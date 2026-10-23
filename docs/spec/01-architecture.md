@@ -5,7 +5,8 @@
 ```
 sc-core        domain types: Entry, Meta, Path abstraction, Selection, SortKey, Filter, errors
 sc-vfs         Vfs trait + providers (local, archive, sftp, ftp, webdav, s3, temp, trash)
-sc-jobs        operation engine: job graph, queue, progress, conflict policy, journal
+sc-jobs        operation engine: plan/execute/settle, conflict policy, progress (queue and
+               journal still to come)
 sc-ui          immediate-mode widgets on top of a cell buffer: panel, dialog, menu, keybar
 sc-tui         the only backend: terminal I/O, input decoding, capability detection
 sc-view        viewer: text/hex/dump, encodings, search, preview pipeline

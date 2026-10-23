@@ -19,7 +19,7 @@ reviewable and testable.
 | 10 | `sc-cmd`: command registry, keymap loader, scope stack, chords, `--check-keymap` | 2 |
 | 11 | keymap profiles `far` + `mc`, learn-keys dialog, `keys.local.toml` | 10 |
 | 12 | `sc-config`: discovery, TOML load/merge/validate, `--dump-config`, hot reload | 2 |
-| 13 | `sc-jobs`: job model, planner, executor, progress, conflict dialog; copy/move/delete/mkdir | 5,12 |
+| 13 | ✅ `sc-jobs`: job model, planner, executor, progress, conflict dialog; copy/move/delete/mkdir | 5,12 |
 | 14 | command line + `%`-macros + user screen (`Ctrl+O`) + run command | 6,12 |
 | 15 | `sc-view`: text viewer with wrap, windowed reader, encodings, plain search, big files | 5 |
 | 16 | `sc-platform` M1 slice: long paths, trash, clipboard, drives/mounts, FS watch | 1 |
@@ -27,6 +27,9 @@ reviewable and testable.
 | 18 | packaging: static builds for linux-gnu/musl, macOS universal, windows-msvc; checksums | 1 |
 | 19 | snapshot test harness + keymap tests + job property tests + perf budget check | all |
 | 20 | docs: README, help pages generated from `docs/`, man page | all |
+
+**Done so far**: chunks 1–14 and 16–19 in some form, plus 13 (the operation engine). What M1
+still owes: the text viewer (15), trash and wipe, and the documentation/packaging chunks.
 
 Exit criteria: the authors use it instead of `mc`/FAR for a week without reaching for the old
 tool for anything in M1 scope; all quality gates green on three platforms.

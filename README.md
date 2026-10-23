@@ -27,13 +27,26 @@ cargo run --release -- /etc /tmp     # left panel, right panel
 1Help   2Menu   3View   4Edit   5Copy   6RenMov 7MkDir  8Delete 9PullDn 10Quit
 ```
 
-What works today: `Tab` / `Ctrl+U` panels, arrows / `PgUp` / `PgDn` / `Home` / `End` / `Enter` /
-`Ctrl+PgUp` / `Backspace` / `Ctrl+\` navigation with history (`Alt+←/→`), `Ins` and `+` / `-` /
-`*` / `Ctrl+A` selection by mask, `Ctrl+F3..F7` sorting (press twice to reverse), `Ctrl+1/2`
-view modes, `Ctrl+H` hidden files, `Alt+I` live filter, quick search by typing, `Space` for
-recursive directory size, `Ctrl+=` to sync the other panel, `Alt+T` to cycle themes, `F1` for a
-help page generated from the live keymap, `F10` to quit. `F5`/`F6`/`F7`/`F8` and `F3`/`F4` say
-so plainly instead of pretending.
+What works today:
+
+- **File operations**: `F5` copy, `F6` move/rename, `F7` create directory, `F8` delete — on the
+  selection or on the item under the cursor, with the destination prefilled from the passive
+  panel. Recursive trees, conflict dialogs (overwrite / all / skip / skip all / cancel), error
+  decision points (retry / skip / skip all / cancel), a progress overlay with a per-file and a
+  total bar, `Esc` to cancel, and both panels refreshed afterwards. A same-filesystem move is a
+  rename, not a copy. A copy is written to `name.sc-part` and renamed only when complete, so an
+  interrupted operation never leaves a file that looks finished.
+- **Panels**: `Tab` / `Ctrl+U`, arrows / `PgUp` / `PgDn` / `Home` / `End` / `Enter` /
+  `Ctrl+PgUp` / `Backspace` / `Ctrl+\` with history (`Alt+←/→`), `Ins` and `+` / `-` / `*` /
+  `Ctrl+A` selection by mask, `Ctrl+F3..F7` sorting (press twice to reverse), `Ctrl+1/2` view
+  modes, `Ctrl+H` hidden files, `Alt+I` live filter, quick search by typing, `Space` for a
+  recursive directory size, `Ctrl+=` to sync the other panel.
+- **The rest**: `Alt+T` cycles themes, `F1` is a help page generated from the live keymap,
+  `F10` quits.
+
+Not yet: `F3` view and `F4` edit (the viewer and the editor are the next milestone), trash,
+wipe, a background job queue, archives and network panels. Anything unimplemented says so
+plainly instead of pretending.
 
 Non-interactive modes (used by CI and by scripts):
 
@@ -82,6 +95,7 @@ Chinese (`ui.language = "auto"` follows the OS locale); CJK double-width layout 
 ```
 crates/sc-core     paths, entries, listings, sorting, selection   (no dependencies of ours)
 crates/sc-vfs      the Vfs trait + the local provider
+crates/sc-jobs     the operation engine: plan, execute, settle; conflicts and progress
 crates/sc-cmd      command vocabulary, keys, keymap profiles (far, mc)
 crates/sc-config   TOML configuration, discovery, overrides
 crates/sc-i18n     fluent catalogues for seven languages

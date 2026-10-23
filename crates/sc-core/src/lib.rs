@@ -3,6 +3,7 @@
 //! This crate is deliberately dependency-light and knows nothing about terminals, async
 //! runtimes or configuration files. See `docs/spec/01-architecture.md`.
 
+pub mod cancel;
 pub mod entry;
 pub mod error;
 pub mod listing;
@@ -12,6 +13,7 @@ pub mod sort;
 pub mod view;
 pub mod vpath;
 
+pub use cancel::CancelToken;
 pub use entry::{Entry, EntryFlags, EntryId, EntryKind};
 pub use error::{Error, Result};
 pub use listing::{Listing, Totals};

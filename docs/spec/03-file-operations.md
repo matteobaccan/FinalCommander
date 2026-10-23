@@ -3,6 +3,16 @@
 Everything that touches the filesystem goes through `sc-jobs`. The UI never calls
 `std::fs::copy` directly.
 
+**Implemented today** (M1): the plan/execute/settle pipeline, copy, move (with the
+same-filesystem rename fast path), recursive delete, nested mkdir, the conflict matrix
+(`Ask` / `Overwrite` / `OverwriteIfNewer` / `Skip` / `Rename`) with per-conflict and
+`…All` answers, error decision points (retry / skip / skip all / cancel), progress with a
+per-file and a total bar, cancellation, metadata preservation (mtime, Unix mode), symlinks
+copied as links, write-to-`.sc-part`-then-rename, the guards in §2, and a dry-run mode.
+**Still to come**: trash and wipe (§4), the job queue and journal (§5), verification and
+resume (§3), attribute dialogs (§7), multi-rename (§8), checksums and split (§9), compare and
+synchronise (§10).
+
 ## 1. Job model
 
 ```rust

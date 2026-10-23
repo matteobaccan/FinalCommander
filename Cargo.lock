@@ -706,11 +706,13 @@ dependencies = [
  "sc-config",
  "sc-core",
  "sc-i18n",
+ "sc-jobs",
  "sc-tui",
  "sc-ui",
  "sc-vfs",
  "tempfile",
  "tokio",
+ "unicode-width",
 ]
 
 [[package]]
@@ -749,6 +751,15 @@ version = "0.1.0"
 dependencies = [
  "fluent-bundle",
  "unic-langid",
+]
+
+[[package]]
+name = "sc-jobs"
+version = "0.1.0"
+dependencies = [
+ "sc-core",
+ "tempfile",
+ "thiserror",
 ]
 
 [[package]]
