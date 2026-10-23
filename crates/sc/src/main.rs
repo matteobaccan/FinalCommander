@@ -13,11 +13,12 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use sc_cmd::{Command as ScCommand, Keymap};
 use sc_config::{Config, Paths};
-use sc_core::VPath;
+use sc_core::{CancelToken, VPath};
 use sc_i18n::I18n;
+use sc_jobs::JobSpec;
 use sc_tui::{Input, Term};
 use sc_ui::{Buffer, Theme, ThemeSet};
-use sc_vfs::{CancelToken, LocalVfs, Vfs};
+use sc_vfs::{LocalVfs, Vfs};
 
 use crate::app::{App, Event, Request, Startup};
 
@@ -387,6 +388,10 @@ fn interactive(mut app: App) -> Result<()> {
                         });
                     });
                 }
+                Request::Job { id, spec, cancel } => {
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || run_job(id, spec, cancel, tx));
+                }
                 Request::DirSize { panel, path } => {
                     let tx = tx.clone();
                     runtime.spawn_blocking(move || {
@@ -418,6 +423,69 @@ fn interactive(mut app: App) -> Result<()> {
 
     term.restore();
     Ok(())
+}
+
+/// Run one job to completion on a worker thread, reporting through the event channel.
+///
+/// `ask` blocks this thread until the UI answers, which is exactly what the engine wants: the
+/// UI thread keeps drawing while the job waits.
+fn run_job(id: u64, spec: JobSpec, cancel: CancelToken, tx: mpsc::Sender<Event>) {
+    struct ChannelReporter {
+        id: u64,
+        tx: mpsc::Sender<Event>,
+        last: std::time::Instant,
+    }
+
+    impl sc_jobs::Reporter for ChannelReporter {
+        fn progress(&mut self, progress: &sc_jobs::Progress) {
+            // 20 frames a second is plenty; a tight copy loop must not flood the channel.
+            let now = std::time::Instant::now();
+            let done = progress.phase == sc_jobs::Phase::Done;
+            if !done && now.duration_since(self.last) < std::time::Duration::from_millis(50) {
+                return;
+            }
+            self.last = now;
+            let _ = self.tx.send(Event::JobProgress {
+                id: self.id,
+                progress: progress.clone(),
+            });
+        }
+
+        fn ask(&mut self, question: sc_jobs::Question) -> sc_jobs::Decision {
+            let (reply, answer) = mpsc::channel();
+            if self
+                .tx
+                .send(Event::JobQuestion {
+                    id: self.id,
+                    question,
+                    reply,
+                })
+                .is_err()
+            {
+                return sc_jobs::Decision::Cancel;
+            }
+            answer.recv().unwrap_or(sc_jobs::Decision::Cancel)
+        }
+    }
+
+    let kind = spec.kind;
+    let mut reporter = ChannelReporter {
+        id,
+        tx: tx.clone(),
+        last: std::time::Instant::now() - std::time::Duration::from_secs(1),
+    };
+
+    let outcome = match sc_jobs::plan(&sc_jobs::LocalFs, &spec, &cancel) {
+        Ok(plan) => sc_jobs::execute(&sc_jobs::LocalFs, &spec, plan, &mut reporter, &cancel),
+        Err(e) => sc_jobs::Outcome {
+            errors: vec![(
+                spec.target.clone().unwrap_or_else(|| VPath::local(".")),
+                e.to_string(),
+            )],
+            ..sc_jobs::Outcome::default()
+        },
+    };
+    let _ = tx.send(Event::JobDone { id, kind, outcome });
 }
 
 /// Recursive size of a directory. Depth-limited, cancellable, and it never follows symlinks.
@@ -484,6 +552,214 @@ mod tests {
                 ScCommand::parse(&id).is_some(),
                 "`{id}` does not parse back"
             );
+        }
+    }
+
+    #[test]
+    fn run_job_copies_for_real_and_reports_through_the_channel() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("src")).unwrap();
+        std::fs::write(dir.path().join("src/a.txt"), b"hello").unwrap();
+        std::fs::create_dir(dir.path().join("dst")).unwrap();
+
+        let (tx, rx) = mpsc::channel();
+        run_job(
+            7,
+            JobSpec::new(
+                sc_jobs::JobKind::Copy,
+                vec![VPath::local(dir.path().join("src"))],
+                Some(VPath::local(dir.path().join("dst"))),
+            ),
+            CancelToken::new(),
+            tx,
+        );
+
+        let mut done = None;
+        let mut progress_frames = 0;
+        while let Ok(event) = rx.try_recv() {
+            match event {
+                Event::JobProgress { id, .. } => {
+                    assert_eq!(id, 7);
+                    progress_frames += 1;
+                }
+                Event::JobDone { id, kind, outcome } => {
+                    assert_eq!((id, kind), (7, sc_jobs::JobKind::Copy));
+                    done = Some(outcome);
+                }
+                other => panic!("unexpected event {other:?}"),
+            }
+        }
+        let outcome = done.expect("the job reported no result");
+        assert!(outcome.is_clean(), "{outcome:?}");
+        assert_eq!((outcome.files, outcome.bytes), (1, 5));
+        assert!(progress_frames > 0, "no progress was reported");
+        assert_eq!(
+            std::fs::read(dir.path().join("dst/src/a.txt")).unwrap(),
+            b"hello"
+        );
+    }
+
+    /// The whole loop, without a terminal: keys in, job out, filesystem changed, panels
+    /// refreshed. This is the test that would have caught every wiring mistake.
+    #[test]
+    fn f5_copies_a_real_file_end_to_end() {
+        let root = tempfile::tempdir().unwrap();
+        let left = root.path().join("left");
+        let right = root.path().join("right");
+        std::fs::create_dir_all(&left).unwrap();
+        std::fs::create_dir_all(&right).unwrap();
+        std::fs::write(left.join("report.txt"), b"the numbers").unwrap();
+
+        let mut app = App::new(Startup {
+            cfg: Config::default(),
+            paths: Paths::discover(Some(&root.path().join("sc.toml")), None),
+            i18n: I18n::new("en"),
+            keymap: Keymap::builtin("far").unwrap(),
+            themes: ThemeSet::builtin_only(),
+            theme: Theme::default_theme(),
+            left: VPath::local(&left),
+            right: VPath::local(&right),
+        });
+
+        // Serve the initial panel reads from the real filesystem.
+        let pump = |app: &mut App| {
+            for request in app.take_requests() {
+                match request {
+                    Request::Read {
+                        panel,
+                        path,
+                        generation,
+                    } => {
+                        let result = sc_vfs::local::list_blocking(&path, &CancelToken::new())
+                            .map_err(|e| e.to_string());
+                        app.handle_event(Event::Listed {
+                            panel,
+                            generation,
+                            result,
+                        });
+                    }
+                    Request::Job { id, spec, cancel } => {
+                        let (tx, rx) = mpsc::channel();
+                        run_job(id, spec, cancel, tx);
+                        while let Ok(event) = rx.try_recv() {
+                            app.handle_event(event);
+                        }
+                    }
+                    Request::DirSize { .. } => {}
+                }
+            }
+        };
+        pump(&mut app);
+
+        // Cursor onto report.txt, then F5 and Enter to accept the prefilled destination.
+        let key = |app: &mut App, k: &str| app.handle_input(Input::Key(k.parse().unwrap()));
+        key(&mut app, "Down");
+        assert_eq!(
+            app.panel().current().unwrap().name_str(),
+            "report.txt",
+            "the cursor is not where the test thinks"
+        );
+        key(&mut app, "F5");
+        key(&mut app, "Enter");
+        pump(&mut app);
+        pump(&mut app); // the refresh reads queued by the finished job
+
+        assert_eq!(
+            std::fs::read(right.join("report.txt")).unwrap(),
+            b"the numbers",
+            "the copy did not happen"
+        );
+        assert!(
+            app.panels[1].listing.row_of_name("report.txt").is_some(),
+            "the passive panel was not refreshed"
+        );
+        assert!(app.status.contains("11 B"), "{}", app.status);
+    }
+
+    #[test]
+    fn f8_deletes_a_real_file_end_to_end() {
+        let root = tempfile::tempdir().unwrap();
+        let dir = root.path().join("work");
+        std::fs::create_dir_all(dir.join("sub")).unwrap();
+        std::fs::write(dir.join("sub/one.txt"), b"x").unwrap();
+        std::fs::write(dir.join("two.txt"), b"yy").unwrap();
+
+        let mut app = App::new(Startup {
+            cfg: Config::default(),
+            paths: Paths::discover(Some(&root.path().join("sc.toml")), None),
+            i18n: I18n::new("en"),
+            keymap: Keymap::builtin("far").unwrap(),
+            themes: ThemeSet::builtin_only(),
+            theme: Theme::default_theme(),
+            left: VPath::local(&dir),
+            right: VPath::local(root.path()),
+        });
+        let pump = |app: &mut App| {
+            for request in app.take_requests() {
+                match request {
+                    Request::Read {
+                        panel,
+                        path,
+                        generation,
+                    } => {
+                        let result = sc_vfs::local::list_blocking(&path, &CancelToken::new())
+                            .map_err(|e| e.to_string());
+                        app.handle_event(Event::Listed {
+                            panel,
+                            generation,
+                            result,
+                        });
+                    }
+                    Request::Job { id, spec, cancel } => {
+                        let (tx, rx) = mpsc::channel();
+                        run_job(id, spec, cancel, tx);
+                        while let Ok(event) = rx.try_recv() {
+                            app.handle_event(event);
+                        }
+                    }
+                    Request::DirSize { .. } => {}
+                }
+            }
+        };
+        pump(&mut app);
+
+        let key = |app: &mut App, k: &str| app.handle_input(Input::Key(k.parse().unwrap()));
+        // Select the subdirectory and the file, then delete both.
+        key(&mut app, "Down");
+        key(&mut app, "Ins");
+        key(&mut app, "Ins");
+        assert_eq!(app.panel().selection.len(), 2);
+        key(&mut app, "F8");
+        key(&mut app, "Enter"); // confirm
+        pump(&mut app);
+        pump(&mut app);
+
+        assert!(!dir.join("sub").exists(), "the directory survived");
+        assert!(!dir.join("two.txt").exists(), "the file survived");
+        assert_eq!(app.panel().listing.totals.files, 0);
+    }
+
+    #[test]
+    fn run_job_reports_a_plan_failure_instead_of_panicking() {
+        let dir = tempfile::tempdir().unwrap();
+        let (tx, rx) = mpsc::channel();
+        run_job(
+            1,
+            JobSpec::new(
+                sc_jobs::JobKind::Delete,
+                vec![VPath::local(dir.path().join("ghost"))],
+                None,
+            ),
+            CancelToken::new(),
+            tx,
+        );
+        let event = rx.recv().expect("an event");
+        match event {
+            Event::JobDone { outcome, .. } => {
+                assert!(!outcome.is_clean());
+                assert_eq!(outcome.errors.len(), 1);
+            }
+            other => panic!("unexpected {other:?}"),
         }
     }
 

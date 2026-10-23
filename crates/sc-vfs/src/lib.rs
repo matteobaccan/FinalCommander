@@ -3,13 +3,13 @@
 //! M1 ships only the local provider; the trait and the capability flags exist so that no
 //! caller may assume a local filesystem. See `docs/spec/04-vfs.md`.
 
-mod cancel;
 mod caps;
 pub mod local;
 
-pub use cancel::CancelToken;
 pub use caps::Caps;
 pub use local::LocalVfs;
+/// Re-exported so callers need only one import; the type lives in `sc-core`.
+pub use sc_core::CancelToken;
 
 use async_trait::async_trait;
 use sc_core::{Entry, Result, VPath};

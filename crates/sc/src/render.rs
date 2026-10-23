@@ -74,10 +74,17 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         widgets::draw_keybar(buf, &app.theme, Rect::new(0, h - 1, w, 1), &refs);
     }
 
-    match app.mode.clone() {
+    let screen = Rect::new(0, 0, w, panels_h);
+    if app.mode.is_normal() {
+        return None;
+    }
+    if let Some(view) = app.mode.job() {
+        draw_job(app, view, buf, screen);
+        return None;
+    }
+    match &app.mode {
         Mode::Normal => None,
         Mode::Prompt(prompt) => {
-            let screen = Rect::new(0, 0, w, panels_h);
             let (_, cx, cy) = widgets::draw_prompt(
                 buf,
                 &app.theme,
@@ -88,16 +95,77 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             );
             Some((cx, cy))
         }
+        Mode::Confirm(confirm) => {
+            widgets::draw_choice(
+                buf,
+                &app.theme,
+                screen,
+                &confirm.title,
+                &confirm.lines,
+                &[],
+                0,
+            );
+            None
+        }
+        Mode::Job(_) => None, // handled above, through `Mode::job()`
         Mode::Message { title, lines } => {
-            let screen = Rect::new(0, 0, w, panels_h);
-            widgets::draw_dialog(buf, &app.theme, screen, &title, &lines, None);
+            widgets::draw_dialog(buf, &app.theme, screen, title, lines, None);
             None
         }
         Mode::Help { scroll } => {
-            draw_help(app, buf, scroll, Rect::new(0, 0, w, panels_h));
+            let scroll = *scroll;
+            draw_help(app, buf, scroll, screen);
             None
         }
     }
+}
+
+/// The progress overlay, or the question the engine is blocked on.
+fn draw_job(app: &App, view: &crate::app::JobView, buf: &mut Buffer, screen: Rect) {
+    if let Some(pending) = &view.question {
+        let (title, lines) = app.question_text(&pending.question);
+        let labels: Vec<String> = pending.buttons.iter().map(|(l, _)| l.clone()).collect();
+        widgets::draw_choice(
+            buf,
+            &app.theme,
+            screen,
+            &title,
+            &lines,
+            &labels,
+            view.choice,
+        );
+        return;
+    }
+
+    let p = &view.progress;
+    let current = p
+        .current
+        .as_ref()
+        .map(|path| path.to_string())
+        .unwrap_or_else(|| app.i18n.t("job-planning"));
+    let counters = app.i18n.t_args(
+        "job-counters",
+        &[
+            ("files", (p.files_done as i64).into()),
+            ("filestotal", (p.files_total as i64).into()),
+            ("bytes", sc_core::format_size(p.bytes_done).into()),
+            ("bytestotal", sc_core::format_size(p.bytes_total).into()),
+        ],
+    );
+    widgets::draw_progress(
+        buf,
+        &app.theme,
+        screen,
+        &widgets::ProgressView {
+            title: &app.job_title(view.kind),
+            current: &current,
+            counters: &counters,
+            total_percent: p.percent(),
+            file_percent: p.file_percent(),
+            show_file_bar: p.files_total > 1,
+            hint: &app.i18n.t("job-hint"),
+        },
+    );
 }
 
 fn status_hint(app: &App) -> String {
@@ -323,6 +391,98 @@ mod tests {
         let mut app = app("commander", "en");
         let out = frame(&mut app, 18, 4);
         assert!(out.contains("too small"), "{out}");
+    }
+
+    #[test]
+    fn the_delete_confirmation_lists_what_will_go() {
+        let mut app = app("commander", "en");
+        app.handle_input(Input::Key("Down".parse().unwrap()));
+        app.handle_input(Input::Key("F8".parse().unwrap()));
+        let out = frame(&mut app, 70, 20);
+        assert!(out.contains("Delete"), "{out}");
+        assert!(out.contains("src"), "{out}");
+        assert!(out.contains("Enter = yes"), "{out}");
+    }
+
+    #[test]
+    fn the_progress_overlay_renders_while_a_job_runs() {
+        let mut app = app("commander", "en");
+        app.handle_input(Input::Key("Down".parse().unwrap()));
+        app.handle_input(Input::Key("F5".parse().unwrap()));
+        app.handle_input(Input::Key("Enter".parse().unwrap()));
+        let id = match app.take_requests().into_iter().next() {
+            Some(crate::app::Request::Job { id, .. }) => id,
+            other => panic!("{other:?}"),
+        };
+        app.handle_event(Event::JobProgress {
+            id,
+            progress: sc_jobs::Progress {
+                files_done: 3,
+                files_total: 10,
+                bytes_done: 1024,
+                bytes_total: 4096,
+                file_bytes_done: 512,
+                file_bytes_total: 1024,
+                current: Some(VPath::local("/home/mb/project/src/main.rs")),
+                ..sc_jobs::Progress::default()
+            },
+        });
+        let out = frame(&mut app, 70, 20);
+        assert!(out.contains("Copying"), "{out}");
+        assert!(out.contains("main.rs"), "{out}");
+        assert!(out.contains("3 / 10 files"), "{out}");
+        assert!(out.contains(" 25%"), "{out}");
+        assert!(out.contains(" 50%"), "the per-file bar is missing: {out}");
+        assert!(out.contains("Esc cancels"), "{out}");
+    }
+
+    #[test]
+    fn a_conflict_dialog_shows_both_sides_and_the_buttons() {
+        let mut app = app("commander", "en");
+        app.handle_input(Input::Key("Down".parse().unwrap()));
+        app.handle_input(Input::Key("F5".parse().unwrap()));
+        app.handle_input(Input::Key("Enter".parse().unwrap()));
+        let id = match app.take_requests().into_iter().next() {
+            Some(crate::app::Request::Job { id, .. }) => id,
+            other => panic!("{other:?}"),
+        };
+        let (reply, _answers) = std::sync::mpsc::channel();
+        app.handle_event(Event::JobQuestion {
+            id,
+            question: sc_jobs::Question::Conflict {
+                src: VPath::local("/home/mb/project/src"),
+                dst: VPath::local("/tmp/src"),
+                src_size: 412,
+                dst_size: 1024,
+                src_newer: true,
+            },
+            reply,
+        });
+        let out = frame(&mut app, 76, 20);
+        assert!(out.contains("The destination exists"), "{out}");
+        assert!(out.contains("/tmp/src") && out.contains("1.00 K"), "{out}");
+        assert!(
+            out.contains("[ Overwrite ]") && out.contains("[ Cancel ]"),
+            "{out}"
+        );
+        assert!(out.contains("the source is newer"), "{out}");
+    }
+
+    #[test]
+    fn job_overlays_render_in_every_language() {
+        for (tag, _) in sc_i18n::LANGUAGES {
+            let mut app = app("commander", tag);
+            app.handle_input(Input::Key("Down".parse().unwrap()));
+            app.handle_input(Input::Key("F8".parse().unwrap()));
+            let out = frame(&mut app, 76, 20);
+            for line in out.lines() {
+                assert!(
+                    unicode_width::UnicodeWidthStr::width(line) <= 76,
+                    "language {tag} overflowed the screen: {line:?}"
+                );
+            }
+            assert!(out.contains("src"), "language {tag}: {out}");
+        }
     }
 
     #[test]

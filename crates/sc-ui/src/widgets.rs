@@ -417,6 +417,195 @@ pub fn draw_prompt(
     )
 }
 
+/// A horizontal bar: `███████░░░░░░░  43%`.
+pub fn draw_bar(buf: &mut Buffer, area: Rect, percent: u16, filled: Style, empty: Style) {
+    if area.w < 6 {
+        return;
+    }
+    let label = format!("{:>3}%", percent.min(100));
+    let bar_w = area.w.saturating_sub(label.width() as u16 + 1);
+    let done = (bar_w as u32 * percent.min(100) as u32 / 100) as u16;
+    for x in 0..bar_w {
+        let (ch, style) = if x < done {
+            ('█', filled)
+        } else {
+            ('░', empty)
+        };
+        buf.set(area.x + x, area.y, ch, style);
+    }
+    buf.put_str(
+        area.x + bar_w + 1,
+        area.y,
+        &label,
+        empty,
+        label.width() as u16,
+    );
+}
+
+/// What the progress overlay shows. Strings are already localised by the caller.
+pub struct ProgressView<'a> {
+    pub title: &'a str,
+    /// The item being worked on right now.
+    pub current: &'a str,
+    pub counters: &'a str,
+    pub total_percent: u16,
+    pub file_percent: u16,
+    /// Shown only when there is more than one file.
+    pub show_file_bar: bool,
+    pub hint: &'a str,
+}
+
+/// Centred progress box: current item, one or two bars, counters, and how to cancel.
+pub fn draw_progress(
+    buf: &mut Buffer,
+    theme: &Theme,
+    screen: Rect,
+    view: &ProgressView<'_>,
+) -> Rect {
+    let w = (screen.w * 3 / 4).clamp(30, screen.w.saturating_sub(4));
+    let h = if view.show_file_bar { 8 } else { 7 };
+    let h = h.min(screen.h);
+    let x = screen.x + (screen.w.saturating_sub(w)) / 2;
+    let y = screen.y + (screen.h.saturating_sub(h)) / 2;
+    let area = Rect::new(x, y, w, h);
+
+    let style = theme.dialog();
+    let accent = Style::new(theme.color("dialog.title"), theme.color("dialog.bg"));
+    buf.fill(area, ' ', style);
+    buf.draw_frame(
+        area,
+        Style::new(theme.color("dialog.frame"), theme.color("dialog.bg")),
+        Some(view.title),
+    );
+
+    let inner = area.inner();
+    let mut row = inner.y;
+    buf.put_str(
+        inner.x,
+        row,
+        &elide_middle(view.current, inner.w as usize),
+        style,
+        inner.w,
+    );
+    row += 1;
+
+    if view.show_file_bar {
+        draw_bar(
+            buf,
+            Rect::new(inner.x, row, inner.w, 1),
+            view.file_percent,
+            accent,
+            style,
+        );
+        row += 1;
+    }
+    draw_bar(
+        buf,
+        Rect::new(inner.x, row, inner.w, 1),
+        view.total_percent,
+        accent,
+        style,
+    );
+    row += 2;
+    buf.put_str(
+        inner.x,
+        row,
+        &truncate_cols(view.counters, inner.w as usize),
+        style,
+        inner.w,
+    );
+    buf.put_str(
+        inner.x,
+        area.bottom() - 1,
+        &truncate_cols(view.hint, inner.w as usize),
+        accent,
+        inner.w,
+    );
+    area
+}
+
+/// A row of buttons, the selected one highlighted. Returns the columns each button starts at,
+/// so a click can be mapped back to a choice.
+pub fn draw_buttons(
+    buf: &mut Buffer,
+    theme: &Theme,
+    area: Rect,
+    labels: &[String],
+    selected: usize,
+) -> Vec<u16> {
+    let normal = theme.dialog();
+    let active = Style::new(theme.color("cursor.fg"), theme.color("cursor.bg")).bold();
+    let total: usize = labels.iter().map(|l| l.width() + 4).sum();
+    let mut x = area.x + (area.w as usize).saturating_sub(total) as u16 / 2;
+    let mut starts = Vec::with_capacity(labels.len());
+    for (i, label) in labels.iter().enumerate() {
+        let style = if i == selected { active } else { normal };
+        let text = format!("[ {label} ]");
+        let width = text.width() as u16;
+        if x + width > area.right() {
+            break;
+        }
+        starts.push(x);
+        buf.put_str(x, area.y, &text, style, width);
+        x += width;
+    }
+    starts
+}
+
+/// A dialog with message lines and a row of buttons (conflicts, errors, confirmations).
+pub fn draw_choice(
+    buf: &mut Buffer,
+    theme: &Theme,
+    screen: Rect,
+    title: &str,
+    lines: &[String],
+    buttons: &[String],
+    selected: usize,
+) -> Rect {
+    let buttons_w: usize = buttons.iter().map(|l| l.width() + 4).sum();
+    let content_w = lines
+        .iter()
+        .map(|l| l.width())
+        .chain(std::iter::once(buttons_w))
+        .chain(std::iter::once(title.width() + 4))
+        .max()
+        .unwrap_or(24)
+        .min(screen.w.saturating_sub(4) as usize);
+    let w = content_w as u16 + 4;
+    let h = (lines.len() as u16 + 4).min(screen.h);
+    let x = screen.x + (screen.w.saturating_sub(w)) / 2;
+    let y = screen.y + (screen.h.saturating_sub(h)) / 2;
+    let area = Rect::new(x, y, w, h);
+
+    let style = theme.dialog();
+    buf.fill(area, ' ', style);
+    buf.draw_frame(
+        area,
+        Style::new(theme.color("dialog.frame"), theme.color("dialog.bg")),
+        Some(title),
+    );
+    for (i, line) in lines.iter().enumerate() {
+        if area.y + 1 + i as u16 >= area.bottom() - 2 {
+            break;
+        }
+        buf.put_str(
+            area.x + 2,
+            area.y + 1 + i as u16,
+            &truncate_cols(line, (w - 4) as usize),
+            style,
+            w - 4,
+        );
+    }
+    draw_buttons(
+        buf,
+        theme,
+        Rect::new(area.x + 1, area.bottom() - 2, w - 2, 1),
+        buttons,
+        selected,
+    );
+    area
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -615,6 +804,125 @@ mod tests {
         for line in buf.to_lines() {
             assert!(line.width() <= 40, "line wider than the panel: {line:?}");
         }
+    }
+
+    #[test]
+    fn the_progress_overlay_shows_two_bars_and_the_counters() {
+        let theme = Theme::default_theme();
+        let mut buf = Buffer::new(60, 20);
+        let screen = buf.area();
+        let area = draw_progress(
+            &mut buf,
+            &theme,
+            screen,
+            &ProgressView {
+                title: "Copying",
+                current: "/home/mb/project/target/debug/deps/libfoo.rlib",
+                counters: "12 / 40 files · 4.1 M / 22.7 M",
+                total_percent: 43,
+                file_percent: 80,
+                show_file_bar: true,
+                hint: "Esc cancels",
+            },
+        );
+        let out = buf.to_text();
+        assert!(area.w >= 30);
+        assert!(out.contains("Copying"), "{out}");
+        assert!(out.contains("43%") && out.contains("80%"), "{out}");
+        assert!(out.contains("12 / 40 files"), "{out}");
+        assert!(out.contains("Esc cancels"), "{out}");
+        assert!(out.contains('█') && out.contains('░'), "{out}");
+    }
+
+    #[test]
+    fn a_single_file_job_shows_one_bar() {
+        let theme = Theme::default_theme();
+        let mut buf = Buffer::new(50, 16);
+        let screen = buf.area();
+        let two = draw_progress(
+            &mut buf,
+            &theme,
+            screen,
+            &ProgressView {
+                title: "Copying",
+                current: "x",
+                counters: "c",
+                total_percent: 10,
+                file_percent: 10,
+                show_file_bar: true,
+                hint: "h",
+            },
+        );
+        let one = draw_progress(
+            &mut buf,
+            &theme,
+            screen,
+            &ProgressView {
+                title: "Copying",
+                current: "x",
+                counters: "c",
+                total_percent: 10,
+                file_percent: 10,
+                show_file_bar: false,
+                hint: "h",
+            },
+        );
+        assert_eq!(one.h + 1, two.h);
+    }
+
+    #[test]
+    fn the_choice_dialog_highlights_the_selected_button() {
+        let theme = Theme::default_theme();
+        let mut buf = Buffer::new(60, 14);
+        let screen = buf.area();
+        let buttons = vec![
+            "Overwrite".to_string(),
+            "All".to_string(),
+            "Skip".to_string(),
+            "Cancel".to_string(),
+        ];
+        draw_choice(
+            &mut buf,
+            &theme,
+            screen,
+            "The destination exists",
+            &["destination  /tmp/a.txt   412 B".to_string()],
+            &buttons,
+            2,
+        );
+        let out = buf.to_text();
+        assert!(out.contains("The destination exists"), "{out}");
+        assert!(
+            out.contains("[ Skip ]") && out.contains("[ Overwrite ]"),
+            "{out}"
+        );
+
+        // The selected button is drawn with the cursor colours, not the dialog ones.
+        let row = buf.height() - 1;
+        let mut found = false;
+        for y in 0..buf.height() {
+            for x in 0..buf.width() {
+                let cell = buf.get(x, y).unwrap();
+                if cell.ch == 'S' && cell.style.bg == theme.color("cursor.bg") {
+                    found = true;
+                }
+            }
+        }
+        assert!(found, "the selected button is not highlighted (row {row})");
+    }
+
+    #[test]
+    fn a_bar_too_narrow_to_draw_is_skipped_rather_than_panicking() {
+        let theme = Theme::default_theme();
+        let mut buf = Buffer::new(8, 3);
+        draw_bar(
+            &mut buf,
+            Rect::new(0, 0, 4, 1),
+            50,
+            theme.dialog(),
+            theme.dialog(),
+        );
+        assert_eq!(buf.to_lines()[0], "");
     }
 
     #[test]

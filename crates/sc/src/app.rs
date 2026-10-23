@@ -1,7 +1,10 @@
+use std::sync::mpsc::Sender;
+
 use sc_cmd::{Command, Key, KeyCode, Keymap, Mods, Scope};
 use sc_config::{Config, Paths, QuickSearch};
-use sc_core::{Entry, MaskScope, Sort, SortKey, VPath, ViewMode};
+use sc_core::{CancelToken, Entry, MaskScope, Sort, SortKey, VPath, ViewMode};
 use sc_i18n::I18n;
+use sc_jobs::{Decision, JobKind, JobSpec, Outcome, Progress, Question};
 use sc_tui::Input;
 use sc_ui::{Theme, ThemeSet};
 
@@ -18,6 +21,12 @@ pub enum Request {
     DirSize {
         panel: usize,
         path: VPath,
+    },
+    /// Run a file operation off the UI thread.
+    Job {
+        id: u64,
+        spec: JobSpec,
+        cancel: CancelToken,
     },
 }
 
@@ -36,6 +45,21 @@ pub enum Event {
         bytes: u64,
         files: u64,
     },
+    JobProgress {
+        id: u64,
+        progress: Progress,
+    },
+    /// The engine needs an answer before it can continue; it is blocked on `reply`.
+    JobQuestion {
+        id: u64,
+        question: Question,
+        reply: Sender<Decision>,
+    },
+    JobDone {
+        id: u64,
+        kind: JobKind,
+        outcome: Outcome,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,6 +68,12 @@ pub enum PromptKind {
     SelectMask,
     DeselectMask,
     Filter,
+    /// Destination for F5; pre-filled with the other panel's directory.
+    CopyTarget,
+    /// Destination for F6.
+    MoveTarget,
+    /// Name for F7.
+    Mkdir,
     /// Quick search; remembers where the cursor was so Esc can put it back.
     QuickSearch {
         origin: usize,
@@ -57,12 +87,53 @@ pub struct Prompt {
     pub text: String,
 }
 
+/// A yes/no question that carries the job it will start on `Enter`.
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Confirm {
+    pub title: String,
+    pub lines: Vec<String>,
+    pub spec: JobSpec,
+}
+
+/// A decision point the engine is blocked on.
+#[derive(Debug)]
+pub struct PendingQuestion {
+    pub question: Question,
+    pub buttons: Vec<(String, Decision)>,
+    pub reply: Sender<Decision>,
+}
+
+#[derive(Debug)]
+pub struct JobView {
+    pub id: u64,
+    pub kind: JobKind,
+    pub progress: Progress,
+    pub question: Option<PendingQuestion>,
+    pub cancel: CancelToken,
+    pub choice: usize,
+}
+
+#[derive(Debug)]
 pub enum Mode {
     Normal,
     Prompt(Prompt),
+    Confirm(Confirm),
+    Job(JobView),
     Help { scroll: usize },
     Message { title: String, lines: Vec<String> },
+}
+
+impl Mode {
+    pub fn is_normal(&self) -> bool {
+        matches!(self, Mode::Normal)
+    }
+
+    pub fn job(&self) -> Option<&JobView> {
+        match self {
+            Mode::Job(view) => Some(view),
+            _ => None,
+        }
+    }
 }
 
 /// Everything the application is started with. Grouping it keeps `App::new` honest and makes
@@ -95,6 +166,7 @@ pub struct App {
     /// Panel geometry from the last frame, so key handling knows how far a page is.
     pub rows: usize,
     pub columns: usize,
+    next_job_id: u64,
 }
 
 impl App {
@@ -138,6 +210,7 @@ impl App {
             requests: Vec::new(),
             rows: 20,
             columns: 1,
+            next_job_id: 1,
         };
         app.read_panel(0);
         app.read_panel(1);
@@ -216,6 +289,36 @@ impl App {
                     }
                 }
             }
+            Event::JobProgress { id, progress } => {
+                if let Mode::Job(view) = &mut self.mode {
+                    if view.id == id {
+                        view.progress = progress;
+                    }
+                }
+            }
+            Event::JobQuestion {
+                id,
+                question,
+                reply,
+            } => {
+                let buttons = self.buttons_for(&question);
+                match &mut self.mode {
+                    Mode::Job(view) if view.id == id => {
+                        view.choice = 0;
+                        view.question = Some(PendingQuestion {
+                            question,
+                            buttons,
+                            reply,
+                        });
+                    }
+                    // A question for a job we are no longer showing cannot be answered by a
+                    // human, so it must not block the engine for ever.
+                    _ => {
+                        let _ = reply.send(Decision::Cancel);
+                    }
+                }
+            }
+            Event::JobDone { id, kind, outcome } => self.job_done(id, kind, outcome),
             Event::DirSized {
                 panel,
                 path,
@@ -252,18 +355,91 @@ impl App {
     }
 
     fn handle_key(&mut self, key: Key) {
-        match self.mode.clone() {
-            Mode::Help { scroll } => self.help_key(key, scroll),
-            Mode::Message { .. } => {
-                if matches!(
+        // `Mode` owns a reply channel while a job is asking, so it cannot be cloned: take it
+        // out, dispatch, and put back whatever the handler did not replace.
+        match std::mem::replace(&mut self.mode, Mode::Normal) {
+            Mode::Help { scroll } => {
+                self.mode = Mode::Help { scroll };
+                self.help_key(key, scroll);
+            }
+            Mode::Message { title, lines } => {
+                let close = matches!(
                     key.code,
                     KeyCode::Esc | KeyCode::Enter | KeyCode::Char(' ') | KeyCode::F(10)
-                ) {
-                    self.mode = Mode::Normal;
+                );
+                if !close {
+                    self.mode = Mode::Message { title, lines };
                 }
             }
-            Mode::Prompt(prompt) => self.prompt_key(key, prompt),
+            Mode::Prompt(prompt) => {
+                self.mode = Mode::Prompt(prompt.clone());
+                self.prompt_key(key, prompt);
+            }
+            Mode::Confirm(confirm) => {
+                self.mode = Mode::Confirm(confirm.clone());
+                self.confirm_key(key, confirm);
+            }
+            Mode::Job(view) => {
+                self.mode = Mode::Job(view);
+                self.job_key(key);
+            }
             Mode::Normal => self.normal_key(key),
+        }
+    }
+
+    fn confirm_key(&mut self, key: Key, confirm: Confirm) {
+        match key.code {
+            KeyCode::Enter | KeyCode::Char('y') | KeyCode::Char('Y') => {
+                self.mode = Mode::Normal;
+                self.start_job(confirm.spec);
+            }
+            KeyCode::Esc | KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::F(10) => {
+                self.mode = Mode::Normal
+            }
+            _ => {}
+        }
+    }
+
+    fn job_key(&mut self, key: Key) {
+        let Mode::Job(view) = &mut self.mode else {
+            return;
+        };
+        match &view.question {
+            None => {
+                // No question pending: the only thing to do is stop the job.
+                if matches!(key.code, KeyCode::Esc | KeyCode::Char('c')) {
+                    view.cancel.cancel();
+                    let kind = view.kind;
+                    let msg = self
+                        .i18n
+                        .t_args("job-cancelled", &[("kind", self.kind_label(kind).into())]);
+                    self.set_status(msg);
+                }
+            }
+            Some(pending) => {
+                let count = pending.buttons.len();
+                match key.code {
+                    KeyCode::Left | KeyCode::BackTab => {
+                        view.choice = (view.choice + count - 1) % count
+                    }
+                    KeyCode::Right | KeyCode::Tab => view.choice = (view.choice + 1) % count,
+                    KeyCode::Enter => {
+                        let decision = pending.buttons[view.choice].1.clone();
+                        self.answer(decision);
+                    }
+                    KeyCode::Esc => self.answer(Decision::Cancel),
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    /// Unblock the engine with a decision.
+    fn answer(&mut self, decision: Decision) {
+        if let Mode::Job(view) = &mut self.mode {
+            if let Some(pending) = view.question.take() {
+                let _ = pending.reply.send(decision);
+            }
         }
     }
 
@@ -387,8 +563,232 @@ impl App {
                     }
                 }
             }
+            PromptKind::CopyTarget | PromptKind::MoveTarget => {
+                let raw = prompt.text.trim();
+                if raw.is_empty() {
+                    return;
+                }
+                let kind = if prompt.kind == PromptKind::CopyTarget {
+                    JobKind::Copy
+                } else {
+                    JobKind::Move
+                };
+                let sources = self.job_sources();
+                if sources.is_empty() {
+                    let m = self.i18n.t("msg-nothing-to-do");
+                    self.set_error(m);
+                    return;
+                }
+                let target = self.resolve_path(raw);
+                self.start_job(JobSpec::new(kind, sources, Some(target)));
+            }
+            PromptKind::Mkdir => {
+                let raw = prompt.text.trim();
+                if raw.is_empty() {
+                    return;
+                }
+                let target = self.resolve_path(raw);
+                self.start_job(JobSpec::new(JobKind::Mkdir, vec![], Some(target)));
+            }
             PromptKind::Filter | PromptKind::QuickSearch { .. } => {}
         }
+    }
+
+    /// A path typed by the user: absolute as given, `~` expanded, otherwise relative to the
+    /// active panel.
+    fn resolve_path(&self, raw: &str) -> VPath {
+        let expanded = expand_tilde(raw);
+        if std::path::Path::new(&expanded).is_absolute() {
+            VPath::local(&expanded)
+        } else {
+            self.panel().cwd.join(&expanded)
+        }
+        .normalised()
+    }
+
+    /// What an operation acts on: the selection, or the item under the cursor.
+    pub fn job_sources(&self) -> Vec<VPath> {
+        let panel = self.panel();
+        if !panel.selection.is_empty() {
+            let mut out = Vec::new();
+            for row in 0..panel.listing.len() {
+                let e = panel.listing.row(row).expect("row in range");
+                if e.is_selectable() && panel.selection.contains(e.id) {
+                    out.push(panel.cwd.join(&e.name));
+                }
+            }
+            return out;
+        }
+        match panel.current() {
+            Some(e) if e.is_selectable() => vec![panel.cwd.join(&e.name)],
+            _ => Vec::new(),
+        }
+    }
+
+    /// How the sources are described in a prompt: one name, or "N selected items".
+    fn sources_label(&self, sources: &[VPath]) -> String {
+        match sources.len() {
+            1 => sources[0].display_name(),
+            n => self
+                .i18n
+                .t_args("what-selected", &[("count", (n as i64).into())]),
+        }
+    }
+
+    fn kind_label(&self, kind: JobKind) -> String {
+        self.i18n.t(match kind {
+            JobKind::Copy => "job-copy",
+            JobKind::Move => "job-move",
+            JobKind::Delete => "job-delete",
+            JobKind::Mkdir => "job-mkdir",
+        })
+    }
+
+    /// Title of the progress overlay for a job kind.
+    pub fn job_title(&self, kind: JobKind) -> String {
+        self.kind_label(kind)
+    }
+
+    /// Title and body of the dialog for a decision point.
+    pub fn question_text(&self, question: &Question) -> (String, Vec<String>) {
+        match question {
+            Question::Conflict {
+                src,
+                dst,
+                src_size,
+                dst_size,
+                src_newer,
+            } => {
+                let title = self.i18n.t("conflict-title");
+                let lines = vec![
+                    self.i18n.t_args(
+                        "conflict-dst",
+                        &[
+                            ("path", dst.to_string().into()),
+                            ("bytes", sc_core::format_size(*dst_size).into()),
+                        ],
+                    ),
+                    self.i18n.t_args(
+                        "conflict-src",
+                        &[
+                            ("path", src.to_string().into()),
+                            ("bytes", sc_core::format_size(*src_size).into()),
+                        ],
+                    ),
+                    String::new(),
+                    self.i18n.t(if *src_newer {
+                        "conflict-newer"
+                    } else {
+                        "conflict-older"
+                    }),
+                ];
+                (title, lines)
+            }
+            Question::Error { path, error } => (
+                self.i18n.t("dialog-error"),
+                vec![path.to_string(), String::new(), error.clone()],
+            ),
+        }
+    }
+
+    fn buttons_for(&self, question: &Question) -> Vec<(String, Decision)> {
+        match question {
+            Question::Conflict { .. } => vec![
+                (self.i18n.t("btn-overwrite"), Decision::Overwrite),
+                (self.i18n.t("btn-overwrite-all"), Decision::OverwriteAll),
+                (self.i18n.t("btn-skip"), Decision::Skip),
+                (self.i18n.t("btn-skip-all"), Decision::SkipAll),
+                (self.i18n.t("btn-cancel"), Decision::Cancel),
+            ],
+            Question::Error { .. } => vec![
+                (self.i18n.t("btn-retry"), Decision::Retry),
+                (self.i18n.t("btn-skip"), Decision::Skip),
+                (self.i18n.t("btn-skip-all"), Decision::SkipAll),
+                (self.i18n.t("btn-cancel"), Decision::Cancel),
+            ],
+        }
+    }
+
+    /// Hand a job to the runner and show its progress overlay.
+    pub fn start_job(&mut self, spec: JobSpec) {
+        let id = self.next_job_id;
+        self.next_job_id += 1;
+        let cancel = CancelToken::new();
+        let kind = spec.kind;
+        self.mode = Mode::Job(JobView {
+            id,
+            kind,
+            progress: Progress::default(),
+            question: None,
+            cancel: cancel.clone(),
+            choice: 0,
+        });
+        self.requests.push(Request::Job { id, spec, cancel });
+    }
+
+    fn job_done(&mut self, id: u64, kind: JobKind, outcome: Outcome) {
+        if let Mode::Job(view) = &self.mode {
+            if view.id != id {
+                return;
+            }
+        }
+        self.mode = Mode::Normal;
+
+        let kind_label = self.kind_label(kind);
+        let mut summary = if outcome.renamed > 0 && outcome.bytes == 0 {
+            self.i18n.t_args(
+                "job-done-renamed",
+                &[
+                    ("kind", kind_label.clone().into()),
+                    ("files", (outcome.files as i64).into()),
+                ],
+            )
+        } else {
+            self.i18n.t_args(
+                "job-done",
+                &[
+                    ("kind", kind_label.clone().into()),
+                    ("files", (outcome.files as i64).into()),
+                    ("bytes", sc_core::format_size(outcome.bytes).into()),
+                ],
+            )
+        };
+        if outcome.skipped > 0 {
+            summary.push_str(&self.i18n.t_args(
+                "job-done-skipped",
+                &[("skipped", (outcome.skipped as i64).into())],
+            ));
+        }
+        if !outcome.errors.is_empty() {
+            summary.push_str(&self.i18n.t_args(
+                "job-done-errors",
+                &[("errors", (outcome.errors.len() as i64).into())],
+            ));
+        }
+        if outcome.cancelled {
+            summary = self
+                .i18n
+                .t_args("job-cancelled", &[("kind", kind_label.into())]);
+        }
+
+        if outcome.errors.is_empty() {
+            self.set_status(summary);
+        } else {
+            self.set_error(summary);
+            let title = self.i18n.t("job-errors-title");
+            let lines: Vec<String> = outcome
+                .errors
+                .iter()
+                .take(8)
+                .map(|(path, error)| format!("{path}: {error}"))
+                .collect();
+            self.show_message(title, lines);
+        }
+
+        // Both panels may be looking at what just changed.
+        self.panels[self.active].selection.clear();
+        self.read_panel(0);
+        self.read_panel(1);
     }
 
     fn normal_key(&mut self, key: Key) {
@@ -639,8 +1039,100 @@ impl App {
                 self.set_status(m);
             }
 
+            Command::FileCopy | Command::FileMove => {
+                let sources = self.job_sources();
+                if sources.is_empty() {
+                    let m = self.i18n.t("msg-nothing-to-do");
+                    self.set_error(m);
+                    return;
+                }
+                let what = self.sources_label(&sources);
+                let copy = cmd == Command::FileCopy;
+                let title = self.i18n.t_args(
+                    if copy {
+                        "prompt-copy-to"
+                    } else {
+                        "prompt-move-to"
+                    },
+                    &[("what", what.into())],
+                );
+                // Pre-filled with the passive panel's directory, as every commander does.
+                let mut text = self.other().cwd.to_string();
+                if !text.ends_with(std::path::MAIN_SEPARATOR) {
+                    text.push(std::path::MAIN_SEPARATOR);
+                }
+                self.mode = Mode::Prompt(Prompt {
+                    kind: if copy {
+                        PromptKind::CopyTarget
+                    } else {
+                        PromptKind::MoveTarget
+                    },
+                    title,
+                    text,
+                });
+            }
+            Command::FileMkdir => {
+                let title = self.i18n.t("prompt-mkdir");
+                self.mode = Mode::Prompt(Prompt {
+                    kind: PromptKind::Mkdir,
+                    title,
+                    text: String::new(),
+                });
+            }
+            Command::FileDelete => {
+                let sources = self.job_sources();
+                if sources.is_empty() {
+                    let m = self.i18n.t("msg-nothing-to-do");
+                    self.set_error(m);
+                    return;
+                }
+                let bytes = self.selected_bytes(&sources);
+                let spec = JobSpec::new(JobKind::Delete, sources.clone(), None);
+                if !self.cfg.general.confirm_delete {
+                    self.start_job(spec);
+                    return;
+                }
+                let title = self.i18n.t("confirm-delete-title");
+                let body = self.i18n.t_args(
+                    "confirm-delete-body",
+                    &[
+                        ("count", (sources.len() as i64).into()),
+                        ("bytes", sc_core::format_size(bytes).into()),
+                    ],
+                );
+                let mut lines = vec![body, String::new()];
+                lines.extend(
+                    sources
+                        .iter()
+                        .take(3)
+                        .map(|p| format!("  {}", p.display_name())),
+                );
+                if sources.len() > 3 {
+                    lines.push(format!("  … {}", sources.len() - 3));
+                }
+                lines.push(String::new());
+                lines.push(self.i18n.t("confirm-yes-no"));
+                self.mode = Mode::Confirm(Confirm { title, lines, spec });
+            }
+
             other => self.not_implemented(&other.id()),
         }
+    }
+
+    /// Total size of what is about to be deleted, for the confirmation.
+    fn selected_bytes(&self, sources: &[VPath]) -> u64 {
+        let panel = self.panel();
+        let mut total = 0;
+        for src in sources {
+            if let Some(name) = src.file_name() {
+                if let Some(row) = panel.listing.row_of_name(&name.to_string_lossy()) {
+                    if let Some(e) = panel.listing.row(row) {
+                        total += e.size;
+                    }
+                }
+            }
+        }
+        total
     }
 
     fn not_implemented(&mut self, what: &str) {
@@ -1005,6 +1497,295 @@ mod tests {
             .take_requests()
             .iter()
             .any(|r| matches!(r, Request::Read { panel: 1, .. })));
+    }
+
+    fn job_request(app: &mut App) -> (u64, JobSpec) {
+        match app
+            .take_requests()
+            .into_iter()
+            .find(|r| matches!(r, Request::Job { .. }))
+        {
+            Some(Request::Job { id, spec, .. }) => (id, spec),
+            other => panic!("expected a job request, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn f5_prompts_with_the_passive_panel_prefilled() {
+        let mut app = app();
+        press(&mut app, "Down"); // docs/
+        press(&mut app, "F5");
+        match &app.mode {
+            Mode::Prompt(p) => {
+                assert_eq!(p.kind, PromptKind::CopyTarget);
+                assert!(p.text.starts_with("/tmp"), "{}", p.text);
+                assert!(p.text.ends_with('/'), "{}", p.text);
+                assert!(p.title.contains("docs"), "{}", p.title);
+            }
+            other => panic!("expected a prompt, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn f5_then_enter_starts_a_copy_job_for_the_item_under_the_cursor() {
+        let mut app = app();
+        press(&mut app, "Down");
+        press(&mut app, "Down"); // a.txt
+        press(&mut app, "F5");
+        press(&mut app, "Enter");
+        let (_, spec) = job_request(&mut app);
+        assert_eq!(spec.kind, JobKind::Copy);
+        assert_eq!(spec.sources, vec![VPath::local("/home/mb/a.txt")]);
+        assert_eq!(spec.target, Some(VPath::local("/tmp")));
+        assert!(matches!(app.mode, Mode::Job(_)), "{:?}", app.mode);
+    }
+
+    #[test]
+    fn f6_moves_the_whole_selection() {
+        let mut app = app();
+        press(&mut app, "Down");
+        press(&mut app, "Down");
+        press(&mut app, "Ins"); // a.txt
+        press(&mut app, "Ins"); // b.rs
+        press(&mut app, "F6");
+        press(&mut app, "Enter");
+        let (_, spec) = job_request(&mut app);
+        assert_eq!(spec.kind, JobKind::Move);
+        assert_eq!(spec.sources.len(), 2);
+        assert!(spec.sources.contains(&VPath::local("/home/mb/a.txt")));
+    }
+
+    #[test]
+    fn f7_creates_a_directory_relative_to_the_panel() {
+        let mut app = app();
+        press(&mut app, "F7");
+        for c in ["n", "e", "w"] {
+            press(&mut app, c);
+        }
+        press(&mut app, "Enter");
+        let (_, spec) = job_request(&mut app);
+        assert_eq!(spec.kind, JobKind::Mkdir);
+        assert_eq!(spec.target, Some(VPath::local("/home/mb/new")));
+        assert!(spec.sources.is_empty());
+    }
+
+    #[test]
+    fn f8_confirms_before_deleting_and_shows_what_it_will_delete() {
+        let mut app = app();
+        press(&mut app, "Down");
+        press(&mut app, "Down"); // a.txt
+        press(&mut app, "F8");
+        match &app.mode {
+            Mode::Confirm(c) => {
+                assert!(c.lines.iter().any(|l| l.contains("a.txt")), "{:?}", c.lines);
+                assert_eq!(c.spec.kind, JobKind::Delete);
+            }
+            other => panic!("expected a confirmation, got {other:?}"),
+        }
+        assert!(app.take_requests().is_empty(), "deleted before confirming");
+        press(&mut app, "Enter");
+        let (_, spec) = job_request(&mut app);
+        assert_eq!(spec.sources, vec![VPath::local("/home/mb/a.txt")]);
+    }
+
+    #[test]
+    fn esc_at_the_confirmation_deletes_nothing() {
+        let mut app = app();
+        press(&mut app, "Down");
+        press(&mut app, "F8");
+        press(&mut app, "Esc");
+        assert!(app.mode.is_normal());
+        assert!(app.take_requests().is_empty());
+    }
+
+    #[test]
+    fn an_operation_with_nothing_to_act_on_says_so() {
+        let mut app = app();
+        app.panels[0].cursor_to(0); // the `..` entry is never a source
+        press(&mut app, "F5");
+        assert!(app.status_error, "{}", app.status);
+        assert!(app.mode.is_normal());
+    }
+
+    #[test]
+    fn a_conflict_is_answered_through_the_dialog() {
+        let mut app = app();
+        press(&mut app, "Down");
+        press(&mut app, "F5");
+        press(&mut app, "Enter");
+        let (id, _) = job_request(&mut app);
+
+        let (reply, answers) = std::sync::mpsc::channel();
+        app.handle_event(Event::JobQuestion {
+            id,
+            question: Question::Conflict {
+                src: VPath::local("/home/mb/docs"),
+                dst: VPath::local("/tmp/docs"),
+                src_size: 10,
+                dst_size: 20,
+                src_newer: true,
+            },
+            reply,
+        });
+        // Overwrite, All, Skip, Skip all, Cancel → pick "Skip".
+        press(&mut app, "Right");
+        press(&mut app, "Right");
+        press(&mut app, "Enter");
+        assert_eq!(answers.recv().unwrap(), Decision::Skip);
+        // The dialog is gone, the job keeps running.
+        assert!(app.mode.job().unwrap().question.is_none());
+    }
+
+    #[test]
+    fn esc_during_a_question_cancels_the_job() {
+        let mut app = app();
+        press(&mut app, "Down");
+        press(&mut app, "F5");
+        press(&mut app, "Enter");
+        let (id, _) = job_request(&mut app);
+        let (reply, answers) = std::sync::mpsc::channel();
+        app.handle_event(Event::JobQuestion {
+            id,
+            question: Question::Error {
+                path: VPath::local("/tmp/docs"),
+                error: "permission denied".into(),
+            },
+            reply,
+        });
+        press(&mut app, "Esc");
+        assert_eq!(answers.recv().unwrap(), Decision::Cancel);
+    }
+
+    #[test]
+    fn a_question_from_a_job_we_are_not_showing_is_never_left_hanging() {
+        let mut app = app();
+        let (reply, answers) = std::sync::mpsc::channel();
+        app.handle_event(Event::JobQuestion {
+            id: 999,
+            question: Question::Error {
+                path: VPath::local("/x"),
+                error: "boom".into(),
+            },
+            reply,
+        });
+        assert_eq!(
+            answers.recv().unwrap(),
+            Decision::Cancel,
+            "an unanswerable question must not block the engine for ever"
+        );
+    }
+
+    #[test]
+    fn esc_cancels_a_running_job() {
+        let mut app = app();
+        press(&mut app, "Down");
+        press(&mut app, "F5");
+        press(&mut app, "Enter");
+        let cancel = match app.take_requests().into_iter().next() {
+            Some(Request::Job { cancel, .. }) => cancel,
+            other => panic!("{other:?}"),
+        };
+        assert!(!cancel.is_cancelled());
+        press(&mut app, "Esc");
+        assert!(cancel.is_cancelled());
+        assert!(app.status.contains("cancel"), "{}", app.status);
+    }
+
+    #[test]
+    fn progress_only_updates_the_job_it_belongs_to() {
+        let mut app = app();
+        press(&mut app, "Down");
+        press(&mut app, "F5");
+        press(&mut app, "Enter");
+        let (id, _) = job_request(&mut app);
+        app.handle_event(Event::JobProgress {
+            id,
+            progress: Progress {
+                files_done: 3,
+                files_total: 10,
+                ..Progress::default()
+            },
+        });
+        assert_eq!(app.mode.job().unwrap().progress.files_done, 3);
+        app.handle_event(Event::JobProgress {
+            id: id + 100,
+            progress: Progress {
+                files_done: 99,
+                ..Progress::default()
+            },
+        });
+        assert_eq!(app.mode.job().unwrap().progress.files_done, 3);
+    }
+
+    #[test]
+    fn finishing_a_job_rereads_both_panels_and_reports() {
+        let mut app = app();
+        press(&mut app, "Down");
+        press(&mut app, "Down");
+        press(&mut app, "Ins");
+        press(&mut app, "F5");
+        press(&mut app, "Enter");
+        let (id, _) = job_request(&mut app);
+        app.handle_event(Event::JobDone {
+            id,
+            kind: JobKind::Copy,
+            outcome: Outcome {
+                files: 2,
+                bytes: 2048,
+                ..Outcome::default()
+            },
+        });
+        assert!(app.mode.is_normal());
+        assert!(app.status.contains("2"), "{}", app.status);
+        assert!(app.status.contains("2.00 K"), "{}", app.status);
+        assert!(
+            app.panel().selection.is_empty(),
+            "the selection should be cleared"
+        );
+        let reads: Vec<usize> = app
+            .take_requests()
+            .iter()
+            .filter_map(|r| match r {
+                Request::Read { panel, .. } => Some(*panel),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(reads, vec![0, 1], "both panels must be refreshed");
+    }
+
+    #[test]
+    fn errors_from_a_job_are_shown_not_swallowed() {
+        let mut app = app();
+        press(&mut app, "Down");
+        press(&mut app, "F5");
+        press(&mut app, "Enter");
+        let (id, _) = job_request(&mut app);
+        app.handle_event(Event::JobDone {
+            id,
+            kind: JobKind::Copy,
+            outcome: Outcome {
+                files: 1,
+                errors: vec![(VPath::local("/tmp/x"), "permission denied".into())],
+                ..Outcome::default()
+            },
+        });
+        assert!(app.status_error);
+        match &app.mode {
+            Mode::Message { lines, .. } => {
+                assert!(lines[0].contains("permission denied"), "{lines:?}")
+            }
+            other => panic!("expected the error list, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn delete_can_be_configured_not_to_ask() {
+        let mut app = app();
+        app.cfg.general.confirm_delete = false;
+        press(&mut app, "Down");
+        press(&mut app, "F8");
+        let (_, spec) = job_request(&mut app);
+        assert_eq!(spec.kind, JobKind::Delete);
     }
 
     #[test]

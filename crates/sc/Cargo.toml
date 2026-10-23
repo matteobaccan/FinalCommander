@@ -15,10 +15,12 @@ sc-cmd = { version = "0.1.0", path = "../sc-cmd" }
 sc-config = { version = "0.1.0", path = "../sc-config" }
 sc-core = { version = "0.1.0", path = "../sc-core" }
 sc-i18n = { version = "0.1.0", path = "../sc-i18n" }
+sc-jobs = { version = "0.1.0", path = "../sc-jobs" }
 sc-tui = { version = "0.1.0", path = "../sc-tui" }
 sc-ui = { version = "0.1.0", path = "../sc-ui" }
 sc-vfs = { version = "0.1.0", path = "../sc-vfs" }
 tokio = { version = "1.53.3", features = ["rt-multi-thread", "fs", "sync", "time", "macros"] }
+unicode-width = "0.2.2"
 
 [dev-dependencies]
 tempfile = "3.27.0"
