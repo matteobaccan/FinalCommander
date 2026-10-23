@@ -4122,7 +4122,11 @@ abcdefghij
         }
         press(&mut app, "Enter");
         let written = std::fs::read_to_string(dir.path().join("new.txt")).unwrap();
-        assert_eq!(written, "hi\n");
+        // A new file gets this platform's line ending, so compare against that.
+        assert_eq!(
+            written,
+            format!("hi{}", scmd_edit::Eol::detect("").0.bytes())
+        );
         assert_eq!(app.mode.editor().unwrap().name(), "new.txt");
     }
 
@@ -4524,6 +4528,9 @@ abcdefghij
         });
 
         // F5 from the remote panel to the local one: the source is a remote path.
+        // The passive panel gets a real local directory, so the prefilled destination is a
+        // path this platform calls absolute (on Windows, `/tmp` is not).
+        app.panels[1].go(VPath::local(std::env::temp_dir()), true);
         app.panels[0].cursor_to(2); // notes.txt
         press(&mut app, "F5");
         press(&mut app, "Enter");

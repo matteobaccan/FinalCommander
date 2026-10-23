@@ -991,14 +991,12 @@ mod tests {
 
     #[test]
     fn paths_describe_one_file_and_one_optional_directory() {
-        let paths = Paths::discover(
-            Some(std::path::Path::new("/tmp/sc-x/scmd.toml")),
-            Some(std::path::Path::new("/tmp/sc-x/plugins")),
-        );
+        // A native directory, so every separator in the output is this platform's.
+        let base = std::env::temp_dir().join("sc-x");
+        let paths = Paths::discover(Some(&base.join("scmd.toml")), Some(&base.join("plugins")));
         let text = paths.describe();
-        // `describe` prints whatever the platform's `Display` gives, so compare on that.
         for expected in ["scmd.toml", "scmd-state.toml", "plugins"] {
-            let path = std::path::Path::new("/tmp/sc-x").join(expected);
+            let path = base.join(expected);
             assert!(text.contains(&path.display().to_string()), "{text}");
         }
     }

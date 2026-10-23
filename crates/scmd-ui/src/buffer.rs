@@ -155,13 +155,11 @@ impl Buffer {
     }
 
     pub fn clear(&mut self, style: Style) {
-        for c in &mut self.cells {
-            *c = Cell {
-                ch: ' ',
-                style,
-                wide_tail: false,
-            };
-        }
+        self.cells.fill(Cell {
+            ch: ' ',
+            style,
+            wide_tail: false,
+        });
     }
 
     pub fn fill(&mut self, rect: Rect, ch: char, style: Style) {
