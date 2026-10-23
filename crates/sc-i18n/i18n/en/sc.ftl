@@ -82,3 +82,20 @@ btn-skip-all = Skip all
 btn-retry = Retry
 btn-cancel = Cancel
 msg-nothing-to-do = nothing selected
+
+# Viewer (F3)
+key-wrap = Wrap
+key-hex = Hex
+key-search = Search
+key-code = Code
+key-follow = Follow
+viewer-prompt-search = Search for ({ $mode }):
+viewer-prompt-goto = Go to offset, or NN% :
+viewer-not-found = `{ $query }` not found
+viewer-follow-on = following the end of the file
+viewer-follow-off = follow mode off
+viewer-codepage = codepage: { $name }
+viewer-wrap-mode = { $mode }
+viewer-no-undo = no earlier position
+viewer-empty = (empty file)
+viewer-status = { $mode } { $codepage }  { $offset } / { $len }  { $percent }%

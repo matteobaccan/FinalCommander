@@ -41,12 +41,18 @@ What works today:
   `Ctrl+A` selection by mask, `Ctrl+F3..F7` sorting (press twice to reverse), `Ctrl+1/2` view
   modes, `Ctrl+H` hidden files, `Alt+I` live filter, quick search by typing, `Space` for a
   recursive directory size, `Ctrl+=` to sync the other panel.
+- **Viewer** (`F3`): text, dump and hex on files of any size — position is a byte offset, so
+  opening a 40 GB log costs one read and `End` costs one seek. Encoding detected (UTF-8,
+  UTF-16 with or without a BOM, CP1252, CP437) and switchable with `F8`; `F2` cycles
+  no-wrap / character / word wrap; `F4` hex, `Shift+F4` the next mode; `F7` search (plain,
+  regex or `4D 5A ?? 00` hex patterns, hits highlighted, `n`/`N` for the next and previous);
+  `Alt+F8` jumps to an offset, `0x`-offset or `NN%`; `Shift+F` follows a growing file like
+  `tail -f`; `Ctrl+Z` undoes a jump. `hjkl`, `g`/`G`, `/` and `:` work too.
 - **The rest**: `Alt+T` cycles themes, `F1` is a help page generated from the live keymap,
   `F10` quits.
 
-Not yet: `F3` view and `F4` edit (the viewer and the editor are the next milestone), trash,
-wipe, a background job queue, archives and network panels. Anything unimplemented says so
-plainly instead of pretending.
+Not yet: `F4` edit (the editor is next), trash, wipe, a background job queue, archives and
+network panels. Anything unimplemented says so plainly instead of pretending.
 
 Non-interactive modes (used by CI and by scripts):
 
@@ -96,6 +102,7 @@ Chinese (`ui.language = "auto"` follows the OS locale); CJK double-width layout 
 crates/sc-core     paths, entries, listings, sorting, selection   (no dependencies of ours)
 crates/sc-vfs      the Vfs trait + the local provider
 crates/sc-jobs     the operation engine: plan, execute, settle; conflicts and progress
+crates/sc-view     the viewer: windowed reads, encodings, text/dump/hex, search
 crates/sc-cmd      command vocabulary, keys, keymap profiles (far, mc)
 crates/sc-config   TOML configuration, discovery, overrides
 crates/sc-i18n     fluent catalogues for seven languages

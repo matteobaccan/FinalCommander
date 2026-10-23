@@ -9,7 +9,7 @@ sc-jobs        operation engine: plan/execute/settle, conflict policy, progress 
                journal still to come)
 sc-ui          immediate-mode widgets on top of a cell buffer: panel, dialog, menu, keybar
 sc-tui         the only backend: terminal I/O, input decoding, capability detection
-sc-view        viewer: text/hex/dump, encodings, search, preview pipeline
+sc-view        viewer: text/dump/hex, encodings, search (preview pipeline still to come)
 sc-edit        editor: rope buffer, column blocks, undo, syntax (tree-sitter)
 sc-cmd         command vocabulary, keymap, macro engine, command palette
 sc-config      TOML config, themes, profiles, portable-mode discovery, migration

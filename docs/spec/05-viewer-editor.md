@@ -1,5 +1,14 @@
 # SPEC 05 — Viewer and editor
 
+**Implemented today** (M1): the viewer's text, dump and hex modes; no-wrap / character / word
+wrapping; encoding detection (BOM, UTF-8 validity, the UTF-16 NUL pattern) with manual
+switching between UTF-8, UTF-16LE/BE, CP1252 and CP437; plain, regex and hex-pattern search
+with highlighted hits and next/previous; go to offset, `0x` offset or percentage; position undo;
+bookmarks 0–9; follow mode; windowed reads with no line index, so file size does not matter.
+**Still to come**: the "all matches" list (§1.4), the preview pipeline (§1.6), filtered view
+(§1.9), next/previous file in the panel, syntax highlighting, and the whole editor (§2) and
+diff viewer (§3).
+
 ## 1. Viewer (`F3`)
 
 ### 1.1 Modes

@@ -213,3 +213,109 @@ cmd = "app.palette"
 keys = ["Alt+T"]
 scope = "global"
 cmd = "app.theme.next"
+
+# ---------------------------------------------------------------- viewer (F3)
+[[bind]]
+keys = ["Esc", "F3", "F10", "q"]
+scope = "viewer"
+cmd = "viewer.quit"
+
+[[bind]]
+keys = ["F2"]
+scope = "viewer"
+cmd = "viewer.wrap"
+
+[[bind]]
+keys = ["F4"]
+scope = "viewer"
+cmd = "viewer.hex"
+
+[[bind]]
+keys = ["Shift+F4"]
+scope = "viewer"
+cmd = "viewer.mode.next"
+
+[[bind]]
+keys = ["F7", "/"]
+scope = "viewer"
+cmd = "viewer.search"
+
+[[bind]]
+keys = ["Shift+F7", "n"]
+scope = "viewer"
+cmd = "viewer.search.next"
+
+[[bind]]
+keys = ["Alt+F7", "Shift+N"]
+scope = "viewer"
+cmd = "viewer.search.prev"
+
+[[bind]]
+keys = ["F8"]
+scope = "viewer"
+cmd = "viewer.codepage.next"
+
+[[bind]]
+keys = ["Alt+F8", ":"]
+scope = "viewer"
+cmd = "viewer.goto"
+
+[[bind]]
+keys = ["Shift+F"]
+scope = "viewer"
+cmd = "viewer.follow"
+
+[[bind]]
+keys = ["Ctrl+Z"]
+scope = "viewer"
+cmd = "viewer.undo"
+
+[[bind]]
+keys = ["["]
+scope = "viewer"
+cmd = "viewer.bytes.less"
+
+[[bind]]
+keys = ["]"]
+scope = "viewer"
+cmd = "viewer.bytes.more"
+
+[[bind]]
+keys = ["Up", "k"]
+scope = "viewer"
+cmd = "nav.up"
+
+[[bind]]
+keys = ["Down", "j"]
+scope = "viewer"
+cmd = "nav.down"
+
+[[bind]]
+keys = ["PgUp", "Ctrl+B"]
+scope = "viewer"
+cmd = "nav.pageup"
+
+[[bind]]
+keys = ["PgDn", "Space"]
+scope = "viewer"
+cmd = "nav.pagedown"
+
+[[bind]]
+keys = ["Home", "Ctrl+Home", "g"]
+scope = "viewer"
+cmd = "nav.top"
+
+[[bind]]
+keys = ["End", "Ctrl+End", "Shift+G"]
+scope = "viewer"
+cmd = "nav.bottom"
+
+[[bind]]
+keys = ["Left", "h"]
+scope = "viewer"
+cmd = "viewer.left"
+
+[[bind]]
+keys = ["Right", "l"]
+scope = "viewer"
+cmd = "viewer.right"

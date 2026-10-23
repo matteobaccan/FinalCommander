@@ -11,6 +11,26 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         return None;
     }
 
+    // The viewer takes the whole screen; its prompts draw on top of it.
+    if let Some((mut viewer, parked)) = app.viewer_for_render() {
+        draw_viewer(app, &mut viewer, buf);
+        app.return_viewer(viewer, parked);
+        if parked {
+            if let Mode::Prompt(prompt) = &app.mode {
+                let (_, cx, cy) = widgets::draw_prompt(
+                    buf,
+                    &app.theme,
+                    Rect::new(0, 0, w, h.saturating_sub(1)),
+                    &prompt.title,
+                    &prompt.text,
+                    prompt.text.chars().count(),
+                );
+                return Some((cx, cy));
+            }
+        }
+        return None;
+    }
+
     let keybar_h = u16::from(app.cfg.ui.key_bar);
     let status_h = u16::from(app.cfg.ui.status_bar);
     let panels_h = h.saturating_sub(keybar_h + status_h).max(3);
@@ -107,7 +127,8 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             );
             None
         }
-        Mode::Job(_) => None, // handled above, through `Mode::job()`
+        Mode::Job(_) => None,    // handled above, through `Mode::job()`
+        Mode::Viewer(_) => None, // handled above, before the panels are drawn
         Mode::Message { title, lines } => {
             widgets::draw_dialog(buf, &app.theme, screen, title, lines, None);
             None
@@ -166,6 +187,68 @@ fn draw_job(app: &App, view: &crate::app::JobView, buf: &mut Buffer, screen: Rec
             hint: &app.i18n.t("job-hint"),
         },
     );
+}
+
+/// The viewer, full screen: name and status on the top line, content, key bar at the bottom.
+fn draw_viewer(app: &mut App, viewer: &mut sc_view::Viewer, buf: &mut Buffer) {
+    let (w, h) = (buf.width(), buf.height());
+    let keybar_h = u16::from(app.cfg.ui.key_bar);
+    let body = Rect::new(0, 1, w, h.saturating_sub(1 + keybar_h));
+    app.viewer_size = (body.w, body.h);
+
+    let base = app.theme.panel();
+    buf.fill(Rect::new(0, 0, w, h.saturating_sub(keybar_h)), ' ', base);
+
+    // Top line: the file on the left, the status on the right.
+    let header = Style::new(
+        app.theme.color("panel.header.fg"),
+        app.theme.color("status.bg"),
+    );
+    buf.fill(Rect::new(0, 0, w, 1), ' ', header);
+    let status = viewer.status();
+    let status_text = app.viewer_status(&status);
+    let status_w = status_text.chars().count().min(w as usize) as u16;
+    let name_w = w.saturating_sub(status_w + 2);
+    buf.put_str(
+        0,
+        0,
+        &sc_ui::elide_middle(&viewer.path.to_string(), name_w as usize),
+        header,
+        name_w,
+    );
+    buf.put_str(w - status_w, 0, &status_text, header, status_w);
+
+    // Content.
+    let hit = Style::new(app.theme.color("search.fg"), app.theme.color("panel.bg")).bold();
+    let rows = viewer.rows(body.w, body.h);
+    for (i, row) in rows.iter().enumerate() {
+        let y = body.y + i as u16;
+        buf.put_str(0, y, &row.text, base, body.w);
+        for (start, len) in &row.hits {
+            let text: String = row.text.chars().skip(*start).take(*len).collect();
+            if text.is_empty() {
+                continue;
+            }
+            let x = row
+                .text
+                .chars()
+                .take(*start)
+                .filter_map(unicode_width::UnicodeWidthChar::width)
+                .sum::<usize>() as u16;
+            if x < body.w {
+                buf.put_str(x, y, &text, hit, body.w - x);
+            }
+        }
+    }
+    if rows.is_empty() {
+        buf.put_str(0, body.y, &app.i18n.t("viewer-empty"), base, body.w);
+    }
+
+    if keybar_h == 1 {
+        let labels = app.keybar_viewer();
+        let refs: Vec<(u8, &str)> = labels.iter().map(|(n, s)| (*n, s.as_str())).collect();
+        widgets::draw_keybar(buf, &app.theme, Rect::new(0, h - 1, w, 1), &refs);
+    }
 }
 
 fn status_hint(app: &App) -> String {
@@ -482,6 +565,117 @@ mod tests {
                 );
             }
             assert!(out.contains("src"), "language {tag}: {out}");
+        }
+    }
+
+    #[test]
+    fn the_viewer_takes_the_whole_screen_with_a_status_and_its_own_key_bar() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("readme.txt"),
+            b"first line
+second line
+third line
+",
+        )
+        .unwrap();
+        let mut app = App::new(Startup {
+            cfg: Config::default(),
+            paths: Paths::discover(Some(&dir.path().join("sc.toml")), None),
+            i18n: I18n::new("en"),
+            keymap: Keymap::builtin("far").unwrap(),
+            themes: ThemeSet::builtin_only(),
+            theme: Theme::default_theme(),
+            left: VPath::local(dir.path()),
+            right: VPath::local(dir.path()),
+        });
+        app.requests.clear();
+        let entries =
+            sc_vfs::local::list_blocking(&VPath::local(dir.path()), &sc_core::CancelToken::new())
+                .unwrap();
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation: 1,
+            result: Ok(entries.clone()),
+        });
+        app.handle_event(Event::Listed {
+            panel: 1,
+            generation: 1,
+            result: Ok(entries),
+        });
+
+        app.handle_input(Input::Key("Down".parse().unwrap()));
+        app.handle_input(Input::Key("F3".parse().unwrap()));
+        let out = frame(&mut app, 70, 12);
+        let lines: Vec<&str> = out.lines().collect();
+
+        assert!(lines[0].contains("readme.txt"), "{out}");
+        assert!(
+            lines[0].contains("UTF-8") && lines[0].contains('%'),
+            "{out}"
+        );
+        assert!(lines[1].contains("first line"), "{out}");
+        assert!(lines[3].contains("third line"), "{out}");
+        assert!(
+            lines[11].contains("Wrap") && lines[11].contains("Hex"),
+            "{out}"
+        );
+        assert!(lines[11].contains("Search"), "{out}");
+        // The panels are gone: the viewer owns the screen.
+        assert!(!out.contains('┌'), "a panel frame is still visible: {out}");
+
+        // A search hit is highlighted with the theme's search colour.
+        app.handle_input(Input::Key("F7".parse().unwrap()));
+        for c in ["s", "e", "c"] {
+            app.handle_input(Input::Key(c.parse().unwrap()));
+        }
+        app.handle_input(Input::Key("Enter".parse().unwrap()));
+        let mut buf = Buffer::new(70, 12);
+        draw(&mut app, &mut buf);
+        let highlighted = (0..buf.height())
+            .flat_map(|y| (0..buf.width()).map(move |x| (x, y)))
+            .filter(|(x, y)| buf.get(*x, *y).unwrap().style.fg == app.theme.color("search.fg"))
+            .count();
+        assert!(highlighted >= 3, "the search hit is not highlighted");
+    }
+
+    #[test]
+    fn the_viewer_renders_a_binary_as_hex_without_overflowing() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut bytes = vec![0x7f, b'E', b'L', b'F'];
+        bytes.extend((0..200u16).map(|i| (i % 251) as u8));
+        std::fs::write(dir.path().join("prog.bin"), &bytes).unwrap();
+        let mut app = App::new(Startup {
+            cfg: Config::default(),
+            paths: Paths::discover(Some(&dir.path().join("sc.toml")), None),
+            i18n: I18n::new("en"),
+            keymap: Keymap::builtin("far").unwrap(),
+            themes: ThemeSet::builtin_only(),
+            theme: Theme::default_theme(),
+            left: VPath::local(dir.path()),
+            right: VPath::local(dir.path()),
+        });
+        app.requests.clear();
+        let entries =
+            sc_vfs::local::list_blocking(&VPath::local(dir.path()), &sc_core::CancelToken::new())
+                .unwrap();
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation: 1,
+            result: Ok(entries),
+        });
+        app.handle_input(Input::Key("Down".parse().unwrap()));
+        app.handle_input(Input::Key("F3".parse().unwrap()));
+        // A binary opens in dump mode; F4 switches to hex.
+        assert_eq!(app.mode.viewer().unwrap().mode, sc_view::Mode::Dump);
+        app.handle_input(Input::Key("F4".parse().unwrap()));
+        let out = frame(&mut app, 80, 10);
+        assert!(out.contains("00000000  7F 45 4C 46"), "{out}");
+        for line in out.lines() {
+            assert!(
+                unicode_width::UnicodeWidthStr::width(line) <= 80,
+                "overflow: {line:?}"
+            );
         }
     }
 
