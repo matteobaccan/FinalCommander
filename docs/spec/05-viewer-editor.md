@@ -91,7 +91,7 @@ geometry). Quick-view panel uses the same pipeline at lower priority.
   file" mode with chunked editing refused and an explanation.
 - Encoding on open = viewer's detection; on save: keep original encoding and EOL by default
   (FAR's `KeepEditorEOL`), with explicit conversion commands. BOM preserved unless changed.
-- Atomic save: write `name.sc-tmp` in the same directory, copy permissions/owner where
+- Atomic save: write `name.scmd-tmp` in the same directory, copy permissions/owner where
   possible, fsync, rename. Option for in-place save for special files (`/proc`, sockets,
   hardlink-sensitive paths).
 - External-change detection: if the file changed on disk while open, offer reload / keep /
@@ -104,7 +104,7 @@ geometry). Quick-view panel uses the same pipeline at lower priority.
 | Blocks | stream blocks (`Shift+arrows`) **and column blocks** (`Alt+Shift+arrows`) with the FAR semantics: typing replaces the block optionally, `Alt+I`/`Alt+U` indent/outdent, persistent-block mode copies/moves a block to the cursor (`Ctrl+Shift+P`/`Ctrl+Shift+M`) |
 | Multi-caret | derived from a column block or `Ctrl+D`-style "add next occurrence" (M3) |
 | Undo | grouped by typing burst (300 ms) and by command; configurable depth; redo; undo survives save |
-| Clipboard | OS clipboard via `sc-platform` (X11/Wayland/macOS/Windows, OSC 52 fallback over SSH); internal ring of the last 10 blocks; append-to-clipboard (`Ctrl+Shift+C`) |
+| Clipboard | OS clipboard via `scmd-platform` (X11/Wayland/macOS/Windows, OSC 52 fallback over SSH); internal ring of the last 10 blocks; append-to-clipboard (`Ctrl+Shift+C`) |
 | Indentation | detect per file (spaces vs tabs, width), auto-indent, smart home, trailing-space trim on save (opt-in), `.editorconfig` support |
 | Lines | duplicate, delete, move up/down, join, sort selected lines, unique, reverse, number |
 | Search/replace | shared engine with the viewer, plus **replace with capture groups**, replace-in-selection, count, and "preserve style" (match the case/separator convention of the replaced token — FAR's feature, re-implemented from the described behaviour) |
@@ -131,4 +131,4 @@ Side-by-side and unified views of two files (or the two panels' cursor items, or
 its on-disk version), with word-level intra-line diff, synchronised scrolling, next/previous
 change, copy-block-to-other-side (producing a normal job), ignore-whitespace/case/EOL options,
 and binary comparison (first differing offset, hex context). Backed by a Myers/patience diff
-implementation in `sc-core`.
+implementation in `scmd-core`.

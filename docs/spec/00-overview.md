@@ -2,7 +2,7 @@
 
 ## 1. What we are building
 
-**SupremeCommander** (`sc`) is a cross-platform orthodox file manager written in Rust:
+**SupremeCommander** (`scmd`) is a cross-platform orthodox file manager written in Rust:
 two panels, a command line, a function-key bar, keyboard-first, with an internal viewer and
 editor, a virtual filesystem layer (archives, SFTP, S3, …), a job engine for file operations,
 and an extension layer (Lua + WebAssembly).
@@ -38,8 +38,8 @@ and preview pipeline. Licensing basis: `docs/01-licensing.md`.
   an empty disk around it — no installer, no asset directory, no data files to deploy, nothing
   to break when a path moves.
   The only directory SupremeCommander ever looks for is **`plugins/`**, and it is optional.
-  User settings, when there are any, are **one file** (`sc.toml`) plus **one state file**
-  (`sc-state.toml`) beside it — themes and keymaps are blocks inside that file, not a tree.
+  User settings, when there are any, are **one file** (`scmd.toml`) plus **one state file**
+  (`scmd-state.toml`) beside it — themes and keymaps are blocks inside that file, not a tree.
   Budget: < 20 MB binary, cold start < 50 ms, no runtime dependencies for the core features.
 
 ## 3. Non-goals
@@ -89,7 +89,7 @@ and preview pipeline. Licensing basis: `docs/01-licensing.md`.
 | Memory for 100 000-entry panel | ≤ 60 MB RSS |
 | `cargo clippy -- -D warnings`, `cargo fmt --check` | clean |
 | `cargo deny` (licences + advisories) | clean |
-| `unsafe` outside `sc-platform` | forbidden by lint |
+| `unsafe` outside `scmd-platform` | forbidden by lint |
 | Snapshot tests of the rendered screen | all platforms |
 | Fuzz targets (path parsing, archive readers, keymap parser) | no new crashes |
 

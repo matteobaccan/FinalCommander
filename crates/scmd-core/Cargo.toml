@@ -1,0 +1,14 @@
+[package]
+name = "scmd-core"
+description = "SupremeCommander: core domain types (paths, entries, listings, sorting, selection)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+globset = "0.4"
+thiserror = "2"
+unicode-width = "0.2"

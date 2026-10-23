@@ -735,48 +735,48 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
 
 [[package]]
-name = "sc"
+name = "scmd"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
- "sc-cmd",
- "sc-config",
- "sc-core",
- "sc-i18n",
- "sc-jobs",
- "sc-tui",
- "sc-ui",
- "sc-vfs",
- "sc-view",
+ "scmd-cmd",
+ "scmd-config",
+ "scmd-core",
+ "scmd-i18n",
+ "scmd-jobs",
+ "scmd-tui",
+ "scmd-ui",
+ "scmd-vfs",
+ "scmd-view",
  "tempfile",
  "tokio",
  "unicode-width",
 ]
 
 [[package]]
-name = "sc-cmd"
+name = "scmd-cmd"
 version = "0.1.0"
 dependencies = [
- "sc-core",
+ "scmd-core",
  "serde",
  "thiserror",
  "toml",
 ]
 
 [[package]]
-name = "sc-config"
+name = "scmd-config"
 version = "0.1.0"
 dependencies = [
  "dirs",
- "sc-core",
+ "scmd-core",
  "serde",
  "thiserror",
  "toml",
 ]
 
 [[package]]
-name = "sc-core"
+name = "scmd-core"
 version = "0.1.0"
 dependencies = [
  "globset",
@@ -785,7 +785,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sc-i18n"
+name = "scmd-i18n"
 version = "0.1.0"
 dependencies = [
  "fluent-bundle",
@@ -793,31 +793,31 @@ dependencies = [
 ]
 
 [[package]]
-name = "sc-jobs"
+name = "scmd-jobs"
 version = "0.1.0"
 dependencies = [
- "sc-core",
+ "scmd-core",
  "tempfile",
  "thiserror",
 ]
 
 [[package]]
-name = "sc-tui"
+name = "scmd-tui"
 version = "0.1.0"
 dependencies = [
  "crossterm",
- "sc-cmd",
- "sc-ui",
+ "scmd-cmd",
+ "scmd-ui",
  "thiserror",
 ]
 
 [[package]]
-name = "sc-ui"
+name = "scmd-ui"
 version = "0.1.0"
 dependencies = [
  "chrono",
- "sc-core",
- "sc-i18n",
+ "scmd-core",
+ "scmd-i18n",
  "serde",
  "tempfile",
  "thiserror",
@@ -826,24 +826,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "sc-vfs"
+name = "scmd-vfs"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "sc-core",
+ "scmd-core",
  "tempfile",
  "thiserror",
  "tokio",
 ]
 
 [[package]]
-name = "sc-view"
+name = "scmd-view"
 version = "0.1.0"
 dependencies = [
  "encoding_rs",
  "memchr",
  "regex",
- "sc-core",
+ "scmd-core",
  "tempfile",
  "thiserror",
  "unicode-width",

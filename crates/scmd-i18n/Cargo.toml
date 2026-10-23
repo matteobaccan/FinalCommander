@@ -1,0 +1,13 @@
+[package]
+name = "scmd-i18n"
+description = "SupremeCommander component"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+fluent-bundle = "0.16.0"
+unic-langid = "0.9.6"

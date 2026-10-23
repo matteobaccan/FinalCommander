@@ -1,0 +1,15 @@
+[package]
+name = "scmd-cmd"
+description = "SupremeCommander component"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+scmd-core = { version = "0.1.0", path = "../scmd-core" }
+serde = { version = "1.0.229", features = ["derive"] }
+thiserror = "2.0.21"
+toml = "1.0.7"
