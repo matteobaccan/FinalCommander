@@ -46,7 +46,7 @@ where the code lives, not whether it is linked into the binary.
 
 | Scheme | Crate / mechanism | Caps | Milestone |
 | --- | --- | --- | --- |
-| `file` | `std::fs` + `sc-platform` | all native | M1 |
+| `file` | `std::fs` + `scmd-platform` | all native | M1 |
 | `zip` | `zip` (read/write, zip64, AES, deflate/zstd) | READ WRITE CREATE DELETE SEEK | M2 |
 | `tar` family | `tar` + `flate2`/`xz2`/`zstd`/`bzip2` | READ, WRITE(append/rebuild), stream-only for compressed | M2 |
 | `7z` | `sevenz-rust2` | READ, WRITE (M3), no random write in solid blocks | M2/M3 |

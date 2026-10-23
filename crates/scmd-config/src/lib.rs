@@ -1,0 +1,431 @@
+//! Configuration: discovery, TOML parsing, defaults, and a dump of what is in effect.
+//!
+//! Unknown keys are warnings, never errors: a config written for a later version still loads.
+//! See `docs/spec/07-config-theming.md`.
+
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+
+use serde::{Deserialize, Serialize};
+
+/// The single configuration file. There is no configuration *directory*: SupremeCommander
+/// ships as one executable and the only directory it ever looks for is the plugins folder
+/// (see `docs/spec/07-config-theming.md` §1).
+pub const CONFIG_FILE_NAME: &str = "scmd.toml";
+/// Histories, panel paths and other remembered state: one file, next to the config.
+pub const STATE_FILE_NAME: &str = "scmd-state.toml";
+/// The one directory: optional, and the only thing that may live outside the binary.
+pub const PLUGINS_DIR_NAME: &str = "plugins";
+
+#[derive(Debug, thiserror::Error)]
+pub enum ConfigError {
+    #[error("{path}: {source}")]
+    Io {
+        path: String,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("{path}: {source}")]
+    Toml {
+        path: String,
+        #[source]
+        source: toml::de::Error,
+    },
+}
+
+/// Where this run reads and writes. Three paths, no trees.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Paths {
+    /// The directory the executable sits in — where portable mode and plugins are looked for.
+    pub exe_dir: PathBuf,
+    pub config_file: PathBuf,
+    pub state_file: PathBuf,
+    pub plugins_dir: PathBuf,
+    /// True when the configuration sits next to the executable.
+    pub portable: bool,
+}
+
+impl Paths {
+    /// `--config <file>` wins. Otherwise, if `scmd.toml` sits next to the executable we are
+    /// portable (a USB stick, a release zip); failing that, the per-OS config location — as a
+    /// single file, `<config>/scmd.toml`, not a directory of our own.
+    ///
+    /// The plugins directory is `--plugins <dir>`, then `$SCMD_PLUGINS`, then `plugins/` next to
+    /// the executable, then `scmd-plugins/` beside the config file.
+    pub fn discover(config: Option<&Path>, plugins: Option<&Path>) -> Paths {
+        let exe_dir = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(Path::to_path_buf))
+            .unwrap_or_else(|| PathBuf::from("."));
+
+        let portable_config = exe_dir.join(CONFIG_FILE_NAME);
+        let (config_file, portable) = match config {
+            Some(explicit) => (explicit.to_path_buf(), false),
+            None if portable_config.exists() => (portable_config, true),
+            None => (
+                dirs::config_dir()
+                    .unwrap_or_else(|| PathBuf::from("."))
+                    .join(CONFIG_FILE_NAME),
+                false,
+            ),
+        };
+
+        let config_parent = config_file
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| PathBuf::from("."));
+        let state_file = config_parent.join(STATE_FILE_NAME);
+
+        let plugins_dir = plugins
+            .map(Path::to_path_buf)
+            .or_else(|| std::env::var_os("SCMD_PLUGINS").map(PathBuf::from))
+            .unwrap_or_else(|| {
+                let beside_exe = exe_dir.join(PLUGINS_DIR_NAME);
+                if beside_exe.is_dir() {
+                    beside_exe
+                } else {
+                    config_parent.join("scmd-plugins")
+                }
+            });
+
+        Paths {
+            exe_dir,
+            config_file,
+            state_file,
+            plugins_dir,
+            portable,
+        }
+    }
+
+    /// Human-readable summary for `sc --paths`: the first question anyone asks.
+    pub fn describe(&self) -> String {
+        format!(
+            "config   {}{}\nstate    {}\nplugins  {}{}\n",
+            self.config_file.display(),
+            if self.config_file.exists() {
+                ""
+            } else {
+                "   (not present; defaults are compiled in)"
+            },
+            self.state_file.display(),
+            self.plugins_dir.display(),
+            if self.plugins_dir.is_dir() {
+                ""
+            } else {
+                "   (not present; no plugins loaded)"
+            }
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct General {
+    pub confirm_exit: bool,
+    pub confirm_delete: bool,
+    pub confirm_overwrite: bool,
+    /// Never on: the program makes no network call the user did not ask for.
+    pub update_check: bool,
+}
+
+impl Default for General {
+    fn default() -> Self {
+        General {
+            confirm_exit: false,
+            confirm_delete: true,
+            confirm_overwrite: true,
+            update_check: false,
+        }
+    }
+}
+
+/// How typing in a panel behaves: FAR filters with `Alt`+letters, mc with bare letters.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum QuickSearch {
+    Alt,
+    Plain,
+    Off,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PanelCfg {
+    pub view: String,
+    pub sort: String,
+    pub reverse: bool,
+    pub dirs_first: bool,
+    pub selected_first: bool,
+    pub natural_sort: bool,
+    pub show_hidden: bool,
+    pub allow_reverse_sort: bool,
+    pub quick_search: QuickSearch,
+}
+
+impl Default for PanelCfg {
+    fn default() -> Self {
+        PanelCfg {
+            view: "full".into(),
+            sort: "name".into(),
+            reverse: false,
+            dirs_first: true,
+            selected_first: false,
+            natural_sort: true,
+            show_hidden: false,
+            allow_reverse_sort: true,
+            quick_search: QuickSearch::Alt,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct UiCfg {
+    pub theme: String,
+    pub keymap: String,
+    pub language: String,
+    pub key_bar: bool,
+    pub status_bar: bool,
+}
+
+impl Default for UiCfg {
+    fn default() -> Self {
+        UiCfg {
+            theme: "commander".into(),
+            keymap: "far".into(),
+            language: "auto".into(),
+            key_bar: true,
+            status_bar: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Config {
+    pub general: General,
+    pub panel: PanelCfg,
+    pub ui: UiCfg,
+    /// `[[theme]]` blocks: themes live in the config file, not in a themes directory.
+    #[serde(rename = "theme")]
+    pub themes: Vec<toml::Table>,
+    /// `[[keymap]]` blocks: same reasoning.
+    #[serde(rename = "keymap")]
+    pub keymaps: Vec<toml::Table>,
+    /// Anything we did not recognise, kept so `--dump-config` can show it and warn.
+    #[serde(flatten, skip_serializing)]
+    pub unknown: BTreeMap<String, toml::Value>,
+}
+
+impl Config {
+    /// Load the config file if it exists. A missing file is not an error; a broken one is.
+    pub fn load(paths: &Paths) -> Result<(Config, Vec<String>), ConfigError> {
+        let file = paths.config_file.clone();
+        if !file.exists() {
+            return Ok((Config::default(), Vec::new()));
+        }
+        let src = std::fs::read_to_string(&file).map_err(|source| ConfigError::Io {
+            path: file.display().to_string(),
+            source,
+        })?;
+        Self::parse(&file.display().to_string(), &src)
+    }
+
+    pub fn parse(name: &str, src: &str) -> Result<(Config, Vec<String>), ConfigError> {
+        let cfg: Config = toml::from_str(src).map_err(|source| ConfigError::Toml {
+            path: name.to_string(),
+            source,
+        })?;
+        let warnings = cfg
+            .unknown
+            .keys()
+            .map(|k| format!("{name}: unknown section or key `{k}` (ignored)"))
+            .collect();
+        Ok((cfg, warnings))
+    }
+
+    /// The effective configuration as TOML (`sc --dump-config`).
+    pub fn dump(&self) -> String {
+        toml::to_string_pretty(self).unwrap_or_else(|e| format!("# cannot serialise: {e}\n"))
+    }
+
+    /// Apply a `--set key=value` override. Returns an error message when it does not apply.
+    pub fn set(&mut self, key: &str, value: &str) -> Result<(), String> {
+        match key {
+            "ui.theme" => self.ui.theme = value.to_string(),
+            "ui.keymap" => self.ui.keymap = value.to_string(),
+            "ui.language" => self.ui.language = value.to_string(),
+            "ui.key_bar" => self.ui.key_bar = parse_bool(value)?,
+            "ui.status_bar" => self.ui.status_bar = parse_bool(value)?,
+            "panel.view" => self.panel.view = value.to_string(),
+            "panel.sort" => self.panel.sort = value.to_string(),
+            "panel.reverse" => self.panel.reverse = parse_bool(value)?,
+            "panel.show_hidden" => self.panel.show_hidden = parse_bool(value)?,
+            "panel.dirs_first" => self.panel.dirs_first = parse_bool(value)?,
+            "panel.selected_first" => self.panel.selected_first = parse_bool(value)?,
+            "panel.natural_sort" => self.panel.natural_sort = parse_bool(value)?,
+            "panel.quick_search" => {
+                self.panel.quick_search = match value {
+                    "alt" => QuickSearch::Alt,
+                    "plain" => QuickSearch::Plain,
+                    "off" => QuickSearch::Off,
+                    other => {
+                        return Err(format!(
+                            "panel.quick_search: expected alt|plain|off, got `{other}`"
+                        ))
+                    }
+                }
+            }
+            "general.confirm_exit" => self.general.confirm_exit = parse_bool(value)?,
+            "general.confirm_delete" => self.general.confirm_delete = parse_bool(value)?,
+            other => return Err(format!("unknown setting `{other}`")),
+        }
+        Ok(())
+    }
+}
+
+fn parse_bool(v: &str) -> Result<bool, String> {
+    match v.trim().to_ascii_lowercase().as_str() {
+        "true" | "yes" | "on" | "1" => Ok(true),
+        "false" | "no" | "off" | "0" => Ok(false),
+        other => Err(format!("expected a boolean, got `{other}`")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn defaults_are_the_documented_ones() {
+        let c = Config::default();
+        assert_eq!(c.ui.theme, "commander");
+        assert_eq!(c.ui.keymap, "far");
+        assert_eq!(c.panel.view, "full");
+        assert!(c.panel.dirs_first);
+        assert!(!c.general.update_check, "no network calls by default");
+        assert_eq!(c.panel.quick_search, QuickSearch::Alt);
+    }
+
+    #[test]
+    fn partial_config_keeps_the_other_defaults() {
+        let (c, warnings) = Config::parse(
+            "t.toml",
+            r#"
+            [ui]
+            theme = "matrix"
+            [panel]
+            show_hidden = true
+            "#,
+        )
+        .unwrap();
+        assert_eq!(c.ui.theme, "matrix");
+        assert_eq!(c.ui.keymap, "far");
+        assert!(c.panel.show_hidden);
+        assert!(c.panel.dirs_first);
+        assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn unknown_sections_warn_but_load() {
+        let (c, warnings) = Config::parse(
+            "t.toml",
+            r#"
+            [ui]
+            theme = "tron"
+            [from_the_future]
+            holograms = true
+            "#,
+        )
+        .unwrap();
+        assert_eq!(c.ui.theme, "tron");
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("from_the_future"), "{:?}", warnings);
+    }
+
+    #[test]
+    fn broken_toml_is_an_error_naming_the_file() {
+        let err = Config::parse("broken.toml", "[ui\ntheme =").unwrap_err();
+        assert!(err.to_string().starts_with("broken.toml:"), "{err}");
+    }
+
+    #[test]
+    fn dump_round_trips() {
+        let mut c = Config::default();
+        c.ui.theme = "blade".into();
+        c.panel.show_hidden = true;
+        let (again, warnings) = Config::parse("dump.toml", &c.dump()).unwrap();
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(again.ui.theme, "blade");
+        assert!(again.panel.show_hidden);
+    }
+
+    #[test]
+    fn cli_overrides_are_validated() {
+        let mut c = Config::default();
+        c.set("ui.theme", "matrix").unwrap();
+        c.set("panel.show_hidden", "yes").unwrap();
+        assert_eq!(c.ui.theme, "matrix");
+        assert!(c.panel.show_hidden);
+        assert!(c.set("panel.show_hidden", "maybe").is_err());
+        assert!(c.set("ui.colour_of_magic", "octarine").is_err());
+    }
+
+    #[test]
+    fn an_explicit_config_file_wins_and_state_sits_beside_it() {
+        let p = Paths::discover(Some(Path::new("/tmp/scconf/scmd.toml")), None);
+        assert_eq!(p.config_file, PathBuf::from("/tmp/scconf/scmd.toml"));
+        assert_eq!(p.state_file, PathBuf::from("/tmp/scconf/scmd-state.toml"));
+        assert!(!p.portable);
+    }
+
+    #[test]
+    fn an_explicit_plugins_dir_wins() {
+        let p = Paths::discover(None, Some(Path::new("/opt/sc/plugins")));
+        assert_eq!(p.plugins_dir, PathBuf::from("/opt/sc/plugins"));
+    }
+
+    #[test]
+    fn discovery_produces_one_file_and_no_directory_of_our_own() {
+        let p = Paths::discover(None, None);
+        assert_eq!(
+            p.config_file.file_name().unwrap(),
+            std::ffi::OsStr::new("scmd.toml")
+        );
+        // `~/.config/scmd.toml`, not `~/.config/sc/config.toml`: nothing to create, nothing to
+        // leave behind but one file.
+        let parent = p.config_file.parent().unwrap();
+        assert_ne!(parent.file_name(), Some(std::ffi::OsStr::new("scmd")));
+        assert!(p.describe().contains("plugins"));
+    }
+
+    #[test]
+    fn themes_and_keymaps_come_from_the_config_file() {
+        let (cfg, warnings) = Config::parse(
+            "scmd.toml",
+            r##"
+            [ui]
+            theme = "mine"
+
+            [[theme]]
+            id = "mine"
+            inherit = "matrix"
+            [theme.colors]
+            "selected.fg" = "#ff00ff"
+
+            [[keymap]]
+            name = "mine"
+            inherit = "far"
+            [[keymap.bind]]
+            keys = ["F4"]
+            cmd = "file.view"
+            "##,
+        )
+        .unwrap();
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(cfg.themes.len(), 1);
+        assert_eq!(cfg.keymaps.len(), 1);
+        assert_eq!(cfg.themes[0]["id"].as_str(), Some("mine"));
+        assert_eq!(cfg.keymaps[0]["name"].as_str(), Some("mine"));
+    }
+}

@@ -48,7 +48,7 @@ submenu = [
 ]
 ```
 
-A directory may carry its own `.sc-menu.toml`, merged above the global menu (FAR/mc local menus).
+A directory may carry its own `.scmd-menu.toml`, merged above the global menu (FAR/mc local menus).
 
 ## 5. File associations (`assoc.toml`)
 
@@ -73,7 +73,7 @@ per-history clearing. Stored as JSONL under `$STATE/history/`.
 | User screen | `Ctrl+O` shows the output of the last command full-screen; the output buffer is scrollable and searchable (`Ctrl+Shift+F`), capped in lines |
 | Subshell | a persistent PTY (`portable-pty`) running `$SHELL` (or `cmd`/`pwsh` on Windows) with **bidirectional cwd sync**: we inject a prompt hook (`PROMPT_COMMAND`/`precmd`/`PS1` OSC 7) so a `cd` in the shell moves the panel, and `panel.cd` sends a `cd` to the shell |
 | Terminal pane | `Ctrl+Alt+E` toggles an embedded terminal with full VT support (alternate screen, mouse, 24-bit colour) so `vim`/`htop` run inside it; multiple terminal tabs (M3) |
-| Elevation | a privileged helper process (`sc-helper`) started on demand via `pkexec`/`sudo`/UAC, speaking a minimal JSON protocol over a pipe, used only for explicitly elevated jobs; never started implicitly |
+| Elevation | a privileged helper process (`scmd-helper`) started on demand via `pkexec`/`sudo`/UAC, speaking a minimal JSON protocol over a pipe, used only for explicitly elevated jobs; never started implicitly |
 | Open with OS | `tool.os.open` (xdg-open/open/ShellExecute), `tool.os.terminal`, `tool.os.filemanager`, `tool.os.properties` |
 
 ## 8. Dialogs and common UI behaviour
@@ -85,7 +85,7 @@ per-history clearing. Stored as JSONL under `$STATE/history/`.
 - Long operations inside dialogs (listing a remote dir for a path picker) are cancellable.
 - The **command palette** (`Ctrl+Shift+P`) fuzzy-searches every command, shows its binding and
   scope, and is the discovery mechanism that replaces reading the manual.
-- **Learn keys** dialog: press a key, see what the terminal sent and what `sc` resolved it to;
+- **Learn keys** dialog: press a key, see what the terminal sent and what `scmd` resolved it to;
   write a local override.
 
 ## 9. Help system
@@ -99,4 +99,4 @@ and the keymap pages are generated from the live keymap (never hand-written).
 
 `session.toml` holds panels, tabs, paths, view modes, sorts, filters, selection (optional),
 viewer/editor positions, and the job journal pointer. `--no-session` starts clean;
-`sc path1 path2` opens the two panels at those paths; `sc --goto file:line` opens the editor.
+`scmd path1 path2` opens the two panels at those paths; `scmd --goto file:line` opens the editor.

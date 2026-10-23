@@ -19,7 +19,7 @@ cargo run --release -- /etc /tmp     # left panel, right panel
 ┌────────── /home/mb/project ──────────┐┌──────────────── /tmp ────────────────┐
 │..                      UP--          ││..                      UP--          │
 │src/                  FOLDER          ││cargo-installXXXXXX/  FOLDER          │
-│docs/                 FOLDER          ││sc-build/             FOLDER          │
+│docs/                 FOLDER          ││scmd-build/             FOLDER          │
 │Cargo.toml             412 B 2026-10-2││notes.md              1.2 K 2026-10-2│
 │README.md             2.00 K 2026-10-2││                                      │
 └─2 files, 2.40 K  [name]──────────────┘└─1 files, 1.20 K  [name]──────────────┘
@@ -34,7 +34,7 @@ What works today:
   panel. Recursive trees, conflict dialogs (overwrite / all / skip / skip all / cancel), error
   decision points (retry / skip / skip all / cancel), a progress overlay with a per-file and a
   total bar, `Esc` to cancel, and both panels refreshed afterwards. A same-filesystem move is a
-  rename, not a copy. A copy is written to `name.sc-part` and renamed only when complete, so an
+  rename, not a copy. A copy is written to `name.scmd-part` and renamed only when complete, so an
   interrupted operation never leaves a file that looks finished.
 - **Panels**: `Tab` / `Ctrl+U`, arrows / `PgUp` / `PgDn` / `Home` / `End` / `Enter` /
   `Ctrl+PgUp` / `Backspace` / `Ctrl+\` with history (`Alt+←/→`), `Ins` and `+` / `-` / `*` /
@@ -57,14 +57,14 @@ network panels. Anything unimplemented says so plainly instead of pretending.
 Non-interactive modes (used by CI and by scripts):
 
 ```sh
-sc --list-themes      # built-in and external themes, with where each came from
-sc --list-commands    # the command vocabulary every key, menu and plugin binds to
-sc --list-languages   # en it de fr es ru zh
-sc --check-keymap     # validate a keymap and print the resolved bindings
-sc --dump-config      # the effective configuration
-sc --export-theme tron >> ~/.config/sc.toml   # a ready-to-paste [[theme]] block
-sc --paths            # where the config file, the state file and plugins/ are
-sc --list-plugins     # what is in the plugins directory
+scmd --list-themes      # built-in and external themes, with where each came from
+scmd --list-commands    # the command vocabulary every key, menu and plugin binds to
+scmd --list-languages   # en it de fr es ru zh
+scmd --check-keymap     # validate a keymap and print the resolved bindings
+scmd --dump-config      # the effective configuration
+scmd --export-theme tron >> ~/.config/scmd.toml   # a ready-to-paste [[theme]] block
+scmd --paths            # where the config file, the state file and plugins/ are
+scmd --list-plugins     # what is in the plugins directory
 ```
 
 ## Why
@@ -80,17 +80,25 @@ nothing to install and no asset tree — the same keys on Linux, macOS and Windo
 blocks or loses data, and a sandboxed plugin ABI whose first three clients are the viewer, the
 editor and netbox (the network panel).
 
-Everything on disk is optional and amounts to: one settings file (`sc.toml`, which also holds
+Everything on disk is optional and amounts to: one settings file (`scmd.toml`, which also holds
 your themes and keymaps), one state file beside it, and one `plugins/` directory — the only
 directory the program ever reads.
 
 There is no GUI build and there will not be one: the graphical commanders are a crowded field,
 and the open slot is a terminal commander with a modern engine.
 
+## Why the command is `scmd` and not `sc`
+
+`sc` is taken three times over: on Windows `sc.exe` in `System32` is the Service Control
+Manager, on Unix `sc` is the classic spreadsheet calculator, and the crates.io name belongs to
+a syscall crate. A commander that promises the same keys on three platforms cannot fight a
+system command for its own name, so the binary, the config file and the crates are all
+`scmd`. Please do not "fix" it back.
+
 ## Themes and languages
 
 Six themes are compiled in — `commander` (the classic blue, default), `black`, `white`,
-`matrix`, `tron`, `blade` — and `[[theme]]` blocks in `sc.toml` are read at startup,
+`matrix`, `tron`, `blade` — and `[[theme]]` blocks in `scmd.toml` are read at startup,
 hot-reloaded, may `inherit` a built-in one, and replace a built-in with the same id.
 
 The interface ships in English, Italian, German, French, Spanish, Russian and Simplified
@@ -99,16 +107,16 @@ Chinese (`ui.language = "auto"` follows the OS locale); CJK double-width layout 
 ## Layout
 
 ```
-crates/sc-core     paths, entries, listings, sorting, selection   (no dependencies of ours)
-crates/sc-vfs      the Vfs trait + the local provider
-crates/sc-jobs     the operation engine: plan, execute, settle; conflicts and progress
-crates/sc-view     the viewer: windowed reads, encodings, text/dump/hex, search
-crates/sc-cmd      command vocabulary, keys, keymap profiles (far, mc)
-crates/sc-config   TOML configuration, discovery, overrides
-crates/sc-i18n     fluent catalogues for seven languages
-crates/sc-ui       cell buffer, colours, themes, panel and chrome widgets
-crates/sc-tui      the terminal backend: input decoding and diffed painting
-crates/sc          the binary: CLI, state machine, event loop
+crates/scmd-core     paths, entries, listings, sorting, selection   (no dependencies of ours)
+crates/scmd-vfs      the Vfs trait + the local provider
+crates/scmd-jobs     the operation engine: plan, execute, settle; conflicts and progress
+crates/scmd-view     the viewer: windowed reads, encodings, text/dump/hex, search
+crates/scmd-cmd      command vocabulary, keys, keymap profiles (far, mc)
+crates/scmd-config   TOML configuration, discovery, overrides
+crates/scmd-i18n     fluent catalogues for seven languages
+crates/scmd-ui       cell buffer, colours, themes, panel and chrome widgets
+crates/scmd-tui      the terminal backend: input decoding and diffed painting
+crates/scmd        the binary: CLI, state machine, event loop
 ```
 
 ## Documents

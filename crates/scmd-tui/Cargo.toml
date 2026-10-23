@@ -1,0 +1,15 @@
+[package]
+name = "scmd-tui"
+description = "SupremeCommander component"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+crossterm = "0.29.0"
+scmd-cmd = { version = "0.1.0", path = "../scmd-cmd" }
+scmd-ui = { version = "0.1.0", path = "../scmd-ui" }
+thiserror = "2.0.21"

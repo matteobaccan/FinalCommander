@@ -7,22 +7,22 @@ reviewable and testable.
 
 | # | Chunk | Depends on |
 | --- | --- | --- |
-| 1 | workspace skeleton: crates, CI (fmt/clippy/deny/test on 3 OS), release profile, `sc --version` | — |
-| 2 | `sc-core`: `VPath`, `Entry`, `Listing`, `Selection`, `Sort`, `Totals`, predicate evaluator | 1 |
-| 3 | `sc-tui`: backend trait, cell buffer, diff renderer, input decoding + capability detection | 1 |
-| 4 | `sc-ui`: panel widget, key bar, status line, message/confirm dialog, input dialog | 2,3 |
-| 5 | `sc-vfs`: trait + local provider (streaming list, stat, read/write, rename, remove) | 2 |
+| 1 | workspace skeleton: crates, CI (fmt/clippy/deny/test on 3 OS), release profile, `scmd --version` | — |
+| 2 | `scmd-core`: `VPath`, `Entry`, `Listing`, `Selection`, `Sort`, `Totals`, predicate evaluator | 1 |
+| 3 | `scmd-tui`: backend trait, cell buffer, diff renderer, input decoding + capability detection | 1 |
+| 4 | `scmd-ui`: panel widget, key bar, status line, message/confirm dialog, input dialog | 2,3 |
+| 5 | `scmd-vfs`: trait + local provider (streaming list, stat, read/write, rename, remove) | 2 |
 | 6 | panel behaviour: navigation, cursor, scrolling, enter/parent/root, history, re-read | 4,5 |
 | 7 | view modes brief/full + sorting (all keys, reverse, dirs-first, natural) | 6 |
 | 8 | selection: `Ins`, ranges, masks `+`/`-`/`*`, select all/none/invert, totals | 6 |
 | 9 | fast find / quick search in panel | 6 |
-| 10 | `sc-cmd`: command registry, keymap loader, scope stack, chords, `--check-keymap` | 2 |
+| 10 | `scmd-cmd`: command registry, keymap loader, scope stack, chords, `--check-keymap` | 2 |
 | 11 | keymap profiles `far` + `mc`, learn-keys dialog, `keys.local.toml` | 10 |
-| 12 | `sc-config`: discovery, TOML load/merge/validate, `--dump-config`, hot reload | 2 |
-| 13 | ✅ `sc-jobs`: job model, planner, executor, progress, conflict dialog; copy/move/delete/mkdir | 5,12 |
+| 12 | `scmd-config`: discovery, TOML load/merge/validate, `--dump-config`, hot reload | 2 |
+| 13 | ✅ `scmd-jobs`: job model, planner, executor, progress, conflict dialog; copy/move/delete/mkdir | 5,12 |
 | 14 | command line + `%`-macros + user screen (`Ctrl+O`) + run command | 6,12 |
-| 15 | ✅ `sc-view`: viewer with wrap, windowed reader, encodings, plain/regex/hex search, hex and dump modes, follow, bookmarks | 5 |
-| 16 | `sc-platform` M1 slice: long paths, trash, clipboard, drives/mounts, FS watch | 1 |
+| 15 | ✅ `scmd-view`: viewer with wrap, windowed reader, encodings, plain/regex/hex search, hex and dump modes, follow, bookmarks | 5 |
+| 16 | `scmd-platform` M1 slice: long paths, trash, clipboard, drives/mounts, FS watch | 1 |
 | 17 | theming: theme loader, `far-classic` + `mono`, colour degradation | 3,12 |
 | 18 | packaging: static builds for linux-gnu/musl, macOS universal, windows-msvc; checksums | 1 |
 | 19 | snapshot test harness + keymap tests + job property tests + perf budget check | all |
@@ -40,7 +40,7 @@ tool for anything in M1 scope; all quality gates green on three platforms.
 **Headline: the viewer and the editor** (the first two of the three priority components, SPEC
 08 §8), then: tabs · quick view / info / tree panels · filters + highlight groups · custom columns ·
 find files + grep + panelize · disk usage · archives (zip/tar/7z read+write, pack/unpack
-dialogs) · temp panel · job queue panel + journal/resume · editor (`sc-edit`) · multi-rename ·
+dialogs) · temp panel · job queue panel + journal/resume · editor (`scmd-edit`) · multi-rename ·
 compare dirs · checksums/split/combine · attributes & permissions dialogs · links · trash/wipe ·
 PTY subshell with cwd sync · user menu · associations · histories with pinning · hex/dump
 viewer modes + regex/hex search · help system · session restore · `tc`/`nc` keymap profiles ·
@@ -59,10 +59,10 @@ far/tc/mc/dc.
 ## M4 — Ambition
 
 Multi-panel / windowed layout **inside the TUI** (the DOS Navigator idea: several panels and
-floating windows drawn in the character grid) · plugin registry and `sc plugin` CLI ·
+floating windows drawn in the character grid) · plugin registry and `scmd plugin` CLI ·
 native plugin ABI + optional TC packer-plugin bridge on Windows · special VFS (process list,
-registry, services, git) · headless CLI (`sc copy --queue`) · Android/iOS and web experiments ·
-remote `sc` protocol (run the engine on the server, the UI locally — far2l's best trick).
+registry, services, git) · headless CLI (`scmd copy --queue`) · Android/iOS and web experiments ·
+remote `scmd` protocol (run the engine on the server, the UI locally — far2l's best trick).
 
 ## Risks and how we de-risk them
 
@@ -84,4 +84,4 @@ remote `sc` protocol (run the engine on the server, the UI locally — far2l's b
    the same commit.
 3. Every user-visible behaviour needs a snapshot or keymap test; every job behaviour needs a
    failure-injection test.
-4. No new dependency without a justification line; no `unsafe` outside `sc-platform`.
+4. No new dependency without a justification line; no `unsafe` outside `scmd-platform`.

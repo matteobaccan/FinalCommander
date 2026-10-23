@@ -1,0 +1,27 @@
+[package]
+name = "scmd"
+description = "SupremeCommander: a cross-platform orthodox file manager for the terminal"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+anyhow = "1.0.104"
+clap = { version = "4.5.61", features = ["derive"] }
+scmd-cmd = { version = "0.1.0", path = "../scmd-cmd" }
+scmd-config = { version = "0.1.0", path = "../scmd-config" }
+scmd-core = { version = "0.1.0", path = "../scmd-core" }
+scmd-i18n = { version = "0.1.0", path = "../scmd-i18n" }
+scmd-jobs = { version = "0.1.0", path = "../scmd-jobs" }
+scmd-tui = { version = "0.1.0", path = "../scmd-tui" }
+scmd-ui = { version = "0.1.0", path = "../scmd-ui" }
+scmd-vfs = { version = "0.1.0", path = "../scmd-vfs" }
+scmd-view = { version = "0.1.0", path = "../scmd-view" }
+tokio = { version = "1.53.3", features = ["rt-multi-thread", "fs", "sync", "time", "macros"] }
+unicode-width = "0.2.2"
+
+[dev-dependencies]
+tempfile = "3.27.0"

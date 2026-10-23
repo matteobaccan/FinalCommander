@@ -11,13 +11,13 @@ repository = "https://github.com/matteobaccan/SupremeCommander"
 authors = ["Matteo Baccan and the SupremeCommander contributors"]
 
 [workspace.dependencies]
-sc-core = { path = "crates/sc-core", version = "0.1.0" }
-sc-vfs = { path = "crates/sc-vfs", version = "0.1.0" }
-sc-config = { path = "crates/sc-config", version = "0.1.0" }
-sc-cmd = { path = "crates/sc-cmd", version = "0.1.0" }
-sc-i18n = { path = "crates/sc-i18n", version = "0.1.0" }
-sc-ui = { path = "crates/sc-ui", version = "0.1.0" }
-sc-tui = { path = "crates/sc-tui", version = "0.1.0" }
+scmd-core = { path = "crates/scmd-core", version = "0.1.0" }
+scmd-vfs = { path = "crates/scmd-vfs", version = "0.1.0" }
+scmd-config = { path = "crates/scmd-config", version = "0.1.0" }
+scmd-cmd = { path = "crates/scmd-cmd", version = "0.1.0" }
+scmd-i18n = { path = "crates/scmd-i18n", version = "0.1.0" }
+scmd-ui = { path = "crates/scmd-ui", version = "0.1.0" }
+scmd-tui = { path = "crates/scmd-tui", version = "0.1.0" }
 
 [profile.release]
 opt-level = 3

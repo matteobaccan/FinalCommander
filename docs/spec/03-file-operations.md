@@ -1,6 +1,6 @@
 # SPEC 03 — File operations engine
 
-Everything that touches the filesystem goes through `sc-jobs`. The UI never calls
+Everything that touches the filesystem goes through `scmd-jobs`. The UI never calls
 `std::fs::copy` directly.
 
 **Implemented today** (M1): the plan/execute/settle pipeline, copy, move (with the
@@ -8,7 +8,7 @@ same-filesystem rename fast path), recursive delete, nested mkdir, the conflict 
 (`Ask` / `Overwrite` / `OverwriteIfNewer` / `Skip` / `Rename`) with per-conflict and
 `…All` answers, error decision points (retry / skip / skip all / cancel), progress with a
 per-file and a total bar, cancellation, metadata preservation (mtime, Unix mode), symlinks
-copied as links, write-to-`.sc-part`-then-rename, the guards in §2, and a dry-run mode.
+copied as links, write-to-`.scmd-part`-then-rename, the guards in §2, and a dry-run mode.
 **Still to come**: trash and wipe (§4), the job queue and journal (§5), verification and
 resume (§3), attribute dialogs (§7), multi-rename (§8), checksums and split (§9), compare and
 synchronise (§10).
@@ -72,7 +72,7 @@ length limits, case-insensitive collision) → offered transliteration/truncatio
 | Symlinks | copy as link (default), follow, or ask; relative links rewritten when the target moves inside the copied tree (option) |
 | Hard links | links inside one job preserved (inode map) when `preserve_hardlinks = true` |
 | Verify | optional read-back hash (blake3) or size+mtime check; mismatch → decision point |
-| Interruption | partial target removed (default) or kept for resume; never left under the final name — write to `name.sc-part` then atomic rename |
+| Interruption | partial target removed (default) or kept for resume; never left under the final name — write to `name.scmd-part` then atomic rename |
 | Permissions | target dir not writable → decision point with an "elevate" action (SPEC 06 §7) |
 
 Move: same-filesystem → `rename`; otherwise copy+verify+delete, and the delete step only runs
@@ -101,7 +101,7 @@ the source or fully at the target — never both-partial.
   jobs asks; `--detach` is not supported in M2 (jobs are in-process), so the dialog offers
   "wait" or "cancel".
 - **Journal**: each job writes an append-only record (`$STATE/jobs/<id>.jsonl`) with planned
-  units and completion marks, so after a crash `sc` can report what had been done and offer to
+  units and completion marks, so after a crash `scmd` can report what had been done and offer to
   resume a Copy/Move.
 
 ## 6. Progress UI
