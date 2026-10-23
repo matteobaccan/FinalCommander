@@ -84,6 +84,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 4.2 | Archive write: create/add/delete/update in zip, 7z, tar family; pack dialog with format options (level, solid, encryption, split volumes) | TC | M2/M3 |
 | 4.3 | Pack/unpack shortcuts (`Alt+F5`/`Alt+F6`/`Shift+F1`/`Shift+F2`), test archive, extract-here vs extract-to | FAR/TC | M2 |
 | 4.4 | Open a file inside an archive in the viewer/editor; edit-in-place writes back | FAR | M3 |
+| 4.4b | **Remote file in the viewer and the editor**: `F3` views a fetched copy, `F4` edits it and `F2` writes it back (rename into place, change check, the local copy named if it fails) | FAR NetBox | M1 |
 | 4.5 | **SFTP/SSH** panels: listing, navigation, mkdir, rename, delete, symlinks, mode and mtime | far2l NetRocks/termscp | M1 |
 | 4.5b | FTP/FTPS, WebDAV, SMB, NFS, S3-compatible object storage, MTP/ADB (Android), rclone bridge | far2l NetRocks/termscp | M3 |
 | 4.6 | **Connection manager** (`Alt+N`): saved `[[site]]` list with groups, agent / key file / asked password, host-key verification with a trust-on-first-use prompt, one pooled connection per host, explicit disconnect | TC/KRU | M1 (OS keyring, `ProxyJump`, charset M3) |

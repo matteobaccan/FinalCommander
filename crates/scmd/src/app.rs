@@ -51,11 +51,47 @@ pub enum Request {
     Disconnect {
         authority: String,
     },
-    /// Copy a remote file into a temporary directory so the viewer can open it.
+    /// Copy a remote file into a temporary directory so the viewer or the editor can open it.
     Fetch {
         id: u64,
         path: VPath,
+        purpose: Fetched,
     },
+    /// Write a temporary file back to the server it came from (SPEC 04 §5).
+    Upload {
+        id: u64,
+        local: std::path::PathBuf,
+        remote: VPath,
+        /// What the file looked like when it was fetched; a change on the server is reported
+        /// rather than overwritten.
+        expect: Option<RemoteStamp>,
+        force: bool,
+    },
+}
+
+/// Why a remote file is being fetched.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Fetched {
+    /// `F3`: read-only, and the user is told it is a copy.
+    View,
+    /// `F4`: edit here, write back on save.
+    Edit,
+}
+
+/// A remote file open in the editor: the bytes live in a local copy, and a save puts them
+/// back where they came from (SPEC 04 §5).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteEdit {
+    pub remote: VPath,
+    pub local: std::path::PathBuf,
+    pub stamp: Option<RemoteStamp>,
+}
+
+/// Enough of a remote file to notice that someone else has changed it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RemoteStamp {
+    pub size: u64,
+    pub mtime: Option<u32>,
 }
 
 /// What comes back.
@@ -106,8 +142,23 @@ pub enum Event {
     Fetched {
         id: u64,
         remote: VPath,
-        result: Result<std::path::PathBuf, String>,
+        purpose: Fetched,
+        /// The local copy and what the file looked like on the server.
+        result: Result<(std::path::PathBuf, RemoteStamp), String>,
     },
+    Uploaded {
+        id: u64,
+        remote: VPath,
+        result: Result<u64, UploadError>,
+    },
+}
+
+/// Why a write-back did not happen.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UploadError {
+    /// The file changed on the server since it was fetched.
+    Changed,
+    Failed(String),
 }
 
 /// How a connection attempt ended. A connection that needs something says what it needs,
@@ -188,6 +239,8 @@ pub enum ConfirmAction {
     DiscardEdits,
     /// Save over a file that changed on disk since it was opened.
     OverwriteChanged,
+    /// Write the editor's copy over a remote file that changed on the server.
+    OverwriteRemote,
     /// Record a host key we have never seen and connect.
     AcceptHostKey {
         panel: usize,
@@ -342,6 +395,11 @@ pub struct App {
     pending_connect: Option<(usize, Box<Site>, Option<String>)>,
     /// The fetch we are waiting for, if any.
     fetch_id: Option<u64>,
+    /// The file the editor is editing on behalf of a server: where it came from, the local
+    /// copy, and what it looked like when it was fetched.
+    remote_edit: Option<RemoteEdit>,
+    /// The write-back we are waiting for, if any.
+    upload_id: Option<u64>,
     next_job_id: u64,
 }
 
@@ -400,6 +458,8 @@ impl App {
             connected: Vec::new(),
             pending_connect: None,
             fetch_id: None,
+            remote_edit: None,
+            upload_id: None,
             next_job_id: 1,
         };
         app.read_panel(0);
@@ -483,14 +543,78 @@ impl App {
                     }
                 }
             }
-            Event::Fetched { id, remote, result } => {
+            Event::Fetched {
+                id,
+                remote,
+                purpose,
+                result,
+            } => {
                 if self.fetch_id != Some(id) {
                     return; // the user moved on
                 }
                 self.fetch_id = None;
+                match (result, purpose) {
+                    (Ok((local, _)), Fetched::View) => self.open_viewer_on(&local, remote),
+                    (Ok((local, stamp)), Fetched::Edit) => {
+                        self.open_remote_editor(remote, local, Some(stamp))
+                    }
+                    (Err(e), _) => self.set_error(e),
+                }
+            }
+            Event::Uploaded { id, remote, result } => {
+                if self.upload_id != Some(id) {
+                    return;
+                }
+                self.upload_id = None;
                 match result {
-                    Ok(local) => self.open_viewer_on(&local, remote),
-                    Err(e) => self.set_error(e),
+                    Ok(bytes) => {
+                        if let Some(edit) = &mut self.remote_edit {
+                            // What we just wrote is now what the server has.
+                            edit.stamp = Some(RemoteStamp {
+                                size: bytes,
+                                mtime: None,
+                            });
+                        }
+                        let msg = self.i18n.t_args(
+                            "net-written-back",
+                            &[
+                                ("name", remote.to_string().into()),
+                                ("bytes", (bytes as i64).into()),
+                            ],
+                        );
+                        self.set_status(msg);
+                        // The listing's size and date are stale now.
+                        for panel in 0..2 {
+                            if self.panels[panel].cwd.same_provider(&remote) {
+                                self.read_panel(panel);
+                            }
+                        }
+                    }
+                    Err(UploadError::Changed) => {
+                        let title = self.i18n.t("net-changed-title");
+                        let body = self
+                            .i18n
+                            .t_args("net-changed-body", &[("name", remote.to_string().into())]);
+                        self.park_editor();
+                        self.mode = Mode::Confirm(Confirm {
+                            title,
+                            lines: vec![body],
+                            action: ConfirmAction::OverwriteRemote,
+                        });
+                    }
+                    Err(UploadError::Failed(detail)) => {
+                        // The edits are not lost: they are in the local copy, and we say where.
+                        let local = self
+                            .remote_edit
+                            .as_ref()
+                            .map(|e| e.local.display().to_string())
+                            .unwrap_or_default();
+                        let msg = self.i18n.t_args(
+                            "net-write-back-failed",
+                            &[("error", detail.into()), ("local", local.into())],
+                        );
+                        self.set_error(msg);
+                    }
                 }
             }
             Event::Listed {
@@ -726,10 +850,15 @@ impl App {
                     ConfirmAction::Job(spec) => self.start_job(spec),
                     ConfirmAction::DiscardEdits => {
                         self.editor_parked = None;
+                        self.remote_edit = None;
                     }
                     ConfirmAction::OverwriteChanged => {
                         self.restore_editor();
                         self.save_editor(true);
+                    }
+                    ConfirmAction::OverwriteRemote => {
+                        self.restore_editor();
+                        self.write_back(true);
                     }
                     ConfirmAction::AcceptHostKey {
                         panel,
@@ -1240,6 +1369,12 @@ impl App {
                     return;
                 }
                 let target = self.resolve_path(&raw);
+                if target.is_remote() {
+                    self.save_as_remote(target);
+                    return;
+                }
+                // Saving a fetched copy under a local name makes it a local file again.
+                self.remote_edit = None;
                 let result = self
                     .mode
                     .editor_mut()
@@ -1271,6 +1406,13 @@ impl App {
     /// A path typed by the user: absolute as given, `~` expanded, otherwise relative to the
     /// active panel.
     fn resolve_path(&self, raw: &str) -> VPath {
+        // A URL is a path too: a copy target, a save-as name or a directory can be remote.
+        if raw.contains("://") {
+            let parsed = VPath::parse(raw);
+            if parsed.is_remote() {
+                return parsed.normalised();
+            }
+        }
         let expanded = expand_tilde(raw);
         if std::path::Path::new(&expanded).is_absolute() {
             VPath::local(&expanded)
@@ -1906,35 +2048,40 @@ impl App {
         }
         let path = self.panel().cwd.join(&entry.name);
         if path.is_remote() {
-            // The viewer reads a real file, so the file comes down first. A copy is honest
-            // about being a copy: the status line says so when it opens.
-            let limit = self.cfg.net.fetch_limit_mb.saturating_mul(1024 * 1024);
-            if limit > 0 && entry.size > limit {
-                let msg = self.i18n.t_args(
-                    "net-too-big",
-                    &[
-                        ("name", entry.name_str().into_owned().into()),
-                        (
-                            "limit",
-                            format!("{} MB", self.cfg.net.fetch_limit_mb).into(),
-                        ),
-                    ],
-                );
-                self.set_error(msg);
-                return;
-            }
-            let id = self.next_job_id;
-            self.next_job_id += 1;
-            self.fetch_id = Some(id);
-            let msg = self
-                .i18n
-                .t_args("net-fetching", &[("name", path.display_name().into())]);
-            self.set_status(msg);
-            self.requests.push(Request::Fetch { id, path });
+            // The viewer reads a real file, so the file comes down first.
+            self.fetch_remote(path, entry.size, Fetched::View);
             return;
         }
         let local = path.as_path().to_path_buf();
         self.open_viewer_on(&local, path);
+    }
+
+    /// Ask for a remote file to be copied down. The size limit keeps `F3` on a 4 GB image
+    /// from quietly filling the temporary directory.
+    fn fetch_remote(&mut self, path: VPath, size: u64, purpose: Fetched) {
+        let limit = self.cfg.net.fetch_limit_mb.saturating_mul(1024 * 1024);
+        if limit > 0 && size > limit {
+            let msg = self.i18n.t_args(
+                "net-too-big",
+                &[
+                    ("name", path.display_name().into()),
+                    (
+                        "limit",
+                        format!("{} MB", self.cfg.net.fetch_limit_mb).into(),
+                    ),
+                ],
+            );
+            self.set_error(msg);
+            return;
+        }
+        let id = self.next_job_id;
+        self.next_job_id += 1;
+        self.fetch_id = Some(id);
+        let msg = self
+            .i18n
+            .t_args("net-fetching", &[("name", path.display_name().into())]);
+        self.set_status(msg);
+        self.requests.push(Request::Fetch { id, path, purpose });
     }
 
     /// Open the viewer on a local file, showing `shown` as its name — which is the remote
@@ -2071,8 +2218,8 @@ impl App {
         }
         let path = self.panel().cwd.join(&entry.name);
         if path.is_remote() {
-            // Editing in place needs the write-back half of SPEC 04 §5, which is not here yet.
-            self.not_implemented("file.edit on a remote file (fetch, edit, write back)");
+            // Fetch, edit the copy, and write it back on save (SPEC 04 §5).
+            self.fetch_remote(path, entry.size, Fetched::Edit);
             return;
         }
         match Editor::open(path.as_path()) {
@@ -2092,6 +2239,115 @@ impl App {
     /// `Shift+F4`: a new file in the active panel's directory.
     pub(crate) fn open_new_editor(&mut self) {
         self.mode = Mode::Editor(Box::new(Editor::empty(None)));
+    }
+
+    /// Open the editor on a copy fetched from a server. The buffer is the local file; the
+    /// title, the status line and the write-back all speak in terms of the remote path.
+    fn open_remote_editor(
+        &mut self,
+        remote: VPath,
+        local: std::path::PathBuf,
+        stamp: Option<RemoteStamp>,
+    ) {
+        match Editor::open(&local) {
+            Ok(editor) => {
+                let msg = self
+                    .i18n
+                    .t_args("net-editing", &[("name", remote.to_string().into())]);
+                self.remote_edit = Some(RemoteEdit {
+                    remote,
+                    local,
+                    stamp,
+                });
+                self.mode = Mode::Editor(Box::new(editor));
+                self.set_status(msg);
+            }
+            Err(e) => self.set_error(format!("{}: {e}", local.display())),
+        }
+    }
+
+    /// `Shift+F2` onto a remote path: write the buffer to a local copy, then send it up.
+    fn save_as_remote(&mut self, target: VPath) {
+        let dir = std::env::temp_dir().join(format!("scmd-{}", std::process::id()));
+        if let Err(e) = std::fs::create_dir_all(&dir) {
+            self.set_error(format!("{}: {e}", dir.display()));
+            return;
+        }
+        let name = target.display_name();
+        let local = dir.join(if name.is_empty() {
+            "untitled".to_string()
+        } else {
+            name
+        });
+        let result = self
+            .mode
+            .editor_mut()
+            .map(|e| (e.name(), e.save_as(&local)));
+        match result {
+            Some((_, Ok(_))) => {
+                self.remote_edit = Some(RemoteEdit {
+                    remote: target,
+                    local,
+                    // Nothing was fetched, so there is nothing to compare: an existing file
+                    // on the server is overwritten, which is what "save as" means.
+                    stamp: None,
+                });
+                self.write_back(true);
+            }
+            Some((name, Err(e))) => {
+                let msg = self.i18n.t_args(
+                    "editor-failed",
+                    &[("name", name.into()), ("error", e.to_string().into())],
+                );
+                self.set_error(msg);
+            }
+            None => {}
+        }
+    }
+
+    /// What the editor is editing on behalf of a server, if anything.
+    pub fn remote_edit(&self) -> Option<&RemoteEdit> {
+        self.remote_edit.as_ref()
+    }
+
+    #[cfg(test)]
+    fn open_remote_editor_for_test(&mut self, remote: VPath, local: std::path::PathBuf) {
+        self.open_remote_editor(
+            remote,
+            local,
+            Some(RemoteStamp {
+                size: 5,
+                mtime: Some(1),
+            }),
+        );
+    }
+
+    /// Pretend a write-back is in flight, so a test can answer it twice.
+    #[cfg(test)]
+    fn upload_id_for_test(&mut self, id: u64) {
+        self.upload_id = Some(id);
+    }
+
+    /// Send the editor's local copy back to the server it came from.
+    fn write_back(&mut self, force: bool) {
+        let Some(edit) = self.remote_edit.clone() else {
+            return;
+        };
+        let id = self.next_job_id;
+        self.next_job_id += 1;
+        self.upload_id = Some(id);
+        let msg = self.i18n.t_args(
+            "net-writing-back",
+            &[("name", edit.remote.to_string().into())],
+        );
+        self.set_status(msg);
+        self.requests.push(Request::Upload {
+            id,
+            local: edit.local,
+            remote: edit.remote,
+            expect: edit.stamp,
+            force,
+        });
     }
 
     /// Park the editor under a prompt or confirmation, so it comes back afterwards.
@@ -2121,11 +2377,16 @@ impl App {
         let name = editor.name();
         match editor.save(force) {
             Ok(scmd_edit::SaveOutcome::Saved { bytes, .. }) => {
-                let msg = self.i18n.t_args(
-                    "editor-saved",
-                    &[("name", name.into()), ("bytes", (bytes as i64).into())],
-                );
-                self.set_status(msg);
+                if self.remote_edit.is_some() {
+                    // The local copy is written; now put it back on the server.
+                    self.write_back(false);
+                } else {
+                    let msg = self.i18n.t_args(
+                        "editor-saved",
+                        &[("name", name.into()), ("bytes", (bytes as i64).into())],
+                    );
+                    self.set_status(msg);
+                }
             }
             Ok(scmd_edit::SaveOutcome::NothingToDo) => {
                 let msg = self
@@ -2171,6 +2432,7 @@ impl App {
         if !dirty {
             self.mode = Mode::Normal;
             self.editor_parked = None;
+            self.remote_edit = None;
             // The file may have been saved: refresh both panels.
             self.read_panel(0);
             self.read_panel(1);
@@ -4295,8 +4557,9 @@ abcdefghij
         app.panels[0].cursor_to(2); // notes.txt
         press(&mut app, "F3");
         let id = match app.take_requests().into_iter().next() {
-            Some(Request::Fetch { id, path }) => {
+            Some(Request::Fetch { id, path, purpose }) => {
                 assert_eq!(path.to_string(), "sftp://mb@host.example:22/srv/notes.txt");
+                assert_eq!(purpose, Fetched::View);
                 id
             }
             other => panic!("expected a fetch, got {other:?}"),
@@ -4306,7 +4569,14 @@ abcdefghij
         app.handle_event(Event::Fetched {
             id,
             remote: app.panels[0].cwd.join("notes.txt"),
-            result: Ok(local.clone()),
+            purpose: Fetched::View,
+            result: Ok((
+                local.clone(),
+                RemoteStamp {
+                    size: 16,
+                    mtime: None,
+                },
+            )),
         });
         let viewer = app.mode.viewer().expect("the viewer should be open");
         assert_eq!(
@@ -4319,7 +4589,14 @@ abcdefghij
         app.handle_event(Event::Fetched {
             id: id + 99,
             remote: app.panels[0].cwd.join("other.txt"),
-            result: Ok(local),
+            purpose: Fetched::View,
+            result: Ok((
+                local,
+                RemoteStamp {
+                    size: 16,
+                    mtime: None,
+                },
+            )),
         });
         assert_eq!(app.mode.viewer().unwrap().path.display_name(), "notes.txt");
     }
@@ -4344,16 +4621,6 @@ abcdefghij
     }
 
     #[test]
-    fn f4_on_a_remote_file_says_what_is_missing() {
-        let mut app = connected_app();
-        app.panels[0].cursor_to(2);
-        press(&mut app, "F4");
-        assert!(app.mode.is_normal());
-        assert!(app.status.contains("not implemented"), "{}", app.status);
-        assert!(app.status.contains("remote"), "{}", app.status);
-    }
-
-    #[test]
     fn the_site_list_shows_hosts_connected_by_hand_too() {
         let mut app = net_app();
         app.connected = vec!["root@other:2222".into()];
@@ -4374,5 +4641,243 @@ abcdefghij
             Some(Request::Disconnect { authority }) => assert_eq!(authority, "root@other:2222"),
             other => panic!("{other:?}"),
         }
+    }
+
+    #[test]
+    fn f4_on_a_remote_file_edits_a_copy_and_writes_it_back() {
+        let dir = tempfile::tempdir().unwrap();
+        let local = dir.path().join("notes.txt");
+        std::fs::write(&local, b"server side\n").unwrap();
+        let mut app = connected_app();
+        app.panels[0].cursor_to(2); // notes.txt
+        press(&mut app, "F4");
+
+        let (id, purpose) = match app.take_requests().into_iter().next() {
+            Some(Request::Fetch { id, path, purpose }) => {
+                assert_eq!(path.to_string(), "sftp://mb@host.example:22/srv/notes.txt");
+                (id, purpose)
+            }
+            other => panic!("expected a fetch, got {other:?}"),
+        };
+        assert_eq!(purpose, Fetched::Edit);
+
+        let remote = app.panels[0].cwd.join("notes.txt");
+        app.handle_event(Event::Fetched {
+            id,
+            remote: remote.clone(),
+            purpose: Fetched::Edit,
+            result: Ok((
+                local.clone(),
+                RemoteStamp {
+                    size: 12,
+                    mtime: Some(1_700_000_000),
+                },
+            )),
+        });
+        assert!(app.mode.editor().is_some(), "the editor should be open");
+        assert_eq!(
+            app.remote_edit().map(|e| e.remote.to_string()),
+            Some("sftp://mb@host.example:22/srv/notes.txt".to_string())
+        );
+        assert!(app.status.contains("copy"), "{}", app.status);
+
+        // Type, save: the local copy is written and the upload is asked for.
+        press(&mut app, "End");
+        press(&mut app, "!");
+        press(&mut app, "F2");
+        assert_eq!(std::fs::read_to_string(&local).unwrap(), "server side!\n");
+        let (upload_id, expect, force) = match app
+            .take_requests()
+            .into_iter()
+            .find(|r| matches!(r, Request::Upload { .. }))
+        {
+            Some(Request::Upload {
+                id,
+                local: sent,
+                remote: target,
+                expect,
+                force,
+            }) => {
+                assert_eq!(sent, local);
+                assert_eq!(target, remote);
+                (id, expect, force)
+            }
+            other => panic!("expected an upload, got {other:?}"),
+        };
+        assert!(!force, "a first write-back never forces");
+        assert_eq!(
+            expect.map(|s| s.size),
+            Some(12),
+            "the stamp must be carried"
+        );
+
+        app.handle_event(Event::Uploaded {
+            id: upload_id,
+            remote: remote.clone(),
+            result: Ok(13),
+        });
+        assert!(app.status.contains("written back"), "{}", app.status);
+        assert!(!app.status_error);
+        // The panels are refreshed, because the size and date just changed.
+        assert!(app
+            .take_requests()
+            .iter()
+            .any(|r| matches!(r, Request::Read { .. })));
+    }
+
+    #[test]
+    fn a_file_changed_on_the_server_is_not_overwritten_without_a_yes() {
+        let dir = tempfile::tempdir().unwrap();
+        let local = dir.path().join("notes.txt");
+        std::fs::write(&local, b"mine\n").unwrap();
+        let mut app = connected_app();
+        let remote = app.panels[0].cwd.join("notes.txt");
+        app.open_remote_editor_for_test(remote.clone(), local.clone());
+        press(&mut app, "End");
+        press(&mut app, "x");
+        press(&mut app, "F2");
+        let id = match app
+            .take_requests()
+            .into_iter()
+            .find(|r| matches!(r, Request::Upload { .. }))
+        {
+            Some(Request::Upload { id, .. }) => id,
+            other => panic!("{other:?}"),
+        };
+
+        app.handle_event(Event::Uploaded {
+            id,
+            remote: remote.clone(),
+            result: Err(UploadError::Changed),
+        });
+        match &app.mode {
+            Mode::Confirm(c) => {
+                assert_eq!(c.action, ConfirmAction::OverwriteRemote);
+                assert!(c.lines[0].contains("notes.txt"), "{:?}", c.lines);
+            }
+            other => panic!("expected the overwrite confirmation, got {other:?}"),
+        }
+        // No: the editor comes back and the server keeps its file.
+        press(&mut app, "Esc");
+        assert!(app.mode.editor().is_some());
+        assert!(app.take_requests().is_empty());
+
+        // Yes: the write-back is repeated, this time forcing.
+        app.upload_id_for_test(id);
+        app.handle_event(Event::Uploaded {
+            id,
+            remote,
+            result: Err(UploadError::Changed),
+        });
+        press(&mut app, "Enter");
+        match app
+            .take_requests()
+            .into_iter()
+            .find(|r| matches!(r, Request::Upload { .. }))
+        {
+            Some(Request::Upload { force, .. }) => assert!(force, "the retry must force"),
+            other => panic!("{other:?}"),
+        }
+        assert!(app.mode.editor().is_some(), "the editor must stay open");
+    }
+
+    #[test]
+    fn a_failed_write_back_says_where_the_edits_are() {
+        let dir = tempfile::tempdir().unwrap();
+        let local = dir.path().join("notes.txt");
+        std::fs::write(&local, b"mine\n").unwrap();
+        let mut app = connected_app();
+        let remote = app.panels[0].cwd.join("notes.txt");
+        app.open_remote_editor_for_test(remote.clone(), local.clone());
+        press(&mut app, "End");
+        press(&mut app, "x");
+        press(&mut app, "F2");
+        let id = match app
+            .take_requests()
+            .into_iter()
+            .find(|r| matches!(r, Request::Upload { .. }))
+        {
+            Some(Request::Upload { id, .. }) => id,
+            other => panic!("{other:?}"),
+        };
+        app.handle_event(Event::Uploaded {
+            id,
+            remote,
+            result: Err(UploadError::Failed("quota exceeded".into())),
+        });
+        assert!(app.status_error, "{}", app.status);
+        assert!(app.status.contains("quota exceeded"), "{}", app.status);
+        assert!(
+            app.status.contains(&local.display().to_string()),
+            "the user must be told where their work is: {}",
+            app.status
+        );
+        assert!(app.mode.editor().is_some());
+    }
+
+    #[test]
+    fn save_as_onto_a_remote_path_writes_a_copy_and_sends_it() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("local.txt"), b"local file\n").unwrap();
+        let mut app = app_on_disk(dir.path());
+        app.panels[1].go(
+            VPath::remote(scmd_core::Scheme::Sftp, "mb@host:22", "/srv"),
+            true,
+        );
+        app.take_requests();
+        press(&mut app, "Down"); // local.txt
+        press(&mut app, "F4");
+        assert!(app.mode.editor().is_some(), "{}", app.status);
+
+        press(&mut app, "Shift+F2");
+        match &app.mode {
+            Mode::Prompt(p) => assert_eq!(p.kind, PromptKind::EditorSaveAs),
+            other => panic!("expected the save-as prompt, got {other:?}"),
+        }
+        // Clear the prefilled path and type a remote URL.
+        for _ in 0..80 {
+            press(&mut app, "Backspace");
+        }
+        for c in [
+            "s", "f", "t", "p", ":", "/", "/", "m", "b", "@", "h", "o", "s", "t", ":", "2", "2",
+            "/", "s", "r", "v", "/", "u", "p", ".", "t", "x", "t",
+        ] {
+            press(&mut app, c);
+        }
+        press(&mut app, "Enter");
+        match app
+            .take_requests()
+            .into_iter()
+            .find(|r| matches!(r, Request::Upload { .. }))
+        {
+            Some(Request::Upload {
+                local,
+                remote,
+                force,
+                ..
+            }) => {
+                assert_eq!(remote.to_string(), "sftp://mb@host:22/srv/up.txt");
+                assert_eq!(std::fs::read_to_string(&local).unwrap(), "local file\n");
+                assert!(force, "save-as means overwrite");
+            }
+            other => panic!("expected an upload, got {other:?}"),
+        }
+        assert_eq!(
+            app.remote_edit().map(|e| e.remote.display_name()),
+            Some("up.txt".to_string())
+        );
+    }
+
+    #[test]
+    fn leaving_the_editor_forgets_the_remote_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let local = dir.path().join("notes.txt");
+        std::fs::write(&local, b"mine\n").unwrap();
+        let mut app = connected_app();
+        let remote = app.panels[0].cwd.join("notes.txt");
+        app.open_remote_editor_for_test(remote, local);
+        press(&mut app, "F10");
+        assert!(app.mode.is_normal());
+        assert!(app.remote_edit().is_none());
     }
 }

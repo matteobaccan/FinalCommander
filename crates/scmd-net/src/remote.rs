@@ -14,6 +14,9 @@ use crate::site::Site;
 /// full without holding much memory per job.
 pub const CHUNK: usize = 256 * 1024;
 
+/// What an incomplete upload is called on the server, matching the job engine's local rule.
+pub const PART_SUFFIX: &str = scmd_jobs::PART_SUFFIX;
+
 /// One live connection, addressed with [`VPath`]s instead of wire strings.
 ///
 /// Every operation checks that the path belongs to this connection, so a `file://` path can
@@ -220,6 +223,36 @@ impl Remote {
             .await
             .map_err(|e| NetError::remote(&wire, e))?;
         Ok(total)
+    }
+
+    /// Upload, then put the file in place with a rename: the destination keeps its old
+    /// bytes until the new ones are completely on the server.
+    ///
+    /// SFTP version 3's rename fails when the destination exists and OpenSSH's atomic
+    /// `posix-rename` extension is not in `russh-sftp` yet, so the old file is removed
+    /// between the upload and the rename. If the rename then fails, the uploaded bytes are
+    /// still on the server under the `.scmd-part` name, and the error says so — nothing is
+    /// lost, but it has to be moved by hand.
+    pub async fn upload_in_place<F: FnMut(u64) -> bool + ?Sized>(
+        &self,
+        src: &Path,
+        dst: &VPath,
+        on_bytes: &mut F,
+    ) -> Result<u64> {
+        let wire = self.wire(dst)?;
+        let part = format!("{wire}{PART_SUFFIX}");
+        let part_path = VPath::remote(self.site.scheme, self.authority(), &part);
+        let written = self.upload(src, &part_path, on_bytes).await?;
+        if self.sftp.exists(&wire).await {
+            self.sftp.remove_file(&wire).await?;
+        }
+        match self.sftp.rename(&part, &wire).await {
+            Ok(()) => Ok(written),
+            Err(e) => Err(NetError::Remote {
+                path: wire,
+                detail: format!("{e}: the new bytes are on the server as {part}"),
+            }),
+        }
     }
 
     /// Remote → remote on the same connection. SFTP has no server-side copy, so the bytes
@@ -489,6 +522,46 @@ mod tests {
         assert!(text.contains("permission denied"), "{text}");
         // And it maps onto the io error kind the job engine reads.
         assert_eq!(err.into_io().kind(), std::io::ErrorKind::PermissionDenied);
+    }
+
+    #[tokio::test]
+    async fn an_upload_in_place_keeps_the_old_bytes_until_the_new_ones_are_there() {
+        let dir = tempfile::tempdir().unwrap();
+        let local = dir.path().join("notes.txt");
+        std::fs::write(&local, b"second version\n").unwrap();
+        let fs = MemorySftp::new().with_file("/srv/notes.txt", b"first version\n");
+        let r = remote(fs.clone());
+        let mut ignore = |_: u64| true;
+
+        let written = r
+            .upload_in_place(&local, &path(&r, "/srv/notes.txt"), &mut ignore)
+            .await
+            .unwrap();
+        assert_eq!(written, 15);
+        assert_eq!(fs.file("/srv/notes.txt").unwrap(), b"second version\n");
+        assert!(
+            !fs.paths().iter().any(|p| p.ends_with(".scmd-part")),
+            "the part file is still there: {:?}",
+            fs.paths()
+        );
+
+        // A write to a name that is not there yet is just a write.
+        r.upload_in_place(&local, &path(&r, "/srv/new.txt"), &mut ignore)
+            .await
+            .unwrap();
+        assert_eq!(fs.file("/srv/new.txt").unwrap(), b"second version\n");
+
+        // When the upload itself fails, the destination is untouched.
+        let fs = MemorySftp::new()
+            .with_file("/srv/notes.txt", b"first version\n")
+            .break_path("/srv/notes.txt.scmd-part", "quota exceeded");
+        let r = remote(fs.clone());
+        let err = r
+            .upload_in_place(&local, &path(&r, "/srv/notes.txt"), &mut ignore)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("quota exceeded"), "{err}");
+        assert_eq!(fs.file("/srv/notes.txt").unwrap(), b"first version\n");
     }
 
     #[tokio::test]

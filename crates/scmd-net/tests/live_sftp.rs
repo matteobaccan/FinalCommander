@@ -530,6 +530,27 @@ async fn the_provider_works_against_a_real_ssh_server() {
     let err = remote.stat(&path("nothing-here")).await.unwrap_err();
     assert!(err.to_string().contains("nothing-here"), "{err}");
 
+    // The write-back path `F4` uses: fetch a file, change the copy, put it back in place.
+    std::fs::write(server_root.path().join("srv/edit.txt"), b"before\n").unwrap();
+    let edited = remote
+        .fetch_to(&path("edit.txt"), local.path(), &CancelToken::new())
+        .await
+        .unwrap();
+    assert_eq!(std::fs::read_to_string(&edited).unwrap(), "before\n");
+    std::fs::write(&edited, b"edited on the client\n").unwrap();
+    remote
+        .upload_in_place(&edited, &path("edit.txt"), &mut ignore)
+        .await
+        .unwrap();
+    assert_eq!(
+        std::fs::read_to_string(server_root.path().join("srv/edit.txt")).unwrap(),
+        "edited on the client\n"
+    );
+    assert!(
+        !server_root.path().join("srv/edit.txt.scmd-part").exists(),
+        "the part file was left on the server"
+    );
+
     // `fetch_to`, which is what `F3` uses.
     let fetched = remote
         .fetch_to(&path("big.bin"), local.path(), &CancelToken::new())
