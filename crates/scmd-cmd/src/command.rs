@@ -47,6 +47,7 @@ pub enum Command {
 
     FileView,
     FileEdit,
+    FileEditNew,
     FileCopy,
     FileMove,
     FileMkdir,
@@ -77,9 +78,144 @@ pub enum Command {
     ViewerDisasm,
     /// Decompile: WebAssembly to text, or an external decompiler's output.
     ViewerDecompile,
+
+    // Editor (scope `editor`). Movement and typing are handled directly by the editor; the
+    // keymap binds its commands.
+    EditorQuit,
+    EditorSave,
+    EditorSaveAs,
+    EditorReload,
+    EditorUndo,
+    EditorRedo,
+    EditorSearch,
+    EditorSearchNext,
+    EditorSearchPrev,
+    EditorReplace,
+    EditorGoto,
+    EditorSelectAll,
+    EditorCopy,
+    EditorCut,
+    EditorPaste,
+    EditorDeleteLine,
+    EditorDuplicateLine,
+    EditorMoveLineUp,
+    EditorMoveLineDown,
+    EditorIndent,
+    EditorOutdent,
+    EditorDeleteToEnd,
+    EditorDeleteWordLeft,
+    EditorToggleReadOnly,
 }
 
 impl Command {
+    /// Every command, for `scmd --list-commands`, the command palette and the docs.
+    pub fn all() -> Vec<Command> {
+        let mut out: Vec<Command> = vec![
+            Command::AppQuit,
+            Command::AppHelp,
+            Command::AppMenu,
+            Command::AppPalette,
+            Command::AppThemeNext,
+            Command::PanelFocusToggle,
+            Command::PanelSwap,
+            Command::PanelReread,
+            Command::PanelHiddenToggle,
+            Command::PanelSortReverse,
+            Command::PanelFilterQuick,
+            Command::PanelOtherSync,
+            Command::NavUp,
+            Command::NavDown,
+            Command::NavPageUp,
+            Command::NavPageDown,
+            Command::NavTop,
+            Command::NavBottom,
+            Command::NavEnter,
+            Command::NavParent,
+            Command::NavRoot,
+            Command::NavBack,
+            Command::NavForward,
+            Command::NavGotoPath,
+            Command::SelToggle,
+            Command::SelAll,
+            Command::SelNone,
+            Command::SelInvert,
+            Command::SelMaskAdd,
+            Command::SelMaskRemove,
+            Command::SelRestore,
+            Command::FileView,
+            Command::FileEdit,
+            Command::FileEditNew,
+            Command::FileCopy,
+            Command::FileMove,
+            Command::FileMkdir,
+            Command::FileDelete,
+            Command::FileDirSize,
+            Command::ToolUserMenu,
+            Command::ToolFind,
+            Command::ShellOutputShow,
+            Command::ViewerQuit,
+            Command::ViewerWrap,
+            Command::ViewerHex,
+            Command::ViewerModeNext,
+            Command::ViewerSearch,
+            Command::ViewerSearchNext,
+            Command::ViewerSearchPrev,
+            Command::ViewerGoto,
+            Command::ViewerCodepageNext,
+            Command::ViewerFollow,
+            Command::ViewerLeft,
+            Command::ViewerRight,
+            Command::ViewerUndoPosition,
+            Command::ViewerBytesLess,
+            Command::ViewerBytesMore,
+            Command::ViewerDisasm,
+            Command::ViewerDecompile,
+            Command::EditorQuit,
+            Command::EditorSave,
+            Command::EditorSaveAs,
+            Command::EditorReload,
+            Command::EditorUndo,
+            Command::EditorRedo,
+            Command::EditorSearch,
+            Command::EditorSearchNext,
+            Command::EditorSearchPrev,
+            Command::EditorReplace,
+            Command::EditorGoto,
+            Command::EditorSelectAll,
+            Command::EditorCopy,
+            Command::EditorCut,
+            Command::EditorPaste,
+            Command::EditorDeleteLine,
+            Command::EditorDuplicateLine,
+            Command::EditorMoveLineUp,
+            Command::EditorMoveLineDown,
+            Command::EditorIndent,
+            Command::EditorOutdent,
+            Command::EditorDeleteToEnd,
+            Command::EditorDeleteWordLeft,
+            Command::EditorToggleReadOnly,
+        ];
+        for v in [
+            ViewMode::Brief,
+            ViewMode::Full,
+            ViewMode::Detail,
+            ViewMode::Wide,
+        ] {
+            out.push(Command::PanelViewSet(v));
+        }
+        for k in [
+            SortKey::Name,
+            SortKey::Ext,
+            SortKey::Size,
+            SortKey::MTime,
+            SortKey::Unsorted,
+        ] {
+            out.push(Command::PanelSortBy(k));
+        }
+        out.sort_by_key(|c| c.id());
+        out
+    }
+
     /// The stable string id used in keymaps, menus, scripts and `scmd --list-commands`.
     pub fn id(self) -> String {
         match self {
@@ -118,6 +254,7 @@ impl Command {
             Command::SelRestore => "sel.restore".into(),
             Command::FileView => "file.view".into(),
             Command::FileEdit => "file.edit".into(),
+            Command::FileEditNew => "file.edit.new".into(),
             Command::FileCopy => "file.copy".into(),
             Command::FileMove => "file.move".into(),
             Command::FileMkdir => "file.mkdir".into(),
@@ -143,6 +280,30 @@ impl Command {
             Command::ViewerBytesMore => "viewer.bytes.more".into(),
             Command::ViewerDisasm => "viewer.disasm".into(),
             Command::ViewerDecompile => "viewer.decompile".into(),
+            Command::EditorQuit => "editor.quit".into(),
+            Command::EditorSave => "editor.save".into(),
+            Command::EditorSaveAs => "editor.save.as".into(),
+            Command::EditorReload => "editor.reload".into(),
+            Command::EditorUndo => "editor.undo".into(),
+            Command::EditorRedo => "editor.redo".into(),
+            Command::EditorSearch => "editor.search".into(),
+            Command::EditorSearchNext => "editor.search.next".into(),
+            Command::EditorSearchPrev => "editor.search.prev".into(),
+            Command::EditorReplace => "editor.replace".into(),
+            Command::EditorGoto => "editor.goto".into(),
+            Command::EditorSelectAll => "editor.select.all".into(),
+            Command::EditorCopy => "editor.copy".into(),
+            Command::EditorCut => "editor.cut".into(),
+            Command::EditorPaste => "editor.paste".into(),
+            Command::EditorDeleteLine => "editor.line.delete".into(),
+            Command::EditorDuplicateLine => "editor.line.duplicate".into(),
+            Command::EditorMoveLineUp => "editor.line.up".into(),
+            Command::EditorMoveLineDown => "editor.line.down".into(),
+            Command::EditorIndent => "editor.indent".into(),
+            Command::EditorOutdent => "editor.outdent".into(),
+            Command::EditorDeleteToEnd => "editor.delete.to.end".into(),
+            Command::EditorDeleteWordLeft => "editor.delete.word.left".into(),
+            Command::EditorToggleReadOnly => "editor.readonly.toggle".into(),
         }
     }
 
@@ -188,6 +349,7 @@ impl Command {
             ("sel.restore", _) => Command::SelRestore,
             ("file.view", _) => Command::FileView,
             ("file.edit", _) => Command::FileEdit,
+            ("file.edit.new", _) => Command::FileEditNew,
             ("file.copy", _) => Command::FileCopy,
             ("file.move", _) => Command::FileMove,
             ("file.mkdir", _) => Command::FileMkdir,
@@ -213,6 +375,30 @@ impl Command {
             ("viewer.bytes.more", _) => Command::ViewerBytesMore,
             ("viewer.disasm", _) => Command::ViewerDisasm,
             ("viewer.decompile", _) => Command::ViewerDecompile,
+            ("editor.quit", _) => Command::EditorQuit,
+            ("editor.save", _) => Command::EditorSave,
+            ("editor.save.as", _) => Command::EditorSaveAs,
+            ("editor.reload", _) => Command::EditorReload,
+            ("editor.undo", _) => Command::EditorUndo,
+            ("editor.redo", _) => Command::EditorRedo,
+            ("editor.search", _) => Command::EditorSearch,
+            ("editor.search.next", _) => Command::EditorSearchNext,
+            ("editor.search.prev", _) => Command::EditorSearchPrev,
+            ("editor.replace", _) => Command::EditorReplace,
+            ("editor.goto", _) => Command::EditorGoto,
+            ("editor.select.all", _) => Command::EditorSelectAll,
+            ("editor.copy", _) => Command::EditorCopy,
+            ("editor.cut", _) => Command::EditorCut,
+            ("editor.paste", _) => Command::EditorPaste,
+            ("editor.line.delete", _) => Command::EditorDeleteLine,
+            ("editor.line.duplicate", _) => Command::EditorDuplicateLine,
+            ("editor.line.up", _) => Command::EditorMoveLineUp,
+            ("editor.line.down", _) => Command::EditorMoveLineDown,
+            ("editor.indent", _) => Command::EditorIndent,
+            ("editor.outdent", _) => Command::EditorOutdent,
+            ("editor.delete.to.end", _) => Command::EditorDeleteToEnd,
+            ("editor.delete.word.left", _) => Command::EditorDeleteWordLeft,
+            ("editor.readonly.toggle", _) => Command::EditorToggleReadOnly,
             _ => return None,
         };
         Some(cmd)
@@ -246,6 +432,7 @@ impl fmt::Display for Command {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Keymap;
 
     #[test]
     fn every_id_round_trips() {
@@ -263,6 +450,9 @@ mod tests {
             Command::ViewerBytesMore,
             Command::ViewerDisasm,
             Command::ViewerDecompile,
+            Command::EditorSave,
+            Command::EditorPaste,
+            Command::EditorToggleReadOnly,
         ];
         for c in all {
             assert_eq!(Command::parse(&c.id()), Some(c), "{}", c.id());
@@ -282,5 +472,32 @@ mod tests {
             Command::PanelSortBy(SortKey::Size).label_key(),
             "cmd.panel.sort.by"
         );
+    }
+
+    #[test]
+    fn every_command_is_listed_and_round_trips() {
+        let all = Command::all();
+        let mut ids: Vec<String> = all.iter().map(|c| c.id()).collect();
+        let before = ids.len();
+        ids.sort();
+        ids.dedup();
+        assert_eq!(before, ids.len(), "two commands share an id");
+        for cmd in &all {
+            let id = cmd.id();
+            assert_eq!(
+                Command::parse(&id),
+                Some(*cmd),
+                "`{id}` does not parse back to itself"
+            );
+        }
+        // Everything the keymaps bind must be in the list.
+        for profile in ["far", "mc"] {
+            for (_, _, cmd) in Keymap::builtin(profile).unwrap().bindings() {
+                assert!(
+                    all.contains(&cmd),
+                    "{profile} binds {cmd}, which `all()` omits"
+                );
+            }
+        }
     }
 }

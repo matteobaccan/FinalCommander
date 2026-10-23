@@ -261,72 +261,7 @@ fn list_plugins(paths: &Paths) {
 }
 
 fn command_ids() -> Vec<String> {
-    use scmd_core::{SortKey, ViewMode};
-    let mut ids: Vec<String> = [
-        ScCommand::AppQuit,
-        ScCommand::AppHelp,
-        ScCommand::AppMenu,
-        ScCommand::AppPalette,
-        ScCommand::AppThemeNext,
-        ScCommand::PanelFocusToggle,
-        ScCommand::PanelSwap,
-        ScCommand::PanelReread,
-        ScCommand::PanelHiddenToggle,
-        ScCommand::PanelSortReverse,
-        ScCommand::PanelFilterQuick,
-        ScCommand::PanelOtherSync,
-        ScCommand::NavUp,
-        ScCommand::NavDown,
-        ScCommand::NavPageUp,
-        ScCommand::NavPageDown,
-        ScCommand::NavTop,
-        ScCommand::NavBottom,
-        ScCommand::NavEnter,
-        ScCommand::NavParent,
-        ScCommand::NavRoot,
-        ScCommand::NavBack,
-        ScCommand::NavForward,
-        ScCommand::NavGotoPath,
-        ScCommand::SelToggle,
-        ScCommand::SelAll,
-        ScCommand::SelNone,
-        ScCommand::SelInvert,
-        ScCommand::SelMaskAdd,
-        ScCommand::SelMaskRemove,
-        ScCommand::SelRestore,
-        ScCommand::FileView,
-        ScCommand::FileEdit,
-        ScCommand::FileCopy,
-        ScCommand::FileMove,
-        ScCommand::FileMkdir,
-        ScCommand::FileDelete,
-        ScCommand::FileDirSize,
-        ScCommand::ToolUserMenu,
-        ScCommand::ToolFind,
-        ScCommand::ShellOutputShow,
-    ]
-    .iter()
-    .map(|c| c.id())
-    .collect();
-    for v in [
-        ViewMode::Brief,
-        ViewMode::Full,
-        ViewMode::Detail,
-        ViewMode::Wide,
-    ] {
-        ids.push(ScCommand::PanelViewSet(v).id());
-    }
-    for k in [
-        SortKey::Name,
-        SortKey::Ext,
-        SortKey::Size,
-        SortKey::MTime,
-        SortKey::Unsorted,
-    ] {
-        ids.push(ScCommand::PanelSortBy(k).id());
-    }
-    ids.sort();
-    ids
+    ScCommand::all().into_iter().map(|c| c.id()).collect()
 }
 
 fn interactive(mut app: App) -> Result<()> {

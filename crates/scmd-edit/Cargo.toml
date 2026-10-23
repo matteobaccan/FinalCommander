@@ -1,0 +1,19 @@
+[package]
+name = "scmd-edit"
+description = "SupremeCommander: the internal editor (buffer, undo, blocks, search, atomic save)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+scmd-core = { path = "../scmd-core" }
+scmd-view = { path = "../scmd-view" }
+regex = "1"
+thiserror = "2"
+unicode-width = "0.2"
+
+[dev-dependencies]
+tempfile = "3"

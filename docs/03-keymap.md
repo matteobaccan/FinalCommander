@@ -190,7 +190,7 @@ indistinguishable in a TTY — see §9.
 | append to clipboard | Ctrl+Gray + | — | Ctrl+Shift+C |
 | copy / move block to cursor | Ctrl+P / Ctrl+M (persistent blocks) | F5 / F6 | Ctrl+Shift+P / Ctrl+Shift+M |
 | delete block / line / to EOL | Ctrl+D / Ctrl+Y / Ctrl+K | F8 / Ctrl+Y / Ctrl+K | Ctrl+D / Ctrl+Y / Ctrl+K |
-| delete word left / right | Ctrl+Backspace / Ctrl+T, Ctrl+Del | Alt+Backspace | Ctrl+W / Alt+D |
+| delete word left / right | Ctrl+Backspace / Ctrl+T, Ctrl+Del | Alt+Backspace | Ctrl+Backspace / Alt+D |
 | indent / outdent block | Alt+I / Alt+U | — | Tab / Shift+Tab (block), Alt+I / Alt+U |
 | start/end of file | Ctrl+Home, Ctrl+PgUp / Ctrl+End, Ctrl+PgDn | Ctrl+Home / Ctrl+End | Ctrl+Home / Ctrl+End |
 | start/end of screen | Ctrl+N / Ctrl+E | — | — |
@@ -200,6 +200,19 @@ indistinguishable in a TTY — see §9.
 | read-only lock | Ctrl+L | — | Ctrl+Alt+L |
 | literal next key (char code) | Ctrl+Q | — | Ctrl+Q |
 | insert name of current file | Shift+Enter / Ctrl+Shift+Enter (other panel) | — | same |
+| duplicate line | Ctrl+Shift+D (via block) | — | Ctrl+Shift+D |
+| move line up / down | Alt+↑ / Alt+↓ (via block) | — | Alt+↑ / Alt+↓ |
+| reload from disk | Ctrl+Shift+R | — | Ctrl+R |
+| new file (from the panel) | Shift+F4 | Shift+F4 | Shift+F4 |
+
+**Shipped today** in the `far` profile's `editor` scope (`scmd --check-keymap` prints the live
+list): F2 save, Shift+F2 save as, F4 / F10 / Esc quit, Ctrl+R reload, F7 search, Shift+F7 next,
+Alt+F7 previous, Ctrl+F7 replace, Alt+F8 go to line, Ctrl+Z undo, Ctrl+Shift+Z redo, Ctrl+A
+select all, Ctrl+C / Ctrl+Ins copy, Ctrl+X / Shift+Del cut, Ctrl+V / Shift+Ins paste, Ctrl+Y
+delete line, Ctrl+Shift+D duplicate line, Alt+↑ / Alt+↓ move line, Alt+I / Alt+U indent and
+outdent, Ctrl+K delete to end of line, Ctrl+Backspace delete word left, Ctrl+Alt+L read-only
+toggle. Movement, typing, Shift+arrows (stream block) and Alt+Shift+arrows (column block) are
+handled by the editor itself and are not bindable yet.
 
 ## 9. Terminal reality check (design constraints)
 

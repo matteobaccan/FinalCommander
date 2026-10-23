@@ -6,11 +6,13 @@ switching between UTF-8, UTF-16LE/BE, CP1252 and CP437; plain, regex and hex-pat
 with highlighted hits and next/previous; go to offset, `0x` offset or percentage; position undo;
 bookmarks 0–9; follow mode; windowed reads with no line index, so file size does not matter.
 Also implemented: **disassembly** of ELF/PE/Mach-O/raw x86 and x86-64 with sections and
-symbols, and **decompilation** through WebAssembly's text format in process or an installed
-external tool (§1.6).
+symbols, **JVM class files and .NET assemblies** read in process (constant pool, members and
+JVM bytecode; metadata tables and CIL), and **decompilation** through WebAssembly's text format
+in process or an installed external tool (§1.6).
+Also implemented: the **editor** (`F4`, `Shift+F4` for a new file) — see the note under §2.
 **Still to come**: the "all matches" list (§1.4), the preview pipeline (§1.7), filtered view
-(§1.10), next/previous file in the panel, syntax highlighting, JVM/.NET/Python bytecode and
-non-x86 decoding in process, and the whole editor (§2) and diff viewer (§3).
+(§1.10), next/previous file in the panel, syntax highlighting, Python bytecode and non-x86
+decoding in process, and the diff viewer (§3).
 
 ## 1. Viewer (`F3`)
 
@@ -140,6 +142,25 @@ block-character renderer (`chafa`-style) is built in; results are cached by (pat
 geometry). Quick-view panel uses the same pipeline at lower priority.
 
 ## 2. Editor (`F4`)
+
+**Implemented today** (M1, `scmd-edit`): open and save with the encoding, EOL, BOM and
+final-newline of the original preserved (`Eol::detect`, UTF-8/UTF-16LE/BE/CP1252/CP437);
+`Shift+F4` for a new file; atomic save through `name.scmd-tmp` + rename with the permissions
+carried over; save-as; reload; refusal to overwrite a file that changed on disk without a
+confirmation; read-only files opened and marked as such. Editing: insert, newline with
+auto-indent, backspace, delete, delete to end of line, delete word left, tab expansion, indent
+and outdent, delete / duplicate / move line, undo and redo grouped per command, stream blocks
+(`Shift+arrows`) and **column blocks** (`Alt+Shift+arrows`) with copy / cut / paste (a column
+paste pads short lines), select all, plain search with wrap, replace once and replace all (the search engine
+is the viewer's, so regex and case-insensitive matching are already there, waiting for a dialog
+that offers them), go to line or `line:col`, bookmarks 0–9, smart home, and horizontal scrolling with tabs and wide
+characters counted in display columns.
+**Still to come**: the rope (today's buffer is a `Vec<String>` of lines — enough for the
+256 MiB open limit and far simpler to keep correct; it will be swapped for a rope when
+streaming edits of larger files land), typing-burst undo grouping, the OS clipboard (the
+clipboard is internal to the editor for now), persistent-block mode, multi-caret, regex and
+capture-group replace, `.editorconfig`, syntax highlighting, sort/unique/reverse on lines,
+macros, the buffer list (§2.3) and the external editor (§2.4).
 
 ### 2.1 Buffer
 

@@ -11,6 +11,45 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         return None;
     }
 
+    // The editor takes the whole screen; its prompts and confirmations draw on top of it.
+    if app.mode.editor().is_some() || app.editor_parked_for_render() {
+        if let Some((mut editor, parked)) = app.editor_for_render() {
+            let cursor = draw_editor(app, &mut editor, buf);
+            app.return_editor(editor, parked);
+            if !parked {
+                return cursor;
+            }
+            // A prompt or confirmation is open over the editor.
+            let screen = Rect::new(0, 0, w, h.saturating_sub(1));
+            match &app.mode {
+                Mode::Prompt(prompt) => {
+                    let (_, cx, cy) = widgets::draw_prompt(
+                        buf,
+                        &app.theme,
+                        screen,
+                        &prompt.title,
+                        &prompt.text,
+                        prompt.text.chars().count(),
+                    );
+                    return Some((cx, cy));
+                }
+                Mode::Confirm(confirm) => {
+                    widgets::draw_choice(
+                        buf,
+                        &app.theme,
+                        screen,
+                        &confirm.title,
+                        &confirm.lines,
+                        &[],
+                        0,
+                    );
+                    return None;
+                }
+                _ => return None,
+            }
+        }
+    }
+
     // The viewer takes the whole screen; its prompts draw on top of it.
     if let Some((mut viewer, parked)) = app.viewer_for_render() {
         draw_viewer(app, &mut viewer, buf);
@@ -129,6 +168,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         }
         Mode::Job(_) => None,    // handled above, through `Mode::job()`
         Mode::Viewer(_) => None, // handled above, before the panels are drawn
+        Mode::Editor(_) => None, // handled above, before the panels are drawn
         Mode::Message { title, lines } => {
             widgets::draw_dialog(buf, &app.theme, screen, title, lines, None);
             None
@@ -187,6 +227,145 @@ fn draw_job(app: &App, view: &crate::app::JobView, buf: &mut Buffer, screen: Rec
             hint: &app.i18n.t("job-hint"),
         },
     );
+}
+
+/// The editor, full screen. Returns where the text cursor sits.
+fn draw_editor(
+    app: &mut App,
+    editor: &mut scmd_edit::Editor,
+    buf: &mut Buffer,
+) -> Option<(u16, u16)> {
+    let (w, h) = (buf.width(), buf.height());
+    let keybar_h = u16::from(app.cfg.ui.key_bar);
+    let body = Rect::new(0, 1, w, h.saturating_sub(1 + keybar_h));
+    app.editor_size = (body.w, body.h);
+
+    let base = app.theme.panel();
+    buf.fill(Rect::new(0, 0, w, h.saturating_sub(keybar_h)), ' ', base);
+
+    // Header: the file on the left, the position and flags on the right.
+    let header = Style::new(
+        app.theme.color("panel.header.fg"),
+        app.theme.color("status.bg"),
+    );
+    buf.fill(Rect::new(0, 0, w, 1), ' ', header);
+    let status = editor.status();
+    let status_w = (status.chars().count() as u16).min(w);
+    let name_w = w.saturating_sub(status_w + 2);
+    let title = editor
+        .path
+        .as_ref()
+        .map(|p| p.to_string())
+        .unwrap_or_else(|| editor.name());
+    buf.put_str(
+        0,
+        0,
+        &scmd_ui::elide_middle(&title, name_w as usize),
+        header,
+        name_w,
+    );
+    buf.put_str(w - status_w, 0, &status, header, status_w);
+
+    let visible = editor.scroll_into_view(body.h as usize, body.w as usize);
+    let selected = Style::new(app.theme.color("cursor.fg"), app.theme.color("cursor.bg"));
+
+    for (row, line_index) in visible.clone().enumerate() {
+        let y = body.y + row as u16;
+        let text = expand_line(editor, line_index);
+        let shown: String = text
+            .chars()
+            .skip(editor.left)
+            .take(body.w as usize)
+            .collect();
+        buf.put_str(0, y, &shown, base, body.w);
+
+        // The block, in display columns.
+        if let Some((from, to)) = block_columns(editor, line_index) {
+            let from = from.saturating_sub(editor.left);
+            let to = to.saturating_sub(editor.left);
+            let slice: String = shown
+                .chars()
+                .skip(from)
+                .take(to.saturating_sub(from))
+                .collect();
+            if !slice.is_empty() && (from as u16) < body.w {
+                buf.put_str(from as u16, y, &slice, selected, body.w - from as u16);
+            }
+        }
+    }
+
+    if keybar_h == 1 {
+        let labels = app.keybar_editor();
+        let refs: Vec<(u8, &str)> = labels.iter().map(|(n, s)| (*n, s.as_str())).collect();
+        widgets::draw_keybar(buf, &app.theme, Rect::new(0, h - 1, w, 1), &refs);
+    }
+
+    // The cursor: display column minus the horizontal scroll.
+    let cursor_col = editor.display_col(editor.cursor);
+    if editor.cursor.line >= visible.start && editor.cursor.line < visible.end {
+        let x = cursor_col.saturating_sub(editor.left) as u16;
+        let y = body.y + (editor.cursor.line - visible.start) as u16;
+        if x < body.w {
+            return Some((x, y));
+        }
+    }
+    None
+}
+
+/// A line with its tabs expanded, which is what the screen shows.
+fn expand_line(editor: &scmd_edit::Editor, line: usize) -> String {
+    let raw = editor.buffer.line(line);
+    if !raw.contains('\t') {
+        return raw.to_string();
+    }
+    let mut out = String::with_capacity(raw.len() + 8);
+    let mut column = 0usize;
+    for ch in raw.chars() {
+        if ch == '\t' {
+            let pad = editor.tab_width - (column % editor.tab_width);
+            out.extend(std::iter::repeat_n(' ', pad));
+            column += pad;
+        } else {
+            out.push(ch);
+            column += unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
+        }
+    }
+    out
+}
+
+/// The highlighted display-column range on `line`, if the block covers it.
+fn block_columns(editor: &scmd_edit::Editor, line: usize) -> Option<(usize, usize)> {
+    let block = editor.block?;
+    let width = expand_line(editor, line).chars().count();
+    match block.kind {
+        scmd_edit::BlockKind::Column => {
+            let (top, bottom, left, right) = block.columns();
+            if line < top || line > bottom {
+                return None;
+            }
+            Some((
+                editor.display_col(scmd_edit::Position::new(line, left)),
+                editor.display_col(scmd_edit::Position::new(line, right)),
+            ))
+        }
+        scmd_edit::BlockKind::Stream => {
+            let range = block.range();
+            if line < range.start.line || line > range.end.line {
+                return None;
+            }
+            let from = if line == range.start.line {
+                editor.display_col(range.start)
+            } else {
+                0
+            };
+            let to = if line == range.end.line {
+                editor.display_col(range.end)
+            } else {
+                width.max(1)
+            };
+            Some((from, to))
+        }
+    }
 }
 
 /// The viewer, full screen: name and status on the top line, content, key bar at the bottom.
@@ -694,5 +873,176 @@ third line
             app.columns
         );
         assert!(app.rows > 20, "rows = {}", app.rows);
+    }
+
+    /// A panel over a real directory, so `F4` can open a real file.
+    fn app_on_disk(dir: &std::path::Path) -> App {
+        let mut app = App::new(Startup {
+            cfg: Config::default(),
+            paths: Paths::discover(Some(&dir.join("scmd.toml")), None),
+            i18n: I18n::new("en"),
+            keymap: Keymap::builtin("far").unwrap(),
+            themes: ThemeSet::builtin_only(),
+            theme: Theme::default_theme(),
+            left: VPath::local(dir),
+            right: VPath::local(dir),
+        });
+        app.requests.clear();
+        let entries =
+            scmd_vfs::local::list_blocking(&VPath::local(dir), &scmd_core::CancelToken::new())
+                .unwrap();
+        for panel in 0..2 {
+            app.handle_event(Event::Listed {
+                panel,
+                generation: 1,
+                result: Ok(entries.clone()),
+            });
+        }
+        app
+    }
+
+    fn press(app: &mut App, key: &str) {
+        app.handle_input(Input::Key(key.parse().unwrap()));
+    }
+
+    #[test]
+    fn the_editor_takes_the_whole_screen_with_a_status_and_its_own_key_bar() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("notes.txt"),
+            b"first line\nsecond line\nthird line\n",
+        )
+        .unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F4");
+
+        let mut buf = Buffer::new(100, 12);
+        let cursor = draw(&mut app, &mut buf);
+        let out = buf.to_text();
+        let lines: Vec<&str> = out.lines().collect();
+
+        assert!(lines[0].contains("notes.txt"), "{out}");
+        assert!(lines[0].contains("1:1"), "the position is missing: {out}");
+        assert!(lines[0].contains("UTF-8"), "{out}");
+        assert!(lines[1].contains("first line"), "{out}");
+        assert!(lines[3].contains("third line"), "{out}");
+        assert!(
+            lines[11].contains("Save") && lines[11].contains("Quit"),
+            "{out}"
+        );
+        // The panels are gone: the editor owns the screen.
+        assert!(!out.contains('┌'), "a panel frame is still visible: {out}");
+        assert_eq!(cursor, Some((0, 1)), "the cursor is not on the first char");
+
+        // The cursor follows the text, tabs and all.
+        press(&mut app, "Down");
+        press(&mut app, "End");
+        let mut buf = Buffer::new(100, 12);
+        let cursor = draw(&mut app, &mut buf);
+        assert_eq!(cursor, Some((11, 2)));
+        assert!(
+            buf.to_text().lines().next().unwrap().contains("2:12"),
+            "{}",
+            buf.to_text()
+        );
+        // The editor is still open under its own frame.
+        assert!(app.mode.editor().is_some());
+    }
+
+    #[test]
+    fn a_block_is_highlighted_and_tabs_are_expanded() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("t.txt"), b"\tindented\nplain text\n").unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F4");
+
+        let mut buf = Buffer::new(40, 8);
+        draw(&mut app, &mut buf);
+        let first = buf.to_text().lines().nth(1).unwrap().to_string();
+        assert!(
+            first.starts_with("    indented"),
+            "the tab was not expanded: {first:?}"
+        );
+
+        // Shift+Down marks a stream block over the first line.
+        press(&mut app, "Shift+Down");
+        let mut buf = Buffer::new(40, 8);
+        draw(&mut app, &mut buf);
+        let highlighted = (0..buf.height())
+            .flat_map(|y| (0..buf.width()).map(move |x| (x, y)))
+            .filter(|(x, y)| buf.get(*x, *y).unwrap().style.bg == app.theme.color("cursor.bg"))
+            .count();
+        assert!(
+            highlighted >= 12,
+            "the block is not highlighted ({highlighted} cells)"
+        );
+    }
+
+    #[test]
+    fn a_prompt_over_the_editor_keeps_the_text_behind_it() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("t.txt"), b"needle in here\n").unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F4");
+        press(&mut app, "F7"); // search
+
+        let mut buf = Buffer::new(60, 10);
+        let cursor = draw(&mut app, &mut buf);
+        let out = buf.to_text();
+        assert!(cursor.is_some(), "the prompt has no cursor");
+        assert!(out.contains("Search"), "{out}");
+        assert!(out.contains("needle in here"), "the editor is gone: {out}");
+    }
+
+    #[test]
+    fn long_lines_scroll_sideways_instead_of_overflowing() {
+        let dir = tempfile::tempdir().unwrap();
+        let long = "abcdefghij".repeat(12); // 120 columns
+        std::fs::write(dir.path().join("wide.txt"), format!("{long}\n")).unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F4");
+        press(&mut app, "End");
+
+        let mut buf = Buffer::new(40, 8);
+        let cursor = draw(&mut app, &mut buf);
+        let out = buf.to_text();
+        for line in out.lines() {
+            assert!(
+                unicode_width::UnicodeWidthStr::width(line) <= 40,
+                "overflow: {line:?}"
+            );
+        }
+        let (x, _) = cursor.expect("the cursor should be on screen");
+        assert!(x < 40, "the cursor left the screen at {x}");
+        assert!(out.contains("1:121"), "{out}");
+    }
+
+    #[test]
+    fn every_theme_and_language_renders_the_editor() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("t.txt"), b"hello\n").unwrap();
+        for id in ["commander", "black", "white", "matrix", "tron", "blade"] {
+            for (tag, _) in scmd_i18n::LANGUAGES {
+                let mut app = app_on_disk(dir.path());
+                app.theme = Theme::builtin(id).unwrap();
+                app.i18n = I18n::new(tag);
+                press(&mut app, "Down");
+                press(&mut app, "F4");
+                let mut buf = Buffer::new(60, 10);
+                draw(&mut app, &mut buf);
+                let out = buf.to_text();
+                assert!(out.contains("hello"), "theme {id} / {tag}: {out}");
+                for line in out.lines() {
+                    assert!(
+                        unicode_width::UnicodeWidthStr::width(line) <= 60,
+                        "theme {id} / {tag} overflowed: {line:?}"
+                    );
+                }
+            }
+        }
     }
 }

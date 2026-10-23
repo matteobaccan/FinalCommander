@@ -4,10 +4,10 @@ A cross-platform **orthodox file manager** (two panels, command line, function k
 keyboard-first) written in Rust — in the tradition of Norton Commander, FAR Manager,
 Total Commander, Midnight Commander and Krusader, with a modern engine underneath.
 
-> **Status: milestone M1 in progress.** The specs are written and the skeleton runs: two
+> **Status: milestone M1 in progress.** The specs are written and the program runs: two
 > panels, navigation, selection, sorting, view modes, quick search and filter, themes,
-> keymap profiles and seven interface languages. File operations, the viewer and the editor
-> are the next chunks — see `docs/spec/09-roadmap.md`.
+> keymap profiles and seven interface languages, real file operations (`F5`–`F8`), the viewer
+> (`F3`) and the editor (`F4`). What M1 still owes is in `docs/spec/09-roadmap.md`.
 
 ## Try it
 
@@ -60,11 +60,20 @@ What works today:
   tool through a `[[decompile]]` rule — `javap`, `ilspycmd`, `python -m dis`, `objdump`,
   `retdec` — whose output is then viewable, searchable text. A real decompiler is a research
   project: we call the good ones instead of shipping a bad one.
+- **Editor** (`F4`, `Shift+F4` for a new file): the file's encoding, line endings, BOM and
+  final newline survive a round trip, and the save is atomic — `name.scmd-tmp` written beside
+  the original, permissions carried over, then renamed. A file that changed on disk while you
+  were editing is never overwritten without a confirmation. `F2` saves, `Shift+F2` saves as,
+  `Ctrl+R` reloads, `F7` searches, `Ctrl+F7` replaces everywhere, `Alt+F8` goes to `line:col`,
+  `Ctrl+Z`/`Ctrl+Shift+Z` undo and redo, `Ctrl+Y` deletes a line, `Alt+↑/↓` moves one,
+  `Alt+I`/`Alt+U` indent and outdent. `Shift+arrows` marks a stream block and
+  **`Alt+Shift+arrows` a column block** — cut a rectangle out of a table and paste it back
+  (short lines are padded, as FAR does).
 - **The rest**: `Alt+T` cycles themes, `F1` is a help page generated from the live keymap,
   `F10` quits.
 
-Not yet: `F4` edit (the editor is next), trash, wipe, a background job queue, archives and
-network panels. Anything unimplemented says so plainly instead of pretending.
+Not yet: syntax highlighting and several open buffers in the editor, the OS clipboard, trash,
+wipe, a background job queue, archives and network panels. Anything unimplemented says so plainly instead of pretending.
 
 Non-interactive modes (used by CI and by scripts):
 
@@ -122,7 +131,8 @@ Chinese (`ui.language = "auto"` follows the OS locale); CJK double-width layout 
 crates/scmd-core     paths, entries, listings, sorting, selection   (no dependencies of ours)
 crates/scmd-vfs      the Vfs trait + the local provider
 crates/scmd-jobs     the operation engine: plan, execute, settle; conflicts and progress
-crates/scmd-view     the viewer: windowed reads, encodings, text/dump/hex, search
+crates/scmd-view     the viewer: windowed reads, encodings, text/dump/hex, search, disasm
+crates/scmd-edit     the editor: buffer, undo, blocks, search/replace, atomic save
 crates/scmd-cmd      command vocabulary, keys, keymap profiles (far, mc)
 crates/scmd-config   TOML configuration, discovery, overrides
 crates/scmd-i18n     fluent catalogues for seven languages
