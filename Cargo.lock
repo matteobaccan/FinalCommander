@@ -767,6 +767,7 @@ dependencies = [
  "scmd-cmd",
  "scmd-config",
  "scmd-core",
+ "scmd-edit",
  "scmd-i18n",
  "scmd-jobs",
  "scmd-tui",
@@ -804,6 +805,18 @@ name = "scmd-core"
 version = "0.1.0"
 dependencies = [
  "globset",
+ "thiserror",
+ "unicode-width",
+]
+
+[[package]]
+name = "scmd-edit"
+version = "0.1.0"
+dependencies = [
+ "regex",
+ "scmd-core",
+ "scmd-view",
+ "tempfile",
  "thiserror",
  "unicode-width",
 ]

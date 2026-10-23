@@ -4,6 +4,7 @@ use scmd_cmd::{Command, Key, KeyCode, Keymap, Mods, Scope};
 use scmd_config::DecompileRule;
 use scmd_config::{Config, Paths, QuickSearch};
 use scmd_core::{CancelToken, Entry, MaskScope, Sort, SortKey, VPath, ViewMode};
+use scmd_edit::{BlockKind, Editor};
 use scmd_i18n::I18n;
 use scmd_jobs::{Decision, JobKind, JobSpec, Outcome, Progress, Question};
 use scmd_tui::Input;
@@ -87,6 +88,11 @@ pub enum PromptKind {
     ViewerSearch,
     /// Offset or percentage for the viewer.
     ViewerGoto,
+    EditorSearch,
+    EditorReplaceFrom,
+    EditorReplaceWith,
+    EditorGoto,
+    EditorSaveAs,
     /// Destination for F6.
     MoveTarget,
     /// Name for F7.
@@ -104,12 +110,23 @@ pub struct Prompt {
     pub text: String,
 }
 
-/// A yes/no question that carries the job it will start on `Enter`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// What a confirmation will do on `Enter`.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ConfirmAction {
+    /// Start this file operation.
+    Job(JobSpec),
+    /// Leave the editor, losing unsaved changes.
+    DiscardEdits,
+    /// Save over a file that changed on disk since it was opened.
+    OverwriteChanged,
+}
+
+/// A yes/no question that carries what it will do on `Enter`.
+#[derive(Debug, Clone, PartialEq)]
 pub struct Confirm {
     pub title: String,
     pub lines: Vec<String>,
-    pub spec: JobSpec,
+    pub action: ConfirmAction,
 }
 
 /// A decision point the engine is blocked on.
@@ -138,6 +155,8 @@ pub enum Mode {
     Job(JobView),
     /// `F3`: the internal viewer, full screen.
     Viewer(Box<Viewer>),
+    /// `F4`: the internal editor, full screen.
+    Editor(Box<Editor>),
     Help {
         scroll: usize,
     },
@@ -169,6 +188,20 @@ impl Mode {
     pub fn viewer_mut(&mut self) -> Option<&mut Viewer> {
         match self {
             Mode::Viewer(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    pub fn editor(&self) -> Option<&Editor> {
+        match self {
+            Mode::Editor(e) => Some(e),
+            _ => None,
+        }
+    }
+
+    pub fn editor_mut(&mut self) -> Option<&mut Editor> {
+        match self {
+            Mode::Editor(e) => Some(e),
             _ => None,
         }
     }
@@ -212,6 +245,12 @@ pub struct App {
     pub last_search: Option<String>,
     /// The viewer, parked while one of its prompts is open.
     viewer_under_prompt: Option<Box<Viewer>>,
+    /// The editor, parked while one of its prompts or confirmations is open.
+    editor_parked: Option<Box<Editor>>,
+    /// The replacement text waiting for its second prompt.
+    replace_from: Option<String>,
+    /// Size of the editor's text area, from the last frame.
+    pub editor_size: (u16, u16),
     /// The decompilation we are waiting for, if any.
     decompile_id: Option<u64>,
     next_job_id: u64,
@@ -263,6 +302,9 @@ impl App {
             search_case_insensitive: true,
             last_search: None,
             viewer_under_prompt: None,
+            editor_parked: None,
+            replace_from: None,
+            editor_size: (80, 20),
             decompile_id: None,
             next_job_id: 1,
         };
@@ -472,6 +514,10 @@ impl App {
                 self.mode = Mode::Viewer(viewer);
                 self.viewer_key(key);
             }
+            Mode::Editor(editor) => {
+                self.mode = Mode::Editor(editor);
+                self.editor_key(key);
+            }
             Mode::Normal => self.normal_key(key),
         }
     }
@@ -480,10 +526,21 @@ impl App {
         match key.code {
             KeyCode::Enter | KeyCode::Char('y') | KeyCode::Char('Y') => {
                 self.mode = Mode::Normal;
-                self.start_job(confirm.spec);
+                match confirm.action {
+                    ConfirmAction::Job(spec) => self.start_job(spec),
+                    ConfirmAction::DiscardEdits => {
+                        self.editor_parked = None;
+                    }
+                    ConfirmAction::OverwriteChanged => {
+                        self.restore_editor();
+                        self.save_editor(true);
+                    }
+                }
             }
             KeyCode::Esc | KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::F(10) => {
-                self.mode = Mode::Normal
+                self.mode = Mode::Normal;
+                // A refused confirmation gives the editor back, not a lost buffer.
+                self.restore_editor();
             }
             _ => {}
         }
@@ -519,6 +576,130 @@ impl App {
                     KeyCode::Esc => self.answer(Decision::Cancel),
                     _ => {}
                 }
+            }
+        }
+    }
+
+    /// The editor consumes movement and typing keys itself — binding thirty arrow-plus-modifier
+    /// combinations as commands would buy nothing — and the keymap drives its commands.
+    fn editor_key(&mut self, key: Key) {
+        let (width, height) = self.editor_size;
+        let shift = key.mods.contains(Mods::SHIFT);
+        let ctrl = key.mods.contains(Mods::CTRL);
+        let alt = key.mods.contains(Mods::ALT);
+        // Alt+Shift+arrows select a column block, as in FAR.
+        let kind = if alt && shift {
+            BlockKind::Column
+        } else {
+            BlockKind::Stream
+        };
+        let extend = shift;
+
+        let handled = {
+            let Some(editor) = self.mode.editor_mut() else {
+                return;
+            };
+            let result: Result<bool, scmd_edit::editor::EditorError> = (|| {
+                Ok(match key.code {
+                    // Alt alone belongs to the keymap (move line); Alt+Shift selects a column.
+                    KeyCode::Up if !alt || shift => {
+                        editor.move_by(-1, 0, extend, kind);
+                        true
+                    }
+                    KeyCode::Down if !alt || shift => {
+                        editor.move_by(1, 0, extend, kind);
+                        true
+                    }
+                    KeyCode::Left => {
+                        if ctrl {
+                            editor.move_by(0, -5, extend, kind);
+                        } else {
+                            editor.move_by(0, -1, extend, kind);
+                        }
+                        true
+                    }
+                    KeyCode::Right => {
+                        if ctrl {
+                            editor.move_by(0, 5, extend, kind);
+                        } else {
+                            editor.move_by(0, 1, extend, kind);
+                        }
+                        true
+                    }
+                    KeyCode::Home => {
+                        if ctrl {
+                            editor.move_file_start(extend);
+                        } else {
+                            editor.move_line_start(extend);
+                        }
+                        true
+                    }
+                    KeyCode::End => {
+                        if ctrl {
+                            editor.move_file_end(extend);
+                        } else {
+                            editor.move_line_end(extend);
+                        }
+                        true
+                    }
+                    KeyCode::PageUp => {
+                        editor.page(false, height as usize, extend);
+                        true
+                    }
+                    KeyCode::PageDown => {
+                        editor.page(true, height as usize, extend);
+                        true
+                    }
+                    KeyCode::Enter => {
+                        editor.insert_newline()?;
+                        true
+                    }
+                    KeyCode::Backspace if !ctrl => {
+                        editor.backspace()?;
+                        true
+                    }
+                    KeyCode::Delete if !shift => {
+                        editor.delete_forward()?;
+                        true
+                    }
+                    KeyCode::Tab => {
+                        editor.indent()?;
+                        true
+                    }
+                    KeyCode::BackTab => {
+                        editor.outdent()?;
+                        true
+                    }
+                    KeyCode::Char(ch) if !ctrl && !alt => {
+                        editor.insert_char(ch)?;
+                        true
+                    }
+                    _ => false,
+                })
+            })();
+            match result {
+                Ok(handled) => {
+                    editor.scroll_into_view(height as usize, width as usize);
+                    Ok(handled)
+                }
+                Err(e) => Err(e.to_string()),
+            }
+        };
+
+        match handled {
+            Ok(true) => {}
+            Ok(false) => {
+                if let Some(cmd) = self.keymap.resolve(&[Scope::Editor, Scope::Global], key) {
+                    self.run(cmd);
+                }
+            }
+            Err(error) => {
+                let name = self.mode.editor().map(|e| e.name()).unwrap_or_default();
+                let msg = self.i18n.t_args(
+                    "editor-failed",
+                    &[("name", name.into()), ("error", error.into())],
+                );
+                self.set_error(msg);
             }
         }
     }
@@ -573,6 +754,7 @@ impl App {
                 }
                 self.mode = Mode::Normal;
                 self.restore_viewer();
+                self.restore_editor();
             }
             KeyCode::Enter => {
                 self.mode = Mode::Normal;
@@ -739,6 +921,102 @@ impl App {
                             self.set_error(msg);
                         }
                     }
+                }
+            }
+            PromptKind::EditorSearch => {
+                let query = prompt.text.trim().to_string();
+                self.restore_editor();
+                if query.is_empty() {
+                    return;
+                }
+                let found = self
+                    .mode
+                    .editor_mut()
+                    .map(|e| e.find(&query, false))
+                    .unwrap_or(Ok(false));
+                match found {
+                    Ok(true) => {}
+                    Ok(false) => {
+                        let msg = self
+                            .i18n
+                            .t_args("editor-not-found", &[("query", query.into())]);
+                        self.set_error(msg);
+                    }
+                    Err(e) => self.set_error(e.to_string()),
+                }
+            }
+            PromptKind::EditorReplaceFrom => {
+                let from = prompt.text.trim().to_string();
+                if from.is_empty() {
+                    self.restore_editor();
+                    return;
+                }
+                self.replace_from = Some(from);
+                let title = self.i18n.t("editor-prompt-replace-with");
+                self.mode = Mode::Prompt(Prompt {
+                    kind: PromptKind::EditorReplaceWith,
+                    title,
+                    text: String::new(),
+                });
+            }
+            PromptKind::EditorReplaceWith => {
+                let with = prompt.text.clone();
+                let from = self.replace_from.take().unwrap_or_default();
+                self.restore_editor();
+                let result = self.mode.editor_mut().map(|e| e.replace_all(&from, &with));
+                match result {
+                    Some(Ok(count)) => {
+                        let msg = self
+                            .i18n
+                            .t_args("editor-replaced", &[("count", (count as i64).into())]);
+                        self.set_status(msg);
+                    }
+                    Some(Err(e)) => self.set_error(e.to_string()),
+                    None => {}
+                }
+            }
+            PromptKind::EditorGoto => {
+                let text = prompt.text.clone();
+                self.restore_editor();
+                let (width, height) = self.editor_size;
+                if let Some(editor) = self.mode.editor_mut() {
+                    if !editor.goto(&text) {
+                        let msg = format!("{}: ?", text.trim());
+                        self.set_error(msg);
+                    } else {
+                        editor.scroll_into_view(height as usize, width as usize);
+                    }
+                }
+            }
+            PromptKind::EditorSaveAs => {
+                let raw = prompt.text.trim().to_string();
+                self.restore_editor();
+                if raw.is_empty() {
+                    return;
+                }
+                let target = self.resolve_path(&raw);
+                let result = self
+                    .mode
+                    .editor_mut()
+                    .map(|e| (e.name(), e.save_as(target.as_path())));
+                match result {
+                    Some((name, Ok(scmd_edit::SaveOutcome::Saved { bytes, .. }))) => {
+                        let msg = self.i18n.t_args(
+                            "editor-saved",
+                            &[("name", name.into()), ("bytes", (bytes as i64).into())],
+                        );
+                        self.set_status(msg);
+                        self.read_panel(0);
+                        self.read_panel(1);
+                    }
+                    Some((name, Err(e))) => {
+                        let msg = self.i18n.t_args(
+                            "editor-failed",
+                            &[("name", name.into()), ("error", e.to_string().into())],
+                        );
+                        self.set_error(msg);
+                    }
+                    _ => {}
                 }
             }
             PromptKind::Filter | PromptKind::QuickSearch { .. } => {}
@@ -981,6 +1259,15 @@ impl App {
             self.viewer_command(cmd);
             return;
         }
+        if is_editor_command(cmd) {
+            if self.mode.editor().is_some() || self.editor_parked.is_some() {
+                self.editor_command(cmd);
+                return;
+            }
+            // An editor command with no editor open is a keymap mistake, not a crash.
+            self.not_implemented(&cmd.id());
+            return;
+        }
         self.panel_mut().message = None;
         match cmd {
             Command::AppQuit => self.quit = true,
@@ -1183,6 +1470,8 @@ impl App {
             }
 
             Command::FileView => self.open_viewer(),
+            Command::FileEdit => self.open_editor(),
+            Command::FileEditNew => self.open_new_editor(),
 
             Command::ViewerDisasm if self.mode.viewer().is_some() => {
                 let name = self
@@ -1331,7 +1620,11 @@ impl App {
                 }
                 lines.push(String::new());
                 lines.push(self.i18n.t("confirm-yes-no"));
-                self.mode = Mode::Confirm(Confirm { title, lines, spec });
+                self.mode = Mode::Confirm(Confirm {
+                    title,
+                    lines,
+                    action: ConfirmAction::Job(spec),
+                });
             }
 
             other => self.not_implemented(&other.id()),
@@ -1361,6 +1654,275 @@ impl App {
                 self.mode = Mode::Viewer(Box::new(viewer));
             }
             Err(e) => self.set_error(format!("{path}: {e}")),
+        }
+    }
+
+    /// `F4`: open the editor on the item under the cursor.
+    fn open_editor(&mut self) {
+        let Some(entry) = self.panel().current().cloned() else {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        };
+        if entry.kind.is_dirlike() {
+            self.not_implemented("file.edit (attributes dialog for directories)");
+            return;
+        }
+        let path = self.panel().cwd.join(&entry.name);
+        match Editor::open(path.as_path()) {
+            Ok(editor) => {
+                if editor.buffer.read_only {
+                    let msg = self
+                        .i18n
+                        .t_args("editor-read-only", &[("name", editor.name().into())]);
+                    self.set_status(msg);
+                }
+                self.mode = Mode::Editor(Box::new(editor));
+            }
+            Err(e) => self.set_error(format!("{path}: {e}")),
+        }
+    }
+
+    /// `Shift+F4`: a new file in the active panel's directory.
+    pub(crate) fn open_new_editor(&mut self) {
+        self.mode = Mode::Editor(Box::new(Editor::empty(None)));
+    }
+
+    /// Park the editor under a prompt or confirmation, so it comes back afterwards.
+    fn park_editor(&mut self) {
+        if let Mode::Editor(editor) = std::mem::replace(&mut self.mode, Mode::Normal) {
+            self.editor_parked = Some(editor);
+        }
+    }
+
+    fn restore_editor(&mut self) {
+        if let Some(editor) = self.editor_parked.take() {
+            self.mode = Mode::Editor(editor);
+        }
+    }
+
+    fn editor_prompt(&mut self, kind: PromptKind, title_key: &str, text: String) {
+        self.park_editor();
+        let title = self.i18n.t(title_key);
+        self.mode = Mode::Prompt(Prompt { kind, title, text });
+    }
+
+    /// Save, turning the engine's answers into messages and dialogs.
+    fn save_editor(&mut self, force: bool) {
+        let Some(editor) = self.mode.editor_mut() else {
+            return;
+        };
+        let name = editor.name();
+        match editor.save(force) {
+            Ok(scmd_edit::SaveOutcome::Saved { bytes, .. }) => {
+                let msg = self.i18n.t_args(
+                    "editor-saved",
+                    &[("name", name.into()), ("bytes", (bytes as i64).into())],
+                );
+                self.set_status(msg);
+            }
+            Ok(scmd_edit::SaveOutcome::NothingToDo) => {
+                let msg = self
+                    .i18n
+                    .t_args("editor-nothing-to-save", &[("name", name.into())]);
+                self.set_status(msg);
+            }
+            Err(scmd_edit::editor::EditorError::NoPath) => self.editor_prompt(
+                PromptKind::EditorSaveAs,
+                "editor-prompt-save-as",
+                String::new(),
+            ),
+            Err(scmd_edit::editor::EditorError::ChangedOnDisk(_)) => {
+                // Never overwrite someone else's work without being told to.
+                let title = self.i18n.t("editor-changed-title");
+                let body = self
+                    .i18n
+                    .t_args("editor-changed-body", &[("name", name.into())]);
+                self.park_editor();
+                self.mode = Mode::Confirm(Confirm {
+                    title,
+                    lines: vec![body],
+                    action: ConfirmAction::OverwriteChanged,
+                });
+            }
+            Err(e) => {
+                let msg = self.i18n.t_args(
+                    "editor-failed",
+                    &[("name", name.into()), ("error", e.to_string().into())],
+                );
+                self.set_error(msg);
+            }
+        }
+    }
+
+    /// Leaving the editor: unsaved changes are confirmed, never dropped silently.
+    fn close_editor(&mut self) {
+        let dirty = self
+            .mode
+            .editor()
+            .map(|e| e.buffer.modified())
+            .unwrap_or(false);
+        if !dirty {
+            self.mode = Mode::Normal;
+            self.editor_parked = None;
+            // The file may have been saved: refresh both panels.
+            self.read_panel(0);
+            self.read_panel(1);
+            return;
+        }
+        let name = self.mode.editor().map(|e| e.name()).unwrap_or_default();
+        let title = self.i18n.t("editor-discard-title");
+        let body = self
+            .i18n
+            .t_args("editor-discard-body", &[("name", name.into())]);
+        self.park_editor();
+        self.mode = Mode::Confirm(Confirm {
+            title,
+            lines: vec![body],
+            action: ConfirmAction::DiscardEdits,
+        });
+    }
+
+    fn editor_command(&mut self, cmd: Command) {
+        let (width, height) = self.editor_size;
+        let mut message: Option<String> = None;
+        let mut error: Option<String> = None;
+
+        match cmd {
+            Command::EditorQuit => {
+                self.close_editor();
+                return;
+            }
+            Command::EditorSave => {
+                self.save_editor(false);
+                return;
+            }
+            Command::EditorSaveAs => {
+                let text = self
+                    .mode
+                    .editor()
+                    .and_then(|e| e.path.as_ref().map(|p| p.to_string()))
+                    .unwrap_or_default();
+                self.editor_prompt(PromptKind::EditorSaveAs, "editor-prompt-save-as", text);
+                return;
+            }
+            Command::EditorSearch => {
+                let text = self
+                    .mode
+                    .editor()
+                    .and_then(|e| e.last_search.clone())
+                    .unwrap_or_default();
+                self.editor_prompt(PromptKind::EditorSearch, "editor-prompt-search", text);
+                return;
+            }
+            Command::EditorReplace => {
+                self.editor_prompt(
+                    PromptKind::EditorReplaceFrom,
+                    "editor-prompt-replace-from",
+                    String::new(),
+                );
+                return;
+            }
+            Command::EditorGoto => {
+                self.editor_prompt(PromptKind::EditorGoto, "editor-prompt-goto", String::new());
+                return;
+            }
+            _ => {}
+        }
+
+        let Some(editor) = self.mode.editor_mut() else {
+            return;
+        };
+        let name = editor.name();
+        let result: Result<(), String> = (|| {
+            match cmd {
+                Command::EditorUndo => {
+                    if !editor.undo() {
+                        return Err("editor-no-undo".into());
+                    }
+                }
+                Command::EditorRedo => {
+                    if !editor.redo() {
+                        return Err("editor-no-redo".into());
+                    }
+                }
+                Command::EditorSelectAll => editor.select_all(),
+                Command::EditorCopy => {
+                    editor.copy_block();
+                }
+                Command::EditorCut => {
+                    editor.cut_block().map_err(|e| e.to_string())?;
+                }
+                Command::EditorPaste => {
+                    editor.paste().map_err(|e| e.to_string())?;
+                }
+                Command::EditorDeleteLine => editor.delete_line().map_err(|e| e.to_string())?,
+                Command::EditorDuplicateLine => {
+                    editor.duplicate_line().map_err(|e| e.to_string())?
+                }
+                Command::EditorMoveLineUp => editor.move_line(false).map_err(|e| e.to_string())?,
+                Command::EditorMoveLineDown => editor.move_line(true).map_err(|e| e.to_string())?,
+                Command::EditorIndent => editor.indent().map_err(|e| e.to_string())?,
+                Command::EditorOutdent => editor.outdent().map_err(|e| e.to_string())?,
+                Command::EditorDeleteToEnd => {
+                    editor.delete_to_line_end().map_err(|e| e.to_string())?
+                }
+                Command::EditorDeleteWordLeft => {
+                    editor.delete_word_left().map_err(|e| e.to_string())?
+                }
+                Command::EditorToggleReadOnly => {
+                    editor.buffer.read_only = !editor.buffer.read_only;
+                    return Err(if editor.buffer.read_only {
+                        "editor-readonly-on".into()
+                    } else {
+                        "editor-readonly-off".into()
+                    });
+                }
+                Command::EditorReload => {
+                    editor.reload().map_err(|e| e.to_string())?;
+                    return Err("editor-reloaded".into());
+                }
+                Command::EditorSearchNext | Command::EditorSearchPrev => {
+                    let query = editor.last_search.clone().unwrap_or_default();
+                    if query.is_empty() {
+                        return Ok(());
+                    }
+                    let backwards = cmd == Command::EditorSearchPrev;
+                    if !editor.find(&query, backwards).map_err(|e| e.to_string())? {
+                        return Err(format!("not-found:{query}"));
+                    }
+                }
+                _ => {}
+            }
+            editor.scroll_into_view(height as usize, width as usize);
+            Ok(())
+        })();
+
+        match result {
+            Ok(()) => {}
+            // Message keys the editor hands back, resolved here where the catalogue lives.
+            Err(key) if key.starts_with("not-found:") => {
+                let query = key.trim_start_matches("not-found:").to_string();
+                message = Some(
+                    self.i18n
+                        .t_args("editor-not-found", &[("query", query.into())]),
+                );
+            }
+            Err(key) if key.starts_with("editor-") && !key.contains(' ') => {
+                message = Some(self.i18n.t(&key));
+            }
+            Err(other) => {
+                error = Some(self.i18n.t_args(
+                    "editor-failed",
+                    &[("name", name.into()), ("error", other.into())],
+                ));
+            }
+        }
+        if let Some(text) = message {
+            self.set_status(text);
+        }
+        if let Some(text) = error {
+            self.set_error(text);
         }
     }
 
@@ -1577,6 +2139,46 @@ impl App {
         }
     }
 
+    /// Is an editor parked under a prompt? The renderer needs to know before it takes it.
+    pub fn editor_parked_for_render(&self) -> bool {
+        self.editor_parked.is_some()
+    }
+
+    /// Hand the editor to the renderer (it needs `&mut` to scroll), and say whether it was
+    /// parked under a prompt so it goes back where it came from.
+    pub fn editor_for_render(&mut self) -> Option<(Box<Editor>, bool)> {
+        if let Some(editor) = self.editor_parked.take() {
+            return Some((editor, true));
+        }
+        match std::mem::replace(&mut self.mode, Mode::Normal) {
+            Mode::Editor(editor) => Some((editor, false)),
+            other => {
+                self.mode = other;
+                None
+            }
+        }
+    }
+
+    pub fn return_editor(&mut self, editor: Box<Editor>, parked: bool) {
+        if parked {
+            self.editor_parked = Some(editor);
+        } else {
+            self.mode = Mode::Editor(editor);
+        }
+    }
+
+    /// The key bar while the editor is open.
+    pub fn keybar_editor(&self) -> Vec<(u8, String)> {
+        vec![
+            (1, self.i18n.t("key-help")),
+            (2, self.i18n.t("key-save")),
+            (4, self.i18n.t("key-quit")),
+            (7, self.i18n.t("key-search")),
+            (8, self.i18n.t("key-replace")),
+            (10, self.i18n.t("key-quit")),
+        ]
+    }
+
     /// The key bar while the viewer is open.
     pub fn keybar_viewer(&self) -> Vec<(u8, String)> {
         vec![
@@ -1651,6 +2253,11 @@ impl App {
         }
         lines
     }
+}
+
+/// Commands that only make sense inside the editor.
+fn is_editor_command(cmd: Command) -> bool {
+    cmd.id().starts_with("editor.")
 }
 
 /// Commands the viewer handles itself when it is open.
@@ -2053,7 +2660,10 @@ mod tests {
         match &app.mode {
             Mode::Confirm(c) => {
                 assert!(c.lines.iter().any(|l| l.contains("a.txt")), "{:?}", c.lines);
-                assert_eq!(c.spec.kind, JobKind::Delete);
+                match &c.action {
+                    ConfirmAction::Job(spec) => assert_eq!(spec.kind, JobKind::Delete),
+                    other => panic!("expected a job confirmation, got {other:?}"),
+                }
             }
             other => panic!("expected a confirmation, got {other:?}"),
         }
@@ -2709,5 +3319,271 @@ abcdefghij
         press(&mut app, "Ctrl+H");
         assert!(app.status.contains("nascosti"), "{}", app.status);
         assert_eq!(app.keybar()[4].1, "Copia");
+    }
+
+    /// A panel over a real directory, sized for the editor.
+    fn editing_app(dir: &std::path::Path) -> App {
+        let mut app = app_on_disk(dir);
+        app.editor_size = (40, 6);
+        app
+    }
+
+    #[test]
+    fn f4_opens_the_editor_on_a_real_file() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("notes.txt"), b"alpha\nbeta\n").unwrap();
+        let mut app = editing_app(dir.path());
+
+        press(&mut app, "Down"); // notes.txt
+        press(&mut app, "F4");
+        let editor = app.mode.editor().expect("the editor should be open");
+        assert_eq!(editor.name(), "notes.txt");
+        assert_eq!(editor.buffer.lines(), ["alpha", "beta"]);
+
+        // Typing goes to the editor, not to the panel.
+        let cursor_before = app.panel().cursor;
+        press(&mut app, "End");
+        for c in ["!", "!"] {
+            press(&mut app, c);
+        }
+        assert_eq!(app.panel().cursor, cursor_before, "the panel moved instead");
+        assert_eq!(app.mode.editor().unwrap().buffer.line(0), "alpha!!");
+        assert!(app.mode.editor().unwrap().buffer.modified());
+    }
+
+    #[test]
+    fn f2_writes_the_file_and_reports_what_it_wrote() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("notes.txt");
+        std::fs::write(&path, b"alpha\n").unwrap();
+        let mut app = editing_app(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F4");
+        press(&mut app, "End");
+        press(&mut app, "x");
+        press(&mut app, "F2");
+
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "alphax\n");
+        assert!(!app.mode.editor().unwrap().buffer.modified());
+        assert!(app.status.contains("notes.txt"), "{}", app.status);
+        // Nothing more to save is said, not silently ignored.
+        press(&mut app, "F2");
+        assert!(app.status.contains("notes.txt"), "{}", app.status);
+    }
+
+    #[test]
+    fn quitting_with_unsaved_changes_asks_first() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("notes.txt");
+        std::fs::write(&path, b"alpha\n").unwrap();
+        let mut app = editing_app(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F4");
+        press(&mut app, "End");
+        press(&mut app, "z");
+
+        press(&mut app, "Esc");
+        match &app.mode {
+            Mode::Confirm(c) => assert_eq!(c.action, ConfirmAction::DiscardEdits),
+            other => panic!("expected the discard confirmation, got {other:?}"),
+        }
+        // Saying no keeps the editor and the edit.
+        press(&mut app, "Esc");
+        assert_eq!(app.mode.editor().unwrap().buffer.line(0), "alphaz");
+        // Saying yes throws the edit away and leaves the file alone.
+        press(&mut app, "Esc");
+        press(&mut app, "Enter");
+        assert!(app.mode.is_normal(), "{:?}", app.mode);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "alpha\n");
+    }
+
+    #[test]
+    fn quitting_a_clean_editor_refreshes_the_panels() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("notes.txt"), b"alpha\n").unwrap();
+        let mut app = editing_app(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F4");
+        app.requests.clear();
+        press(&mut app, "F10");
+        assert!(app.mode.is_normal());
+        assert!(!app.quit, "F10 in the editor closes the editor, not scmd");
+        let reads: Vec<usize> = app
+            .take_requests()
+            .iter()
+            .filter_map(|r| match r {
+                Request::Read { panel, .. } => Some(*panel),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(reads, vec![0, 1]);
+    }
+
+    #[test]
+    fn shift_f4_edits_a_new_file_in_the_panel_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("keep.txt"), b"x\n").unwrap();
+        let mut app = editing_app(dir.path());
+        press(&mut app, "Shift+F4");
+        assert!(app.mode.editor().unwrap().path.is_none());
+        for c in ["h", "i"] {
+            press(&mut app, c);
+        }
+
+        // With no name yet, F2 has to ask for one.
+        press(&mut app, "F2");
+        match &app.mode {
+            Mode::Prompt(p) => assert_eq!(p.kind, PromptKind::EditorSaveAs),
+            other => panic!("expected the save-as prompt, got {other:?}"),
+        }
+        for c in ["n", "e", "w", ".", "t", "x", "t"] {
+            press(&mut app, c);
+        }
+        press(&mut app, "Enter");
+        let written = std::fs::read_to_string(dir.path().join("new.txt")).unwrap();
+        assert_eq!(written, "hi\n");
+        assert_eq!(app.mode.editor().unwrap().name(), "new.txt");
+    }
+
+    #[test]
+    fn a_file_changed_underneath_us_is_never_overwritten_silently() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("shared.txt");
+        std::fs::write(&path, b"mine\n").unwrap();
+        let mut app = editing_app(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F4");
+        press(&mut app, "End");
+        press(&mut app, "!");
+        // Someone else saves while we are editing.
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        std::fs::write(&path, b"theirs\n").unwrap();
+
+        press(&mut app, "F2");
+        match &app.mode {
+            Mode::Confirm(c) => assert_eq!(c.action, ConfirmAction::OverwriteChanged),
+            other => panic!("expected the overwrite confirmation, got {other:?}"),
+        }
+        press(&mut app, "Esc");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "theirs\n");
+        assert!(app.mode.editor().is_some(), "the editor must stay open");
+
+        press(&mut app, "F2");
+        press(&mut app, "Enter"); // yes, overwrite
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "mine!\n");
+    }
+
+    #[test]
+    fn searching_and_replacing_runs_through_the_prompts() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("code.rs").as_path(),
+            b"let a = 1;\nlet b = 2;\n",
+        )
+        .unwrap();
+        let mut app = editing_app(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F4");
+
+        press(&mut app, "F7");
+        for c in ["l", "e", "t", "Space", "b"] {
+            press(&mut app, c);
+        }
+        press(&mut app, "Enter");
+        let editor = app.mode.editor().expect("the editor should be back");
+        assert_eq!(editor.cursor.line, 1);
+        assert_eq!(editor.last_search.as_deref(), Some("let b"));
+
+        // A query that is not there says so and keeps the editor open.
+        press(&mut app, "F7");
+        for c in ["z", "z"] {
+            press(&mut app, c);
+        }
+        press(&mut app, "Enter");
+        assert!(app.status_error, "{}", app.status);
+        assert!(app.mode.editor().is_some());
+
+        // Replace all: "let" → "const".
+        press(&mut app, "Ctrl+F7");
+        for c in ["l", "e", "t"] {
+            press(&mut app, c);
+        }
+        press(&mut app, "Enter");
+        for c in ["c", "o", "n", "s", "t"] {
+            press(&mut app, c);
+        }
+        press(&mut app, "Enter");
+        assert_eq!(
+            app.mode.editor().unwrap().buffer.lines(),
+            ["const a = 1;", "const b = 2;"]
+        );
+        assert!(app.status.contains('2'), "{}", app.status);
+    }
+
+    #[test]
+    fn undo_goto_and_line_commands_are_reachable_from_the_keymap() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), b"one\ntwo\nthree\n").unwrap();
+        let mut app = editing_app(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F4");
+
+        press(&mut app, "Ctrl+Y"); // delete the line, as in FAR
+        assert_eq!(app.mode.editor().unwrap().buffer.lines(), ["two", "three"]);
+        press(&mut app, "Ctrl+Z");
+        assert_eq!(
+            app.mode.editor().unwrap().buffer.lines(),
+            ["one", "two", "three"]
+        );
+
+        press(&mut app, "Alt+F8"); // go to line
+        press(&mut app, "3");
+        press(&mut app, "Enter");
+        assert_eq!(app.mode.editor().unwrap().cursor.line, 2);
+    }
+
+    #[test]
+    fn a_column_block_is_cut_and_pasted_as_a_rectangle() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("t.txt"), b"abcd\nefgh\n").unwrap();
+        let mut app = editing_app(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F4");
+
+        // Alt+Shift+arrows mark a column block: two rows, two columns.
+        press(&mut app, "Alt+Shift+Right");
+        press(&mut app, "Alt+Shift+Right");
+        press(&mut app, "Alt+Shift+Down");
+        let editor = app.mode.editor().unwrap();
+        assert_eq!(editor.block.unwrap().kind, BlockKind::Column);
+        assert_eq!(editor.block_text().as_deref(), Some("ab\nef"));
+
+        press(&mut app, "Ctrl+X");
+        assert_eq!(app.mode.editor().unwrap().buffer.lines(), ["cd", "gh"]);
+        press(&mut app, "Ctrl+V");
+        assert_eq!(app.mode.editor().unwrap().buffer.lines(), ["abcd", "efgh"]);
+    }
+
+    #[test]
+    fn a_read_only_file_is_opened_and_said_to_be_read_only() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("ro.txt");
+        std::fs::write(&path, b"locked\n").unwrap();
+        let mut perms = std::fs::metadata(&path).unwrap().permissions();
+        perms.set_readonly(true);
+        std::fs::set_permissions(&path, perms).unwrap();
+
+        let mut app = editing_app(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F4");
+        assert!(app.mode.editor().unwrap().buffer.read_only);
+        assert!(
+            app.status.to_lowercase().contains("read-only"),
+            "{}",
+            app.status
+        );
+        press(&mut app, "x");
+        assert_eq!(app.mode.editor().unwrap().buffer.line(0), "locked");
+        assert!(app.status_error, "{}", app.status);
     }
 }

@@ -115,16 +115,20 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 
 | # | Feature | Origin | M |
 | --- | --- | --- | --- |
-| 6.1 | Full-screen editor, multiple files open, big-file support, read-only lock | FAR | M2 |
-| 6.2 | Block operations: stream blocks and **column/vertical blocks**, indent/outdent, copy/move block to cursor, append to clipboard | FAR | M2 |
-| 6.3 | Undo/redo with configurable depth, persistent position/bookmarks per file | FAR | M2 |
-| 6.4 | Search/replace: case, whole word, regex (with capture refs), fuzzy, "preserve style" (camelCase/snake_case aware), all-matches list | FAR | M2/M3 |
-| 6.5 | Go to line:column, bookmarks 0..9, jump to matching bracket | FAR | M2 |
-| 6.6 | Encoding and EOL conversion on save, keep original EOL, optional BOM | FAR | M2 |
+| 6.1 | Full-screen editor, 256 MiB open limit, read-only files opened and marked | FAR | M1 (multiple open files M2) |
+| 6.2 | Block operations: stream blocks and **column/vertical blocks**, copy/cut/paste (a column paste pads short lines), indent/outdent | FAR | M1 (block-to-cursor, append-to-clipboard, OS clipboard M2) |
+| 6.3 | Undo/redo grouped per command | FAR | M1 (typing-burst grouping, configurable depth and persisted positions M2) |
+| 6.4 | Search/replace: plain search with wrap, replace once, replace all (the engine already does regex and case-insensitive; the dialog that exposes them is M2) | FAR | M1; whole word, capture refs, "preserve style", all-matches list M2/M3 |
+| 6.5 | Go to `line` or `line:column`, bookmarks 0..9 | FAR | M1 (matching-bracket jump M2) |
+| 6.6 | Keep the original encoding, EOL, BOM and final newline on save | FAR | M1 (explicit conversion commands M2) |
 | 6.7 | Syntax highlighting (tree-sitter), bracket matching, auto-indent, tabs/spaces policy, trailing-space trim | MTN2/NEW | M3 |
 | 6.8 | Insert file name / path / current date, character by code, macros | FAR | M3 |
 | 6.9 | External editor delegation (`$EDITOR`, per-type associations) | all | M1 |
 | 6.10 | LSP-lite: completion/diagnostics for the open file (optional plugin) | NEW | M4 |
+| 6.11 | **Atomic save** (`name.scmd-tmp` + rename, permissions carried over) and a save-as prompt | NEW | M1 |
+| 6.12 | **External-change detection**: a file changed on disk is never overwritten without a confirmation; reload on demand | FAR | M1 (diff-on-conflict M3) |
+| 6.13 | `Shift+F4` edits a new file, saved into the active panel's directory | FAR | M1 |
+| 6.14 | Line editing: delete, duplicate, move up/down, delete to end of line, delete word left, auto-indent, smart home, tab expansion | FAR | M1 (join, sort, unique, reverse, number M2) |
 
 ## 7. Tools & dialogs
 

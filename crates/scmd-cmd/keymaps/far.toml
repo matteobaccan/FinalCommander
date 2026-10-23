@@ -21,6 +21,10 @@ keys = ["F4"]
 cmd = "file.edit"
 
 [[bind]]
+keys = ["Shift+F4"]
+cmd = "file.edit.new"
+
+[[bind]]
 keys = ["F5"]
 cmd = "file.copy"
 
@@ -329,3 +333,125 @@ cmd = "viewer.disasm"
 keys = ["F6"]
 scope = "viewer"
 cmd = "viewer.decompile"
+
+# ---------------------------------------------------------------- editor (F4)
+[[bind]]
+keys = ["F2"]
+scope = "editor"
+cmd = "editor.save"
+
+[[bind]]
+keys = ["Shift+F2"]
+scope = "editor"
+cmd = "editor.save.as"
+
+[[bind]]
+keys = ["F4", "F10", "Esc"]
+scope = "editor"
+cmd = "editor.quit"
+
+[[bind]]
+keys = ["F7"]
+scope = "editor"
+cmd = "editor.search"
+
+[[bind]]
+keys = ["Shift+F7"]
+scope = "editor"
+cmd = "editor.search.next"
+
+[[bind]]
+keys = ["Alt+F7"]
+scope = "editor"
+cmd = "editor.search.prev"
+
+[[bind]]
+keys = ["Ctrl+F7"]
+scope = "editor"
+cmd = "editor.replace"
+
+[[bind]]
+keys = ["Alt+F8"]
+scope = "editor"
+cmd = "editor.goto"
+
+[[bind]]
+keys = ["Ctrl+Z"]
+scope = "editor"
+cmd = "editor.undo"
+
+[[bind]]
+keys = ["Ctrl+Shift+Z"]
+scope = "editor"
+cmd = "editor.redo"
+
+[[bind]]
+keys = ["Ctrl+A"]
+scope = "editor"
+cmd = "editor.select.all"
+
+[[bind]]
+keys = ["Ctrl+C", "Ctrl+Ins"]
+scope = "editor"
+cmd = "editor.copy"
+
+[[bind]]
+keys = ["Ctrl+X", "Shift+Del"]
+scope = "editor"
+cmd = "editor.cut"
+
+[[bind]]
+keys = ["Ctrl+V", "Shift+Ins"]
+scope = "editor"
+cmd = "editor.paste"
+
+# FAR deletes the line with Ctrl+Y, so redo lives on Ctrl+Shift+Z alone.
+[[bind]]
+keys = ["Ctrl+Y"]
+scope = "editor"
+cmd = "editor.line.delete"
+
+[[bind]]
+keys = ["Ctrl+Shift+D"]
+scope = "editor"
+cmd = "editor.line.duplicate"
+
+[[bind]]
+keys = ["Alt+Up"]
+scope = "editor"
+cmd = "editor.line.up"
+
+[[bind]]
+keys = ["Alt+Down"]
+scope = "editor"
+cmd = "editor.line.down"
+
+[[bind]]
+keys = ["Alt+I"]
+scope = "editor"
+cmd = "editor.indent"
+
+[[bind]]
+keys = ["Alt+U"]
+scope = "editor"
+cmd = "editor.outdent"
+
+[[bind]]
+keys = ["Ctrl+K"]
+scope = "editor"
+cmd = "editor.delete.to.end"
+
+[[bind]]
+keys = ["Ctrl+Backspace"]
+scope = "editor"
+cmd = "editor.delete.word.left"
+
+[[bind]]
+keys = ["Ctrl+Alt+L"]
+scope = "editor"
+cmd = "editor.readonly.toggle"
+
+[[bind]]
+keys = ["Ctrl+R"]
+scope = "editor"
+cmd = "editor.reload"
