@@ -93,6 +93,24 @@ kitty_keyboard = "auto"
 CLI overrides: `--set panel.show_hidden=true`, `--theme`, `--keymap`, `--config`, `--portable`.
 Environment: `SCMD_CONFIG_DIR`, `SCMD_THEME`, `SCMD_KEYMAP`, `NO_COLOR`, `COLORTERM`.
 
+## 2b. `[[decompile]]` rules
+
+External tools the viewer may call for `F6` (SPEC 05 §1.6). A rule is used only when its
+program is on the `PATH`, so the defaults can name tools that are not installed.
+
+```toml
+[[decompile]]
+name = "javap"            # shown in the status line
+match = "*.class"         # `*.ext`, or an exact file name
+cmd = "javap -c -p -constants {file}"   # run directly, never through a shell
+```
+
+Compiled-in defaults, each active only if present: `javap` (`*.class`), `ilspycmd` (`*.dll`),
+`python3 -m dis` (`*.pyc`), `wasm2wat` (`*.wasm`, though WebAssembly is printed in process
+anyway), `objdump -d -C` (`*.o`, `*.so`, `*.a`), `retdec-decompiler` (`*.exe`). A rule in
+`scmd.toml` wins over a default for the same mask. `{file}` is substituted; a rule that forgets
+it still gets the path appended.
+
 ## 3. Keymaps
 
 ```toml

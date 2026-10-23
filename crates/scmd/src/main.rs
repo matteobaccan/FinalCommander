@@ -392,6 +392,14 @@ fn interactive(mut app: App) -> Result<()> {
                     let tx = tx.clone();
                     runtime.spawn_blocking(move || run_job(id, spec, cancel, tx));
                 }
+                Request::Decompile { id, rule, path } => {
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || {
+                        let tool = rule.name.clone();
+                        let result = run_decompiler(&rule, &path);
+                        let _ = tx.send(Event::Decompiled { id, tool, result });
+                    });
+                }
                 Request::DirSize { panel, path } => {
                     let tx = tx.clone();
                     runtime.spawn_blocking(move || {
@@ -486,6 +494,53 @@ fn run_job(id: u64, spec: JobSpec, cancel: CancelToken, tx: mpsc::Sender<Event>)
         },
     };
     let _ = tx.send(Event::JobDone { id, kind, outcome });
+}
+
+/// Run an external decompiler and capture its text.
+///
+/// The command is executed **directly**, never through a shell, so a path with spaces or
+/// shell characters cannot turn into a command. Output is capped: a decompiler pointed at the
+/// wrong file can print for ever.
+fn run_decompiler(rule: &scmd_config::DecompileRule, path: &VPath) -> Result<String, String> {
+    const MAX_OUTPUT: usize = 32 * 1024 * 1024;
+
+    let mut parts = rule.cmd.split_whitespace();
+    let program = parts.next().ok_or_else(|| "empty command".to_string())?;
+    let args: Vec<String> = parts
+        .map(|arg| {
+            if arg.contains("{file}") {
+                arg.replace("{file}", &path.to_string())
+            } else {
+                arg.to_string()
+            }
+        })
+        .collect();
+    // A rule that forgot `{file}` still gets the path, at the end.
+    let args = if rule.cmd.contains("{file}") {
+        args
+    } else {
+        let mut args = args;
+        args.push(path.to_string());
+        args
+    };
+
+    let output = std::process::Command::new(program)
+        .args(&args)
+        .output()
+        .map_err(|e| format!("{program}: {e}"))?;
+
+    let mut text = String::from_utf8_lossy(&output.stdout).into_owned();
+    if text.trim().is_empty() {
+        text = String::from_utf8_lossy(&output.stderr).into_owned();
+    }
+    if !output.status.success() && text.trim().is_empty() {
+        return Err(format!("exited with {}", output.status));
+    }
+    if text.len() > MAX_OUTPUT {
+        text.truncate(MAX_OUTPUT);
+        text.push_str("\n… output truncated\n");
+    }
+    Ok(text)
 }
 
 /// Recursive size of a directory. Depth-limited, cancellable, and it never follows symlinks.
@@ -645,7 +700,7 @@ mod tests {
                             app.handle_event(event);
                         }
                     }
-                    Request::DirSize { .. } => {}
+                    Request::DirSize { .. } | Request::Decompile { .. } => {}
                 }
             }
         };
@@ -717,7 +772,7 @@ mod tests {
                             app.handle_event(event);
                         }
                     }
-                    Request::DirSize { .. } => {}
+                    Request::DirSize { .. } | Request::Decompile { .. } => {}
                 }
             }
         };

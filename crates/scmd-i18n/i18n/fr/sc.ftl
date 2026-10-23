@@ -92,3 +92,11 @@ viewer-wrap-mode = { $mode }
 viewer-no-undo = aucune position précédente
 viewer-empty = (fichier vide)
 viewer-status = { $mode } { $codepage }  { $offset } / { $len }  { $percent }%
+
+key-disasm = Désass
+key-decomp = Décomp
+viewer-disasm-failed = impossible de désassembler { $name } : { $error }
+viewer-decompile-running = { $tool } s'exécute sur { $name }…
+viewer-decompile-none = rien ici ne décompile { $format } ; installez un outil et ajoutez une règle [[decompile]] dans scmd.toml
+viewer-decompile-failed = { $tool } : { $error }
+viewer-derived = { $producer } de { $name }

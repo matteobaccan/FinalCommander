@@ -92,3 +92,11 @@ viewer-wrap-mode = { $mode }
 viewer-no-undo = 没有更早的位置
 viewer-empty = （空文件）
 viewer-status = { $mode } { $codepage }  { $offset } / { $len }  { $percent }%
+
+key-disasm = 反汇编
+key-decomp = 反编译
+viewer-disasm-failed = 无法反汇编 { $name }：{ $error }
+viewer-decompile-running = { $tool } 正在处理 { $name }…
+viewer-decompile-none = 没有可用于反编译 { $format } 的工具；请安装后在 scmd.toml 中添加 [[decompile]] 规则
+viewer-decompile-failed = { $tool }：{ $error }
+viewer-derived = { $name } 的 { $producer }

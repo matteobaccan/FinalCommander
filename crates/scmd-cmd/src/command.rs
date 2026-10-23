@@ -73,10 +73,14 @@ pub enum Command {
     ViewerUndoPosition,
     ViewerBytesLess,
     ViewerBytesMore,
+    /// Disassemble: machine code as instructions.
+    ViewerDisasm,
+    /// Decompile: WebAssembly to text, or an external decompiler's output.
+    ViewerDecompile,
 }
 
 impl Command {
-    /// The stable string id used in keymaps, menus, scripts and `sc --list-commands`.
+    /// The stable string id used in keymaps, menus, scripts and `scmd --list-commands`.
     pub fn id(self) -> String {
         match self {
             Command::AppQuit => "app.quit".into(),
@@ -137,6 +141,8 @@ impl Command {
             Command::ViewerUndoPosition => "viewer.undo".into(),
             Command::ViewerBytesLess => "viewer.bytes.less".into(),
             Command::ViewerBytesMore => "viewer.bytes.more".into(),
+            Command::ViewerDisasm => "viewer.disasm".into(),
+            Command::ViewerDecompile => "viewer.decompile".into(),
         }
     }
 
@@ -205,6 +211,8 @@ impl Command {
             ("viewer.undo", _) => Command::ViewerUndoPosition,
             ("viewer.bytes.less", _) => Command::ViewerBytesLess,
             ("viewer.bytes.more", _) => Command::ViewerBytesMore,
+            ("viewer.disasm", _) => Command::ViewerDisasm,
+            ("viewer.decompile", _) => Command::ViewerDecompile,
             _ => return None,
         };
         Some(cmd)
@@ -253,6 +261,8 @@ mod tests {
             Command::ViewerQuit,
             Command::ViewerSearchNext,
             Command::ViewerBytesMore,
+            Command::ViewerDisasm,
+            Command::ViewerDecompile,
         ];
         for c in all {
             assert_eq!(Command::parse(&c.id()), Some(c), "{}", c.id());

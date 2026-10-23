@@ -229,7 +229,7 @@ impl Keymap {
             .map(|((_, k), _)| *k)
     }
 
-    /// Every binding, sorted — used by the help dialog and `sc --check-keymap`.
+    /// Every binding, sorted — used by the help dialog and `scmd --check-keymap`.
     pub fn bindings(&self) -> impl Iterator<Item = (Scope, Key, Command)> + '_ {
         self.binds.iter().map(|((s, k), c)| (*s, *k, *c))
     }
