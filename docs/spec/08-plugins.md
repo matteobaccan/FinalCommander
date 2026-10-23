@@ -84,6 +84,11 @@ interface vfs-provider {                 // a plugin can add a scheme
 
 interface viewer-provider { can-handle: func(name: string, head: list<u8>) -> bool;
                             render: func(path: string, geom: geometry) -> result<render, error>; }
+interface editor-provider  { can-handle: func(name: string) -> bool;
+                             open: func(path: string) -> result<session-id, error>;
+                             key: func(id: session-id, k: key) -> result<edit-effect, error>;
+                             render: func(id: session-id, geom: geometry) -> result<render, error>;
+                             save: func(id: session-id, path: string) -> result<_, error>; }
 interface command-provider { commands: func() -> list<command-desc>;
                              invoke: func(id: string, args: string) -> result<string, error>; }
 interface column-provider  { columns: func() -> list<column-desc>;
@@ -181,3 +186,34 @@ compiles to a WASM component against the versioned WIT interfaces, plus a `plugi
 test harness that runs the VFS conformance suite against it. A FAR/TC plugin author therefore
 ports *logic*, not glue: the interfaces are deliberately close in shape (list / open / read /
 write for VFS, can-handle / render for viewers) so the port is mechanical.
+
+## 8. The three plugins that matter first: viewer, editor, netbox
+
+Priority decision. Of everything that can be a plugin, three carry the weight, and the plugin
+layer is designed around them — if the ABI can host these, it can host anything:
+
+| Plugin | Interface it implements | What it covers | Milestone |
+| --- | --- | --- | --- |
+| **`sc-viewer`** | `viewer-provider` + the preview pipeline | text / dump / hex, encodings, search, huge files, follow mode, per-type previews (SPEC 05 §1) | M2 |
+| **`sc-editor`** | `editor-provider` | full-screen editor, column blocks, undo, search & replace, syntax highlighting (SPEC 05 §2) | M2 |
+| **`sc-netbox`** | `vfs-provider` (one plugin, several schemes) | SFTP/SSH, FTP/FTPS, WebDAV, S3-compatible, plus the connection manager's site list (SPEC 04 §3, §6) — the FAR NetBox / far2l NetRocks role | M3 |
+
+How they are built, in order:
+
+1. **In-tree first, behind the public interface.** `sc-view`, `sc-edit` and `sc-net` are
+   workspace crates that implement exactly the `viewer-provider` / `editor-provider` /
+   `vfs-provider` shapes above, called through a trait object. They ship as part of the binary,
+   so M2 and M3 do not wait for the WASM host.
+2. **Then moved out, unchanged, as the three reference plugins.** The WASM ABI is **not
+   considered done** until the viewer, the editor and netbox run as plugins through it, with no
+   private back channel into the core. They are the acceptance test for the plugin layer, and
+   the examples plugin authors read.
+3. **Always replaceable, never removable.** A user may point `viewer`, `editor` or a scheme at
+   a third-party plugin; if none is present, the built-in one is used. No configuration can
+   leave the commander without a working `F3`, `F4` or network panel.
+
+Consequences recorded elsewhere in the specs: the viewer/editor interfaces must be able to
+express a full-screen component driven by keys (not just "render this file"), and `vfs-provider`
+must support credentials, host-key prompts and long-lived connections — so the host exposes
+`ui.prompt`, `keyring.get/put` and a connection-lifetime hook to plugins holding the
+`vfs:net` capability.

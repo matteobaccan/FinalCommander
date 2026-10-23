@@ -158,7 +158,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | --- | --- | --- | --- |
 | 9.1 | Human-editable config files (TOML) + in-app settings dialogs; portable mode (config next to the binary) | MTN2 | M1 |
 | 9.2 | Full keymap remapping, multiple **keymap profiles** (`far`, `tc`, `mc`, `nc`, `vi`) switchable at runtime | KRU/MTN2 | M1 (far+mc), M2 rest |
-| 9.3 | Themes from files (24-bit colour + 256/16 fallbacks), ship Far Classic / NC / MC / TC / Gruvbox / Dracula / Nord / Solarized / light / high-contrast | MTN2 | M1 (2 themes), M2 set |
+| 9.3 | Themes: 6 built-in (`commander`, `black`, `white`, `matrix`, `tron`, `blade`) + external TOML themes discovered from `themes/`, hot-reloaded, `inherit`-able, exportable; 24-bit colour with 256/16/mono degradation | MTN2 | M1 |
 | 9.4 | Localisation (fluent-based): EN, IT, DE, FR, ES, RU, ZH-Hans; UI + help + key names, runtime switchable, drop-in language dirs | FAR/MTN2 | M2 |
 | 9.5 | CJK/wide-character correct layout, combining marks, RTL-safe truncation, emoji width | MTN2 | M2 |
 | 9.6 | Accessibility: no-colour mode, screen-reader-friendly output mode, configurable focus indication | NEW | M3 |
@@ -184,7 +184,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | --- | --- | --- | --- |
 | 11.1 | Linux, macOS, Windows first-class; FreeBSD best-effort | — | M1 |
 | 11.2 | TUI backend (any terminal, works over SSH/tmux) as the primary UI | — | M1 |
-| 11.3 | Optional GUI backend rendering the same TUI grid (GPU canvas, own font, true colour, images) | MTN2 | M4 |
+| 11.3 | **No GUI backend, ever** — strictly TUI; terminal extras (inline images, kitty keyboard, OSC 52) are capability-detected, not a second UI | decision | — |
 | 11.4 | Single static binary, no installer required; packages: `.deb`, `.rpm`, Homebrew, Scoop/winget, AUR, Flatpak | — | M2 |
 | 11.5 | Startup under ~50 ms, listing of 100k entries without blocking the UI | YAZI | M1 (budget), enforced in CI |
 | 11.6 | Crash safety: no data loss on operation interruption; journaled job state | NEW | M2 |

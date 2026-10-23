@@ -7,9 +7,12 @@ two panels, a command line, a function-key bar, keyboard-first, with an internal
 editor, a virtual filesystem layer (archives, SFTP, S3, …), a job engine for file operations,
 and an extension layer (Lua + WebAssembly).
 
-Primary UI is a **TUI** that runs in any terminal (local, over SSH, inside tmux). An optional
-GUI backend (M4) renders the same character grid on a GPU canvas with its own font, true
-colour and inline images — the MTN2 approach — without forking the UI code.
+The interface is **strictly TUI**: a character grid in a terminal, local or over SSH, inside
+tmux or a bare console. There is no GUI build, no GPU canvas, no desktop-toolkit backend — not
+as an option, not later. Anything that cannot be expressed in cells, colours and keystrokes is
+out of scope, and the few places where terminals do offer more (inline image protocols,
+kitty keyboard reporting, OSC 52 clipboard) are used as *terminal* features behind capability
+detection, never as a second UI.
 
 Model: FAR Manager for the interaction grammar and plugin ambition, Total Commander and
 Krusader for the tool set, Midnight Commander for Unix integration, yazi for the async engine
@@ -39,7 +42,8 @@ and preview pipeline. Licensing basis: `docs/01-licensing.md`.
 - No cloud sync service, no accounts, no "AI assistant" in the panel.
 - No bundled proprietary blobs; no feature that requires a non-free component to work
   (RAR *write*, for example, is simply out of scope).
-- Not bound to a desktop toolkit: no GTK/Qt dependency in the core.
+- **No GUI.** No GTK/Qt/GPU backend, no "windowed mode", no web front end. The TUI is the
+  product; a graphical file manager is a different program.
 - Not a terminal multiplexer, though it embeds PTYs.
 
 ## 4. Users we design for
@@ -84,10 +88,10 @@ and preview pipeline. Licensing basis: `docs/01-licensing.md`.
 
 | M | Theme | Done when |
 | --- | --- | --- |
-| **M1** | Daily driver | two panels, navigation, selection, copy/move/delete/mkdir with conflicts and progress, command line + user screen, viewer (text), config/keymap/theme, far+mc profiles, Linux/macOS/Windows builds |
+| **M1** | Daily driver | two panels, navigation, selection, copy/move/delete/mkdir with conflicts and progress, command line + user screen, viewer (text), config/keymap, the six built-in themes plus external theme loading, far+mc profiles, Linux/macOS/Windows builds |
 | **M2** | mc/FAR parity | tabs, quick view/info/tree panels, filters, find files, archives (zip/tar/7z) read+write, job queue, editor, multi-rename, compare dirs, checksums, PTY subshell, trash, help system |
 | **M3** | Commander parity | full VFS (SFTP/FTP/WebDAV/S3), connection manager, previews, syntax highlighting, macros, Lua API, WASM plugin ABI, diff viewer, synchroniser, elevated ops |
-| **M4** | Beyond | GUI backend, multi-panel windows, plugin registry, special VFS (process/registry/git), headless CLI, mobile/web experiments |
+| **M4** | Beyond | multi-panel/windowed layout *inside the TUI*, plugin registry, native plugin ABI, special VFS (process/registry/git), headless CLI, split engine/UI over ssh |
 
 Specs: `01-architecture`, `02-panels`, `03-file-operations`, `04-vfs`, `05-viewer-editor`,
 `06-tools`, `07-config-theming`, `08-plugins`, `09-roadmap`.

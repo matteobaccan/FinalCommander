@@ -1,0 +1,215 @@
+# Default keymap: FAR Manager grammar, adapted to what terminals can actually deliver.
+# See docs/03-keymap.md (§9 explains every deviation).
+name = "far"
+
+# ---------------------------------------------------------------- function keys
+[[bind]]
+keys = ["F1"]
+scope = "global"
+cmd = "app.help"
+
+[[bind]]
+keys = ["F2"]
+cmd = "tool.usermenu"
+
+[[bind]]
+keys = ["F3"]
+cmd = "file.view"
+
+[[bind]]
+keys = ["F4"]
+cmd = "file.edit"
+
+[[bind]]
+keys = ["F5"]
+cmd = "file.copy"
+
+[[bind]]
+keys = ["F6"]
+cmd = "file.move"
+
+[[bind]]
+keys = ["F7"]
+cmd = "file.mkdir"
+
+[[bind]]
+keys = ["F8", "Del"]
+cmd = "file.delete"
+
+[[bind]]
+keys = ["F9"]
+scope = "global"
+cmd = "app.menu"
+
+[[bind]]
+keys = ["F10"]
+scope = "global"
+cmd = "app.quit"
+
+[[bind]]
+keys = ["Alt+F7"]
+cmd = "tool.find"
+
+# ---------------------------------------------------------------- panel control
+[[bind]]
+keys = ["Tab"]
+cmd = "panel.focus.toggle"
+
+[[bind]]
+keys = ["Ctrl+U"]
+cmd = "panel.swap"
+
+[[bind]]
+keys = ["Ctrl+R"]
+cmd = "panel.reread"
+
+[[bind]]
+keys = ["Ctrl+H"]
+cmd = "panel.hidden.toggle"
+
+[[bind]]
+keys = ["Ctrl+="]
+cmd = "panel.other.sync"
+
+[[bind]]
+keys = ["Alt+I"]
+cmd = "panel.filter.quick"
+
+[[bind]]
+keys = ["Ctrl+1"]
+cmd = "panel.view.set(brief)"
+
+[[bind]]
+keys = ["Ctrl+2"]
+cmd = "panel.view.set(full)"
+
+[[bind]]
+keys = ["Ctrl+3"]
+cmd = "panel.view.set(detail)"
+
+[[bind]]
+keys = ["Ctrl+4"]
+cmd = "panel.view.set(wide)"
+
+[[bind]]
+keys = ["Ctrl+F3"]
+cmd = "panel.sort.by(name)"
+
+[[bind]]
+keys = ["Ctrl+F4"]
+cmd = "panel.sort.by(ext)"
+
+[[bind]]
+keys = ["Ctrl+F5"]
+cmd = "panel.sort.by(mtime)"
+
+[[bind]]
+keys = ["Ctrl+F6"]
+cmd = "panel.sort.by(size)"
+
+[[bind]]
+keys = ["Ctrl+F7"]
+cmd = "panel.sort.by(none)"
+
+[[bind]]
+keys = ["Ctrl+F12"]
+cmd = "panel.sort.reverse"
+
+# ---------------------------------------------------------------- navigation
+[[bind]]
+keys = ["Up"]
+cmd = "nav.up"
+
+[[bind]]
+keys = ["Down"]
+cmd = "nav.down"
+
+[[bind]]
+keys = ["PgUp"]
+cmd = "nav.pageup"
+
+[[bind]]
+keys = ["PgDn"]
+cmd = "nav.pagedown"
+
+[[bind]]
+keys = ["Home"]
+cmd = "nav.top"
+
+[[bind]]
+keys = ["End"]
+cmd = "nav.bottom"
+
+[[bind]]
+keys = ["Enter"]
+cmd = "nav.enter"
+
+[[bind]]
+keys = ["Ctrl+PgUp", "Backspace"]
+cmd = "nav.parent"
+
+[[bind]]
+keys = ["Ctrl+\\"]
+cmd = "nav.root"
+
+[[bind]]
+keys = ["Alt+Left"]
+cmd = "nav.history.back"
+
+[[bind]]
+keys = ["Alt+Right"]
+cmd = "nav.history.forward"
+
+[[bind]]
+keys = ["Ctrl+L"]
+cmd = "nav.goto.path"
+
+# ---------------------------------------------------------------- selection
+[[bind]]
+keys = ["Ins"]
+cmd = "sel.toggle"
+
+[[bind]]
+keys = ["Ctrl+A"]
+cmd = "sel.all"
+
+[[bind]]
+keys = ["Ctrl+Shift+A"]
+cmd = "sel.none"
+
+[[bind]]
+keys = ["*"]
+cmd = "sel.invert"
+
+[[bind]]
+keys = ["+"]
+cmd = "sel.mask.add"
+
+[[bind]]
+keys = ["-"]
+cmd = "sel.mask.remove"
+
+# FAR uses Ctrl+M, which a terminal delivers as Enter: Ctrl+Shift+M instead.
+[[bind]]
+keys = ["Ctrl+Shift+M"]
+cmd = "sel.restore"
+
+# ---------------------------------------------------------------- misc
+[[bind]]
+keys = ["Space"]
+cmd = "file.dirsize"
+
+[[bind]]
+keys = ["Ctrl+O"]
+scope = "global"
+cmd = "shell.output.show"
+
+[[bind]]
+keys = ["Ctrl+Shift+P"]
+scope = "global"
+cmd = "app.palette"
+
+[[bind]]
+keys = ["Alt+T"]
+scope = "global"
+cmd = "app.theme.next"

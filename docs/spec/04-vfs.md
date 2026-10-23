@@ -39,6 +39,11 @@ failure.
 
 ## 3. Providers
 
+Split of responsibility: the **core** owns `file`, the archive schemes and `temp`/`trash`;
+**all network schemes are delivered by the `netbox` first-party plugin** (SPEC 08 §8), which is
+also the reference implementation of `vfs-provider`. The table's "crate" column therefore names
+where the code lives, not whether it is linked into the binary.
+
 | Scheme | Crate / mechanism | Caps | Milestone |
 | --- | --- | --- | --- |
 | `file` | `std::fs` + `sc-platform` | all native | M1 |

@@ -94,7 +94,7 @@ Pressing the same sort key twice toggles direction when `panel.allow_reverse_sor
 
 ## 5. Filters
 
-- **Quick filter bar** (`Ctrl+I`): live substring/glob, applied to the visible order only.
+- **Quick filter bar** (`Alt+I`): live substring/glob, applied to the visible order only.
 - **Filter sets**: named rules combining masks (`*.rs,*.toml`), exclude masks, size range, age
   range, attributes, and entry kind; stored in `filters.toml`, selectable from a menu,
   lockable so a changed directory keeps the filter.

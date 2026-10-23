@@ -33,7 +33,8 @@ tool for anything in M1 scope; all quality gates green on three platforms.
 
 ## M2 — mc/FAR parity
 
-tabs · quick view / info / tree panels · filters + highlight groups · custom columns ·
+**Headline: the viewer and the editor** (the first two of the three priority components, SPEC
+08 §8), then: tabs · quick view / info / tree panels · filters + highlight groups · custom columns ·
 find files + grep + panelize · disk usage · archives (zip/tar/7z read+write, pack/unpack
 dialogs) · temp panel · job queue panel + journal/resume · editor (`sc-edit`) · multi-rename ·
 compare dirs · checksums/split/combine · attributes & permissions dialogs · links · trash/wipe ·
@@ -43,7 +44,8 @@ viewer modes + regex/hex search · help system · session restore · `tc`/`nc` k
 
 ## M3 — Commander parity and beyond the terminal's usual limits
 
-SFTP/FTP/WebDAV/S3/rclone providers + connection manager + keyring · nested containers and
+**Headline: netbox** — SFTP/FTP/FTPS/WebDAV/S3 in one first-party plugin, plus the connection
+manager and keyring; then rclone bridge · nested containers and
 write-back · previews (images via kitty/sixel, markdown, PDF, media) · syntax highlighting
 (tree-sitter) in viewer and editor · diff viewer · synchroniser · macros · Lua API · WASM
 plugin host + WIT interfaces + capability grants · elevated helper · embedded terminal tabs ·
@@ -52,8 +54,8 @@ far/tc/mc/dc.
 
 ## M4 — Ambition
 
-GUI backend (same cell buffer on a GPU canvas, own font, inline images, true 24-bit colour) ·
-multi-panel/windowed layout (the DOS Navigator idea) · plugin registry and `sc plugin` CLI ·
+Multi-panel / windowed layout **inside the TUI** (the DOS Navigator idea: several panels and
+floating windows drawn in the character grid) · plugin registry and `sc plugin` CLI ·
 native plugin ABI + optional TC packer-plugin bridge on Windows · special VFS (process list,
 registry, services, git) · headless CLI (`sc copy --queue`) · Android/iOS and web experiments ·
 remote `sc` protocol (run the engine on the server, the UI locally — far2l's best trick).

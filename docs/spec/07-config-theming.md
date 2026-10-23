@@ -67,7 +67,7 @@ max_open_size = "256MiB"
 undo_depth = 10000
 
 [ui]
-theme = "far-classic"
+theme = "commander"
 keymap = "far"
 icons = false                   # nerd-font glyphs
 menu_bar = "auto"               # auto | always | never
@@ -116,9 +116,11 @@ ranges, and modal states — nothing else (no scripting in the keymap).
 ## 4. Themes
 
 ```toml
-name = "far-classic"
+id = "commander"
+name = "Commander"
 author = "SupremeCommander"
 variant = "dark"
+inherit = ""          # optional: start from another theme and override keys below
 
 [palette]                        # named colours, reused below
 blue = "#000080"
@@ -149,10 +151,27 @@ hidden = "#808080"
 
 - Colours accept hex, `palette` names, 256-index, and `ansi:N` for 16-colour terminals; the
   backend degrades automatically and themes may declare a `[fallback16]` section.
-- Shipped themes: `far-classic`, `nc-classic`, `mc-classic`, `tc-light`, `gruvbox`,
-  `tokyo-night`, `dracula`, `nord`, `solarized-dark`, `solarized-light`, `high-contrast`,
-  `mono`. Re-derived from published palettes, not copied from other apps' theme files
-  (`01-licensing.md` §4).
+- **Built-in themes (compiled in, always available, no files needed):**
+
+  | id | look |
+  | --- | --- |
+  | `commander` | the classic orthodox blue: dark blue panels, cyan text, yellow selection, cyan key bar — the default |
+  | `black` | near-monochrome dark: black background, grey text, white cursor; for low-contrast terminals and e-ink |
+  | `white` | light theme: white background, dark text, blue accents; readable in daylight and on projectors |
+  | `matrix` | green phosphor on black, bright green cursor, dim green chrome |
+  | `tron` | neon on black: cyan and orange accents, thin bright highlights |
+  | `blade` | amber/teal on near-black, warm selection — "blade" |
+
+- **External themes** are TOML files found in `themes/` inside the config directory (and in any
+  path listed in `ui.theme_path`). They are discovered at startup and hot-reloaded on change; an
+  external theme with the same id as a built-in one overrides it, so a user can retune
+  `commander` without renaming it. `ui.theme = "<id>"` selects, `app.theme.next` cycles through
+  everything discovered, and `sc --list-themes` prints the resolved list with its source.
+- A theme file may `inherit = "<id>"` and override single keys; unknown keys are a warning, not
+  a failure, so a theme written for a later version still loads.
+- `sc --export-theme <id> > my.toml` writes a built-in theme out as a file to start from.
+- Themes are re-derived from published palettes, never copied from another application's theme
+  files (`01-licensing.md` §4).
 - `app.theme.next` cycles; a theme change is hot-reloaded, as is any config file change
   (watched), with parse errors shown as a non-blocking banner and the previous value kept.
 

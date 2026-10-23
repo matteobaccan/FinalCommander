@@ -7,8 +7,7 @@ sc-core        domain types: Entry, Meta, Path abstraction, Selection, SortKey, 
 sc-vfs         Vfs trait + providers (local, archive, sftp, ftp, webdav, s3, temp, trash)
 sc-jobs        operation engine: job graph, queue, progress, conflict policy, journal
 sc-ui          immediate-mode widgets on top of a cell buffer: panel, dialog, menu, keybar
-sc-tui         terminal backend (crossterm/ratatui), input decoding, capability detection
-sc-gui         optional GPU backend rendering the same cell buffer (M4, feature-gated)
+sc-tui         the only backend: terminal I/O, input decoding, capability detection
 sc-view        viewer: text/hex/dump, encodings, search, preview pipeline
 sc-edit        editor: rope buffer, column blocks, undo, syntax (tree-sitter)
 sc-cmd         command vocabulary, keymap, macro engine, command palette
@@ -20,9 +19,11 @@ sc-i18n        fluent catalogues, pluralisation, width-aware formatting
 sc             the binary: wiring, CLI, session, panic/crash handling
 ```
 
-Dependency rule: `sc-core` depends on nothing of ours; `sc-ui` knows nothing about the
-terminal; nothing below `sc` knows about `sc-gui`/`sc-tui` (they are chosen at startup behind a
-`Backend` trait). Enforced by `cargo-deny`-style allow-lists in CI.
+Dependency rule: `sc-core` depends on nothing of ours; `sc-ui` draws into a cell buffer and
+knows nothing about the terminal; only `sc-tui` talks to a terminal, and only `sc` wires them
+together. The UI is strictly TUI — there is no second backend, and the cell-buffer boundary
+exists for testability (render to a string and diff it), not to leave room for a GUI.
+Enforced by dependency allow-lists in CI.
 
 ## 2. Process and thread model
 
