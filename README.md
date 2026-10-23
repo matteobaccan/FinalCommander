@@ -48,10 +48,14 @@ What works today:
   regex or `4D 5A ?? 00` hex patterns, hits highlighted, `n`/`N` for the next and previous);
   `Alt+F8` jumps to an offset, `0x`-offset or `NN%`; `Shift+F` follows a growing file like
   `tail -f`; `Ctrl+Z` undoes a jump. `hjkl`, `g`/`G`, `/` and `:` work too.
-- **Inside compiled files**: `F5` disassembles — ELF, PE, Mach-O or raw bytes, sections and
-  symbols read with `object`, x86/x86-64 decoded with `iced-x86`, `<symbol>:` headings,
-  scrolling by whole instructions, and a raw sweep (announced in the status line) for files
-  over the 64 MiB parse limit, because a debug build is routinely 100 MB. `F6` decompiles:
+- **Inside compiled files**: `F5` shows the code, whatever the file is. Native binaries (ELF,
+  PE, Mach-O, raw) are disassembled with sections and symbols read via `object` and x86/x86-64
+  decoded with `iced-x86`, with `<symbol>:` headings, scrolling by whole instructions, and a
+  raw sweep (announced in the status line) for files over the 64 MiB parse limit, because a
+  debug build is routinely 100 MB. **Bytecode is read in process**: a `.class` file becomes a
+  `javap`-style listing with the constant pool resolved into the comments, a managed PE becomes
+  an `ildasm`-style IL listing with metadata-resolved tokens and `ldstr` literals, and a
+  `.wasm` becomes its text format. `F6` decompiles:
   WebAssembly becomes its text format in process, and anything else is handed to an installed
   tool through a `[[decompile]]` rule — `javap`, `ilspycmd`, `python -m dis`, `objdump`,
   `retdec` — whose output is then viewable, searchable text. A real decompiler is a research

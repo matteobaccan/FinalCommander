@@ -107,7 +107,8 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 5.9 | Filtered view: pipe the file through a command and view the output | MC | M3 |
 | 5.11 | **Disassembly** (`F5`): ELF/PE/Mach-O/raw recognition, sections and symbols, x86/x86-64 decoding with symbol headings, instruction-accurate scrolling, raw sweep for files over the parse limit | NEW | M1 |
 | 5.12 | **Decompilation** (`F6`): WebAssembly to its text format in process; `[[decompile]]` rules call installed tools (javap, ilspycmd, python -m dis, objdump, retdec) and the output is viewed as text | NEW | M1 |
-| 5.13 | More formats in process: JVM bytecode, .NET IL, Python bytecode, aarch64/riscv decoding | NEW | M3 |
+| 5.13 | **JVM bytecode and .NET IL in process**: class files listed javap-style with the constant pool resolved; managed PEs listed ildasm-style with metadata-resolved tokens and `#US` string literals | NEW | M1 |
+| 5.14 | Still external: Python bytecode, aarch64/riscv decoding, .NET signatures and generics | NEW | M3 |
 | 5.10 | Next/previous file in panel without leaving the viewer (`+`/`-`) | FAR | M2 |
 
 ## 6. Editor (`F4`)

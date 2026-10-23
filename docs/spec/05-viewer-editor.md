@@ -80,12 +80,28 @@ Two different things, and the viewer is honest about which one it is doing.
 | Huge files | ELF and PE keep their section tables at the *end*, so a prefix cannot be parsed. Above a 64 MiB limit (a debug build of a Rust program is routinely 100 MB) the viewer sweeps **raw bytes** with the host architecture and the status line says `raw x86-64 sweep (over the 64 MiB parse limit)` |
 | Other architectures | aarch64 and the rest are not decoded in process: the error names the external-tool route rather than pretending |
 
-**Decompilation — the specialists, called not reimplemented.** A decompiler that produces
-C- or Java-like source is a research project (Ghidra, RetDec, ILSpy, javap, uncompyle6);
-SupremeCommander runs the installed one and views its output:
+**Bytecode — in process, because it is a table not an analysis.** Where a format carries its
+own symbols, there is nothing to guess, so we read it ourselves:
 
-- **WebAssembly is the exception**: `wasmprinter` turns a `.wasm` into its canonical text
-  format in process, which is as close to source as a module has.
+| Format | What `F5` produces |
+| --- | --- |
+| `.class` | a `javap -c`-style listing: class file version, flags, fields, and every method's bytecode with the constant pool resolved into the comments (`invokevirtual #17 // java/io/PrintStream.println:(Ljava/lang/String;)V`), absolute branch targets, `tableswitch`/`lookupswitch` with their cases, `wide` applied to the instruction it widens, and exception handlers |
+| managed PE (.NET) | an `ildasm`-flavoured listing: the CLI header and metadata root, the `#~` table stream walked as far as MemberRef, methods grouped by type, tiny and fat method bodies, and IL with tokens resolved to names — `ldstr` literals come out of the `#US` heap as text |
+| `.wasm` | the canonical text format via `wasmprinter`, as close to source as a module has |
+
+The class-file parser is written here rather than taken as a dependency: the format is small
+and completely specified (JVMS §4), and the interesting part — resolving the constant pool into
+readable operands — is work no parser crate does for us. The .NET reader stops where honesty
+does: signatures, generics and custom attributes are not parsed, and a token it cannot name
+prints as `MemberRef(7)` rather than a guess.
+
+Note on `CAFEBABE`: it is both a Java class file and a Mach-O universal binary. They are told
+apart by what follows — a class file's major version is at least 45, a fat Mach-O's
+architecture count is small.
+
+**Decompilation — the specialists, called not reimplemented.** Turning machine code back into
+C is a research project (Ghidra, RetDec, ILSpy); SupremeCommander runs the installed one and
+views its output:
 - Everything else goes through a `[[decompile]]` rule (SPEC 07): `javap -c -p` for `.class`,
   `ilspycmd` for .NET assemblies, `python -m dis` for `.pyc`, `objdump -d -C` for an
   architecture we do not decode, `retdec-decompiler` for an `.exe`. A rule is offered only when
