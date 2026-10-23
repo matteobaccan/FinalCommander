@@ -1,0 +1,81 @@
+# SPEC 09 — Roadmap
+
+Sized in issue-level chunks so M1 can start immediately. Each chunk is independently
+reviewable and testable.
+
+## M1 — Daily driver (the walking skeleton, then the keys)
+
+| # | Chunk | Depends on |
+| --- | --- | --- |
+| 1 | workspace skeleton: crates, CI (fmt/clippy/deny/test on 3 OS), release profile, `sc --version` | — |
+| 2 | `sc-core`: `VPath`, `Entry`, `Listing`, `Selection`, `Sort`, `Totals`, predicate evaluator | 1 |
+| 3 | `sc-tui`: backend trait, cell buffer, diff renderer, input decoding + capability detection | 1 |
+| 4 | `sc-ui`: panel widget, key bar, status line, message/confirm dialog, input dialog | 2,3 |
+| 5 | `sc-vfs`: trait + local provider (streaming list, stat, read/write, rename, remove) | 2 |
+| 6 | panel behaviour: navigation, cursor, scrolling, enter/parent/root, history, re-read | 4,5 |
+| 7 | view modes brief/full + sorting (all keys, reverse, dirs-first, natural) | 6 |
+| 8 | selection: `Ins`, ranges, masks `+`/`-`/`*`, select all/none/invert, totals | 6 |
+| 9 | fast find / quick search in panel | 6 |
+| 10 | `sc-cmd`: command registry, keymap loader, scope stack, chords, `--check-keymap` | 2 |
+| 11 | keymap profiles `far` + `mc`, learn-keys dialog, `keys.local.toml` | 10 |
+| 12 | `sc-config`: discovery, TOML load/merge/validate, `--dump-config`, hot reload | 2 |
+| 13 | `sc-jobs`: job model, planner, executor, progress, conflict dialog; copy/move/delete/mkdir | 5,12 |
+| 14 | command line + `%`-macros + user screen (`Ctrl+O`) + run command | 6,12 |
+| 15 | `sc-view`: text viewer with wrap, windowed reader, encodings, plain search, big files | 5 |
+| 16 | `sc-platform` M1 slice: long paths, trash, clipboard, drives/mounts, FS watch | 1 |
+| 17 | theming: theme loader, `far-classic` + `mono`, colour degradation | 3,12 |
+| 18 | packaging: static builds for linux-gnu/musl, macOS universal, windows-msvc; checksums | 1 |
+| 19 | snapshot test harness + keymap tests + job property tests + perf budget check | all |
+| 20 | docs: README, help pages generated from `docs/`, man page | all |
+
+Exit criteria: the authors use it instead of `mc`/FAR for a week without reaching for the old
+tool for anything in M1 scope; all quality gates green on three platforms.
+
+## M2 — mc/FAR parity
+
+tabs · quick view / info / tree panels · filters + highlight groups · custom columns ·
+find files + grep + panelize · disk usage · archives (zip/tar/7z read+write, pack/unpack
+dialogs) · temp panel · job queue panel + journal/resume · editor (`sc-edit`) · multi-rename ·
+compare dirs · checksums/split/combine · attributes & permissions dialogs · links · trash/wipe ·
+PTY subshell with cwd sync · user menu · associations · histories with pinning · hex/dump
+viewer modes + regex/hex search · help system · session restore · `tc`/`nc` keymap profiles ·
+`.deb`/`.rpm`/Homebrew/Scoop/AUR packages.
+
+## M3 — Commander parity and beyond the terminal's usual limits
+
+SFTP/FTP/WebDAV/S3/rclone providers + connection manager + keyring · nested containers and
+write-back · previews (images via kitty/sixel, markdown, PDF, media) · syntax highlighting
+(tree-sitter) in viewer and editor · diff viewer · synchroniser · macros · Lua API · WASM
+plugin host + WIT interfaces + capability grants · elevated helper · embedded terminal tabs ·
+fuzzy goto · ACL/xattr/ADS editors · accessibility mode · `vi` profile · config import from
+far/tc/mc/dc.
+
+## M4 — Ambition
+
+GUI backend (same cell buffer on a GPU canvas, own font, inline images, true 24-bit colour) ·
+multi-panel/windowed layout (the DOS Navigator idea) · plugin registry and `sc plugin` CLI ·
+native plugin ABI + optional TC packer-plugin bridge on Windows · special VFS (process list,
+registry, services, git) · headless CLI (`sc copy --queue`) · Android/iOS and web experiments ·
+remote `sc` protocol (run the engine on the server, the UI locally — far2l's best trick).
+
+## Risks and how we de-risk them
+
+| Risk | Mitigation |
+| --- | --- |
+| Terminal key limitations make the FAR keymap unusable | capability detection + kitty protocol + chord fallbacks + learn-keys, all in M1 (§9 of `03-keymap.md`) |
+| Scope explosion (FAR has 30 years of features) | the feature matrix is milestone-tagged; M1 ships a *complete* small thing, not a broken big one |
+| Async + UI complexity | one rule: UI thread owns state, everything else is messages; enforced by the crate graph |
+| Archive/VFS edge cases eat months | one conformance suite run against every provider; unsupported capability is a clear message, not a bug |
+| Data loss bugs | job journal, write-to-temp-then-rename, verify option, property tests with injected failures, no delete before a verified copy |
+| Plugin ABI churn | WIT-versioned WASM interfaces from the start; native ABI deferred to M4 |
+| Licence contamination | `01-licensing.md` rules + `cargo deny` + PR review checklist |
+| Single-maintainer bus factor | small crates, documented specs, generated help/docs, no hidden tribal knowledge |
+
+## How to contribute (once M1 starts)
+
+1. Pick a chunk from the table; the spec section it implements is linked in the issue.
+2. Specs are the contract: if the implementation needs to deviate, the PR updates the spec in
+   the same commit.
+3. Every user-visible behaviour needs a snapshot or keymap test; every job behaviour needs a
+   failure-injection test.
+4. No new dependency without a justification line; no `unsafe` outside `sc-platform`.

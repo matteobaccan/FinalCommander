@@ -1,0 +1,115 @@
+# SPEC 04 — Virtual filesystem
+
+## 1. The trait
+
+```rust
+#[async_trait]
+pub trait Vfs: Send + Sync {
+    fn scheme(&self) -> &'static str;
+    fn caps(&self) -> Caps;                 // bitflags, see §2
+
+    async fn list(&self, p: &VPath, sink: &mut dyn ListSink, ct: &CancelToken) -> Result<()>;
+    async fn stat(&self, p: &VPath) -> Result<Meta>;
+    async fn open_read(&self, p: &VPath) -> Result<Box<dyn AsyncRead + Unpin + Send>>;
+    async fn open_write(&self, p: &VPath, o: WriteOpts) -> Result<Box<dyn AsyncWrite + Unpin + Send>>;
+    async fn mkdir(&self, p: &VPath) -> Result<()>;
+    async fn remove(&self, p: &VPath, recursive: bool) -> Result<()>;
+    async fn rename(&self, from: &VPath, to: &VPath) -> Result<()>;
+    async fn set_meta(&self, p: &VPath, m: &MetaPatch) -> Result<()>;
+    async fn copy_within(&self, from: &VPath, to: &VPath) -> Result<CopyOutcome>; // server-side
+    async fn watch(&self, p: &VPath, tx: WatchSender) -> Result<WatchHandle>;
+    fn random_access(&self) -> bool;        // can we seek cheaply? (viewer/hex mode)
+}
+```
+
+`ListSink` receives chunks so panels paint progressively. Everything is cancellable.
+
+## 2. Capabilities
+
+```
+READ WRITE CREATE DELETE RENAME SEEK TRUNCATE
+META_TIMES META_MODE META_OWNER XATTR STREAMS LINKS HARDLINKS
+WATCH SERVER_SIDE_COPY RESUME RANDOM_WRITE CASE_SENSITIVE ATOMIC_RENAME
+```
+
+The UI *asks* before it offers: no "Set permissions" entry on a FAT or S3 path, no `F6` rename
+inside a solid 7z, no hard-link command where `HARDLINKS` is absent. A missing capability
+produces a precise message ("SFTP server does not support atomic rename"), never a generic
+failure.
+
+## 3. Providers
+
+| Scheme | Crate / mechanism | Caps | Milestone |
+| --- | --- | --- | --- |
+| `file` | `std::fs` + `sc-platform` | all native | M1 |
+| `zip` | `zip` (read/write, zip64, AES, deflate/zstd) | READ WRITE CREATE DELETE SEEK | M2 |
+| `tar` family | `tar` + `flate2`/`xz2`/`zstd`/`bzip2` | READ, WRITE(append/rebuild), stream-only for compressed | M2 |
+| `7z` | `sevenz-rust2` | READ, WRITE (M3), no random write in solid blocks | M2/M3 |
+| `rar` | `unrar` (read-only, non-free licence, optional feature, off by default in distro builds) | READ SEEK | M3 |
+| `iso`, `cab`, `ar`/`deb`, `rpm`, `cpio`, `lha`, `arj`, `squashfs` | `libarchive` binding as one fallback provider | READ | M3 |
+| `sftp` | `russh` + `russh-sftp` | READ WRITE CREATE DELETE RENAME SEEK META_* RESUME | M2/M3 |
+| `ftp`/`ftps` | `suppaftp` | READ WRITE CREATE DELETE RENAME RESUME | M3 |
+| `webdav` | `reqwest-dav` | READ WRITE CREATE DELETE RENAME | M3 |
+| `s3` | `aws-sdk-s3` (any S3-compatible endpoint) | READ WRITE CREATE DELETE SERVER_SIDE_COPY, no RENAME | M3 |
+| `smb` | `pavao`/system mount | varies | M3 |
+| `adb`, `mtp` | external `adb` binary / `libmtp` | READ WRITE DELETE | M4 |
+| `rclone` | `rclone rcd` JSON API bridge — one provider, dozens of backends | READ WRITE DELETE RENAME | M3 |
+| `temp` | in-memory collection of real paths | pass-through | M2 |
+| `trash` | XDG/Finder/Recycle Bin listing + restore | READ DELETE, restore verb | M3 |
+| `proc`, `reg`, `git` | special views | READ (+ verbs) | M4 |
+
+## 4. Nesting and the archive cache
+
+`sftp://srv/backups/x.tar.gz!/etc!/nginx.conf` — each `!` opens a nested provider.
+
+- A **container cache** keyed by (scheme, root, size, mtime) holds an open provider instance
+  with its index; LRU-evicted by count and total memory, closed on idle timeout.
+- Non-seekable containers (`.tar.gz` over SFTP) are materialised to a temp file under a size
+  limit (configurable, default 512 MiB) with a visible progress bar; above the limit the panel
+  shows a streaming listing and random access is refused with a clear message.
+- Nesting depth limit (default 4) to stop zip-bomb recursion; entry-count and expansion-ratio
+  guards on every archive read, with the limits in config and the refusal explained.
+- Writes to a nested container rebuild the outer container; the UI warns and the job engine
+  treats it as one transactional unit (write to temp, verify, atomic replace).
+
+## 5. Editing inside a VFS
+
+`F4` on `zip://a.zip!/b.txt`: extract to a temp dir, open the editor, watch the temp file, on
+save write back into the container through the job engine, then refresh. On failure the temp
+file is kept and its path is shown. Same mechanism for "open with" external programs, with a
+"wait for the program to exit, then write back" dialog (FAR behaviour).
+
+## 6. Connection manager
+
+`sites.toml` (no secrets) + OS keyring entries:
+
+```toml
+[[site]]
+id = "jump"
+scheme = "sftp"
+host = "jump.example.net"
+port = 22
+user = "mb"
+auth = "agent"              # agent | key:<path> | keyring | ask
+charset = "utf-8"
+start_dir = "/srv"
+keepalive = "30s"
+compress = true
+```
+
+Features: folder grouping, per-site keymap of a start action, host-key verification with a
+TOFU prompt and a known-hosts file, proxy/jump-host chains (`ProxyJump`), connection reuse
+across panels and jobs, automatic reconnect with the operation queue paused, and an explicit
+"disconnect" command. Passwords/passphrases are only ever stored in the OS keyring, never in
+config; `--no-keyring` forces prompting.
+
+## 7. Performance rules
+
+- `list` must yield the first chunk in under 100 ms on a warm local directory; providers that
+  cannot (remote) show the spinner immediately and never block the UI thread.
+- `stat` storms are avoided: listing uses the directory entry's own type/size where the OS
+  provides it (`d_type`, `FindFirstFileEx` info level), and extra metadata is a second pass.
+- Remote providers batch and pipeline (SFTP: concurrent reads with a window; S3: list
+  continuation prefetch).
+- Every provider has a conformance test and a latency-injection test (500 ms per call) that the
+  UI must survive without a dropped frame.
