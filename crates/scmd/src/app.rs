@@ -1190,13 +1190,23 @@ impl App {
                     .viewer()
                     .map(|v| v.path.display_name())
                     .unwrap_or_default();
-                let result = self.mode.viewer_mut().map(|v| v.start_disasm());
-                if let Some(Err(e)) = result {
-                    let msg = self.i18n.t_args(
-                        "viewer-disasm-failed",
-                        &[("name", name.into()), ("error", e.to_string().into())],
-                    );
-                    self.set_error(msg);
+                match self.mode.viewer_mut().map(|v| v.start_disasm()) {
+                    Some(Err(e)) => {
+                        let msg = self.i18n.t_args(
+                            "viewer-disasm-failed",
+                            &[("name", name.into()), ("error", e.to_string().into())],
+                        );
+                        self.set_error(msg);
+                    }
+                    // A bytecode listing is generated content: say who produced it.
+                    Some(Ok(scmd_view::Started::Derived(producer))) => {
+                        let msg = self.i18n.t_args(
+                            "viewer-derived",
+                            &[("producer", producer.into()), ("name", name.into())],
+                        );
+                        self.set_status(msg);
+                    }
+                    _ => {}
                 }
             }
             Command::ViewerDecompile if self.mode.viewer().is_some() => self.decompile(),
@@ -2496,6 +2506,56 @@ abcdefghij
                 assert!(app.status.contains("external tool"), "{}", app.status);
             }
         }
+    }
+
+    #[test]
+    fn f5_on_a_class_file_lists_its_bytecode_in_process() {
+        let dir = tempfile::tempdir().unwrap();
+        // A minimal class: `public class A` with no members.
+        let mut class: Vec<u8> = Vec::new();
+        class.extend_from_slice(&0xCAFE_BABEu32.to_be_bytes());
+        class.extend_from_slice(&0u16.to_be_bytes()); // minor
+        class.extend_from_slice(&52u16.to_be_bytes()); // Java 8
+        class.extend_from_slice(&5u16.to_be_bytes()); // pool count (4 entries)
+        class.push(1); // Utf8 "A"
+        class.extend_from_slice(&1u16.to_be_bytes());
+        class.push(b'A');
+        class.push(7); // Class #1
+        class.extend_from_slice(&1u16.to_be_bytes());
+        class.push(1); // Utf8 "java/lang/Object"
+        class.extend_from_slice(&16u16.to_be_bytes());
+        class.extend_from_slice(b"java/lang/Object");
+        class.push(7); // Class #3
+        class.extend_from_slice(&3u16.to_be_bytes());
+        class.extend_from_slice(&0x0021u16.to_be_bytes()); // public super
+        class.extend_from_slice(&2u16.to_be_bytes()); // this_class
+        class.extend_from_slice(&4u16.to_be_bytes()); // super_class
+        class.extend_from_slice(&0u16.to_be_bytes()); // interfaces
+        class.extend_from_slice(&0u16.to_be_bytes()); // fields
+        class.extend_from_slice(&0u16.to_be_bytes()); // methods
+        class.extend_from_slice(&0u16.to_be_bytes()); // attributes
+        std::fs::write(dir.path().join("A.class"), &class).unwrap();
+
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F3");
+        press(&mut app, "F5");
+
+        let viewer = app.mode.viewer_mut().expect("still open");
+        assert_eq!(viewer.derived.as_deref(), Some("bytecode"));
+        let text = viewer
+            .rows(80, 6)
+            .into_iter()
+            .map(|r| r.text)
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(text.contains("Java 8"), "{text}");
+        assert!(text.contains("public super class A"), "{text}");
+        assert!(app.status.contains("bytecode"), "{}", app.status);
+        assert!(
+            app.take_requests().is_empty(),
+            "no external tool was needed"
+        );
     }
 
     #[test]

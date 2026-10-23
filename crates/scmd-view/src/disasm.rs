@@ -67,10 +67,20 @@ pub fn probe(head: &[u8]) -> Format {
         [0xfe, 0xed, 0xfa, 0xce, ..]
         | [0xce, 0xfa, 0xed, 0xfe, ..]
         | [0xfe, 0xed, 0xfa, 0xcf, ..]
-        | [0xcf, 0xfa, 0xed, 0xfe, ..]
-        | [0xca, 0xfe, 0xba, 0xbe, 0x00, ..] => Format::MachO,
+        | [0xcf, 0xfa, 0xed, 0xfe, ..] => Format::MachO,
         [0x00, b'a', b's', b'm', ..] => Format::Wasm,
-        [0xca, 0xfe, 0xba, 0xbe, ..] => Format::JavaClass,
+        // `CAFEBABE` is both a Java class and a Mach-O universal binary. They are told apart
+        // by what follows: a class file has a major version of at least 45 (Java 1.1) where a
+        // fat Mach-O has a small architecture count.
+        [0xca, 0xfe, 0xba, 0xbe, _, _, major_high, major_low, ..] => {
+            let major = u16::from_be_bytes([*major_high, *major_low]);
+            if (45..=200).contains(&major) {
+                Format::JavaClass
+            } else {
+                Format::MachO
+            }
+        }
+        [0xca, 0xfe, 0xba, 0xbe, ..] => Format::MachO,
         [b'!', b'<', b'a', b'r', b'c', b'h', b'>', ..] => Format::Archive,
         _ => {
             // `.pyc`: a 16-byte header whose magic ends in \r\n.
@@ -427,8 +437,17 @@ mod tests {
         assert_eq!(probe(b"\x7fELF\x02\x01"), Format::Elf);
         assert_eq!(probe(b"MZ\x90\x00"), Format::Pe);
         assert_eq!(probe(b"\x00asm\x01\x00\x00\x00"), Format::Wasm);
-        assert_eq!(probe(b"\xca\xfe\xba\xbe\x00\x00\x00\x34"), Format::MachO);
-        assert_eq!(probe(b"\xca\xfe\xba\xbe\x34\x00"), Format::JavaClass);
+        // CAFEBABE is ambiguous: a class file's major version tells it from a fat Mach-O.
+        assert_eq!(
+            probe(b"\xca\xfe\xba\xbe\x00\x00\x00\x34"),
+            Format::JavaClass,
+            "minor 0, major 52 is a Java 8 class"
+        );
+        assert_eq!(
+            probe(b"\xca\xfe\xba\xbe\x00\x00\x00\x02"),
+            Format::MachO,
+            "two architectures is a universal binary"
+        );
         assert_eq!(probe(b"!<arch>\n"), Format::Archive);
         assert_eq!(probe(b"plain text"), Format::Raw);
         assert_eq!(

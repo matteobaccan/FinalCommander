@@ -2,10 +2,11 @@ use scmd_core::{CancelToken, VPath};
 use unicode_width::UnicodeWidthChar;
 
 use crate::decode::{detect, looks_binary, Codepage};
-use crate::disasm::{self, Arch, Binary, DisasmError};
+use crate::disasm::{self, Arch, Binary, DisasmError, Format};
 use crate::nav::{next_line_start, prev_line_start, read_line, snap_to_line};
 use crate::search::{compile, find, Match, Pattern, SearchError, SearchMode};
 use crate::source::Source;
+use crate::{il, jvm};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
@@ -53,6 +54,13 @@ impl Wrap {
             Wrap::Word => "word wrap",
         }
     }
+}
+
+/// What `start_disasm` did: rows of instructions, or a generated listing shown as text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Started {
+    Instructions,
+    Derived(&'static str),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -255,9 +263,52 @@ impl Viewer {
 
     /// Switch to disassembly, jumping to the code section the first time.
     ///
-    /// A file too large to parse structurally is still disassembled, as a raw sweep from where
-    /// the cursor already is, using the host architecture; the status line says so.
-    pub fn start_disasm(&mut self) -> Result<(), DisasmError> {
+    /// Bytecode formats produce a listing instead of instruction rows, because that is how
+    /// they are read: a `.class` file becomes a `javap`-style listing, a managed PE becomes an
+    /// IL listing, a `.wasm` becomes its text format — all in process. A file too large to
+    /// parse structurally is still disassembled, as a raw sweep from where the cursor already
+    /// is, using the host architecture; the status line says so.
+    pub fn start_disasm(&mut self) -> Result<Started, DisasmError> {
+        match self.format() {
+            Format::JavaClass => {
+                let bytes = self.whole_file()?;
+                let text = jvm::listing(&bytes).map_err(|e| DisasmError::Parse(e.to_string()))?;
+                self.show_derived("bytecode", text);
+                return Ok(Started::Derived("bytecode"));
+            }
+            Format::Wasm => {
+                let text = self.wasm_text()?;
+                self.show_derived("WAT", text);
+                return Ok(Started::Derived("WAT"));
+            }
+            Format::Pe => {
+                let bytes = self.whole_file()?;
+                if il::is_managed(&bytes) {
+                    let text =
+                        il::listing(&bytes).map_err(|e| DisasmError::Parse(e.to_string()))?;
+                    self.show_derived("IL", text);
+                    return Ok(Started::Derived("IL"));
+                }
+            }
+            _ => {}
+        }
+        self.start_native_disasm().map(|()| Started::Instructions)
+    }
+
+    /// The whole file, for the parsers that need it. Bounded by the parse limit.
+    fn whole_file(&mut self) -> Result<Vec<u8>, DisasmError> {
+        let len = self.source.len();
+        if len > disasm::MAX_PARSE as u64 {
+            return Err(DisasmError::TooLarge {
+                limit: disasm::MAX_PARSE as u64 / (1024 * 1024),
+            });
+        }
+        self.source
+            .read_vec(0, len as usize)
+            .map_err(|e| DisasmError::Parse(e.to_string()))
+    }
+
+    fn start_native_disasm(&mut self) -> Result<(), DisasmError> {
         let start = match self.analyze() {
             Ok(binary) => {
                 if !binary.arch.disassemblable() {
@@ -1276,7 +1327,10 @@ mod tests {
         // A native binary opens in dump mode; asking for disassembly analyses it first.
         assert_eq!(v.mode, Mode::Dump);
         match v.start_disasm() {
-            Ok(()) => {}
+            Ok(Started::Instructions) => {}
+            Ok(Started::Derived(producer)) => {
+                panic!("a native binary should give instructions, not {producer}")
+            }
             Err(e) => {
                 // On a non-x86 runner this is objdump's job, and the message says so.
                 assert!(e.to_string().contains("external tool"), "{e}");

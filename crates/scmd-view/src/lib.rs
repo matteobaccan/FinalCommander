@@ -6,6 +6,8 @@
 
 pub mod decode;
 pub mod disasm;
+pub mod il;
+pub mod jvm;
 pub mod nav;
 pub mod search;
 pub mod source;
@@ -15,4 +17,4 @@ pub use decode::{detect, looks_binary, sniff_bom, Codepage};
 pub use disasm::{analyze, disassemble, probe, wasm_text, Arch, Binary, DisasmError, Format};
 pub use search::{compile, Match, Pattern, SearchError, SearchMode};
 pub use source::{BytesSource, FileSource, Source};
-pub use view::{Mode, Row, RowKind, Status, Viewer, Wrap};
+pub use view::{Mode, Row, RowKind, Started, Status, Viewer, Wrap};
