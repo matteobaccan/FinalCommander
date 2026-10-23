@@ -608,7 +608,7 @@ third line
 
         app.handle_input(Input::Key("Down".parse().unwrap()));
         app.handle_input(Input::Key("F3".parse().unwrap()));
-        let out = frame(&mut app, 70, 12);
+        let out = frame(&mut app, 100, 12);
         let lines: Vec<&str> = out.lines().collect();
 
         assert!(lines[0].contains("readme.txt"), "{out}");
@@ -632,7 +632,7 @@ third line
             app.handle_input(Input::Key(c.parse().unwrap()));
         }
         app.handle_input(Input::Key("Enter".parse().unwrap()));
-        let mut buf = Buffer::new(70, 12);
+        let mut buf = Buffer::new(100, 12);
         draw(&mut app, &mut buf);
         let highlighted = (0..buf.height())
             .flat_map(|y| (0..buf.width()).map(move |x| (x, y)))

@@ -257,7 +257,7 @@ impl Theme {
     }
 
     /// Write the theme out as a `[[theme]]` block, ready to paste into the config file
-    /// (`sc --export-theme`).
+    /// (`scmd --export-theme`).
     pub fn to_toml(&self) -> String {
         let mut s = String::new();
         s.push_str("[[theme]]\n");

@@ -97,7 +97,7 @@ impl Paths {
         }
     }
 
-    /// Human-readable summary for `sc --paths`: the first question anyone asks.
+    /// Human-readable summary for `scmd --paths`: the first question anyone asks.
     pub fn describe(&self) -> String {
         format!(
             "config   {}{}\nstate    {}\nplugins  {}{}\n",
@@ -200,6 +200,88 @@ impl Default for UiCfg {
     }
 }
 
+/// A `[[decompile]]` rule: an external tool that turns a compiled file into readable text.
+///
+/// SupremeCommander disassembles x86 code and prints WebAssembly itself; real decompilation is
+/// a research project, so it calls the specialists instead of reimplementing them.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DecompileRule {
+    /// Shown in the viewer's status line.
+    pub name: String,
+    /// `*.class`, `*.pyc`, or an exact file name.
+    #[serde(rename = "match")]
+    pub mask: String,
+    /// The command. `{file}` is replaced with the path; it is executed directly, never
+    /// through a shell.
+    pub cmd: String,
+}
+
+impl DecompileRule {
+    /// Does this rule apply to `name`? `*.ext` compares the extension, anything else the
+    /// whole file name, both case-insensitively.
+    pub fn matches(&self, name: &str) -> bool {
+        let name = name.to_ascii_lowercase();
+        let mask = self.mask.trim().to_ascii_lowercase();
+        match mask.strip_prefix("*.") {
+            Some(ext) => name.rsplit('.').next() == Some(ext),
+            None => name == mask,
+        }
+    }
+
+    /// The program the rule runs, for an availability check.
+    pub fn program(&self) -> &str {
+        self.cmd.split_whitespace().next().unwrap_or("")
+    }
+}
+
+/// Rules compiled in, used when the config file does not override them. Each is tried only if
+/// its program is actually installed.
+pub fn default_decompile_rules() -> Vec<DecompileRule> {
+    let rule = |name: &str, mask: &str, cmd: &str| DecompileRule {
+        name: name.to_string(),
+        mask: mask.to_string(),
+        cmd: cmd.to_string(),
+    };
+    vec![
+        rule("javap", "*.class", "javap -c -p -constants {file}"),
+        rule("ilspycmd", "*.dll", "ilspycmd {file}"),
+        rule("python -m dis", "*.pyc", "python3 -m dis {file}"),
+        rule("wasm2wat", "*.wasm", "wasm2wat {file}"),
+        rule("objdump", "*.o", "objdump -d -C {file}"),
+        rule("objdump", "*.so", "objdump -d -C {file}"),
+        rule("objdump", "*.a", "objdump -d -C {file}"),
+        rule(
+            "retdec",
+            "*.exe",
+            "retdec-decompiler --cleanup -o /dev/stdout {file}",
+        ),
+    ]
+}
+
+/// Is `program` on the PATH (or an existing path of its own)?
+pub fn command_exists(program: &str) -> bool {
+    if program.is_empty() {
+        return false;
+    }
+    let candidate = Path::new(program);
+    if candidate.components().count() > 1 {
+        return candidate.is_file();
+    }
+    let Some(path) = std::env::var_os("PATH") else {
+        return false;
+    };
+    std::env::split_paths(&path).any(|dir| {
+        let direct = dir.join(program);
+        if direct.is_file() {
+            return true;
+        }
+        // Windows: the extension is implied.
+        ["exe", "bat", "cmd", "com"]
+            .iter()
+            .any(|ext| dir.join(format!("{program}.{ext}")).is_file())
+    })
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
@@ -212,6 +294,9 @@ pub struct Config {
     /// `[[keymap]]` blocks: same reasoning.
     #[serde(rename = "keymap")]
     pub keymaps: Vec<toml::Table>,
+    /// `[[decompile]]` blocks: external tools the viewer may call.
+    #[serde(rename = "decompile")]
+    pub decompile: Vec<DecompileRule>,
     /// Anything we did not recognise, kept so `--dump-config` can show it and warn.
     #[serde(flatten, skip_serializing)]
     pub unknown: BTreeMap<String, toml::Value>,
@@ -244,7 +329,17 @@ impl Config {
         Ok((cfg, warnings))
     }
 
-    /// The effective configuration as TOML (`sc --dump-config`).
+    /// The first rule that applies to `name` and whose program is installed: the config
+    /// file's rules first, then the built-in ones.
+    pub fn decompiler_for(&self, name: &str) -> Option<DecompileRule> {
+        self.decompile
+            .iter()
+            .cloned()
+            .chain(default_decompile_rules())
+            .find(|rule| rule.matches(name) && command_exists(rule.program()))
+    }
+
+    /// The effective configuration as TOML (`scmd --dump-config`).
     pub fn dump(&self) -> String {
         toml::to_string_pretty(self).unwrap_or_else(|e| format!("# cannot serialise: {e}\n"))
     }
@@ -397,6 +492,56 @@ mod tests {
         let parent = p.config_file.parent().unwrap();
         assert_ne!(parent.file_name(), Some(std::ffi::OsStr::new("scmd")));
         assert!(p.describe().contains("plugins"));
+    }
+
+    #[test]
+    fn decompile_masks_match_extensions_and_names() {
+        let rule = DecompileRule {
+            name: "javap".into(),
+            mask: "*.CLASS".into(),
+            cmd: "javap -c {file}".into(),
+        };
+        assert!(rule.matches("Main.class"));
+        assert!(rule.matches("main.CLASS"));
+        assert!(!rule.matches("main.classx"));
+        assert!(!rule.matches("classfile"));
+        assert_eq!(rule.program(), "javap");
+
+        let exact = DecompileRule {
+            name: "x".into(),
+            mask: "a.out".into(),
+            cmd: "objdump -d {file}".into(),
+        };
+        assert!(exact.matches("a.out"));
+        assert!(!exact.matches("b.out"));
+    }
+
+    #[test]
+    fn a_configured_rule_wins_over_the_builtin_one() {
+        let (cfg, warnings) = Config::parse(
+            "scmd.toml",
+            r#"
+            [[decompile]]
+            name = "my tool"
+            match = "*.class"
+            cmd = "sh -c true {file}"
+            "#,
+        )
+        .unwrap();
+        assert!(warnings.is_empty());
+        assert_eq!(cfg.decompile.len(), 1);
+        // `sh` exists on any unix runner; on Windows this falls through to the built-ins.
+        if command_exists("sh") {
+            assert_eq!(cfg.decompiler_for("A.class").unwrap().name, "my tool");
+        }
+        assert!(cfg.decompiler_for("whatever.unknown").is_none());
+    }
+
+    #[test]
+    fn command_existence_is_checked_before_a_tool_is_offered() {
+        assert!(command_exists("cargo") || command_exists("rustc"));
+        assert!(!command_exists("definitely-not-a-real-program-42"));
+        assert!(!command_exists(""));
     }
 
     #[test]

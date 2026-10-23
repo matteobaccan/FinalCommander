@@ -1,6 +1,7 @@
 use std::sync::mpsc::Sender;
 
 use scmd_cmd::{Command, Key, KeyCode, Keymap, Mods, Scope};
+use scmd_config::DecompileRule;
 use scmd_config::{Config, Paths, QuickSearch};
 use scmd_core::{CancelToken, Entry, MaskScope, Sort, SortKey, VPath, ViewMode};
 use scmd_i18n::I18n;
@@ -12,7 +13,7 @@ use scmd_view::{FileSource, SearchMode, Viewer};
 use crate::panel::Panel;
 
 /// Work the application wants done off the UI thread. The runner drains these.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Request {
     Read {
         panel: usize,
@@ -21,6 +22,12 @@ pub enum Request {
     },
     DirSize {
         panel: usize,
+        path: VPath,
+    },
+    /// Run an external decompiler and show its output in the viewer.
+    Decompile {
+        id: u64,
+        rule: DecompileRule,
         path: VPath,
     },
     /// Run a file operation off the UI thread.
@@ -60,6 +67,11 @@ pub enum Event {
         id: u64,
         kind: JobKind,
         outcome: Outcome,
+    },
+    Decompiled {
+        id: u64,
+        tool: String,
+        result: Result<String, String>,
     },
 }
 
@@ -200,6 +212,8 @@ pub struct App {
     pub last_search: Option<String>,
     /// The viewer, parked while one of its prompts is open.
     viewer_under_prompt: Option<Box<Viewer>>,
+    /// The decompilation we are waiting for, if any.
+    decompile_id: Option<u64>,
     next_job_id: u64,
 }
 
@@ -249,6 +263,7 @@ impl App {
             search_case_insensitive: true,
             last_search: None,
             viewer_under_prompt: None,
+            decompile_id: None,
             next_job_id: 1,
         };
         app.read_panel(0);
@@ -358,6 +373,37 @@ impl App {
                 }
             }
             Event::JobDone { id, kind, outcome } => self.job_done(id, kind, outcome),
+            Event::Decompiled { id, tool, result } => {
+                if self.decompile_id != Some(id) {
+                    return; // the viewer moved on
+                }
+                self.decompile_id = None;
+                match result {
+                    Ok(text) if self.mode.viewer().is_some() => {
+                        let name = self
+                            .mode
+                            .viewer()
+                            .map(|v| v.path.display_name())
+                            .unwrap_or_default();
+                        if let Some(viewer) = self.mode.viewer_mut() {
+                            viewer.show_derived(&tool, text);
+                        }
+                        let msg = self.i18n.t_args(
+                            "viewer-derived",
+                            &[("producer", tool.into()), ("name", name.into())],
+                        );
+                        self.set_status(msg);
+                    }
+                    Ok(_) => {}
+                    Err(e) => {
+                        let msg = self.i18n.t_args(
+                            "viewer-decompile-failed",
+                            &[("tool", tool.into()), ("error", e.into())],
+                        );
+                        self.set_error(msg);
+                    }
+                }
+            }
             Event::DirSized {
                 panel,
                 path,
@@ -1138,6 +1184,23 @@ impl App {
 
             Command::FileView => self.open_viewer(),
 
+            Command::ViewerDisasm if self.mode.viewer().is_some() => {
+                let name = self
+                    .mode
+                    .viewer()
+                    .map(|v| v.path.display_name())
+                    .unwrap_or_default();
+                let result = self.mode.viewer_mut().map(|v| v.start_disasm());
+                if let Some(Err(e)) = result {
+                    let msg = self.i18n.t_args(
+                        "viewer-disasm-failed",
+                        &[("name", name.into()), ("error", e.to_string().into())],
+                    );
+                    self.set_error(msg);
+                }
+            }
+            Command::ViewerDecompile if self.mode.viewer().is_some() => self.decompile(),
+
             Command::ViewerQuit => self.mode = Mode::Normal,
             Command::ViewerSearch if self.mode.viewer().is_some() => {
                 let mode = self.search_mode;
@@ -1291,6 +1354,62 @@ impl App {
         }
     }
 
+    /// `F6`: produce readable text from a compiled file.
+    ///
+    /// WebAssembly is printed in process; everything else goes to an external tool, because a
+    /// decompiler is a research project and we would rather call a good one than ship a bad
+    /// one. See `[[decompile]]` in the config.
+    fn decompile(&mut self) {
+        let Some(viewer) = self.mode.viewer_mut() else {
+            return;
+        };
+        let name = viewer.path.display_name();
+        let path = viewer.path.clone();
+        let format = viewer.format();
+
+        if format == scmd_view::Format::Wasm {
+            match viewer.wasm_text() {
+                Ok(text) => {
+                    viewer.show_derived("WAT", text);
+                    let msg = self.i18n.t_args(
+                        "viewer-derived",
+                        &[("producer", "WAT".into()), ("name", name.into())],
+                    );
+                    self.set_status(msg);
+                }
+                Err(e) => {
+                    let msg = self.i18n.t_args(
+                        "viewer-disasm-failed",
+                        &[("name", name.into()), ("error", e.to_string().into())],
+                    );
+                    self.set_error(msg);
+                }
+            }
+            return;
+        }
+
+        match self.cfg.decompiler_for(&name) {
+            Some(rule) => {
+                let id = self.next_job_id;
+                self.next_job_id += 1;
+                self.decompile_id = Some(id);
+                let msg = self.i18n.t_args(
+                    "viewer-decompile-running",
+                    &[("tool", rule.name.clone().into()), ("name", name.into())],
+                );
+                self.set_status(msg);
+                self.requests.push(Request::Decompile { id, rule, path });
+            }
+            None => {
+                let msg = self.i18n.t_args(
+                    "viewer-decompile-none",
+                    &[("format", format.as_str().into())],
+                );
+                self.set_error(msg);
+            }
+        }
+    }
+
     /// A prompt that keeps the viewer underneath it (search, go to).
     fn mode_prompt_over_viewer(&mut self, kind: PromptKind, title: String, text: String) {
         let Mode::Viewer(viewer) = std::mem::replace(&mut self.mode, Mode::Normal) else {
@@ -1324,10 +1443,12 @@ impl App {
                 Command::ViewerWrap => viewer.toggle_wrap(),
                 Command::ViewerHex => viewer.toggle_hex(),
                 Command::ViewerModeNext => {
+                    // text → dump → hex → text. Disassembly is F5, not part of the cycle,
+                    // because it only applies to some files.
                     let next = match viewer.mode {
                         scmd_view::Mode::Text => scmd_view::Mode::Dump,
                         scmd_view::Mode::Dump => scmd_view::Mode::Hex,
-                        scmd_view::Mode::Hex => scmd_view::Mode::Text,
+                        scmd_view::Mode::Hex | scmd_view::Mode::Disasm => scmd_view::Mode::Text,
                     };
                     viewer.set_mode(next);
                 }
@@ -1453,6 +1574,8 @@ impl App {
             (2, self.i18n.t("key-wrap")),
             (3, self.i18n.t("key-quit")),
             (4, self.i18n.t("key-hex")),
+            (5, self.i18n.t("key-disasm")),
+            (6, self.i18n.t("key-decomp")),
             (7, self.i18n.t("key-search")),
             (8, self.i18n.t("key-code")),
             (10, self.i18n.t("key-quit")),
@@ -2336,6 +2459,187 @@ abcdefghij
         press(&mut app, "F3");
         assert!(app.status_error, "{}", app.status);
         assert!(app.mode.is_normal());
+    }
+
+    #[test]
+    fn f5_disassembles_a_real_executable_in_the_viewer() {
+        let dir = tempfile::tempdir().unwrap();
+        let exe = std::env::current_exe().unwrap();
+        std::fs::copy(&exe, dir.path().join("program")).unwrap();
+        let mut app = app_on_disk(dir.path());
+
+        press(&mut app, "Down"); // program
+        press(&mut app, "F3");
+        assert_eq!(app.mode.viewer().unwrap().mode, scmd_view::Mode::Dump);
+
+        press(&mut app, "F5");
+        match app.mode.viewer().unwrap().mode {
+            scmd_view::Mode::Disasm => {
+                let viewer = app.mode.viewer_mut().unwrap();
+                let rows = viewer.rows(100, 6);
+                assert!(
+                    rows.iter().any(|r| r.kind == scmd_view::RowKind::Code),
+                    "{rows:?}"
+                );
+                // Either the file was parsed, or it was over the parse limit (a debug build
+                // of this very test is ~100 MB) and we are sweeping raw bytes — the status
+                // line says which, and never nothing.
+                let summary = viewer.status().binary.expect("a summary either way");
+                assert!(
+                    viewer.binary.is_some() || summary.contains("raw"),
+                    "{summary}"
+                );
+            }
+            _ => {
+                // A non-x86 runner: the message must say an external tool is needed.
+                assert!(app.status_error, "{}", app.status);
+                assert!(app.status.contains("external tool"), "{}", app.status);
+            }
+        }
+    }
+
+    #[test]
+    fn f5_on_a_text_file_explains_itself_and_changes_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("notes.txt"), b"not a binary\n").unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F3");
+        press(&mut app, "F5");
+        assert_eq!(app.mode.viewer().unwrap().mode, scmd_view::Mode::Text);
+        assert!(app.status_error, "{}", app.status);
+        assert!(app.status.contains("notes.txt"), "{}", app.status);
+    }
+
+    #[test]
+    fn f6_prints_a_wasm_module_as_text_without_an_external_tool() {
+        let dir = tempfile::tempdir().unwrap();
+        let wasm: &[u8] = &[
+            0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x05, 0x01, 0x60, 0x00, 0x01,
+            0x7f, 0x03, 0x02, 0x01, 0x00, 0x0a, 0x06, 0x01, 0x04, 0x00, 0x41, 0x2a, 0x0b,
+        ];
+        std::fs::write(dir.path().join("mod.wasm"), wasm).unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F3");
+        press(&mut app, "F6");
+
+        let viewer = app.mode.viewer_mut().expect("still open");
+        assert_eq!(viewer.derived.as_deref(), Some("WAT"));
+        let rows: Vec<String> = viewer.rows(80, 6).into_iter().map(|r| r.text).collect();
+        assert!(rows.iter().any(|r| r.contains("i32.const 42")), "{rows:?}");
+        assert!(app.status.contains("WAT"), "{}", app.status);
+        assert!(
+            app.take_requests().is_empty(),
+            "no external tool was needed"
+        );
+    }
+
+    #[test]
+    fn f6_asks_the_runner_to_run_a_configured_decompiler() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("Main.class"),
+            b"\xca\xfe\xba\xbe\x00\x00\x00\x34",
+        )
+        .unwrap();
+        let mut app = app_on_disk(dir.path());
+        // A tool that certainly exists, so the test does not depend on javap being installed.
+        app.cfg.decompile = vec![DecompileRule {
+            name: "cat".into(),
+            mask: "*.class".into(),
+            cmd: "cat {file}".into(),
+        }];
+        press(&mut app, "Down");
+        press(&mut app, "F3");
+        press(&mut app, "F6");
+
+        if !scmd_config::command_exists("cat") {
+            return; // Windows runner
+        }
+        let request = app.take_requests().into_iter().next().expect("a request");
+        let id = match request {
+            Request::Decompile { id, rule, path } => {
+                assert_eq!(rule.name, "cat");
+                assert!(path.to_string().ends_with("Main.class"));
+                id
+            }
+            other => panic!("expected a decompile request, got {other:?}"),
+        };
+        assert!(app.status.contains("cat"), "{}", app.status);
+
+        app.handle_event(Event::Decompiled {
+            id,
+            tool: "cat".into(),
+            result: Ok("public class Main {}\n".into()),
+        });
+        let viewer = app.mode.viewer_mut().expect("still open");
+        assert_eq!(viewer.derived.as_deref(), Some("cat"));
+        assert_eq!(
+            viewer.rows(40, 1).first().map(|r| r.text.clone()),
+            Some("public class Main {}".to_string())
+        );
+    }
+
+    #[test]
+    fn f6_without_any_tool_says_what_to_install() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("thing.unknownext"), b"\x00\x01\x02\x03").unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F3");
+        press(&mut app, "F6");
+        assert!(app.status_error, "{}", app.status);
+        assert!(app.status.contains("decompile"), "{}", app.status);
+        assert!(app.take_requests().is_empty());
+    }
+
+    #[test]
+    fn a_decompiler_failure_is_reported_and_the_viewer_stays() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("Main.class"), b"\xca\xfe\xba\xbe").unwrap();
+        let mut app = app_on_disk(dir.path());
+        app.cfg.decompile = vec![DecompileRule {
+            name: "broken".into(),
+            mask: "*.class".into(),
+            cmd: "cat {file}".into(),
+        }];
+        press(&mut app, "Down");
+        press(&mut app, "F3");
+        press(&mut app, "F6");
+        if !scmd_config::command_exists("cat") {
+            return;
+        }
+        let id = match app.take_requests().into_iter().next().unwrap() {
+            Request::Decompile { id, .. } => id,
+            other => panic!("{other:?}"),
+        };
+        app.handle_event(Event::Decompiled {
+            id,
+            tool: "broken".into(),
+            result: Err("exited with 2".into()),
+        });
+        assert!(app.status_error, "{}", app.status);
+        assert!(app.status.contains("exited with 2"), "{}", app.status);
+        assert!(
+            app.mode.viewer().is_some(),
+            "the viewer should still be open"
+        );
+    }
+
+    #[test]
+    fn a_stale_decompilation_result_is_ignored() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), b"text\n").unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F3");
+        app.handle_event(Event::Decompiled {
+            id: 4242,
+            tool: "ghost".into(),
+            result: Ok("whatever".into()),
+        });
+        assert!(app.mode.viewer().unwrap().derived.is_none());
     }
 
     #[test]

@@ -2,6 +2,7 @@ use scmd_core::{CancelToken, VPath};
 use unicode_width::UnicodeWidthChar;
 
 use crate::decode::{detect, looks_binary, Codepage};
+use crate::disasm::{self, Arch, Binary, DisasmError};
 use crate::nav::{next_line_start, prev_line_start, read_line, snap_to_line};
 use crate::search::{compile, find, Match, Pattern, SearchError, SearchMode};
 use crate::source::Source;
@@ -12,6 +13,8 @@ pub enum Mode {
     /// Raw bytes as characters, fixed width: for files where decoding lies.
     Dump,
     Hex,
+    /// Machine code as instructions.
+    Disasm,
 }
 
 impl Mode {
@@ -21,6 +24,7 @@ impl Mode {
             Mode::Text => 't',
             Mode::Dump => 'd',
             Mode::Hex => 'h',
+            Mode::Disasm => 'a',
         }
     }
 
@@ -29,6 +33,7 @@ impl Mode {
             Mode::Text => "text",
             Mode::Dump => "dump",
             Mode::Hex => "hex",
+            Mode::Disasm => "disasm",
         }
     }
 }
@@ -55,6 +60,10 @@ pub enum RowKind {
     Text,
     Hex,
     Dump,
+    /// A disassembled instruction.
+    Code,
+    /// A heading inside the disassembly: a symbol, a section, the file summary.
+    Label,
 }
 
 /// One rendered row, ready for the screen.
@@ -81,6 +90,10 @@ pub struct Status {
     pub follow: bool,
     pub search: Option<String>,
     pub bookmarks: Vec<usize>,
+    /// What this file is, when we recognised a compiled format.
+    pub binary: Option<String>,
+    /// Set when we are looking at generated text (WAT, a decompiler's output).
+    pub derived: Option<String>,
 }
 
 /// Tabs expand to the next multiple of this.
@@ -103,6 +116,16 @@ pub struct Viewer {
     pub bytes_per_row: usize,
     pub follow: bool,
     pub bookmarks: [Option<u64>; 10],
+    /// Structure of the compiled file, once we have looked.
+    pub binary: Option<Binary>,
+    /// Name of the producer when the content is generated (`WAT`, `javap`, …).
+    pub derived: Option<String>,
+    /// Set when the file was too large to parse and we are sweeping raw bytes; carries the
+    /// limit, for the status line.
+    raw_disasm: Option<u64>,
+    /// Offsets the disassembly scrolled down through, so scrolling up is exact instead of
+    /// heuristic: backward decoding of a variable-length instruction set can only guess.
+    disasm_trail: Vec<u64>,
     pattern: Option<Pattern>,
     query: Option<String>,
     pub last_match: Option<Match>,
@@ -144,6 +167,10 @@ impl Viewer {
             bytes_per_row: 16,
             follow: false,
             bookmarks: [None; 10],
+            binary: None,
+            derived: None,
+            raw_disasm: None,
+            disasm_trail: Vec::new(),
             pattern: None,
             query: None,
             last_match: None,
@@ -175,7 +202,8 @@ impl Viewer {
                 }
             }
             Mode::Dump => self.set_mode(Mode::Text),
-            Mode::Hex => {
+            // From hex or disassembly, F2 goes back to whatever text/dump mode we came from.
+            Mode::Hex | Mode::Disasm => {
                 let base = self.base_mode;
                 self.set_mode(base);
             }
@@ -203,6 +231,92 @@ impl Viewer {
         self.goto(top);
     }
 
+    /// Read the file's structure (format, architecture, sections, symbols) if we have not yet.
+    ///
+    /// Files above [`disasm::MAX_PARSE`] are parsed from their first bytes only, and the result
+    /// says so, rather than pulling a gigabyte into memory.
+    pub fn analyze(&mut self) -> Result<&Binary, DisasmError> {
+        if self.binary.is_none() {
+            let len = self.source.len();
+            let cap = disasm::MAX_PARSE as u64;
+            if len > cap {
+                return Err(DisasmError::TooLarge {
+                    limit: cap / (1024 * 1024),
+                });
+            }
+            let bytes = self
+                .source
+                .read_vec(0, len as usize)
+                .map_err(|e| DisasmError::Parse(e.to_string()))?;
+            self.binary = Some(disasm::analyze(&bytes, true)?);
+        }
+        Ok(self.binary.as_ref().expect("just analysed"))
+    }
+
+    /// Switch to disassembly, jumping to the code section the first time.
+    ///
+    /// A file too large to parse structurally is still disassembled, as a raw sweep from where
+    /// the cursor already is, using the host architecture; the status line says so.
+    pub fn start_disasm(&mut self) -> Result<(), DisasmError> {
+        let start = match self.analyze() {
+            Ok(binary) => {
+                if !binary.arch.disassemblable() {
+                    return Err(DisasmError::NoDisassembler(binary.arch.as_str()));
+                }
+                binary
+                    .offset_for_va(binary.entry)
+                    .or_else(|| binary.text_section().and_then(|s| s.file_offset))
+            }
+            Err(DisasmError::TooLarge { limit }) => {
+                if !disasm::host_arch().disassemblable() {
+                    return Err(DisasmError::NoDisassembler(disasm::host_arch().as_str()));
+                }
+                self.raw_disasm = Some(limit);
+                None
+            }
+            Err(other) => return Err(other),
+        };
+        self.mode = Mode::Disasm;
+        self.col = 0;
+        if let Some(offset) = start {
+            self.jump(offset);
+        }
+        Ok(())
+    }
+
+    /// Point the viewer at generated text — WebAssembly's text format, or a decompiler's
+    /// output — keeping the original path in the title.
+    pub fn show_derived(&mut self, producer: &str, text: String) {
+        self.source = Box::new(crate::source::BytesSource::new(text.into_bytes()));
+        self.derived = Some(producer.to_string());
+        self.codepage = Codepage::Utf8;
+        self.mode = Mode::Text;
+        self.base_mode = Mode::Text;
+        self.binary = None;
+        self.history.clear();
+        self.disasm_trail.clear();
+        self.top = 0;
+        self.top_sub = 0;
+        self.col = 0;
+        self.clear_search();
+    }
+
+    /// WebAssembly to its canonical text format, in process.
+    pub fn wasm_text(&mut self) -> Result<String, DisasmError> {
+        let len = self.source.len();
+        let bytes = self
+            .source
+            .read_vec(0, len.min(disasm::MAX_PARSE as u64) as usize)
+            .map_err(|e| DisasmError::Parse(e.to_string()))?;
+        disasm::wasm_text(&bytes)
+    }
+
+    /// What this file is, for the decompile command to decide what to do.
+    pub fn format(&mut self) -> disasm::Format {
+        let head = self.source.read_vec(0, 64).unwrap_or_default();
+        disasm::probe(&head)
+    }
+
     pub fn next_codepage(&mut self) {
         self.codepage = self.codepage.next();
     }
@@ -221,12 +335,13 @@ impl Viewer {
     // ── position ───────────────────────────────────────────────────────────────────────────
 
     pub fn goto(&mut self, offset: u64) {
+        self.disasm_trail.clear();
         let len = self.source.len();
         let offset = offset.min(len);
         self.top = match self.mode {
             Mode::Text => snap_to_line(&mut *self.source, offset),
             Mode::Hex => offset - (offset % self.bytes_per_row as u64),
-            Mode::Dump => offset,
+            Mode::Dump | Mode::Disasm => offset,
         };
         self.top_sub = 0;
     }
@@ -301,6 +416,7 @@ impl Viewer {
         }
         match self.mode {
             Mode::Text => self.scroll_text(delta, width, height),
+            Mode::Disasm => self.scroll_disasm(delta),
             Mode::Hex => {
                 let step = self.bytes_per_row as i64 * delta;
                 self.top = clamp_offset(self.top, step, self.source.len());
@@ -353,6 +469,54 @@ impl Viewer {
         }
     }
 
+    /// Instructions have no fixed length, so scrolling decodes: forwards by one instruction,
+    /// backwards by re-decoding a lead-in window (see `disasm::previous_instruction`).
+    fn scroll_disasm(&mut self, delta: i64) {
+        let arch = self.disasm_arch();
+        let len = self.source.len();
+        let mut remaining = delta.abs();
+        while remaining > 0 {
+            if delta > 0 {
+                let window = self.source.read_vec(self.top, 32).unwrap_or_default();
+                let step = disasm::disassemble(&window, self.top, self.top, arch, 1)
+                    .ok()
+                    .and_then(|lines| lines.first().map(|l| l.bytes.len() as u64))
+                    .unwrap_or(1)
+                    .max(1);
+                if self.top + step >= len {
+                    break;
+                }
+                self.disasm_trail.push(self.top);
+                if self.disasm_trail.len() > 8192 {
+                    self.disasm_trail.remove(0);
+                }
+                self.top += step;
+            } else {
+                if self.top == 0 {
+                    break;
+                }
+                // Exact when we came down this way; a decoded guess when we did not.
+                match self.disasm_trail.pop() {
+                    Some(previous) if previous < self.top => self.top = previous,
+                    _ => {
+                        let lead = self.top.min(32);
+                        let window = self
+                            .source
+                            .read_vec(self.top - lead, lead as usize)
+                            .unwrap_or_default();
+                        let previous = disasm::previous_instruction(&window, self.top, arch);
+                        self.top = if previous >= self.top {
+                            self.top.saturating_sub(1)
+                        } else {
+                            previous
+                        };
+                    }
+                }
+            }
+            remaining -= 1;
+        }
+    }
+
     fn segment_count(&mut self, line_start: u64, width: u16) -> usize {
         if self.wrap == Wrap::Off {
             return 1;
@@ -372,7 +536,76 @@ impl Viewer {
             Mode::Text => self.rows_text(width, height),
             Mode::Hex => self.rows_hex(width, height),
             Mode::Dump => self.rows_dump(width, height),
+            Mode::Disasm => self.rows_disasm(width, height),
         }
+    }
+
+    /// The architecture to decode with: the file's, or the host's for a raw sweep.
+    fn disasm_arch(&self) -> Arch {
+        self.binary
+            .as_ref()
+            .map(|b| b.arch)
+            .unwrap_or_else(disasm::host_arch)
+    }
+
+    fn rows_disasm(&mut self, width: u16, height: u16) -> Vec<Row> {
+        let arch = self.disasm_arch();
+        // 15 bytes is the longest x86 instruction, so this window always covers the screen.
+        let window_len = height as usize * 16 + 32;
+        let window = self
+            .source
+            .read_vec(self.top, window_len)
+            .unwrap_or_default();
+        if window.is_empty() {
+            return Vec::new();
+        }
+        let base_va = self
+            .binary
+            .as_ref()
+            .map(|b| b.va_for_offset(self.top))
+            .unwrap_or(self.top);
+        let lines = disasm::disassemble(&window, self.top, base_va, arch, height as usize)
+            .unwrap_or_default();
+
+        let mut out = Vec::with_capacity(lines.len());
+        for line in lines {
+            if out.len() >= height as usize {
+                break;
+            }
+            // A symbol that starts exactly here gets a heading of its own.
+            if let Some(symbol) = self
+                .binary
+                .as_ref()
+                .and_then(|b| b.functions.iter().find(|f| f.address == line.address))
+            {
+                if out.len() + 1 < height as usize {
+                    out.push(Row {
+                        offset: line.offset,
+                        text: format!("{:016X} <{}>:", line.address, symbol.name),
+                        hits: Vec::new(),
+                        kind: RowKind::Label,
+                    });
+                }
+            }
+            let hex: String = line
+                .bytes
+                .iter()
+                .map(|b| format!("{b:02X}"))
+                .collect::<Vec<_>>()
+                .join(" ");
+            let text = format!("{:016X}  {:<23}  {}", line.address, hex, line.text);
+            out.push(Row {
+                offset: line.offset,
+                text: truncate_to(&text, width as usize),
+                hits: Vec::new(),
+                kind: if line.invalid {
+                    RowKind::Dump
+                } else {
+                    RowKind::Code
+                },
+            });
+        }
+        out
     }
 
     fn rows_text(&mut self, width: u16, height: u16) -> Vec<Row> {
@@ -622,6 +855,15 @@ impl Viewer {
                 .enumerate()
                 .filter_map(|(i, b)| b.map(|_| i))
                 .collect(),
+            binary: match (&self.binary, self.raw_disasm) {
+                (Some(binary), _) => Some(disasm::summary(binary)),
+                (None, Some(limit)) => Some(format!(
+                    "raw {} sweep (over the {limit} MiB parse limit)",
+                    disasm::host_arch().as_str()
+                )),
+                _ => None,
+            },
+            derived: self.derived.clone(),
         }
     }
 }
@@ -632,6 +874,21 @@ fn clamp_offset(current: u64, delta: i64, len: u64) -> u64 {
     } else {
         current.saturating_sub((-delta) as u64)
     }
+}
+
+/// Cut a string to `cols` display columns without the ellipsis a user would mistake for data.
+fn truncate_to(text: &str, cols: usize) -> String {
+    let mut out = String::new();
+    let mut used = 0usize;
+    for ch in text.chars() {
+        let w = ch.width().unwrap_or(0);
+        if used + w > cols {
+            break;
+        }
+        out.push(ch);
+        used += w;
+    }
+    out
 }
 
 /// Expand tabs to the next tab stop, so columns line up as the file's author intended.
@@ -1007,6 +1264,130 @@ mod tests {
         assert!(v.is_empty());
         assert!(v.rows(20, 5).is_empty());
         assert_eq!(v.status().percent, 100);
+    }
+
+    #[test]
+    fn a_real_executable_disassembles_in_the_viewer() {
+        let path = std::env::current_exe().unwrap();
+        let mut v = Viewer::new(
+            Box::new(crate::source::FileSource::open(&path).unwrap()),
+            VPath::local(&path),
+        );
+        // A native binary opens in dump mode; asking for disassembly analyses it first.
+        assert_eq!(v.mode, Mode::Dump);
+        match v.start_disasm() {
+            Ok(()) => {}
+            Err(e) => {
+                // On a non-x86 runner this is objdump's job, and the message says so.
+                assert!(e.to_string().contains("external tool"), "{e}");
+                return;
+            }
+        }
+        assert_eq!(v.mode, Mode::Disasm);
+        // A debug build of this test is often over the parse limit; then the viewer sweeps raw
+        // bytes instead of following sections, and says so.
+        match v.binary.as_ref() {
+            Some(binary) => {
+                assert!(binary.format.native_support());
+                assert!(
+                    v.top > 0,
+                    "disassembly should start at the code, not the header"
+                );
+            }
+            None => assert!(
+                v.status().binary.unwrap_or_default().contains("raw"),
+                "a raw sweep must be announced"
+            ),
+        }
+
+        let rows = v.rows(100, 10);
+        assert!(!rows.is_empty());
+        let code_rows: Vec<&Row> = rows.iter().filter(|r| r.kind == RowKind::Code).collect();
+        assert!(code_rows.len() >= 5, "{rows:?}");
+        assert!(
+            code_rows[0].text.contains("  "),
+            "a row is address, bytes and mnemonic: {:?}",
+            code_rows[0].text
+        );
+        for row in &rows {
+            assert!(
+                unicode_width::UnicodeWidthStr::width(row.text.as_str()) <= 100,
+                "row wider than the screen: {:?}",
+                row.text
+            );
+        }
+
+        // Scrolling moves by whole instructions, forwards and back to where it started.
+        let start = v.top;
+        v.scroll(3, 100, 10);
+        assert!(v.top > start);
+        v.scroll(-3, 100, 10);
+        assert_eq!(
+            v.top, start,
+            "scrolling back must land on the same instruction"
+        );
+
+        assert_eq!(v.status().mode, Mode::Disasm);
+        assert!(
+            v.status().binary.is_some(),
+            "the status must say what the file is"
+        );
+    }
+
+    #[test]
+    fn disassembly_of_known_bytes_shows_addresses_and_mnemonics() {
+        // Not a container: a raw code fragment is disassembled from offset 0.
+        let mut v = viewer(&[0x55, 0x48, 0x89, 0xE5, 0x31, 0xC0, 0x5D, 0xC3]);
+        v.mode = Mode::Disasm;
+        let rows = v.rows(80, 8);
+        let joined = rows
+            .iter()
+            .map(|r| r.text.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(joined.contains("push"), "{joined}");
+        assert!(joined.contains("mov"), "{joined}");
+        assert!(joined.contains("ret"), "{joined}");
+        assert!(joined.contains("0000000000000000"), "{joined}");
+        assert!(joined.contains("48 89 E5"), "{joined}");
+    }
+
+    #[test]
+    fn a_wasm_module_is_shown_as_its_text_format() {
+        let wasm: &[u8] = &[
+            0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x05, 0x01, 0x60, 0x00, 0x01,
+            0x7f, 0x03, 0x02, 0x01, 0x00, 0x0a, 0x06, 0x01, 0x04, 0x00, 0x41, 0x2a, 0x0b,
+        ];
+        let mut v = viewer(wasm);
+        assert_eq!(v.format(), crate::disasm::Format::Wasm);
+        let text = v.wasm_text().expect("prints");
+        v.show_derived("WAT", text);
+
+        assert_eq!(v.mode, Mode::Text);
+        assert_eq!(v.derived.as_deref(), Some("WAT"));
+        assert_eq!(v.status().derived.as_deref(), Some("WAT"));
+        let rows = texts(&mut v, 80, 10);
+        assert!(rows[0].contains("(module"), "{rows:?}");
+        assert!(rows.iter().any(|r| r.contains("i32.const 42")), "{rows:?}");
+
+        // Searching works on the generated text like on any file.
+        assert!(v
+            .search(
+                "i32.const",
+                SearchMode::Plain,
+                false,
+                false,
+                &CancelToken::new()
+            )
+            .unwrap());
+    }
+
+    #[test]
+    fn asking_for_disassembly_of_a_text_file_is_refused_with_a_reason() {
+        let mut v = viewer(b"#!/bin/sh\necho hi\n");
+        let err = v.start_disasm().unwrap_err();
+        assert!(err.to_string().contains("parse"), "{err}");
+        assert_eq!(v.mode, Mode::Text, "the mode must not change on failure");
     }
 
     #[test]

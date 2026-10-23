@@ -5,9 +5,12 @@ wrapping; encoding detection (BOM, UTF-8 validity, the UTF-16 NUL pattern) with 
 switching between UTF-8, UTF-16LE/BE, CP1252 and CP437; plain, regex and hex-pattern search
 with highlighted hits and next/previous; go to offset, `0x` offset or percentage; position undo;
 bookmarks 0–9; follow mode; windowed reads with no line index, so file size does not matter.
-**Still to come**: the "all matches" list (§1.4), the preview pipeline (§1.6), filtered view
-(§1.9), next/previous file in the panel, syntax highlighting, and the whole editor (§2) and
-diff viewer (§3).
+Also implemented: **disassembly** of ELF/PE/Mach-O/raw x86 and x86-64 with sections and
+symbols, and **decompilation** through WebAssembly's text format in process or an installed
+external tool (§1.6).
+**Still to come**: the "all matches" list (§1.4), the preview pipeline (§1.7), filtered view
+(§1.10), next/previous file in the panel, syntax highlighting, JVM/.NET/Python bytecode and
+non-x86 decoding in process, and the whole editor (§2) and diff viewer (§3).
 
 ## 1. Viewer (`F3`)
 
@@ -60,7 +63,45 @@ Go to offset / line / percent (`Alt+F8`, `:`), bookmarks 0..9 (set `Ctrl+Shift+N
 encoding, "jump to this file in the panel" (`Ctrl+F10`), copy selection (`Ctrl+C`) including
 hex-mode byte ranges.
 
-### 1.6 Preview pipeline
+### 1.6 Compiled files: disassembly and decompilation
+
+Two different things, and the viewer is honest about which one it is doing.
+
+**Disassembly — in process, no external tool.**
+
+| What | How |
+| --- | --- |
+| Recognise the file | magic bytes: ELF, PE, Mach-O (incl. universal), WebAssembly, Java class, `.pyc`, `ar` archive, or raw |
+| Read its structure | `object` (MIT/Apache-2.0): architecture, bitness, entry point, sections, function symbols |
+| Decode instructions | `iced-x86` (MIT) for x86 and x86-64, Intel syntax, exact instruction lengths |
+| Row format | `address  bytes  mnemonic operands`, with a `<symbol>:` heading where a function starts |
+| Bad bytes | one `(bad)` line per byte and the sweep resyncs one byte on, so data between functions does not hide the code after it |
+| Scrolling | down decodes the next instruction; up uses the trail of offsets we came down through, because backward decoding of a variable-length instruction set can only guess |
+| Huge files | ELF and PE keep their section tables at the *end*, so a prefix cannot be parsed. Above a 64 MiB limit (a debug build of a Rust program is routinely 100 MB) the viewer sweeps **raw bytes** with the host architecture and the status line says `raw x86-64 sweep (over the 64 MiB parse limit)` |
+| Other architectures | aarch64 and the rest are not decoded in process: the error names the external-tool route rather than pretending |
+
+**Decompilation — the specialists, called not reimplemented.** A decompiler that produces
+C- or Java-like source is a research project (Ghidra, RetDec, ILSpy, javap, uncompyle6);
+SupremeCommander runs the installed one and views its output:
+
+- **WebAssembly is the exception**: `wasmprinter` turns a `.wasm` into its canonical text
+  format in process, which is as close to source as a module has.
+- Everything else goes through a `[[decompile]]` rule (SPEC 07): `javap -c -p` for `.class`,
+  `ilspycmd` for .NET assemblies, `python -m dis` for `.pyc`, `objdump -d -C` for an
+  architecture we do not decode, `retdec-decompiler` for an `.exe`. A rule is offered only when
+  its program is actually installed; when none is, the message says what to install.
+- The command runs **directly, never through a shell**, so a path cannot turn into a command,
+  on a worker thread with its output capped at 32 MiB.
+- The result is shown as generated text: the status line reads `javap of Main.class`, and
+  search, wrapping and go-to work on it like on any file.
+
+Keys: `F5` disassemble, `F6` decompile. Both are refusable: the viewer never silently stays on
+the old content.
+
+Nothing here circumvents a protection: it reads bytes the user can already read. What those
+bytes may be used for is the user's licence question, not the file manager's.
+
+### 1.7 Preview pipeline
 
 ```toml
 [[preview]]

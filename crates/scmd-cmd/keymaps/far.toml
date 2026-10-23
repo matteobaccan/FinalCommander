@@ -319,3 +319,13 @@ cmd = "viewer.left"
 keys = ["Right", "l"]
 scope = "viewer"
 cmd = "viewer.right"
+
+[[bind]]
+keys = ["F5"]
+scope = "viewer"
+cmd = "viewer.disasm"
+
+[[bind]]
+keys = ["F6"]
+scope = "viewer"
+cmd = "viewer.decompile"
