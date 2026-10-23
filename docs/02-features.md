@@ -158,7 +158,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | --- | --- | --- | --- |
 | 9.1 | Human-editable config files (TOML) + in-app settings dialogs; portable mode (config next to the binary) | MTN2 | M1 |
 | 9.2 | Full keymap remapping, multiple **keymap profiles** (`far`, `tc`, `mc`, `nc`, `vi`) switchable at runtime | KRU/MTN2 | M1 (far+mc), M2 rest |
-| 9.3 | Themes: 6 built-in (`commander`, `black`, `white`, `matrix`, `tron`, `blade`) + external TOML themes discovered from `themes/`, hot-reloaded, `inherit`-able, exportable; 24-bit colour with 256/16/mono degradation | MTN2 | M1 |
+| 9.3 | Themes: 6 built-in (`commander`, `black`, `white`, `matrix`, `tron`, `blade`) + `[[theme]]` blocks in `sc.toml` or from plugins, hot-reloaded, `inherit`-able, exportable with `--export-theme`; 24-bit colour with 256/16/mono degradation | MTN2 | M1 |
 | 9.4 | Localisation (fluent-based): EN, IT, DE, FR, ES, RU, ZH-Hans; UI + help + key names, runtime switchable, drop-in language dirs | FAR/MTN2 | M2 |
 | 9.5 | CJK/wide-character correct layout, combining marks, RTL-safe truncation, emoji width | MTN2 | M2 |
 | 9.6 | Accessibility: no-colour mode, screen-reader-friendly output mode, configurable focus indication | NEW | M3 |

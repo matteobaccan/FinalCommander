@@ -122,6 +122,15 @@ impl Keymap {
         &["far", "mc"]
     }
 
+    /// A `[[keymap]]` block from the configuration file.
+    pub fn from_table(origin: &str, table: &toml::Table) -> Result<Self, KeymapError> {
+        let src = toml::to_string(table).map_err(|e| KeymapError::UnknownCommand {
+            file: origin.to_string(),
+            cmd: e.to_string(),
+        })?;
+        Self::from_toml(origin, &src)
+    }
+
     /// Parse a keymap, resolving `inherit` against the built-in profiles.
     pub fn from_toml(file: &str, src: &str) -> Result<Self, KeymapError> {
         let parsed: KeymapFile = toml::from_str(src).map_err(|source| KeymapError::Toml {
@@ -363,6 +372,30 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(err.to_string(), "bad.toml: unknown command `file.teleport`");
+    }
+
+    #[test]
+    fn a_keymap_can_come_from_a_config_block() {
+        let table: toml::Table = r#"
+            name = "mine"
+            inherit = "far"
+            [[bind]]
+            keys = ["F4"]
+            cmd = "file.view"
+        "#
+        .parse()
+        .unwrap();
+        let km = Keymap::from_table("sc.toml", &table).unwrap();
+        assert_eq!(km.name(), "mine");
+        assert_eq!(
+            km.resolve(&[Scope::Panel], "F4".parse().unwrap()),
+            Some(Command::FileView)
+        );
+        assert_eq!(
+            km.resolve(&[Scope::Panel], "F5".parse().unwrap()),
+            Some(Command::FileCopy),
+            "inherited bindings survive"
+        );
     }
 
     #[test]

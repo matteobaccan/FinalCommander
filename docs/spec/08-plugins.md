@@ -96,11 +96,19 @@ interface column-provider  { columns: func() -> list<column-desc>;
 interface highlighter      { highlight: func(path: string, text: string) -> list<span>; }
 ```
 
-- Plugin manifest (`plugin.toml`): id, name, version, api version, entry wasm file, declared
-  capabilities (`vfs:net`, `vfs:fs:<root>`, `shell`, `clipboard`, `ui`), author, licence.
-  Capabilities are shown to the user before the first load and stored as a grant.
-- Lifecycle: discovery in `plugins/`, lazy load on first use, unload on idle, hot reload in dev
-  mode. A plugin crash/trap disables it for the session with a readable message.
+- **One plugin is one file.** The whole program is a single executable and the plugins folder
+  is the only directory it reads, so a plugin must not need a directory either:
+  `plugins/<id>.wasm` (a WASM component) or `plugins/<id>.lua` (a script). The manifest lives
+  *inside* the file — a `sc.plugin` custom section in the component, or a leading
+  `--[[ sc.plugin ... ]]` block in the script — and declares id, name, version, api version,
+  platforms (`["*"]` for WASM/Lua), capabilities (`vfs:net`, `vfs:fs:<root>`, `shell`,
+  `clipboard`, `ui`), author and licence. A subdirectory per plugin is accepted but never
+  required, and nothing outside `plugins/` is ever read.
+- Capabilities are shown to the user before the first load and the grant is stored in
+  `sc-state.toml` (keyed by plugin id and file hash, so a changed plugin asks again).
+- Lifecycle: `plugins/` is scanned at startup (`sc --list-plugins` prints what was found),
+  plugins load lazily on first use, unload on idle, and hot-reload in dev mode. A plugin
+  crash/trap disables it for the session with a readable message.
 - Plugin-provided VFS schemes, panels, columns, viewers, previews, highlighters, commands and
   menu entries are all first-class — no second-class plugin UI.
 
@@ -128,9 +136,10 @@ macros that invoke destructive commands prompt once per playback unless marked `
 ## 6. Plugin registry (M4)
 
 A JSON index (git-hosted) listing plugins with their versions, checksums, capabilities and
-source URLs; `sc plugin search/install/update/remove` verifies the checksum and signature,
-installs into `plugins/<id>/<version>/`, and never auto-updates. Everything the registry
-installs is WASM or Lua — never a binary blob.
+source URLs; `sc plugin search/install/update/remove` verifies the checksum and signature and
+drops **one file** into `plugins/` (`<id>.wasm` or `<id>.lua`, version recorded in the
+manifest and in `sc-state.toml`), never auto-updates, and never installs a native binary blob.
+Removing a plugin is deleting one file.
 
 ## 7. Porting the existing plugin ecosystems (and why plugins must be portable too)
 
@@ -146,7 +155,7 @@ So portability is a property of the plugin *model*, not of a compatibility layer
 | **Core** | Rust inside the workspace | builds everywhere we build | us |
 | **First-party plugin** | WASM component (or Lua script) in this repo, MIT | **one artifact, every OS and CPU** | us |
 | **Third-party plugin** | WASM component or Lua script | same single artifact | anyone |
-| **Native plugin** (M4, last resort) | `cdylib` against the `sc_plugin_v1` C ABI | per-platform, declared in the manifest | only where WASM cannot reach the OS |
+| **Native plugin** (M4, last resort) | one `cdylib` in the same folder, against the `sc_plugin_v1` C ABI | per-platform, declared in the manifest | only where WASM cannot reach the OS |
 
 Rules that keep the promise:
 

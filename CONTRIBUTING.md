@@ -35,7 +35,8 @@ Useful non-interactive modes while developing:
 cargo run -- --check-keymap     # validate and print the resolved bindings
 cargo run -- --list-commands    # the command vocabulary
 cargo run -- --list-themes      # built-in + external themes, with their source
-cargo run -- --export-theme tron > ~/.config/sc/themes/mine.toml
+cargo run -- --export-theme tron    # a [[theme]] block to paste into sc.toml
+cargo run -- --paths                # config file, state file, plugins directory
 cargo run -- --dump-config      # the effective configuration
 ```
 

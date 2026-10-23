@@ -1,26 +1,33 @@
 # SPEC 07 — Configuration, keymaps, themes, i18n
 
-## 1. Files
+## 1. Files: one, plus one optional directory
 
-```
-config.toml          general settings
-keymaps/far.toml     shipped profiles: far, mc, tc, nc, vi
-keymaps/user.toml    user overrides (inherit = "far")
-keys.local.toml      machine-specific terminal key fixes (written by "learn keys")
-themes/*.toml        colour themes
-filters.toml         named filter sets + highlight groups
-assoc.toml           file associations and preview commands
-menu.toml            user menu (F2)
-sites.toml           remote sites (no secrets)
-history/*.jsonl      histories
-session.toml         restored session
-```
+SupremeCommander is a **single executable**. Themes, keymap profiles, language catalogues and
+help are compiled in, so the program is fully usable with nothing else on disk.
 
-Everything is TOML, commented, and regenerable: `sc --dump-config` prints the effective
-configuration with defaults and provenance (`default` / `config.toml:42` / `--set`), which is
-also what bug reports should include.
+| Path | What | Required? |
+| --- | --- | --- |
+| `sc.toml` | **all** user settings: options, `[[theme]]` blocks, `[[keymap]]` blocks, filters, associations, user menu, remote sites (no secrets), terminal key fixes | no |
+| `sc-state.toml` | remembered state beside it: histories, last session, panel paths, viewer positions | written only if there is something to remember |
+| `plugins/` | the **only** directory ever read: one file per plugin | no |
 
-## 2. config.toml (shape, with defaults)
+Discovery, in order:
+
+1. `--config <file>` / `--plugins <dir>` (and `$SC_PLUGINS`);
+2. **portable**: an `sc.toml` next to the executable — a release zip or a USB stick needs no
+   setup, and nothing is written outside that folder;
+3. otherwise the per-OS config location, as a single file: `~/.config/sc.toml`,
+   `~/Library/Application Support/sc.toml`, `%APPDATA%\sc.toml`. Note the absence of a
+   directory of our own — there is one file to back up and one file to delete.
+
+`sc --paths` prints all three locations and says whether each exists. `sc --dump-config` prints
+the effective configuration (including the themes it carries) with provenance
+(`default` / `sc.toml` / `--set`), which is what a bug report should include.
+Sections inside `sc.toml`: `[general]`, `[panel]`, `[operations]`, `[viewer]`, `[editor]`,
+`[ui]`, `[terminal]`, `[[theme]]`, `[[keymap]]`, `[[filter]]`, `[[highlight]]`, `[[assoc]]`,
+`[[menu]]`, `[[site]]`, `[keys.local]`.
+
+## 2. sc.toml (shape, with defaults)
 
 ```toml
 [general]
@@ -89,6 +96,9 @@ Environment: `SC_CONFIG_DIR`, `SC_THEME`, `SC_KEYMAP`, `NO_COLOR`, `COLORTERM`.
 ## 3. Keymaps
 
 ```toml
+# a [[keymap]] block inside sc.toml
+[[keymap]]
+name = "mine"
 inherit = "far"
 # scope: global | panel | viewer | editor | dialog | terminal
 [[bind]]
@@ -162,14 +172,15 @@ hidden = "#808080"
   | `tron` | neon on black: cyan and orange accents, thin bright highlights |
   | `blade` | amber/teal on near-black, warm selection — "blade" |
 
-- **External themes** are TOML files found in `themes/` inside the config directory (and in any
-  path listed in `ui.theme_path`). They are discovered at startup and hot-reloaded on change; an
-  external theme with the same id as a built-in one overrides it, so a user can retune
-  `commander` without renaming it. `ui.theme = "<id>"` selects, `app.theme.next` cycles through
-  everything discovered, and `sc --list-themes` prints the resolved list with its source.
+- **External themes** are `[[theme]]` blocks in `sc.toml` (or themes a plugin declares). They
+  are read at startup and hot-reloaded when the file changes; a block with the id of a built-in
+  overrides it, so a user can retune `commander` without renaming it. `ui.theme = "<id>"`
+  selects, `app.theme.next` cycles through everything available, and `sc --list-themes` prints
+  the resolved list with where each came from (`built-in`, the config file, or `plugin:<id>`).
 - A theme file may `inherit = "<id>"` and override single keys; unknown keys are a warning, not
   a failure, so a theme written for a later version still loads.
-- `sc --export-theme <id> > my.toml` writes a built-in theme out as a file to start from.
+- `sc --export-theme <id>` prints a built-in theme as a ready-to-paste `[[theme]]` block
+  (`sc --export-theme tron >> ~/.config/sc.toml`).
 - Themes are re-derived from published palettes, never copied from another application's theme
   files (`01-licensing.md` §4).
 - `app.theme.next` cycles; a theme change is hot-reloaded, as is any config file change

@@ -98,8 +98,11 @@ pub struct VPath { scheme: SchemeId, root: Arc<str>, segments: Vec<OsString> }
 3. Otherwise XDG (`$XDG_CONFIG_HOME/sc`), `~/Library/Application Support/sc`,
    `%APPDATA%\sc`; state/cache separated (`$XDG_STATE_HOME`, `$XDG_CACHE_HOME`).
 
-Files: `config.toml`, `keymaps/*.toml`, `themes/*.toml`, `filters.toml`, `assoc.toml`,
-`menu.toml`, `sites.toml` (no secrets — those go to the OS keyring), `history/*`, `session.toml`.
+Files: **one**. `sc.toml` holds options plus the `[[theme]]`, `[[keymap]]`, `[[filter]]`,
+`[[assoc]]`, `[[menu]]` and `[[site]]` blocks (no secrets — those go to the OS keyring);
+`sc-state.toml` beside it holds histories and the last session. Themes, keymap profiles,
+language catalogues and help are compiled into the executable, and the only directory ever
+read is the optional `plugins/`. See SPEC 07 §1.
 
 ## 8. Testing strategy
 

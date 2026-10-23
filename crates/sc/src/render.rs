@@ -165,7 +165,7 @@ fn draw_help(app: &App, buf: &mut Buffer, scroll: usize, screen: Rect) {
         buf.put_str(
             inner.x,
             inner.y + row as u16 + 1,
-            &format!("config: {}", app.config_dir().display()),
+            &format!("config: {}", app.config_file().display()),
             style,
             inner.w,
         );
@@ -212,7 +212,7 @@ mod tests {
     fn app(theme: &str, lang: &str) -> App {
         let mut app = App::new(Startup {
             cfg: Config::default(),
-            paths: Paths::discover(Some(Path::new("/tmp/sc-test"))),
+            paths: Paths::discover(Some(Path::new("/tmp/sc-test/sc.toml")), None),
             i18n: I18n::new(lang),
             keymap: Keymap::builtin("far").unwrap(),
             themes: ThemeSet::builtin_only(),

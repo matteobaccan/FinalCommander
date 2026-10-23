@@ -267,5 +267,6 @@ command with its current binding — which also makes the whole keymap self-docu
 | `nc` | Norton Commander 5 | minimal set, no Ctrl+F-key sorting beyond name/ext/date/size |
 | `vi` | vifm/yazi-ish | modal: `hjkl`, `gg`/`G`, `dd`/`yy`/`p`, `/` search, `:` command line, `Space` select |
 
-Profiles are TOML files in `keymaps/`; a user profile may `inherit = "far"` and override single
-bindings. Switching is runtime (`app.keymap.profile`), no restart.
+Profiles are compiled into the executable. A `[[keymap]]` block in `sc.toml` may
+`inherit = "far"` and override single bindings, and a block whose `name` matches a built-in
+profile replaces it. Switching is runtime (`app.keymap.profile`), no restart.
