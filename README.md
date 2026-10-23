@@ -79,12 +79,14 @@ What works today:
   shared by both panels and every job, so `F5` and `F6` copy and move up, down, between two
   servers or inside one — with the same progress, conflict and cancellation behaviour as a
   local copy, because it is the same engine. `F3` fetches a remote file into a temporary copy
-  and says that is what you are looking at. `Alt+Shift+N` disconnects.
+  and says that is what you are looking at; `F4` edits that copy and `F2` writes it back —
+  uploaded beside the original and renamed into place, so the file on the server keeps its old
+  bytes until the new ones are all there, and a file someone else changed in the meantime asks
+  before being overwritten. `Alt+Shift+N` disconnects.
 - **The rest**: `Alt+T` cycles themes, `F1` is a help page generated from the live keymap,
   `F10` quits.
 
-Not yet: editing a remote file in place, the OS keyring for passwords, `ProxyJump`, FTP and the
-other schemes, syntax highlighting and several open buffers in the editor, the OS clipboard,
+Not yet: the OS keyring for passwords, `ProxyJump`, FTP and the other schemes, syntax highlighting and several open buffers in the editor, the OS clipboard,
 trash, wipe, a background job queue and archives. Anything unimplemented says so plainly instead of pretending.
 
 Non-interactive modes (used by CI and by scripts):

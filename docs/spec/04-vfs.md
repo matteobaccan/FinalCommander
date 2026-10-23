@@ -8,8 +8,10 @@ which SFTP has no call for), delete, rename, symlinks, mode and mtime, and trans
 direction (up, down, server-to-server on one connection and between two) driven by the job
 engine with progress and cancellation. A `Router` sends each path to the provider that owns it,
 so nothing above the VFS knows whether a panel is local or remote.
-**Still to come**: archives, `temp`, `trash`, the other network schemes, nesting (§4), editing
-in place (§5), `watch`, and `copy_within` as a server-side operation.
+Editing a remote file works too: `F4` fetches it, the editor edits the copy, and `F2` writes it
+back with a change check and a rename into place (§5).
+**Still to come**: archives, `temp`, `trash`, the other network schemes, nesting (§4), `watch`,
+and `copy_within` as a server-side operation.
 
 ## 1. The trait
 
@@ -89,6 +91,22 @@ where the code lives, not whether it is linked into the binary.
   treats it as one transactional unit (write to temp, verify, atomic replace).
 
 ## 5. Editing inside a VFS
+
+**Implemented today for `sftp`**: `F4` on a remote file fetches it into
+`<temp>/scmd-<pid>/<name>`, opens the editor on that copy (the header and every message show
+the remote path, not the temp one), and `F2` writes it back. The write-back uploads to
+`name.scmd-part` and renames it over the target, so the file on the server keeps its old bytes
+until the new ones are completely there. Before writing, the server's size and mtime are
+compared with what they were when the file was fetched: a file someone else has changed brings
+up a confirmation instead of being overwritten. If the write-back fails, the error names both
+the reason and the local copy, so the edits are never lost silently. `Shift+F2` onto an
+`sftp://` path writes the buffer up the same way, and `Shift+F4` on a remote panel plus a save
+creates a file on the server. SFTP version 3's rename cannot replace an existing file and
+`russh-sftp` has no `posix-rename` extension yet, so the old file is removed between the upload
+and the rename; if the rename then fails the bytes are still on the server under the
+`.scmd-part` name, and the message says so.
+**Still to come**: the same thing for archives, and watching the temp file so an external
+program's save is picked up.
 
 `F4` on `zip://a.zip!/b.txt`: extract to a temp dir, open the editor, watch the temp file, on
 save write back into the container through the job engine, then refresh. On failure the temp

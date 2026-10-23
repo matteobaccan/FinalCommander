@@ -262,11 +262,15 @@ fn draw_editor(
     let status = editor.status();
     let status_w = (status.chars().count() as u16).min(w);
     let name_w = w.saturating_sub(status_w + 2);
-    let title = editor
-        .path
-        .as_ref()
-        .map(|p| p.to_string())
-        .unwrap_or_else(|| editor.name());
+    // A fetched copy is shown under the name it has on the server, not its temp path.
+    let title = match app.remote_edit() {
+        Some(edit) => edit.remote.to_string(),
+        None => editor
+            .path
+            .as_ref()
+            .map(|p| p.to_string())
+            .unwrap_or_else(|| editor.name()),
+    };
     buf.put_str(
         0,
         0,

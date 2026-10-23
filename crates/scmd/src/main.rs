@@ -21,7 +21,7 @@ use scmd_tui::{Input, Term};
 use scmd_ui::{Buffer, Theme, ThemeSet};
 use scmd_vfs::Vfs;
 
-use crate::app::{App, ConnectOutcome, Event, Request, Startup};
+use crate::app::{App, ConnectOutcome, Event, RemoteStamp, Request, Startup, UploadError};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -403,7 +403,7 @@ fn interactive(mut app: App) -> Result<()> {
                         });
                     });
                 }
-                Request::Fetch { id, path } => {
+                Request::Fetch { id, path, purpose } => {
                     let tx = tx.clone();
                     let pool = pool.clone();
                     runtime.spawn(async move {
@@ -411,8 +411,23 @@ fn interactive(mut app: App) -> Result<()> {
                         let _ = tx.send(Event::Fetched {
                             id,
                             remote: path,
+                            purpose,
                             result,
                         });
+                    });
+                }
+                Request::Upload {
+                    id,
+                    local,
+                    remote,
+                    expect,
+                    force,
+                } => {
+                    let tx = tx.clone();
+                    let pool = pool.clone();
+                    runtime.spawn(async move {
+                        let result = write_back(&pool, &local, &remote, expect, force).await;
+                        let _ = tx.send(Event::Uploaded { id, remote, result });
                     });
                 }
                 Request::DirSize { panel, path } => {
@@ -601,16 +616,62 @@ fn dir_size(
 ///
 /// The directory is created under the system temp directory with the session's process id, so
 /// two running copies never collide, and it is removed when the process exits.
-async fn fetch_remote(pool: &Pool, path: &VPath) -> Result<PathBuf, String> {
+async fn fetch_remote(pool: &Pool, path: &VPath) -> Result<(PathBuf, RemoteStamp), String> {
     let remote = pool.require(path).map_err(|e| e.to_string())?;
     let dir = std::env::temp_dir().join(format!("scmd-{}", std::process::id()));
     tokio::fs::create_dir_all(&dir)
         .await
         .map_err(|e| format!("{}: {e}", dir.display()))?;
-    remote
+    let local = remote
         .fetch_to(path, &dir, &CancelToken::new())
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    let stamp = stamp_of(&remote, path).await.unwrap_or(RemoteStamp {
+        size: 0,
+        mtime: None,
+    });
+    Ok((local, stamp))
+}
+
+/// What the file looks like on the server right now.
+async fn stamp_of(remote: &scmd_net::Remote, path: &VPath) -> Option<RemoteStamp> {
+    let wire = remote.wire(path).ok()?;
+    let entry = remote.sftp().stat(&wire, true).await.ok()?;
+    Some(RemoteStamp {
+        size: entry.size,
+        mtime: entry.mtime,
+    })
+}
+
+/// Write the editor's local copy back to the server (SPEC 04 §5).
+///
+/// Unless `force` is set, the file is compared with what it looked like when it was fetched:
+/// someone else's work is never overwritten without the user saying so.
+async fn write_back(
+    pool: &Pool,
+    local: &std::path::Path,
+    remote_path: &VPath,
+    expect: Option<RemoteStamp>,
+    force: bool,
+) -> Result<u64, UploadError> {
+    let remote = pool
+        .require(remote_path)
+        .map_err(|e| UploadError::Failed(e.to_string()))?;
+    if !force {
+        if let (Some(expected), Some(now)) = (expect, stamp_of(&remote, remote_path).await) {
+            // A file that is not there any more is not someone else's work: write it.
+            let changed = now.size != expected.size
+                || (now.mtime.is_some() && expected.mtime.is_some() && now.mtime != expected.mtime);
+            if changed {
+                return Err(UploadError::Changed);
+            }
+        }
+    }
+    let mut ignore = |_: u64| true;
+    remote
+        .upload_in_place(local, remote_path, &mut ignore)
+        .await
+        .map_err(|e| UploadError::Failed(e.to_string()))
 }
 
 #[cfg(test)]
@@ -749,7 +810,8 @@ mod tests {
                     | Request::Decompile { .. }
                     | Request::Connect { .. }
                     | Request::Disconnect { .. }
-                    | Request::Fetch { .. } => {}
+                    | Request::Fetch { .. }
+                    | Request::Upload { .. } => {}
                 }
             }
         };
@@ -826,7 +888,8 @@ mod tests {
                     | Request::Decompile { .. }
                     | Request::Connect { .. }
                     | Request::Disconnect { .. }
-                    | Request::Fetch { .. } => {}
+                    | Request::Fetch { .. }
+                    | Request::Upload { .. } => {}
                 }
             }
         };
