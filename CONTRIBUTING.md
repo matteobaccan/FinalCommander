@@ -22,11 +22,15 @@ specs are written, the skeleton runs, and most features are still ahead.
 
 ## Working on it
 
+The minimum Rust version is **1.89** (`russh`, the netbox's SSH library, needs it); stable is
+what CI uses.
+
 ```sh
 cargo test --workspace          # everything, including the render snapshots
 cargo clippy --all-targets -- -D warnings
 cargo fmt --all
 cargo run -- /etc /tmp          # two panels, left and right
+cargo test -p scmd-net          # includes an SSH server started in the test process
 ```
 
 Useful non-interactive modes while developing:

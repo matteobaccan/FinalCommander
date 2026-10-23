@@ -144,13 +144,19 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
     match &app.mode {
         Mode::Normal => None,
         Mode::Prompt(prompt) => {
+            // A password is never put on the screen, not even for a frame.
+            let shown = if prompt.secret {
+                "*".repeat(prompt.text.chars().count())
+            } else {
+                prompt.text.clone()
+            };
             let (_, cx, cy) = widgets::draw_prompt(
                 buf,
                 &app.theme,
                 screen,
                 &prompt.title,
-                &prompt.text,
-                prompt.text.chars().count(),
+                &shown,
+                shown.chars().count(),
             );
             Some((cx, cy))
         }
@@ -171,6 +177,10 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         Mode::Editor(_) => None, // handled above, before the panels are drawn
         Mode::Message { title, lines } => {
             widgets::draw_dialog(buf, &app.theme, screen, title, lines, None);
+            None
+        }
+        Mode::Sites { cursor } => {
+            draw_sites(app, buf, screen, *cursor);
             None
         }
         Mode::Help { scroll } => {
@@ -450,6 +460,56 @@ fn status_hint(app: &App) -> String {
     }
 }
 
+/// The connection manager: the site list, what is connected, and what the keys do.
+fn draw_sites(app: &App, buf: &mut Buffer, screen: Rect, cursor: usize) {
+    let rows = app.site_rows();
+    let mut lines: Vec<String> = Vec::new();
+    if rows.is_empty() {
+        lines.push(app.i18n.t("net-no-sites"));
+    }
+    let mut group: Option<String> = None;
+    for site in &rows {
+        if site.group != group {
+            group = site.group.clone();
+            if let Some(name) = &group {
+                lines.push(format!("[{name}]"));
+            }
+        }
+        let mark = if app.connected.contains(&site.authority()) {
+            '*'
+        } else {
+            ' '
+        };
+        lines.push(format!(
+            "{mark} {}  ({})",
+            site.label(),
+            site.auth.describe()
+        ));
+    }
+    let hint = app.i18n.t("net-sites-hint");
+    let title = app.i18n.t("net-sites-title");
+    let area = widgets::draw_dialog(buf, &app.theme, screen, &title, &lines, Some(&hint));
+
+    // Highlight the row under the cursor, skipping the group headings.
+    let selected = Style::new(app.theme.color("cursor.fg"), app.theme.color("cursor.bg"));
+    let mut row = 0usize;
+    for (index, line) in lines.iter().enumerate() {
+        if line.starts_with('[') {
+            continue;
+        }
+        if row == cursor && !rows.is_empty() {
+            let y = area.y + 1 + index as u16;
+            if y < area.y + area.h {
+                let width = area.w.saturating_sub(2);
+                let text = format!("{line:<w$}", w = width as usize);
+                buf.put_str(area.x + 1, y, &text, selected, width);
+            }
+            break;
+        }
+        row += 1;
+    }
+}
+
 fn draw_help(app: &App, buf: &mut Buffer, scroll: usize, screen: Rect) {
     let lines = app.help_lines();
     let box_w = screen.w.saturating_sub(6).clamp(24, 60);
@@ -549,6 +609,7 @@ mod tests {
             theme: Theme::builtin(theme).unwrap(),
             left: VPath::local("/home/mb/project"),
             right: VPath::local("/tmp"),
+            sites: Vec::new(),
         });
         app.requests.clear();
         for panel in 0..2 {
@@ -767,6 +828,7 @@ third line
             theme: Theme::default_theme(),
             left: VPath::local(dir.path()),
             right: VPath::local(dir.path()),
+            sites: Vec::new(),
         });
         app.requests.clear();
         let entries = scmd_vfs::local::list_blocking(
@@ -835,6 +897,7 @@ third line
             theme: Theme::default_theme(),
             left: VPath::local(dir.path()),
             right: VPath::local(dir.path()),
+            sites: Vec::new(),
         });
         app.requests.clear();
         let entries = scmd_vfs::local::list_blocking(
@@ -886,6 +949,7 @@ third line
             theme: Theme::default_theme(),
             left: VPath::local(dir),
             right: VPath::local(dir),
+            sites: Vec::new(),
         });
         app.requests.clear();
         let entries =
@@ -1044,5 +1108,80 @@ third line
                 }
             }
         }
+    }
+
+    #[test]
+    fn the_site_list_shows_the_sites_and_what_is_connected() {
+        let mut with_sites = app("commander", "en");
+        let mut site = scmd_net::Site::parse_url("sftp://mb@jump.example:2222/srv").unwrap();
+        site.id = "jump".into();
+        site.group = Some("work".into());
+        with_sites.sites = vec![site.clone()];
+        with_sites.connected = vec![site.authority()];
+        with_sites.handle_input(Input::Key("Alt+N".parse().unwrap()));
+
+        let out = frame(&mut with_sites, 80, 24);
+        assert!(out.contains("Connections"), "{out}");
+        assert!(
+            out.contains("[work]"),
+            "the group heading is missing: {out}"
+        );
+        assert!(out.contains("jump.example:2222"), "{out}");
+        assert!(out.contains("agent"), "the auth method is missing: {out}");
+        assert!(out.contains('*'), "the connected marker is missing: {out}");
+        assert!(out.contains("Esc"), "the hint is missing: {out}");
+
+        // Nothing configured: the dialog says what to do instead of showing an empty box.
+        let mut empty = app("commander", "en");
+        empty.handle_input(Input::Key("Alt+N".parse().unwrap()));
+        let out = frame(&mut empty, 80, 24);
+        assert!(out.contains("No sites"), "{out}");
+    }
+
+    #[test]
+    fn a_password_prompt_shows_stars_and_not_the_password() {
+        let mut app = app("commander", "en");
+        app.handle_event(Event::Connected {
+            panel: 0,
+            site: Box::new(scmd_net::Site::parse_url("sftp://mb@host:22/").unwrap()),
+            outcome: crate::app::ConnectOutcome::NeedsSecret(scmd_net::SecretKind::Password),
+        });
+        for c in ["s", "e", "c", "r", "e", "t"] {
+            app.handle_input(Input::Key(c.parse().unwrap()));
+        }
+        let mut buf = Buffer::new(70, 20);
+        let cursor = draw(&mut app, &mut buf);
+        let out = buf.to_text();
+        assert!(cursor.is_some());
+        assert!(out.contains("******"), "the stars are missing: {out}");
+        assert!(
+            !out.contains("secret"),
+            "the password is on the screen: {out}"
+        );
+    }
+
+    #[test]
+    fn a_remote_panel_shows_the_url_in_its_header() {
+        let mut app = app("commander", "en");
+        let site = scmd_net::Site::parse_url("sftp://mb@host.example:22/srv/www").unwrap();
+        app.handle_event(Event::Connected {
+            panel: 0,
+            site: Box::new(site.clone()),
+            outcome: crate::app::ConnectOutcome::Open {
+                start: site.start(),
+                connected: vec![site.authority()],
+            },
+        });
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation: app.panels[0].generation,
+            result: Ok(vec![
+                Entry::parent_entry(),
+                entry("index.html", EntryKind::File, 42),
+            ]),
+        });
+        let out = frame(&mut app, 100, 12);
+        assert!(out.contains("sftp://mb@host.example:22/srv/www"), "{out}");
+        assert!(out.contains("index.html"), "{out}");
     }
 }

@@ -247,7 +247,7 @@ pub fn is_inside(outer: &VPath, inner: &VPath) -> bool {
     if a == b {
         return false;
     }
-    b.as_path().starts_with(a.as_path())
+    b.starts_with(&a)
 }
 
 fn check_cancel(cancel: &CancelToken) -> Result<(), PlanError> {

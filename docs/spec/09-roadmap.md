@@ -23,14 +23,16 @@ reviewable and testable.
 | 14 | command line + `%`-macros + user screen (`Ctrl+O`) + run command | 6,12 |
 | 15 | ✅ `scmd-view`: viewer with wrap, windowed reader, encodings, plain/regex/hex search, hex and dump modes, follow, bookmarks | 5 |
 | 21 | ✅ `scmd-edit`: line buffer with encoding/EOL/BOM preserved, atomic save, undo, stream and column blocks, search/replace, go to line, bookmarks; `F4`/`Shift+F4` in the TUI | 5,12 |
+| 22 | ✅ `scmd-net` (netbox): SFTP provider, site list, connection pool, host-key policy, transfers through the job engine; `Alt+N`, remote panels, `sftp://` in `Ctrl+L` | 5,12,13 |
 | 16 | `scmd-platform` M1 slice: long paths, trash, clipboard, drives/mounts, FS watch | 1 |
 | 17 | theming: theme loader, `far-classic` + `mono`, colour degradation | 3,12 |
 | 18 | packaging: static builds for linux-gnu/musl, macOS universal, windows-msvc; checksums | 1 |
 | 19 | snapshot test harness + keymap tests + job property tests + perf budget check | all |
 | 20 | docs: README, help pages generated from `docs/`, man page | all |
 
-**Done so far**: chunks 1–19 and 21 in some form, including the operation engine (13), the
-viewer (15) and the editor (21). What M1 still owes: trash and wipe, the generated help/man
+**Done so far**: chunks 1–19, 21 and 22 in some form, including the operation engine (13), the
+viewer (15), the editor (21) and the netbox (22) — the three priority components of SPEC 08 §8
+are all in the binary. What M1 still owes: trash and wipe, the generated help/man
 pages and the packaging chunk (18, 20), and the performance budget checks in CI.
 
 Exit criteria: the authors use it instead of `mc`/FAR for a week without reaching for the old
@@ -50,7 +52,7 @@ viewer modes + regex/hex search · help system · session restore · `tc`/`nc` k
 
 ## M3 — Commander parity and beyond the terminal's usual limits
 
-**Headline: netbox** — SFTP/FTP/FTPS/WebDAV/S3 in one first-party plugin, plus the connection
+**Headline: the rest of netbox** (SFTP and the connection manager landed in M1) — FTP/FTPS/WebDAV/S3 in one first-party plugin, plus the connection
 manager and keyring; then rclone bridge · nested containers and
 write-back · previews (images via kitty/sixel, markdown, PDF, media) · syntax highlighting
 (tree-sitter) in viewer and editor · diff viewer · synchroniser · macros · Lua API · WASM

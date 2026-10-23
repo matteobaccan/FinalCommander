@@ -124,3 +124,23 @@ editor-changed-title = Cambiado en el disco
 editor-changed-body = { $name } cambió en el disco desde que se abrió. ¿Sobrescribirlo?
 editor-reloaded = { $name } recargado
 editor-failed = { $name }: { $error }
+
+# netbox (SPEC 04 §6)
+net-sites-title = Conexiones
+net-sites-hint = Entrar conecta · n nueva · d desconecta · Esc cierra
+net-no-sites = Aún no hay sitios. Pulsa `n` para escribir una URL, o añade bloques [[site]] a la configuración.
+net-prompt-url = Conectar a:
+net-prompt-password = Contraseña de { $user }@{ $host }:
+net-prompt-passphrase = Frase de contraseña de la clave de { $user }@{ $host }:
+net-connecting = conectando a { $host }…
+net-connected = conectado a { $host }
+net-disconnected = { $host } desconectado
+net-not-connected = { $host } no está conectado
+net-local-panel = este panel está en un sistema de archivos local
+net-nothing-pending = ninguna conexión espera eso
+net-hostkey-title = Clave de host desconocida
+net-hostkey-body = { $host } no está en known_hosts. Su huella:
+net-hostkey-question = ¿Registrarla y conectar?
+net-fetching = descargando { $name }…
+net-viewing-copy = { $name }: copia local, descargada para el visor
+net-too-big = { $name } supera { $limit }: aumenta net.fetch_limit_mb

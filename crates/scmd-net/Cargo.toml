@@ -1,0 +1,27 @@
+[package]
+name = "scmd-net"
+description = "SupremeCommander: netbox — network filesystems (SFTP today) and the site list"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+scmd-config = { path = "../scmd-config" }
+scmd-core = { path = "../scmd-core" }
+scmd-vfs = { path = "../scmd-vfs" }
+scmd-jobs = { path = "../scmd-jobs" }
+async-trait = "0.1"
+russh = { version = "0.64.1", default-features = false, features = ["ring", "rsa", "flate2"] }
+russh-sftp = "3.0.1"
+thiserror = "2"
+tokio = { version = "1", features = ["rt", "io-util", "net", "time", "macros", "fs"] }
+
+[dev-dependencies]
+# The live test runs an SSH + SFTP server in process, which needs a throwaway host key.
+rand = "0.10.3"
+russh-sftp = "3.0.1"
+tempfile = "3"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

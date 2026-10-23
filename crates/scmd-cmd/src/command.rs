@@ -58,6 +58,14 @@ pub enum Command {
     ToolFind,
     ShellOutputShow,
 
+    // netbox (SPEC 04 §6)
+    /// The site list: connect, disconnect, add.
+    NetSites,
+    /// Connect to a URL typed by hand.
+    NetConnect,
+    /// Close the connection the active panel is on.
+    NetDisconnect,
+
     // Viewer (scope `viewer`)
     ViewerQuit,
     ViewerWrap,
@@ -153,6 +161,9 @@ impl Command {
             Command::ToolUserMenu,
             Command::ToolFind,
             Command::ShellOutputShow,
+            Command::NetSites,
+            Command::NetConnect,
+            Command::NetDisconnect,
             Command::ViewerQuit,
             Command::ViewerWrap,
             Command::ViewerHex,
@@ -263,6 +274,9 @@ impl Command {
             Command::ToolUserMenu => "tool.usermenu".into(),
             Command::ToolFind => "tool.find".into(),
             Command::ShellOutputShow => "shell.output.show".into(),
+            Command::NetSites => "net.sites".into(),
+            Command::NetConnect => "net.connect".into(),
+            Command::NetDisconnect => "net.disconnect".into(),
             Command::ViewerQuit => "viewer.quit".into(),
             Command::ViewerWrap => "viewer.wrap".into(),
             Command::ViewerHex => "viewer.hex".into(),
@@ -358,6 +372,9 @@ impl Command {
             ("tool.usermenu", _) => Command::ToolUserMenu,
             ("tool.find", _) => Command::ToolFind,
             ("shell.output.show", _) => Command::ShellOutputShow,
+            ("net.sites", _) => Command::NetSites,
+            ("net.connect", _) => Command::NetConnect,
+            ("net.disconnect", _) => Command::NetDisconnect,
             ("viewer.quit", _) => Command::ViewerQuit,
             ("viewer.wrap", _) => Command::ViewerWrap,
             ("viewer.hex", _) => Command::ViewerHex,

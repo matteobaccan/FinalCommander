@@ -7,6 +7,7 @@ use scmd_core::{CancelToken, Entry, MaskScope, Sort, SortKey, VPath, ViewMode};
 use scmd_edit::{BlockKind, Editor};
 use scmd_i18n::I18n;
 use scmd_jobs::{Decision, JobKind, JobSpec, Outcome, Progress, Question};
+use scmd_net::{SecretKind, Site};
 use scmd_tui::Input;
 use scmd_ui::{Theme, ThemeSet};
 use scmd_view::{FileSource, SearchMode, Viewer};
@@ -36,6 +37,24 @@ pub enum Request {
         id: u64,
         spec: JobSpec,
         cancel: CancelToken,
+    },
+    /// Open a connection (or reuse the one that is already open) and show it in `panel`.
+    Connect {
+        panel: usize,
+        site: Box<Site>,
+        /// Password or key passphrase, when the connection asked for one.
+        secret: Option<String>,
+        /// Set only after the user has seen the fingerprint and accepted it.
+        accept_host_key: bool,
+    },
+    /// Close a connection.
+    Disconnect {
+        authority: String,
+    },
+    /// Copy a remote file into a temporary directory so the viewer can open it.
+    Fetch {
+        id: u64,
+        path: VPath,
     },
 }
 
@@ -74,6 +93,39 @@ pub enum Event {
         tool: String,
         result: Result<String, String>,
     },
+    Connected {
+        panel: usize,
+        site: Box<Site>,
+        outcome: ConnectOutcome,
+    },
+    Disconnected {
+        authority: String,
+        /// Every host still connected, so the site list stays truthful.
+        connected: Vec<String>,
+    },
+    Fetched {
+        id: u64,
+        remote: VPath,
+        result: Result<std::path::PathBuf, String>,
+    },
+}
+
+/// How a connection attempt ended. A connection that needs something says what it needs,
+/// instead of failing with "authentication failed" and leaving the user to guess.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConnectOutcome {
+    /// Connected; the panel opens here.
+    Open {
+        start: VPath,
+        connected: Vec<String>,
+    },
+    NeedsSecret(SecretKind),
+    /// The host is not in `known_hosts` yet; the user decides, with the fingerprint in front
+    /// of them.
+    UnknownHostKey {
+        fingerprint: String,
+    },
+    Failed(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -97,6 +149,10 @@ pub enum PromptKind {
     MoveTarget,
     /// Name for F7.
     Mkdir,
+    /// A URL to connect to: `sftp://mb@host/srv`.
+    NetConnect,
+    /// A password or a key passphrase. Never echoed, never stored.
+    NetSecret(SecretKind),
     /// Quick search; remembers where the cursor was so Esc can put it back.
     QuickSearch {
         origin: usize,
@@ -108,6 +164,19 @@ pub struct Prompt {
     pub kind: PromptKind,
     pub title: String,
     pub text: String,
+    /// Render as `****`: a password is never put on the screen.
+    pub secret: bool,
+}
+
+impl Prompt {
+    pub fn new(kind: PromptKind, title: String, text: String) -> Prompt {
+        Prompt {
+            kind,
+            title,
+            text,
+            secret: false,
+        }
+    }
 }
 
 /// What a confirmation will do on `Enter`.
@@ -119,6 +188,12 @@ pub enum ConfirmAction {
     DiscardEdits,
     /// Save over a file that changed on disk since it was opened.
     OverwriteChanged,
+    /// Record a host key we have never seen and connect.
+    AcceptHostKey {
+        panel: usize,
+        site: Box<Site>,
+        secret: Option<String>,
+    },
 }
 
 /// A yes/no question that carries what it will do on `Enter`.
@@ -163,6 +238,10 @@ pub enum Mode {
     Message {
         title: String,
         lines: Vec<String>,
+    },
+    /// The connection manager: the site list plus whatever is connected.
+    Sites {
+        cursor: usize,
     },
 }
 
@@ -218,6 +297,8 @@ pub struct Startup {
     pub theme: Theme,
     pub left: VPath,
     pub right: VPath,
+    /// The netbox's site list, from `[[site]]` blocks.
+    pub sites: Vec<Site>,
 }
 
 pub struct App {
@@ -253,6 +334,14 @@ pub struct App {
     pub editor_size: (u16, u16),
     /// The decompilation we are waiting for, if any.
     decompile_id: Option<u64>,
+    /// The netbox's site list and what is connected right now.
+    pub sites: Vec<Site>,
+    pub connected: Vec<String>,
+    /// The connection we are in the middle of opening, kept so a password prompt or a
+    /// host-key confirmation can resume it.
+    pending_connect: Option<(usize, Box<Site>, Option<String>)>,
+    /// The fetch we are waiting for, if any.
+    fetch_id: Option<u64>,
     next_job_id: u64,
 }
 
@@ -267,6 +356,7 @@ impl App {
             theme,
             left,
             right,
+            sites,
         } = start;
         let sort = Sort {
             key: parse_sort(&cfg.panel.sort),
@@ -306,6 +396,10 @@ impl App {
             replace_from: None,
             editor_size: (80, 20),
             decompile_id: None,
+            sites,
+            connected: Vec::new(),
+            pending_connect: None,
+            fetch_id: None,
             next_job_id: 1,
         };
         app.read_panel(0);
@@ -367,6 +461,38 @@ impl App {
     pub fn handle_event(&mut self, event: Event) {
         match event {
             Event::Input(input) => self.handle_input(input),
+            Event::Connected {
+                panel,
+                site,
+                outcome,
+            } => self.connection_result(panel, site, outcome),
+            Event::Disconnected {
+                authority,
+                connected,
+            } => {
+                self.connected = connected;
+                let msg = self
+                    .i18n
+                    .t_args("net-disconnected", &[("host", authority.clone().into())]);
+                self.set_status(msg);
+                // A panel left on a closed connection goes home instead of showing a corpse.
+                for panel in 0..2 {
+                    if self.panels[panel].cwd.authority() == Some(authority.as_str()) {
+                        self.panels[panel].go(local_home(), true);
+                        self.read_panel(panel);
+                    }
+                }
+            }
+            Event::Fetched { id, remote, result } => {
+                if self.fetch_id != Some(id) {
+                    return; // the user moved on
+                }
+                self.fetch_id = None;
+                match result {
+                    Ok(local) => self.open_viewer_on(&local, remote),
+                    Err(e) => self.set_error(e),
+                }
+            }
             Event::Listed {
                 panel,
                 generation,
@@ -518,8 +644,78 @@ impl App {
                 self.mode = Mode::Editor(editor);
                 self.editor_key(key);
             }
+            Mode::Sites { cursor } => {
+                self.mode = Mode::Sites { cursor };
+                self.sites_key(key, cursor);
+            }
             Mode::Normal => self.normal_key(key),
         }
+    }
+
+    /// The connection manager's keys: `Enter` connects, `n` types a URL, `d` disconnects.
+    fn sites_key(&mut self, key: Key, cursor: usize) {
+        let rows = self.site_rows();
+        match key.code {
+            KeyCode::Esc | KeyCode::F(10) => self.mode = Mode::Normal,
+            KeyCode::Up => {
+                self.mode = Mode::Sites {
+                    cursor: cursor.saturating_sub(1),
+                }
+            }
+            KeyCode::Down => {
+                self.mode = Mode::Sites {
+                    cursor: (cursor + 1).min(rows.len().saturating_sub(1)),
+                }
+            }
+            KeyCode::Home => self.mode = Mode::Sites { cursor: 0 },
+            KeyCode::End => {
+                self.mode = Mode::Sites {
+                    cursor: rows.len().saturating_sub(1),
+                }
+            }
+            KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Insert => {
+                self.mode = Mode::Normal;
+                self.run(Command::NetConnect);
+            }
+            KeyCode::Char('d') | KeyCode::Char('D') | KeyCode::Delete => {
+                if let Some(site) = rows.get(cursor) {
+                    let authority = site.authority();
+                    if self.connected.contains(&authority) {
+                        self.mode = Mode::Normal;
+                        self.requests.push(Request::Disconnect { authority });
+                    } else {
+                        let msg = self
+                            .i18n
+                            .t_args("net-not-connected", &[("host", authority.into())]);
+                        self.set_status(msg);
+                    }
+                }
+            }
+            KeyCode::Enter => {
+                if let Some(site) = rows.get(cursor).cloned() {
+                    self.mode = Mode::Normal;
+                    self.connect_to(site, None, false);
+                } else {
+                    self.mode = Mode::Normal;
+                    self.run(Command::NetConnect);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// The site list: the configured sites, plus any host connected by hand this session.
+    pub fn site_rows(&self) -> Vec<Site> {
+        let mut rows = self.sites.clone();
+        for authority in &self.connected {
+            if rows.iter().any(|s| &s.authority() == authority) {
+                continue;
+            }
+            if let Ok(site) = Site::parse_url(&format!("sftp://{authority}/")) {
+                rows.push(site);
+            }
+        }
+        rows
     }
 
     fn confirm_key(&mut self, key: Key, confirm: Confirm) {
@@ -534,6 +730,18 @@ impl App {
                     ConfirmAction::OverwriteChanged => {
                         self.restore_editor();
                         self.save_editor(true);
+                    }
+                    ConfirmAction::AcceptHostKey {
+                        panel,
+                        site,
+                        secret,
+                    } => {
+                        self.requests.push(Request::Connect {
+                            panel,
+                            site,
+                            secret,
+                            accept_host_key: true,
+                        });
                     }
                 }
             }
@@ -801,10 +1009,46 @@ impl App {
 
     fn prompt_accept(&mut self, prompt: Prompt) {
         match prompt.kind {
+            PromptKind::NetConnect => {
+                let raw = prompt.text.trim().to_string();
+                if raw.is_empty() {
+                    return;
+                }
+                match Site::parse_url(&raw) {
+                    Ok(site) => self.connect_to(site, None, false),
+                    Err(e) => self.set_error(e.to_string()),
+                }
+            }
+            PromptKind::NetSecret(_) => {
+                let secret = prompt.text.clone();
+                match self.pending_connect.take() {
+                    Some((panel, site, _)) => self.requests.push(Request::Connect {
+                        panel,
+                        site,
+                        secret: Some(secret),
+                        accept_host_key: false,
+                    }),
+                    None => {
+                        let m = self.i18n.t("net-nothing-pending");
+                        self.set_status(m);
+                    }
+                }
+            }
             PromptKind::Goto => {
                 let raw = prompt.text.trim();
                 if raw.is_empty() {
                     return;
+                }
+                // `sftp://mb@host/srv` typed into `Ctrl+L` connects, as FAR's NetBox does.
+                if let Ok(site) = Site::parse_url(raw) {
+                    if raw.contains("://") {
+                        if let Some(remote) = self.connected_site_path(&site) {
+                            self.goto(remote);
+                        } else {
+                            self.connect_to(site, None, false);
+                        }
+                        return;
+                    }
                 }
                 let expanded = expand_tilde(raw);
                 let target = if std::path::Path::new(&expanded).is_absolute() {
@@ -957,6 +1201,7 @@ impl App {
                     kind: PromptKind::EditorReplaceWith,
                     title,
                     text: String::new(),
+                    secret: false,
                 });
             }
             PromptKind::EditorReplaceWith => {
@@ -1247,6 +1492,7 @@ impl App {
                 kind: PromptKind::QuickSearch { origin },
                 title,
                 text: c.to_string(),
+                secret: false,
             });
             let text = c.to_string();
             self.prompt_changed(&text);
@@ -1341,6 +1587,7 @@ impl App {
                     kind: PromptKind::Filter,
                     title,
                     text: self.panel().filter.clone().unwrap_or_default(),
+                    secret: false,
                 });
             }
             Command::PanelOtherSync => {
@@ -1416,6 +1663,7 @@ impl App {
                     kind: PromptKind::Goto,
                     title,
                     text: String::new(),
+                    secret: false,
                 });
             }
 
@@ -1462,6 +1710,7 @@ impl App {
                     },
                     title,
                     text: "*".to_string(),
+                    secret: false,
                 });
             }
             Command::SelRestore => {
@@ -1472,6 +1721,16 @@ impl App {
             Command::FileView => self.open_viewer(),
             Command::FileEdit => self.open_editor(),
             Command::FileEditNew => self.open_new_editor(),
+            Command::NetSites => self.mode = Mode::Sites { cursor: 0 },
+            Command::NetConnect => {
+                let title = self.i18n.t("net-prompt-url");
+                self.mode = Mode::Prompt(Prompt::new(
+                    PromptKind::NetConnect,
+                    title,
+                    "sftp://".to_string(),
+                ));
+            }
+            Command::NetDisconnect => self.disconnect_active(),
 
             Command::ViewerDisasm if self.mode.viewer().is_some() => {
                 let name = self
@@ -1577,6 +1836,7 @@ impl App {
                     },
                     title,
                     text,
+                    secret: false,
                 });
             }
             Command::FileMkdir => {
@@ -1585,6 +1845,7 @@ impl App {
                     kind: PromptKind::Mkdir,
                     title,
                     text: String::new(),
+                    secret: false,
                 });
             }
             Command::FileDelete => {
@@ -1644,16 +1905,156 @@ impl App {
             return;
         }
         let path = self.panel().cwd.join(&entry.name);
-        match FileSource::open(path.as_path()) {
+        if path.is_remote() {
+            // The viewer reads a real file, so the file comes down first. A copy is honest
+            // about being a copy: the status line says so when it opens.
+            let limit = self.cfg.net.fetch_limit_mb.saturating_mul(1024 * 1024);
+            if limit > 0 && entry.size > limit {
+                let msg = self.i18n.t_args(
+                    "net-too-big",
+                    &[
+                        ("name", entry.name_str().into_owned().into()),
+                        (
+                            "limit",
+                            format!("{} MB", self.cfg.net.fetch_limit_mb).into(),
+                        ),
+                    ],
+                );
+                self.set_error(msg);
+                return;
+            }
+            let id = self.next_job_id;
+            self.next_job_id += 1;
+            self.fetch_id = Some(id);
+            let msg = self
+                .i18n
+                .t_args("net-fetching", &[("name", path.display_name().into())]);
+            self.set_status(msg);
+            self.requests.push(Request::Fetch { id, path });
+            return;
+        }
+        let local = path.as_path().to_path_buf();
+        self.open_viewer_on(&local, path);
+    }
+
+    /// Open the viewer on a local file, showing `shown` as its name — which is the remote
+    /// path when the bytes came down from a server.
+    fn open_viewer_on(&mut self, local: &std::path::Path, shown: VPath) {
+        match FileSource::open(local) {
             Ok(source) => {
-                let mut viewer = Viewer::new(Box::new(source), path);
+                let remote = shown.is_remote();
+                let mut viewer = Viewer::new(Box::new(source), shown.clone());
                 if viewer.is_empty() {
                     let m = self.i18n.t("viewer-empty");
                     self.set_status(m);
+                } else if remote {
+                    let msg = self
+                        .i18n
+                        .t_args("net-viewing-copy", &[("name", shown.display_name().into())]);
+                    self.set_status(msg);
                 }
                 self.mode = Mode::Viewer(Box::new(viewer));
             }
-            Err(e) => self.set_error(format!("{path}: {e}")),
+            Err(e) => self.set_error(format!("{shown}: {e}")),
+        }
+    }
+
+    // ── netbox ─────────────────────────────────────────────────────────────────────────────
+
+    /// Start (or reuse) a connection and show it in the active panel.
+    fn connect_to(&mut self, site: Site, secret: Option<String>, accept_host_key: bool) {
+        let panel = self.active;
+        let msg = self
+            .i18n
+            .t_args("net-connecting", &[("host", site.authority().into())]);
+        self.set_status(msg);
+        self.requests.push(Request::Connect {
+            panel,
+            site: Box::new(site),
+            secret,
+            accept_host_key,
+        });
+    }
+
+    /// The path a site's start directory has, if that host is already connected.
+    fn connected_site_path(&self, site: &Site) -> Option<VPath> {
+        self.connected
+            .contains(&site.authority())
+            .then(|| site.start())
+    }
+
+    /// What came back from a connection attempt.
+    fn connection_result(&mut self, panel: usize, site: Box<Site>, outcome: ConnectOutcome) {
+        match outcome {
+            ConnectOutcome::Open { start, connected } => {
+                self.connected = connected;
+                self.pending_connect = None;
+                let msg = self
+                    .i18n
+                    .t_args("net-connected", &[("host", site.authority().into())]);
+                self.set_status(msg);
+                self.panels[panel].go(start, true);
+                self.read_panel(panel);
+            }
+            ConnectOutcome::NeedsSecret(kind) => {
+                let title = self.i18n.t_args(
+                    match kind {
+                        SecretKind::Password => "net-prompt-password",
+                        SecretKind::Passphrase => "net-prompt-passphrase",
+                    },
+                    &[
+                        ("user", site.user.clone().into()),
+                        ("host", site.host.clone().into()),
+                    ],
+                );
+                self.pending_connect = Some((panel, site, None));
+                self.mode = Mode::Prompt(Prompt {
+                    kind: PromptKind::NetSecret(kind),
+                    title,
+                    text: String::new(),
+                    secret: true,
+                });
+            }
+            ConnectOutcome::UnknownHostKey { fingerprint } => {
+                let title = self.i18n.t("net-hostkey-title");
+                let lines = vec![
+                    self.i18n
+                        .t_args("net-hostkey-body", &[("host", site.host.clone().into())]),
+                    fingerprint,
+                    self.i18n.t("net-hostkey-question"),
+                ];
+                let secret = self
+                    .pending_connect
+                    .take()
+                    .and_then(|(_, _, secret)| secret);
+                self.mode = Mode::Confirm(Confirm {
+                    title,
+                    lines,
+                    action: ConfirmAction::AcceptHostKey {
+                        panel,
+                        site,
+                        secret,
+                    },
+                });
+            }
+            ConnectOutcome::Failed(detail) => {
+                self.pending_connect = None;
+                self.set_error(detail);
+            }
+        }
+    }
+
+    /// `Alt+Shift+N`: close the connection the active panel is on.
+    fn disconnect_active(&mut self) {
+        match self.panel().cwd.authority() {
+            Some(authority) => {
+                let authority = authority.to_string();
+                self.requests.push(Request::Disconnect { authority });
+            }
+            None => {
+                let m = self.i18n.t("net-local-panel");
+                self.set_status(m);
+            }
         }
     }
 
@@ -1669,6 +2070,11 @@ impl App {
             return;
         }
         let path = self.panel().cwd.join(&entry.name);
+        if path.is_remote() {
+            // Editing in place needs the write-back half of SPEC 04 §5, which is not here yet.
+            self.not_implemented("file.edit on a remote file (fetch, edit, write back)");
+            return;
+        }
         match Editor::open(path.as_path()) {
             Ok(editor) => {
                 if editor.buffer.read_only {
@@ -1704,7 +2110,7 @@ impl App {
     fn editor_prompt(&mut self, kind: PromptKind, title_key: &str, text: String) {
         self.park_editor();
         let title = self.i18n.t(title_key);
-        self.mode = Mode::Prompt(Prompt { kind, title, text });
+        self.mode = Mode::Prompt(Prompt::new(kind, title, text));
     }
 
     /// Save, turning the engine's answers into messages and dialogs.
@@ -1988,7 +2394,7 @@ impl App {
             return;
         };
         self.viewer_under_prompt = Some(viewer);
-        self.mode = Mode::Prompt(Prompt { kind, title, text });
+        self.mode = Mode::Prompt(Prompt::new(kind, title, text));
     }
 
     /// Put the viewer back when its prompt closes.
@@ -2293,6 +2699,16 @@ fn parse_sort(s: &str) -> SortKey {
     }
 }
 
+/// Where a panel goes when the connection it was on is closed.
+pub fn local_home() -> VPath {
+    VPath::local(
+        std::env::var_os("HOME")
+            .or_else(|| std::env::var_os("USERPROFILE"))
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| std::path::PathBuf::from("/")),
+    )
+}
+
 fn expand_tilde(raw: &str) -> String {
     if let Some(rest) = raw.strip_prefix('~') {
         if let Some(home) = dirs_home() {
@@ -2336,6 +2752,7 @@ mod tests {
             theme: Theme::default_theme(),
             left: VPath::local("/home/mb"),
             right: VPath::local("/tmp"),
+            sites: Vec::new(),
         });
         app.requests.clear();
         let entries = vec![
@@ -2884,6 +3301,7 @@ mod tests {
             theme: Theme::default_theme(),
             left: VPath::local(dir),
             right: VPath::local(dir),
+            sites: Vec::new(),
         });
         app.requests.clear();
         let entries = scmd_vfs::local::list_blocking(&VPath::local(dir), &CancelToken::new())
@@ -3585,5 +4003,376 @@ abcdefghij
         press(&mut app, "x");
         assert_eq!(app.mode.editor().unwrap().buffer.line(0), "locked");
         assert!(app.status_error, "{}", app.status);
+    }
+
+    // ── netbox ─────────────────────────────────────────────────────────────────────────────
+
+    fn site() -> Site {
+        let mut site = Site::parse_url("sftp://mb@host.example:22/srv").unwrap();
+        site.id = "work".into();
+        site
+    }
+
+    /// An app with one site in the list, nothing connected yet.
+    fn net_app() -> App {
+        let mut app = app();
+        app.sites = vec![site()];
+        app
+    }
+
+    /// An app whose left panel is already on the remote host.
+    fn connected_app() -> App {
+        let mut app = net_app();
+        app.handle_event(Event::Connected {
+            panel: 0,
+            site: Box::new(site()),
+            outcome: ConnectOutcome::Open {
+                start: site().start(),
+                connected: vec![site().authority()],
+            },
+        });
+        app.requests.clear();
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation: app.panels[0].generation,
+            result: Ok(vec![
+                Entry::parent_entry(),
+                entry("www", EntryKind::Dir, 0),
+                entry("notes.txt", EntryKind::File, 120),
+            ]),
+        });
+        app
+    }
+
+    fn connect_request(app: &mut App) -> (usize, Site, Option<String>, bool) {
+        match app
+            .take_requests()
+            .into_iter()
+            .find(|r| matches!(r, Request::Connect { .. }))
+        {
+            Some(Request::Connect {
+                panel,
+                site,
+                secret,
+                accept_host_key,
+            }) => (panel, *site, secret, accept_host_key),
+            other => panic!("expected a connect request, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn the_site_list_connects_on_enter() {
+        let mut app = net_app();
+        press(&mut app, "Alt+N");
+        assert!(
+            matches!(app.mode, Mode::Sites { cursor: 0 }),
+            "{:?}",
+            app.mode
+        );
+        press(&mut app, "Enter");
+        let (panel, site, secret, accept) = connect_request(&mut app);
+        assert_eq!(panel, 0);
+        assert_eq!(site.authority(), "mb@host.example:22");
+        assert_eq!(secret, None);
+        assert!(
+            !accept,
+            "a first attempt never accepts a host key by itself"
+        );
+        assert!(app.status.contains("host.example"), "{}", app.status);
+
+        // The answer puts the panel on the server and asks for a listing.
+        app.handle_event(Event::Connected {
+            panel: 0,
+            site: Box::new(site.clone()),
+            outcome: ConnectOutcome::Open {
+                start: site.start(),
+                connected: vec![site.authority()],
+            },
+        });
+        assert_eq!(app.panels[0].cwd, site.start());
+        assert_eq!(
+            app.panels[0].cwd.to_string(),
+            "sftp://mb@host.example:22/srv"
+        );
+        assert!(app.connected.contains(&site.authority()));
+        assert!(app
+            .take_requests()
+            .iter()
+            .any(|r| matches!(r, Request::Read { panel: 0, .. })));
+    }
+
+    #[test]
+    fn a_password_is_asked_for_and_never_echoed() {
+        let mut app = net_app();
+        app.handle_event(Event::Connected {
+            panel: 0,
+            site: Box::new(site()),
+            outcome: ConnectOutcome::NeedsSecret(scmd_net::SecretKind::Password),
+        });
+        match &app.mode {
+            Mode::Prompt(p) => {
+                assert_eq!(
+                    p.kind,
+                    PromptKind::NetSecret(scmd_net::SecretKind::Password)
+                );
+                assert!(p.secret, "a password prompt must be masked");
+                assert!(p.title.contains("mb"), "{}", p.title);
+            }
+            other => panic!("expected the password prompt, got {other:?}"),
+        }
+        for c in ["h", "u", "n", "t", "e", "r"] {
+            press(&mut app, c);
+        }
+        press(&mut app, "Enter");
+        let (_, site, secret, _) = connect_request(&mut app);
+        assert_eq!(secret.as_deref(), Some("hunter"));
+        assert_eq!(site.authority(), "mb@host.example:22");
+    }
+
+    #[test]
+    fn an_unknown_host_key_is_a_decision_with_the_fingerprint_in_view() {
+        let mut app = net_app();
+        app.handle_event(Event::Connected {
+            panel: 0,
+            site: Box::new(site()),
+            outcome: ConnectOutcome::UnknownHostKey {
+                fingerprint: "SHA256:abc123".into(),
+            },
+        });
+        match &app.mode {
+            Mode::Confirm(c) => {
+                assert!(
+                    c.lines.iter().any(|l| l.contains("SHA256:abc123")),
+                    "{:?}",
+                    c.lines
+                );
+                assert!(matches!(c.action, ConfirmAction::AcceptHostKey { .. }));
+            }
+            other => panic!("expected the host-key confirmation, got {other:?}"),
+        }
+        // Saying no connects to nothing.
+        press(&mut app, "Esc");
+        assert!(app.take_requests().is_empty());
+
+        app.handle_event(Event::Connected {
+            panel: 0,
+            site: Box::new(site()),
+            outcome: ConnectOutcome::UnknownHostKey {
+                fingerprint: "SHA256:abc123".into(),
+            },
+        });
+        press(&mut app, "Enter");
+        let (_, _, _, accept) = connect_request(&mut app);
+        assert!(accept, "the retry must carry the user's decision");
+    }
+
+    #[test]
+    fn a_refused_connection_says_why_and_changes_nothing() {
+        let mut app = net_app();
+        let before = app.panels[0].cwd.clone();
+        app.handle_event(Event::Connected {
+            panel: 0,
+            site: Box::new(site()),
+            outcome: ConnectOutcome::Failed("mb@host.example: authentication failed".into()),
+        });
+        assert!(app.status_error, "{}", app.status);
+        assert!(
+            app.status.contains("authentication failed"),
+            "{}",
+            app.status
+        );
+        assert_eq!(app.panels[0].cwd, before);
+    }
+
+    #[test]
+    fn disconnecting_takes_the_panel_home() {
+        let mut app = connected_app();
+        press(&mut app, "Alt+Shift+N");
+        match app.take_requests().into_iter().next() {
+            Some(Request::Disconnect { authority }) => {
+                assert_eq!(authority, "mb@host.example:22")
+            }
+            other => panic!("expected a disconnect, got {other:?}"),
+        }
+        app.handle_event(Event::Disconnected {
+            authority: "mb@host.example:22".into(),
+            connected: Vec::new(),
+        });
+        assert!(app.panels[0].cwd.is_local(), "{}", app.panels[0].cwd);
+        assert!(app.connected.is_empty());
+        assert!(app.status.contains("host.example"), "{}", app.status);
+
+        // A local panel is told plainly that there is nothing to disconnect.
+        app.take_requests(); // the read of the home directory
+        press(&mut app, "Alt+Shift+N");
+        assert!(app.take_requests().is_empty());
+        assert!(!app.status.is_empty());
+    }
+
+    #[test]
+    fn a_url_typed_into_the_goto_prompt_connects() {
+        let mut app = net_app();
+        press(&mut app, "Ctrl+L");
+        for c in [
+            "s", "f", "t", "p", ":", "/", "/", "m", "b", "@", "h", "o", "s", "t", "/", "s", "r",
+            "v",
+        ] {
+            press(&mut app, c);
+        }
+        press(&mut app, "Enter");
+        let (_, site, _, _) = connect_request(&mut app);
+        assert_eq!(site.host, "host");
+        assert_eq!(site.user, "mb");
+        assert_eq!(site.start_dir, "/srv");
+        // A local path still changes directory, it does not dial anything.
+        press(&mut app, "Ctrl+L");
+        for c in ["/", "t", "m", "p"] {
+            press(&mut app, c);
+        }
+        press(&mut app, "Enter");
+        assert_eq!(app.panel().cwd, VPath::local("/tmp"));
+    }
+
+    #[test]
+    fn a_remote_panel_navigates_and_feeds_jobs_remote_paths() {
+        let mut app = connected_app();
+        assert_eq!(app.panel().listing.len(), 3);
+        // Enter on a directory asks for the remote listing of it.
+        press(&mut app, "Down");
+        press(&mut app, "Enter");
+        match app.take_requests().into_iter().next() {
+            Some(Request::Read { path, .. }) => {
+                assert_eq!(path.to_string(), "sftp://mb@host.example:22/srv/www")
+            }
+            other => panic!("{other:?}"),
+        }
+        press(&mut app, "Backspace");
+        app.take_requests();
+        assert_eq!(app.panel().cwd.to_string(), "sftp://mb@host.example:22/srv");
+        // The parent's listing comes back, as it would from the server.
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation: app.panels[0].generation,
+            result: Ok(vec![
+                Entry::parent_entry(),
+                entry("www", EntryKind::Dir, 0),
+                entry("notes.txt", EntryKind::File, 120),
+            ]),
+        });
+
+        // F5 from the remote panel to the local one: the source is a remote path.
+        app.panels[0].cursor_to(2); // notes.txt
+        press(&mut app, "F5");
+        press(&mut app, "Enter");
+        match app
+            .take_requests()
+            .into_iter()
+            .find(|r| matches!(r, Request::Job { .. }))
+        {
+            Some(Request::Job { spec, .. }) => {
+                assert_eq!(spec.kind, JobKind::Copy);
+                assert_eq!(
+                    spec.sources[0].to_string(),
+                    "sftp://mb@host.example:22/srv/notes.txt"
+                );
+                assert!(spec.target.unwrap().is_local());
+            }
+            other => panic!("expected a copy job, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn f3_on_a_remote_file_fetches_it_then_views_the_copy() {
+        let dir = tempfile::tempdir().unwrap();
+        let local = dir.path().join("notes.txt");
+        std::fs::write(
+            &local,
+            b"from the server
+",
+        )
+        .unwrap();
+        let mut app = connected_app();
+        app.panels[0].cursor_to(2); // notes.txt
+        press(&mut app, "F3");
+        let id = match app.take_requests().into_iter().next() {
+            Some(Request::Fetch { id, path }) => {
+                assert_eq!(path.to_string(), "sftp://mb@host.example:22/srv/notes.txt");
+                id
+            }
+            other => panic!("expected a fetch, got {other:?}"),
+        };
+        assert!(app.mode.is_normal(), "the viewer must wait for the bytes");
+
+        app.handle_event(Event::Fetched {
+            id,
+            remote: app.panels[0].cwd.join("notes.txt"),
+            result: Ok(local.clone()),
+        });
+        let viewer = app.mode.viewer().expect("the viewer should be open");
+        assert_eq!(
+            viewer.path.to_string(),
+            "sftp://mb@host.example:22/srv/notes.txt"
+        );
+        assert!(app.status.contains("copy"), "{}", app.status);
+
+        // A fetch we are no longer waiting for is ignored.
+        app.handle_event(Event::Fetched {
+            id: id + 99,
+            remote: app.panels[0].cwd.join("other.txt"),
+            result: Ok(local),
+        });
+        assert_eq!(app.mode.viewer().unwrap().path.display_name(), "notes.txt");
+    }
+
+    #[test]
+    fn a_remote_file_too_big_to_fetch_says_so_with_the_limit() {
+        let mut app = connected_app();
+        app.cfg.net.fetch_limit_mb = 1;
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation: app.panels[0].generation,
+            result: Ok(vec![
+                Entry::parent_entry(),
+                entry("huge.iso", EntryKind::File, 50 * 1024 * 1024),
+            ]),
+        });
+        app.panels[0].cursor_to(1);
+        press(&mut app, "F3");
+        assert!(app.status_error, "{}", app.status);
+        assert!(app.status.contains("1 MB"), "{}", app.status);
+        assert!(app.take_requests().is_empty(), "it fetched it anyway");
+    }
+
+    #[test]
+    fn f4_on_a_remote_file_says_what_is_missing() {
+        let mut app = connected_app();
+        app.panels[0].cursor_to(2);
+        press(&mut app, "F4");
+        assert!(app.mode.is_normal());
+        assert!(app.status.contains("not implemented"), "{}", app.status);
+        assert!(app.status.contains("remote"), "{}", app.status);
+    }
+
+    #[test]
+    fn the_site_list_shows_hosts_connected_by_hand_too() {
+        let mut app = net_app();
+        app.connected = vec!["root@other:2222".into()];
+        let rows = app.site_rows();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].authority(), "mb@host.example:22");
+        assert_eq!(rows[1].authority(), "root@other:2222");
+
+        // `d` on a site that is not connected does not pretend to disconnect it.
+        press(&mut app, "Alt+N");
+        press(&mut app, "d");
+        assert!(app.take_requests().is_empty());
+        assert!(matches!(app.mode, Mode::Sites { .. }));
+        // On the connected one it does.
+        press(&mut app, "Down");
+        press(&mut app, "d");
+        match app.take_requests().into_iter().next() {
+            Some(Request::Disconnect { authority }) => assert_eq!(authority, "root@other:2222"),
+            other => panic!("{other:?}"),
+        }
     }
 }

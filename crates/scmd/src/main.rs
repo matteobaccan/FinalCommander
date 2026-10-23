@@ -16,11 +16,12 @@ use scmd_config::{Config, Paths};
 use scmd_core::{CancelToken, VPath};
 use scmd_i18n::I18n;
 use scmd_jobs::JobSpec;
+use scmd_net::{Pool, RoutedFs, Router, Site};
 use scmd_tui::{Input, Term};
 use scmd_ui::{Buffer, Theme, ThemeSet};
-use scmd_vfs::{LocalVfs, Vfs};
+use scmd_vfs::Vfs;
 
-use crate::app::{App, Event, Request, Startup};
+use crate::app::{App, ConnectOutcome, Event, Request, Startup};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -205,6 +206,9 @@ fn run(cli: Cli) -> Result<()> {
     let left = VPath::local(cli.paths.first().cloned().unwrap_or_else(|| cwd.clone())).normalised();
     let right = VPath::local(cli.paths.get(1).cloned().unwrap_or(cwd)).normalised();
 
+    let (sites, site_problems) = Site::list_from_config(&cfg);
+    warnings.extend(site_problems);
+
     let mut app = App::new(Startup {
         cfg,
         paths,
@@ -214,6 +218,7 @@ fn run(cli: Cli) -> Result<()> {
         theme,
         left,
         right,
+        sites,
     });
     if !warnings.is_empty() {
         // Startup problems are shown once, as a dialog: they are easy to miss in a status line.
@@ -287,7 +292,15 @@ fn interactive(mut app: App) -> Result<()> {
         }
     });
 
-    let vfs = LocalVfs;
+    // One pool of connections, shared by the panels, the viewer and every job.
+    let pool = Pool::new();
+    if !app.cfg.net.known_hosts.trim().is_empty() {
+        pool.set_policy(scmd_net::HostKeyPolicy {
+            known_hosts: Some(scmd_net::site::expand_tilde(app.cfg.net.known_hosts.trim())),
+            accept_new: false,
+        });
+    }
+    let vfs = Router::new(pool.clone());
     let mut cancels: [Option<CancelToken>; 2] = [None, None];
     let (mut w, mut h) = term.size();
     let mut buf = Buffer::new(w, h);
@@ -314,6 +327,7 @@ fn interactive(mut app: App) -> Result<()> {
                     }
                     let token = cancels[panel].clone().expect("just set");
                     let tx = tx.clone();
+                    let vfs = vfs.clone();
                     runtime.spawn(async move {
                         let result = vfs.list(&path, token).await.map_err(|e| e.to_string());
                         let _ = tx.send(Event::Listed {
@@ -325,7 +339,10 @@ fn interactive(mut app: App) -> Result<()> {
                 }
                 Request::Job { id, spec, cancel } => {
                     let tx = tx.clone();
-                    runtime.spawn_blocking(move || run_job(id, spec, cancel, tx));
+                    // A job runs on a blocking thread, which is what lets the remote
+                    // provider's async calls be driven with `block_on` (see `scmd-net`).
+                    let fs = RoutedFs::new(pool.clone(), runtime.handle().clone());
+                    runtime.spawn_blocking(move || run_job(id, spec, cancel, tx, &fs));
                 }
                 Request::Decompile { id, rule, path } => {
                     let tx = tx.clone();
@@ -335,10 +352,74 @@ fn interactive(mut app: App) -> Result<()> {
                         let _ = tx.send(Event::Decompiled { id, tool, result });
                     });
                 }
+                Request::Connect {
+                    panel,
+                    site,
+                    secret,
+                    accept_host_key,
+                } => {
+                    let tx = tx.clone();
+                    let pool = pool.clone();
+                    runtime.spawn(async move {
+                        if accept_host_key {
+                            pool.accept_new_host_key(true);
+                        }
+                        let outcome = match pool.connect(&site, secret.as_deref()).await {
+                            Ok(remote) => {
+                                // Ask the server where we are: a site may say `.` or a
+                                // relative directory, and `~` is the login directory.
+                                let start = remote
+                                    .canonicalize(&site.start())
+                                    .await
+                                    .unwrap_or_else(|_| site.start());
+                                ConnectOutcome::Open {
+                                    start,
+                                    connected: pool.connected(),
+                                }
+                            }
+                            Err(scmd_net::NetError::NeedsSecret { kind, .. }) => {
+                                ConnectOutcome::NeedsSecret(kind)
+                            }
+                            Err(scmd_net::NetError::UnknownHostKey { fingerprint, .. }) => {
+                                ConnectOutcome::UnknownHostKey { fingerprint }
+                            }
+                            Err(e) => ConnectOutcome::Failed(e.to_string()),
+                        };
+                        let _ = tx.send(Event::Connected {
+                            panel,
+                            site,
+                            outcome,
+                        });
+                    });
+                }
+                Request::Disconnect { authority } => {
+                    let tx = tx.clone();
+                    let pool = pool.clone();
+                    runtime.spawn(async move {
+                        pool.disconnect(&authority).await;
+                        let _ = tx.send(Event::Disconnected {
+                            authority,
+                            connected: pool.connected(),
+                        });
+                    });
+                }
+                Request::Fetch { id, path } => {
+                    let tx = tx.clone();
+                    let pool = pool.clone();
+                    runtime.spawn(async move {
+                        let result = fetch_remote(&pool, &path).await;
+                        let _ = tx.send(Event::Fetched {
+                            id,
+                            remote: path,
+                            result,
+                        });
+                    });
+                }
                 Request::DirSize { panel, path } => {
                     let tx = tx.clone();
+                    let fs = RoutedFs::new(pool.clone(), runtime.handle().clone());
                     runtime.spawn_blocking(move || {
-                        let (bytes, files) = dir_size(&path, &CancelToken::new(), 0);
+                        let (bytes, files) = dir_size(&fs, &path, &CancelToken::new(), 0);
                         let _ = tx.send(Event::DirSized {
                             panel,
                             path,
@@ -372,7 +453,13 @@ fn interactive(mut app: App) -> Result<()> {
 ///
 /// `ask` blocks this thread until the UI answers, which is exactly what the engine wants: the
 /// UI thread keeps drawing while the job waits.
-fn run_job(id: u64, spec: JobSpec, cancel: CancelToken, tx: mpsc::Sender<Event>) {
+fn run_job(
+    id: u64,
+    spec: JobSpec,
+    cancel: CancelToken,
+    tx: mpsc::Sender<Event>,
+    fs: &dyn scmd_jobs::JobFs,
+) {
     struct ChannelReporter {
         id: u64,
         tx: mpsc::Sender<Event>,
@@ -418,8 +505,8 @@ fn run_job(id: u64, spec: JobSpec, cancel: CancelToken, tx: mpsc::Sender<Event>)
         last: std::time::Instant::now() - std::time::Duration::from_secs(1),
     };
 
-    let outcome = match scmd_jobs::plan(&scmd_jobs::LocalFs, &spec, &cancel) {
-        Ok(plan) => scmd_jobs::execute(&scmd_jobs::LocalFs, &spec, plan, &mut reporter, &cancel),
+    let outcome = match scmd_jobs::plan(fs, &spec, &cancel) {
+        Ok(plan) => scmd_jobs::execute(fs, &spec, plan, &mut reporter, &cancel),
         Err(e) => scmd_jobs::Outcome {
             errors: vec![(
                 spec.target.clone().unwrap_or_else(|| VPath::local(".")),
@@ -479,30 +566,51 @@ fn run_decompiler(rule: &scmd_config::DecompileRule, path: &VPath) -> Result<Str
 }
 
 /// Recursive size of a directory. Depth-limited, cancellable, and it never follows symlinks.
-fn dir_size(path: &VPath, cancel: &CancelToken, depth: u32) -> (u64, u64) {
+fn dir_size(
+    fs: &dyn scmd_jobs::JobFs,
+    path: &VPath,
+    cancel: &CancelToken,
+    depth: u32,
+) -> (u64, u64) {
     if depth > 64 || cancel.is_cancelled() {
         return (0, 0);
     }
-    let Ok(entries) = scmd_vfs::local::list_blocking(path, cancel) else {
+    let Ok(entries) = fs.read_dir(path) else {
         return (0, 0);
     };
     let mut bytes = 0u64;
     let mut files = 0u64;
-    for e in entries {
-        match e.kind {
+    for (name, facts) in entries {
+        match facts.kind {
             scmd_core::EntryKind::Parent | scmd_core::EntryKind::Symlink => {}
             scmd_core::EntryKind::Dir => {
-                let (b, f) = dir_size(&path.join(&e.name), cancel, depth + 1);
+                let (b, f) = dir_size(fs, &path.join(&name), cancel, depth + 1);
                 bytes += b;
                 files += f;
             }
             _ => {
-                bytes += e.size;
+                bytes += facts.size;
                 files += 1;
             }
         }
     }
     (bytes, files)
+}
+
+/// Bring a remote file down into a private temporary directory, for the viewer.
+///
+/// The directory is created under the system temp directory with the session's process id, so
+/// two running copies never collide, and it is removed when the process exits.
+async fn fetch_remote(pool: &Pool, path: &VPath) -> Result<PathBuf, String> {
+    let remote = pool.require(path).map_err(|e| e.to_string())?;
+    let dir = std::env::temp_dir().join(format!("scmd-{}", std::process::id()));
+    tokio::fs::create_dir_all(&dir)
+        .await
+        .map_err(|e| format!("{}: {e}", dir.display()))?;
+    remote
+        .fetch_to(path, &dir, &CancelToken::new())
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
@@ -562,6 +670,7 @@ mod tests {
             ),
             CancelToken::new(),
             tx,
+            &scmd_jobs::LocalFs,
         );
 
         let mut done = None;
@@ -609,6 +718,7 @@ mod tests {
             theme: Theme::default_theme(),
             left: VPath::local(&left),
             right: VPath::local(&right),
+            sites: Vec::new(),
         });
 
         // Serve the initial panel reads from the real filesystem.
@@ -630,12 +740,16 @@ mod tests {
                     }
                     Request::Job { id, spec, cancel } => {
                         let (tx, rx) = mpsc::channel();
-                        run_job(id, spec, cancel, tx);
+                        run_job(id, spec, cancel, tx, &scmd_jobs::LocalFs);
                         while let Ok(event) = rx.try_recv() {
                             app.handle_event(event);
                         }
                     }
-                    Request::DirSize { .. } | Request::Decompile { .. } => {}
+                    Request::DirSize { .. }
+                    | Request::Decompile { .. }
+                    | Request::Connect { .. }
+                    | Request::Disconnect { .. }
+                    | Request::Fetch { .. } => {}
                 }
             }
         };
@@ -683,6 +797,7 @@ mod tests {
             theme: Theme::default_theme(),
             left: VPath::local(&dir),
             right: VPath::local(root.path()),
+            sites: Vec::new(),
         });
         let pump = |app: &mut App| {
             for request in app.take_requests() {
@@ -702,12 +817,16 @@ mod tests {
                     }
                     Request::Job { id, spec, cancel } => {
                         let (tx, rx) = mpsc::channel();
-                        run_job(id, spec, cancel, tx);
+                        run_job(id, spec, cancel, tx, &scmd_jobs::LocalFs);
                         while let Ok(event) = rx.try_recv() {
                             app.handle_event(event);
                         }
                     }
-                    Request::DirSize { .. } | Request::Decompile { .. } => {}
+                    Request::DirSize { .. }
+                    | Request::Decompile { .. }
+                    | Request::Connect { .. }
+                    | Request::Disconnect { .. }
+                    | Request::Fetch { .. } => {}
                 }
             }
         };
@@ -742,6 +861,7 @@ mod tests {
             ),
             CancelToken::new(),
             tx,
+            &scmd_jobs::LocalFs,
         );
         let event = rx.recv().expect("an event");
         match event {
@@ -759,7 +879,12 @@ mod tests {
         std::fs::write(dir.path().join("a"), vec![0u8; 10]).unwrap();
         std::fs::create_dir(dir.path().join("sub")).unwrap();
         std::fs::write(dir.path().join("sub/b"), vec![0u8; 32]).unwrap();
-        let (bytes, files) = dir_size(&VPath::local(dir.path()), &CancelToken::new(), 0);
+        let (bytes, files) = dir_size(
+            &scmd_jobs::LocalFs,
+            &VPath::local(dir.path()),
+            &CancelToken::new(),
+            0,
+        );
         assert_eq!((bytes, files), (42, 2));
     }
 
@@ -769,7 +894,10 @@ mod tests {
         std::fs::write(dir.path().join("a"), vec![0u8; 10]).unwrap();
         let token = CancelToken::new();
         token.cancel();
-        assert_eq!(dir_size(&VPath::local(dir.path()), &token, 0), (0, 0));
+        assert_eq!(
+            dir_size(&scmd_jobs::LocalFs, &VPath::local(dir.path()), &token, 0),
+            (0, 0)
+        );
     }
 
     #[test]

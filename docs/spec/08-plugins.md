@@ -205,14 +205,16 @@ layer is designed around them — if the ABI can host these, it can host anythin
 | --- | --- | --- | --- |
 | **`scmd-viewer`** | `viewer-provider` + the preview pipeline | text / dump / hex, encodings, search, huge files, follow mode, per-type previews (SPEC 05 §1) | M2 |
 | **`scmd-editor`** | `editor-provider` | full-screen editor, column blocks, undo, search & replace, syntax highlighting (SPEC 05 §2) | M2 |
-| **`scmd-netbox`** | `vfs-provider` (one plugin, several schemes) | SFTP/SSH, FTP/FTPS, WebDAV, S3-compatible, plus the connection manager's site list (SPEC 04 §3, §6) — the FAR NetBox / far2l NetRocks role | M3 |
+| **`scmd-netbox`** | `vfs-provider` (one plugin, several schemes) | SFTP/SSH, FTP/FTPS, WebDAV, S3-compatible, plus the connection manager's site list (SPEC 04 §3, §6) — the FAR NetBox / far2l NetRocks role | M1 for SFTP + the site list, M3 for the other schemes |
 
 How they are built, in order:
 
 1. **In-tree first, behind the public interface.** `scmd-view`, `scmd-edit` and `scmd-net` are
    workspace crates that implement exactly the `viewer-provider` / `editor-provider` /
    `vfs-provider` shapes above, called through a trait object. They ship as part of the binary,
-   so M2 and M3 do not wait for the WASM host.
+   so M2 and M3 do not wait for the WASM host. All three are in: `scmd-view` (SPEC 05 §1),
+   `scmd-edit` (SPEC 05 §2) and `scmd-net` (SPEC 04), the last one already behind the `Vfs`
+   trait and the job engine's `JobFs`, which is the `vfs-provider` shape.
 2. **Then moved out, unchanged, as the three reference plugins.** The WASM ABI is **not
    considered done** until the viewer, the editor and netbox run as plugins through it, with no
    private back channel into the core. They are the acceptance test for the plugin layer, and

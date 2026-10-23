@@ -124,3 +124,23 @@ editor-changed-title = Файл изменён на диске
 editor-changed-body = { $name } изменён на диске после открытия. Записать поверх?
 editor-reloaded = { $name } перечитан с диска
 editor-failed = { $name }: { $error }
+
+# netbox (SPEC 04 §6)
+net-sites-title = Соединения
+net-sites-hint = Enter — подключить · n — новое · d — отключить · Esc — закрыть
+net-no-sites = Сайтов пока нет. Нажмите `n`, чтобы ввести URL, или добавьте блоки [[site]] в настройки.
+net-prompt-url = Подключиться к:
+net-prompt-password = Пароль для { $user }@{ $host }:
+net-prompt-passphrase = Пароль ключа { $user }@{ $host }:
+net-connecting = подключение к { $host }…
+net-connected = подключено к { $host }
+net-disconnected = { $host } отключён
+net-not-connected = { $host } не подключён
+net-local-panel = эта панель на локальной файловой системе
+net-nothing-pending = ни одно соединение этого не ждёт
+net-hostkey-title = Неизвестный ключ хоста
+net-hostkey-body = { $host } отсутствует в known_hosts. Отпечаток:
+net-hostkey-question = Записать его и подключиться?
+net-fetching = загрузка { $name }…
+net-viewing-copy = { $name }: локальная копия, загружена для просмотра
+net-too-big = { $name } больше { $limit }: увеличьте net.fetch_limit_mb

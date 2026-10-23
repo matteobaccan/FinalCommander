@@ -214,6 +214,15 @@ outdent, Ctrl+K delete to end of line, Ctrl+Backspace delete word left, Ctrl+Alt
 toggle. Movement, typing, Shift+arrows (stream block) and Alt+Shift+arrows (column block) are
 handled by the editor itself and are not bindable yet.
 
+## 8b. Netbox (connections)
+
+| Action | FAR | MC | SC |
+| --- | --- | --- | --- |
+| connection list | F11 → NetBox | — | **Alt+N** |
+| connect by URL | inside the plugin | `cd sftp://host/dir` | **Ctrl+L** with `sftp://user@host:port/dir` |
+| disconnect the active panel | Shift+F11-ish, per plugin | `cd /` | **Alt+Shift+N** |
+| inside the list | — | — | Enter connects · `n` a new URL · `d` disconnects · Esc closes |
+
 ## 9. Terminal reality check (design constraints)
 
 A TUI cannot receive every combination the Windows console gives FAR. Decisions:

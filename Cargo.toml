@@ -5,7 +5,7 @@ members = ["crates/*"]
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.82"
+rust-version = "1.89"
 license = "MIT"
 repository = "https://github.com/matteobaccan/SupremeCommander"
 authors = ["Matteo Baccan and the SupremeCommander contributors"]

@@ -7,7 +7,8 @@ Total Commander, Midnight Commander and Krusader, with a modern engine underneat
 > **Status: milestone M1 in progress.** The specs are written and the program runs: two
 > panels, navigation, selection, sorting, view modes, quick search and filter, themes,
 > keymap profiles and seven interface languages, real file operations (`F5`–`F8`), the viewer
-> (`F3`) and the editor (`F4`). What M1 still owes is in `docs/spec/09-roadmap.md`.
+> (`F3`), the editor (`F4`) and the netbox (`Alt+N`: SFTP panels and transfers). What M1 still
+> owes is in `docs/spec/09-roadmap.md`.
 
 ## Try it
 
@@ -69,11 +70,22 @@ What works today:
   `Alt+I`/`Alt+U` indent and outdent. `Shift+arrows` marks a stream block and
   **`Alt+Shift+arrows` a column block** — cut a rectangle out of a table and paste it back
   (short lines are padded, as FAR does).
+- **Netbox** (`Alt+N`): SFTP panels. The connection list holds the `[[site]]` entries from the
+  config — grouped, with the authentication method and a marker on what is connected — and
+  `sftp://user@host:port/dir` typed into `Ctrl+L` connects on the spot. Authentication is the
+  SSH agent, a key file, or a password asked for in a masked prompt; the host key is checked
+  against `~/.ssh/known_hosts`, an unknown one is shown as a SHA256 fingerprint for you to
+  accept, and a *changed* one is refused outright. One connection per `user@host:port` is
+  shared by both panels and every job, so `F5` and `F6` copy and move up, down, between two
+  servers or inside one — with the same progress, conflict and cancellation behaviour as a
+  local copy, because it is the same engine. `F3` fetches a remote file into a temporary copy
+  and says that is what you are looking at. `Alt+Shift+N` disconnects.
 - **The rest**: `Alt+T` cycles themes, `F1` is a help page generated from the live keymap,
   `F10` quits.
 
-Not yet: syntax highlighting and several open buffers in the editor, the OS clipboard, trash,
-wipe, a background job queue, archives and network panels. Anything unimplemented says so plainly instead of pretending.
+Not yet: editing a remote file in place, the OS keyring for passwords, `ProxyJump`, FTP and the
+other schemes, syntax highlighting and several open buffers in the editor, the OS clipboard,
+trash, wipe, a background job queue and archives. Anything unimplemented says so plainly instead of pretending.
 
 Non-interactive modes (used by CI and by scripts):
 
@@ -133,6 +145,7 @@ crates/scmd-vfs      the Vfs trait + the local provider
 crates/scmd-jobs     the operation engine: plan, execute, settle; conflicts and progress
 crates/scmd-view     the viewer: windowed reads, encodings, text/dump/hex, search, disasm
 crates/scmd-edit     the editor: buffer, undo, blocks, search/replace, atomic save
+crates/scmd-net      netbox: SFTP, sites, connection pool, routed job filesystem
 crates/scmd-cmd      command vocabulary, keys, keymap profiles (far, mc)
 crates/scmd-config   TOML configuration, discovery, overrides
 crates/scmd-i18n     fluent catalogues for seven languages

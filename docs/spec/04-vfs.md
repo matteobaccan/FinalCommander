@@ -1,5 +1,16 @@
 # SPEC 04 — Virtual filesystem
 
+**Implemented today**: the trait and the capability flags; the `file` provider; and the
+**netbox**'s `sftp` provider (`scmd-net`) with the connection pool, the site list from
+`[[site]]` blocks, host-key verification against `known_hosts` with a trust-on-first-use
+prompt, agent / key-file / password authentication, listing, stat, mkdir (including `mkdir -p`,
+which SFTP has no call for), delete, rename, symlinks, mode and mtime, and transfers in every
+direction (up, down, server-to-server on one connection and between two) driven by the job
+engine with progress and cancellation. A `Router` sends each path to the provider that owns it,
+so nothing above the VFS knows whether a panel is local or remote.
+**Still to come**: archives, `temp`, `trash`, the other network schemes, nesting (§4), editing
+in place (§5), `watch`, and `copy_within` as a server-side operation.
+
 ## 1. The trait
 
 ```rust
@@ -52,7 +63,7 @@ where the code lives, not whether it is linked into the binary.
 | `7z` | `sevenz-rust2` | READ, WRITE (M3), no random write in solid blocks | M2/M3 |
 | `rar` | `unrar` (read-only, non-free licence, optional feature, off by default in distro builds) | READ SEEK | M3 |
 | `iso`, `cab`, `ar`/`deb`, `rpm`, `cpio`, `lha`, `arj`, `squashfs` | `libarchive` binding as one fallback provider | READ | M3 |
-| `sftp` | `russh` + `russh-sftp` | READ WRITE CREATE DELETE RENAME SEEK META_* RESUME | M2/M3 |
+| `sftp` | `russh` + `russh-sftp` (**implemented**, `scmd-net`) | READ WRITE CREATE DELETE RENAME SEEK TRUNCATE META_TIMES META_MODE META_OWNER LINKS RESUME RANDOM_WRITE CASE_SENSITIVE | M1 |
 | `ftp`/`ftps` | `suppaftp` | READ WRITE CREATE DELETE RENAME RESUME | M3 |
 | `webdav` | `reqwest-dav` | READ WRITE CREATE DELETE RENAME | M3 |
 | `s3` | `aws-sdk-s3` (any S3-compatible endpoint) | READ WRITE CREATE DELETE SERVER_SIDE_COPY, no RENAME | M3 |
@@ -86,7 +97,9 @@ file is kept and its path is shown. Same mechanism for "open with" external prog
 
 ## 6. Connection manager
 
-`sites.toml` (no secrets) + OS keyring entries:
+`[[site]]` blocks in `scmd.toml` (no secrets). The spec first said `sites.toml`; the
+single-file rule (SPEC 07 §1) moved them into the one config file, and the OS keyring is not
+used yet — see the note below.
 
 ```toml
 [[site]]
@@ -107,6 +120,26 @@ TOFU prompt and a known-hosts file, proxy/jump-host chains (`ProxyJump`), connec
 across panels and jobs, automatic reconnect with the operation queue paused, and an explicit
 "disconnect" command. Passwords/passphrases are only ever stored in the OS keyring, never in
 config; `--no-keyring` forces prompting.
+
+**Implemented today** (`Alt+N` opens the list, `Alt+Shift+N` closes the active panel's
+connection, and a `sftp://user@host:port/dir` URL typed into `Ctrl+L` connects): the site list
+with groups and a connected marker, `auth = "agent" | "key:<path>" | "ask"`, one pooled
+connection per `user@host:port` shared by both panels and every job, host-key verification
+with the fingerprint shown before anything is recorded, a changed host key refused outright,
+and the password or key passphrase asked for in a masked prompt and kept only for the
+connection attempt. **Not yet**: the OS keyring (so a password is asked for every connection),
+`ProxyJump` chains, automatic reconnect, and `charset`.
+
+### 6.1 How the netbox is tested
+
+Two layers, because a provider that can only be tested against someone's server is not tested:
+
+- everything above the wire (paths, listings, transfers, the job engine's view of a remote
+  filesystem) runs against `scmd_net::memory::MemorySftp`, an in-memory SFTP server;
+- the wire itself runs against a **real SSH server started in the test process** on a loopback
+  port (`crates/scmd-net/tests/live_sftp.rs`): key exchange, the host-key decision including
+  trust-on-first-use writing to a `known_hosts` file, password authentication, the `sftp`
+  subsystem, and every call the provider makes.
 
 ## 7. Performance rules
 
