@@ -1,0 +1,126 @@
+# SPEC 01 — Architecture
+
+## 1. Crate layout (cargo workspace)
+
+```
+sc-core        domain types: Entry, Meta, Path abstraction, Selection, SortKey, Filter, errors
+sc-vfs         Vfs trait + providers (local, archive, sftp, ftp, webdav, s3, temp, trash)
+sc-jobs        operation engine: job graph, queue, progress, conflict policy, journal
+sc-ui          immediate-mode widgets on top of a cell buffer: panel, dialog, menu, keybar
+sc-tui         terminal backend (crossterm/ratatui), input decoding, capability detection
+sc-gui         optional GPU backend rendering the same cell buffer (M4, feature-gated)
+sc-view        viewer: text/hex/dump, encodings, search, preview pipeline
+sc-edit        editor: rope buffer, column blocks, undo, syntax (tree-sitter)
+sc-cmd         command vocabulary, keymap, macro engine, command palette
+sc-config      TOML config, themes, profiles, portable-mode discovery, migration
+sc-plugin      Lua (mlua) + WASM (wasmtime) hosts, capability-scoped plugin API
+sc-platform    the only crate allowed `unsafe`: OS specifics (ADS, xattr, trash, elevation,
+               long paths, FS watch, PTY, clipboard, drives/mounts)
+sc-i18n        fluent catalogues, pluralisation, width-aware formatting
+sc             the binary: wiring, CLI, session, panic/crash handling
+```
+
+Dependency rule: `sc-core` depends on nothing of ours; `sc-ui` knows nothing about the
+terminal; nothing below `sc` knows about `sc-gui`/`sc-tui` (they are chosen at startup behind a
+`Backend` trait). Enforced by `cargo-deny`-style allow-lists in CI.
+
+## 2. Process and thread model
+
+```
+main thread            ── UI loop: decode input → dispatch Command → update state → render
+tokio runtime (mt)     ── VFS I/O, network, directory scans, previews, hashing
+rayon pool             ── CPU-bound: sorting large listings, checksum, search in files
+blocking pool          ── OS calls that can hang (stat on dead NFS, Windows drive probe)
+pty threads            ── one reader thread per embedded terminal
+```
+
+- UI state is owned by the main thread. Everything else communicates by messages:
+  `Event::{Input, Vfs, Job, Plugin, Watch, Tick}` on an `mpsc` channel.
+- No lock is ever held across an `await` or across a frame.
+- Every background task carries a `CancellationToken`; leaving a directory cancels its scan,
+  its sizing and its previews.
+- A frame is rendered only when state changed or a 60 Hz tick has pending animation; idle cost
+  is zero CPU (blocking read on the event channel).
+
+## 3. Rendering
+
+- `sc-ui` draws into a **cell buffer** (`Cell { char, fg, bg, attrs, wide_flag }`) with
+  double-buffered diffing; `sc-tui` emits only the changed runs.
+- Unicode width via `unicode-width` + explicit east-asian-wide handling; a wide glyph occupies
+  two cells with a continuation marker, so panel columns never tear (MTN2's CJK rule).
+- Immediate-mode widgets: `fn panel(&mut Frame, &PanelState)`. No retained widget tree, no
+  callbacks — this is what makes snapshot testing trivial (`render_to_string(80, 24)`).
+- Colour: 24-bit by default, automatic degradation to 256/16/mono from terminfo and
+  `COLORTERM`; themes declare colours once and the backend maps them.
+
+## 4. Input
+
+- `sc-tui` decodes: legacy xterm sequences, kitty keyboard protocol (enabled when advertised),
+  Win32 input mode on Windows, bracketed paste, focus events, SGR mouse, mouse wheel.
+- Decoded into `KeyEvent { code, mods, kind }`; `sc-cmd` resolves it through the active keymap
+  and the current **scope stack** (dialog > editor > viewer > panel > global).
+- Ambiguities (Esc vs Alt, F-keys without modifiers reported) are resolved by capability
+  detection at startup plus the "learn keys" dialog, persisted to `keys.local.toml`.
+- Chord support (`F12 5`, `Ctrl+x c`) so mc-style prefixes and fallbacks work.
+
+## 5. Paths
+
+`sc-core::VPath` — a VFS-aware path:
+
+```rust
+pub struct VPath { scheme: SchemeId, root: Arc<str>, segments: Vec<OsString> }
+```
+
+- Local paths keep `OsString` (so non-UTF-8 names on Unix and UTF-16 oddities on Windows
+  survive a round trip); display uses lossy conversion marked with a sentinel.
+- Windows: long paths via `\\?\` prefixing in `sc-platform`, UNC aware, case-insensitive
+  comparison with case-preserving display.
+- Archive/remote paths are `scheme://root!/inner/path`; nesting is allowed
+  (`sftp://host/a.tar.gz!/b.zip!/c.txt`) with a depth limit and an explicit cache.
+- No `String`-based path concatenation anywhere; a lint forbids `format!("{}/{}")` on paths.
+
+## 6. Error handling
+
+- `thiserror` per crate, one `ScError` at the boundary, every error carries the `VPath` and the
+  raw OS error code.
+- Operations never `unwrap`; the job engine turns an error into a **decision point**
+  (retry/skip/skip-all/cancel) and records it in the job log.
+- A panic in a plugin or a preview task never takes the app down: plugin tasks run isolated
+  (WASM instance or `catch_unwind`-wrapped Lua) and the UI shows a one-line failure.
+- Crash handler writes a report with the last 100 events (no file contents, no paths from
+  other users) to `$STATE/crash/`.
+
+## 7. Configuration discovery
+
+1. `--config <dir>` wins.
+2. Portable mode: a `sc-portable` marker file next to the executable → config beside the binary.
+3. Otherwise XDG (`$XDG_CONFIG_HOME/sc`), `~/Library/Application Support/sc`,
+   `%APPDATA%\sc`; state/cache separated (`$XDG_STATE_HOME`, `$XDG_CACHE_HOME`).
+
+Files: `config.toml`, `keymaps/*.toml`, `themes/*.toml`, `filters.toml`, `assoc.toml`,
+`menu.toml`, `sites.toml` (no secrets — those go to the OS keyring), `history/*`, `session.toml`.
+
+## 8. Testing strategy
+
+| Level | How |
+| --- | --- |
+| unit | pure functions in `sc-core`/`sc-jobs` (sorting, filters, conflict matrix, rename patterns) |
+| golden screen | render a scripted session to a text grid and diff against a snapshot (`insta`) |
+| keymap | table-driven: profile + key → expected command id |
+| VFS conformance | one test suite run against every provider (local, zip, tar, sftp-in-docker, s3 via minio) |
+| jobs | property tests on a simulated FS with injected errors (ENOSPC, EACCES, vanishing files, symlink loops) |
+| platform | per-OS integration tests in CI matrix (ubuntu/macos/windows), plus FreeBSD cron job |
+| fuzz | `cargo-fuzz` on archive readers, path parser, keymap/theme parsers, viewer decoders |
+| performance | criterion benches + a CI budget check on the gates in SPEC 00 §6 |
+
+## 9. Dependency policy
+
+Allowed core dependencies (all permissive): `crossterm`/`ratatui`, `tokio`, `rayon`,
+`unicode-width`, `unicode-segmentation`, `encoding_rs`, `memchr`, `regex`, `globset`,
+`serde`/`toml`, `thiserror`, `tracing`, `zip`/`tar`/`flate2`/`zstd`/`xz2`/`sevenz-rust2`,
+`russh`/`suppaftp`/`reqwest-dav`/`aws-sdk-s3` (feature-gated), `mlua`, `wasmtime`,
+`portable-pty`, `notify`, `trash`, `keyring`, `tree-sitter`, `fluent`.
+
+Rules: no GPL/AGPL dependency in the default feature set; every optional backend behind a
+cargo feature; `cargo deny` fails the build on a licence outside the allow-list; new
+dependencies need a one-line justification in the PR.
