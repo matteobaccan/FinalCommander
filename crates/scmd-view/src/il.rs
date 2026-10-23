@@ -81,10 +81,12 @@ impl Assembly {
             .user_strings
             .get(start..end.min(self.user_strings.len()))?;
         // UTF-16LE, with a trailing byte that flags non-ASCII content.
-        let units: Vec<u16> = bytes
-            .chunks_exact(2)
-            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
-            .collect();
+        let mut units: Vec<u16> = Vec::with_capacity(bytes.len() / 2);
+        let mut rest = bytes;
+        while let [low, high, tail @ ..] = rest {
+            units.push(u16::from_le_bytes([*low, *high]));
+            rest = tail;
+        }
         Some(String::from_utf16_lossy(&units))
     }
 

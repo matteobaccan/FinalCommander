@@ -206,7 +206,7 @@ async fn authenticate(
             Ok(())
         }
         Auth::Agent => {
-            let mut agent = russh::keys::agent::client::AgentClient::connect_env()
+            let mut agent = connect_agent()
                 .await
                 .map_err(|e| auth_failed(format!("no usable SSH agent: {e}")))?;
             let identities = agent
@@ -246,6 +246,53 @@ async fn authenticate(
             }))
         }
     }
+}
+
+/// The running SSH agent, however this platform exposes one.
+///
+/// Unix: `SSH_AUTH_SOCK`. Windows: OpenSSH's named pipe first, then Pageant, which is what
+/// PuTTY and WinSCP users have. The stream type differs per platform, so the client is boxed
+/// into its dynamic form and the caller sees one type either way.
+#[cfg(unix)]
+async fn connect_agent() -> std::result::Result<
+    russh::keys::agent::client::AgentClient<
+        Box<dyn russh::keys::agent::client::AgentStream + Send + Unpin>,
+    >,
+    russh::keys::Error,
+> {
+    Ok(russh::keys::agent::client::AgentClient::connect_env()
+        .await?
+        .dynamic())
+}
+
+#[cfg(windows)]
+async fn connect_agent() -> std::result::Result<
+    russh::keys::agent::client::AgentClient<
+        Box<dyn russh::keys::agent::client::AgentStream + Send + Unpin>,
+    >,
+    russh::keys::Error,
+> {
+    const OPENSSH_PIPE: &str = r"\\.\pipe\openssh-ssh-agent";
+    match russh::keys::agent::client::AgentClient::connect_named_pipe(OPENSSH_PIPE).await {
+        Ok(client) => Ok(client.dynamic()),
+        Err(openssh) => match russh::keys::agent::client::AgentClient::connect_pageant().await {
+            Ok(client) => Ok(client.dynamic()),
+            // The first failure is the more likely one to be useful.
+            Err(_) => Err(openssh),
+        },
+    }
+}
+
+#[cfg(not(any(unix, windows)))]
+async fn connect_agent() -> std::result::Result<
+    russh::keys::agent::client::AgentClient<
+        Box<dyn russh::keys::agent::client::AgentStream + Send + Unpin>,
+    >,
+    russh::keys::Error,
+> {
+    Err(russh::keys::Error::IO(std::io::Error::other(
+        "no SSH agent on this platform",
+    )))
 }
 
 fn russh_err(site: &Site, e: russh::Error) -> NetError {

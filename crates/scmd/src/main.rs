@@ -996,8 +996,10 @@ mod tests {
             Some(std::path::Path::new("/tmp/sc-x/plugins")),
         );
         let text = paths.describe();
-        assert!(text.contains("/tmp/sc-x/scmd.toml"), "{text}");
-        assert!(text.contains("/tmp/sc-x/scmd-state.toml"), "{text}");
-        assert!(text.contains("/tmp/sc-x/plugins"), "{text}");
+        // `describe` prints whatever the platform's `Display` gives, so compare on that.
+        for expected in ["scmd.toml", "scmd-state.toml", "plugins"] {
+            let path = std::path::Path::new("/tmp/sc-x").join(expected);
+            assert!(text.contains(&path.display().to_string()), "{text}");
+        }
     }
 }

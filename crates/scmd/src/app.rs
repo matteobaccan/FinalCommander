@@ -3280,7 +3280,8 @@ mod tests {
             Mode::Prompt(p) => {
                 assert_eq!(p.kind, PromptKind::CopyTarget);
                 assert!(p.text.starts_with("/tmp"), "{}", p.text);
-                assert!(p.text.ends_with('/'), "{}", p.text);
+                // The prefill ends with the platform's separator, so typing a name appends.
+                assert!(p.text.ends_with(std::path::MAIN_SEPARATOR), "{}", p.text);
                 assert!(p.title.contains("docs"), "{}", p.title);
             }
             other => panic!("expected a prompt, got {other:?}"),

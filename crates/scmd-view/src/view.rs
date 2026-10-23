@@ -319,9 +319,8 @@ impl Viewer {
                     .or_else(|| binary.text_section().and_then(|s| s.file_offset))
             }
             Err(DisasmError::TooLarge { limit }) => {
-                if !disasm::host_arch().disassemblable() {
-                    return Err(DisasmError::NoDisassembler(disasm::host_arch().as_str()));
-                }
+                // Too big to parse structurally: sweep the bytes. There is no architecture to
+                // read, so the host's is used, or x86-64 where the host has no decoder.
                 self.raw_disasm = Some(limit);
                 None
             }
@@ -592,11 +591,19 @@ impl Viewer {
     }
 
     /// The architecture to decode with: the file's, or the host's for a raw sweep.
+    /// Which instruction set the bytes are decoded with: the file's own when we could read a
+    /// container, otherwise the host's — and when the host has no decoder (an ARM Mac, say)
+    /// x86-64, which the status line calls an assumption rather than a fact.
     fn disasm_arch(&self) -> Arch {
-        self.binary
-            .as_ref()
-            .map(|b| b.arch)
-            .unwrap_or_else(disasm::host_arch)
+        if let Some(binary) = &self.binary {
+            return binary.arch;
+        }
+        let host = disasm::host_arch();
+        if host.disassemblable() {
+            host
+        } else {
+            Arch::X86_64
+        }
     }
 
     fn rows_disasm(&mut self, width: u16, height: u16) -> Vec<Row> {
@@ -909,8 +916,13 @@ impl Viewer {
             binary: match (&self.binary, self.raw_disasm) {
                 (Some(binary), _) => Some(disasm::summary(binary)),
                 (None, Some(limit)) => Some(format!(
-                    "raw {} sweep (over the {limit} MiB parse limit)",
-                    disasm::host_arch().as_str()
+                    "raw {}{} sweep (over the {limit} MiB parse limit)",
+                    self.disasm_arch().as_str(),
+                    if disasm::host_arch().disassemblable() {
+                        ""
+                    } else {
+                        " (assumed)"
+                    }
                 )),
                 _ => None,
             },
@@ -1404,6 +1416,21 @@ mod tests {
         assert!(joined.contains("ret"), "{joined}");
         assert!(joined.contains("0000000000000000"), "{joined}");
         assert!(joined.contains("48 89 E5"), "{joined}");
+    }
+
+    #[test]
+    fn raw_bytes_are_decoded_with_an_architecture_we_have_a_decoder_for() {
+        // On a host we cannot decode (an ARM Mac, say) raw bytes still disassemble, as x86-64,
+        // and the status line calls that an assumption. Without this, `F5` on a code fragment
+        // would do nothing at all on Apple Silicon.
+        let v = viewer(&[0x90]);
+        assert!(
+            v.disasm_arch().disassemblable(),
+            "the fallback architecture must have a decoder"
+        );
+        if !disasm::host_arch().disassemblable() {
+            assert_eq!(v.disasm_arch(), Arch::X86_64);
+        }
     }
 
     #[test]

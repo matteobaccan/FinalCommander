@@ -13,6 +13,17 @@ deny = []
 
 [advisories]
 yanked = "deny"
+# Advisories we carry knowingly, each with a reason and a way out.
+ignore = [
+  # RUSTSEC-2023-0071: a timing side channel in `rsa` (the Marvin attack) with no fixed
+  # version. It reaches us only through `russh`'s `rsa` feature, which is what lets the netbox
+  # use RSA keys and verify `ssh-rsa` host keys — still the only option on plenty of servers.
+  # The attack needs an oracle that performs many RSA *decryptions* with the same private key;
+  # an SSH client signs with its key and never decrypts for an attacker, so there is nothing
+  # to measure. It goes away when `rsa` ships a constant-time implementation, or sooner if we
+  # drop the feature (and with it RSA support).
+  { id = "RUSTSEC-2023-0071", reason = "timing side channel in RSA decryption; the netbox only signs" },
+]
 
 [sources]
 unknown-registry = "deny"
