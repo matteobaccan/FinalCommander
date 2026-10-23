@@ -159,7 +159,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 9.1 | Human-editable config files (TOML) + in-app settings dialogs; portable mode (config next to the binary) | MTN2 | M1 |
 | 9.2 | Full keymap remapping, multiple **keymap profiles** (`far`, `tc`, `mc`, `nc`, `vi`) switchable at runtime | KRU/MTN2 | M1 (far+mc), M2 rest |
 | 9.3 | Themes from files (24-bit colour + 256/16 fallbacks), ship Far Classic / NC / MC / TC / Gruvbox / Dracula / Nord / Solarized / light / high-contrast | MTN2 | M1 (2 themes), M2 set |
-| 9.4 | Localisation (fluent-based), at least EN + IT + RU + DE; help localised too | FAR/MTN2 | M2 |
+| 9.4 | Localisation (fluent-based): EN, IT, DE, FR, ES, RU, ZH-Hans; UI + help + key names, runtime switchable, drop-in language dirs | FAR/MTN2 | M2 |
 | 9.5 | CJK/wide-character correct layout, combining marks, RTL-safe truncation, emoji width | MTN2 | M2 |
 | 9.6 | Accessibility: no-colour mode, screen-reader-friendly output mode, configurable focus indication | NEW | M3 |
 | 9.7 | Session save/restore (tabs, paths, selections, viewer positions) | TC | M2 |

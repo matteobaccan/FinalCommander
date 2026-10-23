@@ -48,8 +48,8 @@ and in tmux, an operation engine that never blocks or loses data, and a sandboxe
   and feature set* are ideas and interfaces, not protected expression (CJEU C-406/10,
   Lotus v Borland, Google v Oracle), so a `tc` keymap profile is fine.
 
-Details, including the planned outbound licence (MIT OR Apache-2.0), in
-[`docs/01-licensing.md`](docs/01-licensing.md).
+**This project is MIT licensed** (see [`LICENSE`](LICENSE)); details and the inbound-compatibility
+rules in [`docs/01-licensing.md`](docs/01-licensing.md).
 
 ## Non-goals
 
