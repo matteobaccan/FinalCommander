@@ -219,8 +219,11 @@ A TUI cannot receive every combination the Windows console gives FAR. Decisions:
    `keys.local.toml`.
 5. **Conflicts with the terminal emulator and the desktop** (`Ctrl+Shift+C/V`, `Alt+F4`,
    `Ctrl+W`, `F10` on GNOME, `Ctrl+Q`) are listed in the keymap docs; every one of them has an
-   alternative binding, and the GUI backend (M4) takes them literally.
-6. **`Esc`** is both "cancel" and the Alt prefix: we use a 25 ms disambiguation timeout
+   alternative binding, listed next to it in the help, and a `keys.local.toml` override.
+6. **`Ctrl+I` is `Tab`, `Ctrl+M` is `Enter`, `Ctrl+J` is a newline** in every terminal, so
+   they are not bindable: quick filter is `Alt+I`, "restore selection" is `Ctrl+Shift+M`, and
+   the help page states the rule instead of letting a user wonder why nothing happens.
+7. **`Esc`** is both "cancel" and the Alt prefix: we use a 25 ms disambiguation timeout
    (configurable), and `Esc Esc` always means cancel.
 
 ## 10. Command vocabulary (what keys actually bind to)

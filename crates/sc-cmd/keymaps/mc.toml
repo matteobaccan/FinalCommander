@@ -1,0 +1,37 @@
+# Midnight Commander profile: the FAR baseline plus the mc habits people actually press.
+name = "mc"
+inherit = "far"
+
+# mc hides dotfiles with Alt+. (Ctrl+H stays bound too, from the base profile).
+[[bind]]
+keys = ["Alt+."]
+cmd = "panel.hidden.toggle"
+
+# mc selects with + and deselects with backslash.
+[[bind]]
+keys = ["\\"]
+cmd = "sel.mask.remove"
+
+# mc: make the other panel show this directory.
+[[bind]]
+keys = ["Alt+O"]
+cmd = "panel.other.sync"
+
+# mc: find file.
+[[bind]]
+keys = ["Alt+?"]
+cmd = "tool.find"
+
+# mc: quick cd.
+[[bind]]
+keys = ["Alt+C"]
+cmd = "nav.goto.path"
+
+# mc cycles listing formats with Alt+T; we map it to the next view mode.
+[[bind]]
+keys = ["Alt+L"]
+cmd = "panel.view.set(brief)"
+
+[[bind]]
+keys = ["Alt+F"]
+cmd = "panel.view.set(full)"

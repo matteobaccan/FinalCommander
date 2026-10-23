@@ -4,9 +4,47 @@ A cross-platform **orthodox file manager** (two panels, command line, function k
 keyboard-first) written in Rust — in the tradition of Norton Commander, FAR Manager,
 Total Commander, Midnight Commander and Krusader, with a modern engine underneath.
 
-> **Status: specification phase.** There is no code yet. This repository currently holds the
-> survey of existing commanders, the licence analysis, the full feature/keymap inventory and
-> the implementation specs. Milestone M1 (see `docs/spec/09-roadmap.md`) is the first code.
+> **Status: milestone M1 in progress.** The specs are written and the skeleton runs: two
+> panels, navigation, selection, sorting, view modes, quick search and filter, themes,
+> keymap profiles and seven interface languages. File operations, the viewer and the editor
+> are the next chunks — see `docs/spec/09-roadmap.md`.
+
+## Try it
+
+```sh
+cargo run --release -- /etc /tmp     # left panel, right panel
+```
+
+```
+┌────────── /home/mb/project ──────────┐┌──────────────── /tmp ────────────────┐
+│..                      UP--          ││..                      UP--          │
+│src/                  FOLDER          ││cargo-installXXXXXX/  FOLDER          │
+│docs/                 FOLDER          ││sc-build/             FOLDER          │
+│Cargo.toml             412 B 2026-10-2││notes.md              1.2 K 2026-10-2│
+│README.md             2.00 K 2026-10-2││                                      │
+└─2 files, 2.40 K  [name]──────────────┘└─1 files, 1.20 K  [name]──────────────┘
+ Cargo.toml  412 B  2026-10-23 17:42
+1Help   2Menu   3View   4Edit   5Copy   6RenMov 7MkDir  8Delete 9PullDn 10Quit
+```
+
+What works today: `Tab` / `Ctrl+U` panels, arrows / `PgUp` / `PgDn` / `Home` / `End` / `Enter` /
+`Ctrl+PgUp` / `Backspace` / `Ctrl+\` navigation with history (`Alt+←/→`), `Ins` and `+` / `-` /
+`*` / `Ctrl+A` selection by mask, `Ctrl+F3..F7` sorting (press twice to reverse), `Ctrl+1/2`
+view modes, `Ctrl+H` hidden files, `Alt+I` live filter, quick search by typing, `Space` for
+recursive directory size, `Ctrl+=` to sync the other panel, `Alt+T` to cycle themes, `F1` for a
+help page generated from the live keymap, `F10` to quit. `F5`/`F6`/`F7`/`F8` and `F3`/`F4` say
+so plainly instead of pretending.
+
+Non-interactive modes (used by CI and by scripts):
+
+```sh
+sc --list-themes      # built-in and external themes, with where each came from
+sc --list-commands    # the command vocabulary every key, menu and plugin binds to
+sc --list-languages   # en it de fr es ru zh
+sc --check-keymap     # validate a keymap and print the resolved bindings
+sc --dump-config      # the effective configuration
+sc --export-theme tron > ~/.config/sc/themes/mine.toml
+```
 
 ## Why
 
@@ -15,8 +53,35 @@ The best commanders are either Windows-only (FAR Manager, Total Commander), GPL 
 Double Commander). Nothing in Rust covers the full orthodox feature set: the existing Rust
 file managers are single-pane browsers (yazi, joshuto, xplr) or very young GTK4 apps.
 
-Goal: one static binary, the same keys on Linux, macOS and Windows, a TUI that works over SSH
-and in tmux, an operation engine that never blocks or loses data, and a sandboxed plugin ABI.
+Goal: one static binary, the same keys on Linux, macOS and Windows, a **strictly TUI**
+interface that works over SSH and in tmux, an operation engine that never blocks or loses data,
+and a sandboxed plugin ABI whose first three clients are the viewer, the editor and netbox
+(the network panel).
+
+There is no GUI build and there will not be one: the graphical commanders are a crowded field,
+and the open slot is a terminal commander with a modern engine.
+
+## Themes and languages
+
+Six themes are compiled in — `commander` (the classic blue, default), `black`, `white`,
+`matrix`, `tron`, `blade` — and any `*.toml` in `~/.config/sc/themes/` is picked up at startup,
+hot-reloaded, may `inherit` a built-in one, and replaces a built-in with the same id.
+
+The interface ships in English, Italian, German, French, Spanish, Russian and Simplified
+Chinese (`ui.language = "auto"` follows the OS locale); CJK double-width layout is tested.
+
+## Layout
+
+```
+crates/sc-core     paths, entries, listings, sorting, selection   (no dependencies of ours)
+crates/sc-vfs      the Vfs trait + the local provider
+crates/sc-cmd      command vocabulary, keys, keymap profiles (far, mc)
+crates/sc-config   TOML configuration, discovery, overrides
+crates/sc-i18n     fluent catalogues for seven languages
+crates/sc-ui       cell buffer, colours, themes, panel and chrome widgets
+crates/sc-tui      the terminal backend: input decoding and diffed painting
+crates/sc          the binary: CLI, state machine, event loop
+```
 
 ## Documents
 
