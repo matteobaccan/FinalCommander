@@ -7,6 +7,7 @@ use sc_i18n::I18n;
 use sc_jobs::{Decision, JobKind, JobSpec, Outcome, Progress, Question};
 use sc_tui::Input;
 use sc_ui::{Theme, ThemeSet};
+use sc_view::{FileSource, SearchMode, Viewer};
 
 use crate::panel::Panel;
 
@@ -70,6 +71,10 @@ pub enum PromptKind {
     Filter,
     /// Destination for F5; pre-filled with the other panel's directory.
     CopyTarget,
+    /// Query for the viewer's search.
+    ViewerSearch,
+    /// Offset or percentage for the viewer.
+    ViewerGoto,
     /// Destination for F6.
     MoveTarget,
     /// Name for F7.
@@ -119,8 +124,15 @@ pub enum Mode {
     Prompt(Prompt),
     Confirm(Confirm),
     Job(JobView),
-    Help { scroll: usize },
-    Message { title: String, lines: Vec<String> },
+    /// `F3`: the internal viewer, full screen.
+    Viewer(Box<Viewer>),
+    Help {
+        scroll: usize,
+    },
+    Message {
+        title: String,
+        lines: Vec<String>,
+    },
 }
 
 impl Mode {
@@ -131,6 +143,20 @@ impl Mode {
     pub fn job(&self) -> Option<&JobView> {
         match self {
             Mode::Job(view) => Some(view),
+            _ => None,
+        }
+    }
+
+    pub fn viewer(&self) -> Option<&Viewer> {
+        match self {
+            Mode::Viewer(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    pub fn viewer_mut(&mut self) -> Option<&mut Viewer> {
+        match self {
+            Mode::Viewer(v) => Some(v),
             _ => None,
         }
     }
@@ -166,6 +192,14 @@ pub struct App {
     /// Panel geometry from the last frame, so key handling knows how far a page is.
     pub rows: usize,
     pub columns: usize,
+    /// Size of the viewer's text area, from the last frame.
+    pub viewer_size: (u16, u16),
+    /// Remembered across files, like every commander does.
+    pub search_mode: SearchMode,
+    pub search_case_insensitive: bool,
+    pub last_search: Option<String>,
+    /// The viewer, parked while one of its prompts is open.
+    viewer_under_prompt: Option<Box<Viewer>>,
     next_job_id: u64,
 }
 
@@ -210,6 +244,11 @@ impl App {
             requests: Vec::new(),
             rows: 20,
             columns: 1,
+            viewer_size: (80, 20),
+            search_mode: SearchMode::Plain,
+            search_case_insensitive: true,
+            last_search: None,
+            viewer_under_prompt: None,
             next_job_id: 1,
         };
         app.read_panel(0);
@@ -383,6 +422,10 @@ impl App {
                 self.mode = Mode::Job(view);
                 self.job_key(key);
             }
+            Mode::Viewer(viewer) => {
+                self.mode = Mode::Viewer(viewer);
+                self.viewer_key(key);
+            }
             Mode::Normal => self.normal_key(key),
         }
     }
@@ -434,6 +477,12 @@ impl App {
         }
     }
 
+    fn viewer_key(&mut self, key: Key) {
+        if let Some(cmd) = self.keymap.resolve(&[Scope::Viewer, Scope::Global], key) {
+            self.run(cmd);
+        }
+    }
+
     /// Unblock the engine with a decision.
     fn answer(&mut self, decision: Decision) {
         if let Mode::Job(view) = &mut self.mode {
@@ -477,6 +526,7 @@ impl App {
                     self.panel_mut().cursor_to(origin);
                 }
                 self.mode = Mode::Normal;
+                self.restore_viewer();
             }
             KeyCode::Enter => {
                 self.mode = Mode::Normal;
@@ -589,6 +639,61 @@ impl App {
                 }
                 let target = self.resolve_path(raw);
                 self.start_job(JobSpec::new(JobKind::Mkdir, vec![], Some(target)));
+            }
+            PromptKind::ViewerSearch => {
+                let query = prompt.text.trim().to_string();
+                self.restore_viewer();
+                if query.is_empty() {
+                    return;
+                }
+                self.last_search = Some(query.clone());
+                let (mode, ci) = (self.search_mode, self.search_case_insensitive);
+                let result = self
+                    .mode
+                    .viewer_mut()
+                    .map(|v| v.search(&query, mode, ci, false, &CancelToken::new()));
+                match result {
+                    Some(Ok(true)) => {}
+                    Some(Ok(false)) => {
+                        let msg = self
+                            .i18n
+                            .t_args("viewer-not-found", &[("query", query.into())]);
+                        self.set_error(msg);
+                    }
+                    Some(Err(e)) => self.set_error(e.to_string()),
+                    None => {}
+                }
+            }
+            PromptKind::ViewerGoto => {
+                let raw = prompt.text.trim().to_string();
+                self.restore_viewer();
+                if raw.is_empty() {
+                    return;
+                }
+                let (width, height) = self.viewer_size;
+                let _ = (width, height);
+                if let Some(viewer) = self.mode.viewer_mut() {
+                    if let Some(pct) = raw.strip_suffix('%') {
+                        if let Ok(p) = pct.trim().parse::<u16>() {
+                            viewer.goto_percent(p);
+                            return;
+                        }
+                    }
+                    let parsed = if let Some(hex) =
+                        raw.strip_prefix("0x").or_else(|| raw.strip_prefix("0X"))
+                    {
+                        u64::from_str_radix(hex, 16).ok()
+                    } else {
+                        raw.parse::<u64>().ok()
+                    };
+                    match parsed {
+                        Some(offset) => viewer.jump(offset),
+                        None => {
+                            let msg = format!("{raw}: ?");
+                            self.set_error(msg);
+                        }
+                    }
+                }
             }
             PromptKind::Filter | PromptKind::QuickSearch { .. } => {}
         }
@@ -825,6 +930,11 @@ impl App {
     }
 
     pub fn run(&mut self, cmd: Command) {
+        // While the viewer is open, movement and its own toggles belong to it, not the panel.
+        if self.mode.viewer().is_some() && is_viewer_movement(cmd) {
+            self.viewer_command(cmd);
+            return;
+        }
         self.panel_mut().message = None;
         match cmd {
             Command::AppQuit => self.quit = true,
@@ -1026,6 +1136,42 @@ impl App {
                 self.panel_mut().rebuild();
             }
 
+            Command::FileView => self.open_viewer(),
+
+            Command::ViewerQuit => self.mode = Mode::Normal,
+            Command::ViewerSearch if self.mode.viewer().is_some() => {
+                let mode = self.search_mode;
+                let title = self
+                    .i18n
+                    .t_args("viewer-prompt-search", &[("mode", mode.as_str().into())]);
+                self.mode_prompt_over_viewer(
+                    PromptKind::ViewerSearch,
+                    title,
+                    self.last_search.clone().unwrap_or_default(),
+                );
+            }
+            Command::ViewerGoto if self.mode.viewer().is_some() => {
+                let title = self.i18n.t("viewer-prompt-goto");
+                self.mode_prompt_over_viewer(PromptKind::ViewerGoto, title, String::new());
+            }
+            Command::ViewerSearchNext | Command::ViewerSearchPrev
+                if self.mode.viewer().is_some() =>
+            {
+                let backwards = cmd == Command::ViewerSearchPrev;
+                let found = self
+                    .mode
+                    .viewer_mut()
+                    .map(|v| v.find_again(backwards, &CancelToken::new()))
+                    .unwrap_or(false);
+                if !found {
+                    let query = self.last_search.clone().unwrap_or_default();
+                    let msg = self
+                        .i18n
+                        .t_args("viewer-not-found", &[("query", query.into())]);
+                    self.set_error(msg);
+                }
+            }
+
             Command::FileDirSize => {
                 let (panel, path) = match self.panel().current() {
                     Some(e) if e.kind.is_dirlike() => (self.active, self.panel().cwd.join(&e.name)),
@@ -1119,6 +1265,119 @@ impl App {
         }
     }
 
+    /// `F3`: open the viewer on the item under the cursor. On a directory it measures it
+    /// instead, as FAR does.
+    fn open_viewer(&mut self) {
+        let Some(entry) = self.panel().current().cloned() else {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        };
+        if entry.kind.is_dirlike() {
+            self.run(Command::FileDirSize);
+            return;
+        }
+        let path = self.panel().cwd.join(&entry.name);
+        match FileSource::open(path.as_path()) {
+            Ok(source) => {
+                let mut viewer = Viewer::new(Box::new(source), path);
+                if viewer.is_empty() {
+                    let m = self.i18n.t("viewer-empty");
+                    self.set_status(m);
+                }
+                self.mode = Mode::Viewer(Box::new(viewer));
+            }
+            Err(e) => self.set_error(format!("{path}: {e}")),
+        }
+    }
+
+    /// A prompt that keeps the viewer underneath it (search, go to).
+    fn mode_prompt_over_viewer(&mut self, kind: PromptKind, title: String, text: String) {
+        let Mode::Viewer(viewer) = std::mem::replace(&mut self.mode, Mode::Normal) else {
+            return;
+        };
+        self.viewer_under_prompt = Some(viewer);
+        self.mode = Mode::Prompt(Prompt { kind, title, text });
+    }
+
+    /// Put the viewer back when its prompt closes.
+    fn restore_viewer(&mut self) {
+        if let Some(viewer) = self.viewer_under_prompt.take() {
+            self.mode = Mode::Viewer(viewer);
+        }
+    }
+
+    fn viewer_command(&mut self, cmd: Command) {
+        let (width, height) = self.viewer_size;
+        let mut message: Option<String> = None;
+        let mut error: Option<String> = None;
+        if let Some(viewer) = self.mode.viewer_mut() {
+            match cmd {
+                Command::NavUp => viewer.scroll(-1, width, height),
+                Command::NavDown => viewer.scroll(1, width, height),
+                Command::NavPageUp => viewer.scroll(-(height as i64), width, height),
+                Command::NavPageDown => viewer.scroll(height as i64, width, height),
+                Command::NavTop => viewer.to_start(),
+                Command::NavBottom => viewer.to_end(width, height),
+                Command::ViewerLeft => viewer.scroll_h(-1),
+                Command::ViewerRight => viewer.scroll_h(1),
+                Command::ViewerWrap => viewer.toggle_wrap(),
+                Command::ViewerHex => viewer.toggle_hex(),
+                Command::ViewerModeNext => {
+                    let next = match viewer.mode {
+                        sc_view::Mode::Text => sc_view::Mode::Dump,
+                        sc_view::Mode::Dump => sc_view::Mode::Hex,
+                        sc_view::Mode::Hex => sc_view::Mode::Text,
+                    };
+                    viewer.set_mode(next);
+                }
+                Command::ViewerCodepageNext => viewer.next_codepage(),
+                Command::ViewerFollow => viewer.toggle_follow(),
+                Command::ViewerBytesLess => viewer.set_bytes_per_row(-8),
+                Command::ViewerBytesMore => viewer.set_bytes_per_row(8),
+                Command::ViewerUndoPosition if !viewer.undo_jump() => {
+                    error = Some("viewer-no-undo".into());
+                }
+                _ => {}
+            }
+            // Messages that depend on the new state.
+            match cmd {
+                Command::ViewerCodepageNext => {
+                    message = Some(format!("codepage:{}", viewer.codepage.name()))
+                }
+                Command::ViewerWrap => message = Some(format!("wrap:{}", viewer.wrap.as_str())),
+                Command::ViewerFollow => {
+                    message = Some(if viewer.follow {
+                        "follow:on".into()
+                    } else {
+                        "follow:off".into()
+                    })
+                }
+                _ => {}
+            }
+        }
+        if let Some(key) = error {
+            let m = self.i18n.t(&key);
+            self.set_error(m);
+        }
+        if let Some(tag) = message {
+            let text = match tag.split_once(':') {
+                Some(("codepage", name)) => self
+                    .i18n
+                    .t_args("viewer-codepage", &[("name", name.to_string().into())]),
+                Some(("wrap", mode)) => self
+                    .i18n
+                    .t_args("viewer-wrap-mode", &[("mode", mode.to_string().into())]),
+                Some(("follow", "on")) => self.i18n.t("viewer-follow-on"),
+                Some(("follow", _)) => self.i18n.t("viewer-follow-off"),
+                _ => String::new(),
+            };
+            if !text.is_empty() {
+                self.set_status(text);
+            }
+        }
+    }
+
     /// Total size of what is about to be deleted, for the confirmation.
     fn selected_bytes(&self, sources: &[VPath]) -> u64 {
         let panel = self.panel();
@@ -1164,6 +1423,66 @@ impl App {
         self.read_panel(index);
     }
 
+    /// Hand the viewer to the renderer (it needs `&mut` to read its windows) and say whether
+    /// it was parked under a prompt, so it goes back where it came from.
+    pub fn viewer_for_render(&mut self) -> Option<(Box<Viewer>, bool)> {
+        if let Some(viewer) = self.viewer_under_prompt.take() {
+            return Some((viewer, true));
+        }
+        match std::mem::replace(&mut self.mode, Mode::Normal) {
+            Mode::Viewer(viewer) => Some((viewer, false)),
+            other => {
+                self.mode = other;
+                None
+            }
+        }
+    }
+
+    pub fn return_viewer(&mut self, viewer: Box<Viewer>, parked: bool) {
+        if parked {
+            self.viewer_under_prompt = Some(viewer);
+        } else {
+            self.mode = Mode::Viewer(viewer);
+        }
+    }
+
+    /// The key bar while the viewer is open.
+    pub fn keybar_viewer(&self) -> Vec<(u8, String)> {
+        vec![
+            (1, self.i18n.t("key-help")),
+            (2, self.i18n.t("key-wrap")),
+            (3, self.i18n.t("key-quit")),
+            (4, self.i18n.t("key-hex")),
+            (7, self.i18n.t("key-search")),
+            (8, self.i18n.t("key-code")),
+            (10, self.i18n.t("key-quit")),
+        ]
+    }
+
+    /// The viewer's status line.
+    pub fn viewer_status(&self, status: &sc_view::Status) -> String {
+        let mut text = self.i18n.t_args(
+            "viewer-status",
+            &[
+                ("mode", status.mode.letter().to_string().into()),
+                ("codepage", status.codepage.to_string().into()),
+                ("offset", (status.offset as i64).into()),
+                ("len", (status.len as i64).into()),
+                ("percent", (status.percent as i64).into()),
+            ],
+        );
+        if status.wrap != sc_view::Wrap::Off {
+            text.push_str(&format!("  {}", status.wrap.as_str()));
+        }
+        if status.follow {
+            text.push_str(&format!("  {}", self.i18n.t("key-follow")));
+        }
+        if let Some(query) = &status.search {
+            text.push_str(&format!("  /{query}"));
+        }
+        text
+    }
+
     /// The `F1..F10` labels for the key bar, localised.
     pub fn keybar(&self) -> Vec<(u8, String)> {
         [
@@ -1199,6 +1518,29 @@ impl App {
         }
         lines
     }
+}
+
+/// Commands the viewer handles itself when it is open.
+fn is_viewer_movement(cmd: Command) -> bool {
+    matches!(
+        cmd,
+        Command::NavUp
+            | Command::NavDown
+            | Command::NavPageUp
+            | Command::NavPageDown
+            | Command::NavTop
+            | Command::NavBottom
+            | Command::ViewerWrap
+            | Command::ViewerHex
+            | Command::ViewerModeNext
+            | Command::ViewerCodepageNext
+            | Command::ViewerFollow
+            | Command::ViewerLeft
+            | Command::ViewerRight
+            | Command::ViewerUndoPosition
+            | Command::ViewerBytesLess
+            | Command::ViewerBytesMore
+    )
 }
 
 fn parse_sort(s: &str) -> SortKey {
@@ -1786,6 +2128,214 @@ mod tests {
         press(&mut app, "F8");
         let (_, spec) = job_request(&mut app);
         assert_eq!(spec.kind, JobKind::Delete);
+    }
+
+    /// A panel over a real directory, so `F3` can open a real file.
+    fn app_on_disk(dir: &std::path::Path) -> App {
+        let mut app = App::new(Startup {
+            cfg: Config::default(),
+            paths: Paths::discover(Some(&dir.join("sc.toml")), None),
+            i18n: I18n::new("en"),
+            keymap: Keymap::builtin("far").unwrap(),
+            themes: ThemeSet::builtin_only(),
+            theme: Theme::default_theme(),
+            left: VPath::local(dir),
+            right: VPath::local(dir),
+        });
+        app.requests.clear();
+        let entries = sc_vfs::local::list_blocking(&VPath::local(dir), &CancelToken::new())
+            .expect("the test directory");
+        for panel in 0..2 {
+            app.handle_event(Event::Listed {
+                panel,
+                generation: 1,
+                result: Ok(entries.clone()),
+            });
+        }
+        app.viewer_size = (40, 4);
+        app
+    }
+
+    #[test]
+    fn f3_opens_the_viewer_on_a_real_file() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("notes.txt"),
+            b"one
+two
+three
+four
+five
+",
+        )
+        .unwrap();
+        let mut app = app_on_disk(dir.path());
+
+        press(&mut app, "Down"); // notes.txt
+        press(&mut app, "F3");
+        let viewer = app.mode.viewer().expect("the viewer should be open");
+        assert_eq!(viewer.path.display_name(), "notes.txt");
+        assert_eq!(viewer.mode, sc_view::Mode::Text);
+
+        // Movement goes to the viewer, not to the panel.
+        let cursor_before = app.panel().cursor;
+        press(&mut app, "Down");
+        press(&mut app, "Down");
+        assert_eq!(app.panel().cursor, cursor_before, "the panel moved instead");
+        let rows = app
+            .mode
+            .viewer_mut()
+            .unwrap()
+            .rows(40, 2)
+            .into_iter()
+            .map(|r| r.text)
+            .collect::<Vec<_>>();
+        assert_eq!(rows, vec!["three", "four"]);
+
+        press(&mut app, "Esc");
+        assert!(app.mode.is_normal(), "Esc should close the viewer");
+    }
+
+    #[test]
+    fn the_viewer_toggles_wrap_hex_and_codepage() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("a.txt"),
+            b"hello hex
+",
+        )
+        .unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F3");
+
+        press(&mut app, "F4");
+        assert_eq!(app.mode.viewer().unwrap().mode, sc_view::Mode::Hex);
+        press(&mut app, "F4");
+        assert_eq!(app.mode.viewer().unwrap().mode, sc_view::Mode::Text);
+
+        press(&mut app, "F2");
+        assert_eq!(app.mode.viewer().unwrap().wrap, sc_view::Wrap::Char);
+        assert!(app.status.contains("wrap"), "{}", app.status);
+
+        press(&mut app, "F8");
+        assert_eq!(app.mode.viewer().unwrap().codepage.name(), "UTF-16LE");
+        assert!(app.status.contains("codepage"), "{}", app.status);
+    }
+
+    #[test]
+    fn searching_in_the_viewer_finds_and_reports() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("log.txt"),
+            b"starting
+WARNING: disk full
+done
+",
+        )
+        .unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F3");
+
+        press(&mut app, "F7");
+        assert!(matches!(app.mode, Mode::Prompt(_)), "{:?}", app.mode);
+        for c in ["d", "i", "s", "k"] {
+            press(&mut app, c);
+        }
+        press(&mut app, "Enter");
+        let viewer = app.mode.viewer().expect("the viewer should be back");
+        assert_eq!(viewer.query(), Some("disk"));
+        assert!(viewer.last_match.is_some(), "nothing was found");
+
+        // A query that is not there says so and keeps the viewer open.
+        press(&mut app, "F7");
+        for c in ["z", "z", "z"] {
+            press(&mut app, c);
+        }
+        press(&mut app, "Enter");
+        assert!(app.status_error, "{}", app.status);
+        assert!(app.status.contains("zzz"), "{}", app.status);
+        assert!(app.mode.viewer().is_some());
+    }
+
+    #[test]
+    fn esc_in_the_search_prompt_returns_to_the_viewer() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("a.txt"),
+            b"text
+",
+        )
+        .unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F3");
+        press(&mut app, "F7");
+        press(&mut app, "Esc");
+        assert!(app.mode.viewer().is_some(), "{:?}", app.mode);
+    }
+
+    #[test]
+    fn goto_accepts_offsets_hex_and_percentages() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("a.txt"),
+            b"0123456789
+abcdefghij
+",
+        )
+        .unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F3");
+
+        press(&mut app, "Alt+F8");
+        for c in ["1", "1"] {
+            press(&mut app, c);
+        }
+        press(&mut app, "Enter");
+        assert_eq!(app.mode.viewer().unwrap().top, 11);
+
+        press(&mut app, "Alt+F8");
+        for c in ["0", "%"] {
+            press(&mut app, c);
+        }
+        press(&mut app, "Enter");
+        assert_eq!(app.mode.viewer().unwrap().top, 0);
+
+        press(&mut app, "Alt+F8");
+        for c in ["n", "o", "p", "e"] {
+            press(&mut app, c);
+        }
+        press(&mut app, "Enter");
+        assert!(app.status_error, "a bad offset should be reported");
+    }
+
+    #[test]
+    fn f3_on_a_directory_measures_it_instead_of_opening_a_viewer() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("sub")).unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down"); // sub/
+        press(&mut app, "F3");
+        assert!(app.mode.is_normal());
+        assert!(matches!(
+            app.take_requests().first(),
+            Some(Request::DirSize { .. })
+        ));
+    }
+
+    #[test]
+    fn opening_a_file_that_vanished_reports_the_error() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("gone.txt"), b"x").unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        std::fs::remove_file(dir.path().join("gone.txt")).unwrap();
+        press(&mut app, "F3");
+        assert!(app.status_error, "{}", app.status);
+        assert!(app.mode.is_normal());
     }
 
     #[test]

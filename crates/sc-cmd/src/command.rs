@@ -56,6 +56,23 @@ pub enum Command {
     ToolUserMenu,
     ToolFind,
     ShellOutputShow,
+
+    // Viewer (scope `viewer`)
+    ViewerQuit,
+    ViewerWrap,
+    ViewerHex,
+    ViewerModeNext,
+    ViewerSearch,
+    ViewerSearchNext,
+    ViewerSearchPrev,
+    ViewerGoto,
+    ViewerCodepageNext,
+    ViewerFollow,
+    ViewerLeft,
+    ViewerRight,
+    ViewerUndoPosition,
+    ViewerBytesLess,
+    ViewerBytesMore,
 }
 
 impl Command {
@@ -105,6 +122,21 @@ impl Command {
             Command::ToolUserMenu => "tool.usermenu".into(),
             Command::ToolFind => "tool.find".into(),
             Command::ShellOutputShow => "shell.output.show".into(),
+            Command::ViewerQuit => "viewer.quit".into(),
+            Command::ViewerWrap => "viewer.wrap".into(),
+            Command::ViewerHex => "viewer.hex".into(),
+            Command::ViewerModeNext => "viewer.mode.next".into(),
+            Command::ViewerSearch => "viewer.search".into(),
+            Command::ViewerSearchNext => "viewer.search.next".into(),
+            Command::ViewerSearchPrev => "viewer.search.prev".into(),
+            Command::ViewerGoto => "viewer.goto".into(),
+            Command::ViewerCodepageNext => "viewer.codepage.next".into(),
+            Command::ViewerFollow => "viewer.follow".into(),
+            Command::ViewerLeft => "viewer.left".into(),
+            Command::ViewerRight => "viewer.right".into(),
+            Command::ViewerUndoPosition => "viewer.undo".into(),
+            Command::ViewerBytesLess => "viewer.bytes.less".into(),
+            Command::ViewerBytesMore => "viewer.bytes.more".into(),
         }
     }
 
@@ -158,6 +190,21 @@ impl Command {
             ("tool.usermenu", _) => Command::ToolUserMenu,
             ("tool.find", _) => Command::ToolFind,
             ("shell.output.show", _) => Command::ShellOutputShow,
+            ("viewer.quit", _) => Command::ViewerQuit,
+            ("viewer.wrap", _) => Command::ViewerWrap,
+            ("viewer.hex", _) => Command::ViewerHex,
+            ("viewer.mode.next", _) => Command::ViewerModeNext,
+            ("viewer.search", _) => Command::ViewerSearch,
+            ("viewer.search.next", _) => Command::ViewerSearchNext,
+            ("viewer.search.prev", _) => Command::ViewerSearchPrev,
+            ("viewer.goto", _) => Command::ViewerGoto,
+            ("viewer.codepage.next", _) => Command::ViewerCodepageNext,
+            ("viewer.follow", _) => Command::ViewerFollow,
+            ("viewer.left", _) => Command::ViewerLeft,
+            ("viewer.right", _) => Command::ViewerRight,
+            ("viewer.undo", _) => Command::ViewerUndoPosition,
+            ("viewer.bytes.less", _) => Command::ViewerBytesLess,
+            ("viewer.bytes.more", _) => Command::ViewerBytesMore,
             _ => return None,
         };
         Some(cmd)
@@ -203,6 +250,9 @@ mod tests {
             Command::SelMaskAdd,
             Command::FileDirSize,
             Command::ShellOutputShow,
+            Command::ViewerQuit,
+            Command::ViewerSearchNext,
+            Command::ViewerBytesMore,
         ];
         for c in all {
             assert_eq!(Command::parse(&c.id()), Some(c), "{}", c.id());
