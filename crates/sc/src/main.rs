@@ -33,15 +33,19 @@ struct Cli {
     #[arg(value_name = "PATH", num_args = 0..=2)]
     paths: Vec<PathBuf>,
 
-    /// Use this configuration directory instead of the default one.
-    #[arg(long, value_name = "DIR")]
+    /// Use this configuration file instead of the default one.
+    #[arg(long, value_name = "FILE")]
     config: Option<PathBuf>,
+
+    /// Use this plugins directory (the only directory sc ever reads besides the config file).
+    #[arg(long, value_name = "DIR")]
+    plugins: Option<PathBuf>,
 
     /// Theme id (commander, black, white, matrix, tron, blade, or an external one).
     #[arg(long, value_name = "ID")]
     theme: Option<String>,
 
-    /// Keymap profile (far, mc) or the name of a file in <config>/keymaps.
+    /// Keymap profile: a built-in one (far, mc) or a [[keymap]] block from the config file.
     #[arg(long, value_name = "NAME")]
     keymap: Option<String>,
 
@@ -76,6 +80,14 @@ struct Cli {
     /// Print the effective configuration.
     #[arg(long)]
     dump_config: bool,
+
+    /// Print where the config file, the state file and the plugins directory are.
+    #[arg(long = "paths")]
+    show_paths: bool,
+
+    /// List the plugins found in the plugins directory.
+    #[arg(long)]
+    list_plugins: bool,
 }
 
 fn main() -> Result<()> {
@@ -90,7 +102,7 @@ fn main() -> Result<()> {
 }
 
 fn run(cli: Cli) -> Result<()> {
-    let paths = Paths::discover(cli.config.as_deref());
+    let paths = Paths::discover(cli.config.as_deref(), cli.plugins.as_deref());
     let (mut cfg, mut warnings) = Config::load(&paths).context("loading the configuration")?;
 
     for assignment in &cli.set {
@@ -111,11 +123,9 @@ fn run(cli: Cli) -> Result<()> {
     }
 
     let i18n = I18n::new(&cfg.ui.language);
-    let keymap = load_keymap(&cfg.ui.keymap, &paths)?;
-    let mut themes = ThemeSet::builtin_only().with_dir(&paths.themes_dir());
-    for dir in &cfg.ui.theme_path {
-        themes = themes.with_dir(dir);
-    }
+    let origin = paths.config_file.display().to_string();
+    let keymap = load_keymap(&cfg, &origin)?;
+    let themes = ThemeSet::builtin_only().with_tables(&origin, &cfg.themes);
     warnings.extend(themes.load_errors.clone());
 
     let theme = match themes.get(&cfg.ui.theme) {
@@ -132,11 +142,20 @@ fn run(cli: Cli) -> Result<()> {
     warnings.extend(theme.warnings().iter().cloned());
 
     // ── informational modes: print and exit, no terminal takeover
+    if cli.show_paths {
+        print!("{}", paths.describe());
+        return Ok(());
+    }
+    if cli.list_plugins {
+        list_plugins(&paths);
+        return Ok(());
+    }
     if cli.list_themes {
         for t in themes.iter() {
             let source = match &t.source {
                 sc_ui::ThemeSource::BuiltIn => "built-in".to_string(),
-                sc_ui::ThemeSource::File(p) => p.display().to_string(),
+                sc_ui::ThemeSource::Config => origin.clone(),
+                sc_ui::ThemeSource::Plugin(p) => format!("plugin:{p}"),
             };
             println!("{:<12} {:<16} {source}", t.id, t.name);
         }
@@ -169,6 +188,12 @@ fn run(cli: Cli) -> Result<()> {
     }
     if cli.dump_config {
         print!("{}", cfg.dump());
+        for t in themes
+            .iter()
+            .filter(|t| t.source == sc_ui::ThemeSource::Config)
+        {
+            print!("\n{}", t.to_toml());
+        }
         for w in &warnings {
             eprintln!("warning: {w}");
         }
@@ -196,14 +221,42 @@ fn run(cli: Cli) -> Result<()> {
     interactive(app)
 }
 
-fn load_keymap(name: &str, paths: &Paths) -> Result<Keymap> {
-    let file = paths.keymaps_dir().join(format!("{name}.toml"));
-    if file.exists() {
-        let src = std::fs::read_to_string(&file)
-            .with_context(|| format!("reading {}", file.display()))?;
-        return Keymap::from_toml(&file.display().to_string(), &src).map_err(anyhow::Error::new);
+/// A `[[keymap]]` block from the config file wins over a built-in profile of the same name.
+fn load_keymap(cfg: &Config, origin: &str) -> Result<Keymap> {
+    let wanted = cfg.ui.keymap.trim();
+    for table in &cfg.keymaps {
+        let name = table
+            .get("name")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default();
+        if name == wanted {
+            return Keymap::from_table(origin, table).map_err(anyhow::Error::new);
+        }
     }
-    Keymap::builtin(name).map_err(anyhow::Error::new)
+    Keymap::builtin(wanted).map_err(anyhow::Error::new)
+}
+
+/// Everything in the plugins directory, with a note that the host is not here yet.
+fn list_plugins(paths: &Paths) {
+    if !paths.plugins_dir.is_dir() {
+        println!("no plugins directory at {}", paths.plugins_dir.display());
+        return;
+    }
+    let mut found = Vec::new();
+    if let Ok(read) = std::fs::read_dir(&paths.plugins_dir) {
+        for entry in read.flatten() {
+            found.push(entry.file_name().to_string_lossy().into_owned());
+        }
+    }
+    found.sort();
+    if found.is_empty() {
+        println!("{}: empty", paths.plugins_dir.display());
+        return;
+    }
+    for name in found {
+        println!("{name}");
+    }
+    println!("(no plugin host in this build yet: viewer, editor and netbox come first — see docs/spec/08-plugins.md)");
 }
 
 fn command_ids() -> Vec<String> {
@@ -454,10 +507,40 @@ mod tests {
     }
 
     #[test]
-    fn keymap_falls_back_to_the_builtin_profile() {
-        let paths = Paths::discover(Some(std::path::Path::new("/nonexistent-config-dir")));
-        let km = load_keymap("far", &paths).unwrap();
-        assert!(km.len() > 30);
-        assert!(load_keymap("klingon", &paths).is_err());
+    fn keymap_comes_from_the_config_block_or_falls_back_to_a_builtin() {
+        let mut cfg = Config::default();
+        assert!(load_keymap(&cfg, "sc.toml").unwrap().len() > 30);
+
+        cfg.ui.keymap = "klingon".into();
+        assert!(load_keymap(&cfg, "sc.toml").is_err());
+
+        let (with_block, _) = Config::parse(
+            "sc.toml",
+            r#"
+            [ui]
+            keymap = "klingon"
+            [[keymap]]
+            name = "klingon"
+            inherit = "far"
+            [[keymap.bind]]
+            keys = ["F4"]
+            cmd = "file.view"
+            "#,
+        )
+        .unwrap();
+        let km = load_keymap(&with_block, "sc.toml").unwrap();
+        assert_eq!(km.name(), "klingon");
+    }
+
+    #[test]
+    fn paths_describe_one_file_and_one_optional_directory() {
+        let paths = Paths::discover(
+            Some(std::path::Path::new("/tmp/sc-x/sc.toml")),
+            Some(std::path::Path::new("/tmp/sc-x/plugins")),
+        );
+        let text = paths.describe();
+        assert!(text.contains("/tmp/sc-x/sc.toml"), "{text}");
+        assert!(text.contains("/tmp/sc-x/sc-state.toml"), "{text}");
+        assert!(text.contains("/tmp/sc-x/plugins"), "{text}");
     }
 }

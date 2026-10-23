@@ -8,8 +8,14 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-pub const CONFIG_FILE: &str = "config.toml";
-pub const PORTABLE_MARKER: &str = "sc-portable";
+/// The single configuration file. There is no configuration *directory*: SupremeCommander
+/// ships as one executable and the only directory it ever looks for is the plugins folder
+/// (see `docs/spec/07-config-theming.md` §1).
+pub const CONFIG_FILE_NAME: &str = "sc.toml";
+/// Histories, panel paths and other remembered state: one file, next to the config.
+pub const STATE_FILE_NAME: &str = "sc-state.toml";
+/// The one directory: optional, and the only thing that may live outside the binary.
+pub const PLUGINS_DIR_NAME: &str = "plugins";
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
@@ -27,67 +33,88 @@ pub enum ConfigError {
     },
 }
 
-/// Where everything lives for this run.
+/// Where this run reads and writes. Three paths, no trees.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Paths {
-    pub config_dir: PathBuf,
-    pub state_dir: PathBuf,
-    pub cache_dir: PathBuf,
+    /// The directory the executable sits in — where portable mode and plugins are looked for.
+    pub exe_dir: PathBuf,
+    pub config_file: PathBuf,
+    pub state_file: PathBuf,
+    pub plugins_dir: PathBuf,
+    /// True when the configuration sits next to the executable.
     pub portable: bool,
 }
 
 impl Paths {
-    /// `--config <dir>` wins; then portable mode (a marker file next to the executable);
-    /// then the per-OS conventions.
-    pub fn discover(explicit: Option<&Path>) -> Paths {
-        if let Some(dir) = explicit {
-            return Paths {
-                config_dir: dir.to_path_buf(),
-                state_dir: dir.join("state"),
-                cache_dir: dir.join("cache"),
-                portable: false,
-            };
-        }
-        if let Some(exe_dir) = std::env::current_exe()
+    /// `--config <file>` wins. Otherwise, if `sc.toml` sits next to the executable we are
+    /// portable (a USB stick, a release zip); failing that, the per-OS config location — as a
+    /// single file, `<config>/sc.toml`, not a directory of our own.
+    ///
+    /// The plugins directory is `--plugins <dir>`, then `$SC_PLUGINS`, then `plugins/` next to
+    /// the executable, then `sc-plugins/` beside the config file.
+    pub fn discover(config: Option<&Path>, plugins: Option<&Path>) -> Paths {
+        let exe_dir = std::env::current_exe()
             .ok()
             .and_then(|p| p.parent().map(Path::to_path_buf))
-        {
-            if exe_dir.join(PORTABLE_MARKER).exists() {
-                return Paths {
-                    config_dir: exe_dir.clone(),
-                    state_dir: exe_dir.join("state"),
-                    cache_dir: exe_dir.join("cache"),
-                    portable: true,
-                };
-            }
-        }
-        let config_dir = dirs::config_dir()
-            .map(|d| d.join("sc"))
-            .unwrap_or_else(|| PathBuf::from(".sc"));
-        let state_dir = dirs::data_local_dir()
-            .map(|d| d.join("sc"))
-            .unwrap_or_else(|| config_dir.join("state"));
-        let cache_dir = dirs::cache_dir()
-            .map(|d| d.join("sc"))
-            .unwrap_or_else(|| config_dir.join("cache"));
+            .unwrap_or_else(|| PathBuf::from("."));
+
+        let portable_config = exe_dir.join(CONFIG_FILE_NAME);
+        let (config_file, portable) = match config {
+            Some(explicit) => (explicit.to_path_buf(), false),
+            None if portable_config.exists() => (portable_config, true),
+            None => (
+                dirs::config_dir()
+                    .unwrap_or_else(|| PathBuf::from("."))
+                    .join(CONFIG_FILE_NAME),
+                false,
+            ),
+        };
+
+        let config_parent = config_file
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| PathBuf::from("."));
+        let state_file = config_parent.join(STATE_FILE_NAME);
+
+        let plugins_dir = plugins
+            .map(Path::to_path_buf)
+            .or_else(|| std::env::var_os("SC_PLUGINS").map(PathBuf::from))
+            .unwrap_or_else(|| {
+                let beside_exe = exe_dir.join(PLUGINS_DIR_NAME);
+                if beside_exe.is_dir() {
+                    beside_exe
+                } else {
+                    config_parent.join("sc-plugins")
+                }
+            });
+
         Paths {
-            config_dir,
-            state_dir,
-            cache_dir,
-            portable: false,
+            exe_dir,
+            config_file,
+            state_file,
+            plugins_dir,
+            portable,
         }
     }
 
-    pub fn config_file(&self) -> PathBuf {
-        self.config_dir.join(CONFIG_FILE)
-    }
-
-    pub fn themes_dir(&self) -> PathBuf {
-        self.config_dir.join("themes")
-    }
-
-    pub fn keymaps_dir(&self) -> PathBuf {
-        self.config_dir.join("keymaps")
+    /// Human-readable summary for `sc --paths`: the first question anyone asks.
+    pub fn describe(&self) -> String {
+        format!(
+            "config   {}{}\nstate    {}\nplugins  {}{}\n",
+            self.config_file.display(),
+            if self.config_file.exists() {
+                ""
+            } else {
+                "   (not present; defaults are compiled in)"
+            },
+            self.state_file.display(),
+            self.plugins_dir.display(),
+            if self.plugins_dir.is_dir() {
+                ""
+            } else {
+                "   (not present; no plugins loaded)"
+            }
+        )
     }
 }
 
@@ -159,8 +186,6 @@ pub struct UiCfg {
     pub language: String,
     pub key_bar: bool,
     pub status_bar: bool,
-    /// Extra directories to look for themes in.
-    pub theme_path: Vec<PathBuf>,
 }
 
 impl Default for UiCfg {
@@ -171,7 +196,6 @@ impl Default for UiCfg {
             language: "auto".into(),
             key_bar: true,
             status_bar: true,
-            theme_path: Vec::new(),
         }
     }
 }
@@ -182,6 +206,12 @@ pub struct Config {
     pub general: General,
     pub panel: PanelCfg,
     pub ui: UiCfg,
+    /// `[[theme]]` blocks: themes live in the config file, not in a themes directory.
+    #[serde(rename = "theme")]
+    pub themes: Vec<toml::Table>,
+    /// `[[keymap]]` blocks: same reasoning.
+    #[serde(rename = "keymap")]
+    pub keymaps: Vec<toml::Table>,
     /// Anything we did not recognise, kept so `--dump-config` can show it and warn.
     #[serde(flatten, skip_serializing)]
     pub unknown: BTreeMap<String, toml::Value>,
@@ -190,7 +220,7 @@ pub struct Config {
 impl Config {
     /// Load the config file if it exists. A missing file is not an error; a broken one is.
     pub fn load(paths: &Paths) -> Result<(Config, Vec<String>), ConfigError> {
-        let file = paths.config_file();
+        let file = paths.config_file.clone();
         if !file.exists() {
             return Ok((Config::default(), Vec::new()));
         }
@@ -342,17 +372,60 @@ mod tests {
     }
 
     #[test]
-    fn explicit_config_dir_wins() {
-        let p = Paths::discover(Some(Path::new("/tmp/scconf")));
-        assert_eq!(p.config_dir, PathBuf::from("/tmp/scconf"));
-        assert_eq!(p.config_file(), PathBuf::from("/tmp/scconf/config.toml"));
-        assert_eq!(p.themes_dir(), PathBuf::from("/tmp/scconf/themes"));
+    fn an_explicit_config_file_wins_and_state_sits_beside_it() {
+        let p = Paths::discover(Some(Path::new("/tmp/scconf/sc.toml")), None);
+        assert_eq!(p.config_file, PathBuf::from("/tmp/scconf/sc.toml"));
+        assert_eq!(p.state_file, PathBuf::from("/tmp/scconf/sc-state.toml"));
         assert!(!p.portable);
     }
 
     #[test]
-    fn discovery_without_an_override_produces_absolute_paths() {
-        let p = Paths::discover(None);
-        assert!(p.config_dir.is_absolute() || p.config_dir.starts_with(".sc"));
+    fn an_explicit_plugins_dir_wins() {
+        let p = Paths::discover(None, Some(Path::new("/opt/sc/plugins")));
+        assert_eq!(p.plugins_dir, PathBuf::from("/opt/sc/plugins"));
+    }
+
+    #[test]
+    fn discovery_produces_one_file_and_no_directory_of_our_own() {
+        let p = Paths::discover(None, None);
+        assert_eq!(
+            p.config_file.file_name().unwrap(),
+            std::ffi::OsStr::new("sc.toml")
+        );
+        // `~/.config/sc.toml`, not `~/.config/sc/config.toml`: nothing to create, nothing to
+        // leave behind but one file.
+        let parent = p.config_file.parent().unwrap();
+        assert_ne!(parent.file_name(), Some(std::ffi::OsStr::new("sc")));
+        assert!(p.describe().contains("plugins"));
+    }
+
+    #[test]
+    fn themes_and_keymaps_come_from_the_config_file() {
+        let (cfg, warnings) = Config::parse(
+            "sc.toml",
+            r##"
+            [ui]
+            theme = "mine"
+
+            [[theme]]
+            id = "mine"
+            inherit = "matrix"
+            [theme.colors]
+            "selected.fg" = "#ff00ff"
+
+            [[keymap]]
+            name = "mine"
+            inherit = "far"
+            [[keymap.bind]]
+            keys = ["F4"]
+            cmd = "file.view"
+            "##,
+        )
+        .unwrap();
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(cfg.themes.len(), 1);
+        assert_eq!(cfg.keymaps.len(), 1);
+        assert_eq!(cfg.themes[0]["id"].as_str(), Some("mine"));
+        assert_eq!(cfg.keymaps[0]["name"].as_str(), Some("mine"));
     }
 }

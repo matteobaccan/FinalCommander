@@ -33,8 +33,14 @@ and preview pipeline. Licensing basis: `docs/01-licensing.md`.
   internal refactors.
 - **G5 — Honest and local.** No telemetry, no accounts, no background network traffic.
   Config is human-readable TOML in a documented location; portable mode supported.
-- **G6 — Small, fast, boring to install.** Single static binary, < 20 MB, cold start < 50 ms,
-  no runtime dependencies for the core features.
+- **G6 — One file.** The product is a **single executable**. Every resource it needs is
+  compiled in: themes, keymap profiles, all seven language catalogues, the help. It runs with
+  an empty disk around it — no installer, no asset directory, no data files to deploy, nothing
+  to break when a path moves.
+  The only directory SupremeCommander ever looks for is **`plugins/`**, and it is optional.
+  User settings, when there are any, are **one file** (`sc.toml`) plus **one state file**
+  (`sc-state.toml`) beside it — themes and keymaps are blocks inside that file, not a tree.
+  Budget: < 20 MB binary, cold start < 50 ms, no runtime dependencies for the core features.
 
 ## 3. Non-goals
 
@@ -42,6 +48,9 @@ and preview pipeline. Licensing basis: `docs/01-licensing.md`.
 - No cloud sync service, no accounts, no "AI assistant" in the panel.
 - No bundled proprietary blobs; no feature that requires a non-free component to work
   (RAR *write*, for example, is simply out of scope).
+- **No installer and no asset tree.** Nothing is read from `/usr/share`, no theme or language
+  files are deployed next to the binary, and a missing config file is a normal state, not a
+  degraded one. A release is one executable (plus, if you want them, plugins in one folder).
 - **No GUI.** No GTK/Qt/GPU backend, no "windowed mode", no web front end. The TUI is the
   product; a graphical file manager is a different program.
 - Not a terminal multiplexer, though it embeds PTYs.

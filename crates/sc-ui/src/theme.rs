@@ -1,7 +1,5 @@
-use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
-
 use serde::Deserialize;
+use std::collections::BTreeMap;
 
 use crate::buffer::Style;
 use crate::color::{Color, ColorDepth};
@@ -30,12 +28,6 @@ pub enum ThemeError {
     },
     #[error("unknown theme `{0}`")]
     Unknown(String),
-    #[error("{path}: {source}")]
-    Io {
-        path: String,
-        #[source]
-        source: std::io::Error,
-    },
 }
 
 #[derive(Debug, Deserialize)]
@@ -74,8 +66,12 @@ pub struct Theme {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ThemeSource {
+    /// Compiled into the executable.
     BuiltIn,
-    File(PathBuf),
+    /// Declared as a `[[theme]]` block in the single configuration file.
+    Config,
+    /// Provided by a plugin (the only other thing that may ship themes).
+    Plugin(String),
 }
 
 /// The six themes compiled into the binary. `commander` is the default.
@@ -142,21 +138,14 @@ impl Theme {
         Theme::builtin(DEFAULT_THEME).expect("the default theme compiles")
     }
 
-    pub fn from_file(path: &Path) -> Result<Theme, ThemeError> {
-        let src = std::fs::read_to_string(path).map_err(|source| ThemeError::Io {
-            path: path.display().to_string(),
-            source,
+    /// A `[[theme]]` block from the configuration file (or from a plugin manifest).
+    pub fn from_table(origin: &str, table: &toml::Table) -> Result<Theme, ThemeError> {
+        let src = toml::to_string(table).map_err(|e| ThemeError::BadColor {
+            file: origin.to_string(),
+            key: "[[theme]]".to_string(),
+            value: e.to_string(),
         })?;
-        let name = path
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        let mut t = Theme::from_toml(&name, &src)?;
-        if t.id.is_empty() {
-            t.id = name.trim_end_matches(".toml").to_string();
-        }
-        t.source = ThemeSource::File(path.to_path_buf());
-        Ok(t)
+        Theme::from_toml(origin, &src)
     }
 
     pub fn from_toml(file: &str, src: &str) -> Result<Theme, ThemeError> {
@@ -267,16 +256,18 @@ impl Theme {
         out
     }
 
-    /// Write the theme back out as TOML (`sc --export-theme`).
+    /// Write the theme out as a `[[theme]]` block, ready to paste into the config file
+    /// (`sc --export-theme`).
     pub fn to_toml(&self) -> String {
         let mut s = String::new();
+        s.push_str("[[theme]]\n");
         s.push_str(&format!("id = \"{}\"\n", self.id));
         s.push_str(&format!("name = \"{}\"\n", self.name));
         if !self.author.is_empty() {
             s.push_str(&format!("author = \"{}\"\n", self.author));
         }
         s.push_str(&format!(
-            "variant = \"{}\"\n\n[colors]\n",
+            "variant = \"{}\"\n\n[theme.colors]\n",
             match self.variant {
                 Variant::Dark => "dark",
                 Variant::Light => "light",
@@ -310,20 +301,30 @@ impl ThemeSet {
         }
     }
 
-    /// Add every `*.toml` in `dir`, if it exists. Broken files are reported, not fatal.
-    pub fn with_dir(mut self, dir: &Path) -> ThemeSet {
-        let Ok(read) = std::fs::read_dir(dir) else {
-            return self;
-        };
-        let mut found: Vec<PathBuf> = read
-            .filter_map(|e| e.ok())
-            .map(|e| e.path())
-            .filter(|p| p.extension().is_some_and(|e| e == "toml"))
-            .collect();
-        found.sort();
-        for path in found {
-            match Theme::from_file(&path) {
-                Ok(theme) => {
+    /// Add the `[[theme]]` blocks declared in the configuration file.
+    ///
+    /// A theme with the id of a built-in replaces it, so a user can retune `commander`
+    /// without inventing a new name. A broken block is reported, never fatal.
+    pub fn with_tables(mut self, origin: &str, tables: &[toml::Table]) -> ThemeSet {
+        for table in tables {
+            match Theme::from_table(origin, table) {
+                Ok(mut theme) => {
+                    theme.source = ThemeSource::Config;
+                    self.themes.retain(|t| t.id != theme.id);
+                    self.themes.push(theme);
+                }
+                Err(e) => self.load_errors.push(e.to_string()),
+            }
+        }
+        self
+    }
+
+    /// Add themes a plugin declares. Same rules, different origin in `--list-themes`.
+    pub fn with_plugin_tables(mut self, plugin: &str, tables: &[toml::Table]) -> ThemeSet {
+        for table in tables {
+            match Theme::from_table(plugin, table) {
+                Ok(mut theme) => {
+                    theme.source = ThemeSource::Plugin(plugin.to_string());
                     self.themes.retain(|t| t.id != theme.id);
                     self.themes.push(theme);
                 }
@@ -479,30 +480,59 @@ mod tests {
         assert_eq!(t.color("panel.bg"), Color::Default);
     }
 
-    #[test]
-    fn external_theme_overrides_a_builtin_with_the_same_id() {
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::write(
-            dir.path().join("commander.toml"),
-            "id = \"commander\"\nname = \"Mine\"\n[colors]\n\"panel.bg\" = \"#010203\"\n",
-        )
-        .unwrap();
-        let set = ThemeSet::builtin_only().with_dir(dir.path());
-        assert_eq!(set.len(), 6, "the external theme replaced the built-in one");
-        let t = set.get("commander").unwrap();
-        assert_eq!(t.name, "Mine");
-        assert_eq!(t.color("panel.bg"), Color::Rgb(1, 2, 3));
-        assert!(matches!(t.source, ThemeSource::File(_)));
+    fn table(src: &str) -> toml::Table {
+        src.parse::<toml::Table>().unwrap()
     }
 
     #[test]
-    fn a_broken_external_theme_is_reported_not_fatal() {
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::write(dir.path().join("oops.toml"), "this is not = toml = at all").unwrap();
-        let set = ThemeSet::builtin_only().with_dir(dir.path());
-        assert_eq!(set.len(), 6);
+    fn a_config_theme_overrides_a_builtin_with_the_same_id() {
+        let set = ThemeSet::builtin_only().with_tables(
+            "sc.toml",
+            &[table(
+                r##"
+                id = "commander"
+                name = "Mine"
+                [colors]
+                "panel.bg" = "#010203"
+                "##,
+            )],
+        );
+        assert_eq!(set.len(), 6, "the config theme replaced the built-in one");
+        let t = set.get("commander").unwrap();
+        assert_eq!(t.name, "Mine");
+        assert_eq!(t.color("panel.bg"), Color::Rgb(1, 2, 3));
+        assert_eq!(t.source, ThemeSource::Config);
+    }
+
+    #[test]
+    fn a_broken_config_theme_is_reported_not_fatal() {
+        let set = ThemeSet::builtin_only().with_tables(
+            "sc.toml",
+            &[table(
+                r##"
+                id = "oops"
+                [colors]
+                "panel.fg" = "chartreuse"
+                "##,
+            )],
+        );
+        assert_eq!(set.len(), 6, "the broken theme was not added");
         assert_eq!(set.load_errors.len(), 1);
-        assert!(set.load_errors[0].contains("oops.toml"));
+        assert!(
+            set.load_errors[0].contains("chartreuse"),
+            "{:?}",
+            set.load_errors
+        );
+    }
+
+    #[test]
+    fn plugin_themes_say_where_they_came_from() {
+        let set =
+            ThemeSet::builtin_only().with_plugin_tables("sunset", &[table(r#"id = "sunset""#)]);
+        assert_eq!(
+            set.get("sunset").unwrap().source,
+            ThemeSource::Plugin("sunset".into())
+        );
     }
 
     #[test]
@@ -514,10 +544,16 @@ mod tests {
     }
 
     #[test]
-    fn export_round_trips() {
+    fn export_round_trips_through_the_config_shape() {
         let original = Theme::builtin("tron").unwrap();
         let exported = original.to_toml();
-        let reparsed = Theme::from_toml("tron.toml", &exported).unwrap();
+        assert!(exported.starts_with("[[theme]]"), "{exported}");
+        let as_config: toml::Table = exported.parse().unwrap();
+        let block = as_config["theme"].as_array().unwrap()[0]
+            .as_table()
+            .unwrap()
+            .clone();
+        let reparsed = Theme::from_table("sc.toml", &block).unwrap();
         for (key, _) in DEFAULTS {
             assert_eq!(reparsed.color(key), original.color(key), "{key}");
         }

@@ -191,8 +191,8 @@ impl App {
     }
 
     /// Where the configuration for this run lives (shown in the help page footer).
-    pub fn config_dir(&self) -> &std::path::Path {
-        &self.paths.config_dir
+    pub fn config_file(&self) -> &std::path::Path {
+        &self.paths.config_file
     }
 
     pub fn handle_event(&mut self, event: Event) {
@@ -755,7 +755,7 @@ mod tests {
     fn app() -> App {
         let mut app = App::new(Startup {
             cfg: Config::default(),
-            paths: Paths::discover(Some(std::path::Path::new("/tmp/sc-test"))),
+            paths: Paths::discover(Some(std::path::Path::new("/tmp/sc-test/sc.toml")), None),
             i18n: I18n::new("en"),
             keymap: Keymap::builtin("far").unwrap(),
             themes: ThemeSet::builtin_only(),

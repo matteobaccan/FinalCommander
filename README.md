@@ -43,7 +43,9 @@ sc --list-commands    # the command vocabulary every key, menu and plugin binds 
 sc --list-languages   # en it de fr es ru zh
 sc --check-keymap     # validate a keymap and print the resolved bindings
 sc --dump-config      # the effective configuration
-sc --export-theme tron > ~/.config/sc/themes/mine.toml
+sc --export-theme tron >> ~/.config/sc.toml   # a ready-to-paste [[theme]] block
+sc --paths            # where the config file, the state file and plugins/ are
+sc --list-plugins     # what is in the plugins directory
 ```
 
 ## Why
@@ -53,10 +55,15 @@ The best commanders are either Windows-only (FAR Manager, Total Commander), GPL 
 Double Commander). Nothing in Rust covers the full orthodox feature set: the existing Rust
 file managers are single-pane browsers (yazi, joshuto, xplr) or very young GTK4 apps.
 
-Goal: one static binary, the same keys on Linux, macOS and Windows, a **strictly TUI**
-interface that works over SSH and in tmux, an operation engine that never blocks or loses data,
-and a sandboxed plugin ABI whose first three clients are the viewer, the editor and netbox
-(the network panel).
+Goal: **one executable** — themes, keymaps, all seven languages and the help compiled in,
+nothing to install and no asset tree — the same keys on Linux, macOS and Windows, a
+**strictly TUI** interface that works over SSH and in tmux, an operation engine that never
+blocks or loses data, and a sandboxed plugin ABI whose first three clients are the viewer, the
+editor and netbox (the network panel).
+
+Everything on disk is optional and amounts to: one settings file (`sc.toml`, which also holds
+your themes and keymaps), one state file beside it, and one `plugins/` directory — the only
+directory the program ever reads.
 
 There is no GUI build and there will not be one: the graphical commanders are a crowded field,
 and the open slot is a terminal commander with a modern engine.
@@ -64,8 +71,8 @@ and the open slot is a terminal commander with a modern engine.
 ## Themes and languages
 
 Six themes are compiled in — `commander` (the classic blue, default), `black`, `white`,
-`matrix`, `tron`, `blade` — and any `*.toml` in `~/.config/sc/themes/` is picked up at startup,
-hot-reloaded, may `inherit` a built-in one, and replaces a built-in with the same id.
+`matrix`, `tron`, `blade` — and `[[theme]]` blocks in `sc.toml` are read at startup,
+hot-reloaded, may `inherit` a built-in one, and replace a built-in with the same id.
 
 The interface ships in English, Italian, German, French, Spanish, Russian and Simplified
 Chinese (`ui.language = "auto"` follows the OS locale); CJK double-width layout is tested.
