@@ -17,6 +17,7 @@ scmd-core = { version = "0.1.0", path = "../scmd-core" }
 scmd-edit = { version = "0.1.0", path = "../scmd-edit" }
 scmd-i18n = { version = "0.1.0", path = "../scmd-i18n" }
 scmd-jobs = { version = "0.1.0", path = "../scmd-jobs" }
+scmd-net = { version = "0.1.0", path = "../scmd-net" }
 scmd-tui = { version = "0.1.0", path = "../scmd-tui" }
 scmd-ui = { version = "0.1.0", path = "../scmd-ui" }
 scmd-vfs = { version = "0.1.0", path = "../scmd-vfs" }

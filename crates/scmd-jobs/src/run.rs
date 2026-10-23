@@ -161,8 +161,8 @@ struct State {
 
 fn unit_belongs_to(unit: &Unit, src: &VPath) -> bool {
     match &unit.src {
-        Some(unit_src) => unit_src == src || unit_src.as_path().starts_with(src.as_path()),
-        None => unit.dst == *src || unit.dst.as_path().starts_with(src.as_path()),
+        Some(unit_src) => unit_src == src || unit_src.starts_with(src),
+        None => unit.dst == *src || unit.dst.starts_with(src),
     }
 }
 

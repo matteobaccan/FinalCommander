@@ -11,6 +11,7 @@ scmd-ui          immediate-mode widgets on top of a cell buffer: panel, dialog, 
 scmd-tui         the only backend: terminal I/O, input decoding, capability detection
 scmd-view        viewer: text/dump/hex, encodings, search (preview pipeline still to come)
 scmd-edit        editor: line buffer (rope later), column blocks, undo, syntax (tree-sitter)
+scmd-net         netbox: SFTP today, site list, connection pool, routed job filesystem
 scmd-cmd         command vocabulary, keymap, macro engine, command palette
 scmd-config      TOML config, themes, profiles, portable-mode discovery, migration
 scmd-plugin      Lua (mlua) + WASM (wasmtime) hosts, capability-scoped plugin API

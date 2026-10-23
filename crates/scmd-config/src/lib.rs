@@ -200,6 +200,62 @@ impl Default for UiCfg {
     }
 }
 
+/// `[net]`: the netbox's own settings.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct NetCfg {
+    /// Where host keys are recorded. Empty means `~/.ssh/known_hosts`.
+    pub known_hosts: String,
+    /// Keepalive for a connection, in seconds. 0 turns it off.
+    pub keepalive_secs: u64,
+    /// The largest remote file the viewer and the editor will fetch into a temporary file.
+    pub fetch_limit_mb: u64,
+}
+
+impl Default for NetCfg {
+    fn default() -> Self {
+        NetCfg {
+            known_hosts: String::new(),
+            keepalive_secs: 30,
+            fetch_limit_mb: 512,
+        }
+    }
+}
+
+/// A `[[site]]` block: one entry of the netbox's site list.
+///
+/// Secrets are never here. A site says *how* to authenticate (`agent`, `key:<path>`, `ask`)
+/// and the password or passphrase is asked for when the connection needs it
+/// (`docs/spec/04-vfs.md` §6).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SiteCfg {
+    /// Short name, shown in the site list and usable from the command line.
+    #[serde(default)]
+    pub id: String,
+    /// `sftp` today.
+    #[serde(default = "default_scheme")]
+    pub scheme: String,
+    pub host: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub port: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auth: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_dir: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keepalive_secs: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub compress: Option<bool>,
+}
+
+fn default_scheme() -> String {
+    "sftp".to_string()
+}
+
 /// A `[[decompile]]` rule: an external tool that turns a compiled file into readable text.
 ///
 /// SupremeCommander disassembles x86 code and prints WebAssembly itself; real decompilation is
@@ -297,6 +353,10 @@ pub struct Config {
     /// `[[decompile]]` blocks: external tools the viewer may call.
     #[serde(rename = "decompile")]
     pub decompile: Vec<DecompileRule>,
+    pub net: NetCfg,
+    /// `[[site]]` blocks: the netbox's site list.
+    #[serde(rename = "site")]
+    pub sites: Vec<SiteCfg>,
     /// Anything we did not recognise, kept so `--dump-config` can show it and warn.
     #[serde(flatten, skip_serializing)]
     pub unknown: BTreeMap<String, toml::Value>,
@@ -331,6 +391,13 @@ impl Config {
 
     /// The first rule that applies to `name` and whose program is installed: the config
     /// file's rules first, then the built-in ones.
+    /// A site by its id, case-insensitively.
+    pub fn site(&self, id: &str) -> Option<&SiteCfg> {
+        self.sites
+            .iter()
+            .find(|s| s.id.eq_ignore_ascii_case(id.trim()))
+    }
+
     pub fn decompiler_for(&self, name: &str) -> Option<DecompileRule> {
         self.decompile
             .iter()
@@ -370,6 +437,17 @@ impl Config {
                         ))
                     }
                 }
+            }
+            "net.known_hosts" => self.net.known_hosts = value.to_string(),
+            "net.keepalive_secs" => {
+                self.net.keepalive_secs = value
+                    .parse()
+                    .map_err(|_| format!("net.keepalive_secs: `{value}` is not a number"))?
+            }
+            "net.fetch_limit_mb" => {
+                self.net.fetch_limit_mb = value
+                    .parse()
+                    .map_err(|_| format!("net.fetch_limit_mb: `{value}` is not a number"))?
             }
             "general.confirm_exit" => self.general.confirm_exit = parse_bool(value)?,
             "general.confirm_delete" => self.general.confirm_delete = parse_bool(value)?,

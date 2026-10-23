@@ -25,6 +25,16 @@ keys = ["Shift+F4"]
 cmd = "file.edit.new"
 
 [[bind]]
+keys = ["Alt+N"]
+scope = "panel"
+cmd = "net.sites"
+
+[[bind]]
+keys = ["Alt+Shift+N"]
+scope = "panel"
+cmd = "net.disconnect"
+
+[[bind]]
 keys = ["F5"]
 cmd = "file.copy"
 

@@ -132,3 +132,23 @@ editor-changed-title = Changed on disk
 editor-changed-body = { $name } changed on disk since it was opened. Save over it?
 editor-reloaded = { $name } reloaded from disk
 editor-failed = { $name }: { $error }
+
+# netbox (SPEC 04 §6)
+net-sites-title = Connections
+net-sites-hint = Enter connect · n new · d disconnect · Esc close
+net-no-sites = No sites yet. Press `n` to type a URL, or add [[site]] blocks to the config.
+net-prompt-url = Connect to:
+net-prompt-password = Password for { $user }@{ $host }:
+net-prompt-passphrase = Passphrase for the key of { $user }@{ $host }:
+net-connecting = connecting to { $host }…
+net-connected = connected to { $host }
+net-disconnected = { $host } disconnected
+net-not-connected = { $host } is not connected
+net-local-panel = this panel is on a local filesystem
+net-nothing-pending = no connection is waiting for that
+net-hostkey-title = Unknown host key
+net-hostkey-body = { $host } is not in known_hosts. Its fingerprint is:
+net-hostkey-question = Record it and connect?
+net-fetching = fetching { $name }…
+net-viewing-copy = { $name }: a local copy, fetched for the viewer
+net-too-big = { $name } is larger than { $limit }: raise net.fetch_limit_mb to fetch it

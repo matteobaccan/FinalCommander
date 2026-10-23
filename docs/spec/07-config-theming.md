@@ -111,6 +111,27 @@ anyway), `objdump -d -C` (`*.o`, `*.so`, `*.a`), `retdec-decompiler` (`*.exe`). 
 `scmd.toml` wins over a default for the same mask. `{file}` is substituted; a rule that forgets
 it still gets the path appended.
 
+## 2c. `[net]` and `[[site]]`
+
+The netbox's settings and its site list (SPEC 04 §6). No secret ever appears here: a site says
+*how* to authenticate and the password or passphrase is asked for when the connection needs it.
+
+```toml
+[net]
+known_hosts = ""          # empty = ~/.ssh/known_hosts
+keepalive_secs = 30       # 0 turns it off
+fetch_limit_mb = 512      # the largest remote file `F3` will fetch into a temporary copy
+
+[[site]]
+id = "jump"               # shown in the list (Alt+N) and usable by name
+host = "jump.example.net"
+port = 2222               # 22 when left out
+user = "mb"               # the local account name when left out
+auth = "agent"            # agent | key:~/.ssh/id_ed25519 | ask
+start_dir = "/srv"
+group = "work"            # a heading in the site list
+```
+
 ## 3. Keymaps
 
 ```toml

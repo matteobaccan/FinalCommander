@@ -34,10 +34,17 @@ Unicode-3.0, or MPL-2.0 at file level). The policy and the allow-list live in `d
 | `thiserror`, `anyhow` | MIT OR Apache-2.0 | error types |
 | `dirs` (and `option-ext`, MPL-2.0) | MIT OR Apache-2.0 | per-OS configuration directories |
 | `async-trait` | MIT OR Apache-2.0 | the `Vfs` trait |
+| `russh`, `russh-sftp` | Apache-2.0 | SSH and SFTP in the netbox |
+| `ring` (russh's crypto backend, chosen over `aws-lc-rs`) | Apache-2.0 AND ISC | ciphers, key exchange, signatures |
+| `ssh-key`, `ssh-encoding`, `ssh-cipher` | Apache-2.0 OR MIT | OpenSSH key and `known_hosts` formats |
 | `tempfile` (dev only) | MIT OR Apache-2.0 | filesystem tests |
 
 Two dependencies are multi-licensed with a copyleft option we do **not** take: `r-efi`
 (we use MIT) and `self_cell` (we use Apache-2.0).
+
+`russh`'s default crypto backend (`aws-lc-rs`) carries the OpenSSL licence, which is not in
+our allow-list, so the netbox builds `russh` with `default-features = false` and the `ring`
+backend instead. That also keeps the build free of `cmake`.
 
 ## Planned, with conditions
 

@@ -124,3 +124,23 @@ editor-changed-title = 磁盘上已更改
 editor-changed-body = { $name } 自打开后在磁盘上已更改。要覆盖吗？
 editor-reloaded = 已从磁盘重新加载 { $name }
 editor-failed = { $name }：{ $error }
+
+# netbox (SPEC 04 §6)
+net-sites-title = 连接
+net-sites-hint = 回车连接 · n 新建 · d 断开 · Esc 关闭
+net-no-sites = 还没有站点。按 `n` 输入 URL，或在配置中添加 [[site]] 块。
+net-prompt-url = 连接到：
+net-prompt-password = { $user }@{ $host } 的密码：
+net-prompt-passphrase = { $user }@{ $host } 密钥的口令：
+net-connecting = 正在连接 { $host }…
+net-connected = 已连接 { $host }
+net-disconnected = { $host } 已断开
+net-not-connected = { $host } 未连接
+net-local-panel = 此面板位于本地文件系统
+net-nothing-pending = 没有连接在等待它
+net-hostkey-title = 未知主机密钥
+net-hostkey-body = { $host } 不在 known_hosts 中。其指纹为：
+net-hostkey-question = 记录并连接？
+net-fetching = 正在获取 { $name }…
+net-viewing-copy = { $name }：本地副本，为查看器获取
+net-too-big = { $name } 超过 { $limit }：请提高 net.fetch_limit_mb
