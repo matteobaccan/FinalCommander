@@ -113,14 +113,30 @@ key→action pairs**. No documentation text is copied.
 
 ## 5. Outbound licence for SupremeCommander
 
-Recommendation: **dual MIT OR Apache-2.0**, the Rust ecosystem default. It is compatible with
-pulling in BSD/MIT/Apache code (including FAR fragments, with notices), it lets anyone embed the
-engine crates, and it keeps the door open to a GPL-licensed *optional* plugin living in a
-separate crate/repo.
+**Decided: MIT** (`LICENSE` in the repository root, copyright "Matteo Baccan and the
+SupremeCommander contributors").
 
-Pick GPL-3.0 instead only if we decide we want copyleft or if we end up needing to vendor GPL
-code (an mc/Krusader algorithm, a GPL archive backend). That decision is the repository owner's;
-nothing in the specs depends on it.
+Consequences of that choice, recorded so nobody has to re-derive them:
+
+- Inbound compatibility: we may use MIT, BSD-2/3, Apache-2.0, ISC, Zlib and MPL-2.0 (file-level)
+  dependencies. FAR Manager fragments (BSD-3) may be reused, keeping their notice in
+  `THIRD-PARTY.md`.
+- **No GPL/LGPL/AGPL code in the shipped binary's default feature set.** An LGPL component is
+  acceptable only as a *dynamically loaded, optional* library (e.g. a system `7z.dll`/
+  `liblzma`), never statically linked into the default build. `cargo deny` enforces the
+  allow-list.
+- Non-free pieces stay out of the default build: the UnRAR library (its licence forbids using
+  the source to re-create the RAR compression algorithm) is an opt-in cargo feature,
+  disabled in distro packages, with its notice shipped alongside.
+- Contributions are under MIT by the usual inbound=outbound rule (stated in `CONTRIBUTING.md`);
+  no CLA.
+- A GPL-licensed *plugin* may exist outside this repository: plugins are separate artifacts
+  (WASM/Lua) loaded at runtime, so their licence is their author's business.
+
+Apache-2.0 was considered for its explicit patent grant (the Rust ecosystem's usual
+`MIT OR Apache-2.0`); MIT alone was chosen for simplicity. If a patent grant is ever needed,
+re-licensing to `MIT OR Apache-2.0` only requires contributor agreement, which inbound=outbound
+keeps feasible.
 
 ## 6. Operating rules for contributors (clean-room-ish)
 

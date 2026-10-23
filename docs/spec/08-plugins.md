@@ -126,3 +126,58 @@ A JSON index (git-hosted) listing plugins with their versions, checksums, capabi
 source URLs; `sc plugin search/install/update/remove` verifies the checksum and signature,
 installs into `plugins/<id>/<version>/`, and never auto-updates. Everything the registry
 installs is WASM or Lua — never a binary blob.
+
+## 7. Porting the existing plugin ecosystems (and why plugins must be portable too)
+
+**We rewrite the plugins. We do not load FAR's or Total Commander's.** Their plugins are
+Windows DLLs compiled against a C/C++ ABI, they call Win32 directly, and several are GPL or
+closed source — so they are neither loadable nor relicensable on Linux/macOS. Binary
+compatibility would also freeze our internals around a 1990s Windows API.
+
+So portability is a property of the plugin *model*, not of a compatibility layer:
+
+| Tier | Form | Portability | Who writes it |
+| --- | --- | --- | --- |
+| **Core** | Rust inside the workspace | builds everywhere we build | us |
+| **First-party plugin** | WASM component (or Lua script) in this repo, MIT | **one artifact, every OS and CPU** | us |
+| **Third-party plugin** | WASM component or Lua script | same single artifact | anyone |
+| **Native plugin** (M4, last resort) | `cdylib` against the `sc_plugin_v1` C ABI | per-platform, declared in the manifest | only where WASM cannot reach the OS |
+
+Rules that keep the promise:
+
+1. **No core feature may depend on a non-portable plugin.** If something only works via a
+   native plugin, it is an extra, never part of a milestone's definition of done.
+2. A plugin manifest declares `platforms = ["*"]` for WASM/Lua, or an explicit list
+   (`["windows-x86_64"]`) for native ones; the UI shows the difference and the registry filters
+   by platform.
+3. WASM plugins get no ambient authority: filesystem and network access go through the host's
+   capability-scoped API (`vfs:net`, `vfs:fs:<root>`), so a plugin behaves identically on all
+   three OSes — it never sees a drive letter or a `/proc` path unless we hand it one.
+4. Anything genuinely OS-specific that we still want everywhere (trash, clipboard, drives,
+   elevation, FS watch, PTY) lives in `sc-platform` in the core, not in plugins.
+
+### Where the classic plugins land
+
+| Classic plugin (FAR / TC / far2l) | Our destination | Why |
+| --- | --- | --- |
+| multiarc, arclite, zip/7z packers (WCX) | **core** VFS providers (`zip`, `tar`, `7z`, `libarchive` fallback) — SPEC 04 §3 | archives are table stakes, must work offline on every platform |
+| NetRocks, FTP/SFTP/WebDAV/S3/SMB (WFX) | **core** VFS providers + connection manager | ditto; async networking belongs in the engine, not in a sandbox |
+| TmpPanel | **core** (temp panel kind, SPEC 02 §7) | it is panel behaviour, not an add-on |
+| Advanced compare, SyncDirs, Checksums, split/combine, multi-rename | **core** tools (SPEC 03, SPEC 06) | they drive the job engine |
+| Colorer (syntax highlighting) | **core** tree-sitter highlighter + a `highlighter` plugin interface | grammars are data, loaded at runtime |
+| Hexitor, ImageViewer, Markdown/Office viewers (WLX "Lister") | **first-party plugins** via `viewer-provider` / preview pipeline | optional, perfect WASM fit (pure transforms) |
+| EditorComp, autowrap, align, drawline, editcase, SimpleIndent, truncate… | **Lua scripts** shipped in `scripts/` | tiny editor behaviours, hot-reloadable |
+| Macros (FAR 3 / far2m Lua) | **core** macro engine + Lua API (§2, §5) | keys, menus and scripts share the command bus |
+| ADB, MTP | **first-party plugin**; MTP may need a **native** one | `adb` is an external binary (portable); `libmtp` is not |
+| Process list, registry, services | **first-party plugins** per platform, same `vfs-provider` interface | the interface is portable, the data source is not |
+| Git status/branch panel | **first-party plugin** (WASM, shells out via the host) | optional, nice to have, no core coupling |
+| Python plugin (far2l) | **not reimplemented**: Lua is our scripting runtime | one scripting VM is enough; a WASM plugin may embed any language |
+| TC packer plugins (WCX) on Windows | **optional bridge** (M4), written against the published ABI only, Windows-only, clearly labelled non-portable | lets veterans keep exotic formats without polluting the core |
+
+### Migration path for plugin authors
+
+`sc plugin new <id> --kind vfs|viewer|column|command|highlighter` scaffolds a Rust project that
+compiles to a WASM component against the versioned WIT interfaces, plus a `plugin.toml` and a
+test harness that runs the VFS conformance suite against it. A FAR/TC plugin author therefore
+ports *logic*, not glue: the interfaces are deliberately close in shape (list / open / read /
+write for VFS, can-handle / render for viewers) so the port is mechanical.

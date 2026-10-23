@@ -160,9 +160,16 @@ hidden = "#808080"
 
 - `fluent` catalogues per language in `i18n/<lang>/*.ftl`, compiled in, plus an override
   directory so a translator can iterate without rebuilding (MTN2's approach).
-- Launch languages: English (source), Italian, Russian, German; the project accepts more.
+- Shipped languages: **English** (source), **Italian**, **German**, **French**, **Spanish**,
+  **Russian**, **Chinese (Simplified, `zh-Hans`)**. Language is chosen in the settings or with
+  `ui.language`/`--lang`; `auto` follows the OS locale and falls back to English. Adding a
+  language means dropping an `i18n/<lang>/` directory next to the binary — no rebuild.
 - Rules: no string concatenation in code; plurals and gender through fluent; every message has
   an id; `sc --i18n-lint` finds missing/unused ids in CI.
+- Russian and Chinese drive two requirements that are not optional: full Unicode input/display
+  (no codepage assumptions anywhere) and correct double-width layout for CJK. Both are tested
+  per language in the snapshot suite, and German/French/Spanish strings are the ones that break
+  narrow dialogs, so every dialog has a long-string snapshot test.
 - Width-aware layout: labels are measured in terminal columns, dialogs auto-size, and
   truncation happens on grapheme boundaries. CJK/wide and combining characters are tested with
   a dedicated snapshot suite.
