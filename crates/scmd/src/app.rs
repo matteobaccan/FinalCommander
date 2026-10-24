@@ -5621,7 +5621,10 @@ impl App {
             // It is rooted where the other panel's path starts — the drive, or the archive, or
             // the server — and opens its way down to where that panel is, so it comes up with
             // the cursor on the directory the user is already looking at.
-            let here = self.panels[1 - index].cwd.clone();
+            // The spelling the filesystem uses, not the one the panel shows: the tree can only
+            // put its cursor on a row a listing produced, and a listing of `/tmp` on macOS
+            // says `/private/tmp`, while Windows may hand us `RUNNER~1` for a long name.
+            let here = scmd_vfs::local::real_path(&self.panels[1 - index].cwd);
             let mut tree = crate::tree::Tree::new(here.root());
             tree.want = Some(here);
             self.active = index;

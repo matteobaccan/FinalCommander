@@ -62,6 +62,42 @@ impl Vfs for LocalVfs {
     }
 }
 
+/// The path as the filesystem itself spells it.
+///
+/// Symbolic links are resolved — `/tmp` on macOS is really `/private/tmp` — and on Windows a
+/// short `RUNNER~1` comes back as the long name. Anything that walks a directory and then
+/// tries to find a given path among the rows needs this, because the rows carry the spelling
+/// the filesystem gave them and nothing else will match.
+///
+/// A path we cannot resolve is returned as it is: a server, an archive, or something that has
+/// been removed since. This is never used to *show* a path — a panel shows what the user
+/// typed — only to look one up.
+pub fn real_path(path: &VPath) -> VPath {
+    if !path.is_local() || path.in_container() {
+        return path.clone();
+    }
+    match fs::canonicalize(path.as_path()) {
+        Ok(real) => VPath::local(strip_verbatim(real)),
+        Err(_) => path.clone(),
+    }
+}
+
+/// Windows' `canonicalize` hands back a verbatim path (`\\?\C:\x`), which no listing of ours
+/// ever produces and which the user would not recognise. Everything else is already plain.
+fn strip_verbatim(path: std::path::PathBuf) -> std::path::PathBuf {
+    if !cfg!(windows) {
+        return path;
+    }
+    let text = path.to_string_lossy().into_owned();
+    if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
+        return std::path::PathBuf::from(format!(r"\\{rest}"));
+    }
+    match text.strip_prefix(r"\\?\") {
+        Some(rest) => std::path::PathBuf::from(rest),
+        None => path,
+    }
+}
+
 /// The synchronous core of [`LocalVfs::list`], kept public for tests and for the sizing walker.
 pub fn list_blocking(path: &VPath, cancel: &CancelToken) -> Result<Vec<Entry>> {
     if path.in_container() {
@@ -196,6 +232,43 @@ fn entry_id(full: &Path, _meta: &Metadata) -> EntryId {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_path_comes_back_the_way_the_filesystem_spells_it() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("real")).unwrap();
+        let here = VPath::local(dir.path().join("real"));
+
+        // Whatever the platform does to a temporary path — `/private` on macOS, a short name
+        // on Windows — the answer is a path that a listing of its parent would produce.
+        let real = real_path(&here);
+        assert!(real.as_path().is_dir(), "{real}");
+        let parent = real.parent().expect("a parent");
+        let names = list_blocking(&parent, &CancelToken::new()).expect("the listing");
+        assert!(
+            names.iter().any(|e| e.name_str() == real.display_name()),
+            "{} is not among {:?}",
+            real,
+            names
+                .iter()
+                .map(|e| e.name_str().into_owned())
+                .collect::<Vec<_>>()
+        );
+
+        // A link resolves to what it points at, which is the whole reason this exists.
+        #[cfg(unix)]
+        {
+            let link = dir.path().join("link");
+            std::os::unix::fs::symlink(dir.path().join("real"), &link).unwrap();
+            assert_eq!(real_path(&VPath::local(&link)), real);
+        }
+
+        // What cannot be resolved comes back untouched rather than empty.
+        let gone = VPath::local(dir.path().join("not-here"));
+        assert_eq!(real_path(&gone), gone);
+        let remote = VPath::remote(scmd_core::Scheme::Sftp, "host", "/srv");
+        assert_eq!(real_path(&remote), remote);
+    }
     use super::*;
 
     #[test]

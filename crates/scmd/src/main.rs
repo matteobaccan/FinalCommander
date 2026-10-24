@@ -1675,9 +1675,13 @@ mod tests {
             "it is still looking for {:?}",
             tree.want
         );
-        assert_eq!(tree.path(), Some(VPath::local(&here)));
+        // Through the link, the real directory is the one the tree lands on.
+        assert_eq!(
+            tree.path(),
+            Some(scmd_vfs::local::real_path(&VPath::local(&here)))
+        );
         assert!(
-            tree.rows.iter().any(|r| r.name() == "link"),
+            tree.rows.iter().any(|r| r.name() == "real"),
             "the link is not in the tree: {:?}",
             tree.rows.iter().map(|r| r.name()).collect::<Vec<_>>()
         );
@@ -1802,9 +1806,12 @@ mod tests {
         assert_eq!(app.panels[1].content, crate::panel::Content::Tree);
         assert_eq!(app.active, 1, "the tree takes the focus");
         let tree = app.trees[1].as_ref().expect("a tree");
+        // The filesystem's own spelling of the directory: on macOS a temporary path goes
+        // through `/private`, and on Windows it can arrive in its short `RUNNER~1` form.
+        let real = scmd_vfs::local::real_path(&VPath::local(&here));
         assert_eq!(
             tree.path(),
-            Some(VPath::local(&here)),
+            Some(real),
             "the cursor should be on the other panel's own directory"
         );
         assert!(tree.want.is_none(), "it stopped looking");
