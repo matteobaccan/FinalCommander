@@ -1,0 +1,12 @@
+# What the `message` action is for: something worth reading rather than a line that scrolls by.
+[plugin]
+id = "big-here"
+name = "Big here"
+scmd = ">=0.1.0"
+
+[[command]]
+id = "user.disk.big-here"
+label = "What is taking up the room here"
+run = "big.sh"
+needs = ["panel"]
+timeout = 60

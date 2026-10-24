@@ -1,0 +1,12 @@
+# What the `select` action is for: the panel's selection, set from something only git knows.
+[plugin]
+id = "git-select"
+name = "Git select"
+scmd = ">=0.1.0"
+
+[[command]]
+id = "user.git.select-changed"
+label = "Git: select the files that changed"
+run = "select.sh"
+needs = ["panel"]
+timeout = 15

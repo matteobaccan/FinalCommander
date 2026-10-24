@@ -193,6 +193,13 @@ pub struct Command {
     pub scope: Option<String>,
     /// The program to run, relative to the plugin's own directory.
     pub run: String,
+    /// What to run on Windows instead, when the two cannot be one file.
+    ///
+    /// A shell script and a `.cmd` are not interchangeable, and the point of this program is
+    /// that habits carry across systems — so a plugin gets to be portable too. Absent means
+    /// `run` serves everywhere, which is right for anything that is not a script.
+    #[serde(default)]
+    pub run_windows: Option<String>,
     /// What it is given. Nothing is passed that is not asked for, so a plugin that wants the
     /// selection says so and one that does not never sees it.
     #[serde(default)]
@@ -203,6 +210,24 @@ pub struct Command {
 }
 
 impl Command {
+    /// Which program this platform runs: `run_windows` on Windows when it is given.
+    pub fn program(&self) -> &str {
+        match (cfg!(windows), self.run_windows.as_deref()) {
+            (true, Some(windows)) => windows,
+            _ => self.run.as_str(),
+        }
+    }
+
+    /// The one for the *other* platform, which is checked for shape but not for existence:
+    /// a plugin written for both should not fail to load on one of them.
+    pub fn other_program(&self) -> Option<&str> {
+        let other = match cfg!(windows) {
+            true => Some(self.run.as_str()),
+            false => self.run_windows.as_deref(),
+        };
+        other.filter(|p| *p != self.program())
+    }
+
     /// Is `id` something a plugin may define? The built-in vocabulary is not.
     pub fn id_is_allowed(id: &str) -> bool {
         let id = id.trim();
@@ -370,7 +395,13 @@ impl Plugin {
                 });
             }
             // The same rule as a `file =` entry: inside the plugin's directory, or nothing.
-            safe_join(dir, &path, ItemKind::Command, &command.run)?;
+            // Only for the program this platform would run — the other one is checked for
+            // shape alone, because a plugin that ships a script for each system must load on
+            // both and the file for the other one need not even be there.
+            safe_join(dir, &path, ItemKind::Command, command.program())?;
+            if let Some(other) = command.other_program() {
+                safe_shape(&path, ItemKind::Command, other)?;
+            }
         }
 
         Ok(Plugin {
@@ -381,12 +412,13 @@ impl Plugin {
         })
     }
 
-    /// The commands this plugin provides, with the program resolved to a real path.
+    /// The commands this plugin provides, with the program for *this* platform resolved to a
+    /// real path.
     pub fn commands(&self) -> Vec<(&Command, PathBuf)> {
         self.manifest
             .commands
             .iter()
-            .map(|c| (c, self.dir.join(c.run.trim())))
+            .map(|c| (c, self.dir.join(c.program().trim())))
             .collect()
     }
 
@@ -627,6 +659,34 @@ fn resolve(
     }
 }
 
+/// The half of `safe_join` that does not touch the filesystem: is this a relative path that
+/// names something inside the directory, saying nothing about whether it is there?
+///
+/// For the program of the platform we are *not* on. A `.cmd` beside a `.sh` has to be refused
+/// if it says `../../../bin/sh`, and must not be required to exist on a machine that would
+/// never run it.
+fn safe_shape(manifest: &str, kind: ItemKind, file: &str) -> Result<(), PlugError> {
+    let escape = || PlugError::Escape {
+        path: manifest.to_string(),
+        section: kind.section(),
+        file: file.to_string(),
+    };
+    let relative = Path::new(file.trim());
+    let mut named_something = false;
+    for component in relative.components() {
+        match component {
+            Component::Normal(_) => named_something = true,
+            Component::CurDir => {}
+            _ => return Err(escape()),
+        }
+    }
+    if named_something {
+        Ok(())
+    } else {
+        Err(escape())
+    }
+}
+
 /// Join a `file = ` entry to the plugin's directory, or refuse.
 ///
 /// A manifest is data somebody downloaded, and the plugins folder is the only directory this
@@ -772,6 +832,51 @@ impl Requirement {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_command_can_name_a_program_for_each_system() {
+        let one = Command {
+            id: "user.x".into(),
+            label: "X".into(),
+            scope: None,
+            run: "x.sh".into(),
+            run_windows: Some("x.cmd".into()),
+            needs: Vec::new(),
+            timeout: None,
+        };
+        // This platform's program, and the other one named for the shape check.
+        if cfg!(windows) {
+            assert_eq!(one.program(), "x.cmd");
+            assert_eq!(one.other_program(), Some("x.sh"));
+        } else {
+            assert_eq!(one.program(), "x.sh");
+            assert_eq!(one.other_program(), Some("x.cmd"));
+        }
+        // With no Windows program, `run` serves everywhere and there is no other.
+        let both = Command {
+            run_windows: None,
+            ..one.clone()
+        };
+        assert_eq!(both.program(), "x.sh");
+        assert_eq!(both.other_program(), None);
+        // The same file named twice is not two programs.
+        let same = Command {
+            run_windows: Some("x.sh".into()),
+            ..one
+        };
+        assert_eq!(same.other_program(), None);
+    }
+
+    #[test]
+    fn the_other_systems_program_is_checked_for_shape_without_being_opened() {
+        // It need not exist — the point of the check — but it may not leave the directory.
+        assert!(safe_shape("m", ItemKind::Command, "nowhere.cmd").is_ok());
+        assert!(safe_shape("m", ItemKind::Command, "./deep/nowhere.cmd").is_ok());
+        assert!(safe_shape("m", ItemKind::Command, "../escape.cmd").is_err());
+        assert!(safe_shape("m", ItemKind::Command, "/bin/sh").is_err());
+        assert!(safe_shape("m", ItemKind::Command, "").is_err());
+        assert!(safe_shape("m", ItemKind::Command, ".").is_err());
+    }
     use super::*;
 
     /// A plugin directory with the manifest text given, and nothing else.

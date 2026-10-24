@@ -1,3 +1,4 @@
+# The smallest useful plugin: one command, one script, one line of answer.
 [plugin]
 id = "git-here"
 name = "Git here"
@@ -7,5 +8,6 @@ scmd = ">=0.1.0"
 id = "user.git.status"
 label = "Git: what has changed here"
 run = "status.sh"
+run_windows = "status.cmd"
 needs = ["panel"]
 timeout = 15

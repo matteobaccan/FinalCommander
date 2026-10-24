@@ -1,0 +1,12 @@
+# Two actions in one answer: run a command of the program's own vocabulary, then go somewhere.
+[plugin]
+id = "dated-folder"
+name = "Dated folder"
+scmd = ">=0.1.0"
+
+[[command]]
+id = "user.folder.dated"
+label = "Make a folder named today, and go into it"
+run = "dated.sh"
+needs = ["panel"]
+timeout = 10

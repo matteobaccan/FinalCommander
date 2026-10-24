@@ -1563,12 +1563,11 @@ timeout = 10
         assert_eq!(count, 1, "{problems:?}");
     }
 
-    /// The example plugin in the repository loads and provides what its README says.
-    ///
-    /// An example that does not work is worse than no example, and this one is three files in
-    /// a folder — exactly the thing somebody copies to start from.
+    /// Every example plugin in the repository loads, and each one's program is there and
+    /// runnable. An example that does not work is worse than no example — and these are what
+    /// somebody copies to start from.
     #[test]
-    fn the_example_plugin_loads() {
+    fn the_example_plugins_load() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .and_then(|p| p.parent())
@@ -1579,27 +1578,78 @@ timeout = 10
         let mut warnings = Vec::new();
         let (_, _, commands) = load_plugins(&paths, ThemeSet::builtin_only(), &mut warnings);
         assert!(warnings.is_empty(), "{warnings:?}");
-        assert!(
-            commands.iter().any(|c| c.id == "user.git.status"),
-            "the example's command is missing: {:?}",
+
+        // Every folder under examples/plugins is a plugin, so every one of them must have
+        // produced a command: a folder nobody loads is an example nobody can use.
+        let folders = std::fs::read_dir(&root)
+            .unwrap()
+            .flatten()
+            .filter(|e| e.path().is_dir())
+            .count();
+        assert!(folders >= 4, "only {folders} example plugins?");
+        assert_eq!(
+            commands.len(),
+            folders,
+            "{folders} folders but {} commands: {:?}",
+            commands.len(),
             commands.iter().map(|c| &c.id).collect::<Vec<_>>()
         );
-        // And its program is there, and executable where that is a thing.
-        let program = &commands
-            .iter()
-            .find(|c| c.id == "user.git.status")
-            .unwrap()
-            .program;
-        assert!(program.is_file(), "{}", program.display());
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mode = std::fs::metadata(program).unwrap().permissions().mode();
+
+        for command in &commands {
             assert!(
-                mode & 0o111 != 0,
-                "the host runs it, so it has to be executable"
+                command.id.starts_with("user."),
+                "{} is not in the plugin name space",
+                command.id
             );
+            assert!(!command.label.is_empty(), "{} has no label", command.id);
+            assert!(
+                command.program.is_file(),
+                "{}: {} is not there",
+                command.id,
+                command.program.display()
+            );
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let mode = std::fs::metadata(&command.program)
+                    .unwrap()
+                    .permissions()
+                    .mode();
+                assert!(
+                    mode & 0o111 != 0,
+                    "{}: the host runs it, so it has to be executable",
+                    command.id
+                );
+            }
         }
+    }
+
+    /// The one example that ships a program for each system: on Unix the host picks the shell
+    /// script, on Windows the `.cmd`, and both files are in the folder either way.
+    #[test]
+    fn an_example_with_two_programs_picks_the_one_for_this_system() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(|p| p.parent())
+            .unwrap()
+            .join("examples/plugins/git-here");
+        let plugin = scmd_plug::Plugin::load(&root).expect("it loads");
+        let (declared, program) = plugin.commands().into_iter().next().expect("one command");
+        assert_eq!(declared.run, "status.sh");
+        assert_eq!(declared.run_windows.as_deref(), Some("status.cmd"));
+        let name = program.file_name().unwrap().to_string_lossy().into_owned();
+        assert_eq!(
+            name,
+            if cfg!(windows) {
+                "status.cmd"
+            } else {
+                "status.sh"
+            }
+        );
+        // The other system's program is in the folder too, so the example is complete on a
+        // machine that cannot run it.
+        assert!(root.join("status.sh").is_file());
+        assert!(root.join("status.cmd").is_file());
     }
 
     /// An app looking at two real directories.

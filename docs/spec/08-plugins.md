@@ -29,6 +29,7 @@ id = "user.git.branch"            # `user.` or `plugin.`; the built-in names are
 label = "Git: checkout branch"    # what F11 and the palette show
 scope = "panel"                   # panel, viewer, editor, global
 run = "branch.sh"                 # inside the plugin's own directory, checked at load
+run_windows = "branch.cmd"        # optional: a shell script and a .cmd are not one file
 needs = ["panel", "selection"]    # nothing is passed that is not asked for
 timeout = 20                      # seconds; a plugin that hangs is killed and said so
 ```
@@ -57,6 +58,13 @@ could have done. A `run` that names nothing is an error on screen, not a silence
 
 A line of output that is not an action is kept and shown rather than dropped: a plugin writing
 for a human is how a half-written plugin behaves, and swallowing it would make it undebuggable.
+
+**Two systems, two programs.** `run_windows` is run on Windows when it is given and `run`
+everywhere else, because a shell script and a `.cmd` are not interchangeable — and a program
+whose whole point is that habits carry across systems should let a plugin be portable too.
+Both are checked at load for leaving the plugin's folder; only the one this system would run
+has to exist, so a plugin written for both loads on either. `examples/plugins/` has four
+worked examples, one per action, and the one that ships a program for each system.
 
 Refused at load, not at the first press: a command id outside the plugin space, a `run` that
 leaves the plugin's directory (by `..`, by an absolute path or through a symlink), a `needs`
