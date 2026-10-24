@@ -792,8 +792,11 @@ pub struct App {
     pub plugin_commands: Vec<PluginCommand>,
     /// Recorded macros (SPEC 08 §5), as `scmd-macros.toml` holds them.
     pub macros: scmd_cmd::Macros,
-    /// The steps gathered so far, while `Ctrl+.` is recording.
+    /// The steps gathered so far, while `Ctrl+.` is recording, and where the recording
+    /// started: a run of editor keys would mean something else entirely in a panel, so the
+    /// scope is part of what is recorded rather than assumed afterwards.
     pub recording: Option<Vec<scmd_cmd::Step>>,
+    recording_scope: scmd_cmd::Scope,
     /// The key being dispatched, while recording. `run` takes it to mean "this key became a
     /// command"; whatever is left after dispatch was consumed as a keystroke instead.
     record_key: Option<Key>,
@@ -917,6 +920,7 @@ impl App {
             plugin_commands,
             macros,
             recording: None,
+            recording_scope: scmd_cmd::Scope::Panel,
             record_key: None,
             playing: 0,
             background: Vec::new(),
@@ -5519,6 +5523,7 @@ impl App {
         match self.recording.take() {
             None => {
                 self.recording = Some(Vec::new());
+                self.recording_scope = self.scope();
                 let m = self.i18n.t("macro-recording");
                 self.set_status(m);
             }
@@ -5529,7 +5534,7 @@ impl App {
             Some(steps) => {
                 // The key is pressed rather than typed, which is how one knows it is free.
                 self.mode = Mode::MacroKey { steps };
-            }
+            } // (the empty case is above: nothing recorded is nothing to assign)
         }
     }
 
@@ -5541,9 +5546,9 @@ impl App {
             self.set_status(m);
             return;
         }
-        // The scope it was recorded in is the scope it plays in: a macro of editor keys
-        // would do something else entirely in the panel.
-        let scope = scmd_cmd::Scope::Panel;
+        // The scope recording started in, not the one this key was pressed in: stopping a
+        // recording is itself a keystroke, and by now one may be looking at something else.
+        let scope = self.recording_scope;
         let title = self
             .i18n
             .t_args("macro-describe", &[("key", key.to_string().into())]);
@@ -9344,6 +9349,9 @@ mod tests {
         assert!(written.contains("key = \"Alt+9\""), "{written}");
         assert!(written.contains("panel.hidden.toggle"), "{written}");
 
+        // The scope is the one recording started in, which here is the panel.
+        assert_eq!(saved.scope, scmd_cmd::Scope::Panel);
+
         // Playing it: the key now does what was recorded, twice over.
         let hidden_before = app.panels[app.active].show_hidden;
         let cursor_before = app.panels[app.active].cursor;
@@ -9355,6 +9363,34 @@ mod tests {
         let again = app_with_macros(dir.path());
         assert_eq!(again.macros.all.len(), 1);
         assert_eq!(again.macros.all[0].description, "hide-and-step");
+    }
+
+    #[test]
+    fn a_macro_recorded_in_the_editor_belongs_to_the_editor() {
+        let dir = tempfile::tempdir().unwrap();
+        let text = dir.path().join("notes.txt");
+        std::fs::write(&text, "one\ntwo\n").unwrap();
+        let mut app = app_with_macros(dir.path());
+
+        // Record inside the editor, and assign the macro while looking at something else:
+        // the scope is where the recording started, not where it was stopped.
+        app.open_hex(&text);
+        press(&mut app, "Ctrl+.");
+        press(&mut app, "Down");
+        press(&mut app, "Ctrl+.");
+        let Mode::MacroKey { .. } = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        press(&mut app, "Alt+7");
+        press(&mut app, "Enter");
+        assert_eq!(app.macros.all.len(), 1, "{:?}", app.status);
+        assert_eq!(app.macros.all[0].scope, scmd_cmd::Scope::Editor);
+
+        // So the key does nothing in the panels, and the macro is still there.
+        app.mode = Mode::Normal;
+        let before = app.panels[app.active].cursor;
+        press(&mut app, "Alt+7");
+        assert_eq!(app.panels[app.active].cursor, before);
     }
 
     #[test]
