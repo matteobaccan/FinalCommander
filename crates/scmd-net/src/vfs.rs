@@ -259,6 +259,72 @@ mod tests {
         assert!(!router.caps_for(&site.start()).contains(Caps::HARDLINKS));
     }
 
+    /// An `s3://` path goes to the object provider the router was handed, and the netbox is
+    /// not consulted about it — which is the whole point of handing it over as a trait object.
+    #[tokio::test]
+    async fn an_object_path_goes_to_the_object_provider() {
+        /// Not the real one: the S3 provider is tested against a service in its own crate,
+        /// and what this has to prove is the routing.
+        #[derive(Debug)]
+        struct Stub;
+
+        #[async_trait]
+        impl Vfs for Stub {
+            fn scheme(&self) -> &'static str {
+                "s3"
+            }
+
+            fn caps(&self) -> Caps {
+                Caps::READ | Caps::SEEK
+            }
+
+            async fn list(&self, _path: &VPath, _cancel: CancelToken) -> CoreResult<Vec<Entry>> {
+                Ok(vec![Entry::parent_entry()])
+            }
+
+            async fn stat(&self, _path: &VPath) -> CoreResult<Entry> {
+                Ok(Entry::parent_entry())
+            }
+
+            async fn list_dir(&self, _path: &VPath, _cancel: CancelToken) -> CoreResult<Dir> {
+                Ok(Dir::partial(
+                    vec![Entry::parent_entry()],
+                    "the first 1 of many",
+                ))
+            }
+        }
+
+        let router = Router::new(Pool::new()).with_objects(Arc::new(Stub));
+        let path = VPath::parse("s3://logs/2024/08/");
+        assert_eq!(path.scheme(), scmd_core::Scheme::S3);
+        assert_eq!(
+            router.list(&path, CancelToken::new()).await.unwrap().len(),
+            1
+        );
+        // And the listing's own account of itself survives the routing.
+        let dir = router.list_dir(&path, CancelToken::new()).await.unwrap();
+        assert!(!dir.complete);
+        assert_eq!(dir.note.as_deref(), Some("the first 1 of many"));
+        // Capabilities follow the path: object storage cannot rename.
+        assert!(router.caps_for(&path).contains(Caps::READ));
+        assert!(!router.caps_for(&path).contains(Caps::RENAME));
+        // A local path is unaffected by any of this.
+        assert!(router.caps_for(&VPath::local("/tmp")).contains(Caps::WRITE));
+    }
+
+    /// With nothing configured, an `s3://` path must not read like a network failure.
+    #[tokio::test]
+    async fn an_object_path_with_no_service_configured_says_what_to_do() {
+        let router = Router::new(Pool::new());
+        let err = router
+            .list(&VPath::parse("s3://logs/2024/"), CancelToken::new())
+            .await
+            .unwrap_err();
+        let text = err.to_string();
+        assert!(text.contains("s3://logs/2024"), "{text}");
+        assert!(text.contains("[[s3]]"), "{text}");
+    }
+
     #[tokio::test]
     async fn a_path_whose_host_is_not_connected_says_so() {
         let router = Router::new(Pool::new());
