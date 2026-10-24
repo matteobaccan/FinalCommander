@@ -23,7 +23,7 @@ panel-reading-error = cannot read this directory: { $error }
 prompt-select-mask = Select files by mask:
 prompt-deselect-mask = Deselect files by mask:
 prompt-goto = Change directory to:
-prompt-filter = Show only names containing:
+prompt-filter = File mask or part of a name:
 prompt-search = Quick search:
 
 # Dialogs

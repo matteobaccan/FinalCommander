@@ -20,7 +20,7 @@ panel-reading-error = 无法读取该目录：{ $error }
 prompt-select-mask = 按通配符选择文件：
 prompt-deselect-mask = 按通配符取消选择：
 prompt-goto = 切换到目录：
-prompt-filter = 只显示包含以下内容的名称：
+prompt-filter = 文件掩码或名称片段：
 prompt-search = 快速查找：
 
 dialog-ok = 确定

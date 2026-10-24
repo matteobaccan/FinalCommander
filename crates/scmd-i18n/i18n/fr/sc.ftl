@@ -20,7 +20,7 @@ panel-reading-error = lecture du répertoire impossible : { $error }
 prompt-select-mask = Sélectionner les fichiers par masque :
 prompt-deselect-mask = Désélectionner les fichiers par masque :
 prompt-goto = Aller au répertoire :
-prompt-filter = N'afficher que les noms contenant :
+prompt-filter = Masque ou partie d'un nom :
 prompt-search = Recherche rapide :
 
 dialog-ok = OK

@@ -20,7 +20,7 @@ panel-reading-error = Verzeichnis nicht lesbar: { $error }
 prompt-select-mask = Dateien nach Maske auswählen:
 prompt-deselect-mask = Auswahl nach Maske aufheben:
 prompt-goto = Wechseln zu Verzeichnis:
-prompt-filter = Nur Namen zeigen, die enthalten:
+prompt-filter = Maske oder Teil des Namens:
 prompt-search = Schnellsuche:
 
 dialog-ok = OK

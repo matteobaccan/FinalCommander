@@ -547,6 +547,29 @@ impl Viewer {
         self.goto(top);
     }
 
+    /// The bytes per row that actually fit in `width`: never more than the setting, never
+    /// fewer than four, and always a power of two so an offset aligned to the setting stays
+    /// aligned to what we draw. A narrow window drops a column instead of cutting the
+    /// printable gutter in half, which is the one part of a hex dump a reader scans.
+    pub fn hex_fit(&self, width: u16) -> usize {
+        let mut bpr = 4;
+        for candidate in [4, 8, 16, 32, 64] {
+            if candidate > self.bytes_per_row {
+                break;
+            }
+            if hex_row_width(candidate) <= width {
+                bpr = candidate;
+            }
+        }
+        bpr
+    }
+
+    /// Columns a hex row needs: the offset, two spaces, the pairs with a gap every eight,
+    /// and the printable gutter between its bars.
+    pub fn hex_row_cols(&self, width: u16) -> u16 {
+        hex_row_width(self.hex_fit(width))
+    }
+
     // ── position ───────────────────────────────────────────────────────────────────────────
 
     pub fn goto(&mut self, offset: u64) {
@@ -633,9 +656,10 @@ impl Viewer {
             Mode::Text => self.scroll_text(delta, width, height),
             Mode::Disasm => self.scroll_disasm(delta),
             Mode::Hex => {
-                let step = self.bytes_per_row as i64 * delta;
+                let bpr = self.hex_fit(width) as u64;
+                let step = bpr as i64 * delta;
                 self.top = clamp_offset(self.top, step, self.source.len());
-                self.top -= self.top % self.bytes_per_row as u64;
+                self.top -= self.top % bpr;
             }
             Mode::Dump => {
                 let step = width.max(1) as i64 * delta;
@@ -916,8 +940,8 @@ impl Viewer {
         out
     }
 
-    fn rows_hex(&mut self, _width: u16, height: u16) -> Vec<Row> {
-        let bpr = self.bytes_per_row;
+    fn rows_hex(&mut self, width: u16, height: u16) -> Vec<Row> {
+        let bpr = self.hex_fit(width);
         let len = self.source.len();
         let mut out = Vec::with_capacity(height as usize);
         let mut offset = self.top;
@@ -1131,6 +1155,12 @@ fn clamp_offset(current: u64, delta: i64, len: u64) -> u64 {
     } else {
         current.saturating_sub((-delta) as u64)
     }
+}
+
+/// Columns one hex row occupies for `bpr` bytes.
+fn hex_row_width(bpr: usize) -> u16 {
+    // `00000000  ` + `XX ` each + a space every eight + `|` + the printables + `|`.
+    (8 + 2 + bpr * 3 + bpr / 8 + 1 + bpr + 1) as u16
 }
 
 /// Cut a string to `cols` display columns without the ellipsis a user would mistake for data.
@@ -1364,6 +1394,36 @@ mod tests {
         // F4 goes back to the mode we came from.
         v.toggle_hex();
         assert_eq!(v.mode, Mode::Text);
+    }
+
+    #[test]
+    fn a_hex_row_never_overruns_the_window() {
+        let mut v = viewer(&(0u8..=255).collect::<Vec<_>>());
+        v.set_mode(Mode::Hex);
+        for width in [30u16, 45, 60, 78, 100] {
+            let rows = v.rows(width, 4);
+            for row in &rows {
+                assert!(
+                    row.text.chars().count() <= width as usize,
+                    "width {width} produced a {} column row: {}",
+                    row.text.chars().count(),
+                    row.text
+                );
+                assert!(
+                    row.text.ends_with('|'),
+                    "the printable gutter was cut: {}",
+                    row.text
+                );
+            }
+        }
+        // Wide enough for the setting and it is honoured; too narrow and it halves.
+        assert_eq!(v.hex_fit(100), 16);
+        assert_eq!(v.hex_fit(60), 8);
+        assert_eq!(v.hex_fit(30), 4);
+        // Never more than the setting, however much room there is.
+        v.set_bytes_per_row(-8);
+        assert_eq!(v.bytes_per_row, 8);
+        assert_eq!(v.hex_fit(200), 8);
     }
 
     #[test]

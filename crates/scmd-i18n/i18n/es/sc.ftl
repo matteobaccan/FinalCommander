@@ -20,7 +20,7 @@ panel-reading-error = no se puede leer el directorio: { $error }
 prompt-select-mask = Seleccionar archivos por máscara:
 prompt-deselect-mask = Deseleccionar archivos por máscara:
 prompt-goto = Ir al directorio:
-prompt-filter = Mostrar solo los nombres que contienen:
+prompt-filter = Máscara o parte de un nombre:
 prompt-search = Búsqueda rápida:
 
 dialog-ok = Aceptar

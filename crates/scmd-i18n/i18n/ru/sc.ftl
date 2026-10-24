@@ -20,7 +20,7 @@ panel-reading-error = не удалось прочитать каталог: { $
 prompt-select-mask = Отметить файлы по маске:
 prompt-deselect-mask = Снять отметку по маске:
 prompt-goto = Перейти в каталог:
-prompt-filter = Показывать только имена, содержащие:
+prompt-filter = Маска или часть имени:
 prompt-search = Быстрый поиск:
 
 dialog-ok = ОК

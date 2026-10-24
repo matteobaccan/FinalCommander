@@ -668,10 +668,22 @@ fn draw_viewer(app: &mut App, viewer: &mut scmd_view::Viewer, buf: &mut Buffer) 
     );
     buf.put_str(w - status_w, 0, &status_text, header, status_w);
 
-    // The structure pane takes the right-hand third, and the content keeps the rest.
+    // The structure pane takes what the content does not need. In hex the row width is
+    // decided by the data rather than the window, so the pane gets the remainder — that way
+    // the printable gutter stays whole instead of being cut off by the pane's frame.
     let mut body = body;
     let pane = if viewer.show_structure {
-        let pane_w = (body.w / 3).clamp(28, 48).min(body.w.saturating_sub(24));
+        let third = (body.w / 3).clamp(28, 48);
+        let pane_w = match viewer.mode {
+            scmd_view::Mode::Hex => body
+                .w
+                .saturating_sub(viewer.hex_row_cols(body.w.saturating_sub(third)))
+                // The pane absorbs the slack a fixed-width dump leaves over, rather than
+                // leaving a strip of empty columns between the bytes and its frame.
+                .clamp(24, 64),
+            _ => third,
+        }
+        .min(body.w.saturating_sub(24));
         if pane_w >= 24 {
             let at = Rect::new(body.right() - pane_w, body.y, pane_w, body.h);
             body = Rect::new(body.x, body.y, body.w - pane_w, body.h);
@@ -1323,6 +1335,243 @@ mod tests {
             }
             println!("=== {cmd} ===\n{}", frame(&mut app, 80, 24));
         }
+    }
+
+    /// A project directory as it really looks, so a screenshot shows columns doing work
+    /// rather than three rows of placeholder.
+    fn project(app: &mut App) {
+        let at = |days: u64| {
+            Some(std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(days * 86_400))
+        };
+        let mut rows = vec![Entry::parent_entry()];
+        let dirs = [
+            ("crates", 20_700),
+            ("docs", 20_720),
+            ("target", 20_740),
+            (".git", 20_690),
+        ];
+        for (name, day) in dirs {
+            let mut e = entry(name, EntryKind::Dir, 0);
+            e.mtime = at(day);
+            if name.starts_with('.') {
+                e.flags.insert(EntryFlags::HIDDEN);
+            }
+            rows.push(e);
+        }
+        let files = [
+            ("Cargo.toml", 1_284u64, 20_741),
+            ("Cargo.lock", 48_912, 20_741),
+            ("CHANGELOG.md", 7_430, 20_740),
+            ("LICENSE", 1_513, 20_612),
+            ("README.md", 12_088, 20_739),
+            ("rust-toolchain.toml", 94, 20_612),
+            ("scmd.toml", 2_240, 20_738),
+        ];
+        for (name, size, day) in files {
+            let mut e = entry(name, EntryKind::File, size);
+            e.mtime = at(day);
+            rows.push(e);
+        }
+        for panel in 0..2 {
+            app.handle_event(Event::Listed {
+                panel,
+                generation: 1,
+                result: Ok(rows.clone()),
+            });
+        }
+    }
+
+    fn type_line(app: &mut App, text: &str) {
+        for c in text.chars() {
+            app.handle_input(Input::Key(scmd_cmd::Key::new(
+                scmd_cmd::KeyCode::Char(c),
+                scmd_cmd::Mods::NONE,
+            )));
+        }
+    }
+
+    fn frame_buf(app: &mut App, w: u16, h: u16) -> Buffer {
+        let mut buf = Buffer::new(w, h);
+        draw(app, &mut buf);
+        buf
+    }
+
+    /// Every screen worth a look, each as the buffer a terminal would actually receive.
+    fn scenes() -> Vec<(String, Buffer)> {
+        const W: u16 = 100;
+        const H: u16 = 28;
+        let mut out: Vec<(String, Buffer)> = Vec::new();
+
+        let mut a = app("far", "en");
+        project(&mut a);
+        out.push(("panel".into(), frame_buf(&mut a, W, H)));
+
+        let mut a = app("far", "en");
+        project(&mut a);
+        for _ in 0..4 {
+            a.handle_input(Input::Key("Down".parse().unwrap()));
+        }
+        a.handle_input(Input::Key("Insert".parse().unwrap()));
+        a.handle_input(Input::Key("Insert".parse().unwrap()));
+        type_line(&mut a, "cargo test -p scmd-view structure");
+        out.push((
+            "a command typed, two files marked".into(),
+            frame_buf(&mut a, W, H),
+        ));
+
+        let mut a = app("far", "en");
+        project(&mut a);
+        a.run(scmd_cmd::Command::PanelFilterQuick);
+        type_line(&mut a, "*.toml,*.md|Cargo*");
+        out.push(("quick filter".into(), frame_buf(&mut a, W, H)));
+
+        let mut a = app("far", "en");
+        project(&mut a);
+        a.user_screen = vec![
+            "scmd $ cargo build --release".into(),
+            "   Compiling scmd-core v0.0.3".into(),
+            "   Compiling scmd-view v0.0.3".into(),
+            "    Finished `release` profile [optimized] in 41.72s".into(),
+            String::new(),
+            "scmd $ git log --oneline -3".into(),
+            "0d7fbfe feat(core): one filter object".into(),
+            "3b19a04 feat(view): a structure pane for binaries".into(),
+            "a71c2e8 feat(cmd): the command line".into(),
+        ];
+        a.run(scmd_cmd::Command::ShellOutputShow);
+        out.push(("user screen".into(), frame_buf(&mut a, W, H)));
+
+        let mut a = app("far", "en");
+        project(&mut a);
+        a.run(scmd_cmd::Command::PanelViewSet(scmd_core::ViewMode::Brief));
+        out.push(("brief view".into(), frame_buf(&mut a, W, H)));
+
+        let mut a = app("far", "en");
+        project(&mut a);
+        a.run(scmd_cmd::Command::AppMenu);
+        out.push(("menu bar".into(), frame_buf(&mut a, W, H)));
+
+        for (title, cmd) in [
+            ("system settings", scmd_cmd::Command::OptSystem),
+            ("panel settings", scmd_cmd::Command::OptPanel),
+            ("interface settings", scmd_cmd::Command::OptInterface),
+            ("confirmations", scmd_cmd::Command::OptConfirmations),
+            ("sort modes", scmd_cmd::Command::PanelSortMenu),
+            (
+                "drives",
+                scmd_cmd::Command::PanelDrive(scmd_cmd::Side::Left),
+            ),
+        ] {
+            let mut a = app("far", "en");
+            project(&mut a);
+            a.run(cmd);
+            out.push((title.into(), frame_buf(&mut a, W, H)));
+        }
+
+        let mut a = app("far", "en");
+        project(&mut a);
+        a.open_site_form(None);
+        out.push(("session editor".into(), frame_buf(&mut a, W, H)));
+
+        // Our own binary is to hand and is a real ELF.
+        let path = std::env::current_exe().unwrap();
+        let mut a = app("far", "en");
+        if let Ok(source) = scmd_view::source::FileSource::open(&path) {
+            let mut viewer = scmd_view::Viewer::new(Box::new(source), VPath::local(&path));
+            viewer.set_mode(scmd_view::Mode::Hex);
+            if viewer.toggle_structure() {
+                a.mode = crate::app::Mode::Viewer(Box::new(viewer));
+                out.push(("structure pane".into(), frame_buf(&mut a, W, H)));
+            }
+        }
+
+        out
+    }
+
+    #[test]
+    #[ignore = "a look at the screen, not an assertion"]
+    fn eyeball_panels() {
+        for (title, buf) in scenes() {
+            println!("=== {title} ===\n{}", buf.to_text());
+        }
+    }
+
+    /// The same screens as HTML, one `<pre>` each, with the cell colours the theme really
+    /// produced: a screenshot that can go in a release note without a terminal recording.
+    /// Writes to `$SCMD_SHOTS` and does nothing when that is unset.
+    #[test]
+    #[ignore = "writes a file, on request"]
+    fn shots_html() {
+        let Ok(dest) = std::env::var("SCMD_SHOTS") else {
+            return;
+        };
+        let mut page = String::new();
+        for (title, buf) in scenes() {
+            page.push_str(&format!(
+                "<section data-title=\"{title}\"><h3>{title}</h3>\n{}</section>\n",
+                as_html(&buf)
+            ));
+        }
+        std::fs::write(&dest, page).unwrap();
+    }
+
+    /// One `<pre>` of `<span>` runs, a run per stretch of cells sharing a style.
+    fn as_html(buf: &Buffer) -> String {
+        let mut out = String::from("<pre class=\"shot\">");
+        for y in 0..buf.height() {
+            let mut run = String::new();
+            let mut style: Option<Style> = None;
+            let flush = |out: &mut String, run: &mut String, style: &Option<Style>| {
+                if run.is_empty() {
+                    return;
+                }
+                let s = style.unwrap_or_default();
+                out.push_str(&format!(
+                    "<span style=\"color:{};background:{}{}\">{}</span>",
+                    css(s.fg, "#c0c0c0"),
+                    css(s.bg, "#000000"),
+                    if s.bold { ";font-weight:700" } else { "" },
+                    escape(run)
+                ));
+                run.clear();
+            };
+            for x in 0..buf.width() {
+                let cell = buf.get(x, y).expect("in range");
+                if cell.wide_tail {
+                    continue;
+                }
+                if style != Some(cell.style) {
+                    flush(&mut out, &mut run, &style);
+                    style = Some(cell.style);
+                }
+                run.push(cell.ch);
+            }
+            flush(&mut out, &mut run, &style);
+            out.push('\n');
+        }
+        out.push_str("</pre>");
+        out
+    }
+
+    fn css(color: scmd_ui::Color, fallback: &str) -> String {
+        // The sixteen console colours, so a theme that names them lands on the same values a
+        // terminal would show.
+        const ANSI: [&str; 16] = [
+            "#000000", "#800000", "#008000", "#808000", "#000080", "#800080", "#008080", "#c0c0c0",
+            "#808080", "#ff0000", "#00ff00", "#ffff00", "#0000ff", "#ff00ff", "#00ffff", "#ffffff",
+        ];
+        match color {
+            scmd_ui::Color::Rgb(r, g, b) => format!("#{r:02x}{g:02x}{b:02x}"),
+            scmd_ui::Color::Ansi(n) => ANSI[(n as usize).min(15)].to_string(),
+            scmd_ui::Color::Indexed(n) if (n as usize) < 16 => ANSI[n as usize].to_string(),
+            scmd_ui::Color::Indexed(_) | scmd_ui::Color::Default => fallback.to_string(),
+        }
+    }
+
+    fn escape(s: &str) -> String {
+        s.replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;")
     }
 
     #[test]
