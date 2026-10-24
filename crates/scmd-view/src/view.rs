@@ -1086,10 +1086,104 @@ impl Viewer {
         Ok(self.step(backwards, cancel))
     }
 
-    /// `Shift+F7` / `Alt+F7`: the same query again.
+    /// Search the *instructions* rather than the bytes (SPEC 05 §2.7's other half, and what
+    /// `docs/02-features.md` §5b calls searching by instruction pattern).
+    ///
+    /// In disassembly mode this is the only search that means anything: nobody looking for a
+    /// `call` wants the four letters of it to appear in the file. The query matches the text
+    /// the disassembler prints — `call`, `jmp 0x401000`, `mov eax` — case-insensitively,
+    /// with `*` standing for anything, so `mov *, eax` finds every move into that register.
+    ///
+    /// It walks instruction by instruction from where it is, decoding a window at a time,
+    /// because an instruction stream has no index to jump about in.
+    pub fn search_instructions(
+        &mut self,
+        query: &str,
+        backwards: bool,
+        cancel: &CancelToken,
+    ) -> bool {
+        let needle = query.trim().to_ascii_lowercase();
+        if needle.is_empty() {
+            return false;
+        }
+        self.query = Some(query.to_string());
+        self.pattern = None;
+        let arch = self.disasm_arch();
+        if !arch.disassemblable() {
+            return false;
+        }
+        let len = self.len();
+        let from = match (self.last_match, backwards) {
+            (Some(m), false) => m.offset + 1,
+            (Some(m), true) => m.offset.saturating_sub(1),
+            (None, _) => self.top,
+        };
+
+        // A window at a time, forwards from here or backwards to the start.
+        const WINDOW: usize = 64 * 1024;
+        let mut at = if backwards {
+            from.saturating_sub(WINDOW as u64)
+        } else {
+            from
+        };
+        loop {
+            if cancel.is_cancelled() {
+                return false;
+            }
+            let window = self.source.read_vec(at, WINDOW).unwrap_or_default();
+            if window.is_empty() {
+                return false;
+            }
+            let base = self
+                .binary
+                .as_ref()
+                .map(|b| b.va_for_offset(at))
+                .unwrap_or(at);
+            // No limit: every instruction in the window is a candidate.
+            let lines =
+                disasm::disassemble(&window, at, base, arch, usize::MAX).unwrap_or_default();
+            let hit = if backwards {
+                lines
+                    .iter()
+                    .rev()
+                    .find(|l| l.offset < from && matches(&l.text, &needle))
+            } else {
+                lines
+                    .iter()
+                    .find(|l| l.offset >= from && matches(&l.text, &needle))
+            };
+            if let Some(line) = hit {
+                self.last_match = Some(Match {
+                    offset: line.offset,
+                    len: line.bytes.len(),
+                });
+                self.jump(line.offset);
+                return true;
+            }
+            if backwards {
+                if at == 0 {
+                    return false;
+                }
+                at = at.saturating_sub(WINDOW as u64);
+            } else {
+                // Overlap by the longest instruction, so one straddling the edge is still
+                // found — and never read past the end.
+                at += WINDOW as u64 - 16;
+                if at >= len {
+                    return false;
+                }
+            }
+        }
+    }
+
+    /// `Shift+F7` / `Alt+F7`: the same query again. In disassembly mode that means the next
+    /// instruction matching the pattern, because that is what the search was.
     pub fn find_again(&mut self, backwards: bool, cancel: &CancelToken) -> bool {
         if self.pattern.is_none() {
-            return false;
+            return match (self.mode, self.query.clone()) {
+                (Mode::Disasm, Some(query)) => self.search_instructions(&query, backwards, cancel),
+                _ => false,
+            };
         }
         self.step(backwards, cancel)
     }
@@ -1313,6 +1407,31 @@ fn expand_shift(expanded: &str, raw_bytes: &[u8], char_index: usize) -> usize {
         }
     }
     column.min(expanded.chars().count())
+}
+
+/// Does the instruction text match the pattern? The pieces of the pattern have to appear in
+/// the text, in order; `*` is what stands between them, and a pattern with no `*` is simply a
+/// substring. So `call` finds every call, `mov *, eax` every move into that register, and
+/// `cmpsb` finds `repe cmpsb` too — a reader searching for an instruction is not thinking
+/// about what prefixes it.
+fn matches(text: &str, needle: &str) -> bool {
+    // The disassembler pads its operands into columns; the pattern should not have to know.
+    let text: String = text
+        .to_ascii_lowercase()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let mut at = 0usize;
+    for part in needle.split('*') {
+        if part.is_empty() {
+            continue;
+        }
+        match text[at..].find(part) {
+            Some(found) => at += found + part.len(),
+            None => return false,
+        }
+    }
+    true
 }
 
 #[cfg(test)]
@@ -1734,6 +1853,74 @@ mod tests {
             v.status().binary.is_some(),
             "the status must say what the file is"
         );
+    }
+
+    #[test]
+    fn an_instruction_pattern_matches_the_way_a_reader_writes_it() {
+        assert!(matches("call rax", "call"));
+        assert!(matches("CALL rax", "call"));
+        // The disassembler pads its operands; the pattern should not have to.
+        assert!(matches("mov    eax, 1", "mov eax, 1"));
+        assert!(!matches("mov eax, 1", "call"));
+        // `*` stands for anything, so a register can be asked for without its source.
+        assert!(matches("mov ebx, eax", "mov *, eax"));
+        assert!(!matches("mov eax, ebx", "mov *, eax"));
+        assert!(matches("jne 0x401000", "jne *"));
+        assert!(matches("lock xchg eax, ebx", "*xchg*"));
+        assert!(!matches("xor eax, eax", "*xchg*"));
+        // A plain query is a substring: someone looking for `cmpsb` means the one with a
+        // `repe` in front of it as well.
+        assert!(matches("repe cmpsb", "cmpsb"));
+        // The pieces have to come in the pattern's own order, though.
+        assert!(!matches("mov eax, ebx", "ebx*mov"));
+    }
+
+    #[test]
+    fn searching_the_disassembly_finds_an_instruction_not_its_letters() {
+        // push rbp / mov rbp,rsp / xor eax,eax / nop*8 / call rax / ret
+        let mut code = vec![0x55, 0x48, 0x89, 0xE5, 0x31, 0xC0];
+        code.extend(std::iter::repeat_n(0x90u8, 8));
+        code.extend_from_slice(&[0xFF, 0xD0, 0xC3]);
+        let mut v = viewer(&code);
+        if v.start_disasm().is_err() {
+            return; // no x86 decoder on this target: the external-tool path is tested elsewhere
+        }
+        assert_eq!(v.mode, Mode::Disasm);
+        let cancel = CancelToken::new();
+
+        // The bytes `call` appear nowhere in the file, but the instruction does.
+        assert!(
+            v.search_instructions("call", false, &cancel),
+            "no call found"
+        );
+        assert_eq!(v.last_match.unwrap().offset, 14);
+
+        // From the top again, a pattern with a wildcard.
+        v.clear_search();
+        v.jump(0);
+        assert!(v.search_instructions("mov *, rsp", false, &cancel));
+        assert_eq!(v.last_match.unwrap().offset, 1);
+
+        // Repeating the search walks forwards: the eight nops, one after another.
+        v.clear_search();
+        v.jump(0);
+        assert!(v.search_instructions("nop", false, &cancel));
+        let first = v.last_match.unwrap().offset;
+        assert_eq!(first, 6);
+        assert!(
+            v.find_again(false, &cancel),
+            "Shift+F7 must find the next nop"
+        );
+        assert_eq!(v.last_match.unwrap().offset, 7);
+        // And backwards, back to the first one.
+        assert!(v.find_again(true, &cancel));
+        assert_eq!(v.last_match.unwrap().offset, 6);
+
+        // Something that is not in the code at all leaves the search empty.
+        v.clear_search();
+        v.jump(0);
+        assert!(!v.search_instructions("syscall", false, &cancel));
+        assert!(!v.search_instructions("", false, &cancel));
     }
 
     #[test]

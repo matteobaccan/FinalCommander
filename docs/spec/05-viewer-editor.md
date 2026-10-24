@@ -296,13 +296,38 @@ A marked byte range with operations on it, which is the other half of a usable h
 | Read a file into it | overwrite or insert, the dialog says which and how the lengths compare |
 | Fill with a byte | the byte is typed in hex or as a character |
 | XOR with a key | a byte or a repeating key; the name says what it is, so nobody mistakes it for encryption |
-| Copy / move from elsewhere | source offset and length, within the same file |
+| Copy / move from elsewhere | source offset and length in hex, within the same file; a move that would land inside its own source is refused rather than half done |
 | Insert / delete | shifts everything after, with the new length shown before it happens |
 
 Every one of them is a planned operation with a preview of the result's length, because the
-failure mode of a hex editor is a file that is silently one byte wrong.
+failure mode of a hex editor is a file that is silently one byte wrong. `Esc` out of the menu,
+or out of the question one of these asks, goes back to the editor with its patches intact:
+changing one's mind about a fill byte must never be a way to lose an afternoon's work.
 
-### 2.7 Assembler (`F9`)
+### 2.7 Search by instruction pattern (`F7` in the disassembly)
+
+Over a disassembly, `F7` searches the instructions, not the bytes: nobody looking for a `call`
+wants the four letters of it to appear in the file. The query is matched against the text the
+disassembler prints, case-insensitively, with the operands' column padding collapsed so the
+pattern does not have to know about it:
+
+| Pattern | Finds |
+| --- | --- |
+| `call` | every call, `call rax` and `call 0x401000` alike |
+| `mov *, eax` | every move into `eax`, whatever the destination |
+| `jne *` | every conditional jump of that kind |
+| `cmpsb` | `repe cmpsb` as well — a prefix does not hide the instruction |
+
+`*` stands for whatever lies between two pieces of the pattern, and the pieces must appear in
+the pattern's own order. With no `*` the query is simply a substring. `Shift+F7` and `Alt+F7`
+walk to the next and the previous match, as they do for an ordinary search.
+
+It decodes a window at a time, forwards from where the screen is or backwards towards the
+start, because an instruction stream has no index to jump about in; `Esc` cancels a long walk.
+For an architecture we cannot decode the search says so rather than searching the bytes behind
+the reader's back.
+
+### 2.8 Assembler (`F9`)
 
 One instruction at a time, for the architecture the structure pane detected. The dialog shows
 three facts before anything is written: the bytes the instruction assembles to, the instruction

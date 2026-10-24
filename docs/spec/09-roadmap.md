@@ -49,7 +49,7 @@ later items goes first. Sizes are honest estimates of focused work, not of calen
 
 | Release | Theme | What is in it | Size | Why here |
 | --- | --- | --- | --- | --- |
-| **0.0.8** | The hex editor (the Hiew track) | **Hex mode of the editor** with a patch list and an atomic save, **block operations** (`F3` marks, `F12` operates), the **assembler**, a **calculator**, **search by instruction pattern**, and **raw devices**. SPEC 05 §2.5–§2.7 and `docs/02-features.md` §5b. | A release of its own | Deliberately in the editor, not the viewer: the viewer's read-only contract is what lets it seek through 40 GB |
+| **0.0.8** | The hex editor (the Hiew track) | **Hex mode of the editor** with a patch list and an atomic save, **block operations** (`F3` marks, `F12` operates), the **assembler**, a **calculator**, **search by instruction pattern**, and **raw devices**. SPEC 05 §2.5–§2.8 and `docs/02-features.md` §5b. | A release of its own | Deliberately in the editor, not the viewer: the viewer's read-only contract is what lets it seek through 40 GB |
 | **0.1.0** | Macros, plugins, and the screens | **Macro engine** (record and play per area, two play modes, a list) on top of the command vocabulary, the **screens list** (`F12`) and the background-screen counter, the **plugin host API** so a plugin can do more than carry data, the **help system** generated from `docs/`, and the **man page**. | The macro engine is the large one | Macros need everything else to be a command first, which is why they are last rather than first |
 
 0.0.7 was a fix release for a hang in 0.0.6's tree panel, which is why the Hiew track is

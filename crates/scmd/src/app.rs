@@ -10,7 +10,7 @@ use scmd_jobs::{Decision, JobKind, JobSpec, Outcome, Progress, Question};
 use scmd_net::{SecretKind, Site};
 use scmd_tui::Input;
 use scmd_ui::{Theme, ThemeSet};
-use scmd_view::{FileSource, SearchMode, Viewer};
+use scmd_view::{FileSource, Mode as ViewerMode, SearchMode, Viewer};
 
 use crate::cmdline::{self, CmdLine, Internal, Parsed, Prefix};
 use crate::expand;
@@ -315,6 +315,10 @@ pub enum PromptKind {
     HexRead,
     /// How many bytes to insert at the cursor.
     HexInsert,
+    /// `offset length`, in hex: bytes from elsewhere in this same file, copied to the cursor.
+    HexCopy,
+    /// The same, but the source is removed — the bytes move rather than multiply.
+    HexMove,
     /// One line of arithmetic, answered in every base at once.
     Calculator,
     /// A URL to connect to: `sftp://mb@host/srv`.
@@ -1889,6 +1893,9 @@ impl App {
                 self.mode = Mode::Normal;
                 self.restore_viewer();
                 self.restore_editor();
+                // A question asked over the hex editor goes back to it when it is dismissed:
+                // changing one's mind about a fill byte must not drop unsaved patches.
+                self.restore_hex();
             }
             KeyCode::Enter => {
                 self.mode = Mode::Normal;
@@ -1981,7 +1988,9 @@ impl App {
             | PromptKind::HexXor
             | PromptKind::HexWrite
             | PromptKind::HexRead
-            | PromptKind::HexInsert => {
+            | PromptKind::HexInsert
+            | PromptKind::HexCopy
+            | PromptKind::HexMove => {
                 let kind = prompt.kind.clone();
                 let text = prompt.text.trim().to_string();
                 self.restore_hex();
@@ -2163,10 +2172,15 @@ impl App {
                 }
                 self.last_search = Some(query.clone());
                 let (mode, ci) = (self.search_mode, self.search_case_insensitive);
-                let result = self
-                    .mode
-                    .viewer_mut()
-                    .map(|v| v.search(&query, mode, ci, false, &CancelToken::new()));
+                // In disassembly mode the query is an instruction pattern, not bytes: looking
+                // for the four letters of `call` in the file would find nothing that matters.
+                let result = self.mode.viewer_mut().map(|v| {
+                    if v.mode == ViewerMode::Disasm {
+                        Ok(v.search_instructions(&query, false, &CancelToken::new()))
+                    } else {
+                        v.search(&query, mode, ci, false, &CancelToken::new())
+                    }
+                });
                 match result {
                     Some(Ok(true)) => {}
                     Some(Ok(false)) => {
@@ -3180,10 +3194,15 @@ impl App {
                 self.viewer_to_editor();
             }
             Command::ViewerSearch if self.mode.viewer().is_some() => {
-                let mode = self.search_mode;
+                // The prompt says what will be searched. Over a disassembly that is not text,
+                // hex or a regular expression but an instruction pattern, so say so.
+                let what = match self.mode.viewer().map(|v| v.mode) {
+                    Some(ViewerMode::Disasm) => "instructions",
+                    _ => self.search_mode.as_str(),
+                };
                 let title = self
                     .i18n
-                    .t_args("viewer-prompt-search", &[("mode", mode.as_str().into())]);
+                    .t_args("viewer-prompt-search", &[("mode", what.into())]);
                 self.mode_prompt_over_viewer(
                     PromptKind::ViewerSearch,
                     title,
@@ -5014,6 +5033,20 @@ impl App {
                 value: "insert".to_string(),
                 current: false,
             },
+            PickRow {
+                label: self
+                    .i18n
+                    .t_args("hex-op-copy", &[("at", format!("{cursor:08X}").into())]),
+                value: "copy".to_string(),
+                current: false,
+            },
+            PickRow {
+                label: self
+                    .i18n
+                    .t_args("hex-op-move", &[("at", format!("{cursor:08X}").into())]),
+                value: "move".to_string(),
+                current: false,
+            },
         ];
         if span > 0 {
             // The operations that need a block, with the size they would act on.
@@ -5169,8 +5202,65 @@ impl App {
                 );
                 self.set_status(msg);
             }
+            PromptKind::HexCopy | PromptKind::HexMove => {
+                // `offset length`, both in hex, because that is what the rest of the pane
+                // speaks: the source is somewhere else in this same file.
+                let Some((from, span)) = App::hex_range(text) else {
+                    let m = self.i18n.t("hex-not-a-range");
+                    self.set_error(m);
+                    return;
+                };
+                let len = editor.len();
+                if span == 0 || from >= len || from + span > len {
+                    let m = self.i18n.t_args(
+                        "hex-range-outside",
+                        &[("size", scmd_core::format_size(len).into())],
+                    );
+                    self.set_error(m);
+                    return;
+                }
+                let moving = kind == PromptKind::HexMove;
+                if moving && cursor > from && cursor < from + span {
+                    // Moving a block onto itself would eat its own source.
+                    let m = self.i18n.t("hex-move-into-itself");
+                    self.set_error(m);
+                    return;
+                }
+                let bytes = editor.read(from, span as usize);
+                // Insert first, then remove the source, so the offsets are the ones the user
+                // typed: taking the source out first would shift the destination.
+                editor.insert_bytes(cursor, &bytes);
+                if moving {
+                    let source = if from >= cursor { from + span } else { from };
+                    editor.delete(source, span);
+                    if cursor > from {
+                        editor.cursor = cursor - span;
+                    }
+                }
+                let msg = self.i18n.t_args(
+                    if moving { "hex-moved" } else { "hex-copied" },
+                    &[
+                        ("size", scmd_core::format_size(span).into()),
+                        ("from", format!("{from:08X}").into()),
+                    ],
+                );
+                self.set_status(msg);
+            }
             _ => {}
         }
+    }
+
+    /// `offset length`, both hex, separated by a space or a comma. Anything else is nothing.
+    fn hex_range(text: &str) -> Option<(u64, u64)> {
+        let mut parts = text
+            .split([' ', ',', '\t', '+'])
+            .filter(|p| !p.trim().is_empty());
+        let from = u64::from_str_radix(parts.next()?.trim().trim_start_matches("0x"), 16).ok()?;
+        let span = u64::from_str_radix(parts.next()?.trim().trim_start_matches("0x"), 16).ok()?;
+        if parts.next().is_some() {
+            return None;
+        }
+        Some((from, span))
     }
 
     fn park_hex(&mut self) {
@@ -5320,7 +5410,11 @@ impl App {
             return;
         };
         match key.code {
-            KeyCode::Esc | KeyCode::F(10) => self.mode = Mode::Normal,
+            KeyCode::Esc | KeyCode::F(10) => {
+                self.mode = Mode::Normal;
+                // The block menu was opened over the hex editor; closing it goes back there.
+                self.restore_hex();
+            }
             KeyCode::Up => pick.move_cursor(-1),
             KeyCode::Down => pick.move_cursor(1),
             KeyCode::PageUp => pick.move_cursor(-10),
@@ -5348,6 +5442,8 @@ impl App {
                     "fill" => self.hex_prompt(PromptKind::HexFill, "hex-fill-title"),
                     "xor" => self.hex_prompt(PromptKind::HexXor, "hex-xor-title"),
                     "insert" => self.hex_prompt(PromptKind::HexInsert, "hex-insert-title"),
+                    "copy" => self.hex_prompt(PromptKind::HexCopy, "hex-copy-title"),
+                    "move" => self.hex_prompt(PromptKind::HexMove, "hex-move-title"),
                     "delete" => {
                         let done = self.mode.hex_mut().and_then(|editor| {
                             let (a, b) = editor.block?;
@@ -8190,6 +8286,66 @@ mod tests {
             panic!("{:?}", app.mode)
         };
         assert!(prompt.text.contains("/0"), "the line should still be there");
+    }
+
+    #[test]
+    fn a_range_for_a_block_operation_is_an_offset_and_a_length_in_hex() {
+        assert_eq!(App::hex_range("10 4"), Some((0x10, 4)));
+        assert_eq!(App::hex_range(" 0x1F,0x10 "), Some((0x1f, 0x10)));
+        assert_eq!(App::hex_range("1f+10"), Some((0x1f, 0x10)));
+        // One number is not a range, three are not either, and letters are not hex.
+        assert_eq!(App::hex_range("10"), None);
+        assert_eq!(App::hex_range("10 4 2"), None);
+        assert_eq!(App::hex_range("ten four"), None);
+        assert_eq!(App::hex_range(""), None);
+    }
+
+    #[test]
+    fn a_block_is_copied_and_moved_from_elsewhere_in_the_same_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("bytes.bin");
+        std::fs::write(&path, b"ABCDEFGH").unwrap();
+        let mut app = app();
+
+        // Copy the two bytes at 6 (`GH`) to the start: the file grows by two.
+        app.open_hex(&path);
+        app.run(Command::EditorBlockOps);
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert!(
+            pick.rows.iter().any(|r| r.value == "copy")
+                && pick.rows.iter().any(|r| r.value == "move"),
+            "the block menu must offer both"
+        );
+        press(&mut app, "Esc"); // the menu puts the editor back where it was
+        app.hex_operation(PromptKind::HexCopy, "6 2");
+        let editor = app.mode.hex_mut().expect("still in hex");
+        assert_eq!(editor.read(0, 10), b"GHABCDEFGH");
+
+        // A range that is not in the file is refused, and nothing is written.
+        app.hex_operation(PromptKind::HexCopy, "FF 2");
+        assert!(
+            app.status.to_lowercase().contains("outside"),
+            "{}",
+            app.status
+        );
+        assert_eq!(app.mode.hex_mut().unwrap().read(0, 10), b"GHABCDEFGH");
+
+        // Move the two bytes back: the file is the length it started at, in the old order.
+        let editor = app.mode.hex_mut().unwrap();
+        editor.cursor = 10;
+        editor.clear_block();
+        app.hex_operation(PromptKind::HexMove, "0 2");
+        let editor = app.mode.hex_mut().unwrap();
+        assert_eq!(editor.len(), 10);
+        assert_eq!(editor.read(0, 10), b"ABCDEFGHGH");
+
+        // A move whose destination is inside its own source is refused, not half done.
+        let editor = app.mode.hex_mut().unwrap();
+        editor.cursor = 2;
+        app.hex_operation(PromptKind::HexMove, "0 6");
+        assert_eq!(app.mode.hex_mut().unwrap().read(0, 10), b"ABCDEFGHGH");
     }
 
     #[test]

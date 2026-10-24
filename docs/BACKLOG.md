@@ -86,18 +86,17 @@ what we intend to do about it.
 
 ## Binary viewer and hex editor
 
-What a dedicated binary tool does and we do not (SPEC 05 §1.8–§1.10 and §2.5–§2.7). The order
+What a dedicated binary tool does and we do not (SPEC 05 §1.8–§1.10 and §2.5–§2.8). The order
 here is the order to build it in: each item needs only the ones above it.
 
 | Item | Where | Notes |
 | --- | --- | --- |
 | ~~Structure pane~~ | `F11` in the viewer | **Shipped.** ELF, PE, Mach-O (thin and universal) and `ar`: identity, the header field by field with its raw bytes, sections, segments, load commands, archive members, interpreter and build id, with `Enter` taking the bytes to an offset. Written here rather than taken from `object`, because the pane needs the raw bytes beside the meaning, has to survive a hostile or truncated file, and must read only the offsets that matter. Imports and exports (ELF `DT_NEEDED` and `.dynsym` with bindings and types, the PE import and export directories including forwarders and exports with no name, Mach-O `LC_LOAD_DYLIB` and `LC_SYMTAB`), the symbol table feeding names into the disassembly, and the .NET CLI header with the metadata root all shipped too. |
 | ~~Following a branch~~ | `Enter` in the disassembly | **Shipped**, with `Backspace` back and the jumped-from stack on screen. |
-| Hex mode of the editor | `F4` on a binary | SPEC 05 §2.5. Deliberately in the editor, not the viewer: the viewer is read-only by contract and that is what lets it seek through a 40 GB file. Overwrite and insert, a patch list, the editor's own undo and atomic save. |
-| Blocks | `F3` marks, `F12` operates | SPEC 05 §2.6. Write out, read in, fill, XOR, copy, move, insert, delete — the large ones through the job engine, each with the resulting length shown before it happens. |
-| Assembler | `F9` | SPEC 05 §2.7. One instruction at a time, showing the bytes, the instruction replaced and whether the length changed, writing into the patch list rather than straight to disk. |
-| Search by instruction pattern | `F7` in the disassembly | Search the decoded stream rather than the bytes: a mnemonic, an operand shape, a wildcard byte. Hiew has it (release VIII); the disassembly pane already produces the decoded instructions, so this is a matcher over them, not a new decoder. |
-| A calculator | hex pane | Hex, decimal, octal and binary with the bitwise operators and conversion between bases. What a hex editor is asked for every ten minutes, and self-contained enough to be an afternoon. |
+| ~~Hex mode of the editor~~ | `F4` on a binary | **Shipped (0.0.8).** SPEC 05 §2.5. Deliberately in the editor, not the viewer: the viewer is read-only by contract and that is what lets it seek through a 40 GB file. Overwrite and insert, a patch list, the editor's own undo and an atomic save. |
+| ~~Blocks~~ | `F3` marks, `F12` operates | **Shipped (0.0.8).** SPEC 05 §2.6: write out, read in, fill, XOR, copy and move from elsewhere in the file, insert, delete — each with the resulting length shown before it happens. |
+| Assembler | `F9` | SPEC 05 §2.8. One instruction at a time, showing the bytes, the instruction replaced and whether the length changed, writing into the patch list rather than straight to disk. |
+| ~~A calculator~~ | `Alt+F12` | **Shipped (0.0.8).** One line answered in decimal, hex, octal, binary and as characters at once, with the bitwise and shift operators and literals in every base the tools around it use. |
 | Crypt / decrypt a block | `F12` on a block | As a block operation (XOR, and a named cipher with a key), never as a promise of security — the dialog has to say what it is and what it is not. Follows the block operations above. |
 | ~~Search and replace across files~~ | find tool | **Shipped.** Its own job, over the files selected in the panel or the one under the cursor — a find result panelised with `F5` included, which is how it joins up with the find tool. The dry run is not optional: the confirmation counts the files and the matches by running the same engine that then writes, so the two cannot disagree. Hiew does this across multiple files, and it was the one thing on its list that belongs to the *panel* rather than to the viewer. |
 | ARM / AArch64 disassembly | `F5` | A decoder crate, not new design — and on an Apple Silicon machine a viewer that only decodes x86 is half a tool. |
