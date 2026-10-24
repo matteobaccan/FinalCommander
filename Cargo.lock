@@ -1963,6 +1963,7 @@ dependencies = [
 name = "scmd-jobs"
 version = "0.0.3"
 dependencies = [
+ "regex",
  "scmd-core",
  "tempfile",
  "thiserror",

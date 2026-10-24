@@ -1,5 +1,7 @@
 use scmd_core::VPath;
 
+use crate::replace::ReplaceOptions;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum JobKind {
     Copy,
@@ -9,6 +11,10 @@ pub enum JobKind {
     /// what that does and does not promise.
     Wipe,
     Mkdir,
+    /// Replace one string with another inside every file in [`JobSpec::sources`], which the
+    /// caller has already chosen: this searches inside files, never for them. What to look for
+    /// lives in [`JobSpec::replace`].
+    Replace,
 }
 
 impl JobKind {
@@ -19,6 +25,7 @@ impl JobKind {
             JobKind::Delete => "delete",
             JobKind::Wipe => "wipe",
             JobKind::Mkdir => "mkdir",
+            JobKind::Replace => "replace",
         }
     }
 
@@ -104,6 +111,12 @@ pub struct JobSpec {
     pub sources: Vec<VPath>,
     pub target: Option<VPath>,
     pub options: JobOptions,
+    /// What to look for and what to put there, for [`JobKind::Replace`]. Every other kind
+    /// ignores it, and a replacement without it is refused while planning.
+    ///
+    /// It sits here rather than in [`JobOptions`] because it holds the two strings the user
+    /// typed, and `JobOptions` is a small `Copy` value that every job passes around by value.
+    pub replace: Option<ReplaceOptions>,
 }
 
 impl JobSpec {
@@ -113,11 +126,17 @@ impl JobSpec {
             sources,
             target,
             options: JobOptions::default(),
+            replace: None,
         }
     }
 
     pub fn with_options(mut self, options: JobOptions) -> Self {
         self.options = options;
+        self
+    }
+
+    pub fn with_replace(mut self, replace: ReplaceOptions) -> Self {
+        self.replace = Some(replace);
         self
     }
 }
@@ -175,6 +194,10 @@ mod tests {
         assert!(JobKind::Mkdir.needs_target());
         assert!(!JobKind::Delete.needs_target());
         assert!(!JobKind::Wipe.needs_target(), "a wipe destroys in place");
+        assert!(
+            !JobKind::Replace.needs_target(),
+            "a replacement rewrites the files it was given"
+        );
     }
 
     #[test]

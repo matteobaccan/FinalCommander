@@ -6,6 +6,7 @@ use std::time::SystemTime;
 
 use scmd_core::{EntryKind, VPath};
 
+use crate::replace::{self, Matcher, ReplacePass, Replaced};
 use crate::spec::Preserve;
 
 /// The facts about a path the engine needs: no more, so a remote provider can supply them
@@ -108,6 +109,43 @@ pub trait JobFs: Send + Sync {
         let _ = (path, buffer, on_bytes);
         Err(unsupported(
             "a wipe can only overwrite a file on a local filesystem",
+        ))
+    }
+
+    /// Replace every match of `matcher` in a regular file.
+    ///
+    /// A [`ReplacePass::Count`] pass writes nothing and reports what a [`ReplacePass::Rewrite`]
+    /// would change; a `Rewrite` pass does it. The two are the same walk over the same bytes —
+    /// see [`crate::replace`] — because a dry run whose count disagreed with the write it is
+    /// shown before would be worse than no dry run at all.
+    ///
+    /// A rewrite is atomic from the outside: the result goes into a sibling temporary file, is
+    /// flushed to the device and only then renamed over the original, so the file is either the
+    /// one it was or the one it is meant to become, and never half of each. Whatever goes wrong
+    /// in between — a read error, a full disk, a cancellation — leaves the original as it was
+    /// and takes the temporary file with it. Unlike a copy there is no second copy of the bytes
+    /// to fall back on, which is why this one syncs before the rename rather than only flushing.
+    ///
+    /// `on_bytes` reports every chunk read, so a job can show where it is inside a large file
+    /// and stop there; returning `false` from it abandons the pass and changes nothing.
+    ///
+    /// The file's metadata is left to the caller, exactly as a copy's is: read [`Facts`] before
+    /// the call and hand them to [`JobFs::apply_meta`] after it, so one [`Preserve`] decides
+    /// what a rewritten file keeps for a replacement and for a copy alike.
+    ///
+    /// The default is a refusal, because a provider that cannot write a sibling file and rename
+    /// it over another cannot promise any of the above.
+    fn replace_in_file(
+        &self,
+        path: &VPath,
+        matcher: &Matcher,
+        pass: ReplacePass,
+        buffer: usize,
+        on_bytes: &mut dyn FnMut(u64) -> bool,
+    ) -> io::Result<Replaced> {
+        let _ = (path, matcher, pass, buffer, on_bytes);
+        Err(unsupported(
+            "a replacement can only rewrite a file on a local filesystem",
         ))
     }
 }
@@ -362,6 +400,87 @@ impl JobFs for LocalFs {
         drop(file);
         self.remove_file(path)
     }
+
+    fn replace_in_file(
+        &self,
+        path: &VPath,
+        matcher: &Matcher,
+        pass: ReplacePass,
+        buffer: usize,
+        on_bytes: &mut dyn FnMut(u64) -> bool,
+    ) -> io::Result<Replaced> {
+        if !path.is_local() {
+            return Err(unsupported(
+                "a replacement can only rewrite a file on a local filesystem",
+            ));
+        }
+        let meta = fs::symlink_metadata(path.as_path())?;
+        if !meta.is_file() {
+            // A directory, a symlink, a device or a socket has no bytes of its own. Rewriting
+            // what a link points at would replace a file the user never chose.
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "only a regular file has bytes of its own to replace in",
+            ));
+        }
+        let mut reader = File::open(path.as_path())?;
+
+        if pass == ReplacePass::Count {
+            return replace::pass(&mut reader, None, matcher, buffer, on_bytes);
+        }
+
+        // The result is written as it is found, because whether a single byte differs is only
+        // known once the last one has been read. A file nothing matched in therefore costs a
+        // temporary file that is then removed — one sequential write, against reading every
+        // file twice, which is the other way to learn the same thing.
+        let part = part_path(path);
+        // Buffered, because the result arrives as a long run of bytes that did not change, a
+        // short replacement, another long run: a file with a thousand matches is not worth a
+        // thousand extra syscalls.
+        let mut writer = io::BufWriter::new(File::create(part.as_path())?);
+        let report = match replace::pass(&mut reader, Some(&mut writer), matcher, buffer, on_bytes)
+        {
+            Ok(report) => report,
+            Err(e) => {
+                drop(writer);
+                let _ = fs::remove_file(part.as_path());
+                return Err(e);
+            }
+        };
+
+        if !report.changed {
+            // Nothing to do. The original keeps its inode, its permissions and its modification
+            // time, rather than being replaced by a file with the same bytes and none of that.
+            drop(writer);
+            let _ = fs::remove_file(part.as_path());
+            return Ok(report);
+        }
+
+        // Unlike a copy, this is the only copy: once the rename lands there is no original left
+        // to go back to, so the bytes have to be on the device before the name moves.
+        if let Err(e) = flush_and_sync(&mut writer) {
+            drop(writer);
+            let _ = fs::remove_file(part.as_path());
+            return Err(e);
+        }
+        drop(writer);
+        // Only now does the file the user is watching change at all.
+        if let Err(e) = fs::rename(part.as_path(), path.as_path()) {
+            let _ = fs::remove_file(part.as_path());
+            return Err(e);
+        }
+        Ok(Replaced {
+            rewritten: true,
+            ..report
+        })
+    }
+}
+
+/// Everything a rewritten file has to have on the device before its name is allowed to change:
+/// out of the buffer, out of the kernel, onto the disk.
+fn flush_and_sync(writer: &mut io::BufWriter<File>) -> io::Result<()> {
+    writer.flush()?;
+    writer.get_ref().sync_all()
 }
 
 /// Clear the read-only bit, best effort. A file the user told us to delete or wipe has to go
@@ -719,6 +838,8 @@ mod tests {
     #[test]
     fn a_provider_that_implements_none_of_them_refuses_instead_of_trying() {
         let path = remote();
+        let matcher =
+            Matcher::compile(&crate::replace::ReplaceOptions::new("alpha", "omega")).unwrap();
         for kind in [
             Barest
                 .append_file(&path, &path, 0, &mut |_| true)
@@ -727,6 +848,10 @@ mod tests {
             Barest.hard_link(&path, &path).unwrap_err().kind(),
             Barest
                 .wipe_file(&path, 0, &mut |_| true)
+                .unwrap_err()
+                .kind(),
+            Barest
+                .replace_in_file(&path, &matcher, ReplacePass::Count, 0, &mut |_| true)
                 .unwrap_err()
                 .kind(),
         ] {
