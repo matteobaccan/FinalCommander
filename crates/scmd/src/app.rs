@@ -3362,7 +3362,9 @@ mod tests {
         press(&mut app, "F8");
         match &app.mode {
             Mode::Confirm(c) => assert!(
-                c.lines.iter().any(|l| l.to_lowercase().contains("permanent")),
+                c.lines
+                    .iter()
+                    .any(|l| l.to_lowercase().contains("permanent")),
                 "the user must be told there is no trash: {:?}",
                 c.lines
             ),
