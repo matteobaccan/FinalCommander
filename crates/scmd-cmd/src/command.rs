@@ -192,6 +192,10 @@ pub enum Command {
     ViewerLeft,
     ViewerRight,
     ViewerUndoPosition,
+    /// Move the whole dump one byte back or on, so a structure that does not begin on a
+    /// multiple of the row width can be read in line. FAR's `Ctrl+Left` and `Ctrl+Right`.
+    ViewerShiftBack,
+    ViewerShiftForward,
     ViewerBytesLess,
     ViewerBytesMore,
     /// Disassemble: machine code as instructions.
@@ -381,6 +385,8 @@ impl Command {
             Command::ViewerLeft,
             Command::ViewerRight,
             Command::ViewerUndoPosition,
+            Command::ViewerShiftBack,
+            Command::ViewerShiftForward,
             Command::ViewerBytesLess,
             Command::ViewerBytesMore,
             Command::ViewerFollowBranch,
@@ -567,6 +573,8 @@ impl Command {
             Command::ViewerLeft => "viewer.left".into(),
             Command::ViewerRight => "viewer.right".into(),
             Command::ViewerUndoPosition => "viewer.undo".into(),
+            Command::ViewerShiftBack => "viewer.shift.back".into(),
+            Command::ViewerShiftForward => "viewer.shift.forward".into(),
             Command::ViewerBytesLess => "viewer.bytes.less".into(),
             Command::ViewerBytesMore => "viewer.bytes.more".into(),
             Command::ViewerFollowBranch => "viewer.follow.branch".into(),
@@ -730,6 +738,8 @@ impl Command {
             ("viewer.left", _) => Command::ViewerLeft,
             ("viewer.right", _) => Command::ViewerRight,
             ("viewer.undo", _) => Command::ViewerUndoPosition,
+            ("viewer.shift.back", _) => Command::ViewerShiftBack,
+            ("viewer.shift.forward", _) => Command::ViewerShiftForward,
             ("viewer.bytes.less", _) => Command::ViewerBytesLess,
             ("viewer.bytes.more", _) => Command::ViewerBytesMore,
             ("viewer.follow.branch", _) => Command::ViewerFollowBranch,

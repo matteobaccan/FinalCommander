@@ -13,6 +13,11 @@ pub enum Scope {
     Panel,
     Viewer,
     Editor,
+    /// The hex editor. Its own scope rather than the text editor's, because the two share a
+    /// screen and almost nothing else: `F12` marks a block of bytes in one and lists the open
+    /// screens in the other. A key it does not define falls through to `Editor`, so everything
+    /// the two really do share is written once.
+    Hex,
     Dialog,
 }
 
@@ -23,6 +28,7 @@ impl Scope {
             Scope::Panel => "panel",
             Scope::Viewer => "viewer",
             Scope::Editor => "editor",
+            Scope::Hex => "hex",
             Scope::Dialog => "dialog",
         }
     }
@@ -33,6 +39,7 @@ impl Scope {
             "panel" => Some(Scope::Panel),
             "viewer" => Some(Scope::Viewer),
             "editor" => Some(Scope::Editor),
+            "hex" => Some(Scope::Hex),
             "dialog" => Some(Scope::Dialog),
             _ => None,
         }

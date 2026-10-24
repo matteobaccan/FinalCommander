@@ -621,6 +621,22 @@ impl Viewer {
         self.top_sub = 0;
     }
 
+    /// Move the view by whole bytes, *without* snapping to the row width.
+    ///
+    /// A hex dump starts each row on a multiple of the row width, which is what keeps the
+    /// offsets round and the columns in line. A structure inside a file does not care about
+    /// that: a record that begins at an odd offset is read diagonally, one byte further along
+    /// on every row. Nudging the whole dump by a byte puts it back in line, and that is all
+    /// this does — the alignment of the rows to each other is kept, only their alignment to
+    /// the start of the file changes.
+    pub fn shift(&mut self, delta: i64) {
+        let len = self.source.len() as i64;
+        let next = (self.top as i64).saturating_add(delta).clamp(0, len);
+        self.top = next as u64;
+        self.top_sub = 0;
+        self.disasm_trail.clear();
+    }
+
     /// Remember where we are, then jump: `Ctrl+Z` in the viewer comes back here.
     pub fn jump(&mut self, offset: u64) {
         self.history.push((self.top, self.top_sub));
@@ -1580,6 +1596,50 @@ mod tests {
         v.set_bytes_per_row(-8);
         assert_eq!(v.bytes_per_row, 8);
         assert_eq!(v.hex_fit(200), 8);
+    }
+
+    /// The arrows in hex mode set the row width; `Ctrl` plus the arrows nudges the dump off
+    /// the grid so a structure that starts at an odd offset can be read in line.
+    #[test]
+    fn a_hex_dump_can_be_widened_and_nudged() {
+        let mut v = viewer(&(0..=255u8).collect::<Vec<u8>>());
+        v.set_mode(Mode::Hex);
+        assert_eq!(v.bytes_per_row, 16);
+
+        // Eight at a time, within the limits: never below four, never above sixty-four.
+        v.set_bytes_per_row(8);
+        assert_eq!(v.bytes_per_row, 24);
+        v.set_bytes_per_row(-8);
+        v.set_bytes_per_row(-8);
+        assert_eq!(v.bytes_per_row, 8);
+        for _ in 0..10 {
+            v.set_bytes_per_row(-8);
+        }
+        assert_eq!(v.bytes_per_row, 4, "it stops rather than going to nothing");
+        for _ in 0..20 {
+            v.set_bytes_per_row(8);
+        }
+        assert_eq!(v.bytes_per_row, 64);
+
+        // A jump snaps to the row width, which is what keeps the offsets round...
+        v.set_bytes_per_row(-48);
+        assert_eq!(v.bytes_per_row, 16);
+        v.goto(33);
+        assert_eq!(v.top, 32);
+        // ...and a nudge does not, which is the whole point of it.
+        v.shift(1);
+        assert_eq!(v.top, 33);
+        v.shift(1);
+        assert_eq!(v.top, 34);
+        v.shift(-4);
+        assert_eq!(v.top, 30);
+        // It stops at the ends rather than wrapping or going negative.
+        v.shift(-1000);
+        assert_eq!(v.top, 0);
+        v.shift(-1);
+        assert_eq!(v.top, 0);
+        v.shift(100_000);
+        assert_eq!(v.top, 256);
     }
 
     #[test]

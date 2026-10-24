@@ -216,6 +216,9 @@ pub enum Event {
     CompareDone {
         id: u64,
         differ: Vec<String>,
+        /// The pairs whose bytes differ only in how their lines end, which is a difference
+        /// worth naming rather than counting with the rest.
+        line_endings: Vec<String>,
         unreadable: u64,
         stopped: bool,
     },
@@ -700,9 +703,17 @@ impl Mode {
     /// The string is what the screens list shows: the kind and the file.
     pub fn screen_title(&self) -> Option<String> {
         match self {
-            Mode::Viewer(v) => Some(format!("View  {}", v.path.display_name())),
-            Mode::Editor(e) => Some(format!("Edit  {}", e.name())),
-            Mode::Hex(e) => Some(format!("Hex   {}", e.name())),
+            // The whole path, not the name: two files called `README.md` open at once are two
+            // screens, and a list that calls them both `README.md` is a list one cannot use.
+            Mode::Viewer(v) => Some(format!("View  {}", v.path)),
+            Mode::Editor(e) => Some(format!(
+                "Edit  {}",
+                e.path.as_ref().map(|p| p.to_string()).unwrap_or(e.name())
+            )),
+            Mode::Hex(e) => Some(format!(
+                "Hex   {}",
+                e.path.as_ref().map(|p| p.to_string()).unwrap_or(e.name())
+            )),
             _ => None,
         }
     }
@@ -1359,6 +1370,7 @@ impl App {
             Event::CompareDone {
                 id,
                 differ,
+                line_endings,
                 unreadable,
                 stopped,
             } => {
@@ -1366,7 +1378,7 @@ impl App {
                     return;
                 }
                 self.compare = None;
-                self.apply_compare(&differ, unreadable, stopped);
+                self.apply_compare(&differ, &line_endings, unreadable, stopped);
             }
             Event::ListingCut {
                 panel,
@@ -1985,7 +1997,12 @@ impl App {
         if handled {
             return;
         }
-        if let Some(cmd) = self.keymap.resolve(&[Scope::Editor, Scope::Global], key) {
+        // The hex editor's own scope first, then the text editor's: what the two share is
+        // written once, and where they differ the hex one wins.
+        if let Some(cmd) = self
+            .keymap
+            .resolve(&[Scope::Hex, Scope::Editor, Scope::Global], key)
+        {
             self.run(cmd);
         }
     }
@@ -3227,10 +3244,10 @@ impl App {
             },
             Command::NavParent => {
                 if let Some(parent) = self.panel().cwd.parent() {
-                    let child = self.panel().cwd.display_name();
+                    // The cursor goes back on the directory we came out of; `goto` does that
+                    // for every way of going up, which this used to try to do by itself and
+                    // got wrong — it put the name in the status message instead.
                     self.goto(parent.normalised());
-                    // Put the cursor back on the directory we came out of, like FAR does.
-                    self.panel_mut().message = Some(child);
                 }
             }
             Command::NavRoot => {
@@ -5821,13 +5838,24 @@ impl App {
 
     /// Which scope the keymap — and a macro — is looked up in right now.
     pub fn scope(&self) -> scmd_cmd::Scope {
+        self.scopes()[0]
+    }
+
+    /// The scopes a key is looked up in, most specific first.
+    ///
+    /// One entry for everything but the hex editor, which is its own scope and falls through
+    /// to the text editor's: the two share a screen and a few keys, and differ on the ones
+    /// that matter — `F12` marks a block of bytes in one and lists the open screens in the
+    /// other.
+    pub fn scopes(&self) -> Vec<scmd_cmd::Scope> {
         use scmd_cmd::Scope;
         match &self.mode {
-            Mode::Normal => Scope::Panel,
-            Mode::Viewer(_) => Scope::Viewer,
-            Mode::Editor(_) | Mode::Hex(_) => Scope::Editor,
+            Mode::Normal => vec![Scope::Panel],
+            Mode::Viewer(_) => vec![Scope::Viewer],
+            Mode::Hex(_) => vec![Scope::Hex, Scope::Editor],
+            Mode::Editor(_) => vec![Scope::Editor],
             // Everything else is a dialog of some kind: a question, a list, a form.
-            _ => Scope::Dialog,
+            _ => vec![Scope::Dialog],
         }
     }
 
@@ -7327,8 +7355,25 @@ impl App {
                 Command::NavPageDown => viewer.scroll(height as i64, width, height),
                 Command::NavTop => viewer.to_start(),
                 Command::NavBottom => viewer.to_end(width, height),
+                // In text and dump mode the arrows scroll sideways, because there is a line
+                // wider than the window to scroll. A hex dump has no such line: its width is
+                // the row width, so the arrows set *that* — eight bytes at a time, which is
+                // half a row and keeps the offsets round. FAR puts this on `Alt+arrow`; here
+                // it is the plain arrow, because in hex mode it is the only thing sideways
+                // can mean.
+                Command::ViewerLeft if viewer.mode == scmd_view::Mode::Hex => {
+                    viewer.set_bytes_per_row(-8)
+                }
+                Command::ViewerRight if viewer.mode == scmd_view::Mode::Hex => {
+                    viewer.set_bytes_per_row(8)
+                }
                 Command::ViewerLeft => viewer.scroll_h(-1),
                 Command::ViewerRight => viewer.scroll_h(1),
+                // And `Ctrl+arrow` moves the whole dump by a single byte, so a structure that
+                // does not start on a multiple of the row width can be read in line rather
+                // than diagonally. The same keys FAR uses for it.
+                Command::ViewerShiftBack => viewer.shift(-1),
+                Command::ViewerShiftForward => viewer.shift(1),
                 Command::ViewerWrap => viewer.toggle_wrap(),
                 Command::ViewerHex => viewer.toggle_hex(),
                 Command::ViewerModeNext => {
@@ -7614,9 +7659,16 @@ impl App {
 
     /// What a finished comparison does to the panels: select what differs on both sides, and
     /// say what was found in one line.
-    fn apply_compare(&mut self, differ: &[String], unreadable: u64, stopped: bool) {
+    fn apply_compare(
+        &mut self,
+        differ: &[String],
+        line_endings: &[String],
+        unreadable: u64,
+        stopped: bool,
+    ) {
         let alone = std::mem::take(&mut self.compare_alone);
         let mut names: Vec<String> = differ.to_vec();
+        names.extend(line_endings.iter().cloned());
         names.extend(alone.iter().cloned());
         let pairs = self.compare_pairs;
         self.select_in_both(&names);
@@ -7626,7 +7678,7 @@ impl App {
             self.set_status(m);
             return;
         }
-        let mut line = if differ.is_empty() && alone.is_empty() {
+        let mut line = if differ.is_empty() && alone.is_empty() && line_endings.is_empty() {
             self.i18n
                 .t_args("compare-contents-same", &[("pairs", (pairs as i64).into())])
         } else {
@@ -7638,6 +7690,14 @@ impl App {
                 ],
             )
         };
+        if !line_endings.is_empty() {
+            let more = self.i18n.t_args(
+                "compare-contents-eol",
+                &[("count", (line_endings.len() as i64).into())],
+            );
+            line.push_str(", ");
+            line.push_str(&more);
+        }
         if !alone.is_empty() {
             let more = self.i18n.t_args(
                 "compare-contents-only",
@@ -7945,7 +8005,23 @@ impl App {
 
     pub fn goto(&mut self, path: VPath) {
         let index = self.active;
+        // Going *up* puts the cursor back on what was left, which is what FAR does and what
+        // makes stepping in and out of a tree bearable: one `Enter` and one `..` leave the
+        // cursor where it was rather than at the top of a directory with four hundred rows
+        // in it. It is set here rather than in the three callers — `Enter` on `..`, the
+        // `..` key, `cd ..` — because all three are this one call, and because the fourth
+        // case is the one that is easiest to miss: coming out of an archive, where the name
+        // to go back to is the archive's own and not the directory's inside it.
+        let leaving = self.panels[index].cwd.clone();
+        let came_from = leaving
+            .parent()
+            .map(|parent| parent.normalised())
+            .filter(|parent| *parent == path.normalised())
+            .map(|_| leaving.display_name());
         self.panels[index].go(path, true);
+        if let Some(name) = came_from {
+            self.panels[index].want_cursor = Some(name);
+        }
         self.read_panel(index);
     }
 
@@ -8009,6 +8085,7 @@ impl App {
             (7, self.i18n.t("key-search")),
             (8, self.i18n.t("key-replace")),
             (10, self.i18n.t("key-quit")),
+            (12, self.i18n.t("key-screens")),
         ]
     }
 
@@ -8037,6 +8114,7 @@ impl App {
             (8, self.i18n.t("key-code")),
             (10, self.i18n.t("key-quit")),
             (11, self.i18n.t("key-struct")),
+            (12, self.i18n.t("key-screens")),
         ]
     }
 
@@ -8221,6 +8299,8 @@ fn is_viewer_movement(cmd: Command) -> bool {
             | Command::ViewerUndoPosition
             | Command::ViewerBytesLess
             | Command::ViewerBytesMore
+            | Command::ViewerShiftBack
+            | Command::ViewerShiftForward
     )
 }
 
@@ -9898,7 +9978,7 @@ mod tests {
     }
 
     #[test]
-    fn a_macro_recorded_in_the_editor_belongs_to_the_editor() {
+    fn a_macro_recorded_in_the_hex_editor_belongs_to_the_hex_editor() {
         let dir = tempfile::tempdir().unwrap();
         let text = dir.path().join("notes.txt");
         std::fs::write(&text, "one\ntwo\n").unwrap();
@@ -9919,7 +9999,9 @@ mod tests {
         press(&mut app, "Esc");
         assert_eq!(app.macros.all.len(), 1, "{:?}", app.status);
         assert_eq!(app.macros.all[0].play, scmd_cmd::Play::Once);
-        assert_eq!(app.macros.all[0].scope, scmd_cmd::Scope::Editor);
+        // The hex editor's own scope, not the text editor's: a macro of block operations and
+        // byte edits has no meaning in a buffer of text, and the two are told apart now.
+        assert_eq!(app.macros.all[0].scope, scmd_cmd::Scope::Hex);
 
         // So the key does nothing in the panels, and the macro is still there.
         app.mode = Mode::Normal;
@@ -10448,6 +10530,149 @@ mod tests {
         assert_eq!(app.mode.hex_mut().unwrap().read(0, 10), b"ABCDEFGHGH");
     }
 
+    /// `F12` has to work from inside a viewer and an editor, not only from the panels: that
+    /// is the whole point of having screens, and the key bar has to say so or nobody finds it.
+    #[test]
+    fn f12_switches_screens_from_a_viewer_and_an_editor() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("one.txt"), b"first file\n").unwrap();
+        std::fs::write(dir.path().join("two.txt"), b"second file\n").unwrap();
+        let mut app = app();
+        app.panels[app.active].cwd = VPath::local(dir.path());
+        let entries =
+            scmd_vfs::local::list_blocking(&VPath::local(dir.path()), &CancelToken::new()).unwrap();
+        let (panel, generation) = (app.active, app.panels[app.active].generation);
+        app.handle_event(Event::Listed {
+            panel,
+            generation,
+            result: Ok(entries),
+        });
+
+        // A viewer on one file and an editor on the other.
+        let row = app.panels[app.active]
+            .listing
+            .row_of_name("one.txt")
+            .unwrap();
+        app.panels[app.active].cursor_to(row);
+        press(&mut app, "F3");
+        assert!(app.mode.viewer().is_some(), "{:?}", app.mode);
+        // The key bar says F12 is there, which is how anybody learns it.
+        assert!(
+            app.keybar_viewer().iter().any(|(n, _)| *n == 12),
+            "{:?}",
+            app.keybar_viewer()
+        );
+        assert!(app.keybar_editor().iter().any(|(n, _)| *n == 12));
+
+        // F12 from the viewer opens the list, and the viewer is in it.
+        press(&mut app, "F12");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("F12 did not open the screens: {:?}", app.mode)
+        };
+        assert_eq!(pick.kind, PickKind::Screens);
+        let labels: Vec<String> = pick.rows.iter().map(|r| r.label.clone()).collect();
+        assert!(
+            labels
+                .iter()
+                .any(|l| l.contains("View") && l.contains("one.txt")),
+            "{labels:?}"
+        );
+        // And the panels are the first row, as they are the first screen in FAR.
+        assert!(labels[0].to_lowercase().contains("panel"), "{labels:?}");
+        // The path, not just the name: two files of one name are two screens.
+        assert!(
+            labels
+                .iter()
+                .any(|l| l.contains(&dir.path().display().to_string())),
+            "{labels:?}"
+        );
+        press(&mut app, "Esc");
+        assert!(app.mode.viewer().is_some(), "Esc goes back to the viewer");
+    }
+
+    /// Coming back out of a directory — or out of an archive — puts the cursor back on what
+    /// was left, rather than at the top of a listing with four hundred rows in it.
+    #[test]
+    fn going_up_lands_on_what_was_left() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir(root.join("alpha")).unwrap();
+        std::fs::create_dir(root.join("beta")).unwrap();
+        std::fs::create_dir(root.join("gamma")).unwrap();
+        // An archive, so the way out of one is tested too: the name to go back to is the
+        // archive's own, not the directory's inside it.
+        let zip = root.join("tree.zip");
+        let file = std::fs::File::create(&zip).unwrap();
+        let mut writer = zip::ZipWriter::new(file);
+        writer
+            .start_file("inside.txt", zip::write::SimpleFileOptions::default())
+            .unwrap();
+        std::io::Write::write_all(&mut writer, b"x").unwrap();
+        writer.finish().unwrap();
+
+        let mut app = app();
+        let read = |app: &mut App| {
+            let path = app.panels[app.active].cwd.clone();
+            let entries = if path.in_container() {
+                let vfs = scmd_vfs::ArcVfs::new(scmd_arc::Limits::default());
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .build()
+                    .unwrap();
+                rt.block_on(scmd_vfs::Vfs::list(&vfs, &path, CancelToken::new()))
+                    .unwrap()
+            } else {
+                scmd_vfs::local::list_blocking(&path, &CancelToken::new()).unwrap()
+            };
+            let (panel, generation) = (app.active, app.panels[app.active].generation);
+            app.handle_event(Event::Listed {
+                panel,
+                generation,
+                result: Ok(entries),
+            });
+        };
+
+        app.panels[app.active].cwd = VPath::local(root);
+        read(&mut app);
+        // Into `beta`, and back out: the cursor is on `beta` and not on `alpha`.
+        let beta = app.panels[app.active]
+            .listing
+            .row_of_name("beta")
+            .expect("beta is there");
+        app.panels[app.active].cursor_to(beta);
+        app.run(Command::NavEnter);
+        read(&mut app);
+        assert_eq!(app.panels[app.active].cwd, VPath::local(root.join("beta")));
+        app.run(Command::NavParent);
+        read(&mut app);
+        assert_eq!(
+            app.panels[app.active]
+                .current()
+                .map(|e| e.name_str().into_owned()),
+            Some("beta".to_string())
+        );
+
+        // Into the archive and out again by `Enter` on `..`, which is the other way up.
+        let row = app.panels[app.active]
+            .listing
+            .row_of_name("tree.zip")
+            .expect("the archive is there");
+        app.panels[app.active].cursor_to(row);
+        app.run(Command::NavEnter);
+        read(&mut app);
+        assert!(app.panels[app.active].cwd.in_container(), "inside the zip");
+        app.panels[app.active].cursor_to(0); // the `..` row
+        app.run(Command::NavEnter);
+        read(&mut app);
+        assert_eq!(app.panels[app.active].cwd, VPath::local(root));
+        assert_eq!(
+            app.panels[app.active]
+                .current()
+                .map(|e| e.name_str().into_owned()),
+            Some("tree.zip".to_string()),
+            "coming out of an archive lands on the archive"
+        );
+    }
+
     /// A tunnel goes over the connection the panel is on, so there has to be one, and what
     /// is typed has to be a tunnel. Both are said while the dialog is still on screen.
     #[test]
@@ -10581,6 +10806,10 @@ mod tests {
         // Same name, different size: settled without opening anything.
         std::fs::write(left.path().join("grown.log"), b"one line\n").unwrap();
         std::fs::write(right.path().join("grown.log"), b"one line\ntwo lines\n").unwrap();
+        // The same text, checked out on two systems: every line differs and none of it means
+        // anything. FAR has a checkbox for this; here it is a third answer.
+        std::fs::write(left.path().join("windows.txt"), b"one\r\ntwo\r\n").unwrap();
+        std::fs::write(right.path().join("windows.txt"), b"one\ntwo\n").unwrap();
         // Only on one side.
         std::fs::write(left.path().join("only-left.txt"), b"x").unwrap();
         std::fs::write(right.path().join("only-right.txt"), b"y").unwrap();
@@ -10611,7 +10840,10 @@ mod tests {
         // Three names are on both sides; the two that are not are not pairs.
         let mut names: Vec<&str> = pairs.iter().map(|p| p.name.as_str()).collect();
         names.sort_unstable();
-        assert_eq!(names, vec!["grown.log", "same.txt", "sneaky.bin"]);
+        assert_eq!(
+            names,
+            vec!["grown.log", "same.txt", "sneaky.bin", "windows.txt"]
+        );
 
         // The real worker, on this thread: the reading, the progress and the verdict are the
         // ones the binary runs, not a second implementation written for the test.
@@ -10622,14 +10854,20 @@ mod tests {
         while let Ok(event) = rx.try_recv() {
             match &event {
                 Event::CompareProgress { .. } => progress += 1,
-                Event::CompareDone { differ, .. } => done = Some(differ.clone()),
+                Event::CompareDone {
+                    differ,
+                    line_endings,
+                    ..
+                } => done = Some((differ.clone(), line_endings.clone())),
                 _ => {}
             }
             app.handle_event(event);
         }
-        let mut differ = done.expect("the comparison finished");
+        let (mut differ, eol) = done.expect("the comparison finished");
         differ.sort();
         assert_eq!(differ, vec!["grown.log", "sneaky.bin"]);
+        // The pair that differs only in its line endings is named apart from the rest.
+        assert_eq!(eol, vec!["windows.txt"]);
         assert!(progress >= 1, "it should have reported progress");
 
         let marked = |app: &App, side: usize| -> Vec<String> {
@@ -10646,12 +10884,14 @@ mod tests {
         // has it.
         assert_eq!(
             marked(&app, 0),
-            vec!["grown.log", "only-left.txt", "sneaky.bin"]
+            vec!["grown.log", "only-left.txt", "sneaky.bin", "windows.txt"]
         );
         assert_eq!(
             marked(&app, 1),
-            vec!["grown.log", "only-right.txt", "sneaky.bin"]
+            vec!["grown.log", "only-right.txt", "sneaky.bin", "windows.txt"]
         );
+        // And the sentence says which kind of difference each number is.
+        assert!(app.status.contains("line endings"), "{}", app.status);
         assert!(app.status.contains('2'), "{}", app.status);
     }
 
@@ -10673,6 +10913,7 @@ mod tests {
         app.handle_event(Event::CompareDone {
             id: 7,
             differ: vec!["x".into()],
+            line_endings: Vec::new(),
             unreadable: 0,
             stopped: true,
         });

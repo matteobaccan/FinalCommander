@@ -418,6 +418,19 @@ keys = ["Ctrl+Z"]
 scope = "viewer"
 cmd = "viewer.undo"
 
+# In hex mode the plain arrows set the row width (the dump has no columns to scroll) and
+# `Ctrl+arrow` moves the whole dump by one byte, for a structure that does not begin on a
+# multiple of the row width. FAR puts the first pair on `Alt+arrow`; the second pair is its own.
+[[bind]]
+keys = ["Ctrl+Left"]
+scope = "viewer"
+cmd = "viewer.shift.back"
+
+[[bind]]
+keys = ["Ctrl+Right"]
+scope = "viewer"
+cmd = "viewer.shift.forward"
+
 [[bind]]
 keys = ["["]
 scope = "viewer"
@@ -724,7 +737,7 @@ cmd = "editor.block.mark"
 # What to do with the marked bytes. Hiew's own key for it.
 [[bind]]
 keys = ["F12"]
-scope = "editor"
+scope = "hex"
 cmd = "editor.block.ops"
 
 # One instruction, assembled where the cursor is. Hiew's own key for it.
@@ -743,6 +756,11 @@ cmd = "app.screens"
 [[bind]]
 keys = ["F12"]
 scope = "viewer"
+cmd = "app.screens"
+
+[[bind]]
+keys = ["F12"]
+scope = "editor"
 cmd = "app.screens"
 
 [[bind]]
