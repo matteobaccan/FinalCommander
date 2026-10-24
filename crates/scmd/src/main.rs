@@ -543,6 +543,16 @@ fn interactive(mut app: App) -> Result<()> {
                         let _ = tx.send(Event::Uploaded { id, remote, result });
                     });
                 }
+                Request::Link { target, link, kind } => {
+                    let tx = tx.clone();
+                    let fs = RoutedFs::new(pool.clone(), runtime.handle().clone());
+                    runtime.spawn_blocking(move || {
+                        let error = scmd_jobs::create_link(&fs, &target, &link, kind)
+                            .err()
+                            .map(|e| e.to_string());
+                        let _ = tx.send(Event::LinkDone { link, error });
+                    });
+                }
                 Request::DirSize { panel, path } => {
                     let tx = tx.clone();
                     let fs = RoutedFs::new(pool.clone(), runtime.handle().clone());
@@ -1010,6 +1020,13 @@ mod tests {
                             app.handle_event(event);
                         }
                     }
+                    Request::Link { target, link, kind } => {
+                        let error =
+                            scmd_jobs::create_link(&scmd_jobs::LocalFs, &target, &link, kind)
+                                .err()
+                                .map(|e| e.to_string());
+                        app.handle_event(Event::LinkDone { link, error });
+                    }
                     Request::DirSize { .. }
                     | Request::Shell { .. }
                     | Request::Decompile { .. }
@@ -1088,6 +1105,13 @@ mod tests {
                         while let Ok(event) = rx.try_recv() {
                             app.handle_event(event);
                         }
+                    }
+                    Request::Link { target, link, kind } => {
+                        let error =
+                            scmd_jobs::create_link(&scmd_jobs::LocalFs, &target, &link, kind)
+                                .err()
+                                .map(|e| e.to_string());
+                        app.handle_event(Event::LinkDone { link, error });
                     }
                     Request::DirSize { .. }
                     | Request::Shell { .. }

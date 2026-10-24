@@ -130,6 +130,16 @@ cmd = "panel.sort.by(size)"
 keys = ["Ctrl+F7"]
 cmd = "panel.sort.by(none)"
 
+# FAR's own two: a filesystem that does not keep the field sorts those entries together at
+# the old end rather than failing (see docs/spec/02-panels.md §4).
+[[bind]]
+keys = ["Ctrl+F8"]
+cmd = "panel.sort.by(btime)"
+
+[[bind]]
+keys = ["Ctrl+F9"]
+cmd = "panel.sort.by(atime)"
+
 # FAR opens the sort list on Ctrl+F12; reversing is a choice inside it, so the direct
 # toggle moves one key further out.
 [[bind]]
@@ -260,6 +270,14 @@ cmd = "file.delete.current"
 [[bind]]
 keys = ["Ctrl+G"]
 cmd = "file.apply"
+
+[[bind]]
+keys = ["Alt+F6"]
+cmd = "file.link"
+
+[[bind]]
+keys = ["Alt+Del"]
+cmd = "file.wipe"
 
 
 # ---------------------------------------------------------------- layout
@@ -431,16 +449,43 @@ keys = ["F5"]
 scope = "viewer"
 cmd = "viewer.disasm"
 
+# FAR's F6 in the viewer switches to the editor, so that is what it does here; decompiling
+# is ours and moves one key along. See docs/03-keymap.md §7.
 [[bind]]
 keys = ["F6"]
 scope = "viewer"
+cmd = "viewer.to.editor"
+
+[[bind]]
+keys = ["Shift+F6"]
+scope = "viewer"
 cmd = "viewer.decompile"
+
+[[bind]]
+keys = ["+"]
+scope = "viewer"
+cmd = "viewer.file.next"
+
+[[bind]]
+keys = ["-"]
+scope = "viewer"
+cmd = "viewer.file.prev"
+
+[[bind]]
+keys = ["Ctrl+F10"]
+scope = "viewer"
+cmd = "viewer.to.panel"
 
 # ---------------------------------------------------------------- editor (F4)
 [[bind]]
 keys = ["F2"]
 scope = "editor"
 cmd = "editor.save"
+
+[[bind]]
+keys = ["F6"]
+scope = "editor"
+cmd = "editor.to.viewer"
 
 [[bind]]
 keys = ["Shift+F2"]

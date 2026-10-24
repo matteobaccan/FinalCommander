@@ -30,6 +30,12 @@ pub enum Request {
         panel: usize,
         path: VPath,
     },
+    /// Create a link. Not a job: it is one syscall, with nothing to report progress on.
+    Link {
+        target: VPath,
+        link: VPath,
+        kind: scmd_jobs::LinkKind,
+    },
     /// Run an external decompiler and show its output in the viewer.
     Decompile {
         id: u64,
@@ -126,6 +132,11 @@ pub enum Event {
     FreeSpace {
         panel: usize,
         bytes: Option<u64>,
+    },
+    /// A link was created, or could not be.
+    LinkDone {
+        link: VPath,
+        error: Option<String>,
     },
     /// A shell command finished: its merged output, capped, and how it ended.
     ShellDone {
@@ -227,6 +238,8 @@ pub enum PromptKind {
     Mkdir,
     /// `Ctrl+G`: one command line, run once per selected file (SPEC 06 §5).
     ApplyCommand,
+    /// `Alt+F6`: where the new link goes. The target travels in `Prompt::sources`.
+    LinkName,
     /// A URL to connect to: `sftp://mb@host/srv`.
     NetConnect,
     /// A password or a key passphrase. Never echoed, never stored.
@@ -596,6 +609,17 @@ impl App {
     pub fn handle_event(&mut self, event: Event) {
         match event {
             Event::Input(input) => self.handle_input(input),
+            Event::LinkDone { link, error } => match error {
+                Some(e) => self.set_error(e),
+                None => {
+                    let msg = self
+                        .i18n
+                        .t_args("link-created", &[("name", link.display_name().into())]);
+                    self.set_status(msg);
+                    self.read_panel(0);
+                    self.read_panel(1);
+                }
+            },
             Event::FreeSpace { panel, bytes } => {
                 if let Some(p) = self.panels.get_mut(panel) {
                     p.free = bytes;
@@ -1488,6 +1512,25 @@ impl App {
                 let target = self.resolve_path(raw);
                 self.start_job(JobSpec::new(kind, sources, Some(target)));
             }
+            PromptKind::LinkName => {
+                let raw = prompt.text.trim();
+                let Some(target) = prompt.sources.first().cloned() else {
+                    return;
+                };
+                if raw.is_empty() {
+                    return;
+                }
+                let link = self.resolve_path(raw);
+                // A relative symbolic link, which is the one that survives the whole tree
+                // being moved or copied elsewhere. The dialog that offers a hard link and an
+                // absolute one is a backlog item; `link:` on the command line will carry the
+                // choice when it lands.
+                self.requests.push(Request::Link {
+                    target,
+                    link,
+                    kind: scmd_jobs::LinkKind::SymlinkRelative,
+                });
+            }
             PromptKind::ApplyCommand => {
                 let template = prompt.text.trim().to_string();
                 if template.is_empty() {
@@ -1965,6 +2008,14 @@ impl App {
             self.viewer_command(cmd);
             return;
         }
+        // Crossing to the viewer leaves the editor behind, so it is not one of the editor's
+        // own commands even though it is named like one.
+        if cmd == Command::EditorToViewer {
+            if self.mode.editor().is_some() {
+                self.editor_to_viewer();
+            }
+            return;
+        }
         if is_editor_command(cmd) {
             if self.mode.editor().is_some() || self.editor_parked.is_some() {
                 self.editor_command(cmd);
@@ -2226,6 +2277,73 @@ impl App {
                 );
                 self.set_status(msg);
             }
+            Command::FileWipe => {
+                let sources = self.job_sources();
+                if sources.is_empty() {
+                    let m = self.i18n.t("msg-nothing-to-do");
+                    self.set_error(m);
+                    return;
+                }
+                let bytes = self.selected_bytes(&sources);
+                let spec = JobSpec::new(JobKind::Wipe, sources.clone(), None);
+                let title = self.i18n.t("confirm-wipe-title");
+                let body = self.i18n.t_args(
+                    "confirm-wipe-body",
+                    &[
+                        ("count", (sources.len() as i64).into()),
+                        ("bytes", scmd_core::format_size(bytes).into()),
+                    ],
+                );
+                let mut lines = vec![body, String::new()];
+                lines.extend(
+                    sources
+                        .iter()
+                        .take(3)
+                        .map(|p| format!("  {}", p.display_name())),
+                );
+                if sources.len() > 3 {
+                    lines.push(format!("  … {}", sources.len() - 3));
+                }
+                lines.push(String::new());
+                // Overwriting is not a promise on modern hardware, and the dialog says so
+                // rather than letting a user believe something the filesystem cannot deliver.
+                lines.push(self.i18n.t("confirm-wipe-honest"));
+                lines.push(self.i18n.t("confirm-yes-no"));
+                self.mode = Mode::Confirm(Confirm {
+                    title,
+                    lines,
+                    action: ConfirmAction::Job(spec),
+                });
+            }
+            Command::FileLink => {
+                let Some(entry) = self.panel().current().cloned() else {
+                    let m = self.i18n.t("msg-nothing-to-do");
+                    self.set_error(m);
+                    return;
+                };
+                if entry.kind == scmd_core::EntryKind::Parent {
+                    let m = self.i18n.t("msg-nothing-to-do");
+                    self.set_error(m);
+                    return;
+                }
+                let target = self.panel().cwd.join(&entry.name);
+                // The link goes in the other panel, as a copy would.
+                let mut text = self.other().cwd.to_string();
+                if !text.ends_with(std::path::MAIN_SEPARATOR) {
+                    text.push(std::path::MAIN_SEPARATOR);
+                }
+                text.push_str(&entry.name.to_string_lossy());
+                let title = self
+                    .i18n
+                    .t_args("prompt-link", &[("name", target.display_name().into())]);
+                self.mode = Mode::Prompt(Prompt {
+                    kind: PromptKind::LinkName,
+                    title,
+                    text,
+                    secret: false,
+                    sources: vec![target],
+                });
+            }
             Command::FileApply => {
                 let sources = self.job_sources();
                 if sources.is_empty() {
@@ -2354,6 +2472,38 @@ impl App {
             Command::ViewerDecompile if self.mode.viewer().is_some() => self.decompile(),
 
             Command::ViewerQuit => self.mode = Mode::Normal,
+            Command::ViewerToPanel if self.mode.viewer().is_some() => {
+                // `Ctrl+F10`: the panel catches up with what is being viewed, which is the
+                // point once `Gray +`/`Gray -` have walked away from where F3 was pressed.
+                let path = self.mode.viewer().map(|v| v.path.clone());
+                if let Some(path) = path {
+                    let name = path.display_name();
+                    let row = self.panel().listing.row_of_name(&name);
+                    match row {
+                        Some(row) => {
+                            self.panel_mut().cursor_to(row);
+                            let msg = self
+                                .i18n
+                                .t_args("viewer-in-panel", &[("name", name.into())]);
+                            self.set_status(msg);
+                        }
+                        None => {
+                            let m = self.i18n.t("viewer-not-in-panel");
+                            self.set_error(m);
+                        }
+                    }
+                }
+            }
+            Command::ViewerNextFile | Command::ViewerPrevFile if self.mode.viewer().is_some() => {
+                self.viewer_step_file(if cmd == Command::ViewerNextFile {
+                    1
+                } else {
+                    -1
+                });
+            }
+            Command::ViewerToEditor if self.mode.viewer().is_some() => {
+                self.viewer_to_editor();
+            }
             Command::ViewerSearch if self.mode.viewer().is_some() => {
                 let mode = self.search_mode;
                 let title = self
@@ -2528,6 +2678,106 @@ impl App {
         }
         let local = path.as_path().to_path_buf();
         self.open_viewer_on(&local, path);
+    }
+
+    /// `Gray +` / `Gray -`: the next or previous file of the panel, without leaving the
+    /// viewer. Directories are skipped — stepping into one would mean measuring it, which is
+    /// not what a reader walking through a directory of logs asked for.
+    fn viewer_step_file(&mut self, delta: isize) {
+        let mode = self.mode.viewer().map(|v| v.mode);
+        let len = self.panel().listing.len();
+        let mut row = self.panel().cursor as isize;
+        let mut found = None;
+        for _ in 0..len {
+            row += delta;
+            if row < 0 || row as usize >= len {
+                break;
+            }
+            let entry = self.panel().listing.row(row as usize).cloned();
+            match entry {
+                Some(e) if !e.kind.is_dirlike() => {
+                    found = Some((row as usize, e));
+                    break;
+                }
+                Some(_) => continue,
+                None => break,
+            }
+        }
+        let Some((row, entry)) = found else {
+            let m = self.i18n.t("viewer-no-more-files");
+            self.set_status(m);
+            return;
+        };
+        self.panel_mut().cursor_to(row);
+        let path = self.panel().cwd.join(&entry.name);
+        if path.is_remote() {
+            self.fetch_remote(path, entry.size, Fetched::View);
+            return;
+        }
+        let local = path.as_path().to_path_buf();
+        self.open_viewer_on(&local, path);
+        // The reader was in hex or disassembly for a reason; the next file opens the same way.
+        if let (Some(mode), Some(viewer)) = (mode, self.mode.viewer_mut()) {
+            viewer.set_mode(mode);
+        }
+    }
+
+    /// `F6` in the viewer: the same file in the editor, on the line the bytes were showing.
+    fn viewer_to_editor(&mut self) {
+        let Some((path, offset)) = self
+            .mode
+            .viewer()
+            .map(|v| (v.path.clone(), v.top))
+            .filter(|(p, _)| !p.is_remote())
+        else {
+            let m = self.i18n.t("cmd-not-remote");
+            self.set_error(m);
+            return;
+        };
+        match Editor::open(path.as_path()) {
+            Ok(mut editor) => {
+                let line = line_at_offset(&editor, offset);
+                editor.goto(&line.to_string());
+                if editor.buffer.read_only {
+                    let msg = self
+                        .i18n
+                        .t_args("editor-read-only", &[("name", editor.name().into())]);
+                    self.set_status(msg);
+                }
+                self.mode = Mode::Editor(Box::new(editor));
+            }
+            Err(e) => self.set_error(format!("{path}: {e}")),
+        }
+    }
+
+    /// `F6` in the editor: the same file in the viewer, at the byte the cursor is on. Unsaved
+    /// changes stay in the editor — the viewer reads the file on disk, and saying so is better
+    /// than showing a line that is not there any more.
+    fn editor_to_viewer(&mut self) {
+        let Some(editor) = self.mode.editor() else {
+            return;
+        };
+        if editor.buffer.modified() {
+            let m = self.i18n.t("editor-unsaved-for-viewer");
+            self.set_error(m);
+            return;
+        }
+        let Some(path) = editor.path.clone() else {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        };
+        let offset = offset_at_line(editor, editor.cursor.line);
+        if path.is_remote() {
+            let m = self.i18n.t("cmd-not-remote");
+            self.set_error(m);
+            return;
+        }
+        let local = path.as_path().to_path_buf();
+        self.open_viewer_on(&local, path);
+        if let Some(viewer) = self.mode.viewer_mut() {
+            viewer.goto(offset);
+        }
     }
 
     /// Ask for a remote file to be copied down. The size limit keeps `F3` on a 4 GB image
@@ -3685,6 +3935,8 @@ impl App {
                     (SortKey::Ext, "sort-ext"),
                     (SortKey::Size, "sort-size"),
                     (SortKey::MTime, "sort-mtime"),
+                    (SortKey::BTime, "sort-btime"),
+                    (SortKey::ATime, "sort-atime"),
                     (SortKey::Unsorted, "sort-none"),
                 ];
                 Pick::new(
@@ -3771,6 +4023,8 @@ impl App {
                     "ext" => SortKey::Ext,
                     "size" => SortKey::Size,
                     "mtime" => SortKey::MTime,
+                    "btime" => SortKey::BTime,
+                    "atime" => SortKey::ATime,
                     "unsorted" | "none" => SortKey::Unsorted,
                     _ => SortKey::Name,
                 };
@@ -4460,7 +4714,7 @@ impl App {
             (3, self.i18n.t("key-quit")),
             (4, self.i18n.t("key-hex")),
             (5, self.i18n.t("key-disasm")),
-            (6, self.i18n.t("key-decomp")),
+            (6, self.i18n.t("key-edit")),
             (7, self.i18n.t("key-search")),
             (8, self.i18n.t("key-code")),
             (10, self.i18n.t("key-quit")),
@@ -4561,11 +4815,40 @@ fn is_viewer_movement(cmd: Command) -> bool {
     )
 }
 
+/// The one-based line a byte offset falls on. The sum is over encoded bytes, so a file in a
+/// code page other than UTF-8 still lands on the right line.
+fn line_at_offset(editor: &Editor, offset: u64) -> usize {
+    let mut at = 0u64;
+    let eol = editor.buffer.eol.bytes().len() as u64;
+    for (i, line) in editor.buffer.lines().iter().enumerate() {
+        let bytes = editor.buffer.codepage.encode(line).len() as u64 + eol;
+        if at + bytes > offset {
+            return i + 1;
+        }
+        at += bytes;
+    }
+    editor.buffer.len().max(1)
+}
+
+/// The byte offset a line starts at: the other direction, for `F6` out of the editor.
+fn offset_at_line(editor: &Editor, line: usize) -> u64 {
+    let eol = editor.buffer.eol.bytes().len() as u64;
+    editor
+        .buffer
+        .lines()
+        .iter()
+        .take(line)
+        .map(|l| editor.buffer.codepage.encode(l).len() as u64 + eol)
+        .sum()
+}
+
 fn parse_sort(s: &str) -> SortKey {
     match s.trim().to_ascii_lowercase().as_str() {
         "ext" | "extension" => SortKey::Ext,
         "size" => SortKey::Size,
         "mtime" | "time" | "date" => SortKey::MTime,
+        "btime" | "created" => SortKey::BTime,
+        "atime" | "accessed" => SortKey::ATime,
         "none" | "unsorted" => SortKey::Unsorted,
         _ => SortKey::Name,
     }
@@ -4824,6 +5107,124 @@ mod tests {
             app.cfg.sites.first().and_then(|s| s.auth.clone()),
             Some("key:~/.ssh/id_ed25519".to_string())
         );
+    }
+
+    #[test]
+    fn alt_del_asks_first_and_says_what_overwriting_cannot_promise() {
+        let mut app = app();
+        press(&mut app, "Down");
+        press(&mut app, "Down"); // a.txt
+        app.run(Command::FileWipe);
+        let Mode::Confirm(confirm) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        let text = confirm.lines.join(" ");
+        assert!(text.contains("a.txt"), "{text}");
+        // The dialog has to be honest about SSDs and snapshots, or it promises something the
+        // filesystem cannot deliver.
+        assert!(text.contains("SSD"), "{text}");
+        match &confirm.action {
+            ConfirmAction::Job(spec) => {
+                assert_eq!(spec.kind, scmd_jobs::JobKind::Wipe);
+                assert_eq!(spec.sources.len(), 1);
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn alt_f6_puts_a_relative_symlink_in_the_other_panel() {
+        let mut app = app();
+        press(&mut app, "Down");
+        press(&mut app, "Down"); // a.txt
+        app.run(Command::FileLink);
+        let Mode::Prompt(prompt) = std::mem::replace(&mut app.mode, Mode::Normal) else {
+            panic!("the link prompt did not open")
+        };
+        assert_eq!(prompt.kind, PromptKind::LinkName);
+        // Pre-filled with the passive panel's directory, as a copy would be.
+        assert!(prompt.text.starts_with("/tmp/"), "{}", prompt.text);
+        assert!(prompt.text.ends_with("a.txt"), "{}", prompt.text);
+        assert_eq!(
+            prompt.sources.len(),
+            1,
+            "the target travels with the prompt"
+        );
+        app.prompt_accept(prompt);
+        match app.take_requests().into_iter().next() {
+            Some(Request::Link { target, link, kind }) => {
+                assert!(target.to_string().ends_with("a.txt"), "{target}");
+                assert_eq!(link.to_string(), "/tmp/a.txt");
+                assert_eq!(kind, scmd_jobs::LinkKind::SymlinkRelative);
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn the_viewer_walks_to_the_next_file_without_going_back_to_the_panel() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("one.txt"), b"first\n").unwrap();
+        std::fs::write(dir.path().join("two.txt"), b"second\n").unwrap();
+        std::fs::create_dir(dir.path().join("sub")).unwrap();
+        let mut app = app_on_disk(dir.path());
+        // `sub` sorts before the files, so two steps to reach one of them.
+        press(&mut app, "Down");
+        press(&mut app, "Down");
+        press(&mut app, "F3");
+        let first = app.mode.viewer().expect("open").path.display_name();
+        press(&mut app, "+");
+        let second = app.mode.viewer().expect("still open").path.display_name();
+        assert_ne!(first, second, "it did not move");
+        // A directory is skipped rather than measured.
+        assert!(second.ends_with(".txt"), "{second}");
+        // And the panel's cursor came along, so Esc leaves it on what was last read.
+        assert_eq!(app.panel().current().unwrap().name_str(), second);
+        press(&mut app, "-");
+        assert_eq!(
+            app.mode.viewer().expect("still open").path.display_name(),
+            first
+        );
+    }
+
+    #[test]
+    fn f6_crosses_between_the_viewer_and_the_editor_at_the_same_place() {
+        let dir = tempfile::tempdir().unwrap();
+        // Ten lines of six bytes each, so an offset maps to an obvious line.
+        let text: String = (0..10).map(|i| format!("line{i}\n")).collect();
+        std::fs::write(dir.path().join("notes.txt"), &text).unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F3");
+        // Down three lines, then across to the editor.
+        for _ in 0..3 {
+            press(&mut app, "Down");
+        }
+        let offset = app.mode.viewer().expect("open").top;
+        assert_eq!(offset, 18, "three lines of six bytes");
+        press(&mut app, "F6");
+        let editor = app.mode.editor().expect("the editor did not open");
+        assert_eq!(editor.cursor.line, 3, "line 4, one-based");
+        // And back again, landing on the same byte.
+        press(&mut app, "F6");
+        assert_eq!(app.mode.viewer().expect("open").top, 18);
+    }
+
+    #[test]
+    fn ctrl_f10_brings_the_panel_to_what_is_being_viewed() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("one.txt"), b"first\n").unwrap();
+        std::fs::write(dir.path().join("two.txt"), b"second\n").unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F3");
+        press(&mut app, "+");
+        let viewed = app.mode.viewer().expect("open").path.display_name();
+        // Move the panel away, then ask it to catch up.
+        app.panel_mut().cursor_to(0);
+        app.run(Command::ViewerToPanel);
+        assert_eq!(app.panel().current().unwrap().name_str(), viewed);
+        assert!(app.status.contains(&viewed), "{}", app.status);
     }
 
     // ── selection and the keys that ignore it ───────────────────────────────────────────────
@@ -6290,7 +6691,7 @@ abcdefghij
     }
 
     #[test]
-    fn f6_prints_a_wasm_module_as_text_without_an_external_tool() {
+    fn shift_f6_prints_a_wasm_module_as_text_without_an_external_tool() {
         let dir = tempfile::tempdir().unwrap();
         let wasm: &[u8] = &[
             0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x05, 0x01, 0x60, 0x00, 0x01,
@@ -6300,7 +6701,7 @@ abcdefghij
         let mut app = app_on_disk(dir.path());
         press(&mut app, "Down");
         press(&mut app, "F3");
-        press(&mut app, "F6");
+        press(&mut app, "Shift+F6");
 
         let viewer = app.mode.viewer_mut().expect("still open");
         assert_eq!(viewer.derived.as_deref(), Some("WAT"));
@@ -6330,7 +6731,7 @@ abcdefghij
         }];
         press(&mut app, "Down");
         press(&mut app, "F3");
-        press(&mut app, "F6");
+        press(&mut app, "Shift+F6");
 
         if !scmd_config::command_exists("cat") {
             return; // Windows runner
@@ -6360,13 +6761,13 @@ abcdefghij
     }
 
     #[test]
-    fn f6_without_any_tool_says_what_to_install() {
+    fn shift_f6_without_any_tool_says_what_to_install() {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("thing.unknownext"), b"\x00\x01\x02\x03").unwrap();
         let mut app = app_on_disk(dir.path());
         press(&mut app, "Down");
         press(&mut app, "F3");
-        press(&mut app, "F6");
+        press(&mut app, "Shift+F6");
         assert!(app.status_error, "{}", app.status);
         assert!(app.status.contains("decompile"), "{}", app.status);
         assert!(app.take_requests().is_empty());
@@ -6384,7 +6785,7 @@ abcdefghij
         }];
         press(&mut app, "Down");
         press(&mut app, "F3");
-        press(&mut app, "F6");
+        press(&mut app, "Shift+F6");
         if !scmd_config::command_exists("cat") {
             return;
         }

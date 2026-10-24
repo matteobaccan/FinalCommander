@@ -693,6 +693,9 @@ pub struct ProgressView<'a> {
     /// The item being worked on right now.
     pub current: &'a str,
     pub counters: &'a str,
+    /// Speed, elapsed and what is left: the three numbers people actually watch. Empty keeps
+    /// the row out of the box.
+    pub rates: &'a str,
     pub total_percent: u16,
     pub file_percent: u16,
     /// Shown only when there is more than one file.
@@ -708,7 +711,7 @@ pub fn draw_progress(
     view: &ProgressView<'_>,
 ) -> Rect {
     let w = (screen.w * 3 / 4).clamp(30, screen.w.saturating_sub(4));
-    let h = if view.show_file_bar { 8 } else { 7 };
+    let h = 7 + u16::from(view.show_file_bar) + u16::from(!view.rates.is_empty());
     let h = h.min(screen.h);
     let x = screen.x + (screen.w.saturating_sub(w)) / 2;
     let y = screen.y + (screen.h.saturating_sub(h)) / 2;
@@ -759,6 +762,16 @@ pub fn draw_progress(
         style,
         inner.w,
     );
+    if !view.rates.is_empty() {
+        row += 1;
+        buf.put_str(
+            inner.x,
+            row,
+            &truncate_cols(view.rates, inner.w as usize),
+            style,
+            inner.w,
+        );
+    }
     buf.put_str(
         inner.x,
         area.bottom() - 1,
@@ -1111,6 +1124,7 @@ mod tests {
                 title: "Copying",
                 current: "/home/mb/project/target/debug/deps/libfoo.rlib",
                 counters: "12 / 40 files · 4.1 M / 22.7 M",
+                rates: "",
                 total_percent: 43,
                 file_percent: 80,
                 show_file_bar: true,
@@ -1139,6 +1153,7 @@ mod tests {
                 title: "Copying",
                 current: "x",
                 counters: "c",
+                rates: "",
                 total_percent: 10,
                 file_percent: 10,
                 show_file_bar: true,
@@ -1153,6 +1168,7 @@ mod tests {
                 title: "Copying",
                 current: "x",
                 counters: "c",
+                rates: "",
                 total_percent: 10,
                 file_percent: 10,
                 show_file_bar: false,

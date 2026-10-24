@@ -188,10 +188,10 @@ pub fn menus() -> Vec<Menu> {
                 ),
                 item("menu-copy", "F5", Action::Run(Command::FileCopy)),
                 item("menu-rename", "F6", Action::Run(Command::FileMove)),
-                item("menu-link", "Alt+F6", Action::Todo("file.link")),
+                item("menu-link", "Alt+F6", Action::Run(Command::FileLink)),
                 item("menu-mkdir", "F7", Action::Run(Command::FileMkdir)),
                 item("menu-delete", "F8", Action::Run(Command::FileDelete)),
-                item("menu-wipe", "Alt+Del", Action::Todo("file.wipe")),
+                item("menu-wipe", "Alt+Del", Action::Run(Command::FileWipe)),
                 Entry::Separator,
                 item("menu-archive-add", "Shift+F1", Action::Todo("archive.add")),
                 item(

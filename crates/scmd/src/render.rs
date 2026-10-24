@@ -507,6 +507,24 @@ fn draw_job(app: &App, view: &crate::app::JobView, buf: &mut Buffer, screen: Rec
             ("bytestotal", scmd_core::format_size(p.bytes_total).into()),
         ],
     );
+    // Speed, elapsed and what is left. All three come from the average rather than the last
+    // tick, and the estimate is simply absent until there is enough to compute it: a number
+    // that jumps between four seconds and four hours is worse than no number.
+    let rates = match (p.bytes_per_sec(), p.eta()) {
+        (Some(speed), eta) => app.i18n.t_args(
+            if eta.is_some() {
+                "job-rates"
+            } else {
+                "job-rates-no-eta"
+            },
+            &[
+                ("speed", scmd_core::format_size(speed as u64).into()),
+                ("elapsed", clock(p.elapsed).into()),
+                ("eta", eta.map(clock).unwrap_or_default().into()),
+            ],
+        ),
+        _ => String::new(),
+    };
     widgets::draw_progress(
         buf,
         &app.theme,
@@ -515,6 +533,7 @@ fn draw_job(app: &App, view: &crate::app::JobView, buf: &mut Buffer, screen: Rec
             title: &app.job_title(view.kind),
             current: &current,
             counters: &counters,
+            rates: &rates,
             total_percent: p.percent(),
             file_percent: p.file_percent(),
             show_file_bar: p.files_total > 1,
@@ -757,6 +776,18 @@ fn draw_viewer(app: &mut App, viewer: &mut scmd_view::Viewer, buf: &mut Buffer) 
         let labels = app.keybar_viewer();
         let refs: Vec<(u8, &str)> = labels.iter().map(|(n, s)| (*n, s.as_str())).collect();
         widgets::draw_keybar(buf, &app.theme, Rect::new(0, h - 1, w, 1), &refs);
+    }
+}
+
+/// A duration as a clock: `1:05` or `2:14:03`. Seconds alone read as a number rather than as
+/// a time, and nobody watching a copy wants three decimal places.
+fn clock(d: std::time::Duration) -> String {
+    let secs = d.as_secs();
+    let (h, m, s) = (secs / 3600, (secs % 3600) / 60, secs % 60);
+    if h > 0 {
+        format!("{h}:{m:02}:{s:02}")
+    } else {
+        format!("{m}:{s:02}")
     }
 }
 
