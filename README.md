@@ -20,7 +20,7 @@ third codebase. Same shape, five times over, with different keys and different g
 system. This is that idea written once, as one binary per platform from one source tree —
 with FAR's keymap as the default, because a user's fingers are a specification too.
 
-> **Status: 0.0.7, a preview.** Two panels, navigation, the selection matrix, sorting, view
+> **Status: 0.1.0, open to testers.** Two panels, navigation, the selection matrix, sorting, view
 > modes, quick search, filters with FAR's whole mask grammar, themes (including FAR's own
 > palette), keymap profiles and seven interface languages, real file operations (`F5`–`F8`,
 > plus wipe and links), a command line with FAR's internal commands, prefixes and metasymbols
@@ -32,7 +32,12 @@ with FAR's keymap as the default, because a user's fingers are a specification t
 > with the count taken before anything is written, **archives** (`Enter` opens a zip or a
 > tarball as a panel, `Shift+F1` builds one, `Shift+F2` takes one apart), and the panels FAR
 > has: **quick view** (`Ctrl+Q`), **info** (`Ctrl+L`) and the **tree** (`Ctrl+T`), plus
-> **compare folders** and FAR's five view modes on FAR's own keys.
+> **compare folders** and FAR's five view modes on FAR's own keys. Then the 0.0.8 and 0.1.0
+> work: the **hex editor** (`F4` on a binary) with a patch list, block operations (`F12`), an
+> **assembler** (`F9`) and a **calculator** (`Alt+=`), search by instruction pattern in a
+> disassembly, raw devices on Linux and macOS, **macros** (`Ctrl+.`), the **screens**
+> (`F12`, `Ctrl+Tab`), a **help system** whose key and command chapters are generated from the
+> keymap in force (`F1`), a **manual page**, and **plugin commands** (`F11`).
 > What is missing says so rather than failing quietly; the list is in
 > [`CHANGELOG.md`](CHANGELOG.md), item by item in [`docs/BACKLOG.md`](docs/BACKLOG.md), and the
 > plan in `docs/spec/09-roadmap.md`.
@@ -54,7 +59,7 @@ one directory down.
 
 ```sh
 # Linux, for example
-tar xzf scmd-linux-x86_64-0.0.7.tar.gz
+tar xzf scmd-linux-x86_64-0.1.0.tar.gz
 sudo install -m755 scmd /usr/local/bin/scmd
 scmd --version
 ```

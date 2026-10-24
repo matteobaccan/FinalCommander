@@ -6,6 +6,72 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] — 2026-10-24
+
+The first release meant to be used by somebody other than its author: macros, the screens, a
+real help system, a manual page, and the first thing a plugin can do beyond carrying data.
+
+### Added
+
+- **Macros (`Ctrl+.` records, `Ctrl+Shift+.` lists)**. A macro is a list of *commands*, not of
+  keystrokes: every action in the program is already a named command, so a recorded macro is a
+  readable list of names in `scmd-macros.toml` that one can read, edit, diff and carry to
+  another machine. What a key cannot say as a command is kept as a key — the letters typed into
+  a prompt, `Enter` on a dialog — and recording tells the two apart by where the key went.
+  The corner of the screen says `REC` and counts the steps while one is being recorded; the key
+  pressed afterwards is the key the macro answers to, which is how one finds out it is free.
+  Two play modes: once, or once for every selected file with the cursor put on each in turn —
+  the mode that makes a macro worth recording. Anything that copies, moves, deletes, packs,
+  overwrites or runs a shell command asks first and shows the steps, unless the file says
+  `trusted = true`.
+- **The screens (`F12`, `Ctrl+Tab`)**. A viewer or an editor is a screen one steps away from
+  and comes back to, keeping its position, its search and its unsaved changes while the panels
+  or another file are worked on. `F12` lists them with a `*` in front of one holding unwritten
+  changes; the count of what is behind the panels sits in the corner. The panels are screen
+  zero of the ring, so `Ctrl+Tab` from a screen steps out to them and from them steps in to the
+  next: the panels are never more than one key away. `F10` from the panels now asks about every
+  background screen with unsaved changes instead of ending the program on the spot.
+- **A help system worth the key (`F1`)**. A table of contents: seven written chapters —
+  what this is, the panels, files, the viewer, the editor, servers, configuration — compiled
+  into the binary from `docs/help/`, and three **generated** ones: every binding by scope,
+  every command with the keys that reach it, and the settings as this session has them. The
+  generated half is built from the keymap actually in force, so it cannot drift; a written list
+  of keys is wrong the day after it is written.
+- **A manual page**, `docs/scmd.1`, generated from the command line's own options with the
+  sections `clap` cannot know about written underneath, and shipped in the release archives. A
+  test fails when the committed page and the binary disagree, so a flag cannot exist without a
+  line in the page.
+- **Plugin commands (`F11`)** — the first plugin tier that does something rather than carrying
+  data. A plugin declares a `[[command]]` and the host runs it: deliberately a *process*, so
+  one artifact works on every platform, there is no sandbox to get wrong, and a plugin that
+  crashes crashes alone. It runs on the worker pool with the context as JSON on standard input
+  and the same facts in the environment, and answers with one action per line. An action that
+  runs something names a command of *our* vocabulary, so everything a plugin can do a key can
+  do too. A command id outside the plugin space, a program that leaves the plugin's directory,
+  or a context nobody can give is refused at load rather than at the first press.
+
+### Fixed
+
+- The manual-page test failed on Windows and only there, because the checkout converts line
+  endings. `.gitattributes` pins the data the program reads with `include_str!` to LF, and the
+  comparison ignores the endings anyway.
+- The tag workflow waited half an hour for a CI run it was not allowed to read: reading whether
+  CI passed is an Actions read, and a job with an explicit permissions block gets only what it
+  lists. It says so immediately now instead of timing out, and a dispatch can name the commit a
+  missed release was cut at.
+
+### Notes for the first testers
+
+Everything is a file you can read: `scmd --paths` says where they are, `scmd --dump-config`
+prints the settings as the program has them, and `scmd --check-keymap` says whether a keymap is
+sound. `F1` is the manual, `F9` names every dialog with its key, and the key bar always says
+what the function keys do right now.
+
+What is deliberately not here yet is written down rather than left to be discovered:
+[`docs/BACKLOG.md`](docs/BACKLOG.md) is the list, each line with the reason it is a line and
+not a feature.
+
+
 ## [0.0.8] — 2026-10-24
 
 The Hiew track: a hex editor with a patch list, block operations, an assembler, a calculator,
