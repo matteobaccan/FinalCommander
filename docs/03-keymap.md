@@ -31,9 +31,9 @@ Column `SC` = SupremeCommander default (profile `far`, our baseline).
 
 | Key | FAR | MC | TC `?` | Krusader | SC |
 | --- | --- | --- | --- | --- | --- |
-| Shift+F1 | add to archive | — | — | what's this | add to archive |
-| Shift+F2 | extract from archive | — | compare by content | multi-rename | extract archive |
-| Shift+F3 | archive commands menu | — | — | view URL | archive commands |
+| Shift+F1 | add to archive | — | — | what's this | **add to archive** (zip, tar, tar.gz, tar.bz2, tar.xz, tar.zst) |
+| Shift+F2 | extract from archive | — | compare by content | multi-rename | **extract archive** into a directory of its own; inside an archive it is `F5` |
+| Shift+F3 | archive commands menu | — | — | view URL | archive commands (unbound today; `docs/BACKLOG.md`) |
 | Shift+F4 | edit a new file | edit new file | create new text file | edit new file | edit new file |
 | Shift+F5 | copy the item under the cursor (same panel) | — | copy in same panel | copy by queue | copy here |
 | Shift+F6 | rename/move the item under the cursor | — | rename in place | move by queue | rename in place |

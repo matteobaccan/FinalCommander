@@ -9,7 +9,7 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
-scmd-arc = { version = "0.0.4", path = "../scmd-arc" }
+scmd-arc = { version = "0.0.5", path = "../scmd-arc" }
 scmd-core = { path = "../scmd-core" }
 regex = "1"
 thiserror = "2"

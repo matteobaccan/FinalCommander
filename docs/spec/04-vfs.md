@@ -10,7 +10,15 @@ engine with progress and cancellation. A `Router` sends each path to the provide
 so nothing above the VFS knows whether a panel is local or remote.
 Editing a remote file works too: `F4` fetches it, the editor edits the copy, and `F2` writes it
 back with a change check and a rename into place (§5).
-**Still to come**: archives, `temp`, `trash`, the other network schemes, nesting (§4), `watch`,
+**Archives** (0.0.5): `scmd-arc` reads zip and the tar family — plain, gzip, bzip2, xz and
+zstd — with every decoder pure Rust, so the binary stays one file that cross-compiles without a
+C toolchain. The format comes from the bytes first and the name second. `Enter` on an archive
+opens it as a panel (§4's `!` paths), `F3` reads an entry, `F5` copies out through the job
+engine, `Shift+F1` builds an archive and `Shift+F2` extracts one. The provider reports `READ`
+and `SEEK` only: writing *into* an existing container is §4's rebuild and is not here yet, and
+`F4` inside an archive says so rather than editing a copy nobody can save.
+**Still to come**: `temp`, `trash`, the other network schemes, nesting and archives over a
+remote filesystem (§4 — both want the container copied to a temporary file first), `watch`,
 and `copy_within` as a server-side operation.
 
 ## 1. The trait
@@ -60,8 +68,8 @@ where the code lives, not whether it is linked into the binary.
 | Scheme | Crate / mechanism | Caps | Milestone |
 | --- | --- | --- | --- |
 | `file` | `std::fs` + `scmd-platform` | all native | M1 |
-| `zip` | `zip` (read/write, zip64, AES, deflate/zstd) | READ WRITE CREATE DELETE SEEK | M2 |
-| `tar` family | `tar` + `flate2`/`xz2`/`zstd`/`bzip2` | READ, WRITE(append/rebuild), stream-only for compressed | M2 |
+| `zip` | `zip` (**implemented, read + create**, deflate/deflate64/bzip2/lzma/xz, zip64) | READ SEEK, CREATE as a whole archive | M2 |
+| `tar` family | `tar` + `flate2`/`lzma-rust2`/`ruzstd`/`bzip2`, all pure Rust (**implemented, read + create**) | READ SEEK (plain tar and zip only), CREATE as a whole archive | M2 |
 | `7z` | `sevenz-rust2` | READ, WRITE (M3), no random write in solid blocks | M2/M3 |
 | `rar` | `unrar` (read-only, non-free licence, optional feature, off by default in distro builds) | READ SEEK | M3 |
 | `iso`, `cab`, `ar`/`deb`, `rpm`, `cpio`, `lha`, `arj`, `squashfs` | `libarchive` binding as one fallback provider | READ | M3 |
@@ -82,11 +90,20 @@ where the code lives, not whether it is linked into the binary.
 
 - A **container cache** keyed by (scheme, root, size, mtime) holds an open provider instance
   with its index; LRU-evicted by count and total memory, closed on idle timeout.
+  **Implemented**: four archives, keyed by the file's path, size and modification time, so
+  stepping in and out of one reads its index once and an archive rewritten under us is read
+  afresh rather than answered from a stale index. One cache serves the panels and the job
+  engine, so the index a panel read to draw itself is the one an unpack then reads from.
 - Non-seekable containers (`.tar.gz` over SFTP) are materialised to a temp file under a size
   limit (configurable, default 512 MiB) with a visible progress bar; above the limit the panel
   shows a streaming listing and random access is refused with a clear message.
 - Nesting depth limit (default 4) to stop zip-bomb recursion; entry-count and expansion-ratio
   guards on every archive read, with the limits in config and the refusal explained.
+  **Implemented** as `[arc]` in the config file (`max_entries`, `max_total_mb`, `max_ratio`,
+  `max_depth`): the refusal names the limit that fired and what the archive asked for, because
+  a user who meets one has to decide whether to raise it. An entry whose name climbs out of the
+  archive (`../../etc/passwd`) is pinned at the root rather than trusted, so no extraction can
+  be talked into writing outside where it was told to.
 - Writes to a nested container rebuild the outer container; the UI warns and the job engine
   treats it as one transactional unit (write to temp, verify, atomic replace).
 

@@ -6,6 +6,44 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+## [0.0.5] — 2026-10-24
+
+Archives: a panel can be inside one, and a key puts files into one.
+
+- **A path can point inside a container**, in the syntax SPEC 04 §4 specifies —
+  `/home/mb/src.zip!/doc/readme.md`, and nested. Every path operation works on the innermost
+  level, and `..` at the root of an archive leaves it, because an archive root has a parent and
+  so is not a root. Two archives are two providers, and so are an archive and the directory it
+  sits in: that is what stops a copy out of one being planned as a rename.
+- **`scmd-arc` reads zip and the tar family** — plain, gzip, bzip2, xz and zstd — and builds
+  all six. Every decoder and encoder is pure Rust, so the binary stays one file that
+  cross-compiles without a C toolchain. The format comes from the bytes first and the name
+  second: a zip called `.epub` is still a zip, while only the name can say that a gzip stream
+  has a tar inside it.
+- **`Enter` goes into an archive** and everything that works on a panel works in there: the
+  sort, the selection matrix, `F3` (which brings the bytes out to a temporary file, the same
+  shape as fetching a remote file) and `F5`, which copies out through the ordinary job engine
+  with its conflicts, progress and cancellation.
+- **`Shift+F1` builds an archive** out of what is selected, offered in the other panel and
+  named after the one item or the directory, in any of the six formats with three compression
+  levels. A name the user typed wins over the format row. It writes to a sibling `.part` and
+  renames it into place, so a cancelled pack leaves no half-built archive where someone will
+  later trust one.
+- **`Shift+F2` extracts** into a directory of its own, named after the archive without its
+  extension — a hundred files straight into a panel is nobody's intention. It is an ordinary
+  copy job with one new option, which copies what is *inside* each source rather than the
+  source itself.
+- **The zip-bomb guards of SPEC 04 §4** are `[arc]` in the config file: entry count, unpacked
+  total, the ratio to the archive's own size, and the nesting depth. A refusal names the limit
+  that fired and what the archive asked for, because a user who meets one has to decide whether
+  to raise it. An entry whose name climbs out of the archive is pinned at its root rather than
+  trusted.
+- **What is inside an archive cannot be changed yet** and says so in all seven languages:
+  that is the rebuild of SPEC 04 §4, with an archive inside an archive and an archive on a
+  server beside it in [`docs/BACKLOG.md`](docs/BACKLOG.md).
+- The release archives are now `scmd-<platform>-<version>` and hold the files at their root,
+  with no directory of their own.
+
 ## [0.0.4] — 2026-10-24
 
 Finding things: a search worth the name, and a panel that can hold what it found.
