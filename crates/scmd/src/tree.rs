@@ -217,6 +217,42 @@ impl Tree {
         self.rows.iter().rposition(|r| path.starts_with(&r.path))
     }
 
+    /// Open the levels towards [`Tree::want`] as far as the cache can take it, and return the
+    /// one directory it cannot — whose read brings us back here.
+    ///
+    /// A loop that cannot spin: every turn either opens a row that was closed or stops. The
+    /// case that would otherwise never end is a path that is not in this tree at all — a name
+    /// that differs only in case on a filesystem that does not, a directory that has gone
+    /// since — where the deepest row we can see is already open and the path is still not
+    /// under it. Then it gives up looking rather than asking for ever.
+    pub fn reveal(&mut self, cache: &Cache, page: usize) -> Option<VPath> {
+        while let Some(want) = self.want.clone() {
+            if self.select(&want, page) {
+                self.want = None;
+                return None;
+            }
+            let Some(at) = self.towards(&want) else {
+                // Not under this root after all.
+                self.want = None;
+                return None;
+            };
+            if self.rows[at].expanded {
+                // Open already, and the path is still not there: stop looking.
+                self.want = None;
+                return None;
+            }
+            let saved = self.cursor;
+            self.cursor = at;
+            let known = self.expand(cache);
+            self.cursor = saved;
+            self.move_cursor(0, page);
+            if !known {
+                return self.rows.get(at).map(|r| r.path.clone());
+            }
+        }
+        None
+    }
+
     /// The guides and the name for one row: `│  ├─ name`.
     pub fn line(&self, index: usize) -> String {
         let Some(row) = self.rows.get(index) else {
@@ -342,6 +378,57 @@ mod tests {
         assert_eq!(lines[1], "├─ one/");
         assert_eq!(lines[2], "│  └─ deep …");
         assert_eq!(lines[3], "└─ two …");
+    }
+
+    #[test]
+    fn revealing_a_path_opens_one_level_per_read_and_stops_when_it_cannot() {
+        let mut cache = Cache::default();
+        cache.insert(VPath::local("/"), vec![VPath::local("/a")]);
+        let mut tree = Tree::new(VPath::local("/"));
+        tree.want = Some(VPath::local("/a/one/deep"));
+
+        // `/` is cached, `/a` is not: it opens the first level and asks for the second.
+        assert_eq!(tree.reveal(&cache, 10), Some(VPath::local("/a")));
+        assert_eq!(tree.rows.len(), 2);
+        assert!(tree.want.is_some(), "it is still on its way");
+
+        // The read arrives, and the next one is asked for.
+        cache.insert(VPath::local("/a"), vec![VPath::local("/a/one")]);
+        assert_eq!(tree.reveal(&cache, 10), Some(VPath::local("/a/one")));
+
+        // And the last one lands the cursor.
+        cache.insert(VPath::local("/a/one"), vec![VPath::local("/a/one/deep")]);
+        assert_eq!(tree.reveal(&cache, 10), None);
+        assert_eq!(tree.path(), Some(VPath::local("/a/one/deep")));
+        assert!(tree.want.is_none());
+    }
+
+    /// The case that hung the tree on macOS and Windows: a path that is not in the tree at
+    /// all. The deepest row it can see is open, the path is still not under it, and asking
+    /// again would mean asking for ever.
+    #[test]
+    fn a_path_that_is_not_in_the_tree_ends_the_search_instead_of_spinning() {
+        let mut cache = Cache::default();
+        cache.insert(VPath::local("/a"), vec![VPath::local("/a/one")]);
+        cache.insert(VPath::local("/a/one"), vec![]);
+        let mut tree = Tree::new(VPath::local("/a"));
+        // `/a/One` with a capital: the same directory on Windows, a different one here, and
+        // either way not a row in this tree.
+        tree.want = Some(VPath::local("/a/One/deep"));
+
+        // One turn opens `/a`, the next finds nothing more to open and gives up.
+        assert_eq!(tree.reveal(&cache, 10), None);
+        assert!(
+            tree.want.is_none(),
+            "it kept looking for a path that is not here"
+        );
+        // The rows it did open are still there: giving up is not giving back.
+        assert_eq!(tree.rows.len(), 2);
+
+        // And a want under no row at all stops at once.
+        tree.want = Some(VPath::local("/elsewhere"));
+        assert_eq!(tree.reveal(&cache, 10), None);
+        assert!(tree.want.is_none());
     }
 
     #[test]

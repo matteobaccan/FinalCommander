@@ -3,6 +3,13 @@
 allow = [
   "MIT", "Apache-2.0", "Apache-2.0 WITH LLVM-exception", "BSD-2-Clause",
   "BSD-3-Clause", "ISC", "Zlib", "Unicode-3.0", "MPL-2.0", "CC0-1.0", "Unlicense",
+  # Julian Seward's own licence for bzip2, carried by `libbz2-rs-sys` — the pure-Rust bzip2
+  # that lets us read and write `.tar.bz2` without a C toolchain. It is a BSD-style
+  # permissive licence: use, modify and redistribute in source or binary form, keep the
+  # notice, no warranty, and no use of the author's name to endorse. Debian and Fedora both
+  # treat it as free. Nothing in it reaches the user of the binary beyond the notice, which
+  # `THIRD-PARTY.md` carries.
+  "bzip2-1.0.6",
 ]
 confidence-threshold = 0.9
 

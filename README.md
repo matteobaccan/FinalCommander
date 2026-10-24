@@ -4,7 +4,7 @@ A cross-platform **orthodox file manager** (two panels, command line, function k
 keyboard-first) written in Rust — in the tradition of Norton Commander, FAR Manager,
 Total Commander, Midnight Commander and Krusader, with a modern engine underneath.
 
-> **Status: 0.0.6, a preview.** Two panels, navigation, the selection matrix, sorting, view
+> **Status: 0.0.7, a preview.** Two panels, navigation, the selection matrix, sorting, view
 > modes, quick search, filters with FAR's whole mask grammar, themes (including FAR's own
 > palette), keymap profiles and seven interface languages, real file operations (`F5`–`F8`,
 > plus wipe and links), a command line with FAR's internal commands, prefixes and metasymbols
@@ -38,7 +38,7 @@ one directory down.
 
 ```sh
 # Linux, for example
-tar xzf scmd-linux-x86_64-0.0.6.tar.gz
+tar xzf scmd-linux-x86_64-0.0.7.tar.gz
 sudo install -m755 scmd /usr/local/bin/scmd
 scmd --version
 ```

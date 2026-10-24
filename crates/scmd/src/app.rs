@@ -5639,39 +5639,17 @@ impl App {
         }
     }
 
-    /// Open one more level towards the path the tree is trying to show, reading it when the
-    /// cache has nothing — the next read comes back and brings us here again.
+    /// Open the tree's way towards the directory it wants to show, asking for the one read it
+    /// needs. The loop and the reason it cannot spin are in [`crate::tree::Tree::reveal`].
     fn tree_reveal(&mut self, index: usize) {
         let page = self.rows.max(1);
         let Some(mut tree) = self.trees[index].take() else {
             return;
         };
-        let mut wanted = None;
-        if let Some(want) = tree.want.clone() {
-            if tree.select(&want, page) {
-                tree.want = None;
-            } else if let Some(at) = tree.towards(&want) {
-                let saved = tree.cursor;
-                tree.cursor = at;
-                if tree.expand(&self.tree_cache) {
-                    tree.cursor = saved;
-                    tree.move_cursor(0, page);
-                } else {
-                    tree.cursor = saved;
-                    wanted = tree.rows.get(at).map(|r| r.path.clone());
-                }
-            } else {
-                // Nothing on the way: the path is not under this root after all.
-                tree.want = None;
-            }
-        }
-        let keep_going = tree.want.is_some() && wanted.is_none();
+        let wanted = tree.reveal(&self.tree_cache, page);
         self.trees[index] = Some(tree);
         if let Some(path) = wanted {
             self.requests.push(Request::TreeRead { panel: index, path });
-        } else if keep_going {
-            // The level we needed was already cached, so the next one can be opened at once.
-            self.tree_reveal(index);
         }
     }
 

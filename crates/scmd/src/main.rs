@@ -706,12 +706,27 @@ fn interactive(mut app: App) -> Result<()> {
                     let vfs = vfs.clone();
                     runtime.spawn(async move {
                         // Only the subdirectories: a tree does not show files, and the panel
-                        // that does is right beside it.
+                        // that does is right beside it. A symbolic link that points at a
+                        // directory is one — on macOS `/tmp`, `/var` and `/etc` all are, and
+                        // a tree that dropped them could not show where the user is.
                         let dirs = match vfs.list(&path, CancelToken::new()).await {
                             Ok(entries) => entries
                                 .into_iter()
-                                .filter(|e| e.kind == scmd_core::EntryKind::Dir)
-                                .map(|e| path.join(&e.name))
+                                .filter_map(|e| {
+                                    let child = path.join(&e.name);
+                                    match e.kind {
+                                        scmd_core::EntryKind::Dir => Some(child),
+                                        scmd_core::EntryKind::Symlink
+                                            if child.is_local()
+                                                && std::fs::metadata(child.as_path())
+                                                    .map(|m| m.is_dir())
+                                                    .unwrap_or(false) =>
+                                        {
+                                            Some(child)
+                                        }
+                                        _ => None,
+                                    }
+                                })
                                 .collect(),
                             // A directory we cannot read is an empty branch rather than an
                             // error in a dialog: the tree is a way of looking around.
@@ -1320,7 +1335,13 @@ mod tests {
                         .map(|entries| {
                             entries
                                 .into_iter()
-                                .filter(|e| e.kind == scmd_core::EntryKind::Dir)
+                                .filter(|e| {
+                                    e.kind == scmd_core::EntryKind::Dir
+                                        || (e.kind == scmd_core::EntryKind::Symlink
+                                            && std::fs::metadata(path.join(&e.name).as_path())
+                                                .map(|m| m.is_dir())
+                                                .unwrap_or(false))
+                                })
                                 .map(|e| path.join(&e.name))
                                 .collect()
                         })
@@ -1624,6 +1645,42 @@ mod tests {
         serve(&mut app);
         assert!(!app.panel().cwd.in_container());
         assert_eq!(app.panel().cwd, VPath::local(root.path()));
+    }
+
+    /// The tree on a path that goes through a symbolic link — `/tmp` and `/var` on macOS are
+    /// links, and a tree that dropped them could not show where the user is, which is what
+    /// made `Ctrl+T` spin there.
+    #[cfg(unix)]
+    #[test]
+    fn the_tree_follows_a_link_to_a_directory() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(root.path().join("real/inside")).unwrap();
+        std::os::unix::fs::symlink(root.path().join("real"), root.path().join("link")).unwrap();
+
+        // The other panel sits inside the link, so the tree has to open its way through it.
+        let here = root.path().join("link/inside");
+        let mut app = app_on(&here, root.path());
+        serve(&mut app);
+
+        key(&mut app, "Ctrl+T");
+        for _ in 0..40 {
+            if app.requests.is_empty() {
+                break;
+            }
+            serve(&mut app);
+        }
+        let tree = app.trees[1].as_ref().expect("a tree");
+        assert!(
+            tree.want.is_none(),
+            "it is still looking for {:?}",
+            tree.want
+        );
+        assert_eq!(tree.path(), Some(VPath::local(&here)));
+        assert!(
+            tree.rows.iter().any(|r| r.name() == "link"),
+            "the link is not in the tree: {:?}",
+            tree.rows.iter().map(|r| r.name()).collect::<Vec<_>>()
+        );
     }
 
     /// `Shift+F1` builds an archive out of the selection, and `Shift+F2` takes one apart —

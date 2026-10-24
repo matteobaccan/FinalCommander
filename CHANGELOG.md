@@ -6,6 +6,27 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+## [0.0.7] — 2026-10-24
+
+A fix release: 0.0.6's tree panel could hang, and it went out before the build on the other
+two platforms had finished saying so. The Hiew track moves to 0.0.8.
+
+### Fixed
+
+- **`Ctrl+T` could spin for ever** on a path the tree could not find a row for — which on
+  macOS was most paths, because `/tmp`, `/var` and `/etc` are symbolic links and the tree
+  only showed real directories. The tree now shows a link that points at a directory, and the
+  loop that opens its way towards the current directory is a loop that cannot spin: every turn
+  either opens a row that was closed or gives up looking. It gives up when the deepest row it
+  can see is already open and the path is still not under it — a name spelled differently by
+  the filesystem, or a directory that has gone since.
+- The archive dependencies brought in a licence our own policy did not list: `libbz2-rs-sys`
+  carries Julian Seward's own bzip2 licence rather than one of the usual names. It is BSD-style
+  permissive and both Debian and Fedora treat it as free, so it is in `deny.toml`'s allow-list
+  with a line saying exactly that, and in `THIRD-PARTY.md` with the same.
+- `actions/checkout` to v7, `upload-artifact` to v7 and `download-artifact` to v8, which have
+  to move as a pair.
+
 ## [0.0.6] — 2026-10-24
 
 The panels FAR has and we did not, and the view modes to go with them.

@@ -37,10 +37,23 @@ Unicode-3.0, or MPL-2.0 at file level). The policy and the allow-list live in `d
 | `russh`, `russh-sftp` | Apache-2.0 | SSH and SFTP in the netbox |
 | `ring` (russh's crypto backend, chosen over `aws-lc-rs`) | Apache-2.0 AND ISC | ciphers, key exchange, signatures |
 | `ssh-key`, `ssh-encoding`, `ssh-cipher` | Apache-2.0 OR MIT | OpenSSH key and `known_hosts` formats |
+| `zip` | MIT | reading and writing zip archives |
+| `tar` | MIT OR Apache-2.0 | reading and writing the tar family |
+| `flate2` (with `miniz_oxide`) | MIT OR Apache-2.0 | gzip, in pure Rust |
+| `bzip2` (with `libbz2-rs-sys`) | MIT OR Apache-2.0 / **bzip2-1.0.6** | bzip2, in pure Rust |
+| `lzma-rust2` | Apache-2.0 | xz, in pure Rust |
+| `ruzstd` | MIT | zstd, in pure Rust |
 | `tempfile` (dev only) | MIT OR Apache-2.0 | filesystem tests |
 
 Two dependencies are multi-licensed with a copyleft option we do **not** take: `r-efi`
 (we use MIT) and `self_cell` (we use Apache-2.0).
+
+`libbz2-rs-sys` carries **Julian Seward's own bzip2 licence** (`bzip2-1.0.6`) rather than one
+of the usual names, which is why it has a line of its own in `deny.toml`'s allow-list. It is a
+BSD-style permissive licence — use, modify and redistribute in source or binary form, keep the
+notice, no warranty, and do not use the author's name to endorse — and both Debian and Fedora
+treat it as free. It is the pure-Rust bzip2, which is what lets `.tar.bz2` work without a C
+toolchain in the build.
 
 `russh`'s default crypto backend (`aws-lc-rs`) carries the OpenSSL licence, which is not in
 our allow-list, so the netbox builds `russh` with `default-features = false` and the `ring`
