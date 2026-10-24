@@ -7,6 +7,8 @@
 //! where a copy will fit. This module answers that question per platform and says nothing it
 //! has not actually read — a column it cannot fill stays empty rather than guessing.
 
+// Only the mount table and its labels use a map, and only two platforms have one.
+#[cfg(any(target_os = "linux", test))]
 use std::collections::HashMap;
 
 /// One row of the change-drive dialog.
@@ -184,15 +186,20 @@ fn platform() -> Vec<Drive> {
 }
 
 /// The two sizes, from `statvfs`. Unavailable on Windows, where both columns stay empty.
+///
+/// `statvfs` is an old interface and every system chose its own widths for it: the counts are
+/// 64-bit on Linux and 32-bit on macOS, so the conversion that looks useless on one is what
+/// makes it compile on the other.
 #[cfg(unix)]
+#[allow(clippy::useless_conversion)]
 fn fill_space(drive: &mut Drive) {
     let Ok(stat) = nix::sys::statvfs::statvfs(drive.path.as_str()) else {
         return;
     };
-    let block = stat.fragment_size();
-    drive.total = Some(stat.blocks() * block);
+    let block = u64::from(stat.fragment_size());
+    drive.total = Some(u64::from(stat.blocks()) * block);
     // What an unprivileged process may really use, as the panel frame already reports.
-    drive.free = Some(stat.blocks_available() * block);
+    drive.free = Some(u64::from(stat.blocks_available()) * block);
 }
 
 #[cfg(not(unix))]

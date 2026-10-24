@@ -10233,16 +10233,18 @@ mod tests {
         };
         assert_eq!(pick.kind, PickKind::Drives);
 
-        // The root is there, and it says what it is rather than only where it is.
-        let root = pick
-            .rows
-            .iter()
-            .find(|r| r.value == "/")
-            .expect("the root is a drive");
+        // The first row is a place on this machine — `/` on Unix, a drive letter on Windows
+        // — and it says what it is rather than only where it is.
+        let first = pick.rows.first().expect("at least one drive");
         assert!(
-            root.label.contains('/') && root.label.split_whitespace().count() > 1,
+            first.label.split_whitespace().count() > 1,
             "the row has no columns: {}",
-            root.label
+            first.label
+        );
+        assert!(
+            pick.rows.iter().any(|r| r.value.ends_with(['/', '\\'])),
+            "no filesystem among the drives: {:?}",
+            pick.rows
         );
 
         // The connection is at the bottom, numbered, and the number reaches it.
