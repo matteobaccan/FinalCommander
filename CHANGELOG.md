@@ -6,6 +6,62 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+## [0.0.8] — 2026-10-24
+
+The Hiew track: a hex editor with a patch list, block operations, an assembler, a calculator,
+search by instruction pattern, and raw devices. The one thing deliberately left out is a
+compiler — see below for what the assembler does and does not do.
+
+### Added
+
+- **Hex mode of the editor (`F4` on a binary, `Alt+H` either way)**. A piece table over the
+  file, so an edit costs nothing at the front of a terabyte and the length can change without
+  rewriting what follows. The two panes are the bytes and the text; `Tab` moves between them
+  and both type. Changed bytes are drawn as changed until they are written, with a patch list
+  beside them — offset, old byte, new byte — and the editor's own `Ctrl+Z`/`Ctrl+Y` over the
+  whole session. `F2` saves atomically: a part file beside the original, synced, then renamed
+  over the top, and the buffer reopens clean.
+  It is in the editor and not the viewer on purpose: the viewer's read-only contract is
+  exactly what lets it seek through a 40 GB file.
+- **Block operations (`F3` marks, `F12` operates)**: write the block out to a file, read a file
+  in, fill with a byte or a repeating pattern, exclusive-or with a key, copy or move bytes from
+  elsewhere in the same file, insert zeros, delete. Each one says what the file's length will
+  be before it happens, because the failure of a hex editor is a file that is quietly one byte
+  wrong. The exclusive-or is named for what it is and not for security.
+- **An assembler (`F9`)** for the instructions a patcher types: no operands, register to
+  register, register and a number, one register, and a branch written as the address to arrive
+  at rather than as a displacement — the shortest form that reaches it, unless `short` or
+  `near` says otherwise. The architecture comes from the file's own header, so a 32-bit PE is
+  assembled as 32-bit code on a 64-bit machine. Everything encoded is decoded again by the
+  disassembler before the dialog shows it, so what appears is the instruction the processor
+  will see.
+  **Memory operands are refused by name**: `mov [rbx+rcx*4+8], eax` needs a full ModRM and SIB
+  parser and brings exactly the addressing-mode mistakes a patcher cannot afford. The hex pane
+  is still there for bytes nobody can spell, and the backlog carries the parser.
+- **A calculator (`Alt+=`)**: one line of arithmetic answered in decimal, hex, octal, binary
+  and as characters at once, with the bitwise and shift operators and literals in every base
+  the tools around it use (`0x1f`, `1Fh`, `0b1010`, `0o37`, `'PE'`). The same parser reads the
+  numbers typed into the assembler and the block operations, so a number means one thing
+  everywhere in the program.
+- **Search by instruction pattern (`F7` over a disassembly)**. The query matches what the
+  disassembler prints, not the bytes: nobody looking for a `call` wants the four letters of it
+  to appear in the file. `*` stands for whatever lies between the pieces of a pattern, so
+  `mov *, eax` finds every move into that register, and the operands' column padding is
+  collapsed first so the pattern does not have to know about it. `Shift+F7` and `Alt+F7` walk
+  on as they always did.
+- **Raw devices on Linux and macOS**, read-only. A block device is a file, but `stat` reports
+  it as zero bytes long and the viewer believed that; the length is measured by seeking to the
+  end instead, which the kernel answers without reading anything and which needs no `ioctl`
+  and no C dependency. A device opens read-only, the status line names it and the size it
+  measured, and the bytes are written *out* to a file rather than back over the disk — an
+  atomic save renames a new file over the old one, and there is no such move onto a disk.
+  Windows needs its own path and is on the backlog.
+
+### Fixed
+
+- `Esc` out of the block menu, or out of a question one of its operations asked, dropped the
+  hex editor along with every unsaved patch in it. It goes back to the editor now.
+
 ## [0.0.7] — 2026-10-24
 
 A fix release: 0.0.6's tree panel could hang, and it went out before the build on the other

@@ -9,7 +9,7 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
-scmd-core = { path = "../scmd-core" }
+scmd-core = { workspace = true }
 encoding_rs = "0.8"
 memchr = "2"
 regex = "1"

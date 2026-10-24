@@ -9,8 +9,8 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
-scmd-core = { path = "../scmd-core" }
-scmd-view = { path = "../scmd-view" }
+scmd-core = { workspace = true }
+scmd-view = { workspace = true }
 regex = "1"
 thiserror = "2"
 unicode-width = "0.2"

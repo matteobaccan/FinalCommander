@@ -10,9 +10,9 @@ authors.workspace = true
 
 [dependencies]
 memchr = "2"
-scmd-core = { version = "0.0.7", path = "../scmd-core" }
-scmd-vfs = { version = "0.0.7", path = "../scmd-vfs" }
-scmd-view = { version = "0.0.7", path = "../scmd-view" }
+scmd-core = { workspace = true }
+scmd-vfs = { workspace = true }
+scmd-view = { workspace = true }
 thiserror = "2"
 
 [dev-dependencies]
