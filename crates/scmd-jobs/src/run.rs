@@ -88,6 +88,7 @@ pub fn execute(
         skip_errors: false,
         outcome: Outcome::default(),
         dir_meta: Vec::new(),
+        kept: Vec::new(),
         bytes_since_report: 0,
     };
 
@@ -156,6 +157,8 @@ struct State {
     skip_errors: bool,
     outcome: Outcome,
     dir_meta: Vec<(VPath, VPath)>,
+    /// Sources whose copy did not happen, so a move must leave them where they are.
+    kept: Vec<VPath>,
     bytes_since_report: u64,
 }
 
@@ -180,13 +183,16 @@ fn run_unit(
             Attempt::Done => return,
             Attempt::Skipped => {
                 state.progress.skipped += 1;
+                keep_source(state, unit);
                 return;
             }
             Attempt::Cancelled => {
                 state.outcome.cancelled = true;
+                keep_source(state, unit);
                 return;
             }
             Attempt::Failed(error) => {
+                keep_source(state, unit);
                 if state.skip_errors {
                     state.progress.errors += 1;
                     state.outcome.errors.push((unit.dst.clone(), error));
@@ -216,6 +222,15 @@ fn run_unit(
                 }
             }
         }
+    }
+}
+
+/// A move removes a source only once its copy is really in place. Anything skipped, failed or
+/// cut short keeps its source — and, through [`State::kept`], the directories above it — so
+/// the one thing a move must never do, lose the file it was moving, cannot happen.
+fn keep_source(state: &mut State, unit: &Unit) {
+    if let Some(src) = &unit.src {
+        state.kept.push(src.clone());
     }
 }
 
@@ -331,6 +346,9 @@ fn attempt(
         }
 
         UnitKind::RemoveFile => {
+            if state.kept.iter().any(|kept| kept == &unit.dst) {
+                return Attempt::Done;
+            }
             if !dry {
                 match fs.remove_file(&unit.dst) {
                     Ok(()) => {}
@@ -347,6 +365,12 @@ fn attempt(
         }
 
         UnitKind::RemoveDir => {
+            // Something below this directory stayed, so the directory stays too. Removing it
+            // would fail anyway; not trying is the difference between a quiet result and a
+            // dialog about every parent of the one file the user chose to keep.
+            if state.kept.iter().any(|kept| kept.starts_with(&unit.dst)) {
+                return Attempt::Done;
+            }
             if !dry {
                 match fs.remove_dir(&unit.dst) {
                     Ok(()) => {}
@@ -644,6 +668,67 @@ mod tests {
         assert!(
             !dir.path().join("src").exists(),
             "the source should be gone"
+        );
+        assert_eq!(
+            stdfs::read(dir.path().join("dst/src/a.txt")).unwrap(),
+            b"aaaa"
+        );
+    }
+
+    #[test]
+    fn a_move_that_skips_a_file_leaves_the_source_alone() {
+        let dir = tree();
+        stdfs::write(dir.path().join("dst/a.txt"), b"keep me").unwrap();
+        let spec = JobSpec::new(
+            JobKind::Move,
+            vec![VPath::local(dir.path().join("src/a.txt"))],
+            Some(VPath::local(dir.path().join("dst"))),
+        )
+        .with_options(JobOptions {
+            on_conflict: ConflictPolicy::Skip,
+            ..JobOptions::default()
+        });
+        let out = run(&spec, &mut Scripted::new(vec![]));
+
+        assert!(out.is_clean(), "{out:?}");
+        assert_eq!(out.skipped, 1);
+        assert_eq!(
+            stdfs::read(dir.path().join("dst/a.txt")).unwrap(),
+            b"keep me"
+        );
+        assert_eq!(
+            stdfs::read(dir.path().join("src/a.txt")).unwrap(),
+            b"aaaa",
+            "a move that copied nothing must not remove the source"
+        );
+    }
+
+    #[test]
+    fn a_move_keeps_the_directories_above_what_it_skipped() {
+        let dir = tree();
+        // Only the deeper file is in the way, so one half of the tree moves and one stays.
+        stdfs::create_dir_all(dir.path().join("dst/src/sub")).unwrap();
+        stdfs::write(dir.path().join("dst/src/sub/b.txt"), b"keep me").unwrap();
+        let spec = JobSpec::new(
+            JobKind::Move,
+            vec![VPath::local(dir.path().join("src"))],
+            Some(VPath::local(dir.path().join("dst"))),
+        )
+        .with_options(JobOptions {
+            on_conflict: ConflictPolicy::Skip,
+            ..JobOptions::default()
+        });
+        let out = run(&spec, &mut Scripted::new(vec![]));
+
+        assert!(out.is_clean(), "{out:?}");
+        assert_eq!(
+            stdfs::read(dir.path().join("src/sub/b.txt")).unwrap(),
+            b"bb",
+            "the file that was not copied had to stay"
+        );
+        assert!(
+            !dir.path().join("src/a.txt").exists(),
+            "the file that did move should be gone"
         );
         assert_eq!(
             stdfs::read(dir.path().join("dst/src/a.txt")).unwrap(),
