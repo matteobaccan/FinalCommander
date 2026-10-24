@@ -135,6 +135,19 @@ jobs:
             echo "archive=dist/${name}.tar.gz" >> "$GITHUB_OUTPUT"
           fi
 
+      # What went in, in the log. Answering "is the manual page in there" by downloading the
+      # release and unpacking it is a silly way to spend ten minutes.
+      - name: What is in the archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="${{ steps.package.outputs.archive }}"
+          ls -l "$archive"
+          case "$archive" in
+            *.zip) 7z l "$archive" ;;
+            *) tar tzvf "$archive" ;;
+          esac
+
       - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.name }}
