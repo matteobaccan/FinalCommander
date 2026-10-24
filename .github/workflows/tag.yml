@@ -12,7 +12,9 @@
 #   * only the default branch and the development branches are watched;
 #   * CI on that very commit must be green first — a push that fires this waits for the build
 #     on all three platforms, and a failure refuses to tag.
-# `workflow_dispatch` takes a version explicitly, for a release that was missed at the time.
+# `workflow_dispatch` takes a version and a commit explicitly, for a release that was missed at
+# the time: by then the branch has moved on, and a tag has to go where the release was cut, not
+# where the work has got to since.
 name: Tag
 
 on:
@@ -25,6 +27,10 @@ on:
     inputs:
       version:
         description: "Version to tag (default: whatever Cargo.toml says)"
+        required: false
+        type: string
+      sha:
+        description: "Commit to tag (default: the head of the branch this runs on)"
         required: false
         type: string
 
@@ -48,6 +54,8 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          # A dispatch may name the commit the release was cut at; a push is its own commit.
+          ref: ${{ inputs.sha || github.sha }}
 
       # 0.0.6 went out while the build on the other two platforms was still saying it had a
       # bug, because nothing here waited for it. Now the tag waits for CI on this very commit:
@@ -91,8 +99,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           ASKED: ${{ inputs.version }}
+          ASKED_SHA: ${{ inputs.sha }}
         run: |
           set -euo pipefail
+          # What the tag will point at: the commit asked for, else this run's own.
+          target="${ASKED_SHA:-$GITHUB_SHA}"
+          target=$(git rev-parse "$target")
+          echo "tagging $target"
           version="${ASKED#v}"
           if [ -z "$version" ]; then
             version=$(awk '/^\[workspace\.package\]/ { inside = 1; next }
@@ -133,7 +146,7 @@ jobs:
           object=$(gh api "repos/$GITHUB_REPOSITORY/git/tags" \
             -f tag="$tag" \
             -f message="$tag — $summary" \
-            -f object="$GITHUB_SHA" \
+            -f object="$target" \
             -f type=commit \
             -f tagger[name]="Matteo Baccan" \
             -f tagger[email]="matteo.baccan@gmail.com" \
@@ -141,7 +154,7 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/git/refs" \
             -f ref="refs/tags/$tag" \
             -f sha="$object" >/dev/null
-          echo "created $tag at $GITHUB_SHA"
+          echo "created $tag at $target"
           echo "created=true" >> "$GITHUB_OUTPUT"
 
   release:
