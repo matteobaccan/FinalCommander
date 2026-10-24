@@ -30,6 +30,10 @@ default-features = false
 # the tree, whose licence for the Mozilla root data is not one `deny.toml` allows.)
 features = ["rustls-tls-native-roots", "http2", "stream", "socks"]
 
+[features]
+# The in-process S3 service, for the tests of the crates above this one.
+fake = []
+
 [dev-dependencies]
 tempfile = "3"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }

@@ -10,5 +10,8 @@ pub mod uri;
 pub mod vfs;
 pub mod xml;
 
-#[cfg(test)]
-pub(crate) mod fake;
+/// A service that speaks S3, in this process, for the tests — this crate's own, and those of
+/// the application above it, which is why it is behind a feature rather than `cfg(test)`:
+/// a test in another crate cannot see a `cfg(test)` module of this one.
+#[cfg(any(test, feature = "fake"))]
+pub mod fake;

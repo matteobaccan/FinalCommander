@@ -38,5 +38,8 @@ clap_mangen = "0.3"
 nix = { version = "0.31.3", features = ["fs"] }
 
 [dev-dependencies]
+# The same crate again, with the in-process S3 service switched on: an object the viewer
+# fetches has to come from somewhere, and it must not be someone's account.
+scmd-s3 = { workspace = true, features = ["fake"] }
 tempfile = "3.27.0"
 zip = { version = "9", default-features = false, features = ["deflate-flate2"] }

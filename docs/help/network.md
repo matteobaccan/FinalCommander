@@ -38,5 +38,9 @@ The keys are never kept in `scmd.toml`. They come from `AWS_ACCESS_KEY_ID` and
 `AWS_SECRET_ACCESS_KEY`, or from `~/.aws/credentials` — the file the AWS tools share, profiles
 and all. A bucket that anyone may read needs `credentials = "anonymous"` and no keys at all.
 
-Objects are read-only today: `F3` and a copy out work, and nothing offers to write, rename or
-delete, because the provider does not claim a capability it does not have.
+`F3` on an object brings it down to a temporary copy and shows you that, the way it does for a
+file on a server, and `net.fetch_limit_mb` is the ceiling on what it will fetch. Objects are
+read-only, and nothing offers to write, rename or delete one, because the provider does not
+claim a capability it does not have — object storage has no rename at all. `F5` to a local
+panel is not wired to the job engine yet; `F3` and a shell command are the ways to get at an
+object's bytes today.

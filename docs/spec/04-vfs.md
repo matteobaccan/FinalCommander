@@ -278,14 +278,23 @@ environment variables, and `~/.aws/credentials` — the file every AWS tool shar
 format they all write, profiles and session tokens included. `credentials = "anonymous"` signs
 nothing, which is how a bucket with a public read policy is browsed.
 
-### 8.6 What is not there yet
+### 8.6 What works, and what is not there yet
 
-Writing. The capabilities say `READ | SEEK | CASE_SENSITIVE` and nothing else, so the UI offers
-nothing it cannot do: no `F6` rename (object storage has no rename — it is a copy and a
-delete), no permissions, no timestamps. Upload, delete and server-side copy are the next
-increment; they are a different kind of operation (a multipart upload is a protocol of its own)
-and they are not worth shipping half-done, because a half-finished upload of a large object is
-a charge on someone's account.
+Browsing, and reading. A prefix opens as a directory, `F3` brings an object down to a temporary
+copy and shows that — the same path a file on a server takes, with `net.fetch_limit_mb` as the
+ceiling — and the viewer's own machinery (seeks, hex mode, the disassembler reading an
+executable's headers) then works on a local file, which is the point of fetching rather than
+issuing a range request per movement over a network that charges by the request.
+
+Not there yet: **a copy out through the job engine**. `F5` from a bucket to a local panel needs
+`JobFs` implemented for object storage — `facts`, `read_dir` and `copy_file` — and that is the
+next increment rather than this one.
+
+And writing at all. The capabilities say `READ | SEEK | CASE_SENSITIVE` and nothing else, so
+the UI offers nothing it cannot do: no `F6` rename (object storage has no rename — it is a copy
+and a delete), no permissions, no timestamps. Upload, delete and server-side copy come with the
+job engine's side of it; a multipart upload is a protocol of its own, and a half-finished one
+of a large object is a charge on someone's account, so it is not worth shipping half-done.
 
 ### 8.7 How it is tested
 

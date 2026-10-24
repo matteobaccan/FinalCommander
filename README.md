@@ -160,9 +160,11 @@ What works today:
   `listing_cap` rows and the footer then says `(partial)` for as long as it is on screen,
   because a count that is not the whole count must not look like one. No access key is ever
   written into `scmd.toml`: they come from the `AWS_*` variables or from `~/.aws/credentials`,
-  and `credentials = "anonymous"` reads a public bucket with no keys at all. Read-only in this
-  release, and the capabilities say so, so nothing offers to rename an object — object storage
-  has no rename.
+  and `credentials = "anonymous"` reads a public bucket with no keys at all. `F3` brings an
+  object down to a temporary copy and shows you that, as it does for a file on a server.
+  Read-only in this release, and the capabilities say so, so nothing offers to rename an
+  object — object storage has no rename; `F5` to a local panel is the next increment, along
+  with upload and delete.
 - **Menus and settings** (`F9`): FAR's five menus — Left, Files, Commands, Options, Right.
   Every entry is a command from the same vocabulary the keys use, the shortcut shown beside it
   is read from the keymap in force, and an entry whose feature is not here yet is drawn dim and

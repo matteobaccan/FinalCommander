@@ -665,8 +665,8 @@ fn interactive(mut app: App) -> Result<()> {
             accept_new: false,
         });
     }
-    let vfs = Router::with_limits(pool.clone(), app.cfg.arc.limits())
-        .with_objects(std::sync::Arc::new(object_storage(&app.cfg)));
+    let objects = std::sync::Arc::new(object_storage(&app.cfg));
+    let vfs = Router::with_limits(pool.clone(), app.cfg.arc.limits()).with_objects(objects.clone());
     // One container cache for the whole program: the index a panel read to draw itself is the
     // one an unpack then reads from.
     let archives = vfs.archives().cache();
@@ -819,12 +819,15 @@ fn interactive(mut app: App) -> Result<()> {
                     let tx = tx.clone();
                     let pool = pool.clone();
                     let archives = archives.clone();
+                    let objects_for_fetch = objects.clone();
                     runtime.spawn(async move {
                         let result = if path.in_container() {
                             let inner = path.clone();
                             tokio::task::spawn_blocking(move || fetch_entry(&archives, &inner))
                                 .await
                                 .unwrap_or_else(|e| Err(format!("the unpack failed: {e}")))
+                        } else if path.scheme() == scmd_core::Scheme::S3 {
+                            fetch_object(&objects_for_fetch, &path).await
                         } else {
                             fetch_remote(&pool, &path).await
                         };
@@ -1255,6 +1258,50 @@ async fn fetch_remote(pool: &Pool, path: &VPath) -> Result<(PathBuf, RemoteStamp
         mtime: None,
     });
     Ok((local, stamp))
+}
+
+/// Bring an object down to a temporary file, which is what `F3` and `F11` then read.
+///
+/// The same shape as [`fetch_remote`], and for the same reason: the viewer seeks, the
+/// disassembler reads an executable's headers from four places at once, and neither is worth
+/// doing with a range request each over a network that charges by the request. The copy is
+/// written under the process's own directory in the temporary folder, as a remote file's is,
+/// and the panel says that a copy is what is being looked at.
+async fn fetch_object(
+    objects: &scmd_s3::vfs::S3Vfs,
+    path: &VPath,
+) -> Result<(PathBuf, RemoteStamp), String> {
+    let cancel = CancelToken::new();
+    let entry = Vfs::stat(objects, path).await.map_err(|e| e.to_string())?;
+    let bytes = objects
+        .read_object(path, None, &cancel)
+        .await
+        .map_err(|e| e.to_string())?;
+    let dir = std::env::temp_dir().join(format!("scmd-{}", std::process::id()));
+    tokio::fs::create_dir_all(&dir)
+        .await
+        .map_err(|e| format!("{}: {e}", dir.display()))?;
+    // The key's last segment, and nothing of the rest of it: a key holds slashes, and a file
+    // name must not. An empty name cannot happen — a path with no key is a prefix, which has
+    // no bytes to fetch — but a name is given anyway rather than assumed.
+    let name = path.display_name();
+    let name = if name.is_empty() { "object" } else { &name };
+    let local = dir.join(name);
+    tokio::fs::write(&local, &bytes)
+        .await
+        .map_err(|e| format!("{}: {e}", local.display()))?;
+    Ok((
+        local,
+        RemoteStamp {
+            size: entry.size,
+            // The stamp is in whole seconds since the epoch, which is what the wire carries
+            // for an SFTP file and what the one comparison it is for needs.
+            mtime: entry
+                .mtime
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .and_then(|d| u32::try_from(d.as_secs()).ok()),
+        },
+    ))
 }
 
 /// Build an archive, reporting through the job channel so that the progress box, the counters
@@ -1750,6 +1797,50 @@ timeout = 10
             }
         }
         assert!(checked >= 10, "only {checked} scripts checked?");
+    }
+
+    /// `F3` on an object: the bytes come down to a temporary file and the viewer reads that,
+    /// because the viewer seeks and a range request per movement over a network that charges
+    /// by the request is not how to read a file.
+    ///
+    /// Against the in-process S3 service, so the whole path is exercised — the signature, the
+    /// listing, the `HEAD` for the size and the `GET` for the bytes — without an account
+    /// anywhere.
+    #[tokio::test]
+    async fn an_object_is_fetched_for_the_viewer() {
+        use scmd_s3::fake::FakeS3;
+        use scmd_s3::vfs::{S3Vfs, Service};
+        use std::collections::BTreeMap;
+
+        let mut bucket = BTreeMap::new();
+        bucket.insert(
+            "notes/readme.txt".to_string(),
+            b"hello from a bucket".to_vec(),
+        );
+        let mut buckets = BTreeMap::new();
+        buckets.insert("logs".to_string(), bucket);
+        let fake = FakeS3::start(buckets).await;
+        let objects = S3Vfs::new(vec![
+            Service::new("", fake.endpoint()).with_credentials(Some(fake.credentials.clone()))
+        ]);
+
+        let path = VPath::parse("s3://logs/notes/readme.txt");
+        let (local, stamp) = fetch_object(&objects, &path).await.expect("it comes down");
+        assert_eq!(
+            std::fs::read(&local).unwrap(),
+            b"hello from a bucket".to_vec()
+        );
+        // The copy is named after the key's last segment, not after the whole key.
+        assert_eq!(local.file_name().unwrap(), "readme.txt");
+        assert_eq!(stamp.size, 19);
+        assert!(stamp.mtime.is_some(), "the object has a date");
+        let _ = std::fs::remove_file(&local);
+
+        // And a key that is not there is a sentence, not a panic.
+        let missing = fetch_object(&objects, &VPath::parse("s3://logs/nope.txt"))
+            .await
+            .unwrap_err();
+        assert!(missing.contains("no such object"), "{missing}");
     }
 
     /// `sh -n` on this machine is not `sh -n` on every machine, and one difference has bitten

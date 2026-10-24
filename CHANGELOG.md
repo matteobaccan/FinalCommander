@@ -32,9 +32,13 @@ Notable changes, newest first. The format follows
   it is tested against `botocore` — the library the AWS command line signs with — on a frozen
   clock, one of those vectors being the worked example AWS publishes the signature of.
 
-  Objects are read-only in this release. The provider claims `READ | SEEK | CASE_SENSITIVE` and
-  nothing else, so nothing in the UI offers to rename an object (object storage has no rename),
-  set permissions on one or write to one. Upload, delete and server-side copy come next.
+  `F3` on an object brings it down to a temporary copy and shows that, the same path a file on
+  a server takes, with `net.fetch_limit_mb` as the ceiling — so the viewer's seeks, its hex
+  mode and the disassembler all work on it. Objects are read-only in this release: the provider
+  claims `READ | SEEK | CASE_SENSITIVE` and nothing else, so nothing in the UI offers to rename
+  an object (object storage has no rename), set permissions on one or write to one. `F5` from a
+  bucket to a local panel is not wired to the job engine yet, and that — with upload, delete
+  and server-side copy — is the next increment.
 
 ### Fixed
 
