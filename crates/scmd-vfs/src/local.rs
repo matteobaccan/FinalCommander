@@ -132,10 +132,15 @@ fn is_hidden(name: &OsString, _meta: &Metadata) -> bool {
 }
 
 #[cfg(windows)]
-fn is_hidden(_name: &OsString, meta: &Metadata) -> bool {
+fn is_hidden(name: &OsString, meta: &Metadata) -> bool {
     use std::os::windows::fs::MetadataExt;
     const FILE_ATTRIBUTE_HIDDEN: u32 = 0x2;
-    meta.file_attributes() & FILE_ATTRIBUTE_HIDDEN != 0
+    const FILE_ATTRIBUTE_SYSTEM: u32 = 0x4;
+    // Two rules, both of which a user expects on Windows: the attributes Explorer honours,
+    // and the leading dot. `Ctrl+H` has to mean the same thing on all three platforms, or
+    // `.git` and `.env` would be in the way here and out of the way everywhere else.
+    name.to_string_lossy().starts_with('.')
+        || meta.file_attributes() & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM) != 0
 }
 
 #[cfg(unix)]
@@ -192,6 +197,7 @@ mod tests {
         fs::write(dir.path().join(".secret"), b"x").unwrap();
         let entries = list_blocking(&VPath::local(dir.path()), &CancelToken::new()).unwrap();
         let hidden = entries.iter().find(|e| e.name_str() == ".secret").unwrap();
+        // A dotfile counts as hidden on every platform, Windows included.
         assert!(hidden.flags.contains(EntryFlags::HIDDEN));
     }
 

@@ -26,7 +26,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 1.13 | Sort by name/ext/size/mtime/ctime/atime/owner/unsorted, reversible, group dirs first, selected first, natural ("version") sort, locale-aware collation | FAR/TC | M1 core, M2 full |
 | 1.14 | Secondary sort criteria chain (tie-breakers, configurable) | FAR | M3 |
 | 1.15 | Filters: per-panel display filter, quick filter bar, filter by mask/size/date/attrs, named filter sets, filter menu | FAR/KRU | M2 |
-| 1.16 | Hidden/system files toggle; show dotfiles | all | M1 |
+| 1.16 | Hidden/system files toggle (`Ctrl+H`). A dotfile counts as hidden on every platform, and Windows adds the hidden and system attributes, so the key means the same thing everywhere | all | M1 |
 | 1.17 | Branch view (flat recursive listing of the current tree) | TC | M2 |
 | 1.18 | Panelize: fill a panel with the result of a search or an external command | MC | M2 |
 | 1.19 | Directory sizes computed on demand (`Space`/`F3` on a dir) and in background | FAR/TC | M1 |
