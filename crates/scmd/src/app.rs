@@ -1306,10 +1306,24 @@ impl App {
                 }
             }
             PromptKind::Filter => {
-                let lower = text.to_lowercase();
-                let panel = self.panel_mut();
-                panel.filter = if lower.is_empty() { None } else { Some(lower) };
-                panel.rebuild();
+                // The filter bar takes the whole mask grammar — `*.rs,*.toml`, an exclusion
+                // after `|`, `<arc>`, `/regex/i` — and a bare word still means "contains".
+                // A mask that does not parse yet (`*.rs|`, a half-typed group) leaves the
+                // previous filter alone instead of flickering the panel empty.
+                let text = text.trim().to_string();
+                if text.is_empty() {
+                    let panel = self.panel_mut();
+                    panel.filter = None;
+                    panel.filter_set = None;
+                    panel.rebuild();
+                    return;
+                }
+                if let Ok(masks) = scmd_core::filter::MaskSet::parse(&text) {
+                    let panel = self.panel_mut();
+                    panel.filter = Some(text);
+                    panel.filter_set = Some(masks);
+                    panel.rebuild();
+                }
             }
             _ => {}
         }

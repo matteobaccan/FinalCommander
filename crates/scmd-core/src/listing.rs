@@ -65,12 +65,13 @@ impl Listing {
 
     /// Recompute the visible order and the totals.
     ///
-    /// `quick_filter` is a lowercase substring; `None` means no filter.
+    /// `filter` is a mask set (a bare word still means "contains", so the quick filter bar
+    /// behaves as it always did); `None` means no filter.
     pub fn rebuild(
         &mut self,
         sort: Sort,
         show_hidden: bool,
-        quick_filter: Option<&str>,
+        filter: Option<&crate::filter::MaskSet>,
         selection: &Selection,
     ) {
         self.order.clear();
@@ -85,8 +86,8 @@ impl Listing {
             if !show_hidden && e.flags.contains(EntryFlags::HIDDEN) {
                 continue;
             }
-            if let Some(needle) = quick_filter {
-                if !e.name_str().to_lowercase().contains(needle) {
+            if let Some(masks) = filter {
+                if !masks.matches(e) {
                     continue;
                 }
             }
@@ -175,7 +176,8 @@ mod tests {
     #[test]
     fn quick_filter_keeps_the_parent_entry() {
         let mut l = sample();
-        l.rebuild(Sort::default(), false, Some("a."), &Selection::default());
+        let masks = crate::filter::MaskSet::parse("a.").unwrap();
+        l.rebuild(Sort::default(), false, Some(&masks), &Selection::default());
         let names: Vec<_> = (0..l.len())
             .map(|i| l.row(i).unwrap().name_str().into_owned())
             .collect();

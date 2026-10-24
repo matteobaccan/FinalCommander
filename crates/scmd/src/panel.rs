@@ -11,7 +11,10 @@ pub struct Panel {
     pub sort: Sort,
     pub view: ViewMode,
     pub show_hidden: bool,
+    /// What was typed in the filter bar, for the status line.
     pub filter: Option<String>,
+    /// The same thing compiled. Both are set together, or neither is.
+    pub filter_set: Option<scmd_core::filter::MaskSet>,
     pub history: Vec<VPath>,
     pub history_pos: usize,
     pub generation: u64,
@@ -36,6 +39,7 @@ impl Panel {
             view,
             show_hidden,
             filter: None,
+            filter_set: None,
             want_cursor: None,
             history_pos: 0,
             generation: 0,
@@ -53,7 +57,7 @@ impl Panel {
         self.listing.rebuild(
             self.sort,
             self.show_hidden,
-            self.filter.as_deref(),
+            self.filter_set.as_ref(),
             &self.selection,
         );
         self.clamp();
@@ -141,6 +145,7 @@ impl Panel {
         self.cursor = 0;
         self.top = 0;
         self.filter = None;
+        self.filter_set = None;
         self.selection.clear();
         self.loading = true;
         self.listing = Listing::default();
