@@ -2490,6 +2490,14 @@ impl App {
 
             Command::NavUp => self.move_cursor(-1),
             Command::NavDown => self.move_cursor(1),
+            Command::NavLeft | Command::NavRight => {
+                // A column, in the views that have more than one of them. In a single-column
+                // view there is nothing to the left or the right, and FAR does nothing there.
+                if matches!(self.panel().view, ViewMode::Brief | ViewMode::Wide) {
+                    let step = self.rows.max(1) as isize;
+                    self.move_cursor(if cmd == Command::NavLeft { -step } else { step });
+                }
+            }
             Command::NavPageUp => {
                 let step = self.page_step();
                 self.move_cursor(-step)
@@ -7485,6 +7493,34 @@ mod tests {
         assert!(app.status.contains("size"), "{}", app.status);
         // biggest first now
         assert_eq!(app.panel().listing.row(2).unwrap().name_str(), "c.rs");
+    }
+
+    #[test]
+    fn left_and_right_move_by_a_column_where_there_is_one() {
+        let mut app = app();
+        app.rows = 2;
+        app.panels[0].view = ViewMode::Brief;
+        // Four rows, two to a column: `→` crosses to the second column.
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation: app.panels[0].generation,
+            result: Ok(vec![
+                Entry::parent_entry(),
+                entry("docs", EntryKind::Dir, 0),
+                entry("a.txt", EntryKind::File, 1),
+                entry("b.txt", EntryKind::File, 2),
+            ]),
+        });
+        app.panels[0].cursor_to(0);
+        press(&mut app, "Right");
+        assert_eq!(app.panels[0].cursor, 2);
+        press(&mut app, "Left");
+        assert_eq!(app.panels[0].cursor, 0);
+
+        // In a one-column view they do nothing, as in FAR.
+        app.panels[0].view = ViewMode::Full;
+        press(&mut app, "Right");
+        assert_eq!(app.panels[0].cursor, 0);
     }
 
     #[test]
