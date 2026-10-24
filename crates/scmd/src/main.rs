@@ -96,6 +96,118 @@ struct Cli {
     list_plugins: bool,
 }
 
+/// A search on a worker thread. The engine streams events; each one becomes an event the app
+/// already knows how to draw, so the list fills while the walk is still going.
+///
+/// This is the one place that turns what the dialog asked for into what the engine takes: the
+/// dialog knows nothing about walks, and the engine knows nothing about panels.
+fn run_find(id: u64, spec: app::FindSpec, cancel: CancelToken, tx: mpsc::Sender<Event>) {
+    use scmd_core::filter::{Filter, MaskSet};
+    use scmd_find::{Content, Needle};
+
+    let started = std::time::Instant::now();
+    let fail = |message: String| {
+        let _ = tx.send(Event::FindDone {
+            id,
+            files: 0,
+            dirs: 0,
+            elapsed: started.elapsed(),
+            problems: Vec::new(),
+            error: Some(message),
+        });
+    };
+
+    let groups = scmd_core::filter::default_groups();
+    let masks = match MaskSet::parse_with(&spec.mask, &groups, spec.case_sensitive) {
+        Ok(masks) => masks,
+        Err(e) => return fail(e.to_string()),
+    };
+    let mut filter = Filter::named("find");
+    filter.masks = Some(masks);
+
+    let content = if spec.text.is_empty() {
+        None
+    } else {
+        let needle = if spec.hex {
+            match Needle::hex(&spec.text) {
+                Ok(needle) => needle,
+                Err(e) => return fail(e.to_string()),
+            }
+        } else {
+            Needle::text(spec.text.clone())
+                .case_sensitive(spec.case_sensitive)
+                .whole_words(spec.whole_words)
+        };
+        Some(if spec.not_containing {
+            Content::not_containing(needle)
+        } else {
+            Content::containing(needle)
+        })
+    };
+
+    let query = scmd_find::Query {
+        roots: spec.roots.clone(),
+        filter,
+        // "This folder" is the only scope that does not go down.
+        subdirectories: spec.scope != app::FindScope::Panel,
+        follow_links: spec.follow_links,
+        include_dirs: spec.directories,
+        content,
+    };
+
+    let mut problems: Vec<String> = Vec::new();
+    let mut last_report = std::time::Instant::now();
+    let result =
+        scmd_find::find(
+            &scmd_vfs::local::LocalVfs,
+            &query,
+            &cancel,
+            &mut |event| match event {
+                scmd_find::Event::Hit(hit) => {
+                    let _ = tx.send(Event::FindHit {
+                        id,
+                        path: hit.path,
+                        entry: Box::new(hit.entry),
+                    });
+                }
+                scmd_find::Event::Scanning(dir) => {
+                    // Not every directory: a walk over a large tree would spend its time telling
+                    // the screen about itself, and ten a second is already more than a reader can
+                    // follow.
+                    if last_report.elapsed() >= std::time::Duration::from_millis(100) {
+                        last_report = std::time::Instant::now();
+                        let _ = tx.send(Event::FindProgress {
+                            id,
+                            scanning: dir.to_string(),
+                            files: 0,
+                            dirs: 0,
+                        });
+                    }
+                }
+                scmd_find::Event::Problem(problem) => {
+                    // Capped: a search over a whole drive meets unreadable directories by the
+                    // dozen, and ten thousand of them help nobody.
+                    if problems.len() < 200 {
+                        problems.push(format!("{}: {}", problem.path, problem.message));
+                    }
+                }
+            },
+        );
+    match result {
+        Ok(stats) => {
+            let _ = tx.send(Event::FindDone {
+                id,
+                files: stats.files_seen,
+                dirs: stats.dirs_seen,
+                elapsed: started.elapsed(),
+                problems,
+                error: None,
+            });
+        }
+        Err(e) => fail(e.to_string()),
+    }
+}
+
 /// Free bytes on the device a local directory is on, for the panel frame. `std` does not
 /// expose `statvfs`, so this is the one call that needs a platform crate; a remote provider
 /// does not report free space at all, and Windows wants `GetDiskFreeSpaceEx`, so both answer
@@ -544,18 +656,10 @@ fn interactive(mut app: App) -> Result<()> {
                     });
                 }
                 Request::Find { id, spec, cancel } => {
-                    // The dialog, the results list and the keys are here; the walk itself is
-                    // `scmd-find`, which is not in this build yet. Saying so is better than a
-                    // search that always finds nothing.
-                    let _ = (&spec, &cancel);
-                    let _ = tx.send(Event::FindDone {
-                        id,
-                        files: 0,
-                        dirs: 0,
-                        elapsed: std::time::Duration::ZERO,
-                        problems: Vec::new(),
-                        error: Some(app.find_not_available()),
-                    });
+                    let tx = tx.clone();
+                    // A blocking thread: the walk is synchronous, and it must not sit in the
+                    // way of the runtime that is also serving the panels.
+                    runtime.spawn_blocking(move || run_find(id, *spec, cancel, tx));
                 }
                 Request::TempRefresh {
                     panel,
@@ -932,6 +1036,96 @@ mod tests {
     use super::*;
     use clap::CommandFactory;
 
+    /// An app looking at two real directories.
+    fn app_on(left: &std::path::Path, right: &std::path::Path) -> App {
+        App::new(Startup {
+            cfg: Config::default(),
+            paths: Paths::discover(Some(&left.join("scmd.toml")), None),
+            i18n: I18n::new("en"),
+            keymap: Keymap::builtin("far").unwrap(),
+            themes: ThemeSet::builtin_only(),
+            theme: Theme::default_theme(),
+            left: VPath::local(left),
+            right: VPath::local(right),
+            sites: Vec::new(),
+        })
+    }
+
+    /// Serve every request the app has queued, from the real filesystem and through the real
+    /// workers, so a test drives the same code the binary does.
+    fn serve(app: &mut App) {
+        for request in app.take_requests() {
+            match request {
+                Request::Read {
+                    panel,
+                    path,
+                    generation,
+                } => {
+                    let result = scmd_vfs::local::list_blocking(&path, &CancelToken::new())
+                        .map_err(|e| e.to_string());
+                    app.handle_event(Event::Listed {
+                        panel,
+                        generation,
+                        result,
+                    });
+                }
+                Request::Job { id, spec, cancel } => {
+                    let (tx, rx) = mpsc::channel();
+                    run_job(id, spec, cancel, tx, &scmd_jobs::LocalFs);
+                    while let Ok(event) = rx.try_recv() {
+                        app.handle_event(event);
+                    }
+                }
+                Request::Link { target, link, kind } => {
+                    let error = scmd_jobs::create_link(&scmd_jobs::LocalFs, &target, &link, kind)
+                        .err()
+                        .map(|e| e.to_string());
+                    app.handle_event(Event::LinkDone { link, error });
+                }
+                Request::Find { id, spec, cancel } => {
+                    let (tx, rx) = mpsc::channel();
+                    run_find(id, *spec, cancel, tx);
+                    while let Ok(event) = rx.try_recv() {
+                        app.handle_event(event);
+                    }
+                }
+                Request::TempRefresh {
+                    panel,
+                    generation,
+                    title,
+                    paths,
+                } => {
+                    let items = paths
+                        .into_iter()
+                        .filter_map(|path| {
+                            scmd_vfs::local::stat_blocking(&path)
+                                .ok()
+                                .map(|entry| (path, entry))
+                        })
+                        .collect();
+                    app.handle_event(Event::TempListed {
+                        panel,
+                        generation,
+                        title,
+                        items,
+                    });
+                }
+                Request::DirSize { .. }
+                | Request::Shell { .. }
+                | Request::Decompile { .. }
+                | Request::Connect { .. }
+                | Request::Disconnect { .. }
+                | Request::Fetch { .. }
+                | Request::Upload { .. } => {}
+            }
+        }
+    }
+
+    /// A key, by its name in the keymap.
+    fn key(app: &mut App, k: &str) {
+        app.handle_input(Input::Key(k.parse().unwrap()));
+    }
+
     #[test]
     fn cli_definition_is_valid() {
         Cli::command().debug_assert();
@@ -1023,95 +1217,12 @@ mod tests {
         std::fs::create_dir_all(&right).unwrap();
         std::fs::write(left.join("report.txt"), b"the numbers").unwrap();
 
-        let mut app = App::new(Startup {
-            cfg: Config::default(),
-            paths: Paths::discover(Some(&root.path().join("scmd.toml")), None),
-            i18n: I18n::new("en"),
-            keymap: Keymap::builtin("far").unwrap(),
-            themes: ThemeSet::builtin_only(),
-            theme: Theme::default_theme(),
-            left: VPath::local(&left),
-            right: VPath::local(&right),
-            sites: Vec::new(),
-        });
+        let mut app = app_on(&left, &right);
 
         // Serve the initial panel reads from the real filesystem.
-        let pump = |app: &mut App| {
-            for request in app.take_requests() {
-                match request {
-                    Request::Read {
-                        panel,
-                        path,
-                        generation,
-                    } => {
-                        let result = scmd_vfs::local::list_blocking(&path, &CancelToken::new())
-                            .map_err(|e| e.to_string());
-                        app.handle_event(Event::Listed {
-                            panel,
-                            generation,
-                            result,
-                        });
-                    }
-                    Request::Job { id, spec, cancel } => {
-                        let (tx, rx) = mpsc::channel();
-                        run_job(id, spec, cancel, tx, &scmd_jobs::LocalFs);
-                        while let Ok(event) = rx.try_recv() {
-                            app.handle_event(event);
-                        }
-                    }
-                    Request::Link { target, link, kind } => {
-                        let error =
-                            scmd_jobs::create_link(&scmd_jobs::LocalFs, &target, &link, kind)
-                                .err()
-                                .map(|e| e.to_string());
-                        app.handle_event(Event::LinkDone { link, error });
-                    }
-                    Request::Find { id, .. } => {
-                        let message = app.find_not_available();
-                        app.handle_event(Event::FindDone {
-                            id,
-                            files: 0,
-                            dirs: 0,
-                            elapsed: std::time::Duration::ZERO,
-                            problems: Vec::new(),
-                            error: Some(message),
-                        });
-                    }
-                    Request::TempRefresh {
-                        panel,
-                        generation,
-                        title,
-                        paths,
-                    } => {
-                        let items = paths
-                            .into_iter()
-                            .filter_map(|path| {
-                                scmd_vfs::local::stat_blocking(&path)
-                                    .ok()
-                                    .map(|entry| (path, entry))
-                            })
-                            .collect();
-                        app.handle_event(Event::TempListed {
-                            panel,
-                            generation,
-                            title,
-                            items,
-                        });
-                    }
-                    Request::DirSize { .. }
-                    | Request::Shell { .. }
-                    | Request::Decompile { .. }
-                    | Request::Connect { .. }
-                    | Request::Disconnect { .. }
-                    | Request::Fetch { .. }
-                    | Request::Upload { .. } => {}
-                }
-            }
-        };
-        pump(&mut app);
+        serve(&mut app);
 
         // Cursor onto report.txt, then F5 and Enter to accept the prefilled destination.
-        let key = |app: &mut App, k: &str| app.handle_input(Input::Key(k.parse().unwrap()));
         key(&mut app, "Down");
         assert_eq!(
             app.panel().current().unwrap().name_str(),
@@ -1120,8 +1231,8 @@ mod tests {
         );
         key(&mut app, "F5");
         key(&mut app, "Enter");
-        pump(&mut app);
-        pump(&mut app); // the refresh reads queued by the finished job
+        serve(&mut app);
+        serve(&mut app); // the refresh reads queued by the finished job
 
         assert_eq!(
             std::fs::read(right.join("report.txt")).unwrap(),
@@ -1143,92 +1254,9 @@ mod tests {
         std::fs::write(dir.join("sub/one.txt"), b"x").unwrap();
         std::fs::write(dir.join("two.txt"), b"yy").unwrap();
 
-        let mut app = App::new(Startup {
-            cfg: Config::default(),
-            paths: Paths::discover(Some(&root.path().join("scmd.toml")), None),
-            i18n: I18n::new("en"),
-            keymap: Keymap::builtin("far").unwrap(),
-            themes: ThemeSet::builtin_only(),
-            theme: Theme::default_theme(),
-            left: VPath::local(&dir),
-            right: VPath::local(root.path()),
-            sites: Vec::new(),
-        });
-        let pump = |app: &mut App| {
-            for request in app.take_requests() {
-                match request {
-                    Request::Read {
-                        panel,
-                        path,
-                        generation,
-                    } => {
-                        let result = scmd_vfs::local::list_blocking(&path, &CancelToken::new())
-                            .map_err(|e| e.to_string());
-                        app.handle_event(Event::Listed {
-                            panel,
-                            generation,
-                            result,
-                        });
-                    }
-                    Request::Job { id, spec, cancel } => {
-                        let (tx, rx) = mpsc::channel();
-                        run_job(id, spec, cancel, tx, &scmd_jobs::LocalFs);
-                        while let Ok(event) = rx.try_recv() {
-                            app.handle_event(event);
-                        }
-                    }
-                    Request::Link { target, link, kind } => {
-                        let error =
-                            scmd_jobs::create_link(&scmd_jobs::LocalFs, &target, &link, kind)
-                                .err()
-                                .map(|e| e.to_string());
-                        app.handle_event(Event::LinkDone { link, error });
-                    }
-                    Request::Find { id, .. } => {
-                        let message = app.find_not_available();
-                        app.handle_event(Event::FindDone {
-                            id,
-                            files: 0,
-                            dirs: 0,
-                            elapsed: std::time::Duration::ZERO,
-                            problems: Vec::new(),
-                            error: Some(message),
-                        });
-                    }
-                    Request::TempRefresh {
-                        panel,
-                        generation,
-                        title,
-                        paths,
-                    } => {
-                        let items = paths
-                            .into_iter()
-                            .filter_map(|path| {
-                                scmd_vfs::local::stat_blocking(&path)
-                                    .ok()
-                                    .map(|entry| (path, entry))
-                            })
-                            .collect();
-                        app.handle_event(Event::TempListed {
-                            panel,
-                            generation,
-                            title,
-                            items,
-                        });
-                    }
-                    Request::DirSize { .. }
-                    | Request::Shell { .. }
-                    | Request::Decompile { .. }
-                    | Request::Connect { .. }
-                    | Request::Disconnect { .. }
-                    | Request::Fetch { .. }
-                    | Request::Upload { .. } => {}
-                }
-            }
-        };
-        pump(&mut app);
+        let mut app = app_on(&dir, root.path());
+        serve(&mut app);
 
-        let key = |app: &mut App, k: &str| app.handle_input(Input::Key(k.parse().unwrap()));
         // Select the subdirectory and the file, then delete both.
         key(&mut app, "Down");
         key(&mut app, "Ins");
@@ -1236,12 +1264,92 @@ mod tests {
         assert_eq!(app.panel().selection.len(), 2);
         key(&mut app, "F8");
         key(&mut app, "Enter"); // confirm
-        pump(&mut app);
-        pump(&mut app);
+        serve(&mut app);
+        serve(&mut app);
 
         assert!(!dir.join("sub").exists(), "the directory survived");
         assert!(!dir.join("two.txt").exists(), "the file survived");
         assert_eq!(app.panel().listing.totals.files, 0);
+    }
+
+    /// The whole chain through the real engine: a tree on disk, a search by mask and by text,
+    /// the results in the list, and then the results in the panel.
+    #[test]
+    fn a_search_finds_what_is_there_and_the_panel_can_hold_it() {
+        let root = tempfile::tempdir().unwrap();
+        let src = root.path().join("src");
+        std::fs::create_dir_all(src.join("deep")).unwrap();
+        std::fs::write(src.join("one.rs"), b"fn needle() {}\n").unwrap();
+        std::fs::write(src.join("deep/two.rs"), b"// needle here\n").unwrap();
+        std::fs::write(src.join("three.rs"), b"nothing of the sort\n").unwrap();
+        std::fs::write(src.join("notes.txt"), b"needle in text\n").unwrap();
+
+        let mut app = app_on(&src, root.path());
+        serve(&mut app);
+
+        app.last_find = app::FindSpec {
+            mask: "*.rs".into(),
+            text: "needle".into(),
+            ..app::FindSpec::default()
+        };
+        app.run(ScCommand::ToolFind);
+        key(&mut app, "F10");
+        serve(&mut app);
+
+        let rows = match &app.mode {
+            app::Mode::Find(view) => {
+                assert!(view.done, "the search did not finish");
+                assert!(view.files >= 4, "only {} files looked at", view.files);
+                view.rows.clone()
+            }
+            // A search that cannot start closes the list and says why in the status line.
+            _ => panic!("{}", app.status),
+        };
+        // The two `.rs` files that contain it — not the one that does not, and not the `.txt`
+        // that does.
+        let names: Vec<String> = rows.iter().map(|(p, _)| p.display_name()).collect();
+        assert_eq!(rows.len(), 2, "{names:?}");
+        assert!(names.contains(&"one.rs".to_string()), "{names:?}");
+        assert!(names.contains(&"two.rs".to_string()), "{names:?}");
+
+        // F5 puts them in the panel, where the rest of the keys work on them. The two files
+        // live in different directories, so only a temporary panel can hold both.
+        key(&mut app, "F5");
+        assert_eq!(app.panel().listing.len(), 2);
+        let under_cursor = app.panel().current_path().expect("a path for the row");
+        assert!(
+            under_cursor.to_string().ends_with(".rs"),
+            "{under_cursor:?}"
+        );
+    }
+
+    /// A search that finds nothing has to say so, rather than leaving an empty list that
+    /// looks like a search still running.
+    #[test]
+    fn a_search_for_what_is_not_there_says_so_rather_than_nothing() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(root.path().join("one.rs"), b"fn main() {}\n").unwrap();
+
+        let mut app = app_on(root.path(), root.path());
+        serve(&mut app);
+
+        app.last_find = app::FindSpec {
+            mask: "*".into(),
+            text: "absolutely-not-in-there".into(),
+            ..app::FindSpec::default()
+        };
+        app.run(ScCommand::ToolFind);
+        key(&mut app, "F10");
+        serve(&mut app);
+
+        match &app.mode {
+            app::Mode::Find(view) => {
+                assert!(view.done);
+                assert!(view.rows.is_empty());
+                assert!(view.files >= 1, "it did look at the file");
+            }
+            _ => panic!("{}", app.status),
+        }
     }
 
     #[test]

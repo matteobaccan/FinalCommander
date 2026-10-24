@@ -366,7 +366,6 @@ find-hint = ↑↓ scegli · Invio vai · F3 visualizza · F5 nel pannello · Es
 find-hint-done = ↑↓ scegli · Invio vai · F3 visualizza · F5 nel pannello · Esc chiudi
 find-panelised = { $count } risultati nel pannello
 find-needs-mask = serve una maschera: `*` vuol dire tutti i file
-find-no-engine = il motore di ricerca non è ancora in questa build
 find-bad-hex = { $error }
 
 # ------------------------------------------------- replace across files

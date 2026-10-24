@@ -366,7 +366,6 @@ find-hint = ↑↓ выбор · Enter перейти · F3 смотреть · 
 find-hint-done = ↑↓ выбор · Enter перейти · F3 смотреть · F5 в панель · Esc закрыть
 find-panelised = { $count } результатов в панели
 find-needs-mask = нужна маска: `*` значит все файлы
-find-no-engine = движок поиска пока не входит в эту сборку
 find-bad-hex = { $error }
 
 # ------------------------------------------------- replace across files

@@ -17,6 +17,7 @@ scmd-cmd = { version = "0.0.3", path = "../scmd-cmd" }
 scmd-config = { version = "0.0.3", path = "../scmd-config" }
 scmd-core = { version = "0.0.3", path = "../scmd-core" }
 scmd-edit = { version = "0.0.3", path = "../scmd-edit" }
+scmd-find = { version = "0.0.3", path = "../scmd-find" }
 scmd-i18n = { version = "0.0.3", path = "../scmd-i18n" }
 scmd-jobs = { version = "0.0.3", path = "../scmd-jobs" }
 scmd-net = { version = "0.0.3", path = "../scmd-net" }

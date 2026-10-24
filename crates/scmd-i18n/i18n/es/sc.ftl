@@ -366,7 +366,6 @@ find-hint = ↑↓ elegir · Enter ir · F3 ver · F5 al panel · Esc detener
 find-hint-done = ↑↓ elegir · Enter ir · F3 ver · F5 al panel · Esc cerrar
 find-panelised = { $count } resultados en el panel
 find-needs-mask = hace falta una máscara: `*` significa todos los archivos
-find-no-engine = el motor de búsqueda todavía no está en esta compilación
 find-bad-hex = { $error }
 
 # ------------------------------------------------- replace across files

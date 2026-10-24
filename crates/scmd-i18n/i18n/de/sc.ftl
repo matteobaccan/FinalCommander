@@ -366,7 +366,6 @@ find-hint = ↑↓ wählen · Enter hingehen · F3 ansehen · F5 ins Panel · Es
 find-hint-done = ↑↓ wählen · Enter hingehen · F3 ansehen · F5 ins Panel · Esc schließen
 find-panelised = { $count } Ergebnisse im Panel
 find-needs-mask = eine Maske wird gebraucht: `*` heißt jede Datei
-find-no-engine = die Suchmaschine ist in diesem Build noch nicht enthalten
 find-bad-hex = { $error }
 
 # ------------------------------------------------- replace across files

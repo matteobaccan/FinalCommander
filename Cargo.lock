@@ -1892,6 +1892,7 @@ dependencies = [
  "scmd-config",
  "scmd-core",
  "scmd-edit",
+ "scmd-find",
  "scmd-i18n",
  "scmd-jobs",
  "scmd-net",

@@ -366,7 +366,6 @@ find-hint = ↑↓ 选择 · Enter 前往 · F3 查看 · F5 放入面板 · Esc
 find-hint-done = ↑↓ 选择 · Enter 前往 · F3 查看 · F5 放入面板 · Esc 关闭
 find-panelised = 面板中有 { $count } 个结果
 find-needs-mask = 需要一个掩码：`*` 表示所有文件
-find-no-engine = 此版本尚未包含搜索引擎
 find-bad-hex = { $error }
 
 # ------------------------------------------------- replace across files

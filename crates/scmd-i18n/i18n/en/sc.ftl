@@ -374,7 +374,6 @@ find-hint = ↑↓ choose · Enter go to · F3 view · F5 panelise · Esc stop
 find-hint-done = ↑↓ choose · Enter go to · F3 view · F5 panelise · Esc close
 find-panelised = { $count } results in the panel
 find-needs-mask = a mask is needed: `*` means every file
-find-no-engine = the search engine is not in this build yet
 find-bad-hex = { $error }
 
 # ------------------------------------------------- replace across files

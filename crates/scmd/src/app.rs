@@ -146,17 +146,13 @@ pub enum Event {
         panel: usize,
         bytes: Option<u64>,
     },
-    // These two are sent by the worker as the walk goes; until `scmd-find` is in the build,
-    // only the tests construct them. The attribute goes away with the engine.
     /// One file a search matched.
-    #[allow(dead_code)]
     FindHit {
         id: u64,
         path: VPath,
         entry: Box<Entry>,
     },
     /// Where a search has got to, so the list can say it is still working.
-    #[allow(dead_code)]
     FindProgress {
         id: u64,
         scanning: String,
@@ -3873,12 +3869,6 @@ impl App {
                 out
             }
         }
-    }
-
-    /// Until the engine is wired, a search says so rather than looking like one that found
-    /// nothing. One place, one string, and it goes away with the engine.
-    pub fn find_not_available(&self) -> String {
-        self.i18n.t("find-no-engine")
     }
 
     fn start_find(&mut self, spec: FindSpec) {
