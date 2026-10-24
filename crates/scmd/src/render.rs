@@ -535,15 +535,52 @@ fn draw_pick(app: &App, buf: &mut Buffer, screen: Rect, pick: &crate::form::Pick
         lines.push(app.i18n.t("pick-empty"));
     }
     let hint = app.i18n.t("pick-hint");
-    let area = widgets::draw_dialog(buf, &app.theme, screen, &pick.title, &lines, Some(&hint));
+
+    // A list longer than the screen is windowed, not clipped. The folder and command
+    // histories are the long ones in practice — and the plugin commands now — and before
+    // this the rows past the bottom were drawn nowhere and the cursor went with them.
+    //
+    // The window is a third of a screen of room on each side of the cursor where there is
+    // list to show, the same rule the panel scrolls by.
+    let room = screen.h.saturating_sub(3).max(1) as usize; // frame, hint, and the row itself
+    let (start, more_above, more_below) = if lines.len() <= room {
+        (0, false, false)
+    } else {
+        // At least one row of margin, so the cursor is never the row a label will take.
+        let margin = (room / 3).max(1);
+        let start = pick
+            .cursor
+            .saturating_sub(margin)
+            .min(lines.len().saturating_sub(room));
+        (start, start > 0, start + room < lines.len())
+    };
+    let mut shown: Vec<String> = lines[start..(start + room).min(lines.len())].to_vec();
+    // Say that there is more, in the row that would otherwise be the first or last one: a
+    // list that silently has more in it is a list one does not scroll. The label takes a row
+    // and so hides the entry that was in it, which the count has to include — `start` rows
+    // are above the window and the first one of it is now the label, so `start + 1` are out
+    // of sight.
+    if more_above {
+        if let Some(first) = shown.first_mut() {
+            *first = format!("↑ {} more above", start + 1);
+        }
+    }
+    if more_below {
+        if let Some(last) = shown.last_mut() {
+            *last = format!("↓ {} more below", lines.len() - (start + room - 1));
+        }
+    }
+
+    let area = widgets::draw_dialog(buf, &app.theme, screen, &pick.title, &shown, Some(&hint));
     if pick.rows.is_empty() {
         return;
     }
     let style = Style::new(app.theme.color("cursor.fg"), app.theme.color("cursor.bg"));
-    let y = area.y + 1 + pick.cursor as u16;
-    if y < area.y + area.h.saturating_sub(1) {
+    let row = pick.cursor.saturating_sub(start);
+    let y = area.y + 1 + row as u16;
+    if row < shown.len() && y < area.y + area.h.saturating_sub(1) {
         let width = area.w.saturating_sub(2) as usize;
-        let text = format!(" {:<w$}", lines[pick.cursor], w = width.saturating_sub(1));
+        let text = format!(" {:<w$}", shown[row], w = width.saturating_sub(1));
         buf.put_str(area.x + 1, y, &text, style, width as u16);
     }
 }
@@ -1616,6 +1653,86 @@ mod tests {
         app.handle_input(Input::Key("Down".parse().unwrap()));
         let out = frame(&mut app, 80, 24);
         assert!(out.contains("Cargo.toml  412 B"), "{out}");
+    }
+
+    /// The plugin list with every example plugin loaded: twenty-four commands in a list that
+    /// used to hold seven, on a terminal with room for twenty rows.
+    #[test]
+    fn a_long_pick_list_scrolls_instead_of_overflowing() {
+        let mut app = app("commander", "en");
+        app.plugin_commands = (0..24)
+            .map(|i| crate::app::PluginCommand {
+                plugin: format!("plugin-{i}"),
+                id: format!("user.x.command-{i}"),
+                label: format!("Command number {i} with a label of its own"),
+                scope: scmd_cmd::Scope::Panel,
+                program: std::path::PathBuf::from("/bin/true"),
+                needs: Vec::new(),
+                timeout: None,
+                confirm: None,
+            })
+            .collect();
+        app.handle_input(Input::Key("F11".parse().unwrap()));
+        let out = frame(&mut app, 80, 24);
+        assert!(out.contains("Command number 0"), "{out}");
+        for line in out.lines() {
+            assert!(
+                unicode_width::UnicodeWidthStr::width(line) <= 80,
+                "a row ran off the screen: {line:?}"
+            );
+        }
+        // The last rows are reached by moving: the cursor pulls the window down.
+        for _ in 0..23 {
+            app.handle_input(Input::Key("Down".parse().unwrap()));
+        }
+        let bottom = frame(&mut app, 80, 24);
+        assert!(bottom.contains("Command number 23"), "{bottom}");
+        assert!(
+            !bottom.contains("Command number 0 "),
+            "the window did not move: {bottom}"
+        );
+        // And it says what is out of sight, exactly: the rows above the window plus the one
+        // the label itself took.
+        let above = bottom
+            .lines()
+            .find(|l| l.contains("more above"))
+            .expect("a windowed list says there is more above")
+            .to_string();
+        let count: usize = above
+            .split_whitespace()
+            .find_map(|w| w.parse().ok())
+            .expect("the label carries a number");
+        let visible = (0..24)
+            .filter(|i| bottom.contains(&format!("Command number {i} ")))
+            .count();
+        assert_eq!(
+            count + visible,
+            24,
+            "{count} said hidden and {visible} on screen is not 24:\n{bottom}"
+        );
+    }
+
+    #[test]
+    #[ignore = "a look at the screen, not an assertion"]
+    fn eyeball_long_pick() {
+        let mut app = app("commander", "en");
+        app.plugin_commands = (0..24)
+            .map(|i| crate::app::PluginCommand {
+                plugin: format!("plugin-{i}"),
+                id: format!("user.x.command-{i}"),
+                label: format!("Command number {i}"),
+                scope: scmd_cmd::Scope::Panel,
+                program: std::path::PathBuf::from("/bin/true"),
+                needs: Vec::new(),
+                timeout: None,
+                confirm: None,
+            })
+            .collect();
+        app.handle_input(Input::Key("F11".parse().unwrap()));
+        for _ in 0..12 {
+            app.handle_input(Input::Key("Down".parse().unwrap()));
+        }
+        println!("{}", frame(&mut app, 80, 20));
     }
 
     #[test]
