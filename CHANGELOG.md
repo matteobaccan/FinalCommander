@@ -17,6 +17,11 @@ lose work, which is why this is a release of its own rather than a line in the n
   file. The second mode existed in 0.1.0 and could only be chosen by editing the file by hand,
   which is a mode nobody finds. `once` is the first row, so the ordinary answer costs one
   keystroke and `Esc` means the same thing rather than throwing the recording away.
+- **An example plugin**, `examples/plugins/git-here`: a manifest naming one command and a
+  shell script that answers it, saying which branch the panel's directory is on. "A plugin
+  command is a process" is a sentence; a script one can read in twenty seconds is the
+  explanation. A test loads it the way the binary does, because an example that does not work
+  is worse than no example.
 
 ### Fixed
 
@@ -32,6 +37,9 @@ lose work, which is why this is a release of its own rather than a line in the n
   editor keys ended up on a panel key where its steps mean something else entirely. The scope
   is taken when recording starts now, which is also the right moment for a second reason:
   stopping a recording is itself a keystroke, and by then one may be looking at something else.
+- `--list-plugins` said "(0 items)" for a plugin that provides a command: it counted the
+  declared TOML blocks, which such a plugin has none of. It counts what a plugin actually
+  brings now, data and commands separately.
 - Sixteen message ids were translated into all seven languages and shown by nothing. There was
   already a test that every id the code asks for exists in every language; the other direction
   is now a test too, because that is the one that catches a catalogue growing a tail of text
