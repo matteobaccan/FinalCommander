@@ -181,6 +181,8 @@ mod tests {
             kind,
             size: 1,
             mtime: None,
+            btime: None,
+            atime: None,
             flags: EntryFlags::empty(),
             id: EntryId::Name(name.bytes().map(u64::from).sum()),
             link_target: None,

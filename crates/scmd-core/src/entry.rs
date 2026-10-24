@@ -81,6 +81,11 @@ pub struct Entry {
     pub kind: EntryKind,
     pub size: u64,
     pub mtime: Option<SystemTime>,
+    /// Creation time, and last access time. `None` means "this filesystem does not say", not
+    /// "the epoch": `Metadata::created` is an error on ext3 and on most network mounts, and a
+    /// VFS provider may carry neither field. A listing degrades to `None` rather than fail.
+    pub btime: Option<SystemTime>,
+    pub atime: Option<SystemTime>,
     pub flags: EntryFlags,
     pub id: EntryId,
     /// Resolved target of a symlink, when cheap to obtain.
@@ -94,6 +99,8 @@ impl Entry {
             kind: EntryKind::Parent,
             size: 0,
             mtime: None,
+            btime: None,
+            atime: None,
             flags: EntryFlags::empty(),
             id: EntryId::Name(0),
             link_target: None,

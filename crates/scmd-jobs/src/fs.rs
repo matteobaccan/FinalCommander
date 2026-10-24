@@ -55,6 +55,67 @@ pub trait JobFs: Send + Sync {
         buffer: usize,
         on_bytes: &mut dyn FnMut(u64) -> bool,
     ) -> io::Result<u64>;
+
+    /// Append `src` to the end of `dst`, creating `dst` if it is not there, and leave its
+    /// permissions as they were. Returns the bytes appended.
+    ///
+    /// Unlike [`JobFs::copy_file`] this writes into the destination itself: there is no
+    /// temporary file, because the point is the bytes that are already in it.
+    fn append_file(
+        &self,
+        src: &VPath,
+        dst: &VPath,
+        buffer: usize,
+        on_bytes: &mut dyn FnMut(u64) -> bool,
+    ) -> io::Result<u64> {
+        let _ = (src, dst, buffer, on_bytes);
+        Err(unsupported("this filesystem cannot append to a file"))
+    }
+
+    /// Point `link` at the same bytes as `target`, as a second name for one file.
+    fn hard_link(&self, target: &VPath, link: &VPath) -> io::Result<()> {
+        let _ = (target, link);
+        Err(unsupported("this filesystem has no hard links"))
+    }
+
+    /// Overwrite every byte of a regular file with zeros, flush them to the device, and only
+    /// then unlink it. `on_bytes` reports progress as it goes; returning `false` from it
+    /// stops the wipe, and what has already been overwritten stays overwritten — there is no
+    /// undoing a wipe halfway through, which is the nature of the operation.
+    ///
+    /// **What this guarantees, exactly.** On a filesystem that rewrites a file's blocks in
+    /// place, on a device that rewrites the sectors it is given, the bytes that were in those
+    /// blocks are gone. That is the whole of the promise, and it is the reason the default
+    /// here is a refusal rather than a best effort:
+    ///
+    /// - an SSD writes the zeros to different cells and erases the old ones when its
+    ///   controller feels like it, if ever — wear levelling is the opposite of overwriting;
+    /// - a copy-on-write filesystem (Btrfs, ZFS, APFS) never writes in place by design, and
+    ///   any snapshot keeps the old extents alive and readable;
+    /// - a journalling filesystem can hold a small file's data in the journal as well;
+    /// - a network, archive or cloud provider has no idea what the far end does with blocks,
+    ///   and no way to find out.
+    ///
+    /// The name is not covered either: it stays in the directory's free space, and in the
+    /// journal, after the unlink. This is a defence against whoever next reads the disk, not
+    /// against a laboratory, and the dialog has to say so.
+    fn wipe_file(
+        &self,
+        path: &VPath,
+        buffer: usize,
+        on_bytes: &mut dyn FnMut(u64) -> bool,
+    ) -> io::Result<()> {
+        let _ = (path, buffer, on_bytes);
+        Err(unsupported(
+            "a wipe can only overwrite a file on a local filesystem",
+        ))
+    }
+}
+
+/// The one refusal every provider that cannot keep a promise returns, so the engine's error
+/// text reads the same wherever it came from.
+fn unsupported(message: &'static str) -> io::Error {
+    io::Error::new(io::ErrorKind::Unsupported, message)
 }
 
 /// The local filesystem.
@@ -112,12 +173,7 @@ impl JobFs for LocalFs {
     fn remove_file(&self, path: &VPath) -> io::Result<()> {
         // A read-only file still has to go when the user says delete.
         if let Ok(meta) = fs::symlink_metadata(path.as_path()) {
-            if meta.permissions().readonly() {
-                let mut perms = meta.permissions();
-                #[allow(clippy::permissions_set_readonly_false)]
-                perms.set_readonly(false);
-                let _ = fs::set_permissions(path.as_path(), perms);
-            }
+            clear_readonly(path, &meta);
         }
         fs::remove_file(path.as_path())
     }
@@ -219,6 +275,105 @@ impl JobFs for LocalFs {
         }
         Ok(total)
     }
+
+    fn append_file(
+        &self,
+        src: &VPath,
+        dst: &VPath,
+        buffer: usize,
+        on_bytes: &mut dyn FnMut(u64) -> bool,
+    ) -> io::Result<u64> {
+        let mut reader = File::open(src.as_path())?;
+        // `append` seeks to the end on every write, so bytes already in the destination are
+        // kept whatever else writes to it meanwhile; `create` rather than `create_new`
+        // because appending to a destination that is not there yet is just a copy. Neither
+        // touches the permissions of a file that exists, which `File::create` would not do.
+        let mut writer = File::options()
+            .append(true)
+            .create(true)
+            .open(dst.as_path())?;
+        let mut buf = vec![0u8; buffer.clamp(16 * 1024, 8 * 1024 * 1024)];
+        let mut total = 0u64;
+
+        loop {
+            let read = match reader.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => n,
+                Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                Err(e) => return Err(e),
+            };
+            writer.write_all(&buf[..read])?;
+            total += read as u64;
+            if !on_bytes(read as u64) {
+                // Half an append cannot be taken back the way a half-written copy can: the
+                // bytes are in the user's own file. They are flushed and left there.
+                writer.flush()?;
+                return Err(io::Error::new(io::ErrorKind::Interrupted, "cancelled"));
+            }
+        }
+
+        writer.flush()?;
+        Ok(total)
+    }
+
+    fn hard_link(&self, target: &VPath, link: &VPath) -> io::Result<()> {
+        fs::hard_link(target.as_path(), link.as_path())
+    }
+
+    fn wipe_file(
+        &self,
+        path: &VPath,
+        buffer: usize,
+        on_bytes: &mut dyn FnMut(u64) -> bool,
+    ) -> io::Result<()> {
+        if !path.is_local() {
+            return Err(unsupported(
+                "a wipe can only overwrite a file on a local filesystem",
+            ));
+        }
+        let meta = fs::symlink_metadata(path.as_path())?;
+        if !meta.is_file() {
+            // A symlink, a device or a socket has no bytes of its own; overwriting what one
+            // of them points at would destroy something the user never selected.
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "only a regular file has bytes of its own to overwrite",
+            ));
+        }
+        clear_readonly(path, &meta);
+
+        let mut file = File::options().write(true).open(path.as_path())?;
+        let zeros = vec![0u8; buffer.clamp(16 * 1024, 8 * 1024 * 1024)];
+        let mut left = meta.len();
+        while left > 0 {
+            let chunk = left.min(zeros.len() as u64) as usize;
+            file.write_all(&zeros[..chunk])?;
+            left -= chunk as u64;
+            if !on_bytes(chunk as u64) {
+                let _ = file.sync_all();
+                return Err(io::Error::new(io::ErrorKind::Interrupted, "cancelled"));
+            }
+        }
+
+        // The zeros have to be on the device before the name goes: a crash in between would
+        // otherwise leave the directory entry removed and the old blocks untouched, which is
+        // the one outcome a wipe must not have.
+        file.sync_all()?;
+        drop(file);
+        self.remove_file(path)
+    }
+}
+
+/// Clear the read-only bit, best effort. A file the user told us to delete or wipe has to go
+/// whatever its permissions say, and a failure here is reported by the write that follows.
+fn clear_readonly(path: &VPath, meta: &fs::Metadata) {
+    if !meta.permissions().readonly() {
+        return;
+    }
+    let mut perms = meta.permissions();
+    #[allow(clippy::permissions_set_readonly_false)]
+    perms.set_readonly(false);
+    let _ = fs::set_permissions(path.as_path(), perms);
 }
 
 pub fn part_path(dst: &VPath) -> VPath {
@@ -295,6 +450,80 @@ pub fn free_name(fs: &dyn JobFs, dst: &VPath) -> VPath {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use scmd_core::Scheme;
+
+    /// A provider that implements only the calls the trait requires, so the operations a
+    /// filesystem may not be able to do can be checked to refuse rather than guess. Every
+    /// required call is a refusal too: none of them is reached.
+    struct Barest;
+
+    impl JobFs for Barest {
+        fn facts(&self, _path: &VPath) -> io::Result<Facts> {
+            Err(unsupported("nothing here"))
+        }
+
+        fn facts_following(&self, _path: &VPath) -> io::Result<Facts> {
+            Err(unsupported("nothing here"))
+        }
+
+        fn exists(&self, _path: &VPath) -> bool {
+            false
+        }
+
+        fn read_dir(&self, _path: &VPath) -> io::Result<Vec<(OsString, Facts)>> {
+            Err(unsupported("nothing here"))
+        }
+
+        fn create_dir(&self, _path: &VPath) -> io::Result<()> {
+            Err(unsupported("nothing here"))
+        }
+
+        fn create_dir_all(&self, _path: &VPath) -> io::Result<()> {
+            Err(unsupported("nothing here"))
+        }
+
+        fn rename(&self, _from: &VPath, _to: &VPath) -> io::Result<()> {
+            Err(unsupported("nothing here"))
+        }
+
+        fn remove_file(&self, _path: &VPath) -> io::Result<()> {
+            Err(unsupported("nothing here"))
+        }
+
+        fn remove_dir(&self, _path: &VPath) -> io::Result<()> {
+            Err(unsupported("nothing here"))
+        }
+
+        fn read_link(&self, _path: &VPath) -> io::Result<PathBuf> {
+            Err(unsupported("nothing here"))
+        }
+
+        fn symlink(&self, _target: &std::path::Path, _link: &VPath) -> io::Result<()> {
+            Err(unsupported("nothing here"))
+        }
+
+        fn same_file(&self, _a: &VPath, _b: &VPath) -> bool {
+            false
+        }
+
+        fn apply_meta(&self, _p: &VPath, _f: &Facts, _preserve: Preserve) -> io::Result<()> {
+            Err(unsupported("nothing here"))
+        }
+
+        fn copy_file(
+            &self,
+            _src: &VPath,
+            _dst: &VPath,
+            _buffer: usize,
+            _on_bytes: &mut dyn FnMut(u64) -> bool,
+        ) -> io::Result<u64> {
+            Err(unsupported("nothing here"))
+        }
+    }
+
+    fn remote() -> VPath {
+        VPath::remote(Scheme::Sftp, "host", "/srv/x")
+    }
 
     #[test]
     fn copy_reports_progress_and_never_leaves_a_partial_destination() {
@@ -391,6 +620,118 @@ mod tests {
         fs::set_permissions(path.as_path(), perms).unwrap();
         LocalFs.remove_file(&path).unwrap();
         assert!(!LocalFs.exists(&path));
+    }
+
+    #[test]
+    fn a_wipe_overwrites_the_bytes_before_it_unlinks_the_name() {
+        let dir = tempfile::tempdir().unwrap();
+        let secret = VPath::local(dir.path().join("secret"));
+        let witness = VPath::local(dir.path().join("witness"));
+        fs::write(secret.as_path(), vec![0xABu8; 70_000]).unwrap();
+        // A second name for the same inode outlives the unlink, which is the only way to
+        // read back what a wipe left behind.
+        LocalFs.hard_link(&secret, &witness).unwrap();
+
+        let mut seen = 0u64;
+        LocalFs
+            .wipe_file(&secret, 16 * 1024, &mut |n| {
+                seen += n;
+                true
+            })
+            .unwrap();
+
+        assert_eq!(seen, 70_000, "progress must cover every byte");
+        assert!(!LocalFs.exists(&secret), "the name should be gone");
+        let left = fs::read(witness.as_path()).unwrap();
+        assert_eq!(left.len(), 70_000);
+        assert!(left.iter().all(|b| *b == 0), "a byte survived the wipe");
+    }
+
+    #[test]
+    fn a_cancelled_wipe_leaves_the_file_and_what_it_already_destroyed() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = VPath::local(dir.path().join("half"));
+        fs::write(path.as_path(), vec![0xABu8; 200_000]).unwrap();
+
+        let err = LocalFs
+            .wipe_file(&path, 16 * 1024, &mut |_| false)
+            .unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::Interrupted);
+
+        // There is no undoing an overwrite, so the honest outcome is a file that is still
+        // there with its first chunk already gone.
+        let left = fs::read(path.as_path()).unwrap();
+        assert_eq!(left.len(), 200_000);
+        assert!(left[..16 * 1024].iter().all(|b| *b == 0));
+        assert!(left[16 * 1024..].iter().all(|b| *b == 0xAB));
+    }
+
+    #[test]
+    fn a_wipe_refuses_everything_it_cannot_make_a_promise_about() {
+        let dir = tempfile::tempdir().unwrap();
+        let real = VPath::local(dir.path().join("real"));
+        let link = VPath::local(dir.path().join("link"));
+        fs::write(real.as_path(), b"keep me").unwrap();
+        LocalFs
+            .symlink(std::path::Path::new("real"), &link)
+            .unwrap();
+
+        let err = LocalFs.wipe_file(&remote(), 0, &mut |_| true).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::Unsupported);
+
+        for path in [&link, &VPath::local(dir.path())] {
+            let err = LocalFs.wipe_file(path, 0, &mut |_| true).unwrap_err();
+            assert_eq!(err.kind(), io::ErrorKind::InvalidInput, "{path}");
+        }
+        assert_eq!(
+            fs::read(real.as_path()).unwrap(),
+            b"keep me",
+            "wiping a link must not touch what it points at"
+        );
+    }
+
+    #[test]
+    fn appending_lands_after_the_bytes_already_there() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = VPath::local(dir.path().join("part2"));
+        let dst = VPath::local(dir.path().join("whole"));
+        fs::write(src.as_path(), b"second").unwrap();
+        fs::write(dst.as_path(), b"first ").unwrap();
+
+        let mut seen = 0u64;
+        let written = LocalFs
+            .append_file(&src, &dst, 16 * 1024, &mut |n| {
+                seen += n;
+                true
+            })
+            .unwrap();
+        assert_eq!((written, seen), (6, 6));
+        assert_eq!(fs::read(dst.as_path()).unwrap(), b"first second");
+
+        // A destination that is not there yet is simply a copy.
+        let fresh = VPath::local(dir.path().join("fresh"));
+        LocalFs
+            .append_file(&src, &fresh, 16 * 1024, &mut |_| true)
+            .unwrap();
+        assert_eq!(fs::read(fresh.as_path()).unwrap(), b"second");
+    }
+
+    #[test]
+    fn a_provider_that_implements_none_of_them_refuses_instead_of_trying() {
+        let path = remote();
+        for kind in [
+            Barest
+                .append_file(&path, &path, 0, &mut |_| true)
+                .unwrap_err()
+                .kind(),
+            Barest.hard_link(&path, &path).unwrap_err().kind(),
+            Barest
+                .wipe_file(&path, 0, &mut |_| true)
+                .unwrap_err()
+                .kind(),
+        ] {
+            assert_eq!(kind, io::ErrorKind::Unsupported);
+        }
     }
 
     #[test]

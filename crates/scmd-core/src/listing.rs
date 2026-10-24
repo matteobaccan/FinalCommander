@@ -135,6 +135,8 @@ mod tests {
             kind,
             size,
             mtime: None,
+            btime: None,
+            atime: None,
             flags,
             id: EntryId::Name(name.as_bytes().iter().map(|b| *b as u64).sum()),
             link_target: None,
