@@ -58,6 +58,32 @@ Per mask: `view`, `edit`, `execute`, `alt_view`, `alt_edit`, `extract`, plus an 
 `{line}`, `{col}`. Default associations are derived from the OS where possible (xdg-mime,
 `LSCopyDefaultRoleHandler`, registry) and overridable.
 
+### 5b. Substitutions, and FAR's spelling of them
+
+The same substitution table serves the user menu, the associations and apply-command. Ours is
+named (`{file}`, `{file.q}`, `{list}`, `{other.dir}`); FAR's is punctuation, and it is what a
+migrating user's `FarMenu.ini` and associations are written in, so we accept it too and document
+the mapping (`docs/04-far-inventory.md` §8):
+
+| FAR | Means | Ours |
+| --- | --- | --- |
+| `!!` | a literal `!` | `{{` |
+| `!` / `!.!` | name without / with extension | `{name}` / `{file}` |
+| `` !` `` | extension alone | `{ext}` |
+| `!@!` | a temporary file holding the list of selected names | `{list}` |
+| `!&` | the selected names inline | `{selection}` |
+| `!\` | the current path | `{dir}` |
+| `!=\` | the current path with symlinks resolved | `{dir.real}` |
+| `!?!` | the description of the current file | `{descr}` |
+| `!?<title>?<init>!` | **ask the user**, with `$<history>$` for a named history | `{ask:title=…,init=…,history=…}` |
+| `!` `!^` `![` `!]` | switch every following symbol to the passive / active / left / right panel | `{right.file}` … and a `{panel:left}` prefix form |
+| modifiers on `!@!`: `Q` `S` `F` `A` `U` `W` | quote · forward slashes · full paths · ANSI · UTF-8 · UTF-16 | `{list.q}`, `{list.slash}`, `{list.full}`, `{list:enc=utf8}` |
+
+Two things in that table are features, not spellings, and we do not have them: the **interactive
+prompt** (a command that asks for a value before it runs, optionally remembering what was typed
+in a named history) and the **panel prefix** that makes a whole command line refer to the other
+panel. Both are in `docs/BACKLOG.md`.
+
 ## 6. Histories
 
 Command, directory, view/edit, search, rename pattern, and mask histories: persisted, size-capped,
@@ -75,6 +101,41 @@ per-history clearing. Stored as JSONL under `$STATE/history/`.
 | Terminal pane | `Ctrl+Alt+E` toggles an embedded terminal with full VT support (alternate screen, mouse, 24-bit colour) so `vim`/`htop` run inside it; multiple terminal tabs (M3) |
 | Elevation | a privileged helper process (`scmd-helper`) started on demand via `pkexec`/`sudo`/UAC, speaking a minimal JSON protocol over a pipe, used only for explicitly elevated jobs; never started implicitly |
 | Open with OS | `tool.os.open` (xdg-open/open/ShellExecute), `tool.os.terminal`, `tool.os.filemanager`, `tool.os.properties` |
+
+### 7.1 Commands we run ourselves
+
+A commander that shells out for `cd` cannot keep the panel in step, so some commands are ours.
+FAR's list, which is the one users expect, mapped to what we do:
+
+| Command | Behaviour |
+| --- | --- |
+| `cd` / `chdir [path]` | change the active panel's directory; on a remote panel `cd` moves inside the provider while `chdir` always means the local filesystem. `cd ~` goes to the configured home, `cd -` to the previous directory |
+| `<drive>:` | Windows: change the panel's drive |
+| `cls` | clear the user screen |
+| `set [name=[value]]` | show, set or remove an environment variable for our own child processes |
+| `if [not] exist <path> <command>` · `if [not] defined <name> <command>` | nestable, so an association or a menu entry can test before it runs |
+| `pushd [path]` / `popd` / `clrd` | a directory stack |
+| `title [text]` | fix the window title until told otherwise |
+| `chcp [n]` | show or set the code page used for child-process output (Windows) |
+| `exit` | leave |
+
+### 7.2 Command prefixes
+
+FAR ships these as a plugin (`farcmds`); for us they are core, because they are the cheapest way
+to reach the viewer, the editor and the clipboard from a command line or a macro:
+
+| Prefix | Does |
+| --- | --- |
+| `view:<file>` | open it in the internal viewer |
+| `edit:[line[:col]] <file>` | open it in the internal editor at a position |
+| `goto:<path>` | move the panel there and put the cursor on it |
+| `whereis:<name>` | find it and go there |
+| `clip:<file>` | put its contents on the clipboard (and `clip:` with no argument clears it) |
+| `link:<target> <name>` | create a link |
+| `run:<file><command>` | run a command and send its output to a file, the screen, or nowhere |
+
+Prefixes work wherever a command line does: the line itself, the user menu, associations,
+apply-command and macros.
 
 ## 8. Dialogs and common UI behaviour
 

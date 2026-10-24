@@ -70,7 +70,8 @@ Restore selection · Folder size.
 Find file, Command history (backlog), View and edit history (backlog), Folders history (§4.4) ·
 Swap panels, Sync other panel, Panels on/off, Compare folders (backlog) · Connections,
 Disconnect · User menu, File associations (backlog), Folder shortcuts (backlog) · Plugin
-commands (backlog), Screens list (backlog), Task list (backlog).
+commands (backlog), Screens list (backlog: our own viewers, editors and jobs), Task list
+(backlog: the operating system's processes, as FAR's is — see `docs/BACKLOG.md`).
 
 ### 2.4 Options
 

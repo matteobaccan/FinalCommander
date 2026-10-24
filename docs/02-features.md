@@ -5,6 +5,10 @@ the modern TUIs (yazi, MTN2), normalised into one list with a target milestone.
 
 Milestones: **M1** = usable daily driver (MVP), **M2** = feature parity with mc + basic FAR,
 **M3** = parity with FAR/TC, **M4** = beyond (new ideas).
+
+For FAR specifically, [`04-far-inventory.md`](04-far-inventory.md) is the harder check: FAR 3.x
+read from its own repository — 283 help topics, 311 settings keys — with each feature marked
+against what SupremeCommander actually does today.
 Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `YAZI`, `NEW`.
 
 ## 1. Panels
@@ -24,8 +28,12 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 1.11 | Status line (name, size, date of the current item) and total/selected counters | FAR | M1 |
 | 1.12 | Function-key bar (`F1..F12`, follows modifiers: Shift/Alt/Ctrl rows) | NC | M1 |
 | 1.13 | Sort by name/ext/size/mtime/ctime/atime/owner/unsorted, reversible, group dirs first, selected first, natural ("version") sort, locale-aware collation | FAR/TC | M1 core, M2 full |
-| 1.14 | Secondary sort criteria chain (tie-breakers, configurable) | FAR | M3 |
+| 1.14 | Secondary sort criteria chain (tie-breakers, configurable): per sort mode an ordered set, with its own editor (add, remove, replace, direction, inherit, reorder, reset) | FAR | M3 |
+| 1.14b | Sort groups: named mask groups that sort ahead of or behind everything else, ordered, applied on top of the sort mode | FAR (`Shift+F11`) | M2 |
+| 1.14c | Sort by creation time, access time, owner and description, besides name/ext/size/write time | FAR (`Ctrl+F8…F11`) | M2 |
 | 1.15 | Filters: per-panel display filter, quick filter bar, filter by mask/size/date/attrs, named filter sets, filter menu | FAR/KRU | M2 |
+| 1.15b | A column grammar for view modes: per column a property letter with modifiers (name with selection marks / no extension / right-aligned, extension, size / allocated size / stream size with grouping, decimal units, fractions, four date-and-time pairs with brief and month-name forms, attributes, description, owner with domain, hard-link count, stream count), widths absolute or automatic or a percentage, repeated groups giving newspaper stripes, and the same grammar for the panel status line and for search results | FAR | M2 |
+| 1.15c | Per view mode: fullscreen, align file and folder extensions, folders uppercase, files lowercase, uppercase names shown lowercase | FAR | M2 |
 | 1.16 | Hidden/system files toggle (`Ctrl+H`). A dotfile counts as hidden on every platform, and Windows adds the hidden and system attributes, so the key means the same thing everywhere | all | M1 |
 | 1.17 | Branch view (flat recursive listing of the current tree) | TC | M2 |
 | 1.18 | Panelize: fill a panel with the result of a search or an external command | MC | M2 |
@@ -179,6 +187,32 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 9.11 | `Save setup` (`Shift+F9`) writes the configuration as it stands, including themes that came from the file | FAR | M1 |
 | 9.13 | Session editor for stored connections (`Alt+N` → `Ins`/`F4`): name, host, port, user, authentication, key file, remote folder, group, keep-alive, compression — validated before it is stored, `Shift+F9` makes it permanent (SPEC 10 §3.5) | FAR (NetBox) | M1 |
 | 9.12 | Choose-one lists: languages, themes, drives and open connections (`Alt+F1`/`Alt+F2`), folder history (`Alt+F12`), sort modes (`Ctrl+F12`, where re-choosing the current order reverses it) (SPEC 10 §4) | FAR | M1 |
+
+## 9b. What a FAR user expects and we had not written down
+
+Found by reading FAR's own help and configuration tables; the detail is in
+[`04-far-inventory.md`](04-far-inventory.md) and each line has a backlog entry.
+
+| # | Feature | Origin | M |
+| --- | --- | --- | --- |
+| 9b.1 | The selection matrix: the modifier picks the criterion — mask, same extension as the cursor, same name, everything — across select, deselect and invert, with separate rules for folders | FAR | M2 |
+| 9b.2 | `Shift+F5`/`Shift+F6`/`Shift+F8`: copy, move and delete the item under the cursor, ignoring the selection | FAR | M1 |
+| 9b.3 | Filters as one shared object used by the panel display, by find and by copy: mask, size range (binary and decimal suffixes), date range on any of four timestamps, absolute or relative in days, attributes as three-state include/exclude/ignore, more-than-one-hard-link | FAR/KRU | M2 |
+| 9b.4 | Mask groups (`<arc>`, `<temp>`, `<exec>`, nestable) and the full mask grammar: character ranges, `/regex/i`, `include|exclude` | FAR | M2 |
+| 9b.5 | Four histories (commands, folders, view/edit, dialogs), each with a size and a lifetime in days, persisted, with items that can be locked so new entries do not evict them | FAR | M2 |
+| 9b.6 | File descriptions (`descript.ion`, `files.bbs`): edit, display as a column, carry through copy/move/rename/delete, show the folder's own description file in the info panel | FAR/NC | M3 |
+| 9b.7 | Copy dialog depth: several destinations, append to existing, only-newer as a policy, copy symlink contents, a filter on the operation, destination from the folder tree, speed and ETA | FAR | M2 |
+| 9b.8 | Metasymbol language for the user menu, file associations and apply-command: name forms, the selected-file list as a file or inline, path forms, resolved paths, the description, a prompt with history, panel-switching prefixes, and quoting/case/encoding modifiers | FAR | M2 |
+| 9b.9 | Command prefixes on the command line (`view:`, `edit:`, `goto:`, `clip:`, `whereis:`, `link:`, `run:`), as FAR's `farcmds` does | FAR | M2 |
+| 9b.10 | Internal shell commands that need no shell: `cls`, `cd`/`chdir` with a configurable `cd ~`, `chcp`, `set`, nestable `if [not] exist` / `if [not] defined`, `pushd`/`popd`/`clrd`, `title`, `exit` | FAR | M2 |
+| 9b.11 | Autocomplete with four separately switchable sources (filesystem, history, `PATH`, environment), each three-state, as a list or appended inline | FAR | M2 |
+| 9b.12 | Screen grabber: select any region of the screen, stream or block, extend, move, append to the clipboard | FAR (`Alt+Ins`) | M3 |
+| 9b.13 | Viewer ⇄ editor at the same position, jump to the open file in the panel, next/previous file of the panel from inside the viewer | FAR (`F6`, `Ctrl+F10`, `Gray ±`) | M2 |
+| 9b.14 | Remember per file: position, code page, view mode, wrap mode, bookmarks | FAR | M2 |
+| 9b.15 | Sorting collation as three settings — collation (ordinal/invariant/linguistic), digits-as-numbers, case sensitivity — rather than one "natural sort" flag | FAR | M3 |
+| 9b.16 | A searchable settings browser, because the setting count only grows (FAR: 311) | FAR (`far:config`) | M3 |
+| 9b.17 | Dialog framework: history in edit fields with lockable items, autocomplete, three-state checkboxes, movable dialogs, click outside to accept or cancel | FAR | M2 |
+| 9b.18 | Menus that filter as you type, with a lock and horizontal scrolling | FAR (`RAlt`) | M3 |
 
 ## 10. Extensibility
 

@@ -39,9 +39,9 @@ Column `SC` = SupremeCommander default (profile `far`, our baseline).
 | Shift+F6 | rename/move the item under the cursor | — | rename in place | move by queue | rename in place |
 | Shift+F8 | delete only the item under the cursor | — | delete permanently | — | delete under cursor |
 | Shift+F9 | save configuration | — | — | — | save configuration |
-| Shift+F10 | repeat last menu item | — | — | view all files | repeat last command |
-| Shift+F11 | group sorting toggle | — | — | — | group dirs toggle |
-| Shift+F12 | selected files first | — | — | custom view | selected first |
+| Shift+F10 | select the last used item of the user menu | — | — | view all files | same, once the user menu exists (unbound today) |
+| Shift+F11 | sort groups on/off (named mask groups that sort ahead of or behind everything else — not the same as "directories first") | — | — | — | same, once sort groups exist (unbound today) |
+| Shift+F12 | selected files first | — | — | custom view | selected first (a setting today, `Shift+F12` unbound) |
 | Shift+Del | delete skipping trash | delete | delete permanently | delete permanently | delete permanently |
 | Shift+Enter | run in a separate window / OS open | — | run in own window | — | OS-open item |
 | Shift+arrows | extend selection | extend selection | extend selection | extend selection | extend selection |
@@ -108,14 +108,14 @@ Column `SC` = SupremeCommander default (profile `far`, our baseline).
 | root directory | Ctrl+\ | — | Ctrl+Backspace | Ctrl+\ |
 | same dir in other panel | — | Alt+I | Ctrl+= | Ctrl+= |
 | other panel follows cursor | — | Alt+O | Ctrl+←/→ | Alt+O |
-| directory hotlist/bookmarks | Ctrl+D (folder shortcuts: Ctrl+Shift+0..9 set, RightCtrl+0..9 go) | Ctrl+\ | Ctrl+D / Ctrl+B add | Ctrl+D; Ctrl+Shift+0..9 set; Alt+0..9 go |
+| directory hotlist/bookmarks | folder shortcuts: Ctrl+Shift+0..9 set, RightCtrl+0..9 go (and insert the path when in an edit line), plus a list in the Commands menu | Ctrl+\ | Ctrl+D / Ctrl+B add | Ctrl+D; Ctrl+Shift+0..9 set; Alt+0..9 go |
 | directory history | Alt+F12 | Alt+Shift+H; Alt+Y / Alt+U back/forward | Ctrl+H; Alt+←/→ | Alt+F12; Alt+←/→ |
 | quick cd / path entry | — | Alt+C | Ctrl+L | Ctrl+L |
 | new tab / close tab | — | — | Ctrl+Alt+N / Ctrl+W | Ctrl+T… see note | 
 | next/prev tab | — | — | Alt+←/→ (tabs: Shift+←/→) | Ctrl+PgDn is taken → Alt+1..9, Ctrl+Tab |
 | find file | Alt+F7 | Alt+? | Ctrl+S | Alt+F7 |
 | disk usage | — | Ctrl+Space on a dir | Alt+Shift+S | Alt+Shift+S |
-| compare directories | — | — | Alt+Shift+C | Alt+Shift+C |
+| compare directories | Commands menu, no default key (marks what is missing or newer in the other panel; names, sizes and times only, no subfolders) | — | Alt+Shift+C | Alt+Shift+C |
 | synchronise directories | — | — | Ctrl+Y | Ctrl+Y |
 | pack / unpack | Shift+F1 / Shift+F2 | — | Alt+Shift+P / Alt+Shift+U | Shift+F1 / Shift+F2 |
 | test archive | — | — | Alt+Shift+E | Alt+Shift+E |
@@ -125,7 +125,7 @@ Column `SC` = SupremeCommander default (profile `far`, our baseline).
 | select all / none | Shift+Gray + / Shift+Gray − | — | Alt++ / Alt+− | Ctrl+A / Ctrl+Shift+A |
 | by extension | Ctrl+Gray + / − | — | — | Alt++ / Alt+− |
 | restore previous selection | Ctrl+M | — | — | Ctrl+Shift+M |
-| copy names to clipboard | Ctrl+Ins / Ctrl+Shift+Ins | — | — | Ctrl+Shift+C (names), Alt+Shift+C (full paths) |
+| copy names to clipboard | Ctrl+Ins / Ctrl+Shift+Ins names, Alt+Shift+Ins full names, Ctrl+Alt+Ins real/UNC names, Ctrl+Shift+C / Ctrl+Shift+X copy/cut the files themselves | — | — | Ctrl+Shift+C (names), Alt+Shift+C (full paths) |
 | attributes / permissions | Ctrl+A | Ctrl+x c (chmod), Ctrl+x o (chown) | Alt+Enter | Ctrl+A |
 | apply command to selection | Ctrl+G | — | — | Ctrl+G |
 | describe files | Ctrl+Z | — | — | Ctrl+Shift+D |

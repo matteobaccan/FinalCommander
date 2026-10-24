@@ -82,6 +82,36 @@ columns = [
 Column widths: fixed, percentage, or `*` (fill). Horizontal scrolling for long names
 (`Alt+←/→`), ellipsis in the middle for paths and at the end for names.
 
+### 3b. Reading FAR's column strings
+
+Our column definition is a TOML table; FAR's is a pair of strings (`Column types`,
+`Column widths`) that every FAR user already has in their configuration, in their saved panel
+modes and in their find-results layout. We parse that spelling too — on import (SPEC 07 §6) and
+wherever a string is more convenient than a table. The grammar, taken from FAR 3.x
+(`docs/04-far-inventory.md` §2):
+
+```
+N[M[D],O,R[F],N]      name: M selection marks (D dynamic), O without path,
+                      R right-align what does not fit (F always), N without extension
+X[R]                  extension (R right-aligned)
+S / P / G [C,T,F,E]   size / allocated / stream size: C group digits, T decimal units,
+                      F fraction with three significant digits, E no space before the unit
+D   T                 write date, write time
+DM / DC / DA / DE [B,M]   write / creation / access / change date+time: B brief, M month name
+A    attributes    Z  description    O[L] owner (L with domain)
+LN   hard links    F  streams
+```
+
+Widths: a number, `0` for automatic, or `n%` of the space left after the fixed columns; `+1` on a
+time column means 12-hour, more gives seconds and milliseconds; `+2` on a date column gives a
+four-digit year. A repeated group of columns means newspaper stripes. Our equivalents are named
+(`{ type = "mtime", fmt = "…" }`), and the mapping is one to one for everything we support;
+what we do not support (allocated size, streams, descriptions before they exist) is reported as
+a warning on import, never dropped silently.
+
+Per-mode flags from the same dialog: fullscreen, align file extensions, align folder extensions,
+folders uppercase, files lowercase, uppercase names shown lowercase.
+
 ## 4. Sorting
 
 Keys: name, ext, size, mtime, ctime, atime, btime, attrs, owner, descr, packed, type, none
@@ -90,7 +120,13 @@ case-insensitive (default on Windows/macOS), **natural/version order** for digit
 collation via ICU-less `unicode-collation`-style folding. A **criteria chain** breaks ties
 (FAR's idea): `sort.chain = ["size", "name"]`.
 
-Pressing the same sort key twice toggles direction when `panel.allow_reverse_sort = true`.
+Pressing the same sort key twice toggles direction when `panel.allow_reverse_sort = true`; so
+does choosing the current order again in the sort list (SPEC 10 §4.5).
+
+**Sort groups** (FAR's `Shift+F11`) sit on top of the sort: an ordered list of named mask groups,
+some pulling their files ahead of everything else and some pushing them behind, with the
+boundary between "front" and "back" explicit in the list. Within a group the normal sort
+applies. This is what makes `*.cpp` files appear before `*.o` ones however the panel is sorted.
 
 ## 5. Filters
 
@@ -98,6 +134,15 @@ Pressing the same sort key twice toggles direction when `panel.allow_reverse_sor
 - **Filter sets**: named rules combining masks (`*.rs,*.toml`), exclude masks, size range, age
   range, attributes, and entry kind; stored in `filters.toml`, selectable from a menu,
   lockable so a changed directory keeps the filter.
+- One filter object, three users. A filter is not a panel feature that find and copy happen to
+  copy: it is one object the panel display, the find tool and the copy engine all take. FAR
+  proves the shape (its filter dialog is reached from all three) and it halves the work.
+  A filter condition set is: masks and exclude masks · a size range, with binary suffixes
+  (`B K M G T P E`) and lowercase for decimal · a date range on a *chosen* timestamp (write,
+  creation, access, change), given either absolutely or **relative in days**, which is what
+  makes a filter survive being saved · attributes as three states (must have, must not have,
+  don't care) · "more than one hard link". Each condition switches off on its own, so a saved
+  filter can be narrowed without being rewritten.
 - **Highlight groups** use the same predicate language to colour rows:
 
 ```toml
