@@ -15,6 +15,37 @@ set, save/load the search.
 
 `tool.find.folder` is the same dialog restricted to directories, with a "go to" action.
 
+### 1b. What shipped first, and why in this shape
+
+The dialog above is the whole of it; the first version is the half that answers the question
+people actually ask, with the other half named in `docs/BACKLOG.md` rather than half-built.
+
+**In 0.0.4**: masks in the filter grammar of SPEC 02 §5 (lists, `*`, `?`, ranges, `/regex/i`,
+exclusions after `|`, groups like `<arc>`), content as text or as a hex pattern, case
+sensitivity, whole words, **files that do *not* contain it**, five scopes (this folder; this
+folder and below; the folders selected in the panel; from the root of the drive; the other
+panel and below), following symbolic links, and directories in the results. The engine is its
+own crate, `scmd-find`, so the dialog does not know how a walk works and the walk does not know
+what a panel is: the dialog produces a plain `FindSpec`, and one place turns that into the
+engine's query.
+
+**Results stream.** A result is useful before the search has finished, so the list grows under
+the cursor while the walk is still going; the counters say how many files and directories have
+been looked at, and the row at the foot says where it is. `Enter` goes to the file (the panel
+changes directory and the cursor lands on it), `F3` reads it without leaving the list, `F5`
+**panelises** — the results become the panel, which is what makes every other key in the
+program work on them — and `Esc` stops the search while keeping what it found, with a second
+`Esc` closing the list. Nothing is thrown away by a single keystroke.
+
+**What is deliberately not in the first version**: searching inside archives (the archive
+provider comes first), the size, date and attribute conditions (the filter object carries them
+already — the dialog does not offer them yet), saving and loading a search, running a job over
+the whole result set, and `tool.find.folder`. Each is a line in the backlog.
+
+**Problems are collected, not announced.** A search over a whole drive meets unreadable
+directories by the dozen; saying so one at a time would bury the results. They are counted and
+kept, and the list can show them on request.
+
 ## 2. Grep with jump-to-match
 
 `tool.grep` is a content-first search: pattern, file filter, context lines. Results are grouped

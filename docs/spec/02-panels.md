@@ -204,6 +204,24 @@ on close), nameable, reorderable, movable to the other side, duplicable. Persist
 - Any element can be hidden; hiding both panels gives the full-screen shell (FAR `Ctrl+O`).
 - Minimum usable size 60x15; below that the panels stack and the key bar collapses to one row.
 
+### 9a. A panel that is a list rather than a directory (shipped)
+
+Find results, `panelize`, and later an archive's contents and a plugin's own list are all the
+same thing: a panel whose rows are files wherever they live. It comes down to one method —
+`Panel::path_of` — which is the single place that decides whether a row's path is the panel's
+own path with the name on the end, or something the panel was told. Every operation, the
+viewer, the editor and the metasymbols go through it, so none of them needs to know which kind
+of panel it is looking at.
+
+| Question | Answer |
+| --- | --- |
+| What is a row's path? | The list's own, kept in a map keyed by entry id — *not* by row, because the listing re-sorts underneath it |
+| What does the frame say? | What the list is of, rather than a directory the rows are not in |
+| What does `Enter` do on a file? | Goes to the directory the file lives in, with the cursor on it: that is what a result is for |
+| What does a re-read do? | Asks about each of its own paths again, dropping what is no longer there — a results panel that still shows a deleted file is a liar |
+| What does navigating away do? | Turns the panel back into a directory; a list is never half a directory |
+| What is `{dir}` on one? | The directory of the file under the cursor, because the panel's own has nothing to do with the rows |
+
 ### 9b. The panel's own frame (shipped)
 
 What FAR draws in and around a panel's frame, and what we do about it:
