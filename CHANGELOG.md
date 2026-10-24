@@ -4,7 +4,13 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
-## [Unreleased]
+## [0.2.0] — 2026-10-24
+
+Buckets in a panel, and the chrome of the thing finally looks like what it is modelled on.
+Object storage browses by prefix, so a bucket of 1.7 million objects opens as fast as one with
+ten; the panels wear FAR's double frame, its column rules and its foot; the key bar follows
+the modifier you are holding; the editor and the viewer colour twenty-five languages; and
+`F1` now answers the question people actually ask it, which is what the keys do *here*.
 
 ### Added
 

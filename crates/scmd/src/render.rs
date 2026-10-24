@@ -1869,9 +1869,9 @@ mod tests {
             generation: app.panels[1].generation,
             result: Ok(vec![
                 Entry::parent_entry(),
-                file("scmd-linux-x86_64-0.1.1.tar.gz", 3_470_221, 0),
-                file("scmd-macos-aarch64-0.1.1.tar.gz", 3_118_904, 0),
-                file("scmd-windows-x86_64-0.1.1.zip", 3_902_118, 0),
+                file("scmd-linux-x86_64-0.2.0.tar.gz", 3_470_221, 0),
+                file("scmd-macos-aarch64-0.2.0.tar.gz", 3_118_904, 0),
+                file("scmd-windows-x86_64-0.2.0.zip", 3_902_118, 0),
                 file("SHA256SUMS", 312, 0),
                 file("CHANGELOG.md", 28_440, 0),
             ]),

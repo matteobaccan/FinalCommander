@@ -24,7 +24,7 @@ third codebase. Same shape, five times over, with different keys and different g
 system. This is that idea written once, as one binary per platform from one source tree —
 with FAR's keymap as the default, because a user's fingers are a specification too.
 
-> **Status: 0.1.1, open to testers.** Two panels, navigation, the selection matrix, sorting, view
+> **Status: 0.2.0, open to testers.** Two panels, navigation, the selection matrix, sorting, view
 > modes, quick search, filters with FAR's whole mask grammar, themes (including FAR's own
 > palette), keymap profiles and seven interface languages, real file operations (`F5`–`F8`,
 > plus wipe and links), a command line with FAR's internal commands, prefixes and metasymbols
@@ -41,7 +41,14 @@ with FAR's keymap as the default, because a user's fingers are a specification t
 > **assembler** (`F9`) and a **calculator** (`Alt+=`), search by instruction pattern in a
 > disassembly, raw devices on Linux and macOS, **macros** (`Ctrl+.`), the **screens**
 > (`F12`, `Ctrl+Tab`), a **help system** whose key and command chapters are generated from the
-> keymap in force (`F1`), a **manual page**, and **plugin commands** (`F11`).
+> keymap in force (`F1`), a **manual page**, and **plugin commands** (`F11`). Then 0.2.0:
+> **object storage** (`s3://`, a bucket as a panel), **tunnels** over a connection the panel
+> is already on, **comparing two folders by what is in the files**, **syntax highlighting**
+> in the viewer and the editor, FAR's own panel chrome and foot, a **key bar that follows the
+> modifier** you hold, the **archive commands** (`Shift+F3`, with testing an archive), panels
+> you can **resize with `Ctrl` and the arrows**, a **change-drive dialog that is a table**,
+> one **search dialog** that asks the whole question, and an **`F1` that is about where you
+> are**.
 > What is missing says so rather than failing quietly; the list is in
 > [`CHANGELOG.md`](CHANGELOG.md), item by item in [`docs/BACKLOG.md`](docs/BACKLOG.md), and the
 > plan in `docs/spec/09-roadmap.md`.
@@ -78,7 +85,7 @@ one directory down.
 
 ```sh
 # Linux, for example
-tar xzf scmd-linux-x86_64-0.1.1.tar.gz
+tar xzf scmd-linux-x86_64-0.2.0.tar.gz
 sudo install -m755 scmd /usr/local/bin/scmd
 scmd --version
 ```
@@ -209,9 +216,9 @@ What works today:
 - **The rest**: `Alt+T` cycles themes, `F1` is a help page generated from the live keymap,
   `F10` quits.
 
-Not yet: the command line and its history, the OS keyring for passwords, `ProxyJump`, FTP and
-the other schemes, syntax highlighting and several open buffers in the editor, the OS clipboard,
-trash, wipe, a background job queue and archives. Anything unimplemented says so plainly instead
+Not yet: the OS keyring for passwords, `ProxyJump`, FTP and the other schemes, several open
+buffers in the editor, the OS clipboard, trash and a background job queue. Anything
+unimplemented says so plainly instead
 of pretending — [`docs/BACKLOG.md`](docs/BACKLOG.md) lists it item by item, with the open
 questions marked.
 
