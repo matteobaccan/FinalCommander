@@ -211,7 +211,9 @@ Two play modes:
 | `each-selected` | once for every selected file, with the cursor put on each in turn first |
 
 The second is the one that makes a macro worth recording: "do this to each of the files I
-picked" is otherwise done by hand twenty times. The files are remembered by path rather than
+picked" is otherwise done by hand twenty times. It is **asked** when a recording is assigned,
+not assumed — a mode the interface cannot set is a mode nobody finds — with `once` as the first
+row, so the ordinary answer costs one keystroke and `Esc` means the same thing. The files are remembered by path rather than
 by row, because a step can change the listing under it. With nothing selected it runs once on
 the row under the cursor, which is the rule everywhere else in the program.
 

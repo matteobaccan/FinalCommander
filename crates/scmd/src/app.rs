@@ -797,6 +797,8 @@ pub struct App {
     /// scope is part of what is recorded rather than assumed afterwards.
     pub recording: Option<Vec<scmd_cmd::Step>>,
     recording_scope: scmd_cmd::Scope,
+    /// A macro that has its key and its description and is waiting to be told how to play.
+    macro_pending: Option<Box<scmd_cmd::Macro>>,
     /// The key being dispatched, while recording. `run` takes it to mean "this key became a
     /// command"; whatever is left after dispatch was consumed as a keystroke instead.
     record_key: Option<Key>,
@@ -921,6 +923,7 @@ impl App {
             macros,
             recording: None,
             recording_scope: scmd_cmd::Scope::Panel,
+            macro_pending: None,
             record_key: None,
             playing: 0,
             background: Vec::new(),
@@ -2180,7 +2183,7 @@ impl App {
             PromptKind::MacroDescription { key, scope, steps } => {
                 let description = prompt.text.trim().to_string();
                 self.mode = Mode::Normal;
-                self.store_macro(scmd_cmd::Macro {
+                self.ask_macro_play(scmd_cmd::Macro {
                     key,
                     scope,
                     steps,
@@ -5559,6 +5562,29 @@ impl App {
         ));
     }
 
+    /// The last question: once, or once for every selected file.
+    ///
+    /// Asked rather than assumed, because `each-selected` is the mode that makes a macro worth
+    /// recording and a mode the interface cannot set is a mode nobody finds. `Enter` on the
+    /// first row is the ordinary answer, so it costs one keystroke.
+    fn ask_macro_play(&mut self, which: scmd_cmd::Macro) {
+        let rows = vec![
+            PickRow {
+                label: self.i18n.t("macro-play-once"),
+                value: scmd_cmd::Play::Once.as_str().to_string(),
+                current: true,
+            },
+            PickRow {
+                label: self.i18n.t("macro-play-each"),
+                value: scmd_cmd::Play::EachSelected.as_str().to_string(),
+                current: false,
+            },
+        ];
+        let title = self.i18n.t("macro-play-title");
+        self.macro_pending = Some(Box::new(which));
+        self.mode = Mode::Pick(Box::new(Pick::new(PickKind::MacroPlay, title, rows, 0)));
+    }
+
     /// Store a macro and write the file. A recording that cannot be saved is still in memory
     /// for this session, and says so rather than pretending it was written.
     fn store_macro(&mut self, new: scmd_cmd::Macro) {
@@ -6144,6 +6170,8 @@ impl App {
             PickKind::Macros => return,
             // And `open_plugin_commands`, which knows the scope.
             PickKind::Plugins => return,
+            // And `ask_macro_play`, which carries the macro it is about.
+            PickKind::MacroPlay => return,
             PickKind::Languages => Pick::new(
                 kind,
                 self.i18n.t("menu-languages"),
@@ -6256,6 +6284,14 @@ impl App {
             return;
         };
         match key.code {
+            KeyCode::Esc | KeyCode::F(10) if self.macro_pending.is_some() => {
+                // Dismissing the last question is not throwing the recording away: it is
+                // saying "the ordinary way", which is what the first row says too.
+                self.mode = Mode::Normal;
+                if let Some(pending) = self.macro_pending.take() {
+                    self.store_macro(*pending);
+                }
+            }
             KeyCode::Esc | KeyCode::F(10) => {
                 self.mode = Mode::Normal;
                 // A list opened over a screen — the block menu over the hex editor, the
@@ -6284,6 +6320,13 @@ impl App {
             PickKind::Plugins => {
                 if let Ok(i) = row.value.parse::<usize>() {
                     self.run_plugin_command(i);
+                }
+            }
+            PickKind::MacroPlay => {
+                if let Some(mut pending) = self.macro_pending.take() {
+                    pending.play =
+                        scmd_cmd::Play::parse(&row.value).unwrap_or(scmd_cmd::Play::Once);
+                    self.store_macro(*pending);
                 }
             }
             PickKind::Macros => {
@@ -9336,6 +9379,13 @@ mod tests {
             press(&mut app, &c.to_string());
         }
         press(&mut app, "Enter");
+        // And the last question: how it plays. The first row is the ordinary answer.
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(pick.rows.len(), 2);
+        assert!(pick.rows[0].current);
+        press(&mut app, "Enter");
         assert!(app.recording.is_none());
         assert_eq!(app.macros.all.len(), 1);
         let saved = &app.macros.all[0];
@@ -9383,7 +9433,10 @@ mod tests {
         };
         press(&mut app, "Alt+7");
         press(&mut app, "Enter");
+        // Esc out of the play question is "the ordinary way", not "throw it away".
+        press(&mut app, "Esc");
         assert_eq!(app.macros.all.len(), 1, "{:?}", app.status);
+        assert_eq!(app.macros.all[0].play, scmd_cmd::Play::Once);
         assert_eq!(app.macros.all[0].scope, scmd_cmd::Scope::Editor);
 
         // So the key does nothing in the panels, and the macro is still there.
@@ -9391,6 +9444,59 @@ mod tests {
         let before = app.panels[app.active].cursor;
         press(&mut app, "Alt+7");
         assert_eq!(app.panels[app.active].cursor, before);
+    }
+
+    #[test]
+    fn a_macro_can_be_told_to_run_once_for_every_selected_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = app_with_macros(dir.path());
+
+        // Record one step, assign it, and choose the second play mode.
+        press(&mut app, "Ctrl+.");
+        press(&mut app, "Ctrl+H");
+        press(&mut app, "Ctrl+.");
+        press(&mut app, "Alt+6");
+        press(&mut app, "Enter"); // no description
+        let Mode::Pick(pick) = &mut app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        pick.cursor = 1;
+        press(&mut app, "Enter");
+        assert_eq!(app.macros.all.len(), 1);
+        assert_eq!(app.macros.all[0].play, scmd_cmd::Play::EachSelected);
+
+        // It survives the file: the mode is written and read back.
+        let written = std::fs::read_to_string(dir.path().join("scmd-macros.toml")).unwrap();
+        assert!(written.contains("each-selected"), "{written}");
+        let again = app_with_macros(dir.path());
+        assert_eq!(again.macros.all[0].play, scmd_cmd::Play::EachSelected);
+
+        // And it runs once per selected file. The recorded step re-reads the panel, so the
+        // listing is fed again first: in a test nothing serves that read.
+        let entries = vec![
+            Entry::parent_entry(),
+            entry("a.txt", EntryKind::File, 100),
+            entry("b.rs", EntryKind::File, 200),
+            entry("c.rs", EntryKind::File, 300),
+        ];
+        app.handle_event(Event::Listed {
+            panel: app.active,
+            generation: app.panels[app.active].generation,
+            result: Ok(entries),
+        });
+        app.panel_mut().cursor_to(1);
+        for _ in 0..3 {
+            press(&mut app, "Insert");
+        }
+        assert_eq!(app.panels[app.active].selection.len(), 3);
+        // Three selected files mean three runs, and three toggles of the hidden flag leave
+        // it flipped — an odd number is the cheapest way to count them.
+        let before = app.panels[app.active].show_hidden;
+        press(&mut app, "Alt+6");
+        assert_ne!(
+            app.panels[app.active].show_hidden, before,
+            "three files means three runs"
+        );
     }
 
     #[test]

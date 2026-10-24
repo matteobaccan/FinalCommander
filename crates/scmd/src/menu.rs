@@ -58,6 +58,8 @@ pub enum PickKind {
     Macros,
     /// The commands the loaded plugins provide (SPEC 08 §1).
     Plugins,
+    /// How a just-recorded macro should play (SPEC 08 §5).
+    MacroPlay,
 }
 
 /// A mark (`√`) next to the entry that is currently in force.
