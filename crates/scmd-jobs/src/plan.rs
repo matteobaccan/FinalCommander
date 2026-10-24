@@ -16,6 +16,10 @@ pub enum UnitKind {
         target: PathBuf,
     },
     RemoveFile,
+    /// Overwrite the file's bytes, then unlink it. `size` is what has to be written over.
+    WipeFile {
+        size: u64,
+    },
     RemoveDir,
 }
 
@@ -53,6 +57,8 @@ pub enum PlanError {
     TargetInsideSource { src: VPath, dst: VPath },
     #[error("{path}: source and destination are the same file")]
     SameFile { path: VPath },
+    #[error("{path}: a wipe can only overwrite a file on a local filesystem")]
+    WipeNotLocal { path: VPath },
     #[error("{path}: {source}")]
     Io {
         path: VPath,
@@ -88,10 +94,17 @@ pub fn plan(fs: &dyn JobFs, spec: &JobSpec, cancel: &CancelToken) -> Result<Plan
     let mut plan = Plan::default();
 
     match spec.kind {
-        JobKind::Delete => {
+        JobKind::Delete | JobKind::Wipe => {
+            let wipe = spec.kind == JobKind::Wipe;
             for src in &spec.sources {
                 check_cancel(cancel)?;
-                walk_delete(fs, src, &mut plan, cancel)?;
+                // Refused here rather than halfway down a tree: on anything but a local
+                // filesystem we have no idea what happens to the blocks we overwrite, so a
+                // wipe would be a promise we cannot keep.
+                if wipe && !src.is_local() {
+                    return Err(PlanError::WipeNotLocal { path: src.clone() });
+                }
+                walk_delete(fs, src, &mut plan, cancel, wipe)?;
             }
         }
         JobKind::Copy | JobKind::Move => {
@@ -131,7 +144,7 @@ pub fn plan(fs: &dyn JobFs, spec: &JobSpec, cancel: &CancelToken) -> Result<Plan
             if spec.kind == JobKind::Move {
                 let mut removals = Plan::default();
                 for src in &spec.sources {
-                    walk_delete(fs, src, &mut removals, cancel)?;
+                    walk_delete(fs, src, &mut removals, cancel, false)?;
                 }
                 plan.units.extend(removals.units);
             }
@@ -207,6 +220,7 @@ fn walk_delete(
     src: &VPath,
     plan: &mut Plan,
     cancel: &CancelToken,
+    wipe: bool,
 ) -> Result<(), PlanError> {
     check_cancel(cancel)?;
     let facts = fs.facts(src).map_err(|source| PlanError::Io {
@@ -220,7 +234,7 @@ fn walk_delete(
             source,
         })?;
         for (name, _) in children {
-            walk_delete(fs, &src.join(&name), plan, cancel)?;
+            walk_delete(fs, &src.join(&name), plan, cancel, wipe)?;
         }
         // Post-order: a directory goes after its contents.
         plan.units.push(Unit {
@@ -230,10 +244,18 @@ fn walk_delete(
         });
         plan.dirs += 1;
     } else {
+        // Only a regular file has bytes of its own to overwrite. A symlink, a device or a
+        // socket is unlinked as a delete would unlink it: writing zeros through one of those
+        // would destroy whatever is on the other side, which the user never selected.
+        let kind = if wipe && facts.kind == EntryKind::File {
+            UnitKind::WipeFile { size: facts.size }
+        } else {
+            UnitKind::RemoveFile
+        };
         plan.units.push(Unit {
             src: None,
             dst: src.clone(),
-            kind: UnitKind::RemoveFile,
+            kind,
         });
         plan.files += 1;
         plan.bytes += facts.size;
@@ -362,6 +384,53 @@ mod tests {
             file_positions.iter().any(|i| *i < first_dir),
             "files must be removed before their directory"
         );
+    }
+
+    #[test]
+    fn wiping_plans_an_overwrite_for_every_file_it_can_overwrite() {
+        let dir = tree();
+        let link = VPath::local(dir.path().join("src/link"));
+        LocalFs
+            .symlink(std::path::Path::new("a.txt"), &link)
+            .unwrap();
+        let spec = JobSpec::new(
+            JobKind::Wipe,
+            vec![VPath::local(dir.path().join("src"))],
+            None,
+        );
+        let p = plan(&LocalFs, &spec, &CancelToken::new()).unwrap();
+
+        // Six bytes of file, plus the five the symlink's own target name takes up.
+        assert_eq!((p.files, p.dirs, p.bytes), (3, 2, 11));
+        let wipes: Vec<&Unit> = p
+            .units
+            .iter()
+            .filter(|u| matches!(u.kind, UnitKind::WipeFile { .. }))
+            .collect();
+        assert_eq!(wipes.len(), 2, "both regular files, and only those");
+        assert!(wipes
+            .iter()
+            .any(|u| u.kind == UnitKind::WipeFile { size: 4 }));
+        // The symlink is unlinked, never written through.
+        let planned_link = p.units.iter().find(|u| u.dst == link).unwrap();
+        assert_eq!(planned_link.kind, UnitKind::RemoveFile);
+        // And the directories still go after what is inside them.
+        assert_eq!(p.units.last().unwrap().kind, UnitKind::RemoveDir);
+    }
+
+    #[test]
+    fn a_wipe_of_a_remote_path_is_refused_before_anything_is_touched() {
+        let spec = JobSpec::new(
+            JobKind::Wipe,
+            vec![scmd_core::VPath::remote(
+                scmd_core::Scheme::Sftp,
+                "host",
+                "/srv/secret",
+            )],
+            None,
+        );
+        let err = plan(&LocalFs, &spec, &CancelToken::new()).unwrap_err();
+        assert!(matches!(err, PlanError::WipeNotLocal { .. }), "{err}");
     }
 
     #[test]

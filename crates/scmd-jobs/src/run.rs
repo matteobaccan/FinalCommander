@@ -1,3 +1,5 @@
+use std::time::{Duration, Instant};
+
 use scmd_core::{CancelToken, VPath};
 
 use crate::fs::{free_name, JobFs};
@@ -18,6 +20,10 @@ pub struct Progress {
     pub current: Option<VPath>,
     pub skipped: u64,
     pub errors: u64,
+    /// How long the job has been running. The engine refreshes it on every frame it reports,
+    /// so the three derived numbers need no clock of their own and a test can state the time
+    /// outright instead of sleeping.
+    pub elapsed: Duration,
 }
 
 impl Progress {
@@ -31,6 +37,32 @@ impl Progress {
     /// Percentage of the file being copied right now.
     pub fn file_percent(&self) -> u16 {
         percent_of(self.file_bytes_done, self.file_bytes_total).unwrap_or(0)
+    }
+
+    /// Average speed over the whole job so far, in bytes per second. `None` until there is
+    /// something to divide: no byte has moved, or no time has passed yet.
+    pub fn bytes_per_sec(&self) -> Option<f64> {
+        let secs = self.elapsed.as_secs_f64();
+        if self.bytes_done == 0 || secs <= 0.0 {
+            return None;
+        }
+        Some(self.bytes_done as f64 / secs)
+    }
+
+    /// What is left of the job at the average speed so far, or `None` when any answer would
+    /// be invention: nothing moved yet to average over, or no byte total to count down to
+    /// (a job of empty files, or a provider that could not size the sources).
+    ///
+    /// The average and not the last tick, deliberately: tick speed swings by an order of
+    /// magnitude between a cached file and a cold one, and a remaining time that jumps
+    /// around is worse than no remaining time at all.
+    pub fn eta(&self) -> Option<Duration> {
+        let total = (self.bytes_total > 0).then_some(self.bytes_total)?;
+        let speed = self.bytes_per_sec()?;
+        let left = total.saturating_sub(self.bytes_done) as f64;
+        // A speed near zero can ask for more seconds than a `Duration` holds; saturating is
+        // the only sane reading of "at this rate, never".
+        Some(Duration::try_from_secs_f64(left / speed).unwrap_or(Duration::MAX))
     }
 }
 
@@ -84,12 +116,14 @@ pub fn execute(
             ..Progress::default()
         },
         overwrite_all: spec.options.on_conflict == ConflictPolicy::Overwrite,
+        append_all: spec.options.on_conflict == ConflictPolicy::Append,
         skip_all: spec.options.on_conflict == ConflictPolicy::Skip,
         skip_errors: false,
         outcome: Outcome::default(),
         dir_meta: Vec::new(),
         kept: Vec::new(),
         bytes_since_report: 0,
+        started: Instant::now(),
     };
 
     // A move on the same filesystem is a rename: no bytes, no risk of a half-copied tree.
@@ -130,6 +164,7 @@ pub fn execute(
 
         state.progress.current = Some(unit.dst.clone());
         run_unit(fs, spec, unit, &mut state, reporter, cancel);
+        state.progress.elapsed = state.started.elapsed();
         reporter.progress(&state.progress);
     }
 
@@ -145,6 +180,7 @@ pub fn execute(
 
     state.progress.phase = Phase::Done;
     state.progress.current = None;
+    state.progress.elapsed = state.started.elapsed();
     reporter.progress(&state.progress);
     state.outcome.skipped = state.progress.skipped;
     state.outcome
@@ -153,6 +189,7 @@ pub fn execute(
 struct State {
     progress: Progress,
     overwrite_all: bool,
+    append_all: bool,
     skip_all: bool,
     skip_errors: bool,
     outcome: Outcome,
@@ -160,6 +197,7 @@ struct State {
     /// Sources whose copy did not happen, so a move must leave them where they are.
     kept: Vec<VPath>,
     bytes_since_report: u64,
+    started: Instant,
 }
 
 fn unit_belongs_to(unit: &Unit, src: &VPath) -> bool {
@@ -269,8 +307,9 @@ fn attempt(
             let Some(src) = unit.src.clone() else {
                 return Attempt::Failed("no source".into());
             };
-            let dst = match resolve_conflict(fs, spec, unit, state, reporter) {
-                Conflict::Proceed(dst) => dst,
+            let (dst, append) = match resolve_conflict(fs, spec, unit, state, reporter) {
+                Conflict::Proceed(dst) => (dst, false),
+                Conflict::Append(dst) => (dst, true),
                 Conflict::Skip => return Attempt::Skipped,
                 Conflict::Cancel => return Attempt::Cancelled,
             };
@@ -291,11 +330,19 @@ fn attempt(
                 state.bytes_since_report += n;
                 !cancel.is_cancelled()
             };
-            let copied = fs.copy_file(&src, &dst, spec.options.buffer, &mut tick);
+            let copied = if append {
+                fs.append_file(&src, &dst, spec.options.buffer, &mut tick)
+            } else {
+                fs.copy_file(&src, &dst, spec.options.buffer, &mut tick)
+            };
             match copied {
                 Ok(bytes) => {
-                    if let Ok(facts) = fs.facts(&src) {
-                        let _ = fs.apply_meta(&dst, &facts, spec.options.preserve);
+                    // A concatenation inherits nothing: the destination is no longer a copy of
+                    // the source, so its own times and permissions are the right ones to keep.
+                    if !append {
+                        if let Ok(facts) = fs.facts(&src) {
+                            let _ = fs.apply_meta(&dst, &facts, spec.options.preserve);
+                        }
                     }
                     if spec.kind == JobKind::Move {
                         // The source goes only after the destination is complete.
@@ -308,6 +355,7 @@ fn attempt(
                     state.progress.files_done += 1;
                     if state.bytes_since_report > 1024 * 1024 {
                         state.bytes_since_report = 0;
+                        state.progress.elapsed = state.started.elapsed();
                         reporter.progress(&state.progress);
                     }
                     Attempt::Done
@@ -320,6 +368,10 @@ fn attempt(
         UnitKind::Symlink { target } => {
             let dst = match resolve_conflict(fs, spec, unit, state, reporter) {
                 Conflict::Proceed(dst) => dst,
+                // A link holds a path, not bytes, so there is nothing to append to. Skipping
+                // leaves the destination as it is rather than replacing it behind an answer
+                // that meant something else.
+                Conflict::Append(_) => return Attempt::Skipped,
                 Conflict::Skip => return Attempt::Skipped,
                 Conflict::Cancel => return Attempt::Cancelled,
             };
@@ -357,11 +409,42 @@ fn attempt(
                     Err(e) => return Attempt::Failed(e.to_string()),
                 }
             }
-            if spec.kind == JobKind::Delete {
+            if destroys(spec.kind) {
                 state.outcome.files += 1;
                 state.progress.files_done += 1;
             }
             Attempt::Done
+        }
+
+        UnitKind::WipeFile { size } => {
+            if dry {
+                state.outcome.files += 1;
+                state.outcome.bytes += size;
+                state.progress.files_done += 1;
+                state.progress.bytes_done += size;
+                return Attempt::Done;
+            }
+
+            state.progress.file_bytes_total = *size;
+            state.progress.file_bytes_done = 0;
+            let mut tick = |n: u64| {
+                state.progress.bytes_done += n;
+                state.progress.file_bytes_done += n;
+                state.bytes_since_report += n;
+                !cancel.is_cancelled()
+            };
+            match fs.wipe_file(&unit.dst, spec.options.buffer, &mut tick) {
+                Ok(()) => {
+                    state.outcome.files += 1;
+                    state.outcome.bytes += size;
+                    state.progress.files_done += 1;
+                    Attempt::Done
+                }
+                // A file already gone is not an error, here or in a plain delete.
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => Attempt::Done,
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => Attempt::Cancelled,
+                Err(e) => Attempt::Failed(e.to_string()),
+            }
         }
 
         UnitKind::RemoveDir => {
@@ -378,7 +461,7 @@ fn attempt(
                     Err(e) => return Attempt::Failed(e.to_string()),
                 }
             }
-            if spec.kind == JobKind::Delete {
+            if destroys(spec.kind) {
                 state.outcome.dirs += 1;
             }
             Attempt::Done
@@ -386,8 +469,15 @@ fn attempt(
     }
 }
 
+/// Is the removal the point of this job, or the cleanup half of a move? A move's counters
+/// describe the copy, so its removals are not counted again.
+fn destroys(kind: JobKind) -> bool {
+    matches!(kind, JobKind::Delete | JobKind::Wipe)
+}
+
 enum Conflict {
     Proceed(VPath),
+    Append(VPath),
     Skip,
     Cancel,
 }
@@ -402,14 +492,23 @@ fn resolve_conflict(
     if !fs.exists(&unit.dst) {
         return Conflict::Proceed(unit.dst.clone());
     }
+
+    let src = unit.src.clone().unwrap_or_else(|| unit.dst.clone());
+    // "Only newer" is a gate, not a policy: it is checked before an `…All` answer is honoured,
+    // so "overwrite all" plus "only newer" still leaves an older source where it is.
+    if spec.options.only_newer && !src_is_newer(fs, &src, &unit.dst) {
+        return Conflict::Skip;
+    }
     if state.skip_all {
         return Conflict::Skip;
+    }
+    if state.append_all {
+        return Conflict::Append(unit.dst.clone());
     }
     if state.overwrite_all {
         return Conflict::Proceed(unit.dst.clone());
     }
 
-    let src = unit.src.clone().unwrap_or_else(|| unit.dst.clone());
     let src_facts = fs.facts(&src).ok();
     let dst_facts = fs.facts(&unit.dst).ok();
     let src_newer = match (
@@ -424,6 +523,7 @@ fn resolve_conflict(
         ConflictPolicy::Overwrite => return Conflict::Proceed(unit.dst.clone()),
         ConflictPolicy::Skip => return Conflict::Skip,
         ConflictPolicy::Rename => return Conflict::Proceed(free_name(fs, &unit.dst)),
+        ConflictPolicy::Append => return Conflict::Append(unit.dst.clone()),
         ConflictPolicy::OverwriteIfNewer => {
             return if src_newer {
                 Conflict::Proceed(unit.dst.clone())
@@ -447,6 +547,11 @@ fn resolve_conflict(
             state.overwrite_all = true;
             Conflict::Proceed(unit.dst.clone())
         }
+        Decision::Append => Conflict::Append(unit.dst.clone()),
+        Decision::AppendAll => {
+            state.append_all = true;
+            Conflict::Append(unit.dst.clone())
+        }
         Decision::Skip => Conflict::Skip,
         Decision::SkipAll => {
             state.skip_all = true;
@@ -461,6 +566,19 @@ fn resolve_conflict(
         }
         Decision::Retry => Conflict::Proceed(unit.dst.clone()),
         Decision::Cancel => Conflict::Cancel,
+    }
+}
+
+/// Is the source newer than the destination? A timestamp either side does not have counts as
+/// "newer", because a provider that cannot date a file must not turn "only newer" into
+/// "nothing at all".
+fn src_is_newer(fs: &dyn JobFs, src: &VPath, dst: &VPath) -> bool {
+    match (
+        fs.facts(src).ok().and_then(|f| f.mtime),
+        fs.facts(dst).ok().and_then(|f| f.mtime),
+    ) {
+        (Some(a), Some(b)) => a > b,
+        _ => true,
     }
 }
 
@@ -511,6 +629,16 @@ mod tests {
         stdfs::write(dir.path().join("src/sub/b.txt"), b"bb").unwrap();
         stdfs::create_dir(dir.path().join("dst")).unwrap();
         dir
+    }
+
+    /// Set a file's modification time, which is how a test says "older" or "newer".
+    fn touch(path: &std::path::Path, when: std::time::SystemTime) {
+        stdfs::File::options()
+            .write(true)
+            .open(path)
+            .unwrap()
+            .set_modified(when)
+            .unwrap();
     }
 
     fn run(spec: &JobSpec, reporter: &mut Scripted) -> Outcome {
@@ -751,6 +879,172 @@ mod tests {
     }
 
     #[test]
+    fn wipe_empties_every_file_then_takes_the_tree_with_it() {
+        let dir = tree();
+        // A second name for one of the files, so there is something left to read afterwards.
+        let witness = VPath::local(dir.path().join("witness"));
+        LocalFs
+            .hard_link(&VPath::local(dir.path().join("src/a.txt")), &witness)
+            .unwrap();
+
+        let spec = JobSpec::new(
+            JobKind::Wipe,
+            vec![VPath::local(dir.path().join("src"))],
+            None,
+        );
+        let out = run(&spec, &mut Scripted::new(vec![]));
+        assert!(out.is_clean(), "{out:?}");
+        assert_eq!((out.files, out.dirs, out.bytes), (2, 2, 6));
+        assert!(!dir.path().join("src").exists());
+        assert_eq!(
+            stdfs::read(witness.as_path()).unwrap(),
+            b"\0\0\0\0",
+            "the bytes should have been written over, not just unlinked"
+        );
+    }
+
+    #[test]
+    fn a_dry_run_wipe_destroys_nothing() {
+        let dir = tree();
+        let spec = JobSpec::new(
+            JobKind::Wipe,
+            vec![VPath::local(dir.path().join("src"))],
+            None,
+        )
+        .with_options(JobOptions {
+            dry_run: true,
+            ..JobOptions::default()
+        });
+        let out = run(&spec, &mut Scripted::new(vec![]));
+        assert_eq!((out.files, out.bytes), (2, 6));
+        assert_eq!(stdfs::read(dir.path().join("src/a.txt")).unwrap(), b"aaaa");
+    }
+
+    #[test]
+    fn append_puts_the_source_after_what_the_destination_already_holds() {
+        let dir = tree();
+        let dst = dir.path().join("dst/a.txt");
+        stdfs::write(&dst, b"before ").unwrap();
+        let before = stdfs::metadata(&dst).unwrap().permissions();
+
+        let spec = JobSpec::new(
+            JobKind::Copy,
+            vec![VPath::local(dir.path().join("src/a.txt"))],
+            Some(VPath::local(dir.path().join("dst"))),
+        )
+        .with_options(JobOptions {
+            on_conflict: ConflictPolicy::Append,
+            ..JobOptions::default()
+        });
+        let mut r = Scripted::new(vec![]);
+        let out = run(&spec, &mut r);
+
+        assert!(out.is_clean(), "{out:?}");
+        assert!(r.asked.is_empty(), "a policy answer must not ask");
+        assert_eq!(stdfs::read(&dst).unwrap(), b"before aaaa");
+        assert_eq!(out.bytes, 4, "only the appended bytes are this job's work");
+        assert_eq!(
+            stdfs::metadata(&dst).unwrap().permissions(),
+            before,
+            "an append must leave the destination's permissions alone"
+        );
+    }
+
+    #[test]
+    fn append_can_be_answered_once_for_the_whole_job() {
+        let dir = tree();
+        stdfs::create_dir_all(dir.path().join("dst/src/sub")).unwrap();
+        stdfs::write(dir.path().join("dst/src/a.txt"), b"1:").unwrap();
+        stdfs::write(dir.path().join("dst/src/sub/b.txt"), b"2:").unwrap();
+
+        let spec = JobSpec::new(
+            JobKind::Copy,
+            vec![VPath::local(dir.path().join("src"))],
+            Some(VPath::local(dir.path().join("dst"))),
+        );
+        let mut r = Scripted::new(vec![Decision::AppendAll]);
+        let out = run(&spec, &mut r);
+        assert!(out.is_clean(), "{out:?}");
+        assert_eq!(r.asked.len(), 1, "`All` should not ask again");
+        assert_eq!(
+            stdfs::read(dir.path().join("dst/src/a.txt")).unwrap(),
+            b"1:aaaa"
+        );
+        assert_eq!(
+            stdfs::read(dir.path().join("dst/src/sub/b.txt")).unwrap(),
+            b"2:bb"
+        );
+    }
+
+    #[test]
+    fn only_newer_skips_an_older_source_whatever_the_policy_says() {
+        let dir = tree();
+        // One destination newer than its source, one older. Both are in the way.
+        let newer_dst = dir.path().join("dst/a.txt");
+        let older_dst = dir.path().join("dst/b.txt");
+        stdfs::write(&newer_dst, b"newer destination").unwrap();
+        stdfs::write(&older_dst, b"older destination").unwrap();
+        touch(
+            &newer_dst,
+            std::time::SystemTime::now() + Duration::from_secs(3600),
+        );
+        touch(
+            &older_dst,
+            std::time::SystemTime::UNIX_EPOCH + Duration::from_secs(1),
+        );
+
+        let spec = JobSpec::new(
+            JobKind::Copy,
+            vec![
+                VPath::local(dir.path().join("src/a.txt")),
+                VPath::local(dir.path().join("src/sub/b.txt")),
+            ],
+            Some(VPath::local(dir.path().join("dst"))),
+        )
+        .with_options(JobOptions {
+            // The gate holds even here, where the policy would have overwritten everything
+            // without asking: that is what makes it a gate and not another policy.
+            on_conflict: ConflictPolicy::Overwrite,
+            only_newer: true,
+            ..JobOptions::default()
+        });
+        let mut r = Scripted::new(vec![]);
+        let out = run(&spec, &mut r);
+
+        assert!(out.is_clean(), "{out:?}");
+        assert!(r.asked.is_empty());
+        assert_eq!(out.skipped, 1, "a file that is not newer is skipped");
+        assert_eq!(out.files, 1);
+        assert_eq!(
+            stdfs::read(&newer_dst).unwrap(),
+            b"newer destination",
+            "the newer destination survived"
+        );
+        assert_eq!(
+            stdfs::read(&older_dst).unwrap(),
+            b"bb",
+            "the older destination was replaced"
+        );
+    }
+
+    #[test]
+    fn only_newer_leaves_a_destination_that_is_not_there_to_the_normal_path() {
+        let dir = tree();
+        let spec = JobSpec::new(
+            JobKind::Copy,
+            vec![VPath::local(dir.path().join("src/a.txt"))],
+            Some(VPath::local(dir.path().join("dst"))),
+        )
+        .with_options(JobOptions {
+            only_newer: true,
+            ..JobOptions::default()
+        });
+        let out = run(&spec, &mut Scripted::new(vec![]));
+        assert_eq!((out.files, out.skipped), (1, 0));
+        assert_eq!(stdfs::read(dir.path().join("dst/a.txt")).unwrap(), b"aaaa");
+    }
+
+    #[test]
     fn mkdir_creates_the_whole_path() {
         let dir = tree();
         let spec = JobSpec::new(
@@ -875,6 +1169,120 @@ mod tests {
         };
         assert_eq!(p.file_percent(), 75);
         assert_eq!(Progress::default().file_percent(), 0);
+    }
+
+    #[test]
+    fn average_speed_is_the_bytes_over_the_elapsed_time() {
+        let p = Progress {
+            bytes_done: 3_000_000,
+            bytes_total: 12_000_000,
+            elapsed: Duration::from_secs(2),
+            ..Progress::default()
+        };
+        assert_eq!(p.bytes_per_sec(), Some(1_500_000.0));
+    }
+
+    #[test]
+    fn speed_and_remaining_time_say_nothing_until_they_know_something() {
+        // No clock reading yet: dividing by zero seconds is the obvious trap.
+        let no_time = Progress {
+            bytes_done: 1_000,
+            bytes_total: 2_000,
+            ..Progress::default()
+        };
+        assert_eq!(no_time.bytes_per_sec(), None);
+        assert_eq!(no_time.eta(), None);
+
+        // Time but no bytes: the job has not shown how fast it is.
+        let no_bytes = Progress {
+            bytes_total: 2_000,
+            elapsed: Duration::from_secs(5),
+            ..Progress::default()
+        };
+        assert_eq!(no_bytes.bytes_per_sec(), None);
+        assert_eq!(no_bytes.eta(), None);
+
+        // Moving along, but nobody counted the sources: a speed, and no estimate.
+        let unknown_total = Progress {
+            bytes_done: 4_000,
+            elapsed: Duration::from_secs(2),
+            ..Progress::default()
+        };
+        assert_eq!(unknown_total.bytes_per_sec(), Some(2_000.0));
+        assert_eq!(
+            unknown_total.eta(),
+            None,
+            "an unknown total cannot be timed"
+        );
+    }
+
+    #[test]
+    fn remaining_time_comes_from_the_average_and_reaches_zero() {
+        // A quarter done in one second: three more seconds at that average.
+        let p = Progress {
+            bytes_done: 1_000,
+            bytes_total: 4_000,
+            elapsed: Duration::from_secs(1),
+            ..Progress::default()
+        };
+        assert_eq!(p.eta(), Some(Duration::from_secs(3)));
+
+        // The same job after a slow patch: the average, not the last tick, decides.
+        let slower = Progress {
+            elapsed: Duration::from_secs(4),
+            ..p.clone()
+        };
+        assert_eq!(slower.eta(), Some(Duration::from_secs(12)));
+
+        // Finished, and the odd case of a total the plan undercounted.
+        let done = Progress {
+            bytes_done: 4_000,
+            ..p.clone()
+        };
+        assert_eq!(done.eta(), Some(Duration::ZERO));
+        let over = Progress {
+            bytes_done: 5_000,
+            ..p
+        };
+        assert_eq!(over.eta(), Some(Duration::ZERO));
+    }
+
+    #[test]
+    fn a_speed_too_slow_to_measure_saturates_instead_of_panicking() {
+        let crawling = Progress {
+            bytes_done: 1,
+            bytes_total: u64::MAX,
+            elapsed: Duration::from_secs(1_000_000),
+            ..Progress::default()
+        };
+        assert_eq!(crawling.eta(), Some(Duration::MAX));
+    }
+
+    #[test]
+    fn a_finished_job_reports_the_time_it_took() {
+        let dir = tree();
+        let spec = JobSpec::new(
+            JobKind::Copy,
+            vec![VPath::local(dir.path().join("src"))],
+            Some(VPath::local(dir.path().join("dst"))),
+        );
+        struct Last(Duration);
+        impl Reporter for Last {
+            fn progress(&mut self, p: &Progress) {
+                if p.phase == Phase::Done {
+                    self.0 = p.elapsed;
+                }
+            }
+
+            fn ask(&mut self, _q: Question) -> Decision {
+                Decision::Cancel
+            }
+        }
+        let mut last = Last(Duration::MAX);
+        let cancel = CancelToken::new();
+        let p = plan(&LocalFs, &spec, &cancel).unwrap();
+        execute(&LocalFs, &spec, p, &mut last, &cancel);
+        assert!(last.0 < Duration::from_secs(60), "{:?}", last.0);
     }
 
     #[test]
