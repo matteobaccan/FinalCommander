@@ -187,6 +187,65 @@ mod tests {
         drop(en);
     }
 
+    /// Every message in the catalogue is shown by something.
+    ///
+    /// The other way round — every id the code asks for exists — is the test above, and the
+    /// two together are what keeps a translation honest: a message nobody shows is seven
+    /// translations of nothing, and it is how a catalogue grows a tail of text that no longer
+    /// matches the program. When this fails, either use the id or delete it from all seven.
+    ///
+    /// It reads the source tree, so an id built at run time rather than written as a literal
+    /// would look unused. There are none today; if one appears, give it a literal somewhere
+    /// (a `const`, a match arm) rather than loosening this.
+    #[test]
+    fn every_message_in_the_catalogue_is_shown_by_something() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(|p| p.parent())
+            .expect("the workspace is two directories up")
+            .to_path_buf();
+        let mut source = String::new();
+        let mut stack = vec![root.join("crates")];
+        while let Some(dir) = stack.pop() {
+            let Ok(entries) = std::fs::read_dir(&dir) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    stack.push(path);
+                } else if path.extension().is_some_and(|e| e == "rs") {
+                    if let Ok(text) = std::fs::read_to_string(&path) {
+                        source.push_str(&text);
+                    }
+                }
+            }
+        }
+        assert!(
+            source.len() > 100_000,
+            "the source tree was not found; this test would pass for the wrong reason"
+        );
+
+        let catalogue = include_str!("../i18n/en/sc.ftl");
+        let mut unused: Vec<&str> = Vec::new();
+        for line in catalogue.lines() {
+            let Some((id, _)) = line.split_once(" = ") else {
+                continue;
+            };
+            if id.starts_with('#') || id.starts_with(' ') || id.is_empty() {
+                continue;
+            }
+            if !source.contains(&format!("\"{id}\"")) {
+                unused.push(id);
+            }
+        }
+        assert!(
+            unused.is_empty(),
+            "messages nobody shows — use them or delete them from all seven catalogues:\n  {}",
+            unused.join("\n  ")
+        );
+    }
+
     #[test]
     fn arguments_are_interpolated_without_bidi_marks() {
         let it = I18n::new("it");

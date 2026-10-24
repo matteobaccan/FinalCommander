@@ -15,12 +15,7 @@ list-up = Up
 list-folder = Folder
 panel-list-count = { $count } items in the list
 panel-empty = (empty)
-panel-up = ..
 panel-loading = reading…
-panel-filter = filter: { $pattern }
-panel-totals = { $files } files, { $bytes }
-panel-selected = { $files } of { $total } selected, { $bytes }
-panel-reading-error = cannot read this directory: { $error }
 
 # Prompts
 prompt-select-mask = Select files by mask:
@@ -30,12 +25,7 @@ prompt-filter = File mask or part of a name:
 prompt-search = Quick search:
 
 # Dialogs
-dialog-ok = OK
-dialog-cancel = Cancel
-dialog-yes = Yes
-dialog-no = No
 dialog-error = Error
-dialog-help-title = Keyboard reference — { $profile }
 dialog-help-hint = Esc goes back to the contents · F1 closes · ↑↓ PgUp PgDn to scroll
 dialog-help-index = SupremeCommander { $version } — Help
 dialog-help-hint-index = Enter opens a chapter · Esc closes
@@ -60,7 +50,6 @@ prompt-mkdir = Create the directory:
 what-selected = { $count } selected items
 confirm-delete-title = Delete
 confirm-delete-body = Delete { $count } items ({ $bytes })?
-confirm-delete-hint = Enter deletes · Esc cancels
 prompt-link = Create a link to { $name } as:
 link-created = { $name } created
 confirm-wipe-title = Wipe
@@ -116,7 +105,6 @@ viewer-empty = (empty file)
 viewer-status = { $mode } { $codepage }  { $offset } / { $len }  { $percent }%
 
 key-disasm = Disasm
-key-decomp = Decomp
 viewer-disasm-failed = cannot disassemble { $name }: { $error }
 viewer-decompile-running = { $tool } is running on { $name }…
 viewer-decompile-none = nothing here can decompile { $format }; install a tool and add a [[decompile]] rule to scmd.toml
@@ -125,7 +113,6 @@ viewer-derived = { $producer } of { $name }
 
 # Editor (F4)
 key-save = Save
-key-undo = Undo
 key-replace = Replac
 editor-prompt-search = Search for:
 editor-prompt-replace-from = Replace:
@@ -371,7 +358,6 @@ find-scope-other = the other panel and below
 find-links = Follow symbolic links
 find-dirs = Folders in the results too
 find-archives = Inside archives
-find-searching = { $path }
 find-results = Found { $count } · { $files } files and { $dirs } folders looked at
 find-done = { $count } found in { $files } files · { $elapsed }
 find-none = nothing found
@@ -380,7 +366,6 @@ find-hint = ↑↓ choose · Enter go to · F3 view · F5 panelise · Esc stop
 find-hint-done = ↑↓ choose · Enter go to · F3 view · F5 panelise · Esc close
 find-panelised = { $count } results in the panel
 find-needs-mask = a mask is needed: `*` means every file
-find-bad-hex = { $error }
 
 # ------------------------------------------------- replace across files
 replace-title = Replace in files
@@ -409,7 +394,6 @@ pack-level-fast = fast
 pack-level-best = best
 pack-scope = { $count } files selected
 pack-needs-name = the archive needs a name
-pack-done = { $files } files in { $name }
 unpack-title = Extract from archive
 unpack-to = Extract to
 unpack-scope = from { $name }
@@ -478,7 +462,6 @@ asm-written = { $text } — { $bytes }
 asm-written-longer = { $text } — { $bytes } ({ $grew } bytes longer)
 screens-title = Screens
 screens-panels = Panels
-screens-count = { $count } in the background
 screens-quit-title = Unsaved changes
 screens-quit-body = These screens hold changes nobody has written:
 macro-recording = Recording a macro · Ctrl+. stops it
