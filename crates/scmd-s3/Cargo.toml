@@ -19,20 +19,23 @@ thiserror = "2"
 tokio = { version = "1", features = ["rt", "io-util", "time", "macros"] }
 
 [dependencies.reqwest]
-version = "0.13"
+version = "0.12"
 default-features = false
 # `rustls` rather than the platform's TLS — one implementation on every system, and no
 # `default-tls`, which would want OpenSSL on Linux and a C toolchain with it. The trust
-# anchors, though, are the machine's own (`rustls-native-certs`): an S3-compatible endpoint
-# inside a company is very often a MinIO or a Ceph behind that company's certificate
-# authority, and a bundled root list cannot be told about it. With the system store, the
-# endpoint works as soon as the machine trusts it, which it already does for every other
-# tool. (It also keeps `webpki-roots` out of the tree, whose licence for the Mozilla root
-# data is not one `deny.toml` allows.)
+# anchors, though, are the machine's own: an S3-compatible endpoint inside a company is very
+# often a MinIO or a Ceph behind that company's certificate authority, and a bundled root list
+# cannot be told about it. With the system store, the endpoint works as soon as the machine
+# trusts it, which it already does for every other tool. (It also keeps `webpki-roots` out of
+# the tree, whose licence for the Mozilla root data is not one `deny.toml` allows.)
+features = ["rustls-tls-native-roots", "http2", "stream", "socks"]
 #
-# reqwest 0.13 renamed these: what was the single `rustls-tls-native-roots` is now `rustls`
-# for the implementation and `rustls-native-certs` for where the roots come from.
-features = ["rustls", "rustls-native-certs", "http2", "stream", "socks"]
+# Not 0.13, and not for want of trying: there the rustls support is built on
+# `rustls-platform-verifier`, which carries `webpki-root-certs` — the Mozilla root data again,
+# under CDLA-Permissive-2.0, which is exactly the licence this crate was moved off
+# `webpki-roots` to avoid. It is not an optional dependency there, so no combination of
+# features gets round it; `cargo deny` refuses the tree, and rightly. Revisit when
+# `rustls-platform-verifier` stops carrying it.
 
 [features]
 # The in-process S3 service, for the tests of the crates above this one.

@@ -171,6 +171,12 @@ the modifier you are holding; the editor and the viewer colour twenty-five langu
 
 ### Changed
 
+- **`reqwest` stays at 0.12**, and the bot's upgrade to 0.13 is refused — by the build rather
+  than by an opinion. In 0.13 the rustls support is built on `rustls-platform-verifier`, which
+  carries `webpki-root-certs`: the Mozilla root data again, under CDLA-Permissive-2.0, which is
+  the licence this crate was moved off `webpki-roots` to avoid in the first place. It is not an
+  optional dependency there, so no combination of features gets round it, and `cargo deny`
+  refuses the tree. Worth revisiting when `rustls-platform-verifier` stops carrying it.
 - **A provider may now say that a listing is not all of it**, through the new `Dir` the panel
   reads directories with. Nothing local changes — a local directory is always read whole, and
   `list` still answers with the rows alone for the job engine, the finder and the dialogs.
