@@ -531,11 +531,19 @@ fn list_plugins(paths: &Paths) {
     print!("{}", found.describe());
 
     // A `.wasm` or a `.lua` in there is somebody waiting for the plugin host. Saying nothing
-    // about it would leave them guessing why their plugin does nothing.
+    // about it would leave them guessing why their plugin does nothing — but saying it about
+    // every file reports the README beside them as a plugin that will not load, so the test
+    // is on the extension and not merely on being a file.
+    const FOR_A_HOST: [&str; 5] = ["wasm", "lua", "so", "dll", "dylib"];
     let mut waiting: Vec<String> = Vec::new();
     if let Ok(read) = std::fs::read_dir(&paths.plugins_dir) {
         for entry in read.flatten() {
-            if entry.path().is_file() {
+            let path = entry.path();
+            let wanted = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .is_some_and(|e| FOR_A_HOST.contains(&e.to_ascii_lowercase().as_str()));
+            if path.is_file() && wanted {
                 waiting.push(entry.file_name().to_string_lossy().into_owned());
             }
         }
