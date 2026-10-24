@@ -2739,6 +2739,7 @@ impl App {
             Command::PanelTree(side) => self.set_content(side, crate::panel::Content::Tree),
             Command::FilePack => self.open_pack_form(),
             Command::FileUnpack => self.open_unpack_form(),
+            Command::ToolCompareDirs => self.compare_dirs(),
             Command::ToolFind => self.open_find_form(),
             Command::ToolReplace => {
                 let files = self.job_sources().len();
@@ -5511,6 +5512,83 @@ impl App {
         Some(panel.path_of(entry).enter("/"))
     }
 
+    /// Compare the two panels and select what differs (SPEC 02 §9, FAR's own rule).
+    ///
+    /// Names, sizes and times — no subdirectories and no contents, which is what makes it
+    /// instant and what the deeper comparison in the backlog is for. In each panel it selects
+    /// the files the other panel does not have, and the ones it has in an older version; a
+    /// file that is the same on both sides is selected in neither, which is the whole point:
+    /// what stays selected is what a copy would have to carry.
+    fn compare_dirs(&mut self) {
+        /// A file's name, with the comparison's own notion of "the same name": case is
+        /// ignored, because the two panels may be on filesystems that disagree about it, and
+        /// a pair that differs only in case is a difference the user wants to see rather than
+        /// a pair we quietly match up.
+        fn key(entry: &Entry) -> String {
+            entry.name_str().to_lowercase()
+        }
+
+        let mut facts: [std::collections::HashMap<String, (u64, Option<std::time::SystemTime>)>;
+            2] = [Default::default(), Default::default()];
+        for (side, side_facts) in facts.iter_mut().enumerate() {
+            let listing = &self.panels[side].listing;
+            for row in 0..listing.len() {
+                let entry = listing.row(row).expect("row in range");
+                // Directories are not compared: FAR's version does not look inside them, and
+                // selecting one would mean copying a tree the user has not been shown.
+                if entry.kind.is_dirlike() {
+                    continue;
+                }
+                side_facts.insert(key(entry), (entry.size, entry.mtime));
+            }
+        }
+
+        let mut marked = [0u64; 2];
+        for (side, count) in marked.iter_mut().enumerate() {
+            let other = 1 - side;
+            let listing = self.panels[side].listing.clone();
+            let mut wanted: Vec<scmd_core::EntryId> = Vec::new();
+            for row in 0..listing.len() {
+                let entry = listing.row(row).expect("row in range");
+                if entry.kind.is_dirlike() {
+                    continue;
+                }
+                let mine = (entry.size, entry.mtime);
+                let theirs = facts[other].get(&key(entry));
+                let differs = match theirs {
+                    // Not over there at all: this copy is the only one.
+                    None => true,
+                    // There, and the same size at the same time: nothing to do.
+                    Some(other) if *other == mine => false,
+                    // There and older, or there with no time to compare and a different
+                    // size. A file with no timestamp on either side falls back to the size,
+                    // because that is all there is to go on.
+                    Some((other_size, other_time)) => match (mine.1, other_time) {
+                        (Some(a), Some(b)) => a > *b,
+                        _ => mine.0 != *other_size,
+                    },
+                };
+                if differs {
+                    wanted.push(entry.id);
+                }
+            }
+            *count = wanted.len() as u64;
+            self.panels[side].selection.clear();
+            for id in wanted {
+                self.panels[side].selection.set(id, true);
+            }
+        }
+
+        let msg = self.i18n.t_args(
+            "compare-done",
+            &[
+                ("left", (marked[0] as i64).into()),
+                ("right", (marked[1] as i64).into()),
+            ],
+        );
+        self.set_status(msg);
+    }
+
     /// `Ctrl+Q` and `Ctrl+L`: turn a special panel kind on, or off again (SPEC 02 §7).
     ///
     /// FAR's rule, and ours: the kind goes in the *passive* panel, so `Side::Active` means
@@ -7493,6 +7571,69 @@ mod tests {
         assert!(app.status.contains("size"), "{}", app.status);
         // biggest first now
         assert_eq!(app.panel().listing.row(2).unwrap().name_str(), "c.rs");
+    }
+
+    #[test]
+    fn comparing_the_panels_selects_what_a_copy_would_have_to_carry() {
+        use std::time::{Duration, SystemTime};
+        let old = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000);
+        let new = old + Duration::from_secs(3_600);
+        let mut app = app();
+
+        let stamped = |name: &str, size: u64, when: SystemTime| {
+            let mut e = entry(name, EntryKind::File, size);
+            e.mtime = Some(when);
+            e
+        };
+
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation: app.panels[0].generation,
+            result: Ok(vec![
+                Entry::parent_entry(),
+                entry("docs", EntryKind::Dir, 0),
+                stamped("same.txt", 10, old),
+                stamped("newer.txt", 10, new),
+                stamped("older.txt", 10, old),
+                stamped("only-here.txt", 10, old),
+            ]),
+        });
+        app.handle_event(Event::Listed {
+            panel: 1,
+            generation: app.panels[1].generation,
+            result: Ok(vec![
+                Entry::parent_entry(),
+                entry("docs", EntryKind::Dir, 0),
+                stamped("same.txt", 10, old),
+                stamped("newer.txt", 10, old),
+                stamped("older.txt", 10, new),
+                stamped("only-there.txt", 10, old),
+            ]),
+        });
+
+        app.run(Command::ToolCompareDirs);
+
+        let selected = |app: &App, side: usize| -> Vec<String> {
+            let panel = &app.panels[side];
+            let mut out = Vec::new();
+            for row in 0..panel.listing.len() {
+                let e = panel.listing.row(row).unwrap();
+                if panel.selection.contains(e.id) {
+                    out.push(e.name_str().into_owned());
+                }
+            }
+            out.sort();
+            out
+        };
+        // Each side keeps what the other does not have, and the version it has newer. The
+        // file that is the same on both sides is selected in neither, and no directory is.
+        assert_eq!(selected(&app, 0), ["newer.txt", "only-here.txt"]);
+        assert_eq!(selected(&app, 1), ["older.txt", "only-there.txt"]);
+        assert!(app.status.contains('2'), "{}", app.status);
+
+        // Run again and nothing piles up: the comparison replaces the selection.
+        app.run(Command::ToolCompareDirs);
+        assert_eq!(selected(&app, 0), ["newer.txt", "only-here.txt"]);
     }
 
     #[test]

@@ -406,6 +406,7 @@ unpack-not-an-archive = no es un archivo que sepamos leer
 panel-quick-view = Vista rápida
 panel-info = Información
 panel-tree = Árbol
+compare-done = { $left } a la izquierda, { $right } a la derecha son distintos
 quick-view-directory = { $name } es un directorio — F3 lo mide
 quick-view-not-here = los bytes no están aquí: F3 los extrae primero
 info-path = Ruta

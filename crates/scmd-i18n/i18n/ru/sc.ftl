@@ -406,6 +406,7 @@ unpack-not-an-archive = это не архив, который мы умеем �
 panel-quick-view = Быстрый просмотр
 panel-info = Сведения
 panel-tree = Дерево
+compare-done = различий слева: { $left }, справа: { $right }
 quick-view-directory = { $name } — это каталог, F3 измерит его
 quick-view-not-here = байтов здесь нет: сначала F3 их извлечёт
 info-path = Путь

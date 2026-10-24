@@ -295,7 +295,11 @@ pub fn menus() -> Vec<Menu> {
                     "Ctrl+O",
                     Action::Run(Command::ShellOutputShow),
                 ),
-                item("menu-compare-folders", "", Action::Todo("tool.compare")),
+                item(
+                    "menu-compare-folders",
+                    "",
+                    Action::Run(Command::ToolCompareDirs),
+                ),
                 Entry::Separator,
                 item("menu-connections", "Alt+N", Action::Run(Command::NetSites)),
                 item(

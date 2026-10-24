@@ -406,6 +406,7 @@ unpack-not-an-archive = 这不是我们能读取的压缩包
 panel-quick-view = 快速查看
 panel-info = 信息
 panel-tree = 目录树
+compare-done = 左侧 { $left } 个、右侧 { $right } 个不同
 quick-view-directory = { $name } 是一个目录 — F3 可以统计它
 quick-view-not-here = 字节不在这里：先用 F3 取出
 info-path = 路径
