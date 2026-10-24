@@ -10,6 +10,12 @@ and `Alt+F7` for the next and previous hit. `F6` hands the file to the editor at
 `Gray +` and `Gray -` step to the next and previous file of the panel without leaving the
 viewer, and `Ctrl+F10` makes the panel catch up with what you are reading.
 
+Text is coloured by the language the file's name implies, as it is in the editor. The viewer
+reads only what it shows, so the colouring starts at the top of the screen: a comment that
+was opened higher up in the file is not carried down to it. That is the price of opening a
+forty-gigabyte log at once, and only the viewer pays it — the editor has the whole file and
+colours it exactly.
+
 # Binaries
 
 `F5` disassembles. x86 and x86-64 are decoded in the program itself; on another architecture it

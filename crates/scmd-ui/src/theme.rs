@@ -146,6 +146,21 @@ const DEFAULTS: &[(&str, Color)] = &[
     ("editor.status.bg", Color::Ansi(6)),
     ("editor.selected.fg", Color::Ansi(0)),
     ("editor.selected.bg", Color::Ansi(6)),
+    // Syntax. FAR's own editor has no colouring — its users install Colorer — so these are
+    // not FAR's palette but the one every terminal editor has converged on, and they are
+    // foregrounds only: the background stays the editor's, so nothing flickers between a
+    // coloured run and plain text.
+    ("syntax.keyword", Color::Ansi(15)),
+    ("syntax.type", Color::Ansi(14)),
+    ("syntax.string", Color::Ansi(10)),
+    ("syntax.number", Color::Ansi(13)),
+    ("syntax.comment", Color::Ansi(8)),
+    ("syntax.preproc", Color::Ansi(11)),
+    ("syntax.tag", Color::Ansi(14)),
+    ("syntax.attr", Color::Ansi(11)),
+    ("syntax.entity", Color::Ansi(13)),
+    ("syntax.function", Color::Ansi(12)),
+    ("syntax.text", Color::Default),
     ("cmdline.fg", Color::Default),
     ("cmdline.bg", Color::Default),
     // The menu bar (horizontal) and a pulled-down menu or list.

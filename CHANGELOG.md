@@ -17,6 +17,24 @@ Notable changes, newest first. The format follows
   the keyboard protocol for this (kitty, foot, WezTerm, Ghostty and others do); where it does
   not, the bar simply stays as it was.
 
+- **Syntax highlighting**, in the editor and the viewer, for Rust, C, C++, Java, C#,
+  JavaScript, TypeScript, PHP, Python, Ruby, Go, shell, SQL, HTML, XML, CSS, Markdown, JSON,
+  TOML, YAML, INI, Make, Dockerfile, Lua and Perl. It is a scanner rather than a parser, and
+  deliberately: it knows how a language writes a comment, a string and a number plus the words
+  anyone would call keywords, which colours real files correctly without a grammar per
+  language.
+
+  The editor keeps the state each line starts in and extends it as you scroll, throwing it
+  away from the first line an edit touched — so closing a comment uncolours the lines below
+  it in the same frame, and a file of a million lines costs only what is on screen. The
+  viewer starts at the top of the window, because it never reads more of a file than it
+  shows; a comment opened above the window is not carried, which is what buys opening a
+  forty-gigabyte log instantly. The editor's status line names the language.
+
+  Each class is a `syntax.*` theme key and every built-in theme defines all of them in its
+  own palette, foregrounds only, so a coloured run never changes the page behind it.
+  `ui.syntax = false` turns the whole thing off.
+
 - **The change-drive dialog is a table** (`Alt+F1`, `Alt+F2`), as it is in FAR: every row
   says what the thing is — disk, removable, optical, network, memory — what it is called,
   what it is formatted as, how big it is and how much is left, read from the real mount

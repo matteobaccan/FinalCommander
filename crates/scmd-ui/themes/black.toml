@@ -92,3 +92,17 @@ accent = "#e0e0e0"
 "editor.status.bg" = "#9a9a9a"
 "editor.selected.fg" = "bg"
 "editor.selected.bg" = "#9a9a9a"
+
+# Syntax, for the editor and the viewer: foregrounds only, on the editor's own
+# background, so a coloured run never changes the colour of the page behind it.
+"syntax.keyword" = "bright"
+"syntax.type" = "accent"
+"syntax.string" = "#9cd49c"
+"syntax.number" = "#d6a0d6"
+"syntax.comment" = "dim"
+"syntax.preproc" = "#d6c48c"
+"syntax.tag" = "accent"
+"syntax.attr" = "#d6c48c"
+"syntax.entity" = "#d6a0d6"
+"syntax.function" = "bright"
+"syntax.text" = "fg"

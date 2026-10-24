@@ -6,45 +6,89 @@
 <text xml:space="preserve" x="0.0" y="31.6" fill="#00ffff">}</text>
 <rect x="0.0" y="36.0" width="840.0" height="18" fill="#000080"/>
 <rect x="0.0" y="54.0" width="840.0" height="18" fill="#000080"/>
-<text xml:space="preserve" x="0.0 8.4 16.8 25.2 33.6 42.0 50.4 58.8 67.2 75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2 369.6 378.0 386.4 394.8 403.2 411.6 420.0 428.4 436.8 445.2 453.6 462.0 470.4 478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4 604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6" y="67.6" fill="#00ffff">/// The same comparison on the bytes of a name, which is how a listing holds it.</text>
+<text xml:space="preserve" x="0.0 8.4 16.8 25.2 33.6 42.0 50.4 58.8 67.2 75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2 369.6 378.0 386.4 394.8 403.2 411.6 420.0 428.4 436.8 445.2 453.6 462.0 470.4 478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4 604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6" y="67.6" fill="#808080">/// The same comparison on the bytes of a name, which is how a listing holds it.</text>
 <rect x="0.0" y="72.0" width="840.0" height="18" fill="#000080"/>
-<text xml:space="preserve" x="0.0 8.4 16.8 25.2 33.6 42.0 50.4 58.8 67.2 75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2 369.6 378.0 386.4 394.8 403.2 411.6 420.0 428.4 436.8 445.2 453.6 462.0 470.4 478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4 604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6" y="85.6" fill="#00ffff">pub fn natural_cmp_bytes(a: &amp;[u8], b: &amp;[u8], case_sensitive: bool) -&gt; Ordering {</text>
+<text xml:space="preserve" x="0.0 8.4 16.8" y="85.6" fill="#ffffff">pub</text>
+<text xml:space="preserve" x="33.6 42.0" y="85.6" fill="#ffffff">fn</text>
+<text xml:space="preserve" x="58.8 67.2 75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2" y="85.6" fill="#ffffff">natural_cmp_bytes</text>
+<text xml:space="preserve" x="201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2 369.6 378.0 386.4 394.8 403.2 411.6 420.0 428.4 436.8 445.2 453.6 462.0 470.4 478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4 604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6" y="85.6" fill="#00ffff">(a: &amp;[u8], b: &amp;[u8], case_sensitive: bool) -&gt; Ordering {</text>
 <rect x="0.0" y="90.0" width="840.0" height="18" fill="#000080"/>
-<text xml:space="preserve" x="33.6 42.0 50.4 58.8 67.2 75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8" y="103.6" fill="#00ffff">let common = a.len().min(b.len());</text>
+<text xml:space="preserve" x="33.6 42.0 50.4" y="103.6" fill="#ffffff">let</text>
+<text xml:space="preserve" x="67.2 75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2" y="103.6" fill="#00ffff">common = a.</text>
+<text xml:space="preserve" x="159.6 168.0 176.4" y="103.6" fill="#ffffff">len</text>
+<text xml:space="preserve" x="184.8 193.2 201.6" y="103.6" fill="#00ffff">().</text>
+<text xml:space="preserve" x="210.0 218.4 226.8" y="103.6" fill="#ffffff">min</text>
+<text xml:space="preserve" x="235.2 243.6 252.0" y="103.6" fill="#00ffff">(b.</text>
+<text xml:space="preserve" x="260.4 268.8 277.2" y="103.6" fill="#ffffff">len</text>
+<text xml:space="preserve" x="285.6 294.0 302.4 310.8" y="103.6" fill="#00ffff">());</text>
 <rect x="0.0" y="108.0" width="840.0" height="18" fill="#000080"/>
-<text xml:space="preserve" x="33.6 42.0 50.4 58.8 67.2 75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8" y="121.6" fill="#00ffff">let mut i = 0;</text>
+<text xml:space="preserve" x="33.6 42.0 50.4" y="121.6" fill="#ffffff">let</text>
+<text xml:space="preserve" x="67.2 75.6 84.0" y="121.6" fill="#ffffff">mut</text>
+<text xml:space="preserve" x="100.8 109.2 117.6" y="121.6" fill="#00ffff">i =</text>
+<text xml:space="preserve" x="134.4" y="121.6" fill="#ff00ff">0</text>
+<text xml:space="preserve" x="142.8" y="121.6" fill="#00ffff">;</text>
 <rect x="0.0" y="126.0" width="840.0" height="18" fill="#000080"/>
-<text xml:space="preserve" x="33.6 42.0 50.4 58.8 67.2 75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8" y="139.6" fill="#00ffff">while i &lt; common &amp;&amp; a[i] == b[i] {</text>
+<text xml:space="preserve" x="33.6 42.0 50.4 58.8 67.2" y="139.6" fill="#ffffff">while</text>
+<text xml:space="preserve" x="84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8" y="139.6" fill="#00ffff">i &lt; common &amp;&amp; a[i] == b[i] {</text>
 <rect x="0.0" y="144.0" width="840.0" height="18" fill="#000080"/>
-<text xml:space="preserve" x="67.2 75.6 84.0 92.4 100.8 109.2 117.6" y="157.6" fill="#00ffff">i += 1;</text>
+<text xml:space="preserve" x="67.2 75.6 84.0 92.4" y="157.6" fill="#00ffff">i +=</text>
+<text xml:space="preserve" x="109.2" y="157.6" fill="#ff00ff">1</text>
+<text xml:space="preserve" x="117.6" y="157.6" fill="#00ffff">;</text>
 <rect x="0.0" y="162.0" width="840.0" height="18" fill="#000080"/>
 <text xml:space="preserve" x="33.6" y="175.6" fill="#00ffff">}</text>
 <rect x="0.0" y="180.0" width="840.0" height="18" fill="#000080"/>
-<text xml:space="preserve" x="33.6 42.0 50.4 58.8 67.2 75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6" y="193.6" fill="#00ffff">if i == common {</text>
+<text xml:space="preserve" x="33.6 42.0" y="193.6" fill="#ffffff">if</text>
+<text xml:space="preserve" x="58.8 67.2 75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6" y="193.6" fill="#00ffff">i == common {</text>
 <rect x="0.0" y="198.0" width="840.0" height="18" fill="#000080"/>
-<text xml:space="preserve" x="67.2 75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2 369.6 378.0 386.4 394.8 403.2 411.6 420.0 428.4 436.8 445.2 453.6 462.0 470.4 478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4 604.8 613.2 621.6 630.0 638.4 646.8 655.2" y="211.6" fill="#00ffff">// One name is the other with more after it, or they are the same name.</text>
+<text xml:space="preserve" x="67.2 75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2 369.6 378.0 386.4 394.8 403.2 411.6 420.0 428.4 436.8 445.2 453.6 462.0 470.4 478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4 604.8 613.2 621.6 630.0 638.4 646.8 655.2" y="211.6" fill="#808080">// One name is the other with more after it, or they are the same name.</text>
 <rect x="0.0" y="216.0" width="840.0" height="18" fill="#000080"/>
-<text xml:space="preserve" x="67.2 75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4" y="229.6" fill="#00ffff">return a.len().cmp(&amp;b.len());</text>
+<text xml:space="preserve" x="67.2 75.6 84.0 92.4 100.8 109.2" y="229.6" fill="#ffffff">return</text>
+<text xml:space="preserve" x="126.0 134.4" y="229.6" fill="#00ffff">a.</text>
+<text xml:space="preserve" x="142.8 151.2 159.6" y="229.6" fill="#ffffff">len</text>
+<text xml:space="preserve" x="168.0 176.4 184.8" y="229.6" fill="#00ffff">().</text>
+<text xml:space="preserve" x="193.2 201.6 210.0" y="229.6" fill="#ffffff">cmp</text>
+<text xml:space="preserve" x="218.4 226.8 235.2 243.6" y="229.6" fill="#00ffff">(&amp;b.</text>
+<text xml:space="preserve" x="252.0 260.4 268.8" y="229.6" fill="#ffffff">len</text>
+<text xml:space="preserve" x="277.2 285.6 294.0 302.4" y="229.6" fill="#00ffff">());</text>
 <rect x="0.0" y="234.0" width="840.0" height="18" fill="#000080"/>
 <text xml:space="preserve" x="33.6" y="247.6" fill="#00ffff">}</text>
 <rect x="0.0" y="252.0" width="840.0" height="18" fill="#000080"/>
-<text xml:space="preserve" x="33.6 42.0 50.4 58.8 67.2 75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2 369.6 378.0" y="265.6" fill="#00ffff">while i &gt; 0 &amp;&amp; a[i - 1].is_ascii_digit() {</text>
+<text xml:space="preserve" x="33.6 42.0 50.4 58.8 67.2" y="265.6" fill="#ffffff">while</text>
+<text xml:space="preserve" x="84.0 92.4 100.8" y="265.6" fill="#00ffff">i &gt;</text>
+<text xml:space="preserve" x="117.6" y="265.6" fill="#ff00ff">0</text>
+<text xml:space="preserve" x="134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2" y="265.6" fill="#00ffff">&amp;&amp; a[i -</text>
+<text xml:space="preserve" x="210.0" y="265.6" fill="#ff00ff">1</text>
+<text xml:space="preserve" x="218.4 226.8" y="265.6" fill="#00ffff">].</text>
+<text xml:space="preserve" x="235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4" y="265.6" fill="#ffffff">is_ascii_digit</text>
+<text xml:space="preserve" x="352.8 361.2 369.6 378.0" y="265.6" fill="#00ffff">() {</text>
 <rect x="0.0" y="270.0" width="840.0" height="18" fill="#000080"/>
-<text xml:space="preserve" x="67.2 75.6 84.0 92.4 100.8 109.2 117.6" y="283.6" fill="#00ffff">i -= 1;</text>
+<text xml:space="preserve" x="67.2 75.6 84.0 92.4" y="283.6" fill="#00ffff">i -=</text>
+<text xml:space="preserve" x="109.2" y="283.6" fill="#ff00ff">1</text>
+<text xml:space="preserve" x="117.6" y="283.6" fill="#00ffff">;</text>
 <rect x="0.0" y="288.0" width="840.0" height="18" fill="#000080"/>
 <text xml:space="preserve" x="33.6" y="301.6" fill="#00ffff">}</text>
 <rect x="0.0" y="306.0" width="840.0" height="18" fill="#000080"/>
-<text xml:space="preserve" x="33.6 42.0 50.4 58.8 67.2 75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2 369.6 378.0 386.4 394.8 403.2 411.6 420.0 428.4 436.8 445.2 453.6 462.0 470.4 478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4 604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4" y="319.6" fill="#00ffff">// A continuation byte cannot begin a character, and both names are inside the same</text>
+<text xml:space="preserve" x="33.6 42.0 50.4 58.8 67.2 75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2 369.6 378.0 386.4 394.8 403.2 411.6 420.0 428.4 436.8 445.2 453.6 462.0 470.4 478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4 604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4" y="319.6" fill="#808080">// A continuation byte cannot begin a character, and both names are inside the same</text>
 <rect x="0.0" y="324.0" width="840.0" height="18" fill="#000080"/>
-<text xml:space="preserve" x="33.6 42.0 50.4 58.8 67.2 75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2 369.6 378.0 386.4 394.8 403.2 411.6 420.0 428.4 436.8 445.2 453.6 462.0 470.4 478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0" y="337.6" fill="#00ffff">// character here, since every byte before this one was equal.</text>
+<text xml:space="preserve" x="33.6 42.0 50.4 58.8 67.2 75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2 369.6 378.0 386.4 394.8 403.2 411.6 420.0 428.4 436.8 445.2 453.6 462.0 470.4 478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0" y="337.6" fill="#808080">// character here, since every byte before this one was equal.</text>
 <rect x="0.0" y="342.0" width="840.0" height="18" fill="#000080"/>
-<text xml:space="preserve" x="33.6 42.0 50.4 58.8 67.2 75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6" y="355.6" fill="#00ffff">while i &gt; 0 &amp;&amp; a[i] &amp; 0xC0 == 0x80 {</text>
+<text xml:space="preserve" x="33.6 42.0 50.4 58.8 67.2" y="355.6" fill="#ffffff">while</text>
+<text xml:space="preserve" x="84.0 92.4 100.8" y="355.6" fill="#00ffff">i &gt;</text>
+<text xml:space="preserve" x="117.6" y="355.6" fill="#ff00ff">0</text>
+<text xml:space="preserve" x="134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6" y="355.6" fill="#00ffff">&amp;&amp; a[i] &amp;</text>
+<text xml:space="preserve" x="218.4 226.8 235.2 243.6" y="355.6" fill="#ff00ff">0xC0</text>
+<text xml:space="preserve" x="260.4 268.8" y="355.6" fill="#00ffff">==</text>
+<text xml:space="preserve" x="285.6 294.0 302.4 310.8" y="355.6" fill="#ff00ff">0x80</text>
+<text xml:space="preserve" x="327.6" y="355.6" fill="#00ffff">{</text>
 <rect x="0.0" y="360.0" width="840.0" height="18" fill="#000080"/>
-<text xml:space="preserve" x="67.2 75.6 84.0 92.4 100.8 109.2 117.6" y="373.6" fill="#00ffff">i -= 1;</text>
+<text xml:space="preserve" x="67.2 75.6 84.0 92.4" y="373.6" fill="#00ffff">i -=</text>
+<text xml:space="preserve" x="109.2" y="373.6" fill="#ff00ff">1</text>
+<text xml:space="preserve" x="117.6" y="373.6" fill="#00ffff">;</text>
 <rect x="0.0" y="378.0" width="840.0" height="18" fill="#000080"/>
 <text xml:space="preserve" x="33.6" y="391.6" fill="#00ffff">}</text>
 <rect x="0.0" y="396.0" width="840.0" height="18" fill="#000080"/>
-<text xml:space="preserve" x="33.6 42.0 50.4 58.8 67.2 75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2 369.6 378.0 386.4 394.8 403.2 411.6 420.0 428.4 436.8 445.2" y="409.6" fill="#00ffff">natural_cmp_from(&amp;a[i..], &amp;b[i..], case_sensitive)</text>
+<text xml:space="preserve" x="33.6 42.0 50.4 58.8 67.2 75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6" y="409.6" fill="#ffffff">natural_cmp_from</text>
+<text xml:space="preserve" x="168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2 369.6 378.0 386.4 394.8 403.2 411.6 420.0 428.4 436.8 445.2" y="409.6" fill="#00ffff">(&amp;a[i..], &amp;b[i..], case_sensitive)</text>
 <rect x="0.0" y="414.0" width="840.0" height="18" fill="#000080"/>
 <text xml:space="preserve" x="0.0" y="427.6" fill="#00ffff">}</text>
 <rect x="0.0" y="432.0" width="840.0" height="18" fill="#000080"/>

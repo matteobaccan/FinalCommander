@@ -97,3 +97,17 @@ rule = "#9aa0a6"
 "editor.status.bg" = "accent"
 "editor.selected.fg" = "bg"
 "editor.selected.bg" = "accent"
+
+# Syntax, for the editor and the viewer: foregrounds only, on the editor's own
+# background, so a coloured run never changes the colour of the page behind it.
+"syntax.keyword" = "accent"
+"syntax.type" = "blue"
+"syntax.string" = "green"
+"syntax.number" = "purple"
+"syntax.comment" = "dim"
+"syntax.preproc" = "orange"
+"syntax.tag" = "blue"
+"syntax.attr" = "orange"
+"syntax.entity" = "purple"
+"syntax.function" = "accent"
+"syntax.text" = "fg"

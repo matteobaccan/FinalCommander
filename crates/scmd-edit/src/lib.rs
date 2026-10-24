@@ -8,7 +8,9 @@
 pub mod buffer;
 pub mod editor;
 pub mod hex;
+pub mod highlight;
 
 pub use buffer::{Buffer, BufferError, Eol, Position, Range, MAX_OPEN};
 pub use editor::{BlockKind, Editor, SaveOutcome};
 pub use hex::{Change, HexEdit, HexError, Pane};
+pub use highlight::Highlight;

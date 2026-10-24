@@ -10,8 +10,10 @@ symbols, **JVM class files and .NET assemblies** read in process (constant pool,
 JVM bytecode; metadata tables and CIL), and **decompilation** through WebAssembly's text format
 in process or an installed external tool (§1.6).
 Also implemented: the **editor** (`F4`, `Shift+F4` for a new file) — see the note under §2.
+Also implemented: **syntax highlighting** in both (§2.5), for the languages and markups
+`scmd-syntax` knows, off with `ui.syntax = false`.
 **Still to come**: the "all matches" list (§1.4), the preview pipeline (§1.7), filtered view
-(§1.10), next/previous file in the panel, syntax highlighting, Python bytecode and non-x86
+(§1.10), next/previous file in the panel, Python bytecode and non-x86
 decoding in process, and the diff viewer (§3).
 
 ## 1. Viewer (`F3`)
@@ -239,7 +241,7 @@ characters counted in display columns.
 256 MiB open limit and far simpler to keep correct; it will be swapped for a rope when
 streaming edits of larger files land), typing-burst undo grouping, the OS clipboard (the
 clipboard is internal to the editor for now), persistent-block mode, multi-caret, regex and
-capture-group replace, `.editorconfig`, syntax highlighting, sort/unique/reverse on lines,
+capture-group replace, `.editorconfig`, sort/unique/reverse on lines,
 macros, the buffer list (§2.3) and the external editor (§2.4).
 
 ### 2.1 Buffer
@@ -267,9 +269,33 @@ macros, the buffer list (§2.3) and the external editor (§2.4).
 | Lines | duplicate, delete, move up/down, join, sort selected lines, unique, reverse, number |
 | Search/replace | shared engine with the viewer, plus **replace with capture groups**, replace-in-selection, count, and "preserve style" (match the case/separator convention of the replaced token — FAR's feature, re-implemented from the described behaviour) |
 | Bookmarks | 0..9 per file, persisted in `history/editor.toml` along with the cursor position |
-| Syntax | tree-sitter grammars loaded from `grammars/` (prebuilt, feature-gated), fallback to a regex-based highlighter; bracket matching, rainbow option |
+| Syntax | shipped — see §2.5. Bracket matching and a rainbow option are still to come |
 | Big edits | search/replace across a whole file streams through the rope without materialising copies |
 | Macros | record/play keystroke macros, scoped to the editor, saved by name |
+
+### 2.5 Syntax highlighting
+
+`scmd-syntax` is a scanner, not a parser, and deliberately: it knows how a language writes a
+comment, a string and a number, plus the words anyone would point at and call keywords. That
+colours real files correctly and fits on a page, where a grammar per language would be a
+compiler front end and a build-time dependency per language on top.
+
+The unit is a line and the state carried from the one before it — a block comment, an
+unterminated string, a Markdown fence. That is what makes both callers possible:
+
+- The **editor** keeps the state each line starts in and extends it as the screen asks for
+  lines further down, throwing it away from the first line an edit touched. Closing a comment
+  uncolours the lines below it in the same frame, and a file of a million lines costs the
+  scan of what is on screen plus whatever is above it, once.
+- The **viewer** starts the scan at the first row on screen, because it never reads more of a
+  file than it shows. A block comment opened above the window is therefore not carried; that
+  is the price of opening a two-gigabyte log instantly, and it is paid only by the viewer.
+
+Recognition is by file name. The classes are `keyword`, `type`, `string`, `number`,
+`comment`, `preproc`, `tag`, `attr`, `entity`, `function`; each is a `syntax.*` theme key, and
+every built-in theme defines all of them in its own palette. Only the foreground is set, so a
+coloured run never changes the colour of the page behind it. `ui.syntax = false` turns the
+whole thing off, and the editor's status line names the language it is reading.
 
 ### 2.3 Multiple files
 

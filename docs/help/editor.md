@@ -9,6 +9,14 @@ old one and renames it over the top — so an interrupted save never leaves half
 A column block is a rectangle rather than a run of lines, which is how a column of numbers is
 moved without touching what is beside it.
 
+# Colours
+
+A file whose name says what it is — Rust, C, C++, Java, C#, JavaScript, TypeScript, PHP,
+Python, Ruby, Go, shell, SQL, HTML, XML, CSS, Markdown, JSON, TOML, YAML, INI, Make,
+Dockerfile, Lua, Perl — is coloured as you read it, and the status line names the language so
+you can see at once when a file is being read as something you did not mean. The colours come
+from the theme, so they follow it. `ui.syntax = false` in `scmd.toml` turns them off.
+
 # Bytes instead of lines
 
 `F4` on a binary opens the same editor on its bytes, and `Alt+H` switches either way. Two

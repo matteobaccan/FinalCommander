@@ -140,6 +140,12 @@ pub struct Buffer {
     redo: Vec<Group>,
     /// Edits are grouped until this is taken; a burst of typing is one undo step.
     open_group: Option<Group>,
+    /// The lowest line changed since anybody last asked, or `usize::MAX` for none.
+    ///
+    /// Syntax highlighting remembers what it scanned, and a cache has to be told how far
+    /// back to throw away. Every change goes through `insert_raw` or `delete_raw`, so that
+    /// is where it is recorded — undo and redo included, since they go through them too.
+    touched: usize,
 }
 
 impl Default for Buffer {
@@ -165,6 +171,7 @@ impl Buffer {
             undo: Vec::new(),
             redo: Vec::new(),
             open_group: None,
+            touched: usize::MAX,
         }
     }
 
@@ -237,6 +244,17 @@ impl Buffer {
 
     pub fn line_chars(&self, index: usize) -> usize {
         self.line(index).chars().count()
+    }
+
+    /// Say that `line` and everything after it may have changed.
+    pub fn touch(&mut self, line: usize) {
+        self.touched = self.touched.min(line);
+    }
+
+    /// The lowest line changed since this was last called, and forget it.
+    pub fn take_touched(&mut self) -> Option<usize> {
+        let touched = std::mem::replace(&mut self.touched, usize::MAX);
+        (touched != usize::MAX).then_some(touched)
     }
 
     pub fn modified(&self) -> bool {
@@ -337,6 +355,7 @@ impl Buffer {
     }
 
     fn insert_raw(&mut self, at: Position, text: &str) -> Position {
+        self.touch(at.line);
         let line = self.lines[at.line].clone();
         let before: String = line.chars().take(at.col).collect();
         let after: String = line.chars().skip(at.col).collect();
@@ -380,6 +399,7 @@ impl Buffer {
     }
 
     fn delete_raw(&mut self, range: Range) {
+        self.touch(range.start.line);
         if range.start.line == range.end.line {
             let line = &self.lines[range.start.line];
             let kept: String = line

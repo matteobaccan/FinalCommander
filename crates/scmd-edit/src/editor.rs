@@ -89,6 +89,8 @@ pub struct Editor {
     pub last_replace: Option<String>,
     pub search_mode: SearchMode,
     pub search_case_insensitive: bool,
+    /// What the file is being read as, and how much of it has been scanned so far.
+    pub highlight: crate::Highlight,
 }
 
 impl std::fmt::Debug for Editor {
@@ -108,6 +110,12 @@ impl Editor {
             .as_ref()
             .and_then(|p| std::fs::metadata(p.as_path()).ok())
             .and_then(|m| m.modified().ok());
+        // The name is what says which language this is: a file opened from an archive or
+        // fetched from a server is read the same way as one on disk.
+        let highlight = match &path {
+            Some(path) => crate::Highlight::for_name(&path.display_name()),
+            None => crate::Highlight::default(),
+        };
         Editor {
             buffer,
             path,
@@ -125,7 +133,22 @@ impl Editor {
             last_replace: None,
             search_mode: SearchMode::Plain,
             search_case_insensitive: true,
+            highlight,
         }
+    }
+
+    /// The coloured runs of one line, with the scan kept in step with the edits.
+    ///
+    /// It is a method of the editor rather than of the buffer because the two have to be
+    /// borrowed together: the cache is extended while the buffer is read.
+    pub fn spans(&mut self, line: usize) -> Vec<scmd_syntax::Span> {
+        let Editor {
+            buffer, highlight, ..
+        } = self;
+        if let Some(from) = buffer.take_touched() {
+            highlight.forget_from(from);
+        }
+        highlight.spans(buffer, line)
     }
 
     pub fn open(path: &Path) -> Result<Editor, EditorError> {

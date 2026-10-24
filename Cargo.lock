@@ -2447,6 +2447,7 @@ dependencies = [
  "scmd-net",
  "scmd-plug",
  "scmd-s3",
+ "scmd-syntax",
  "scmd-tui",
  "scmd-ui",
  "scmd-vfs",
@@ -2514,6 +2515,7 @@ version = "0.1.1"
 dependencies = [
  "regex",
  "scmd-core",
+ "scmd-syntax",
  "scmd-view",
  "tempfile",
  "thiserror",
@@ -2595,6 +2597,10 @@ dependencies = [
  "thiserror",
  "tokio",
 ]
+
+[[package]]
+name = "scmd-syntax"
+version = "0.1.1"
 
 [[package]]
 name = "scmd-tui"

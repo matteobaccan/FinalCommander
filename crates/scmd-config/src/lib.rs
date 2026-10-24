@@ -225,6 +225,8 @@ pub struct UiCfg {
     pub language: String,
     pub key_bar: bool,
     pub status_bar: bool,
+    /// Colour what the viewer and the editor recognise as a language or a markup.
+    pub syntax: bool,
     /// The command line under the panels. Without it, typing goes to quick search.
     pub command_line: bool,
     /// How many command lines to keep between sessions.
@@ -239,6 +241,7 @@ impl Default for UiCfg {
             language: "auto".into(),
             key_bar: true,
             status_bar: true,
+            syntax: true,
             command_line: true,
             command_history: 512,
         }
@@ -577,6 +580,7 @@ impl Config {
                     .map_err(|_| format!("`{value}` is not a number"))?
             }
             "ui.status_bar" => self.ui.status_bar = parse_bool(value)?,
+            "ui.syntax" => self.ui.syntax = parse_bool(value)?,
             "panel.view" => self.panel.view = value.to_string(),
             "panel.sort" => self.panel.sort = value.to_string(),
             "panel.reverse" => self.panel.reverse = parse_bool(value)?,

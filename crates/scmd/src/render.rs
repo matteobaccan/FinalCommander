@@ -861,7 +861,12 @@ fn draw_editor(
     // Header: the file on the left, the position and flags on the right. `Editor.Status`.
     let header = app.theme.editor_status();
     buf.fill(Rect::new(0, 0, w, 1), ' ', header);
-    let status = editor.status();
+    // The language first, where FAR's Colorer puts it: it is the quickest way to see that
+    // a file is being read as something other than what you meant.
+    let status = match editor.highlight.language() {
+        Some(language) if app.cfg.ui.syntax => format!("{language}  {}", editor.status()),
+        _ => editor.status(),
+    };
     let status_w = (status.chars().count() as u16).min(w);
     let name_w = w.saturating_sub(status_w + 2);
     // A fetched copy is shown under the name it has on the server, not its temp path.
@@ -890,15 +895,39 @@ fn draw_editor(
         app.theme.color("editor.selected.bg"),
     );
 
+    let colouring = app.cfg.ui.syntax;
     for (row, line_index) in visible.clone().enumerate() {
         let y = body.y + row as u16;
-        let text = expand_line(editor, line_index);
+        let (text, columns) = expand_with_map(editor, line_index);
         let shown: String = text
             .chars()
             .skip(editor.left)
             .take(body.w as usize)
             .collect();
         buf.put_str(0, y, &shown, base, body.w);
+
+        // The syntax, painted over the line in the foreground colour its class asks for.
+        // The background stays the editor's, so a coloured run is a colour and not a block.
+        if colouring {
+            for span in editor.spans(line_index) {
+                let (from, to) = (
+                    columns.get(span.start).copied().unwrap_or(0),
+                    columns.get(span.end).copied().unwrap_or(0),
+                );
+                let from = from.saturating_sub(editor.left);
+                let to = to.saturating_sub(editor.left);
+                if to <= from || from >= body.w as usize {
+                    continue;
+                }
+                let slice: String = shown.chars().skip(from).take(to - from).collect();
+                if slice.is_empty() {
+                    continue;
+                }
+                let style = base.with_fg(app.theme.color(span.class.theme_key()));
+                let room = body.w - from as u16;
+                buf.put_str(from as u16, y, &slice, style, room);
+            }
+        }
 
         // The block, in display columns.
         if let Some((from, to)) = block_columns(editor, line_index) {
@@ -931,6 +960,37 @@ fn draw_editor(
         }
     }
     None
+}
+
+/// The expanded line, and where each byte of the raw one lands in it.
+///
+/// The syntax scan works in bytes of the line as it is stored; the screen works in the
+/// columns of the line as it is drawn, which differ wherever there is a tab. `columns[b]` is
+/// the column the byte at `b` starts in, with one extra entry for the end of the line so
+/// that a span reaching the end has somewhere to point.
+fn expand_with_map(editor: &scmd_edit::Editor, line: usize) -> (String, Vec<usize>) {
+    let raw = editor.buffer.line(line);
+    let mut text = String::with_capacity(raw.len() + 8);
+    let mut columns = Vec::with_capacity(raw.len() + 1);
+    let mut column = 0usize;
+    for (at, ch) in raw.char_indices() {
+        while columns.len() <= at {
+            columns.push(column);
+        }
+        if ch == '\t' {
+            let pad = editor.tab_width - (column % editor.tab_width);
+            text.extend(std::iter::repeat_n(' ', pad));
+            column += pad;
+        } else {
+            text.push(ch);
+            // Columns, not characters: the editor scrolls by what is on screen.
+            column += unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
+        }
+    }
+    while columns.len() <= raw.len() {
+        columns.push(column);
+    }
+    (text, columns)
 }
 
 /// A line with its tabs expanded, which is what the screen shows.
@@ -1280,9 +1340,32 @@ fn draw_viewer(app: &mut App, viewer: &mut scmd_view::Viewer, buf: &mut Buffer) 
     )
     .bold();
     let rows = viewer.rows(body.w, body.h);
+    // The syntax, where the file is one we recognise and the mode is the one that shows it
+    // as text. The scan starts at the first row on screen rather than at the start of the
+    // file: the viewer never reads more than it shows, so a block comment opened above the
+    // window is not carried — which is the price of opening a two-gigabyte log instantly.
+    let syntax = (app.cfg.ui.syntax && viewer.mode == scmd_view::Mode::Text)
+        .then(|| scmd_syntax::of_name(&viewer.path.display_name()))
+        .flatten();
+    let mut state = scmd_syntax::State::default();
     for (i, row) in rows.iter().enumerate() {
         let y = body.y + i as u16;
         buf.put_str(0, y, &row.text, base, body.w);
+        if let Some(syntax) = syntax {
+            let (spans, next) = syntax.line(&row.text, state);
+            state = next;
+            for span in spans {
+                let text = &row.text[span.start..span.end];
+                let x = row.text[..span.start]
+                    .chars()
+                    .filter_map(unicode_width::UnicodeWidthChar::width)
+                    .sum::<usize>() as u16;
+                if x < body.w && !text.is_empty() {
+                    let style = base.with_fg(app.theme.color(span.class.theme_key()));
+                    buf.put_str(x, y, text, style, body.w - x);
+                }
+            }
+        }
         for (start, len) in &row.hits {
             let text: String = row.text.chars().skip(*start).take(*len).collect();
             if text.is_empty() {
@@ -2755,6 +2838,74 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
         app.connected.push("mb@host:22".into());
         app.run(scmd_cmd::Command::PanelDrive(scmd_cmd::Side::Left));
         println!("{}", frame(&mut app, 100, 28));
+    }
+
+    /// The editor colours what it recognises, and a buffer that is being edited keeps up:
+    /// close a comment and the lines below it stop being one, in the same frame.
+    #[test]
+    fn the_editor_colours_the_syntax_and_follows_the_edits() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("page.html");
+        std::fs::write(
+            &file,
+            "<p class=\"x\">hello</p>\n<!-- a note\nstill a note\n",
+        )
+        .unwrap();
+        let mut app = super::tests::app("far", "en");
+        app.mode =
+            crate::app::Mode::Editor(Box::new(scmd_edit::Editor::open(&file).expect("it opens")));
+        let buf = frame_buf(&mut app, 60, 12);
+        let colour_at = |buf: &Buffer, x: u16, y: u16| buf.get(x, y).unwrap().style.fg;
+
+        // `<p class="x">` — the tag's name, the attribute and the value are each their own.
+        assert_eq!(
+            colour_at(&buf, 1, 1),
+            app.theme.color("syntax.type"),
+            "the tag"
+        );
+        assert_eq!(
+            colour_at(&buf, 3, 1),
+            app.theme.color("syntax.attr"),
+            "the attribute"
+        );
+        assert_eq!(
+            colour_at(&buf, 9, 1),
+            app.theme.color("syntax.string"),
+            "the value"
+        );
+        // The text between the tags is the editor's own colour, not a syntax one.
+        assert_eq!(
+            colour_at(&buf, 13, 1),
+            app.theme.color("editor.fg"),
+            "the text"
+        );
+        // The comment opened on the second line is still one on the third.
+        let comment = app.theme.color("syntax.comment");
+        assert_eq!(colour_at(&buf, 0, 2), comment);
+        assert_eq!(colour_at(&buf, 0, 3), comment, "the comment did not carry");
+
+        // Close the comment on line two, and line three stops being a comment at once.
+        {
+            let editor = app.mode.editor_mut().expect("the editor");
+            editor.cursor = scmd_edit::Position::new(1, editor.buffer.line_chars(1));
+            editor.buffer.insert(editor.cursor, " -->").unwrap();
+        }
+        let buf = frame_buf(&mut app, 60, 12);
+        assert_eq!(
+            colour_at(&buf, 0, 2),
+            comment,
+            "line two is still a comment"
+        );
+        assert_ne!(
+            colour_at(&buf, 0, 3),
+            comment,
+            "line three is still coloured as a comment that has been closed"
+        );
+
+        // And the setting turns the whole thing off.
+        app.cfg.ui.syntax = false;
+        let buf = frame_buf(&mut app, 60, 12);
+        assert_eq!(colour_at(&buf, 1, 1), app.theme.color("editor.fg"));
     }
 
     #[test]

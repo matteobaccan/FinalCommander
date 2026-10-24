@@ -95,3 +95,17 @@ grey = "#3a5a72"
 "editor.status.bg" = "neon"
 "editor.selected.fg" = "bg"
 "editor.selected.bg" = "neon"
+
+# Syntax, for the editor and the viewer: foregrounds only, on the editor's own
+# background, so a coloured run never changes the colour of the page behind it.
+"syntax.keyword" = "white"
+"syntax.type" = "neon"
+"syntax.string" = "#7fffd4"
+"syntax.number" = "orange"
+"syntax.comment" = "grey"
+"syntax.preproc" = "orange"
+"syntax.tag" = "neon"
+"syntax.attr" = "orange"
+"syntax.entity" = "red"
+"syntax.function" = "white"
+"syntax.text" = "fg"

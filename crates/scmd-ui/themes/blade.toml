@@ -95,3 +95,17 @@ smoke = "#4a4336"
 "editor.status.bg" = "amber"
 "editor.selected.fg" = "bg"
 "editor.selected.bg" = "amber"
+
+# Syntax, for the editor and the viewer: foregrounds only, on the editor's own
+# background, so a coloured run never changes the colour of the page behind it.
+"syntax.keyword" = "cream"
+"syntax.type" = "teal"
+"syntax.string" = "#c9d98f"
+"syntax.number" = "amber"
+"syntax.comment" = "smoke"
+"syntax.preproc" = "amber"
+"syntax.tag" = "teal"
+"syntax.attr" = "amber"
+"syntax.entity" = "red"
+"syntax.function" = "cream"
+"syntax.text" = "fg"

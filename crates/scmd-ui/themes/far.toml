@@ -122,3 +122,17 @@ white = "#ffffff"
 "editor.status.bg" = "cyan"
 "editor.selected.fg" = "black"
 "editor.selected.bg" = "cyan"
+
+# Syntax, for the editor and the viewer: foregrounds only, on the editor's own
+# background, so a coloured run never changes the colour of the page behind it.
+"syntax.keyword" = "white"
+"syntax.type" = "lightcyan"
+"syntax.string" = "lightgreen"
+"syntax.number" = "lightmagenta"
+"syntax.comment" = "darkgray"
+"syntax.preproc" = "yellow"
+"syntax.tag" = "lightcyan"
+"syntax.attr" = "yellow"
+"syntax.entity" = "lightmagenta"
+"syntax.function" = "white"
+"syntax.text" = "lightcyan"

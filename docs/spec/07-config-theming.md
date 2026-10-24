@@ -81,6 +81,7 @@ keymap = "far"
 icons = false                   # nerd-font glyphs
 menu_bar = "auto"               # auto | always | never
 key_bar = true
+syntax = true                   # colour the languages and markups we recognise
 clock = false
 language = "auto"
 
@@ -156,7 +157,7 @@ something the file format does not accept:
 | --- | --- |
 | System | `panel.natural_sort`, `panel.allow_reverse_sort`, `net.fetch_limit_mb`, `net.keepalive_secs` |
 | Panel | `panel.show_hidden`, `panel.dirs_first`, `panel.selected_first`, `panel.reverse`, `panel.view`, `panel.sort`, `panel.quick_search` |
-| Interface | `ui.key_bar`, `ui.status_bar`, `ui.keymap` |
+| Interface | `ui.key_bar`, `ui.status_bar`, `ui.syntax`, `ui.keymap` |
 | Confirmations | `general.confirm_delete`, `general.confirm_overwrite`, `general.confirm_exit` |
 
 `Save setup` (`Shift+F9`) writes the whole configuration back out, themes declared in the file
