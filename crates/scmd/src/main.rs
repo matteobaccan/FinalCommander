@@ -1510,8 +1510,16 @@ mod tests {
     fn the_manual_page_in_the_tree_is_the_one_this_binary_generates() {
         let generated = man_page();
         let committed = include_str!("../../../docs/scmd.1");
+        // Compared line by line with the line endings taken off: on Windows the checkout
+        // converts them, so a byte-for-byte comparison would fail for a file nobody touched.
+        let lines = |text: &str| -> Vec<String> {
+            text.lines()
+                .map(|l| l.trim_end_matches('\r').to_string())
+                .collect()
+        };
         assert_eq!(
-            generated, committed,
+            lines(&generated),
+            lines(committed),
             "docs/scmd.1 is out of date — regenerate it with:\n\
              \n    cargo run -p scmd -- --man > docs/scmd.1\n"
         );

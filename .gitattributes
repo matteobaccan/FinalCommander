@@ -1,0 +1,11 @@
+# The manual page is compared against `scmd --man`'s output by a test, and that output has
+# Unix line endings wherever it runs. Without this, a Windows checkout converts the committed
+# file and the test fails on a file nobody touched.
+docs/scmd.1 text eol=lf
+
+# The same reasoning for everything else the program reads as data and compares: keymaps,
+# locales, themes and the help pages are read with `include_str!` and their contents end up in
+# assertions and on screen.
+*.ftl text eol=lf
+*.toml text eol=lf
+*.md text eol=lf
