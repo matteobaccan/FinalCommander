@@ -9,7 +9,9 @@
 #   * the version must have a *dated* heading in the changelog (`## [0.0.3] — 2026-10-24`), so a
 #     bump on its own, or an `## [Unreleased]` section, does nothing;
 #   * a tag that already exists is never moved or replaced;
-#   * only the default branch and the development branches are watched.
+#   * only the default branch and the development branches are watched;
+#   * CI on that very commit must be green first — a push that fires this waits for the build
+#     on all three platforms, and a failure refuses to tag.
 # `workflow_dispatch` takes a version explicitly, for a release that was missed at the time.
 name: Tag
 
@@ -42,6 +44,36 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+
+      # 0.0.6 went out while the build on the other two platforms was still saying it had a
+      # bug, because nothing here waited for it. Now the tag waits for CI on this very commit:
+      # a failure refuses to tag, and a run that never appears (a push that CI does not watch)
+      # times out rather than releasing on no evidence at all.
+      - name: Wait for CI on this commit
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 60); do
+            read -r status conclusion <<<"$(gh api \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&per_page=1" \
+              --jq '.workflow_runs[0] | "\(.status) \(.conclusion)"' 2>/dev/null || echo "none none")"
+            echo "attempt $attempt: CI is $status/$conclusion"
+            case "$status" in
+              completed)
+                if [ "$conclusion" = "success" ]; then
+                  echo "CI is green; tagging."
+                  exit 0
+                fi
+                echo "CI concluded $conclusion — refusing to tag a release nobody can build." >&2
+                exit 1
+                ;;
+            esac
+            sleep 30
+          done
+          echo "CI on $GITHUB_SHA did not finish in 30 minutes — not tagging." >&2
+          exit 1
 
       - name: Which version, and is it ready to tag
         id: decide
