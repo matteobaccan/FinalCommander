@@ -4,6 +4,7 @@ use scmd_core::{CancelToken, VPath};
 
 use crate::fs::{free_name, JobFs};
 use crate::plan::{Plan, Unit, UnitKind};
+use crate::replace::{Matcher, ReplacePass};
 use crate::spec::{ConflictPolicy, Decision, JobKind, JobSpec, Phase, Question};
 
 /// What the UI is told while a job runs.
@@ -91,11 +92,24 @@ pub struct Outcome {
     pub cancelled: bool,
     /// Sources a Move finished with a plain rename, so no byte was copied.
     pub renamed: u64,
+    /// For a [`JobKind::Replace`]: how many occurrences each file had, in the order the files
+    /// were visited.
+    ///
+    /// Only the files whose bytes really differ are listed, which is exactly what a dry run
+    /// lists and the whole reason the UI can show one before asking: a file where the needle
+    /// was found but the replacement spelled the same bytes had nothing to do, and a file
+    /// where it was not found at all has nothing to say.
+    pub replacements: Vec<(VPath, u64)>,
 }
 
 impl Outcome {
     pub fn is_clean(&self) -> bool {
         self.errors.is_empty() && !self.cancelled
+    }
+
+    /// Every occurrence replaced across every file, for the one line the job reports.
+    pub fn occurrences(&self) -> u64 {
+        self.replacements.iter().map(|(_, n)| n).sum()
     }
 }
 
@@ -125,6 +139,14 @@ pub fn execute(
         bytes_since_report: 0,
         started: Instant::now(),
     };
+
+    // Compiled once for the whole job. A needle that does not compile was refused while
+    // planning, so the only way to be here without one is a caller that went around the
+    // planner — which every unit then reports, rather than guessing at what to look for.
+    let matcher = spec
+        .replace
+        .as_ref()
+        .and_then(|options| Matcher::compile(options).ok());
 
     // A move on the same filesystem is a rename: no bytes, no risk of a half-copied tree.
     let mut renamed_sources: Vec<VPath> = Vec::new();
@@ -163,7 +185,15 @@ pub fn execute(
         }
 
         state.progress.current = Some(unit.dst.clone());
-        run_unit(fs, spec, unit, &mut state, reporter, cancel);
+        run_unit(
+            fs,
+            spec,
+            unit,
+            matcher.as_ref(),
+            &mut state,
+            reporter,
+            cancel,
+        );
         state.progress.elapsed = state.started.elapsed();
         reporter.progress(&state.progress);
     }
@@ -211,12 +241,13 @@ fn run_unit(
     fs: &dyn JobFs,
     spec: &JobSpec,
     unit: &Unit,
+    matcher: Option<&Matcher>,
     state: &mut State,
     reporter: &mut dyn Reporter,
     cancel: &CancelToken,
 ) {
     loop {
-        let result = attempt(fs, spec, unit, state, reporter, cancel);
+        let result = attempt(fs, spec, unit, matcher, state, reporter, cancel);
         match result {
             Attempt::Done => return,
             Attempt::Skipped => {
@@ -283,6 +314,7 @@ fn attempt(
     fs: &dyn JobFs,
     spec: &JobSpec,
     unit: &Unit,
+    matcher: Option<&Matcher>,
     state: &mut State,
     reporter: &mut dyn Reporter,
     cancel: &CancelToken,
@@ -447,6 +479,63 @@ fn attempt(
             }
         }
 
+        UnitKind::ReplaceInFile { size } => {
+            let Some(matcher) = matcher else {
+                return Attempt::Failed("there is nothing to search for".into());
+            };
+            // Read before the rewrite, because a file being rewritten is its own source of
+            // permissions and times, the way a copy's source is: one `Preserve` then decides
+            // what a replacement keeps and what a copy keeps alike.
+            let facts = fs.facts(&unit.dst).ok();
+            // A dry run differs in this one value and in nothing else, which is what makes the
+            // number it shows the number the write then produces.
+            let pass = if dry {
+                ReplacePass::Count
+            } else {
+                ReplacePass::Rewrite
+            };
+
+            state.progress.file_bytes_total = *size;
+            state.progress.file_bytes_done = 0;
+            let mut tick = |n: u64| {
+                state.progress.bytes_done += n;
+                state.progress.file_bytes_done += n;
+                state.bytes_since_report += n;
+                !cancel.is_cancelled()
+            };
+            match fs.replace_in_file(&unit.dst, matcher, pass, spec.options.buffer, &mut tick) {
+                Ok(report) => {
+                    // Every byte read is work this job did, whether it changed anything or not.
+                    state.outcome.bytes += size;
+                    if !report.changed {
+                        // Nothing to do: either the needle was not there, or putting the
+                        // replacement in its place spells the bytes already on the disk. The
+                        // file is left as it is, and that is a skip rather than a change.
+                        return Attempt::Skipped;
+                    }
+                    if report.rewritten {
+                        if let Some(facts) = &facts {
+                            let _ = fs.apply_meta(&unit.dst, facts, spec.options.preserve);
+                        }
+                    }
+                    state
+                        .outcome
+                        .replacements
+                        .push((unit.dst.clone(), report.occurrences));
+                    state.outcome.files += 1;
+                    state.progress.files_done += 1;
+                    if state.bytes_since_report > 1024 * 1024 {
+                        state.bytes_since_report = 0;
+                        state.progress.elapsed = state.started.elapsed();
+                        reporter.progress(&state.progress);
+                    }
+                    Attempt::Done
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => Attempt::Cancelled,
+                Err(e) => Attempt::Failed(e.to_string()),
+            }
+        }
+
         UnitKind::RemoveDir => {
             // Something below this directory stayed, so the directory stays too. Removing it
             // would fail anyway; not trying is the difference between a quiet result and a
@@ -587,6 +676,7 @@ mod tests {
     use super::*;
     use crate::fs::LocalFs;
     use crate::plan::plan;
+    use crate::replace::ReplaceOptions;
     use crate::spec::{JobOptions, Preserve};
     use std::fs as stdfs;
 
@@ -1042,6 +1132,228 @@ mod tests {
         let out = run(&spec, &mut Scripted::new(vec![]));
         assert_eq!((out.files, out.skipped), (1, 0));
         assert_eq!(stdfs::read(dir.path().join("dst/a.txt")).unwrap(), b"aaaa");
+    }
+
+    /// Three files with the same needle in them, and one without.
+    fn texts() -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        stdfs::write(dir.path().join("one.txt"), b"alpha beta alpha").unwrap();
+        stdfs::write(dir.path().join("two.txt"), b"beta alpha gamma").unwrap();
+        stdfs::write(dir.path().join("three.txt"), b"alpha").unwrap();
+        stdfs::write(dir.path().join("none.txt"), b"nothing of the sort").unwrap();
+        dir
+    }
+
+    fn all_texts(dir: &tempfile::TempDir) -> Vec<VPath> {
+        ["one.txt", "two.txt", "three.txt", "none.txt"]
+            .iter()
+            .map(|name| VPath::local(dir.path().join(name)))
+            .collect()
+    }
+
+    fn replace_spec(dir: &tempfile::TempDir, dry_run: bool) -> JobSpec {
+        JobSpec::new(JobKind::Replace, all_texts(dir), None)
+            .with_options(JobOptions {
+                dry_run,
+                ..JobOptions::default()
+            })
+            .with_replace(ReplaceOptions::new("alpha", "OMEGA"))
+    }
+
+    #[test]
+    fn a_dry_run_counts_exactly_what_the_write_then_changes() {
+        let dir = texts();
+        let dry = run(&replace_spec(&dir, true), &mut Scripted::new(vec![]));
+        assert!(dry.is_clean(), "{dry:?}");
+        assert_eq!(
+            stdfs::read(dir.path().join("one.txt")).unwrap(),
+            b"alpha beta alpha",
+            "a dry run wrote something"
+        );
+
+        let wet = run(&replace_spec(&dir, false), &mut Scripted::new(vec![]));
+        assert!(wet.is_clean(), "{wet:?}");
+        assert_eq!(
+            dry.replacements, wet.replacements,
+            "the dry run and the write disagreed about the files"
+        );
+        assert_eq!(dry.occurrences(), 4);
+        assert_eq!((dry.files, dry.skipped), (wet.files, wet.skipped));
+        assert_eq!((wet.files, wet.skipped), (3, 1));
+        assert_eq!(
+            stdfs::read(dir.path().join("one.txt")).unwrap(),
+            b"OMEGA beta OMEGA"
+        );
+        assert_eq!(
+            stdfs::read(dir.path().join("two.txt")).unwrap(),
+            b"beta OMEGA gamma"
+        );
+        assert_eq!(
+            stdfs::read(dir.path().join("none.txt")).unwrap(),
+            b"nothing of the sort",
+            "a file with no match must not be rewritten"
+        );
+    }
+
+    #[test]
+    fn a_replacement_keeps_the_file_it_rewrote_as_the_copy_rules_say() {
+        let dir = texts();
+        let path = dir.path().join("one.txt");
+        let when = std::time::SystemTime::UNIX_EPOCH + Duration::from_secs(1_500_000_000);
+        touch(&path, when);
+        #[cfg(unix)]
+        let mode = {
+            use std::os::unix::fs::PermissionsExt;
+            stdfs::set_permissions(&path, stdfs::Permissions::from_mode(0o640)).unwrap();
+            0o640
+        };
+
+        let out = run(&replace_spec(&dir, false), &mut Scripted::new(vec![]));
+        assert!(out.is_clean(), "{out:?}");
+        let facts = LocalFs.facts(&VPath::local(&path)).unwrap();
+        assert_eq!(
+            facts.mtime,
+            Some(when),
+            "the default `Preserve` keeps the file's own modification time"
+        );
+        #[cfg(unix)]
+        assert_eq!(facts.mode.map(|m| m & 0o777), Some(mode));
+
+        // And without `Preserve`, the rewrite is as recent as it really is.
+        stdfs::write(&path, b"alpha again").unwrap();
+        touch(&path, when);
+        let spec = replace_spec(&dir, false).with_options(JobOptions {
+            preserve: Preserve {
+                mtime: false,
+                mode: false,
+            },
+            ..JobOptions::default()
+        });
+        run(&spec, &mut Scripted::new(vec![]));
+        assert_ne!(
+            LocalFs.facts(&VPath::local(&path)).unwrap().mtime,
+            Some(when)
+        );
+    }
+
+    #[test]
+    fn a_cancelled_replacement_leaves_every_file_it_had_not_reached_untouched() {
+        /// A reporter that pulls the plug as soon as it sees the first file go by.
+        struct CancelAtOnce<'a>(&'a CancelToken);
+        impl Reporter for CancelAtOnce<'_> {
+            fn progress(&mut self, _p: &Progress) {
+                self.0.cancel();
+            }
+
+            fn ask(&mut self, _q: Question) -> Decision {
+                Decision::Cancel
+            }
+        }
+
+        let dir = texts();
+        let spec = replace_spec(&dir, false);
+        let cancel = CancelToken::new();
+        let p = plan(&LocalFs, &spec, &cancel).unwrap();
+        let out = execute(&LocalFs, &spec, p, &mut CancelAtOnce(&cancel), &cancel);
+
+        assert!(out.cancelled);
+        assert_eq!(out.files, 1, "the first file was already written");
+        assert_eq!(
+            stdfs::read(dir.path().join("one.txt")).unwrap(),
+            b"OMEGA beta OMEGA"
+        );
+        for name in ["two.txt", "three.txt", "none.txt"] {
+            assert!(
+                !stdfs::read(dir.path().join(name))
+                    .unwrap()
+                    .starts_with(b"OMEGA"),
+                "{name} was changed after the job was cancelled"
+            );
+        }
+    }
+
+    #[test]
+    fn a_directory_in_the_list_is_a_problem_and_the_other_files_still_change() {
+        let dir = texts();
+        stdfs::create_dir(dir.path().join("sub")).unwrap();
+        let mut sources = vec![VPath::local(dir.path().join("sub"))];
+        sources.extend(all_texts(&dir));
+        let spec = JobSpec::new(JobKind::Replace, sources, None)
+            .with_replace(ReplaceOptions::new("alpha", "OMEGA"));
+
+        let mut r = Scripted::new(vec![Decision::SkipAll]);
+        let out = run(&spec, &mut r);
+
+        assert_eq!(r.asked.len(), 1, "the directory is the one problem");
+        assert!(matches!(r.asked[0], Question::Error { .. }));
+        assert_eq!(out.errors.len(), 1);
+        assert_eq!(out.errors[0].0, VPath::local(dir.path().join("sub")));
+        assert_eq!(out.files, 3, "the rest of the list was still done");
+        assert_eq!(
+            stdfs::read(dir.path().join("two.txt")).unwrap(),
+            b"beta OMEGA gamma"
+        );
+    }
+
+    #[test]
+    fn a_replacement_that_spells_the_same_bytes_is_nothing_to_do() {
+        let dir = texts();
+        let spec = JobSpec::new(JobKind::Replace, all_texts(&dir), None)
+            .with_replace(ReplaceOptions::new("alpha", "alpha"));
+        let out = run(&spec, &mut Scripted::new(vec![]));
+
+        assert!(out.is_clean(), "{out:?}");
+        assert_eq!(out.files, 0, "no file changed");
+        assert_eq!(out.skipped, 4, "every one of them had nothing to do");
+        assert!(out.replacements.is_empty());
+        assert_eq!(out.occurrences(), 0);
+        assert_eq!(
+            stdfs::read(dir.path().join("one.txt")).unwrap(),
+            b"alpha beta alpha"
+        );
+    }
+
+    #[test]
+    fn a_replacement_reports_the_file_it_is_working_on_and_the_bytes_it_has_read() {
+        /// A reporter that keeps the last frame of every phase it saw.
+        struct Frames {
+            current: Vec<VPath>,
+            last: Progress,
+        }
+        impl Reporter for Frames {
+            fn progress(&mut self, p: &Progress) {
+                if let Some(path) = &p.current {
+                    self.current.push(path.clone());
+                }
+                self.last = p.clone();
+            }
+
+            fn ask(&mut self, _q: Question) -> Decision {
+                Decision::Cancel
+            }
+        }
+
+        let dir = texts();
+        let spec = replace_spec(&dir, false);
+        let cancel = CancelToken::new();
+        let p = plan(&LocalFs, &spec, &cancel).unwrap();
+        let total = p.bytes;
+        let mut frames = Frames {
+            current: Vec::new(),
+            last: Progress::default(),
+        };
+        let out = execute(&LocalFs, &spec, p, &mut frames, &cancel);
+
+        assert_eq!(frames.current.len(), 4, "one frame per file");
+        assert_eq!(frames.current[0], VPath::local(dir.path().join("one.txt")));
+        assert_eq!(frames.last.phase, Phase::Done);
+        assert_eq!(frames.last.current, None);
+        assert_eq!(
+            (frames.last.bytes_done, out.bytes),
+            (total, total),
+            "every byte of every file was read, matched or not"
+        );
+        assert_eq!(frames.last.percent(), 100);
     }
 
     #[test]

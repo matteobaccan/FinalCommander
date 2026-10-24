@@ -13,11 +13,15 @@
 pub mod fs;
 pub mod link;
 pub mod plan;
+pub mod replace;
 pub mod run;
 pub mod spec;
 
 pub use fs::{free_name, part_path, Facts, JobFs, LocalFs, PART_SUFFIX};
 pub use link::{create_link, LinkError, LinkKind};
 pub use plan::{plan, Plan, PlanError, Unit, UnitKind};
+pub use replace::{
+    replace_bytes, Matcher, ReplaceError, ReplaceOptions, ReplacePass, Replaced, PATTERN_FILE_LIMIT,
+};
 pub use run::{execute, Outcome, Progress, Reporter};
 pub use spec::{ConflictPolicy, Decision, JobKind, JobOptions, JobSpec, Phase, Preserve, Question};

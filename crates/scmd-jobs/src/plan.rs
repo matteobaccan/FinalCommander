@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use scmd_core::{CancelToken, EntryKind, VPath};
 
 use crate::fs::JobFs;
+use crate::replace::{Matcher, ReplaceError};
 use crate::spec::{JobKind, JobSpec};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -18,6 +19,11 @@ pub enum UnitKind {
     RemoveFile,
     /// Overwrite the file's bytes, then unlink it. `size` is what has to be written over.
     WipeFile {
+        size: u64,
+    },
+    /// Replace inside the file in place. `size` is what has to be read, which is the whole of
+    /// it: an occurrence can be anywhere.
+    ReplaceInFile {
         size: u64,
     },
     RemoveDir,
@@ -59,6 +65,12 @@ pub enum PlanError {
     SameFile { path: VPath },
     #[error("{path}: a wipe can only overwrite a file on a local filesystem")]
     WipeNotLocal { path: VPath },
+    #[error("{path}: a replacement can only rewrite a file on a local filesystem")]
+    ReplaceNotLocal { path: VPath },
+    #[error("nothing to replace: the job carries no needle")]
+    NoNeedle,
+    #[error("{0}")]
+    Needle(#[source] ReplaceError),
     #[error("{path}: {source}")]
     Io {
         path: VPath,
@@ -147,6 +159,37 @@ pub fn plan(fs: &dyn JobFs, spec: &JobSpec, cancel: &CancelToken) -> Result<Plan
                     walk_delete(fs, src, &mut removals, cancel, false)?;
                 }
                 plan.units.extend(removals.units);
+            }
+        }
+        JobKind::Replace => {
+            let options = spec.replace.as_ref().ok_or(PlanError::NoNeedle)?;
+            // Compiled here and thrown away: an empty needle or a regular expression that does
+            // not compile is a sentence the user can act on, and it belongs in front of the job
+            // rather than against every file in turn.
+            Matcher::compile(options).map_err(PlanError::Needle)?;
+
+            for src in &spec.sources {
+                check_cancel(cancel)?;
+                // Refused before anything is opened, as a wipe is: rewriting a file in place
+                // means writing a sibling and renaming it over the original, and on anything
+                // but a local filesystem neither step can be promised.
+                if !src.is_local() {
+                    return Err(PlanError::ReplaceNotLocal { path: src.clone() });
+                }
+                let facts = fs.facts(src).map_err(|source| PlanError::Io {
+                    path: src.clone(),
+                    source,
+                })?;
+                // A directory in the list is planned like everything else and refused by the
+                // provider when its turn comes, so one wrong entry is a problem reported
+                // against that entry and not a job the user cannot start at all.
+                plan.units.push(Unit {
+                    src: None,
+                    dst: src.clone(),
+                    kind: UnitKind::ReplaceInFile { size: facts.size },
+                });
+                plan.files += 1;
+                plan.bytes += facts.size;
             }
         }
         JobKind::Mkdir => unreachable!("handled above"),
@@ -284,6 +327,7 @@ fn check_cancel(cancel: &CancelToken) -> Result<(), PlanError> {
 mod tests {
     use super::*;
     use crate::fs::LocalFs;
+    use crate::replace::ReplaceOptions;
     use crate::spec::{JobOptions, JobSpec};
     use std::fs as stdfs;
 
@@ -431,6 +475,72 @@ mod tests {
         );
         let err = plan(&LocalFs, &spec, &CancelToken::new()).unwrap_err();
         assert!(matches!(err, PlanError::WipeNotLocal { .. }), "{err}");
+    }
+
+    #[test]
+    fn a_replacement_plans_one_unit_for_every_file_the_caller_chose() {
+        let dir = tree();
+        // A directory among the files, which the planner keeps rather than expanding: the
+        // caller chose this list, and refusing the whole job over one entry would be worse
+        // than reporting that one entry when its turn comes.
+        let spec = JobSpec::new(
+            JobKind::Replace,
+            vec![
+                VPath::local(dir.path().join("src/a.txt")),
+                VPath::local(dir.path().join("src/sub/b.txt")),
+                VPath::local(dir.path().join("src/sub")),
+            ],
+            None,
+        )
+        .with_replace(ReplaceOptions::new("aa", "bb"));
+
+        let p = plan(&LocalFs, &spec, &CancelToken::new()).unwrap();
+        assert_eq!(p.units.len(), 3, "one unit per file, and no walking");
+        assert_eq!((p.files, p.dirs, p.bytes), (3, 0, 6));
+        assert!(p
+            .units
+            .iter()
+            .all(|u| matches!(u.kind, UnitKind::ReplaceInFile { .. })));
+        assert_eq!(p.units[0].kind, UnitKind::ReplaceInFile { size: 4 });
+    }
+
+    #[test]
+    fn a_replacement_on_a_remote_path_is_refused_before_anything_is_touched() {
+        let spec = JobSpec::new(
+            JobKind::Replace,
+            vec![VPath::remote(scmd_core::Scheme::Sftp, "host", "/srv/x.txt")],
+            None,
+        )
+        .with_replace(ReplaceOptions::new("aa", "bb"));
+        let err = plan(&LocalFs, &spec, &CancelToken::new()).unwrap_err();
+        assert!(matches!(err, PlanError::ReplaceNotLocal { .. }), "{err}");
+    }
+
+    #[test]
+    fn a_replacement_with_no_needle_or_a_broken_one_never_reaches_a_file() {
+        let dir = tree();
+        let files = vec![VPath::local(dir.path().join("src/a.txt"))];
+
+        let err = plan(
+            &LocalFs,
+            &JobSpec::new(JobKind::Replace, files.clone(), None),
+            &CancelToken::new(),
+        )
+        .unwrap_err();
+        assert!(matches!(err, PlanError::NoNeedle), "{err}");
+
+        for options in [
+            ReplaceOptions::new("", "x"),
+            ReplaceOptions {
+                pattern: true,
+                ..ReplaceOptions::new("(unclosed", "x")
+            },
+        ] {
+            let spec = JobSpec::new(JobKind::Replace, files.clone(), None).with_replace(options);
+            let err = plan(&LocalFs, &spec, &CancelToken::new()).unwrap_err();
+            assert!(matches!(err, PlanError::Needle(_)), "{err}");
+            assert!(!err.to_string().is_empty(), "a refusal has to say why");
+        }
     }
 
     #[test]
