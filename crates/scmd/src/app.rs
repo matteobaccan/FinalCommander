@@ -2255,16 +2255,32 @@ impl App {
             }
         };
         match key.code {
-            KeyCode::Esc | KeyCode::F(10) | KeyCode::Char('q') if index => self.mode = Mode::Normal,
+            KeyCode::Esc | KeyCode::F(10) | KeyCode::Char('q') if index => {
+                self.mode = Mode::Normal;
+                // Whatever the help was opened over is waiting behind it.
+                self.restore_front_screen();
+            }
             // Out of a chapter is back to the index; out of the index is out of the help.
             KeyCode::Esc | KeyCode::Left | KeyCode::Backspace | KeyCode::Char('q') => {
                 go(self, Chapter::Index, 0, at)
             }
-            KeyCode::F(1) | KeyCode::F(10) => self.mode = Mode::Normal,
-            KeyCode::Enter | KeyCode::Right if index => {
-                let chapters = crate::help::chapters();
-                if let Some((chapter, _)) = chapters.get(at) {
-                    go(self, *chapter, 0, at);
+            KeyCode::F(1) | KeyCode::F(10) => {
+                self.mode = Mode::Normal;
+                self.restore_front_screen();
+            }
+            // From the page about where you are, on to the chapter that explains it.
+            KeyCode::Enter | KeyCode::Right => {
+                if let Chapter::Here(place) = chapter {
+                    if let Some(i) = place.prose() {
+                        go(self, Chapter::Prose(i), 0, at);
+                    }
+                    return;
+                }
+                if index {
+                    let chapters = crate::help::chapters();
+                    if let Some((chapter, _)) = chapters.get(at) {
+                        go(self, *chapter, 0, at);
+                    }
                 }
             }
             KeyCode::Up if index => go(self, chapter, scroll, at.saturating_sub(1)),
@@ -3350,8 +3366,10 @@ impl App {
         match cmd {
             Command::AppQuit => self.ask_before_quitting(),
             Command::AppHelp => {
+                let place = self.help_place();
+                self.park_front_screen();
                 self.mode = Mode::Help {
-                    chapter: crate::help::Chapter::Index,
+                    chapter: crate::help::Chapter::Here(place),
                     scroll: 0,
                     at: 0,
                 }
@@ -8589,6 +8607,18 @@ impl App {
             .collect()
     }
 
+    /// Where `F1` was pressed, which is what it should be about.
+    fn help_place(&self) -> crate::help::Where {
+        use crate::help::Where;
+        match &self.mode {
+            Mode::Viewer(_) => Where::Viewer,
+            Mode::Editor(_) => Where::Editor,
+            Mode::Hex(_) => Where::Hex,
+            Mode::Form(_) | Mode::Pick(_) | Mode::Prompt(_) | Mode::Confirm(_) => Where::Dialog,
+            _ => Where::Panels,
+        }
+    }
+
     /// The help page, generated from the live keymap so it can never drift.
     /// The lines of one chapter, ready to draw. The written ones are rendered from the text
     /// compiled into the binary; the rest are built here, from what the program is running.
@@ -8603,6 +8633,7 @@ impl App {
                 Some(page) => crate::help::render(page.text, width),
                 None => Vec::new(),
             },
+            Chapter::Here(place) => self.help_here(place, width),
             Chapter::Keys => self.help_keys(),
             Chapter::Commands => self.help_commands(),
             Chapter::Options => self.help_options(),
@@ -8616,6 +8647,67 @@ impl App {
         (self.viewer_size.0 as usize)
             .saturating_sub(4)
             .clamp(20, 100)
+    }
+
+    /// The keys of one screen, each with what it does — the page `F1` opens.
+    ///
+    /// Generated from the keymap as loaded and from each command's own description, so it
+    /// describes the program that is running rather than the one that was written about: a
+    /// binding of the reader's own appears here with the right words next to it.
+    fn help_here(&self, place: crate::help::Where, width: usize) -> Vec<String> {
+        let mut lines = vec![format!("# {}", place.title()), String::new()];
+
+        // One row per command rather than per binding: a command reached by three keys is
+        // one thing you can do, and listing it three times is how a key list becomes
+        // unreadable.
+        let mut rows: Vec<(Command, Vec<String>)> = Vec::new();
+        for scope in place.scopes() {
+            for (bound, key, cmd) in self.keymap.bindings() {
+                if bound != *scope {
+                    continue;
+                }
+                match rows.iter_mut().find(|(c, _)| *c == cmd) {
+                    Some((_, keys)) => keys.push(key.to_string()),
+                    None => rows.push((cmd, vec![key.to_string()])),
+                }
+            }
+        }
+
+        // By subject rather than by the order the keymap file happens to be written in: a
+        // list of keys one reads top to bottom is a list grouped the way one thinks.
+        rows.sort_by_key(|(cmd, _)| (help_group(cmd.id().as_str()).0, cmd.id()));
+
+        let width_of_keys = rows
+            .iter()
+            .map(|(_, keys)| keys.join(", ").chars().count())
+            .max()
+            .unwrap_or(0)
+            .min(24);
+        let mut group = usize::MAX;
+        for (cmd, keys) in &rows {
+            let (order, title) = help_group(cmd.id().as_str());
+            if order != group {
+                group = order;
+                if lines.len() > 2 {
+                    lines.push(String::new());
+                }
+                lines.push(format!("## {title}"));
+            }
+            let keys = keys.join(", ");
+            let text = format!("  {keys:<width_of_keys$}  {}", cmd.describe());
+            // The renderer wraps prose; this is a table, so it is cut rather than folded.
+            lines.push(scmd_ui::truncate_cols(&text, width.max(20)));
+        }
+
+        lines.push(String::new());
+        match place.prose() {
+            Some(_) => lines.push(
+                "Esc for the rest of the manual, where this screen has a chapter of its own."
+                    .to_string(),
+            ),
+            None => lines.push("Esc for the rest of the manual.".to_string()),
+        }
+        lines
     }
 
     /// Every binding of the keymap as loaded, by scope. Generated rather than written, so it
@@ -8832,6 +8924,25 @@ fn keybar_label(cmd: Command) -> Option<&'static str> {
         Command::PluginCommands => "key-plugins",
         _ => return None,
     })
+}
+
+/// Which part of the help a command belongs under, and in what order the parts come. The
+/// identifier's own prefix says it, which is the point of the identifiers being shaped that
+/// way: `file.copy` is a file operation whether or not anyone remembered to say so.
+fn help_group(id: &str) -> (usize, &'static str) {
+    let prefix = id.split('.').next().unwrap_or("");
+    match prefix {
+        "nav" => (0, "Moving about"),
+        "sel" => (1, "Choosing files"),
+        "file" => (2, "Files"),
+        "arc" => (3, "Archives"),
+        "panel" => (4, "The panels"),
+        "viewer" => (5, "Reading"),
+        "editor" => (6, "Editing"),
+        "cmd" | "shell" => (7, "The command line"),
+        "tool" | "net" | "plugin" | "macro" => (8, "Tools"),
+        _ => (9, "The program"),
+    }
 }
 
 #[cfg(test)]
@@ -11793,18 +11904,74 @@ mod tests {
         assert!(app.status.contains("FAR"), "{}", app.status);
     }
 
+    /// `F1` is about where you are: the viewer's keys from the viewer, the editor's from
+    /// the editor — and the screen it was opened over is still there when it closes.
+    #[test]
+    fn the_help_is_about_where_you_are() {
+        use crate::help::{Chapter, Where};
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), b"one\ntwo\n").unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F3");
+
+        press(&mut app, "F1");
+        let Mode::Help { chapter, .. } = app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(chapter, Chapter::Here(Where::Viewer));
+        let page = app.help_lines(chapter, 76);
+        let text = page.join("\n");
+        assert!(text.contains("The viewer"), "{text}");
+        assert!(
+            text.contains("wrap the long lines"),
+            "the viewer's own keys are not on its page: {text}"
+        );
+        assert!(
+            !text.contains("make a directory"),
+            "the panels' keys are on the viewer's page: {text}"
+        );
+
+        // Right goes on to the chapter that explains the viewer at length.
+        press(&mut app, "Right");
+        let Mode::Help { chapter, .. } = app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert!(matches!(chapter, Chapter::Prose(_)));
+
+        // And out of the help is back into the viewer, not onto the panels.
+        press(&mut app, "F1");
+        assert!(app.mode.viewer().is_some(), "{:?}", app.mode);
+
+        // From the editor it is the editor's page.
+        press(&mut app, "F6"); // viewer to editor
+        press(&mut app, "F1");
+        let Mode::Help { chapter, .. } = app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(chapter, Chapter::Here(Where::Editor));
+        press(&mut app, "F1");
+        assert!(app.mode.editor().is_some(), "{:?}", app.mode);
+    }
+
     #[test]
     fn the_help_is_a_book_whose_reference_chapters_are_generated() {
         use crate::help::Chapter;
         let mut app = app();
 
-        // F1 opens the table of contents, not a wall of keys.
+        // F1 opens the page about where you are, with the keys of this screen on it.
         press(&mut app, "F1");
         let Mode::Help { chapter, at, .. } = app.mode else {
             panic!("{:?}", app.mode)
         };
-        assert_eq!(chapter, Chapter::Index);
+        assert_eq!(chapter, Chapter::Here(crate::help::Where::Panels));
         assert_eq!(at, 0);
+        // Esc from there is the table of contents, which is the book behind the page.
+        press(&mut app, "Esc");
+        let Mode::Help { chapter, .. } = app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(chapter, Chapter::Index);
         let index = app.help_lines(Chapter::Index, 76);
         assert_eq!(index.len(), crate::help::chapters().len());
         assert!(index[0].contains("What this is"), "{index:?}");

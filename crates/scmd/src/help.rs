@@ -13,12 +13,62 @@
 /// opened, from the live keymap, the command list and the configuration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Chapter {
-    /// The list of chapters, which is what `F1` opens.
+    /// The list of chapters.
     Index,
     Prose(usize),
     Keys,
     Commands,
     Options,
+    /// The keys of one place, with what each one does: what `F1` opens, chosen from where
+    /// you were standing when you pressed it.
+    Here(Where),
+}
+
+/// Which screen the help was asked from. FAR's help is contextual, and the reason is that
+/// the question behind `F1` is almost never "tell me about this program" — it is "what do
+/// the keys do *here*".
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Where {
+    Panels,
+    Viewer,
+    Editor,
+    Hex,
+    Dialog,
+}
+
+impl Where {
+    pub fn title(self) -> &'static str {
+        match self {
+            Where::Panels => "The panels",
+            Where::Viewer => "The viewer",
+            Where::Editor => "The editor",
+            Where::Hex => "The hex editor",
+            Where::Dialog => "This dialog",
+        }
+    }
+
+    /// The scopes whose keys apply here, innermost first — the same stack the keymap
+    /// resolves through, so the page cannot describe a key the program would not obey.
+    pub fn scopes(self) -> &'static [scmd_cmd::Scope] {
+        use scmd_cmd::Scope;
+        match self {
+            Where::Panels => &[Scope::Panel, Scope::Global],
+            Where::Viewer => &[Scope::Viewer, Scope::Global],
+            Where::Editor => &[Scope::Editor, Scope::Global],
+            Where::Hex => &[Scope::Hex, Scope::Editor, Scope::Global],
+            Where::Dialog => &[Scope::Dialog, Scope::Global],
+        }
+    }
+
+    /// The written chapter that explains this place at length.
+    pub fn prose(self) -> Option<usize> {
+        let title = match self {
+            Where::Panels | Where::Dialog => "The panels",
+            Where::Viewer => "The viewer",
+            Where::Editor | Where::Hex => "The editor, the hex pane and the assembler",
+        };
+        PROSE.iter().position(|p| p.title == title)
+    }
 }
 
 /// One written chapter: the title the index shows, and the text.

@@ -2226,6 +2226,18 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
     fn the_help_opens_on_its_contents_and_draws_a_chapter() {
         let mut app = app("commander", "en");
         app.handle_input(Input::Key("F1".parse().unwrap()));
+        // F1 is the page about where you are; the contents are one Esc behind it.
+        let here = frame(&mut app, 80, 24);
+        assert!(here.contains("The panels"), "{here}");
+        assert!(here.contains("Moving about"), "{here}");
+        // What is below the fold is in the page, which is what scrolling is for.
+        let page = app.help_lines(crate::help::Chapter::Here(crate::help::Where::Panels), 76);
+        assert!(
+            page.iter()
+                .any(|l| l.contains("F5") && l.contains("copy what is selected")),
+            "{page:?}"
+        );
+        app.handle_input(Input::Key("Esc".parse().unwrap()));
         let index = frame(&mut app, 80, 24);
         // The frame names the program and the version, and the body is the chapter list.
         assert!(index.contains("SupremeCommander"), "{index}");

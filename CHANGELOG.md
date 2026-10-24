@@ -17,6 +17,14 @@ Notable changes, newest first. The format follows
   the keyboard protocol for this (kitty, foot, WezTerm, Ghostty and others do); where it does
   not, the bar simply stays as it was.
 
+- **`F1` is about where you are.** It opens the keys of the screen you pressed it on — the
+  panels, the viewer, the editor, the hex editor, a dialog — each with a sentence saying what
+  it does, grouped by subject, generated from the keymap as loaded and from the commands'
+  own descriptions. A binding of your own appears there with the right words next to it, and
+  a key nobody bound appears nowhere. `Right` goes on to the chapter that explains that
+  screen at length, `Esc` to the table of contents, and leaving the help puts you back where
+  you were rather than on the panels.
+
 - **The search dialog** (`F7`), in the viewer and the editor, is FAR's: what to look for,
   whether it is text, hex or a regular expression, whether case matters, whether only whole
   words count, and then *Find next* or *Find previous* — the same question asked in two

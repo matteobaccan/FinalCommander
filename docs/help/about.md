@@ -16,8 +16,11 @@ all three.
 
 # Where to start
 
-`F1` opens this help, from anywhere. `F9` is the menu bar, which names every dialog and the
-key that opens it. `F10` leaves whatever you are in.
+`F1` opens the help for where you are: the keys of that screen, each with a line saying what
+it does, grouped by subject. `Right` from there is the chapter that explains the screen at
+length, `Esc` is the table of contents, and leaving the help puts you back where you were.
+`F9` is the menu bar, which names every dialog and the key that opens it. `F10` leaves
+whatever you are in.
 
 The key bar along the bottom always says what `F1` to `F12` do *right now* — in the panel, in
 the viewer, in the editor — and it follows the modifier you are holding, so holding `Shift`

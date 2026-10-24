@@ -4,6 +4,7 @@
 //! stack into a [`Command`], and that is all. See `docs/03-keymap.md`.
 
 pub mod command;
+mod describe;
 pub mod key;
 pub mod keymap;
 pub mod macros;
