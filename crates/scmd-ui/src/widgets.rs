@@ -1034,7 +1034,7 @@ mod tests {
         let theme = Theme::default_theme();
         let mut listing = listing();
         let mut buf = Buffer::new(44, 9);
-        let mut render = |listing: &Listing, buf: &mut Buffer| {
+        let render = |listing: &Listing, buf: &mut Buffer| {
             let p = PanelRender {
                 area: Rect::new(0, 0, 44, 9),
                 path: "s3://logs/2024/",
