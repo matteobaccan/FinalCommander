@@ -7,7 +7,10 @@ pub struct Totals {
     pub files: u64,
     pub dirs: u64,
     pub bytes: u64,
+    /// Everything selected, directories included — what "N selected" means to the user.
     pub selected_files: u64,
+    /// How many of those are directories, for the panel's selected-totals bar.
+    pub selected_dirs: u64,
     pub selected_bytes: u64,
 }
 
@@ -107,6 +110,9 @@ impl Listing {
                 selected[i] = true;
                 totals.selected_files += 1;
                 totals.selected_bytes += e.size;
+                if e.kind == EntryKind::Dir {
+                    totals.selected_dirs += 1;
+                }
             }
             self.order.push(i as u32);
         }

@@ -223,21 +223,31 @@ impl Buffer {
 
     /// Single-line box with an optional centred title.
     pub fn draw_frame(&mut self, rect: Rect, style: Style, title: Option<&str>) {
+        self.draw_bordered(rect, style, title, Border::Single)
+    }
+
+    /// The same, in the border of one's choosing.
+    ///
+    /// FAR draws its *panels* with a double line and everything else — dialogs, menus, the
+    /// rule above a status line — with a single one, so the two panels read as the frame of
+    /// the program and whatever is in front of them as something laid over it.
+    pub fn draw_bordered(&mut self, rect: Rect, style: Style, title: Option<&str>, border: Border) {
         if rect.w < 2 || rect.h < 2 {
             return;
         }
+        let (tl, tr, bl, br, h, v) = border.parts();
         let (x0, y0, x1, y1) = (rect.x, rect.y, rect.right() - 1, rect.bottom() - 1);
-        self.set(x0, y0, '┌', style);
-        self.set(x1, y0, '┐', style);
-        self.set(x0, y1, '└', style);
-        self.set(x1, y1, '┘', style);
+        self.set(x0, y0, tl, style);
+        self.set(x1, y0, tr, style);
+        self.set(x0, y1, bl, style);
+        self.set(x1, y1, br, style);
         for x in x0 + 1..x1 {
-            self.set(x, y0, '─', style);
-            self.set(x, y1, '─', style);
+            self.set(x, y0, h, style);
+            self.set(x, y1, h, style);
         }
         for y in y0 + 1..y1 {
-            self.set(x0, y, '│', style);
-            self.set(x1, y, '│', style);
+            self.set(x0, y, v, style);
+            self.set(x1, y, v, style);
         }
         if let Some(t) = title {
             let avail = rect.w.saturating_sub(4);
@@ -296,6 +306,23 @@ impl Buffer {
             }
         }
         out
+    }
+}
+
+/// Which line a frame is drawn with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Border {
+    Single,
+    Double,
+}
+
+impl Border {
+    /// Corners, then the horizontal and the vertical piece.
+    fn parts(self) -> (char, char, char, char, char, char) {
+        match self {
+            Border::Single => ('┌', '┐', '└', '┘', '─', '│'),
+            Border::Double => ('╔', '╗', '╚', '╝', '═', '║'),
+        }
     }
 }
 

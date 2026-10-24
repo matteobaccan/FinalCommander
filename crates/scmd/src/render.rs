@@ -2125,7 +2125,7 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
         for id in ["commander", "black", "white", "matrix", "tron", "blade"] {
             let mut app = app(id, "en");
             let out = frame(&mut app, 60, 15);
-            assert!(out.contains("src/"), "theme {id} rendered nothing: {out}");
+            assert!(out.contains("src"), "theme {id} rendered nothing: {out}");
         }
     }
 
@@ -2173,7 +2173,7 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
             "{out}"
         );
         assert!(
-            lines[1].starts_with("│n"),
+            lines[1].starts_with("║n"),
             "no sort letter in the corner: {}",
             lines[1]
         );
@@ -2184,14 +2184,14 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
         app.panels[0].rebuild();
         let out = frame(&mut app, 80, 24);
         let lines: Vec<&str> = out.lines().collect();
-        assert!(lines[1].starts_with("│N"), "{}", lines[1]);
+        assert!(lines[1].starts_with("║N"), "{}", lines[1]);
 
         // A filter puts a mark next to the letter, as FAR does.
         app.panels[0].filter = Some("rs".into());
         app.panels[0].rebuild();
         let out = frame(&mut app, 80, 24);
         let lines: Vec<&str> = out.lines().collect();
-        assert!(lines[1].starts_with("│N*"), "{}", lines[1]);
+        assert!(lines[1].starts_with("║N*"), "{}", lines[1]);
     }
 
     #[test]
@@ -2723,7 +2723,7 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
         let out = frame(&mut app, 100, 28);
         let top = out.lines().next().unwrap();
         assert_eq!(
-            top.matches('┌').count(),
+            top.matches('╔').count(),
             1,
             "two panels are still drawn: {top}"
         );
@@ -2732,7 +2732,7 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
         app.run(scmd_cmd::Command::PanelToggle(scmd_cmd::Side::Left));
         assert_eq!(app.hidden, None);
         let out = frame(&mut app, 100, 28);
-        assert_eq!(out.lines().next().unwrap().matches('┌').count(), 2);
+        assert_eq!(out.lines().next().unwrap().matches('╔').count(), 2);
     }
 
     #[test]
@@ -2784,10 +2784,12 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
             bytes: Some(12 * 1024 * 1024 * 1024),
         });
         let out = frame(&mut app, 100, 28);
-        assert!(out.contains("12.0 G free"), "{out}");
+        // FAR's own layout: what is in the panel, then a piece of double rule, then what
+        // is left on the device.
+        assert!(out.contains("═══ 12.0 G"), "{out}");
         app.cfg.panel.free_space = false;
         let out = frame(&mut app, 100, 28);
-        assert!(!out.contains("free"), "{out}");
+        assert!(!out.contains("12.0 G"), "{out}");
     }
 
     #[test]

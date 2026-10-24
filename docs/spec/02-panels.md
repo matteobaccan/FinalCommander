@@ -290,7 +290,7 @@ What FAR draws in and around a panel's frame, and what we do about it:
 | totals, or the selected count, or the filter | bottom frame, left | — | shipped |
 | free space on the device | bottom frame, right | `panel.free_space` | shipped; `statvfs` on Unix, nothing on a server or on Windows, and it says nothing rather than guessing |
 | scrollbar | right frame | `panel.scrollbar` | shipped; drawn only when there is more than fits |
-| the panel's own status line | a rule and a row above the bottom frame | `panel.status_line` | shipped, **off** by default: the screen-wide status bar already shows the same thing, and two rows saying it is a waste of a row. On, it costs two file rows, as it does in FAR |
+| the panel's own status line | a rule and a row above the bottom frame | `panel.status_line` | shipped, **on** by default, as in FAR: the rule carries the selected totals and the row under it names the file the cursor is on. It costs two file rows |
 | one panel full width | `Ctrl+F1` / `Ctrl+F2` | — | shipped; the focus follows the screen |
 | long names scrolled sideways | `Ctrl+Shift+←/→` | — | shipped, per panel, reset on a change of directory |
 | free space, screen counter, clock in the corner | — | — | the counter and the clock want a repaint on a timer; see the backlog |

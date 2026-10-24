@@ -43,7 +43,7 @@ single_instance = false
 view = "full"
 sort = { key = "name", reverse = false, dirs_first = true, selected_first = false,
          natural = true, case_sensitive = "auto", chain = ["name"] }
-show_hidden = false
+show_hidden = true
 allow_reverse_sort = true
 mouse = true
 quick_search = "alt"            # alt | plain | off   (FAR vs mc behaviour)

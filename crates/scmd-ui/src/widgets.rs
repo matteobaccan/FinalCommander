@@ -6,7 +6,7 @@ use scmd_core::{
 };
 use unicode_width::UnicodeWidthStr;
 
-use crate::buffer::{elide_middle, truncate_cols, Buffer, Rect, Style};
+use crate::buffer::{elide_middle, truncate_cols, Border, Buffer, Rect, Style};
 use crate::theme::Theme;
 
 /// Everything the panel widget needs to know. The panel owns no state of its own.
@@ -84,6 +84,8 @@ pub fn draw_panel(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>) {
         draw_full(buf, theme, p, inner, rows);
     }
 
+    draw_row_rules(buf, theme, p, inner, rows);
+
     if let Some(status) = p.status {
         draw_panel_status(buf, theme, p, status);
     }
@@ -91,6 +93,81 @@ pub fn draw_panel(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>) {
         draw_scrollbar(buf, theme, p, inner, rows);
     }
     draw_footer(buf, theme, p);
+    // Last, because it is drawn over whatever row it lands on: the rule when the panel has a
+    // status line, the bottom frame when it has not. That is where FAR puts it too.
+    let bar = if p.status.is_some() {
+        p.area.bottom().saturating_sub(3)
+    } else {
+        p.area.bottom().saturating_sub(1)
+    };
+    draw_selected_bar(buf, theme, p, bar);
+}
+
+/// Where the vertical rules between the columns go. FAR runs them the whole height of the
+/// list rather than only under the titles, which is what makes the columns read as columns.
+fn column_rules(p: &PanelRender<'_>, inner: Rect) -> Vec<u16> {
+    let mut xs = match p.view {
+        ViewMode::Brief | ViewMode::Wide => {
+            let cols = brief_columns(p.area, p.view);
+            let col_w = (inner.w as usize / cols).max(4);
+            (1..cols)
+                .map(|col| inner.x + (col * col_w) as u16 - 1)
+                .collect()
+        }
+        _ => {
+            let (name_w, size_w, time_w, attr_w) = full_columns(inner.w, p.view);
+            let mut xs = vec![inner.x + name_w, inner.x + name_w + size_w + 1];
+            if attr_w > 0 {
+                xs.push(inner.x + name_w + size_w + time_w + 2);
+            }
+            xs
+        }
+    };
+    xs.retain(|x| *x > inner.x && *x < inner.right());
+    xs
+}
+
+/// The rules themselves, down the rows of the list.
+///
+/// Each one keeps the background of the row it crosses, so the cursor bar and a selected row
+/// run through it unbroken — FAR's `HighlightBorder` does the same thing for the same reason.
+fn draw_row_rules(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect, rows: usize) {
+    let fg = theme.color("panel.frame");
+    let bg = theme.color("panel.bg");
+    for x in column_rules(p, inner) {
+        for row in 0..rows.min(inner.h as usize) {
+            let y = inner.y + row as u16;
+            let behind = buf.get(x, y).map_or(bg, |c| c.style.bg);
+            buf.set(x, y, '│', Style::new(fg, behind));
+        }
+    }
+}
+
+/// `Bytes: 20 879, files: 2, folders: 0`, centred and on its own background.
+///
+/// FAR gives the selected totals a line of their own rather than a corner of the footer
+/// (`ShowSelectedSize` in `filelist.cpp`), which is what makes a selection impossible to miss
+/// from across the room.
+fn draw_selected_bar(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, y: u16) {
+    let t = &p.listing.totals;
+    if t.selected_files == 0 {
+        return;
+    }
+    let text = format!(
+        " Bytes: {}, files: {}, folders: {} ",
+        format_count(t.selected_bytes),
+        format_count(t.selected_files - t.selected_dirs),
+        format_count(t.selected_dirs)
+    );
+    let room = p.area.w.saturating_sub(4) as usize;
+    let text = truncate_cols(&text, room);
+    let tw = text.width() as u16;
+    let style = Style::new(
+        theme.color("panel.info.selected.fg"),
+        theme.color("panel.info.selected.bg"),
+    );
+    let x = p.area.x + 2 + (room as u16).saturating_sub(tw) / 2;
+    buf.put_str(x, y, &text, style, tw);
 }
 
 /// A panel-shaped frame with its title and nothing in it: the frame every panel has, and the
@@ -100,7 +177,9 @@ pub fn draw_pane(buf: &mut Buffer, theme: &Theme, area: Rect, title: &str, focus
     let base = theme.panel();
     buf.fill(area, ' ', base);
     let frame = Style::new(theme.color("panel.frame"), theme.color("panel.bg"));
-    buf.draw_frame(area, frame, None);
+    // FAR draws the panels themselves with a double line, and everything laid over them
+    // with a single one.
+    buf.draw_bordered(area, frame, None, Border::Double);
 
     // The title is elided in the middle, so both ends of a long path stay readable.
     let style = if focused {
@@ -136,6 +215,9 @@ fn draw_panel_status(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, statu
         buf.set(x, rule, '─', frame);
     }
     buf.set(area.right() - 1, rule, '┤', frame);
+    for x in column_rules(p, area.inner()) {
+        buf.set(x, rule, '┴', frame);
+    }
     let style = theme.panel();
     let w = area.w.saturating_sub(2);
     buf.fill(Rect::new(area.x + 1, rule + 1, w, 1), ' ', style);
@@ -220,6 +302,9 @@ fn draw_column_titles(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inne
     buf.fill(Rect::new(inner.x, y, inner.w, 1), ' ', style);
     draw_sort_mark(buf, theme, p, y);
     let frame = Style::new(theme.color("panel.frame"), theme.color("panel.bg"));
+    for x in column_rules(p, inner) {
+        buf.set(x, y, '│', frame);
+    }
     match p.view {
         ViewMode::Brief | ViewMode::Wide => {
             let cols = brief_columns(p.area, p.view);
@@ -227,25 +312,19 @@ fn draw_column_titles(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inne
             for col in 0..cols {
                 let x = inner.x + (col * col_w) as u16;
                 centre(buf, x, y, col_w as u16 - 1, "Name", style);
-                if col + 1 < cols {
-                    buf.set(x + col_w as u16 - 1, y, '│', frame);
-                }
             }
         }
         _ => {
             let (name_w, size_w, time_w, attr_w) = full_columns(inner.w, p.view);
             let mut x = inner.x;
             centre(buf, x, y, name_w, "Name", style);
-            x += name_w;
-            buf.set(x, y, '│', frame);
-            centre(buf, x + 1, y, size_w, "Size", style);
+            x += name_w + 1;
+            centre(buf, x, y, size_w, "Size", style);
             x += size_w + 1;
-            buf.set(x, y, '│', frame);
-            centre(buf, x + 1, y, time_w, "Date       Time", style);
+            centre(buf, x, y, time_w, "Date       Time", style);
             if attr_w > 0 {
                 x += time_w + 1;
-                buf.set(x, y, '│', frame);
-                centre(buf, x + 1, y, attr_w, "Attr", style);
+                centre(buf, x, y, attr_w, "Attr", style);
             }
         }
     }
@@ -424,7 +503,8 @@ fn put_right(buf: &mut Buffer, x: u16, y: u16, w: u16, text: &str, style: Style)
 fn decorate(e: &Entry) -> String {
     let name = e.name_str().into_owned();
     match e.kind {
-        EntryKind::Dir => format!("{name}/"),
+        // No trailing slash: the size column says `Folder`, and FAR leaves the name alone.
+        EntryKind::Dir => name,
         EntryKind::Symlink => format!("{name}@"),
         _ if e.flags.contains(EntryFlags::EXECUTABLE) => format!("{name}*"),
         _ => name,
@@ -467,76 +547,74 @@ pub fn format_mtime(t: SystemTime) -> String {
     dt.format("%Y-%m-%d %H:%M").to_string()
 }
 
+/// The bottom frame: how much is in the panel and how much room is left on the device,
+/// centred the way FAR centres it (`ShowTotalSize` in `filelist.cpp`) — `14,1 M (6/0) ═══ 2,65 G`,
+/// with the rule between the two drawn in the frame's own colour so the eye separates them.
 fn draw_footer(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>) {
     let area = p.area;
     let y = area.bottom() - 1;
-    let w = area.w.saturating_sub(4);
+    let room = area.w.saturating_sub(4) as usize;
     let style = Style::new(theme.color("panel.footer.fg"), theme.color("panel.bg"));
+    let frame = Style::new(theme.color("panel.frame"), theme.color("panel.bg"));
 
     let totals = &p.listing.totals;
-    let text = if let Some(msg) = p.message {
-        msg.to_string()
-    } else if let Some(f) = p.filter {
-        format!("filter: {f}")
-    } else if totals.selected_files > 0 {
-        format!(
-            "{} of {} selected, {}",
-            format_count(totals.selected_files),
-            format_count(totals.files),
-            format_size(totals.selected_bytes)
-        )
-    } else {
-        // The sort mode is in the corner when the titles row is on, so it is not repeated.
-        if p.column_titles {
-            format!(
-                "{} files, {}",
-                format_count(totals.files),
-                format_size(totals.bytes)
-            )
-        } else {
-            format!(
-                "{} files, {}  [{}]",
-                format_count(totals.files),
-                format_size(totals.bytes),
-                p.sort_label
-            )
-        }
-    };
     // A listing the provider cut short says so for as long as it is on screen. The note
     // explaining why is a message, and a message lasts until the next keystroke; this does
     // not, because "2034 files" is otherwise a number that reads like the whole truth.
-    let text = if p.listing.truncated && p.message.is_none() {
-        format!("{text} (partial)")
+    let partial = if p.listing.truncated {
+        " (partial)"
     } else {
-        text
+        ""
     };
-    // Free space takes the right-hand end of the frame, as it does in FAR, so the totals
-    // have what is left.
-    let free = p
-        .free
-        .map(|bytes| format!(" {} free ", format_size(bytes)))
-        .filter(|s| s.width() as u16 + 6 < area.w);
-    let room = w.saturating_sub(free.as_ref().map_or(0, |s| s.width() as u16));
-    if let Some(free) = &free {
-        let fw = free.width() as u16;
-        buf.put_str(area.right() - 2 - fw, y, free, style, fw);
-    }
+    let (left, right) = if let Some(msg) = p.message {
+        (msg.to_string(), None)
+    } else if let Some(f) = p.filter {
+        (format!("filter: {f}{partial}"), None)
+    } else {
+        let sorted = if p.column_titles {
+            String::new()
+        } else {
+            // The sort mode is in the corner when the titles row is on, so it is not repeated.
+            format!(" [{}]", p.sort_label)
+        };
+        (
+            format!(
+                "{} ({}/{}){sorted}{partial}",
+                format_size(totals.bytes),
+                format_count(totals.files),
+                format_count(totals.dirs)
+            ),
+            p.free.map(format_size),
+        )
+    };
 
-    let text = truncate_cols(&text, room as usize);
+    // The free space is dropped rather than squeezed when the panel is too narrow for both.
+    let rule = "═══";
+    let full = match &right {
+        Some(free) if left.width() + free.width() + rule.width() + 4 <= room => {
+            format!(" {left} {rule} {free} ")
+        }
+        _ => format!(" {left} "),
+    };
+    let text = truncate_cols(&full, room);
     let tw = text.width() as u16;
+    let x = area.x + 2 + (room as u16).saturating_sub(tw) / 2;
     let style = if p.filter.is_some() || p.message.is_some() {
         style.with_fg(theme.color("filter.fg"))
-    } else if totals.selected_files > 0 {
-        // FAR puts the selected totals on their own background, which is what makes a
-        // selection impossible to miss from across the room.
-        Style::new(
-            theme.color("panel.info.selected.fg"),
-            theme.color("panel.info.selected.bg"),
-        )
     } else {
         style
     };
-    buf.put_str(area.x + 2, y, &text, style, tw);
+    buf.put_str(x, y, &text, style, tw);
+    // The piece of double line between the totals and the free space belongs to the frame,
+    // not to the text, and FAR colours it as such.
+    if right.is_some() {
+        if let Some(at) = text.find(rule) {
+            let before = text[..at].width() as u16;
+            for i in 0..rule.chars().count() as u16 {
+                buf.set(x + before + i, y, '═', frame);
+            }
+        }
+    }
 }
 
 /// The `F1..F12` bar. `labels` is `(number, label)`, already localised by the caller.
@@ -971,19 +1049,21 @@ mod tests {
     fn full_view_shows_names_sizes_and_times() {
         let out = render(ViewMode::Full, 0, &Selection::default());
         assert!(out.contains("/home/mb/project"), "{out}");
-        assert!(out.contains("src/"), "{out}");
+        // A directory is named as it is: the size column is what says it is one.
+        assert!(out.contains("src ") && !out.contains("src/"), "{out}");
         assert!(out.contains("Folder"), "{out}");
         assert!(out.contains("412 B"), "{out}");
         assert!(out.contains("2.00 K"), "{out}");
         assert!(!out.contains("22…"), "the time column is too narrow: {out}");
-        assert!(out.contains("2 files"), "{out}"); // src/ counts as a directory
+        // The bottom frame counts them the way FAR does: `(files/folders)`.
+        assert!(out.contains("(2/1)"), "{out}");
     }
 
     #[test]
     fn brief_view_lays_names_out_in_columns() {
         let out = render(ViewMode::Brief, 0, &Selection::default());
         let body: Vec<&str> = out.lines().skip(1).take(4).collect();
-        // With 4 entries and several columns, `..` and `src/` share the first row.
+        // With 4 entries and several columns, `..` and `src` share the first row.
         assert!(body[0].contains(".."), "{out}");
         assert!(
             out.contains("Cargo.toml") && out.contains("README.md"),
@@ -992,7 +1072,7 @@ mod tests {
     }
 
     #[test]
-    fn selection_and_cursor_are_visible_in_the_footer() {
+    fn the_selected_totals_get_a_bar_of_their_own() {
         let listing = listing();
         let mut sel = Selection::default();
         let id = listing.row(2).unwrap().id;
@@ -1025,7 +1105,8 @@ mod tests {
         };
         draw_panel(&mut buf, &theme, &p);
         let out = buf.to_text();
-        assert!(out.contains("1 of 2 selected"), "{out}");
+        // FAR's own wording, centred on its own background rather than tucked into a corner.
+        assert!(out.contains("Bytes: 412, files: 1, folders: 0"), "{out}");
     }
 
     /// A listing the provider cut short must not read like a complete one.
@@ -1069,7 +1150,7 @@ mod tests {
         let cut = render(&listing, &mut buf);
         assert!(cut.contains("(partial)"), "{cut}");
         // The count is still there: the marker qualifies it, it does not replace it.
-        assert!(cut.contains("files"), "{cut}");
+        assert!(cut.contains("(2/1)"), "{cut}");
     }
 
     #[test]

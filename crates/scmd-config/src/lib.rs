@@ -172,12 +172,14 @@ pub struct PanelCfg {
     pub dirs_first: bool,
     pub selected_first: bool,
     pub natural_sort: bool,
+    /// On by default, and deliberately: a file manager that quietly leaves files out is
+    /// lying about the directory. `.git` and `.env` are files like any other.
     pub show_hidden: bool,
     pub allow_reverse_sort: bool,
     /// The `Name | Size | Date | Time` row under the panel frame (FAR has it on by default).
     pub column_titles: bool,
     /// The item under the cursor, spelled out in the panel's own bottom row (FAR's
-    /// `Show status line`). Off by default, because we also have a status bar.
+    /// `Show status line`), under a rule that also carries the selected totals.
     pub status_line: bool,
     /// A bar in the right frame showing where the view sits in a long listing.
     pub scrollbar: bool,
@@ -195,10 +197,10 @@ impl Default for PanelCfg {
             dirs_first: true,
             selected_first: false,
             natural_sort: true,
-            show_hidden: false,
+            show_hidden: true,
             allow_reverse_sort: true,
             column_titles: true,
-            status_line: false,
+            status_line: true,
             scrollbar: true,
             free_space: true,
             quick_search: QuickSearch::Alt,
