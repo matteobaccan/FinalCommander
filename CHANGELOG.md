@@ -156,6 +156,19 @@ A command line, and the keys a FAR user reaches for without thinking.
 - The key bar now uses FAR's own wording where FAR ships the language: `UserMn`, `MkFold`,
   `ConfMn`, and their Italian, German, Spanish and Russian forms.
 
+### Also
+
+- **Quoting on Windows was wrong**: the backslash was in the set of characters that need
+  quoting, which is right on Unix (it escapes the next one) and wrong on Windows (it *is* the
+  path separator) — so every path a metasymbol expanded came back wrapped in quotes, which
+  `cmd` then reads differently. Each platform has its own set now.
+- A panel can be **a list of files rather than a directory**: one method decides whether a
+  row's path is the panel's own path plus a name or something it was told, and every
+  operation goes through it. Nothing reaches it from the keyboard yet — it is what find
+  results and `panelize` will be shown in — but it is in this build.
+- Four tests that only held on Unix now hold on both platforms, and one that needed a
+  Windows privilege no longer insists on it.
+
 ### Documentation
 
 - `docs/04-far-inventory.md`: FAR 3.x read from its own repository — 283 help topics, 311
