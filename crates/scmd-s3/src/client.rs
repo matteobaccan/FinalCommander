@@ -7,13 +7,14 @@
 //! a large bucket is a thousand requests in a row and a fresh TLS handshake for each would
 //! cost more than everything else put together.
 
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use scmd_core::CancelToken;
 
 use crate::endpoint::Endpoint;
 use crate::error::{Result, S3Error};
-use crate::sign::{Credentials, Signable, Signer, EMPTY_SHA256};
+use crate::sign::{self, Credentials, Signable, Signer, EMPTY_SHA256};
 use crate::uri;
 use crate::xml::{self, BucketRow, Page};
 
@@ -136,7 +137,9 @@ impl Client {
 
     /// What one object is, without reading it.
     pub async fn head(&self, bucket: &str, key: &str, cancel: &CancelToken) -> Result<ObjectMeta> {
-        let response = self.send("HEAD", bucket, key, &[], None, cancel).await?;
+        let response = self
+            .send("HEAD", bucket, key, &[], &[], Payload::Empty, cancel)
+            .await?;
         let header = |name: &str| {
             response
                 .headers()
@@ -153,6 +156,123 @@ impl Client {
         })
     }
 
+    /// Write an object from bytes already in memory.
+    ///
+    /// This is the small write: the editor's save, and the empty object that stands for a
+    /// directory. It returns what the service said the object is, so a caller can show the
+    /// new stamp without asking again.
+    pub async fn put(
+        &self,
+        bucket: &str,
+        key: &str,
+        body: Vec<u8>,
+        cancel: &CancelToken,
+    ) -> Result<ObjectMeta> {
+        let len = body.len() as u64;
+        let sha = sign::sha256_hex(&body);
+        let response = self
+            .send(
+                "PUT",
+                bucket,
+                key,
+                &[],
+                &[],
+                Payload::Bytes(Arc::new(body), sha),
+                cancel,
+            )
+            .await?;
+        Ok(ObjectMeta {
+            size: len,
+            modified: None,
+            etag: response
+                .headers()
+                .get("etag")
+                .and_then(|v| v.to_str().ok())
+                .map(|e| e.trim_matches('"').to_string()),
+        })
+    }
+
+    /// Write an object from a file, streamed rather than held in memory.
+    ///
+    /// The body goes up as it is read, so a file larger than this process would like to hold
+    /// is not a problem — but it is read twice: once to hash it for the signature, once to
+    /// send it (see [`sign::sha256_file`]).
+    ///
+    /// One `PUT` is one operation to the service: it either arrives whole or leaves nothing
+    /// behind, so there is no half-written object and no partial progress worth reporting
+    /// after a failure. `Esc` is answered before the body starts and by the request timeout
+    /// after it. An object above five gigabytes needs a multipart upload, which this is not,
+    /// and the service's own refusal is what says so.
+    pub async fn put_file(
+        &self,
+        bucket: &str,
+        key: &str,
+        source: &std::path::Path,
+        cancel: &CancelToken,
+    ) -> Result<u64> {
+        let len = tokio::fs::metadata(source)
+            .await
+            .map_err(|e| local_error(source, e))?
+            .len();
+        let path = source.to_path_buf();
+        let sha = tokio::task::spawn_blocking(move || sign::sha256_file(&path))
+            .await
+            .map_err(|e| S3Error::Local(e.to_string()))?
+            .map_err(|e| local_error(source, e))?;
+        self.send(
+            "PUT",
+            bucket,
+            key,
+            &[],
+            &[],
+            Payload::File {
+                path: source.to_path_buf(),
+                len,
+                sha256: sha,
+            },
+            cancel,
+        )
+        .await?;
+        Ok(len)
+    }
+
+    /// Copy an object inside the service, without the bytes coming through here.
+    ///
+    /// `from` is `bucket/key`, which is the form the header takes. The service does the work,
+    /// which is what makes a rename on object storage affordable: a rename is a copy and a
+    /// delete, and this is the copy.
+    pub async fn copy_object(
+        &self,
+        bucket: &str,
+        key: &str,
+        from_bucket: &str,
+        from_key: &str,
+        cancel: &CancelToken,
+    ) -> Result<()> {
+        // The source is a path, so it is encoded as one — a key with a space or a `+` in it
+        // is a key, and a header that said otherwise would copy the wrong object.
+        let source = format!("/{from_bucket}/{}", uri::encode_path(from_key));
+        self.send(
+            "PUT",
+            bucket,
+            key,
+            &[],
+            &[("x-amz-copy-source", source)],
+            Payload::Empty,
+            cancel,
+        )
+        .await?;
+        Ok(())
+    }
+
+    /// Remove one object. A key that is not there is not an error: the end state asked for is
+    /// the end state, and the service reports it the same way.
+    pub async fn delete_object(&self, bucket: &str, key: &str, cancel: &CancelToken) -> Result<()> {
+        self.send("DELETE", bucket, key, &[], &[], Payload::Empty, cancel)
+            .await?;
+        Ok(())
+    }
+
     /// Read an object, or a window of one. The viewer asks for windows; a download asks for
     /// the whole thing.
     pub async fn get(
@@ -167,8 +287,12 @@ impl Client {
             Some(_) => format!("bytes={from}-{from}"),
             None => format!("bytes={from}-"),
         });
+        let range: Vec<(&str, String)> = match range {
+            Some(range) => vec![("range", range)],
+            None => Vec::new(),
+        };
         let response = self
-            .send("GET", bucket, key, &[], range.as_deref(), cancel)
+            .send("GET", bucket, key, &[], &range, Payload::Empty, cancel)
             .await?;
         let host = self.endpoint.host.clone();
         let bytes = response.bytes().await.map_err(|e| S3Error::Transport {
@@ -186,7 +310,9 @@ impl Client {
         query: &[(&str, String)],
         cancel: &CancelToken,
     ) -> Result<String> {
-        let response = self.send(method, bucket, key, query, None, cancel).await?;
+        let response = self
+            .send(method, bucket, key, query, &[], Payload::Empty, cancel)
+            .await?;
         let host = self.endpoint.host.clone();
         response.text().await.map_err(|e| S3Error::Transport {
             host,
@@ -195,13 +321,15 @@ impl Client {
     }
 
     /// Sign, send, and retry what is worth retrying.
+    #[allow(clippy::too_many_arguments)]
     async fn send(
         &self,
         method: &str,
         bucket: &str,
         key: &str,
         query: &[(&str, String)],
-        range: Option<&str>,
+        headers: &[(&str, String)],
+        payload: Payload,
         cancel: &CancelToken,
     ) -> Result<reqwest::Response> {
         let mut attempt = 0;
@@ -209,7 +337,10 @@ impl Client {
             if cancel.is_cancelled() {
                 return Err(S3Error::Cancelled);
             }
-            match self.send_once(method, bucket, key, query, range).await {
+            match self
+                .send_once(method, bucket, key, query, headers, payload.clone())
+                .await
+            {
                 Ok(response) => return Ok(response),
                 Err(error) => {
                     attempt += 1;
@@ -231,16 +362,23 @@ impl Client {
         bucket: &str,
         key: &str,
         query: &[(&str, String)],
-        range: Option<&str>,
+        headers: &[(&str, String)],
+        payload: Payload,
     ) -> Result<reqwest::Response> {
         let target = self.endpoint.target(bucket, key);
         let canonical_query = uri::query_string(query);
         let url = target.url(&canonical_query);
 
-        let extra: Vec<(&str, String)> = match range {
-            Some(range) => vec![("range", range.to_string())],
-            None => Vec::new(),
-        };
+        // Two lists: what is signed, and what is also sent. `content-length` belongs to the
+        // body rather than to the request's meaning, and signing it would make every retry a
+        // different request to a service that computes the signature from the headers it
+        // chose to include.
+        let signed: Vec<(&str, String)> = headers.iter().map(|(n, v)| (*n, v.clone())).collect();
+        let extra: Vec<(&str, String)> = signed
+            .iter()
+            .map(|(n, v)| (*n, v.clone()))
+            .chain(payload.header())
+            .collect();
         let mut request = self
             .http
             .request(
@@ -257,13 +395,14 @@ impl Client {
                 host: &target.host,
                 path: &target.path,
                 query: &canonical_query,
-                headers: &extra,
-                payload_sha256: EMPTY_SHA256,
+                headers: &signed,
+                payload_sha256: payload.sha256(),
             };
             for (name, value) in signer.sign(&signable, SystemTime::now()) {
                 request = request.header(name, value);
             }
         }
+        let request = payload.attach(request, &target.host).await?;
 
         let response = request.send().await.map_err(|e| S3Error::Transport {
             host: target.host.clone(),
@@ -360,6 +499,76 @@ fn http_date(text: &str) -> Option<SystemTime> {
 }
 
 /// What actually happened, rather than the chain of wrappers `reqwest` prints.
+/// What a request carries, and what its signature says about it.
+///
+/// It is cloneable because [`Client::send`] retries, and a retry has to send the same body
+/// again: bytes are shared rather than copied, and a file is re-read from its path. The hash
+/// travels with it for the same reason — computing it once is enough, and for a file that
+/// matters, because computing it means reading the file.
+#[derive(Clone)]
+enum Payload {
+    /// No body at all: every read, a delete, a server-side copy.
+    Empty,
+    /// A body held in memory, signed over its bytes.
+    Bytes(Arc<Vec<u8>>, String),
+    /// A body streamed from a file, signed over the hash of what is in it.
+    File {
+        path: std::path::PathBuf,
+        len: u64,
+        sha256: String,
+    },
+}
+
+impl Payload {
+    /// What `x-amz-content-sha256` is to say. A signed request always says something here,
+    /// which for an empty body is the hash of nothing.
+    fn sha256(&self) -> &str {
+        match self {
+            Payload::Empty => EMPTY_SHA256,
+            Payload::Bytes(_, sha) => sha,
+            Payload::File { sha256, .. } => sha256,
+        }
+    }
+
+    /// The header the body itself asks for, which is its length where there is one. It is
+    /// *not* signed as an extra header — `content-length` is not in the signed set — but the
+    /// service wants it, and a streamed body has no length of its own to offer.
+    fn header(&self) -> Option<(&'static str, String)> {
+        match self {
+            Payload::Empty => None,
+            Payload::Bytes(body, _) => Some(("content-length", body.len().to_string())),
+            Payload::File { len, .. } => Some(("content-length", len.to_string())),
+        }
+    }
+
+    /// Put the body on the request.
+    async fn attach(
+        self,
+        request: reqwest::RequestBuilder,
+        host: &str,
+    ) -> Result<reqwest::RequestBuilder> {
+        match self {
+            Payload::Empty => Ok(request),
+            // The bytes are shared, and `reqwest` wants its own: one copy per attempt, which
+            // is the price of a retry that can repeat the request.
+            Payload::Bytes(body, _) => Ok(request.body(body.as_ref().clone())),
+            Payload::File { path, .. } => {
+                let file = tokio::fs::File::open(&path)
+                    .await
+                    .map_err(|e| local_error(&path, e))?;
+                let stream = tokio_util::io::ReaderStream::new(file);
+                let _ = host;
+                Ok(request.body(reqwest::Body::wrap_stream(stream)))
+            }
+        }
+    }
+}
+
+/// A file we could not read is not the service's fault, and the message should not blame it.
+fn local_error(path: &std::path::Path, error: std::io::Error) -> S3Error {
+    S3Error::Local(format!("{}: {error}", path.display()))
+}
+
 fn transport_detail(error: &reqwest::Error) -> String {
     if error.is_timeout() {
         return "timed out".to_string();
@@ -400,6 +609,132 @@ mod tests {
         let fake = FakeS3::start(buckets).await;
         let client = Client::new(fake.endpoint(), Some(fake.credentials.clone())).unwrap();
         (fake, client)
+    }
+
+    /// Writing an object, deleting it, and copying one inside the service — each of them a
+    /// signed request whose signature covers a body, which is the part a read never exercises.
+    #[tokio::test]
+    async fn an_object_can_be_written_copied_and_deleted() {
+        let (fake, client) = service().await;
+        let cancel = CancelToken::new();
+
+        // Write, then read it back: the bytes that arrived are the bytes that were sent, and
+        // the signature covered them — a service that disagreed would have answered 403.
+        let meta = client
+            .put("logs", "notes/new.txt", b"hello there".to_vec(), &cancel)
+            .await
+            .expect("the write is accepted");
+        assert_eq!(meta.size, 11);
+        let back = client
+            .get("logs", "notes/new.txt", None, &cancel)
+            .await
+            .expect("it reads back");
+        assert_eq!(back, b"hello there");
+
+        // A key with the characters that break naive encoding, written and read.
+        client
+            .put("logs", "an odd & key +2.txt", b"x".to_vec(), &cancel)
+            .await
+            .expect("an awkward key is still a key");
+        assert_eq!(
+            client
+                .get("logs", "an odd & key +2.txt", None, &cancel)
+                .await
+                .expect("it reads back"),
+            b"x"
+        );
+
+        // Copy inside the service: the bytes do not come through here.
+        client
+            .copy_object("logs", "notes/copy.txt", "logs", "notes/new.txt", &cancel)
+            .await
+            .expect("the copy is accepted");
+        assert_eq!(
+            client
+                .get("logs", "notes/copy.txt", None, &cancel)
+                .await
+                .expect("the copy is there"),
+            b"hello there"
+        );
+        assert!(
+            fake.requests().iter().any(|r| r.contains("notes/copy.txt")),
+            "the copy went to the service: {:?}",
+            fake.requests()
+        );
+
+        // Delete, and it is gone; deleting it again is still fine.
+        client
+            .delete_object("logs", "notes/new.txt", &cancel)
+            .await
+            .expect("the delete is accepted");
+        assert!(matches!(
+            client.get("logs", "notes/new.txt", None, &cancel).await,
+            Err(S3Error::NotFound(_))
+        ));
+        client
+            .delete_object("logs", "notes/new.txt", &cancel)
+            .await
+            .expect("deleting what is not there is not an error");
+    }
+
+    /// A file goes up as a stream rather than as a buffer, and the signature is over a hash
+    /// computed by reading it — so what the service verifies is what is on the disk.
+    #[tokio::test]
+    async fn a_file_is_uploaded_as_a_stream() {
+        let (_fake, client) = service().await;
+        let cancel = CancelToken::new();
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("payload.bin");
+        // Larger than one read, so the streaming path is actually a stream.
+        let body: Vec<u8> = (0..300_000u32).map(|i| (i % 251) as u8).collect();
+        std::fs::write(&file, &body).unwrap();
+
+        let sent = client
+            .put_file("logs", "big/payload.bin", &file, &cancel)
+            .await
+            .expect("the upload is accepted");
+        assert_eq!(sent, body.len() as u64);
+        let back = client
+            .get("logs", "big/payload.bin", None, &cancel)
+            .await
+            .expect("it reads back");
+        assert_eq!(back.len(), body.len());
+        assert_eq!(back, body, "every byte arrived as it was");
+
+        // An empty file is a file: zero bytes still hash to something, and the object exists.
+        let empty = dir.path().join("empty");
+        std::fs::write(&empty, b"").unwrap();
+        assert_eq!(
+            client
+                .put_file("logs", "big/empty", &empty, &cancel)
+                .await
+                .expect("an empty object is allowed"),
+            0
+        );
+        assert!(client
+            .head("logs", "big/empty", &cancel)
+            .await
+            .is_ok_and(|m| m.size == 0));
+    }
+
+    /// A write to a bucket that is not there says which bucket, and a write with no
+    /// credentials is refused by the service rather than by a guess here.
+    #[tokio::test]
+    async fn a_write_that_cannot_work_says_why() {
+        let (fake, client) = service().await;
+        let cancel = CancelToken::new();
+        let error = client
+            .put("nope", "k", b"x".to_vec(), &cancel)
+            .await
+            .expect_err("there is no such bucket");
+        assert!(error.to_string().contains("NoSuchBucket"), "{error}");
+
+        let anonymous = Client::new(fake.endpoint(), None).unwrap();
+        let error = anonymous
+            .put("logs", "k", b"x".to_vec(), &cancel)
+            .await
+            .expect_err("an anonymous write is refused");
+        assert!(error.to_string().contains("AccessDenied"), "{error}");
     }
 
     /// The whole round trip, against a service that recomputes the signature from the request

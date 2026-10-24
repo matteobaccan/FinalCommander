@@ -221,6 +221,27 @@ pub fn sha256_hex(body: &[u8]) -> String {
     hex(digest::digest(&digest::SHA256, body).as_ref())
 }
 
+/// Hex SHA-256 of a file, read a block at a time.
+///
+/// A signed request has to say what its body hashes to before the body is sent, so a file
+/// uploaded as a stream is read twice: once to hash it, once to send it. The alternative the
+/// protocol allows — `UNSIGNED-PAYLOAD` — asks the service to take the body on trust, and not
+/// every service that speaks this protocol is willing to.
+pub fn sha256_file(path: &std::path::Path) -> std::io::Result<String> {
+    use std::io::Read;
+    let mut file = std::fs::File::open(path)?;
+    let mut context = digest::Context::new(&digest::SHA256);
+    let mut block = vec![0u8; 256 * 1024];
+    loop {
+        let read = file.read(&mut block)?;
+        if read == 0 {
+            break;
+        }
+        context.update(&block[..read]);
+    }
+    Ok(hex(context.finish().as_ref()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

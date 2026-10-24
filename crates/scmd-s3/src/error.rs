@@ -32,6 +32,11 @@ pub enum S3Error {
 
     #[error("cancelled")]
     Cancelled,
+
+    /// Something on this side of the wire: the file an upload was to read, a thread that
+    /// would not join. It is not the service's fault and the message should not blame it.
+    #[error("{0}")]
+    Local(String),
 }
 
 impl S3Error {

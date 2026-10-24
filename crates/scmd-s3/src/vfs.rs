@@ -188,6 +188,9 @@ impl S3Vfs {
             return self.read_buckets(profile, cancel).await;
         }
         let cap = self.service(profile)?.listing_cap;
+        // A service with no credentials can read and nothing else, and the rows say so: the
+        // panel greys what it cannot change rather than offering a key that answers 403.
+        let writable = self.service(profile)?.credentials.is_some();
         let prefix = S3Vfs::prefix_of(path);
         let delimiter = if flat { None } else { Some("/") };
 
@@ -223,7 +226,7 @@ impl S3Vfs {
                 if object.key == prefix {
                     continue;
                 }
-                entries.push(object_entry(&object.key, &prefix, object));
+                entries.push(object_entry(&object.key, &prefix, object, writable));
             }
             let more = page.truncated && page.next_token.is_some();
             if !more {
@@ -320,6 +323,112 @@ impl S3Vfs {
             .get(bucket, &key, range, cancel)
             .await
     }
+
+    /// Write an object from a file on disk.
+    ///
+    /// There is nothing to create first and nothing to truncate: a key either exists with
+    /// these bytes afterwards or it does not exist at all, which is the one thing object
+    /// storage makes simpler than a filesystem.
+    pub async fn write_object(
+        &self,
+        path: &VPath,
+        source: &std::path::Path,
+        cancel: &CancelToken,
+    ) -> Result<u64> {
+        let (profile, bucket, key) = Self::parts_of(path)?;
+        self.client(&profile, &bucket)?
+            .put_file(&bucket, &key, source, cancel)
+            .await
+    }
+
+    /// Write an object from bytes in memory: the editor's save, and the marker that makes a
+    /// prefix visible before anything is in it.
+    pub async fn write_bytes(
+        &self,
+        path: &VPath,
+        body: Vec<u8>,
+        cancel: &CancelToken,
+    ) -> Result<u64> {
+        let (profile, bucket, key) = Self::parts_of(path)?;
+        let len = body.len() as u64;
+        self.client(&profile, &bucket)?
+            .put(&bucket, &key, body, cancel)
+            .await?;
+        Ok(len)
+    }
+
+    /// Remove an object.
+    pub async fn delete_object(&self, path: &VPath, cancel: &CancelToken) -> Result<()> {
+        let (profile, bucket, key) = Self::parts_of(path)?;
+        self.client(&profile, &bucket)?
+            .delete_object(&bucket, &key, cancel)
+            .await
+    }
+
+    /// Copy an object inside the service, without its bytes passing through this program.
+    ///
+    /// Both ends must be the same service: a copy across services is two halves — a read and
+    /// a write — and that is the job engine's business, not one request's.
+    pub async fn copy_object(&self, from: &VPath, to: &VPath, cancel: &CancelToken) -> Result<()> {
+        let (from_profile, from_bucket, from_key) = Self::parts_of(from)?;
+        let (profile, bucket, key) = Self::parts_of(to)?;
+        if from_profile != profile {
+            return Err(S3Error::Local(format!(
+                "{from} and {to} are on different services, so the copy has to go through here"
+            )));
+        }
+        self.client(&profile, &bucket)?
+            .copy_object(&bucket, &key, &from_bucket, &from_key, cancel)
+            .await
+    }
+
+    /// Make a prefix visible before anything is in it.
+    ///
+    /// Object storage has no directories: `a/b/c.txt` is one key, and the `a/` and `a/b/`
+    /// that a panel shows are read out of the keys. A panel still needs to be able to make
+    /// one — `F7` has to do something — so an empty object named `a/b/` is written, which is
+    /// the convention every console and every other client uses for exactly this. A listing
+    /// shows it as a directory, and the first real key under it makes it redundant.
+    pub async fn make_prefix(&self, path: &VPath, cancel: &CancelToken) -> Result<()> {
+        let (profile, bucket, key) = Self::parts_of(path)?;
+        let marker = if key.ends_with('/') {
+            key
+        } else {
+            format!("{key}/")
+        };
+        self.client(&profile, &bucket)?
+            .put(&bucket, &marker, Vec::new(), cancel)
+            .await?;
+        Ok(())
+    }
+
+    /// Can this path be written to at all? A service configured without credentials can only
+    /// read, and saying so before the attempt is better than a 403 from far away.
+    pub fn writable(&self, path: &VPath) -> bool {
+        let authority = path.authority().unwrap_or("");
+        let (profile, _) = S3Vfs::split_authority(authority);
+        self.services
+            .get(profile)
+            .is_some_and(|s| s.credentials.is_some())
+    }
+
+    /// The three pieces every write needs: which service, which bucket, which key.
+    fn parts_of(path: &VPath) -> Result<(String, String, String)> {
+        let authority = path.authority().unwrap_or("");
+        let (profile, bucket) = S3Vfs::split_authority(authority);
+        let key = S3Vfs::key_of(path);
+        if bucket.is_empty() {
+            return Err(S3Error::Local(format!(
+                "{path}: there is no bucket in this path, and an object lives in one"
+            )));
+        }
+        if key.is_empty() {
+            return Err(S3Error::Local(format!(
+                "{path}: this names the bucket itself, which is not an object"
+            )));
+        }
+        Ok((profile.to_string(), bucket.to_string(), key))
+    }
 }
 
 #[async_trait]
@@ -328,11 +437,26 @@ impl Vfs for S3Vfs {
         "s3"
     }
 
-    /// Read, and seek. An object is immutable from this program's point of view today: there
-    /// is no partial write, no rename that is not a copy, and no timestamp to set — so the
-    /// capabilities say read and nothing else, and the UI offers nothing it cannot do.
+    /// What object storage can do, and no more.
+    ///
+    /// Read and seek, and now write, create, delete and rename — but none of the things a
+    /// filesystem does to a file that already exists: there is no partial write, no truncate,
+    /// no timestamp or mode to set, and no link of any kind. A rename is a copy and a delete,
+    /// which the service does itself (`SERVER_SIDE_COPY`) rather than sending the bytes here
+    /// and back, and it is therefore not atomic — `ATOMIC_RENAME` is absent and means it.
+    ///
+    /// A service configured without credentials can only read. That is not expressible here,
+    /// because these flags describe the provider and a provider may hold several services, so
+    /// the refusal comes from [`S3Vfs::writable`] and from the service itself.
     fn caps(&self) -> Caps {
-        Caps::READ | Caps::SEEK | Caps::CASE_SENSITIVE
+        Caps::READ
+            | Caps::SEEK
+            | Caps::WRITE
+            | Caps::CREATE
+            | Caps::DELETE
+            | Caps::RENAME
+            | Caps::SERVER_SIDE_COPY
+            | Caps::CASE_SENSITIVE
     }
 
     async fn list(&self, path: &VPath, cancel: CancelToken) -> CoreResult<Vec<Entry>> {
@@ -377,11 +501,14 @@ fn dir_entry(name: &str) -> Entry {
 /// A row for an object. The name is what is left of the key after the prefix, which for a
 /// listing with a delimiter is one segment and for a flat listing is the whole path below it —
 /// and that is the right answer for both, since a flat listing is asking to see the depth.
-fn object_entry(key: &str, prefix: &str, object: &crate::xml::ObjectRow) -> Entry {
+fn object_entry(key: &str, prefix: &str, object: &crate::xml::ObjectRow, writable: bool) -> Entry {
     let name = key.strip_prefix(prefix).unwrap_or(key);
     let mut flags = EntryFlags::empty();
-    // Nothing here is writable through this program, and a panel that says so is honest.
-    flags.insert(EntryFlags::READONLY);
+    // Read-only means read-only: an anonymous service cannot be written to, and a panel that
+    // said otherwise would offer a key that comes back 403.
+    if !writable {
+        flags.insert(EntryFlags::READONLY);
+    }
     if name.starts_with('.') {
         flags.insert(EntryFlags::HIDDEN);
     }
@@ -450,6 +577,124 @@ mod tests {
             .iter()
             .map(|e| e.name_str().into_owned())
             .collect::<Vec<_>>()
+    }
+
+    /// Everything a panel does to a key, through the provider: write it, see it in the
+    /// listing, copy it, rename it, delete it, and make a prefix that holds nothing yet.
+    #[tokio::test]
+    async fn a_panel_can_write_rename_and_delete_through_the_provider() {
+        let (_fake, vfs) = provider().await;
+        let cancel = CancelToken::new();
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("upload.txt");
+        std::fs::write(&file, b"fresh bytes").unwrap();
+
+        // Upload, and the panel sees it.
+        let to = VPath::parse("s3://logs/notes/upload.txt");
+        assert_eq!(
+            vfs.write_object(&to, &file, &cancel)
+                .await
+                .expect("the upload works"),
+            11
+        );
+        let listed = Vfs::list(&vfs, &VPath::parse("s3://logs/notes/"), cancel.clone())
+            .await
+            .expect("the prefix lists");
+        assert!(
+            names(&listed).contains(&"upload.txt".to_string()),
+            "{:?}",
+            names(&listed)
+        );
+        assert_eq!(
+            vfs.read_object(&to, None, &cancel).await.expect("it reads"),
+            b"fresh bytes"
+        );
+
+        // A row the service can be written to is not marked read-only.
+        let row = listed
+            .iter()
+            .find(|e| e.name_str() == "upload.txt")
+            .expect("the row is there");
+        assert!(
+            !row.flags.contains(EntryFlags::READONLY),
+            "a writable service writes"
+        );
+
+        // Copy inside the service, then rename — which is that copy and a delete.
+        let beside = VPath::parse("s3://logs/notes/copy.txt");
+        vfs.copy_object(&to, &beside, &cancel)
+            .await
+            .expect("the copy works");
+        assert_eq!(
+            vfs.read_object(&beside, None, &cancel)
+                .await
+                .expect("the copy reads"),
+            b"fresh bytes"
+        );
+        vfs.delete_object(&to, &cancel)
+            .await
+            .expect("the delete works");
+        assert!(Vfs::stat(&vfs, &to).await.is_err(), "it is gone");
+
+        // `F7`: a prefix with nothing in it yet is an empty object named with a slash, and it
+        // lists as a directory rather than as a file called nothing.
+        let made = VPath::parse("s3://logs/brand/new");
+        vfs.make_prefix(&made, &cancel)
+            .await
+            .expect("the prefix is made");
+        let listed = Vfs::list(&vfs, &VPath::parse("s3://logs/brand/"), cancel.clone())
+            .await
+            .expect("it lists");
+        let row = listed
+            .iter()
+            .find(|e| e.name_str() == "new")
+            .expect("the new prefix is there");
+        assert_eq!(row.kind, EntryKind::Dir, "a prefix is a directory");
+    }
+
+    /// A service with no credentials reads and nothing more, and every row says so.
+    #[tokio::test]
+    async fn a_read_only_service_says_so_in_every_row() {
+        let mut buckets = BTreeMap::new();
+        let mut logs = BTreeMap::new();
+        logs.insert("readme.txt".to_string(), b"x".to_vec());
+        buckets.insert("logs".to_string(), logs);
+        let fake = FakeS3::start(buckets).await;
+        fake.public();
+        let vfs = S3Vfs::new(vec![Service::new("", fake.endpoint())]);
+        let cancel = CancelToken::new();
+
+        assert!(!vfs.writable(&VPath::parse("s3://logs/readme.txt")));
+        let listed = Vfs::list(&vfs, &VPath::parse("s3://logs/"), cancel.clone())
+            .await
+            .expect("it lists anonymously");
+        let row = listed
+            .iter()
+            .find(|e| e.name_str() == "readme.txt")
+            .expect("the row is there");
+        assert!(row.flags.contains(EntryFlags::READONLY));
+
+        // And an attempt is refused by the service, with its own word for it.
+        let error = vfs
+            .write_bytes(&VPath::parse("s3://logs/new.txt"), b"x".to_vec(), &cancel)
+            .await
+            .expect_err("an anonymous write cannot work");
+        assert!(error.to_string().contains("AccessDenied"), "{error}");
+    }
+
+    /// A path that names a bucket, or the list of them, is not an object — and the refusal
+    /// says which of the two it is rather than sending a request that cannot mean anything.
+    #[tokio::test]
+    async fn a_bucket_is_not_an_object() {
+        let (_fake, vfs) = provider().await;
+        let cancel = CancelToken::new();
+        for (path, word) in [("s3://logs/", "the bucket itself"), ("s3://", "no bucket")] {
+            let error = vfs
+                .write_bytes(&VPath::parse(path), b"x".to_vec(), &cancel)
+                .await
+                .expect_err("there is nothing there to write");
+            assert!(error.to_string().contains(word), "{path}: {error}");
+        }
     }
 
     #[tokio::test]

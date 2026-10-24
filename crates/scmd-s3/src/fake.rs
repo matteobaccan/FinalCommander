@@ -36,8 +36,9 @@ pub struct Store {
     pub seen: Vec<String>,
     /// Refuse everything with this code, if set.
     pub refuse: Option<(u16, String, String)>,
-    /// Serve unsigned requests, the way a bucket with a public read policy does. Off by
-    /// default, because a private bucket is the case that has to work.
+    /// Serve unsigned *reads*, the way a bucket with a public read policy does. Off by
+    /// default, because a private bucket is the case that has to work. An unsigned write is
+    /// refused whatever this says.
     pub public: bool,
 }
 
@@ -128,18 +129,34 @@ impl Server {
     async fn serve(&self, mut socket: tokio::net::TcpStream) {
         let mut buffer = Vec::new();
         let mut chunk = [0u8; 4096];
-        // Read until the end of the headers. Nothing here has a body.
+        // Read the headers, then as much body as `Content-Length` promised. A `PUT` carries
+        // one, and a service that answered before reading it would leave the client writing
+        // into a socket nobody is listening to — which looks like a broken pipe rather than
+        // like the test it is.
+        let mut head_end = None;
         loop {
             let read = match socket.read(&mut chunk).await {
                 Ok(0) | Err(_) => break,
                 Ok(n) => n,
             };
             buffer.extend_from_slice(&chunk[..read]);
-            if buffer.windows(4).any(|w| w == b"\r\n\r\n") {
-                break;
+            if head_end.is_none() {
+                head_end = buffer
+                    .windows(4)
+                    .position(|w| w == b"\r\n\r\n")
+                    .map(|at| at + 4);
+            }
+            if let Some(start) = head_end {
+                let head = String::from_utf8_lossy(&buffer[..start]).into_owned();
+                let wanted = content_length(&head);
+                if buffer.len() >= start + wanted {
+                    break;
+                }
             }
         }
-        let text = String::from_utf8_lossy(&buffer).into_owned();
+        let head_end = head_end.unwrap_or(buffer.len());
+        let body = buffer[head_end.min(buffer.len())..].to_vec();
+        let text = String::from_utf8_lossy(&buffer[..head_end]).into_owned();
         let mut lines = text.split("\r\n");
         let Some(request_line) = lines.next() else {
             return;
@@ -174,11 +191,12 @@ impl Server {
             .seen
             .push(format!("{method} {target}"));
 
-        let response = self.answer(method, path, query, &headers, &header);
+        let response = self.answer(method, path, query, &headers, &header, body);
         let _ = socket.write_all(&response).await;
         let _ = socket.shutdown().await;
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn answer(
         &self,
         method: &str,
@@ -186,9 +204,14 @@ impl Server {
         query: &str,
         headers: &[(String, String)],
         header: &dyn Fn(&str) -> Option<String>,
+        body: Vec<u8>,
     ) -> Vec<u8> {
         if header("authorization").is_none() {
-            if !self.store.lock().expect("the store").public {
+            // A public bucket is public to *read*. A policy that let the world write to one
+            // would be a mistake nobody makes on purpose, so an unsigned write is refused
+            // here as it is there.
+            let public = self.store.lock().expect("the store").public;
+            if !public || !matches!(method, "GET" | "HEAD") {
                 return error_response(
                     403,
                     "AccessDenied",
@@ -233,7 +256,11 @@ impl Server {
         if key.is_empty() {
             return error_response(405, "MethodNotAllowed", "nothing to do with a bucket");
         }
-        self.object(method, &bucket, &key, header)
+        match method {
+            "PUT" => self.put(&bucket, &key, body, header),
+            "DELETE" => self.delete(&bucket, &key),
+            _ => self.object(method, &bucket, &key, header),
+        }
     }
 
     /// Recompute the signature from what arrived. `None` when it matches.
@@ -407,6 +434,66 @@ impl Server {
         ok_response(body.into_bytes(), &[])
     }
 
+    /// `PUT`, with the body — or, with `x-amz-copy-source`, a copy inside the service.
+    fn put(
+        &self,
+        bucket: &str,
+        key: &str,
+        body: Vec<u8>,
+        header: &dyn Fn(&str) -> Option<String>,
+    ) -> Vec<u8> {
+        let mut store = self.store.lock().expect("the store");
+        if !store.buckets.contains_key(bucket) {
+            return error_response(404, "NoSuchBucket", "the specified bucket does not exist");
+        }
+        let bytes = match header("x-amz-copy-source") {
+            Some(source) => {
+                // `/bucket/key`, percent-encoded as a path.
+                let source = uri::decode(source.trim_start_matches('/'));
+                let Some((from_bucket, from_key)) = source.split_once('/') else {
+                    return error_response(400, "InvalidRequest", "the copy source is not a path");
+                };
+                match store.buckets.get(from_bucket).and_then(|b| b.get(from_key)) {
+                    Some(bytes) => bytes.clone(),
+                    None => {
+                        return error_response(404, "NoSuchKey", "the copy source does not exist")
+                    }
+                }
+            }
+            None => body,
+        };
+        let len = bytes.len();
+        store
+            .buckets
+            .get_mut(bucket)
+            .expect("the bucket is there")
+            .insert(key.to_string(), bytes);
+        let extra = vec![("ETag", format!("\"{len:032x}\""))];
+        if header("x-amz-copy-source").is_some() {
+            // A copy answers with a body, which is how a client knows the copy itself
+            // succeeded rather than only the request.
+            let body = format!(
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?><CopyObjectResult>\
+                 <LastModified>2024-08-13T10:11:12.000Z</LastModified><ETag>&quot;{len:032x}&quot;</ETag>\
+                 </CopyObjectResult>"
+            );
+            return ok_response(body.into_bytes(), &extra);
+        }
+        ok_response(Vec::new(), &extra)
+    }
+
+    /// `DELETE`. A key that was not there is not an error: the end state is the end state.
+    fn delete(&self, bucket: &str, key: &str) -> Vec<u8> {
+        let mut store = self.store.lock().expect("the store");
+        let Some(objects) = store.buckets.get_mut(bucket) else {
+            return error_response(404, "NoSuchBucket", "the specified bucket does not exist");
+        };
+        objects.remove(key);
+        let mut head = String::from("HTTP/1.1 204 No Content\r\n");
+        head.push_str("Content-Length: 0\r\nConnection: close\r\n\r\n");
+        head.into_bytes()
+    }
+
     fn object(
         &self,
         method: &str,
@@ -461,6 +548,15 @@ impl Server {
             None => ok_response(bytes.clone(), &extra),
         }
     }
+}
+
+/// What the head says its body's length is, or nothing.
+fn content_length(head: &str) -> usize {
+    head.split("\r\n")
+        .filter_map(|line| line.split_once(':'))
+        .find(|(name, _)| name.trim().eq_ignore_ascii_case("content-length"))
+        .and_then(|(_, value)| value.trim().parse().ok())
+        .unwrap_or(0)
 }
 
 /// The three characters that cannot appear in XML content as themselves.

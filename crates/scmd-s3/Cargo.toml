@@ -16,7 +16,10 @@ async-trait = "0.1"
 # under the SSH client, so signing costs no new dependency.
 ring = "0.17"
 thiserror = "2"
-tokio = { version = "1", features = ["rt", "io-util", "time", "macros"] }
+tokio = { version = "1", features = ["rt", "io-util", "time", "macros", "fs"] }
+# `ReaderStream`, so an upload's body streams off the disk instead of being held in memory.
+# Already in the tree under `reqwest`, so it costs no new crate.
+tokio-util = { version = "0.7", default-features = false, features = ["io"] }
 
 [dependencies.reqwest]
 version = "0.12"
