@@ -127,7 +127,7 @@ variants, the folder rules, mouse selection.
 | File attributes dialog: the full NTFS attribute set, four timestamps, owner, hard links, streams | `Ctrl+A`, `F4` on a folder | ✗ |
 | Apply a command line to each selected file | `Ctrl+G` | ✗ |
 | Describe files (`descript.ion` / `files.bbs`) | `Ctrl+Z` | ✗ |
-| Compare folders | Commands menu | ✗ |
+| Compare folders | Commands menu | ✓ (by name, size and time; and **by content**, which FAR leaves to a plugin) |
 | Copy names, full names, UNC names, or the files themselves, to the clipboard | `Ctrl+Ins`, `Alt+Shift+Ins`, `Ctrl+Alt+Ins`, `Ctrl+Shift+C/X` | ✗ |
 
 ## 5. Masks, filters, groups, highlighting

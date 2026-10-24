@@ -859,6 +859,10 @@ fn interactive(mut app: App) -> Result<()> {
                     // way of the runtime that is also serving the panels.
                     runtime.spawn_blocking(move || run_find(id, *spec, cancel, tx));
                 }
+                Request::CompareContents { id, pairs, cancel } => {
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || run_compare(id, pairs, cancel, tx));
+                }
                 Request::TempRefresh {
                     panel,
                     generation,
@@ -1258,6 +1262,80 @@ async fn fetch_remote(pool: &Pool, path: &VPath) -> Result<(PathBuf, RemoteStamp
         mtime: None,
     });
     Ok((local, stamp))
+}
+
+/// Read both sides of every pair and report which differ.
+///
+/// On a blocking thread, because the reading is blocking and a comparison of a thousand files
+/// must not sit in front of the panels. Progress goes out every few pairs rather than every
+/// pair: a thousand messages a second is a slower program than no messages at all.
+fn run_compare(
+    id: u64,
+    pairs: Vec<app::ComparePair>,
+    cancel: CancelToken,
+    tx: mpsc::Sender<Event>,
+) {
+    use scmd_find::FindFs;
+    let fs = scmd_vfs::LocalVfs;
+    let total = pairs.len() as u64;
+    let mut differ = Vec::new();
+    let mut unreadable = 0u64;
+    let mut stopped = false;
+
+    for (index, pair) in pairs.iter().enumerate() {
+        if cancel.is_cancelled() {
+            stopped = true;
+            break;
+        }
+        // Two different sizes are two different files, and the listing already said so.
+        let same = if pair.left_size != pair.right_size {
+            Some(false)
+        } else {
+            match (fs.open(&pair.left), fs.open(&pair.right)) {
+                (Ok(mut left), Ok(mut right)) => {
+                    match scmd_core::compare::same_contents(
+                        &mut left,
+                        &mut right,
+                        &cancel,
+                        &mut |_| true,
+                    ) {
+                        Ok(same) => Some(same),
+                        Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {
+                            stopped = true;
+                            None
+                        }
+                        // A file that cannot be read is not a file that is the same: it is
+                        // counted and named as unread, which is a different thing to act on.
+                        Err(_) => {
+                            unreadable += 1;
+                            None
+                        }
+                    }
+                }
+                _ => {
+                    unreadable += 1;
+                    None
+                }
+            }
+        };
+        if stopped {
+            break;
+        }
+        if same == Some(false) {
+            differ.push(pair.name.clone());
+        }
+        let done = index as u64 + 1;
+        if done.is_multiple_of(8) || done == total {
+            let _ = tx.send(Event::CompareProgress { id, done, total });
+        }
+    }
+
+    let _ = tx.send(Event::CompareDone {
+        id,
+        differ,
+        unreadable,
+        stopped,
+    });
 }
 
 /// Bring an object down to a temporary file, which is what `F3` and `F11` then read.
@@ -2033,6 +2111,13 @@ timeout = 10
                         .err()
                         .map(|e| e.to_string());
                     app.handle_event(Event::LinkDone { link, error });
+                }
+                Request::CompareContents { id, pairs, cancel } => {
+                    let (tx, rx) = mpsc::channel();
+                    run_compare(id, pairs, cancel, tx);
+                    while let Ok(event) = rx.try_recv() {
+                        app.handle_event(event);
+                    }
                 }
                 Request::Find { id, spec, cancel } => {
                     let (tx, rx) = mpsc::channel();

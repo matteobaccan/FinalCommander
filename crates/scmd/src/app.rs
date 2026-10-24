@@ -30,6 +30,13 @@ pub enum Request {
         panel: usize,
         path: VPath,
     },
+    /// Read both sides of every pair and say which differ. The pairs are already matched by
+    /// name: this is the reading, which is the part that takes time.
+    CompareContents {
+        id: u64,
+        pairs: Vec<ComparePair>,
+        cancel: CancelToken,
+    },
     /// Walk and match. The engine is `scmd-find`; this carries what the dialog asked for.
     Find {
         id: u64,
@@ -175,6 +182,20 @@ pub enum Event {
         panel: usize,
         generation: u64,
         note: String,
+    },
+    /// How far a comparison by content has got.
+    CompareProgress {
+        id: u64,
+        done: u64,
+        total: u64,
+    },
+    /// A comparison by content finished, or was stopped: the names whose bytes differ, and
+    /// how many pairs could not be read at all.
+    CompareDone {
+        id: u64,
+        differ: Vec<String>,
+        unreadable: u64,
+        stopped: bool,
     },
     DirSized {
         panel: usize,
@@ -419,6 +440,20 @@ pub enum ConfirmAction {
         site: Box<Site>,
         secret: Option<String>,
     },
+}
+
+/// Two files with the same name, one in each panel, waiting to be read.
+///
+/// The sizes come from the listings that are already on screen, so a pair whose sizes differ
+/// is settled without opening anything — which is most of them, and the reason a comparison
+/// of two build trees finishes in the time it takes to read the few files that match.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ComparePair {
+    pub name: String,
+    pub left: VPath,
+    pub right: VPath,
+    pub left_size: u64,
+    pub right_size: u64,
 }
 
 /// A yes/no question that carries what it will do on `Enter`.
@@ -777,6 +812,15 @@ pub struct App {
     pending_connect: Option<(usize, Box<Site>, Option<String>)>,
     /// The fetch we are waiting for, if any.
     fetch_id: Option<u64>,
+    /// The comparison by content that is running, and the token that stops it. `Esc` on a
+    /// panel with an empty command line stops it, which is the only way out of a comparison
+    /// of ten thousand files that was started by mistake.
+    compare: Option<(u64, CancelToken)>,
+    /// Files with no counterpart on the other side, kept while the reading runs: they are
+    /// differences too, and they are selected with the rest when it finishes.
+    compare_alone: Vec<String>,
+    /// How many pairs the running comparison was given, for the sentence at the end.
+    compare_pairs: usize,
     /// The command line under the panels (SPEC 06 §7).
     pub cmd: CmdLine,
     /// What the commands that have run printed, for `Ctrl+O`. Capped.
@@ -920,6 +964,9 @@ impl App {
             connected: Vec::new(),
             pending_connect: None,
             fetch_id: None,
+            compare: None,
+            compare_alone: Vec::new(),
+            compare_pairs: 0,
             cmd: CmdLine::new(),
             user_screen: Vec::new(),
             hidden: None,
@@ -1231,6 +1278,31 @@ impl App {
                         self.set_error(e);
                     }
                 }
+            }
+            Event::CompareProgress { id, done, total } => {
+                if self.compare.as_ref().map(|(running, _)| *running) != Some(id) {
+                    return;
+                }
+                let msg = self.i18n.t_args(
+                    "compare-contents-working",
+                    &[
+                        ("done", (done as i64).into()),
+                        ("total", (total as i64).into()),
+                    ],
+                );
+                self.set_status(msg);
+            }
+            Event::CompareDone {
+                id,
+                differ,
+                unreadable,
+                stopped,
+            } => {
+                if self.compare.as_ref().map(|(running, _)| *running) != Some(id) {
+                    return;
+                }
+                self.compare = None;
+                self.apply_compare(&differ, unreadable, stopped);
             }
             Event::ListingCut {
                 panel,
@@ -3281,6 +3353,7 @@ impl App {
             Command::FilePack => self.open_pack_form(),
             Command::FileUnpack => self.open_unpack_form(),
             Command::ToolCompareDirs => self.compare_dirs(),
+            Command::ToolCompareContents => self.compare_contents(),
             Command::ToolCalculator => {
                 // It opens on the last sum: a calculator is used in runs.
                 let title = self.i18n.t("calc-title");
@@ -3924,6 +3997,16 @@ impl App {
             }
             KeyCode::Esc if !empty => {
                 self.cmd.clear();
+                true
+            }
+            // With nothing on the line, `Esc` is the way out of a comparison by content that
+            // is reading more files than it was meant to.
+            KeyCode::Esc if self.compare.is_some() => {
+                if let Some((_, cancel)) = self.compare.take() {
+                    cancel.cancel();
+                }
+                let m = self.i18n.t("compare-contents-stopped");
+                self.set_status(m);
                 true
             }
             KeyCode::Backspace if !empty && ctrl => {
@@ -7287,6 +7370,168 @@ impl App {
         self.set_status(msg);
     }
 
+    /// Compare the two panels by what is *in* the files.
+    ///
+    /// The other comparison asks whether two files have the same name, size and time, which is
+    /// what every file manager means by comparing folders and what is wanted nine times out of
+    /// ten. This is the tenth: two trees that were built from the same source, or copied by
+    /// something that did not keep the timestamps, where the only question that means anything
+    /// is whether the bytes are the same.
+    ///
+    /// The pairs are matched by name, as the other one matches them. A pair whose sizes differ
+    /// is settled from the listing without opening anything; the rest are read. A file with no
+    /// counterpart on the other side is selected too, because it is a difference, and it is
+    /// counted separately so the message does not read as if its bytes had been compared with
+    /// something.
+    fn compare_contents(&mut self) {
+        // Reading is through the local filesystem — the same limit the search has. A remote
+        // panel would mean a fetch per file, and a fetch per file is a different feature with
+        // a different progress bar.
+        if self
+            .panels
+            .iter()
+            .any(|p| !p.cwd.is_local() || p.cwd.in_container())
+        {
+            let m = self.i18n.t("compare-contents-local");
+            self.set_error(m);
+            return;
+        }
+        if let Some((_, cancel)) = self.compare.take() {
+            cancel.cancel();
+        }
+
+        let key = |entry: &Entry| entry.name_str().to_lowercase();
+        let mut right: std::collections::HashMap<String, (VPath, u64)> =
+            std::collections::HashMap::new();
+        let listing = &self.panels[1].listing;
+        for row in 0..listing.len() {
+            let entry = listing.row(row).expect("row in range");
+            if entry.kind.is_dirlike() {
+                continue;
+            }
+            right.insert(key(entry), (self.panels[1].path_of(entry), entry.size));
+        }
+
+        let mut pairs = Vec::new();
+        let mut alone: Vec<String> = Vec::new();
+        let listing = self.panels[0].listing.clone();
+        for row in 0..listing.len() {
+            let entry = listing.row(row).expect("row in range");
+            if entry.kind.is_dirlike() {
+                continue;
+            }
+            match right.get(&key(entry)) {
+                Some((path, size)) => pairs.push(ComparePair {
+                    name: entry.name_str().into_owned(),
+                    left: self.panels[0].path_of(entry),
+                    right: path.clone(),
+                    left_size: entry.size,
+                    right_size: *size,
+                }),
+                None => alone.push(entry.name_str().into_owned()),
+            }
+        }
+        // And the other way round: a file only on the right is also a difference.
+        let matched: std::collections::HashSet<String> =
+            pairs.iter().map(|p| p.name.to_lowercase()).collect();
+        let listing = self.panels[1].listing.clone();
+        for row in 0..listing.len() {
+            let entry = listing.row(row).expect("row in range");
+            if entry.kind.is_dirlike() || matched.contains(&key(entry)) {
+                continue;
+            }
+            alone.push(entry.name_str().into_owned());
+        }
+
+        self.compare_alone = alone;
+        if pairs.is_empty() {
+            let unmatched = std::mem::take(&mut self.compare_alone);
+            self.select_in_both(&unmatched);
+            let m = self.i18n.t("compare-contents-none");
+            self.set_status(m);
+            return;
+        }
+
+        let id = self.next_job_id;
+        self.next_job_id += 1;
+        let cancel = CancelToken::new();
+        self.compare = Some((id, cancel.clone()));
+        let total = pairs.len() as i64;
+        self.compare_pairs = pairs.len();
+        let msg = self.i18n.t_args(
+            "compare-contents-working",
+            &[("done", 0.into()), ("total", total.into())],
+        );
+        self.set_status(msg);
+        self.requests
+            .push(Request::CompareContents { id, pairs, cancel });
+    }
+
+    /// What a finished comparison does to the panels: select what differs on both sides, and
+    /// say what was found in one line.
+    fn apply_compare(&mut self, differ: &[String], unreadable: u64, stopped: bool) {
+        let alone = std::mem::take(&mut self.compare_alone);
+        let mut names: Vec<String> = differ.to_vec();
+        names.extend(alone.iter().cloned());
+        let pairs = self.compare_pairs;
+        self.select_in_both(&names);
+
+        if stopped {
+            let m = self.i18n.t("compare-contents-stopped");
+            self.set_status(m);
+            return;
+        }
+        let mut line = if differ.is_empty() && alone.is_empty() {
+            self.i18n
+                .t_args("compare-contents-same", &[("pairs", (pairs as i64).into())])
+        } else {
+            self.i18n.t_args(
+                "compare-contents-done",
+                &[
+                    ("differ", (differ.len() as i64).into()),
+                    ("pairs", (pairs as i64).into()),
+                ],
+            )
+        };
+        if !alone.is_empty() {
+            let more = self.i18n.t_args(
+                "compare-contents-only",
+                &[("count", (alone.len() as i64).into())],
+            );
+            line.push_str(", ");
+            line.push_str(&more);
+        }
+        if unreadable > 0 {
+            let more = self.i18n.t_args(
+                "compare-contents-unread",
+                &[("count", (unreadable as i64).into())],
+            );
+            line.push_str(", ");
+            line.push_str(&more);
+        }
+        self.set_status(line);
+    }
+
+    /// Mark these names in whichever panel has them, and nothing else.
+    fn select_in_both(&mut self, names: &[String]) {
+        let wanted: std::collections::HashSet<String> =
+            names.iter().map(|n| n.to_lowercase()).collect();
+        for side in 0..2 {
+            let listing = self.panels[side].listing.clone();
+            self.panels[side].selection.clear();
+            for row in 0..listing.len() {
+                let entry = listing.row(row).expect("row in range");
+                if entry.kind.is_dirlike() {
+                    continue;
+                }
+                if wanted.contains(&entry.name_str().to_lowercase()) {
+                    self.panels[side].selection.set(entry.id, true);
+                }
+            }
+            self.panels[side].rebuild();
+        }
+    }
+
     /// `Ctrl+Q` and `Ctrl+L`: turn a special panel kind on, or off again (SPEC 02 §7).
     ///
     /// FAR's rule, and ours: the kind goes in the *passive* panel, so `Side::Active` means
@@ -10056,6 +10301,136 @@ mod tests {
         editor.cursor = 2;
         app.hex_operation(PromptKind::HexMove, "0 6");
         assert_eq!(app.mode.hex_mut().unwrap().read(0, 10), b"ABCDEFGHGH");
+    }
+
+    /// Comparing by content: the pairs that matched by name are read, and what differs is
+    /// selected on both sides along with whatever has no counterpart at all.
+    #[test]
+    fn comparing_by_content_reads_the_pairs_and_marks_what_differs() {
+        let left = tempfile::tempdir().unwrap();
+        let right = tempfile::tempdir().unwrap();
+        // Same name, same size, same bytes: identical.
+        std::fs::write(left.path().join("same.txt"), b"hello world").unwrap();
+        std::fs::write(right.path().join("same.txt"), b"hello world").unwrap();
+        // Same name, same size, different bytes — the case only a read can tell apart, and
+        // the whole reason this command exists.
+        std::fs::write(left.path().join("sneaky.bin"), b"AAAABBBB").unwrap();
+        std::fs::write(right.path().join("sneaky.bin"), b"AAAACCCC").unwrap();
+        // Same name, different size: settled without opening anything.
+        std::fs::write(left.path().join("grown.log"), b"one line\n").unwrap();
+        std::fs::write(right.path().join("grown.log"), b"one line\ntwo lines\n").unwrap();
+        // Only on one side.
+        std::fs::write(left.path().join("only-left.txt"), b"x").unwrap();
+        std::fs::write(right.path().join("only-right.txt"), b"y").unwrap();
+
+        let mut app = app();
+        app.panels[0].cwd = VPath::local(left.path());
+        app.panels[1].cwd = VPath::local(right.path());
+        for (side, dir) in [(0usize, left.path()), (1, right.path())] {
+            let entries =
+                scmd_vfs::local::list_blocking(&VPath::local(dir), &CancelToken::new()).unwrap();
+            app.handle_event(Event::Listed {
+                panel: side,
+                generation: app.panels[side].generation,
+                result: Ok(entries),
+            });
+        }
+
+        app.run(Command::ToolCompareContents);
+        let request = app
+            .take_requests()
+            .into_iter()
+            .find_map(|r| match r {
+                Request::CompareContents { id, pairs, cancel } => Some((id, pairs, cancel)),
+                _ => None,
+            })
+            .expect("a comparison was asked for");
+        let (id, pairs, cancel) = request;
+        // Three names are on both sides; the two that are not are not pairs.
+        let mut names: Vec<&str> = pairs.iter().map(|p| p.name.as_str()).collect();
+        names.sort_unstable();
+        assert_eq!(names, vec!["grown.log", "same.txt", "sneaky.bin"]);
+
+        // The real worker, on this thread: the reading, the progress and the verdict are the
+        // ones the binary runs, not a second implementation written for the test.
+        let (tx, rx) = std::sync::mpsc::channel();
+        crate::run_compare(id, pairs, cancel, tx);
+        let mut done = None;
+        let mut progress = 0;
+        while let Ok(event) = rx.try_recv() {
+            match &event {
+                Event::CompareProgress { .. } => progress += 1,
+                Event::CompareDone { differ, .. } => done = Some(differ.clone()),
+                _ => {}
+            }
+            app.handle_event(event);
+        }
+        let mut differ = done.expect("the comparison finished");
+        differ.sort();
+        assert_eq!(differ, vec!["grown.log", "sneaky.bin"]);
+        assert!(progress >= 1, "it should have reported progress");
+
+        let marked = |app: &App, side: usize| -> Vec<String> {
+            let panel = &app.panels[side];
+            let mut out: Vec<String> = (0..panel.listing.len())
+                .filter_map(|row| panel.listing.row(row))
+                .filter(|e| panel.selection.contains(e.id))
+                .map(|e| e.name_str().into_owned())
+                .collect();
+            out.sort();
+            out
+        };
+        // The identical pair is not marked anywhere; everything else is, on the side that
+        // has it.
+        assert_eq!(
+            marked(&app, 0),
+            vec!["grown.log", "only-left.txt", "sneaky.bin"]
+        );
+        assert_eq!(
+            marked(&app, 1),
+            vec!["grown.log", "only-right.txt", "sneaky.bin"]
+        );
+        assert!(app.status.contains('2'), "{}", app.status);
+    }
+
+    /// A comparison of ten thousand files started by mistake has to be stoppable, and the
+    /// key for that is the one that means "no" everywhere else.
+    #[test]
+    fn esc_stops_a_comparison_that_is_running() {
+        let mut app = app();
+        let cancel = CancelToken::new();
+        app.compare = Some((7, cancel.clone()));
+        press(&mut app, "Esc");
+        assert!(
+            cancel.is_cancelled(),
+            "the token should have been cancelled"
+        );
+        assert!(app.compare.is_none());
+
+        // What arrives after that is a result nobody is waiting for, and it changes nothing.
+        app.handle_event(Event::CompareDone {
+            id: 7,
+            differ: vec!["x".into()],
+            unreadable: 0,
+            stopped: true,
+        });
+        assert!(app.panels[0].selection.is_empty());
+    }
+
+    /// A remote panel has no local bytes to read, and the refusal says which panel and why
+    /// rather than failing somewhere in a worker.
+    #[test]
+    fn comparing_by_content_needs_both_panels_on_disk() {
+        let mut app = app();
+        app.panels[1].cwd = VPath::remote(scmd_core::Scheme::Sftp, "mb@host:22", "/srv");
+        app.run(Command::ToolCompareContents);
+        assert!(
+            app.take_requests()
+                .iter()
+                .all(|r| !matches!(r, Request::CompareContents { .. })),
+            "it should not have started"
+        );
+        assert!(app.status_error, "it should have said why: {}", app.status);
     }
 
     /// A listing the provider stopped short of the end must not pass for a whole one. The

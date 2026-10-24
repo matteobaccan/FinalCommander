@@ -34,3 +34,22 @@ tar, and tar with gzip, bzip2, xz or zstd — and the path says where you are:
 
 Everything that reads a file works in there: the viewer, the hex editor, the search. Writing
 into an archive is not there yet, so the panel refuses rather than pretending.
+
+## Comparing two folders
+
+`F9 → Commands` has both of them, and they answer different questions.
+
+**Compare folders** is FAR's own, and it is instant: it matches names, compares the size and
+the time, and leaves selected in each panel what the other side does not have or has an older
+copy of. What stays selected is what a copy would have to carry.
+
+**Compare by content** reads the files. Every pair with the same name is opened on both sides
+and the bytes are compared — a pair whose sizes already differ is settled without opening
+anything, and the rest are read until the first byte that differs, which for two files that
+are not the same is usually in the first block. It is the question to ask about two trees that
+were built from the same source, or copied by something that did not keep the timestamps,
+where the date proves nothing.
+
+Both panels have to be on a local filesystem for it, and anything with no counterpart on the
+other side is selected too, because it is a difference. A long comparison says how far it has
+got in the status line, and `Esc` on an empty command line stops it.

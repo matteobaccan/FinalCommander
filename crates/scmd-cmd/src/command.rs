@@ -156,6 +156,9 @@ pub enum Command {
     ToolUserMenu,
     /// Compare the two panels by name, size and time, and select what differs.
     ToolCompareDirs,
+    /// Compare the two panels by what is *in* the files: every pair with the same name is
+    /// read on both sides and selected where the bytes differ. The slow, certain one.
+    ToolCompareContents,
     /// A sixty-four bit calculator, in every base at once.
     ToolCalculator,
     ToolFind,
@@ -351,6 +354,7 @@ impl Command {
             Command::FileUnpack,
             Command::ToolUserMenu,
             Command::ToolCompareDirs,
+            Command::ToolCompareContents,
             Command::ToolCalculator,
             Command::ToolFind,
             Command::ToolReplace,
@@ -534,6 +538,7 @@ impl Command {
             Command::FileUnpack => "file.unpack".into(),
             Command::ToolUserMenu => "tool.usermenu".into(),
             Command::ToolCompareDirs => "tool.compare.dirs".into(),
+            Command::ToolCompareContents => "tool.compare.contents".into(),
             Command::ToolCalculator => "tool.calculator".into(),
             Command::ToolFind => "tool.find".into(),
             Command::ToolReplace => "tool.replace".into(),
@@ -691,6 +696,7 @@ impl Command {
             ("cmd.insert.path", _) => Command::CmdInsertPath,
             ("cmd.insert.path.other", _) => Command::CmdInsertPathOther,
             ("tool.compare.dirs", _) => Command::ToolCompareDirs,
+            ("tool.compare.contents", _) => Command::ToolCompareContents,
             ("tool.calculator", _) => Command::ToolCalculator,
             ("file.pack", _) => Command::FilePack,
             ("file.unpack", _) => Command::FileUnpack,

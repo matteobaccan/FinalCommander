@@ -317,6 +317,11 @@ pub fn menus() -> Vec<Menu> {
                     Action::Run(Command::ToolCompareDirs),
                 ),
                 item(
+                    "menu-compare-contents",
+                    "",
+                    Action::Run(Command::ToolCompareContents),
+                ),
+                item(
                     "menu-calculator",
                     "Alt+=",
                     Action::Run(Command::ToolCalculator),

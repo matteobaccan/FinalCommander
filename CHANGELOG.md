@@ -40,6 +40,21 @@ Notable changes, newest first. The format follows
   bucket to a local panel is not wired to the job engine yet, and that — with upload, delete
   and server-side copy — is the next increment.
 
+- **Compare by content** (`F9 → Commands`), beside FAR's own compare folders. That one matches
+  names and compares size and time, which is instant and right nine times out of ten; this one
+  reads the files. Every pair with the same name is opened on both sides and the bytes are
+  compared — a pair whose sizes already differ is settled from the listing without opening
+  anything, the rest are read until the first byte that differs — and what differs is selected
+  on both sides, along with anything that has no counterpart at all. It is the question to ask
+  about two trees built from the same source, or copied by something that did not keep the
+  timestamps, where the date proves nothing. No hashing: a hash reads every byte of both files
+  and then compares thirty-two, while this stops at the first difference, and a hash can
+  collide where a comparison of the bytes cannot be wrong. The reading happens on a worker
+  thread with the progress in the status line, and `Esc` stops it.
+- **Screenshots**, in `docs/shots`, drawn by the renderer itself rather than photographed: the
+  real panels are rendered into a cell buffer and the buffer is written as SVG, so regenerating
+  them is one command and they cannot show a version of the program that no longer exists.
+
 ### Fixed
 
 - **Three example plugins did not run on macOS**, and the build said so: in bash 3.2, which is
