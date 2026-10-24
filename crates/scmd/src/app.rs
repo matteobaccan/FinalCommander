@@ -5692,6 +5692,9 @@ impl App {
     /// "only the panels" is an answer — and because a key that sometimes does nothing is
     /// worse than a list with one row in it.
     fn open_screens(&mut self) {
+        // A dialog over a viewer belongs to that viewer: put it back on its screen first, or
+        // the list would show the panels in front and the viewer nowhere at all.
+        self.park_screen_dialogs();
         let mut rows = vec![PickRow {
             label: self.i18n.t("screens-panels"),
             value: "panels".to_string(),
@@ -5718,8 +5721,33 @@ impl App {
         }
         let at = rows.iter().position(|r| r.current).unwrap_or(0);
         let title = self.i18n.t("screens-title");
-        self.park_screen_dialogs();
+        // The list is drawn over the screen that is in front, which therefore has to be put
+        // somewhere: `Esc` brings it back, and choosing another row sends it to the
+        // background. Dropping it here would lose a file somebody is editing.
+        self.park_front_screen();
         self.mode = Mode::Pick(Box::new(Pick::new(PickKind::Screens, title, rows, at)));
+    }
+
+    /// Put whatever screen is in front into its waiting place, whichever kind it is.
+    fn park_front_screen(&mut self) {
+        match &self.mode {
+            Mode::Viewer(_) => {
+                if let Mode::Viewer(viewer) = std::mem::replace(&mut self.mode, Mode::Normal) {
+                    self.viewer_under_prompt = Some(viewer);
+                }
+            }
+            Mode::Editor(_) => self.park_editor(),
+            Mode::Hex(_) => self.park_hex(),
+            _ => {}
+        }
+    }
+
+    /// And take it out again. The three are exclusive — one screen is in front — so asking
+    /// each in turn is the whole of it.
+    fn restore_front_screen(&mut self) {
+        self.restore_viewer();
+        self.restore_editor();
+        self.restore_hex();
     }
 
     /// A row of the screens list: the title, and a star if it holds unsaved changes.
@@ -5736,6 +5764,8 @@ impl App {
     /// Nothing is dropped and nothing is closed: a screen only leaves this world through its
     /// own `F10`, which is what asks about unsaved changes.
     fn show_screen(&mut self, which: Option<usize>) {
+        // The front screen may be waiting behind a list or a prompt rather than in `mode`.
+        self.restore_front_screen();
         let front = std::mem::replace(&mut self.mode, Mode::Normal);
         let coming = match which {
             Some(i) if i < self.background.len() => Some(self.background.remove(i)),
@@ -6223,8 +6253,9 @@ impl App {
         match key.code {
             KeyCode::Esc | KeyCode::F(10) => {
                 self.mode = Mode::Normal;
-                // The block menu was opened over the hex editor; closing it goes back there.
-                self.restore_hex();
+                // A list opened over a screen — the block menu over the hex editor, the
+                // screens list over whatever was in front — goes back to it when it closes.
+                self.restore_front_screen();
             }
             KeyCode::Up => pick.move_cursor(-1),
             KeyCode::Down => pick.move_cursor(1),
@@ -6259,7 +6290,8 @@ impl App {
             }
             PickKind::Screens => match row.value.as_str() {
                 "panels" => self.show_screen(None),
-                "front" => {} // already there
+                // Already in front: it is only waiting behind this list.
+                "front" => self.restore_front_screen(),
                 other => {
                     if let Ok(i) = other.parse::<usize>() {
                         self.show_screen(Some(i));
@@ -9436,6 +9468,54 @@ mod tests {
         assert!(app.mode.is_normal());
         app.run(Command::AppScreenPrev);
         assert!(app.mode.hex().is_some(), "{:?}", app.mode);
+    }
+
+    #[test]
+    fn the_screens_list_does_not_lose_the_screen_it_is_drawn_over() {
+        let dir = tempfile::tempdir().unwrap();
+        let text = dir.path().join("notes.txt");
+        std::fs::write(&text, "one\n").unwrap();
+        let mut app = app();
+
+        // F12 with a viewer in front: the viewer is the current row, and Esc gives it back.
+        app.open_viewer_on(&text, VPath::local(&text));
+        app.run(Command::AppScreens);
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(pick.rows.len(), 2, "the panels and the viewer");
+        assert_eq!(pick.rows[1].value, "front");
+        assert!(pick.rows[1].current, "the one in front is the current row");
+        press(&mut app, "Esc");
+        assert!(app.mode.viewer().is_some(), "{:?}", app.mode);
+
+        // And choosing the panels sends it to the background rather than closing it.
+        app.run(Command::AppScreens);
+        let Mode::Pick(pick) = &mut app.mode else {
+            unreachable!()
+        };
+        pick.cursor = 0;
+        press(&mut app, "Enter");
+        assert!(app.mode.is_normal(), "{:?}", app.mode);
+        assert_eq!(app.background.len(), 1);
+
+        // A question asked over a viewer belongs to that viewer: F12 from there lists the
+        // viewer, not the panels, and nothing is left behind the list.
+        app.run(Command::AppScreenPrev);
+        assert!(app.mode.viewer().is_some());
+        app.run(Command::ViewerSearch);
+        assert!(matches!(app.mode, Mode::Prompt(_)));
+        app.run(Command::AppScreens);
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert!(
+            pick.rows.iter().any(|r| r.value == "front"),
+            "the viewer under the prompt is the screen in front: {:?}",
+            pick.rows
+        );
+        press(&mut app, "Esc");
+        assert!(app.mode.viewer().is_some(), "{:?}", app.mode);
     }
 
     #[test]
