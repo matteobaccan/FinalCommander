@@ -104,7 +104,20 @@ impl Sort {
     }
 
     fn cmp_name(&self, a: &Entry, b: &Entry) -> Ordering {
-        self.cmp_str(&a.name_str(), &b.name_str())
+        // The bytes of the name, not a `str` made from them. `to_string_lossy` validates the
+        // whole name as UTF-8 on every call, and this is called twice per comparison and some
+        // thirty-five million times for a panel of 1.7 million rows. The byte path reaches a
+        // character only where one of the two names actually holds a byte above ASCII at the
+        // point the comparison turns on, which for a tree of file names is almost never.
+        if self.natural {
+            natural_cmp_bytes(
+                a.name.as_encoded_bytes(),
+                b.name.as_encoded_bytes(),
+                self.case_sensitive,
+            )
+        } else {
+            self.cmp_str(&a.name_str(), &b.name_str())
+        }
     }
 
     fn cmp_str(&self, a: &str, b: &str) -> Ordering {
@@ -119,33 +132,140 @@ impl Sort {
 }
 
 /// Compare treating digit runs as numbers. `img2` < `img10`, `a` == `A` when insensitive.
+///
+/// Two names that begin alike are settled by what comes after, so the shared head is skipped
+/// with a byte comparison the machine does a word at a time instead of walking it character by
+/// character. That is not an optimisation of the obvious kind: a panel over a bucket or a build
+/// tree holds names that agree for their first thirty characters
+/// (`2024/08/13/customer-00012345/…`), and walking those thirty twice per comparison, times
+/// the thirty-five million comparisons a sort of 1.7 million rows performs, is a lot of
+/// identical prefix.
+///
+/// Two things make the skip safe. The point where the names diverge may sit inside a run of
+/// digits — `a2x` against `a21` diverges at `x` against `1`, and the answer depends on 2
+/// against 21, not on `x` against `1` — so the cursor walks back to the start of that run.
+/// And it may sit inside a multi-byte character, whose leading bytes two different characters
+/// can share, so it walks back to the character boundary. From there the comparison proceeds
+/// exactly as it always did.
 pub fn natural_cmp(a: &str, b: &str, case_sensitive: bool) -> Ordering {
-    let mut ai = a.chars().peekable();
-    let mut bi = b.chars().peekable();
+    natural_cmp_bytes(a.as_bytes(), b.as_bytes(), case_sensitive)
+}
+
+/// The same comparison on the bytes of a name, which is how a listing holds it.
+///
+/// A file name is not always a `str`: on Unix it is any bytes without a slash or a zero, on
+/// Windows it is UTF-16 that need not be well formed. Comparing the encoded bytes is both
+/// faster — no name is validated as UTF-8 to be sorted — and truer to the name, because two
+/// names that are not UTF-8 no longer collapse onto the same replacement character. UTF-8
+/// orders its bytes the way Unicode orders its characters, so for a case-sensitive comparison
+/// the bytes are the answer; only folding case outside ASCII needs the characters themselves,
+/// and that is the one path that decodes.
+pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
+    let common = a.len().min(b.len());
+    let mut i = 0;
+    while i < common && a[i] == b[i] {
+        i += 1;
+    }
+    if i == common {
+        // One name is the other with more after it, or they are the same name.
+        return a.len().cmp(&b.len());
+    }
+    while i > 0 && a[i - 1].is_ascii_digit() {
+        i -= 1;
+    }
+    // A continuation byte cannot begin a character, and both names are inside the same
+    // character here, since every byte before this one was equal.
+    while i > 0 && a[i] & 0xC0 == 0x80 {
+        i -= 1;
+    }
+    natural_cmp_from(&a[i..], &b[i..], case_sensitive)
+}
+
+/// The comparison itself, on the part of the two names that can still decide it.
+fn natural_cmp_from(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
+    // `img02` and `img2` are two different files and must not compare equal, or the order
+    // between them is whatever the sort happened to do. Numerically those runs are the same,
+    // so the padding decides — but last, after everything else has had its say, which is what
+    // keeps `a2b` before `a02c`.
+    let mut padding = Ordering::Equal;
+    let (mut x, mut y) = (0usize, 0usize);
     loop {
-        match (ai.peek().copied(), bi.peek().copied()) {
-            (None, None) => return Ordering::Equal,
+        match (a.get(x).copied(), b.get(y).copied()) {
+            (None, None) => return padding,
             (None, Some(_)) => return Ordering::Less,
             (Some(_), None) => return Ordering::Greater,
             (Some(ca), Some(cb)) => {
                 if ca.is_ascii_digit() && cb.is_ascii_digit() {
-                    let na = take_number(&mut ai);
-                    let nb = take_number(&mut bi);
+                    let (na, la) = take_number(a, &mut x);
+                    let (nb, lb) = take_number(b, &mut y);
                     match na.cmp(&nb) {
+                        Ordering::Equal => {
+                            if padding == Ordering::Equal {
+                                padding = la.cmp(&lb);
+                            }
+                        }
+                        other => return other,
+                    }
+                } else if case_sensitive || (ca.is_ascii() && cb.is_ascii()) {
+                    x += 1;
+                    y += 1;
+                    let (ka, kb) = if case_sensitive {
+                        (ca, cb)
+                    } else {
+                        (ca.to_ascii_lowercase(), cb.to_ascii_lowercase())
+                    };
+                    match ka.cmp(&kb) {
                         Ordering::Equal => {}
+                        other => return other,
+                    }
+                } else {
+                    // Folding case outside ASCII is a question about characters, not bytes.
+                    // This is the only path that decodes, and it starts at a character
+                    // boundary: every byte before it was equal or was ASCII.
+                    let rest = natural_cmp_chars(&a[x..], &b[y..]);
+                    return if rest == Ordering::Equal {
+                        padding
+                    } else {
+                        rest
+                    };
+                }
+            }
+        }
+    }
+}
+
+/// The tail of a case-insensitive comparison where one of the two names left ASCII behind.
+///
+/// Same rules as the byte loop, characters instead of bytes: runs of digits are still numbers,
+/// and padding still decides last. Folding is the only reason to be here, so it is the only
+/// thing done differently.
+fn natural_cmp_chars(a: &[u8], b: &[u8]) -> Ordering {
+    let (a, b) = (String::from_utf8_lossy(a), String::from_utf8_lossy(b));
+    let mut ai = a.chars().peekable();
+    let mut bi = b.chars().peekable();
+    let mut padding = Ordering::Equal;
+    loop {
+        match (ai.peek().copied(), bi.peek().copied()) {
+            (None, None) => return padding,
+            (None, Some(_)) => return Ordering::Less,
+            (Some(_), None) => return Ordering::Greater,
+            (Some(ca), Some(cb)) => {
+                if ca.is_ascii_digit() && cb.is_ascii_digit() {
+                    let (na, la) = take_number_chars(&mut ai);
+                    let (nb, lb) = take_number_chars(&mut bi);
+                    match na.cmp(&nb) {
+                        Ordering::Equal => {
+                            if padding == Ordering::Equal {
+                                padding = la.cmp(&lb);
+                            }
+                        }
                         other => return other,
                     }
                 } else {
                     ai.next();
                     bi.next();
-                    let (ka, kb) = if case_sensitive {
-                        (ca, cb)
-                    } else {
-                        (
-                            ca.to_lowercase().next().unwrap_or(ca),
-                            cb.to_lowercase().next().unwrap_or(cb),
-                        )
-                    };
+                    let ka = ca.to_lowercase().next().unwrap_or(ca);
+                    let kb = cb.to_lowercase().next().unwrap_or(cb);
                     match ka.cmp(&kb) {
                         Ordering::Equal => {}
                         other => return other,
@@ -156,23 +276,101 @@ pub fn natural_cmp(a: &str, b: &str, case_sensitive: bool) -> Ordering {
     }
 }
 
-fn take_number(it: &mut std::iter::Peekable<std::str::Chars<'_>>) -> u128 {
+/// [`take_number`] over characters, for the folding path.
+fn take_number_chars(it: &mut std::iter::Peekable<std::str::Chars<'_>>) -> (u128, usize) {
     let mut n: u128 = 0;
+    let mut digits = 0usize;
     while let Some(c) = it.peek().copied() {
         if !c.is_ascii_digit() {
             break;
         }
         it.next();
+        digits += 1;
         n = n
             .saturating_mul(10)
             .saturating_add((c as u8 - b'0') as u128);
     }
-    n
+    (n, digits)
+}
+
+/// The number a run of digits spells, and how many digits spelled it.
+fn take_number(bytes: &[u8], at: &mut usize) -> (u128, usize) {
+    let mut n: u128 = 0;
+    let mut digits = 0usize;
+    while let Some(c) = bytes.get(*at).copied() {
+        if !c.is_ascii_digit() {
+            break;
+        }
+        *at += 1;
+        digits += 1;
+        n = n.saturating_mul(10).saturating_add((c - b'0') as u128);
+    }
+    (n, digits)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The shared-head skip must be invisible: whatever it decides, the comparison that walks
+    /// every character from the first must decide the same.
+    ///
+    /// The pairs are built to land on the cases the skip has to be careful about — a
+    /// divergence inside a run of digits, leading zeros, a digit run that runs to the end of
+    /// one name, a multi-byte character whose lead byte another one shares, one name a prefix
+    /// of the other — and then every pair is tried in both directions and in both cases.
+    #[test]
+    fn the_shared_head_skip_decides_what_the_long_way_decides() {
+        let parts = [
+            "",
+            "a",
+            "A",
+            "a2",
+            "a02",
+            "a2x",
+            "a21",
+            "a210",
+            "a2x1",
+            "0",
+            "00",
+            "1",
+            "10",
+            "9",
+            "img",
+            "img2",
+            "img10",
+            "img02",
+            "x",
+            "è",
+            "é",
+            "日",
+            "日本",
+            "f1b",
+            "f1B",
+            "f01b",
+            "2024/08/13/x",
+            "2024/08/13/y",
+            "2024/08/3/x",
+            "2024/8/13/x",
+        ];
+        let mut pairs = 0;
+        for a in parts {
+            for b in parts {
+                for case_sensitive in [true, false] {
+                    let fast = natural_cmp(a, b, case_sensitive);
+                    let slow = natural_cmp_from(a.as_bytes(), b.as_bytes(), case_sensitive);
+                    assert_eq!(
+                        fast, slow,
+                        "{a:?} vs {b:?} (case_sensitive = {case_sensitive}): \
+                         the skip says {fast:?}, the long way says {slow:?}"
+                    );
+                    pairs += 1;
+                }
+            }
+        }
+        assert!(pairs > 1_000, "the table got smaller by accident: {pairs}");
+    }
+
     use crate::entry::{Entry, EntryFlags, EntryId, EntryKind};
     use std::ffi::OsString;
 
@@ -206,6 +404,23 @@ mod tests {
     fn names(mut v: Vec<Entry>, sort: Sort) -> Vec<String> {
         v.sort_by(|a, b| sort.compare(a, b));
         v.into_iter().map(|e| e.name_str().into_owned()).collect()
+    }
+
+    /// Two names that differ only in how a number is padded are still two names.
+    #[test]
+    fn leading_zeros_decide_last_but_they_do_decide() {
+        // Not equal: they are different files, and an order that calls them equal leaves the
+        // two rows wherever the sort dropped them.
+        assert_eq!(natural_cmp("img02", "img2", true), Ordering::Greater);
+        assert_eq!(natural_cmp("0", "00", true), Ordering::Less);
+        assert_eq!(natural_cmp("00", "0", true), Ordering::Greater);
+        // Last, though: what follows the number has the first word, so the padding only
+        // settles the pair that is otherwise the same name.
+        assert_eq!(natural_cmp("a2b", "a02c", true), Ordering::Less);
+        assert_eq!(natural_cmp("a2x", "a02x", true), Ordering::Less);
+        assert_eq!(natural_cmp("a02x", "a2x", true), Ordering::Greater);
+        // And the number itself still comes before either of them.
+        assert_eq!(natural_cmp("a03", "a2", true), Ordering::Greater);
     }
 
     #[test]

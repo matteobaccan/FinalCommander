@@ -77,6 +77,11 @@ impl Listing {
         self.order.clear();
         self.order.reserve(self.entries.len());
         let mut totals = Totals::default();
+        // Which rows are selected, by index, answered once here instead of hashed twice per
+        // comparison inside the sort. The filter pass below already asks the question for the
+        // totals, so this costs one bit-ish per entry and saves some seventy million hashes
+        // on a panel with a million rows in it.
+        let mut selected = vec![false; self.entries.len()];
 
         for (i, e) in self.entries.iter().enumerate() {
             if e.kind == EntryKind::Parent {
@@ -99,6 +104,7 @@ impl Listing {
                 }
             }
             if selection.contains(e.id) {
+                selected[i] = true;
                 totals.selected_files += 1;
                 totals.selected_bytes += e.size;
             }
@@ -106,12 +112,24 @@ impl Listing {
         }
 
         let entries = &self.entries;
+        // Unstable: it is the faster sort and there is nothing for stability to preserve,
+        // because the comparison is a total order — two rows only compare equal when they
+        // carry the same name, and a directory cannot hold two of those. Except under
+        // `Unsorted`, which answers `Equal` to everything on purpose: there the order the
+        // provider gave is the order, and a sort that may permute equal elements would throw
+        // away the only thing being asked for, so that case is not sorted at all beyond the
+        // grouping the comparison still has to do.
+        // A stable sort, and measured rather than assumed: the unstable one moves less memory
+        // but performs more comparisons, and a comparison here reaches into a name somewhere
+        // else in the heap, so on 1.7 million rows it came out a third slower. Stability also
+        // means `Unsorted` keeps the order the provider gave, which is the whole of what it
+        // asks for.
         if sort.selected_first {
             self.order.sort_by(|a, b| {
-                let (ea, eb) = (&entries[*a as usize], &entries[*b as usize]);
-                let sa = selection.contains(ea.id);
-                let sb = selection.contains(eb.id);
-                sb.cmp(&sa).then_with(|| sort.compare(ea, eb))
+                let (ia, ib) = (*a as usize, *b as usize);
+                selected[ib]
+                    .cmp(&selected[ia])
+                    .then_with(|| sort.compare(&entries[ia], &entries[ib]))
             });
         } else {
             self.order
@@ -207,5 +225,115 @@ mod tests {
             .collect();
         assert_eq!(names[0], "b.txt");
         assert_eq!(l.totals.selected_bytes, 20);
+    }
+}
+
+/// What a panel over a very large bucket costs, measured rather than guessed.
+///
+/// Not a test of behaviour and not run by `cargo test`: `cargo test --release -p scmd-core
+/// --lib a_bucket_sized_listing -- --ignored --nocapture` prints the numbers. It is here
+/// because the question "could it open a bucket with 1.7 million objects in it" deserves an
+/// answer with figures attached, and because the figures move when this file does.
+///
+/// The names are shaped like the keys such a bucket really holds —
+/// `2024/08/13/customer-00012345/event-0000000678.json` — which matters: they share thirty
+/// characters with their neighbours and they are full of digits, so they are the worst case
+/// for a natural order and nothing like the short names a test directory has.
+#[cfg(test)]
+mod scale {
+    use super::*;
+    use crate::sort::SortKey;
+    use std::ffi::OsString;
+    use std::time::Instant;
+
+    #[test]
+    #[ignore]
+    fn a_bucket_sized_listing() {
+        let n = 1_700_000usize;
+        eprintln!("size_of::<Entry>() = {}", std::mem::size_of::<Entry>());
+        let t = Instant::now();
+        let mut entries: Vec<Entry> = Vec::with_capacity(n + 1);
+        entries.push(Entry::parent_entry());
+        let mut names = 0usize;
+        for i in 0..n {
+            let name = format!(
+                "{:04}/{:02}/{:02}/customer-{:08}/event-{:010}.json",
+                2020 + i % 6,
+                1 + i % 12,
+                1 + i % 28,
+                i % 50_000,
+                i
+            );
+            names += name.len();
+            entries.push(Entry {
+                name: OsString::from(name),
+                kind: EntryKind::File,
+                size: (i as u64 * 7919) % 4_000_000,
+                mtime: Some(
+                    std::time::SystemTime::UNIX_EPOCH
+                        + std::time::Duration::from_secs(1_600_000_000 + i as u64),
+                ),
+                btime: None,
+                atime: None,
+                flags: EntryFlags::empty(),
+                id: EntryId::Name(i as u64),
+                link_target: None,
+            });
+        }
+        eprintln!("built {} rows in {:?}", entries.len(), t.elapsed());
+        eprintln!(
+            "names {:.0} MiB + rows {:.0} MiB + order {:.0} MiB = {:.0} MiB",
+            names as f64 / 1048576.0,
+            (entries.len() * std::mem::size_of::<Entry>()) as f64 / 1048576.0,
+            (entries.len() * 4) as f64 / 1048576.0,
+            (names + entries.len() * (std::mem::size_of::<Entry>() + 4)) as f64 / 1048576.0
+        );
+
+        let t = Instant::now();
+        let mut l = Listing::new(entries, 1);
+        eprintln!("sort by name            {:?}", t.elapsed());
+
+        let t = Instant::now();
+        let masks = crate::filter::MaskSet::parse("*.json").unwrap();
+        l.rebuild(Sort::default(), false, Some(&masks), &Selection::default());
+        eprintln!(
+            "filter *.json and sort  {:?} ({} rows)",
+            t.elapsed(),
+            l.len()
+        );
+
+        let t = Instant::now();
+        l.rebuild(
+            Sort {
+                key: SortKey::Size,
+                ..Sort::default()
+            },
+            false,
+            None,
+            &Selection::default(),
+        );
+        eprintln!("sort by size            {:?}", t.elapsed());
+
+        let t = Instant::now();
+        let row = l.row_of_name("2020/01/01/customer-00000000/event-0000000000.json");
+        eprintln!("find a row by name      {:?} ({row:?})", t.elapsed());
+
+        let mut sel = Selection::default();
+        let t = Instant::now();
+        for i in 0..n as u64 {
+            sel.toggle(EntryId::Name(i));
+        }
+        eprintln!("select every row        {:?}", t.elapsed());
+        let t = Instant::now();
+        l.rebuild(
+            Sort {
+                selected_first: true,
+                ..Sort::default()
+            },
+            false,
+            None,
+            &sel,
+        );
+        eprintln!("sort selected first     {:?}", t.elapsed());
     }
 }
