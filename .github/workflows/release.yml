@@ -100,7 +100,9 @@ jobs:
             # No tag: the workspace version, so a dispatch run packages something sensible.
             version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
           fi
-          name="scmd-${version}-${{ matrix.name }}"
+          # The platform first and the version last, so the archives of one release sort by
+          # platform and a download is read left to right: what it runs on, then which build.
+          name="scmd-${{ matrix.name }}-${version}"
           dir="dist/${name}"
           mkdir -p "$dir"
           bin="target/${{ matrix.target }}/release/scmd"
@@ -115,12 +117,14 @@ jobs:
             windows-*) "$dir/scmd.exe" --version ;;
             *) "$dir/scmd" --version ;;
           esac
-          cd dist
+          # The files sit at the root of the archive, with no directory of their own: the
+          # program is one executable, and unpacking it should put that executable where the
+          # user is, not one level down.
           if [ "${{ runner.os }}" = "Windows" ]; then
-            7z a -tzip "${name}.zip" "${name}" > /dev/null
+            (cd "$dir" && 7z a -tzip "../${name}.zip" ./* > /dev/null)
             echo "archive=dist/${name}.zip" >> "$GITHUB_OUTPUT"
           else
-            tar czf "${name}.tar.gz" "${name}"
+            (cd "$dir" && tar czf "../${name}.tar.gz" ./*)
             echo "archive=dist/${name}.tar.gz" >> "$GITHUB_OUTPUT"
           fi
 

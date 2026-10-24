@@ -26,14 +26,17 @@ One file, nothing to install beside it. Download the archive for your machine fr
 
 | Platform | Archive |
 | --- | --- |
-| Linux (x86-64) | `scmd-<version>-linux-x86_64.tar.gz`, or `-linux-x86_64-static.tar.gz` for a statically linked build that runs on any distribution |
-| macOS (Intel and Apple Silicon) | `scmd-<version>-macos-universal.tar.gz` — one binary for both |
-| Windows (x86-64) | `scmd-<version>-windows-x86_64.zip` |
+| Linux (x86-64) | `scmd-linux-x86_64-<version>.tar.gz`, or `scmd-linux-x86_64-static-<version>.tar.gz` for a statically linked build that runs on any distribution |
+| macOS (Intel and Apple Silicon) | `scmd-macos-universal-<version>.tar.gz` — one binary for both |
+| Windows (x86-64) | `scmd-windows-x86_64-<version>.zip` |
+
+The files sit at the root of the archive, so unpacking leaves `scmd` where you are rather than
+one directory down.
 
 ```sh
 # Linux, for example
-tar xzf scmd-0.0.4-linux-x86_64.tar.gz
-sudo install -m755 scmd-0.0.4-linux-x86_64/scmd /usr/local/bin/scmd
+tar xzf scmd-linux-x86_64-0.0.5.tar.gz
+sudo install -m755 scmd /usr/local/bin/scmd
 scmd --version
 ```
 
