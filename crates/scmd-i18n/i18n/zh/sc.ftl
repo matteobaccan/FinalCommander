@@ -11,6 +11,7 @@ key-quit = 退出
 
 list-up = 上层
 list-folder = 文件夹
+panel-list-count = 列表中有 { $count } 个项目
 panel-empty = （空）
 panel-up = ..
 panel-loading = 读取中…

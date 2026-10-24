@@ -88,6 +88,20 @@ pub fn list_blocking(path: &VPath, cancel: &CancelToken) -> Result<Vec<Entry>> {
     Ok(out)
 }
 
+/// One path, as a panel row. A list panel is built from paths rather than from a directory,
+/// and re-reading it means asking this about each of them again.
+pub fn stat_blocking(path: &VPath) -> Result<Entry> {
+    let real = path.as_path();
+    // The link itself, not what it points at: a results panel should say a link is a link,
+    // and a broken one must not vanish from the list.
+    let meta = fs::symlink_metadata(real).map_err(|e| Error::io(path, e))?;
+    let name = real
+        .file_name()
+        .map(OsString::from)
+        .unwrap_or_else(|| OsString::from(real.as_os_str()));
+    Ok(entry_from_meta(name, real, &meta))
+}
+
 fn entry_from_meta(name: OsString, full: &Path, meta: &Metadata) -> Entry {
     let kind = if meta.is_dir() {
         EntryKind::Dir

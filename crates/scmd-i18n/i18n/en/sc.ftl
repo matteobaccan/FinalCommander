@@ -13,6 +13,7 @@ key-quit = Quit
 # Panel chrome
 list-up = Up
 list-folder = Folder
+panel-list-count = { $count } items in the list
 panel-empty = (empty)
 panel-up = ..
 panel-loading = reading…

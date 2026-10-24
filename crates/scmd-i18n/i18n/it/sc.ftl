@@ -11,6 +11,7 @@ key-quit = Esci
 
 list-up = Su
 list-folder = Cartella
+panel-list-count = { $count } elementi nella lista
 panel-empty = (vuota)
 panel-up = ..
 panel-loading = lettura…

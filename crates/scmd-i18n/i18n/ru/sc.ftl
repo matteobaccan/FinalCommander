@@ -11,6 +11,7 @@ key-quit = Выход
 
 list-up = Вверх
 list-folder = Папка
+panel-list-count = { $count } объектов в списке
 panel-empty = (пусто)
 panel-up = ..
 panel-loading = чтение…

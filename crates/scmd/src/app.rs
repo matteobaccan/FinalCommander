@@ -30,6 +30,13 @@ pub enum Request {
         panel: usize,
         path: VPath,
     },
+    /// Re-stat the paths a list panel is made of, and drop what is no longer there.
+    TempRefresh {
+        panel: usize,
+        generation: u64,
+        title: String,
+        paths: Vec<VPath>,
+    },
     /// Create a link. Not a job: it is one syscall, with nothing to report progress on.
     Link {
         target: VPath,
@@ -132,6 +139,13 @@ pub enum Event {
     FreeSpace {
         panel: usize,
         bytes: Option<u64>,
+    },
+    /// A list panel's rows, with the real path of each: find results, `panelize`, a re-read.
+    TempListed {
+        panel: usize,
+        generation: u64,
+        title: String,
+        items: Vec<(VPath, Entry)>,
     },
     /// A link was created, or could not be.
     LinkDone {
@@ -571,6 +585,18 @@ impl App {
         let generation = self.panels[index].generation + 1;
         self.panels[index].generation = generation;
         self.panels[index].loading = true;
+        // A list panel is not a directory: re-reading it means asking again about the files it
+        // holds, which is what keeps results honest after a delete or a move.
+        if let Some(title) = self.panels[index].temp.as_ref().map(|t| t.title.clone()) {
+            let paths = self.panels[index].temp_paths();
+            self.requests.push(Request::TempRefresh {
+                panel: index,
+                generation,
+                title,
+                paths,
+            });
+            return;
+        }
         let path = self.panels[index].cwd.clone();
         self.requests.push(Request::Read {
             panel: index,
@@ -609,6 +635,26 @@ impl App {
     pub fn handle_event(&mut self, event: Event) {
         match event {
             Event::Input(input) => self.handle_input(input),
+            Event::TempListed {
+                panel,
+                generation,
+                title,
+                items,
+            } => {
+                if let Some(p) = self.panels.get_mut(panel) {
+                    // A listing that arrived after the panel moved on is not thrown away
+                    // silently: the generation is what tells them apart.
+                    if generation >= p.generation {
+                        p.generation = generation;
+                        let count = items.len();
+                        p.set_temp(title, items, generation);
+                        let msg = self
+                            .i18n
+                            .t_args("panel-list-count", &[("count", (count as i64).into())]);
+                        self.set_status(msg);
+                    }
+                }
+            }
             Event::LinkDone { link, error } => match error {
                 Some(e) => self.set_error(e),
                 None => {
@@ -1765,13 +1811,13 @@ impl App {
             for row in 0..panel.listing.len() {
                 let e = panel.listing.row(row).expect("row in range");
                 if e.is_selectable() && panel.selection.contains(e.id) {
-                    out.push(panel.cwd.join(&e.name));
+                    out.push(panel.path_of(e));
                 }
             }
             return out;
         }
         match panel.current() {
-            Some(e) if e.is_selectable() => vec![panel.cwd.join(&e.name)],
+            Some(e) if e.is_selectable() => vec![panel.path_of(e)],
             _ => Vec::new(),
         }
     }
@@ -1781,7 +1827,7 @@ impl App {
     fn cursor_source(&self) -> Vec<VPath> {
         let panel = self.panel();
         match panel.current() {
-            Some(e) if e.is_selectable() => vec![panel.cwd.join(&e.name)],
+            Some(e) if e.is_selectable() => vec![panel.path_of(e)],
             _ => Vec::new(),
         }
     }
@@ -2326,7 +2372,7 @@ impl App {
                     self.set_error(m);
                     return;
                 }
-                let target = self.panel().cwd.join(&entry.name);
+                let target = self.panel().path_of(&entry);
                 // The link goes in the other panel, as a copy would.
                 let mut text = self.other().cwd.to_string();
                 if !text.ends_with(std::path::MAIN_SEPARATOR) {
@@ -2539,7 +2585,7 @@ impl App {
 
             Command::FileDirSize => {
                 let (panel, path) = match self.panel().current() {
-                    Some(e) if e.kind.is_dirlike() => (self.active, self.panel().cwd.join(&e.name)),
+                    Some(e) if e.kind.is_dirlike() => (self.active, self.panel().path_of(e)),
                     _ => {
                         self.not_implemented("file.dirsize (only directories for now)");
                         return;
@@ -2670,7 +2716,7 @@ impl App {
             self.run(Command::FileDirSize);
             return;
         }
-        let path = self.panel().cwd.join(&entry.name);
+        let path = self.panel().path_of(&entry);
         if path.is_remote() {
             // The viewer reads a real file, so the file comes down first.
             self.fetch_remote(path, entry.size, Fetched::View);
@@ -2709,7 +2755,7 @@ impl App {
             return;
         };
         self.panel_mut().cursor_to(row);
-        let path = self.panel().cwd.join(&entry.name);
+        let path = self.panel().path_of(&entry);
         if path.is_remote() {
             self.fetch_remote(path, entry.size, Fetched::View);
             return;
@@ -3038,6 +3084,16 @@ impl App {
                 .filter(|e| e.kind != scmd_core::EntryKind::Parent)
                 .map(|e| e.name.to_string_lossy().into_owned())
         };
+        // On a list panel the rows live in other directories, so "the directory" is the one
+        // the file under the cursor is in rather than the panel's own.
+        let dir_of = |p: &Panel| match p.temp.is_some() {
+            true => p
+                .current_path()
+                .and_then(|path| path.parent())
+                .map(|path| path.as_path().to_path_buf())
+                .unwrap_or_else(|| p.cwd.as_path().to_path_buf()),
+            false => p.cwd.as_path().to_path_buf(),
+        };
         // The selection, or the item under the cursor when nothing is marked — which is what
         // every commander means by "the selection".
         let selection: Vec<String> = {
@@ -3056,9 +3112,9 @@ impl App {
             }
         };
         expand::Context {
-            active_dir: active.cwd.as_path().to_path_buf(),
+            active_dir: dir_of(active),
             active_file: name_of(active),
-            passive_dir: passive.cwd.as_path().to_path_buf(),
+            passive_dir: dir_of(passive),
             passive_file: name_of(passive),
             left_dir: self.panels[0].cwd.as_path().to_path_buf(),
             right_dir: self.panels[1].cwd.as_path().to_path_buf(),
@@ -4059,7 +4115,7 @@ impl App {
             self.not_implemented("file.edit (attributes dialog for directories)");
             return;
         }
-        let path = self.panel().cwd.join(&entry.name);
+        let path = self.panel().path_of(&entry);
         if path.is_remote() {
             // Fetch, edit the copy, and write it back on save (SPEC 04 §5).
             self.fetch_remote(path, entry.size, Fetched::Edit);
@@ -5226,6 +5282,98 @@ mod tests {
         app.run(Command::ViewerToPanel);
         assert_eq!(app.panel().current().unwrap().name_str(), viewed);
         assert!(app.status.contains(&viewed), "{}", app.status);
+    }
+
+    // ── a panel that is a list rather than a directory ──────────────────────────────────────
+
+    #[test]
+    fn a_list_panel_knows_where_its_rows_really_live() {
+        let dir = tempfile::tempdir().unwrap();
+        let one = dir.path().join("a/one.txt");
+        let two = dir.path().join("b/two.txt");
+        std::fs::create_dir_all(one.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(two.parent().unwrap()).unwrap();
+        std::fs::write(&one, b"1").unwrap();
+        std::fs::write(&two, b"22").unwrap();
+
+        let mut app = app();
+        let items = vec![
+            (
+                VPath::local(&two),
+                entry("two.txt", scmd_core::EntryKind::File, 2),
+            ),
+            (
+                VPath::local(&one),
+                entry("one.txt", scmd_core::EntryKind::File, 1),
+            ),
+        ];
+        app.handle_event(Event::TempListed {
+            panel: 0,
+            generation: 2,
+            title: "found 2".into(),
+            items,
+        });
+
+        // Sorting reorders the rows, and the paths must follow them rather than their position.
+        assert_eq!(app.panel().listing.len(), 2);
+        // Sorting by size reorders the two rows (choosing the order already in force would
+        // reverse it instead, which is FAR's behaviour and not what this test is about).
+        app.run(Command::PanelSortBy(scmd_core::SortKey::Size));
+        app.handle_input(Input::Key("Home".parse().unwrap()));
+        assert_eq!(app.panel().current().unwrap().name_str(), "one.txt");
+        assert_eq!(app.panel().current_path().unwrap().as_path(), one);
+        app.handle_input(Input::Key("Down".parse().unwrap()));
+        assert_eq!(app.panel().current_path().unwrap().as_path(), two);
+
+        // An operation works on the real file, not on the panel's own directory joined to a name.
+        app.run(Command::FileCopyCurrent);
+        let Mode::Prompt(prompt) = std::mem::replace(&mut app.mode, Mode::Normal) else {
+            panic!("no prompt")
+        };
+        assert_eq!(prompt.sources, vec![VPath::local(&two)]);
+
+        // `Enter` on a result goes to the directory it lives in.
+        let target = app.panel().enter_target().expect("somewhere to go");
+        assert_eq!(target.as_path(), two.parent().unwrap());
+    }
+
+    #[test]
+    fn re_reading_a_list_panel_drops_what_is_no_longer_there() {
+        let dir = tempfile::tempdir().unwrap();
+        let gone = dir.path().join("gone.txt");
+        let stays = dir.path().join("stays.txt");
+        std::fs::write(&gone, b"x").unwrap();
+        std::fs::write(&stays, b"y").unwrap();
+
+        let mut app = app();
+        app.handle_event(Event::TempListed {
+            panel: 0,
+            generation: 2,
+            title: "found 2".into(),
+            items: vec![
+                (
+                    VPath::local(&gone),
+                    entry("gone.txt", scmd_core::EntryKind::File, 1),
+                ),
+                (
+                    VPath::local(&stays),
+                    entry("stays.txt", scmd_core::EntryKind::File, 1),
+                ),
+            ],
+        });
+        assert_eq!(app.panel().listing.len(), 2);
+
+        std::fs::remove_file(&gone).unwrap();
+        app.requests.clear();
+        app.run(Command::PanelReread);
+        // A list panel re-reads by asking about its own paths, not by listing a directory.
+        match app.take_requests().into_iter().next() {
+            Some(Request::TempRefresh { paths, title, .. }) => {
+                assert_eq!(paths.len(), 2);
+                assert_eq!(title, "found 2");
+            }
+            other => panic!("{other:?}"),
+        }
     }
 
     // ── selection and the keys that ignore it ───────────────────────────────────────────────

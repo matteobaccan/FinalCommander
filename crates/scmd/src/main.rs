@@ -543,6 +543,31 @@ fn interactive(mut app: App) -> Result<()> {
                         let _ = tx.send(Event::Uploaded { id, remote, result });
                     });
                 }
+                Request::TempRefresh {
+                    panel,
+                    generation,
+                    title,
+                    paths,
+                } => {
+                    let tx = tx.clone();
+                    let vfs = vfs.clone();
+                    runtime.spawn(async move {
+                        // A file that has gone since the list was built simply drops out: a
+                        // results panel still showing what was deleted is a liar.
+                        let mut items = Vec::with_capacity(paths.len());
+                        for path in paths {
+                            if let Ok(entry) = vfs.stat(&path).await {
+                                items.push((path, entry));
+                            }
+                        }
+                        let _ = tx.send(Event::TempListed {
+                            panel,
+                            generation,
+                            title,
+                            items,
+                        });
+                    });
+                }
                 Request::Link { target, link, kind } => {
                     let tx = tx.clone();
                     let fs = RoutedFs::new(pool.clone(), runtime.handle().clone());
@@ -1027,6 +1052,27 @@ mod tests {
                                 .map(|e| e.to_string());
                         app.handle_event(Event::LinkDone { link, error });
                     }
+                    Request::TempRefresh {
+                        panel,
+                        generation,
+                        title,
+                        paths,
+                    } => {
+                        let items = paths
+                            .into_iter()
+                            .filter_map(|path| {
+                                scmd_vfs::local::stat_blocking(&path)
+                                    .ok()
+                                    .map(|entry| (path, entry))
+                            })
+                            .collect();
+                        app.handle_event(Event::TempListed {
+                            panel,
+                            generation,
+                            title,
+                            items,
+                        });
+                    }
                     Request::DirSize { .. }
                     | Request::Shell { .. }
                     | Request::Decompile { .. }
@@ -1112,6 +1158,27 @@ mod tests {
                                 .err()
                                 .map(|e| e.to_string());
                         app.handle_event(Event::LinkDone { link, error });
+                    }
+                    Request::TempRefresh {
+                        panel,
+                        generation,
+                        title,
+                        paths,
+                    } => {
+                        let items = paths
+                            .into_iter()
+                            .filter_map(|path| {
+                                scmd_vfs::local::stat_blocking(&path)
+                                    .ok()
+                                    .map(|entry| (path, entry))
+                            })
+                            .collect();
+                        app.handle_event(Event::TempListed {
+                            panel,
+                            generation,
+                            title,
+                            items,
+                        });
                     }
                     Request::DirSize { .. }
                     | Request::Shell { .. }

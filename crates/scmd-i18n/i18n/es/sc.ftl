@@ -11,6 +11,7 @@ key-quit = Salir
 
 list-up = UP-DIR
 list-folder = Directorio
+panel-list-count = { $count } elementos en la lista
 panel-empty = (vacío)
 panel-up = ..
 panel-loading = leyendo…

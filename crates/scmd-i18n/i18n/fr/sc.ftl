@@ -11,6 +11,7 @@ key-quit = Quitter
 
 list-up = Haut
 list-folder = Dossier
+panel-list-count = { $count } éléments dans la liste
 panel-empty = (vide)
 panel-up = ..
 panel-loading = lecture…
