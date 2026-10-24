@@ -1,0 +1,15 @@
+# FAR has `Ctrl+Space`, which measures the directory under the cursor, one at a time. The
+# question people actually ask is which of these twenty is the big one, so this measures all of
+# them and sorts the answer.
+[plugin]
+id = "dir-sizes"
+name = "Directory sizes"
+scmd = ">=0.1.0"
+
+[[command]]
+id = "user.sizes.here"
+label = "Measure every folder here"
+run = "sizes.sh"
+run_windows = "sizes.ps1"
+needs = ["panel"]
+timeout = 300

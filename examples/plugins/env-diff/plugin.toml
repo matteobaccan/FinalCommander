@@ -1,0 +1,13 @@
+# The deploy that fails because one variable was added to `.env.example` and nobody put it in
+# the `.env` on the server. Two files, one list of what is missing from each.
+[plugin]
+id = "env-diff"
+name = "Env files"
+scmd = ">=0.1.0"
+
+[[command]]
+id = "user.env.diff"
+label = "Which keys does .env miss from .env.example?"
+run = "env.sh"
+needs = ["panel"]
+timeout = 30

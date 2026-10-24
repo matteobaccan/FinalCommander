@@ -1,6 +1,6 @@
 # Plugins
 
-Fifteen of them, ready to copy. A plugin is a folder with a `plugin.toml` in it, put in the
+Twenty-one of them, ready to copy. A plugin is a folder with a `plugin.toml` in it, put in the
 plugins directory — `scmd --paths` says where that is, and `scmd --plugins <dir>` points
 somewhere else for a try. `scmd --list-plugins` says what was found and what each one brings.
 `F11` in the panels lists the commands they provide, in the scope you are in.
@@ -35,6 +35,12 @@ one's plugin tier.
 | `git-select` | select what git says changed | — |
 | `dated-folder` | make a folder named today and go into it | — |
 | `goto-root` | go to the top of this project | the twenty times a day one types `cd ../../..` |
+| `dir-sizes` | every folder here, measured and ranked | FAR's `Ctrl+Space`, which measures one at a time — the question is which of the twenty is the big one |
+| `line-count` | lines by extension under here | `cloc`, without `cloc`, and without counting `node_modules` |
+| `syntax-check` | does this parse? php, python, node, json, ruby, sh, perl | the check one runs before committing, with the interpreter that owns the file |
+| `env-diff` | which keys `.env` is missing from `.env.example` | the deploy that fails for one variable nobody copied. Names only, never values |
+| `ssh-hosts` | the hosts in `~/.ssh/config`, with user and port | what the rest of the machine already knows, where the netbox can use it |
+| `strip-bom` | which files start with a BOM; take it off | the blank line before `<?php`, headers already sent, a JSON no parser reads |
 
 Each one is short enough to read before trusting it, which is the point of shipping them as
 scripts rather than as binaries.
@@ -145,3 +151,15 @@ outside the substitution and call it inside, as `what-is-this` and `line-endings
 write the condition as a test — `[ "${path#*/}" = "$path" ]` instead of a `*/*)` pattern, as
 `git-select` now does. A test in the repository reads the scripts and refuses a `case` inside a
 `$( … )`, because a parse check on a newer shell cannot see it.
+
+## Where the rest of the ideas are
+
+[plugring.farmanager.com](https://plugring.farmanager.com) is twenty years of FAR plugins, and
+FAR's own are in its source tree under `plugins/`. Reading them is worth an afternoon, with one
+thing to know before starting: about half of them are *editor* plugins — **Align**, **AutoWrap**,
+**Brackets**, **DrawLine**, **EditCase** — and this program's plugin tier cannot write them. A
+plugin here is a process that is told about the panels and answers with actions on the panels;
+it never runs inside the editor's buffer. The panel-side ones are the ones to steal from, and
+several already have better answers built in rather than bolted on: **Compare** is `F9 →
+Commands` (by name, size and time, and by content), **TmpPanel** is the list panel, **SameFolder**
+is `Ctrl+=`, **ProcList** and **FileCase** are in this folder.

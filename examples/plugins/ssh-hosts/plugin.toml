@@ -1,0 +1,15 @@
+# What `~/.ssh/config` already knows, where the netbox can use it: the hosts you have names
+# for, with the address and the user each one means. The connection list holds the sites this
+# program was told about; this is the list the rest of the machine uses.
+[plugin]
+id = "ssh-hosts"
+name = "SSH hosts"
+scmd = ">=0.1.0"
+
+[[command]]
+id = "user.ssh.hosts"
+label = "The hosts in ~/.ssh/config"
+run = "hosts.sh"
+run_windows = "hosts.ps1"
+needs = []
+timeout = 20

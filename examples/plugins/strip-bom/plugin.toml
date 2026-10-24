@@ -1,0 +1,22 @@
+# The three bytes at the start of a file that a Windows editor adds and PHP prints: a page that
+# begins with a blank line nobody wrote, headers already sent, a JSON file no parser will read.
+# Find them, and take them off.
+[plugin]
+id = "strip-bom"
+name = "Byte order mark"
+scmd = ">=0.1.0"
+
+[[command]]
+id = "user.bom.find"
+label = "Which of these start with a BOM?"
+run = "bom.sh"
+needs = ["panel", "selection", "cursor"]
+timeout = 60
+
+[[command]]
+id = "user.bom.strip"
+label = "Take the BOM off these files"
+run = "bom.sh"
+needs = ["panel", "selection", "cursor"]
+timeout = 120
+confirm = "This rewrites the selected files, removing the three BOM bytes from the front."

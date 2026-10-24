@@ -40,6 +40,16 @@ Notable changes, newest first. The format follows
   bucket to a local panel is not wired to the job engine yet, and that — with upload, delete
   and server-side copy — is the next increment.
 
+- **Six more example plugins**, taking the folder to twenty-one and thirty-three commands:
+  `dir-sizes` (every folder here measured and ranked, where FAR's `Ctrl+Space` does one at a
+  time), `line-count` (lines by extension under here, skipping `node_modules`, `vendor`,
+  `target` and the rest of what nobody wrote by hand), `syntax-check` (does this parse? `php
+  -l`, `python -m py_compile`, `node --check`, JSON, `ruby -c`, `sh -n`, `perl -c`, chosen by
+  what the file is), `env-diff` (which keys `.env` is missing from `.env.example` — names
+  only, never values, because a secret in a dialog is a secret in a screenshot), `ssh-hosts`
+  (what `~/.ssh/config` already knows, `Include` followed, `Host *` left out) and `strip-bom`
+  (the three bytes that put a blank line before `<?php`, found and taken off, with the file's
+  mode kept and the result checked by looking again rather than by trusting the loop).
 - **Tunnels over the netbox connection** (`F9 → Commands → Open a tunnel…`, or `net.tunnel`
   from the palette): `8080:db.internal:5432` makes this machine's 8080 reach `db.internal:5432`
   as the server sees it — SSH's `direct-tcpip`, the thing `ssh -L` is built on, over the

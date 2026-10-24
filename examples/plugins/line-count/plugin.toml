@@ -1,0 +1,14 @@
+# What `cloc` answers, without `cloc`: how much code is here and in what. Counted by extension,
+# with the directories nobody wrote by hand left out — node_modules, vendor, target, .git — and
+# binaries skipped rather than counted as one enormous line.
+[plugin]
+id = "line-count"
+name = "Lines of code"
+scmd = ">=0.1.0"
+
+[[command]]
+id = "user.lines.here"
+label = "Count the lines under here, by kind"
+run = "lines.sh"
+needs = ["panel"]
+timeout = 300

@@ -1,0 +1,14 @@
+# Before committing, before uploading, before wondering why the page is blank: ask the
+# interpreter whether the file parses. One command, and the tool is chosen by what the file is
+# — `php -l`, `python -m py_compile`, `node --check`, `ruby -c`, `sh -n`, `perl -c`.
+[plugin]
+id = "syntax-check"
+name = "Syntax check"
+scmd = ">=0.1.0"
+
+[[command]]
+id = "user.syntax.check"
+label = "Does this parse? (php, python, node, ruby, sh, perl)"
+run = "check.sh"
+needs = ["panel", "selection", "cursor"]
+timeout = 120
