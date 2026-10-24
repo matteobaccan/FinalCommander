@@ -271,6 +271,11 @@ cmd = "file.delete.current"
 keys = ["Ctrl+G"]
 cmd = "file.apply"
 
+# Ours, not FAR's: it has no replace across files, and Hiew's is the shape we follow.
+[[bind]]
+keys = ["Ctrl+Shift+R"]
+cmd = "tool.replace"
+
 [[bind]]
 keys = ["Alt+F6"]
 cmd = "file.link"

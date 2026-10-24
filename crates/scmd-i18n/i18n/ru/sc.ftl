@@ -197,6 +197,7 @@ menu-archive-extract = Распаковать файлы
 menu-archive-commands = Команды архива
 menu-attributes = Атрибуты файла
 menu-apply-command = Применить команду
+menu-replace-in-files = Замена в файлах…
 menu-select-group = Отметить группу
 menu-unselect-group = Снять отметку с группы
 menu-invert-selection = Обратить отметку
@@ -367,3 +368,18 @@ find-panelised = { $count } результатов в панели
 find-needs-mask = нужна маска: `*` значит все файлы
 find-no-engine = движок поиска пока не входит в эту сборку
 find-bad-hex = { $error }
+
+# ------------------------------------------------- replace across files
+replace-title = Замена в файлах
+replace-needle = Искать
+replace-with = Заменить на
+replace-case = Учитывать регистр
+replace-words = Только целые слова
+replace-pattern = Текст выше — регулярное выражение
+replace-hex = Оба — шестнадцатеричные байты
+replace-scope = выделено файлов: { $count }
+replace-needs-needle = искать нечего
+replace-confirm-title = Замена
+replace-confirm-body = Изменится вхождений: { $count } в { $files } файлах.
+replace-nothing = заменять нечего: ни один файл не изменится
+replace-done = заменено вхождений: { $count } в { $files } файлах

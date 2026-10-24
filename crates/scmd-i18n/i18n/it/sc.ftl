@@ -197,6 +197,7 @@ menu-archive-extract = Estrai file
 menu-archive-commands = Comandi archivio
 menu-attributes = Attributi del file
 menu-apply-command = Applica comando
+menu-replace-in-files = Sostituisci nei file…
 menu-select-group = Seleziona gruppo
 menu-unselect-group = Deseleziona gruppo
 menu-invert-selection = Inverti selezione
@@ -367,3 +368,18 @@ find-panelised = { $count } risultati nel pannello
 find-needs-mask = serve una maschera: `*` vuol dire tutti i file
 find-no-engine = il motore di ricerca non è ancora in questa build
 find-bad-hex = { $error }
+
+# ------------------------------------------------- replace across files
+replace-title = Sostituisci nei file
+replace-needle = Cerca
+replace-with = Sostituisci con
+replace-case = Distingui maiuscole
+replace-words = Solo parole intere
+replace-pattern = Il testo sopra è un'espressione regolare
+replace-hex = Entrambi sono byte esadecimali
+replace-scope = { $count } file selezionati
+replace-needs-needle = non c'è niente da cercare
+replace-confirm-title = Sostituzione
+replace-confirm-body = Cambierebbero { $count } occorrenze in { $files } file.
+replace-nothing = niente da sostituire: nessun file cambierebbe
+replace-done = { $count } occorrenze sostituite in { $files } file

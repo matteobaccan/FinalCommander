@@ -197,6 +197,7 @@ menu-archive-extract = 解压文件
 menu-archive-commands = 压缩包命令
 menu-attributes = 文件属性
 menu-apply-command = 应用命令
+menu-replace-in-files = 在文件中替换…
 menu-select-group = 选择组
 menu-unselect-group = 取消选择组
 menu-invert-selection = 反转选择
@@ -367,3 +368,18 @@ find-panelised = 面板中有 { $count } 个结果
 find-needs-mask = 需要一个掩码：`*` 表示所有文件
 find-no-engine = 此版本尚未包含搜索引擎
 find-bad-hex = { $error }
+
+# ------------------------------------------------- replace across files
+replace-title = 在文件中替换
+replace-needle = 查找内容
+replace-with = 替换为
+replace-case = 区分大小写
+replace-words = 仅整个单词
+replace-pattern = 上面的文本是正则表达式
+replace-hex = 两者都是十六进制字节
+replace-scope = 已选择 { $count } 个文件
+replace-needs-needle = 没有要查找的内容
+replace-confirm-title = 替换
+replace-confirm-body = { $files } 个文件中的 { $count } 处将被改变。
+replace-nothing = 没有可替换的内容：不会有文件改变
+replace-done = 已在 { $files } 个文件中替换 { $count } 处

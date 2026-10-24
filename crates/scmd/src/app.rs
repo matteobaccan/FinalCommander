@@ -634,6 +634,11 @@ pub struct App {
     pub hidden: Option<usize>,
     /// What was searched for last, so `Alt+F7` opens on it rather than on an empty dialog.
     pub last_find: FindSpec,
+    /// The same for the replace dialog.
+    pub last_replace: scmd_jobs::ReplaceOptions,
+    /// A replacement runs twice: once to count, and then, if the user says so, for real. This
+    /// is the real one, waiting for the count to come back.
+    pending_replace: Option<JobSpec>,
     /// Which group gives a file its colour. Compiled once: it parses mask lists.
     pub highlight: scmd_ui::Highlight,
     /// What `Ctrl+G` has left to run, one command per file. They go one at a time: a hundred
@@ -712,6 +717,8 @@ impl App {
             user_screen: Vec::new(),
             hidden: None,
             last_find: FindSpec::default(),
+            last_replace: scmd_jobs::ReplaceOptions::default(),
+            pending_replace: None,
             highlight: scmd_ui::Highlight::far_default(),
             apply_queue: Vec::new(),
             apply_total: 0,
@@ -2150,6 +2157,26 @@ impl App {
         }
         self.mode = Mode::Normal;
 
+        // A replacement runs twice. The first run only counted, and `pending_replace` holds
+        // the one that would write: so this is the count, and it asks rather than reports.
+        if kind == JobKind::Replace && self.pending_replace.is_some() {
+            self.replace_counted(&outcome);
+            return;
+        }
+        if kind == JobKind::Replace {
+            let msg = self.i18n.t_args(
+                "replace-done",
+                &[
+                    ("count", (outcome.occurrences() as i64).into()),
+                    ("files", (outcome.replacements.len() as i64).into()),
+                ],
+            );
+            self.set_status(msg);
+            self.read_panel(0);
+            self.read_panel(1);
+            return;
+        }
+
         let kind_label = self.kind_label(kind);
         let mut summary = if outcome.renamed > 0 && outcome.bytes == 0 {
             self.i18n.t_args(
@@ -2599,6 +2626,19 @@ impl App {
                 });
             }
             Command::ToolFind => self.open_find_form(),
+            Command::ToolReplace => {
+                let files = self.job_sources().len();
+                if files == 0 {
+                    let m = self.i18n.t("msg-nothing-to-do");
+                    self.set_error(m);
+                    return;
+                }
+                self.mode = Mode::Form(Box::new(Form::replace(
+                    &self.last_replace,
+                    files,
+                    &self.i18n,
+                )));
+            }
             Command::FileApply => {
                 let sources = self.job_sources();
                 if sources.is_empty() {
@@ -3681,6 +3721,87 @@ impl App {
         }
     }
 
+    /// OK in the replace dialog: count first, always. The dry run and the write share the
+    /// engine's one code path, so what the confirmation says is what the write will do.
+    fn apply_replace_form(&mut self, form: &Form) {
+        let needle = form.text_value("replace.needle");
+        if needle.is_empty() {
+            let m = self.i18n.t("replace-needs-needle");
+            self.set_error(m);
+            self.mode = Mode::Form(Box::new(form.clone()));
+            return;
+        }
+        let options = scmd_jobs::ReplaceOptions {
+            needle,
+            replacement: form.text_value("replace.with"),
+            case_sensitive: form.toggle_value("replace.case"),
+            whole_words: form.toggle_value("replace.words"),
+            pattern: form.toggle_value("replace.pattern"),
+            hex: form.toggle_value("replace.hex"),
+        };
+        let sources = self.job_sources();
+        if sources.is_empty() {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        }
+        self.last_replace = options.clone();
+
+        // A rewritten file should look modified, so its old modification time is not kept.
+        let mut real_options = scmd_jobs::JobOptions::default();
+        real_options.preserve.mtime = false;
+        let real = JobSpec::new(JobKind::Replace, sources.clone(), None)
+            .with_replace(options.clone())
+            .with_options(real_options);
+        self.pending_replace = Some(real);
+
+        let mut counting = real_options;
+        counting.dry_run = true;
+        let dry = JobSpec::new(JobKind::Replace, sources, None)
+            .with_replace(options)
+            .with_options(counting);
+        self.start_job(dry);
+    }
+
+    /// The count came back: say what would change and ask, or say that nothing would.
+    fn replace_counted(&mut self, outcome: &Outcome) {
+        let Some(real) = self.pending_replace.take() else {
+            return;
+        };
+        let occurrences = outcome.occurrences();
+        if occurrences == 0 || outcome.replacements.is_empty() {
+            let m = self.i18n.t("replace-nothing");
+            self.set_status(m);
+            return;
+        }
+        let title = self.i18n.t("replace-confirm-title");
+        let body = self.i18n.t_args(
+            "replace-confirm-body",
+            &[
+                ("count", (occurrences as i64).into()),
+                ("files", (outcome.replacements.len() as i64).into()),
+            ],
+        );
+        let mut lines = vec![body, String::new()];
+        lines.extend(
+            outcome
+                .replacements
+                .iter()
+                .take(5)
+                .map(|(path, n)| format!("  {}  ({n})", path.display_name())),
+        );
+        if outcome.replacements.len() > 5 {
+            lines.push(format!("  … {}", outcome.replacements.len() - 5));
+        }
+        lines.push(String::new());
+        lines.push(self.i18n.t("confirm-yes-no"));
+        self.mode = Mode::Confirm(Confirm {
+            title,
+            lines,
+            action: ConfirmAction::Job(real),
+        });
+    }
+
     /// `Alt+F7`: the dialog, filled in with the last search.
     fn open_find_form(&mut self) {
         self.mode = Mode::Form(Box::new(Form::find(&self.last_find, &self.i18n)));
@@ -4180,6 +4301,10 @@ impl App {
         }
         if form.kind == FormKind::Find {
             self.apply_find_form(&form);
+            return;
+        }
+        if form.kind == FormKind::Replace {
+            self.apply_replace_form(&form);
             return;
         }
         let problems = form.apply(&mut self.cfg);
@@ -5733,6 +5858,128 @@ mod tests {
         app.run(Command::ViewerToPanel);
         assert_eq!(app.panel().current().unwrap().name_str(), viewed);
         assert!(app.status.contains(&viewed), "{}", app.status);
+    }
+
+    // ── replace across files ────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn the_replace_dialog_counts_before_it_writes() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("one.txt"), b"alpha beta alpha\n").unwrap();
+        std::fs::write(dir.path().join("two.txt"), b"nothing here\n").unwrap();
+        let mut app = app_on_disk(dir.path());
+
+        // Select both files, then open the dialog.
+        let listing = app.panel().listing.clone();
+        app.panel_mut()
+            .selection
+            .select_all(&listing, scmd_core::MaskScope::FilesOnly);
+        app.run(Command::ToolReplace);
+        let Mode::Form(mut form) = std::mem::replace(&mut app.mode, Mode::Normal) else {
+            panic!("the replace dialog did not open")
+        };
+        assert_eq!(form.kind, crate::menu::FormKind::Replace);
+        for field in &mut form.fields {
+            if let crate::form::Field::Text {
+                key, value, caret, ..
+            } = field
+            {
+                match *key {
+                    "replace.needle" => *value = "alpha".to_string(),
+                    "replace.with" => *value = "omega".to_string(),
+                    _ => {}
+                }
+                *caret = value.chars().count();
+            }
+        }
+        app.mode = Mode::Form(form);
+        press(&mut app, "F10");
+
+        // The first job out is the count, and it changes nothing.
+        let (id, spec) = match app.take_requests().into_iter().next() {
+            Some(Request::Job { id, spec, .. }) => (id, spec),
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(spec.kind, scmd_jobs::JobKind::Replace);
+        assert!(spec.options.dry_run, "the first run must not write");
+        assert_eq!(spec.sources.len(), 2);
+
+        // What the count found comes back, and the program asks before writing.
+        let counted = scmd_jobs::Outcome {
+            files: 1,
+            replacements: vec![(scmd_core::VPath::local(dir.path().join("one.txt")), 2)],
+            ..Default::default()
+        };
+        app.handle_event(Event::JobDone {
+            id,
+            kind: scmd_jobs::JobKind::Replace,
+            outcome: counted,
+        });
+        let Mode::Confirm(confirm) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        let text = confirm.lines.join(" ");
+        assert!(text.contains('2'), "{text}");
+        assert!(text.contains("one.txt"), "{text}");
+        // And saying yes runs the same thing for real.
+        let real = match &confirm.action {
+            ConfirmAction::Job(spec) => spec.clone(),
+            other => panic!("{other:?}"),
+        };
+        assert!(!real.options.dry_run, "the second run has to write");
+        assert_eq!(real.replace.as_ref().unwrap().needle, "alpha");
+        assert_eq!(real.replace.as_ref().unwrap().replacement, "omega");
+        // A rewritten file should look modified.
+        assert!(!real.options.preserve.mtime);
+    }
+
+    #[test]
+    fn a_count_that_finds_nothing_asks_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("one.txt"), b"nothing here\n").unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        app.run(Command::ToolReplace);
+        let Mode::Form(mut form) = std::mem::replace(&mut app.mode, Mode::Normal) else {
+            panic!("no dialog")
+        };
+        for field in &mut form.fields {
+            if let crate::form::Field::Text {
+                key, value, caret, ..
+            } = field
+            {
+                if *key == "replace.needle" {
+                    *value = "alpha".to_string();
+                    *caret = value.chars().count();
+                }
+            }
+        }
+        app.mode = Mode::Form(form);
+        press(&mut app, "F10");
+        let id = match app.take_requests().into_iter().next() {
+            Some(Request::Job { id, .. }) => id,
+            other => panic!("{other:?}"),
+        };
+        app.handle_event(Event::JobDone {
+            id,
+            kind: scmd_jobs::JobKind::Replace,
+            outcome: scmd_jobs::Outcome::default(),
+        });
+        assert!(matches!(app.mode, Mode::Normal), "{:?}", app.mode);
+        assert!(!app.status.is_empty());
+    }
+
+    #[test]
+    fn a_replacement_with_nothing_to_look_for_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("one.txt"), b"x").unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        app.run(Command::ToolReplace);
+        press(&mut app, "F10");
+        assert!(app.status_error, "{}", app.status);
+        // The dialog stays open, with what was typed still in it.
+        assert!(matches!(app.mode, Mode::Form(_)));
     }
 
     // ── find file (SPEC 06 §1) ──────────────────────────────────────────────────────────────

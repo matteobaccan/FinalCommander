@@ -139,6 +139,8 @@ pub enum Command {
     CmdInsertPathOther,
     ToolUserMenu,
     ToolFind,
+    /// Replace across the selected files, with a dry run first.
+    ToolReplace,
     ShellOutputShow,
 
     // netbox (SPEC 04 §6)
@@ -297,6 +299,7 @@ impl Command {
             Command::CmdInsertPathOther,
             Command::ToolUserMenu,
             Command::ToolFind,
+            Command::ToolReplace,
             Command::ShellOutputShow,
             Command::NetSites,
             Command::NetConnect,
@@ -456,6 +459,7 @@ impl Command {
             Command::CmdInsertPathOther => "cmd.insert.path.other".into(),
             Command::ToolUserMenu => "tool.usermenu".into(),
             Command::ToolFind => "tool.find".into(),
+            Command::ToolReplace => "tool.replace".into(),
             Command::ShellOutputShow => "shell.output.show".into(),
             Command::NetSites => "net.sites".into(),
             Command::NetConnect => "net.connect".into(),
@@ -596,6 +600,7 @@ impl Command {
             ("cmd.insert.path.other", _) => Command::CmdInsertPathOther,
             ("tool.usermenu", _) => Command::ToolUserMenu,
             ("tool.find", _) => Command::ToolFind,
+            ("tool.replace", _) => Command::ToolReplace,
             ("shell.output.show", _) => Command::ShellOutputShow,
             ("net.sites", _) => Command::NetSites,
             ("net.connect", _) => Command::NetConnect,

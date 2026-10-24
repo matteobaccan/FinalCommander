@@ -117,9 +117,9 @@ impl Form {
     pub fn build(kind: FormKind, cfg: &Config, i18n: &I18n) -> Form {
         let t = |id: &str| i18n.t(id);
         let fields = match kind {
-            // The session editor is built by `Form::site`, which needs the site itself, and
-            // the find dialog by `Form::find`, which needs what was searched for last.
-            FormKind::Site | FormKind::Find => Vec::new(),
+            // The session editor is built by `Form::site`, the find dialog by `Form::find` and
+            // the replace dialog by `Form::replace`: each needs more than the configuration.
+            FormKind::Site | FormKind::Find | FormKind::Replace => Vec::new(),
             FormKind::System => vec![
                 Field::toggle(
                     "panel.natural_sort",
@@ -270,6 +270,7 @@ impl Form {
         let title = i18n.t(match kind {
             FormKind::Site => "site-new",
             FormKind::Find => "find-title",
+            FormKind::Replace => "replace-title",
             FormKind::System => "menu-system-settings",
             FormKind::Panel => "menu-panel-settings",
             FormKind::Interface => "menu-interface-settings",
@@ -429,6 +430,30 @@ impl Form {
             }
         }
         String::new()
+    }
+
+    /// Replace across files. `files` is how many are selected, which the dialog says out loud
+    /// because the one thing a user must not get wrong here is *what* it will rewrite.
+    pub fn replace(last: &scmd_jobs::ReplaceOptions, files: usize, i18n: &I18n) -> Form {
+        let t = |id: &str| i18n.t(id);
+        let fields = vec![
+            Field::text("replace.needle", t("replace-needle"), last.needle.clone()),
+            Field::text("replace.with", t("replace-with"), last.replacement.clone()),
+            Field::toggle("replace.case", t("replace-case"), last.case_sensitive),
+            Field::toggle("replace.words", t("replace-words"), last.whole_words),
+            Field::toggle("replace.pattern", t("replace-pattern"), last.pattern),
+            Field::toggle("replace.hex", t("replace-hex"), last.hex),
+            Field::Separator,
+            Field::Dim(i18n.t_args("replace-scope", &[("count", (files as i64).into())])),
+        ];
+        Form {
+            kind: FormKind::Replace,
+            title: t("replace-title"),
+            fields,
+            cursor: 0,
+            site: None,
+            button: None,
+        }
     }
 
     /// What a text row holds now, by key.

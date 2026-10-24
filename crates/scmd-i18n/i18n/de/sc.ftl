@@ -197,6 +197,7 @@ menu-archive-extract = Dateien entpacken
 menu-archive-commands = Archivbefehle
 menu-attributes = Dateiattribute
 menu-apply-command = Befehl anwenden
+menu-replace-in-files = In Dateien ersetzen…
 menu-select-group = Gruppe auswählen
 menu-unselect-group = Gruppe abwählen
 menu-invert-selection = Auswahl umkehren
@@ -367,3 +368,18 @@ find-panelised = { $count } Ergebnisse im Panel
 find-needs-mask = eine Maske wird gebraucht: `*` heißt jede Datei
 find-no-engine = die Suchmaschine ist in diesem Build noch nicht enthalten
 find-bad-hex = { $error }
+
+# ------------------------------------------------- replace across files
+replace-title = In Dateien ersetzen
+replace-needle = Suchen nach
+replace-with = Ersetzen durch
+replace-case = Groß-/Kleinschreibung
+replace-words = Nur ganze Wörter
+replace-pattern = Der Text oben ist ein regulärer Ausdruck
+replace-hex = Beide sind Hex-Bytes
+replace-scope = { $count } Dateien markiert
+replace-needs-needle = es gibt nichts zu suchen
+replace-confirm-title = Ersetzen
+replace-confirm-body = { $count } Vorkommen in { $files } Dateien würden sich ändern.
+replace-nothing = nichts zu ersetzen: keine Datei würde sich ändern
+replace-done = { $count } Vorkommen in { $files } Dateien ersetzt

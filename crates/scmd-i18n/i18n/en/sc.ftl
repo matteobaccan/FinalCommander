@@ -205,6 +205,7 @@ menu-archive-extract = Extract files
 menu-archive-commands = Archive commands
 menu-attributes = File attributes
 menu-apply-command = Apply command
+menu-replace-in-files = Replace in files…
 menu-select-group = Select group
 menu-unselect-group = Unselect group
 menu-invert-selection = Invert selection
@@ -375,3 +376,18 @@ find-panelised = { $count } results in the panel
 find-needs-mask = a mask is needed: `*` means every file
 find-no-engine = the search engine is not in this build yet
 find-bad-hex = { $error }
+
+# ------------------------------------------------- replace across files
+replace-title = Replace in files
+replace-needle = Find what
+replace-with = Replace with
+replace-case = Case sensitive
+replace-words = Whole words only
+replace-pattern = The text above is a regular expression
+replace-hex = Both are hex bytes
+replace-scope = { $count } files selected
+replace-needs-needle = there is nothing to look for
+replace-confirm-title = Replace
+replace-confirm-body = { $count } occurrences in { $files } files would change.
+replace-nothing = nothing to replace: no file would change
+replace-done = { $count } occurrences replaced in { $files } files

@@ -25,6 +25,8 @@ pub enum FormKind {
     Site,
     /// Find file (SPEC 06 §1).
     Find,
+    /// Replace across the selected files.
+    Replace,
     System,
     Panel,
     Interface,
@@ -212,6 +214,12 @@ pub fn menus() -> Vec<Menu> {
                     "menu-apply-command",
                     "Ctrl+G",
                     Action::Run(Command::FileApply),
+                ),
+                // Ours rather than FAR's: FAR has no replace across files.
+                item(
+                    "menu-replace-in-files",
+                    "Ctrl+Shift+R",
+                    Action::Run(Command::ToolReplace),
                 ),
                 Entry::Separator,
                 item("menu-select-group", "+", Action::Run(Command::SelMaskAdd)),
