@@ -21,6 +21,10 @@ the whole screen, and `Ctrl+O` hides both to show the output of the commands tha
 `Ctrl+R` re-reads. `Ctrl+L` turns the other panel into an information panel, `Ctrl+Q` into a
 preview of the file under the cursor, `Ctrl+T` into a directory tree.
 
+`Ctrl+←` and `Ctrl+→` move the line between the two panels; `Ctrl+↑` and `Ctrl+↓` take rows
+off both of them and give them to the output of the last command, which is how you watch a
+build go by without leaving the panels. Both are settings, so `Shift+F9` keeps them.
+
 # Choosing files
 
 `Insert` selects the row and moves on. `Gray +` and `Gray -` select and unselect by a file

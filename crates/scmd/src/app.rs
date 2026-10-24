@@ -3333,6 +3333,17 @@ impl App {
                 panel.sort.reverse = !panel.sort.reverse;
                 panel.rebuild();
             }
+            // The shape of the two panels. Both are settings, so `Shift+F9` keeps them.
+            Command::PanelSplit(by) => {
+                let was = self.cfg.panel.split;
+                self.cfg.panel.split = (was as i32 + by as i32).clamp(10, 90) as u16;
+            }
+            Command::PanelHeight(by) => {
+                let was = self.cfg.panel.height_cut as i32;
+                // Never more than what leaves a panel worth looking at; the renderer has the
+                // final say, but the setting should not run away either.
+                self.cfg.panel.height_cut = (was + by as i32).clamp(0, 40) as u16;
+            }
             // FAR's `Group` and `SelUp`: the two parts of the order that are not the key
             // itself. Both are panel-wide settings, so both panels follow — as the view and
             // the sort key already do.

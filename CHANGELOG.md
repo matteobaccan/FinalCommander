@@ -17,6 +17,13 @@ Notable changes, newest first. The format follows
   the keyboard protocol for this (kitty, foot, WezTerm, Ghostty and others do); where it does
   not, the bar simply stays as it was.
 
+- **The panels can be resized.** `Ctrl+←` and `Ctrl+→` move the line between them,
+  `Ctrl+↑` and `Ctrl+↓` take rows off both and give them to the user screen — the output of
+  the last command, right there under the panels, which is what those keys are for in FAR.
+  The split is a percentage so it survives a resize of the terminal, neither panel can be
+  squeezed below ten columns, and both numbers are settings (`panel.split`,
+  `panel.height_cut`) that `Shift+F9` keeps.
+
 - **The archive commands menu (`Shift+F3`)** — MultiArc's `ArcCmd`. On an archive, or inside
   one: test it, extract it here, extract it elsewhere, delete it, or add files to a new one.
 

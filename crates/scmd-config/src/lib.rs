@@ -185,6 +185,13 @@ pub struct PanelCfg {
     pub scrollbar: bool,
     /// Free space on the device, in the bottom frame.
     pub free_space: bool,
+    /// How much of the width the left panel takes, as a percentage. `Ctrl+Left` and
+    /// `Ctrl+Right` move it; 50 is the even split FAR starts from.
+    pub split: u16,
+    /// Rows taken off the bottom of both panels, which the user screen gets instead.
+    /// `Ctrl+Up` and `Ctrl+Down` move it, and it is FAR's way of watching a command's output
+    /// without leaving the panels.
+    pub height_cut: u16,
     pub quick_search: QuickSearch,
 }
 
@@ -203,6 +210,8 @@ impl Default for PanelCfg {
             status_line: true,
             scrollbar: true,
             free_space: true,
+            split: 50,
+            height_cut: 0,
             quick_search: QuickSearch::Alt,
         }
     }
@@ -575,6 +584,19 @@ impl Config {
             "panel.dirs_first" => self.panel.dirs_first = parse_bool(value)?,
             "panel.selected_first" => self.panel.selected_first = parse_bool(value)?,
             "panel.natural_sort" => self.panel.natural_sort = parse_bool(value)?,
+            "panel.split" => {
+                self.panel.split = value
+                    .trim()
+                    .parse::<u16>()
+                    .map_err(|_| format!("`{value}` is not a number"))?
+                    .clamp(10, 90)
+            }
+            "panel.height_cut" => {
+                self.panel.height_cut = value
+                    .trim()
+                    .parse()
+                    .map_err(|_| format!("`{value}` is not a number"))?
+            }
             "panel.quick_search" => {
                 self.panel.quick_search = match value {
                     "alt" => QuickSearch::Alt,

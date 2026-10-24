@@ -89,7 +89,15 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
     let keybar_h = u16::from(app.cfg.ui.key_bar);
     let status_h = u16::from(app.cfg.ui.status_bar);
     let cmd_h = u16::from(app.cfg.ui.command_line);
-    let panels_h = h.saturating_sub(keybar_h + status_h + cmd_h).max(3);
+    let chrome = keybar_h + status_h + cmd_h;
+    let full_h = h.saturating_sub(chrome).max(3);
+    // `Ctrl+Up`/`Ctrl+Down` take rows off the panels and give them to the user screen, which
+    // is how FAR lets you watch what a command printed without leaving the panels. Six rows
+    // is the least a panel is worth drawing at: a frame, a titles row, the foot and a file.
+    let panels_h = full_h
+        .saturating_sub(app.cfg.panel.height_cut)
+        .max(6)
+        .min(full_h);
 
     // `Ctrl+F1`/`Ctrl+F2` hide one panel and give the screen to the other: a zero-width area
     // draws nothing, which is all "panel off" has to mean.
@@ -97,7 +105,10 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         Some(0) => [Rect::new(0, 0, 0, panels_h), Rect::new(0, 0, w, panels_h)],
         Some(_) => [Rect::new(0, 0, w, panels_h), Rect::new(w, 0, 0, panels_h)],
         None => {
-            let left_w = w / 2;
+            // The split is a percentage, so it survives a resize of the terminal; a panel
+            // narrower than ten columns is not a panel, so neither side can be squeezed out.
+            let left_w = ((w as u32 * app.cfg.panel.split as u32) / 100) as u16;
+            let left_w = left_w.clamp(10.min(w), w.saturating_sub(10));
             [
                 Rect::new(0, 0, left_w, panels_h),
                 Rect::new(left_w, 0, w - left_w, panels_h),
@@ -179,10 +190,26 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         widgets::draw_panel(buf, &app.theme, &render);
     }
 
+    // What the panels gave up: the last lines of the user screen, which is the point of
+    // giving them up at all.
+    if panels_h < full_h {
+        let area = Rect::new(0, panels_h, w, full_h - panels_h);
+        // The terminal's own colours, not the theme's: what is shown here came out of the
+        // shell, and it looked like that when it was printed.
+        let style = Style::new(scmd_ui::Color::Default, scmd_ui::Color::Default);
+        buf.fill(area, ' ', style);
+        let rows = area.h as usize;
+        let start = app.user_screen.len().saturating_sub(rows);
+        for (i, line) in app.user_screen[start..].iter().enumerate() {
+            let text = scmd_ui::truncate_cols(line, w as usize);
+            buf.put_str(0, area.y + i as u16, &text, style, w);
+        }
+    }
+
     // The command line: the panel's path as the prompt, then what is being typed.
     let mut cursor = None;
     if cmd_h == 1 {
-        let y = panels_h;
+        let y = full_h;
         let style = Style::new(app.theme.color("cmdline.fg"), app.theme.color("cmdline.bg"));
         buf.fill(Rect::new(0, y, w, 1), ' ', style);
         let prompt = format!("{}> ", app.panels[app.active].cwd);
@@ -208,7 +235,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         } else {
             app.status.clone()
         };
-        let row = Rect::new(0, panels_h + cmd_h, w, 1);
+        let row = Rect::new(0, full_h + cmd_h, w, 1);
         widgets::draw_status(buf, &app.theme, row, &text, app.status_error);
         // The corner: whether a macro is recording, and how many screens are behind the
         // panels. The recording light comes first because it is the one that matters while it
@@ -2711,6 +2738,83 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
         s.replace('&', "&amp;")
             .replace('<', "&lt;")
             .replace('>', "&gt;")
+    }
+
+    /// `Ctrl+Left`/`Ctrl+Right` move the line between the panels; `Ctrl+Up`/`Ctrl+Down` take
+    /// rows off them and give them to the user screen. Both are settings, so both are kept.
+    #[test]
+    fn the_panels_can_be_resized_and_what_they_give_up_shows_the_user_screen() {
+        let width_of_left = |app: &mut App| {
+            let out = frame(app, 100, 28);
+            out.lines()
+                .nth(1)
+                .unwrap()
+                .char_indices()
+                .filter(|(_, c)| *c == '║')
+                .map(|(i, _)| i)
+                .nth(1)
+                .expect("two frames on the row")
+        };
+
+        let mut app = app("far", "en");
+        project(&mut app);
+        let even = width_of_left(&mut app);
+        for _ in 0..10 {
+            app.handle_input(Input::Key("Ctrl+Right".parse().unwrap()));
+        }
+        assert_eq!(app.cfg.panel.split, 60);
+        let wider = width_of_left(&mut app);
+        assert!(
+            wider > even,
+            "the left panel did not grow: {even} -> {wider}"
+        );
+
+        for _ in 0..30 {
+            app.handle_input(Input::Key("Ctrl+Left".parse().unwrap()));
+        }
+        assert_eq!(app.cfg.panel.split, 30);
+        let narrower = width_of_left(&mut app);
+        assert!(narrower < even, "the left panel did not shrink");
+
+        // Neither side can be squeezed out of existence.
+        for _ in 0..100 {
+            app.handle_input(Input::Key("Ctrl+Left".parse().unwrap()));
+        }
+        assert_eq!(app.cfg.panel.split, 10);
+        assert!(width_of_left(&mut app) >= 10);
+
+        // And the height: four rows off the panels, four rows of user screen.
+        let mut app = super::tests::app("far", "en");
+        project(&mut app);
+        app.user_screen = vec!["$ cargo test".into(), "   Compiling scmd".into()];
+        let before = frame(&mut app, 100, 28);
+        assert!(!before.contains("Compiling scmd"), "{before}");
+        for _ in 0..4 {
+            app.handle_input(Input::Key("Ctrl+Down".parse().unwrap()));
+        }
+        assert_eq!(app.cfg.panel.height_cut, 4);
+        let after = frame(&mut app, 100, 28);
+        assert!(
+            after.contains("Compiling scmd"),
+            "the rows the panels gave up show nothing: {after}"
+        );
+        // The command line and the status bar are still where they were.
+        assert_eq!(
+            before.lines().count(),
+            after.lines().count(),
+            "the screen changed height"
+        );
+        assert_eq!(
+            before.lines().next_back(),
+            after.lines().next_back(),
+            "the key bar moved"
+        );
+
+        for _ in 0..4 {
+            app.handle_input(Input::Key("Ctrl+Up".parse().unwrap()));
+        }
+        assert_eq!(app.cfg.panel.height_cut, 0);
+        assert_eq!(frame(&mut app, 100, 28), before);
     }
 
     #[test]
