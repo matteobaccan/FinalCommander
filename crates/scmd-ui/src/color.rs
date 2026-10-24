@@ -129,7 +129,9 @@ fn rgb_to_256(r: u8, g: u8, b: u8) -> u8 {
     (16 + 36 * q(r) + 6 * q(g) + q(b)) as u8
 }
 
-fn index_to_rgb(i: u8) -> (u8, u8, u8) {
+/// The colour an index actually is, for anything that has to draw outside a terminal — the
+/// SVG screenshots of `svg.rs`, and the degradation above.
+pub fn index_to_rgb(i: u8) -> (u8, u8, u8) {
     match i {
         0..=15 => {
             let base = [

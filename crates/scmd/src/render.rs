@@ -1639,6 +1639,231 @@ mod tests {
         buf.to_text()
     }
 
+    /// The screenshots in `docs/shots`, drawn by the renderer itself from the same buffer the
+    /// terminal would be given.
+    ///
+    /// Not run by `cargo test`: `cargo test -p scmd --bin scmd write_the_screenshots --
+    /// --ignored` writes them. They are in the repository because a picture of a terminal
+    /// program is the first thing anybody wants to see and the last thing anybody remembers to
+    /// update; made this way, regenerating them is one command and they cannot show a version
+    /// of the panel that no longer exists.
+    ///
+    /// Everything in them is fixed on purpose — the paths, the sizes, the dates — so that
+    /// running this twice produces the same bytes and a commit shows a change in the drawing
+    /// rather than a change in the clock.
+    #[test]
+    #[ignore]
+    fn write_the_screenshots() {
+        use std::time::{Duration, SystemTime};
+
+        let out = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(|p| p.parent())
+            .expect("the workspace is two directories up")
+            .join("docs/shots");
+        std::fs::create_dir_all(&out).expect("the shots directory");
+        let write = |name: &str, buf: &Buffer| {
+            let path = out.join(format!("{name}.svg"));
+            std::fs::write(&path, scmd_ui::to_svg(buf)).expect("the picture is written");
+            eprintln!("{}", path.display());
+        };
+        let shot = |app: &mut App, w: u16, h: u16| -> Buffer {
+            let mut buf = Buffer::new(w, h);
+            draw(app, &mut buf);
+            buf
+        };
+        // 1 August 2024, 09:41:00 UTC, so a date column says the same thing every time.
+        let when = |days: u64| -> Option<SystemTime> {
+            Some(SystemTime::UNIX_EPOCH + Duration::from_secs(1_722_505_260 - days * 86_400))
+        };
+        let file = |name: &str, size: u64, days: u64| -> Entry {
+            let mut e = entry(name, EntryKind::File, size);
+            e.mtime = when(days);
+            e
+        };
+        let dir = |name: &str, days: u64| -> Entry {
+            let mut e = entry(name, EntryKind::Dir, 0);
+            e.mtime = when(days);
+            e
+        };
+
+        // ---- the panels, which is what the program is ------------------------------------
+        let mut app = app("far", "en");
+        app.cfg.panel.status_line = true;
+        app.panels[0].cwd = VPath::local("/home/mb/scmd/crates/scmd-core/src");
+        app.panels[1].cwd = VPath::local("/srv/www/releases");
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation: app.panels[0].generation,
+            result: Ok(vec![
+                Entry::parent_entry(),
+                dir("tests", 3),
+                file("entry.rs", 4_812, 1),
+                file("listing.rs", 11_904, 1),
+                file("lib.rs", 2_240, 6),
+                file("selection.rs", 3_671, 12),
+                file("sort.rs", 9_458, 0),
+                file("vpath.rs", 16_380, 2),
+                file("cancel.rs", 980, 40),
+                file("device.rs", 3_112, 5),
+                file("filter.rs", 7_705, 9),
+            ]),
+        });
+        app.handle_event(Event::Listed {
+            panel: 1,
+            generation: app.panels[1].generation,
+            result: Ok(vec![
+                Entry::parent_entry(),
+                file("scmd-linux-x86_64-0.1.1.tar.gz", 3_470_221, 0),
+                file("scmd-macos-aarch64-0.1.1.tar.gz", 3_118_904, 0),
+                file("scmd-windows-x86_64-0.1.1.zip", 3_902_118, 0),
+                file("SHA256SUMS", 312, 0),
+                file("CHANGELOG.md", 28_440, 0),
+            ]),
+        });
+        // Two files marked, because the selection's colours are half of what a panel looks
+        // like and an empty panel never shows them.
+        for name in ["listing.rs", "sort.rs"] {
+            let id = (0..app.panels[0].listing.len())
+                .filter_map(|row| app.panels[0].listing.row(row))
+                .find(|e| e.name_str() == name)
+                .map(|e| e.id)
+                .expect("the row is there");
+            app.panels[0].selection.set(id, true);
+        }
+        app.panels[0].rebuild();
+        app.panels[0].cursor = 6;
+        write("panels", &shot(&mut app, 100, 30));
+
+        // ---- the menu bar, pulled down -----------------------------------------------------
+        press(&mut app, "F9");
+        press(&mut app, "Right");
+        press(&mut app, "Down");
+        write("menu", &shot(&mut app, 100, 30));
+        press(&mut app, "Esc");
+
+        // ---- an object storage panel, and a listing that says it is not all of it ----------
+        let mut objects = app_with_objects(&when(0));
+        write("s3", &shot(&mut objects, 100, 30));
+
+        // ---- the viewer, the hex view, the editor -----------------------------------------
+        let work = std::env::temp_dir().join("scmd-shots/project");
+        let _ = std::fs::remove_dir_all(work.parent().expect("a parent"));
+        std::fs::create_dir_all(&work).expect("the working directory");
+        std::fs::write(work.join("sort.rs"), SAMPLE_SOURCE).expect("the sample");
+        // A small ELF-looking file, for the hex view: the bytes are the point, not the format.
+        let mut bytes: Vec<u8> = b"\x7fELF\x02\x01\x01\x00".to_vec();
+        bytes.extend((0u8..=255).cycle().take(1016));
+        std::fs::write(work.join("binary"), &bytes).expect("the sample");
+        let mut app = app_on_disk(&work);
+        app.theme = Theme::builtin("far").expect("the far theme");
+        app.cfg.panel.status_line = true;
+
+        app.panels[0].cursor = app.panels[0]
+            .listing
+            .row_of_name("sort.rs")
+            .expect("the file is in the listing");
+        press(&mut app, "F3");
+        for _ in 0..3 {
+            press(&mut app, "Down");
+        }
+        write("viewer", &shot(&mut app, 100, 30));
+        press(&mut app, "F4"); // the viewer's hex mode
+        write("hex", &shot(&mut app, 100, 30));
+        press(&mut app, "Esc");
+
+        press(&mut app, "F4"); // the editor
+        for _ in 0..7 {
+            press(&mut app, "Down");
+        }
+        for _ in 0..3 {
+            press(&mut app, "Shift+Down");
+        }
+        write("editor", &shot(&mut app, 100, 30));
+        press(&mut app, "Esc");
+        press(&mut app, "Esc");
+
+        // ---- the help, which is half prose and half the live keymap -----------------------
+        press(&mut app, "F1");
+        write("help", &shot(&mut app, 100, 30));
+
+        let _ = std::fs::remove_dir_all(work.parent().expect("a parent"));
+    }
+
+    /// A panel on a bucket, with a listing the provider cut short — the one picture that shows
+    /// what the object storage support actually looks like.
+    fn app_with_objects(when: &Option<std::time::SystemTime>) -> App {
+        let mut app = app("far", "en");
+        app.cfg.panel.status_line = true;
+        app.panels[0].cwd = VPath::parse("s3://logs/2024/08/");
+        app.panels[1].cwd = VPath::local("/home/mb/incoming");
+        let object = |name: &str, size: u64| -> Entry {
+            let mut e = entry(name, EntryKind::File, size);
+            e.mtime = *when;
+            e.flags.insert(EntryFlags::READONLY);
+            e
+        };
+        let prefix = |name: &str| entry(name, EntryKind::Dir, 0);
+        let generation = app.panels[0].generation;
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation,
+            result: Ok(vec![
+                Entry::parent_entry(),
+                prefix("13"),
+                prefix("14"),
+                prefix("15"),
+                object("access-2024-08-12.log.gz", 41_993_016),
+                object("access-2024-08-13.log.gz", 38_117_402),
+                object("errors-2024-08-13.jsonl", 2_884_120),
+                object("manifest.json", 1_204),
+            ]),
+        });
+        app.handle_event(Event::ListingCut {
+            panel: 0,
+            generation,
+            note: "the first 100000 of this prefix, in 100 requests; there are more \
+                   (s3.listing_cap)"
+                .into(),
+        });
+        app.handle_event(Event::Listed {
+            panel: 1,
+            generation: app.panels[1].generation,
+            result: Ok(vec![Entry::parent_entry()]),
+        });
+        app
+    }
+
+    /// What the viewer and the editor are shown reading. Its own source would do, but a file
+    /// that is a picture of itself is a riddle rather than an illustration.
+    const SAMPLE_SOURCE: &str = r#"/// Compare treating digit runs as numbers: `img2` before `img10`.
+pub fn natural_cmp(a: &str, b: &str, case_sensitive: bool) -> Ordering {
+    natural_cmp_bytes(a.as_bytes(), b.as_bytes(), case_sensitive)
+}
+
+/// The same comparison on the bytes of a name, which is how a listing holds it.
+pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
+    let common = a.len().min(b.len());
+    let mut i = 0;
+    while i < common && a[i] == b[i] {
+        i += 1;
+    }
+    if i == common {
+        // One name is the other with more after it, or they are the same name.
+        return a.len().cmp(&b.len());
+    }
+    while i > 0 && a[i - 1].is_ascii_digit() {
+        i -= 1;
+    }
+    // A continuation byte cannot begin a character, and both names are inside the same
+    // character here, since every byte before this one was equal.
+    while i > 0 && a[i] & 0xC0 == 0x80 {
+        i -= 1;
+    }
+    natural_cmp_from(&a[i..], &b[i..], case_sensitive)
+}
+"#;
+
     #[test]
     fn a_full_frame_has_two_panels_a_status_line_and_a_key_bar() {
         let mut app = app("commander", "en");

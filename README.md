@@ -10,6 +10,10 @@
   works the same way on systems its ancestors never shared.
 </p>
 
+<p align="center">
+  <img src="docs/shots/panels.svg" alt="Two panels in FAR's own palette: a source directory on the left with two files marked, a releases directory on the right, the column titles, the status line and the key bar." width="880">
+</p>
+
 A cross-platform **orthodox file manager** (two panels, command line, function keys,
 keyboard-first) written in Rust — in the tradition of Norton Commander, FAR Manager,
 Total Commander, Midnight Commander and Krusader, with a modern engine underneath.
@@ -41,6 +45,21 @@ with FAR's keymap as the default, because a user's fingers are a specification t
 > What is missing says so rather than failing quietly; the list is in
 > [`CHANGELOG.md`](CHANGELOG.md), item by item in [`docs/BACKLOG.md`](docs/BACKLOG.md), and the
 > plan in `docs/spec/09-roadmap.md`.
+
+## What it looks like
+
+Not photographs: every picture here is drawn by the renderer itself, from the same cell buffer
+the terminal is given, by `cargo test -p scmd --bin scmd write_the_screenshots -- --ignored`.
+They cannot show a version of the program that no longer exists.
+
+| | |
+| --- | --- |
+| <img src="docs/shots/viewer.svg" alt="The viewer on a Rust source file" width="420"> | <img src="docs/shots/hex.svg" alt="The same file in the hex view" width="420"> |
+| **The viewer** (`F3`), in FAR's own colours — light cyan on blue, the title bar black on cyan. | **The hex view** (`F4` in the viewer): offsets, bytes, and the characters beside them. |
+| <img src="docs/shots/editor.svg" alt="The editor with a marked block" width="420"> | <img src="docs/shots/menu.svg" alt="The Files menu pulled down over the panels" width="420"> |
+| **The editor** (`F4`) with a marked block, the line and column in the title. | **The menus** (`F9`): each shortcut is read from the keymap in force, and what is not implemented yet is drawn dim and says so when chosen. |
+| <img src="docs/shots/s3.svg" alt="A panel on an S3 bucket" width="420"> | <img src="docs/shots/help.svg" alt="The help system" width="420"> |
+| **A bucket as a panel** (`s3://logs/2024/08/`): the folders are common prefixes the service computes, and the footer says when the listing is not all of it. | **The help** (`F1`): half written prose, half generated from the keymap and the configuration in force. |
 
 ## Install
 
@@ -302,6 +321,11 @@ No telemetry, no accounts, no cloud service, no bundled proprietary blobs, no GT
 in the core, and no attempt to be an Explorer/Finder replacement.
 
 ## The pictures
+
+`docs/shots/` holds the screenshots, and they are not screenshots: `write_the_screenshots`
+renders the real panels into a cell buffer and writes that buffer as SVG, so regenerating them
+is one command and they cannot drift from the program. `crates/scmd-ui/src/svg.rs` is the
+twenty lines that turn a buffer into a picture.
 
 `assets/` holds the logo, the banner and the icon, all in FAR's own palette and all drawn as
 SVG — `assets/README.md` says what each is for and how the PNGs and the `.ico` are made from
