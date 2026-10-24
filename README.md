@@ -5,53 +5,75 @@
 <h1 align="center">SupremeCommander</h1>
 
 <p align="center">
-  <b>One program. Every system.</b><br>
-  The shape Norton Commander gave the terminal and the keys FAR kept, in one program that
-  works the same way on systems its ancestors never shared.
+  <b>One file. Every system. Everything in it.</b><br>
+  The shape Norton Commander gave the terminal and the keys FAR kept — in a single executable
+  you copy onto a machine and use, on Linux, macOS and Windows alike.
 </p>
 
 <p align="center">
   <img src="docs/shots/panels.svg" alt="Two panels in FAR's own palette: a source directory on the left with two files marked, a releases directory on the right, the column titles, the status line and the key bar." width="880">
 </p>
 
-A cross-platform **orthodox file manager** (two panels, command line, function keys,
-keyboard-first) written in Rust — in the tradition of Norton Commander, FAR Manager,
-Total Commander, Midnight Commander and Krusader, with a modern engine underneath.
+## The argument, in one paragraph
 
-The idea has always been one idea and never one program: FAR is Windows, far2l is its Linux
-port, Midnight Commander is Unix, Total Commander is Windows again, Double Commander is a
-third codebase. Same shape, five times over, with different keys and different gaps on every
-system. This is that idea written once, as one binary per platform from one source tree —
-with FAR's keymap as the default, because a user's fingers are a specification too.
+You already use a two-panel file manager. Around it you have also collected an archiver, an
+SFTP client, something for S3, a hex editor, a viewer that survives a four-gigabyte log, a
+grep-across-files tool, an editor that colours code — and a different set of all of those on
+the other operating system you work on. **SupremeCommander is one binary, about five megabytes
+to download, that does all of it with the same keys on all three platforms.** No installer. No
+runtime. No DLLs, no asset directory, no plugin tree to assemble: the themes, the keymaps,
+seven interface languages, the whole help and the manual page are compiled into the file.
+`scp` it to a server and it works there too.
 
-> **Status: 0.2.0, open to testers.** Two panels, navigation, the selection matrix, sorting, view
-> modes, quick search, filters with FAR's whole mask grammar, themes (including FAR's own
-> palette), keymap profiles and seven interface languages, real file operations (`F5`–`F8`,
-> plus wipe and links), a command line with FAR's internal commands, prefixes and metasymbols
-> and the user screen behind it (`Ctrl+O`), the viewer (`F3`) with a structure pane for
-> binaries (`F11`), the editor (`F4`), the netbox (`Alt+N`: SFTP panels, transfers and a
-> session editor), the menu bar with its settings dialogs (`F9`), and finding things:
-> **find file** (`Alt+F7`) by mask and by content with the results usable while the walk runs,
-> a panel that can be a list of files rather than a directory, **replace across files**
-> with the count taken before anything is written, **archives** (`Enter` opens a zip or a
-> tarball as a panel, `Shift+F1` builds one, `Shift+F2` takes one apart), and the panels FAR
-> has: **quick view** (`Ctrl+Q`), **info** (`Ctrl+L`) and the **tree** (`Ctrl+T`), plus
-> **compare folders** and FAR's five view modes on FAR's own keys. Then the 0.0.8 and 0.1.0
-> work: the **hex editor** (`F4` on a binary) with a patch list, block operations (`F12`), an
-> **assembler** (`F9`) and a **calculator** (`Alt+=`), search by instruction pattern in a
-> disassembly, raw devices on Linux and macOS, **macros** (`Ctrl+.`), the **screens**
-> (`F12`, `Ctrl+Tab`), a **help system** whose key and command chapters are generated from the
-> keymap in force (`F1`), a **manual page**, and **plugin commands** (`F11`). Then 0.2.0:
-> **object storage** (`s3://`, a bucket as a panel), **tunnels** over a connection the panel
-> is already on, **comparing two folders by what is in the files**, **syntax highlighting**
-> in the viewer and the editor, FAR's own panel chrome and foot, a **key bar that follows the
-> modifier** you hold, the **archive commands** (`Shift+F3`, with testing an archive), panels
-> you can **resize with `Ctrl` and the arrows**, a **change-drive dialog that is a table**,
-> one **search dialog** that asks the whole question, and an **`F1` that is about where you
-> are**.
-> What is missing says so rather than failing quietly; the list is in
-> [`CHANGELOG.md`](CHANGELOG.md), item by item in [`docs/BACKLOG.md`](docs/BACKLOG.md), and the
-> plan in `docs/spec/09-roadmap.md`.
+## What the one file replaces
+
+| What you open today | In SupremeCommander |
+| --- | --- |
+| A file manager | Two panels, the selection matrix, five view modes, sorting, filters, quick search, and the command line with the shell behind it (`Ctrl+O`) |
+| An archiver | `Enter` opens a zip or a tarball **as a panel**; `Shift+F1` builds one; `Shift+F2` extracts; `Shift+F3` tests every entry against the format's own checks |
+| An SFTP client | `sftp://user@host/dir` is a panel. Copy between two servers with `F5`; edit a remote file with `F4` and `F2` writes it back atomically |
+| `ssh -L` | `8080:db.internal:5432` forwards a port over the connection the panel is already on — no second login, no second terminal |
+| An S3 browser | `s3://logs/2024/08/` is a panel, on AWS or on MinIO, Ceph, Garage, R2, Wasabi. A bucket of 1.7 million objects opens as fast as one with ten |
+| A pager for huge files | The viewer (`F3`) never loads a file: a 40 GB log opens at once and `End` is one seek. Text, dump, hex, and encodings it detects |
+| A hex editor | `F4` on a binary: two panes, a patch list of what changed, block operations (`F12`), and an **assembler** (`F9`) that writes instructions over the bytes |
+| A disassembler | x86 and x86-64 with sections and symbols, from ELF, PE and Mach-O; JVM class files and .NET assemblies read in process; search by **instruction pattern** |
+| `grep -r` and `sed -i` | Find by mask **and by content** (`Alt+F7`), with the results usable while the walk is still running, and replace across files with the count taken before anything is written |
+| `diff -r` | Compare two folders by name, size and time — or by **what is in the files**, which also knows "the same but for the line endings" |
+| A code editor | `F4` edits with undo, column blocks, an atomic save, and syntax colouring for twenty-five languages and markups |
+| A macro recorder | `Ctrl+.` records *commands*, not keystrokes, and a macro can run once or once for every selected file |
+| A calculator | `Alt+=`, in every base at once |
+
+Each of those is a key, not a plugin to go and find.
+
+## Why not the one you already have
+
+Every orthodox commander is the same good idea, implemented once per operating system:
+
+| | Platforms | Shipped as | Licence |
+| --- | --- | --- | --- |
+| **FAR Manager** | Windows | an installer and a plugin tree | BSD-3-Clause |
+| **far2l** | Linux, macOS | build it, or a distribution package | GPL-2.0 |
+| **Midnight Commander** | Unix | a distribution package | GPL-3.0 |
+| **Total Commander** | Windows | an installer, shareware | proprietary |
+| **Double Commander** | Linux, macOS, Windows | a GTK/Qt application | GPL-2.0 |
+| **Krusader** | Linux (KDE) | KDE libraries | GPL-2.0 |
+| **SupremeCommander** | **Linux, macOS, Windows** | **one file, copied** | **MIT** |
+
+Learn the keys once and they are the keys everywhere — including on the server you only ever
+reach over SSH, where a GTK application is not an option and installing a package may not be
+either.
+
+Credit where it is due: FAR with twenty years of plugins goes deeper on Windows than this does
+today, Midnight Commander is already on every Unix machine you will ever log into, and
+Krusader's synchroniser has no equal here yet. What none of them is, is the same program on
+all three systems — and that is the hole this fills.
+
+> **Status: 0.2.0, open to testers.** Everything described above works today. What is *not*
+> there says so rather than failing quietly: object storage is read-only in this release,
+> writing *into* an existing archive is the next thing being built, and the OS clipboard, a
+> trash can and FTP are not here yet. [`CHANGELOG.md`](CHANGELOG.md) is what has landed and
+> [`docs/BACKLOG.md`](docs/BACKLOG.md) is what has not, item by item, with the open questions
+> marked.
 
 ## What it looks like
 
@@ -62,11 +84,11 @@ They cannot show a version of the program that no longer exists.
 | | |
 | --- | --- |
 | <img src="docs/shots/viewer.svg" alt="The viewer on a Rust source file" width="420"> | <img src="docs/shots/hex.svg" alt="The same file in the hex view" width="420"> |
-| **The viewer** (`F3`), in FAR's own colours — light cyan on blue, the title bar black on cyan. | **The hex view** (`F4` in the viewer): offsets, bytes, and the characters beside them. |
+| **The viewer** (`F3`), in FAR's own colours, with the syntax coloured. | **The hex view** (`F4` in the viewer): offsets, bytes, and the characters beside them. |
 | <img src="docs/shots/editor.svg" alt="The editor with a marked block" width="420"> | <img src="docs/shots/menu.svg" alt="The Files menu pulled down over the panels" width="420"> |
-| **The editor** (`F4`) with a marked block, the line and column in the title. | **The menus** (`F9`): each shortcut is read from the keymap in force, and what is not implemented yet is drawn dim and says so when chosen. |
+| **The editor** (`F4`): a marked block, and the language named in the title bar. | **The menus** (`F9`): each shortcut is read from the keymap in force, and what is not implemented yet is drawn dim and says so when chosen. |
 | <img src="docs/shots/s3.svg" alt="A panel on an S3 bucket" width="420"> | <img src="docs/shots/help.svg" alt="The help system" width="420"> |
-| **A bucket as a panel** (`s3://logs/2024/08/`): the folders are common prefixes the service computes, and the footer says when the listing is not all of it. | **The help** (`F1`): half written prose, half generated from the keymap and the configuration in force. |
+| **A bucket as a panel** (`s3://logs/2024/08/`): the folders are common prefixes the service computes, and the footer says when the listing is not all of it. | **The help** (`F1`): the keys of the screen you are on, each with what it does, generated from the keymap in force. |
 
 ## Install
 
@@ -102,127 +124,73 @@ From source, with Rust 1.89 or newer:
 cargo install --git https://github.com/matteobaccan/SupremeCommander scmd
 ```
 
+Everything the program keeps on disk is optional and amounts to three things: one settings
+file (`scmd.toml`, which also holds your themes and keymaps), one state file beside it, and
+one `plugins/` directory — the only directory it ever reads. Delete them and nothing breaks.
+
 ## Try it
 
 ```sh
-cargo run --release -- /etc /tmp     # left panel, right panel
+scmd /etc /tmp     # left panel, right panel
 ```
 
 ```
-┌────────── /home/mb/project ──────────┐┌──────────────── /tmp ────────────────┐
-│..                      UP--          ││..                      UP--          │
-│src/                  FOLDER          ││cargo-installXXXXXX/  FOLDER          │
-│docs/                 FOLDER          ││scmd-build/             FOLDER          │
-│Cargo.toml             412 B 2026-10-2││notes.md              1.2 K 2026-10-2│
-│README.md             2.00 K 2026-10-2││                                      │
-└─2 files, 2.40 K  [name]──────────────┘└─1 files, 1.20 K  [name]──────────────┘
- Cargo.toml  412 B  2026-10-23 17:42
-1Help   2Menu   3View   4Edit   5Copy   6RenMov 7MkDir  8Delete 9PullDn 10Quit
+╔═══════════ /home/mb/project ═══════════╗╔═════════════════ /tmp ═════════════════╗
+║n       Name        │  Size  │   Date   ║║n       Name        │  Size  │   Date   ║
+║..                  │    Up  │          ║║..                  │    Up  │          ║
+║src                 │ Folder │2026-10-23║║cargo-installXXXXXX │ Folder │2026-10-24║
+║docs                │ Folder │2026-10-23║║notes.md            │  1.20 K│2026-10-24║
+║Cargo.toml          │   412 B│2026-10-23║║                    │        │          ║
+║    Bytes: 2 412, files: 2, folders: 0  ║║                    │        │          ║
+╟────────────────────────────────────────╢╟────────────────────────────────────────╢
+║Cargo.toml   412 B   2026-10-23 17:42   ║║notes.md    1.20 K   2026-10-24 09:15   ║
+╚══════ 2.40 K (2/2) ═══ 12.0 G ═════════╝╚══════ 1.20 K (1/0) ═══ 12.0 G ═════════╝
+/home/mb/project>
+1Help  2UserMn 3View  4Edit  5Copy  6RenMov 7MkFold 8Delete 9ConfMn 10Quit 12Screens
 ```
 
-What works today:
+Hold `Shift` and the key bar becomes the archive keys; hold `Ctrl` and it becomes the sort
+keys; hold `Alt` and it becomes the drives, the search and the histories. `F1` tells you what
+every key on the screen you are looking at does.
+
+## What works today
 
 - **File operations**: `F5` copy, `F6` move/rename, `F7` create directory, `F8` delete — on the
   selection or on the item under the cursor, with the destination prefilled from the passive
   panel. Recursive trees, conflict dialogs (overwrite / all / skip / skip all / cancel), error
   decision points (retry / skip / skip all / cancel), a progress overlay with a per-file and a
   total bar, `Esc` to cancel, and both panels refreshed afterwards. A same-filesystem move is a
-  rename, not a copy. A copy is written to `name.scmd-part` and renamed only when complete, so an
-  interrupted operation never leaves a file that looks finished.
+  rename, not a copy. A copy is written to `name.scmd-part` and renamed only when complete, so
+  an interrupted operation never leaves a file that looks finished.
 - **Panels**: `Tab` / `Ctrl+U`, arrows / `PgUp` / `PgDn` / `Home` / `End` / `Enter` /
-  `Ctrl+PgUp` / `Backspace` / `Ctrl+\` with history (`Alt+←/→`), `Ins` and `+` / `-` / `*` /
-  `Ctrl+A` selection by mask, `Ctrl+F3..F7` sorting (press twice to reverse), `Ctrl+1/2` view
-  modes, `Ctrl+H` hidden files, `Alt+I` live filter, quick search by typing, `Space` for a
-  recursive directory size, `Ctrl+=` to sync the other panel.
+  `Ctrl+PgUp` / `Backspace` / `Ctrl+\` with history (`Alt+←/→`), `Ins` and `+` / `-` / `*`
+  selection by mask, `Ctrl+F3..F9` sorting (press twice to reverse), `Ctrl+1..5` view modes,
+  `Ctrl+H` hidden files, `Alt+I` live filter, quick search by typing, `Space` for a recursive
+  directory size, `Ctrl+=` to sync the other panel, `Ctrl` with the arrows to reshape the two
+  panels, and the panels FAR has: quick view (`Ctrl+Q`), info (`Ctrl+L`), tree (`Ctrl+T`).
 - **Viewer** (`F3`): text, dump and hex on files of any size — position is a byte offset, so
   opening a 40 GB log costs one read and `End` costs one seek. Encoding detected (UTF-8,
   UTF-16 with or without a BOM, CP1252, CP437) and switchable with `F8`; `F2` cycles
-  no-wrap / character / word wrap; `F4` hex, `Shift+F4` the next mode; `F7` search (plain,
-  regex or `4D 5A ?? 00` hex patterns, hits highlighted, `n`/`N` for the next and previous);
-  `Alt+F8` jumps to an offset, `0x`-offset or `NN%`; `Shift+F` follows a growing file like
-  `tail -f`; `Ctrl+Z` undoes a jump. `hjkl`, `g`/`G`, `/` and `:` work too.
-- **Inside compiled files**: `F5` shows the code, whatever the file is. Native binaries (ELF,
-  PE, Mach-O, raw) are disassembled with sections and symbols read via `object` and x86/x86-64
-  decoded with `iced-x86`, with `<symbol>:` headings, scrolling by whole instructions, and a
-  raw sweep (announced in the status line) for files over the 64 MiB parse limit, because a
-  debug build is routinely 100 MB. **Bytecode is read in process**: a `.class` file becomes a
-  `javap`-style listing with the constant pool resolved into the comments, a managed PE becomes
-  an `ildasm`-style IL listing with metadata-resolved tokens and `ldstr` literals, and a
-  `.wasm` becomes its text format. `F6` decompiles:
-  WebAssembly becomes its text format in process, and anything else is handed to an installed
-  tool through a `[[decompile]]` rule — `javap`, `ilspycmd`, `python -m dis`, `objdump`,
-  `retdec` — whose output is then viewable, searchable text. A real decompiler is a research
-  project: we call the good ones instead of shipping a bad one.
-- **Editor** (`F4`, `Shift+F4` for a new file): the file's encoding, line endings, BOM and
-  final newline survive a round trip, and the save is atomic — `name.scmd-tmp` written beside
-  the original, permissions carried over, then renamed. A file that changed on disk while you
-  were editing is never overwritten without a confirmation. `F2` saves, `Shift+F2` saves as,
-  `Ctrl+R` reloads, `F7` searches, `Ctrl+F7` replaces everywhere, `Alt+F8` goes to `line:col`,
-  `Ctrl+Z`/`Ctrl+Shift+Z` undo and redo, `Ctrl+Y` deletes a line, `Alt+↑/↓` moves one,
-  `Alt+I`/`Alt+U` indent and outdent. `Shift+arrows` marks a stream block and
-  **`Alt+Shift+arrows` a column block** — cut a rectangle out of a table and paste it back
-  (short lines are padded, as FAR does).
-- **Netbox** (`Alt+N`): SFTP panels. The connection list holds the `[[site]]` entries from the
-  config — grouped, with the authentication method and a marker on what is connected — and
-  `sftp://user@host:port/dir` typed into `Ctrl+L` connects on the spot. Authentication is the
-  SSH agent, a key file, or a password asked for in a masked prompt; the host key is checked
-  against `~/.ssh/known_hosts`, an unknown one is shown as a SHA256 fingerprint for you to
-  accept, and a *changed* one is refused outright. One connection per `user@host:port` is
-  shared by both panels and every job, so `F5` and `F6` copy and move up, down, between two
-  servers or inside one — with the same progress, conflict and cancellation behaviour as a
-  local copy, because it is the same engine. `F3` fetches a remote file into a temporary copy
-  and says that is what you are looking at; `F4` edits that copy and `F2` writes it back —
-  uploaded beside the original and renamed into place, so the file on the server keeps its old
-  bytes until the new ones are all there, and a file someone else changed in the meantime asks
-  before being overwritten. `Alt+Shift+N` disconnects.
-- **Tunnels** (`F9 → Commands`): `8080:db.internal:5432` forwards a port over the connection
-  the panel is on — SSH's own `direct-tcpip`, the thing `ssh -L` is built on — so a database
-  client, a browser or this program's own `s3://` panel can reach a service only the server can
-  see, without a second authentication and without a second connection. The local end binds
-  `127.0.0.1`, never every interface. The list shows what is open with the connections carried,
-  open now and refused, and `Enter` closes one.
-- **Object storage** (`s3://`): a bucket as a panel, on AWS or on anything else that speaks the
-  protocol — MinIO, Ceph, Garage, R2, Wasabi, a LocalStack in a container — with the endpoint,
-  the region and the addressing style in an `[[s3]]` block of the config. `s3://logs/2024/08/`
-  opens a prefix, `s3://work@logs/` picks a service by name, `s3://work@/` lists the buckets.
-  A bucket has no directories in it — `2024/08/13/access.log` is one key with slashes — so what
-  the panel shows as a folder is a common prefix the *service* computes, which is why opening
-  one costs a single request in a bucket of ten million objects as in a bucket of ten. Asking
-  for everything under a prefix is the other thing, and it is bounded: the listing stops at
-  `listing_cap` rows and the footer then says `(partial)` for as long as it is on screen,
-  because a count that is not the whole count must not look like one. No access key is ever
-  written into `scmd.toml`: they come from the `AWS_*` variables or from `~/.aws/credentials`,
-  and `credentials = "anonymous"` reads a public bucket with no keys at all. `F3` brings an
-  object down to a temporary copy and shows you that, as it does for a file on a server.
-  Read-only in this release, and the capabilities say so, so nothing offers to rename an
-  object — object storage has no rename; `F5` to a local panel is the next increment, along
-  with upload and delete.
-- **Menus and settings** (`F9`): FAR's five menus — Left, Files, Commands, Options, Right.
-  Every entry is a command from the same vocabulary the keys use, the shortcut shown beside it
-  is read from the keymap in force, and an entry whose feature is not here yet is drawn dim and
-  says so when chosen, so the menu is a map of the program rather than a promise. Four settings
-  dialogs (System, Panel, Interface, Confirmations) whose every row is bound to a configuration
-  key and goes in through the same code as `--set`; `OK` takes effect in the running panels at
-  once and `Shift+F9` writes `scmd.toml`. Five lists to choose from: languages (switches the
-  interface on the spot), themes, drives and open connections (`Alt+F1` / `Alt+F2`), folder
-  history (`Alt+F12`) and sort modes (`Ctrl+F12`, where choosing the order already in force
-  turns it round, as FAR does).
-- **Connections without editing TOML**: in the connection list (`Alt+N`), `Ins` stores a new
-  session and `F4` edits the one under the cursor — name, host, port, user, authentication
-  (agent, key file or ask), remote folder, group, keep-alive, compression. It is checked before
-  it is stored, so an unusable session is refused with the reason instead of being written; the
-  session is live at once and `Shift+F9` keeps it. No password is ever a field: a session says
-  how to authenticate and the secret is asked for when the connection needs it.
-- **The rest**: `Alt+T` cycles themes, `F1` is a help page generated from the live keymap,
-  `F10` quits.
+  no-wrap / character / word wrap; `F4` between text and hex; `F7` opens one search dialog that
+  asks the whole question — text, hex or a regular expression, case, whole words, forwards or
+  backwards. A structure pane (`F11`) for binaries, with sections and symbols, and `F5` to read
+  the bytes as instructions.
+- **Editor** (`F4`): undo over the session, column blocks, search and replace, an atomic save,
+  and syntax colouring for Rust, C, C++, Java, C#, JavaScript, TypeScript, PHP, Python, Ruby,
+  Go, shell, SQL, HTML, XML, CSS, Markdown, JSON, TOML, YAML, INI, Make, Dockerfile, Lua and
+  Perl. On a binary it is a hex editor instead, with a patch list and an assembler.
+- **Archives**: zip and the tar family (plain, gzip, bzip2, xz, zstd), all with pure-Rust
+  decoders — nothing shells out. `Enter` opens one as a panel, `F3` reads an entry, `F5` copies
+  out through the same job engine as any other copy.
+- **Servers and buckets**: SFTP panels and transfers, a session editor, host-key checking
+  against `known_hosts`, port forwarding, and `s3://` panels with the credentials read from the
+  environment or `~/.aws/credentials` — never written into the configuration file.
+- **The program itself**: six themes, seven interface languages switchable while it runs, two
+  keymap profiles (FAR and mc) and your own on top, macros, the screens list (`F12`), plugin
+  commands (`F11`), a help system whose key pages are generated from the keymap in force, and a
+  manual page.
 
-Not yet: the OS keyring for passwords, `ProxyJump`, FTP and the other schemes, several open
-buffers in the editor, the OS clipboard, trash and a background job queue. Anything
-unimplemented says so plainly instead
-of pretending — [`docs/BACKLOG.md`](docs/BACKLOG.md) lists it item by item, with the open
-questions marked.
-
-Non-interactive modes (used by CI and by scripts):
+Non-interactive modes, for CI and for scripts:
 
 ```sh
 scmd --list-themes      # built-in and external themes, with where each came from
@@ -235,25 +203,13 @@ scmd --paths            # where the config file, the state file and plugins/ are
 scmd --list-plugins     # what is in the plugins directory
 ```
 
-## Why
+## Coming from another commander
 
-The best commanders are either Windows-only (FAR Manager, Total Commander), GPL forks of
-30-year-old C++ (far2l, Midnight Commander), or tied to a desktop toolkit (Krusader,
-Double Commander). Nothing in Rust covers the full orthodox feature set: the existing Rust
-file managers are single-pane browsers (yazi, joshuto, xplr) or very young GTK4 apps.
-
-Goal: **one executable** — themes, keymaps, all seven languages and the help compiled in,
-nothing to install and no asset tree — the same keys on Linux, macOS and Windows, a
-**strictly TUI** interface that works over SSH and in tmux, an operation engine that never
-blocks or loses data, and a sandboxed plugin ABI whose first three clients are the viewer, the
-editor and netbox (the network panel).
-
-Everything on disk is optional and amounts to: one settings file (`scmd.toml`, which also holds
-your themes and keymaps), one state file beside it, and one `plugins/` directory — the only
-directory the program ever reads.
-
-There is no GUI build and there will not be one: the graphical commanders are a crowded field,
-and the open slot is a terminal commander with a modern engine.
+`ui.keymap = "far"` is the default and `"mc"` ships beside it; a keymap of your own is a TOML
+file of `keys = [...]` / `cmd = "..."` lines, and `scmd --check-keymap` tells you whether it
+resolves before you rely on it. Every action in the program is a named command —
+`scmd --list-commands` prints all of them — so anything you can reach with a key you can also
+put in a menu, a macro or a plugin.
 
 ## Why the command is `scmd` and not `sc`
 
@@ -274,23 +230,35 @@ Chinese (`ui.language = "auto"` follows the OS locale); CJK double-width layout 
 `F9` → Options → Languages switches language while the program runs, and Options → Themes is
 the same list for the themes; `Shift+F9` makes either choice permanent.
 
-## Layout
+## How it is built
+
+A strictly TUI interface — it works over SSH and in tmux — and there is no GUI build and will
+not be one: the graphical commanders are a crowded field, and the open slot is a terminal
+commander with a modern engine underneath.
 
 ```
 crates/scmd-core     paths, entries, listings, sorting, selection   (no dependencies of ours)
 crates/scmd-vfs      the Vfs trait + the local provider
 crates/scmd-jobs     the operation engine: plan, execute, settle; conflicts and progress
+crates/scmd-arc      archives: zip and the tar family, reading, writing and testing
 crates/scmd-view     the viewer: windowed reads, encodings, text/dump/hex, search, disasm
 crates/scmd-edit     the editor: buffer, undo, blocks, search/replace, atomic save
-crates/scmd-net      netbox: SFTP, sites, connection pool, routed job filesystem
+crates/scmd-syntax   the syntax scanner: one line, and the state the line before it left
+crates/scmd-net      netbox: SFTP, sites, connection pool, tunnels, routed job filesystem
 crates/scmd-s3       object storage: SigV4, listings, the S3 provider and a fake service
+crates/scmd-find     find by name and by content, as a walk the interface reads as it runs
 crates/scmd-cmd      command vocabulary, keys, keymap profiles (far, mc)
 crates/scmd-config   TOML configuration, discovery, overrides
 crates/scmd-i18n     fluent catalogues for seven languages
+crates/scmd-plug     the plugin tier: manifests, discovery, running a command
 crates/scmd-ui       cell buffer, colours, themes, panel and chrome widgets
 crates/scmd-tui      the terminal backend: input decoding and diffed painting
-crates/scmd        the binary: CLI, state machine, event loop
+crates/scmd          the binary: CLI, state machine, event loop
 ```
+
+Every push builds and tests on Linux, macOS and Windows, with `clippy -D warnings`, a licence
+check over every crate in the tree on every platform, and a release that cannot be tagged
+unless all of that is green.
 
 ## Documents
 
