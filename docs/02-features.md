@@ -120,6 +120,9 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 5.12 | **Decompilation** (`F6`): WebAssembly to its text format in process; `[[decompile]]` rules call installed tools (javap, ilspycmd, python -m dis, objdump, retdec) and the output is viewed as text | NEW | M1 |
 | 5.13 | **JVM bytecode and .NET IL in process**: class files listed javap-style with the constant pool resolved; managed PEs listed ildasm-style with metadata-resolved tokens and `#US` string literals | NEW | M1 |
 | 5.14 | Still external: Python bytecode, aarch64/riscv decoding, .NET signatures and generics | NEW | M3 |
+| 5.15 | **Structure pane** (`F11`): what the file is and where anything inside it is — format, architecture, kind, entry point, the header field by field, sections and segments, imports and exports, the interpreter and build id; `Tab` moves the focus, `Enter` takes the hex or disassembly pane to that offset. Read through a seeking reader, so a section table at the end of a 3 GB file costs two seeks | NEW | M1 |
+| 5.16 | Following a branch in the disassembly (`Enter` on a `call`/`jmp`, `Backspace` back, the jumped-from stack on screen), and `Alt+F8` taking a virtual address as well as an offset | NEW | M2 |
+| 5.17 | Raw devices: a block device or a partition opened as a file, size from an `ioctl`, read-only unless told otherwise | NEW | M2 |
 | 5.10 | Next/previous file in panel without leaving the viewer (`+`/`-`) | FAR | M2 |
 
 ## 6. Editor (`F4`)
@@ -128,6 +131,9 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | --- | --- | --- | --- |
 | 6.1 | Full-screen editor, 256 MiB open limit, read-only files opened and marked | FAR | M1 (multiple open files M2) |
 | 6.2 | Block operations: stream blocks and **column/vertical blocks**, copy/cut/paste (a column paste pads short lines), indent/outdent | FAR | M1 (block-to-cursor, append-to-clipboard, OS clipboard M2) |
+| 6.2b | **Hex mode** (`F4` on a binary, `Ins` for insert/overwrite): byte editing with a patch list, the editor's own undo, and the same temp-file-and-rename save; in-place writing only when explicitly chosen | NEW | M2 |
+| 6.2c | **Byte blocks** (`F3` marks, `F12` operates): write out, read in, fill, XOR with a key, copy or move from elsewhere, insert, delete — large ones through the job engine, each showing the resulting length first | NEW | M2 |
+| 6.2d | **Inline assembler** (`F9`): one instruction, showing the bytes it produces, the instruction it replaces and whether the length changed, written into the patch list rather than to disk | NEW | M3 |
 | 6.3 | Undo/redo grouped per command | FAR | M1 (typing-burst grouping, configurable depth and persisted positions M2) |
 | 6.4 | Search/replace: plain search with wrap, replace once, replace all (the engine already does regex and case-insensitive; the dialog that exposes them is M2) | FAR | M1; whole word, capture refs, "preserve style", all-matches list M2/M3 |
 | 6.5 | Go to `line` or `line:column`, bookmarks 0..9 | FAR | M1 (matching-bracket jump M2) |

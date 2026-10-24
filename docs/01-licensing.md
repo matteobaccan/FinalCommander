@@ -58,6 +58,7 @@ Verified licences:
 | GNOME Commander | GPL-2.0-or-later | yes | no |
 | MTN2 (`Laex/MTN2`) | MPL-2.0 | yes | file-level copyleft: possible but it would make those files MPL — avoid for a Rust rewrite (it is Delphi anyway) |
 | Total Commander | proprietary shareware | **no reverse engineering, no decompiling** | no |
+| Hiew (hex viewer/editor, `hiew.ru`) | proprietary shareware | its *published description* of what it does, yes; the program itself, **no reverse engineering, no decompiling, nothing copied from its help text or its wording** | no |
 | Directory Opus, Multi Commander, FreeCommander, WinNc, Altap Salamander | proprietary / freeware | no | no |
 | nnn (BSD-2), yazi / xplr / broot / lf (MIT), joshuto (LGPL-3), vifm (GPL-2), ranger (GPL-3) | mixed | yes | only the permissive ones (MIT/BSD/Apache), with notice |
 

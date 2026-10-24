@@ -77,6 +77,22 @@ what we intend to do about it.
 | User screen | `Ctrl+O`, `Ctrl+Alt+Shift` to peek | Needs the command line first. |
 | Screen grabber | `Alt+Ins` | Select any region of the screen, stream or block, extend, move, append to the clipboard. Small, self-contained, and oddly useful. |
 
+## Binary viewer and hex editor
+
+What a dedicated binary tool does and we do not (SPEC 05 §1.8–§1.10 and §2.5–§2.7). The order
+here is the order to build it in: each item needs only the ones above it.
+
+| Item | Where | Notes |
+| --- | --- | --- |
+| Structure pane | `F11` in the viewer | SPEC 05 §1.8. Header field by field, sections and segments, imports and exports, with `Enter` jumping the hex pane to an offset. `object`'s `ReadCache` over the open handle, so nothing is loaded. It stands alone, needs no write path, and is what gives the disassembler its symbol names. **In progress.** |
+| Following a branch | `Enter` in the disassembly | SPEC 05 §1.9. Go where a `call` or `jmp` points, `Backspace` to come back, the jumped-from stack at the foot of the pane, and `Alt+F8` learning to take a virtual address. Small, once the structure pane supplies the names. |
+| Hex mode of the editor | `F4` on a binary | SPEC 05 §2.5. Deliberately in the editor, not the viewer: the viewer is read-only by contract and that is what lets it seek through a 40 GB file. Overwrite and insert, a patch list, the editor's own undo and atomic save. |
+| Blocks | `F3` marks, `F12` operates | SPEC 05 §2.6. Write out, read in, fill, XOR, copy, move, insert, delete — the large ones through the job engine, each with the resulting length shown before it happens. |
+| Assembler | `F9` | SPEC 05 §2.7. One instruction at a time, showing the bytes, the instruction replaced and whether the length changed, writing into the patch list rather than straight to disk. |
+| ARM / AArch64 disassembly | `F5` | A decoder crate, not new design — and on an Apple Silicon machine a viewer that only decodes x86 is half a tool. |
+| Raw devices | hex pane | SPEC 05 §1.10. On Linux and macOS almost free, because a block device is a file: the size has to come from an `ioctl` rather than `stat`, the device opens read-only, and a write is confirmed loudly. Windows needs its own path. |
+| More executable formats | structure pane | NE, LE, LX, TE — the DOS and EFI families. Rainy-day additions to the same pane once ELF, PE and Mach-O are solid. |
+
 ## Viewer and editor gaps
 
 | Item | Where | Notes |

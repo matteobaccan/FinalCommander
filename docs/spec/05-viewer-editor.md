@@ -23,7 +23,8 @@ decoding in process, and the diff viewer (§3).
 | `text` | decoded text, wrap off/char/word | arbitrary line length, tabs expanded per config |
 | `dump` | raw bytes as characters, fixed width | for binaries where text decoding lies |
 | `hex` | offset + hex + ASCII/decoded pane | bytes-per-row adjustable (`Alt+←/→`), 16-aligned jumps |
-| `preview` | rendered content (image, markdown, PDF page, media info, archive listing) | pluggable, see §1.6 |
+| `preview` | rendered content (image, markdown, PDF page, media info, archive listing) | pluggable, see §1.7 |
+| `structure` | a side pane that decodes what the file *is*: header fields, section and segment tables, imports and exports | `F11`, see §1.8; it rides alongside `hex` and `disasm` rather than replacing them |
 
 Mode indicator in the status bar (`t`/`d`/`h`/`p`) plus encoding, position (offset, %, line) and
 file size. `F2` toggles wrap in text mode, `F4` toggles hex, `Shift+F4` picks the base mode
@@ -57,6 +58,11 @@ raw byte shown in the status line. Line endings CRLF/LF/CR/NEL all recognised an
   `Alt+F7` navigate. Search runs in the background on a copy of the window reader so the UI
   keeps scrolling, with a progress indicator on big files.
 - Search history shared with the editor and the find tool.
+- **One file here, many files there.** A pattern that is worth running on one file is usually
+  worth running on a tree, so the hex pattern and the regular expression are the same objects
+  the find tool takes (SPEC 06 §1), and the hit list is the same list. The viewer does not grow
+  its own multi-file search; the finder grows a hex mode and hands a hit back to the viewer at
+  its offset.
 
 ### 1.5 Navigation extras
 
@@ -118,6 +124,67 @@ the old content.
 
 Nothing here circumvents a protection: it reads bytes the user can already read. What those
 bytes may be used for is the user's licence question, not the file manager's.
+
+### 1.8 Structure pane (`F11`)
+
+The disassembler already parses a binary enough to find its architecture and entry point. The
+structure pane shows the rest of what the parse already knows, which is most of what someone
+opening a binary in a file manager actually wants: **what is this file, and where inside it is
+anything.**
+
+It is a pane, not a mode: it sits beside the hex or disassembly pane, `Tab` moves the focus
+between them, and `Enter` on a row takes the other pane to that offset. That is the whole point
+— the tables are navigation, not a report.
+
+| Group | Rows |
+| --- | --- |
+| Identity | format, architecture, bitness, endianness, kind (executable, shared object, core, object file), entry point, and for a universal binary the list of slices |
+| Header | the format's own header, field by field: name, raw bytes, and the decoded meaning (`e_machine 003E x86-64`) |
+| Sections / segments | name, file offset, virtual address, size, flags, with the one the cursor is in marked |
+| Imports / exports | library and symbol, with the file offset of the entry |
+| Strings of note | the interpreter (`/lib64/ld-linux-x86-64.so.2`), the `rpath`, the SONAME, the build id |
+
+Rules it follows:
+
+- **It reads bytes, it never loads a file.** `object`'s `ReadCache` over the open handle, so an
+  ELF whose section table lives at the end of a 3 GB file costs two seeks, not 3 GB of memory.
+  The 64 MiB parse limit of §1.6 applies to the *disassembler's* need for a symbol table, not to
+  reading a header, so a huge file still gets its identity and its section list.
+- **A field it cannot decode is shown raw**, never guessed, and the pane says which parser
+  produced it.
+- **A broken file is a normal case**, not an error dialog: a truncated header fills the rows it
+  can and marks the rest `(truncated)`. Anyone opening a corrupt binary is opening it *because*
+  it is corrupt.
+- **Nothing is executed and nothing is trusted.** Offsets out of range, sizes past the end of
+  the file, a section count of 0xFFFF — all of it is hostile input from a program whose job is
+  to look at other people's files, and every field is range-checked against the real length
+  before it is used.
+
+Formats, in the order they are worth having: ELF, PE (including .NET's CLI header) and Mach-O
+first, because those are the files people open; then archives (`ar`, and the member list of a
+`zip`), then the older DOS and EFI families if anyone asks.
+
+### 1.9 Following a branch
+
+In the disassembly pane, `Enter` on an instruction whose operand is an address — a `call`, a
+`jmp`, a conditional branch, a `lea` of a string — moves to it; `Backspace` comes back. The
+stack of places jumped from is shown at the foot of the pane, so a walk into a function has a
+way home. `Alt+F8` already takes an offset and learns to take a virtual address too (`0x1B50`
+means the file offset; `va:0x401B50` the loaded address), because a disassembly listing names
+addresses, not offsets.
+
+Where the structure pane has read a symbol table, the operand carries the name
+(`call 0000001F80 <scmd_main>`); where it has not, the address stands alone. The viewer never
+invents a name.
+
+### 1.10 Raw devices
+
+A block device is a file: on Linux and macOS the hex pane can open `/dev/sdb` or a partition
+with no special case in the viewer at all. Two things do need care, and they are the whole
+feature: the size comes from an `ioctl` (`BLKGETSIZE64`, `DKIOCGETBLOCKCOUNT`) because `stat`
+reports zero, and a device opens **read-only** unless the user says otherwise, with a warning
+that names the device and its size. Windows needs `\\.\PhysicalDrive0` handling and is a
+later addition.
 
 ### 1.7 Preview pipeline
 
@@ -202,6 +269,49 @@ per file with a "save all" action.
 `$VISUAL`/`$EDITOR` or a per-mask association (`assoc.toml`) can replace the internal editor
 for chosen types; the panel waits for the process and refreshes afterwards. `Alt+F4` always
 flips internal↔external (FAR's rule).
+
+### 2.5 Hex mode (`F4` on a binary)
+
+The viewer is read-only by contract — that is what lets it open a 40 GB file by seeking — so
+editing bytes belongs here, in the editor, where undo, atomic save and the unsaved-changes
+question already exist. `F4` on a file the panel knows to be binary opens the editor in hex mode
+instead of text mode; `Shift+F4` picks the mode by hand either way.
+
+| Thing | Behaviour |
+| --- | --- |
+| Panes | offset, hex, decoded; `Tab` moves between hex and text, typing in either writes the same byte |
+| Insert vs overwrite | `Ins` toggles, and the title says which. Overwrite is the default, because in a binary a shifted byte usually breaks the file |
+| Changed bytes | drawn in the "modified" colour until written, with a patch list — offset, old byte, new byte, and where the bytes are code, the instruction before and after |
+| Undo | the editor's own undo stack, one entry per edit, so `Ctrl+Z` works the same as in text |
+| Save | `F2`, through the same temp-file-and-rename path as a text save, so an interrupted save never leaves a half-written binary. In-place writing (no copy, for a device or a file too big to duplicate) is a separate, explicitly confirmed mode |
+| Growing a file | insert mode past the end extends it; truncating is an explicit block operation, never a side effect |
+
+### 2.6 Blocks (`F3` marks, `F12` operates)
+
+A marked byte range with operations on it, which is the other half of a usable hex editor:
+
+| Operation | Notes |
+| --- | --- |
+| Write to a file | carve the block out; large ones go through the job engine (SPEC 03) with a progress bar and `Esc` |
+| Read a file into it | overwrite or insert, the dialog says which and how the lengths compare |
+| Fill with a byte | the byte is typed in hex or as a character |
+| XOR with a key | a byte or a repeating key; the name says what it is, so nobody mistakes it for encryption |
+| Copy / move from elsewhere | source offset and length, within the same file |
+| Insert / delete | shifts everything after, with the new length shown before it happens |
+
+Every one of them is a planned operation with a preview of the result's length, because the
+failure mode of a hex editor is a file that is silently one byte wrong.
+
+### 2.7 Assembler (`F9`)
+
+One instruction at a time, for the architecture the structure pane detected. The dialog shows
+three facts before anything is written: the bytes the instruction assembles to, the instruction
+it replaces, and whether the length changed — that last one is what decides whether everything
+after it moves. `Enter` writes into the patch list of §2.5, so `Ctrl+Z` takes it back and `F2`
+is still what commits.
+
+x86 and x86-64 come from the same crate family as the disassembler. For an architecture we
+cannot assemble, the dialog says so instead of offering a box that will not work.
 
 ## 3. Diff viewer (M3)
 
