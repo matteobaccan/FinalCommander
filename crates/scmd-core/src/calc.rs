@@ -109,10 +109,7 @@ impl Parser {
     /// means here what it means there.
     fn expression(&mut self, least: u8) -> Result<i128, CalcError> {
         let mut left = self.unary()?;
-        loop {
-            let Some((op, power, width)) = self.operator() else {
-                break;
-            };
+        while let Some((op, power, width)) = self.operator() {
             if power < least {
                 break;
             }
