@@ -1,0 +1,35 @@
+# Separate from a bug on purpose: "FAR does this and you do not" is a different conversation
+# from "this is broken", and the answer is often a line in docs/BACKLOG.md rather than code.
+name: Something is missing
+description: A feature from FAR, Midnight Commander, Total Commander or elsewhere that is not here
+labels: ["missing"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please check [`docs/BACKLOG.md`](../blob/main/docs/BACKLOG.md) first — much of what is
+        missing is already a line there with the reason it is a line and not a feature. Saying
+        *which* line matters to you is more useful than a new one.
+
+  - type: input
+    id: where
+    attributes:
+      label: Where you know it from
+      description: Which program does this, and what it is called there
+      placeholder: FAR — "Advanced compare" in the Commands menu
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What it does
+      description: What the feature is for, in terms of what you are trying to get done
+    validations:
+      required: true
+
+  - type: input
+    id: key
+    attributes:
+      label: The key it is on, where you know it from
+      placeholder: Ctrl+Shift+F3
