@@ -21,6 +21,24 @@ looks_binary() {
   }
 }
 
+# What one file's counts mean, said in words. A function, and not a `case` written inside the
+# command substitution below, because that does not parse in bash 3.2 — which is the bash
+# macOS ships. See the note in examples/plugins/README.md.
+report_one() {
+  one_name=$1
+  one_crlf=$2
+  one_lf=$3
+  if [ "$one_crlf" = 0 ] && [ "$one_lf" = 0 ]; then
+    printf '%s: no line endings at all\n' "$one_name"
+  elif [ "$one_crlf" = 0 ]; then
+    printf '%s: LF, %s lines\n' "$one_name" "$one_lf"
+  elif [ "$one_crlf" = "$one_lf" ]; then
+    printf '%s: CRLF, %s lines\n' "$one_name" "$one_lf"
+  else
+    printf '%s: mixed — %s CR and %s LF\n' "$one_name" "$one_crlf" "$one_lf"
+  fi
+}
+
 case "$SCMD_COMMAND" in
   *.what)
     report=$(printf '%s\n' "$names" | while IFS= read -r name; do
@@ -32,15 +50,7 @@ case "$SCMD_COMMAND" in
       fi
       crlf=$(tr -dc '\r' < "$name" 2>/dev/null | wc -c | tr -d ' ')
       lf=$(tr -dc '\n' < "$name" 2>/dev/null | wc -c | tr -d ' ')
-      case "$crlf:$lf" in
-        0:0) printf '%s: no line endings at all\n' "$name" ;;
-        0:*) printf '%s: LF, %s lines\n' "$name" "$lf" ;;
-        *)   if [ "$crlf" = "$lf" ]; then
-               printf '%s: CRLF, %s lines\n' "$name" "$lf"
-             else
-               printf '%s: mixed — %s CR and %s LF\n' "$name" "$crlf" "$lf"
-             fi ;;
-      esac
+      report_one "$name" "$crlf" "$lf"
     done)
     [ -n "$report" ] || { echo '{"status":"no text files among those"}'; exit 0; }
     printf '{"message":{"title":"Line endings","lines":['

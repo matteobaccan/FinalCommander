@@ -132,3 +132,16 @@ another already provides. A plugin that would surprise somebody does not load at
 one: a plugin that *adds* a panel column, a preview or a filesystem, and one that is asked a
 question rather than told to run. `what-is-this` is the clearest argument for the first of
 those — it says in a message what Total Commander puts in columns.
+
+## One shell trap, written down because it cost a build
+
+`sh -n` on your machine is not `sh -n` on everyone's. macOS ships **bash 3.2** — it has since
+2007, when bash changed licence — and in that version a `case` statement written **inside a
+`$( … )`** does not parse: the `)` closing the first pattern closes the substitution instead,
+and the error arrives at the `;;` on a line that looks perfectly fine.
+
+Three of the scripts here had one. The fix is either to move the `case` into a function defined
+outside the substitution and call it inside, as `what-is-this` and `line-endings` now do, or to
+write the condition as a test — `[ "${path#*/}" = "$path" ]` instead of a `*/*)` pattern, as
+`git-select` now does. A test in the repository reads the scripts and refuses a `case` inside a
+`$( … )`, because a parse check on a newer shell cannot see it.

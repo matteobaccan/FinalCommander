@@ -16,11 +16,12 @@ names=$(git status --porcelain --untracked-files=all . 2>/dev/null |
         cut -c4- |
         sed 's|^"\(.*\)"$|\1|' |
         while IFS= read -r path; do
-          case "$path" in
-            */*) ;;                       # in a subdirectory: no row to select
-            "") ;;
-            *) printf '%s\n' "$path" ;;
-          esac
+          # A name with a slash in it is in a subdirectory and the panel has no row for it.
+          # Written as one test rather than as a `case`, which must not appear inside a
+          # command substitution: see the note in examples/plugins/README.md.
+          [ -n "$path" ] || continue
+          [ "${path#*/}" = "$path" ] || continue
+          printf '%s\n' "$path"
         done)
 
 if [ -z "$names" ]; then

@@ -1752,6 +1752,96 @@ timeout = 10
         assert!(checked >= 10, "only {checked} scripts checked?");
     }
 
+    /// `sh -n` on this machine is not `sh -n` on every machine, and one difference has bitten
+    /// once already: in bash 3.2 — which is the bash macOS ships, and has shipped since 2007
+    /// because of a licence change — a `case` written inside a `$( … )` does not parse. The
+    /// `)` that closes the first pattern closes the substitution instead, and what follows is
+    /// a syntax error at the `;;`, reported against a line that looks perfectly fine.
+    ///
+    /// A newer shell parses it, so the test above cannot see it and did not: it passed here
+    /// and failed on macOS. This one is a reading of the text rather than a parse, and it
+    /// holds on every machine. The fix in a script is to move the `case` into a function
+    /// defined outside the substitution, or to write the condition as a test.
+    #[test]
+    fn no_example_script_hides_a_case_inside_a_command_substitution() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(|p| p.parent())
+            .unwrap()
+            .join("examples/plugins");
+        let mut checked = 0;
+        for folder in std::fs::read_dir(&root).unwrap().flatten() {
+            if !folder.path().is_dir() {
+                continue;
+            }
+            for file in std::fs::read_dir(folder.path()).unwrap().flatten() {
+                let path = file.path();
+                if !path.extension().is_some_and(|e| e == "sh") {
+                    continue;
+                }
+                let text = std::fs::read_to_string(&path).unwrap();
+                for span in substitutions(&text) {
+                    assert!(
+                        !has_word(&without_comments(span), "case"),
+                        "{}: a `case` inside a `$( … )` does not parse in bash 3.2:\n{span}",
+                        path.display()
+                    );
+                }
+                checked += 1;
+            }
+        }
+        assert!(checked >= 10, "only {checked} scripts checked?");
+    }
+
+    /// Every `$( … )` of a script, with its parentheses balanced so a nested one does not end
+    /// the outer span early.
+    fn substitutions(text: &str) -> Vec<&str> {
+        let bytes = text.as_bytes();
+        let mut spans = Vec::new();
+        let mut i = 0;
+        while i + 1 < bytes.len() {
+            if bytes[i] != b'$' || bytes[i + 1] != b'(' {
+                i += 1;
+                continue;
+            }
+            let start = i;
+            let mut depth = 1;
+            let mut j = i + 2;
+            while j < bytes.len() && depth > 0 {
+                match bytes[j] {
+                    b'(' => depth += 1,
+                    b')' => depth -= 1,
+                    _ => {}
+                }
+                j += 1;
+            }
+            spans.push(&text[start..j.min(text.len())]);
+            i = j;
+        }
+        spans
+    }
+
+    /// The same text without its comments, so that a comment *about* the rule — of which
+    /// there are three, in the scripts the rule was written for — does not break it.
+    fn without_comments(text: &str) -> String {
+        text.lines()
+            .map(|line| match line.find('#') {
+                // Only a `#` that begins a word is a comment. One inside a word is a shell
+                // variable's length or part of a name, and neither starts a comment.
+                Some(i) if i == 0 || line[..i].ends_with(char::is_whitespace) => &line[..i],
+                _ => line,
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    /// Is `word` in `text` as a word, rather than inside a longer one? `lowercase` holds the
+    /// word `case` and is not a `case` statement.
+    fn has_word(text: &str, word: &str) -> bool {
+        text.split(|c: char| !c.is_alphanumeric() && c != '_')
+            .any(|piece| piece == word)
+    }
+
     /// The one example that ships a program for each system: on Unix the host picks the shell
     /// script, on Windows the `.cmd`, and both files are in the folder either way.
     #[test]

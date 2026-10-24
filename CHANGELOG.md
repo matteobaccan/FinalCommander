@@ -33,6 +33,16 @@ Notable changes, newest first. The format follows
   nothing else, so nothing in the UI offers to rename an object (object storage has no rename),
   set permissions on one or write to one. Upload, delete and server-side copy come next.
 
+### Fixed
+
+- **Three example plugins did not run on macOS**, and the build said so: in bash 3.2, which is
+  the bash macOS has shipped since 2007, a `case` written inside a `$( … )` does not parse —
+  the `)` of the first pattern closes the substitution and the error lands on the `;;`, on a
+  line that looks perfectly fine. A newer shell parses it, so `sh -n` here could not see it.
+  The `case` has moved into a function in two of them and become a plain test in the third,
+  and a new test reads the scripts for the shape rather than parsing them, so this cannot come
+  back on a machine the test suite does not run on.
+
 ### Changed
 
 - **A provider may now say that a listing is not all of it**, through the new `Dir` the panel
