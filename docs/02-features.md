@@ -187,7 +187,7 @@ a binary into something readable rather than only into instructions.
 | 7.4 | User menu (`F2`) with user-defined entries, submenus, hotkeys, per-directory menus | FAR/MC | M2 |
 | 7.5 | File associations by mask: view/edit/execute/alternative commands | FAR/MC | M2 |
 | 7.6 | Command history, view/edit history, folder history — all searchable and persisted | FAR | M1 |
-| 7.7 | Macro recorder/player, keyboard macros with conditions, assignable to any key | FAR/far2m | M3 |
+| 7.7 | Macro recorder/player, keyboard macros with conditions, assignable to any key | FAR/far2m | **Recorder, player and list: 0.1.0** (`Ctrl+.`, `Ctrl+Shift+.`) — a macro is a list of commands in a readable file, assigned to the key one presses after recording, with `once` and `each-selected` play modes. Conditions and the Lua form need a macro step that can ask the application a question, which is the plugin host's job: M3 |
 | 7.8 | Scripting console (Lua) with the full command vocabulary | far2m/YAZI | M3 |
 | 7.9 | Print files / print manager | FAR | M4 |
 | 7.10 | Screen grabber (copy a rectangle of the screen to clipboard) | FAR | M4 |
@@ -221,6 +221,8 @@ a binary into something readable rather than only into instructions.
 | 9.8 | Settings search ("where is that option?") | NEW | M3 |
 | 9.9 | No telemetry, no network calls except explicit user actions; optional update check off by default | MTN2 | M1 |
 | 9.10 | Menu bar (`F9`) with FAR's five menus; every entry is a command from the vocabulary, the shortcut shown is read from the keymap in force, and an entry whose feature is missing is drawn dim and says so (SPEC 10 §2) | FAR | M1 |
+| 9.14 | Screens (`F12`, `Ctrl+Tab`): a viewer or an editor one steps away from and comes back to, keeping its position and its unsaved changes, with the panels as screen zero of the ring and a count of what is behind them in the corner. `F10` from the panels names every background screen with unwritten changes (SPEC 02 §10) | FAR | **0.1.0** |
+| 9.15 | Help (`F1`) as a book: written chapters compiled into the binary, and the keys, the commands and the settings generated from the keymap and configuration in force so they cannot drift. A manual page generated from the command line's own options, with a test that fails when the two disagree | FAR / Unix | **0.1.0** |
 | 9.11 | `Save setup` (`Shift+F9`) writes the configuration as it stands, including themes that came from the file | FAR | M1 |
 | 9.13 | Session editor for stored connections (`Alt+N` → `Ins`/`F4`): name, host, port, user, authentication, key file, remote folder, group, keep-alive, compression — validated before it is stored, `Shift+F9` makes it permanent (SPEC 10 §3.5) | FAR (NetBox) | M1 |
 | 9.12 | Choose-one lists: languages, themes, drives and open connections (`Alt+F1`/`Alt+F2`), folder history (`Alt+F12`), sort modes (`Ctrl+F12`, where re-choosing the current order reverses it) (SPEC 10 §4) | FAR | M1 |
@@ -256,6 +258,7 @@ Found by reading FAR's own help and configuration tables; the detail is in
 | # | Feature | Origin | M |
 | --- | --- | --- | --- |
 | 10.1 | Command vocabulary (`cmd.panel.copy`, …) that every key, menu entry, macro and plugin targets | DC (`cm_*`) | M1 |
+| 10.1b | Plugin commands (`F11`): a plugin declares a `[[command]]` and the host runs it as a process, with the context as JSON on standard input and one action per line back — each action naming a command of the vocabulary, so a plugin can do exactly what a key can (SPEC 08 §1b) | FAR (plugin menu) | **0.1.0** |
 | 10.2 | Lua scripting API (panels, selection, jobs, dialogs, VFS, events) | far2m/YAZI | M3 |
 | 10.3 | WASM plugins (WASI + a component interface): VFS providers, panels, viewers, commands, highlighters — sandboxed, portable | MTN2 | M3 |
 | 10.4 | Native plugin ABI (stable C ABI) for performance-critical/OS-specific plugins | FAR | M4 |

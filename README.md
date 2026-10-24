@@ -20,7 +20,7 @@ third codebase. Same shape, five times over, with different keys and different g
 system. This is that idea written once, as one binary per platform from one source tree —
 with FAR's keymap as the default, because a user's fingers are a specification too.
 
-> **Status: 0.1.0, open to testers.** Two panels, navigation, the selection matrix, sorting, view
+> **Status: 0.1.1, open to testers.** Two panels, navigation, the selection matrix, sorting, view
 > modes, quick search, filters with FAR's whole mask grammar, themes (including FAR's own
 > palette), keymap profiles and seven interface languages, real file operations (`F5`–`F8`,
 > plus wipe and links), a command line with FAR's internal commands, prefixes and metasymbols
@@ -59,7 +59,7 @@ one directory down.
 
 ```sh
 # Linux, for example
-tar xzf scmd-linux-x86_64-0.1.0.tar.gz
+tar xzf scmd-linux-x86_64-0.1.1.tar.gz
 sudo install -m755 scmd /usr/local/bin/scmd
 scmd --version
 ```

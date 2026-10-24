@@ -6,6 +6,44 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-10-24
+
+Three things found by reading 0.1.0's own code an hour after cutting it. Two of them could
+lose work, which is why this is a release of its own rather than a line in the next one.
+
+### Added
+
+- Assigning a recorded macro now **asks how it should play**: once, or once for every selected
+  file. The second mode existed in 0.1.0 and could only be chosen by editing the file by hand,
+  which is a mode nobody finds. `once` is the first row, so the ordinary answer costs one
+  keystroke and `Esc` means the same thing rather than throwing the recording away.
+
+### Fixed
+
+- **`F12` lost the screen it was drawn over.** The screens list replaced whatever was in front
+  with itself, so pressing it while reading a file dropped the viewer — and with an editor in
+  front, an afternoon's unsaved work with it. It parks the front screen now, the way the block
+  menu parks the hex editor: `Esc` brings it back, choosing the panels sends it to the
+  background, choosing another screen swaps them. And a question asked over a viewer belongs to
+  that viewer, so `F12` from a search prompt lists the viewer as the screen in front instead of
+  showing the panels and hiding the viewer from its own list.
+- **A macro recorded in the editor was stored as a panel macro.** The documentation said the
+  scope is where the recording started and the code wrote `panel` regardless, so a run of
+  editor keys ended up on a panel key where its steps mean something else entirely. The scope
+  is taken when recording starts now, which is also the right moment for a second reason:
+  stopping a recording is itself a keystroke, and by then one may be looking at something else.
+- Sixteen message ids were translated into all seven languages and shown by nothing. There was
+  already a test that every id the code asks for exists in every language; the other direction
+  is now a test too, because that is the one that catches a catalogue growing a tail of text
+  the program no longer matches.
+
+### Notes
+
+- **0.0.8 has no release**, and the changelog says so where its section is: the tag never
+  happened, and everything in it reached users in 0.1.0. The workflow that cuts a release now
+  says why it cannot when it cannot, instead of timing out.
+
+
 ## [0.1.0] — 2026-10-24
 
 The first release meant to be used by somebody other than its author: macros, the screens, a
@@ -73,6 +111,11 @@ not a feature.
 
 
 ## [0.0.8] — 2026-10-24
+
+> **Not published as a release.** The tag never happened: the workflow that cuts one waited
+> half an hour for a CI result it was not allowed to read, and by the time that was fixed the
+> branch had moved on. Everything below reached users in 0.1.0 instead, which is why there is
+> no `v0.0.8` on the releases page. The section stays because it says what was built and when.
 
 The Hiew track: a hex editor with a patch list, block operations, an assembler, a calculator,
 search by instruction pattern, and raw devices. The one thing deliberately left out is a

@@ -15,6 +15,13 @@
 # `workflow_dispatch` takes a version and a commit explicitly, for a release that was missed at
 # the time: by then the branch has moved on, and a tag has to go where the release was cut, not
 # where the work has got to since.
+#
+# One thing to know about that dispatch: start it from the Actions tab, not through the REST
+# API with an app's token. A run dispatched by an app gets a token limited by that app's own
+# permissions, so `contents: write` here is capped and creating the tag comes back
+# `Resource not accessible by integration (HTTP 403)` — which looks like a mistake in this
+# file and is not one. A push does not have that problem, which is why the ordinary path is a
+# push that changes `Cargo.toml` and `CHANGELOG.md`.
 name: Tag
 
 on:
