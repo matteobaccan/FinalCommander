@@ -2772,6 +2772,95 @@ third line
         );
     }
 
+    /// The block keys, end to end: mark some bytes, fill them, exclusive-or them, write them
+    /// out, and take them away — each through the menu a user would walk.
+    #[test]
+    fn a_block_of_bytes_is_marked_and_operated_on() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("program.bin");
+        std::fs::write(&path, (0u8..32).collect::<Vec<u8>>()).unwrap();
+
+        let mut app = app("commander", "en");
+        // A name typed into a dialog is relative to the panel, so the panel is where the
+        // file is.
+        app.panels[0].cwd = VPath::local(dir.path());
+        app.open_hex(&path);
+        let key = |app: &mut App, k: &str| app.handle_input(Input::Key(k.parse().unwrap()));
+
+        // Mark four bytes from the start.
+        key(&mut app, "F3");
+        for _ in 0..4 {
+            key(&mut app, "Right");
+        }
+        key(&mut app, "F3");
+        assert_eq!(app.mode.hex().unwrap().block, Some((0, 4)));
+
+        // `F12` offers what can be done with them, sized.
+        key(&mut app, "F12");
+        let out = frame(&mut app, 100, 24);
+        assert!(out.contains("Block"), "{out}");
+        assert!(out.contains("Fill"), "{out}");
+        assert!(out.contains("Delete"), "{out}");
+
+        // Fill them with one byte, which repeats over the block.
+        while !matches!(&app.mode, crate::app::Mode::Pick(p)
+            if p.rows[p.cursor].value == "fill")
+        {
+            key(&mut app, "Down");
+        }
+        key(&mut app, "Enter");
+        for c in "ff".chars() {
+            key(&mut app, &c.to_string());
+        }
+        key(&mut app, "Enter");
+        let editor = app.mode.hex_mut().expect("still editing");
+        assert_eq!(editor.read(0, 6), vec![0xff, 0xff, 0xff, 0xff, 0x04, 0x05]);
+        assert_eq!(editor.len(), 32, "a fill never changes the length");
+
+        // Exclusive-or the same block back to what it was.
+        key(&mut app, "F12");
+        while !matches!(&app.mode, crate::app::Mode::Pick(p)
+            if p.rows[p.cursor].value == "xor")
+        {
+            key(&mut app, "Down");
+        }
+        key(&mut app, "Enter");
+        for c in "ff".chars() {
+            key(&mut app, &c.to_string());
+        }
+        key(&mut app, "Enter");
+        assert_eq!(app.mode.hex_mut().unwrap().read(0, 4), vec![0, 0, 0, 0]);
+        assert!(app.status.contains("not encryption"), "{}", app.status);
+
+        // Write the block out, and then delete it: the length changes and says so.
+        key(&mut app, "F12");
+        while !matches!(&app.mode, crate::app::Mode::Pick(p)
+            if p.rows[p.cursor].value == "write")
+        {
+            key(&mut app, "Down");
+        }
+        key(&mut app, "Enter");
+        for c in "block.bin".chars() {
+            key(&mut app, &c.to_string());
+        }
+        key(&mut app, "Enter");
+        let written = dir.path().join("block.bin");
+        assert_eq!(std::fs::read(&written).unwrap(), vec![0, 0, 0, 0]);
+
+        key(&mut app, "F12");
+        while !matches!(&app.mode, crate::app::Mode::Pick(p)
+            if p.rows[p.cursor].value == "delete")
+        {
+            key(&mut app, "Down");
+        }
+        key(&mut app, "Enter");
+        assert_eq!(app.mode.hex().unwrap().len(), 28);
+        assert!(app.mode.hex().unwrap().block.is_none());
+
+        // And the file on disk is untouched until it is saved.
+        assert_eq!(std::fs::read(&path).unwrap().len(), 32);
+    }
+
     #[test]
     fn ctrl_q_previews_the_file_under_the_cursor_in_the_other_panel() {
         let dir = tempfile::tempdir().unwrap();

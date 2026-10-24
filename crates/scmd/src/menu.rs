@@ -50,6 +50,8 @@ pub enum PickKind {
     CommandHistory,
     /// The sort order for this panel.
     SortModes,
+    /// What to do with the block of bytes that is marked (SPEC 05 §2.6).
+    HexBlock,
 }
 
 /// A mark (`√`) next to the entry that is currently in force.

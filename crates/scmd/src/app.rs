@@ -305,6 +305,16 @@ pub enum PromptKind {
     ApplyCommand,
     /// `Alt+F6`: where the new link goes. The target travels in `Prompt::sources`.
     LinkName,
+    /// The byte to fill a block with, in hex.
+    HexFill,
+    /// The key to exclusive-or a block with, in hex.
+    HexXor,
+    /// Where to write the marked bytes.
+    HexWrite,
+    /// A file to read into the buffer at the cursor.
+    HexRead,
+    /// How many bytes to insert at the cursor.
+    HexInsert,
     /// A URL to connect to: `sftp://mb@host/srv`.
     NetConnect,
     /// A password or a key passphrase. Never echoed, never stored.
@@ -675,6 +685,8 @@ pub struct App {
     /// outlives the panel, so leaving the tree and coming back costs no reads.
     pub trees: [Option<Box<crate::tree::Tree>>; 2],
     pub tree_cache: crate::tree::Cache,
+    /// The hex editor, while a dialog of its own is open over it.
+    hex_parked: Option<Box<HexEdit>>,
     /// The quick view's own reader, and what it is of: opened when the cursor lands on a file
     /// and kept while it stays there, so moving down a directory does not reopen a file.
     pub quick: Option<Box<Viewer>>,
@@ -768,6 +780,7 @@ impl App {
             user_screen: Vec::new(),
             hidden: None,
             last_find: FindSpec::default(),
+            hex_parked: None,
             trees: [None, None],
             tree_cache: crate::tree::Cache::default(),
             quick: None,
@@ -1492,6 +1505,7 @@ impl App {
                     editor.toggle_mark();
                 }
             }
+            Command::EditorBlockOps => self.open_block_menu(),
             Command::EditorToggleReadOnly => {
                 if let Some(editor) = self.mode.hex_mut() {
                     editor.read_only = !editor.read_only;
@@ -1930,6 +1944,16 @@ impl App {
 
     fn prompt_accept(&mut self, prompt: Prompt) {
         match prompt.kind {
+            PromptKind::HexFill
+            | PromptKind::HexXor
+            | PromptKind::HexWrite
+            | PromptKind::HexRead
+            | PromptKind::HexInsert => {
+                let kind = prompt.kind.clone();
+                let text = prompt.text.trim().to_string();
+                self.restore_hex();
+                self.hex_operation(kind, &text);
+            }
             PromptKind::CommandAnswer { ref pending } => {
                 // The answer goes in and the line runs; an empty answer still counts, because
                 // "search for nothing" is a decision the user is allowed to make.
@@ -4922,8 +4946,229 @@ impl App {
         self.set_status(msg);
     }
 
+    /// `F12` in the hex editor: what to do with the bytes that are marked (SPEC 05 §2.6).
+    ///
+    /// Every operation says what it will do to the length before it does it, because the
+    /// failure of a hex editor is a file that is quietly one byte wrong.
+    fn open_block_menu(&mut self) {
+        let Some(editor) = self.mode.hex_mut() else {
+            return;
+        };
+        let block = editor.block;
+        let len = editor.len();
+        let cursor = editor.cursor;
+        let t = |app: &App, id: &str| app.i18n.t(id);
+        let span = block.map(|(a, b)| b - a).unwrap_or(0);
+
+        let mut rows = vec![
+            PickRow {
+                label: self
+                    .i18n
+                    .t_args("hex-op-read", &[("at", format!("{cursor:08X}").into())]),
+                value: "read".to_string(),
+                current: false,
+            },
+            PickRow {
+                label: self
+                    .i18n
+                    .t_args("hex-op-insert", &[("at", format!("{cursor:08X}").into())]),
+                value: "insert".to_string(),
+                current: false,
+            },
+        ];
+        if span > 0 {
+            // The operations that need a block, with the size they would act on.
+            let size = scmd_core::format_size(span);
+            rows.insert(
+                0,
+                PickRow {
+                    label: self
+                        .i18n
+                        .t_args("hex-op-write", &[("size", size.clone().into())]),
+                    value: "write".to_string(),
+                    current: true,
+                },
+            );
+            rows.push(PickRow {
+                label: self
+                    .i18n
+                    .t_args("hex-op-fill", &[("size", size.clone().into())]),
+                value: "fill".to_string(),
+                current: false,
+            });
+            rows.push(PickRow {
+                label: self
+                    .i18n
+                    .t_args("hex-op-xor", &[("size", size.clone().into())]),
+                value: "xor".to_string(),
+                current: false,
+            });
+            rows.push(PickRow {
+                label: self.i18n.t_args(
+                    "hex-op-delete",
+                    &[
+                        ("size", size.into()),
+                        ("was", scmd_core::format_size(len).into()),
+                        ("becomes", scmd_core::format_size(len - span).into()),
+                    ],
+                ),
+                value: "delete".to_string(),
+                current: false,
+            });
+        }
+        let title = t(self, "hex-block-title");
+        self.park_hex();
+        self.mode = Mode::Pick(Box::new(Pick::new(PickKind::HexBlock, title, rows, 0)));
+    }
+
+    /// Carry out one block operation with the value the user typed.
+    fn hex_operation(&mut self, kind: PromptKind, text: &str) {
+        // Whatever needs the rest of the application — a path, a message — is worked out
+        // before the editor is borrowed, because the two cannot be held at once.
+        let path = matches!(kind, PromptKind::HexWrite | PromptKind::HexRead)
+            .then(|| self.resolve_path(text));
+        let Some(editor) = self.mode.hex_mut() else {
+            return;
+        };
+        let block = editor.block;
+        let cursor = editor.cursor;
+        match kind {
+            PromptKind::HexFill => {
+                let Some(bytes) = App::hex_bytes(text) else {
+                    let m = self.i18n.t("hex-not-hex");
+                    self.set_error(m);
+                    return;
+                };
+                let Some((a, b)) = block else { return };
+                let span = (b - a) as usize;
+                // The value repeats over the block: one byte fills it, four bytes pattern it.
+                let filled: Vec<u8> = bytes.iter().copied().cycle().take(span).collect();
+                editor.splice(a, b - a, &filled);
+                let msg = self.i18n.t_args(
+                    "hex-filled",
+                    &[("size", scmd_core::format_size(b - a).into())],
+                );
+                self.set_status(msg);
+            }
+            PromptKind::HexXor => {
+                let Some(key) = App::hex_bytes(text) else {
+                    let m = self.i18n.t("hex-not-hex");
+                    self.set_error(m);
+                    return;
+                };
+                let Some((a, b)) = block else { return };
+                let mut bytes = editor.read(a, (b - a) as usize);
+                for (i, byte) in bytes.iter_mut().enumerate() {
+                    *byte ^= key[i % key.len()];
+                }
+                editor.splice(a, b - a, &bytes);
+                let msg = self.i18n.t_args(
+                    "hex-xored",
+                    &[("size", scmd_core::format_size(b - a).into())],
+                );
+                self.set_status(msg);
+            }
+            PromptKind::HexWrite => {
+                let Some((a, b)) = block else { return };
+                let bytes = editor.read(a, (b - a) as usize);
+                let Some(path) = path else { return };
+                match std::fs::write(path.as_path(), &bytes) {
+                    Ok(()) => {
+                        let msg = self.i18n.t_args(
+                            "hex-written",
+                            &[
+                                ("size", scmd_core::format_size(bytes.len() as u64).into()),
+                                ("name", path.display_name().into()),
+                            ],
+                        );
+                        self.set_status(msg);
+                        self.read_panel(0);
+                        self.read_panel(1);
+                    }
+                    Err(e) => self.set_error(format!("{path}: {e}")),
+                }
+            }
+            PromptKind::HexRead => {
+                let Some(path) = path else { return };
+                match std::fs::read(path.as_path()) {
+                    Ok(bytes) => {
+                        // Overwrite where the cursor is, or insert when insert mode is on:
+                        // the mode the user can see decides, not a second question.
+                        let remove = if editor.insert {
+                            0
+                        } else {
+                            (bytes.len() as u64).min(editor.len() - cursor.min(editor.len()))
+                        };
+                        editor.splice(cursor, remove, &bytes);
+                        let msg = self.i18n.t_args(
+                            "hex-read-done",
+                            &[
+                                ("size", scmd_core::format_size(bytes.len() as u64).into()),
+                                ("name", path.display_name().into()),
+                            ],
+                        );
+                        self.set_status(msg);
+                    }
+                    Err(e) => self.set_error(format!("{path}: {e}")),
+                }
+            }
+            PromptKind::HexInsert => {
+                let count: u64 = match text.trim().parse() {
+                    Ok(n) if n > 0 => n,
+                    _ => {
+                        let m = self.i18n.t("hex-not-a-count");
+                        self.set_error(m);
+                        return;
+                    }
+                };
+                // A quarter of a gigabyte of zeros is a mistake, not a plan.
+                let count = count.min(256 << 20);
+                editor.insert_bytes(cursor, &vec![0u8; count as usize]);
+                let msg = self.i18n.t_args(
+                    "hex-inserted",
+                    &[("size", scmd_core::format_size(count).into())],
+                );
+                self.set_status(msg);
+            }
+            _ => {}
+        }
+    }
+
+    fn park_hex(&mut self) {
+        if let Mode::Hex(editor) = std::mem::replace(&mut self.mode, Mode::Normal) {
+            self.hex_parked = Some(editor);
+        }
+    }
+
+    fn restore_hex(&mut self) {
+        if let Some(editor) = self.hex_parked.take() {
+            self.mode = Mode::Hex(editor);
+        }
+    }
+
+    /// Ask for the one value an operation needs, with the hex editor waiting behind it.
+    fn hex_prompt(&mut self, kind: PromptKind, title_key: &str) {
+        self.park_hex();
+        let title = self.i18n.t(title_key);
+        self.mode = Mode::Prompt(Prompt::new(kind, title, String::new()));
+    }
+
+    /// Hex digits, with spaces anywhere: `de ad be ef` and `deadbeef` are the same key.
+    fn hex_bytes(text: &str) -> Option<Vec<u8>> {
+        let digits: String = text.chars().filter(|c| !c.is_whitespace()).collect();
+        if digits.is_empty() || !digits.len().is_multiple_of(2) {
+            return None;
+        }
+        (0..digits.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&digits[i..i + 2], 16).ok())
+            .collect()
+    }
+
     pub fn open_pick(&mut self, kind: PickKind, side: usize) {
         let pick = match kind {
+            // Built by `open_block_menu`, which knows what is marked; nothing opens it here.
+            PickKind::HexBlock => return,
             PickKind::Languages => Pick::new(
                 kind,
                 self.i18n.t("menu-languages"),
@@ -5056,6 +5301,33 @@ impl App {
             return;
         };
         match pick.kind {
+            PickKind::HexBlock => {
+                self.restore_hex();
+                match row.value.as_str() {
+                    "write" => self.hex_prompt(PromptKind::HexWrite, "hex-write-title"),
+                    "read" => self.hex_prompt(PromptKind::HexRead, "hex-read-title"),
+                    "fill" => self.hex_prompt(PromptKind::HexFill, "hex-fill-title"),
+                    "xor" => self.hex_prompt(PromptKind::HexXor, "hex-xor-title"),
+                    "insert" => self.hex_prompt(PromptKind::HexInsert, "hex-insert-title"),
+                    "delete" => {
+                        let done = self.mode.hex_mut().and_then(|editor| {
+                            let (a, b) = editor.block?;
+                            editor.delete(a, b - a);
+                            editor.cursor = a;
+                            editor.clear_block();
+                            Some(b - a)
+                        });
+                        if let Some(bytes) = done {
+                            let msg = self.i18n.t_args(
+                                "hex-deleted",
+                                &[("size", scmd_core::format_size(bytes).into())],
+                            );
+                            self.set_status(msg);
+                        }
+                    }
+                    _ => {}
+                }
+            }
             PickKind::Languages => {
                 self.i18n = I18n::new(&row.value);
                 self.cfg.ui.language = row.value.clone();

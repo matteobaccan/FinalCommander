@@ -720,3 +720,9 @@ cmd = "editor.hex.toggle"
 keys = ["F3"]
 scope = "editor"
 cmd = "editor.block.mark"
+
+# What to do with the marked bytes. Hiew's own key for it.
+[[bind]]
+keys = ["F12"]
+scope = "editor"
+cmd = "editor.block.ops"

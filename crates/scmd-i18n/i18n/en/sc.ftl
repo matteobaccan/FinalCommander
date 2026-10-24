@@ -435,3 +435,25 @@ info-modified = Modified
 key-mark = Mark
 hex-needs-a-file = this buffer has no file to read bytes from
 hex-save-first = save first: the two editors cannot hold each other's unsaved changes
+
+# ── the hex editor's block operations (SPEC 05 §2.6) ────────────────────────────────────
+hex-block-title = Block
+hex-op-write = Write the { $size } to a file
+hex-op-read = Read a file in at { $at }
+hex-op-insert = Insert zero bytes at { $at }
+hex-op-fill = Fill the { $size } with a byte
+hex-op-xor = Exclusive-or the { $size } with a key
+hex-op-delete = Delete the { $size } — { $was } becomes { $becomes }
+hex-write-title = Write the block to
+hex-read-title = Read which file
+hex-fill-title = Fill with which byte (hex)
+hex-xor-title = Exclusive-or with which key (hex)
+hex-insert-title = How many zero bytes
+hex-not-hex = that is not a run of hex digits
+hex-not-a-count = that is not a number of bytes
+hex-filled = { $size } filled
+hex-xored = { $size } exclusive-ored — this is not encryption
+hex-written = { $size } written to { $name }
+hex-read-done = { $size } read from { $name }
+hex-inserted = { $size } of zeros inserted
+hex-deleted = { $size } deleted

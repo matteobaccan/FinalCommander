@@ -427,3 +427,25 @@ info-modified = Modificato
 key-mark = Marca
 hex-needs-a-file = questo buffer non ha un file da cui leggere i byte
 hex-save-first = salva prima: i due editor non possono tenersi le modifiche a vicenda
+
+# ── operazioni sui blocchi dell'editor esadecimale (SPEC 05 §2.6) ───────────────────────
+hex-block-title = Blocco
+hex-op-write = Scrivi i { $size } in un file
+hex-op-read = Leggi un file a { $at }
+hex-op-insert = Inserisci byte a zero a { $at }
+hex-op-fill = Riempi i { $size } con un byte
+hex-op-xor = XOR dei { $size } con una chiave
+hex-op-delete = Elimina i { $size } — da { $was } a { $becomes }
+hex-write-title = Scrivi il blocco in
+hex-read-title = Quale file leggere
+hex-fill-title = Con quale byte riempire (hex)
+hex-xor-title = Con quale chiave fare XOR (hex)
+hex-insert-title = Quanti byte a zero
+hex-not-hex = non è una sequenza di cifre esadecimali
+hex-not-a-count = non è un numero di byte
+hex-filled = { $size } riempiti
+hex-xored = XOR su { $size } — non è cifratura
+hex-written = { $size } scritti in { $name }
+hex-read-done = { $size } letti da { $name }
+hex-inserted = inseriti { $size } di zeri
+hex-deleted = eliminati { $size }

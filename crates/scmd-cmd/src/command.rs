@@ -225,6 +225,8 @@ pub enum Command {
     EditorHexToggle,
     /// `F3` in hex mode: start or finish marking a block (SPEC 05 §2.6).
     EditorBlockMark,
+    /// `F12` in hex mode: what to do with the block that is marked.
+    EditorBlockOps,
     EditorCopy,
     EditorCut,
     EditorPaste,
@@ -380,6 +382,7 @@ impl Command {
             Command::EditorToViewer,
             Command::EditorHexToggle,
             Command::EditorBlockMark,
+            Command::EditorBlockOps,
             Command::EditorCopy,
             Command::EditorCut,
             Command::EditorPaste,
@@ -554,6 +557,7 @@ impl Command {
             Command::EditorToViewer => "editor.to.viewer".into(),
             Command::EditorHexToggle => "editor.hex.toggle".into(),
             Command::EditorBlockMark => "editor.block.mark".into(),
+            Command::EditorBlockOps => "editor.block.ops".into(),
             Command::EditorCopy => "editor.copy".into(),
             Command::EditorCut => "editor.cut".into(),
             Command::EditorPaste => "editor.paste".into(),
@@ -705,6 +709,7 @@ impl Command {
             ("editor.to.viewer", _) => Command::EditorToViewer,
             ("editor.hex.toggle", _) => Command::EditorHexToggle,
             ("editor.block.mark", _) => Command::EditorBlockMark,
+            ("editor.block.ops", _) => Command::EditorBlockOps,
             ("editor.copy", _) => Command::EditorCopy,
             ("editor.cut", _) => Command::EditorCut,
             ("editor.paste", _) => Command::EditorPaste,
