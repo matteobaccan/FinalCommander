@@ -33,15 +33,15 @@ Column `SC` = SupremeCommander default (profile `far`, our baseline).
 | --- | --- | --- | --- | --- | --- |
 | Shift+F1 | add to archive | — | — | what's this | **add to archive** (zip, tar, tar.gz, tar.bz2, tar.xz, tar.zst) |
 | Shift+F2 | extract from archive | — | compare by content | multi-rename | **extract archive** into a directory of its own; inside an archive it is `F5` |
-| Shift+F3 | archive commands menu | — | — | view URL | archive commands (unbound today; `docs/BACKLOG.md`) |
+| Shift+F3 | archive commands menu | — | — | view URL | **archive commands**: test, extract here, extract to, delete, add |
 | Shift+F4 | edit a new file | edit new file | create new text file | edit new file | edit new file |
 | Shift+F5 | copy the item under the cursor (same panel) | — | copy in same panel | copy by queue | copy here |
 | Shift+F6 | rename/move the item under the cursor | — | rename in place | move by queue | rename in place |
 | Shift+F8 | delete only the item under the cursor | — | delete permanently | — | delete under cursor |
 | Shift+F9 | save configuration | — | — | — | save configuration |
 | Shift+F10 | select the last used item of the user menu | — | — | view all files | same, once the user menu exists (unbound today) |
-| Shift+F11 | sort groups on/off (named mask groups that sort ahead of or behind everything else — not the same as "directories first") | — | — | — | same, once sort groups exist (unbound today) |
-| Shift+F12 | selected files first | — | — | custom view | selected first (a setting today, `Shift+F12` unbound) |
+| Shift+F11 | sort groups on/off (named mask groups that sort ahead of or behind everything else — not the same as "directories first") | — | — | — | **directories first on/off**, which is the part of FAR's `Group` we have; named sort groups are still to come |
+| Shift+F12 | selected files first | — | — | custom view | **selected files first on/off** |
 | Shift+Del | delete skipping trash | delete | delete permanently | delete permanently | delete permanently |
 | Shift+Enter | run in a separate window / OS open | — | run in own window | — | OS-open item |
 | Shift+arrows | extend selection | extend selection | extend selection | extend selection | extend selection |

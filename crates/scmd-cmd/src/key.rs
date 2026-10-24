@@ -18,6 +18,10 @@ impl Mods {
         self.0 |= other.0;
     }
 
+    pub fn remove(&mut self, other: Self) {
+        self.0 &= !other.0;
+    }
+
     pub const fn bits(self) -> u8 {
         self.0
     }

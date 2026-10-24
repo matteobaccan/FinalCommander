@@ -26,8 +26,13 @@ work, so the two cannot disagree.
 
 # Archives
 
-`Shift+F1` packs what is selected; `Shift+F2` unpacks the archive under the cursor;
-`Shift+F3` looks inside one. `Enter` on an archive opens it as if it were a directory — zip,
+`Shift+F1` packs what is selected — and can delete the originals once the archive is really
+written, which is a box in the dialog and never the default. `Shift+F2` unpacks the archive
+under the cursor into a directory of its own. `Shift+F3` is the archive menu: test it (every
+entry is decompressed and checked, nothing is written), extract it here, extract it
+elsewhere, delete it, or add files to a new one.
+
+`Enter` on an archive opens it as if it were a directory — zip,
 tar, and tar with gzip, bzip2, xz or zstd — and the path says where you are:
 
     /home/me/sources.tar.gz!/src/main.rs

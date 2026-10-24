@@ -9,7 +9,8 @@ use std::time::Duration;
 
 use crossterm::event::{
     self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyCode as CKey, KeyEvent,
-    KeyEventKind, KeyModifiers,
+    KeyEventKind, KeyModifiers, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags,
+    PushKeyboardEnhancementFlags,
 };
 use crossterm::style::{
     Attribute, Color as CColor, Print, SetAttribute, SetBackgroundColor, SetForegroundColor,
@@ -23,6 +24,10 @@ use scmd_ui::{Buffer, Color, ColorDepth};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Input {
     Key(Key),
+    /// The modifiers being held right now, with no key pressed yet. Only terminals that
+    /// speak the keyboard protocol report this; the rest never send it, and the key bar
+    /// simply does not change for them.
+    Mods(Mods),
     Paste(String),
     Resize(u16, u16),
     /// The terminal closed on us.
@@ -51,6 +56,8 @@ pub struct Term {
     prev: Buffer,
     depth: ColorDepth,
     raw: bool,
+    /// Whether the keyboard protocol was turned on, so that it is turned off again.
+    enhanced: bool,
 }
 
 impl Term {
@@ -65,12 +72,26 @@ impl Term {
             EnableBracketedPaste,
             cursor::Hide
         )?;
+        // The key bar changes as a modifier goes down, the way FAR's does, and a terminal
+        // only says so when it reports every key as an escape code. Terminals that do not
+        // understand this ignore it; nothing else depends on it.
+        let enhanced = terminal::supports_keyboard_enhancement().unwrap_or(false);
+        if enhanced {
+            let _ = queue!(
+                out,
+                PushKeyboardEnhancementFlags(
+                    KeyboardEnhancementFlags::REPORT_EVENT_TYPES
+                        | KeyboardEnhancementFlags::REPORT_ALL_KEYS_AS_ESCAPE_CODES
+                )
+            );
+        }
         out.flush()?;
         Ok(Term {
             out: Box::new(out),
             prev: Buffer::new(w, h),
             depth: detect_depth(),
             raw: true,
+            enhanced,
         })
     }
 
@@ -81,6 +102,7 @@ impl Term {
             prev: Buffer::new(w, h),
             depth: ColorDepth::TrueColor,
             raw: false,
+            enhanced: false,
         }
     }
 
@@ -98,6 +120,7 @@ impl Term {
             prev: Buffer::new(0, 0),
             depth: ColorDepth::TrueColor,
             raw: true,
+            enhanced: false,
         };
         (term, sink)
     }
@@ -174,6 +197,9 @@ impl Term {
     pub fn restore(&mut self) {
         if !self.raw {
             return;
+        }
+        if self.enhanced {
+            let _ = queue!(self.out, PopKeyboardEnhancementFlags);
         }
         let _ = queue!(
             self.out,
@@ -260,9 +286,6 @@ pub fn poll_input(timeout: Duration) -> io::Result<Option<Input>> {
 /// kitty protocol or Win32 input mode a terminal reports them, and acting on both would run
 /// every command twice.
 pub fn map_key_event(k: KeyEvent) -> Option<Input> {
-    if matches!(k.kind, KeyEventKind::Release) {
-        return None;
-    }
     let mut mods = Mods::NONE;
     if k.modifiers.contains(KeyModifiers::CONTROL) {
         mods.insert(Mods::CTRL);
@@ -272,6 +295,18 @@ pub fn map_key_event(k: KeyEvent) -> Option<Input> {
     }
     if k.modifiers.contains(KeyModifiers::SHIFT) {
         mods.insert(Mods::SHIFT);
+    }
+    // A modifier on its own is not a key: it is the news that the key bar should now show
+    // what that modifier does. On release the terminal still names the modifier it is
+    // letting go of, so it is taken back out.
+    if let CKey::Modifier(which) = k.code {
+        if matches!(k.kind, KeyEventKind::Release) {
+            mods.remove(of_modifier(which));
+        }
+        return Some(Input::Mods(mods));
+    }
+    if matches!(k.kind, KeyEventKind::Release) {
+        return None;
     }
     let code = match k.code {
         CKey::Char(c) => KeyCode::Char(c),
@@ -294,6 +329,17 @@ pub fn map_key_event(k: KeyEvent) -> Option<Input> {
         _ => return None,
     };
     Some(Input::Key(Key { code, mods }))
+}
+
+/// Which of ours a modifier key is.
+fn of_modifier(which: crossterm::event::ModifierKeyCode) -> Mods {
+    use crossterm::event::ModifierKeyCode as M;
+    match which {
+        M::LeftShift | M::RightShift => Mods::SHIFT,
+        M::LeftControl | M::RightControl => Mods::CTRL,
+        M::LeftAlt | M::RightAlt => Mods::ALT,
+        _ => Mods::NONE,
+    }
 }
 
 fn to_crossterm(c: Color) -> CColor {

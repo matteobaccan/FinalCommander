@@ -8,6 +8,30 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **The key bar follows the modifier.** Hold Shift and the bar becomes the archive keys —
+  `Add`, `Extrct`, `ArcCmd`, `Edit…`, `Copy`, `Rename`, `Delete`, `Save`, `Group`, `SelUp`;
+  hold Ctrl and it becomes the sort keys; hold Alt and it becomes the drives, the link, the
+  search and the two histories. The words are FAR's own, in all seven languages, and the bar
+  is built from the keymap rather than written out, so it cannot promise a key that is bound
+  to nothing — a keymap of your own is described correctly for free. A terminal has to speak
+  the keyboard protocol for this (kitty, foot, WezTerm, Ghostty and others do); where it does
+  not, the bar simply stays as it was.
+
+- **The archive commands menu (`Shift+F3`)** — MultiArc's `ArcCmd`. On an archive, or inside
+  one: test it, extract it here, extract it elsewhere, delete it, or add files to a new one.
+
+- **Testing an archive.** Every entry is read and decompressed and the bytes are thrown away;
+  what the format checks, it checks — a zip's CRC, a decompressor's own framing. It reports as
+  a job, so there is a progress bar, Esc stops it, and the entries that failed are listed with
+  the reason each one gave. A compressed tar is walked once rather than reopened per entry.
+
+- **`Shift+F1` can delete the originals** once the archive is written. It is a box in the
+  dialog, off by default, and the deletion happens only if the pack really finished: a pack
+  that failed or was stopped leaves every file where it was.
+
+- **`Shift+F11` and `Shift+F12`** toggle *directories first* and *selected files first*, which
+  are FAR's `Group` and `SelUp`.
+
 - **Object storage in the panels.** `s3://logs/2024/08/` opens a bucket as a tree of prefixes,
   on AWS or on anything else that speaks the protocol — MinIO, Ceph, Garage, R2, Wasabi, a
   LocalStack in a container — with the endpoint, the region and the addressing style named in

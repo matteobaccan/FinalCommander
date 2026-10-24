@@ -237,7 +237,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
     }
 
     if keybar_h == 1 {
-        let labels = app.keybar();
+        let labels = app.keybar_for(app.held);
         let refs: Vec<(u8, &str)> = labels.iter().map(|(n, s)| (*n, s.as_str())).collect();
         widgets::draw_keybar(buf, &app.theme, Rect::new(0, h - 1, w, 1), &refs);
     }

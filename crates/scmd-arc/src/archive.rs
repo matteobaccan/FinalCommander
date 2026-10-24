@@ -29,6 +29,21 @@ pub struct ArcEntry {
     at: Option<u64>,
 }
 
+/// What [`Archive::verify`] found: how much was read, and what did not come out whole.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct Report {
+    pub members: u64,
+    pub bytes: u64,
+    /// The entries that failed, each with the reason it gave.
+    pub bad: Vec<(String, String)>,
+}
+
+impl Report {
+    pub fn is_whole(&self) -> bool {
+        self.bad.is_empty()
+    }
+}
+
 impl ArcEntry {
     /// The entry's own name, without the directories above it.
     pub fn name(&self) -> &str {
@@ -322,6 +337,66 @@ impl Archive {
             source: e,
         })?;
         Ok(written)
+    }
+
+    /// Read every entry and say which ones do not come out whole.
+    ///
+    /// This is what *test archive* means: the bytes are decompressed, checked by whatever
+    /// the format checks them with (a zip's CRC, a decompressor's own framing) and thrown
+    /// away. What comes back is the count, the size, and the entries that failed with the
+    /// reason each one gave.
+    ///
+    /// A compressed tar is one stream, so it is walked once instead of being reopened per
+    /// entry: testing a thousand-member `.tar.gz` the other way would read the archive a
+    /// thousand times.
+    pub fn verify(
+        &self,
+        cancel: &CancelToken,
+        progress: &mut dyn FnMut(&str, u64),
+    ) -> Result<Report> {
+        let mut report = Report::default();
+        if !self.format.seekable() {
+            let mut stream = tar::Archive::new(decoder(&self.source, self.format)?);
+            let items = stream.entries().map_err(|e| self.broken(e))?;
+            for item in items {
+                if cancel.is_cancelled() {
+                    return Err(ArcError::Cancelled);
+                }
+                let mut item = item.map_err(|e| self.broken(e))?;
+                let path = item
+                    .path()
+                    .map(|p| tar_path(&p))
+                    .unwrap_or_else(|_| String::new());
+                if path.ends_with('/') {
+                    continue;
+                }
+                report.members += 1;
+                progress(&path, report.bytes);
+                match copy(&mut item, &mut io::sink(), cancel, &mut |_| {}) {
+                    Ok(bytes) => report.bytes += bytes,
+                    Err(ArcError::Cancelled) => return Err(ArcError::Cancelled),
+                    Err(e) => report.bad.push((path, e.to_string())),
+                }
+            }
+            return Ok(report);
+        }
+        for entry in &self.entries {
+            if cancel.is_cancelled() {
+                return Err(ArcError::Cancelled);
+            }
+            if entry.kind == EntryKind::Dir {
+                continue;
+            }
+            let path = entry.path.clone();
+            report.members += 1;
+            progress(&path, report.bytes);
+            match self.copy_out(&path, &mut io::sink(), cancel, &mut |_| {}) {
+                Ok(bytes) => report.bytes += bytes,
+                Err(ArcError::Cancelled) => return Err(ArcError::Cancelled),
+                Err(e) => report.bad.push((path, e.to_string())),
+            }
+        }
+        Ok(report)
     }
 
     fn copy_out(
@@ -1003,6 +1078,54 @@ mod tests {
         cache.forget(&path);
         let fourth = cache.open(&path, &CancelToken::new()).unwrap();
         assert!(!Arc::ptr_eq(&third, &fourth));
+    }
+
+    /// Testing an archive has to answer two questions: does every entry come out, and when
+    /// one does not, which one and why. A corrupted zip answers the second.
+    #[test]
+    fn a_whole_archive_tests_whole_and_a_damaged_one_names_what_is_broken() {
+        let dir = tempfile::tempdir().unwrap();
+        for format in Format::ALL {
+            let path = dir.path().join(format!("tree.{}", format.extension()));
+            write_archive(&path, format, &TREE);
+            let mut seen: Vec<String> = Vec::new();
+            let report = open(&path)
+                .verify(&CancelToken::new(), &mut |name, _| {
+                    seen.push(name.trim_start_matches('/').to_string())
+                })
+                .expect("a whole archive");
+            assert!(report.is_whole(), "{}: {:?}", format.label(), report.bad);
+            assert_eq!(report.members, 3, "{}", format.label());
+            let total: u64 = TREE.iter().map(|(_, b)| b.len() as u64).sum();
+            assert_eq!(report.bytes, total, "{}", format.label());
+            // Every member is named as it is read, so the progress bar can say where it is.
+            seen.sort();
+            assert_eq!(
+                seen,
+                ["readme.md", "src/deep/notes.txt", "src/main.rs"],
+                "{}",
+                format.label()
+            );
+        }
+
+        // A zip whose deflated bytes have been scribbled on: the entry is still listed, and
+        // the CRC is what catches it. The first entry's payload starts after its local
+        // header — thirty bytes, then the name, then the extra field — and that is what is
+        // damaged, rather than a byte in the middle of the file that might be a header.
+        let path = dir.path().join("broken.zip");
+        write_zip(&path, &TREE);
+        let mut bytes = std::fs::read(&path).unwrap();
+        assert_eq!(&bytes[..4], b"PK\x03\x04");
+        let name_len = u16::from_le_bytes([bytes[26], bytes[27]]) as usize;
+        let extra_len = u16::from_le_bytes([bytes[28], bytes[29]]) as usize;
+        let at = 30 + name_len + extra_len;
+        bytes[at] ^= 0xff;
+        std::fs::write(&path, &bytes).unwrap();
+        let report = open(&path)
+            .verify(&CancelToken::new(), &mut |_, _| {})
+            .expect("the listing still reads");
+        assert!(!report.is_whole(), "the damage went unnoticed: {report:?}");
+        assert_eq!(report.members, 3);
     }
 
     #[test]

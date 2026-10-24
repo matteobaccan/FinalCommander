@@ -62,6 +62,8 @@ pub enum PickKind {
     MacroPlay,
     /// The tunnels that are open, and what has gone through them (SPEC 04 §6.2).
     Tunnels,
+    /// What can be done with the archive at hand (`Shift+F3`).
+    ArcCommands,
 }
 
 /// A mark (`√`) next to the entry that is currently in force.
@@ -244,8 +246,9 @@ pub fn menus() -> Vec<Menu> {
                 item(
                     "menu-archive-commands",
                     "Shift+F3",
-                    Action::Todo("archive.commands"),
+                    Action::Run(Command::ArcCommands),
                 ),
+                item("menu-archive-test", "", Action::Run(Command::ArcTest)),
                 Entry::Separator,
                 item("menu-attributes", "", Action::Todo("file.attributes")),
                 item(

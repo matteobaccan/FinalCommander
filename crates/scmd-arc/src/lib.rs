@@ -15,7 +15,7 @@ mod format;
 mod limits;
 mod write;
 
-pub use archive::{ArcEntry, Archive, Cache};
+pub use archive::{ArcEntry, Archive, Cache, Report};
 pub use format::Format;
 pub use limits::Limits;
 pub use write::{create, Level, Written};

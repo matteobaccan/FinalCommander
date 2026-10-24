@@ -58,6 +58,20 @@ cmd = "file.pack"
 keys = ["Shift+F2"]
 cmd = "file.unpack"
 
+# What can be done with the archive under the cursor, as a menu — MultiArc's `ArcCmd`.
+[[bind]]
+keys = ["Shift+F3"]
+cmd = "arc.commands"
+
+# FAR's `Group` and `SelUp`: the two parts of the order that are not the sort key itself.
+[[bind]]
+keys = ["Shift+F11"]
+cmd = "panel.dirs.first"
+
+[[bind]]
+keys = ["Shift+F12"]
+cmd = "panel.selected.first"
+
 [[bind]]
 keys = ["F9"]
 scope = "global"

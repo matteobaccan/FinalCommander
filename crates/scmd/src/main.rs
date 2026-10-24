@@ -971,6 +971,15 @@ fn interactive(mut app: App) -> Result<()> {
                         run_pack(id, archive, format, level, sources, cancel, tx, &archives)
                     });
                 }
+                Request::ArcTest {
+                    id,
+                    archive,
+                    cancel,
+                } => {
+                    let tx = tx.clone();
+                    let archives = archives.clone();
+                    runtime.spawn_blocking(move || run_test(id, archive, cancel, tx, &archives));
+                }
                 Request::Plugin {
                     id,
                     label,
@@ -1567,6 +1576,82 @@ fn run_pack(
     let _ = tx.send(Event::JobDone {
         id,
         kind: scmd_jobs::JobKind::Pack,
+        outcome,
+    });
+}
+
+/// Read every entry of an archive and report what does not come out whole.
+///
+/// It reports as a job: the same progress box, the same counters, the same Esc to stop. What
+/// it finds goes into the outcome's errors, one line per entry, which is where the job's own
+/// summary already knows how to show them.
+fn run_test(
+    id: u64,
+    archive: VPath,
+    cancel: CancelToken,
+    tx: mpsc::Sender<Event>,
+    archives: &std::sync::Arc<scmd_arc::Cache>,
+) {
+    use scmd_jobs::{Outcome, Phase, Progress};
+
+    let started = std::time::Instant::now();
+    let outcome = match archives.open(archive.as_path(), &cancel) {
+        Ok(handle) => {
+            let total = handle
+                .entries()
+                .iter()
+                .filter(|e| e.kind != scmd_core::EntryKind::Dir)
+                .count() as u64;
+            let mut done = 0u64;
+            let mut last = std::time::Instant::now();
+            let report = handle.verify(&cancel, &mut |name, bytes| {
+                done += 1;
+                if last.elapsed() < std::time::Duration::from_millis(100) {
+                    return;
+                }
+                last = std::time::Instant::now();
+                let _ = tx.send(Event::JobProgress {
+                    id,
+                    progress: Progress {
+                        phase: Phase::Running,
+                        files_done: done,
+                        files_total: total,
+                        bytes_done: bytes,
+                        current: Some(archive.enter(name)),
+                        elapsed: started.elapsed(),
+                        ..Progress::default()
+                    },
+                });
+            });
+            match report {
+                Ok(report) => Outcome {
+                    files: report.members,
+                    bytes: report.bytes,
+                    errors: report
+                        .bad
+                        .into_iter()
+                        .map(|(name, why)| (archive.enter(name), why))
+                        .collect(),
+                    ..Outcome::default()
+                },
+                Err(scmd_arc::ArcError::Cancelled) => Outcome {
+                    cancelled: true,
+                    ..Outcome::default()
+                },
+                Err(e) => Outcome {
+                    errors: vec![(archive.clone(), e.to_string())],
+                    ..Outcome::default()
+                },
+            }
+        }
+        Err(e) => Outcome {
+            errors: vec![(archive.clone(), e.to_string())],
+            ..Outcome::default()
+        },
+    };
+    let _ = tx.send(Event::JobDone {
+        id,
+        kind: scmd_jobs::JobKind::Test,
         outcome,
     });
 }
@@ -2283,6 +2368,18 @@ timeout = 10
                     let (tx, rx) = mpsc::channel();
                     let archives = std::sync::Arc::new(scmd_arc::Cache::new(Default::default()));
                     run_pack(id, archive, format, level, sources, cancel, tx, &archives);
+                    while let Ok(event) = rx.try_recv() {
+                        app.handle_event(event);
+                    }
+                }
+                Request::ArcTest {
+                    id,
+                    archive,
+                    cancel,
+                } => {
+                    let (tx, rx) = mpsc::channel();
+                    let archives = std::sync::Arc::new(scmd_arc::Cache::new(Default::default()));
+                    run_test(id, archive, cancel, tx, &archives);
                     while let Ok(event) = rx.try_recv() {
                         app.handle_event(event);
                     }

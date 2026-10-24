@@ -484,6 +484,9 @@ impl Form {
                 format.extension(),
             ),
             choice("pack.level", t("pack-level"), &levels, "normal"),
+            // FAR's `Delete files after archiving`. Off, and it stays off between dialogs:
+            // an archiver that quietly removes the originals is a bad surprise once.
+            Field::toggle("pack.delete", t("pack-delete-after"), false),
             Field::Separator,
             Field::Dim(i18n.t_args("pack-scope", &[("count", (files as i64).into())])),
         ];

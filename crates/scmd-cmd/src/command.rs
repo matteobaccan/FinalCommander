@@ -70,6 +70,10 @@ pub enum Command {
     PanelTree(Side),
     PanelSortBy(SortKey),
     PanelSortReverse,
+    /// Directories before files, or mixed in with them (`Shift+F11`, FAR's `Group`).
+    PanelDirsFirst,
+    /// The selected files first in the order (`Shift+F12`, FAR's `SelUp`).
+    PanelSelectedFirst,
     PanelFilterQuick,
     PanelOtherSync,
     /// Choose the sort order from a list.
@@ -153,6 +157,10 @@ pub enum Command {
     FilePack,
     /// Take an archive apart, into a directory (`Shift+F2`).
     FileUnpack,
+    /// What can be done with the archive under the cursor, as a menu (`Shift+F3`).
+    ArcCommands,
+    /// Read every member of the archive under the cursor and say whether it comes out whole.
+    ArcTest,
     /// Open a tunnel over the connection the active panel is on: `ssh -L`, without the ssh.
     NetTunnel,
     /// The tunnels that are open, with what has gone through them.
@@ -288,6 +296,8 @@ impl Command {
             Command::PanelReread,
             Command::PanelHiddenToggle,
             Command::PanelSortReverse,
+            Command::PanelDirsFirst,
+            Command::PanelSelectedFirst,
             Command::PanelFilterQuick,
             Command::PanelOtherSync,
             Command::PanelSortMenu,
@@ -360,6 +370,8 @@ impl Command {
             Command::CmdInsertPathOther,
             Command::FilePack,
             Command::FileUnpack,
+            Command::ArcCommands,
+            Command::ArcTest,
             Command::NetTunnel,
             Command::NetTunnels,
             Command::ToolUserMenu,
@@ -481,6 +493,8 @@ impl Command {
             Command::PanelViewSet(v) => format!("panel.view.set({})", v.as_str()),
             Command::PanelSortBy(k) => format!("panel.sort.by({})", k.as_str()),
             Command::PanelSortReverse => "panel.sort.reverse".into(),
+            Command::PanelDirsFirst => "panel.dirs.first".into(),
+            Command::PanelSelectedFirst => "panel.selected.first".into(),
             Command::PanelFilterQuick => "panel.filter.quick".into(),
             Command::PanelOtherSync => "panel.other.sync".into(),
             Command::PanelSortMenu => "panel.sort.menu".into(),
@@ -548,6 +562,8 @@ impl Command {
             Command::CmdInsertPathOther => "cmd.insert.path.other".into(),
             Command::FilePack => "file.pack".into(),
             Command::FileUnpack => "file.unpack".into(),
+            Command::ArcCommands => "arc.commands".into(),
+            Command::ArcTest => "arc.test".into(),
             Command::NetTunnel => "net.tunnel".into(),
             Command::NetTunnels => "net.tunnels".into(),
             Command::ToolUserMenu => "tool.usermenu".into(),
@@ -654,6 +670,8 @@ impl Command {
             ("panel.view.set", Some(a)) => Command::PanelViewSet(ViewMode::parse(a)?),
             ("panel.sort.by", Some(a)) => Command::PanelSortBy(parse_sort_key(a)?),
             ("panel.sort.reverse", _) => Command::PanelSortReverse,
+            ("panel.dirs.first", _) => Command::PanelDirsFirst,
+            ("panel.selected.first", _) => Command::PanelSelectedFirst,
             ("panel.filter.quick", _) => Command::PanelFilterQuick,
             ("panel.other.sync", _) => Command::PanelOtherSync,
             ("nav.up", _) => Command::NavUp,
@@ -716,6 +734,8 @@ impl Command {
             ("tool.calculator", _) => Command::ToolCalculator,
             ("file.pack", _) => Command::FilePack,
             ("file.unpack", _) => Command::FileUnpack,
+            ("arc.commands", _) => Command::ArcCommands,
+            ("arc.test", _) => Command::ArcTest,
             ("net.tunnel", _) => Command::NetTunnel,
             ("net.tunnels", _) => Command::NetTunnels,
             ("tool.usermenu", _) => Command::ToolUserMenu,

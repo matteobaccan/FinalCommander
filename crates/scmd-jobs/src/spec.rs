@@ -23,6 +23,12 @@ pub enum JobKind {
     /// reports progress and finishes through the same box, counters and status line as every
     /// other job — see `scmd::run_pack`.
     Pack,
+    /// Read every entry of an archive and report the ones that do not come out whole.
+    ///
+    /// Like [`JobKind::Pack`], the engine does not run it: `scmd-arc` does, in one pass. The
+    /// kind exists so that testing an archive reports through the same box and the same
+    /// counters as everything else, and can be cancelled the same way.
+    Test,
 }
 
 impl JobKind {
@@ -35,6 +41,7 @@ impl JobKind {
             JobKind::Mkdir => "mkdir",
             JobKind::Replace => "replace",
             JobKind::Pack => "pack",
+            JobKind::Test => "test",
         }
     }
 

@@ -79,6 +79,13 @@ pub enum Request {
         sources: Vec<VPath>,
         cancel: CancelToken,
     },
+    /// Read every entry of an archive and report what does not come out whole. A job as far
+    /// as the user is concerned, for the same reason `Pack` is one.
+    ArcTest {
+        id: u64,
+        archive: VPath,
+        cancel: CancelToken,
+    },
     /// Run a plugin's command (SPEC 08 §1). Off the interface thread, because it is somebody
     /// else's program and we do not know how long it will think about it.
     Plugin {
@@ -830,6 +837,13 @@ pub struct App {
     pub mode: Mode,
     pub status: String,
     pub status_error: bool,
+    /// The modifiers held down right now, for the key bar. Only terminals that speak the
+    /// keyboard protocol ever report this, so on the others it stays empty and the bar does
+    /// not change — which is what it did before.
+    pub held: Mods,
+    /// What to delete once the archive is written, when the dialog asked for it. It is held
+    /// here rather than in the job because the delete only happens if the pack succeeded.
+    pack_delete: Option<Vec<VPath>>,
     pub quit: bool,
     pub requests: Vec<Request>,
     /// Panel geometry from the last frame, so key handling knows how far a page is.
@@ -998,6 +1012,8 @@ impl App {
             mode: Mode::Normal,
             status: String::new(),
             status_error: false,
+            held: Mods::NONE,
+            pack_delete: None,
             quit: false,
             requests: Vec::new(),
             rows: 20,
@@ -1560,12 +1576,16 @@ impl App {
                     self.prompt_changed(&text);
                 }
             }
+            Input::Mods(mods) => self.held = mods,
             Input::Resize(..) => {}
             Input::Eof => self.quit = true,
         }
     }
 
     fn handle_key(&mut self, key: Key) {
+        // The bar showed what this modifier does; the key has now been pressed, so it goes
+        // back to the plain one until the terminal says the modifier is down again.
+        self.held = Mods::NONE;
         // A macro answers the key before anything else does, which is what lets one put a
         // macro on `F5` — FAR allows that, and a macro one cannot put on a useful key is a
         // macro one does not record. Not while recording, or a macro would record itself.
@@ -2819,6 +2839,7 @@ impl App {
             JobKind::Wipe => "job-wipe",
             JobKind::Replace => "job-replace",
             JobKind::Pack => "job-pack",
+            JobKind::Test => "job-test",
         })
     }
 
@@ -2913,6 +2934,122 @@ impl App {
             choice: 0,
         });
         self.requests.push(Request::Job { id, spec, cancel });
+    }
+
+    /// Ask before deleting, unless the setting says not to, and then do it.
+    fn ask_delete(&mut self, sources: Vec<VPath>) {
+        let bytes = self.selected_bytes(&sources);
+        let spec = JobSpec::new(JobKind::Delete, sources.clone(), None);
+        if !self.cfg.general.confirm_delete {
+            self.start_job(spec);
+            return;
+        }
+        let title = self.i18n.t("confirm-delete-title");
+        let body = self.i18n.t_args(
+            "confirm-delete-body",
+            &[
+                ("count", (sources.len() as i64).into()),
+                ("bytes", scmd_core::format_size(bytes).into()),
+            ],
+        );
+        let mut lines = vec![body, String::new()];
+        lines.extend(
+            sources
+                .iter()
+                .take(3)
+                .map(|p| format!("  {}", p.display_name())),
+        );
+        if sources.len() > 3 {
+            lines.push(format!("  … {}", sources.len() - 3));
+        }
+        lines.push(String::new());
+        // There is no trash yet, so the dialog says what the key really does.
+        lines.push(self.i18n.t("confirm-delete-permanent"));
+        lines.push(self.i18n.t("confirm-yes-no"));
+        self.mode = Mode::Confirm(Confirm {
+            title,
+            lines,
+            action: ConfirmAction::Job(spec),
+        });
+    }
+
+    /// Everything in `archive`, straight into `to`: the extraction that asks nothing, for the
+    /// archive menu's *extract here*.
+    fn unpack_into(&mut self, archive: VPath, to: VPath) {
+        let options = scmd_jobs::JobOptions {
+            contents: true,
+            ..Default::default()
+        };
+        let spec =
+            JobSpec::new(JobKind::Copy, vec![archive.enter("/")], Some(to)).with_options(options);
+        self.start_job(spec);
+    }
+
+    /// The same progress box again, with the archive reader behind it.
+    fn start_test(&mut self, archive: VPath) {
+        let id = self.next_job_id;
+        self.next_job_id += 1;
+        let cancel = CancelToken::new();
+        self.mode = Mode::Job(JobView {
+            id,
+            kind: JobKind::Test,
+            progress: Progress::default(),
+            question: None,
+            cancel: cancel.clone(),
+            choice: 0,
+        });
+        self.requests.push(Request::ArcTest {
+            id,
+            archive,
+            cancel,
+        });
+    }
+
+    /// The archive the archive commands are about: the file under the cursor when it is one,
+    /// or the container the panel is inside when it is in one.
+    fn archive_at_hand(&self) -> Option<VPath> {
+        let panel = self.panel();
+        if panel.cwd.in_container() {
+            // Out of every level: the commands are about the file on disk, not about a
+            // container nested inside another one.
+            let mut host = panel.cwd.clone();
+            while let Some(outer) = host.leave() {
+                host = outer;
+            }
+            return Some(host);
+        }
+        let entry = panel.current()?;
+        let path = panel.cwd.join(entry.name_str().as_ref());
+        scmd_arc::Format::of_name(&path.display_name()).map(|_| path)
+    }
+
+    /// `Shift+F3`: what can be done with the archive at hand, as a menu. MultiArc calls it
+    /// `ArcCmd`, and the list is short because everything on it is something we really do.
+    fn open_arc_commands(&mut self) {
+        let archive = self.archive_at_hand();
+        let mut rows = Vec::new();
+        if let Some(path) = &archive {
+            let name = path.display_name();
+            for (id, value) in [
+                ("arc-op-test", "test"),
+                ("arc-op-extract-here", "here"),
+                ("arc-op-extract-to", "to"),
+                ("arc-op-delete", "delete"),
+            ] {
+                rows.push(PickRow {
+                    label: self.i18n.t_args(id, &[("name", name.clone().into())]),
+                    value: value.to_string(),
+                    current: false,
+                });
+            }
+        }
+        rows.push(PickRow {
+            label: self.i18n.t("arc-op-add"),
+            value: "add".to_string(),
+            current: false,
+        });
+        let title = self.i18n.t("arc-commands-title");
+        self.mode = Mode::Pick(Box::new(Pick::new(PickKind::ArcCommands, title, rows, 0)));
     }
 
     /// The same progress box as a job, with the archive writer behind it.
@@ -3021,6 +3158,15 @@ impl App {
                 .map(|(path, error)| format!("{path}: {error}"))
                 .collect();
             self.show_message(title, lines);
+        }
+
+        // The dialog asked for the originals to go once the archive was written. Written
+        // is the condition: nothing is deleted after a pack that failed or was stopped.
+        if let Some(sources) = self.pack_delete.take() {
+            if kind == JobKind::Pack && outcome.errors.is_empty() && !outcome.cancelled {
+                self.start_job(JobSpec::new(JobKind::Delete, sources, None));
+                return;
+            }
         }
 
         // Both panels may be looking at what just changed.
@@ -3187,6 +3333,45 @@ impl App {
                 panel.sort.reverse = !panel.sort.reverse;
                 panel.rebuild();
             }
+            // FAR's `Group` and `SelUp`: the two parts of the order that are not the key
+            // itself. Both are panel-wide settings, so both panels follow — as the view and
+            // the sort key already do.
+            Command::PanelDirsFirst => {
+                self.cfg.panel.dirs_first = !self.cfg.panel.dirs_first;
+                let on = self.cfg.panel.dirs_first;
+                for panel in &mut self.panels {
+                    panel.sort.dirs_first = on;
+                    panel.rebuild();
+                }
+                let msg = self.i18n.t(if on {
+                    "msg-dirs-first-on"
+                } else {
+                    "msg-dirs-first-off"
+                });
+                self.set_status(msg);
+            }
+            Command::PanelSelectedFirst => {
+                self.cfg.panel.selected_first = !self.cfg.panel.selected_first;
+                let on = self.cfg.panel.selected_first;
+                for panel in &mut self.panels {
+                    panel.sort.selected_first = on;
+                    panel.rebuild();
+                }
+                let msg = self.i18n.t(if on {
+                    "msg-selected-first-on"
+                } else {
+                    "msg-selected-first-off"
+                });
+                self.set_status(msg);
+            }
+            Command::ArcCommands => self.open_arc_commands(),
+            Command::ArcTest => match self.archive_at_hand() {
+                Some(path) => self.start_test(path),
+                None => {
+                    let m = self.i18n.t("unpack-not-an-archive");
+                    self.set_error(m);
+                }
+            },
             Command::PanelFilterQuick => {
                 let title = self.i18n.t("prompt-filter");
                 self.mode = Mode::Prompt(Prompt {
@@ -3771,39 +3956,7 @@ impl App {
                     self.set_error(m);
                     return;
                 }
-                let bytes = self.selected_bytes(&sources);
-                let spec = JobSpec::new(JobKind::Delete, sources.clone(), None);
-                if !self.cfg.general.confirm_delete {
-                    self.start_job(spec);
-                    return;
-                }
-                let title = self.i18n.t("confirm-delete-title");
-                let body = self.i18n.t_args(
-                    "confirm-delete-body",
-                    &[
-                        ("count", (sources.len() as i64).into()),
-                        ("bytes", scmd_core::format_size(bytes).into()),
-                    ],
-                );
-                let mut lines = vec![body, String::new()];
-                lines.extend(
-                    sources
-                        .iter()
-                        .take(3)
-                        .map(|p| format!("  {}", p.display_name())),
-                );
-                if sources.len() > 3 {
-                    lines.push(format!("  … {}", sources.len() - 3));
-                }
-                lines.push(String::new());
-                // There is no trash yet, so the dialog says what the key really does.
-                lines.push(self.i18n.t("confirm-delete-permanent"));
-                lines.push(self.i18n.t("confirm-yes-no"));
-                self.mode = Mode::Confirm(Confirm {
-                    title,
-                    lines,
-                    action: ConfirmAction::Job(spec),
-                });
+                self.ask_delete(sources);
             }
 
             other => self.not_implemented(&other.id()),
@@ -4651,6 +4804,7 @@ impl App {
             _ => scmd_arc::Level::Normal,
         };
         self.last_pack = format;
+        self.pack_delete = form.toggle_value("pack.delete").then(|| sources.clone());
         self.start_pack(archive, format, level, sources);
     }
 
@@ -6512,6 +6666,8 @@ impl App {
             PickKind::MacroPlay => return,
             // And `open_tunnels`, which knows what the worker last reported.
             PickKind::Tunnels => return,
+            // And `open_arc_commands`, which knows which archive it is about.
+            PickKind::ArcCommands => return,
             PickKind::Languages => Pick::new(
                 kind,
                 self.i18n.t("menu-languages"),
@@ -6694,6 +6850,20 @@ impl App {
                     }
                 }
             },
+            PickKind::ArcCommands => {
+                let archive = self.archive_at_hand();
+                match (row.value.as_str(), archive) {
+                    ("test", Some(path)) => self.start_test(path),
+                    ("here", Some(path)) => {
+                        let to = self.panel().cwd.clone();
+                        self.unpack_into(path, to);
+                    }
+                    ("to", _) => self.open_unpack_form(),
+                    ("delete", Some(path)) => self.ask_delete(vec![path]),
+                    ("add", _) => self.open_pack_form(),
+                    _ => {}
+                }
+            }
             PickKind::HexBlock => {
                 self.restore_hex();
                 match row.value.as_str() {
@@ -8176,6 +8346,28 @@ impl App {
         .collect()
     }
 
+    /// The key bar while a modifier is held down.
+    ///
+    /// FAR swaps the whole bar as you press Shift, Ctrl or Alt, which is how anyone ever
+    /// learns what those keys do. The bar is built from the keymap rather than written out,
+    /// so a key nobody has bound shows nothing instead of promising something the program
+    /// will not do — and a keymap of the reader's own is described correctly for free.
+    pub fn keybar_for(&self, mods: Mods) -> Vec<(u8, String)> {
+        if mods == Mods::NONE {
+            return self.keybar();
+        }
+        (1..=12u8)
+            .filter_map(|n| {
+                let key = Key {
+                    code: KeyCode::F(n),
+                    mods,
+                };
+                let cmd = self.keymap.resolve(&[Scope::Panel], key)?;
+                Some((n, self.i18n.t(keybar_label(cmd)?)))
+            })
+            .collect()
+    }
+
     /// The help page, generated from the live keymap so it can never drift.
     /// The lines of one chapter, ready to draw. The written ones are rendered from the text
     /// compiled into the binary; the rest are built here, from what the program is running.
@@ -8403,6 +8595,45 @@ fn dirs_home() -> Option<String> {
     std::env::var("HOME")
         .ok()
         .or_else(|| std::env::var("USERPROFILE").ok())
+}
+
+/// The six-column word for a command on the key bar, in FAR's own wording. `None` means the
+/// command has no place on the bar: the slot stays empty rather than being filled with a
+/// label too long to read.
+fn keybar_label(cmd: Command) -> Option<&'static str> {
+    use scmd_cmd::Side;
+    use scmd_core::SortKey;
+    Some(match cmd {
+        // Shift
+        Command::FilePack => "key-add",
+        Command::FileUnpack => "key-extract",
+        Command::ArcCommands => "key-arccmd",
+        Command::FileEditNew => "key-edit-new",
+        Command::FileCopyCurrent => "key-copy",
+        Command::FileMoveCurrent => "key-rename",
+        Command::FileDeleteCurrent => "key-delete",
+        Command::AppSetupSave => "key-save",
+        Command::PanelDirsFirst => "key-group",
+        Command::PanelSelectedFirst => "key-selup",
+        // Ctrl
+        Command::PanelToggle(Side::Left) | Command::PanelDrive(Side::Left) => "key-left",
+        Command::PanelToggle(Side::Right) | Command::PanelDrive(Side::Right) => "key-right",
+        Command::PanelSortBy(SortKey::Name) => "key-sort-name",
+        Command::PanelSortBy(SortKey::Ext) => "key-sort-ext",
+        Command::PanelSortBy(SortKey::MTime) => "key-sort-write",
+        Command::PanelSortBy(SortKey::Size) => "key-sort-size",
+        Command::PanelSortBy(SortKey::Unsorted) => "key-sort-unsort",
+        Command::PanelSortBy(SortKey::BTime) => "key-sort-create",
+        Command::PanelSortBy(SortKey::ATime) => "key-sort-access",
+        Command::PanelSortMenu => "key-sort",
+        // Alt
+        Command::FileLink => "key-mklink",
+        Command::ToolFind => "key-find",
+        Command::CmdHistory => "key-history",
+        Command::PanelHistory => "key-folders",
+        Command::PluginCommands => "key-plugins",
+        _ => return None,
+    })
 }
 
 #[cfg(test)]
@@ -9549,14 +9780,184 @@ mod tests {
     #[test]
     fn an_entry_with_no_feature_behind_it_says_so_instead_of_pretending() {
         let mut app = app();
-        // The archive commands menu is the one archive entry still to come.
-        open(&mut app, 1, "menu-archive-commands");
+        // The file attributes dialog is still to come.
+        open(&mut app, 1, "menu-attributes");
         assert!(
-            app.status.contains("archive.commands"),
+            app.status.contains("file.attributes"),
             "a missing feature must say so instead of doing nothing quietly: `{}`",
             app.status
         );
         assert!(app.mode.is_normal());
+    }
+
+    /// The key bar follows the modifier, and what it shows is what the keymap really does.
+    #[test]
+    fn the_key_bar_changes_with_the_modifier_and_never_lies() {
+        let mut app = app();
+        let plain = app.keybar_for(Mods::NONE);
+        assert_eq!(plain, app.keybar());
+
+        let shift = app.keybar_for(Mods::SHIFT);
+        let labels: Vec<&str> = shift.iter().map(|(_, l)| l.as_str()).collect();
+        assert!(labels.contains(&"Add"), "{labels:?}");
+        assert!(labels.contains(&"Extrct"), "{labels:?}");
+        assert!(labels.contains(&"ArcCmd"), "{labels:?}");
+        assert!(labels.contains(&"SelUp"), "{labels:?}");
+
+        let ctrl = app.keybar_for(Mods::CTRL);
+        assert_eq!(
+            ctrl.iter().find(|(n, _)| *n == 1).map(|(_, l)| l.as_str()),
+            Some("Left")
+        );
+        let alt = app.keybar_for(Mods::ALT);
+        assert_eq!(
+            alt.iter().find(|(n, _)| *n == 7).map(|(_, l)| l.as_str()),
+            Some("Find")
+        );
+
+        // Every label on a modifier bar belongs to a key that really runs something: the bar
+        // is built from the keymap, so it cannot promise what the program will not do.
+        for mods in [Mods::SHIFT, Mods::CTRL, Mods::ALT] {
+            for (n, label) in app.keybar_for(mods) {
+                let key = Key {
+                    code: KeyCode::F(n),
+                    mods,
+                };
+                assert!(
+                    app.keymap.resolve(&[Scope::Panel], key).is_some(),
+                    "F{n} is on the bar as `{label}` and bound to nothing"
+                );
+            }
+        }
+
+        // And the bar goes back to plain as soon as the key is pressed.
+        app.handle_input(Input::Mods(Mods::SHIFT));
+        assert_eq!(app.held, Mods::SHIFT);
+        press(&mut app, "Shift+F11");
+        assert_eq!(app.held, Mods::NONE);
+        assert!(
+            !app.cfg.panel.dirs_first,
+            "Shift+F11 did not toggle the grouping"
+        );
+        assert!(app.panels.iter().all(|p| !p.sort.dirs_first));
+    }
+
+    /// The archive dialog can be told to clear up after itself — but only if the archive was
+    /// really written. A pack that failed must leave the originals where they are.
+    #[test]
+    fn the_originals_go_only_after_an_archive_that_was_written() {
+        let run = |clean: bool| {
+            let mut app = app();
+            app.panels[0].cursor = 2; // a.txt
+            app.run(Command::FilePack);
+            let Mode::Form(form) = &app.mode else {
+                panic!("no dialog: {:?}", app.mode)
+            };
+            // Down to the `delete after archiving` row and tick it, as a user would.
+            let row = form
+                .fields
+                .iter()
+                .position(|f| matches!(f, crate::form::Field::Toggle { key, .. } if *key == "pack.delete"))
+                .expect("the dialog has the row");
+            for _ in 0..row {
+                press(&mut app, "Down");
+            }
+            press(&mut app, "Space");
+            assert!(
+                matches!(&app.mode, Mode::Form(f) if f.toggle_value("pack.delete")),
+                "the row did not tick"
+            );
+            app.requests.clear();
+            press(&mut app, "F10"); // the shortcut for OK
+            let id = match app.requests.iter().find_map(|r| match r {
+                Request::Pack { id, .. } => Some(*id),
+                _ => None,
+            }) {
+                Some(id) => id,
+                None => panic!("no pack was started: {:?}", app.requests),
+            };
+            app.requests.clear();
+            let outcome = Outcome {
+                files: 1,
+                bytes: 100,
+                errors: if clean {
+                    Vec::new()
+                } else {
+                    vec![(VPath::local("/home/mb/a.txt"), "no room".into())]
+                },
+                ..Outcome::default()
+            };
+            app.handle_event(Event::JobDone {
+                id,
+                kind: JobKind::Pack,
+                outcome,
+            });
+            app.requests
+                .iter()
+                .filter_map(|r| match r {
+                    Request::Job { spec, .. } if spec.kind == JobKind::Delete => {
+                        Some(spec.sources.clone())
+                    }
+                    _ => None,
+                })
+                .next()
+        };
+
+        let deleted = run(true).expect("the originals go after a clean pack");
+        assert_eq!(deleted.len(), 1);
+        assert!(deleted[0].to_string().ends_with("a.txt"), "{deleted:?}");
+        assert!(
+            run(false).is_none(),
+            "a pack that failed must not delete the files it was given"
+        );
+    }
+
+    /// `Shift+F3` on an archive: the menu names it, and what is on the menu is what we do.
+    #[test]
+    fn the_archive_menu_knows_which_archive_it_is_about() {
+        let mut app = app();
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation: app.panels[0].listing.generation,
+            result: Ok(vec![
+                entry("tree.zip", EntryKind::File, 100),
+                entry("notes.txt", EntryKind::File, 10),
+            ]),
+        });
+        app.panels[0].cursor = app.panels[0]
+            .listing
+            .order
+            .iter()
+            .position(|i| app.panels[0].listing.entries[*i as usize].name_str() == "tree.zip")
+            .expect("the archive is in the listing");
+
+        app.run(Command::ArcCommands);
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("no menu: {:?}", app.mode)
+        };
+        assert_eq!(pick.kind, PickKind::ArcCommands);
+        let labels: Vec<String> = pick.rows.iter().map(|r| r.label.clone()).collect();
+        assert!(
+            labels.iter().any(|l| l.contains("tree.zip")),
+            "the menu does not say which archive: {labels:?}"
+        );
+        let values: Vec<&str> = pick.rows.iter().map(|r| r.value.as_str()).collect();
+        assert_eq!(values, ["test", "here", "to", "delete", "add"]);
+
+        // On a file that is not an archive, only the one entry that does not need one.
+        app.mode = Mode::Normal;
+        app.panels[0].cursor = app.panels[0]
+            .listing
+            .order
+            .iter()
+            .position(|i| app.panels[0].listing.entries[*i as usize].name_str() == "notes.txt")
+            .expect("the file is in the listing");
+        app.run(Command::ArcCommands);
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("no menu: {:?}", app.mode)
+        };
+        let values: Vec<&str> = pick.rows.iter().map(|r| r.value.as_str()).collect();
+        assert_eq!(values, ["add"]);
     }
 
     #[test]
