@@ -342,14 +342,49 @@ the reader's back.
 
 ### 2.8 Assembler (`F9`)
 
-One instruction at a time, for the architecture the structure pane detected. The dialog shows
-three facts before anything is written: the bytes the instruction assembles to, the instruction
-it replaces, and whether the length changed — that last one is what decides whether everything
-after it moves. `Enter` writes into the patch list of §2.5, so `Ctrl+Z` takes it back and `F2`
-is still what commits.
+One instruction at a time, written where the cursor is. The dialog names the offset and the
+architecture it is assembling for — the file's own header decides that, so a 32-bit PE is
+assembled as 32-bit code on a 64-bit machine — and what comes back names the bytes, the
+instruction the *disassembler* reads in them, and by how much the length changed if it did.
+`Enter` writes into the patch list of §2.5, so `Ctrl+Z` takes it back and `F2` is still what
+commits. The instruction typed last comes back with the dialog, because patching is repetitive
+work.
 
-x86 and x86-64 come from the same crate family as the disassembler. For an architecture we
-cannot assemble, the dialog says so instead of offering a box that will not work.
+The subset is the one a patcher types, and it is deliberately a subset:
+
+| Form | Examples |
+| --- | --- |
+| no operands | `nop`, `ret`, `ret 8`, `int3`, `leave`, `syscall`, `ud2`, `cld`, `cqo` |
+| register to register | `mov rbp, rsp`, `xor eax, eax`, `add r9, r10`, `cmp al, bl`, `xchg eax, ecx`, `test rcx, rcx` |
+| register and a number | `mov eax, 0x2a`, `mov rax, 0x123456789`, `sub rsp, 0x18`, `and al, 0x0f` |
+| one register | `inc rcx`, `dec rsi`, `not ebx`, `neg rdx`, `push rbp`, `pop r15`, `mul rbx` |
+| a branch to an address | `jmp 0x401010`, `je 0x401040`, `call 0x402000`, `jmp short 0x401010`, `jne near 0x402000` |
+| a branch through a register | `call rax`, `jmp r11` |
+
+A number is whatever the calculator of §2.9 reads: `0x2a`, `2Ah`, `0b101010`, `42`, `0x10+6`.
+A branch is written as the address to arrive at, not as a displacement, and the shortest form
+that reaches it is chosen unless `short` or `near` says otherwise.
+
+**Memory operands are not assembled.** `mov [rbx+rcx*4+8], eax` needs a full ModRM and SIB
+parser, and brings with it exactly the addressing-mode mistakes a patcher cannot afford; it is
+refused by name rather than guessed at, and the hex pane is still there for bytes nobody can
+spell. The same goes for the floating-point and vector instruction sets: this is not a compiler
+and does not pretend to be one.
+
+Every encoding is decoded again by the disassembler before the dialog shows it, so what appears
+is the instruction the processor will see rather than the one that was meant — and a bug in the
+encoder shows up as a refusal rather than as a corrupted binary. The round trip is a test as
+well: every form above is assembled, decoded, and assembled again from the decoder's own
+spelling, and the bytes have to come out the same.
+
+### 2.9 Calculator (`Alt+=`)
+
+One line of arithmetic answered in decimal, hex, octal, binary and as characters at once, with
+the bitwise and shift operators and literals in every base the tools around it use (`0x1f`,
+`1Fh`, `0b1010`, `0o37`, `'PE'`). It is what a hex editor is asked for every ten minutes — how
+far is this offset from that one, what is this field with the top bit set — and the same parser
+reads the numbers typed into the assembler and the block operations, so a number means the same
+thing everywhere in the program.
 
 ## 3. Diff viewer (M3)
 

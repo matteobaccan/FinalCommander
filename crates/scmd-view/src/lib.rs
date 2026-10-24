@@ -4,6 +4,7 @@
 //! and `End` costs one seek — there is no index to build and no line count to compute. See
 //! `docs/spec/05-viewer-editor.md` §1.
 
+pub mod asm;
 pub mod decode;
 pub mod disasm;
 pub mod il;
@@ -14,6 +15,7 @@ pub mod source;
 pub mod structure;
 pub mod view;
 
+pub use asm::{assemble, AsmError, Assembled};
 pub use decode::{detect, looks_binary, sniff_bom, Codepage};
 pub use disasm::{
     analyze, disassemble, probe, resolve_targets, wasm_text, Arch, Binary, DisasmError, Format,

@@ -727,6 +727,12 @@ keys = ["F12"]
 scope = "editor"
 cmd = "editor.block.ops"
 
+# One instruction, assembled where the cursor is. Hiew's own key for it.
+[[bind]]
+keys = ["F9"]
+scope = "editor"
+cmd = "editor.assemble"
+
 # The calculator, on the key that looks like one.
 [[bind]]
 keys = ["Alt+="]

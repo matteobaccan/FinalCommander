@@ -315,6 +315,8 @@ pub enum PromptKind {
     HexRead,
     /// How many bytes to insert at the cursor.
     HexInsert,
+    /// One instruction to assemble over the bytes at the cursor (SPEC 05 §2.8).
+    Assemble,
     /// `offset length`, in hex: bytes from elsewhere in this same file, copied to the cursor.
     HexCopy,
     /// The same, but the source is removed — the bytes move rather than multiply.
@@ -703,6 +705,8 @@ pub struct App {
     pub quick_size: (u16, u16),
     /// The last sum, so the calculator opens on it.
     pub last_calc: String,
+    /// The last instruction assembled, so `F9` opens on it: patching is repetitive work.
+    pub last_asm: Option<String>,
     /// The archive format the last pack used, so the next one opens on it.
     pub last_pack: scmd_arc::Format,
     /// The same for the replace dialog.
@@ -796,6 +800,7 @@ impl App {
             quick_why: None,
             quick_size: (40, 20),
             last_calc: String::new(),
+            last_asm: None,
             last_pack: scmd_arc::Format::Zip,
             last_replace: scmd_jobs::ReplaceOptions::default(),
             pending_replace: None,
@@ -1515,6 +1520,7 @@ impl App {
                 }
             }
             Command::EditorBlockOps => self.open_block_menu(),
+            Command::EditorAssemble => self.open_assembler(),
             Command::EditorToggleReadOnly => {
                 if let Some(editor) = self.mode.hex_mut() {
                     editor.read_only = !editor.read_only;
@@ -1983,6 +1989,11 @@ impl App {
                         self.mode = Mode::Prompt(Prompt::new(PromptKind::Calculator, title, line));
                     }
                 }
+            }
+            PromptKind::Assemble => {
+                let text = prompt.text.trim().to_string();
+                self.restore_hex();
+                self.assemble_at_cursor(&text);
             }
             PromptKind::HexFill
             | PromptKind::HexXor
@@ -5093,6 +5104,105 @@ impl App {
         self.mode = Mode::Pick(Box::new(Pick::new(PickKind::HexBlock, title, rows, 0)));
     }
 
+    /// `F9`: ask for one instruction, with the address it will sit at in the title.
+    ///
+    /// The dialog is deliberately the plainest one in the program: the hard part is not
+    /// choosing the instruction but seeing what it costs, and that is answered after it is
+    /// assembled, before a byte is written.
+    fn open_assembler(&mut self) {
+        let Some(cursor) = self.mode.hex().map(|e| e.cursor) else {
+            return;
+        };
+        let arch = self.hex_arch();
+        if !arch.disassemblable() {
+            let msg = self
+                .i18n
+                .t_args("asm-no-arch", &[("arch", arch.as_str().into())]);
+            self.set_error(msg);
+            return;
+        }
+        let title = self.i18n.t_args(
+            "asm-title",
+            &[
+                ("at", format!("{cursor:08X}").into()),
+                ("arch", arch.as_str().into()),
+            ],
+        );
+        let last = self.last_asm.clone().unwrap_or_default();
+        self.park_hex();
+        self.mode = Mode::Prompt(Prompt::new(PromptKind::Assemble, title, last));
+    }
+
+    /// Which processor the bytes under the cursor are for.
+    ///
+    /// The file's own header answers when it has one — a 32-bit PE is assembled as 32-bit
+    /// code even on a 64-bit machine, which is the whole reason to ask. Failing that it is
+    /// the machine's own width, and the dialog's title names whatever was assumed.
+    fn hex_arch(&mut self) -> scmd_view::Arch {
+        let head = self
+            .mode
+            .hex_mut()
+            .map(|e| e.read(0, 4096))
+            .unwrap_or_default();
+        // The header alone, not the sections: this is one field, read from the front.
+        if let Ok(binary) = scmd_view::analyze(&head, false) {
+            if binary.arch.disassemblable() {
+                return binary.arch;
+            }
+        }
+        let host = scmd_view::disasm::host_arch();
+        if host.disassemblable() {
+            host
+        } else {
+            scmd_view::Arch::X86_64
+        }
+    }
+
+    /// Assemble what was typed and write it over the bytes at the cursor.
+    fn assemble_at_cursor(&mut self, line: &str) {
+        if line.trim().is_empty() {
+            return;
+        }
+        self.last_asm = Some(line.to_string());
+        let arch = self.hex_arch();
+        let Some(editor) = self.mode.hex_mut() else {
+            return;
+        };
+        let at = editor.cursor;
+        // The address, when the file is a binary we understand, is the one the instruction
+        // will have when it runs — which is what a relative jump is written against.
+        let address = at;
+        match scmd_view::assemble(line, arch, address) {
+            Ok(done) => {
+                let old = editor.read(at, done.bytes.len());
+                // Overwrite: the length of a binary is not ours to change behind the user's
+                // back, and insert mode is the way to say otherwise.
+                let remove = if editor.insert {
+                    0
+                } else {
+                    (done.bytes.len() as u64).min(editor.len().saturating_sub(at))
+                };
+                editor.splice(at, remove, &done.bytes);
+                let shown: Vec<String> = done.bytes.iter().map(|b| format!("{b:02X}")).collect();
+                let grew = done.bytes.len() as i64 - old.len() as i64;
+                let msg = self.i18n.t_args(
+                    if grew == 0 {
+                        "asm-written"
+                    } else {
+                        "asm-written-longer"
+                    },
+                    &[
+                        ("text", done.text.into()),
+                        ("bytes", shown.join(" ").into()),
+                        ("grew", grew.into()),
+                    ],
+                );
+                self.set_status(msg);
+            }
+            Err(e) => self.set_error(e.to_string()),
+        }
+    }
+
     /// Carry out one block operation with the value the user typed.
     fn hex_operation(&mut self, kind: PromptKind, text: &str) {
         // Whatever needs the rest of the application — a path, a message — is worked out
@@ -5863,6 +5973,12 @@ impl App {
             self.hex_command(cmd);
             return;
         }
+        // `F9` is the assembler in bytes and the menu bar in lines: there is nothing to
+        // assemble over a line of text, so the key keeps the meaning it has everywhere else.
+        if cmd == Command::EditorAssemble {
+            self.run(Command::AppMenu);
+            return;
+        }
         let (width, height) = self.editor_size;
         let mut message: Option<String> = None;
         let mut error: Option<String> = None;
@@ -6618,7 +6734,9 @@ impl App {
             (1, self.i18n.t("key-help")),
             (2, self.i18n.t("key-save")),
             (3, self.i18n.t("key-mark")),
+            (9, self.i18n.t("key-asm")),
             (10, self.i18n.t("key-quit")),
+            (12, self.i18n.t("key-block")),
         ]
     }
 
@@ -8306,6 +8424,64 @@ mod tests {
             panic!("{:?}", app.mode)
         };
         assert!(prompt.text.contains("/0"), "the line should still be there");
+    }
+
+    #[test]
+    fn f9_assembles_one_instruction_over_the_bytes_at_the_cursor() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("patch.bin");
+        // push rbp / mov rbp,rsp / xor eax,eax / ret, and room after it.
+        std::fs::write(&path, [0x55, 0x48, 0x89, 0xE5, 0x31, 0xC0, 0xC3, 0x90]).unwrap();
+        let mut app = app();
+        app.open_hex(&path);
+
+        // The dialog says where it is about to write, and for which processor.
+        app.run(Command::EditorAssemble);
+        let Mode::Prompt(prompt) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(prompt.kind, PromptKind::Assemble);
+        assert!(prompt.title.contains("00000000"), "{}", prompt.title);
+
+        // Make the function return straight away: one byte over the first one.
+        press(&mut app, "Esc");
+        app.assemble_at_cursor("ret");
+        let editor = app.mode.hex_mut().expect("still in hex");
+        assert_eq!(editor.read(0, 2), [0xC3, 0x48]);
+        assert!(
+            editor.is_changed(0),
+            "the patched byte is marked as changed"
+        );
+        assert!(app.status.contains("C3"), "{}", app.status);
+
+        // Undo puts it back, which is the whole point of the patch list.
+        let editor = app.mode.hex_mut().unwrap();
+        assert!(editor.undo());
+        assert_eq!(editor.read(0, 1), [0x55]);
+
+        // A jump is written as the address to arrive at, measured from the cursor.
+        let editor = app.mode.hex_mut().unwrap();
+        editor.cursor = 4;
+        app.assemble_at_cursor("jmp 6");
+        let editor = app.mode.hex_mut().unwrap();
+        assert_eq!(editor.read(4, 2), [0xEB, 0x00]);
+
+        // Something out of the subset leaves the file alone and says why.
+        let before = app.mode.hex_mut().unwrap().read(0, 8);
+        app.assemble_at_cursor("mov eax, [rbx]");
+        assert!(
+            app.status.to_lowercase().contains("memory"),
+            "{}",
+            app.status
+        );
+        assert_eq!(app.mode.hex_mut().unwrap().read(0, 8), before);
+
+        // And F9 opens again on what was typed last.
+        app.run(Command::EditorAssemble);
+        let Mode::Prompt(prompt) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(prompt.text, "mov eax, [rbx]");
     }
 
     #[test]

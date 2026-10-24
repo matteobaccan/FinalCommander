@@ -229,6 +229,8 @@ pub enum Command {
     EditorBlockMark,
     /// `F12` in hex mode: what to do with the block that is marked.
     EditorBlockOps,
+    /// `F9` in hex mode: type one instruction and write its bytes (SPEC 05 §2.8).
+    EditorAssemble,
     EditorCopy,
     EditorCut,
     EditorPaste,
@@ -386,6 +388,7 @@ impl Command {
             Command::EditorHexToggle,
             Command::EditorBlockMark,
             Command::EditorBlockOps,
+            Command::EditorAssemble,
             Command::EditorCopy,
             Command::EditorCut,
             Command::EditorPaste,
@@ -562,6 +565,7 @@ impl Command {
             Command::EditorHexToggle => "editor.hex.toggle".into(),
             Command::EditorBlockMark => "editor.block.mark".into(),
             Command::EditorBlockOps => "editor.block.ops".into(),
+            Command::EditorAssemble => "editor.assemble".into(),
             Command::EditorCopy => "editor.copy".into(),
             Command::EditorCut => "editor.cut".into(),
             Command::EditorPaste => "editor.paste".into(),
@@ -715,6 +719,7 @@ impl Command {
             ("editor.hex.toggle", _) => Command::EditorHexToggle,
             ("editor.block.mark", _) => Command::EditorBlockMark,
             ("editor.block.ops", _) => Command::EditorBlockOps,
+            ("editor.assemble", _) => Command::EditorAssemble,
             ("editor.copy", _) => Command::EditorCopy,
             ("editor.cut", _) => Command::EditorCut,
             ("editor.paste", _) => Command::EditorPaste,
