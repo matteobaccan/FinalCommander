@@ -80,3 +80,20 @@ rule = "#9aa0a6"
 "warn.fg" = "bg"
 "warn.bg" = "red"
 "warn.frame" = "bg"
+
+# Viewer.Text / Viewer.Status / Viewer.Text.Selected, and the same three for the editor.
+# In FAR's palette.cpp the two views carry the panel's own text colours and a status line that
+# is the key bar's — Viewer.Status, Editor.Status and Keybar are one value there — so a theme
+# answers these from what it already says about those two.
+"viewer.fg" = "fg"
+"viewer.bg" = "bg"
+"viewer.status.fg" = "bg"
+"viewer.status.bg" = "accent"
+"viewer.selected.fg" = "bg"
+"viewer.selected.bg" = "accent"
+"editor.fg" = "fg"
+"editor.bg" = "bg"
+"editor.status.fg" = "bg"
+"editor.status.bg" = "accent"
+"editor.selected.fg" = "bg"
+"editor.selected.bg" = "accent"

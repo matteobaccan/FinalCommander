@@ -127,6 +127,25 @@ const DEFAULTS: &[(&str, Color)] = &[
     ("keybar.background.bg", Color::Ansi(0)),
     ("status.fg", Color::Default),
     ("status.bg", Color::Default),
+    // Viewer.Text, Viewer.Status, Viewer.Text.Selected — and the editor's three. FAR keeps
+    // these apart from the panel's and from the status bar's on purpose: the two views are
+    // full-screen, their status line is the key bar's colour (black on cyan in its own
+    // palette), and a search hit or a marked block is that colour too. Borrowing
+    // `panel.header.fg` over `status.bg` for the title, which is what this did before, mixed
+    // two roles that belong to other things and came out wrong in every theme where they
+    // happen not to match.
+    ("viewer.fg", Color::Default),
+    ("viewer.bg", Color::Default),
+    ("viewer.status.fg", Color::Ansi(0)),
+    ("viewer.status.bg", Color::Ansi(6)),
+    ("viewer.selected.fg", Color::Ansi(0)),
+    ("viewer.selected.bg", Color::Ansi(6)),
+    ("editor.fg", Color::Default),
+    ("editor.bg", Color::Default),
+    ("editor.status.fg", Color::Ansi(0)),
+    ("editor.status.bg", Color::Ansi(6)),
+    ("editor.selected.fg", Color::Ansi(0)),
+    ("editor.selected.bg", Color::Ansi(6)),
     ("cmdline.fg", Color::Default),
     ("cmdline.bg", Color::Default),
     // The menu bar (horizontal) and a pulled-down menu or list.
@@ -278,6 +297,30 @@ impl Theme {
 
     pub fn keybar(&self) -> Style {
         self.fg_on("keybar.fg", "keybar.bg")
+    }
+
+    /// The viewer's body: its own text colours, not the panel's.
+    pub fn viewer(&self) -> Style {
+        Style::new(self.color("viewer.fg"), self.color("viewer.bg"))
+    }
+
+    /// The viewer's status line — `Viewer.Status` in FAR's palette.
+    pub fn viewer_status(&self) -> Style {
+        Style::new(
+            self.color("viewer.status.fg"),
+            self.color("viewer.status.bg"),
+        )
+    }
+
+    pub fn editor(&self) -> Style {
+        Style::new(self.color("editor.fg"), self.color("editor.bg"))
+    }
+
+    pub fn editor_status(&self) -> Style {
+        Style::new(
+            self.color("editor.status.fg"),
+            self.color("editor.status.bg"),
+        )
     }
 
     pub fn dialog(&self) -> Style {

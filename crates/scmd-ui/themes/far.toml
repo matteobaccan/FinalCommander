@@ -105,3 +105,20 @@ white = "#ffffff"
 "error.fg" = "lightred"
 "filter.fg" = "yellow"
 "search.fg" = "yellow"
+
+# Viewer.Text / Viewer.Status / Viewer.Text.Selected, and the same three for the editor.
+# In FAR's palette.cpp the two views carry the panel's own text colours and a status line that
+# is the key bar's — Viewer.Status, Editor.Status and Keybar are one value there — so a theme
+# answers these from what it already says about those two.
+"viewer.fg" = "lightcyan"
+"viewer.bg" = "blue"
+"viewer.status.fg" = "black"
+"viewer.status.bg" = "cyan"
+"viewer.selected.fg" = "black"
+"viewer.selected.bg" = "cyan"
+"editor.fg" = "lightcyan"
+"editor.bg" = "blue"
+"editor.status.fg" = "black"
+"editor.status.bg" = "cyan"
+"editor.selected.fg" = "black"
+"editor.selected.bg" = "cyan"

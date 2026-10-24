@@ -677,11 +677,9 @@ fn draw_hex(
     app.editor_size = (body.w, body.h);
     editor.scroll_into_view(body.h as usize);
 
-    // The header: the file, and where the cursor is in it.
-    let header = Style::new(
-        app.theme.color("panel.header.fg"),
-        app.theme.color("status.bg"),
-    );
+    // The header: the file, and where the cursor is in it. The hex pane is the editor in
+    // another mode, so it wears `Editor.Status` like the editor does.
+    let header = app.theme.editor_status();
     buf.fill(Rect::new(0, 0, w, 1), ' ', header);
     let status = format!(
         "{:08X}/{:08X}  {}  {}{}",
@@ -715,7 +713,12 @@ fn draw_hex(
         app.theme.color("panel.info.selected.fg"),
         app.theme.color("panel.info.selected.bg"),
     );
-    let on = Style::new(app.theme.color("cursor.fg"), app.theme.color("cursor.bg"));
+    // `Editor.Text.Selected`: a marked block, which in FAR's palette is the status
+    // line's colour rather than the panel cursor's.
+    let on = Style::new(
+        app.theme.color("editor.selected.fg"),
+        app.theme.color("editor.selected.bg"),
+    );
     let offset_style = Style::new(
         app.theme.color("panel.column.fg"),
         app.theme.color("panel.bg"),
@@ -820,14 +823,11 @@ fn draw_editor(
     let body = Rect::new(0, 1, w, h.saturating_sub(1 + keybar_h));
     app.editor_size = (body.w, body.h);
 
-    let base = app.theme.panel();
+    let base = app.theme.editor();
     buf.fill(Rect::new(0, 0, w, h.saturating_sub(keybar_h)), ' ', base);
 
-    // Header: the file on the left, the position and flags on the right.
-    let header = Style::new(
-        app.theme.color("panel.header.fg"),
-        app.theme.color("status.bg"),
-    );
+    // Header: the file on the left, the position and flags on the right. `Editor.Status`.
+    let header = app.theme.editor_status();
     buf.fill(Rect::new(0, 0, w, 1), ' ', header);
     let status = editor.status();
     let status_w = (status.chars().count() as u16).min(w);
@@ -851,7 +851,12 @@ fn draw_editor(
     buf.put_str(w - status_w, 0, &status, header, status_w);
 
     let visible = editor.scroll_into_view(body.h as usize, body.w as usize);
-    let selected = Style::new(app.theme.color("cursor.fg"), app.theme.color("cursor.bg"));
+    // `Editor.Text.Selected`: a marked block, which in FAR's palette is the status
+    // line's colour rather than the panel cursor's.
+    let selected = Style::new(
+        app.theme.color("editor.selected.fg"),
+        app.theme.color("editor.selected.bg"),
+    );
 
     for (row, line_index) in visible.clone().enumerate() {
         let y = body.y + row as u16;
@@ -1187,14 +1192,12 @@ fn draw_viewer(app: &mut App, viewer: &mut scmd_view::Viewer, buf: &mut Buffer) 
     let body = Rect::new(0, 1, w, h.saturating_sub(1 + keybar_h));
     app.viewer_size = (body.w, body.h);
 
-    let base = app.theme.panel();
+    let base = app.theme.viewer();
     buf.fill(Rect::new(0, 0, w, h.saturating_sub(keybar_h)), ' ', base);
 
-    // Top line: the file on the left, the status on the right.
-    let header = Style::new(
-        app.theme.color("panel.header.fg"),
-        app.theme.color("status.bg"),
-    );
+    // Top line: the file on the left, the status on the right. `Viewer.Status` in FAR's own
+    // palette, which is a colour of its own and not the panel header's over the status bar's.
+    let header = app.theme.viewer_status();
     buf.fill(Rect::new(0, 0, w, 1), ' ', header);
     let status = viewer.status();
     let status_text = app.viewer_status(&status);
@@ -1237,8 +1240,13 @@ fn draw_viewer(app: &mut App, viewer: &mut scmd_view::Viewer, buf: &mut Buffer) 
         None
     };
 
-    // Content.
-    let hit = Style::new(app.theme.color("search.fg"), app.theme.color("panel.bg")).bold();
+    // Content. `Viewer.Text.Selected` marks a search hit — its own role in FAR's palette,
+    // which the panel's background had no business being half of.
+    let hit = Style::new(
+        app.theme.color("viewer.selected.fg"),
+        app.theme.color("viewer.selected.bg"),
+    )
+    .bold();
     let rows = viewer.rows(body.w, body.h);
     for (i, row) in rows.iter().enumerate() {
         let y = body.y + i as u16;
@@ -1710,6 +1718,95 @@ mod tests {
             24,
             "{count} said hidden and {visible} on screen is not 24:\n{bottom}"
         );
+    }
+
+    /// The title bar of the two full-screen views is their own colour, not a mixture of the
+    /// panel header's and the status bar's. The bug this guards is subtle on screen and plain
+    /// here: black on cyan, which is what `Viewer.Status` is in FAR's own palette.
+    #[test]
+    fn the_viewer_and_the_editor_have_their_own_title_colour() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("notes.txt");
+        std::fs::write(&file, "one\ntwo\nthree\n").unwrap();
+        for theme in ["far", "commander", "tron"] {
+            let mut app = app(theme, "en");
+            let source = scmd_view::source::FileSource::open(&file).unwrap();
+            app.mode = crate::app::Mode::Viewer(Box::new(scmd_view::Viewer::new(
+                Box::new(source),
+                VPath::local(&file),
+            )));
+            let mut buf = Buffer::new(80, 24);
+            draw(&mut app, &mut buf);
+            let top = buf.get(1, 0).unwrap().style;
+            assert_eq!(
+                (top.fg, top.bg),
+                (
+                    app.theme.color("viewer.status.fg"),
+                    app.theme.color("viewer.status.bg")
+                ),
+                "{theme}: the viewer's title bar is not Viewer.Status"
+            );
+            // And not the pair it used to borrow, which in the FAR palette is light cyan on
+            // whatever the status bar happens to be.
+            assert_ne!(
+                (top.fg, top.bg),
+                (
+                    app.theme.color("panel.header.fg"),
+                    app.theme.color("status.bg")
+                ),
+                "{theme}: still the old mixture"
+            );
+
+            // The body is the view's own, which for these themes is the panel's own value —
+            // the point is that it is asked for by the right name.
+            let body = buf.get(1, 2).unwrap().style;
+            assert_eq!(body.bg, app.theme.color("viewer.bg"), "{theme}: body");
+
+            app.mode = crate::app::Mode::Editor(Box::new(
+                scmd_edit::Editor::open(&file).expect("it opens"),
+            ));
+            let mut buf = Buffer::new(80, 24);
+            draw(&mut app, &mut buf);
+            let top = buf.get(1, 0).unwrap().style;
+            assert_eq!(
+                (top.fg, top.bg),
+                (
+                    app.theme.color("editor.status.fg"),
+                    app.theme.color("editor.status.bg")
+                ),
+                "{theme}: the editor's title bar is not Editor.Status"
+            );
+        }
+    }
+
+    /// The two full-screen views, with their colours named rather than described.
+    #[test]
+    #[ignore = "a look at the screen, not an assertion"]
+    fn eyeball_viewer_colours() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("notes.txt");
+        std::fs::write(&file, "one\ntwo\nthree\nfour\n").unwrap();
+        for theme in ["far", "white"] {
+            let mut app = app(theme, "en");
+            let source = scmd_view::source::FileSource::open(&file).unwrap();
+            app.mode = crate::app::Mode::Viewer(Box::new(scmd_view::Viewer::new(
+                Box::new(source),
+                VPath::local(&file),
+            )));
+            let mut buf = Buffer::new(72, 8);
+            draw(&mut app, &mut buf);
+            println!("=== {theme}: viewer");
+            for y in 0..3 {
+                let cell = buf.get(1, y).unwrap();
+                println!("  row {y}: fg {:?} bg {:?}", cell.style.fg, cell.style.bg);
+            }
+            println!(
+                "  Viewer.Status should be {:?} on {:?}",
+                app.theme.color("viewer.status.fg"),
+                app.theme.color("viewer.status.bg")
+            );
+            println!("{}", buf.to_text());
+        }
     }
 
     #[test]
@@ -2673,7 +2770,11 @@ third line
         draw(&mut app, &mut buf);
         let highlighted = (0..buf.height())
             .flat_map(|y| (0..buf.width()).map(move |x| (x, y)))
-            .filter(|(x, y)| buf.get(*x, *y).unwrap().style.fg == app.theme.color("search.fg"))
+            .filter(|(x, y)| {
+                let cell = buf.get(*x, *y).unwrap();
+                cell.style.fg == app.theme.color("viewer.selected.fg")
+                    && cell.style.bg == app.theme.color("viewer.selected.bg")
+            })
             .count();
         assert!(highlighted >= 3, "the search hit is not highlighted");
     }
@@ -2834,11 +2935,20 @@ third line
         draw(&mut app, &mut buf);
         let highlighted = (0..buf.height())
             .flat_map(|y| (0..buf.width()).map(move |x| (x, y)))
-            .filter(|(x, y)| buf.get(*x, *y).unwrap().style.bg == app.theme.color("cursor.bg"))
+            .filter(|(x, y)| {
+                buf.get(*x, *y).unwrap().style.bg == app.theme.color("editor.selected.bg")
+            })
             .count();
         assert!(
             highlighted >= 12,
             "the block is not highlighted ({highlighted} cells)"
+        );
+        // Not the panel cursor's colour, which is what it used to borrow: in FAR's palette a
+        // marked block is `Editor.Text.Selected` and the two are different entries.
+        assert_ne!(
+            app.theme.color("editor.selected.bg"),
+            app.theme.color("cursor.bg"),
+            "this theme cannot tell the two apart, so the test proves nothing"
         );
     }
 

@@ -223,10 +223,19 @@ hidden = "#808080"
   adding it to all of them, and a theme can never be half-coloured. The groups are: `panel.*`
   (background, text, frame, the path in the header, the active panel's inverted title, column
   titles, footer, scrollbar), `cursor.*` and `selected.fg`, `file.*` (the semantic file
-  colours), `keybar.*`, `status.*`, `cmdline.*`, `hmenu.*` (the menu bar), `menu.*` (a
+  colours), `viewer.*` and `editor.*` (body, status line, selection — `Viewer.Text`,
+  `Viewer.Status`, `Viewer.Text.Selected` and the editor's three, which FAR keeps apart from
+  the panel's and which the hex pane shares with the editor), `keybar.*`, `status.*`,
+  `cmdline.*`, `hmenu.*` (the menu bar), `menu.*` (a
   pulled-down menu or a list: text, frame, title, selection, shortcut, dim), `dialog.*`
   (text, frame, title, input fields, buttons, the chosen button), `warn.*` (a dialog that
   reports a failure), and `error.fg` / `filter.fg` / `search.fg`.
+- **The full-screen views are not the panel.** `F3` and `F4` have their own body, status line
+  and selection, because FAR's palette does: `Viewer.Text` is `F_LIGHTCYAN|B_BLUE` while
+  `Viewer.Status` and `Viewer.Text.Selected` are both `F_BLACK|B_CYAN` — the key bar's colour,
+  not the panel header's. Drawing the title with `panel.header.fg` over `status.bg`, which is
+  what this did until 0.1.2, mixed two roles belonging to other things and came out wrong in
+  every theme where those two happen not to match.
 - Menus are not dialogs and do not borrow their colours: in FAR a dropdown is cyan with yellow
   shortcuts while a dialog is grey with cyan fields, and a theme has to be able to say both.
 - A floating window **drops a shadow** on what is behind it — two columns to the right, one row
