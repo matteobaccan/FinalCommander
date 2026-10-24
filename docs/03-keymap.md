@@ -224,6 +224,18 @@ handled by the editor itself and are not bindable yet.
 | inside the list | — | — | Enter connects · `n` a new URL · `Ins`/`F7` stores a session · `F4` edits one · `d` disconnects · Esc closes |
 | session editor | NetBox session dialog | — | **`Alt+N` → `Ins`/`F7`/`F4`**: name, host, port, user, authentication, key file, remote folder, group, keep-alive, compression (SPEC 10 §3.5) |
 
+## 7b. Viewer: the structure pane (shipped, SPEC 05 §1.8)
+
+| Action | SC |
+| --- | --- |
+| open or close the pane | **F11** |
+| move the keys between the bytes and the pane | **Tab** |
+| inside the pane | ↑↓ PgUp PgDn Home End |
+| take the bytes to the row's offset | **Enter** (a row that points nowhere says so) |
+
+FAR has no equivalent: its `F11` is the plugin menu, which in the viewer we leave free because
+there are no plugins yet. When they arrive the pane moves rather than the plugin menu.
+
 ## 8c. The menu bar and the dialogs (shipped, SPEC 10)
 
 | Action | FAR | SC |

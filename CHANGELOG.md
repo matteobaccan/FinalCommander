@@ -6,6 +6,20 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### The viewer says what a binary is
+
+- **Structure pane** (`F11`): beside the hex or disassembly rows, a pane that decodes the file —
+  identity (format, architecture, bitness, kind, entry point), the header field by field with
+  its raw bytes next to its meaning, and then the tables: ELF sections and segments, PE
+  sections, Mach-O load commands and dylibs, the slices of a universal binary, the members of
+  an `ar` archive, plus an ELF's interpreter and build id. `Tab` moves the keys between the
+  bytes and the pane, `Enter` on a row takes the bytes to that offset.
+- It reads only the offsets that matter: an ELF keeps its section table at the end of the file,
+  and our own 162 MB debug binary is decoded in four reads rather than loaded.
+- Every offset is range-checked before it becomes a jump target, every table is capped, and a
+  file that stops early fills the rows it can and says `truncated` — a corrupt binary is the
+  normal case for this pane, not an error.
+
 ### The screen looks like FAR's
 
 - A **`far` theme**: FAR Manager's own default palette, element for element, read from
