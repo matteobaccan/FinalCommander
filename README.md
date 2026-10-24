@@ -114,11 +114,24 @@ What works today:
   uploaded beside the original and renamed into place, so the file on the server keeps its old
   bytes until the new ones are all there, and a file someone else changed in the meantime asks
   before being overwritten. `Alt+Shift+N` disconnects.
+- **Menus and settings** (`F9`): FAR's five menus — Left, Files, Commands, Options, Right.
+  Every entry is a command from the same vocabulary the keys use, the shortcut shown beside it
+  is read from the keymap in force, and an entry whose feature is not here yet is drawn dim and
+  says so when chosen, so the menu is a map of the program rather than a promise. Four settings
+  dialogs (System, Panel, Interface, Confirmations) whose every row is bound to a configuration
+  key and goes in through the same code as `--set`; `OK` takes effect in the running panels at
+  once and `Shift+F9` writes `scmd.toml`. Five lists to choose from: languages (switches the
+  interface on the spot), themes, drives and open connections (`Alt+F1` / `Alt+F2`), folder
+  history (`Alt+F12`) and sort modes (`Ctrl+F12`, where choosing the order already in force
+  turns it round, as FAR does).
 - **The rest**: `Alt+T` cycles themes, `F1` is a help page generated from the live keymap,
   `F10` quits.
 
-Not yet: the OS keyring for passwords, `ProxyJump`, FTP and the other schemes, syntax highlighting and several open buffers in the editor, the OS clipboard,
-trash, wipe, a background job queue and archives. Anything unimplemented says so plainly instead of pretending.
+Not yet: the command line and its history, the OS keyring for passwords, `ProxyJump`, FTP and
+the other schemes, syntax highlighting and several open buffers in the editor, the OS clipboard,
+trash, wipe, a background job queue and archives. Anything unimplemented says so plainly instead
+of pretending — [`docs/BACKLOG.md`](docs/BACKLOG.md) lists it item by item, with the open
+questions marked.
 
 Non-interactive modes (used by CI and by scripts):
 
@@ -169,6 +182,8 @@ hot-reloaded, may `inherit` a built-in one, and replace a built-in with the same
 
 The interface ships in English, Italian, German, French, Spanish, Russian and Simplified
 Chinese (`ui.language = "auto"` follows the OS locale); CJK double-width layout is tested.
+`F9` → Options → Languages switches language while the program runs, and Options → Themes is
+the same list for the themes; `Shift+F9` makes either choice permanent.
 
 ## Layout
 
@@ -205,6 +220,8 @@ crates/scmd        the binary: CLI, state machine, event loop
 | [`docs/spec/07-config-theming.md`](docs/spec/07-config-theming.md) | TOML config, keymap profiles, themes, i18n, config import from other commanders |
 | [`docs/spec/08-plugins.md`](docs/spec/08-plugins.md) | command bus, Lua API, WASM plugin ABI (WIT), native ABI, macros |
 | [`docs/spec/09-roadmap.md`](docs/spec/09-roadmap.md) | M1→M4 with issue-sized chunks, risks, contribution rules |
+| [`docs/spec/10-menus-and-dialogs.md`](docs/spec/10-menus-and-dialogs.md) | the menu bar, the settings dialogs and the choose-one lists, with every row mapped to a config key |
+| [`docs/BACKLOG.md`](docs/BACKLOG.md) | what is specified but not built yet, and the decisions still open |
 
 ## Licence question, short version
 

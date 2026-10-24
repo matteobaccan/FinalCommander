@@ -83,7 +83,7 @@ Column `SC` = SupremeCommander default (profile `far`, our baseline).
 | Ctrl+F9 | sort by access time | — | sort by atime |
 | Ctrl+F10 | sort by description | show all files | sort by description |
 | Ctrl+F11 | sort by owner | — | sort by owner |
-| Ctrl+F12 | sort modes menu | custom filter | sort menu |
+| Ctrl+F12 | sort modes menu | custom filter | **sort modes list** (re-choosing the current order reverses it); `Ctrl+Shift+F12` reverses directly |
 | Ctrl+Shift+F3 / F4 | always internal viewer / editor | — | force internal viewer / editor |
 
 ## 5. Panel control (FAR as baseline, verified)
@@ -222,6 +222,26 @@ handled by the editor itself and are not bindable yet.
 | connect by URL | inside the plugin | `cd sftp://host/dir` | **Ctrl+L** with `sftp://user@host:port/dir` |
 | disconnect the active panel | Shift+F11-ish, per plugin | `cd /` | **Alt+Shift+N** |
 | inside the list | — | — | Enter connects · `n` a new URL · `d` disconnects · Esc closes |
+
+## 8c. The menu bar and the dialogs (shipped, SPEC 10)
+
+| Action | FAR | SC |
+| --- | --- | --- |
+| open the menu bar | F9 | **F9** (the menu of the panel that has the focus) |
+| inside the bar | ←→ menus, ↑↓ entries, letter, Enter, Esc | the same |
+| drive / connection list | Alt+F1 left, Alt+F2 right | **Alt+F1** / **Alt+F2** |
+| folder history | Alt+F12 | **Alt+F12** |
+| sort modes list | Ctrl+F12 | **Ctrl+F12** (choosing the current order again reverses it) |
+| reverse the order directly | — | **Ctrl+Shift+F12** |
+| themes | Options → Colors | **Alt+T** cycles · Options → Themes lists them |
+| languages | Options → Languages | Options → Languages, applied at once |
+| save the configuration | Shift+F9 | **Shift+F9** |
+| inside a settings dialog | ↑↓ rows, Space toggles, Tab to the buttons, Enter, Esc | the same, plus **F10** for OK |
+| inside a choose-one list | ↑↓ PgUp PgDn Home End, Enter, Esc | the same |
+
+Two of FAR's keys are not ours yet, and the menu says nothing rather than something untrue:
+`Ctrl+A` (FAR: file attributes) selects all here, and `Ctrl+L` (FAR: info panel) is "change
+directory". Both are in `docs/BACKLOG.md` as decisions to settle when those features land.
 
 ## 9. Terminal reality check (design constraints)
 

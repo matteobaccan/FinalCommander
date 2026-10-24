@@ -132,6 +132,23 @@ start_dir = "/srv"
 group = "work"            # a heading in the site list
 ```
 
+## 2d. The keys the settings dialogs write (implemented today)
+
+§2 above is the shape the configuration is heading for; what the binary reads today is flat and
+smaller. The settings dialogs (SPEC 10 §3) edit exactly these keys, and they go in through
+`Config::set`, the same function `--set key=value` calls, so the dialog can never write
+something the file format does not accept:
+
+| Dialog | Keys |
+| --- | --- |
+| System | `panel.natural_sort`, `panel.allow_reverse_sort`, `net.fetch_limit_mb`, `net.keepalive_secs` |
+| Panel | `panel.show_hidden`, `panel.dirs_first`, `panel.selected_first`, `panel.reverse`, `panel.view`, `panel.sort`, `panel.quick_search` |
+| Interface | `ui.key_bar`, `ui.status_bar`, `ui.keymap` |
+| Confirmations | `general.confirm_delete`, `general.confirm_overwrite`, `general.confirm_exit` |
+
+`Save setup` (`Shift+F9`) writes the whole configuration back out, themes declared in the file
+included, and what it writes parses back into the same configuration.
+
 ## 3. Keymaps
 
 ```toml

@@ -24,16 +24,19 @@ reviewable and testable.
 | 15 | ✅ `scmd-view`: viewer with wrap, windowed reader, encodings, plain/regex/hex search, hex and dump modes, follow, bookmarks | 5 |
 | 21 | ✅ `scmd-edit`: line buffer with encoding/EOL/BOM preserved, atomic save, undo, stream and column blocks, search/replace, go to line, bookmarks; `F4`/`Shift+F4` in the TUI | 5,12 |
 | 22 | ✅ `scmd-net` (netbox): SFTP provider, site list, connection pool, host-key policy, transfers through the job engine; `Alt+N`, remote panels, `sftp://` in `Ctrl+L` | 5,12,13 |
+| 23 | ✅ menu bar (`F9`) with FAR's five menus, settings dialogs (System/Panel/Interface/Confirmations), languages, themes, drives, folder history and sort-mode lists, `Save setup` (SPEC 10) | 4,10,12 |
 | 16 | `scmd-platform` M1 slice: long paths, trash, clipboard, drives/mounts, FS watch | 1 |
 | 17 | theming: theme loader, `far-classic` + `mono`, colour degradation | 3,12 |
 | 18 | ✅ packaging: a tag builds linux-gnu, linux-musl (static), macOS universal and windows-msvc, with checksums and release notes from the changelog | 1 |
 | 19 | snapshot test harness + keymap tests + job property tests + perf budget check | all |
 | 20 | docs: README, help pages generated from `docs/`, man page | all |
 
-**Done so far**: chunks 1–19, 21 and 22 in some form, including the operation engine (13), the
-viewer (15), the editor (21) and the netbox (22) — the three priority components of SPEC 08 §8
-are all in the binary. What M1 still owes: trash and wipe, the generated help/man
-pages and the packaging chunk (18, 20), and the performance budget checks in CI.
+**Done so far**: chunks 1–19 and 21–23 in some form, including the operation engine (13), the
+viewer (15), the editor (21), the netbox (22) — the three priority components of SPEC 08 §8 are
+all in the binary — and the menu bar with its settings dialogs (23). What M1 still owes: the
+command line and user screen (14), trash and wipe, the generated help/man pages (20), and the
+performance budget checks in CI. `docs/BACKLOG.md` lists every menu entry that is in the bar
+but not yet behind a feature.
 
 Exit criteria: the authors use it instead of `mc`/FAR for a week without reaching for the old
 tool for anything in M1 scope; all quality gates green on three platforms.
