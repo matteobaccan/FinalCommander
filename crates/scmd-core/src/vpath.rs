@@ -291,17 +291,22 @@ mod tests {
     #[test]
     fn parent_and_root() {
         let p = VPath::local("/usr/local/bin");
-        assert_eq!(p.parent().unwrap().to_string(), "/usr/local");
-        assert_eq!(p.root().to_string(), "/");
+        assert_eq!(p.parent().unwrap(), VPath::local("/usr/local"));
+        // `root` rebuilds the path, so it comes out with this platform's separator.
+        assert_eq!(p.root(), VPath::local(std::path::MAIN_SEPARATOR_STR));
         assert!(VPath::local("/").is_root());
         assert!(!p.is_root());
     }
 
     #[test]
     fn normalisation_is_lexical() {
+        // Built the same way the result is: from components, with the platform's separator.
+        let expected: PathBuf = [std::path::MAIN_SEPARATOR_STR, "a", "c", "d"]
+            .iter()
+            .collect();
         assert_eq!(
-            VPath::local("/a/b/../c/./d").normalised().to_string(),
-            "/a/c/d"
+            VPath::local("/a/b/../c/./d").normalised(),
+            VPath::local(expected)
         );
     }
 
