@@ -60,6 +60,16 @@ pub enum Request {
         sources: Vec<VPath>,
         cancel: CancelToken,
     },
+    /// Run a plugin's command (SPEC 08 §1). Off the interface thread, because it is somebody
+    /// else's program and we do not know how long it will think about it.
+    Plugin {
+        id: String,
+        label: String,
+        program: std::path::PathBuf,
+        cwd: Option<std::path::PathBuf>,
+        ctx: Box<scmd_plug::host::Context>,
+        timeout: Option<u64>,
+    },
     /// Create a link. Not a job: it is one syscall, with nothing to report progress on.
     Link {
         target: VPath,
@@ -146,6 +156,12 @@ pub struct RemoteStamp {
 #[derive(Debug)]
 pub enum Event {
     Input(Input),
+    /// A plugin's command has finished: what it asked for, or why it could not.
+    PluginDone {
+        id: String,
+        label: String,
+        result: Result<scmd_plug::host::Reply, String>,
+    },
     Listed {
         panel: usize,
         generation: u64,
@@ -673,6 +689,25 @@ impl Mode {
 
 /// Everything the application is started with. Grouping it keeps `App::new` honest and makes
 /// the test setup read like the real startup path.
+/// A command a plugin provides, with everything needed to run it resolved (SPEC 08 §1).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PluginCommand {
+    /// Which plugin it came from, for the list and for any complaint about it.
+    pub plugin: String,
+    pub id: String,
+    pub label: String,
+    pub scope: scmd_cmd::Scope,
+    pub program: std::path::PathBuf,
+    pub needs: Vec<String>,
+    pub timeout: Option<u64>,
+}
+
+impl PluginCommand {
+    fn wants(&self, what: &str) -> bool {
+        self.needs.iter().any(|n| n == what)
+    }
+}
+
 pub struct Startup {
     pub cfg: Config,
     pub paths: Paths,
@@ -684,6 +719,8 @@ pub struct Startup {
     pub right: VPath,
     /// The netbox's site list, from `[[site]]` blocks.
     pub sites: Vec<Site>,
+    /// The commands the loaded plugins provide.
+    pub plugin_commands: Vec<PluginCommand>,
 }
 
 pub struct App {
@@ -751,6 +788,8 @@ pub struct App {
     pub quick_size: (u16, u16),
     /// The last sum, so the calculator opens on it.
     pub last_calc: String,
+    /// What the plugins provide (SPEC 08 §1): `F11` lists these.
+    pub plugin_commands: Vec<PluginCommand>,
     /// Recorded macros (SPEC 08 §5), as `scmd-macros.toml` holds them.
     pub macros: scmd_cmd::Macros,
     /// The steps gathered so far, while `Ctrl+.` is recording.
@@ -805,6 +844,7 @@ impl App {
             left,
             right,
             sites,
+            plugin_commands,
         } = start;
         let sort = Sort {
             key: parse_sort(&cfg.panel.sort),
@@ -874,6 +914,7 @@ impl App {
             quick_why: None,
             quick_size: (40, 20),
             last_calc: String::new(),
+            plugin_commands,
             macros,
             recording: None,
             record_key: None,
@@ -965,6 +1006,15 @@ impl App {
 
     pub fn handle_event(&mut self, event: Event) {
         match event {
+            Event::PluginDone { id, label, result } => match result {
+                Ok(reply) => self.apply_plugin_reply(&label, reply),
+                Err(e) => {
+                    let m = self
+                        .i18n
+                        .t_args("plugin-failed", &[("id", id.into()), ("why", e.into())]);
+                    self.set_error(m);
+                }
+            },
             Event::Input(input) => self.handle_input(input),
             Event::FindHit { id, path, entry } => {
                 if let Some(view) = self.find_mut() {
@@ -3271,6 +3321,7 @@ impl App {
             Command::CmdHistoryNext => {
                 self.cmd.history_next();
             }
+            Command::PluginCommands => self.open_plugin_commands(),
             Command::MacroRecord => self.toggle_recording(),
             Command::MacroList => self.open_macros(),
             Command::AppScreens => self.open_screens(),
@@ -5296,6 +5347,159 @@ impl App {
         });
     }
 
+    // ── plugin commands (SPEC 08 §1) ──────────────────────────────────────────────────────
+
+    /// `F11`: what the loaded plugins provide, in the scope we are in.
+    fn open_plugin_commands(&mut self) {
+        let scope = self.scope();
+        let rows: Vec<PickRow> = self
+            .plugin_commands
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| c.scope == scope || c.scope == scmd_cmd::Scope::Global)
+            .map(|(i, c)| PickRow {
+                label: format!("{:<40} {}", c.label, c.plugin),
+                value: i.to_string(),
+                current: false,
+            })
+            .collect();
+        if rows.is_empty() {
+            // Said rather than a list with nothing in it, and said in a way that answers the
+            // next question: there is nowhere to get plugins from yet.
+            let m = self.i18n.t_args(
+                "plugin-none",
+                &[("dir", self.paths.plugins_dir.display().to_string().into())],
+            );
+            self.set_status(m);
+            return;
+        }
+        let title = self.i18n.t("plugin-list-title");
+        self.mode = Mode::Pick(Box::new(Pick::new(PickKind::Plugins, title, rows, 0)));
+    }
+
+    /// Ask for a plugin command to be run, with the context it asked for and nothing else.
+    fn run_plugin_command(&mut self, which: usize) {
+        let Some(cmd) = self.plugin_commands.get(which).cloned() else {
+            return;
+        };
+        let mut ctx = scmd_plug::host::Context::new(&cmd.id);
+        let view = |path: &VPath| scmd_plug::host::PanelView {
+            cwd: path.to_string(),
+            // A path inside an archive or on a server has no directory to run a program in,
+            // and the field is absent rather than holding something that cannot be opened.
+            dir: (!path.is_remote() && !path.in_container())
+                .then(|| path.as_path().display().to_string()),
+        };
+        let here = self.panel().cwd.clone();
+        if cmd.wants("panel") {
+            ctx.panel = Some(view(&here));
+        }
+        if cmd.wants("other") {
+            ctx.other = Some(view(&self.panels[1 - self.active].cwd.clone()));
+        }
+        if cmd.wants("cursor") {
+            ctx.cursor = self.panel().current().map(|e| e.name_str().into_owned());
+        }
+        if cmd.wants("selection") {
+            let panel = self.panel();
+            ctx.selection = (0..panel.listing.len())
+                .filter_map(|row| panel.listing.row(row))
+                .filter(|e| panel.selection.contains(e.id))
+                .map(|e| e.name_str().into_owned())
+                .collect();
+        }
+        let cwd = (!here.is_remote() && !here.in_container()).then(|| here.as_path().to_path_buf());
+        let msg = self
+            .i18n
+            .t_args("plugin-running", &[("label", cmd.label.clone().into())]);
+        self.set_status(msg);
+        self.requests.push(Request::Plugin {
+            id: cmd.id.clone(),
+            label: cmd.label.clone(),
+            program: cmd.program.clone(),
+            cwd,
+            ctx: Box::new(ctx),
+            timeout: cmd.timeout,
+        });
+    }
+
+    /// What a plugin asked for, carried out.
+    ///
+    /// Every action goes through the same door a keystroke would: `run` resolves against the
+    /// command vocabulary and is refused if it names nothing, so a plugin cannot reach past
+    /// what a key could have done.
+    fn apply_plugin_reply(&mut self, label: &str, reply: scmd_plug::host::Reply) {
+        use scmd_plug::host::Action;
+        let mut said = false;
+        for action in reply.actions {
+            match action {
+                Action::Status(text) => {
+                    self.set_status(text);
+                    said = true;
+                }
+                Action::Error(text) => {
+                    self.set_error(text);
+                    said = true;
+                }
+                Action::Run(id) => match Command::parse(&id) {
+                    Some(cmd) => self.run(cmd),
+                    None => {
+                        let m = self
+                            .i18n
+                            .t_args("plugin-unknown-command", &[("id", id.into())]);
+                        self.set_error(m);
+                        said = true;
+                    }
+                },
+                Action::Chdir { path, panel } => {
+                    let side = match panel.as_deref() {
+                        Some("other") => 1 - self.active,
+                        Some("left") => 0,
+                        Some("right") => 1,
+                        _ => self.active,
+                    };
+                    let target = self.resolve_path(&path);
+                    self.panels[side].go(target, true);
+                    self.read_panel(side);
+                }
+                Action::Message { title, lines } => {
+                    self.mode = Mode::Message { title, lines };
+                    said = true;
+                }
+                Action::Cursor(name) => {
+                    if let Some(row) = self.panel().listing.row_of_name(&name) {
+                        self.panel_mut().cursor_to(row);
+                    }
+                }
+                Action::Select(names) => {
+                    let ids: Vec<_> = {
+                        let panel = self.panel();
+                        (0..panel.listing.len())
+                            .filter_map(|row| panel.listing.row(row))
+                            .filter(|e| names.iter().any(|n| n.as_str() == e.name_str()))
+                            .map(|e| e.id)
+                            .collect()
+                    };
+                    let panel = self.panel_mut();
+                    panel.selection.clear();
+                    for id in ids {
+                        panel.selection.set(id, true);
+                    }
+                }
+            }
+        }
+        // Whatever the plugin wrote for a human, rather than for us, is shown — but only if
+        // it did not already say something of its own.
+        let mut leftover = reply.text;
+        leftover.extend(reply.complaints);
+        if !leftover.is_empty() && !said {
+            self.mode = Mode::Message {
+                title: label.to_string(),
+                lines: leftover,
+            };
+        }
+    }
+
     // ── macros (SPEC 08 §5) ───────────────────────────────────────────────────────────────
 
     /// Which scope the keymap — and a macro — is looked up in right now.
@@ -5903,6 +6107,8 @@ impl App {
             PickKind::Screens => return,
             // And `open_macros`, which knows what has been recorded.
             PickKind::Macros => return,
+            // And `open_plugin_commands`, which knows the scope.
+            PickKind::Plugins => return,
             PickKind::Languages => Pick::new(
                 kind,
                 self.i18n.t("menu-languages"),
@@ -6039,6 +6245,11 @@ impl App {
             return;
         };
         match pick.kind {
+            PickKind::Plugins => {
+                if let Ok(i) = row.value.parse::<usize>() {
+                    self.run_plugin_command(i);
+                }
+            }
             PickKind::Macros => {
                 if let Ok(i) = row.value.parse::<usize>() {
                     if let Some(which) = self.macros.all.get(i).cloned() {
@@ -7569,6 +7780,7 @@ mod tests {
             left: VPath::local("/home/mb"),
             right: VPath::local("/tmp"),
             sites: Vec::new(),
+            plugin_commands: Vec::new(),
         });
         app.requests.clear();
         let entries = vec![
@@ -9029,6 +9241,7 @@ mod tests {
             left: VPath::local("/home/mb"),
             right: VPath::local("/tmp"),
             sites: Vec::new(),
+            plugin_commands: Vec::new(),
         });
         app.requests.clear();
         let entries = vec![
@@ -9974,6 +10187,7 @@ mod tests {
             left: VPath::local(dir),
             right: VPath::local(dir),
             sites: Vec::new(),
+            plugin_commands: Vec::new(),
         });
         app.requests.clear();
         let entries = scmd_vfs::local::list_blocking(&VPath::local(dir), &CancelToken::new())

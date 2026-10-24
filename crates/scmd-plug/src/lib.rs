@@ -10,6 +10,8 @@
 //! Discipline, the same as `scmd-config`: a broken plugin is reported and skipped, never fatal
 //! and never silently ignored, and one bad plugin never stops the others.
 
+pub mod host;
+
 use std::collections::BTreeMap;
 use std::path::{Component, Path, PathBuf};
 
@@ -42,6 +44,16 @@ pub enum PlugError {
         id: String,
         folder: String,
     },
+    #[error("{path}: [[command]] `{id}` is not a name a plugin may define (it must start with `user.` or `plugin.`)")]
+    BadCommandId { path: String, id: String },
+    #[error("{path}: [[command]] `{id}` asks for `{needs}`, which is not something we pass")]
+    UnknownNeed {
+        path: String,
+        id: String,
+        needs: String,
+    },
+    #[error("{path}: [[command]] `{id}` has no label")]
+    CommandLabel { path: String, id: String },
     #[error("{path}: duplicate plugin id `{id}`, already loaded from `{first}`")]
     DuplicateId {
         path: String,
@@ -74,6 +86,9 @@ pub enum ItemKind {
     Assoc,
     Decompile,
     MaskGroup,
+    /// A `[[command]]`. It carries no TOML block to resolve — `ItemKind::all()` leaves it out
+    /// for that reason — and is here so a refused `run =` path names its own section.
+    Command,
 }
 
 impl ItemKind {
@@ -85,6 +100,7 @@ impl ItemKind {
             ItemKind::Assoc => "assoc",
             ItemKind::Decompile => "decompile",
             ItemKind::MaskGroup => "mask-group",
+            ItemKind::Command => "command",
         }
     }
 
@@ -149,9 +165,62 @@ pub struct Manifest {
     /// `[[mask-group]]` blocks: named mask lists, usable wherever a mask is asked for.
     #[serde(rename = "mask-group")]
     pub mask_groups: Vec<toml::Table>,
+    /// `[[command]]` blocks: a command the plugin provides (SPEC 08 §1). This is the first
+    /// thing a plugin can do beyond carrying data, and it is deliberately a *process* rather
+    /// than code in our address space: one artifact for every platform, no sandbox to get
+    /// wrong, and nothing to match compiler versions with.
+    #[serde(rename = "command")]
+    pub commands: Vec<Command>,
     /// Anything else in the file, reported as a warning the way `scmd-config` does it.
     #[serde(flatten, skip_serializing)]
     pub unknown: BTreeMap<String, toml::Value>,
+}
+
+/// A command a plugin provides: what the palette shows, and what the host runs.
+///
+/// The host passes the context on standard input as JSON and reads *actions* from standard
+/// output, one per line. An action names a command of the vocabulary, so SPEC 08's first
+/// sentence holds literally — everything a plugin can do, a key or a macro can do too.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub struct Command {
+    /// The id, which must be in the `user.` or `plugin.` space: the built-in vocabulary is
+    /// not something a plugin may redefine.
+    pub id: String,
+    /// What the palette and the plugin menu show.
+    pub label: String,
+    /// Where it may run: `panel`, `viewer`, `editor` or `global`. Default `panel`.
+    #[serde(default)]
+    pub scope: Option<String>,
+    /// The program to run, relative to the plugin's own directory.
+    pub run: String,
+    /// What it is given. Nothing is passed that is not asked for, so a plugin that wants the
+    /// selection says so and one that does not never sees it.
+    #[serde(default)]
+    pub needs: Vec<String>,
+    /// How long it may take, in seconds. A plugin that hangs is killed and said so.
+    #[serde(default)]
+    pub timeout: Option<u64>,
+}
+
+impl Command {
+    /// Is `id` something a plugin may define? The built-in vocabulary is not.
+    pub fn id_is_allowed(id: &str) -> bool {
+        let id = id.trim();
+        (id.starts_with("user.") || id.starts_with("plugin."))
+            && id.len() > 5
+            && id
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '.' || c == '-')
+    }
+
+    /// Does it ask for something we know how to give?
+    pub fn needs_are_known(&self) -> Option<&str> {
+        const KNOWN: [&str; 4] = ["panel", "other", "selection", "cursor"];
+        self.needs
+            .iter()
+            .find(|n| !KNOWN.contains(&n.as_str()))
+            .map(String::as_str)
+    }
 }
 
 impl Manifest {
@@ -198,6 +267,8 @@ impl Manifest {
             ItemKind::Assoc => &self.assocs,
             ItemKind::Decompile => &self.decompile,
             ItemKind::MaskGroup => &self.mask_groups,
+            // Not a declared TOML block: `[[command]]` is parsed into a type of its own.
+            ItemKind::Command => &[],
         }
     }
 }
@@ -275,12 +346,48 @@ impl Plugin {
             }
         }
 
+        // The declared commands, checked before anything can run one: a name outside the
+        // plugin space, a request for something we do not pass, or a program that is not in
+        // the plugin's own directory is a refusal to load, not a surprise at the first press.
+        for command in &manifest.commands {
+            if !Command::id_is_allowed(&command.id) {
+                return Err(PlugError::BadCommandId {
+                    path,
+                    id: command.id.clone(),
+                });
+            }
+            if command.label.trim().is_empty() {
+                return Err(PlugError::CommandLabel {
+                    path,
+                    id: command.id.clone(),
+                });
+            }
+            if let Some(needs) = command.needs_are_known() {
+                return Err(PlugError::UnknownNeed {
+                    path,
+                    id: command.id.clone(),
+                    needs: needs.to_string(),
+                });
+            }
+            // The same rule as a `file =` entry: inside the plugin's directory, or nothing.
+            safe_join(dir, &path, ItemKind::Command, &command.run)?;
+        }
+
         Ok(Plugin {
             dir: dir.to_path_buf(),
             manifest,
             items,
             warnings,
         })
+    }
+
+    /// The commands this plugin provides, with the program resolved to a real path.
+    pub fn commands(&self) -> Vec<(&Command, PathBuf)> {
+        self.manifest
+            .commands
+            .iter()
+            .map(|c| (c, self.dir.join(c.run.trim())))
+            .collect()
     }
 
     pub fn id(&self) -> &str {

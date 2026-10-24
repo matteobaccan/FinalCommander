@@ -771,3 +771,9 @@ cmd = "macro.record"
 keys = ["Ctrl+Shift+."]
 scope = "global"
 cmd = "macro.list"
+
+# The commands the loaded plugins provide. FAR's own key for it.
+[[bind]]
+keys = ["F11"]
+scope = "panel"
+cmd = "plugin.commands"

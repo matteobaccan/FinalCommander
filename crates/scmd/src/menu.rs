@@ -56,6 +56,8 @@ pub enum PickKind {
     Screens,
     /// The recorded macros (SPEC 08 §5).
     Macros,
+    /// The commands the loaded plugins provide (SPEC 08 §1).
+    Plugins,
 }
 
 /// A mark (`√`) next to the entry that is currently in force.
@@ -332,7 +334,7 @@ pub fn menus() -> Vec<Menu> {
                 item(
                     "menu-plugin-commands",
                     "F11",
-                    Action::Todo("plugin.commands"),
+                    Action::Run(Command::PluginCommands),
                 ),
                 item("menu-screens-list", "F12", Action::Run(Command::AppScreens)),
                 item(

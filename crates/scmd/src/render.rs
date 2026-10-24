@@ -1571,6 +1571,7 @@ mod tests {
             left: VPath::local("/home/mb/project"),
             right: VPath::local("/tmp"),
             sites: Vec::new(),
+            plugin_commands: Vec::new(),
         });
         app.requests.clear();
         for panel in 0..2 {
@@ -1896,6 +1897,7 @@ mod tests {
             left: VPath::local(dir.path()),
             right: VPath::local(dir.path()),
             sites: Vec::new(),
+            plugin_commands: Vec::new(),
         });
         app.requests.clear();
         let entries = scmd_vfs::local::list_blocking(
@@ -2505,6 +2507,7 @@ third line
             left: VPath::local(dir.path()),
             right: VPath::local(dir.path()),
             sites: Vec::new(),
+            plugin_commands: Vec::new(),
         });
         app.requests.clear();
         let entries = scmd_vfs::local::list_blocking(
@@ -2574,6 +2577,7 @@ third line
             left: VPath::local(dir.path()),
             right: VPath::local(dir.path()),
             sites: Vec::new(),
+            plugin_commands: Vec::new(),
         });
         app.requests.clear();
         let entries = scmd_vfs::local::list_blocking(
@@ -2626,6 +2630,7 @@ third line
             left: VPath::local(dir),
             right: VPath::local(dir),
             sites: Vec::new(),
+            plugin_commands: Vec::new(),
         });
         app.requests.clear();
         let entries =

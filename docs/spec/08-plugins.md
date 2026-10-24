@@ -15,6 +15,58 @@ and a declaration of the capabilities it needs. Commands are discoverable
 (`app.palette`), scriptable, bindable and introspectable (`scmd --list-commands --json`) — which
 is also how the docs and the help pages are generated.
 
+### 1b. What a plugin can do today (0.1.0)
+
+The first tier that is more than data: a plugin declares a `[[command]]` and the host runs it.
+Deliberately a **process**, not code in our address space — one artifact works on every
+platform, there is no sandbox to get wrong, nothing has to match our compiler version, and a
+plugin that crashes crashes alone. The cost is a process per invocation, which for "check out
+a branch" or "run the tests here" is nothing.
+
+```toml
+[[command]]
+id = "user.git.branch"            # `user.` or `plugin.`; the built-in names are not a plugin's
+label = "Git: checkout branch"    # what F11 and the palette show
+scope = "panel"                   # panel, viewer, editor, global
+run = "branch.sh"                 # inside the plugin's own directory, checked at load
+needs = ["panel", "selection"]    # nothing is passed that is not asked for
+timeout = 20                      # seconds; a plugin that hangs is killed and said so
+```
+
+`F11` lists the commands of the scope one is in. The host runs the program on the worker pool,
+with the context as one JSON object on standard input and the same facts in the environment
+(`SCMD_CWD`, `SCMD_DIR`, `SCMD_CURSOR`, `SCMD_SELECTED` one name per line) — because most of
+these will be shell scripts, and a script that has to parse JSON to learn its own directory is
+a script nobody writes.
+
+The plugin answers with one JSON **action** per line:
+
+| Action | What it does |
+| --- | --- |
+| `{"status": "…"}` / `{"error": "…"}` | a line in the status bar |
+| `{"run": "panel.reread"}` | run a command of the vocabulary, by id |
+| `{"chdir": {"path": "…", "panel": "other"}}` | take a panel somewhere |
+| `{"message": {"title": "…", "lines": […]}}` | something worth reading |
+| `{"cursor": "name"}` | put the cursor on a row |
+| `{"select": ["a", "b"]}` | select these names |
+
+`run` names a command of **our** vocabulary — the one every key and macro uses — so the first
+sentence of this document holds literally: everything a plugin can do, a key can do too. There
+is no second vocabulary to keep in step, and no way for a plugin to reach past what a keystroke
+could have done. A `run` that names nothing is an error on screen, not a silence.
+
+A line of output that is not an action is kept and shown rather than dropped: a plugin writing
+for a human is how a half-written plugin behaves, and swallowing it would make it undebuggable.
+
+Refused at load, not at the first press: a command id outside the plugin space, a `run` that
+leaves the plugin's directory (by `..`, by an absolute path or through a symlink), a `needs`
+nobody can give, a missing label, and a second plugin claiming an id another already provides.
+
+Still to come, and what the tiers below are for: a plugin that *adds* a panel column, a
+preview, a sorter or a filesystem, and one that is asked a question rather than told to run.
+Those need the host to call into the plugin repeatedly, which is where an interpreter or a WASM
+instance earns its keep.
+
 ## 2. Lua (M3)
 
 `mlua` (Lua 5.4), one VM, scripts in `scripts/`, loaded at startup and hot-reloadable.

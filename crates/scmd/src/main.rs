@@ -17,7 +17,7 @@ use std::sync::mpsc;
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use scmd_cmd::{Command as ScCommand, Keymap};
+use scmd_cmd::{Command as ScCommand, Keymap, Scope as ScmdScope};
 use scmd_config::{Config, Paths};
 use scmd_core::{CancelToken, VPath};
 use scmd_i18n::I18n;
@@ -27,7 +27,9 @@ use scmd_tui::{Input, Term};
 use scmd_ui::{Buffer, Theme, ThemeSet};
 use scmd_vfs::Vfs;
 
-use crate::app::{App, ConnectOutcome, Event, RemoteStamp, Request, Startup, UploadError};
+use crate::app::{
+    App, ConnectOutcome, Event, PluginCommand, RemoteStamp, Request, Startup, UploadError,
+};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -381,7 +383,7 @@ fn run(cli: Cli) -> Result<()> {
     let themes = ThemeSet::builtin_only().with_tables(&origin, &cfg.themes);
     // Plugins are read before the theme and the keymap are chosen, so a plugin can supply
     // either one.
-    let (themes, plugin_keymaps) = load_plugins(&paths, themes, &mut warnings);
+    let (themes, plugin_keymaps, plugin_commands) = load_plugins(&paths, themes, &mut warnings);
     warnings.extend(themes.load_errors.clone());
     let keymap = load_keymap(&cfg, &origin, &plugin_keymaps)?;
 
@@ -484,6 +486,7 @@ fn run(cli: Cli) -> Result<()> {
         left,
         right,
         sites,
+        plugin_commands,
     });
     app.cmd.load_history(state.command_history);
     if !warnings.is_empty() {
@@ -563,12 +566,13 @@ fn load_plugins(
     paths: &Paths,
     themes: ThemeSet,
     warnings: &mut Vec<String>,
-) -> (ThemeSet, Vec<(String, toml::Table)>) {
+) -> (ThemeSet, Vec<(String, toml::Table)>, Vec<PluginCommand>) {
     let found = scmd_plug::discover(&paths.plugins_dir);
     warnings.extend(found.problems.iter().cloned());
     warnings.extend(found.warnings.iter().cloned());
     let mut themes = themes;
     let mut keymaps = Vec::new();
+    let mut commands: Vec<PluginCommand> = Vec::new();
     for plugin in &found.plugins {
         if !plugin.supports(env!("CARGO_PKG_VERSION")) {
             warnings.push(format!(
@@ -585,8 +589,36 @@ fn load_plugins(
         for table in plugin.tables(scmd_plug::ItemKind::Keymap) {
             keymaps.push((plugin.origin(), table));
         }
+        // The commands it provides, with the program resolved. A name already taken is a
+        // warning and the first one wins: two plugins answering to one id would make which of
+        // them ran a matter of directory order.
+        for (declared, program) in plugin.commands() {
+            if let Some(first) = commands.iter().find(|c| c.id == declared.id) {
+                warnings.push(format!(
+                    "{}: command `{}` is already provided by {} — the second one is ignored",
+                    plugin.id(),
+                    declared.id,
+                    first.plugin
+                ));
+                continue;
+            }
+            let scope = declared
+                .scope
+                .as_deref()
+                .and_then(ScmdScope::parse)
+                .unwrap_or(ScmdScope::Panel);
+            commands.push(PluginCommand {
+                plugin: plugin.id().to_string(),
+                id: declared.id.clone(),
+                label: declared.label.clone(),
+                scope,
+                program,
+                needs: declared.needs.clone(),
+                timeout: declared.timeout,
+            });
+        }
     }
-    (themes, keymaps)
+    (themes, keymaps, commands)
 }
 
 fn command_ids() -> Vec<String> {
@@ -866,6 +898,25 @@ fn interactive(mut app: App) -> Result<()> {
                     let archives = archives.clone();
                     runtime.spawn_blocking(move || {
                         run_pack(id, archive, format, level, sources, cancel, tx, &archives)
+                    });
+                }
+                Request::Plugin {
+                    id,
+                    label,
+                    program,
+                    cwd,
+                    ctx,
+                    timeout,
+                } => {
+                    let tx = tx.clone();
+                    // Somebody else's program, on the worker pool: the interface stays
+                    // answerable while it thinks, and a plugin that hangs is its own problem
+                    // rather than everybody's.
+                    runtime.spawn_blocking(move || {
+                        let result =
+                            scmd_plug::host::run_command(&program, cwd.as_deref(), &ctx, timeout)
+                                .map_err(|e| e.to_string());
+                        let _ = tx.send(Event::PluginDone { id, label, result });
                     });
                 }
                 Request::Link { target, link, kind } => {
@@ -1354,6 +1405,164 @@ mod tests {
     use super::*;
     use clap::CommandFactory;
 
+    /// A plugin on disk, a command it provides, and the whole conversation: the manifest is
+    /// loaded the way the binary loads one, the program is a real script, and what it asks for
+    /// is carried out. This is the half of the plugin host API that no unit test reaches.
+    #[test]
+    #[cfg(unix)]
+    fn a_plugin_provides_a_command_and_the_application_does_what_it_asks() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = tempfile::tempdir().unwrap();
+        let left = root.path().join("left");
+        let right = root.path().join("right");
+        std::fs::create_dir_all(left.join("sub")).unwrap();
+        std::fs::create_dir_all(&right).unwrap();
+        std::fs::write(left.join("one.txt"), "1").unwrap();
+        std::fs::write(left.join("two.txt"), "2").unwrap();
+
+        // The plugin: a manifest and a shell script that answers in the protocol.
+        let plugins = root.path().join("plugins");
+        let dir = plugins.join("demo");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("plugin.toml"),
+            format!(
+                r#"
+[plugin]
+id = "demo"
+name = "Demo"
+scmd = ">={}"
+
+[[command]]
+id = "user.demo.look"
+label = "Demo: say where we are and select everything"
+run = "look.sh"
+needs = ["panel", "cursor", "selection"]
+timeout = 10
+"#,
+                env!("CARGO_PKG_VERSION")
+            ),
+        )
+        .unwrap();
+        let script = dir.join("look.sh");
+        std::fs::write(
+            &script,
+            "#!/bin/sh\n             cat >/dev/null\n             printf '{\"status\":\"here: %s\"}\\n' \"$SCMD_CWD\"\n             echo '{\"select\":[\"one.txt\",\"two.txt\"]}'\n             echo '{\"cursor\":\"two.txt\"}'\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        // Loaded the way the binary loads it.
+        let paths = Paths::discover(Some(&left.join("scmd.toml")), Some(&plugins));
+        let mut warnings = Vec::new();
+        let (_, _, commands) = load_plugins(&paths, ThemeSet::builtin_only(), &mut warnings);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(commands.len(), 1);
+        assert_eq!(commands[0].id, "user.demo.look");
+        assert_eq!(commands[0].scope, ScmdScope::Panel);
+        assert_eq!(commands[0].program, script);
+
+        let mut app = App::new(Startup {
+            cfg: Config::default(),
+            paths,
+            i18n: I18n::new("en"),
+            keymap: Keymap::builtin("far").unwrap(),
+            themes: ThemeSet::builtin_only(),
+            theme: Theme::default_theme(),
+            left: VPath::local(&left),
+            right: VPath::local(&right),
+            sites: Vec::new(),
+            plugin_commands: commands,
+        });
+        serve(&mut app);
+
+        // F11 lists it, with the plugin it came from beside it.
+        app.handle_input(Input::Key("F11".parse().unwrap()));
+        let crate::app::Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(pick.rows.len(), 1);
+        assert!(
+            pick.rows[0].label.contains("Demo: say where"),
+            "{:?}",
+            pick.rows[0]
+        );
+        assert!(pick.rows[0].label.contains("demo"), "{:?}", pick.rows[0]);
+
+        // Enter runs it, through the same request channel everything else uses.
+        app.handle_input(Input::Key("Enter".parse().unwrap()));
+        serve(&mut app);
+
+        // What it asked for happened: a status line, a selection, a cursor.
+        assert!(app.status.contains("here:"), "{}", app.status);
+        assert!(
+            app.status.contains(&left.display().to_string()),
+            "{}",
+            app.status
+        );
+        assert_eq!(app.panels[app.active].selection.len(), 2);
+        let under = app.panels[app.active]
+            .current()
+            .map(|e| e.name_str().into_owned());
+        assert_eq!(under.as_deref(), Some("two.txt"));
+    }
+
+    /// A manifest the host refuses, and the reasons it gives. A plugin that would do something
+    /// surprising must not load at all, rather than surprise somebody at the first press.
+    #[test]
+    fn a_command_a_plugin_may_not_declare_stops_it_loading() {
+        let root = tempfile::tempdir().unwrap();
+        let plugins = root.path().join("plugins");
+        let write = |body: &str| {
+            let dir = plugins.join("bad");
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(dir.join("run.sh"), "#!/bin/sh\n").unwrap();
+            std::fs::write(
+                dir.join("plugin.toml"),
+                format!(
+                    "[plugin]\nid = \"bad\"\nname = \"Bad\"\nscmd = \">={}\"\n{body}",
+                    env!("CARGO_PKG_VERSION")
+                ),
+            )
+            .unwrap();
+            let paths = Paths::discover(Some(&root.path().join("scmd.toml")), Some(&plugins));
+            let mut warnings = Vec::new();
+            let (_, _, commands) = load_plugins(&paths, ThemeSet::builtin_only(), &mut warnings);
+            (commands.len(), warnings)
+        };
+
+        // A name in the built-in vocabulary is not a plugin's to define.
+        let (count, problems) =
+            write("[[command]]\nid = \"file.delete\"\nlabel = \"Nope\"\nrun = \"run.sh\"\n");
+        assert_eq!(count, 0);
+        assert!(
+            problems.iter().any(|p| p.contains("file.delete")),
+            "{problems:?}"
+        );
+
+        // Nor is a program outside the plugin's own directory.
+        let (count, problems) =
+            write("[[command]]\nid = \"user.x\"\nlabel = \"X\"\nrun = \"../../../bin/sh\"\n");
+        assert_eq!(count, 0);
+        assert!(!problems.is_empty(), "an escaping path must be refused");
+
+        // Nor a context nobody knows how to give.
+        let (count, problems) = write(
+            "[[command]]\nid = \"user.x\"\nlabel = \"X\"\nrun = \"run.sh\"\nneeds = [\"ssh-keys\"]\n",
+        );
+        assert_eq!(count, 0);
+        assert!(
+            problems.iter().any(|p| p.contains("ssh-keys")),
+            "{problems:?}"
+        );
+
+        // And one that is sound loads.
+        let (count, problems) = write(
+            "[[command]]\nid = \"user.x\"\nlabel = \"X\"\nrun = \"run.sh\"\nneeds = [\"panel\"]\n",
+        );
+        assert_eq!(count, 1, "{problems:?}");
+    }
+
     /// An app looking at two real directories.
     fn app_on(left: &std::path::Path, right: &std::path::Path) -> App {
         App::new(Startup {
@@ -1366,6 +1575,7 @@ mod tests {
             left: VPath::local(left),
             right: VPath::local(right),
             sites: Vec::new(),
+            plugin_commands: Vec::new(),
         })
     }
 
@@ -1404,6 +1614,21 @@ mod tests {
                     while let Ok(event) = rx.try_recv() {
                         app.handle_event(event);
                     }
+                }
+                Request::Plugin {
+                    id,
+                    label,
+                    program,
+                    cwd,
+                    ctx,
+                    timeout,
+                } => {
+                    // In the pump it runs where it stands: a test wants the answer, not a
+                    // thread.
+                    let result =
+                        scmd_plug::host::run_command(&program, cwd.as_deref(), &ctx, timeout)
+                            .map_err(|e| e.to_string());
+                    app.handle_event(Event::PluginDone { id, label, result });
                 }
                 Request::Link { target, link, kind } => {
                     let error = scmd_jobs::create_link(&scmd_jobs::LocalFs, &target, &link, kind)

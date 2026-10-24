@@ -231,6 +231,8 @@ pub enum Command {
     EditorBlockOps,
     /// `F9` in hex mode: type one instruction and write its bytes (SPEC 05 §2.8).
     EditorAssemble,
+    /// `F11`: the commands the loaded plugins provide (SPEC 08 §1).
+    PluginCommands,
     /// `Ctrl+.`: start recording a macro, or stop and assign it to a key (SPEC 08 §5).
     MacroRecord,
     /// `Ctrl+Shift+.`: the recorded macros, to play or delete one.
@@ -398,6 +400,7 @@ impl Command {
             Command::EditorBlockMark,
             Command::EditorBlockOps,
             Command::EditorAssemble,
+            Command::PluginCommands,
             Command::MacroRecord,
             Command::MacroList,
             Command::AppScreens,
@@ -580,6 +583,7 @@ impl Command {
             Command::EditorBlockMark => "editor.block.mark".into(),
             Command::EditorBlockOps => "editor.block.ops".into(),
             Command::EditorAssemble => "editor.assemble".into(),
+            Command::PluginCommands => "plugin.commands".into(),
             Command::MacroRecord => "macro.record".into(),
             Command::MacroList => "macro.list".into(),
             Command::AppScreens => "app.screens".into(),
@@ -739,6 +743,7 @@ impl Command {
             ("editor.block.mark", _) => Command::EditorBlockMark,
             ("editor.block.ops", _) => Command::EditorBlockOps,
             ("editor.assemble", _) => Command::EditorAssemble,
+            ("plugin.commands", _) => Command::PluginCommands,
             ("macro.record", _) => Command::MacroRecord,
             ("macro.list", _) => Command::MacroList,
             ("app.screens", _) => Command::AppScreens,
