@@ -7,15 +7,18 @@
 //! - what entries does it hold ([`Archive::open`], [`Archive::list`]),
 //! - give me one of them ([`Archive::read`], [`Archive::extract`]).
 //!
-//! Reading comes first and writing follows: an archive opened here is never modified.
+//! Reading and writing a whole archive ([`create`]); changing one that exists is the rebuild
+//! of SPEC 04 §4 and is not here yet, so an archive opened for reading is never modified.
 
 mod archive;
 mod format;
 mod limits;
+mod write;
 
 pub use archive::{ArcEntry, Archive, Cache};
 pub use format::Format;
 pub use limits::Limits;
+pub use write::{create, Level, Written};
 
 /// What can go wrong with a container, in the words the UI shows.
 #[derive(Debug, thiserror::Error)]

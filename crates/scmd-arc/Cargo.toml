@@ -13,7 +13,7 @@ authors.workspace = true
 # toolchain, which is the whole point of the release matrix.
 bzip2 = "0.6"
 flate2 = "1"
-lzma-rust2 = { version = "0.23", default-features = false, features = ["std", "xz"] }
+lzma-rust2 = { version = "0.23", default-features = false, features = ["std", "xz", "encoder"] }
 ruzstd = "0.9"
 scmd-core = { version = "0.0.4", path = "../scmd-core" }
 tar = { version = "0.4", default-features = false }
@@ -27,7 +27,4 @@ zip = { version = "9", default-features = false, features = [
 ] }
 
 [dev-dependencies]
-# The encoders, so a test can build the archive it then reads. Not in the binary: a release
-# build never compiles dev-dependencies, so the shipped code can only read.
-lzma-rust2 = { version = "0.23", default-features = false, features = ["std", "xz", "encoder"] }
 tempfile = "3"
