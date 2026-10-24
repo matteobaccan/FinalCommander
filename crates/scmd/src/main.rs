@@ -504,7 +504,7 @@ fn interactive(mut app: App) -> Result<()> {
             accept_new: false,
         });
     }
-    let vfs = Router::new(pool.clone());
+    let vfs = Router::with_limits(pool.clone(), app.cfg.arc.limits());
     // One container cache for the whole program: the index a panel read to draw itself is the
     // one an unpack then reads from.
     let archives = vfs.archives().cache();

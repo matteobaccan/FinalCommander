@@ -241,6 +241,47 @@ impl Default for NetCfg {
     }
 }
 
+/// `[arc]`: the guards every archive read goes through (SPEC 04 §4).
+///
+/// They are configuration because a zip bomb and a legitimate archive of a disk image look
+/// alike from the outside, and only the person at the keyboard knows which one this is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ArcCfg {
+    /// How many entries one archive may list.
+    pub max_entries: usize,
+    /// The total unpacked size an archive may add up to, in megabytes.
+    pub max_total_mb: u64,
+    /// Unpacked over packed. Text compresses 10:1 and a disk image far better, so the default
+    /// is generous; a thousandfold archive is a bomb or a curiosity.
+    pub max_ratio: u64,
+    /// How many containers deep a path may go.
+    pub max_depth: usize,
+}
+
+impl Default for ArcCfg {
+    fn default() -> Self {
+        let limits = scmd_arc::Limits::default();
+        ArcCfg {
+            max_entries: limits.entries,
+            max_total_mb: limits.total_bytes >> 20,
+            max_ratio: limits.ratio,
+            max_depth: limits.depth,
+        }
+    }
+}
+
+impl ArcCfg {
+    pub fn limits(&self) -> scmd_arc::Limits {
+        scmd_arc::Limits {
+            entries: self.max_entries,
+            total_bytes: self.max_total_mb.saturating_mul(1 << 20),
+            ratio: self.max_ratio,
+            depth: self.max_depth,
+        }
+    }
+}
+
 /// A `[[site]]` block: one entry of the netbox's site list.
 ///
 /// Secrets are never here. A site says *how* to authenticate (`agent`, `key:<path>`, `ask`)
@@ -392,6 +433,7 @@ pub struct Config {
     #[serde(rename = "decompile")]
     pub decompile: Vec<DecompileRule>,
     pub net: NetCfg,
+    pub arc: ArcCfg,
     /// `[[site]]` blocks: the netbox's site list.
     #[serde(rename = "site")]
     pub sites: Vec<SiteCfg>,

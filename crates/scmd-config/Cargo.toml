@@ -10,6 +10,7 @@ authors.workspace = true
 
 [dependencies]
 dirs = "7.0.0"
+scmd-arc = { version = "0.0.4", path = "../scmd-arc" }
 scmd-core = { version = "0.0.4", path = "../scmd-core" }
 serde = { version = "1.0.229", features = ["derive"] }
 thiserror = "2.0.21"
