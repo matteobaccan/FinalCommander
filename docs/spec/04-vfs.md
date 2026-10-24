@@ -14,9 +14,13 @@ back with a change check and a rename into place (§5).
 zstd — with every decoder pure Rust, so the binary stays one file that cross-compiles without a
 C toolchain. The format comes from the bytes first and the name second. `Enter` on an archive
 opens it as a panel (§4's `!` paths), `F3` reads an entry, `F5` copies out through the job
-engine, `Shift+F1` builds an archive and `Shift+F2` extracts one. The provider reports `READ`
-and `SEEK` only: writing *into* an existing container is §4's rebuild and is not here yet, and
-`F4` inside an archive says so rather than editing a copy nobody can save.
+engine, `Shift+F1` builds an archive and `Shift+F2` extracts one.
+**Changing an archive** (0.3.0): the provider still reports `READ` and `SEEK`, because none of
+these formats can be edited in place. A change goes through §4's rebuild instead, as one
+transactional unit: the archive is streamed into a `.part` file beside it with the change
+applied, the result is read back and verified, and only then does it replace the original.
+`F4` edits an entry and saves it back, `F6` renames or moves one inside the archive, `F8`
+takes entries out, and `F5`/`F6` into an archive put files in.
 **Still to come**: `temp`, `trash`, the other network schemes, nesting and archives over a
 remote filesystem (§4 — both want the container copied to a temporary file first), `watch`,
 and `copy_within` as a server-side operation.
@@ -106,6 +110,15 @@ where the code lives, not whether it is linked into the binary.
   be talked into writing outside where it was told to.
 - Writes to a nested container rebuild the outer container; the UI warns and the job engine
   treats it as one transactional unit (write to temp, verify, atomic replace).
+  **Implemented** for a container on a local disk, as `scmd_arc::rebuild`: a list of changes
+  (`Put`, `Remove`, `Rename`) is applied while the old archive is streamed into
+  `archive.<ext>.part` beside it, the result is opened and checked against the plan, and only
+  then is it renamed over the original. The archive cache is dropped before and after, so no
+  panel answers from a stale index. A cancelled or failed rebuild deletes the `.part` file and
+  leaves the archive exactly as it was. What a format allows is used: a zip entry nobody named
+  moves across as the compressed bytes it already is, so one change to a large archive is a
+  copy rather than a recompression. The nested case still wants the inner container
+  materialised first.
 
 ## 5. Editing inside a VFS
 
@@ -122,13 +135,14 @@ creates a file on the server. SFTP version 3's rename cannot replace an existing
 `russh-sftp` has no `posix-rename` extension yet, so the old file is removed between the upload
 and the rename; if the rename then fails the bytes are still on the server under the
 `.scmd-part` name, and the message says so.
-**Still to come**: the same thing for archives, and watching the temp file so an external
-program's save is picked up.
-
-`F4` on `zip://a.zip!/b.txt`: extract to a temp dir, open the editor, watch the temp file, on
-save write back into the container through the job engine, then refresh. On failure the temp
-file is kept and its path is shown. Same mechanism for "open with" external programs, with a
-"wait for the program to exit, then write back" dialog (FAR behaviour).
+**Implemented for archives** (0.3.0), the same shape: `F4` on
+`/home/me/a.zip!/b.txt` copies the entry to `<temp>/scmd-<pid>/<name>`, the editor edits that
+copy, and `F2` sends it back in as §4's rebuild — a `Put` for that one name. There is no
+change check to make, because the container is a local file and the rebuild reads it in full
+anyway; if it fails, the error names the reason and the local copy. `F6` and `F8` inside an
+archive are the same mechanism with `Rename` and `Remove` instead.
+**Still to come**: watching the temp file so an external program's save is picked up, and the
+"open with" mechanism — "wait for the program to exit, then write back" (FAR behaviour).
 
 ## 6. Connection manager
 

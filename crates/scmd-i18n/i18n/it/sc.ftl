@@ -79,6 +79,7 @@ job-delete = Eliminazione
 job-wipe = Cancellazione sicura
 job-replace = Sostituzione
 job-pack = Compressione
+job-rebuild = Scrittura dell'archivio
 job-mkdir = Creazione directory
 job-planning = analisi…
 job-counters = { $files } / { $filestotal } file · { $bytes } / { $bytestotal }
@@ -410,7 +411,9 @@ replace-nothing = niente da sostituire: nessun file cambierebbe
 replace-done = { $count } occorrenze sostituite in { $files } file
 
 # ── archivi (SPEC 04 §4) ────────────────────────────────────────────────────────────────
-arc-read-only = il contenuto di un archivio non è ancora modificabile — F3 lo legge
+arc-writing-back = { $name } torna dentro l'archivio
+arc-move-out = per portare qualcosa fuori da un archivio, copialo con F5
+arc-add-files-only = uno per uno entrano solo i file; Shift+F1 ci mette una cartella intera
 
 pack-title = Aggiungi all'archivio
 pack-name = Archivio

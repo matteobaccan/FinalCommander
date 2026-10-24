@@ -79,6 +79,7 @@ job-delete = Borrado
 job-wipe = Borrado seguro
 job-replace = Sustituyendo
 job-pack = Comprimiendo
+job-rebuild = Escribiendo el archivo comprimido
 job-mkdir = Creación de directorio
 job-planning = analizando…
 job-counters = { $files } / { $filestotal } archivos · { $bytes } / { $bytestotal }
@@ -410,7 +411,9 @@ replace-nothing = nada que sustituir: ningún archivo cambiaría
 replace-done = { $count } apariciones sustituidas en { $files } archivos
 
 # ── archivos comprimidos (SPEC 04 §4) ───────────────────────────────────────────────────
-arc-read-only = el contenido de un archivo comprimido aún no se puede cambiar — F3 lo lee
+arc-writing-back = { $name } vuelve dentro del archivo comprimido
+arc-move-out = para sacar algo de un archivo comprimido, cópialo con F5
+arc-add-files-only = de uno en uno solo entran archivos; Shift+F1 mete un directorio entero
 
 pack-title = Añadir al archivo
 pack-name = Archivo

@@ -4,6 +4,31 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
+## [Unreleased]
+
+### Added
+
+- **Writing into an archive.** An archive is no longer a read-only window. `F4` on an entry
+  opens it in the editor and saving puts it back in; `F6` renames an entry or moves it to
+  another directory inside the same archive; `F8` takes entries out, the selection included
+  and a directory with its tree; and `F5` or `F6` *into* an archive — with the other panel
+  standing inside one — put files in, `F6` deleting the originals once the archive is
+  written. It works for zip and the whole tar family (plain, gzip, bzip2, xz, zstd).
+
+  None of these formats can be edited in place, so a change means writing the archive again,
+  and the mechanism is the honest one: the old archive is streamed into a `.part` file beside
+  it with the change applied, the result is opened and checked against what was asked for, and
+  only then does it replace the original. An interrupted change — a full disk, `Esc`, a crash
+  — therefore leaves the archive exactly as it was and a `.part` file to delete. Entries
+  nobody named are copied across as the compressed bytes they already are, so taking one file
+  out of a hundred-megabyte zip is a copy and not a recompression. It reports as a job, with a
+  progress bar and `Esc`, and the archive cache is dropped either side of it so no panel
+  answers from a stale index.
+
+- A path typed into a dialog may now name a place inside an archive
+  (`/home/me/a.zip!/src`), which is what the other panel's directory reads as when that panel
+  is inside one.
+
 ## [0.2.0] — 2026-10-24
 
 Buckets in a panel, and the chrome of the thing finally looks like what it is modelled on.

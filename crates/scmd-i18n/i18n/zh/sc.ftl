@@ -79,6 +79,7 @@ job-delete = 删除
 job-wipe = 安全擦除
 job-replace = 替换中
 job-pack = 正在压缩
+job-rebuild = 正在写入压缩包
 job-mkdir = 新建目录
 job-planning = 正在分析…
 job-counters = { $files } / { $filestotal } 个文件 · { $bytes } / { $bytestotal }
@@ -410,7 +411,9 @@ replace-nothing = 没有可替换的内容：不会有文件改变
 replace-done = 已在 { $files } 个文件中替换 { $count } 处
 
 # ── 压缩包（SPEC 04 §4）─────────────────────────────────────────────────────────────────
-arc-read-only = 压缩包里的内容还不能修改 — F3 可以查看
+arc-writing-back = { $name } 正写回压缩包
+arc-move-out = 要把东西从压缩包里取出来，用 F5 复制它
+arc-add-files-only = 逐个加入只接受文件；Shift+F1 可以放进整个目录
 
 pack-title = 添加到压缩包
 pack-name = 压缩包

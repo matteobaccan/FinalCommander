@@ -218,7 +218,9 @@ pub fn plan(fs: &dyn JobFs, spec: &JobSpec, cancel: &CancelToken) -> Result<Plan
         JobKind::Mkdir => unreachable!("handled above"),
         // An archive is written in one pass by `scmd-arc`, not as a sequence of file copies:
         // there is nothing here to plan, and a caller that sends one here has the wrong road.
-        JobKind::Pack | JobKind::Test => return Err(PlanError::NotPlannable { kind: spec.kind }),
+        JobKind::Pack | JobKind::Test | JobKind::Rebuild => {
+            return Err(PlanError::NotPlannable { kind: spec.kind })
+        }
     }
 
     Ok(plan)

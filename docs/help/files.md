@@ -37,8 +37,29 @@ tar, and tar with gzip, bzip2, xz or zstd — and the path says where you are:
 
     /home/me/sources.tar.gz!/src/main.rs
 
-Everything that reads a file works in there: the viewer, the hex editor, the search. Writing
-into an archive is not there yet, so the panel refuses rather than pretending.
+Everything that reads a file works in there: the viewer, the hex editor, the search.
+
+Writing works too, and it works the only way these formats allow. None of them can be edited
+in place — a `.tar.gz` is one compressed stream from end to end — so a change means writing
+the archive again: the old one is streamed into a new file beside it with the change applied,
+the new one is read back and checked, and only then does it replace the original. An
+interrupted change therefore leaves the archive exactly as it was and a `.part` file to
+delete. Entries nobody touched are copied across as the compressed bytes they already are, so
+taking one file out of a hundred-megabyte zip is a copy and not a recompression.
+
+What that gives you, from inside an archive:
+
+* `F4` opens an entry in the editor. Saving puts it back in.
+* `F6` renames an entry, or moves it to another directory inside the same archive. The dialog
+  offers the name it has, because a target in the other panel would mean taking it out of the
+  archive, and that is `F5`.
+* `F8` takes entries out, the selection included. A directory takes its tree with it.
+* `F5` and `F6` *into* an archive — with the other panel inside one — put files in. One file
+  at a time, as many as are selected; a whole directory is `Shift+F1`, which walks it in a
+  job. `F6` deletes the originals once the archive is written, and only then.
+
+What is not there: an entry's permissions and times cannot be changed from the panel, and
+`F7` does not make a directory inside an archive — nothing stores an empty one worth keeping.
 
 ## Comparing two folders
 

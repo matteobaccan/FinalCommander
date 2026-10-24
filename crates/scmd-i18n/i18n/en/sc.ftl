@@ -85,6 +85,7 @@ job-delete = Deleting
 job-wipe = Wiping
 job-replace = Replacing
 job-pack = Packing
+job-rebuild = Writing the archive
 job-mkdir = Creating directory
 job-planning = planning…
 job-counters = { $files } / { $filestotal } files · { $bytes } / { $bytestotal }
@@ -418,7 +419,9 @@ replace-nothing = nothing to replace: no file would change
 replace-done = { $count } occurrences replaced in { $files } files
 
 # ── archives (SPEC 04 §4) ───────────────────────────────────────────────────────────────
-arc-read-only = what is inside an archive cannot be changed yet — F3 reads it
+arc-writing-back = Writing { $name } back into the archive
+arc-move-out = to take something out of an archive, copy it with F5
+arc-add-files-only = only files go in one at a time; Shift+F1 puts a whole directory in
 
 pack-title = Add to archive
 pack-name = Archive

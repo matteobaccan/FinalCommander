@@ -981,6 +981,19 @@ fn interactive(mut app: App) -> Result<()> {
                     let archives = archives.clone();
                     runtime.spawn_blocking(move || run_test(id, archive, cancel, tx, &archives));
                 }
+                Request::ArcRebuild {
+                    id,
+                    archive,
+                    changes,
+                    level,
+                    cancel,
+                } => {
+                    let tx = tx.clone();
+                    let archives = archives.clone();
+                    runtime.spawn_blocking(move || {
+                        run_rebuild(id, archive, changes, level, cancel, tx, &archives)
+                    });
+                }
                 Request::Plugin {
                     id,
                     label,
@@ -1653,6 +1666,76 @@ fn run_test(
     let _ = tx.send(Event::JobDone {
         id,
         kind: scmd_jobs::JobKind::Test,
+        outcome,
+    });
+}
+
+/// Write a new archive out of an old one with the changes applied (SPEC 04 §4).
+///
+/// The cache is told to forget the archive first: its index describes the file as it was, and
+/// after this the file is a different one. Forgetting it before rather than after means a
+/// rebuild that fails half way cannot leave a stale index behind either.
+fn run_rebuild(
+    id: u64,
+    archive: VPath,
+    changes: Vec<scmd_arc::Change>,
+    level: scmd_arc::Level,
+    cancel: CancelToken,
+    tx: mpsc::Sender<Event>,
+    archives: &std::sync::Arc<scmd_arc::Cache>,
+) {
+    use scmd_jobs::{Outcome, Phase, Progress};
+
+    let started = std::time::Instant::now();
+    archives.forget(archive.as_path());
+    let total = changes.len() as u64;
+    let mut done = 0u64;
+    let mut last = std::time::Instant::now();
+    let result = scmd_arc::rebuild(
+        archive.as_path(),
+        &changes,
+        level,
+        &cancel,
+        &mut |name, bytes| {
+            done += 1;
+            if last.elapsed() < std::time::Duration::from_millis(100) {
+                return;
+            }
+            last = std::time::Instant::now();
+            let _ = tx.send(Event::JobProgress {
+                id,
+                progress: Progress {
+                    phase: Phase::Running,
+                    files_done: done,
+                    files_total: total.max(done),
+                    bytes_done: bytes,
+                    current: Some(archive.enter(name)),
+                    elapsed: started.elapsed(),
+                    ..Progress::default()
+                },
+            });
+        },
+    );
+    archives.forget(archive.as_path());
+    let outcome = match result {
+        Ok(written) => Outcome {
+            files: written.files,
+            dirs: written.dirs,
+            bytes: written.bytes,
+            ..Outcome::default()
+        },
+        Err(scmd_arc::ArcError::Cancelled) => Outcome {
+            cancelled: true,
+            ..Outcome::default()
+        },
+        Err(e) => Outcome {
+            errors: vec![(archive.clone(), e.to_string())],
+            ..Outcome::default()
+        },
+    };
+    let _ = tx.send(Event::JobDone {
+        id,
+        kind: scmd_jobs::JobKind::Rebuild,
         outcome,
     });
 }
@@ -2381,6 +2464,20 @@ timeout = 10
                     let (tx, rx) = mpsc::channel();
                     let archives = std::sync::Arc::new(scmd_arc::Cache::new(Default::default()));
                     run_test(id, archive, cancel, tx, &archives);
+                    while let Ok(event) = rx.try_recv() {
+                        app.handle_event(event);
+                    }
+                }
+                Request::ArcRebuild {
+                    id,
+                    archive,
+                    changes,
+                    level,
+                    cancel,
+                } => {
+                    let (tx, rx) = mpsc::channel();
+                    let archives = std::sync::Arc::new(scmd_arc::Cache::new(Default::default()));
+                    run_rebuild(id, archive, changes, level, cancel, tx, &archives);
                     while let Ok(event) = rx.try_recv() {
                         app.handle_event(event);
                     }

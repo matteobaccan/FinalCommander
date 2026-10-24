@@ -23,6 +23,10 @@ pub enum JobKind {
     /// reports progress and finishes through the same box, counters and status line as every
     /// other job — see `scmd::run_pack`.
     Pack,
+    /// Write a new archive out of an old one with a change applied (SPEC 04 §4). Like
+    /// [`JobKind::Pack`] the engine does not run it — `scmd-arc` does, in one pass — and the
+    /// kind exists so that changing an archive reports, and cancels, like everything else.
+    Rebuild,
     /// Read every entry of an archive and report the ones that do not come out whole.
     ///
     /// Like [`JobKind::Pack`], the engine does not run it: `scmd-arc` does, in one pass. The
@@ -42,6 +46,7 @@ impl JobKind {
             JobKind::Replace => "replace",
             JobKind::Pack => "pack",
             JobKind::Test => "test",
+            JobKind::Rebuild => "rebuild",
         }
     }
 

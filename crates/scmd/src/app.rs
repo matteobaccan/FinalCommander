@@ -86,6 +86,15 @@ pub enum Request {
         archive: VPath,
         cancel: CancelToken,
     },
+    /// Write a new archive out of this one with the changes applied (SPEC 04 §4). The old one
+    /// keeps its bytes until the new one is written and read back.
+    ArcRebuild {
+        id: u64,
+        archive: VPath,
+        changes: Vec<scmd_arc::Change>,
+        level: scmd_arc::Level,
+        cancel: CancelToken,
+    },
     /// Run a plugin's command (SPEC 08 §1). Off the interface thread, because it is somebody
     /// else's program and we do not know how long it will think about it.
     Plugin {
@@ -467,6 +476,11 @@ pub enum ConfirmAction {
     PlayMacro(Box<scmd_cmd::Macro>),
     /// Run a plugin's command, which said it should be asked about first.
     RunPlugin(usize),
+    /// Write the archive again with these changes: what `F6` and `F8` do inside one.
+    ArcRebuild {
+        archive: VPath,
+        changes: Vec<scmd_arc::Change>,
+    },
     /// Record a host key we have never seen and connect.
     AcceptHostKey {
         panel: usize,
@@ -840,8 +854,9 @@ pub struct App {
     /// keyboard protocol ever report this, so on the others it stays empty and the bar does
     /// not change — which is what it did before.
     pub held: Mods,
-    /// What to delete once the archive is written, when the dialog asked for it. It is held
-    /// here rather than in the job because the delete only happens if the pack succeeded.
+    /// What to delete once the archive is written, when the dialog asked for it — or when
+    /// `F6` put the files into the archive, which is a move and not a copy. It is held here
+    /// rather than in the job because the delete only happens if the archive was written.
     pack_delete: Option<Vec<VPath>>,
     pub quit: bool,
     pub requests: Vec<Request>,
@@ -936,6 +951,9 @@ pub struct App {
     pub last_asm: Option<String>,
     /// The archive format the last pack used, so the next one opens on it.
     pub last_pack: scmd_arc::Format,
+    /// How hard the compressor works when an archive is rebuilt. The format's own level is
+    /// not readable from an archive, so the one the last dialog chose is the best guess.
+    pub last_pack_level: scmd_arc::Level,
     /// The same for the replace dialog.
     pub last_replace: scmd_jobs::ReplaceOptions,
     /// A replacement runs twice: once to count, and then, if the user says so, for real. This
@@ -1059,6 +1077,7 @@ impl App {
             background: Vec::new(),
             last_asm: None,
             last_pack: scmd_arc::Format::Zip,
+            last_pack_level: scmd_arc::Level::Normal,
             last_replace: scmd_jobs::ReplaceOptions::default(),
             pending_replace: None,
             highlight: scmd_ui::Highlight::far_default(),
@@ -1768,6 +1787,9 @@ impl App {
                 self.mode = Mode::Normal;
                 match confirm.action {
                     ConfirmAction::Job(spec) => self.start_job(spec),
+                    ConfirmAction::ArcRebuild { archive, changes } => {
+                        self.start_rebuild(archive, changes)
+                    }
                     ConfirmAction::DiscardEdits => {
                         self.editor_parked = None;
                         self.remote_edit = None;
@@ -2557,6 +2579,27 @@ impl App {
                     return;
                 }
                 let target = self.resolve_path(raw);
+                // Four cases meet here, and three of them are the archive's (SPEC 04 §4).
+                // The filesystem cannot rename inside a container, so where it is a rebuild
+                // it has to be a rebuild and not a job that would fail halfway.
+                let into_archive = target.in_container();
+                let from_archive = sources.iter().all(|p| p.in_container());
+                if from_archive && kind == JobKind::Move {
+                    let dir = raw.ends_with('/') || raw.ends_with('\\') || sources.len() > 1;
+                    match Self::changes_renaming(&sources, &target, dir) {
+                        Some((archive, changes)) => self.start_rebuild(archive, changes),
+                        None => {
+                            let m = self.i18n.t("arc-move-out");
+                            self.set_error(m);
+                        }
+                    }
+                    return;
+                }
+                if into_archive {
+                    // `F6` into an archive is a move: the originals go once it is written.
+                    self.add_into_archive(sources, &target, kind == JobKind::Move);
+                    return;
+                }
                 self.start_job(JobSpec::new(kind, sources, Some(target)));
             }
             PromptKind::LinkName => {
@@ -2778,6 +2821,14 @@ impl App {
                 return parsed.normalised();
             }
         }
+        // And so is `archive!/inside` (SPEC 04 §4): the path of a container typed out, which
+        // is what the other panel's directory reads as when that panel is inside one.
+        if raw.contains("!/") || raw.contains("!\\") {
+            let parsed = VPath::parse(raw);
+            if parsed.in_container() {
+                return parsed.normalised();
+            }
+        }
         let expanded = expand_tilde(raw);
         if std::path::Path::new(&expanded).is_absolute() {
             VPath::local(&expanded)
@@ -2836,6 +2887,7 @@ impl App {
             JobKind::Replace => "job-replace",
             JobKind::Pack => "job-pack",
             JobKind::Test => "job-test",
+            JobKind::Rebuild => "job-rebuild",
         })
     }
 
@@ -2935,9 +2987,21 @@ impl App {
     /// Ask before deleting, unless the setting says not to, and then do it.
     fn ask_delete(&mut self, sources: Vec<VPath>) {
         let bytes = self.selected_bytes(&sources);
-        let spec = JobSpec::new(JobKind::Delete, sources.clone(), None);
+        // Inside an archive there is nothing to unlink: the container is written again
+        // without those entries (SPEC 04 §4). The question is the same question, so only
+        // what `Enter` does changes.
+        let action = match Self::changes_removing(&sources) {
+            Some((archive, changes)) => ConfirmAction::ArcRebuild { archive, changes },
+            None => ConfirmAction::Job(JobSpec::new(JobKind::Delete, sources.clone(), None)),
+        };
         if !self.cfg.general.confirm_delete {
-            self.start_job(spec);
+            match action {
+                ConfirmAction::ArcRebuild { archive, changes } => {
+                    self.start_rebuild(archive, changes)
+                }
+                ConfirmAction::Job(spec) => self.start_job(spec),
+                _ => unreachable!("ask_delete builds one of those two"),
+            }
             return;
         }
         let title = self.i18n.t("confirm-delete-title");
@@ -2965,8 +3029,78 @@ impl App {
         self.mode = Mode::Confirm(Confirm {
             title,
             lines,
-            action: ConfirmAction::Job(spec),
+            action,
         });
+    }
+
+    /// The removals that take these paths out of the archive they are all in, or `None` if
+    /// they are not all inside one and the same container.
+    fn changes_removing(sources: &[VPath]) -> Option<(VPath, Vec<scmd_arc::Change>)> {
+        let mut archive: Option<VPath> = None;
+        let mut changes = Vec::with_capacity(sources.len());
+        for path in sources {
+            let (host, inner) = Self::inside(path)?;
+            match &archive {
+                Some(seen) if seen != &host => return None,
+                _ => archive = Some(host),
+            }
+            changes.push(scmd_arc::Change::Remove { inner });
+        }
+        archive.map(|a| (a, changes))
+    }
+
+    /// The renames that move these paths about inside the archive they are in, or `None` if
+    /// the target is somewhere else — out of the archive, or in a different one.
+    ///
+    /// With one source and a name, the name is the new name. With several, or a target that
+    /// ends in a separator, the target is a directory inside the archive and each keeps the
+    /// name it has.
+    fn changes_renaming(
+        sources: &[VPath],
+        target: &VPath,
+        dir: bool,
+    ) -> Option<(VPath, Vec<scmd_arc::Change>)> {
+        let (host, to) = Self::inside(target)?;
+        let mut archive = None;
+        let mut changes = Vec::with_capacity(sources.len());
+        for path in sources {
+            let (from_host, from) = Self::inside(path)?;
+            if from_host != host {
+                return None;
+            }
+            archive = Some(from_host);
+            let to = if dir {
+                format!("{}/{}", to.trim_end_matches('/'), path.display_name())
+            } else {
+                to.clone()
+            };
+            if to == from {
+                continue;
+            }
+            changes.push(scmd_arc::Change::Rename { from, to });
+        }
+        archive.map(|a| (a, changes))
+    }
+
+    /// `F5` with the other panel inside an archive: the files go in, which means the archive
+    /// is written again with them (SPEC 04 §4).
+    fn add_into_archive(&mut self, sources: Vec<VPath>, target: &VPath, delete_after: bool) {
+        let Some((archive, dir)) = Self::inside(target) else {
+            return;
+        };
+        let mut changes = Vec::with_capacity(sources.len());
+        for path in &sources {
+            // A tree would have to be walked, and walking it here would stop the interface
+            // while it happened. `Shift+F1` packs a whole directory and does it in a job.
+            if !path.is_local() || path.in_container() || path.as_path().is_dir() {
+                let m = self.i18n.t("arc-add-files-only");
+                self.set_error(m);
+                return;
+            }
+            changes.push(scmd_arc::Change::add(path.as_path(), &dir));
+        }
+        self.pack_delete = delete_after.then(|| sources.clone());
+        self.start_rebuild(archive, changes);
     }
 
     /// Everything in `archive`, straight into `to`: the extraction that asks nothing, for the
@@ -2999,6 +3133,50 @@ impl App {
             archive,
             cancel,
         });
+    }
+
+    /// Change an archive: one job, one progress box, and the old archive untouched until
+    /// the new one is written and checked.
+    fn start_rebuild(&mut self, archive: VPath, changes: Vec<scmd_arc::Change>) {
+        if changes.is_empty() {
+            // Nothing to write means nothing was written, and nothing written means the
+            // originals a move was going to delete stay where they are.
+            self.pack_delete = None;
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        }
+        let id = self.next_job_id;
+        self.next_job_id += 1;
+        let cancel = CancelToken::new();
+        self.mode = Mode::Job(JobView {
+            id,
+            kind: JobKind::Rebuild,
+            progress: Progress::default(),
+            question: None,
+            cancel: cancel.clone(),
+            choice: 0,
+        });
+        self.requests.push(Request::ArcRebuild {
+            id,
+            archive,
+            changes,
+            level: self.last_pack_level,
+            cancel,
+        });
+    }
+
+    /// The container a path inside an archive belongs to, and the path inside it.
+    fn inside(path: &VPath) -> Option<(VPath, String)> {
+        if !path.in_container() {
+            return None;
+        }
+        let inner = path.inner_path().to_string();
+        let mut host = path.clone();
+        while let Some(outer) = host.leave() {
+            host = outer;
+        }
+        Some((host, inner))
     }
 
     /// The archive the archive commands are about: the file under the cursor when it is one,
@@ -3262,7 +3440,10 @@ impl App {
         // The dialog asked for the originals to go once the archive was written. Written
         // is the condition: nothing is deleted after a pack that failed or was stopped.
         if let Some(sources) = self.pack_delete.take() {
-            if kind == JobKind::Pack && outcome.errors.is_empty() && !outcome.cancelled {
+            if matches!(kind, JobKind::Pack | JobKind::Rebuild)
+                && outcome.errors.is_empty()
+                && !outcome.cancelled
+            {
                 self.start_job(JobSpec::new(JobKind::Delete, sources, None));
                 return;
             }
@@ -4037,10 +4218,21 @@ impl App {
                     &[("what", what.into())],
                 );
                 // Pre-filled with the passive panel's directory, as every commander does.
-                let mut text = self.other().cwd.to_string();
-                if !text.ends_with(std::path::MAIN_SEPARATOR) {
-                    text.push(std::path::MAIN_SEPARATOR);
-                }
+                // Moving something that is inside an archive is a rename inside the archive,
+                // so there the offer is the name it has: a target in the other panel would
+                // mean taking it out, which is what `F5` is for.
+                let inside = !copy && sources.iter().all(|p| p.in_container());
+                let text = if inside && sources.len() == 1 {
+                    sources[0].display_name()
+                } else if inside {
+                    String::new()
+                } else {
+                    let mut text = self.other().cwd.to_string();
+                    if !text.ends_with(std::path::MAIN_SEPARATOR) {
+                        text.push(std::path::MAIN_SEPARATOR);
+                    }
+                    text
+                };
                 self.mode = Mode::Prompt(Prompt {
                     kind: if copy {
                         PromptKind::CopyTarget
@@ -4996,6 +5188,7 @@ impl App {
             _ => scmd_arc::Level::Normal,
         };
         self.last_pack = format;
+        self.last_pack_level = level;
         self.pack_delete = form.toggle_value("pack.delete").then(|| sources.clone());
         self.start_pack(archive, format, level, sources);
     }
@@ -7193,15 +7386,10 @@ impl App {
             return;
         }
         let path = self.panel().path_of(&entry);
-        if path.in_container() {
-            // Editing the copy would be easy and useless: there is nowhere to save it until
-            // writing into a container exists, so `F3` is the honest answer today.
-            let m = self.i18n.t("arc-read-only");
-            self.set_error(m);
-            return;
-        }
-        if path.is_remote() {
-            // Fetch, edit the copy, and write it back on save (SPEC 04 §5).
+        if path.in_container() || path.is_remote() {
+            // Fetch, edit the copy, and write it back on save (SPEC 04 §5). Out of a
+            // container or off a server, the shape is the same; what differs is what the
+            // write-back does, and that is `write_back`'s business.
             self.fetch_remote(path, entry.size, Fetched::Edit);
             return;
         }
@@ -7389,6 +7577,25 @@ impl App {
         let Some(edit) = self.remote_edit.clone() else {
             return;
         };
+        // A file that came out of an archive goes back into it, which means writing the
+        // archive again (SPEC 04 §4). There is no upload and no stamp to check: the container
+        // is a local file, and the job engine is what notices if somebody else moved it.
+        if let Some((archive, inner)) = Self::inside(&edit.remote) {
+            let msg = self.i18n.t_args(
+                "arc-writing-back",
+                &[("name", edit.remote.to_string().into())],
+            );
+            self.set_status(msg);
+            self.remote_edit = None;
+            self.start_rebuild(
+                archive,
+                vec![scmd_arc::Change::Put {
+                    inner,
+                    source: edit.local,
+                }],
+            );
+            return;
+        }
         let id = self.next_job_id;
         self.next_job_id += 1;
         self.upload_id = Some(id);
@@ -13787,6 +13994,280 @@ abcdefghij
             app.remote_edit().map(|e| e.remote.display_name()),
             Some("up.txt".to_string())
         );
+    }
+
+    // ── writing into an archive (SPEC 04 §4) ────────────────────────────────────────────────
+
+    /// A zip with three entries, and a panel standing inside it at its root.
+    fn app_inside_a_zip(root: &std::path::Path) -> (App, std::path::PathBuf) {
+        let zip = root.join("box.zip");
+        let file = std::fs::File::create(&zip).unwrap();
+        let mut writer = zip::ZipWriter::new(file);
+        for (name, body) in [
+            ("one.txt", &b"first"[..]),
+            ("two.txt", &b"second"[..]),
+            ("deep/three.txt", &b"third"[..]),
+        ] {
+            writer
+                .start_file(name, zip::write::SimpleFileOptions::default())
+                .unwrap();
+            std::io::Write::write_all(&mut writer, body).unwrap();
+        }
+        writer.finish().unwrap();
+
+        let mut app = app();
+        app.panels[app.active].cwd = VPath::local(&zip).enter("/");
+        let path = app.panels[app.active].cwd.clone();
+        let vfs = scmd_vfs::ArcVfs::new(scmd_arc::Limits::default());
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+        let entries = rt
+            .block_on(scmd_vfs::Vfs::list(&vfs, &path, CancelToken::new()))
+            .unwrap();
+        let (panel, generation) = (app.active, app.panels[app.active].generation);
+        app.handle_event(Event::Listed {
+            panel,
+            generation,
+            result: Ok(entries),
+        });
+        app.requests.clear();
+        (app, zip)
+    }
+
+    /// Empty the open prompt, so what a test types is all that is in it.
+    fn clear_prompt(app: &mut App) {
+        for _ in 0..256 {
+            match &app.mode {
+                Mode::Prompt(p) if !p.text.is_empty() => press(app, "Backspace"),
+                _ => return,
+            }
+        }
+        panic!("the prompt would not empty");
+    }
+
+    /// Type a path, upper case included: `type_text` presses the character as a key name, and
+    /// a key name of one letter carries no shift.
+    fn type_path(app: &mut App, text: &str) {
+        for c in text.chars() {
+            app.handle_input(Input::Key(Key::new(KeyCode::Char(c), Mods::NONE)));
+        }
+    }
+
+    /// Put the cursor on a row by name, failing loudly if the listing has not got it.
+    fn cursor_on(app: &mut App, name: &str) {
+        let row = app.panels[app.active]
+            .listing
+            .row_of_name(name)
+            .unwrap_or_else(|| panic!("no `{name}` in the listing"));
+        app.panels[app.active].cursor_to(row);
+    }
+
+    /// The changes a rebuild was asked for, and the archive they are for.
+    fn rebuild_asked(app: &mut App) -> (std::path::PathBuf, Vec<scmd_arc::Change>) {
+        match app.take_requests().into_iter().next() {
+            Some(Request::ArcRebuild {
+                archive, changes, ..
+            }) => (archive.as_path().to_path_buf(), changes),
+            other => panic!("expected a rebuild, got {other:?}"),
+        }
+    }
+
+    /// Run the changes for real, which is what the worker thread does with the request.
+    fn apply(archive: &std::path::Path, changes: &[scmd_arc::Change]) -> Vec<String> {
+        scmd_arc::rebuild(
+            archive,
+            changes,
+            scmd_arc::Level::Normal,
+            &CancelToken::new(),
+            &mut |_, _| {},
+        )
+        .expect("the rebuild should succeed");
+        let file = std::fs::File::open(archive).unwrap();
+        let mut zip = zip::ZipArchive::new(file).unwrap();
+        (0..zip.len())
+            .map(|i| zip.by_index(i).unwrap().name().unwrap().into_owned())
+            .collect()
+    }
+
+    /// `F8` inside an archive cannot unlink anything: the archive is written again without
+    /// what was selected, and the question asked first is the same question.
+    #[test]
+    fn f8_inside_an_archive_takes_the_entry_out_of_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut app, zip) = app_inside_a_zip(dir.path());
+        cursor_on(&mut app, "two.txt");
+        press(&mut app, "F8");
+        let Mode::Confirm(confirm) = std::mem::replace(&mut app.mode, Mode::Normal) else {
+            panic!("F8 should ask first: {:?}", app.mode)
+        };
+        assert!(
+            confirm.lines.iter().any(|l| l.contains("two.txt")),
+            "{:?}",
+            confirm.lines
+        );
+        app.mode = Mode::Confirm(confirm);
+        press(&mut app, "Enter");
+        let (archive, changes) = rebuild_asked(&mut app);
+        assert_eq!(archive, zip);
+        assert_eq!(
+            changes,
+            vec![scmd_arc::Change::Remove {
+                inner: "/two.txt".to_string()
+            }]
+        );
+        let names = apply(&zip, &changes);
+        assert_eq!(names, vec!["one.txt", "deep/three.txt"]);
+    }
+
+    /// `Shift+F6` inside an archive is a rename inside it, so the dialog offers the name the
+    /// entry has rather than the other panel's directory.
+    #[test]
+    fn shift_f6_inside_an_archive_renames_the_entry() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut app, zip) = app_inside_a_zip(dir.path());
+        cursor_on(&mut app, "one.txt");
+        press(&mut app, "Shift+F6");
+        let Mode::Prompt(prompt) = &app.mode else {
+            panic!("no prompt: {:?}", app.mode)
+        };
+        assert_eq!(prompt.text, "one.txt", "the offer is the name, not a path");
+        app.mode = Mode::Normal;
+        app.run(Command::FileMoveCurrent);
+        clear_prompt(&mut app);
+        type_text(&mut app, "first.txt");
+        press(&mut app, "Enter");
+        let (archive, changes) = rebuild_asked(&mut app);
+        assert_eq!(archive, zip);
+        assert_eq!(
+            changes,
+            vec![scmd_arc::Change::Rename {
+                from: "/one.txt".to_string(),
+                to: "/first.txt".to_string()
+            }]
+        );
+        let names = apply(&zip, &changes);
+        assert!(names.contains(&"first.txt".to_string()), "{names:?}");
+        assert!(!names.contains(&"one.txt".to_string()), "{names:?}");
+    }
+
+    /// A target that is not inside the same archive is not a rename, and the message says
+    /// which key does take something out.
+    #[test]
+    fn moving_out_of_an_archive_says_which_key_does_that() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut app, _zip) = app_inside_a_zip(dir.path());
+        cursor_on(&mut app, "one.txt");
+        app.run(Command::FileMoveCurrent);
+        clear_prompt(&mut app);
+        type_text(&mut app, "/tmp/elsewhere.txt");
+        press(&mut app, "Enter");
+        assert!(app.take_requests().is_empty(), "nothing should be started");
+        assert!(app.status.contains("F5"), "{}", app.status);
+    }
+
+    /// `F4` on an entry fetches it, and saving sends it back into the container it came from
+    /// rather than to a server.
+    #[test]
+    fn saving_an_edit_puts_the_file_back_into_the_archive() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut app, zip) = app_inside_a_zip(dir.path());
+        cursor_on(&mut app, "one.txt");
+        press(&mut app, "F4");
+        let (id, remote, purpose) = match app.take_requests().into_iter().next() {
+            Some(Request::Fetch {
+                id, path, purpose, ..
+            }) => (id, path, purpose),
+            other => panic!("expected a fetch, got {other:?}"),
+        };
+        assert_eq!(purpose, Fetched::Edit);
+        assert_eq!(remote.inner_path(), "/one.txt");
+
+        // The worker brings the bytes out to a copy, which is what the editor opens.
+        let local = dir.path().join("one.txt");
+        std::fs::write(&local, b"first").unwrap();
+        app.handle_event(Event::Fetched {
+            id,
+            remote,
+            purpose: Fetched::Edit,
+            result: Ok((
+                local.clone(),
+                RemoteStamp {
+                    size: 5,
+                    mtime: None,
+                },
+            )),
+        });
+        assert!(app.mode.editor().is_some(), "the editor should be open");
+        press(&mut app, "End");
+        press(&mut app, "!");
+        press(&mut app, "F2");
+        let (archive, changes) = rebuild_asked(&mut app);
+        assert_eq!(archive, zip);
+        assert_eq!(
+            changes,
+            vec![scmd_arc::Change::Put {
+                inner: "/one.txt".to_string(),
+                source: local
+            }]
+        );
+        apply(&zip, &changes);
+        let file = std::fs::File::open(&zip).unwrap();
+        let mut read = zip::ZipArchive::new(file).unwrap();
+        let mut body = String::new();
+        std::io::Read::read_to_string(&mut read.by_name("one.txt").unwrap(), &mut body).unwrap();
+        assert_eq!(body, "first!");
+    }
+
+    /// `F5` with the target inside an archive puts the file in. A directory would have to be
+    /// walked, and the message points at the key that packs a whole tree.
+    #[test]
+    fn f5_into_an_archive_adds_the_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut app, zip) = app_inside_a_zip(dir.path());
+        let source = dir.path().join("new.txt");
+        std::fs::write(&source, b"fresh").unwrap();
+
+        app.panels[app.active].cwd = VPath::local(dir.path());
+        let entries =
+            scmd_vfs::local::list_blocking(&app.panels[app.active].cwd, &CancelToken::new())
+                .unwrap();
+        let (panel, generation) = (app.active, app.panels[app.active].generation);
+        app.handle_event(Event::Listed {
+            panel,
+            generation,
+            result: Ok(entries),
+        });
+        app.requests.clear();
+
+        cursor_on(&mut app, "new.txt");
+        app.run(Command::FileCopyCurrent);
+        clear_prompt(&mut app);
+        type_path(&mut app, &VPath::local(&zip).enter("/deep").to_string());
+        press(&mut app, "Enter");
+        let (archive, changes) = rebuild_asked(&mut app);
+        assert_eq!(archive, zip);
+        assert_eq!(
+            changes,
+            vec![scmd_arc::Change::Put {
+                inner: "/deep/new.txt".to_string(),
+                source: source.clone()
+            }]
+        );
+        let names = apply(&zip, &changes);
+        assert!(names.contains(&"deep/new.txt".to_string()), "{names:?}");
+
+        // A directory one at a time is refused, with the key that does it in the message.
+        std::fs::create_dir(dir.path().join("tree")).unwrap();
+        app.run(Command::FileCopyCurrent);
+        app.mode = Mode::Normal;
+        app.add_into_archive(
+            vec![VPath::local(dir.path().join("tree"))],
+            &VPath::local(&zip).enter("/"),
+            false,
+        );
+        assert!(app.take_requests().is_empty(), "no rebuild for a tree");
+        assert!(app.status.contains("Shift+F1"), "{}", app.status);
     }
 
     #[test]

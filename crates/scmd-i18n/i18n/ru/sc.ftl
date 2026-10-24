@@ -79,6 +79,7 @@ job-delete = Удаление
 job-wipe = Затирание
 job-replace = Замена
 job-pack = Упаковка
+job-rebuild = Запись архива
 job-mkdir = Создание каталога
 job-planning = подготовка…
 job-counters = { $files } / { $filestotal } файлов · { $bytes } / { $bytestotal }
@@ -410,7 +411,9 @@ replace-nothing = заменять нечего: ни один файл не и�
 replace-done = заменено вхождений: { $count } в { $files } файлах
 
 # ── архивы (SPEC 04 §4) ─────────────────────────────────────────────────────────────────
-arc-read-only = содержимое архива пока нельзя изменить — F3 его читает
+arc-writing-back = { $name } возвращается в архив
+arc-move-out = чтобы достать что-то из архива, скопируйте это клавишей F5
+arc-add-files-only = по одному входят только файлы; Shift+F1 помещает внутрь целый каталог
 
 pack-title = Добавить в архив
 pack-name = Архив
