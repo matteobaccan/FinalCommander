@@ -850,7 +850,11 @@ mod tests {
         assert_eq!(e.cursor, Position::new(0, 5));
         e.insert_newline().unwrap();
         e.insert_char('x').unwrap();
-        assert_eq!(e.buffer.to_text(), "hello\nx");
+        // The buffer started empty, so its line ending is this platform's.
+        assert_eq!(
+            e.buffer.to_text(),
+            format!("hello{}x", e.buffer.eol.bytes())
+        );
         assert_eq!(e.cursor, Position::new(1, 1));
     }
 
