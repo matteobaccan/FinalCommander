@@ -11,6 +11,7 @@ pub mod pool;
 pub mod remote;
 pub mod site;
 pub mod ssh;
+pub mod tunnel;
 pub mod vfs;
 
 pub use error::{NetError, Result, SecretKind};
@@ -21,4 +22,5 @@ pub use pool::Pool;
 pub use remote::Remote;
 pub use site::{Auth, Site};
 pub use ssh::{connect, HostKeyPolicy};
+pub use tunnel::{Spec as TunnelSpec, Tunnel};
 pub use vfs::{NetVfs, Router};

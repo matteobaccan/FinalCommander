@@ -67,6 +67,37 @@ impl russh::server::Handler for SshSession {
         Ok(())
     }
 
+    /// The server end of a tunnel: connect where the client asked and pump the bytes.
+    ///
+    /// This is what an SSH server does for `ssh -L`, in about as many lines as it takes to
+    /// say it — which is the point of testing the client against it rather than against a
+    /// mock: the channel, the window, the half-close and the copying are all real.
+    async fn channel_open_direct_tcpip(
+        &mut self,
+        channel: Channel<Msg>,
+        host_to_connect: &str,
+        port_to_connect: u32,
+        _originator_address: &str,
+        _originator_port: u32,
+        reply: ChannelOpenHandle,
+        _session: &mut Session,
+    ) -> Result<(), Self::Error> {
+        let target = format!("{host_to_connect}:{port_to_connect}");
+        match tokio::net::TcpStream::connect(&target).await {
+            Ok(mut socket) => {
+                reply.accept().await;
+                tokio::spawn(async move {
+                    let mut stream = channel.into_stream();
+                    let _ = tokio::io::copy_bidirectional(&mut socket, &mut stream).await;
+                });
+            }
+            // Nothing listening there: the channel is refused, which is what the client has
+            // to survive without losing the session.
+            Err(_) => drop(reply),
+        }
+        Ok(())
+    }
+
     async fn subsystem_request(
         &mut self,
         channel_id: ChannelId,
@@ -562,4 +593,152 @@ async fn the_provider_works_against_a_real_ssh_server() {
     assert!(remote.stat(&VPath::local("/etc/hosts")).await.is_err());
 
     remote.close().await.unwrap();
+}
+
+/// A tunnel over the same session the panel uses: `ssh -L`, without the ssh.
+///
+/// There is a real TCP server at the far end, a real SSH server in the middle and a real
+/// client socket at this end, so what is tested is the whole path — the channel opening, the
+/// copying both ways, the counters, and what happens when the tunnel is closed.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_tunnel_carries_a_connection_to_the_other_side() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    // The service the tunnel reaches: it greets, then echoes in upper case, so the test can
+    // tell which direction a byte went.
+    let service = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+        .await
+        .unwrap();
+    let service_port = service.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        while let Ok((mut socket, _)) = service.accept().await {
+            tokio::spawn(async move {
+                let _ = socket.write_all(b"hello from the far side\n").await;
+                let mut buf = vec![0u8; 256];
+                while let Ok(n) = socket.read(&mut buf).await {
+                    if n == 0 {
+                        return;
+                    }
+                    let shouted = buf[..n].to_ascii_uppercase();
+                    if socket.write_all(&shouted).await.is_err() {
+                        return;
+                    }
+                }
+            });
+        }
+    });
+
+    let server_root = tempfile::tempdir().unwrap();
+    let port = start(server_root.path()).await;
+    let local = tempfile::tempdir().unwrap();
+    let mut site = Site::parse_url(&format!("sftp://mb@127.0.0.1:{port}/")).unwrap();
+    site.auth = SiteAuth::Password;
+    let policy = HostKeyPolicy {
+        known_hosts: Some(local.path().join("known_hosts")),
+        accept_new: true,
+    };
+    let remote = scmd_net::connect(&site, Some(PASSWORD), &policy)
+        .await
+        .expect("the connection");
+
+    let spec = scmd_net::TunnelSpec::parse(&format!("0:127.0.0.1:{service_port}")).unwrap();
+    let tunnel = scmd_net::tunnel::open(remote, 1, spec)
+        .await
+        .expect("the tunnel opens");
+    assert_eq!(tunnel.counts(), (0, 0, 0));
+    assert!(tunnel.describe().contains(&service_port.to_string()));
+    // Port zero asked the system for one, and it is not zero any more.
+    assert_ne!(tunnel.local.port(), 0);
+    assert_eq!(tunnel.local.ip().to_string(), "127.0.0.1");
+
+    let mut client = tokio::net::TcpStream::connect(tunnel.local).await.unwrap();
+    let mut greeting = vec![0u8; 24];
+    client.read_exact(&mut greeting).await.unwrap();
+    assert_eq!(&greeting, b"hello from the far side\n");
+    client.write_all(b"ping\n").await.unwrap();
+    let mut answer = vec![0u8; 5];
+    client.read_exact(&mut answer).await.unwrap();
+    assert_eq!(&answer, b"PING\n");
+
+    let (served, live, failed) = tunnel.counts();
+    assert_eq!((served, failed), (1, 0));
+    assert_eq!(live, 1, "the connection is still open");
+
+    // A second connection goes through the same tunnel.
+    let mut other = tokio::net::TcpStream::connect(tunnel.local).await.unwrap();
+    let mut greeting = vec![0u8; 24];
+    other.read_exact(&mut greeting).await.unwrap();
+    assert_eq!(tunnel.counts().0, 2);
+
+    // Closing the tunnel frees the port: the listener is dropped with it.
+    let address = tunnel.local;
+    drop(tunnel);
+    drop(client);
+    drop(other);
+    let mut freed = false;
+    for _ in 0..50 {
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        if tokio::net::TcpListener::bind(address).await.is_ok() {
+            freed = true;
+            break;
+        }
+    }
+    assert!(freed, "the port should be free again");
+}
+
+/// Nothing listening at the far end: the connection that arrived is dropped and the session
+/// carries on, which is what matters — a refused tunnel must not take the panel with it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_tunnel_to_nothing_does_not_take_the_session_down() {
+    use tokio::io::AsyncReadExt;
+
+    let server_root = tempfile::tempdir().unwrap();
+    std::fs::write(server_root.path().join("there.txt"), b"still here\n").unwrap();
+    let port = start(server_root.path()).await;
+    let local = tempfile::tempdir().unwrap();
+    let mut site = Site::parse_url(&format!("sftp://mb@127.0.0.1:{port}/")).unwrap();
+    site.auth = SiteAuth::Password;
+    let policy = HostKeyPolicy {
+        known_hosts: Some(local.path().join("known_hosts")),
+        accept_new: true,
+    };
+    let remote = scmd_net::connect(&site, Some(PASSWORD), &policy)
+        .await
+        .expect("the connection");
+
+    // A port nothing is on: bound and dropped, so it is free and almost certainly unused.
+    let dead = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+        .await
+        .unwrap();
+    let dead_port = dead.local_addr().unwrap().port();
+    drop(dead);
+
+    let spec = scmd_net::TunnelSpec::parse(&format!("0:127.0.0.1:{dead_port}")).unwrap();
+    let tunnel = scmd_net::tunnel::open(remote.clone(), 2, spec)
+        .await
+        .expect("the tunnel opens: nothing has been connected yet");
+
+    let mut client = tokio::net::TcpStream::connect(tunnel.local).await.unwrap();
+    let mut buf = vec![0u8; 8];
+    // The far end refuses, so this end sees the connection close with nothing on it.
+    let read = client.read(&mut buf).await;
+    assert!(matches!(read, Ok(0) | Err(_)), "{read:?}");
+    for _ in 0..50 {
+        if tunnel.counts().2 > 0 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    assert_eq!(tunnel.counts(), (0, 0, 1), "one refusal, nothing served");
+
+    // And the session is still good for what it was opened for.
+    let entry = remote
+        .stat(&VPath::remote(
+            scmd_core::Scheme::Sftp,
+            site.authority(),
+            "/there.txt",
+        ))
+        .await
+        .expect("the session survived");
+    assert_eq!(entry.size, 11);
 }

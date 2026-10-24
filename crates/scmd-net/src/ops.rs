@@ -112,6 +112,14 @@ pub fn name_hash(name: &str) -> u64 {
 pub type Reader = Box<dyn AsyncRead + Unpin + Send>;
 pub type Writer = Box<dyn AsyncWrite + Unpin + Send>;
 
+/// One end of a tunnel: a stream that reads and writes, which is what both sides of a
+/// forwarded connection need to be.
+pub type Forwarded = Box<dyn Duplex>;
+
+/// What a forwarded connection is, named so the boxed type above says something.
+pub trait Duplex: AsyncRead + AsyncWrite + Unpin + Send {}
+impl<T: AsyncRead + AsyncWrite + Unpin + Send> Duplex for T {}
+
 /// The remote filesystem operations the netbox needs, with paths as the wire spells them.
 ///
 /// One real implementation ([`crate::ssh::SftpBackend`]) and one in-memory implementation
@@ -134,6 +142,20 @@ pub trait Sftp: Send + Sync + std::fmt::Debug {
     async fn create(&self, path: &str) -> Result<Writer>;
     /// Resolve `.`, `..` and a relative path against the login directory.
     async fn canonicalize(&self, path: &str) -> Result<String>;
+    /// Open a channel to `host:port` *as the server sees it* — the client end of a tunnel.
+    ///
+    /// This is SSH's `direct-tcpip`, the same thing `ssh -L` is built on, and it is on this
+    /// trait rather than beside it because the connection it needs is the one the panel is
+    /// already using: one authentication, one host key check, one session, whatever is sent
+    /// over it. A provider that is not SSH says so.
+    async fn forward(&self, host: &str, port: u16) -> Result<Forwarded> {
+        let _ = (host, port);
+        Err(crate::error::NetError::Unsupported {
+            path: format!("{host}:{port}"),
+            detail: "this connection cannot open a tunnel".into(),
+        })
+    }
+
     /// Close the connection. Called by an explicit disconnect; dropping also closes.
     async fn close(&self) -> Result<()> {
         Ok(())

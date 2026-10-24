@@ -165,6 +165,25 @@ and the password or key passphrase asked for in a masked prompt and kept only fo
 connection attempt. **Not yet**: the OS keyring (so a password is asked for every connection),
 `ProxyJump` chains, automatic reconnect, and `charset`.
 
+§TMP§
+
+A connection is a session, and a session can carry more than the files. `direct-tcpip` — what
+`ssh -L` is built on — makes a port on this machine stand for a port the *server* can reach,
+and the netbox opens one on the session the panel is already using: one authentication, one
+host-key check, one connection, one more channel.
+
+- The spec is `[local:]host:port`, or a port on its own, which is the server's own loopback on
+  the same number. Parsed before anything is opened, so a typing mistake is answered by the
+  dialog rather than by a worker.
+- **The local end binds 127.0.0.1.** A tunnel is the server's network handed to this machine;
+  binding it to every interface hands it to the network this machine is on. There is a flag for
+  that case and nothing sets it by accident.
+- Each connection to the local port opens its own channel, and the bytes are copied both ways
+  until either end stops. A far end that refuses costs the connection that arrived and nothing
+  else: the session, and the panel on it, carry on.
+- Closing a tunnel drops its listener and every channel on it, which frees the port at once.
+  The list shows connections carried, open now, and refused.
+
 ### 6.1 How the netbox is tested
 
 Two layers, because a provider that can only be tested against someone's server is not tested:
@@ -175,6 +194,25 @@ Two layers, because a provider that can only be tested against someone's server 
   port (`crates/scmd-net/tests/live_sftp.rs`): key exchange, the host-key decision including
   trust-on-first-use writing to a `known_hosts` file, password authentication, the `sftp`
   subsystem, and every call the provider makes.
+
+### 6.2 Tunnels
+
+A connection is a session, and a session can carry more than the files. `direct-tcpip` — what
+`ssh -L` is built on — makes a port on this machine stand for a port the *server* can reach,
+and the netbox opens one on the session the panel is already using: one authentication, one
+host-key check, one connection, one more channel.
+
+- The spec is `[local:]host:port`, or a port on its own, which is the server's own loopback on
+  the same number. Parsed before anything is opened, so a typing mistake is answered by the
+  dialog rather than by a worker.
+- **The local end binds 127.0.0.1.** A tunnel is the server's network handed to this machine;
+  binding it to every interface hands it to the network this machine is on. There is a flag for
+  that case and nothing sets it by accident.
+- Each connection to the local port opens its own channel, and the bytes are copied both ways
+  until either end stops. A far end that refuses costs the connection that arrived and nothing
+  else: the session, and the panel on it, carry on.
+- Closing a tunnel drops its listener and every channel on it, which frees the port at once.
+  The list shows connections carried, open now, and refused.
 
 ## 7. Performance rules
 

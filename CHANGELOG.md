@@ -40,6 +40,18 @@ Notable changes, newest first. The format follows
   bucket to a local panel is not wired to the job engine yet, and that — with upload, delete
   and server-side copy — is the next increment.
 
+- **Tunnels over the netbox connection** (`F9 → Commands → Open a tunnel…`, or `net.tunnel`
+  from the palette): `8080:db.internal:5432` makes this machine's 8080 reach `db.internal:5432`
+  as the server sees it — SSH's `direct-tcpip`, the thing `ssh -L` is built on, over the
+  session the panel is already using. No second authentication, no second host-key check, no
+  second connection: one more channel on the one that is open. `db.internal:5432` uses the same
+  port on both sides and a bare `5432` means the server's own. The local end binds **127.0.0.1**
+  and not every interface, because a tunnel is the server's network handed to this machine and
+  binding it everywhere hands it to the office; `Tunnels…` lists what is open with the
+  connections carried, open now and refused by the far end, and `Enter` closes one. Tested
+  against a real SSH server in the test process, with a real service at the far end: the
+  channel, the copying both ways, the counters, the port freed on close, and a far end that
+  refuses without taking the session down.
 - **Compare by content** (`F9 → Commands`), beside FAR's own compare folders. That one matches
   names and compares size and time, which is instant and right nine times out of ten; this one
   reads the files. Every pair with the same name is opened on both sides and the bytes are

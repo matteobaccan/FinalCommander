@@ -15,6 +15,26 @@ written anywhere.
 `F7` in the connection manager stores a session, `F4` edits one, and `d` disconnects. What is
 stored is the host, the user and the path — not the password.
 
+## Tunnels
+
+`F9 → Commands → Open a tunnel…` (or `net.tunnel` from the command palette) forwards a port
+over the connection the panel is on — the same thing as `ssh -L`, without a second ssh and
+without a second authentication:
+
+    8080:db.internal:5432     this machine's 8080 reaches db.internal:5432 from the server
+    db.internal:5432          the same port on both sides
+    5432                      the server's own 5432
+
+Anything that connects to the local port is carried over the session and comes out at the far
+end as if it had been opened there — a database client, a browser, or this program's own `s3://`
+panel pointed at a MinIO nobody outside the server room can reach.
+
+The local port is bound on **127.0.0.1**, not on every interface: a tunnel is the server's
+network handed to this machine, and binding it everywhere would hand it to the rest of the
+office. `Tunnels…` in the same menu lists what is open with three counters — connections
+carried, open now, refused by the far end — and `Enter` on a row closes it, which frees the
+port at once.
+
 ## Buckets
 
 An object storage service — S3 itself, or MinIO, Ceph, R2, Wasabi, anything that speaks the

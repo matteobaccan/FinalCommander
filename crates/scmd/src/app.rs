@@ -30,6 +30,18 @@ pub enum Request {
         panel: usize,
         path: VPath,
     },
+    /// Open a tunnel on the connection `authority` names.
+    TunnelOpen {
+        id: u64,
+        authority: String,
+        spec: String,
+    },
+    /// Close one, which frees the local port.
+    TunnelClose {
+        id: u64,
+    },
+    /// What is open, with the counters as they are now.
+    TunnelList,
     /// Read both sides of every pair and say which differ. The pairs are already matched by
     /// name: this is the reading, which is the part that takes time.
     CompareContents {
@@ -182,6 +194,16 @@ pub enum Event {
         panel: usize,
         generation: u64,
         note: String,
+    },
+    /// The tunnels that are open, with their counters — the answer to `TunnelList`, and what
+    /// is sent after one opens or closes.
+    Tunnels {
+        items: Vec<TunnelInfo>,
+    },
+    /// A tunnel could not be opened, and why.
+    TunnelFailed {
+        spec: String,
+        error: String,
     },
     /// How far a comparison by content has got.
     CompareProgress {
@@ -349,6 +371,8 @@ pub enum PromptKind {
     Mkdir,
     /// `Ctrl+G`: one command line, run once per selected file (SPEC 06 §5).
     ApplyCommand,
+    /// Where a tunnel goes: `[local:]host:port`, or a port on its own.
+    Tunnel,
     /// `Alt+F6`: where the new link goes. The target travels in `Prompt::sources`.
     LinkName,
     /// The byte to fill a block with, in hex.
@@ -440,6 +464,18 @@ pub enum ConfirmAction {
         site: Box<Site>,
         secret: Option<String>,
     },
+}
+
+/// One open tunnel, as the panels know about it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TunnelInfo {
+    pub id: u64,
+    /// `127.0.0.1:8080 → db.internal:5432 on mb@jump:22`.
+    pub description: String,
+    /// Connections carried, open now, and refused by the far end.
+    pub served: u64,
+    pub live: u64,
+    pub failed: u64,
 }
 
 /// Two files with the same name, one in each panel, waiting to be read.
@@ -815,6 +851,10 @@ pub struct App {
     /// The comparison by content that is running, and the token that stops it. `Esc` on a
     /// panel with an empty command line stops it, which is the only way out of a comparison
     /// of ten thousand files that was started by mistake.
+    /// The tunnels that are open, as the worker last described them. The tunnels themselves
+    /// live on the runtime, where their listeners and their copying do; this is what the list
+    /// shows and what a status line counts.
+    pub tunnels: Vec<TunnelInfo>,
     compare: Option<(u64, CancelToken)>,
     /// Files with no counterpart on the other side, kept while the reading runs: they are
     /// differences too, and they are selected with the rest when it finishes.
@@ -964,6 +1004,7 @@ impl App {
             connected: Vec::new(),
             pending_connect: None,
             fetch_id: None,
+            tunnels: Vec::new(),
             compare: None,
             compare_alone: Vec::new(),
             compare_pairs: 0,
@@ -1278,6 +1319,29 @@ impl App {
                         self.set_error(e);
                     }
                 }
+            }
+            Event::Tunnels { items } => {
+                let opened = items.len() > self.tunnels.len();
+                self.tunnels = items;
+                if opened {
+                    if let Some(last) = self.tunnels.last() {
+                        let msg = self
+                            .i18n
+                            .t_args("tunnel-open", &[("what", last.description.clone().into())]);
+                        self.set_status(msg);
+                    }
+                }
+                // A list that is on screen is refreshed where it stands.
+                if matches!(&self.mode, Mode::Pick(p) if p.kind == PickKind::Tunnels) {
+                    self.open_tunnels();
+                }
+            }
+            Event::TunnelFailed { spec, error } => {
+                let msg = self.i18n.t_args(
+                    "tunnel-failed",
+                    &[("what", spec.into()), ("why", error.into())],
+                );
+                self.set_error(msg);
             }
             Event::CompareProgress { id, done, total } => {
                 if self.compare.as_ref().map(|(running, _)| *running) != Some(id) {
@@ -2252,6 +2316,31 @@ impl App {
 
     fn prompt_accept(&mut self, prompt: Prompt) {
         match prompt.kind {
+            PromptKind::Tunnel => {
+                let text = prompt.text.trim().to_string();
+                if text.is_empty() {
+                    return;
+                }
+                // Parsed here rather than in the worker: a shape that is not a tunnel is a
+                // typing mistake, and it should be said while the dialog is still on screen
+                // and not after a round trip through a thread.
+                if let Err(e) = scmd_net::TunnelSpec::parse(&text) {
+                    self.set_error(e.to_string());
+                    return;
+                }
+                let Some(authority) = self.panel().cwd.authority().map(str::to_string) else {
+                    let m = self.i18n.t("tunnel-needs-connection");
+                    self.set_error(m);
+                    return;
+                };
+                let id = self.next_job_id;
+                self.next_job_id += 1;
+                self.requests.push(Request::TunnelOpen {
+                    id,
+                    authority,
+                    spec: text,
+                });
+            }
             PromptKind::Calculator => {
                 let line = prompt.text.trim().to_string();
                 match scmd_core::calc::evaluate(&line) {
@@ -3352,6 +3441,11 @@ impl App {
             Command::PanelTree(side) => self.set_content(side, crate::panel::Content::Tree),
             Command::FilePack => self.open_pack_form(),
             Command::FileUnpack => self.open_unpack_form(),
+            Command::NetTunnel => self.ask_tunnel(),
+            Command::NetTunnels => {
+                self.requests.push(Request::TunnelList);
+                self.open_tunnels();
+            }
             Command::ToolCompareDirs => self.compare_dirs(),
             Command::ToolCompareContents => self.compare_contents(),
             Command::ToolCalculator => {
@@ -5522,6 +5616,47 @@ impl App {
         self.mode = Mode::Pick(Box::new(Pick::new(PickKind::Plugins, title, rows, 0)));
     }
 
+    /// Ask where the tunnel goes.
+    fn ask_tunnel(&mut self) {
+        if self.panel().cwd.authority().is_none() {
+            let m = self.i18n.t("tunnel-needs-connection");
+            self.set_error(m);
+            return;
+        }
+        let title = self.i18n.t("tunnel-title");
+        self.mode = Mode::Prompt(Prompt::new(PromptKind::Tunnel, title, String::new()));
+    }
+
+    /// The tunnels that are open. `Enter` on one closes it, which is the only thing there is
+    /// to do to a tunnel once it is up.
+    fn open_tunnels(&mut self) {
+        if self.tunnels.is_empty() {
+            let m = self.i18n.t("tunnel-none");
+            self.set_status(m);
+            self.mode = Mode::Normal;
+            return;
+        }
+        let at = match &self.mode {
+            Mode::Pick(pick) if pick.kind == PickKind::Tunnels => pick.cursor,
+            _ => 0,
+        };
+        let rows: Vec<PickRow> = self
+            .tunnels
+            .iter()
+            .map(|t| PickRow {
+                label: format!(
+                    "{:<46} {} / {} / {}",
+                    t.description, t.served, t.live, t.failed
+                ),
+                value: t.id.to_string(),
+                current: false,
+            })
+            .collect();
+        let title = self.i18n.t("tunnel-list-title");
+        let at = at.min(rows.len().saturating_sub(1));
+        self.mode = Mode::Pick(Box::new(Pick::new(PickKind::Tunnels, title, rows, at)));
+    }
+
     /// Run a plugin's command, asking first when the plugin says to.
     ///
     /// The host cannot know what somebody else's program will do, so the plugin declares the
@@ -6347,6 +6482,8 @@ impl App {
             PickKind::Plugins => return,
             // And `ask_macro_play`, which carries the macro it is about.
             PickKind::MacroPlay => return,
+            // And `open_tunnels`, which knows what the worker last reported.
+            PickKind::Tunnels => return,
             PickKind::Languages => Pick::new(
                 kind,
                 self.i18n.t("menu-languages"),
@@ -6495,6 +6632,14 @@ impl App {
             PickKind::Plugins => {
                 if let Ok(i) = row.value.parse::<usize>() {
                     self.run_plugin_command(i);
+                }
+            }
+            PickKind::Tunnels => {
+                if let Ok(id) = row.value.parse::<u64>() {
+                    self.requests.push(Request::TunnelClose { id });
+                    self.tunnels.retain(|t| t.id != id);
+                    let m = self.i18n.t("tunnel-closed");
+                    self.set_status(m);
                 }
             }
             PickKind::MacroPlay => {
@@ -10301,6 +10446,123 @@ mod tests {
         editor.cursor = 2;
         app.hex_operation(PromptKind::HexMove, "0 6");
         assert_eq!(app.mode.hex_mut().unwrap().read(0, 10), b"ABCDEFGHGH");
+    }
+
+    /// A tunnel goes over the connection the panel is on, so there has to be one, and what
+    /// is typed has to be a tunnel. Both are said while the dialog is still on screen.
+    #[test]
+    fn a_tunnel_needs_a_connection_and_a_shape_that_parses() {
+        let mut app = app();
+        app.run(Command::NetTunnel);
+        assert!(matches!(app.mode, Mode::Normal), "{:?}", app.mode);
+        assert!(app.status_error, "{}", app.status);
+
+        app.panels[app.active].cwd = VPath::remote(scmd_core::Scheme::Sftp, "mb@jump:22", "/srv");
+        app.run(Command::NetTunnel);
+        assert!(matches!(app.mode, Mode::Prompt(_)), "{:?}", app.mode);
+
+        // Not a tunnel: the prompt says so and asks nothing of the worker.
+        type_text(&mut app, "eight:db:5432");
+        press(&mut app, "Enter");
+        assert!(app.status_error, "{}", app.status);
+        assert!(
+            !app.take_requests()
+                .iter()
+                .any(|r| matches!(r, Request::TunnelOpen { .. })),
+            "nothing should have been asked for"
+        );
+
+        // A tunnel: the request carries the connection the panel is on.
+        app.run(Command::NetTunnel);
+        type_text(&mut app, "8080:db.internal:5432");
+        press(&mut app, "Enter");
+        let opened = app
+            .take_requests()
+            .into_iter()
+            .find_map(|r| match r {
+                Request::TunnelOpen {
+                    authority, spec, ..
+                } => Some((authority, spec)),
+                _ => None,
+            })
+            .expect("the tunnel was asked for");
+        assert_eq!(
+            opened,
+            (
+                "mb@jump:22".to_string(),
+                "8080:db.internal:5432".to_string()
+            )
+        );
+    }
+
+    /// The list shows what is open with its counters, and choosing one closes it.
+    #[test]
+    fn the_tunnel_list_closes_what_is_chosen() {
+        let mut app = app();
+        app.handle_event(Event::Tunnels {
+            items: vec![
+                TunnelInfo {
+                    id: 1,
+                    description: "127.0.0.1:8080 → db.internal:5432 on mb@jump:22".into(),
+                    served: 3,
+                    live: 1,
+                    failed: 0,
+                },
+                TunnelInfo {
+                    id: 2,
+                    description: "127.0.0.1:9000 → minio:9000 on mb@jump:22".into(),
+                    served: 0,
+                    live: 0,
+                    failed: 2,
+                },
+            ],
+        });
+        // Opening one says so in the status line without the list being on screen.
+        assert!(
+            app.status.contains("8080") || app.status.contains("9000"),
+            "{}",
+            app.status
+        );
+
+        app.run(Command::NetTunnels);
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(pick.kind, PickKind::Tunnels);
+        assert_eq!(pick.rows.len(), 2);
+        assert!(
+            pick.rows[0].label.contains("db.internal"),
+            "{:?}",
+            pick.rows[0].label
+        );
+        // The counters are in the row: carried, open, refused.
+        assert!(
+            pick.rows[1].label.ends_with("0 / 0 / 2"),
+            "{:?}",
+            pick.rows[1].label
+        );
+
+        press(&mut app, "Down");
+        press(&mut app, "Enter");
+        let closed = app
+            .take_requests()
+            .into_iter()
+            .find_map(|r| match r {
+                Request::TunnelClose { id } => Some(id),
+                _ => None,
+            })
+            .expect("it was closed");
+        assert_eq!(closed, 2);
+        assert_eq!(app.tunnels.len(), 1, "the row goes with it");
+    }
+
+    /// With nothing open, the list is a sentence rather than an empty box.
+    #[test]
+    fn no_tunnels_is_said_rather_than_drawn() {
+        let mut app = app();
+        app.run(Command::NetTunnels);
+        assert!(matches!(app.mode, Mode::Normal), "{:?}", app.mode);
+        assert!(!app.status.is_empty());
     }
 
     /// Comparing by content: the pairs that matched by name are read, and what differs is

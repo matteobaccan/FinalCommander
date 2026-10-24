@@ -342,6 +342,21 @@ fn name_of(path: &str) -> String {
 
 #[async_trait]
 impl Sftp for SftpBackend {
+    /// `direct-tcpip` over the session the panel is already using: `ssh -L` without the ssh.
+    ///
+    /// The originator the server is told is the loopback address and port zero. It is not a
+    /// lie the server can act on — it is what the client claims the connection came from, and
+    /// servers that log it log something true enough — and inventing the real one would mean
+    /// asking the operating system for a peer address this layer has never seen.
+    async fn forward(&self, host: &str, port: u16) -> Result<crate::ops::Forwarded> {
+        let channel = self
+            .keep
+            .channel_open_direct_tcpip(host, u32::from(port), "127.0.0.1", 0)
+            .await
+            .map_err(|e| NetError::remote(format!("{host}:{port}"), e))?;
+        Ok(Box::new(channel.into_stream()))
+    }
+
     async fn read_dir(&self, path: &str) -> Result<Vec<RemoteEntry>> {
         let dir = self
             .session

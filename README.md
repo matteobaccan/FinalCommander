@@ -168,6 +168,12 @@ What works today:
   uploaded beside the original and renamed into place, so the file on the server keeps its old
   bytes until the new ones are all there, and a file someone else changed in the meantime asks
   before being overwritten. `Alt+Shift+N` disconnects.
+- **Tunnels** (`F9 → Commands`): `8080:db.internal:5432` forwards a port over the connection
+  the panel is on — SSH's own `direct-tcpip`, the thing `ssh -L` is built on — so a database
+  client, a browser or this program's own `s3://` panel can reach a service only the server can
+  see, without a second authentication and without a second connection. The local end binds
+  `127.0.0.1`, never every interface. The list shows what is open with the connections carried,
+  open now and refused, and `Enter` closes one.
 - **Object storage** (`s3://`): a bucket as a panel, on AWS or on anything else that speaks the
   protocol — MinIO, Ceph, Garage, R2, Wasabi, a LocalStack in a container — with the endpoint,
   the region and the addressing style in an `[[s3]]` block of the config. `s3://logs/2024/08/`

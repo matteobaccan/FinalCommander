@@ -153,6 +153,10 @@ pub enum Command {
     FilePack,
     /// Take an archive apart, into a directory (`Shift+F2`).
     FileUnpack,
+    /// Open a tunnel over the connection the active panel is on: `ssh -L`, without the ssh.
+    NetTunnel,
+    /// The tunnels that are open, with what has gone through them.
+    NetTunnels,
     ToolUserMenu,
     /// Compare the two panels by name, size and time, and select what differs.
     ToolCompareDirs,
@@ -352,6 +356,8 @@ impl Command {
             Command::CmdInsertPathOther,
             Command::FilePack,
             Command::FileUnpack,
+            Command::NetTunnel,
+            Command::NetTunnels,
             Command::ToolUserMenu,
             Command::ToolCompareDirs,
             Command::ToolCompareContents,
@@ -536,6 +542,8 @@ impl Command {
             Command::CmdInsertPathOther => "cmd.insert.path.other".into(),
             Command::FilePack => "file.pack".into(),
             Command::FileUnpack => "file.unpack".into(),
+            Command::NetTunnel => "net.tunnel".into(),
+            Command::NetTunnels => "net.tunnels".into(),
             Command::ToolUserMenu => "tool.usermenu".into(),
             Command::ToolCompareDirs => "tool.compare.dirs".into(),
             Command::ToolCompareContents => "tool.compare.contents".into(),
@@ -700,6 +708,8 @@ impl Command {
             ("tool.calculator", _) => Command::ToolCalculator,
             ("file.pack", _) => Command::FilePack,
             ("file.unpack", _) => Command::FileUnpack,
+            ("net.tunnel", _) => Command::NetTunnel,
+            ("net.tunnels", _) => Command::NetTunnels,
             ("tool.usermenu", _) => Command::ToolUserMenu,
             ("tool.find", _) => Command::ToolFind,
             ("tool.replace", _) => Command::ToolReplace,

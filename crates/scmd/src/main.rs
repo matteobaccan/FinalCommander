@@ -665,6 +665,9 @@ fn interactive(mut app: App) -> Result<()> {
             accept_new: false,
         });
     }
+    // The tunnels live here, beside the connection pool: their listeners and their copying
+    // run on the runtime, and the panels only ever see what `tunnel_infos` describes.
+    let tunnels: Tunnels = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let objects = std::sync::Arc::new(object_storage(&app.cfg));
     let vfs = Router::with_limits(pool.clone(), app.cfg.arc.limits()).with_objects(objects.clone());
     // One container cache for the whole program: the index a panel read to draw itself is the
@@ -862,6 +865,38 @@ fn interactive(mut app: App) -> Result<()> {
                 Request::CompareContents { id, pairs, cancel } => {
                     let tx = tx.clone();
                     runtime.spawn_blocking(move || run_compare(id, pairs, cancel, tx));
+                }
+                Request::TunnelOpen {
+                    id,
+                    authority,
+                    spec,
+                } => {
+                    let tx = tx.clone();
+                    let pool = pool.clone();
+                    let tunnels = tunnels.clone();
+                    runtime.spawn(async move {
+                        let event = match open_tunnel(&pool, &tunnels, id, &authority, &spec).await
+                        {
+                            Ok(()) => Event::Tunnels {
+                                items: tunnel_infos(&tunnels),
+                            },
+                            Err(error) => Event::TunnelFailed { spec, error },
+                        };
+                        let _ = tx.send(event);
+                    });
+                }
+                Request::TunnelClose { id } => {
+                    // Dropping the tunnel closes its listener and every connection through
+                    // it: there is nothing else to undo.
+                    tunnels.lock().expect("the tunnels").retain(|t| t.id != id);
+                    let _ = tx.send(Event::Tunnels {
+                        items: tunnel_infos(&tunnels),
+                    });
+                }
+                Request::TunnelList => {
+                    let _ = tx.send(Event::Tunnels {
+                        items: tunnel_infos(&tunnels),
+                    });
                 }
                 Request::TempRefresh {
                     panel,
@@ -1262,6 +1297,46 @@ async fn fetch_remote(pool: &Pool, path: &VPath) -> Result<(PathBuf, RemoteStamp
         mtime: None,
     });
     Ok((local, stamp))
+}
+
+/// The tunnels that are open, held where the runtime can reach them.
+type Tunnels = std::sync::Arc<std::sync::Mutex<Vec<scmd_net::Tunnel>>>;
+
+/// Open one over the connection `authority` names, and keep it.
+async fn open_tunnel(
+    pool: &std::sync::Arc<Pool>,
+    tunnels: &Tunnels,
+    id: u64,
+    authority: &str,
+    spec: &str,
+) -> Result<(), String> {
+    let spec = scmd_net::TunnelSpec::parse(spec).map_err(|e| e.to_string())?;
+    let path = VPath::remote(scmd_core::Scheme::Sftp, authority, "/");
+    let remote = pool.require(&path).map_err(|e| e.to_string())?;
+    let tunnel = scmd_net::tunnel::open(remote, id, spec)
+        .await
+        .map_err(|e| e.to_string())?;
+    tunnels.lock().expect("the tunnels").push(tunnel);
+    Ok(())
+}
+
+/// What the panels are told about them.
+fn tunnel_infos(tunnels: &Tunnels) -> Vec<app::TunnelInfo> {
+    tunnels
+        .lock()
+        .expect("the tunnels")
+        .iter()
+        .map(|t| {
+            let (served, live, failed) = t.counts();
+            app::TunnelInfo {
+                id: t.id,
+                description: t.describe(),
+                served,
+                live,
+                failed,
+            }
+        })
+        .collect()
 }
 
 /// Read both sides of every pair and report which differ.
@@ -2112,6 +2187,9 @@ timeout = 10
                         .map(|e| e.to_string());
                     app.handle_event(Event::LinkDone { link, error });
                 }
+                // A tunnel needs a runtime and a connection, and the test server has
+                // neither: the request is seen and nothing is opened.
+                Request::TunnelOpen { .. } | Request::TunnelClose { .. } | Request::TunnelList => {}
                 Request::CompareContents { id, pairs, cancel } => {
                     let (tx, rx) = mpsc::channel();
                     run_compare(id, pairs, cancel, tx);

@@ -60,6 +60,8 @@ pub enum PickKind {
     Plugins,
     /// How a just-recorded macro should play (SPEC 08 §5).
     MacroPlay,
+    /// The tunnels that are open, and what has gone through them (SPEC 04 §6.2).
+    Tunnels,
 }
 
 /// A mark (`√`) next to the entry that is currently in force.
@@ -316,6 +318,8 @@ pub fn menus() -> Vec<Menu> {
                     "",
                     Action::Run(Command::ToolCompareDirs),
                 ),
+                item("menu-tunnel", "", Action::Run(Command::NetTunnel)),
+                item("menu-tunnels", "", Action::Run(Command::NetTunnels)),
                 item(
                     "menu-compare-contents",
                     "",
