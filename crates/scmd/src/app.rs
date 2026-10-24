@@ -2484,28 +2484,37 @@ impl App {
             self.set_error(problems.join("; "));
             return;
         }
-        self.apply_config();
+        self.apply_config(&form.keys());
         let msg = self.i18n.t("opt-applied");
         self.set_status(msg);
     }
 
-    /// Push the configuration into the running panels: the dialogs are useless if the change
-    /// only shows up after a restart.
-    pub fn apply_config(&mut self) {
-        let sort = Sort {
-            key: parse_sort(&self.cfg.panel.sort),
-            reverse: self.cfg.panel.reverse,
-            dirs_first: self.cfg.panel.dirs_first,
-            selected_first: self.cfg.panel.selected_first,
-            natural: self.cfg.panel.natural_sort,
-            ..Sort::default()
-        };
-        let view = ViewMode::parse(&self.cfg.panel.view).unwrap_or(ViewMode::Full);
+    /// Push the configuration into the running panels: a dialog is useless if the change only
+    /// shows up after a restart. Only the keys the dialog owns are pushed, so a panel's own
+    /// sort order — the one chosen with `Ctrl+F3..F7` — survives an unrelated dialog.
+    pub fn apply_config(&mut self, keys: &[&str]) {
+        let mut touched = false;
         for panel in &mut self.panels {
-            panel.sort = sort;
-            panel.view = view;
-            panel.show_hidden = self.cfg.panel.show_hidden;
-            panel.rebuild();
+            for key in keys {
+                match *key {
+                    "panel.sort" => panel.sort.key = parse_sort(&self.cfg.panel.sort),
+                    "panel.reverse" => panel.sort.reverse = self.cfg.panel.reverse,
+                    "panel.dirs_first" => panel.sort.dirs_first = self.cfg.panel.dirs_first,
+                    "panel.selected_first" => {
+                        panel.sort.selected_first = self.cfg.panel.selected_first
+                    }
+                    "panel.natural_sort" => panel.sort.natural = self.cfg.panel.natural_sort,
+                    "panel.show_hidden" => panel.show_hidden = self.cfg.panel.show_hidden,
+                    "panel.view" => {
+                        panel.view = ViewMode::parse(&self.cfg.panel.view).unwrap_or(panel.view)
+                    }
+                    _ => continue,
+                }
+                touched = true;
+            }
+            if touched {
+                panel.rebuild();
+            }
         }
     }
 
@@ -3927,6 +3936,24 @@ mod tests {
     }
 
     #[test]
+    fn an_unrelated_dialog_leaves_a_panels_own_sort_order_alone() {
+        let mut app = app();
+        press(&mut app, "Ctrl+F6"); // sort this panel by size, which the config does not say
+        assert_eq!(app.panels[0].sort.key, SortKey::Size);
+        open(&mut app, 3, "menu-system-settings");
+        press(&mut app, "F10");
+        assert_eq!(
+            app.panels[0].sort.key,
+            SortKey::Size,
+            "a dialog that says nothing about sorting must not reset it"
+        );
+        // The panel dialog does own the sort order, so there it is applied.
+        open(&mut app, 3, "menu-panel-settings");
+        press(&mut app, "F10");
+        assert_eq!(app.panels[0].sort.key, SortKey::Name);
+    }
+
+    #[test]
     fn the_language_list_switches_the_interface() {
         let mut app = app();
         open(&mut app, 3, "menu-languages");
@@ -3978,14 +4005,19 @@ mod tests {
     #[test]
     fn the_folders_list_goes_back_to_a_folder_this_panel_has_been_in() {
         let mut app = app();
-        app.goto(VPath::local("/home/mb/docs"));
+        // Compare whole paths, not substrings: a path is written with this platform's
+        // separator, so `/home/mb` is not a string that has to appear on Windows.
+        let came_from = app.panels[0].cwd.clone();
+        app.goto(came_from.join("docs"));
         press(&mut app, "Alt+F12");
         let Mode::Pick(pick) = &app.mode else {
             panic!("the history did not open")
         };
         assert_eq!(pick.kind, PickKind::FoldersHistory);
         assert!(
-            pick.rows.iter().any(|r| r.value.contains("/home/mb")),
+            pick.rows
+                .iter()
+                .any(|r| VPath::parse(&r.value).normalised() == came_from.normalised()),
             "the folder we came from is not in the list: {:?}",
             pick.rows
         );

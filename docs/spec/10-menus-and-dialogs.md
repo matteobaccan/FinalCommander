@@ -23,9 +23,11 @@ writes into the configuration, and how all of it behaves. It is implemented in
    it edits and applies through `Config::set(key, value)` — the same code path as
    `scmd --set key=value`. One place decides what a setting means; a dialog cannot drift from
    the file format.
-5. **Applying has an effect now.** `OK` writes the configuration *and* pushes it into the
-   running panels (sort, view, hidden files). Nothing waits for a restart. Nothing is written to
-   disk until `Shift+F9` (`Save setup`), so experiments are free.
+5. **Applying has an effect now, and only where it should.** `OK` writes the configuration *and*
+   pushes it into the running panels (sort, view, hidden files) — but only the keys the dialog
+   itself owns, so a panel's own sort order, chosen with `Ctrl+F3..F7`, survives a trip through
+   an unrelated dialog. Nothing waits for a restart, and nothing is written to disk until
+   `Shift+F9` (`Save setup`), so experiments are free.
 
 ## 2. The menu bar (`F9`)
 

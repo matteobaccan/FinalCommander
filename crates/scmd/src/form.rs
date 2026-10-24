@@ -524,6 +524,19 @@ impl Form {
         }
     }
 
+    /// The configuration keys this dialog owns, so applying it touches nothing else.
+    pub fn keys(&self) -> Vec<&'static str> {
+        self.fields
+            .iter()
+            .filter_map(|f| match f {
+                Field::Toggle { key, .. } | Field::Choice { key, .. } | Field::Text { key, .. } => {
+                    Some(*key)
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
     /// Write every row into the configuration. Returns what could not be applied.
     pub fn apply(&self, cfg: &mut Config) -> Vec<String> {
         let mut problems = Vec::new();

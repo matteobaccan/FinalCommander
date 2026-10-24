@@ -48,6 +48,7 @@ not that the work is large.
 
 | Item | Where | Notes |
 | --- | --- | --- |
+| Drive enumeration through the platform | Change drive (`Alt+F1`/`Alt+F2`) | The list is built with `std` today: `/` and `$HOME` on Unix, and on Windows the letters `A:`–`Z:` that answer `Path::exists`. `GetLogicalDrives` would be one call instead of twenty-six, and would also give the volume label and the free space FAR shows. |
 | Use the system recycle bin | System settings | Needs a platform crate (`SHFileOperation`, `~/.local/share/Trash`, `NSFileManager`). |
 | Use the system copy routine | System settings | `copy_file_range`, `CopyFileEx`, `fcopyfile` — a speed-up with its own failure modes, so it stays behind a setting. |
 | Clock in the corner | Interface settings | Wants a repaint on a timer; the event loop is input-driven today. |
