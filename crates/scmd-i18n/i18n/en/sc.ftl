@@ -318,3 +318,5 @@ cmd-set = { $name } = { $value }
 cmd-not-set = { $name } is not set
 user-screen-title = Output — { $lines } lines, from line { $at }
 user-screen-empty = (nothing has run yet)
+viewer-no-branch = this row has no address to follow
+viewer-no-back = nothing to go back to

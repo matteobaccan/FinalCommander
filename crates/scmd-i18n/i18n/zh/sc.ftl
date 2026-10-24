@@ -310,3 +310,5 @@ cmd-set = { $name } = { $value }
 cmd-not-set = { $name } 未设置
 user-screen-title = 输出 — { $lines } 行，自第 { $at } 行
 user-screen-empty = （还没有执行任何命令）
+viewer-no-branch = 这一行没有可跳转的地址
+viewer-no-back = 没有可返回的位置

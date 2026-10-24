@@ -310,3 +310,5 @@ cmd-set = { $name } = { $value }
 cmd-not-set = { $name } не задана
 user-screen-title = Вывод — строк: { $lines }, со строки { $at }
 user-screen-empty = (пока ничего не выполнялось)
+viewer-no-branch = в этой строке нет адреса для перехода
+viewer-no-back = возвращаться некуда

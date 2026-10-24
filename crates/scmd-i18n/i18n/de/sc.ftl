@@ -310,3 +310,5 @@ cmd-set = { $name } = { $value }
 cmd-not-set = { $name } ist nicht gesetzt
 user-screen-title = Ausgabe — { $lines } Zeilen, ab Zeile { $at }
 user-screen-empty = (noch nichts ausgeführt)
+viewer-no-branch = diese Zeile hat keine Adresse zum Folgen
+viewer-no-back = es gibt kein Zurück

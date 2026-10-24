@@ -143,6 +143,10 @@ pub enum Command {
     ViewerBytesLess,
     ViewerBytesMore,
     /// Disassemble: machine code as instructions.
+    /// Follow the branch on the current row (SPEC 05 §1.9).
+    ViewerFollowBranch,
+    /// Back where the last branch was followed from.
+    ViewerBack,
     /// The structure pane: what the file is and where anything inside it is (SPEC 05 §1.8).
     ViewerStructure,
     /// Move the keys between the content and the structure pane.
@@ -264,6 +268,8 @@ impl Command {
             Command::ViewerUndoPosition,
             Command::ViewerBytesLess,
             Command::ViewerBytesMore,
+            Command::ViewerFollowBranch,
+            Command::ViewerBack,
             Command::ViewerStructure,
             Command::ViewerPaneNext,
             Command::ViewerDisasm,
@@ -399,6 +405,8 @@ impl Command {
             Command::ViewerUndoPosition => "viewer.undo".into(),
             Command::ViewerBytesLess => "viewer.bytes.less".into(),
             Command::ViewerBytesMore => "viewer.bytes.more".into(),
+            Command::ViewerFollowBranch => "viewer.follow.branch".into(),
+            Command::ViewerBack => "viewer.back".into(),
             Command::ViewerStructure => "viewer.structure".into(),
             Command::ViewerPaneNext => "viewer.pane.next".into(),
             Command::ViewerDisasm => "viewer.disasm".into(),
@@ -518,6 +526,8 @@ impl Command {
             ("viewer.undo", _) => Command::ViewerUndoPosition,
             ("viewer.bytes.less", _) => Command::ViewerBytesLess,
             ("viewer.bytes.more", _) => Command::ViewerBytesMore,
+            ("viewer.follow.branch", _) => Command::ViewerFollowBranch,
+            ("viewer.back", _) => Command::ViewerBack,
             ("viewer.structure", _) => Command::ViewerStructure,
             ("viewer.pane.next", _) => Command::ViewerPaneNext,
             ("viewer.disasm", _) => Command::ViewerDisasm,
@@ -595,6 +605,8 @@ mod tests {
             Command::ViewerQuit,
             Command::ViewerSearchNext,
             Command::ViewerBytesMore,
+            Command::ViewerFollowBranch,
+            Command::ViewerBack,
             Command::ViewerStructure,
             Command::ViewerPaneNext,
             Command::ViewerDisasm,

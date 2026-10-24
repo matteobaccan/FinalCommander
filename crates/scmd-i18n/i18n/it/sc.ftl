@@ -310,3 +310,5 @@ cmd-set = { $name } = { $value }
 cmd-not-set = { $name } non è impostata
 user-screen-title = Output — { $lines } righe, dalla riga { $at }
 user-screen-empty = (non è stato eseguito ancora niente)
+viewer-no-branch = questa riga non ha un indirizzo da seguire
+viewer-no-back = non c'è niente a cui tornare

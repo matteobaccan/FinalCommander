@@ -4017,6 +4017,16 @@ impl App {
                     };
                     viewer.set_mode(next);
                 }
+                Command::ViewerFollowBranch => {
+                    if viewer.follow_branch().is_none() {
+                        error = Some("viewer-no-branch".into());
+                    }
+                }
+                Command::ViewerBack => {
+                    if !viewer.unfollow_branch() {
+                        error = Some("viewer-no-back".into());
+                    }
+                }
                 Command::ViewerStructure => {
                     if !viewer.toggle_structure() {
                         error = Some("viewer-no-structure".into());
@@ -4272,6 +4282,8 @@ fn is_viewer_movement(cmd: Command) -> bool {
             | Command::NavBottom
             | Command::ViewerWrap
             | Command::ViewerHex
+            | Command::ViewerFollowBranch
+            | Command::ViewerBack
             | Command::ViewerStructure
             | Command::ViewerPaneNext
             | Command::ViewerModeNext

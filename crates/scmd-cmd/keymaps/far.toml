@@ -346,6 +346,16 @@ scope = "viewer"
 cmd = "viewer.right"
 
 [[bind]]
+keys = ["Enter"]
+scope = "viewer"
+cmd = "viewer.follow.branch"
+
+[[bind]]
+keys = ["Backspace"]
+scope = "viewer"
+cmd = "viewer.back"
+
+[[bind]]
 keys = ["F11"]
 scope = "viewer"
 cmd = "viewer.structure"

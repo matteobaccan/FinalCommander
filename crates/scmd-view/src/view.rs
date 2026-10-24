@@ -132,6 +132,10 @@ pub struct Viewer {
     /// The decoded shape of the file: `None` = not looked yet, `Some(None)` = looked and it is
     /// not a format the pane knows, which is the common case.
     structure: Option<Option<Structure>>,
+    /// What each visible disassembly row can follow: (row offset, target).
+    pub disasm_targets: Vec<(u64, disasm::Target)>,
+    /// Offsets we followed a branch from, so there is a way back (SPEC 05 §1.9).
+    pub branch_stack: Vec<u64>,
     /// Cursor and scroll inside the pane, and whether the keys go to it.
     pub struct_cursor: usize,
     struct_top: usize,
@@ -202,6 +206,8 @@ impl Viewer {
             binary: None,
             show_structure: false,
             structure: None,
+            disasm_targets: Vec::new(),
+            branch_stack: Vec::new(),
             struct_cursor: 0,
             struct_top: 0,
             struct_focus: false,
@@ -221,6 +227,39 @@ impl Viewer {
 
     pub fn is_empty(&mut self) -> bool {
         self.source.len() == 0
+    }
+
+    /// `Enter` in the disassembly: the branch on the top row, if it has one. The viewer has no
+    /// cursor of its own in this mode, so the row at the top is the one being read.
+    pub fn follow_branch(&mut self) -> Option<u64> {
+        let from = self.top;
+        let target = self
+            .disasm_targets
+            .iter()
+            .find(|(offset, _)| *offset == from)
+            .and_then(|(_, t)| t.offset)?;
+        self.branch_stack.push(from);
+        self.jump(target);
+        Some(target)
+    }
+
+    /// `Backspace`: back where the last branch was followed from.
+    pub fn unfollow_branch(&mut self) -> bool {
+        match self.branch_stack.pop() {
+            Some(offset) => {
+                self.jump(offset);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// What the top row can follow, for the status line and the key bar.
+    pub fn branch_target(&self) -> Option<&disasm::Target> {
+        self.disasm_targets
+            .iter()
+            .find(|(offset, _)| *offset == self.top)
+            .map(|(_, t)| t)
     }
 
     // ── structure pane (SPEC 05 §1.8) ──────────────────────────────────────────────────────
@@ -748,8 +787,28 @@ impl Viewer {
             .as_ref()
             .map(|b| b.va_for_offset(self.top))
             .unwrap_or(self.top);
-        let lines = disasm::disassemble(&window, self.top, base_va, arch, height as usize)
+        let mut lines = disasm::disassemble(&window, self.top, base_va, arch, height as usize)
             .unwrap_or_default();
+
+        // Where each branch points, in file offsets, so `Enter` can follow one. The section
+        // map comes from whichever reader has it: the disassembler's own parse, or the
+        // structure pane's, which works on files too large for the first.
+        if let Some(binary) = self.binary.as_ref() {
+            binary.resolve_targets(&mut lines);
+        } else if let Some(structure) = self.structure.as_ref().and_then(|s| s.as_ref()) {
+            let map: Vec<structure::Mapping> = structure.maps.clone();
+            disasm::resolve_targets(&mut lines, |va| {
+                map.iter().find_map(|m| {
+                    (va >= m.address && va < m.address.saturating_add(m.size))
+                        .then(|| m.offset + (va - m.address))
+                })
+            });
+        }
+        // Remember what each row can follow, for `Enter` (SPEC 05 §1.9).
+        self.disasm_targets = lines
+            .iter()
+            .filter_map(|l| l.target.as_ref().map(|t| (l.offset, *t)))
+            .collect();
 
         let mut out = Vec::with_capacity(lines.len());
         for line in lines {
@@ -777,7 +836,16 @@ impl Viewer {
                 .map(|b| format!("{b:02X}"))
                 .collect::<Vec<_>>()
                 .join(" ");
-            let text = format!("{:016X}  {:<23}  {}", line.address, hex, line.text);
+            // A branch to a symbol reads as the symbol, which is the whole difference between
+            // reading bytes and reading a program.
+            let binary = self.binary.as_ref();
+            let structure = self.structure.as_ref().and_then(|s| s.as_ref());
+            let body = line.annotated(|va| {
+                binary
+                    .and_then(|b| b.symbol_at(va))
+                    .or_else(|| structure.and_then(|s| s.symbol_at(va)))
+            });
+            let text = format!("{:016X}  {:<23}  {}", line.address, hex, body);
             out.push(Row {
                 offset: line.offset,
                 text: truncate_to(&text, width as usize),

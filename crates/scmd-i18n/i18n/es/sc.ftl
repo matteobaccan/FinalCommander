@@ -310,3 +310,5 @@ cmd-set = { $name } = { $value }
 cmd-not-set = { $name } no está definida
 user-screen-title = Salida — { $lines } líneas, desde la línea { $at }
 user-screen-empty = (todavía no se ha ejecutado nada)
+viewer-no-branch = esta fila no tiene una dirección que seguir
+viewer-no-back = no hay nada a lo que volver
