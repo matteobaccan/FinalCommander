@@ -203,3 +203,20 @@ on close), nameable, reorderable, movable to the other side, duplicable. Persist
   with `Ctrl+Alt+=`.
 - Any element can be hidden; hiding both panels gives the full-screen shell (FAR `Ctrl+O`).
 - Minimum usable size 60x15; below that the panels stack and the key bar collapses to one row.
+
+### 9b. The panel's own frame (shipped)
+
+What FAR draws in and around a panel's frame, and what we do about it:
+
+| Element | Where | Setting | State |
+| --- | --- | --- | --- |
+| path | top frame, centred, elided in the middle | — | shipped; inverted on the active panel |
+| sort letter and filter mark | left end of the titles row, or of the top frame without it | `panel.column_titles` | shipped |
+| column titles | row under the top frame | `panel.column_titles` | shipped, on by default |
+| totals, or the selected count, or the filter | bottom frame, left | — | shipped |
+| free space on the device | bottom frame, right | `panel.free_space` | shipped; `statvfs` on Unix, nothing on a server or on Windows, and it says nothing rather than guessing |
+| scrollbar | right frame | `panel.scrollbar` | shipped; drawn only when there is more than fits |
+| the panel's own status line | a rule and a row above the bottom frame | `panel.status_line` | shipped, **off** by default: the screen-wide status bar already shows the same thing, and two rows saying it is a waste of a row. On, it costs two file rows, as it does in FAR |
+| one panel full width | `Ctrl+F1` / `Ctrl+F2` | — | shipped; the focus follows the screen |
+| long names scrolled sideways | `Ctrl+Shift+←/→` | — | shipped, per panel, reset on a change of directory |
+| free space, screen counter, clock in the corner | — | — | the counter and the clock want a repaint on a timer; see the backlog |

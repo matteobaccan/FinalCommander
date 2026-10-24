@@ -137,6 +137,26 @@ to reach the viewer, the editor and the clipboard from a command line or a macro
 Prefixes work wherever a command line does: the line itself, the user menu, associations,
 apply-command and macros.
 
+### 7.3 Apply command (`Ctrl+G`, shipped)
+
+One command line, run once per selected file. Each file takes its turn as "the current file",
+so the substitutions of §5 mean one file at a time: `!.!` is that file's name, `!` its name
+without the extension, and the selection list is that one file rather than all of them.
+
+Decisions, with the reasoning, because each of them is a question the dialog cannot ask:
+
+- **In sequence, not at once.** A hundred converters started together is not what anybody
+  asked for, and the output would interleave into nonsense. The next command starts when the
+  one before it ends, and the status line counts through the list.
+- **Stop at the first failure.** Pushing ninety-nine more commands over a broken one wastes
+  the user's time and buries the error. The status line says how far it got and which command
+  failed. FAR asks what to do; a dialog mid-run is the better answer and is a backlog item.
+- **A template that asks for a value is refused**, with a message saying why. `!?title?init!`
+  asks once; using that one answer for every file would be a different feature, and guessing
+  which one the user meant would be worse than saying so.
+- **Each command goes through the user screen**, so `Ctrl+O` afterwards shows the whole run,
+  command by command, rather than only the last one.
+
 ## 8. Dialogs and common UI behaviour
 
 - Every dialog: `Tab`/`Shift+Tab` navigation, `Enter` = default action, `Esc` = cancel, `F1` =

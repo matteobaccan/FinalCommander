@@ -121,9 +121,11 @@ Column `SC` = SupremeCommander default (profile `far`, our baseline).
 | test archive | — | — | Alt+Shift+E | Alt+Shift+E |
 | multi-rename | — | — | Shift+F2 | Ctrl+M |
 | select group / unselect group | Gray + / Gray − | + / \ | Ctrl++ / Ctrl+− | + / − |
-| invert selection | Gray * | — | Alt+* | * |
+| invert selection | Gray * | — | Alt+* | `*` (files), `Alt+*` (folders too, FAR's `Ctrl+Gray *`) |
 | select all / none | Shift+Gray + / Shift+Gray − | — | Alt++ / Alt+− | Ctrl+A / Ctrl+Shift+A |
-| by extension | Ctrl+Gray + / − | — | — | Alt++ / Alt+− |
+| by extension of the current file | Ctrl+Gray + / − | — | — | **Ctrl++ / Ctrl+−** |
+| by name, any extension | Alt+Gray + / − | — | — | **Alt++ / Alt+−** |
+| scroll long names sideways | Alt+←/→, Alt+Home/End | — | — | **Ctrl+Shift+←/→** (Alt+←/→ is history here) |
 | restore previous selection | Ctrl+M | — | — | Ctrl+Shift+M |
 | copy names to clipboard | Ctrl+Ins / Ctrl+Shift+Ins names, Alt+Shift+Ins full names, Ctrl+Alt+Ins real/UNC names, Ctrl+Shift+C / Ctrl+Shift+X copy/cut the files themselves | — | — | Ctrl+Shift+C (names), Alt+Shift+C (full paths) |
 | attributes / permissions | Ctrl+A | Ctrl+x c (chmod), Ctrl+x o (chown) | Alt+Enter | Ctrl+A |
@@ -256,6 +258,21 @@ Two of FAR's keys are not ours yet, and the menu says nothing rather than someth
 `Ctrl+A` (FAR: file attributes) selects all here, and `Ctrl+L` (FAR: info panel) is "change
 directory". Both are in `docs/BACKLOG.md` as decisions to settle when those features land.
 
+## 8d. Selection, the keys that ignore it, and the panel chrome (shipped)
+
+| Action | FAR | SC |
+| --- | --- | --- |
+| select / deselect by mask | Gray + / Gray − | **`+` / `−`** (the whole mask grammar: lists, `[c-f]`, `/regex/i`, `include\|exclude`, `<arc>`) |
+| by the current file's extension | Ctrl+Gray + / − | **Ctrl++ / Ctrl+−** |
+| by name, whatever the extension | Alt+Gray + / − | **Alt++ / Alt+−** |
+| invert, folders included | Ctrl+Gray * | **Alt+*** |
+| undo the last sweep | Ctrl+M | **Ctrl+Shift+M** (one press undoes a whole sweep, not one row) |
+| copy / move / delete the item under the cursor | Shift+F5 / Shift+F6 / Shift+F8 | the same, and the list travels with the dialog |
+| run a command once per selected file | Ctrl+G | **Ctrl+G** (in sequence, counted, stopping at the first failure) |
+| give the screen to one panel | Ctrl+F1 / Ctrl+F2 | the same, and the focus goes with it |
+| scroll long names | Alt+←/→ | **Ctrl+Shift+←/→** |
+| the panel's own status line, scrollbar, free space | settings | three settings in the Panel dialog; the status line is off by default because we also have a screen-wide status bar |
+
 ## 9. Terminal reality check (design constraints)
 
 A TUI cannot receive every combination the Windows console gives FAR. Decisions:
@@ -264,6 +281,12 @@ A TUI cannot receive every combination the Windows console gives FAR. Decisions:
    Ctrl+Shift+N, jump with LeftCtrl+N" becomes `Ctrl+Shift+0..9` = set, `Alt+0..9` = jump.
 2. **Numpad / "gray" keys** are not distinguishable from the main block in most terminals.
    `+`, `-`, `*` are therefore bound as plain characters when the command line is empty.
+   The *modified* ones — `Ctrl++`, `Ctrl+−`, `Alt++`, `Alt+−`, `Alt+*`, which carry FAR's
+   selection matrix — need a terminal that reports modified printable keys: kitty, foot,
+   WezTerm, Windows Terminal, or xterm with `modifyOtherKeys`. Where the terminal does not,
+   the same work is a menu entry away, and `Ctrl+A` / `Ctrl+Shift+A` still select everything
+   and nothing. FAR's `Ctrl+Gray *` (invert including folders) is `Alt+*` here, because that
+   one a terminal does deliver.
 3. **`Shift+F1..F12`, `Ctrl+F1..F12`, `Alt+F1..F12`** require a capable terminfo; we also detect
    and enable the **kitty keyboard protocol** (`CSI > 1 u`) and the **Win32 input mode** on
    Windows terminals, which restore full modifier reporting including key releases. Without
