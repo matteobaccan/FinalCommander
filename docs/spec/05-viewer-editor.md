@@ -179,12 +179,25 @@ invents a name.
 
 ### 1.10 Raw devices
 
-A block device is a file: on Linux and macOS the hex pane can open `/dev/sdb` or a partition
-with no special case in the viewer at all. Two things do need care, and they are the whole
-feature: the size comes from an `ioctl` (`BLKGETSIZE64`, `DKIOCGETBLOCKCOUNT`) because `stat`
-reports zero, and a device opens **read-only** unless the user says otherwise, with a warning
-that names the device and its size. Windows needs `\\.\PhysicalDrive0` handling and is a
-later addition.
+A block device is a file: on Linux and macOS the viewer and the hex pane open `/dev/sdb` or a
+partition with no special case at all. Two things do need care, and they are the whole feature.
+
+**The size.** `stat` reports zero for a device, so a viewer that believes it shows an empty
+screen over a terabyte of disk. It is measured instead, by seeking to the end — which the
+kernel answers for a block device without reading anything, and which needs no `ioctl` and no
+C dependency (`scmd_core::device::length`). What cannot be measured that way — a character
+device, a pipe — is reported as an unknown length rather than as an empty file. A directory
+listing never measures: opening every entry of `/dev` to list it could block on a tape or a
+modem, so the panel shows the metadata's zero and the size appears when the device is opened.
+
+**Writing.** A device opens **read-only**, and the status line names it and the size it
+measured. The refusal is not a policy but the shape of the save: an atomic save writes a new
+file beside the old one and renames it over the top, and there is no such move onto a disk.
+Writing the bytes *out* to a file is allowed and is how a device is dumped — `F12` on a
+marked block, or `F2` to a name of its own.
+
+Windows needs `\\.\PhysicalDrive0` handling, where neither the seek nor the open works the
+same way: it is a later addition and the backlog carries it.
 
 ### 1.7 Preview pipeline
 

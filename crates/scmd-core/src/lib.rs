@@ -5,6 +5,7 @@
 
 pub mod calc;
 pub mod cancel;
+pub mod device;
 pub mod entry;
 pub mod error;
 pub mod filter;
@@ -16,6 +17,7 @@ pub mod view;
 pub mod vpath;
 
 pub use cancel::CancelToken;
+pub use device::{is_device, Length};
 pub use entry::{Entry, EntryFlags, EntryId, EntryKind};
 pub use error::{Error, Result};
 pub use filter::{

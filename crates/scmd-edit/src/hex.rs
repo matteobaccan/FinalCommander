@@ -74,6 +74,8 @@ pub enum HexError {
     NotAFile(String),
     #[error("nothing to save to: this buffer has no path")]
     NoPath,
+    #[error("{0} is a device: write the bytes out to a file instead")]
+    IsADevice(String),
 }
 
 type Result<T> = std::result::Result<T, HexError>;
@@ -114,6 +116,10 @@ pub struct HexEdit {
     /// Where a block was started, while it is being marked.
     pub mark: Option<u64>,
     pub read_only: bool,
+    /// A raw device rather than a file (SPEC 05 §1.10). It opens, it is read, it is searched
+    /// — and it is never written to from here: the atomic save writes a new file beside the
+    /// old one and renames it over the top, which is not a thing one can do to a disk.
+    pub device: bool,
 }
 
 impl std::fmt::Debug for HexEdit {
@@ -140,12 +146,15 @@ impl HexEdit {
         if meta.is_dir() {
             return Err(HexError::NotAFile(name));
         }
-        let read_only = meta.permissions().readonly();
-        let file = File::open(path).map_err(|e| HexError::Io {
+        // A device is opened read-only whatever its permissions say.
+        let device = scmd_core::is_device(&meta);
+        let read_only = device || meta.permissions().readonly();
+        let mut file = File::open(path).map_err(|e| HexError::Io {
             path: name,
             source: e,
         })?;
-        let len = meta.len();
+        // A block device's metadata says it is zero bytes long; its length has to be measured.
+        let len = scmd_core::device::length(&mut file, &meta).bytes;
         Ok(HexEdit {
             path: Some(VPath::local(path)),
             file: Some(file),
@@ -173,6 +182,7 @@ impl HexEdit {
             block: None,
             mark: None,
             read_only,
+            device,
         })
     }
 
@@ -207,6 +217,7 @@ impl HexEdit {
             block: None,
             mark: None,
             read_only: false,
+            device: false,
         }
     }
 
@@ -598,6 +609,12 @@ impl HexEdit {
             (None, None) => return Err(HexError::NoPath),
         };
         let name = target.display().to_string();
+        // Saving in place writes a new file beside the old one and renames it over the top.
+        // There is no such move onto a disk, so a device is written out to a file or not at
+        // all — which is also the only way to be sure nobody loses a partition by habit.
+        if self.device && to.is_none() {
+            return Err(HexError::IsADevice(name));
+        }
         let part = target.with_extension(format!(
             "{}.scmd-part",
             target
@@ -727,6 +744,38 @@ impl HexEdit {
 
 #[cfg(test)]
 mod tests {
+
+    /// A raw device (SPEC 05 §1.10). A disk needs permissions CI does not have, but
+    /// `/dev/null` is the same kind of thing — a character device whose metadata says zero —
+    /// and it proves the two rules that matter: it opens, and it cannot be saved over.
+    #[test]
+    #[cfg(unix)]
+    fn a_device_opens_read_only_and_refuses_to_be_saved_over() {
+        let path = Path::new("/dev/null");
+        if !path.exists() {
+            return;
+        }
+        let Ok(mut editor) = HexEdit::open(path) else {
+            return; // a build environment without /dev is not a failure of this code
+        };
+        assert!(editor.device, "a character device must be recognised");
+        assert!(
+            editor.read_only,
+            "a device opens read-only whatever its mode"
+        );
+
+        match editor.save(None) {
+            Err(HexError::IsADevice(name)) => assert!(name.contains("null"), "{name}"),
+            other => panic!("saving over a device must be refused, got {other:?}"),
+        }
+
+        // Writing the bytes out somewhere else is allowed: that is how a device is dumped.
+        let dir = tempfile::tempdir().unwrap();
+        let out = dir.path().join("dump.bin");
+        assert!(editor.save(Some(&out)).is_ok());
+        assert!(out.exists());
+    }
+
     use super::*;
 
     fn edit(bytes: &[u8]) -> HexEdit {

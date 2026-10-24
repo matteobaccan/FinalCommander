@@ -455,6 +455,7 @@ hex-written = { $size } записано в { $name }
 hex-read-done = { $size } прочитано из { $name }
 hex-inserted = вставлено { $size } нулей
 hex-deleted = удалено { $size }
+hex-device = { $name }: устройство { $size }, открыто только для чтения
 hex-copied = { $size } скопировано из { $from }
 hex-moved = { $size } перенесено из { $from }
 menu-calculator = Ка&лькулятор

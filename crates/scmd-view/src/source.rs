@@ -26,25 +26,40 @@ pub trait Source: Send {
     }
 }
 
-/// A file on disk.
+/// A file on disk — or a raw device, which on Linux and macOS is the same thing (SPEC 05
+/// §1.10). Only the length has to be learned differently, and `scmd_core::device` does that.
 pub struct FileSource {
     file: File,
     len: u64,
+    /// A device, a pipe, a socket: anything that is not a regular file. The length of one is
+    /// measured rather than read from its metadata, and it is never re-stat'd.
+    device: bool,
 }
 
 impl FileSource {
     pub fn open(path: &Path) -> io::Result<Self> {
-        let file = File::open(path)?;
-        let len = file.metadata()?.len();
-        Ok(FileSource { file, len })
+        let mut file = File::open(path)?;
+        let meta = file.metadata()?;
+        let device = scmd_core::is_device(&meta);
+        let len = scmd_core::device::length(&mut file, &meta).bytes;
+        Ok(FileSource { file, len, device })
+    }
+
+    /// Is this a device rather than a file? The viewer says so in the status line, and the
+    /// editor refuses to write to one.
+    pub fn is_device(&self) -> bool {
+        self.device
     }
 }
 
 impl Source for FileSource {
     fn len(&mut self) -> u64 {
-        // Re-stat: the file may be growing under us (a log being written).
-        if let Ok(meta) = self.file.metadata() {
-            self.len = meta.len();
+        // Re-stat: the file may be growing under us (a log being written). A device does not
+        // grow, and its metadata would say zero, so the measured length stands.
+        if !self.device {
+            if let Ok(meta) = self.file.metadata() {
+                self.len = meta.len();
+            }
         }
         self.len
     }

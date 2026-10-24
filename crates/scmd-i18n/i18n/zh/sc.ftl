@@ -455,6 +455,7 @@ hex-written = 已将 { $size } 写入 { $name }
 hex-read-done = 已从 { $name } 读取 { $size }
 hex-inserted = 已插入 { $size } 的零
 hex-deleted = 已删除 { $size }
+hex-device = { $name }：{ $size } 的设备，以只读方式打开
 hex-copied = 已从 { $from } 复制 { $size }
 hex-moved = 已从 { $from } 移动 { $size }
 menu-calculator = 计算器(&L)

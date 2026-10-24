@@ -464,6 +464,7 @@ hex-written = { $size } written to { $name }
 hex-read-done = { $size } read from { $name }
 hex-inserted = { $size } of zeros inserted
 hex-deleted = { $size } deleted
+hex-device = { $name }: a device of { $size }, open read-only
 hex-copied = { $size } copied from { $from }
 hex-moved = { $size } moved from { $from }
 menu-calculator = Ca&lculator

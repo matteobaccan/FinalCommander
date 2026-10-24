@@ -5554,6 +5554,15 @@ impl App {
             self.fetch_remote(path, entry.size, Fetched::Edit);
             return;
         }
+        // A raw device is bytes by definition and never lines: it opens in hex, read-only,
+        // without the text editor being given a chance to try (SPEC 05 §1.10).
+        if std::fs::metadata(path.as_path())
+            .map(|m| scmd_core::is_device(&m))
+            .unwrap_or(false)
+        {
+            self.open_hex(path.as_path());
+            return;
+        }
         // A file a text view would mangle opens in hex instead (SPEC 05 §2.5). The reader's
         // own test decides, so `F3` and `F4` agree about what a binary is.
         if looks_binary_file(path.as_path()) {
@@ -5578,7 +5587,18 @@ impl App {
     pub(crate) fn open_hex(&mut self, path: &std::path::Path) {
         match HexEdit::open(path) {
             Ok(mut editor) => {
-                if editor.read_only {
+                if editor.device {
+                    // A device says what it is and how long it measured, because a size that
+                    // came from a seek rather than from `stat` is worth stating once.
+                    let msg = self.i18n.t_args(
+                        "hex-device",
+                        &[
+                            ("name", editor.name().into()),
+                            ("size", scmd_core::format_size(editor.len()).into()),
+                        ],
+                    );
+                    self.set_status(msg);
+                } else if editor.read_only {
                     let msg = self
                         .i18n
                         .t_args("editor-read-only", &[("name", editor.name().into())]);

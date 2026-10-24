@@ -168,6 +168,10 @@ fn entry_from_meta(name: OsString, full: &Path, meta: &Metadata) -> Entry {
         size: if kind == EntryKind::Dir {
             0
         } else {
+            // A device's metadata says zero, and it stays zero here on purpose: measuring one
+            // means opening it, and opening every entry of `/dev` to list the directory could
+            // block on a tape or a modem. The size is measured when a device is opened to be
+            // read — `scmd_core::device::length` — and not before (SPEC 05 §1.10).
             meta.len()
         },
         mtime: meta.modified().ok(),

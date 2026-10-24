@@ -455,6 +455,7 @@ hex-written = { $size } escritos en { $name }
 hex-read-done = { $size } leídos de { $name }
 hex-inserted = insertados { $size } de ceros
 hex-deleted = eliminados { $size }
+hex-device = { $name }: un dispositivo de { $size }, abierto solo para lectura
 hex-copied = { $size } copiados desde { $from }
 hex-moved = { $size } movidos desde { $from }
 menu-calculator = Ca&lculadora

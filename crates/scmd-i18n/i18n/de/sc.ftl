@@ -455,6 +455,7 @@ hex-written = { $size } nach { $name } geschrieben
 hex-read-done = { $size } aus { $name } gelesen
 hex-inserted = { $size } Nullen eingefügt
 hex-deleted = { $size } gelöscht
+hex-device = { $name }: ein Gerät mit { $size }, nur lesend geöffnet
 hex-copied = { $size } von { $from } kopiert
 hex-moved = { $size } von { $from } verschoben
 menu-calculator = Ta&schenrechner
