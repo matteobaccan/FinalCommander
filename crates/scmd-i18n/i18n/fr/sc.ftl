@@ -401,3 +401,23 @@ unpack-title = Extraire de l'archive
 unpack-to = Extraire vers
 unpack-scope = depuis { $name }
 unpack-not-an-archive = pas une archive que nous savons lire
+
+# ── les panneaux particuliers (SPEC 02 §7) ──────────────────────────────────────────────
+panel-quick-view = Aperçu rapide
+panel-info = Informations
+quick-view-directory = { $name } est un répertoire — F3 le mesure
+quick-view-not-here = les octets ne sont pas ici : F3 les extrait d'abord
+info-path = Chemin
+info-kind = Type
+info-kind-local = un répertoire sur cette machine
+info-kind-remote = sur { $host }
+info-kind-archive = dans { $name }
+info-kind-list = une liste de fichiers
+info-free = Libre
+info-contents = Contient
+info-contents-value = { $files } fichiers, { $dirs } répertoires, { $bytes }
+info-selected = Sélection
+info-selected-value = { $count } fichiers, { $bytes }
+info-cursor = Curseur
+info-size = Taille
+info-modified = Modifié

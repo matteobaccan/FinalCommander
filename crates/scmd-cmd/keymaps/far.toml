@@ -203,9 +203,19 @@ cmd = "nav.history.back"
 keys = ["Alt+Right"]
 cmd = "nav.history.forward"
 
+# FAR's `Ctrl+L` is the info panel, and now that `cd` works on the command line the
+# change-directory dialog does not need the better key: it moves to `Ctrl+Shift+L`.
 [[bind]]
 keys = ["Ctrl+L"]
+cmd = "panel.info"
+
+[[bind]]
+keys = ["Ctrl+Shift+L"]
 cmd = "nav.goto.path"
+
+[[bind]]
+keys = ["Ctrl+Q"]
+cmd = "panel.quickview"
 
 # ---------------------------------------------------------------- selection
 [[bind]]

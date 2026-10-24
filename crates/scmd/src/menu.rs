@@ -135,8 +135,16 @@ fn panel_menu(title: &'static str, side: usize) -> Menu {
                 Mark::View(ViewMode::Wide),
             ),
             Entry::Separator,
-            item("menu-info-panel", "", Action::Todo("panel.info")),
-            item("menu-quick-view", "Ctrl+Q", Action::Todo("panel.quickview")),
+            item(
+                "menu-info-panel",
+                "Ctrl+L",
+                Action::Run(Command::PanelInfo(Side::Active)),
+            ),
+            item(
+                "menu-quick-view",
+                "Ctrl+Q",
+                Action::Run(Command::PanelQuickView(Side::Active)),
+            ),
             item("menu-tree-panel", "Ctrl+T", Action::Todo("panel.tree")),
             Entry::Separator,
             item(

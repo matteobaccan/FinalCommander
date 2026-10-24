@@ -642,6 +642,14 @@ pub struct App {
     pub hidden: Option<usize>,
     /// What was searched for last, so `Alt+F7` opens on it rather than on an empty dialog.
     pub last_find: FindSpec,
+    /// The quick view's own reader, and what it is of: opened when the cursor lands on a file
+    /// and kept while it stays there, so moving down a directory does not reopen a file.
+    pub quick: Option<Box<Viewer>>,
+    quick_of: Option<VPath>,
+    /// Why there is nothing to show, when there is not: an empty frame looks broken.
+    pub quick_why: Option<String>,
+    /// The quick view's drawing area, so a page scroll in it is a page of what is on screen.
+    pub quick_size: (u16, u16),
     /// The archive format the last pack used, so the next one opens on it.
     pub last_pack: scmd_arc::Format,
     /// The same for the replace dialog.
@@ -727,6 +735,10 @@ impl App {
             user_screen: Vec::new(),
             hidden: None,
             last_find: FindSpec::default(),
+            quick: None,
+            quick_of: None,
+            quick_why: None,
+            quick_size: (40, 20),
             last_pack: scmd_arc::Format::Zip,
             last_replace: scmd_jobs::ReplaceOptions::default(),
             pending_replace: None,
@@ -2348,6 +2360,10 @@ impl App {
             return;
         }
         self.panel_mut().message = None;
+        // A special panel has no rows: movement in it scrolls what it is showing instead.
+        if self.special_panel_key(cmd) {
+            return;
+        }
         match cmd {
             Command::AppQuit => self.quit = true,
             Command::AppHelp => self.mode = Mode::Help { scroll: 0 },
@@ -2670,6 +2686,10 @@ impl App {
                     sources: vec![target],
                 });
             }
+            Command::PanelQuickView(side) => {
+                self.set_content(side, crate::panel::Content::QuickView)
+            }
+            Command::PanelInfo(side) => self.set_content(side, crate::panel::Content::Info),
             Command::FilePack => self.open_pack_form(),
             Command::FileUnpack => self.open_unpack_form(),
             Command::ToolFind => self.open_find_form(),
@@ -5444,6 +5464,111 @@ impl App {
         Some(panel.path_of(entry).enter("/"))
     }
 
+    /// `Ctrl+Q` and `Ctrl+L`: turn a special panel kind on, or off again (SPEC 02 §7).
+    ///
+    /// FAR's rule, and ours: the kind goes in the *passive* panel, so `Side::Active` means
+    /// "the other one" — pressing the key twice puts the files back.
+    fn set_content(&mut self, side: Side, want: crate::panel::Content) {
+        use crate::panel::Content;
+        let index = match side {
+            Side::Left => 0,
+            Side::Right => 1,
+            Side::Active => 1 - self.active,
+        };
+        let now = self.panels[index].content;
+        let next = if now == want { Content::Files } else { want };
+        self.panels[index].content = next;
+        if next == Content::Files {
+            // Back to a directory: it may have missed changes while it was something else.
+            self.read_panel(index);
+            return;
+        }
+        // Nothing in a special panel can be selected or copied, so the keys stay with the
+        // files: the focus moves to the other panel rather than onto a frame with no rows.
+        self.active = 1 - index;
+        if next == Content::QuickView {
+            // Opened now rather than on the next frame, so the panel is never blank once.
+            self.quick_view_for(self.active);
+        }
+    }
+
+    /// Keys inside a special panel. The quick view scrolls; the info panel has nothing to
+    /// scroll. Returns true when the key was ours, so the panel's own row movement — which
+    /// would move a cursor that is not there — never runs.
+    fn special_panel_key(&mut self, cmd: Command) -> bool {
+        use crate::panel::Content;
+        if self.panels[self.active].content == Content::Files {
+            return false;
+        }
+        let rows = self.rows.max(1) as i64;
+        let delta = match cmd {
+            Command::NavUp => -1,
+            Command::NavDown => 1,
+            Command::NavPageUp => -rows,
+            Command::NavPageDown => rows,
+            Command::NavTop => i64::MIN,
+            Command::NavBottom => i64::MAX,
+            // Everything else belongs to whatever the command normally does; a panel with no
+            // rows simply has nothing for most of them to act on.
+            _ => return false,
+        };
+        let (w, h) = (self.quick_size.0.max(1), self.quick_size.1.max(1));
+        if let Some(viewer) = self.quick.as_mut() {
+            match delta {
+                i64::MIN => viewer.goto(0),
+                i64::MAX => viewer.goto_percent(100),
+                d => viewer.scroll(d, w, h),
+            }
+        }
+        true
+    }
+
+    /// Point the quick view at whatever `panel` has under its cursor, opening a reader when
+    /// that has changed and leaving it alone when it has not.
+    pub fn quick_view_for(&mut self, panel: usize) {
+        let Some(entry) = self.panels[panel].current().cloned() else {
+            self.quick = None;
+            self.quick_of = None;
+            self.quick_why = Some(self.i18n.t("msg-nothing-to-do"));
+            return;
+        };
+        if entry.kind.is_dirlike() {
+            // A directory has no bytes to show. FAR puts its size here; measuring it is
+            // `F3`'s job and takes a walk, so this says what it is and leaves it at that.
+            self.quick = None;
+            self.quick_of = None;
+            self.quick_why = Some(self.i18n.t_args(
+                "quick-view-directory",
+                &[("name", entry.name_str().into_owned().into())],
+            ));
+            return;
+        }
+        let path = self.panels[panel].path_of(&entry);
+        if self.quick_of.as_ref() == Some(&path) {
+            return;
+        }
+        if !path.is_local() || path.in_container() {
+            // The bytes would have to be fetched, and a preview that copies a file down on
+            // every cursor movement is a trap. `F3` fetches it when the user asks.
+            self.quick = None;
+            self.quick_of = None;
+            self.quick_why = Some(self.i18n.t("quick-view-not-here"));
+            return;
+        }
+        match scmd_view::FileSource::open(path.as_path()) {
+            Ok(source) => {
+                self.quick = Some(Box::new(Viewer::new(Box::new(source), path.clone())));
+                self.quick_of = Some(path);
+                self.quick_why = None;
+            }
+            Err(e) => {
+                self.quick = None;
+                self.quick_of = None;
+                self.quick_why = Some(format!("{}: {e}", path.display_name()));
+            }
+        }
+    }
+
     fn not_implemented(&mut self, what: &str) {
         let msg = self.i18n.t_args(
             "msg-not-implemented",
@@ -7201,7 +7326,7 @@ mod tests {
     #[test]
     fn goto_prompt_accepts_relative_and_absolute_paths() {
         let mut app = app();
-        press(&mut app, "Ctrl+L");
+        press(&mut app, "Ctrl+Shift+L");
         for c in ["d", "o", "c", "s"] {
             press(&mut app, c);
         }
@@ -8532,7 +8657,7 @@ abcdefghij
     #[test]
     fn a_url_typed_into_the_goto_prompt_connects() {
         let mut app = net_app();
-        press(&mut app, "Ctrl+L");
+        press(&mut app, "Ctrl+Shift+L");
         for c in [
             "s", "f", "t", "p", ":", "/", "/", "m", "b", "@", "h", "o", "s", "t", "/", "s", "r",
             "v",
@@ -8545,7 +8670,7 @@ abcdefghij
         assert_eq!(site.user, "mb");
         assert_eq!(site.start_dir, "/srv");
         // A local path still changes directory, it does not dial anything.
-        press(&mut app, "Ctrl+L");
+        press(&mut app, "Ctrl+Shift+L");
         for c in ["/", "t", "m", "p"] {
             press(&mut app, c);
         }

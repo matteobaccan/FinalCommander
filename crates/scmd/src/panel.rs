@@ -35,6 +35,23 @@ fn path_hash(path: &VPath) -> u64 {
     hasher.finish()
 }
 
+/// What a panel is showing (SPEC 02 §7).
+///
+/// FAR's rule, and ours: all three special kinds live in the *passive* panel, the key that
+/// turns one on turns it off again, and what the panel shows follows the other panel's
+/// cursor. The special kinds have no rows of their own, so nothing that acts on a selection
+/// has anything to act on — which is why the focus goes to the file panel when one opens.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Content {
+    /// Rows: a directory, or a list of files from anywhere.
+    #[default]
+    Files,
+    /// The viewer, on whatever the other panel's cursor is on (`Ctrl+Q`).
+    QuickView,
+    /// Facts about the device, the directory and the selection (`Ctrl+L`).
+    Info,
+}
+
 /// One panel's state. Pure data plus cursor arithmetic — no I/O, so it is easy to test.
 #[derive(Debug, Clone)]
 pub struct Panel {
@@ -66,6 +83,8 @@ pub struct Panel {
     pub name_scroll: usize,
     /// Set when this panel is a list rather than a directory.
     pub temp: Option<TempList>,
+    /// What this panel shows: rows, or one of the special kinds.
+    pub content: Content,
 }
 
 impl Panel {
@@ -86,6 +105,7 @@ impl Panel {
             free: None,
             name_scroll: 0,
             temp: None,
+            content: Content::default(),
             history_pos: 0,
             generation: 0,
             loading: true,

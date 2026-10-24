@@ -401,3 +401,23 @@ unpack-title = Aus Archiv entpacken
 unpack-to = Entpacken nach
 unpack-scope = aus { $name }
 unpack-not-an-archive = kein Archiv, das wir lesen können
+
+# ── die besonderen Panel-Arten (SPEC 02 §7) ─────────────────────────────────────────────
+panel-quick-view = Schnellansicht
+panel-info = Informationen
+quick-view-directory = { $name } ist ein Verzeichnis — F3 misst es
+quick-view-not-here = die Bytes sind nicht hier: F3 holt sie zuerst
+info-path = Pfad
+info-kind = Art
+info-kind-local = ein Verzeichnis auf diesem Rechner
+info-kind-remote = auf { $host }
+info-kind-archive = in { $name }
+info-kind-list = eine Dateiliste
+info-free = Frei
+info-contents = Enthält
+info-contents-value = { $files } Dateien, { $dirs } Verzeichnisse, { $bytes }
+info-selected = Ausgewählt
+info-selected-value = { $count } Dateien, { $bytes }
+info-cursor = Cursor
+info-size = Größe
+info-modified = Geändert

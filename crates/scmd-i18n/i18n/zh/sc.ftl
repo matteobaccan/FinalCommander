@@ -401,3 +401,23 @@ unpack-title = 从压缩包解压
 unpack-to = 解压到
 unpack-scope = 来自 { $name }
 unpack-not-an-archive = 这不是我们能读取的压缩包
+
+# ── 特殊面板（SPEC 02 §7）──────────────────────────────────────────────────────────────
+panel-quick-view = 快速查看
+panel-info = 信息
+quick-view-directory = { $name } 是一个目录 — F3 可以统计它
+quick-view-not-here = 字节不在这里：先用 F3 取出
+info-path = 路径
+info-kind = 类型
+info-kind-local = 本机上的一个目录
+info-kind-remote = 在 { $host }
+info-kind-archive = 在 { $name } 里
+info-kind-list = 一份文件清单
+info-free = 可用
+info-contents = 包含
+info-contents-value = { $files } 个文件，{ $dirs } 个目录，{ $bytes }
+info-selected = 已选择
+info-selected-value = { $count } 个文件，{ $bytes }
+info-cursor = 光标
+info-size = 大小
+info-modified = 修改时间

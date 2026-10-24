@@ -35,3 +35,13 @@ cmd = "panel.view.set(brief)"
 [[bind]]
 keys = ["Alt+F"]
 cmd = "panel.view.set(full)"
+
+# mc reaches the info panel and the quick view through `Ctrl+x i` and `Ctrl+x q`, which are
+# chords we do not have; FAR's keys serve in both profiles.
+[[bind]]
+keys = ["Ctrl+L"]
+cmd = "panel.info"
+
+[[bind]]
+keys = ["Ctrl+Q"]
+cmd = "panel.quickview"

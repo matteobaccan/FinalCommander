@@ -409,3 +409,23 @@ unpack-title = Extract from archive
 unpack-to = Extract to
 unpack-scope = from { $name }
 unpack-not-an-archive = not an archive we can read
+
+# ── the special panel kinds (SPEC 02 §7) ────────────────────────────────────────────────
+panel-quick-view = Quick view
+panel-info = Info
+quick-view-directory = { $name } is a directory — F3 measures it
+quick-view-not-here = the bytes are not here: F3 brings them out first
+info-path = Path
+info-kind = Kind
+info-kind-local = a directory on this machine
+info-kind-remote = on { $host }
+info-kind-archive = inside { $name }
+info-kind-list = a list of files
+info-free = Free
+info-contents = Holds
+info-contents-value = { $files } files, { $dirs } directories, { $bytes }
+info-selected = Selected
+info-selected-value = { $count } files, { $bytes }
+info-cursor = Cursor
+info-size = Size
+info-modified = Modified

@@ -62,27 +62,7 @@ pub fn draw_panel(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>) {
         return;
     }
     let base = theme.panel();
-    buf.fill(area, ' ', base);
-    let frame = Style::new(theme.color("panel.frame"), theme.color("panel.bg"));
-    buf.draw_frame(area, frame, None);
-
-    // ── header: the path, elided in the middle so both ends stay readable
-    let header_style = if p.focused {
-        Style::new(
-            theme.color("panel.title.active.fg"),
-            theme.color("panel.title.active.bg"),
-        )
-    } else {
-        Style::new(
-            theme.color("panel.header.inactive.fg"),
-            theme.color("panel.header.bg"),
-        )
-    };
-    let header_w = area.w.saturating_sub(4) as usize;
-    let title = elide_middle(p.path, header_w);
-    let tw = title.width() as u16;
-    let tx = area.x + 1 + (area.w.saturating_sub(2).saturating_sub(tw + 2)) / 2;
-    buf.put_str(tx, area.y, &format!(" {title} "), header_style, tw + 2);
+    draw_pane(buf, theme, area, p.path, p.focused);
 
     let mut inner = area.inner();
     let rows = panel_rows(area, p.column_titles, p.status.is_some());
@@ -109,6 +89,35 @@ pub fn draw_panel(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>) {
         draw_scrollbar(buf, theme, p, inner, rows);
     }
     draw_footer(buf, theme, p);
+}
+
+/// A panel-shaped frame with its title and nothing in it: the frame every panel has, and the
+/// one the special panel kinds (quick view, info) draw their own content inside. Returns the
+/// area left over for that content.
+pub fn draw_pane(buf: &mut Buffer, theme: &Theme, area: Rect, title: &str, focused: bool) -> Rect {
+    let base = theme.panel();
+    buf.fill(area, ' ', base);
+    let frame = Style::new(theme.color("panel.frame"), theme.color("panel.bg"));
+    buf.draw_frame(area, frame, None);
+
+    // The title is elided in the middle, so both ends of a long path stay readable.
+    let style = if focused {
+        Style::new(
+            theme.color("panel.title.active.fg"),
+            theme.color("panel.title.active.bg"),
+        )
+    } else {
+        Style::new(
+            theme.color("panel.header.inactive.fg"),
+            theme.color("panel.header.bg"),
+        )
+    };
+    let room = area.w.saturating_sub(4) as usize;
+    let title = elide_middle(title, room);
+    let tw = title.width() as u16;
+    let tx = area.x + 1 + (area.w.saturating_sub(2).saturating_sub(tw + 2)) / 2;
+    buf.put_str(tx, area.y, &format!(" {title} "), style, tw + 2);
+    area.inner()
 }
 
 /// FAR's own status line: a rule across the panel and, under it, the item the cursor is on.

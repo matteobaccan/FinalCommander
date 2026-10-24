@@ -401,3 +401,23 @@ unpack-title = Извлечь из архива
 unpack-to = Извлечь в
 unpack-scope = из { $name }
 unpack-not-an-archive = это не архив, который мы умеем читать
+
+# ── особые виды панели (SPEC 02 §7) ─────────────────────────────────────────────────────
+panel-quick-view = Быстрый просмотр
+panel-info = Сведения
+quick-view-directory = { $name } — это каталог, F3 измерит его
+quick-view-not-here = байтов здесь нет: сначала F3 их извлечёт
+info-path = Путь
+info-kind = Вид
+info-kind-local = каталог на этой машине
+info-kind-remote = на { $host }
+info-kind-archive = внутри { $name }
+info-kind-list = список файлов
+info-free = Свободно
+info-contents = Содержит
+info-contents-value = файлов: { $files }, каталогов: { $dirs }, { $bytes }
+info-selected = Отмечено
+info-selected-value = файлов: { $count }, { $bytes }
+info-cursor = Курсор
+info-size = Размер
+info-modified = Изменён

@@ -1,6 +1,7 @@
 use scmd_ui::{widgets, Buffer, Rect, Style};
 
 use crate::app::{App, Mode};
+use crate::panel as scmd_panel;
 
 /// Draw a whole frame. Returns where the text cursor should sit, if anywhere.
 pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
@@ -111,6 +112,19 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
     let up_label = app.i18n.t("list-up");
     let folder_label = app.i18n.t("list-folder");
     for (i, area) in areas.iter().enumerate() {
+        // The special kinds have no rows, so they draw themselves inside the same frame and
+        // the row machinery below never sees them (SPEC 02 §7).
+        match app.panels[i].content {
+            scmd_panel::Content::QuickView => {
+                draw_quick_view(app, i, *area, buf);
+                continue;
+            }
+            scmd_panel::Content::Info => {
+                draw_info(app, i, *area, buf);
+                continue;
+            }
+            scmd_panel::Content::Files => {}
+        }
         let panel = &app.panels[i];
         // A list panel says what it is a list of; a directory panel says where it is.
         let path = match &panel.temp {
@@ -694,6 +708,190 @@ fn block_columns(editor: &scmd_edit::Editor, line: usize) -> Option<(usize, usiz
 }
 
 /// The viewer, full screen: name and status on the top line, content, key bar at the bottom.
+/// The quick view (`Ctrl+Q`): the viewer's own rows, inside a panel's frame, on whatever the
+/// other panel's cursor is on.
+fn draw_quick_view(app: &mut App, index: usize, area: Rect, buf: &mut Buffer) {
+    if area.w < 8 || area.h < 3 {
+        return;
+    }
+    let title = app.i18n.t("panel-quick-view");
+    let inner = widgets::draw_pane(buf, &app.theme, area, &title, index == app.active);
+    let base = app.theme.panel();
+
+    app.quick_view_for(1 - index);
+    // A page in the preview is a page of what is on screen, so the keys need the geometry.
+    app.quick_size = (inner.w.saturating_sub(1), inner.h);
+    let Some(viewer) = app.quick.as_mut() else {
+        // Nothing under the cursor, or nothing we can read from here: the reason is a line of
+        // its own rather than an empty frame that looks broken.
+        let text = app
+            .quick_why
+            .clone()
+            .unwrap_or_else(|| app.i18n.t("msg-nothing-to-do"));
+        for (n, line) in wrap_lines(&text, inner.w as usize).into_iter().enumerate() {
+            if n as u16 >= inner.h {
+                break;
+            }
+            buf.put_str(inner.x + 1, inner.y + n as u16, &line, base, inner.w);
+        }
+        return;
+    };
+
+    // The name on the frame's foot, as a panel's totals are, so the preview itself is all
+    // the room the rows get.
+    let rows = viewer.rows(inner.w.saturating_sub(1), inner.h);
+    for (n, row) in rows.iter().enumerate() {
+        let text = scmd_ui::truncate_cols(&row.text, inner.w.saturating_sub(1) as usize);
+        buf.put_str(
+            inner.x + 1,
+            inner.y + n as u16,
+            &text,
+            base,
+            inner.w.saturating_sub(1),
+        );
+    }
+    let name = viewer.path.display_name();
+    let foot = Style::new(app.theme.color("panel.frame"), app.theme.color("panel.bg"));
+    let name = scmd_ui::elide_middle(&name, area.w.saturating_sub(4) as usize);
+    let nw = unicode_width::UnicodeWidthStr::width(name.as_str()) as u16;
+    buf.put_str(
+        area.x + 2,
+        area.y + area.h.saturating_sub(1),
+        &format!(" {name} "),
+        foot,
+        nw + 2,
+    );
+}
+
+/// The info panel (`Ctrl+L`): what the other panel is looking at, and what is under its
+/// cursor. Everything here is already known — nothing is read from the disk to draw it.
+fn draw_info(app: &mut App, index: usize, area: Rect, buf: &mut Buffer) {
+    if area.w < 8 || area.h < 3 {
+        return;
+    }
+    let title = app.i18n.t("panel-info");
+    let inner = widgets::draw_pane(buf, &app.theme, area, &title, index == app.active);
+    let base = app.theme.panel();
+    let label = Style::new(
+        app.theme.color("panel.header.fg"),
+        app.theme.color("panel.bg"),
+    );
+
+    let other = &app.panels[1 - index];
+    let mut lines: Vec<(String, String)> = Vec::new();
+    let t = |id: &str| app.i18n.t(id);
+
+    lines.push((t("info-path"), other.cwd.to_string()));
+    lines.push((
+        t("info-kind"),
+        if other.cwd.in_container() {
+            app.i18n.t_args(
+                "info-kind-archive",
+                &[(
+                    "name",
+                    other
+                        .cwd
+                        .leave()
+                        .map(|h| h.display_name())
+                        .unwrap_or_default()
+                        .into(),
+                )],
+            )
+        } else if other.cwd.is_remote() {
+            app.i18n.t_args(
+                "info-kind-remote",
+                &[(
+                    "host",
+                    other.cwd.authority().unwrap_or("").to_string().into(),
+                )],
+            )
+        } else if other.temp.is_some() {
+            t("info-kind-list")
+        } else {
+            t("info-kind-local")
+        },
+    ));
+    if let Some(free) = other.free {
+        lines.push((t("info-free"), scmd_core::format_size(free)));
+    }
+    let totals = &other.listing.totals;
+    lines.push((
+        t("info-contents"),
+        app.i18n.t_args(
+            "info-contents-value",
+            &[
+                ("files", (totals.files as i64).into()),
+                ("dirs", (totals.dirs as i64).into()),
+                ("bytes", scmd_core::format_size(totals.bytes).into()),
+            ],
+        ),
+    ));
+    if !other.selection.is_empty() {
+        lines.push((
+            t("info-selected"),
+            app.i18n.t_args(
+                "info-selected-value",
+                &[
+                    ("count", (totals.selected_files as i64).into()),
+                    (
+                        "bytes",
+                        scmd_core::format_size(totals.selected_bytes).into(),
+                    ),
+                ],
+            ),
+        ));
+    }
+    if let Some(entry) = other.current() {
+        lines.push((String::new(), String::new()));
+        lines.push((t("info-cursor"), entry.name_str().into_owned()));
+        if !entry.kind.is_dirlike() {
+            lines.push((t("info-size"), scmd_core::format_size(entry.size)));
+        }
+        if let Some(mtime) = entry.mtime {
+            lines.push((t("info-modified"), widgets::format_mtime(mtime)));
+        }
+    }
+
+    let width = lines
+        .iter()
+        .map(|(k, _)| unicode_width::UnicodeWidthStr::width(k.as_str()))
+        .max()
+        .unwrap_or(0) as u16;
+    for (n, (key, value)) in lines.iter().enumerate() {
+        let y = inner.y + n as u16;
+        if y >= inner.y + inner.h {
+            break;
+        }
+        buf.put_str(inner.x + 1, y, key, label, width);
+        let x = inner.x + 2 + width;
+        let room = (inner.x + inner.w).saturating_sub(x);
+        let value = scmd_ui::elide_middle(value, room as usize);
+        buf.put_str(x, y, &value, base, room);
+    }
+}
+
+/// Break `text` into lines that fit, on spaces where there are any.
+fn wrap_lines(text: &str, width: usize) -> Vec<String> {
+    if width == 0 {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    let mut line = String::new();
+    for word in text.split_whitespace() {
+        if !line.is_empty() && line.chars().count() + 1 + word.chars().count() > width {
+            out.push(std::mem::take(&mut line));
+        }
+        if !line.is_empty() {
+            line.push(' ');
+        }
+        line.push_str(word);
+    }
+    if !line.is_empty() {
+        out.push(line);
+    }
+    out
+}
+
 fn draw_viewer(app: &mut App, viewer: &mut scmd_view::Viewer, buf: &mut Buffer) {
     let (w, h) = (buf.width(), buf.height());
     let keybar_h = u16::from(app.cfg.ui.key_bar);
@@ -1147,7 +1345,7 @@ mod tests {
     #[test]
     fn a_prompt_is_drawn_over_the_panels_with_a_cursor() {
         let mut app = app("commander", "en");
-        app.handle_input(Input::Key("Ctrl+L".parse().unwrap()));
+        app.handle_input(Input::Key("Ctrl+Shift+L".parse().unwrap()));
         let mut buf = Buffer::new(80, 24);
         let cursor = draw(&mut app, &mut buf);
         assert!(cursor.is_some());
@@ -2312,6 +2510,89 @@ third line
             !out.contains("secret"),
             "the password is on the screen: {out}"
         );
+    }
+
+    #[test]
+    fn ctrl_q_previews_the_file_under_the_cursor_in_the_other_panel() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("notes.txt"),
+            b"the first line\nthe second line\n",
+        )
+        .unwrap();
+        std::fs::write(dir.path().join("other.txt"), b"something else entirely\n").unwrap();
+        let mut app = app("commander", "en");
+        app.panels[0].cwd = VPath::local(dir.path());
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation: app.panels[0].generation,
+            result: Ok(vec![
+                Entry::parent_entry(),
+                entry("notes.txt", EntryKind::File, 30),
+                entry("other.txt", EntryKind::File, 24),
+            ]),
+        });
+        app.panels[0].cursor_to(1);
+        app.active = 0;
+
+        app.handle_input(Input::Key("Ctrl+Q".parse().unwrap()));
+        // The preview goes in the passive panel and the keys stay with the files.
+        assert_eq!(app.panels[1].content, crate::panel::Content::QuickView);
+        assert_eq!(app.active, 0);
+
+        let out = frame(&mut app, 100, 14);
+        assert!(out.contains("Quick view"), "{out}");
+        assert!(out.contains("the first line"), "{out}");
+        assert!(out.contains("notes.txt"), "{out}");
+
+        // The cursor moves, the preview follows.
+        app.handle_input(Input::Key("Down".parse().unwrap()));
+        let out = frame(&mut app, 100, 14);
+        assert!(out.contains("something else entirely"), "{out}");
+        assert!(!out.contains("the first line"), "{out}");
+
+        // A directory says what it is rather than showing an empty frame.
+        app.handle_input(Input::Key("Home".parse().unwrap()));
+        let out = frame(&mut app, 100, 14);
+        assert!(out.contains("is a directory"), "{out}");
+
+        // And the key puts the files back.
+        app.handle_input(Input::Key("Ctrl+Q".parse().unwrap()));
+        assert_eq!(app.panels[1].content, crate::panel::Content::Files);
+    }
+
+    #[test]
+    fn ctrl_l_tells_the_other_panel_what_it_is_looking_at() {
+        let mut app = app("commander", "en");
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation: app.panels[0].generation,
+            result: Ok(vec![
+                Entry::parent_entry(),
+                entry("docs", EntryKind::Dir, 0),
+                entry("a.txt", EntryKind::File, 1024),
+            ]),
+        });
+        app.handle_event(Event::FreeSpace {
+            panel: 0,
+            bytes: Some(42 * 1024 * 1024),
+        });
+        app.panels[0].cursor_to(2);
+        app.active = 0;
+
+        app.handle_input(Input::Key("Ctrl+L".parse().unwrap()));
+        assert_eq!(app.panels[1].content, crate::panel::Content::Info);
+        let out = frame(&mut app, 100, 16);
+        assert!(out.contains("Info"), "{out}");
+        assert!(out.contains("/home/mb/project"), "{out}");
+        assert!(out.contains("a directory on this machine"), "{out}");
+        // The device, the directory's own totals, and the row under the cursor.
+        assert!(out.contains("42"), "{out}");
+        assert!(out.contains("1 files, 1 directories"), "{out}");
+        assert!(out.contains("a.txt"), "{out}");
+
+        app.handle_input(Input::Key("Ctrl+L".parse().unwrap()));
+        assert_eq!(app.panels[1].content, crate::panel::Content::Files);
     }
 
     #[test]
