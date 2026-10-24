@@ -2056,6 +2056,7 @@ impl App {
             JobKind::Delete => "job-delete",
             JobKind::Mkdir => "job-mkdir",
             JobKind::Wipe => "job-wipe",
+            JobKind::Replace => "job-replace",
         })
     }
 

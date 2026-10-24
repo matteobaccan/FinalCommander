@@ -63,6 +63,7 @@ job-copy = Копирование
 job-move = Перенос
 job-delete = Удаление
 job-wipe = Затирание
+job-replace = Замена
 job-mkdir = Создание каталога
 job-planning = подготовка…
 job-counters = { $files } / { $filestotal } файлов · { $bytes } / { $bytestotal }

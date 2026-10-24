@@ -255,6 +255,7 @@ mod tests {
             sources: vec![VPath::local(dir.path().join("src"))],
             target: Some(site.start()),
             options: JobOptions::default(),
+            replace: None,
         };
         let plan = scmd_jobs::plan(&routed, &spec, &CancelToken::new()).unwrap();
         let outcome = execute_now(&routed, &spec, plan);
@@ -271,6 +272,7 @@ mod tests {
             sources: vec![site.start().join("src")],
             target: Some(VPath::local(&down)),
             options: JobOptions::default(),
+            replace: None,
         };
         let plan = scmd_jobs::plan(&routed, &spec, &CancelToken::new()).unwrap();
         let outcome = execute_now(&routed, &spec, plan);
@@ -292,6 +294,7 @@ mod tests {
             sources: vec![site.start().join("one")],
             target: Some(site.start().join("two")),
             options: JobOptions::default(),
+            replace: None,
         };
         let plan = scmd_jobs::plan(&routed, &spec, &CancelToken::new()).unwrap();
         let outcome = execute_now(&routed, &spec, plan);
@@ -311,6 +314,7 @@ mod tests {
             sources: vec![VPath::local(dir.path().join("gone.txt"))],
             target: Some(site.start()),
             options: JobOptions::default(),
+            replace: None,
         };
         let plan = scmd_jobs::plan(&routed, &spec, &CancelToken::new()).unwrap();
         let outcome = execute_now(&routed, &spec, plan);
@@ -334,6 +338,7 @@ mod tests {
             sources: vec![site.start().join("tree")],
             target: None,
             options: JobOptions::default(),
+            replace: None,
         };
         let plan = scmd_jobs::plan(&routed, &spec, &CancelToken::new()).unwrap();
         let outcome = execute_now(&routed, &spec, plan);
@@ -376,6 +381,7 @@ mod tests {
                 on_conflict: ConflictPolicy::Overwrite,
                 ..JobOptions::default()
             },
+            replace: None,
         };
         let plan = scmd_jobs::plan(&routed, &spec, &CancelToken::new()).unwrap();
         let outcome = execute_now(&routed, &spec, plan);

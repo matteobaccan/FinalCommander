@@ -63,6 +63,7 @@ job-copy = Copia
 job-move = Spostamento
 job-delete = Eliminazione
 job-wipe = Cancellazione sicura
+job-replace = Sostituzione
 job-mkdir = Creazione directory
 job-planning = analisi…
 job-counters = { $files } / { $filestotal } file · { $bytes } / { $bytestotal }

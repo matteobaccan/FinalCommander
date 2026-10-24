@@ -63,6 +63,7 @@ job-copy = 复制
 job-move = 移动
 job-delete = 删除
 job-wipe = 安全擦除
+job-replace = 替换中
 job-mkdir = 新建目录
 job-planning = 正在分析…
 job-counters = { $files } / { $filestotal } 个文件 · { $bytes } / { $bytestotal }
