@@ -150,3 +150,4 @@ net-written-back = { $name }: reescrito, { $bytes } bytes
 net-write-back-failed = la reescritura falló: { $error } — tus cambios están en { $local }
 net-changed-title = Cambiado en el servidor
 net-changed-body = { $name } cambió en el servidor desde que se descargó. ¿Sobrescribirlo?
+confirm-delete-permanent = Borrado definitivo: aún no hay papelera.

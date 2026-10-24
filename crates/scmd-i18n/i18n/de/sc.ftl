@@ -150,3 +150,4 @@ net-written-back = { $name }: zurückgeschrieben, { $bytes } Bytes
 net-write-back-failed = Zurückschreiben fehlgeschlagen: { $error } — Ihre Änderungen liegen in { $local }
 net-changed-title = Auf dem Server geändert
 net-changed-body = { $name } wurde auf dem Server geändert, seit es geholt wurde. Überschreiben?
+confirm-delete-permanent = Endgültiges Löschen — einen Papierkorb gibt es noch nicht.

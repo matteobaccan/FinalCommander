@@ -158,3 +158,4 @@ net-written-back = { $name }: written back, { $bytes } bytes
 net-write-back-failed = write-back failed: { $error } — your edits are in { $local }
 net-changed-title = Changed on the server
 net-changed-body = { $name } changed on the server since it was fetched. Write over it?
+confirm-delete-permanent = This deletes permanently — there is no trash yet.

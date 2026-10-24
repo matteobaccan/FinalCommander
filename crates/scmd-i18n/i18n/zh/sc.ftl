@@ -150,3 +150,4 @@ net-written-back = { $name }：已写回，{ $bytes } 字节
 net-write-back-failed = 写回失败：{ $error } — 你的修改在 { $local }
 net-changed-title = 服务器上已更改
 net-changed-body = { $name } 自获取后在服务器上已更改。要覆盖吗？
+confirm-delete-permanent = 这是永久删除——还没有回收站。

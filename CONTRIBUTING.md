@@ -59,3 +59,17 @@ cargo run -- --dump-config      # the effective configuration
 
 Add or fix a language in `crates/scmd-i18n/i18n/<tag>/sc.ftl`. The test suite fails if any
 catalogue is missing a message id, so a half-finished translation cannot ship silently.
+
+## Cutting a release
+
+1. Put the changes under a new heading in `CHANGELOG.md` (`## [0.0.2] — YYYY-MM-DD`): the
+   release notes are read from that section, so what is written there is what people see.
+2. Bump `version` in the workspace `Cargo.toml` (one place: every crate inherits it), then
+   `cargo build` so `Cargo.lock` follows, and commit.
+3. Tag and push: `git tag -a v0.0.2 -m "0.0.2" && git push origin v0.0.2`.
+4. `.github/workflows/release.yml` builds `linux-x86_64`, `linux-x86_64-static` (musl),
+   `macos-universal` (Intel + Apple Silicon in one binary) and `windows-x86_64`, runs
+   `scmd --version` on each, and publishes the archives with `SHA256SUMS`.
+
+Run the workflow by hand from the Actions tab (`Run workflow`) to build the artifacts without
+publishing anything — useful after touching the workflow itself.

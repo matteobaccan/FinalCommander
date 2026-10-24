@@ -1,0 +1,155 @@
+# Build the executables for a tag and publish them as a GitHub Release.
+#
+# `workflow_dispatch` builds and uploads the artifacts without publishing anything, so the
+# workflow itself can be tested without cutting a release.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x86_64
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          # Statically linked: one file that runs on any glibc or musl distribution.
+          - name: linux-x86_64-static
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+          # One binary for both Intel and Apple Silicon.
+          - name: macos-universal
+            os: macos-latest
+            target: universal-apple-darwin
+          - name: windows-x86_64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.name }}
+
+      - name: Install the musl toolchain
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+          rustup target add x86_64-unknown-linux-musl
+
+      - name: Build
+        if: matrix.name != 'macos-universal'
+        shell: bash
+        env:
+          # `ring` compiles C, and the musl target needs its own compiler.
+          CC_x86_64_unknown_linux_musl: musl-gcc
+        run: cargo build --release --locked --target ${{ matrix.target }} -p scmd
+
+      - name: Build both architectures and join them
+        if: matrix.name == 'macos-universal'
+        run: |
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+          cargo build --release --locked --target aarch64-apple-darwin -p scmd
+          cargo build --release --locked --target x86_64-apple-darwin -p scmd
+          mkdir -p target/universal-apple-darwin/release
+          lipo -create -output target/universal-apple-darwin/release/scmd \
+            target/aarch64-apple-darwin/release/scmd \
+            target/x86_64-apple-darwin/release/scmd
+          lipo -info target/universal-apple-darwin/release/scmd
+
+      - name: Package
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          if [ "$GITHUB_REF_TYPE" != "tag" ]; then
+            # Not a tag: the workspace version, so a dispatch run packages something sensible.
+            version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
+          fi
+          name="scmd-${version}-${{ matrix.name }}"
+          dir="dist/${name}"
+          mkdir -p "$dir"
+          bin="target/${{ matrix.target }}/release/scmd"
+          # `set -e` and `[ ... ] && ...` do not mix: a false test would end the script.
+          if [ -f "$bin.exe" ]; then
+            bin="$bin.exe"
+          fi
+          cp "$bin" "$dir/"
+          cp README.md LICENSE THIRD-PARTY.md CHANGELOG.md "$dir/"
+          # The binary must at least run on the machine that built it.
+          case "${{ matrix.name }}" in
+            windows-*) "$dir/scmd.exe" --version ;;
+            *) "$dir/scmd" --version ;;
+          esac
+          cd dist
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            7z a -tzip "${name}.zip" "${name}" > /dev/null
+            echo "archive=dist/${name}.zip" >> "$GITHUB_OUTPUT"
+          else
+            tar czf "${name}.tar.gz" "${name}"
+            echo "archive=dist/${name}.tar.gz" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: ${{ steps.package.outputs.archive }}
+          if-no-files-found: error
+
+  publish:
+    name: Publish the release
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Release notes from the changelog
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          # The section for this version, without its heading.
+          awk -v v="$version" '
+            $0 ~ "^## \\[" v "\\]" { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "See CHANGELOG.md." > notes.md
+          fi
+          cat notes.md
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file notes.md \
+            dist/*

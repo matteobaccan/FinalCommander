@@ -150,3 +150,4 @@ net-written-back = { $name }: riscritto, { $bytes } byte
 net-write-back-failed = riscrittura fallita: { $error } — le tue modifiche sono in { $local }
 net-changed-title = Cambiato sul server
 net-changed-body = { $name } è cambiato sul server dopo lo scaricamento. Sovrascriverlo?
+confirm-delete-permanent = Cancellazione definitiva: il cestino non c'è ancora.

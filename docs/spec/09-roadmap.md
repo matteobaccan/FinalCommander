@@ -26,7 +26,7 @@ reviewable and testable.
 | 22 | ✅ `scmd-net` (netbox): SFTP provider, site list, connection pool, host-key policy, transfers through the job engine; `Alt+N`, remote panels, `sftp://` in `Ctrl+L` | 5,12,13 |
 | 16 | `scmd-platform` M1 slice: long paths, trash, clipboard, drives/mounts, FS watch | 1 |
 | 17 | theming: theme loader, `far-classic` + `mono`, colour degradation | 3,12 |
-| 18 | packaging: static builds for linux-gnu/musl, macOS universal, windows-msvc; checksums | 1 |
+| 18 | ✅ packaging: a tag builds linux-gnu, linux-musl (static), macOS universal and windows-msvc, with checksums and release notes from the changelog | 1 |
 | 19 | snapshot test harness + keymap tests + job property tests + perf budget check | all |
 | 20 | docs: README, help pages generated from `docs/`, man page | all |
 

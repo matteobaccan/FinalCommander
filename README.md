@@ -4,11 +4,42 @@ A cross-platform **orthodox file manager** (two panels, command line, function k
 keyboard-first) written in Rust — in the tradition of Norton Commander, FAR Manager,
 Total Commander, Midnight Commander and Krusader, with a modern engine underneath.
 
-> **Status: milestone M1 in progress.** The specs are written and the program runs: two
-> panels, navigation, selection, sorting, view modes, quick search and filter, themes,
-> keymap profiles and seven interface languages, real file operations (`F5`–`F8`), the viewer
-> (`F3`), the editor (`F4`) and the netbox (`Alt+N`: SFTP panels and transfers). What M1 still
-> owes is in `docs/spec/09-roadmap.md`.
+> **Status: 0.0.1, a preview.** Two panels, navigation, selection, sorting, view modes, quick
+> search and filter, themes, keymap profiles and seven interface languages, real file
+> operations (`F5`–`F8`), the viewer (`F3`), the editor (`F4`) and the netbox (`Alt+N`: SFTP
+> panels and transfers). What is missing says so rather than failing quietly; the list is in
+> [`CHANGELOG.md`](CHANGELOG.md) and the plan in `docs/spec/09-roadmap.md`.
+
+## Install
+
+One file, nothing to install beside it. Download the archive for your machine from the
+[releases page](https://github.com/matteobaccan/SupremeCommander/releases), unpack it, and put
+`scmd` somewhere on your `PATH`.
+
+| Platform | Archive |
+| --- | --- |
+| Linux (x86-64) | `scmd-<version>-linux-x86_64.tar.gz`, or `-linux-x86_64-static.tar.gz` for a statically linked build that runs on any distribution |
+| macOS (Intel and Apple Silicon) | `scmd-<version>-macos-universal.tar.gz` — one binary for both |
+| Windows (x86-64) | `scmd-<version>-windows-x86_64.zip` |
+
+```sh
+# Linux, for example
+tar xzf scmd-0.0.1-linux-x86_64.tar.gz
+sudo install -m755 scmd-0.0.1-linux-x86_64/scmd /usr/local/bin/scmd
+scmd --version
+```
+
+`SHA256SUMS` beside the archives lets you check what you downloaded:
+`sha256sum --check SHA256SUMS`.
+
+macOS will refuse a binary it has not seen before; it is not signed yet, so the first run
+needs `xattr -d com.apple.quarantine scmd` (or Open anyway in System Settings → Privacy).
+
+From source, with Rust 1.89 or newer:
+
+```sh
+cargo install --git https://github.com/matteobaccan/SupremeCommander scmd
+```
 
 ## Try it
 

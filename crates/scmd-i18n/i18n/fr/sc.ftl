@@ -150,3 +150,4 @@ net-written-back = { $name } : réécrit, { $bytes } octets
 net-write-back-failed = réécriture échouée : { $error } — vos modifications sont dans { $local }
 net-changed-title = Modifié sur le serveur
 net-changed-body = { $name } a changé sur le serveur depuis sa récupération. L'écraser ?
+confirm-delete-permanent = Suppression définitive — il n'y a pas encore de corbeille.

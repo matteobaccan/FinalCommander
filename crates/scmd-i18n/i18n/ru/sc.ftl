@@ -150,3 +150,4 @@ net-written-back = { $name }: записан обратно, { $bytes } байт
 net-write-back-failed = запись не удалась: { $error } — ваши правки в { $local }
 net-changed-title = Изменён на сервере
 net-changed-body = { $name } изменился на сервере после загрузки. Перезаписать?
+confirm-delete-permanent = Удаление безвозвратное — корзины пока нет.

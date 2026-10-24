@@ -2022,6 +2022,8 @@ impl App {
                     lines.push(format!("  … {}", sources.len() - 3));
                 }
                 lines.push(String::new());
+                // There is no trash yet, so the dialog says what the key really does.
+                lines.push(self.i18n.t("confirm-delete-permanent"));
                 lines.push(self.i18n.t("confirm-yes-no"));
                 self.mode = Mode::Confirm(Confirm {
                     title,
@@ -3351,6 +3353,21 @@ mod tests {
         press(&mut app, "Enter");
         let (_, spec) = job_request(&mut app);
         assert_eq!(spec.sources, vec![VPath::local("/home/mb/a.txt")]);
+    }
+
+    #[test]
+    fn the_delete_confirmation_says_it_cannot_be_undone() {
+        let mut app = app();
+        press(&mut app, "Down");
+        press(&mut app, "F8");
+        match &app.mode {
+            Mode::Confirm(c) => assert!(
+                c.lines.iter().any(|l| l.to_lowercase().contains("permanent")),
+                "the user must be told there is no trash: {:?}",
+                c.lines
+            ),
+            other => panic!("expected a confirmation, got {other:?}"),
+        }
     }
 
     #[test]
