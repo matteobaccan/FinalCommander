@@ -57,6 +57,7 @@ Every orthodox commander is the same good idea, implemented once per operating s
 | **Total Commander** | Windows | an installer, shareware | proprietary |
 | **Double Commander** | Linux, macOS, Windows | a GTK/Qt application | GPL-2.0 |
 | **Krusader** | Linux (KDE) | KDE libraries | GPL-2.0 |
+| **MTN2** | Windows, Linux | a folder, or a `.deb` | MPL-2.0 |
 | **SupremeCommander** | **Linux, macOS, Windows** | **one file, copied** | **MIT** |
 
 Learn the keys once and they are the keys everywhere — including on the server you only ever
@@ -64,14 +65,16 @@ reach over SSH, where a GTK application is not an option and installing a packag
 either.
 
 Credit where it is due: FAR with twenty years of plugins goes deeper on Windows than this does
-today, Midnight Commander is already on every Unix machine you will ever log into, and
-Krusader's synchroniser has no equal here yet. What none of them is, is the same program on
-all three systems — and that is the hole this fills.
+today, Midnight Commander is already on every Unix machine you will ever log into, Krusader's
+synchroniser has no equal here yet, and MTN2 — the closest thing to this in spirit — has a real
+console in it, which is the one thing a terminal program cannot borrow from a terminal. What
+none of them is, is the same program on all three systems, in one file, with nothing to
+install — and that is the hole this fills.
 
 > **Status: 0.2.0, open to testers.** Everything described above works today. What is *not*
-> there says so rather than failing quietly: object storage is read-only in this release,
-> writing *into* an existing archive is the next thing being built, and the OS clipboard, a
-> trash can and FTP are not here yet. [`CHANGELOG.md`](CHANGELOG.md) is what has landed and
+> there says so rather than failing quietly: object storage is read-only in this release, and
+> the OS clipboard, a trash can, FTP and a console with a real terminal in it are not here
+> yet. [`CHANGELOG.md`](CHANGELOG.md) is what has landed and
 > [`docs/BACKLOG.md`](docs/BACKLOG.md) is what has not, item by item, with the open questions
 > marked.
 

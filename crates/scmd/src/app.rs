@@ -4442,6 +4442,11 @@ impl App {
                         .t_args("net-viewing-copy", &[("name", shown.display_name().into())]);
                     self.set_status(msg);
                 }
+                // A README opens as a README. `Shift+F2` is the way to its source, and the
+                // setting is for a reader who would rather start there.
+                if self.cfg.ui.markdown {
+                    viewer.as_markdown();
+                }
                 self.mode = Mode::Viewer(Box::new(viewer));
             }
             Err(e) => self.set_error(format!("{shown}: {e}")),
@@ -7993,14 +7998,27 @@ impl App {
                 Command::ViewerWrap => viewer.toggle_wrap(),
                 Command::ViewerHex => viewer.toggle_hex(),
                 Command::ViewerModeNext => {
-                    // text → dump → hex → text. Disassembly is F5, not part of the cycle,
-                    // because it only applies to some files.
+                    // text → dump → hex → text, with the rendered document in the ring where
+                    // there is one. Disassembly is F5, not part of the cycle, because it only
+                    // applies to some files.
+                    let renders = viewer.renders_markdown();
                     let next = match viewer.mode {
+                        scmd_view::Mode::Markdown => scmd_view::Mode::Text,
                         scmd_view::Mode::Text => scmd_view::Mode::Dump,
                         scmd_view::Mode::Dump => scmd_view::Mode::Hex,
+                        scmd_view::Mode::Hex | scmd_view::Mode::Disasm if renders => {
+                            scmd_view::Mode::Markdown
+                        }
                         scmd_view::Mode::Hex | scmd_view::Mode::Disasm => scmd_view::Mode::Text,
                     };
                     viewer.set_mode(next);
+                }
+                Command::ViewerMarkdown => {
+                    if viewer.mode == scmd_view::Mode::Markdown {
+                        viewer.set_mode(scmd_view::Mode::Text);
+                    } else if !viewer.as_markdown() {
+                        error = Some("viewer-not-markdown".into());
+                    }
                 }
                 Command::ViewerFollowBranch => {
                     if viewer.follow_branch().is_none() {
@@ -8742,6 +8760,7 @@ impl App {
         match self.mode.viewer() {
             Some(v) if v.mode == scmd_view::Mode::Hex => match v.base_mode {
                 scmd_view::Mode::Dump => "key-dump",
+                scmd_view::Mode::Markdown => "key-doc",
                 _ => "key-text",
             },
             _ => "key-hex",
@@ -9013,6 +9032,7 @@ fn is_viewer_movement(cmd: Command) -> bool {
             | Command::NavBottom
             | Command::ViewerWrap
             | Command::ViewerHex
+            | Command::ViewerMarkdown
             | Command::ViewerFollowBranch
             | Command::ViewerBack
             | Command::ViewerStructure

@@ -9,6 +9,7 @@ pub mod decode;
 pub mod disasm;
 pub mod il;
 pub mod jvm;
+pub mod markdown;
 pub mod nav;
 pub mod search;
 pub mod source;

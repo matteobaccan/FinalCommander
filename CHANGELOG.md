@@ -25,6 +25,27 @@ Notable changes, newest first. The format follows
   progress bar and `Esc`, and the archive cache is dropped either side of it so no panel
   answers from a stale index.
 
+- **Markdown laid out to be read.** A `.md` file opens in the viewer as a document rather
+  than as its source: the marks come off and the space they held is put to use. A heading is
+  bold with a rule under it, a list is bullets with hanging indents and a task list is boxes,
+  a quote gets a bar down its side, a link shows its text and its address, a fenced block is
+  indented and — where the fence named a language — coloured as that language, and a table is
+  drawn with box-drawing characters, its columns lined up and aligned as its delimiter row
+  asked. `Shift+F2` switches between the document and its source, `Shift+F4` has it in the
+  ring with the text, the dump and the hex, and *Interface → Markdown laid out to be read*
+  decides which of the two the first screen is.
+
+  It is the one mode that reads the whole file, because a table's columns cannot be worked out
+  from the part of it on screen; over four megabytes a file stays its source and says so.
+  Searching a laid-out document searches what is on screen rather than the marks behind it, so
+  a word in a table is found in its cell.
+
+- `scmd-syntax` gained `of_language`, which turns a language's *name* into a syntax — what a
+  fenced code block's info string says — where `of_name` turns a file name into one.
+
+- The interface settings now have the two colouring switches that were only in the file:
+  *Colour the languages we recognise* and *Markdown laid out to be read*.
+
 - A path typed into a dialog may now name a place inside an archive
   (`/home/me/a.zip!/src`), which is what the other panel's directory reads as when that panel
   is inside one.

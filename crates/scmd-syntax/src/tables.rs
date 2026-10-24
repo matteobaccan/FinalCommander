@@ -47,6 +47,47 @@ pub fn of_name(name: &str) -> Option<&'static Syntax> {
     SYNTAXES.iter().find(|s| s.extensions.contains(&ext))
 }
 
+/// The syntax a language's *name* asks for: what a fenced code block's info string says
+/// (```` ```rust ````), a `# vim: ft=` line, or a user picking a language from a list.
+///
+/// The name is matched first, then the extensions, so `rust` and `rs` both arrive at Rust and
+/// `c++`, `cpp` and `cc` all arrive at C++.
+pub fn of_language(name: &str) -> Option<&'static Syntax> {
+    let wanted = name.trim().to_ascii_lowercase();
+    if wanted.is_empty() {
+        return None;
+    }
+    if let Some(found) = SYNTAXES
+        .iter()
+        .find(|s| s.name.to_ascii_lowercase() == wanted)
+    {
+        return Some(found);
+    }
+    // The names people write that are not the table's: a fence says `sh` or `bash`, never
+    // `shell`, and `md` as often as `markdown`.
+    let alias = match wanted.as_str() {
+        "bash" | "zsh" | "ksh" | "console" | "shell-session" => "sh",
+        "golang" => "go",
+        "c++" | "cplusplus" => "cpp",
+        "c#" | "csharp" => "cs",
+        "js" | "node" | "mjs" => "javascript",
+        "ts" => "typescript",
+        "py" | "python3" => "python",
+        "yml" => "yaml",
+        "dockerfile" | "docker" => "dockerfile",
+        "makefile" => "make",
+        "md" => "markdown",
+        other => other,
+    };
+    if let Some(found) = SYNTAXES
+        .iter()
+        .find(|s| s.name.to_ascii_lowercase() == alias)
+    {
+        return Some(found);
+    }
+    SYNTAXES.iter().find(|s| s.extensions.contains(&alias))
+}
+
 const C_LIKE: Syntax = Syntax {
     name: "C",
     extensions: &["c", "h"],

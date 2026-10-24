@@ -227,6 +227,9 @@ pub struct UiCfg {
     pub status_bar: bool,
     /// Colour what the viewer and the editor recognise as a language or a markup.
     pub syntax: bool,
+    /// Open a Markdown file laid out to be read rather than as its source. `Shift+F2` in the
+    /// viewer switches either way whatever this says; this is only what the first screen is.
+    pub markdown: bool,
     /// The command line under the panels. Without it, typing goes to quick search.
     pub command_line: bool,
     /// How many command lines to keep between sessions.
@@ -242,6 +245,7 @@ impl Default for UiCfg {
             key_bar: true,
             status_bar: true,
             syntax: true,
+            markdown: true,
             command_line: true,
             command_history: 512,
         }
@@ -581,6 +585,7 @@ impl Config {
             }
             "ui.status_bar" => self.ui.status_bar = parse_bool(value)?,
             "ui.syntax" => self.ui.syntax = parse_bool(value)?,
+            "ui.markdown" => self.ui.markdown = parse_bool(value)?,
             "panel.view" => self.panel.view = value.to_string(),
             "panel.sort" => self.panel.sort = value.to_string(),
             "panel.reverse" => self.panel.reverse = parse_bool(value)?,

@@ -114,7 +114,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 5.4 | Search (plain, case-insensitive, whole word, regex, hex pattern), search next/previous, highlight all hits, copy selection | FAR | M1 plain, M2 regex/hex |
 | 5.5 | Go to offset/line/percent; bookmarks 0..9; "undo position" | FAR | M2 |
 | 5.6 | Streaming/mmap for huge files (GB+) without loading; follow mode (`tail -f`) | FAR/MTN2 | M2 |
-| 5.7 | Syntax highlighting in the viewer; Markdown rendering; tabs expansion | MTN2 | M3 |
+| 5.7 | ~~Syntax highlighting in the viewer; Markdown rendering; tabs expansion~~ | MTN2 | **shipped** |
 | 5.8 | Previews: images (sixel/kitty/iterm protocols), video thumbnails, PDF, archives, media metadata, office/JSON/CSV pretty print — pluggable pipeline with timeouts | YAZI | M3 |
 | 5.9 | Filtered view: pipe the file through a command and view the output | MC | M3 |
 | 5.11 | **Disassembly** (`F5`): ELF/PE/Mach-O/raw recognition, sections and symbols, x86/x86-64 decoding with symbol headings, instruction-accurate scrolling, raw sweep for files over the parse limit | NEW | M1 |

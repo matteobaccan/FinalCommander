@@ -2650,6 +2650,7 @@ dependencies = [
  "object",
  "regex",
  "scmd-core",
+ "scmd-syntax",
  "tempfile",
  "thiserror",
  "unicode-width",

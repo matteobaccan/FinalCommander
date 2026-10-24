@@ -17,6 +17,9 @@ pub enum Mode {
     Hex,
     /// Machine code as instructions.
     Disasm,
+    /// Markdown with the marks taken off and the space they held put to use: headings
+    /// ruled, lists bulleted, tables drawn. `F2` goes back to the source.
+    Markdown,
 }
 
 impl Mode {
@@ -27,6 +30,7 @@ impl Mode {
             Mode::Dump => 'd',
             Mode::Hex => 'h',
             Mode::Disasm => 'a',
+            Mode::Markdown => 'm',
         }
     }
 
@@ -36,6 +40,7 @@ impl Mode {
             Mode::Dump => "dump",
             Mode::Hex => "hex",
             Mode::Disasm => "disasm",
+            Mode::Markdown => "markdown",
         }
     }
 }
@@ -84,6 +89,9 @@ pub struct Row {
     /// Character ranges to highlight (search hits), as `(start, len)` in characters.
     pub hits: Vec<(usize, usize)>,
     pub kind: RowKind,
+    /// How the row is to be coloured, where the row was rendered rather than read: Markdown
+    /// mode fills this, and every other mode leaves it empty and is coloured by its kind.
+    pub spans: Vec<crate::markdown::Span>,
 }
 
 /// What the status line needs.
@@ -107,6 +115,11 @@ pub struct Status {
 
 /// Tabs expand to the next multiple of this.
 const TAB_WIDTH: usize = 8;
+
+/// The largest file the Markdown view will render. Rendering needs the whole document, so
+/// this is the one place the viewer reads more than a screenful — four megabytes is a very
+/// long README and a very short log.
+pub const MARKDOWN_LIMIT: u64 = 4 * 1024 * 1024;
 
 pub struct Viewer {
     source: Box<dyn Source>,
@@ -149,6 +162,13 @@ pub struct Viewer {
     pub disasm_targets: Vec<(u64, disasm::Target)>,
     /// Offsets we followed a branch from, so there is a way back (SPEC 05 §1.9).
     pub branch_stack: Vec<u64>,
+    /// The rendered Markdown and the width it was rendered at. Unlike every other mode this
+    /// one needs the whole document — a table's columns cannot be laid out from the part of
+    /// it that is on screen — so it is rendered once and kept, and rendered again when the
+    /// window changes width. That is also why it is limited to files under
+    /// [`MARKDOWN_LIMIT`]: a reader of a 40 GB log gets the viewer's usual promise, and a
+    /// reader of a README gets its columns lined up.
+    markdown: Option<(usize, Vec<crate::markdown::Line>)>,
     /// Cursor and scroll inside the pane, and whether the keys go to it.
     pub struct_cursor: usize,
     struct_top: usize,
@@ -224,6 +244,7 @@ impl Viewer {
             structure: None,
             disasm_targets: Vec::new(),
             branch_stack: Vec::new(),
+            markdown: None,
             struct_cursor: 0,
             struct_top: 0,
             struct_focus: false,
@@ -411,7 +432,8 @@ impl Viewer {
                     self.col = 0;
                 }
             }
-            Mode::Dump => self.set_mode(Mode::Text),
+            // From a rendered document or a dump, `F2` is the way to the source.
+            Mode::Dump | Mode::Markdown => self.set_mode(Mode::Text),
             // From hex or disassembly, F2 goes back to whatever text/dump mode we came from.
             Mode::Hex | Mode::Disasm => {
                 let base = self.base_mode;
@@ -616,7 +638,7 @@ impl Viewer {
         self.top = match self.mode {
             Mode::Text => snap_to_line(&mut *self.source, offset),
             Mode::Hex => offset - (offset % self.bytes_per_row as u64),
-            Mode::Dump | Mode::Disasm => offset,
+            Mode::Dump | Mode::Disasm | Mode::Markdown => offset,
         };
         self.top_sub = 0;
     }
@@ -718,7 +740,78 @@ impl Viewer {
                 let step = width.max(1) as i64 * delta;
                 self.top = clamp_offset(self.top, step, self.source.len());
             }
+            Mode::Markdown => self.scroll_markdown(delta, width),
         }
+    }
+
+    /// Scrolling a rendered document is scrolling its rendered lines, and the `(offset, sub)`
+    /// pair of the line we land on is the position — the same pair wrapped text already uses,
+    /// so `Ctrl+Z`, the bookmarks and the search all keep working without knowing about this.
+    fn scroll_markdown(&mut self, delta: i64, width: u16) {
+        self.render_markdown(width as usize);
+        let Some((_, lines)) = &self.markdown else {
+            return;
+        };
+        if lines.is_empty() {
+            return;
+        }
+        let at = Self::markdown_index(lines, self.top, self.top_sub) as i64;
+        let last = lines.len() as i64 - 1;
+        let next = (at + delta).clamp(0, last) as usize;
+        self.top = lines[next].source;
+        self.top_sub = lines[next].sub;
+    }
+
+    /// Which rendered line `(top, sub)` names.
+    ///
+    /// Scrolling sets the pair from a line, so it is found exactly. A search or a bookmark
+    /// sets it from an offset in the file, which may be the middle of a paragraph or of a
+    /// table — then the block that offset belongs to is shown from its first line, because
+    /// half a table is not a reading position.
+    fn markdown_index(lines: &[crate::markdown::Line], top: u64, sub: usize) -> usize {
+        let Some(at) = lines.iter().position(|l| (l.source, l.sub) >= (top, sub)) else {
+            return lines.len();
+        };
+        if at == 0 || lines[at].source == top {
+            return at;
+        }
+        let block = lines[at - 1].source;
+        lines
+            .iter()
+            .position(|l| l.source == block)
+            .unwrap_or(at - 1)
+    }
+
+    /// Render the document if it is not rendered at this width already.
+    fn render_markdown(&mut self, width: usize) {
+        if self.markdown.as_ref().is_some_and(|(at, _)| *at == width) {
+            return;
+        }
+        let len = self.source.len().min(MARKDOWN_LIMIT) as usize;
+        let bytes = self.source.read_vec(0, len).unwrap_or_default();
+        let text = self.codepage.decode(&bytes);
+        self.markdown = Some((width, crate::markdown::render(&text, width)));
+    }
+
+    /// Is this a file the Markdown view can show? Its name has to say Markdown and it has to
+    /// be small enough to render whole.
+    pub fn renders_markdown(&mut self) -> bool {
+        let name = self.path.display_name().to_ascii_lowercase();
+        let markdown = name.ends_with(".md")
+            || name.ends_with(".markdown")
+            || name.ends_with(".mdown")
+            || name.ends_with(".mkd");
+        markdown && self.source.len() <= MARKDOWN_LIMIT && self.derived.is_none()
+    }
+
+    /// Show the file rendered, if it is one we can render. `false` when it is not, so the
+    /// caller can say why rather than leaving the key looking broken.
+    pub fn as_markdown(&mut self) -> bool {
+        if !self.renders_markdown() {
+            return false;
+        }
+        self.set_mode(Mode::Markdown);
+        true
     }
 
     fn scroll_text(&mut self, delta: i64, width: u16, height: u16) {
@@ -829,7 +922,37 @@ impl Viewer {
             Mode::Hex => self.rows_hex(width, height),
             Mode::Dump => self.rows_dump(width, height),
             Mode::Disasm => self.rows_disasm(width, height),
+            Mode::Markdown => self.rows_markdown(width, height),
         }
+    }
+
+    fn rows_markdown(&mut self, width: u16, height: u16) -> Vec<Row> {
+        self.render_markdown(width as usize);
+        let (top, sub) = (self.top, self.top_sub);
+        let pattern = self.pattern.is_some();
+        let Some((_, lines)) = &self.markdown else {
+            return Vec::new();
+        };
+        let start = Self::markdown_index(lines, top, sub);
+        let mut out = Vec::with_capacity(height as usize);
+        for line in lines.iter().skip(start).take(height as usize) {
+            out.push(Row {
+                offset: line.source,
+                text: line.text.clone(),
+                hits: Vec::new(),
+                kind: RowKind::Text,
+                spans: line.spans.clone(),
+            });
+        }
+        // A search in a rendered document searches what is on screen, not the marks behind
+        // it: somebody looking for `size` in a table means the word in the cell, and the
+        // offsets of the source line it came from would land on the pipes.
+        if pattern {
+            for row in &mut out {
+                row.hits = self.hits_in_text(&row.text);
+            }
+        }
+        out
     }
 
     /// The architecture to decode with: the file's, or the host's for a raw sweep.
@@ -904,6 +1027,7 @@ impl Viewer {
                         text: format!("{:016X} <{}>:", line.address, symbol.name),
                         hits: Vec::new(),
                         kind: RowKind::Label,
+                        spans: Vec::new(),
                     });
                 }
             }
@@ -932,6 +1056,7 @@ impl Viewer {
                 } else {
                     RowKind::Code
                 },
+                spans: Vec::new(),
             });
         }
         out
@@ -963,6 +1088,7 @@ impl Viewer {
                     text,
                     hits: shifted,
                     kind: RowKind::Text,
+                    spans: Vec::new(),
                 });
             } else {
                 let segments = wrap_segments(&decoded, width, self.wrap);
@@ -975,6 +1101,7 @@ impl Viewer {
                             text: segment.clone(),
                             hits: shift_hits(&hits, char_base, chars),
                             kind: RowKind::Text,
+                            spans: Vec::new(),
                         });
                     }
                     char_base += chars;
@@ -1025,6 +1152,7 @@ impl Viewer {
                 text: format!("{offset:08X}  {hex}|{printable}|"),
                 hits: Vec::new(),
                 kind: RowKind::Hex,
+                spans: Vec::new(),
             });
             offset += bytes.len() as u64;
         }
@@ -1058,6 +1186,7 @@ impl Viewer {
                 text,
                 hits: Vec::new(),
                 kind: RowKind::Dump,
+                spans: Vec::new(),
             });
             offset += bytes.len() as u64;
         }
@@ -1078,6 +1207,28 @@ impl Viewer {
             // Tab expansion shifts the columns; recompute against the expanded text.
             let start = expand_shift(decoded, bytes, start);
             let end = expand_shift(decoded, bytes, end);
+            if end > start {
+                out.push((start, end - start));
+            }
+        }
+        out
+    }
+
+    /// Where the query matches a string we rendered ourselves, in characters.
+    fn hits_in_text(&self, text: &str) -> Vec<(usize, usize)> {
+        let Some(pattern) = &self.pattern else {
+            return Vec::new();
+        };
+        let bytes = text.as_bytes();
+        let mut out = Vec::new();
+        for m in pattern.matches_in(bytes) {
+            let from = m.offset as usize;
+            let to = (from + m.len).min(bytes.len());
+            if !text.is_char_boundary(from) || !text.is_char_boundary(to) {
+                continue;
+            }
+            let start = text[..from].chars().count();
+            let end = text[..to].chars().count();
             if end > start {
                 out.push((start, end - start));
             }
@@ -1478,6 +1629,88 @@ mod tests {
 
     fn texts(v: &mut Viewer, w: u16, h: u16) -> Vec<String> {
         v.rows(w, h).into_iter().map(|r| r.text).collect()
+    }
+
+    /// A viewer on a Markdown file, which is what `renders_markdown` asks about.
+    fn markdown_viewer(text: &str) -> Viewer {
+        Viewer::new(
+            Box::new(BytesSource::new(text.as_bytes().to_vec())),
+            VPath::local("/tmp/read.md"),
+        )
+    }
+
+    #[test]
+    fn a_markdown_file_can_be_laid_out_and_scrolls_by_rendered_lines() {
+        let mut v = markdown_viewer("# One\n\nbody\n\n## Two\n\n| a | b |\n|---|---|\n| 1 | 2 |\n");
+        assert!(v.renders_markdown());
+        assert!(v.as_markdown());
+        assert_eq!(v.mode, Mode::Markdown);
+        assert_eq!(v.status().mode.letter(), 'm');
+        assert_eq!(texts(&mut v, 40, 2), vec!["One", "═══"]);
+
+        // Scrolling moves by rendered lines, and comes back to exactly where it was. The
+        // blank line between the heading and the body is a line like any other.
+        v.scroll(2, 40, 2);
+        assert_eq!(texts(&mut v, 40, 2), vec!["", "body"]);
+        v.scroll(1, 40, 2);
+        assert_eq!(texts(&mut v, 40, 1), vec!["body"]);
+        v.scroll(-3, 40, 2);
+        assert_eq!(texts(&mut v, 40, 2), vec!["One", "═══"]);
+
+        // Past the start and past the end both stop rather than going blank.
+        v.scroll(-50, 40, 2);
+        assert_eq!(texts(&mut v, 40, 1), vec!["One"]);
+        v.scroll(500, 40, 2);
+        assert_eq!(
+            texts(&mut v, 40, 1),
+            vec!["└───┴───┘"],
+            "the last line of the table is the last line of the document"
+        );
+
+        // `End` shows the last screenful, as it does in text mode.
+        v.to_start();
+        v.to_end(40, 3);
+        let tail = texts(&mut v, 40, 3);
+        assert!(tail.iter().any(|l| l.starts_with('└')), "{tail:?}");
+
+        // `F2` out of it is the source, marks and all.
+        v.to_start();
+        v.toggle_wrap();
+        assert_eq!(v.mode, Mode::Text);
+        assert!(texts(&mut v, 40, 1)[0].starts_with("# One"));
+    }
+
+    #[test]
+    fn only_a_markdown_file_small_enough_to_render_is_laid_out() {
+        // The name decides, as it does for the syntax colouring.
+        let mut v = viewer(b"# not markdown\n");
+        assert!(!v.renders_markdown());
+        assert!(!v.as_markdown(), "a .txt stays text");
+        assert_eq!(v.mode, Mode::Text);
+
+        // And so does the size: rendering reads the whole file, so there is a limit on it.
+        let big = format!("# big\n\n{}\n", "x".repeat(MARKDOWN_LIMIT as usize + 1));
+        let mut v = markdown_viewer(&big);
+        assert!(!v.renders_markdown());
+        assert!(!v.as_markdown());
+    }
+
+    #[test]
+    fn searching_a_laid_out_document_finds_what_is_on_screen() {
+        let mut v = markdown_viewer("| name | size |\n|---|---|\n| a | 1 |\n");
+        assert!(v.as_markdown());
+        // `size` is in a cell. In the source it sits between pipes; on screen it is a word,
+        // and the hit has to be marked where the word is.
+        v.search("size", SearchMode::Plain, false, false, &CancelToken::new())
+            .expect("the search compiles");
+        let row = v
+            .rows(40, 10)
+            .into_iter()
+            .find(|r| r.text.contains("size"))
+            .expect("the header is on screen");
+        let (start, len) = row.hits.first().copied().expect("the hit is marked");
+        let hit: String = row.text.chars().skip(start).take(len).collect();
+        assert_eq!(hit, "size");
     }
 
     #[test]

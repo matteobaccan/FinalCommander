@@ -416,6 +416,11 @@ scope = "viewer"
 cmd = "viewer.hex"
 
 [[bind]]
+keys = ["Shift+F2"]
+scope = "viewer"
+cmd = "viewer.markdown"
+
+[[bind]]
 keys = ["Shift+F4"]
 scope = "viewer"
 cmd = "viewer.mode.next"

@@ -1391,6 +1391,27 @@ fn draw_viewer(app: &mut App, viewer: &mut scmd_view::Viewer, buf: &mut Buffer) 
     for (i, row) in rows.iter().enumerate() {
         let y = body.y + i as u16;
         buf.put_str(0, y, &row.text, base, body.w);
+        // A rendered row carries its own runs: the Markdown view decided what a heading, a
+        // bullet and a table's frame are when it laid the line out, and re-scanning the text
+        // it produced would only guess at it again.
+        for span in &row.spans {
+            let Some(text) = row.text.get(span.start..span.end) else {
+                continue;
+            };
+            if text.is_empty() {
+                continue;
+            }
+            let x = row.text[..span.start]
+                .chars()
+                .filter_map(unicode_width::UnicodeWidthChar::width)
+                .sum::<usize>() as u16;
+            if x >= body.w {
+                continue;
+            }
+            let mut style = base.with_fg(app.theme.color(span.class.theme_key()));
+            style.bold = span.bold;
+            buf.put_str(x, y, text, style, body.w - x);
+        }
         if let Some(syntax) = syntax {
             let (spans, next) = syntax.line(&row.text, state);
             state = next;
@@ -2892,6 +2913,125 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
         press(&mut app, "F4");
         press(&mut app, "F7");
         println!("{}", frame(&mut app, 80, 16));
+    }
+
+    /// A README opens laid out: the marks are gone, the heading is ruled, the table is drawn,
+    /// and every part of it is coloured as what it is rather than as the characters it is
+    /// made of.
+    #[test]
+    fn a_markdown_file_opens_laid_out() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("read.md"),
+            "\
+# Title
+
+Some **bold** text and a [link](https://example.com).
+
+| name | size |
+|------|-----:|
+| a    |    1 |
+
+- one
+- two
+",
+        )
+        .unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F3");
+        let buf = frame_buf(&mut app, 60, 20);
+        let text = buf.to_text();
+
+        // The marks are gone and the layout is there.
+        assert!(text.contains("Title"), "{text}");
+        assert!(!text.contains("# Title"), "{text}");
+        assert!(text.contains("═════"), "a heading is ruled: {text}");
+        assert!(text.contains("┌──────┬──────┐"), "a table is drawn: {text}");
+        assert!(text.contains("• one"), "a list is bulleted: {text}");
+        assert!(!text.contains("**bold**"), "{text}");
+
+        // And the status line says which way the file is being read.
+        assert!(
+            text.lines().next().is_some_and(|l| l.contains('m')),
+            "the mode letter is on the status line: {text}"
+        );
+
+        // The heading is drawn in the heading colour, which is the whole point of rendering
+        // it rather than printing it.
+        let row = text
+            .lines()
+            .position(|l| l.trim_start().starts_with("Title"))
+            .expect("the heading is on screen") as u16;
+        let x = text.lines().nth(row as usize).unwrap().find('T').unwrap() as u16;
+        assert_eq!(
+            buf.get(x, row).unwrap().style.fg,
+            app.theme.color("syntax.preproc"),
+            "the heading takes the heading colour"
+        );
+        assert!(buf.get(x, row).unwrap().style.bold, "and it is bold");
+
+        // `Shift+F2` shows the source, and again shows the layout.
+        press(&mut app, "Shift+F2");
+        let text = frame(&mut app, 60, 20);
+        assert!(text.contains("# Title"), "the source has its marks: {text}");
+        press(&mut app, "Shift+F2");
+        let text = frame(&mut app, 60, 20);
+        assert!(!text.contains("# Title"), "{text}");
+    }
+
+    /// Something that is not Markdown says so rather than leaving the key looking broken.
+    #[test]
+    fn asking_for_the_layout_of_something_else_says_no() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("t.txt"), b"# not markdown, just text\n").unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F3");
+        press(&mut app, "Shift+F2");
+        assert!(
+            app.status.to_lowercase().contains("markdown"),
+            "{}",
+            app.status
+        );
+    }
+
+    #[test]
+    #[ignore = "a look at the screen, not an assertion"]
+    fn eyeball_markdown() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("read.md"),
+            "\
+# SupremeCommander
+
+One file. Every system. **Everything** in it.
+
+## What it replaces
+
+| what | instead of |
+|------|-----------:|
+| panels | two of them |
+| viewer | `less` |
+
+> It is the same program on all three systems.
+
+- a bulleted list
+  - nested, with its own bullet
+- [ ] and a box to tick
+
+```rust
+fn main() { println!(\"hello\"); }
+```
+
+See the [docs](https://example.com/docs) for more.
+",
+        )
+        .unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F3");
+        println!("{}", frame(&mut app, 76, 30));
     }
 
     #[test]

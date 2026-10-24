@@ -25,10 +25,11 @@ decoding in process, and the diff viewer (§3).
 | `text` | decoded text, wrap off/char/word | arbitrary line length, tabs expanded per config |
 | `dump` | raw bytes as characters, fixed width | for binaries where text decoding lies |
 | `hex` | offset + hex + ASCII/decoded pane | bytes-per-row adjustable (`Alt+←/→`), 16-aligned jumps |
+| `markdown` | Markdown laid out to be read: the marks off, headings ruled, lists bulleted, tables drawn | **Implemented** (`Shift+F2`, and in `Shift+F4`'s ring). The one mode that reads the whole file, because a table's columns cannot be laid out from the part of it on screen: limited to 4 MiB, over which the file stays its source and says so. Every rendered line carries the `(offset, sub)` pair of the source line it came from, so scrolling, the bookmarks and the search need no line index. A search here searches what is on screen, not the marks behind it. |
 | `preview` | rendered content (image, markdown, PDF page, media info, archive listing) | pluggable, see §1.7 |
 | `structure` | a side pane that decodes what the file *is*: header fields, section and segment tables, imports and exports | `F11`, see §1.8; it rides alongside `hex` and `disasm` rather than replacing them |
 
-Mode indicator in the status bar (`t`/`d`/`h`/`p`) plus encoding, position (offset, %, line) and
+Mode indicator in the status bar (`t`/`d`/`h`/`m`/`p`) plus encoding, position (offset, %, line) and
 file size. `F2` toggles wrap in text mode, `F4` toggles hex, `Shift+F4` picks the base mode
 (FAR's base/hex distinction is kept — it is genuinely useful).
 

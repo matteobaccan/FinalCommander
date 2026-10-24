@@ -16,7 +16,7 @@
 
 mod tables;
 
-pub use tables::{of_name, Syntax, SYNTAXES};
+pub use tables::{of_language, of_name, Syntax, SYNTAXES};
 
 /// What a run of characters is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

@@ -245,6 +245,8 @@ impl Form {
             FormKind::Interface => vec![
                 Field::toggle("ui.key_bar", t("opt-key-bar"), cfg.ui.key_bar),
                 Field::toggle("ui.status_bar", t("opt-status-bar"), cfg.ui.status_bar),
+                Field::toggle("ui.syntax", t("opt-syntax"), cfg.ui.syntax),
+                Field::toggle("ui.markdown", t("opt-markdown"), cfg.ui.markdown),
                 Field::Separator,
                 choice(
                     "ui.keymap",

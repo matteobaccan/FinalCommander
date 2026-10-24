@@ -12,6 +12,24 @@ then *Find next* or *Find previous*, because they are the same question asked tw
 `Gray +` and `Gray -` step to the next and previous file of the panel without leaving the
 viewer, and `Ctrl+F10` makes the panel catch up with what you are reading.
 
+# Markdown
+
+A `.md` file opens laid out rather than as its source: the marks come off and the space they
+held is put to use. A heading is bold with a rule under it, a list is bullets with hanging
+indents and a task list is boxes, a quote gets a bar down its left side, a link shows its text
+and its address, a fenced block is indented and — where the fence named a language — coloured
+as that language, and a table is drawn with its columns lined up and aligned the way its
+delimiter row asked for.
+
+`Shift+F2` switches between the laid-out document and its source, and `Shift+F4` has it in the
+cycle with the text, the dump and the hex. Searching a laid-out document searches what is on
+screen, not the marks behind it, so looking for a word in a table finds it in the cell.
+
+This is the one place the viewer reads more than it shows: a table's columns cannot be worked
+out from the part of it that happens to be on screen, so the document is rendered whole. Over
+four megabytes it stays the source, and says so. *Interface → Markdown laid out to be read*
+turns the first screen back into the source for good.
+
 Text is coloured by the language the file's name implies, as it is in the editor. The viewer
 reads only what it shows, so the colouring starts at the top of the screen: a comment that
 was opened higher up in the file is not carried down to it. That is the price of opening a
