@@ -382,3 +382,6 @@ replace-confirm-title = Ersetzen
 replace-confirm-body = { $count } Vorkommen in { $files } Dateien würden sich ändern.
 replace-nothing = nichts zu ersetzen: keine Datei würde sich ändern
 replace-done = { $count } Vorkommen in { $files } Dateien ersetzt
+
+# ── Archive (SPEC 04 §4) ────────────────────────────────────────────────────────────────
+arc-read-only = der Inhalt eines Archivs ist noch nicht änderbar — F3 liest ihn

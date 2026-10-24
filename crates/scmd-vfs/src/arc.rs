@@ -58,7 +58,9 @@ impl ArcVfs {
         Ok(host)
     }
 
-    fn blocking_list(&self, path: &VPath, cancel: &CancelToken) -> Result<Vec<Entry>> {
+    /// The synchronous core of [`ArcVfs::list`], kept public for the same reasons the local
+    /// provider's is: tests, and the callers that are already on a blocking thread.
+    pub fn list_blocking(&self, path: &VPath, cancel: &CancelToken) -> Result<Vec<Entry>> {
         let host = self.host(path)?;
         let archive = self
             .cache
@@ -135,7 +137,7 @@ impl Vfs for ArcVfs {
     async fn list(&self, path: &VPath, cancel: CancelToken) -> Result<Vec<Entry>> {
         let owned = path.clone();
         let cache = self.cache.clone();
-        tokio::task::spawn_blocking(move || ArcVfs { cache }.blocking_list(&owned, &cancel))
+        tokio::task::spawn_blocking(move || ArcVfs { cache }.list_blocking(&owned, &cancel))
             .await
             .map_err(|e| Error::Other(format!("listing task failed: {e}")))?
     }

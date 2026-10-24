@@ -150,6 +150,20 @@ pub trait JobFs: Send + Sync {
     }
 }
 
+/// A path inside a container is not this filesystem's, and `as_path` would hand it the
+/// archive itself — so a copy would quietly duplicate the whole zip instead of one entry.
+/// Every entry into [`LocalFs`] that could make that mistake asks this first; the archive
+/// layer ([`crate::ArcFs`]) takes those paths before they get here.
+fn not_mine(path: &VPath) -> io::Result<()> {
+    if path.in_container() {
+        return Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            format!("{path}: inside an archive, which this filesystem cannot read"),
+        ));
+    }
+    Ok(())
+}
+
 /// The one refusal every provider that cannot keep a promise returns, so the engine's error
 /// text reads the same wherever it came from.
 fn unsupported(message: &'static str) -> io::Error {
@@ -166,11 +180,13 @@ pub const PART_SUFFIX: &str = ".scmd-part";
 
 impl JobFs for LocalFs {
     fn facts(&self, path: &VPath) -> io::Result<Facts> {
+        not_mine(path)?;
         let meta = fs::symlink_metadata(path.as_path())?;
         Ok(facts_from(&meta))
     }
 
     fn facts_following(&self, path: &VPath) -> io::Result<Facts> {
+        not_mine(path)?;
         let meta = fs::metadata(path.as_path())?;
         Ok(facts_from(&meta))
     }

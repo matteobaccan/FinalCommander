@@ -382,3 +382,6 @@ replace-confirm-title = Sustituir
 replace-confirm-body = Cambiarían { $count } apariciones en { $files } archivos.
 replace-nothing = nada que sustituir: ningún archivo cambiaría
 replace-done = { $count } apariciones sustituidas en { $files } archivos
+
+# ── archivos comprimidos (SPEC 04 §4) ───────────────────────────────────────────────────
+arc-read-only = el contenido de un archivo comprimido aún no se puede cambiar — F3 lo lee

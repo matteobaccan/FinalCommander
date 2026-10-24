@@ -390,3 +390,6 @@ replace-confirm-title = Replace
 replace-confirm-body = { $count } occurrences in { $files } files would change.
 replace-nothing = nothing to replace: no file would change
 replace-done = { $count } occurrences replaced in { $files } files
+
+# ── archives (SPEC 04 §4) ───────────────────────────────────────────────────────────────
+arc-read-only = what is inside an archive cannot be changed yet — F3 reads it

@@ -64,6 +64,11 @@ impl Vfs for LocalVfs {
 
 /// The synchronous core of [`LocalVfs::list`], kept public for tests and for the sizing walker.
 pub fn list_blocking(path: &VPath, cancel: &CancelToken) -> Result<Vec<Entry>> {
+    if path.in_container() {
+        // Not ours: `as_path` would name the archive file, and a listing of it would be the
+        // directory the archive sits in. The archive provider owns these paths.
+        return Err(Error::Unsupported { path: path.clone() });
+    }
     let read = fs::read_dir(path.as_path()).map_err(|e| Error::io(path, e))?;
     let mut out = Vec::with_capacity(64);
     if !path.is_root() {

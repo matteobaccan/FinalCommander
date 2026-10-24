@@ -382,3 +382,6 @@ replace-confirm-title = 替换
 replace-confirm-body = { $files } 个文件中的 { $count } 处将被改变。
 replace-nothing = 没有可替换的内容：不会有文件改变
 replace-done = 已在 { $files } 个文件中替换 { $count } 处
+
+# ── 压缩包（SPEC 04 §4）─────────────────────────────────────────────────────────────────
+arc-read-only = 压缩包里的内容还不能修改 — F3 可以查看

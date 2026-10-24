@@ -19,7 +19,7 @@ use scmd_cmd::{Command as ScCommand, Keymap};
 use scmd_config::{Config, Paths};
 use scmd_core::{CancelToken, VPath};
 use scmd_i18n::I18n;
-use scmd_jobs::JobSpec;
+use scmd_jobs::{ArcFs, JobSpec};
 use scmd_net::{Pool, RoutedFs, Router, Site};
 use scmd_tui::{Input, Term};
 use scmd_ui::{Buffer, Theme, ThemeSet};
@@ -505,6 +505,9 @@ fn interactive(mut app: App) -> Result<()> {
         });
     }
     let vfs = Router::new(pool.clone());
+    // One container cache for the whole program: the index a panel read to draw itself is the
+    // one an unpack then reads from.
+    let archives = vfs.archives().cache();
     let mut cancels: [Option<CancelToken>; 2] = [None, None];
     let (mut w, mut h) = term.size();
     let mut buf = Buffer::new(w, h);
@@ -549,7 +552,10 @@ fn interactive(mut app: App) -> Result<()> {
                     let tx = tx.clone();
                     // A job runs on a blocking thread, which is what lets the remote
                     // provider's async calls be driven with `block_on` (see `scmd-net`).
-                    let fs = RoutedFs::new(pool.clone(), runtime.handle().clone());
+                    let fs = ArcFs::new(
+                        archives.clone(),
+                        RoutedFs::new(pool.clone(), runtime.handle().clone()),
+                    );
                     runtime.spawn_blocking(move || run_job(id, spec, cancel, tx, &fs));
                 }
                 Request::Shell {
@@ -631,8 +637,16 @@ fn interactive(mut app: App) -> Result<()> {
                 Request::Fetch { id, path, purpose } => {
                     let tx = tx.clone();
                     let pool = pool.clone();
+                    let archives = archives.clone();
                     runtime.spawn(async move {
-                        let result = fetch_remote(&pool, &path).await;
+                        let result = if path.in_container() {
+                            let inner = path.clone();
+                            tokio::task::spawn_blocking(move || fetch_entry(&archives, &inner))
+                                .await
+                                .unwrap_or_else(|e| Err(format!("the unpack failed: {e}")))
+                        } else {
+                            fetch_remote(&pool, &path).await
+                        };
                         let _ = tx.send(Event::Fetched {
                             id,
                             remote: path,
@@ -698,7 +712,12 @@ fn interactive(mut app: App) -> Result<()> {
                 }
                 Request::DirSize { panel, path } => {
                     let tx = tx.clone();
-                    let fs = RoutedFs::new(pool.clone(), runtime.handle().clone());
+                    // A directory inside an archive has a size too, and it is what the
+                    // archive says rather than what a disk would give it.
+                    let fs = ArcFs::new(
+                        archives.clone(),
+                        RoutedFs::new(pool.clone(), runtime.handle().clone()),
+                    );
                     runtime.spawn_blocking(move || {
                         let (bytes, files) = dir_size(&fs, &path, &CancelToken::new(), 0);
                         let _ = tx.send(Event::DirSized {
@@ -990,6 +1009,42 @@ async fn fetch_remote(pool: &Pool, path: &VPath) -> Result<(PathBuf, RemoteStamp
     Ok((local, stamp))
 }
 
+/// Copy one entry out of an archive into the temporary directory, for the viewer and the
+/// editor — which both read a real file (SPEC 04 §5, the same shape as a remote fetch).
+fn fetch_entry(
+    archives: &std::sync::Arc<scmd_arc::Cache>,
+    path: &VPath,
+) -> Result<(PathBuf, RemoteStamp), String> {
+    let host = path
+        .leave()
+        .ok_or_else(|| format!("{path}: not a path inside an archive"))?;
+    let archive = archives
+        .open(host.as_path(), &CancelToken::new())
+        .map_err(|e| e.to_string())?;
+    let inner = path.inner_path();
+    let entry = archive
+        .entry(inner)
+        .ok_or_else(|| format!("{path}: no such entry"))?;
+    let dir = std::env::temp_dir().join(format!("scmd-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let local = dir.join(path.display_name());
+    archive
+        .extract(inner, &local, &CancelToken::new(), &mut |_| {})
+        .map_err(|e| e.to_string())?;
+    Ok((
+        local,
+        RemoteStamp {
+            size: entry.size,
+            // The stamp exists to tell whether a file changed under the editor; an archive
+            // entry's own time is in seconds since the epoch, trimmed like the wire's.
+            mtime: entry
+                .mtime
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_secs() as u32),
+        },
+    ))
+}
+
 /// What the file looks like on the server right now.
 async fn stamp_of(remote: &scmd_net::Remote, path: &VPath) -> Option<RemoteStamp> {
     let wire = remote.wire(path).ok()?;
@@ -1061,17 +1116,28 @@ mod tests {
                     path,
                     generation,
                 } => {
-                    let result = scmd_vfs::local::list_blocking(&path, &CancelToken::new())
-                        .map_err(|e| e.to_string());
+                    let cancel = CancelToken::new();
+                    let result = if path.in_container() {
+                        scmd_vfs::ArcVfs::new(scmd_arc::Limits::default())
+                            .list_blocking(&path, &cancel)
+                    } else {
+                        scmd_vfs::local::list_blocking(&path, &cancel)
+                    };
                     app.handle_event(Event::Listed {
                         panel,
                         generation,
-                        result,
+                        result: result.map_err(|e| e.to_string()),
                     });
                 }
                 Request::Job { id, spec, cancel } => {
                     let (tx, rx) = mpsc::channel();
-                    run_job(id, spec, cancel, tx, &scmd_jobs::LocalFs);
+                    // The archive layer, as the program has it: a job whose source is inside
+                    // a zip has to read it out rather than copy the zip.
+                    let fs = ArcFs::new(
+                        std::sync::Arc::new(scmd_arc::Cache::new(Default::default())),
+                        scmd_jobs::LocalFs,
+                    );
+                    run_job(id, spec, cancel, tx, &fs);
                     while let Ok(event) = rx.try_recv() {
                         app.handle_event(event);
                     }
@@ -1110,12 +1176,21 @@ mod tests {
                         items,
                     });
                 }
+                Request::Fetch { id, path, purpose } => {
+                    let archives = std::sync::Arc::new(scmd_arc::Cache::new(Default::default()));
+                    let result = fetch_entry(&archives, &path);
+                    app.handle_event(Event::Fetched {
+                        id,
+                        remote: path,
+                        purpose,
+                        result,
+                    });
+                }
                 Request::DirSize { .. }
                 | Request::Shell { .. }
                 | Request::Decompile { .. }
                 | Request::Connect { .. }
                 | Request::Disconnect { .. }
-                | Request::Fetch { .. }
                 | Request::Upload { .. } => {}
             }
         }
@@ -1321,6 +1396,78 @@ mod tests {
             under_cursor.to_string().ends_with(".rs"),
             "{under_cursor:?}"
         );
+    }
+
+    /// `Enter` on an archive, the panel inside it, `F3` on an entry, and a copy out of it —
+    /// the whole of what 0.0.5 promises, through the real engine and the real provider.
+    #[test]
+    fn enter_goes_into_an_archive_and_everything_else_works_in_there() {
+        let root = tempfile::tempdir().unwrap();
+        let out = root.path().join("out");
+        std::fs::create_dir(&out).unwrap();
+        let zip = root.path().join("tree.zip");
+        {
+            let file = std::fs::File::create(&zip).unwrap();
+            let mut writer = zip::ZipWriter::new(file);
+            for (name, body) in [
+                ("readme.md", &b"# the readme"[..]),
+                ("src/a.txt", &b"aaaa"[..]),
+            ] {
+                writer
+                    .start_file(name, zip::write::SimpleFileOptions::default())
+                    .unwrap();
+                std::io::Write::write_all(&mut writer, body).unwrap();
+            }
+            writer.finish().unwrap();
+        }
+
+        let mut app = app_on(root.path(), &out);
+        serve(&mut app);
+
+        // The cursor onto the zip — `..`, then the `out` directory, then the file — and in.
+        key(&mut app, "Down");
+        key(&mut app, "Down");
+        assert_eq!(app.panel().current().unwrap().name_str(), "tree.zip");
+        key(&mut app, "Enter");
+        serve(&mut app);
+        assert!(app.panel().cwd.in_container(), "{}", app.panel().cwd);
+        let names: Vec<String> = (0..app.panel().listing.len())
+            .map(|i| app.panel().listing.row(i).unwrap().name_str().into_owned())
+            .collect();
+        // Directories first, like any other panel: the sort is the panel's, not the archive's.
+        assert_eq!(names, ["..", "src", "readme.md"], "{}", app.status);
+        // The frame says the archive's name, not the whole path.
+        assert_eq!(app.panel().cwd.display_name(), "tree.zip");
+
+        // `F3` brings the bytes out and reads them.
+        key(&mut app, "Down");
+        key(&mut app, "Down");
+        assert_eq!(app.panel().current().unwrap().name_str(), "readme.md");
+        key(&mut app, "F3");
+        serve(&mut app);
+        let shown = {
+            let viewer = app.mode.viewer_mut().expect("the viewer");
+            (viewer.path.display_name(), viewer.len())
+        };
+        assert_eq!(shown, ("readme.md".to_string(), 12));
+        key(&mut app, "Esc");
+
+        // `F5` copies out of the archive through the ordinary job engine.
+        key(&mut app, "F5");
+        key(&mut app, "Enter"); // accept the prefilled destination
+        serve(&mut app);
+        serve(&mut app);
+        assert_eq!(
+            std::fs::read(out.join("readme.md")).unwrap(),
+            b"# the readme"
+        );
+
+        // And `..` at the root of the archive leaves it, with the cursor back on the file.
+        key(&mut app, "Home");
+        key(&mut app, "Enter");
+        serve(&mut app);
+        assert!(!app.panel().cwd.in_container());
+        assert_eq!(app.panel().cwd, VPath::local(root.path()));
     }
 
     /// A search that finds nothing has to say so, rather than leaving an empty list that

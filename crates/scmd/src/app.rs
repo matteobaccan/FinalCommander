@@ -2410,7 +2410,11 @@ impl App {
             }
             Command::NavEnter => match self.panel().enter_target() {
                 Some(path) => self.goto(path),
-                None => self.not_implemented("nav.enter (running files)"),
+                // Not a directory: it may still be an archive, which `Enter` goes into.
+                None => match self.archive_target() {
+                    Some(path) => self.goto(path),
+                    None => self.not_implemented("nav.enter (running files)"),
+                },
             },
             Command::NavParent => {
                 if let Some(parent) = self.panel().cwd.parent() {
@@ -2962,8 +2966,9 @@ impl App {
             return;
         }
         let path = self.panel().path_of(&entry);
-        if path.is_remote() {
-            // The viewer reads a real file, so the file comes down first.
+        if path.is_remote() || path.in_container() {
+            // The viewer reads a real file, so the bytes are brought out first — off a server
+            // or out of an archive, the shape is the same.
             self.fetch_remote(path, entry.size, Fetched::View);
             return;
         }
@@ -3001,7 +3006,7 @@ impl App {
         };
         self.panel_mut().cursor_to(row);
         let path = self.panel().path_of(&entry);
-        if path.is_remote() {
+        if path.is_remote() || path.in_container() {
             self.fetch_remote(path, entry.size, Fetched::View);
             return;
         }
@@ -3998,7 +4003,7 @@ impl App {
         if entry.kind.is_dirlike() {
             return;
         }
-        if path.is_remote() {
+        if path.is_remote() || path.in_container() {
             self.fetch_remote(path, entry.size, Fetched::View);
             return;
         }
@@ -4682,6 +4687,13 @@ impl App {
             return;
         }
         let path = self.panel().path_of(&entry);
+        if path.in_container() {
+            // Editing the copy would be easy and useless: there is nowhere to save it until
+            // writing into a container exists, so `F3` is the honest answer today.
+            let m = self.i18n.t("arc-read-only");
+            self.set_error(m);
+            return;
+        }
         if path.is_remote() {
             // Fetch, edit the copy, and write it back on save (SPEC 04 §5).
             self.fetch_remote(path, entry.size, Fetched::Edit);
@@ -5234,6 +5246,24 @@ impl App {
             }
         }
         total
+    }
+
+    /// `Enter` on an archive goes into it (SPEC 04 §4).
+    ///
+    /// Decided by the name, like FAR: opening every file under the cursor to look at its first
+    /// bytes is not a thing to do on a key the user presses to walk a tree. A file that lies
+    /// about its name says so when the listing fails, which is the right place for it.
+    fn archive_target(&self) -> Option<VPath> {
+        let panel = self.panel();
+        let entry = panel.current()?;
+        if entry.kind != scmd_core::EntryKind::File {
+            return None;
+        }
+        let name = entry.name_str();
+        if !scmd_vfs::ArcVfs::looks_like_archive(std::path::Path::new(&*name)) {
+            return None;
+        }
+        Some(panel.path_of(entry).enter("/"))
     }
 
     fn not_implemented(&mut self, what: &str) {
