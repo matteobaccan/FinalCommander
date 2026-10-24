@@ -1,0 +1,33 @@
+[package]
+name = "scmd-arc"
+description = "SupremeCommander: the archive provider (what is inside a zip or a tar, and how to get it out)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+# Every decoder here is pure Rust: the binary stays one file that cross-compiles without a C
+# toolchain, which is the whole point of the release matrix.
+bzip2 = "0.6"
+flate2 = "1"
+lzma-rust2 = { version = "0.23", default-features = false, features = ["std", "xz"] }
+ruzstd = "0.9"
+scmd-core = { version = "0.0.4", path = "../scmd-core" }
+tar = { version = "0.4", default-features = false }
+thiserror = "2"
+zip = { version = "9", default-features = false, features = [
+  "deflate-flate2",
+  "deflate64",
+  "bzip2",
+  "lzma",
+  "xz",
+] }
+
+[dev-dependencies]
+# The encoders, so a test can build the archive it then reads. Not in the binary: a release
+# build never compiles dev-dependencies, so the shipped code can only read.
+lzma-rust2 = { version = "0.23", default-features = false, features = ["std", "xz", "encoder"] }
+tempfile = "3"

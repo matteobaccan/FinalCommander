@@ -308,7 +308,8 @@ impl VPath {
         if self.in_container() {
             let (a, b) = (self.inner_path(), other.inner_path());
             return a == b
-                || a.starts_with(b) && (b.ends_with('/') || a.as_bytes().get(b.len()) == Some(&b'/'));
+                || a.starts_with(b)
+                    && (b.ends_with('/') || a.as_bytes().get(b.len()) == Some(&b'/'));
         }
         if self.is_remote() {
             let (a, b) = (self.remote_path(), other.remote_path());
@@ -521,7 +522,10 @@ mod tests {
         assert_eq!(n.depth(), 2);
         assert_eq!(n.remote_path(), "/backups/x.tar.gz");
         assert_eq!(n.inner(), ["/etc".into(), "/nginx.conf".into()]);
-        assert_eq!(n.to_string(), "sftp://srv/backups/x.tar.gz!/etc!/nginx.conf");
+        assert_eq!(
+            n.to_string(),
+            "sftp://srv/backups/x.tar.gz!/etc!/nginx.conf"
+        );
 
         // A path with no `!/` in it is untouched, so an ordinary name keeps working.
         assert!(!VPath::parse("/home/mb/hello!.txt").in_container());
