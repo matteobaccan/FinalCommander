@@ -151,6 +151,14 @@ pub enum Request {
         purpose: Fetched,
     },
     /// Write a temporary file back to the server it came from (SPEC 04 §5).
+    /// Change what these paths are: permissions and times (SPEC 10 §3.8).
+    SetAttrs {
+        id: u64,
+        paths: Vec<VPath>,
+        change: Box<scmd_jobs::Change>,
+        recursive: bool,
+        cancel: CancelToken,
+    },
     Upload {
         id: u64,
         local: std::path::PathBuf,
@@ -454,6 +462,28 @@ impl Prompt {
             secret: false,
             sources: Vec::new(),
         }
+    }
+}
+
+/// A local file's permission bits, or `None` where there are none to read.
+///
+/// On Windows there is no mode and the dialog does not offer one, so this answers `None`
+/// there and the twelve boxes are not built.
+fn mode_of(path: &VPath) -> Option<u32> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if !path.is_local() || path.in_container() {
+            return None;
+        }
+        std::fs::metadata(path.as_path())
+            .ok()
+            .map(|m| m.permissions().mode() & 0o7777)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        None
     }
 }
 
@@ -854,6 +884,9 @@ pub struct App {
     /// keyboard protocol ever report this, so on the others it stays empty and the bar does
     /// not change — which is what it did before.
     pub held: Mods,
+    /// What the attributes dialog is about. The dialog is open while the selection could
+    /// change under it, so what it will touch is settled when it opens.
+    attr_targets: Vec<VPath>,
     /// What to delete once the archive is written, when the dialog asked for it — or when
     /// `F6` put the files into the archive, which is a move and not a copy. It is held here
     /// rather than in the job because the delete only happens if the archive was written.
@@ -1032,6 +1065,7 @@ impl App {
             status: String::new(),
             status_error: false,
             held: Mods::NONE,
+            attr_targets: Vec::new(),
             pack_delete: None,
             quit: false,
             requests: Vec::new(),
@@ -2888,6 +2922,7 @@ impl App {
             JobKind::Pack => "job-pack",
             JobKind::Test => "job-test",
             JobKind::Rebuild => "job-rebuild",
+            JobKind::Attrs => "job-attrs",
         })
     }
 
@@ -3900,6 +3935,7 @@ impl App {
                     action: ConfirmAction::Job(spec),
                 });
             }
+            Command::FileAttributes => self.open_attributes_form(),
             Command::FileLink => {
                 let Some(entry) = self.panel().current().cloned() else {
                     let m = self.i18n.t("msg-nothing-to-do");
@@ -5163,6 +5199,123 @@ impl App {
         }
     }
 
+    /// `Ctrl+A`: what the selected files *are*. The boxes start from the item under the
+    /// cursor, because with several selected there is no one answer to start from and the
+    /// cursor is the one the user is looking at.
+    fn open_attributes_form(&mut self) {
+        let sources = self.job_sources();
+        if sources.is_empty() {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        }
+        let Some(entry) = self.panel().current().cloned() else {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        };
+        // A container is the one place with nothing to set: an entry's permissions are the
+        // archive's, and writing them would mean writing the archive again for nothing.
+        if sources.iter().any(|p| p.in_container()) {
+            let m = self.i18n.t("attr-in-archive");
+            self.set_error(m);
+            return;
+        }
+        let directories = sources.iter().any(|p| {
+            self.panel()
+                .listing
+                .row_of_name(&p.display_name())
+                .and_then(|row| self.panel().listing.row(row))
+                .is_some_and(|e| e.kind.is_dirlike())
+        });
+        let what = sources[0].display_name();
+        // The panel's rows do not carry a mode — no provider is asked for one, because no
+        // view shows it as a number — so the one file the boxes start from is asked about
+        // here. One `stat` of a file that was just listed costs nothing and happens on the
+        // keystroke that opens the dialog; a path that is not local has no mode to read, and
+        // the dialog then starts from the flags alone.
+        let under_cursor = self.panel().path_of(&entry);
+        let mode = mode_of(&under_cursor);
+        self.mode = Mode::Form(Box::new(Form::attributes(
+            &what,
+            sources.len(),
+            mode,
+            entry.flags.contains(scmd_core::EntryFlags::READONLY),
+            entry.mtime,
+            directories,
+            &self.i18n,
+        )));
+        self.attr_targets = sources;
+    }
+
+    /// OK in the attributes dialog: what the boxes say, applied to what was selected.
+    fn apply_attributes_form(&mut self, form: &Form) {
+        let sources = std::mem::take(&mut self.attr_targets);
+        if sources.is_empty() {
+            return;
+        }
+        let bits = scmd_jobs::Mode {
+            owner_read: form.toggle_value("attr.ur"),
+            owner_write: form.toggle_value("attr.uw"),
+            owner_exec: form.toggle_value("attr.ux"),
+            group_read: form.toggle_value("attr.gr"),
+            group_write: form.toggle_value("attr.gw"),
+            group_exec: form.toggle_value("attr.gx"),
+            other_read: form.toggle_value("attr.or"),
+            other_write: form.toggle_value("attr.ow"),
+            other_exec: form.toggle_value("attr.ox"),
+            setuid: form.toggle_value("attr.setuid"),
+            setgid: form.toggle_value("attr.setgid"),
+            sticky: form.toggle_value("attr.sticky"),
+        };
+        let change = scmd_jobs::Change {
+            // The mode is only sent where the dialog offered it: on Windows the twelve boxes
+            // are not there, and twelve absent toggles read as `000`, which would be a very
+            // surprising thing to apply.
+            mode: cfg!(unix).then(|| bits.bits()),
+            readonly: Some(form.toggle_value("attr.readonly")),
+            hidden: cfg!(windows).then(|| form.toggle_value("attr.hidden")),
+            system: cfg!(windows).then(|| form.toggle_value("attr.system")),
+            archive: cfg!(windows).then(|| form.toggle_value("attr.archive")),
+            mtime: scmd_ui::parse_stamp(&form.text_value("attr.mtime")),
+            atime: scmd_ui::parse_stamp(&form.text_value("attr.atime")),
+        };
+        // A time that was typed and makes no sense is worth saying so about: leaving it alone
+        // silently would look like the dialog had done what it was asked.
+        for (key, parsed) in [("attr.mtime", change.mtime), ("attr.atime", change.atime)] {
+            let typed = form.text_value(key);
+            if !typed.trim().is_empty() && parsed.is_none() {
+                let msg = self.i18n.t_args("attr-bad-time", &[("text", typed.into())]);
+                self.set_error(msg);
+                return;
+            }
+        }
+        if change.is_empty() {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_status(m);
+            return;
+        }
+        let recursive = form.toggle_value("attr.recursive");
+        let id = self.next_job_id;
+        self.next_job_id += 1;
+        let cancel = CancelToken::new();
+        self.mode = Mode::Job(JobView {
+            id,
+            kind: JobKind::Attrs,
+            progress: Progress::default(),
+            question: None,
+            cancel: cancel.clone(),
+            choice: 0,
+        });
+        self.requests.push(Request::SetAttrs {
+            id,
+            paths: sources,
+            change: Box::new(change),
+            recursive,
+            cancel,
+        });
+    }
+
     /// OK in the archive dialog: work out the format, and start writing.
     fn apply_pack_form(&mut self, form: &Form) {
         let name = form.text_value("pack.name");
@@ -5860,6 +6013,10 @@ impl App {
         }
         if form.kind == FormKind::Search {
             self.apply_search_form(&form, button);
+            return;
+        }
+        if form.kind == FormKind::Attributes {
+            self.apply_attributes_form(&form);
             return;
         }
         let problems = form.apply(&mut self.cfg);
@@ -10316,14 +10473,117 @@ mod tests {
     #[test]
     fn an_entry_with_no_feature_behind_it_says_so_instead_of_pretending() {
         let mut app = app();
-        // The file attributes dialog is still to come.
-        open(&mut app, 1, "menu-attributes");
+        // The viewer's own settings dialog is still to come. Options is the fourth menu.
+        open(&mut app, 3, "menu-viewer-settings");
         assert!(
-            app.status.contains("file.attributes"),
+            app.status.contains("settings.viewer"),
             "a missing feature must say so instead of doing nothing quietly: `{}`",
             app.status
         );
         assert!(app.mode.is_normal());
+    }
+
+    /// `Ctrl+A`: what a file is, and what the dialog then does about it.
+    #[test]
+    fn the_attributes_dialog_shows_what_a_file_is_and_sets_what_it_is_told() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("one.txt");
+        std::fs::write(&file, b"x").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o644)).unwrap();
+        }
+
+        let mut app = app();
+        app.panels[app.active].cwd = VPath::local(dir.path());
+        let entries =
+            scmd_vfs::local::list_blocking(&app.panels[app.active].cwd, &CancelToken::new())
+                .unwrap();
+        let (panel, generation) = (app.active, app.panels[app.active].generation);
+        app.handle_event(Event::Listed {
+            panel,
+            generation,
+            result: Ok(entries),
+        });
+        app.requests.clear();
+        let row = app.panels[app.active]
+            .listing
+            .row_of_name("one.txt")
+            .expect("the file is listed");
+        app.panels[app.active].cursor_to(row);
+
+        press(&mut app, "Ctrl+A");
+        let Mode::Form(form) = &app.mode else {
+            panic!("Ctrl+A should open the attributes dialog: {:?}", app.mode)
+        };
+        assert_eq!(form.kind, FormKind::Attributes);
+        // The name is in it, and on Unix so is what the file is now.
+        let text: String = form
+            .fields
+            .iter()
+            .map(|f| format!("{f:?}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(text.contains("one.txt"), "{text}");
+        #[cfg(unix)]
+        assert!(text.contains("rw-r--r--"), "{text}");
+
+        // Unix: the twelve boxes are there and start from the mode the file has.
+        #[cfg(unix)]
+        {
+            assert!(form.toggle_value("attr.ur"), "the owner may read");
+            assert!(form.toggle_value("attr.uw"), "and write");
+            assert!(!form.toggle_value("attr.ux"), "but not run it");
+            assert!(!form.toggle_value("attr.ow"), "and the world may not write");
+        }
+
+        // Take the group's read bit off and answer the dialog: the file changes, and only in
+        // the way the box said.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let Mode::Form(form) = &mut app.mode else {
+                unreachable!("the dialog is open")
+            };
+            let at = form
+                .fields
+                .iter()
+                .position(
+                    |f| matches!(f, crate::form::Field::Toggle { key, .. } if *key == "attr.gr"),
+                )
+                .expect("the row is there");
+            form.cursor = at;
+            press(&mut app, "Space");
+            press(&mut app, "Enter");
+            let (paths, change, recursive) = match app.take_requests().into_iter().next() {
+                Some(Request::SetAttrs {
+                    paths,
+                    change,
+                    recursive,
+                    ..
+                }) => (paths, change, recursive),
+                other => panic!("no attribute change was started: {other:?}"),
+            };
+            assert_eq!(change.mode, Some(0o604), "only that bit moved");
+            assert_eq!(paths, vec![VPath::local(&file)]);
+            assert!(!recursive, "nothing here is a directory");
+
+            // And the worker's half of it, which is the engine doing what the box said.
+            let outcome = scmd_jobs::set_attributes(
+                &scmd_jobs::LocalFs,
+                &paths,
+                &change,
+                recursive,
+                &CancelToken::new(),
+                &mut |_, _| {},
+            );
+            assert!(outcome.errors.is_empty(), "{:?}", outcome.errors);
+            assert_eq!(
+                std::fs::metadata(&file).unwrap().permissions().mode() & 0o777,
+                0o604
+            );
+        }
     }
 
     /// The key bar follows the modifier, and what it shows is what the keymap really does.

@@ -126,6 +126,7 @@ impl Command {
             Command::FileApply => "run a command over each selected file",
             Command::FileLink => "make a link",
             Command::FileWipe => "delete, overwriting the bytes first",
+            Command::FileAttributes => "the permissions and the times of what is selected",
 
             Command::CmdRun => "run what is typed on the command line",
             Command::CmdClear => "empty the command line",

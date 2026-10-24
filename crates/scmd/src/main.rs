@@ -748,6 +748,29 @@ fn interactive(mut app: App) -> Result<()> {
                     );
                     runtime.spawn_blocking(move || run_job(id, spec, cancel, tx, &fs));
                 }
+                Request::SetAttrs {
+                    id,
+                    paths,
+                    change,
+                    recursive,
+                    cancel,
+                } => {
+                    let tx = tx.clone();
+                    // The same filesystem a copy uses, so a path on a server or in a bucket
+                    // reaches the provider that owns it and is refused by the one that has
+                    // nothing to set.
+                    let fs = ArcFs::new(
+                        archives.clone(),
+                        ObjectFs::new(
+                            objects.clone(),
+                            RoutedFs::new(pool.clone(), runtime.handle().clone()),
+                            runtime.handle().clone(),
+                        ),
+                    );
+                    runtime.spawn_blocking(move || {
+                        run_attrs(id, &paths, &change, recursive, cancel, tx, &fs)
+                    });
+                }
                 Request::Shell {
                     id,
                     line,
@@ -1835,6 +1858,46 @@ async fn write_back(
         .map_err(|e| UploadError::Failed(e.to_string()))
 }
 
+/// Change what the selected files are, reporting through the same box as a copy.
+fn run_attrs(
+    id: u64,
+    paths: &[VPath],
+    change: &scmd_jobs::Change,
+    recursive: bool,
+    cancel: CancelToken,
+    tx: mpsc::Sender<Event>,
+    fs: &dyn scmd_jobs::JobFs,
+) {
+    use scmd_jobs::{Phase, Progress};
+
+    let started = std::time::Instant::now();
+    let total = paths.len() as u64;
+    let mut last = std::time::Instant::now();
+    let outcome =
+        scmd_jobs::set_attributes(fs, paths, change, recursive, &cancel, &mut |path, done| {
+            if last.elapsed() < std::time::Duration::from_millis(100) {
+                return;
+            }
+            last = std::time::Instant::now();
+            let _ = tx.send(Event::JobProgress {
+                id,
+                progress: Progress {
+                    phase: Phase::Running,
+                    files_done: done,
+                    files_total: total.max(done),
+                    current: Some(path.clone()),
+                    elapsed: started.elapsed(),
+                    ..Progress::default()
+                },
+            });
+        });
+    let _ = tx.send(Event::JobDone {
+        id,
+        kind: scmd_jobs::JobKind::Attrs,
+        outcome,
+    });
+}
+
 /// Send the editor's copy back to the object it came from.
 ///
 /// The shape is [`write_back`]'s, with one `PUT` in place of the upload and rename: there is
@@ -2613,6 +2676,27 @@ timeout = 10
                 }
                 // A tunnel needs a runtime and a connection, and the test server has
                 // neither: the request is seen and nothing is opened.
+                Request::SetAttrs {
+                    id,
+                    paths,
+                    change,
+                    recursive,
+                    cancel,
+                } => {
+                    let (tx, rx) = mpsc::channel();
+                    run_attrs(
+                        id,
+                        &paths,
+                        &change,
+                        recursive,
+                        cancel,
+                        tx,
+                        &scmd_jobs::LocalFs,
+                    );
+                    for event in rx {
+                        app.handle_event(event);
+                    }
+                }
                 Request::TunnelOpen { .. } | Request::TunnelClose { .. } | Request::TunnelList => {}
                 Request::CompareContents { id, pairs, cancel } => {
                     let (tx, rx) = mpsc::channel();

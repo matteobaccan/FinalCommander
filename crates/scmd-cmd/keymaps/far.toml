@@ -280,12 +280,15 @@ cmd = "nav.right"
 keys = ["Ins"]
 cmd = "sel.toggle"
 
+# FAR's own: Shift with the grey keys selects or clears everything. `Ctrl+Shift+A` is kept
+# for `sel.all` because `Ctrl+A` is the attributes dialog, as it is in FAR, and because a
+# terminal that does not report `Shift` with a printable key still needs a way to say it.
 [[bind]]
-keys = ["Ctrl+A"]
+keys = ["Shift++", "Ctrl+Shift+A"]
 cmd = "sel.all"
 
 [[bind]]
-keys = ["Ctrl+Shift+A"]
+keys = ["Shift+-"]
 cmd = "sel.none"
 
 [[bind]]
@@ -307,7 +310,7 @@ cmd = "sel.restore"
 
 # FAR's selection matrix: the modifier picks the criterion. These need a terminal that
 # reports modified printable keys (kitty, foot, WezTerm, Windows Terminal, xterm with
-# modifyOtherKeys); where it does not, the menu and Ctrl+A still reach the same work.
+# modifyOtherKeys); where it does not, the Select menu reaches the same work.
 [[bind]]
 keys = ["Ctrl++"]
 cmd = "sel.ext.add"
@@ -330,6 +333,11 @@ keys = ["Alt+*"]
 cmd = "sel.invert.all"
 
 # ---------------------------------------------------------------- files
+[[bind]]
+keys = ["Ctrl+A"]
+scope = "panel"
+cmd = "file.attributes"
+
 # The item under the cursor, whatever is selected.
 [[bind]]
 keys = ["Shift+F5"]

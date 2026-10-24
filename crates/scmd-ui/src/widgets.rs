@@ -547,6 +547,41 @@ pub fn format_mtime(t: SystemTime) -> String {
     dt.format("%Y-%m-%d %H:%M").to_string()
 }
 
+/// `2026-10-23 17:42:05`, in local time: what the attributes dialog shows and takes back.
+///
+/// The panel's column has no room for the seconds and does not need them; a dialog that sets a
+/// time does, or saving it unchanged would quietly round it down to the minute.
+pub fn format_stamp(t: SystemTime) -> String {
+    let dt: DateTime<Local> = t.into();
+    dt.format("%Y-%m-%d %H:%M:%S").to_string()
+}
+
+/// A time typed into a dialog, in local time. The seconds may be left off.
+///
+/// `None` for anything else, including an empty string — which is how a row the user did not
+/// touch says "leave this alone".
+pub fn parse_stamp(text: &str) -> Option<SystemTime> {
+    use chrono::TimeZone;
+
+    let text = text.trim();
+    if text.is_empty() {
+        return None;
+    }
+    let naive = chrono::NaiveDateTime::parse_from_str(text, "%Y-%m-%d %H:%M:%S")
+        .or_else(|_| chrono::NaiveDateTime::parse_from_str(text, "%Y-%m-%d %H:%M"))
+        .or_else(|_| {
+            chrono::NaiveDate::parse_from_str(text, "%Y-%m-%d")
+                .map(|d| d.and_hms_opt(0, 0, 0).expect("midnight exists"))
+        })
+        .ok()?;
+    // A local time in the hour a clock goes forward does not exist, and one in the hour it
+    // goes back happens twice; the earlier of the two is the answer that does not surprise.
+    Local
+        .from_local_datetime(&naive)
+        .earliest()
+        .map(SystemTime::from)
+}
+
 /// The bottom frame: how much is in the panel and how much room is left on the device,
 /// centred the way FAR centres it (`ShowTotalSize` in `filelist.cpp`) — `14,1 M (6/0) ═══ 2,65 G`,
 /// with the rule between the two drawn in the frame's own colour so the eye separates them.
@@ -1654,6 +1689,7 @@ pub fn draw_form(buf: &mut Buffer, theme: &Theme, screen: Rect, view: &FormView)
         .min(screen.w.saturating_sub(4) as usize);
     let w = content_w as u16 + 4;
     let h = (rows.len() as u16 + 4).min(screen.h);
+    // `first`, below, needs the row count that fits; the height is capped by the screen.
     let x = screen.x + (screen.w.saturating_sub(w)) / 2;
     let y = screen.y + (screen.h.saturating_sub(h)) / 2;
     let area = Rect::new(x, y, w, h);
@@ -1664,8 +1700,28 @@ pub fn draw_form(buf: &mut Buffer, theme: &Theme, screen: Rect, view: &FormView)
     buf.fill(area, ' ', style);
     buf.draw_frame(area, frame, Some(title));
 
-    for (i, row) in rows.iter().enumerate() {
-        let ry = area.y + 1 + i as u16;
+    // A dialog taller than the screen scrolls to the row the cursor is on. The attributes
+    // dialog has twenty rows on Unix, and a terminal of twenty-four lines would otherwise put
+    // the last of them — the times, and the box that says to go into the folders — below the
+    // bottom of the screen, where no key could reach them.
+    let room = area.h.saturating_sub(4) as usize;
+    let first = if rows.len() <= room {
+        0
+    } else {
+        // Keep the cursor in view with a row of context either side where there is one, and
+        // never scroll past the end: a dialog whose last rows are blank looks broken.
+        let want = selected.saturating_sub(1);
+        want.min(rows.len() - room)
+    };
+    if first > 0 {
+        // The frame says there is more above, in the place a scrollbar would be.
+        buf.set(area.right() - 1, area.y + 1, '▲', frame);
+    }
+    if first + room < rows.len() {
+        buf.set(area.right() - 1, area.bottom() - 3, '▼', frame);
+    }
+    for (i, row) in rows.iter().enumerate().skip(first).take(room) {
+        let ry = area.y + 1 + (i - first) as u16;
         if ry >= area.bottom() - 2 {
             break;
         }

@@ -2996,6 +2996,62 @@ Some **bold** text and a [link](https://example.com).
         );
     }
 
+    /// A dialog with more rows than the screen has lines scrolls to the cursor. Without it
+    /// the last rows of the attributes dialog — the times, and the box that takes the change
+    /// into the folders — would be drawn below the bottom of the screen on a short terminal,
+    /// where no key could reach them.
+    #[test]
+    fn a_dialog_taller_than_the_screen_scrolls_to_the_cursor() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("sources")).unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "Ctrl+A");
+
+        // On a short screen the top rows show and the bottom ones do not, and the frame says
+        // there is more below.
+        let text = frame(&mut app, 76, 20);
+        assert!(text.contains("Owner may read"), "{text}");
+        assert!(
+            !text.contains("Last read"),
+            "the times are off screen: {text}"
+        );
+        assert!(text.contains('▼'), "the frame says there is more: {text}");
+
+        // Walk the cursor to the last row: now the bottom shows and the top does not.
+        for _ in 0..30 {
+            press(&mut app, "Down");
+        }
+        let text = frame(&mut app, 76, 20);
+        assert!(text.contains("Last read"), "{text}");
+        assert!(
+            text.contains("And everything inside"),
+            "the last row is reachable: {text}"
+        );
+        assert!(!text.contains("Owner may read"), "{text}");
+        assert!(text.contains('▲'), "and that there is more above: {text}");
+
+        // On a tall screen nothing scrolls and no marker is drawn.
+        let text = frame(&mut app, 76, 40);
+        assert!(text.contains("Owner may read"), "{text}");
+        assert!(text.contains("Last read"), "{text}");
+        assert!(!text.contains('▲') && !text.contains('▼'), "{text}");
+    }
+
+    #[test]
+    #[ignore = "a look at the screen, not an assertion"]
+    fn eyeball_attributes() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("report.txt"), b"x").unwrap();
+        std::fs::create_dir(dir.path().join("sources")).unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "Ctrl+A");
+        println!("{}", frame(&mut app, 76, 30));
+        println!("--- and on a short terminal ---");
+        println!("{}", frame(&mut app, 76, 20));
+    }
+
     #[test]
     #[ignore = "a look at the screen, not an assertion"]
     fn eyeball_markdown() {

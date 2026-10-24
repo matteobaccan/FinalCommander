@@ -62,7 +62,7 @@ A `√` marks the entry that describes the state the panel is in now — the cur
 
 View, Edit, Edit new file, Copy, Rename or move, Create link (backlog), Make folder, Delete,
 Wipe (backlog) · Add to archive / Extract files / Archive commands (backlog) · File attributes
-(backlog), Apply command (backlog) · Select group, Unselect group, Invert selection, Select all,
+(§3.8), Apply command (backlog) · Select group, Unselect group, Invert selection, Select all,
 Restore selection · Folder size.
 
 ### 2.3 Commands
@@ -158,6 +158,42 @@ and the status line says so.
 
 Defaults left empty mean what they mean in `scmd.toml`: no port is 22, no user is the local
 account name, no name is the host itself.
+
+### 3.8 File attributes (`Ctrl+A`)
+
+**Implemented** (0.3.0). What a file *is*, rather than what is in it. `Ctrl+A` is FAR's key for
+it; select-all moved to FAR's own `Shift+Gray +`, with `Ctrl+Shift+A` beside it for terminals
+that do not report `Shift` with a printable key.
+
+The rows are what the platform has:
+
+| Row | Where |
+| --- | --- |
+| the name, or `N selected items`, and what the file under the cursor is now (`rw-r--r-- (0644)`) | everywhere, as text and not as a box |
+| twelve boxes: owner, group and world × read, write, run, then setuid, setgid and sticky | Unix |
+| read-only | everywhere — the write bits on Unix, the attribute on Windows, the write bits again over SFTP |
+| hidden, system, archive | Windows |
+| *Changed* and *Last read*, as `YYYY-MM-DD HH:MM:SS` in local time | everywhere a time can be set |
+| *and everything inside the folders* | when a directory is among what was selected |
+
+A row left alone changes nothing: a blank time means "leave it", and the mode's boxes start
+from what the file under the cursor has. The dialog is the tallest in the program, so a screen
+too short for it scrolls to the cursor and the frame says there is more above or below.
+
+The work is `scmd_jobs::attrs`, and it is deliberately *not* `JobFs::apply_meta`. That one is a
+copy's best effort and swallows what it cannot do, which is right after a copy and wrong here:
+somebody ticked a box, so a permission that could not be set is collected with its path and
+shown. It reports and cancels through the same progress box as a copy ([`JobKind::Attrs`]),
+and a directory is changed *after* its contents — taking the write bit off a directory first
+would put its own contents out of reach.
+
+Where there is nothing to set, that is said rather than silently done: an entry inside an
+archive has the archive's permissions, and an object in a bucket has the time the service wrote
+it and an access policy that is not a mode.
+
+**Still to come:** the owner and the group (`chown`), which needs a user and group picker and
+the privilege to use it; and Windows' advanced bits (compressed, encrypted, not indexed,
+sparse, temporary, offline), which FAR offers behind a second page.
 
 ## 4. Choose-one lists
 

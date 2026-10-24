@@ -229,6 +229,17 @@ impl<F: JobFs> JobFs for ArcFs<F> {
         self.inner.apply_meta(path, facts, preserve)
     }
 
+    /// An entry's permissions and times are the archive's, and writing them means writing the
+    /// archive again for nothing: `scmd_arc::Change` has no variant for metadata, and a dialog
+    /// that offered it would have nothing to do. Outside a container this is the inner
+    /// filesystem's business as everything else is.
+    fn set_attrs(&self, path: &VPath, change: &crate::attrs::Change) -> io::Result<()> {
+        if path.in_container() {
+            return Err(read_only(path));
+        }
+        self.inner.set_attrs(path, change)
+    }
+
     fn copy_file(
         &self,
         src: &VPath,

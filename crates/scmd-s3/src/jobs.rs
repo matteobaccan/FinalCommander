@@ -262,6 +262,18 @@ impl<F: JobFs> JobFs for ObjectFs<F> {
         Ok(())
     }
 
+    /// There is nothing here to set. An object carries the time the service wrote it, and a
+    /// bucket's access is its policy — not a mode, and not this program's to change — so a
+    /// request to change either is refused rather than silently doing nothing.
+    fn set_attrs(&self, path: &VPath, change: &scmd_jobs::attrs::Change) -> io::Result<()> {
+        if !mine(path) {
+            return self.inner.set_attrs(path, change);
+        }
+        Err(unsupported(format!(
+            "{path}: an object has no permissions or times to set — its access is the bucket's policy"
+        )))
+    }
+
     fn copy_file(
         &self,
         src: &VPath,

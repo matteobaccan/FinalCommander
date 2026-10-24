@@ -172,6 +172,40 @@ impl JobFs for RoutedFs {
         self.run(async move { remote.apply_meta(path, &facts).await })
     }
 
+    /// A file on a server has a mode and a modification time, and SFTP can set both. There
+    /// is nothing there for Windows' four bits, so those rows are not offered for a remote
+    /// path; read-only is, because it is the write bits.
+    fn set_attrs(&self, path: &VPath, change: &scmd_jobs::attrs::Change) -> io::Result<()> {
+        if path.is_local() {
+            return self.local.set_attrs(path, change);
+        }
+        let remote = self.remote(path)?;
+        let mut mode = change.mode;
+        if let Some(readonly) = change.readonly {
+            let current = match mode {
+                Some(mode) => mode,
+                None => self.facts(path)?.mode.unwrap_or(0o644),
+            };
+            mode = Some(if readonly {
+                current & !0o222
+            } else {
+                current | 0o200
+            });
+        }
+        if mode.is_none() && change.mtime.is_none() {
+            // Nothing SFTP can carry: the dialog asked for something a server does not have.
+            return Ok(());
+        }
+        let facts = Facts {
+            kind: scmd_core::EntryKind::File,
+            size: 0,
+            mtime: change.mtime,
+            mode,
+            readonly: false,
+        };
+        self.run(async move { remote.apply_meta(path, &facts).await })
+    }
+
     fn copy_file(
         &self,
         src: &VPath,

@@ -122,7 +122,7 @@ Column `SC` = SupremeCommander default (profile `far`, our baseline).
 | multi-rename | — | — | Shift+F2 | Ctrl+M |
 | select group / unselect group | Gray + / Gray − | + / \ | Ctrl++ / Ctrl+− | + / − |
 | invert selection | Gray * | — | Alt+* | `*` (files), `Alt+*` (folders too, FAR's `Ctrl+Gray *`) |
-| select all / none | Shift+Gray + / Shift+Gray − | — | Alt++ / Alt+− | Ctrl+A / Ctrl+Shift+A |
+| select all / none | Shift+Gray + / Shift+Gray − | — | Alt++ / Alt+− | **Shift++ / Shift+−**, and `Ctrl+Shift+A` for *all* where a terminal does not report Shift with a printable key |
 | by extension of the current file | Ctrl+Gray + / − | — | — | **Ctrl++ / Ctrl+−** |
 | by name, any extension | Alt+Gray + / − | — | — | **Alt++ / Alt+−** |
 | scroll long names sideways | Alt+←/→, Alt+Home/End | — | — | **Ctrl+Shift+←/→** (Alt+←/→ is history here) |
@@ -254,9 +254,11 @@ there are no plugins yet. When they arrive the pane moves rather than the plugin
 | inside a settings dialog | ↑↓ rows, Space toggles, Tab to the buttons, Enter, Esc | the same, plus **F10** for OK |
 | inside a choose-one list | ↑↓ PgUp PgDn Home End, Enter, Esc | the same |
 
-Two of FAR's keys are not ours yet, and the menu says nothing rather than something untrue:
-`Ctrl+A` (FAR: file attributes) selects all here, and `Ctrl+L` (FAR: info panel) is "change
-directory". Both are in `docs/BACKLOG.md` as decisions to settle when those features land.
+One of FAR's keys is not ours yet, and the menu says nothing rather than something untrue:
+`Ctrl+L` (FAR: info panel) is "change directory" here. It is in `docs/BACKLOG.md` as a
+decision to settle when that feature lands. `Ctrl+A` was the other one, and it is settled: it
+is the attributes dialog, as it is in FAR, and select-all moved to FAR's own `Shift+Gray +`
+with `Ctrl+Shift+A` beside it.
 
 ## 8d. Selection, the keys that ignore it, and the panel chrome (shipped)
 

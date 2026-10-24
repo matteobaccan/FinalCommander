@@ -37,8 +37,12 @@ pub enum Field {
         /// Shown instead of the characters, for a secret.
         secret: bool,
     },
-    /// In the dialog for completeness; not settable yet.
+    /// In the dialog for completeness; not settable yet. Drawn as an unticked box, because
+    /// that is what it is: a setting FAR has and this does not.
     Dim(String),
+    /// A line that says something rather than asking something — a name, what a file is now.
+    /// Not a setting, so not a box: a box nobody can tick is a worse lie than no box.
+    Note(String),
     Separator,
 }
 
@@ -129,6 +133,7 @@ impl Form {
             | FormKind::Replace
             | FormKind::Pack
             | FormKind::Unpack
+            | FormKind::Attributes
             | FormKind::Search => Vec::new(),
             FormKind::System => vec![
                 Field::toggle(
@@ -285,6 +290,7 @@ impl Form {
             FormKind::Replace => "replace-title",
             FormKind::Pack => "pack-title",
             FormKind::Unpack => "unpack-title",
+            FormKind::Attributes => "attr-title",
             FormKind::Search => "search-title",
             FormKind::System => "menu-system-settings",
             FormKind::Panel => "menu-panel-settings",
@@ -513,6 +519,108 @@ impl Form {
         }
     }
 
+    /// `Ctrl+A`: what a file *is*, rather than what is in it.
+    ///
+    /// The rows are what the platform has. Unix has a mode and two timestamps; Windows has
+    /// four attribute bits and the same timestamps; a file on a server has a mode and a
+    /// modification time. They overlap in one place — read-only, which on Unix is the write
+    /// bits — so that is offered everywhere and the rest where it exists.
+    ///
+    /// A row left alone changes nothing. That is why the mode's boxes start from what the
+    /// file has and the times start empty: a blank time field means "leave it", and a time
+    /// typed in means that time, for every path the dialog was opened on.
+    pub fn attributes(
+        what: &str,
+        count: usize,
+        mode: Option<u32>,
+        readonly: bool,
+        mtime: Option<std::time::SystemTime>,
+        directories: bool,
+        i18n: &I18n,
+    ) -> Form {
+        let t = |id: &str| i18n.t(id);
+        let bits = scmd_jobs::Mode::of(mode.unwrap_or(0o644));
+        let mut fields = vec![Field::Note(if count == 1 {
+            what.to_string()
+        } else {
+            i18n.t_args("attr-count", &[("count", (count as i64).into())])
+        })];
+        if let Some(mode) = mode {
+            fields.push(Field::Note(i18n.t_args(
+                "attr-now",
+                &[
+                    ("text", scmd_jobs::Mode::of(mode).text().into()),
+                    ("octal", format!("{:04o}", mode & 0o7777).into()),
+                ],
+            )));
+        }
+        fields.push(Field::Separator);
+
+        // Unix's twelve boxes. On Windows there is no mode to set, so they are not offered:
+        // a dialog that showed them would be asking about something nothing would read.
+        if cfg!(unix) {
+            for (key, label, on) in [
+                ("attr.ur", "attr-owner-read", bits.owner_read),
+                ("attr.uw", "attr-owner-write", bits.owner_write),
+                ("attr.ux", "attr-owner-exec", bits.owner_exec),
+                ("attr.gr", "attr-group-read", bits.group_read),
+                ("attr.gw", "attr-group-write", bits.group_write),
+                ("attr.gx", "attr-group-exec", bits.group_exec),
+                ("attr.or", "attr-other-read", bits.other_read),
+                ("attr.ow", "attr-other-write", bits.other_write),
+                ("attr.ox", "attr-other-exec", bits.other_exec),
+            ] {
+                fields.push(Field::toggle(key, t(label), on));
+            }
+            fields.push(Field::Separator);
+            for (key, label, on) in [
+                ("attr.setuid", "attr-setuid", bits.setuid),
+                ("attr.setgid", "attr-setgid", bits.setgid),
+                ("attr.sticky", "attr-sticky", bits.sticky),
+            ] {
+                fields.push(Field::toggle(key, t(label), on));
+            }
+            fields.push(Field::Separator);
+        }
+
+        // Read-only is the one row both platforms have, and the only one a server has beyond
+        // the mode.
+        fields.push(Field::toggle("attr.readonly", t("attr-readonly"), readonly));
+        if cfg!(windows) {
+            for (key, label) in [
+                ("attr.hidden", "attr-hidden"),
+                ("attr.system", "attr-system"),
+                ("attr.archive", "attr-archive"),
+            ] {
+                fields.push(Field::toggle(key, t(label), false));
+            }
+        }
+        fields.push(Field::Separator);
+
+        // The times. Empty means leave them; `now` is what the keyboard reaches for most, so
+        // the current value is offered rather than a format to copy from the manual.
+        fields.push(Field::text(
+            "attr.mtime",
+            t("attr-mtime"),
+            mtime.map(scmd_ui::format_stamp).unwrap_or_default(),
+        ));
+        fields.push(Field::text("attr.atime", t("attr-atime"), String::new()));
+        if directories {
+            fields.push(Field::Separator);
+            fields.push(Field::toggle("attr.recursive", t("attr-recursive"), false));
+        }
+
+        Form {
+            kind: FormKind::Attributes,
+            title: t("attr-title"),
+            fields,
+            cursor: 0,
+            site: None,
+            button: None,
+            buttons: vec![i18n.t("btn-ok"), i18n.t("btn-cancel")],
+        }
+    }
+
     /// `F7`: what to look for, and how. FAR asks all of it in one dialog rather than
     /// hiding the how behind keys you have to know, and it offers both directions as
     /// buttons, because *next* and *previous* are the same question asked twice.
@@ -674,6 +782,11 @@ impl Form {
                 Field::Separator => FormRow::separator(),
                 Field::Dim(label) => FormRow {
                     text: format!("[ ] {label}"),
+                    dim: true,
+                    ..FormRow::default()
+                },
+                Field::Note(text) => FormRow {
+                    text: text.clone(),
                     dim: true,
                     ..FormRow::default()
                 },

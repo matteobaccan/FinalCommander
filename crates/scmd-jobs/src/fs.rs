@@ -47,6 +47,23 @@ pub trait JobFs: Send + Sync {
     fn same_file(&self, a: &VPath, b: &VPath) -> bool;
     fn apply_meta(&self, path: &VPath, facts: &Facts, preserve: Preserve) -> io::Result<()>;
 
+    /// Change what the attributes dialog asked to change.
+    ///
+    /// This is [`JobFs::apply_meta`]'s other half, and the difference is who asked. A copy
+    /// applies the source's metadata as a courtesy and swallows a failure rather than losing
+    /// the copy over it. Here somebody ticked a box and pressed Enter, so a permission that
+    /// could not be set is returned and shown — a dialog that reported success it did not have
+    /// would be worse than one that cannot do it at all.
+    ///
+    /// The default is that refusal: a provider that has nothing to set says so.
+    fn set_attrs(&self, path: &VPath, change: &crate::attrs::Change) -> io::Result<()> {
+        let _ = change;
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            format!("{path}: this filesystem cannot change attributes"),
+        ))
+    }
+
     /// Copy `src` to `dst`, calling `on_bytes` as it goes. Returning `false` from `on_bytes`
     /// cancels the copy, and the partial file is removed.
     fn copy_file(
@@ -166,6 +183,35 @@ fn not_mine(path: &VPath) -> io::Result<()> {
 
 /// The one refusal every provider that cannot keep a promise returns, so the engine's error
 /// text reads the same wherever it came from.
+/// Is this a directory? Asked of the path rather than of a handle, because the one caller
+/// needs to know *before* it opens anything.
+fn path_is_dir(path: &std::path::Path) -> bool {
+    fs::metadata(path).map(|m| m.is_dir()).unwrap_or(false)
+}
+
+/// Write the attribute word back. The standard library reads `file_attributes` and has no way
+/// to set it, so this is the one place a Windows API call is made directly.
+#[cfg(windows)]
+fn set_windows_attributes(path: &std::path::Path, attributes: u32) -> io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+
+    unsafe extern "system" {
+        fn SetFileAttributesW(name: *const u16, attributes: u32) -> i32;
+    }
+    let wide: Vec<u16> = path
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    // SAFETY: `wide` is a NUL-terminated UTF-16 string that outlives the call, which is the
+    // whole of what this function requires of its caller.
+    let ok = unsafe { SetFileAttributesW(wide.as_ptr(), attributes) };
+    if ok == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(())
+}
+
 fn unsupported(message: &'static str) -> io::Error {
     io::Error::new(io::ErrorKind::Unsupported, message)
 }
@@ -280,6 +326,92 @@ impl JobFs for LocalFs {
                 let _ = fs::set_permissions(path.as_path(), fs::Permissions::from_mode(mode));
             }
         }
+        Ok(())
+    }
+
+    fn set_attrs(&self, path: &VPath, change: &crate::attrs::Change) -> io::Result<()> {
+        not_mine(path)?;
+        let target = path.as_path();
+        if let Some(when) = change.mtime {
+            // The times go through a handle rather than through the path, which is the only
+            // way the standard library offers and also the right one: a path that changed
+            // underneath us would otherwise have its successor's times set.
+            let file = File::options().write(true).open(target).or_else(|e| {
+                // A read-only file still has its times set by whoever may write the
+                // directory, and a directory cannot be opened for writing at all on Unix.
+                if path_is_dir(target) {
+                    File::open(target)
+                } else {
+                    Err(e)
+                }
+            })?;
+            let mut times = fs::FileTimes::new().set_modified(when);
+            if let Some(atime) = change.atime {
+                times = times.set_accessed(atime);
+            }
+            file.set_times(times)?;
+        } else if let Some(atime) = change.atime {
+            let file = File::open(target)?;
+            file.set_times(fs::FileTimes::new().set_accessed(atime))?;
+        }
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let current =
+                || -> io::Result<u32> { Ok(fs::metadata(target)?.permissions().mode() & 0o7777) };
+            let mut mode = match change.mode {
+                Some(mode) => Some(mode),
+                None if change.readonly.is_some() => Some(current()?),
+                None => None,
+            };
+            // Read-only is applied after the mode, so a dialog that offers both ends with
+            // whichever answer the user gave last. On Unix it is the write bits and nothing
+            // else: the read and execute bits say who may read, and that is a different
+            // question from whether the file may be changed.
+            if let (Some(bits), Some(readonly)) = (mode.as_mut(), change.readonly) {
+                if readonly {
+                    *bits &= !0o222;
+                } else {
+                    // The owner's write bit, and only that. Clearing the write bits throws
+                    // away who had them, so putting them back is a guess either way — and the
+                    // guess that hands the world write access to a world-readable file is the
+                    // wrong one to make on a user's behalf. It is also what `chmod +w` does
+                    // under the usual umask. Somebody who wants the group's bit back has the
+                    // twelve boxes above for it.
+                    *bits |= 0o200;
+                }
+            }
+            if let Some(mode) = mode {
+                fs::set_permissions(target, fs::Permissions::from_mode(mode))?;
+            }
+        }
+
+        #[cfg(windows)]
+        {
+            // The four bits Windows has. `mode` has no meaning here and is ignored rather
+            // than approximated: a dialog on Windows does not offer it.
+            use std::os::windows::fs::MetadataExt;
+            const READONLY: u32 = 0x1;
+            const HIDDEN: u32 = 0x2;
+            const SYSTEM: u32 = 0x4;
+            const ARCHIVE: u32 = 0x20;
+            let mut attributes = fs::metadata(target)?.file_attributes();
+            for (wanted, bit) in [
+                (change.readonly, READONLY),
+                (change.hidden, HIDDEN),
+                (change.system, SYSTEM),
+                (change.archive, ARCHIVE),
+            ] {
+                match wanted {
+                    Some(true) => attributes |= bit,
+                    Some(false) => attributes &= !bit,
+                    None => {}
+                }
+            }
+            set_windows_attributes(target, attributes)?;
+        }
+
         Ok(())
     }
 

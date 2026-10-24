@@ -11,6 +11,7 @@
 //! with a scripted reporter.
 
 pub mod arcfs;
+pub mod attrs;
 pub mod fs;
 pub mod link;
 pub mod plan;
@@ -19,6 +20,7 @@ pub mod run;
 pub mod spec;
 
 pub use arcfs::ArcFs;
+pub use attrs::{set_attributes, Change, Mode};
 pub use fs::{free_name, part_path, Facts, JobFs, LocalFs, PART_SUFFIX};
 pub use link::{create_link, LinkError, LinkKind};
 pub use plan::{plan, Plan, PlanError, Unit, UnitKind};

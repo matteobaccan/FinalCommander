@@ -33,6 +33,11 @@ pub enum JobKind {
     /// kind exists so that testing an archive reports through the same box and the same
     /// counters as everything else, and can be cancelled the same way.
     Test,
+    /// Change what the files in [`JobSpec::sources`] *are*: their permissions and their times
+    /// (SPEC 10 §3.8). Like the three above, the engine does not plan this one — there is no
+    /// byte to copy and nothing to ask about — and the kind exists so that a change over a
+    /// whole tree reports, counts and cancels like everything else. See `scmd_jobs::attrs`.
+    Attrs,
 }
 
 impl JobKind {
@@ -47,6 +52,7 @@ impl JobKind {
             JobKind::Pack => "pack",
             JobKind::Test => "test",
             JobKind::Rebuild => "rebuild",
+            JobKind::Attrs => "attrs",
         }
     }
 

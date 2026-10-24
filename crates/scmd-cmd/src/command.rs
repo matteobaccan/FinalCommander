@@ -143,6 +143,8 @@ pub enum Command {
     FileLink,
     /// `Alt+Del`: overwrite, then unlink.
     FileWipe,
+    /// What a file is, rather than what is in it: the permissions and the times.
+    FileAttributes,
 
     /// Run what is on the command line (SPEC 06 §7).
     CmdRun,
@@ -347,6 +349,7 @@ impl Command {
             Command::FileApply,
             Command::FileLink,
             Command::FileWipe,
+            Command::FileAttributes,
             Command::PanelToggle(Side::Active),
             Command::PanelToggle(Side::Left),
             Command::PanelToggle(Side::Right),
@@ -546,6 +549,7 @@ impl Command {
             Command::FileApply => "file.apply".into(),
             Command::FileLink => "file.link".into(),
             Command::FileWipe => "file.wipe".into(),
+            Command::FileAttributes => "file.attributes".into(),
             Command::PanelToggle(Side::Active) => "panel.toggle".into(),
             Command::PanelToggle(side) => format!("panel.toggle({})", side.as_str()),
             Command::PanelQuickView(Side::Active) => "panel.quickview".into(),
@@ -722,6 +726,7 @@ impl Command {
             ("file.apply", _) => Command::FileApply,
             ("file.link", _) => Command::FileLink,
             ("file.wipe", _) => Command::FileWipe,
+            ("file.attributes", _) => Command::FileAttributes,
             ("panel.toggle", a) => Command::PanelToggle(Side::parse(a.unwrap_or(""))?),
             ("panel.quickview", a) => Command::PanelQuickView(Side::parse(a.unwrap_or(""))?),
             ("panel.info", a) => Command::PanelInfo(Side::parse(a.unwrap_or(""))?),

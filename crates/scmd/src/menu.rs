@@ -31,6 +31,8 @@ pub enum FormKind {
     Pack,
     /// Take an archive apart.
     Unpack,
+    /// What a file is, rather than what is in it (SPEC 10 §3.8).
+    Attributes,
     /// Find text in what the viewer or the editor has open (SPEC 05 §1.4).
     Search,
     System,
@@ -252,7 +254,11 @@ pub fn menus() -> Vec<Menu> {
                 ),
                 item("menu-archive-test", "", Action::Run(Command::ArcTest)),
                 Entry::Separator,
-                item("menu-attributes", "", Action::Todo("file.attributes")),
+                item(
+                    "menu-attributes",
+                    "Ctrl+A",
+                    Action::Run(Command::FileAttributes),
+                ),
                 item(
                     "menu-apply-command",
                     "Ctrl+G",

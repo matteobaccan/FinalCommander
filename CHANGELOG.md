@@ -25,6 +25,31 @@ Notable changes, newest first. The format follows
   progress bar and `Esc`, and the archive cache is dropped either side of it so no panel
   answers from a stale index.
 
+- **The attributes dialog** (`Ctrl+A`). What a file *is*, rather than what is in it: on Unix
+  the mode as twelve boxes — owner, group and world × read, write, run, plus setuid, setgid
+  and sticky — with the line above them saying what it is now (`rw-r--r-- (0644)`); on Windows
+  its four bits instead; read-only on both, because on Unix it is the write bits. Then the
+  modification and access times, and, with a folder among what is selected, *and everything
+  inside the folders*.
+
+  It reports like a copy, with a progress box, a count and `Esc`, and a file that refuses is
+  listed with its reason instead of being passed over — which is why this is `scmd_jobs::attrs`
+  and not `JobFs::apply_meta`: that one is a copy's best effort and swallows what it cannot do,
+  which is right after a copy and wrong when somebody has just ticked a box. A directory is
+  changed after its contents, so taking the write bit off one cannot put its own contents out
+  of reach halfway through. A file on a server gets the mode and the modification time, which
+  is what SFTP carries; an entry in an archive and an object in a bucket have nothing to set
+  and say so.
+
+- `Ctrl+A` is therefore the attributes dialog, as it is in FAR, and **select-all moved to
+  FAR's own `Shift+Gray +`** (`Shift++`), with `Ctrl+Shift+A` beside it for terminals that do
+  not report `Shift` with a printable key. Deselect-all is `Shift+-`.
+
+- **A dialog taller than the screen scrolls to the cursor**, with a mark on the frame where a
+  scrollbar would be. The attributes dialog has twenty rows on Unix, and a terminal of
+  twenty-four lines would otherwise have drawn its last rows below the bottom of the screen,
+  where no key could reach them.
+
 - **Writing to object storage.** A bucket is no longer a read-only window. `F5`, `F6`, `F7`
   and `F8` work on one as they do anywhere else, with the same dialog, progress bar, overwrite
   question and `Esc`, and `F4` edits an object and saves it back. A copy into a bucket is an

@@ -48,7 +48,7 @@ what we intend to do about it.
 | --- | --- | --- |
 | ~~Create link~~ | Files menu (`Alt+F6`) | **Shipped** as a relative symlink in the other panel. The engine does hard and absolute links too; the chooser is the remaining work. |
 | ~~Wipe~~ | Files menu (`Alt+Del`) | **Shipped**, and the dialog says what overwriting cannot promise on an SSD, on copy-on-write or with snapshots. |
-| File attributes | Files menu | SPEC 03 §7. Dialog for mode bits, times, Windows attributes, and the SFTP equivalents. **Open question:** FAR uses `Ctrl+A`, which we gave to `sel.all`; probable answer is `Ctrl+A` for attributes and `Ctrl+Shift+A` for select-all, matching FAR more closely. |
+| ~~File attributes~~ | `Ctrl+A`, Files menu | **Shipped.** The mode as twelve boxes (owner, group, world × read, write, run, plus setuid, setgid and sticky), read-only, the modification and access times, and *and everything inside the folders* for a tree. Windows gets its four bits instead of the mode; a file on a server gets the mode and the modification time, which is what SFTP carries; an entry inside an archive and an object in a bucket have nothing to set and say so. `Ctrl+A` is FAR's key for it, so select-all moved to FAR's own `Shift+Gray +` with `Ctrl+Shift+A` beside it for terminals that do not report Shift with a printable key. |
 | ~~Apply command~~ | Files menu (`Ctrl+G`) | **Shipped.** One command per selected file, in sequence, counted, stopping at the first failure; a template that asks for a value says why it cannot (SPEC 06 §7.3). |
 | Copy: several destinations at once | copy dialog | `;`-separated, quoted when a name contains one. |
 | Copy: append to the existing file, and "only newer" as a policy | copy dialog | **The engine has both** (`ConflictPolicy::Append`, `JobOptions::only_newer`); the dialog does not offer them yet. |
@@ -201,7 +201,6 @@ backlog items; they are decisions already taken.
 
 ## Keymap divergences to settle
 
-* `Ctrl+A` — ours: select all; FAR: file attributes.
 * `Ctrl+L` — ours: change directory; FAR: info panel.
 * `Ctrl+F12` — ours: open the sort list (FAR's behaviour); reversing moved to `Ctrl+Shift+F12`.
 * `Ctrl+M` — FAR's "restore selection" is `Ctrl+Shift+M` here, because a terminal delivers

@@ -61,6 +61,29 @@ What that gives you, from inside an archive:
 What is not there: an entry's permissions and times cannot be changed from the panel, and
 `F7` does not make a directory inside an archive — nothing stores an empty one worth keeping.
 
+# What a file is
+
+`Ctrl+A` opens the attributes dialog: what the file *is*, rather than what is in it.
+
+On Linux and macOS that is the mode, as twelve boxes — owner, group and world, each with read,
+write and run, plus setuid, setgid and sticky — and the line above them says what the file is
+now, both as `rw-r--r--` and as `0644`. On Windows it is read-only, hidden, system and archive
+instead. Read-only is on both, because on Unix it is the write bits.
+
+Below the boxes are the two times, as `2026-10-24 17:42:05` in local time. A time left blank
+is left alone; a time typed in is set. With a folder among what is selected there is one more
+box: *and everything inside the folders*, which takes the whole change down the tree. The
+directories themselves are changed after what is in them, so taking the write bit off a folder
+cannot lock the program out of its own contents halfway through.
+
+It reports like a copy — a progress box, a count, `Esc` — and a file that refuses is listed
+with the reason rather than passed over quietly. A file on a server gets its mode and its
+modification time, which is what SFTP carries. An entry inside an archive has the archive's
+permissions and an object in a bucket has the policy of its bucket, so neither has anything to
+set, and both say so instead of pretending.
+
+What is not there yet: the owner and the group, and Windows' advanced bits.
+
 ## Comparing two folders
 
 `F9 → Commands` has both of them, and they answer different questions.
