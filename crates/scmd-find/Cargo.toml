@@ -1,0 +1,19 @@
+[package]
+name = "scmd-find"
+description = "SupremeCommander: the find-files engine (which files match, streamed as they are found)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+memchr = "2"
+scmd-core = { version = "0.0.3", path = "../scmd-core" }
+scmd-vfs = { version = "0.0.3", path = "../scmd-vfs" }
+scmd-view = { version = "0.0.3", path = "../scmd-view" }
+thiserror = "2"
+
+[dev-dependencies]
+tempfile = "3"
