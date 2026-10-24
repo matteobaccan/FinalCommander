@@ -125,6 +125,36 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 5.17 | Raw devices: a block device or a partition opened as a file, size from an `ioctl`, read-only unless told otherwise | NEW | M2 |
 | 5.10 | Next/previous file in panel without leaving the viewer (`+`/`-`) | FAR | M2 |
 
+## 5b. Hiew release VIII, feature by feature
+
+Hiew is proprietary and the rule from `docs/01-licensing.md` holds: its *published* list of
+what it does is fair to read and answer, the program is not to be reverse engineered or
+decompiled, and nothing is copied from its help text or its wording. What follows is that
+published list, item for item, against what we have.
+
+| Hiew VIII says | Us |
+| --- | --- |
+| view and edit files of unlimited size in text, hex and disassembler modes | **Viewing: shipped** — the viewer streams and seeks, so a 40 GB file opens at once in text, dump, hex or disassembly. Editing a file of unlimited size is the hex editor below: deliberately in `scmd-edit`, because the viewer's read-only contract is exactly what lets it seek through 40 GB |
+| x86-64 disassembler and assembler, AVX included | **Disassembler: shipped** (`iced-x86`, which decodes AVX through AVX-512). **Assembler: backlog** — one instruction at a time, writing into a patch list rather than straight to disk (SPEC 05 §2.7) |
+| physical and logical drive view and edit | **Backlog, SPEC 05 §1.10.** On Linux and macOS a block device is a file: the size comes from an `ioctl` rather than `stat`, it opens read-only, and a write is confirmed loudly. Windows needs its own path |
+| NE, LE, LX, PE/PE32+, ELF/ELF64, Mach-O, TE/TE64 | **PE/PE32+, ELF/ELF64, Mach-O (thin and universal) and `ar`: shipped** in the structure pane, including imports, exports and the .NET CLI header. **NE, LE, LX, TE/TE64: backlog** — the DOS and EFI families, rainy-day additions to the same pane |
+| Netware Loadable Modules (NLM, DSK, LAN…) | **No.** A format with no living platform behind it; if anybody asks, it belongs in a plugin, not the core |
+| navigate direct call/jmp with a single click | **Shipped** — `Enter` on a `call` or `jmp` follows it, `Backspace` comes back, and the jumped-from stack is on screen |
+| search by instruction pattern in the disassembler | **Backlog, new line.** Search the decoded stream rather than the bytes: a mnemonic, an operand shape, a wildcard byte. Needs the search engine to run over decoded instructions, which the disassembly pane already produces |
+| built-in 64-bit decrypt/crypt system | **Backlog, new line.** As a block operation (XOR and a named cipher over a block), not as a promise of security: the dialog has to say what it is |
+| built-in 64-bit calculator | **Backlog, new line.** Hex, decimal, octal, binary, with the bitwise operators and conversion between bases — the thing a hex editor is asked for every ten minutes. Cheap and self-contained |
+| file operations on blocks: read, write, fill, copy, move, insert, delete, crypt | **Backlog, SPEC 05 §2.6.** `F3` marks, `F12` operates, the large ones through the job engine, each showing the resulting length before it happens |
+| search and replace across multiple files | **Backlog, new line.** The find tool (SPEC 06 §1) gets the files; replacing in them is a job with its own confirmation, a dry run, and a count per file |
+| keyboard macros | **Backlog**, with the rest of the macro engine (SPEC 08). The command vocabulary is the right foundation: a macro is a list of commands, not of keystrokes |
+| unicode/utf8 support | **Shipped** throughout: the panel, the viewer, the editor and the command line are UTF-8, with the codepage list for files that are not |
+| Hiew External Module (HEM) support | **Our answer is the plugin system** (SPEC 08): manifests on disk today, a host API when there is something worth hosting |
+| ArmV6 disassembler | **Backlog** — AArch64 first, since a viewer that only decodes x86 is half a tool on an Apple Silicon machine; a decoder crate rather than new design |
+
+Two things on this list we have and Hiew does not, so they are worth saying out loud: the
+structure pane decodes imports, exports and the .NET header beside the raw bytes, and the
+decompilers (WebAssembly in process, JVM and .NET IL in process, external tools by rule) turn
+a binary into something readable rather than only into instructions.
+
 ## 6. Editor (`F4`)
 
 | # | Feature | Origin | M |
