@@ -1,4 +1,39 @@
-use scmd_core::{Entry, EntryKind, Listing, Selection, Sort, VPath, ViewMode};
+use std::collections::HashMap;
+
+use scmd_core::{Entry, EntryId, EntryKind, Listing, Selection, Sort, VPath, ViewMode};
+
+/// A panel made of a list somebody handed us rather than of a directory: find results,
+/// `panelize`, and later a plugin's own list. The rows are files wherever they live, so the
+/// panel cannot work out a path by joining its own directory onto a name — it has to be told,
+/// and the map is keyed by entry id because the listing re-sorts under it.
+#[derive(Debug, Clone)]
+pub struct TempList {
+    /// What the panel says it is showing, in its frame.
+    pub title: String,
+    pub paths: HashMap<EntryId, VPath>,
+}
+
+impl TempList {
+    /// One row per path. The id is the hash of the whole path rather than of the name, because
+    /// two results of a search are very often the same name in different directories.
+    pub fn new(title: String, items: Vec<(VPath, Entry)>) -> (TempList, Vec<Entry>) {
+        let mut paths = HashMap::with_capacity(items.len());
+        let mut entries = Vec::with_capacity(items.len());
+        for (path, mut entry) in items {
+            entry.id = EntryId::Name(path_hash(&path));
+            paths.insert(entry.id, path);
+            entries.push(entry);
+        }
+        (TempList { title, paths }, entries)
+    }
+}
+
+fn path_hash(path: &VPath) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    path.to_string().hash(&mut hasher);
+    hasher.finish()
+}
 
 /// One panel's state. Pure data plus cursor arithmetic — no I/O, so it is easy to test.
 #[derive(Debug, Clone)]
@@ -29,6 +64,8 @@ pub struct Panel {
     pub free: Option<u64>,
     /// Columns the name column is scrolled by, for names wider than it.
     pub name_scroll: usize,
+    /// Set when this panel is a list rather than a directory.
+    pub temp: Option<TempList>,
 }
 
 impl Panel {
@@ -48,6 +85,7 @@ impl Panel {
             want_cursor: None,
             free: None,
             name_scroll: 0,
+            temp: None,
             history_pos: 0,
             generation: 0,
             loading: true,
@@ -149,6 +187,7 @@ impl Panel {
             self.history_pos = self.history.len() - 1;
         }
         self.cwd = path;
+        self.temp = None;
         self.cursor = 0;
         self.top = 0;
         self.filter = None;
@@ -176,13 +215,58 @@ impl Panel {
         Some(self.history[self.history_pos].clone())
     }
 
+    /// Where a row's file actually is. For a directory panel that is the panel's own path with
+    /// the name on the end; for a list panel it is whatever the list said, which is the whole
+    /// reason this method exists rather than `cwd.join(name)` spread across the program.
+    pub fn path_of(&self, e: &Entry) -> VPath {
+        match &self.temp {
+            Some(list) => list
+                .paths
+                .get(&e.id)
+                .cloned()
+                .unwrap_or_else(|| self.cwd.join(&e.name)),
+            None => self.cwd.join(&e.name),
+        }
+    }
+
+    /// The path under the cursor, if the cursor is on something addressable.
+    pub fn current_path(&self) -> Option<VPath> {
+        let e = self.current()?;
+        (e.kind != EntryKind::Parent).then(|| self.path_of(e))
+    }
+
+    /// Become a list of files rather than a directory. The paths are kept beside the rows, so
+    /// sorting, selecting, copying and deleting all work on the real files.
+    pub fn set_temp(&mut self, title: String, items: Vec<(VPath, Entry)>, generation: u64) {
+        let (list, entries) = TempList::new(title, items);
+        self.temp = Some(list);
+        self.selection.clear();
+        self.filter = None;
+        self.filter_set = None;
+        self.name_scroll = 0;
+        self.set_listing(entries, generation);
+    }
+
+    /// Every path the list holds, in listing order: what a re-read starts from.
+    pub fn temp_paths(&self) -> Vec<VPath> {
+        let Some(list) = &self.temp else {
+            return Vec::new();
+        };
+        (0..self.listing.len())
+            .filter_map(|row| self.listing.row(row))
+            .filter_map(|e| list.paths.get(&e.id).cloned())
+            .collect()
+    }
+
     /// Target of `Enter` / `Ctrl+PgDn`: `Some(path)` for a directory, `None` for a file.
     pub fn enter_target(&self) -> Option<VPath> {
         let e = self.current()?;
         match e.kind {
             EntryKind::Parent => self.cwd.parent().map(|p| p.normalised()),
-            EntryKind::Dir => Some(self.cwd.join(&e.name)),
-            EntryKind::Symlink => Some(self.cwd.join(&e.name)),
+            // On a list panel, `Enter` on a file goes to the directory it lives in — the point
+            // of a result is to take you there (FAR's temporary panel does the same).
+            EntryKind::Dir | EntryKind::Symlink => Some(self.path_of(e)),
+            _ if self.temp.is_some() => self.path_of(e).parent().map(|p| p.normalised()),
             _ => None,
         }
     }

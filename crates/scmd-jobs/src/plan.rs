@@ -390,9 +390,11 @@ mod tests {
     fn wiping_plans_an_overwrite_for_every_file_it_can_overwrite() {
         let dir = tree();
         let link = VPath::local(dir.path().join("src/link"));
-        LocalFs
+        // Creating a symbolic link needs a privilege on Windows that a plain user may not
+        // have, and the point of this test is the plan, not the privilege.
+        let linked = LocalFs
             .symlink(std::path::Path::new("a.txt"), &link)
-            .unwrap();
+            .is_ok();
         let spec = JobSpec::new(
             JobKind::Wipe,
             vec![VPath::local(dir.path().join("src"))],
@@ -400,8 +402,19 @@ mod tests {
         );
         let p = plan(&LocalFs, &spec, &CancelToken::new()).unwrap();
 
-        // Six bytes of file, plus the five the symlink's own target name takes up.
-        assert_eq!((p.files, p.dirs, p.bytes), (3, 2, 11));
+        // The two regular files are six bytes between them. A link's own size is whatever the
+        // platform says it is — the length of the target name on Unix, nothing at all for a
+        // reparse point on Windows — so the total is checked against that rather than against
+        // a number that only holds on one of them.
+        let link_size = if linked {
+            std::fs::symlink_metadata(link.as_path())
+                .map(|m| m.len())
+                .unwrap_or(0)
+        } else {
+            0
+        };
+        let files = 2 + u64::from(linked);
+        assert_eq!((p.files, p.dirs, p.bytes), (files, 2, 6 + link_size));
         let wipes: Vec<&Unit> = p
             .units
             .iter()
@@ -411,9 +424,11 @@ mod tests {
         assert!(wipes
             .iter()
             .any(|u| u.kind == UnitKind::WipeFile { size: 4 }));
-        // The symlink is unlinked, never written through.
-        let planned_link = p.units.iter().find(|u| u.dst == link).unwrap();
-        assert_eq!(planned_link.kind, UnitKind::RemoveFile);
+        if linked {
+            // The symlink is unlinked, never written through.
+            let planned_link = p.units.iter().find(|u| u.dst == link).unwrap();
+            assert_eq!(planned_link.kind, UnitKind::RemoveFile);
+        }
         // And the directories still go after what is inside them.
         assert_eq!(p.units.last().unwrap().kind, UnitKind::RemoveDir);
     }
