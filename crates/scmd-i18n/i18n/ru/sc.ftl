@@ -405,6 +405,7 @@ unpack-not-an-archive = это не архив, который мы умеем �
 # ── особые виды панели (SPEC 02 §7) ─────────────────────────────────────────────────────
 panel-quick-view = Быстрый просмотр
 panel-info = Сведения
+panel-tree = Дерево
 quick-view-directory = { $name } — это каталог, F3 измерит его
 quick-view-not-here = байтов здесь нет: сначала F3 их извлечёт
 info-path = Путь

@@ -413,6 +413,7 @@ unpack-not-an-archive = not an archive we can read
 # ── the special panel kinds (SPEC 02 §7) ────────────────────────────────────────────────
 panel-quick-view = Quick view
 panel-info = Info
+panel-tree = Tree
 quick-view-directory = { $name } is a directory — F3 measures it
 quick-view-not-here = the bytes are not here: F3 brings them out first
 info-path = Path

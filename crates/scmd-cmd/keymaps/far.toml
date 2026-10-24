@@ -217,6 +217,22 @@ cmd = "nav.goto.path"
 keys = ["Ctrl+Q"]
 cmd = "panel.quickview"
 
+[[bind]]
+keys = ["Ctrl+T"]
+cmd = "panel.tree"
+
+# In a multi-column view these move by a column, as they do in FAR; in the tree panel they
+# expand and collapse.
+[[bind]]
+keys = ["Left"]
+scope = "panel"
+cmd = "nav.left"
+
+[[bind]]
+keys = ["Right"]
+scope = "panel"
+cmd = "nav.right"
+
 # ---------------------------------------------------------------- selection
 [[bind]]
 keys = ["Ins"]

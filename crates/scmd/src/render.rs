@@ -123,6 +123,10 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
                 draw_info(app, i, *area, buf);
                 continue;
             }
+            scmd_panel::Content::Tree => {
+                draw_tree(app, i, *area, buf);
+                continue;
+            }
             scmd_panel::Content::Files => {}
         }
         let panel = &app.panels[i];
@@ -761,6 +765,50 @@ fn draw_quick_view(app: &mut App, index: usize, area: Rect, buf: &mut Buffer) {
         foot,
         nw + 2,
     );
+}
+
+/// The tree panel (`Ctrl+T`): the directories under this panel's root, as far as they have
+/// been opened, with the cursor on the one the other panel is showing.
+fn draw_tree(app: &mut App, index: usize, area: Rect, buf: &mut Buffer) {
+    if area.w < 8 || area.h < 3 {
+        return;
+    }
+    let root = app.trees[index]
+        .as_ref()
+        .map(|t| t.root.to_string())
+        .unwrap_or_default();
+    let title = format!("{}  {root}", app.i18n.t("panel-tree"));
+    let inner = widgets::draw_pane(buf, &app.theme, area, &title, index == app.active);
+    let base = app.theme.panel();
+    let on = Style::new(
+        app.theme.color("panel.cursor.fg"),
+        app.theme.color("panel.cursor.bg"),
+    );
+    let Some(tree) = app.trees[index].as_ref() else {
+        return;
+    };
+    for n in 0..inner.h {
+        let row = tree.top + n as usize;
+        if row >= tree.rows.len() {
+            break;
+        }
+        let style = if row == tree.cursor && index == app.active {
+            on
+        } else {
+            base
+        };
+        let text = tree.line(row);
+        let text = scmd_ui::truncate_cols(&text, inner.w.saturating_sub(1) as usize);
+        // The cursor's stripe runs the width of the panel, as a file panel's does.
+        buf.fill(Rect::new(inner.x, inner.y + n, inner.w, 1), ' ', style);
+        buf.put_str(
+            inner.x + 1,
+            inner.y + n,
+            &text,
+            style,
+            inner.w.saturating_sub(1),
+        );
+    }
 }
 
 /// The info panel (`Ctrl+L`): what the other panel is looking at, and what is under its

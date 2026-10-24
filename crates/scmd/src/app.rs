@@ -43,6 +43,11 @@ pub enum Request {
         title: String,
         paths: Vec<VPath>,
     },
+    /// Read one directory for the tree panel: only its subdirectories matter.
+    TreeRead {
+        panel: usize,
+        path: VPath,
+    },
     /// Build an archive. A job as far as the user is concerned — the same progress box, the
     /// same counters — but the writing is one pass through `scmd-arc` rather than a plan of
     /// file copies, because a central directory or a compressed stream is not a sequence of
@@ -202,6 +207,12 @@ pub enum Event {
     JobProgress {
         id: u64,
         progress: Progress,
+    },
+    /// One directory read for the tree panel, as the subdirectories it holds.
+    TreeListed {
+        panel: usize,
+        path: VPath,
+        dirs: Vec<VPath>,
     },
     /// The engine needs an answer before it can continue; it is blocked on `reply`.
     JobQuestion {
@@ -642,6 +653,10 @@ pub struct App {
     pub hidden: Option<usize>,
     /// What was searched for last, so `Alt+F7` opens on it rather than on an empty dialog.
     pub last_find: FindSpec,
+    /// The tree panel's rows, per panel, and the directory cache behind them. The cache
+    /// outlives the panel, so leaving the tree and coming back costs no reads.
+    pub trees: [Option<Box<crate::tree::Tree>>; 2],
+    pub tree_cache: crate::tree::Cache,
     /// The quick view's own reader, and what it is of: opened when the cursor lands on a file
     /// and kept while it stays there, so moving down a directory does not reopen a file.
     pub quick: Option<Box<Viewer>>,
@@ -735,6 +750,8 @@ impl App {
             user_screen: Vec::new(),
             hidden: None,
             last_find: FindSpec::default(),
+            trees: [None, None],
+            tree_cache: crate::tree::Cache::default(),
             quick: None,
             quick_of: None,
             quick_why: None,
@@ -1071,6 +1088,27 @@ impl App {
                         self.run_next_apply();
                     }
                 }
+            }
+            Event::TreeListed { panel, path, dirs } => {
+                self.tree_cache.insert(path.clone(), dirs);
+                // The read came back: finish the expansion that was waiting for it. Only the
+                // panel that asked is touched, and only if it is still a tree.
+                if self.panels[panel].content != crate::panel::Content::Tree {
+                    return;
+                }
+                let page = self.rows.max(1);
+                if let Some(mut tree) = self.trees[panel].take() {
+                    let was = tree.cursor;
+                    if let Some(at) = tree.rows.iter().position(|r| r.path == path) {
+                        tree.cursor = at;
+                        tree.expand(&self.tree_cache);
+                        tree.cursor = was;
+                        tree.move_cursor(0, page);
+                    }
+                    self.trees[panel] = Some(tree);
+                }
+                // Still on the way somewhere: open the next level.
+                self.tree_reveal(panel);
             }
             Event::JobProgress { id, progress } => {
                 if let Mode::Job(view) = &mut self.mode {
@@ -2690,6 +2728,7 @@ impl App {
                 self.set_content(side, crate::panel::Content::QuickView)
             }
             Command::PanelInfo(side) => self.set_content(side, crate::panel::Content::Info),
+            Command::PanelTree(side) => self.set_content(side, crate::panel::Content::Tree),
             Command::FilePack => self.open_pack_form(),
             Command::FileUnpack => self.open_unpack_form(),
             Command::ToolFind => self.open_find_form(),
@@ -5473,6 +5512,10 @@ impl App {
         let index = match side {
             Side::Left => 0,
             Side::Right => 1,
+            // The special kinds go in the passive panel — except when the active panel is
+            // already one of them, which only the tree can be: the key that turned it on has
+            // to turn it off, and by then the focus is in it.
+            Side::Active if self.panels[self.active].content != Content::Files => self.active,
             Side::Active => 1 - self.active,
         };
         let now = self.panels[index].content;
@@ -5480,16 +5523,166 @@ impl App {
         self.panels[index].content = next;
         if next == Content::Files {
             // Back to a directory: it may have missed changes while it was something else.
+            // The tree's rows and the preview's reader go with it; the directory cache they
+            // came from stays, so turning the panel back into a tree costs no reads.
+            self.trees[index] = None;
+            self.quick = None;
+            self.quick_of = None;
             self.read_panel(index);
             return;
         }
-        // Nothing in a special panel can be selected or copied, so the keys stay with the
+        if next == Content::Tree {
+            // The tree is the one special kind that takes the focus: moving its cursor is how
+            // it changes the other panel's directory, so the keys have to reach it.
+            //
+            // It is rooted where the other panel's path starts — the drive, or the archive, or
+            // the server — and opens its way down to where that panel is, so it comes up with
+            // the cursor on the directory the user is already looking at.
+            let here = self.panels[1 - index].cwd.clone();
+            let mut tree = crate::tree::Tree::new(here.root());
+            tree.want = Some(here);
+            self.active = index;
+            self.trees[index] = Some(Box::new(tree));
+            self.tree_reveal(index);
+            return;
+        }
+        self.trees[index] = None;
+        // Nothing in the other two can be selected or copied, so the keys stay with the
         // files: the focus moves to the other panel rather than onto a frame with no rows.
         self.active = 1 - index;
         if next == Content::QuickView {
             // Opened now rather than on the next frame, so the panel is never blank once.
             self.quick_view_for(self.active);
         }
+    }
+
+    /// Open one more level towards the path the tree is trying to show, reading it when the
+    /// cache has nothing — the next read comes back and brings us here again.
+    fn tree_reveal(&mut self, index: usize) {
+        let page = self.rows.max(1);
+        let Some(mut tree) = self.trees[index].take() else {
+            return;
+        };
+        let mut wanted = None;
+        if let Some(want) = tree.want.clone() {
+            if tree.select(&want, page) {
+                tree.want = None;
+            } else if let Some(at) = tree.towards(&want) {
+                let saved = tree.cursor;
+                tree.cursor = at;
+                if tree.expand(&self.tree_cache) {
+                    tree.cursor = saved;
+                    tree.move_cursor(0, page);
+                } else {
+                    tree.cursor = saved;
+                    wanted = tree.rows.get(at).map(|r| r.path.clone());
+                }
+            } else {
+                // Nothing on the way: the path is not under this root after all.
+                tree.want = None;
+            }
+        }
+        let keep_going = tree.want.is_some() && wanted.is_none();
+        self.trees[index] = Some(tree);
+        if let Some(path) = wanted {
+            self.requests.push(Request::TreeRead { panel: index, path });
+        } else if keep_going {
+            // The level we needed was already cached, so the next one can be opened at once.
+            self.tree_reveal(index);
+        }
+    }
+
+    /// Keys inside the tree panel. Movement walks the rows and takes the other panel with it;
+    /// `Enter`/`→` expands, `←` collapses or climbs, `*` expands everything under the cursor.
+    fn tree_key(&mut self, cmd: Command) -> bool {
+        let index = self.active;
+        let page = self.rows.max(1);
+        let Some(mut tree) = self.trees[index].take() else {
+            return false;
+        };
+        let mut wanted: Vec<VPath> = Vec::new();
+        let handled = match cmd {
+            Command::NavUp => {
+                tree.move_cursor(-1, page);
+                true
+            }
+            Command::NavDown => {
+                tree.move_cursor(1, page);
+                true
+            }
+            Command::NavPageUp => {
+                tree.move_cursor(-(page as isize), page);
+                true
+            }
+            Command::NavPageDown => {
+                tree.move_cursor(page as isize, page);
+                true
+            }
+            Command::NavTop => {
+                tree.move_cursor(-(tree.rows.len() as isize), page);
+                true
+            }
+            Command::NavBottom => {
+                tree.move_cursor(tree.rows.len() as isize, page);
+                true
+            }
+            Command::NavEnter | Command::NavRight => {
+                if !tree.expand(&self.tree_cache) {
+                    if let Some(path) = tree.path() {
+                        wanted.push(path);
+                    }
+                }
+                true
+            }
+            Command::NavLeft => {
+                if tree.is_expanded() {
+                    tree.collapse();
+                } else {
+                    // Not expanded: `←` climbs to the parent row, which is where the eye is.
+                    let depth = tree.current().map(|r| r.depth).unwrap_or(0);
+                    if depth > 0 {
+                        let up = tree.rows[..tree.cursor]
+                            .iter()
+                            .rposition(|r| r.depth < depth)
+                            .unwrap_or(0);
+                        let delta = up as isize - tree.cursor as isize;
+                        tree.move_cursor(delta, page);
+                    }
+                }
+                true
+            }
+            // `*` has nothing to invert in a tree, and FAR's tree panel uses it to expand
+            // everything under the cursor — bounded, so `*` on `/` cannot hang the panel.
+            Command::SelInvert => {
+                wanted = tree.expand_all(&self.tree_cache);
+                true
+            }
+            Command::PanelReread => {
+                if let Some(path) = tree.path() {
+                    self.tree_cache.forget(&path);
+                    tree.collapse();
+                    wanted.push(path);
+                }
+                true
+            }
+            _ => false,
+        };
+        let chosen = tree.path();
+        self.trees[index] = Some(tree);
+        for path in wanted {
+            self.requests.push(Request::TreeRead { panel: index, path });
+        }
+        if handled {
+            // The other panel follows the cursor: that is the whole point of the tree.
+            if let Some(path) = chosen {
+                let other = 1 - index;
+                if self.panels[other].cwd != path {
+                    self.panels[other].go(path, true);
+                    self.read_panel(other);
+                }
+            }
+        }
+        handled
     }
 
     /// Keys inside a special panel. The quick view scrolls; the info panel has nothing to
@@ -5499,6 +5692,9 @@ impl App {
         use crate::panel::Content;
         if self.panels[self.active].content == Content::Files {
             return false;
+        }
+        if self.panels[self.active].content == Content::Tree {
+            return self.tree_key(cmd);
         }
         let rows = self.rows.max(1) as i64;
         let delta = match cmd {

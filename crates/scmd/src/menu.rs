@@ -145,7 +145,11 @@ fn panel_menu(title: &'static str, side: usize) -> Menu {
                 "Ctrl+Q",
                 Action::Run(Command::PanelQuickView(Side::Active)),
             ),
-            item("menu-tree-panel", "Ctrl+T", Action::Todo("panel.tree")),
+            item(
+                "menu-tree-panel",
+                "Ctrl+T",
+                Action::Run(Command::PanelTree(Side::Active)),
+            ),
             Entry::Separator,
             item(
                 "menu-sort-modes",

@@ -405,6 +405,7 @@ unpack-not-an-archive = 这不是我们能读取的压缩包
 # ── 特殊面板（SPEC 02 §7）──────────────────────────────────────────────────────────────
 panel-quick-view = 快速查看
 panel-info = 信息
+panel-tree = 目录树
 quick-view-directory = { $name } 是一个目录 — F3 可以统计它
 quick-view-not-here = 字节不在这里：先用 F3 取出
 info-path = 路径

@@ -9,6 +9,7 @@ mod form;
 mod menu;
 mod panel;
 mod render;
+mod tree;
 
 use std::path::PathBuf;
 use std::sync::mpsc;
@@ -700,6 +701,25 @@ fn interactive(mut app: App) -> Result<()> {
                         });
                     });
                 }
+                Request::TreeRead { panel, path } => {
+                    let tx = tx.clone();
+                    let vfs = vfs.clone();
+                    runtime.spawn(async move {
+                        // Only the subdirectories: a tree does not show files, and the panel
+                        // that does is right beside it.
+                        let dirs = match vfs.list(&path, CancelToken::new()).await {
+                            Ok(entries) => entries
+                                .into_iter()
+                                .filter(|e| e.kind == scmd_core::EntryKind::Dir)
+                                .map(|e| path.join(&e.name))
+                                .collect(),
+                            // A directory we cannot read is an empty branch rather than an
+                            // error in a dialog: the tree is a way of looking around.
+                            Err(_) => Vec::new(),
+                        };
+                        let _ = tx.send(Event::TreeListed { panel, path, dirs });
+                    });
+                }
                 Request::Pack {
                     id,
                     archive,
@@ -1295,6 +1315,18 @@ mod tests {
                         result,
                     });
                 }
+                Request::TreeRead { panel, path } => {
+                    let dirs = scmd_vfs::local::list_blocking(&path, &CancelToken::new())
+                        .map(|entries| {
+                            entries
+                                .into_iter()
+                                .filter(|e| e.kind == scmd_core::EntryKind::Dir)
+                                .map(|e| path.join(&e.name))
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    app.handle_event(Event::TreeListed { panel, path, dirs });
+                }
                 Request::Pack {
                     id,
                     archive,
@@ -1686,6 +1718,64 @@ mod tests {
         key(&mut app, "Shift+F1");
         assert!(app.mode.is_normal());
         assert!(app.status_error, "{}", app.status);
+    }
+
+    /// `Ctrl+T`: the tree panel opens its way down to where the other panel is, and moving
+    /// its cursor takes that panel with it.
+    #[test]
+    fn the_tree_panel_opens_on_the_other_panels_directory_and_drives_it() {
+        let root = tempfile::tempdir().unwrap();
+        for dir in ["one", "one/deep", "two"] {
+            std::fs::create_dir_all(root.path().join(dir)).unwrap();
+        }
+        std::fs::write(root.path().join("one/a.txt"), b"a").unwrap();
+
+        let here = root.path().join("one");
+        let mut app = app_on(&here, root.path());
+        serve(&mut app);
+
+        key(&mut app, "Ctrl+T");
+        // Rooted at the filesystem root and opening its way down takes several reads.
+        for _ in 0..40 {
+            if app.requests.is_empty() {
+                break;
+            }
+            serve(&mut app);
+        }
+        assert_eq!(app.panels[1].content, crate::panel::Content::Tree);
+        assert_eq!(app.active, 1, "the tree takes the focus");
+        let tree = app.trees[1].as_ref().expect("a tree");
+        assert_eq!(
+            tree.path(),
+            Some(VPath::local(&here)),
+            "the cursor should be on the other panel's own directory"
+        );
+        assert!(tree.want.is_none(), "it stopped looking");
+
+        // `→` opens the row under the cursor — `one` holds `deep` — and `←` closes it again.
+        let before = app.trees[1].as_ref().unwrap().rows.len();
+        key(&mut app, "Right");
+        serve(&mut app);
+        let opened = app.trees[1].as_ref().unwrap();
+        assert!(opened.rows.len() > before, "nothing opened");
+        assert!(
+            opened.rows.iter().any(|r| r.name() == "deep"),
+            "{:?}",
+            opened.rows.iter().map(|r| r.name()).collect::<Vec<_>>()
+        );
+        key(&mut app, "Left");
+        assert_eq!(app.trees[1].as_ref().unwrap().rows.len(), before);
+
+        // Up one row is the parent; the file panel follows the cursor.
+        key(&mut app, "Up");
+        serve(&mut app);
+        let on = app.trees[1].as_ref().unwrap().path().unwrap();
+        assert_eq!(app.panels[0].cwd, on, "the other panel follows the cursor");
+
+        // And the key puts the files back, with the focus where the keys belong.
+        key(&mut app, "Ctrl+T");
+        assert_eq!(app.panels[1].content, crate::panel::Content::Files);
+        assert!(app.trees[1].is_none());
     }
 
     /// A search that finds nothing has to say so, rather than leaving an empty list that

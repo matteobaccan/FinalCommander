@@ -405,6 +405,7 @@ unpack-not-an-archive = non è un archivio che sappiamo leggere
 # ── i pannelli speciali (SPEC 02 §7) ────────────────────────────────────────────────────
 panel-quick-view = Vista rapida
 panel-info = Informazioni
+panel-tree = Albero
 quick-view-directory = { $name } è una directory — F3 la misura
 quick-view-not-here = i byte non sono qui: prima F3 li estrae
 info-path = Percorso

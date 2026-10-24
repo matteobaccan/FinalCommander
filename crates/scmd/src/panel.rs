@@ -50,6 +50,9 @@ pub enum Content {
     QuickView,
     /// Facts about the device, the directory and the selection (`Ctrl+L`).
     Info,
+    /// The directory tree (`Ctrl+T`). The one special kind that takes the focus, because
+    /// moving its cursor is how it changes the other panel's directory.
+    Tree,
 }
 
 /// One panel's state. Pure data plus cursor arithmetic — no I/O, so it is easy to test.
