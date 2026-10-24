@@ -66,7 +66,10 @@ catalogue is missing a message id, so a half-finished translation cannot ship si
    release notes are read from that section, so what is written there is what people see.
 2. Bump `version` in the workspace `Cargo.toml` (one place: every crate inherits it), then
    `cargo build` so `Cargo.lock` follows, and commit.
-3. Tag and push: `git tag -a v0.0.2 -m "0.0.2" && git push origin v0.0.2`.
+3. Tag and push: `git tag -a v0.0.2 -m "0.0.2" && git push origin v0.0.2`. Creating the
+   release from the web interface works too — the workflow fills in the archives either way.
+   The publish step needs the workflow token to be allowed to write: Settings → Actions →
+   General → Workflow permissions → *Read and write*.
 4. `.github/workflows/release.yml` builds `linux-x86_64`, `linux-x86_64-static` (musl),
    `macos-universal` (Intel + Apple Silicon in one binary) and `windows-x86_64`, runs
    `scmd --version` on each, and publishes the archives with `SHA256SUMS`.
