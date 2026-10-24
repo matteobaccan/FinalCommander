@@ -1952,6 +1952,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "scmd-find"
+version = "0.0.3"
+dependencies = [
+ "memchr",
+ "scmd-core",
+ "scmd-vfs",
+ "scmd-view",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "scmd-i18n"
 version = "0.0.3"
 dependencies = [
