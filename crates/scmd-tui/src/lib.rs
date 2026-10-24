@@ -3,7 +3,7 @@
 //! It takes a [`Buffer`] from `scmd-ui` and paints the cells that changed, and it turns terminal
 //! input into [`scmd_cmd::Key`] events. See `docs/spec/01-architecture.md` §3–§4.
 
-use std::io::{self, Stdout, Write};
+use std::io::{self, Write};
 use std::sync::mpsc::Sender;
 use std::time::Duration;
 
@@ -29,8 +29,25 @@ pub enum Input {
     Eof,
 }
 
+/// The writer behind [`Term::capturing`].
+struct Sink(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+impl io::Write for Sink {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        self.0.lock().expect("the sink").extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
 pub struct Term {
-    out: Stdout,
+    /// Where the painting goes. Behind a pointer rather than being `Stdout` itself, so that a
+    /// test can be given the bytes: what this writes is a stream of cursor moves and
+    /// characters whose correctness cannot be seen by looking at the buffer afterwards.
+    out: Box<dyn io::Write + Send>,
     prev: Buffer,
     depth: ColorDepth,
     raw: bool,
@@ -50,7 +67,7 @@ impl Term {
         )?;
         out.flush()?;
         Ok(Term {
-            out,
+            out: Box::new(out),
             prev: Buffer::new(w, h),
             depth: detect_depth(),
             raw: true,
@@ -60,11 +77,29 @@ impl Term {
     /// A terminal that writes nowhere, for tests and `--check` runs.
     pub fn headless(w: u16, h: u16) -> Self {
         Term {
-            out: io::stdout(),
+            out: Box::new(io::stdout()),
             prev: Buffer::new(w, h),
             depth: ColorDepth::TrueColor,
             raw: false,
         }
+    }
+
+    /// A terminal that paints into a byte buffer the caller can read back.
+    ///
+    /// For the tests, and for one kind of test in particular: what [`Term::draw`] emits is a
+    /// stream of cursor moves and characters, and whether it lands where it was meant to
+    /// cannot be told from the cell buffer — only from replaying what was written.
+    pub fn capturing() -> (Term, std::sync::Arc<std::sync::Mutex<Vec<u8>>>) {
+        let sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let term = Term {
+            out: Box::new(Sink(sink.clone())),
+            // Empty, so the first frame paints every cell: a test starts from a blank screen
+            // and has to see all of it.
+            prev: Buffer::new(0, 0),
+            depth: ColorDepth::TrueColor,
+            raw: true,
+        };
+        (term, sink)
     }
 
     pub fn depth(&self) -> ColorDepth {
@@ -104,7 +139,22 @@ impl Term {
                 last_style = Some(cell.style);
             }
             queue!(self.out, Print(cell.ch))?;
-            let advance = if cell.ch.is_ascii() { 1 } else { 2 };
+            // How far the terminal's cursor moved, so the next cell can be written without a
+            // `MoveTo` when it follows this one. It must be *exactly* right: believing the
+            // cursor is a column further right than it is writes the next character one
+            // column to the left of where it belongs, and from there the row is rubbish —
+            // which is what a screen full of half-overwritten text turns out to be.
+            //
+            // The width is not guessed from the character. It is read from the buffer, which
+            // decided the layout: a character that takes two columns has a `wide_tail` cell
+            // after it, and everything else takes one. Asking the character instead — and
+            // calling every non-ASCII character two columns wide, which is what this did —
+            // is wrong for the box-drawing characters the frames are made of, for `…`, `—`,
+            // `√`, for every accented letter and for all of Cyrillic and Greek.
+            let advance = match buf.get(x + 1, y) {
+                Some(next) if next.wide_tail => 2,
+                _ => 1,
+            };
             last_pos = Some((x + advance, y));
         }
         match cursor_at {
@@ -312,6 +362,124 @@ mod tests {
     #[test]
     fn unknown_keys_are_dropped_rather_than_guessed() {
         assert_eq!(key(CKey::CapsLock, KeyModifiers::NONE), None);
+    }
+
+    /// Replay what was written to a terminal, the way a terminal would, and say what is on
+    /// the screen afterwards. Only two things are interpreted: the cursor moves and the
+    /// characters. Colours do not move the cursor and are skipped.
+    fn replay(bytes: &[u8], w: usize, h: usize) -> Vec<String> {
+        let text = String::from_utf8_lossy(bytes).into_owned();
+        let mut screen = vec![vec![' '; w]; h];
+        let (mut x, mut y) = (0usize, 0usize);
+        let mut chars = text.chars().peekable();
+        while let Some(c) = chars.next() {
+            if c != '\u{1b}' {
+                let width = unicode_width::UnicodeWidthChar::width(c)
+                    .unwrap_or(1)
+                    .max(1);
+                if y < h && x < w {
+                    screen[y][x] = c;
+                    // The second column of a wide character holds nothing of its own, which
+                    // is what the buffer's `wide_tail` means; `\0` stands for it here and is
+                    // dropped when the row is read back.
+                    if width == 2 && x + 1 < w {
+                        screen[y][x + 1] = '\0';
+                    }
+                }
+                x += width;
+                continue;
+            }
+            if chars.peek() != Some(&'[') {
+                continue;
+            }
+            chars.next();
+            let mut params = String::new();
+            let mut final_byte = ' ';
+            for c in chars.by_ref() {
+                if c.is_ascii_alphabetic() {
+                    final_byte = c;
+                    break;
+                }
+                params.push(c);
+            }
+            if final_byte == 'H' {
+                let mut parts = params.split(';');
+                let row: usize = parts.next().unwrap_or("1").parse().unwrap_or(1);
+                let col: usize = parts.next().unwrap_or("1").parse().unwrap_or(1);
+                y = row.saturating_sub(1);
+                x = col.saturating_sub(1);
+            }
+        }
+        screen
+            .into_iter()
+            .map(|row| {
+                row.into_iter()
+                    .filter(|c| *c != '\0')
+                    .collect::<String>()
+                    .trim_end()
+                    .to_string()
+            })
+            .collect()
+    }
+
+    /// What is painted has to end up where the buffer says, and the bug this is about could
+    /// not be seen any other way: the backend believed every character outside ASCII took two
+    /// columns, so after a `│` — or a `…`, or an `é`, or anything Cyrillic — it thought the
+    /// cursor was one column further right than it was, skipped the move it then needed, and
+    /// wrote the rest of the row one place to the left, over the text already there.
+    ///
+    /// A panel's frame is made of those characters, so this was most of the screen.
+    #[test]
+    fn what_is_painted_lands_where_the_buffer_says() {
+        let theme = Theme::default_theme();
+        let plain = Style::new(theme.color("panel.fg"), theme.color("panel.bg"));
+        let (mut term, sink) = Term::capturing();
+
+        let mut buf = Buffer::new(24, 2);
+        // Box drawing, an ellipsis, an accent and Cyrillic: every one of them is a single
+        // column, and every one of them used to be counted as two.
+        buf.put_str(0, 0, "│ab…cdé─ключ│", plain, 24);
+        buf.put_str(0, 1, "plain ascii row", plain, 24);
+        term.draw(&buf, None).unwrap();
+        let screen = replay(&sink.lock().unwrap(), 24, 2);
+        assert_eq!(screen[0], buf.to_lines()[0].trim_end(), "first paint");
+        assert_eq!(screen[1], buf.to_lines()[1].trim_end());
+
+        // The painting that actually went wrong needs two cells with a gap between them: only
+        // the cells that differ are written, so after a character the backend measured wrongly
+        // it skips the move it then needs and writes the next one a column early. A first
+        // paint writes every cell in order and cannot show it, which is how this survived a
+        // suite full of rendering tests.
+        sink.lock().unwrap().clear();
+        let mut next = buf.clone();
+        // Column 0 changes (to another single-column character outside ASCII) and column 2
+        // changes; column 1 does not, so where the `X` lands is decided by what the backend
+        // believes about the width of what it wrote before it.
+        next.put_str(0, 0, "é", plain, 1);
+        next.put_str(2, 0, "X", plain, 1);
+        term.draw(&next, None).unwrap();
+        let screen = replay(&sink.lock().unwrap(), 24, 2);
+        assert_eq!(screen[0].chars().next(), Some('é'), "{:?}", screen[0]);
+        assert_eq!(
+            screen[0].chars().nth(2),
+            Some('X'),
+            "the second cell landed in the wrong column: {:?}",
+            screen[0]
+        );
+    }
+
+    /// A character that really is two columns wide keeps its second column: the buffer marks
+    /// it, and the backend reads the mark rather than guessing from the character again.
+    #[test]
+    fn a_double_width_character_advances_by_two() {
+        let theme = Theme::default_theme();
+        let plain = Style::new(theme.color("panel.fg"), theme.color("panel.bg"));
+        let (mut term, sink) = Term::capturing();
+        let mut buf = Buffer::new(12, 1);
+        buf.put_str(0, 0, "日本語ab", plain, 12);
+        term.draw(&buf, None).unwrap();
+        let screen = replay(&sink.lock().unwrap(), 12, 1);
+        assert_eq!(screen[0], buf.to_lines()[0].trim_end());
     }
 
     #[test]

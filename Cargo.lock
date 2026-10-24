@@ -2604,6 +2604,7 @@ dependencies = [
  "scmd-cmd",
  "scmd-ui",
  "thiserror",
+ "unicode-width",
 ]
 
 [[package]]

@@ -9,6 +9,7 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
+unicode-width = "0.2"
 crossterm = "0.29.0"
 scmd-cmd = { workspace = true }
 scmd-ui = { workspace = true }
