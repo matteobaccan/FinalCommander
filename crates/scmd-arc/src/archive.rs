@@ -524,7 +524,7 @@ fn read_up_to(file: &mut File, buf: &mut [u8]) -> io::Result<usize> {
 }
 
 /// The decompressor for a compressed tar, as a plain reader.
-fn decoder(path: &Path, format: Format) -> Result<Box<dyn Read>> {
+pub(crate) fn decoder(path: &Path, format: Format) -> Result<Box<dyn Read>> {
     let name = path.display().to_string();
     let file = File::open(path).map_err(|e| ArcError::Io {
         path: name.clone(),
@@ -554,7 +554,7 @@ fn decoder(path: &Path, format: Format) -> Result<Box<dyn Read>> {
 /// `/`-separated, leading slash, no trailing slash, `.` and `..` resolved. An entry whose name
 /// climbs out of the archive is pinned at the root instead: a zip that says `../../etc/passwd`
 /// is a zip-slip attack, and the answer is to keep it inside, not to trust it.
-fn normalise(path: &str) -> String {
+pub(crate) fn normalise(path: &str) -> String {
     let mut out: Vec<&str> = Vec::new();
     for part in path.split(['/', '\\']) {
         match part {
@@ -571,7 +571,7 @@ fn normalise(path: &str) -> String {
     format!("/{}", out.join("/"))
 }
 
-fn tar_path(path: &Path) -> String {
+pub(crate) fn tar_path(path: &Path) -> String {
     normalise(&path.to_string_lossy())
 }
 

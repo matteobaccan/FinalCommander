@@ -235,7 +235,7 @@ fn write_tar(
 }
 
 /// The compressor a tar is written through, as one `Write`.
-enum Sink {
+pub(crate) enum Sink {
     Plain(BufWriter<File>),
     Gz(flate2::write::GzEncoder<BufWriter<File>>),
     Bz(bzip2::write::BzEncoder<BufWriter<File>>),
@@ -243,7 +243,7 @@ enum Sink {
 }
 
 impl Sink {
-    fn new(path: &Path, format: Format, level: Level) -> Result<Sink> {
+    pub(crate) fn new(path: &Path, format: Format, level: Level) -> Result<Sink> {
         let file = BufWriter::new(File::create(path).map_err(|e| io_error(path, e))?);
         Ok(match format {
             // A `.tar.zst` is built as a plain tar first and compressed afterwards.
@@ -280,7 +280,7 @@ impl Sink {
     }
 
     /// Close the compressor, which is what writes its trailer.
-    fn finish(self, path: &Path) -> Result<()> {
+    pub(crate) fn finish(self, path: &Path) -> Result<()> {
         match self {
             Sink::Plain(mut w) => w.flush().map_err(|e| io_error(path, e)),
             Sink::Gz(w) => w.finish().map(|_| ()).map_err(|e| io_error(path, e)),
