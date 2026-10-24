@@ -409,6 +409,21 @@ mod tests {
         }
     }
 
+    /// The platform's own quoting. An expectation that spells `'…'` only passes on Unix, and
+    /// the thing worth asserting is *which* values get quoted, not which character does it.
+    fn q(text: &str) -> String {
+        if cfg!(windows) {
+            format!("\"{text}\"")
+        } else {
+            format!("'{text}'")
+        }
+    }
+
+    /// A path joined the way this platform joins one.
+    fn p(dir: &str, name: &str) -> String {
+        PathBuf::from(dir).join(name).to_string_lossy().into_owned()
+    }
+
     fn line(text: &str) -> String {
         match expand(text, &ctx(), None).unwrap() {
             Expanded::Line(l) => l,
@@ -418,24 +433,25 @@ mod tests {
 
     #[test]
     fn the_named_form_quotes_what_needs_quoting() {
-        assert_eq!(
-            line("wc -l {file}"),
-            "wc -l '/home/mb/project/notes file.md'"
-        );
-        assert_eq!(line("echo {name}"), "echo 'notes file.md'");
-        assert_eq!(line("echo {stem}"), "echo 'notes file'");
+        let file = q(&p("/home/mb/project", "notes file.md"));
+        assert_eq!(line("wc -l {file}"), format!("wc -l {file}"));
+        assert_eq!(line("echo {name}"), format!("echo {}", q("notes file.md")));
+        assert_eq!(line("echo {stem}"), format!("echo {}", q("notes file")));
         assert_eq!(line("echo {ext}"), "echo md");
         assert_eq!(line("ls {dir}"), "ls /home/mb/project");
         assert_eq!(line("ls {other.dir}"), "ls /tmp");
         assert_eq!(
             line("diff {file} {other.file}"),
-            "diff '/home/mb/project/notes file.md' /tmp/other.txt"
+            format!("diff {file} {}", p("/tmp", "other.txt"))
         );
     }
 
     #[test]
     fn raw_asks_for_the_value_without_quotes() {
-        assert_eq!(line("X={file.raw}"), "X=/home/mb/project/notes file.md");
+        assert_eq!(
+            line("X={file.raw}"),
+            format!("X={}", p("/home/mb/project", "notes file.md"))
+        );
     }
 
     #[test]
@@ -445,13 +461,16 @@ mod tests {
 
     #[test]
     fn fars_punctuation_means_the_same_things() {
-        assert_eq!(line("wc -l !.!"), "wc -l 'notes file.md'");
-        assert_eq!(line("echo !"), "echo 'notes file'");
+        assert_eq!(line("wc -l !.!"), format!("wc -l {}", q("notes file.md")));
+        assert_eq!(line("echo !"), format!("echo {}", q("notes file")));
         assert_eq!(line("echo !`"), "echo md");
         assert_eq!(line("ls !\\"), "ls /home/mb/project");
         assert_eq!(line("echo !!"), "echo !");
         // The passive panel's file.
-        assert_eq!(line("diff !.! !!.!"), "diff 'notes file.md' /tmp/other.txt");
+        assert_eq!(
+            line("diff !.! !!.!"),
+            format!("diff {} {}", q("notes file.md"), p("/tmp", "other.txt"))
+        );
     }
 
     #[test]
@@ -466,8 +485,12 @@ mod tests {
 
     #[test]
     fn the_selection_comes_inline_or_as_a_file() {
-        assert_eq!(line("grep -l x !&"), "grep -l x a.rs 'b rs.rs'");
-        assert_eq!(line("grep -l x {selection}"), "grep -l x a.rs 'b rs.rs'");
+        let selection = format!("a.rs {}", q("b rs.rs"));
+        assert_eq!(line("grep -l x !&"), format!("grep -l x {selection}"));
+        assert_eq!(
+            line("grep -l x {selection}"),
+            format!("grep -l x {selection}")
+        );
 
         // A list file is the caller's to write, and until it exists the symbol says so.
         assert_eq!(
@@ -545,7 +568,10 @@ mod tests {
             panic!()
         };
         let with_answer = pending.replace("{answer}", "TODO");
-        assert_eq!(line(&with_answer), "grep TODO 'notes file.md'");
+        assert_eq!(
+            line(&with_answer),
+            format!("grep TODO {}", q("notes file.md"))
+        );
     }
 
     #[test]

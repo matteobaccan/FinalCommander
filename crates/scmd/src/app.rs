@@ -5142,9 +5142,10 @@ mod tests {
             panic!("the link prompt did not open")
         };
         assert_eq!(prompt.kind, PromptKind::LinkName);
-        // Pre-filled with the passive panel's directory, as a copy would be.
-        assert!(prompt.text.starts_with("/tmp/"), "{}", prompt.text);
-        assert!(prompt.text.ends_with("a.txt"), "{}", prompt.text);
+        // Pre-filled with the passive panel's directory, as a copy would be — joined with
+        // whatever separator this platform uses.
+        let expected = std::path::PathBuf::from("/tmp").join("a.txt");
+        assert_eq!(prompt.text, expected.to_string_lossy());
         assert_eq!(
             prompt.sources.len(),
             1,
@@ -5154,7 +5155,7 @@ mod tests {
         match app.take_requests().into_iter().next() {
             Some(Request::Link { target, link, kind }) => {
                 assert!(target.to_string().ends_with("a.txt"), "{target}");
-                assert_eq!(link.to_string(), "/tmp/a.txt");
+                assert_eq!(link.as_path(), expected);
                 assert_eq!(kind, scmd_jobs::LinkKind::SymlinkRelative);
             }
             other => panic!("{other:?}"),
