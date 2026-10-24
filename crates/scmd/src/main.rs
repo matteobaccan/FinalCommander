@@ -24,6 +24,7 @@ use scmd_core::{CancelToken, VPath};
 use scmd_i18n::I18n;
 use scmd_jobs::{ArcFs, JobSpec};
 use scmd_net::{Pool, RoutedFs, Router, Site};
+use scmd_s3::jobs::ObjectFs;
 use scmd_tui::{Input, Term};
 use scmd_ui::{Buffer, Theme, ThemeSet};
 use scmd_vfs::Vfs;
@@ -739,7 +740,11 @@ fn interactive(mut app: App) -> Result<()> {
                     // provider's async calls be driven with `block_on` (see `scmd-net`).
                     let fs = ArcFs::new(
                         archives.clone(),
-                        RoutedFs::new(pool.clone(), runtime.handle().clone()),
+                        ObjectFs::new(
+                            objects.clone(),
+                            RoutedFs::new(pool.clone(), runtime.handle().clone()),
+                            runtime.handle().clone(),
+                        ),
                     );
                     runtime.spawn_blocking(move || run_job(id, spec, cancel, tx, &fs));
                 }
@@ -852,8 +857,13 @@ fn interactive(mut app: App) -> Result<()> {
                 } => {
                     let tx = tx.clone();
                     let pool = pool.clone();
+                    let objects_for_upload = objects.clone();
                     runtime.spawn(async move {
-                        let result = write_back(&pool, &local, &remote, expect, force).await;
+                        let result = if remote.scheme() == scmd_core::Scheme::S3 {
+                            put_object(&objects_for_upload, &local, &remote, expect, force).await
+                        } else {
+                            write_back(&pool, &local, &remote, expect, force).await
+                        };
                         let _ = tx.send(Event::Uploaded { id, remote, result });
                     });
                 }
@@ -1015,7 +1025,11 @@ fn interactive(mut app: App) -> Result<()> {
                 }
                 Request::Link { target, link, kind } => {
                     let tx = tx.clone();
-                    let fs = RoutedFs::new(pool.clone(), runtime.handle().clone());
+                    let fs = ObjectFs::new(
+                        objects.clone(),
+                        RoutedFs::new(pool.clone(), runtime.handle().clone()),
+                        runtime.handle().clone(),
+                    );
                     runtime.spawn_blocking(move || {
                         let error = scmd_jobs::create_link(&fs, &target, &link, kind)
                             .err()
@@ -1029,7 +1043,11 @@ fn interactive(mut app: App) -> Result<()> {
                     // archive says rather than what a disk would give it.
                     let fs = ArcFs::new(
                         archives.clone(),
-                        RoutedFs::new(pool.clone(), runtime.handle().clone()),
+                        ObjectFs::new(
+                            objects.clone(),
+                            RoutedFs::new(pool.clone(), runtime.handle().clone()),
+                            runtime.handle().clone(),
+                        ),
                     );
                     runtime.spawn_blocking(move || {
                         let (bytes, files) = dir_size(&fs, &path, &CancelToken::new(), 0);
@@ -1817,6 +1835,56 @@ async fn write_back(
         .map_err(|e| UploadError::Failed(e.to_string()))
 }
 
+/// Send the editor's copy back to the object it came from.
+///
+/// The shape is [`write_back`]'s, with one `PUT` in place of the upload and rename: there is
+/// nothing to rename, because an object either exists with these bytes or does not exist at
+/// all, and no temporary name is needed to get that.
+///
+/// The change check is the same question — has somebody else written this since it was
+/// fetched? — asked of the object's size and modification time, which is all object storage
+/// offers. An `ETag` would be stronger, and is what a later version should compare instead.
+async fn put_object(
+    objects: &scmd_s3::vfs::S3Vfs,
+    local: &std::path::Path,
+    remote_path: &VPath,
+    expect: Option<RemoteStamp>,
+    force: bool,
+) -> Result<u64, UploadError> {
+    let cancel = CancelToken::new();
+    if !force {
+        if let Some(expected) = expect {
+            // Not there any more is not someone else's work: write it.
+            if let Ok(entry) = objects.stat_object(remote_path, &cancel).await {
+                let now = stamp_of_entry(&entry);
+                let changed = now.size != expected.size
+                    || (now.mtime.is_some()
+                        && expected.mtime.is_some()
+                        && now.mtime != expected.mtime);
+                if changed {
+                    return Err(UploadError::Changed);
+                }
+            }
+        }
+    }
+    objects
+        .write_object(remote_path, local, &cancel)
+        .await
+        .map_err(|e| UploadError::Failed(e.to_string()))
+}
+
+/// An entry's size and time, as the stamp the change check compares.
+fn stamp_of_entry(entry: &scmd_core::Entry) -> RemoteStamp {
+    RemoteStamp {
+        size: entry.size,
+        mtime: entry.mtime.and_then(|t| {
+            t.duration_since(std::time::UNIX_EPOCH)
+                .ok()
+                .map(|d| d.as_secs() as u32)
+        }),
+    }
+}
+
 /// The object storage provider, built from the `[[s3]]` blocks of the configuration.
 ///
 /// A configuration with none of them gets an empty provider, and an `s3://` path then meets
@@ -2138,6 +2206,174 @@ timeout = 10
             }
         }
         assert!(checked >= 10, "only {checked} scripts checked?");
+    }
+
+    /// The whole of `F5`, `F7` and `F8` on a bucket, through the real job engine against the
+    /// in-process service: the engine does not know object storage exists, and that is the
+    /// point — the copy dialog, the progress and the overwrite question are the ones that
+    /// were already there.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn the_job_engine_copies_to_a_bucket_and_back() {
+        use scmd_s3::fake::FakeS3;
+        use scmd_s3::vfs::{S3Vfs, Service};
+        use std::collections::BTreeMap;
+        use std::sync::Arc;
+
+        let mut buckets = BTreeMap::new();
+        buckets.insert("logs".to_string(), BTreeMap::new());
+        let fake = FakeS3::start(buckets).await;
+        let objects = Arc::new(S3Vfs::new(vec![
+            Service::new("", fake.endpoint()).with_credentials(Some(fake.credentials.clone()))
+        ]));
+
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("one.txt"), b"first file").unwrap();
+        std::fs::write(dir.path().join("two.txt"), b"second file").unwrap();
+
+        let fs = Arc::new(ObjectFs::new(
+            objects.clone(),
+            RoutedFs::new(Pool::new(), tokio::runtime::Handle::current()),
+            tokio::runtime::Handle::current(),
+        ));
+        let here = dir.path().to_path_buf();
+        let worker = fs.clone();
+        tokio::task::spawn_blocking(move || {
+            use scmd_jobs::{JobFs, JobKind, JobSpec};
+
+            struct Quiet;
+            impl scmd_jobs::Reporter for Quiet {
+                fn progress(&mut self, _p: &scmd_jobs::Progress) {}
+                fn ask(&mut self, _q: scmd_jobs::Question) -> scmd_jobs::Decision {
+                    scmd_jobs::Decision::Overwrite
+                }
+            }
+
+            /// Plan it and run it, as the worker thread does.
+            fn plan_and_run(
+                fs: &dyn scmd_jobs::JobFs,
+                spec: &JobSpec,
+                reporter: &mut dyn scmd_jobs::Reporter,
+                cancel: &CancelToken,
+            ) -> scmd_jobs::Outcome {
+                let plan = scmd_jobs::plan(fs, spec, cancel).expect("the job can be planned");
+                scmd_jobs::execute(fs, spec, plan, reporter, cancel)
+            }
+
+            let bucket = VPath::parse("s3://logs/incoming/");
+            let cancel = CancelToken::new();
+
+            // `F7` on the bucket: a prefix that holds nothing yet.
+            let outcome = plan_and_run(
+                &*worker,
+                &JobSpec::new(JobKind::Mkdir, vec![], Some(bucket.clone())),
+                &mut Quiet,
+                &cancel,
+            );
+            assert!(outcome.errors.is_empty(), "{:?}", outcome.errors);
+
+            // `F5`: two local files into the bucket.
+            let sources = vec![
+                VPath::local(here.join("one.txt")),
+                VPath::local(here.join("two.txt")),
+            ];
+            let outcome = plan_and_run(
+                &*worker,
+                &JobSpec::new(JobKind::Copy, sources, Some(bucket.clone())),
+                &mut Quiet,
+                &cancel,
+            );
+            assert!(outcome.errors.is_empty(), "{:?}", outcome.errors);
+            assert_eq!(outcome.files, 2);
+            let one = VPath::parse("s3://logs/incoming/one.txt");
+            assert_eq!(worker.facts(&one).expect("it is up there").size, 10);
+
+            // `F5` the other way: the object comes back down as a file.
+            let back = here.join("back");
+            std::fs::create_dir(&back).unwrap();
+            let outcome = plan_and_run(
+                &*worker,
+                &JobSpec::new(JobKind::Copy, vec![one.clone()], Some(VPath::local(&back))),
+                &mut Quiet,
+                &cancel,
+            );
+            assert!(outcome.errors.is_empty(), "{:?}", outcome.errors);
+            assert_eq!(std::fs::read(back.join("one.txt")).unwrap(), b"first file");
+
+            // `F6`: a rename inside the bucket is a copy and a delete, and the engine asks
+            // for a rename first — which this provider can do.
+            let renamed = VPath::parse("s3://logs/incoming/first.txt");
+            let outcome = plan_and_run(
+                &*worker,
+                &JobSpec::new(JobKind::Move, vec![one.clone()], Some(renamed.clone())),
+                &mut Quiet,
+                &cancel,
+            );
+            assert!(outcome.errors.is_empty(), "{:?}", outcome.errors);
+            assert!(worker.exists(&renamed));
+            assert!(!worker.exists(&one));
+
+            // `F8`: the objects go.
+            let outcome = plan_and_run(
+                &*worker,
+                &JobSpec::new(JobKind::Delete, vec![renamed.clone()], None),
+                &mut Quiet,
+                &cancel,
+            );
+            assert!(outcome.errors.is_empty(), "{:?}", outcome.errors);
+            assert!(!worker.exists(&renamed));
+        })
+        .await
+        .unwrap();
+    }
+
+    /// The editor's save, for an object: one `PUT`, and a file somebody else has written
+    /// since it was fetched brings up the question rather than being overwritten.
+    #[tokio::test]
+    async fn saving_the_editors_copy_writes_the_object() {
+        use scmd_s3::fake::FakeS3;
+        use scmd_s3::vfs::{S3Vfs, Service};
+        use std::collections::BTreeMap;
+
+        let mut bucket = BTreeMap::new();
+        bucket.insert("notes/readme.txt".to_string(), b"as it was".to_vec());
+        let mut buckets = BTreeMap::new();
+        buckets.insert("logs".to_string(), bucket);
+        let fake = FakeS3::start(buckets).await;
+        let objects = S3Vfs::new(vec![
+            Service::new("", fake.endpoint()).with_credentials(Some(fake.credentials.clone()))
+        ]);
+
+        let path = VPath::parse("s3://logs/notes/readme.txt");
+        let (local, stamp) = fetch_object(&objects, &path).await.expect("it comes down");
+        std::fs::write(&local, b"edited here").unwrap();
+
+        // The stamp matches what was fetched, so the write goes through.
+        let written = put_object(&objects, &local, &path, Some(stamp), false)
+            .await
+            .expect("the save works");
+        assert_eq!(written, 11);
+        assert_eq!(
+            objects
+                .read_object(&path, None, &CancelToken::new())
+                .await
+                .expect("it reads back"),
+            b"edited here"
+        );
+
+        // Now the object is eleven bytes and the stale stamp says nine: the save asks first.
+        let stale = RemoteStamp {
+            size: 9,
+            mtime: stamp.mtime,
+        };
+        assert!(matches!(
+            put_object(&objects, &local, &path, Some(stale), false).await,
+            Err(UploadError::Changed)
+        ));
+        // And `force` is the answer to that question.
+        assert!(put_object(&objects, &local, &path, Some(stale), true)
+            .await
+            .is_ok());
+        let _ = std::fs::remove_file(&local);
     }
 
     /// `F3` on an object: the bytes come down to a temporary file and the viewer reads that,

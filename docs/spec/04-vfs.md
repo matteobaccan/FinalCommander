@@ -80,7 +80,7 @@ where the code lives, not whether it is linked into the binary.
 | `sftp` | `russh` + `russh-sftp` (**implemented**, `scmd-net`) | READ WRITE CREATE DELETE RENAME SEEK TRUNCATE META_TIMES META_MODE META_OWNER LINKS RESUME RANDOM_WRITE CASE_SENSITIVE | M1 |
 | `ftp`/`ftps` | `suppaftp` | READ WRITE CREATE DELETE RENAME RESUME | M3 |
 | `webdav` | `reqwest-dav` | READ WRITE CREATE DELETE RENAME | M3 |
-| `s3` | hand-written client over `reqwest` + `ring` (**implemented, read**, `scmd-s3`; any S3-compatible endpoint) | READ SEEK CASE_SENSITIVE; WRITE CREATE DELETE SERVER_SIDE_COPY to come, never RENAME | M3 |
+| `s3` | hand-written client over `reqwest` + `ring` (**implemented, read and write**, `scmd-s3`; any S3-compatible endpoint) | READ SEEK WRITE CREATE DELETE RENAME SERVER_SIDE_COPY CASE_SENSITIVE — and deliberately not ATOMIC_RENAME, TRUNCATE, META_TIMES, META_MODE or LINKS | M3 |
 | `smb` | `pavao`/system mount | varies | M3 |
 | `adb`, `mtp` | external `adb` binary / `libmtp` | READ WRITE DELETE | M4 |
 | `rclone` | `rclone rcd` JSON API bridge — one provider, dozens of backends | READ WRITE DELETE RENAME | M3 |
@@ -292,6 +292,43 @@ which host, which region, which credentials — because unlike SFTP the host is 
 path: two buckets of one account live at the same host, and the same bucket name at two
 providers is two different things. An empty bucket (`s3://work@/`) lists the buckets the
 credentials can see.
+
+### 8.3 Writing
+
+**Implemented** (0.3.0). `scmd_s3::jobs::ObjectFs` is the job engine's filesystem for `s3://`
+paths: it wraps another `JobFs` exactly as the archive layer does, takes the paths that are
+its own and hands everything else through, so the engine runs unchanged and `F5`, `F6`, `F7`
+and `F8` arrive with their dialog, progress bar, overwrite question and `Esc` already working.
+
+| Operation | How | 
+| --- | --- |
+| local → bucket | one `PUT`, the body streamed off the disk. The signature covers the body, so the file is read twice: once to hash it, once to send it — `UNSIGNED-PAYLOAD` would save the first read and not every service that speaks this protocol accepts it. |
+| bucket → local | one `GET`, written to the file a chunk at a time, so an object larger than this process is not a problem. Cancelling removes the partial file. |
+| key → key, one service | `PUT` with `x-amz-copy-source`: the service does it and the bytes never come here. |
+| key → key, two services, or bucket ↔ server | down to a staging file under the temporary directory, then up again, and the staging copy goes however it ends. |
+| `F7` | the empty object named `prefix/` — the convention every console uses to show a prefix with nothing in it yet. The first real key under it makes the marker redundant. |
+| `F6` | a copy and a delete. **Not atomic**, which is why `ATOMIC_RENAME` is absent: a failure between the two leaves both keys, and that is reported rather than hidden. |
+| `F8` | one `DELETE` per key. A key that is not there is not an error — the end state asked for is the end state. |
+
+What is not expressible, and is therefore refused rather than faked: appending, writing into
+the middle, truncating, resuming, any kind of link, a modification time, and permission bits
+(a bucket's access is its policy, not a number). A copy into a bucket consequently does not
+preserve the file's time, which is what every other client of these services also does.
+`apply_meta` returns success having done nothing, because a copy that failed on that account
+would fail every copy.
+
+Still to come: a **multipart upload**. One `PUT` is one object, which AWS caps at five
+gigabytes; above that the upload has to be cut into parts and completed with a manifest, and
+that is also the mechanism a resumable upload needs. Until it is here, the service's own
+refusal is what says so. A **batch delete** (`POST ?delete`) would turn a thousand keys into
+one request rather than a thousand, at the price of a `Content-MD5` the signer does not
+compute yet.
+
+A service configured without credentials can read and nothing more. That is not expressible in
+`Caps`, which describes a provider and not each of the services behind it, so the rows it
+returns carry `READONLY` and `S3Vfs::writable` answers the question before an attempt is made.
+
+### 8.4 Prefixes and keys
 
 A path cannot say whether it means a prefix or a key — underneath it is a `PathBuf`, and
 nothing in it survives the difference between `2024/08` and `2024/08/`. So a prefix is derived

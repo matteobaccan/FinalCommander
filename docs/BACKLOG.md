@@ -171,7 +171,8 @@ here is the order to build it in: each item needs only the ones above it.
 | Item | Where | Notes |
 | --- | --- | --- |
 | Proxy / `ProxyJump` in the session editor | Connections (`Alt+N` → `F4`) | The session editor stores host, port, user, authentication, remote folder, group, keep-alive and compression. FAR's NetBox also has proxy settings; `ProxyJump` is not implemented in the transport yet, so the dialog does not offer it. |
-| FTP / FTPS / WebDAV / S3 | SPEC 04 §6 | The provider trait and the router are in place; each protocol is then its own crate behind a feature. |
+| FTP / FTPS / WebDAV | SPEC 04 §6 | The provider trait and the router are in place; each protocol is then its own crate behind a feature. S3 shipped as `scmd-s3`, read and write. |
+| Multipart upload | — | One `PUT` is one object, which AWS caps at five gigabytes; above that an upload has to be cut into parts and completed with a manifest. Until it exists the service's own refusal is what says so. The same mechanism is what a resumable upload would need. |
 | Known-hosts editing | — | Accepting and changing a host key from inside the program, instead of editing the file. |
 
 ## Dialog framework

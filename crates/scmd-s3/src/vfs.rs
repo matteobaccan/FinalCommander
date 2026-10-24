@@ -357,6 +357,34 @@ impl S3Vfs {
         Ok(len)
     }
 
+    /// One directory's rows, with this crate's own error — as [`S3Vfs::stat_object`], and for
+    /// the same reason.
+    pub async fn list_objects(&self, path: &VPath, cancel: &CancelToken) -> Result<Vec<Entry>> {
+        self.read(path, cancel, false).await.map(|dir| dir.entries)
+    }
+
+    /// What one path is, with this crate's own error rather than the VFS layer's.
+    ///
+    /// The job engine needs to tell "not there" from "went wrong" — its overwrite question
+    /// depends on it — and the VFS error type flattens both into one string.
+    pub async fn stat_object(&self, path: &VPath, cancel: &CancelToken) -> Result<Entry> {
+        self.describe(path, cancel).await
+    }
+
+    /// Read an object into a file, a chunk at a time, reporting as it goes.
+    pub async fn fetch_object(
+        &self,
+        path: &VPath,
+        target: &std::path::Path,
+        on_bytes: &mut dyn FnMut(u64) -> bool,
+        cancel: &CancelToken,
+    ) -> Result<u64> {
+        let (profile, bucket, key) = Self::parts_of(path)?;
+        self.client(&profile, &bucket)?
+            .get_to_file(&bucket, &key, target, on_bytes, cancel)
+            .await
+    }
+
     /// Remove an object.
     pub async fn delete_object(&self, path: &VPath, cancel: &CancelToken) -> Result<()> {
         let (profile, bucket, key) = Self::parts_of(path)?;

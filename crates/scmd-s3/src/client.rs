@@ -302,6 +302,61 @@ impl Client {
         Ok(bytes.to_vec())
     }
 
+    /// Read an object straight into a file, a chunk at a time.
+    ///
+    /// Unlike [`Client::get`] the bytes never all exist here at once, which is what makes a
+    /// download of something larger than this process's memory possible. `on_bytes` is called
+    /// with the running total as each chunk lands and stops the download by returning
+    /// `false`, in which case the partial file is removed — a half-written file under the
+    /// name of a whole one is worse than no file.
+    pub async fn get_to_file(
+        &self,
+        bucket: &str,
+        key: &str,
+        target: &std::path::Path,
+        on_bytes: &mut dyn FnMut(u64) -> bool,
+        cancel: &CancelToken,
+    ) -> Result<u64> {
+        use tokio::io::AsyncWriteExt;
+
+        let mut response = self
+            .send("GET", bucket, key, &[], &[], Payload::Empty, cancel)
+            .await?;
+        let host = self.endpoint.host.clone();
+        let mut file = tokio::fs::File::create(target)
+            .await
+            .map_err(|e| local_error(target, e))?;
+        let mut done = 0u64;
+        loop {
+            let chunk = response.chunk().await.map_err(|e| S3Error::Transport {
+                host: host.clone(),
+                detail: e.to_string(),
+            });
+            let chunk = match chunk {
+                Ok(Some(chunk)) => chunk,
+                Ok(None) => break,
+                Err(e) => {
+                    drop(file);
+                    let _ = tokio::fs::remove_file(target).await;
+                    return Err(e);
+                }
+            };
+            if let Err(e) = file.write_all(&chunk).await {
+                drop(file);
+                let _ = tokio::fs::remove_file(target).await;
+                return Err(local_error(target, e));
+            }
+            done += chunk.len() as u64;
+            if !on_bytes(done) || cancel.is_cancelled() {
+                drop(file);
+                let _ = tokio::fs::remove_file(target).await;
+                return Err(S3Error::Cancelled);
+            }
+        }
+        file.flush().await.map_err(|e| local_error(target, e))?;
+        Ok(done)
+    }
+
     async fn get_text(
         &self,
         method: &str,

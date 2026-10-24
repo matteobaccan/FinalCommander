@@ -2592,6 +2592,7 @@ dependencies = [
  "reqwest",
  "ring",
  "scmd-core",
+ "scmd-jobs",
  "scmd-vfs",
  "tempfile",
  "thiserror",

@@ -25,6 +25,21 @@ Notable changes, newest first. The format follows
   progress bar and `Esc`, and the archive cache is dropped either side of it so no panel
   answers from a stale index.
 
+- **Writing to object storage.** A bucket is no longer a read-only window. `F5`, `F6`, `F7`
+  and `F8` work on one as they do anywhere else, with the same dialog, progress bar, overwrite
+  question and `Esc`, and `F4` edits an object and saves it back. A copy into a bucket is an
+  upload streamed off the disk; a copy out of one is a download written straight to the file;
+  a copy between two keys of the same service is done by the service, so the bytes never come
+  through here.
+
+  The engine knows nothing about object storage: `scmd_s3::jobs::ObjectFs` wraps the job
+  filesystem the way the archive layer does, takes the `s3://` paths and hands everything else
+  through. What the protocol cannot do is said rather than faked — there are no directories
+  (`F7` writes the empty slash-named object every console uses to show an empty prefix), a
+  rename is a copy and a delete and therefore not atomic, and an object carries only the time
+  the service wrote it, so a copy into a bucket does not preserve a file's modification time.
+  A service configured without credentials still reads and nothing more, and its rows say so.
+
 - **Markdown laid out to be read.** A `.md` file opens in the viewer as a document rather
   than as its source: the marks come off and the space they held is put to use. A heading is
   bold with a rule under it, a list is bullets with hanging indents and a task list is boxes,

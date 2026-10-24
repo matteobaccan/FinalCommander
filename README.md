@@ -72,9 +72,8 @@ none of them is, is the same program on all three systems, in one file, with not
 install — and that is the hole this fills.
 
 > **Status: 0.2.0, open to testers.** Everything described above works today. What is *not*
-> there says so rather than failing quietly: object storage is read-only in this release, and
-> the OS clipboard, a trash can, FTP and a console with a real terminal in it are not here
-> yet. [`CHANGELOG.md`](CHANGELOG.md) is what has landed and
+> there says so rather than failing quietly: the OS clipboard, a trash can, FTP and a console
+> with a real terminal in it are not here yet. [`CHANGELOG.md`](CHANGELOG.md) is what has landed and
 > [`docs/BACKLOG.md`](docs/BACKLOG.md) is what has not, item by item, with the open questions
 > marked.
 

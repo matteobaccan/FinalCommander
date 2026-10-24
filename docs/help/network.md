@@ -59,8 +59,30 @@ The keys are never kept in `scmd.toml`. They come from `AWS_ACCESS_KEY_ID` and
 and all. A bucket that anyone may read needs `credentials = "anonymous"` and no keys at all.
 
 `F3` on an object brings it down to a temporary copy and shows you that, the way it does for a
-file on a server, and `net.fetch_limit_mb` is the ceiling on what it will fetch. Objects are
-read-only, and nothing offers to write, rename or delete one, because the provider does not
-claim a capability it does not have — object storage has no rename at all. `F5` to a local
-panel is not wired to the job engine yet; `F3` and a shell command are the ways to get at an
-object's bytes today.
+file on a server, and `net.fetch_limit_mb` is the ceiling on what it will fetch. `F4` edits
+that copy and saving sends it back as one write.
+
+`F5`, `F6`, `F7` and `F8` work on a bucket as they do anywhere else, with the same dialog, the
+same progress bar, the same overwrite question and the same `Esc`. A copy into a bucket is an
+upload streamed off the disk; a copy out of one is a download written straight to the file; a
+copy from one key to another inside the same service is done by the service, so the bytes never
+come through here, which is what makes copying a large object affordable.
+
+A few things are the nature of object storage rather than gaps:
+
+* **There are no directories.** `a/b/c.txt` is one key, and the `a/` a panel shows is read out
+  of the keys. `F7` writes the empty object named `a/b/` that every console uses to make a
+  prefix visible before anything is in it, and the first real key under it makes that marker
+  redundant.
+* **A rename is a copy and a delete**, which the service does itself. It is not atomic: a
+  failure between the two leaves both keys, and the program says so rather than hiding it.
+* **Times and permissions are not kept.** An object carries the time the service wrote it and
+  no other; a bucket's access is its policy, which is not a set of permission bits. A copy
+  into a bucket therefore does not preserve the file's modification time, because there is
+  nowhere to put it.
+* **One write is one object.** There is no appending, no writing into the middle, and no
+  resuming — and no half-written object either, which is the other side of the same coin. An
+  object above five gigabytes needs a multipart upload, which is not here yet; the service's
+  own refusal is what says so.
+* **A service configured without credentials reads and nothing more.** Its rows are marked
+  read-only, and the keys that would write are not offered.

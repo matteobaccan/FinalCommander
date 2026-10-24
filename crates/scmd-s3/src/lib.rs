@@ -5,6 +5,7 @@ pub mod clock;
 pub mod creds;
 pub mod endpoint;
 pub mod error;
+pub mod jobs;
 pub mod sign;
 pub mod uri;
 pub mod vfs;

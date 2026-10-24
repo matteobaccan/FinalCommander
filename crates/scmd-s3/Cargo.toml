@@ -10,6 +10,9 @@ authors.workspace = true
 
 [dependencies]
 scmd-core = { workspace = true }
+# The job engine's filesystem for `s3://` paths lives here rather than in the engine: the
+# engine knows nothing about object storage, and `ObjectFs` is the layer that keeps it so.
+scmd-jobs = { workspace = true }
 scmd-vfs = { workspace = true }
 async-trait = "0.1"
 # The signature is HMAC-SHA256 over a canonical request, and `ring` is already in the tree
