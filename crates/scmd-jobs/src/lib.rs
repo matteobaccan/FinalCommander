@@ -10,6 +10,7 @@
 //! can drive it on a worker thread while the UI thread stays responsive, and tests can drive it
 //! with a scripted reporter.
 
+pub mod arcfs;
 pub mod fs;
 pub mod link;
 pub mod plan;
@@ -17,6 +18,7 @@ pub mod replace;
 pub mod run;
 pub mod spec;
 
+pub use arcfs::ArcFs;
 pub use fs::{free_name, part_path, Facts, JobFs, LocalFs, PART_SUFFIX};
 pub use link::{create_link, LinkError, LinkKind};
 pub use plan::{plan, Plan, PlanError, Unit, UnitKind};
