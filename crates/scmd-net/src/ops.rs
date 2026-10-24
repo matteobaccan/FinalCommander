@@ -71,6 +71,12 @@ impl RemoteEntry {
                 self.size
             },
             mtime: self.modified(),
+            // SFTP version 3 carries an access time beside the modification time, and no
+            // creation time at all. We do not read the access time yet, and sorting by a
+            // timestamp nobody filled in would put every remote file at one end of the
+            // panel, so both say `None` rather than lie.
+            btime: None,
+            atime: None,
             flags,
             id: EntryId::Name(name_hash(&self.name)),
             link_target: self.link_target.as_ref().map(OsString::from),

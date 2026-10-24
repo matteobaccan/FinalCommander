@@ -9,6 +9,8 @@ key-delete = Borrar
 key-pulldown = BarMnú
 key-quit = Salir
 
+list-up = UP-DIR
+list-folder = Directorio
 panel-empty = (vacío)
 panel-up = ..
 panel-loading = leyendo…
@@ -54,6 +56,7 @@ confirm-yes-no = [ Intro = sí ]   [ Esc = no ]
 job-copy = Copia
 job-move = Movimiento
 job-delete = Borrado
+job-wipe = Borrado seguro
 job-mkdir = Creación de directorio
 job-planning = analizando…
 job-counters = { $files } / { $filestotal } archivos · { $bytes } / { $bytestotal }

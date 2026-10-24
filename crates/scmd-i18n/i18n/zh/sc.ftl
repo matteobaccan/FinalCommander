@@ -9,6 +9,8 @@ key-delete = 删除
 key-pulldown = 配置菜
 key-quit = 退出
 
+list-up = 上层
+list-folder = 文件夹
 panel-empty = （空）
 panel-up = ..
 panel-loading = 读取中…
@@ -54,6 +56,7 @@ confirm-yes-no = [ Enter = 是 ]   [ Esc = 否 ]
 job-copy = 复制
 job-move = 移动
 job-delete = 删除
+job-wipe = 安全擦除
 job-mkdir = 新建目录
 job-planning = 正在分析…
 job-counters = { $files } / { $filestotal } 个文件 · { $bytes } / { $bytestotal }

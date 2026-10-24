@@ -48,18 +48,26 @@ white = "#ffffff"
 "cursor.inactive.fg" = "lightcyan"
 "cursor.inactive.bg" = "blue"
 "selected.fg" = "yellow"
-# Highlight groups: FAR ships none by default, these are ours and stay out of the way
+# FAR's six default highlighting groups, colour for colour (`far/hilight.cpp`), in the order
+# FAR applies them: hidden and system first, so a hidden directory is cyan rather than white.
+"file.hidden" = "cyan"
 "file.dir" = "white"
 "file.exec" = "lightgreen"
-"file.symlink" = "lightmagenta"
 "file.archive" = "lightmagenta"
-"file.hidden" = "darkgray"
+"file.temp" = "brown"
+# FAR has no group for either of these. A symlink therefore takes the ordinary file colour;
+# a *broken* one is ours, because a dangling link is worth seeing on a Unix filesystem.
+"file.symlink" = "lightcyan"
 "file.broken" = "lightred"
 # Keybar.Num / Keybar.Text
 "keybar.fg" = "black"
 "keybar.bg" = "cyan"
 "keybar.num.fg" = "lightgray"
 "keybar.num.bg" = "black"
+"keybar.background.fg" = "lightgray"
+"keybar.background.bg" = "black"
+"panel.info.selected.fg" = "yellow"
+"panel.info.selected.bg" = "cyan"
 # HMenu.Text / HMenu.Text.Selected: the menu bar across the top
 "hmenu.fg" = "black"
 "hmenu.bg" = "cyan"

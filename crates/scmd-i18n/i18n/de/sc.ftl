@@ -9,6 +9,8 @@ key-delete = Löschen
 key-pulldown = KonfMn
 key-quit = Ende
 
+list-up = Hoch
+list-folder = Ordner
 panel-empty = (leer)
 panel-up = ..
 panel-loading = lese…
@@ -54,6 +56,7 @@ confirm-yes-no = [ Eingabe = ja ]   [ Esc = nein ]
 job-copy = Kopieren
 job-move = Verschieben
 job-delete = Löschen
+job-wipe = Sicheres Löschen
 job-mkdir = Verzeichnis anlegen
 job-planning = planen…
 job-counters = { $files } / { $filestotal } Dateien · { $bytes } / { $bytestotal }

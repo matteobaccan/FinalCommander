@@ -9,6 +9,8 @@ key-delete = Elimina
 key-pulldown = Config
 key-quit = Esci
 
+list-up = Su
+list-folder = Cartella
 panel-empty = (vuota)
 panel-up = ..
 panel-loading = lettura…
@@ -54,6 +56,7 @@ confirm-yes-no = [ Invio = sì ]   [ Esc = no ]
 job-copy = Copia
 job-move = Spostamento
 job-delete = Eliminazione
+job-wipe = Cancellazione sicura
 job-mkdir = Creazione directory
 job-planning = analisi…
 job-counters = { $files } / { $filestotal } file · { $bytes } / { $bytestotal }

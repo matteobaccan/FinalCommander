@@ -11,6 +11,8 @@ key-pulldown = ConfMn
 key-quit = Quit
 
 # Panel chrome
+list-up = Up
+list-folder = Folder
 panel-empty = (empty)
 panel-up = ..
 panel-loading = reading…
@@ -60,6 +62,7 @@ confirm-yes-no = [ Enter = yes ]   [ Esc = no ]
 job-copy = Copying
 job-move = Moving
 job-delete = Deleting
+job-wipe = Wiping
 job-mkdir = Creating directory
 job-planning = planning…
 job-counters = { $files } / { $filestotal } files · { $bytes } / { $bytestotal }

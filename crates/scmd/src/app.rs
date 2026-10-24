@@ -451,6 +451,8 @@ pub struct App {
     pub user_screen: Vec<String>,
     /// Which panel is hidden, if either: `Ctrl+F1` and `Ctrl+F2` give the screen to one.
     pub hidden: Option<usize>,
+    /// Which group gives a file its colour. Compiled once: it parses mask lists.
+    pub highlight: scmd_ui::Highlight,
     /// What `Ctrl+G` has left to run, one command per file. They go one at a time: a hundred
     /// copies of a converter started at once is not what anybody asked for.
     apply_queue: Vec<String>,
@@ -526,6 +528,7 @@ impl App {
             cmd: CmdLine::new(),
             user_screen: Vec::new(),
             hidden: None,
+            highlight: scmd_ui::Highlight::far_default(),
             apply_queue: Vec::new(),
             apply_total: 0,
             shell: None,
@@ -1756,6 +1759,7 @@ impl App {
             JobKind::Move => "job-move",
             JobKind::Delete => "job-delete",
             JobKind::Mkdir => "job-mkdir",
+            JobKind::Wipe => "job-wipe",
         })
     }
 
@@ -4627,6 +4631,8 @@ mod tests {
             kind,
             size,
             mtime: None,
+            btime: None,
+            atime: None,
             flags: EntryFlags::empty(),
             id: EntryId::Name(name.bytes().map(u64::from).sum()),
             link_target: None,

@@ -3,11 +3,13 @@
 
 pub mod buffer;
 pub mod color;
+pub mod highlight;
 pub mod theme;
 pub mod widgets;
 
 pub use buffer::{elide_middle, truncate_cols, Buffer, Cell, Rect, Style};
 pub use color::{Color, ColorDepth};
+pub use highlight::Highlight;
 pub use theme::{Theme, ThemeError, ThemeSet, ThemeSource, Variant, BUILTIN_THEMES, DEFAULT_THEME};
 
 pub use widgets::{

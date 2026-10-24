@@ -35,6 +35,12 @@ pub struct PanelRender<'a> {
     pub scrollbar: bool,
     /// Columns the name column is scrolled by, for names wider than it.
     pub name_scroll: usize,
+    /// Which group decides a row's colour (FAR's default highlighting).
+    pub highlight: &'a crate::Highlight,
+    /// What the size column says for `..` and for a directory, localised by the caller
+    /// (FAR's `MListUp` and `MListFolder`).
+    pub up_label: &'a str,
+    pub folder_label: &'a str,
 }
 
 /// Rows that fit in a panel of this height. The titles row and the panel's own status line
@@ -234,19 +240,24 @@ fn draw_column_titles(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inne
     }
 }
 
-fn row_style(theme: &Theme, e: &Entry, selected: bool, cursor: bool, focused: bool) -> Style {
+/// The colour of one row: the highlighting group decides, then the selection, then the
+/// cursor — the order FAR applies them in.
+///
+/// Nothing here is bold. FAR draws with console attributes, which have no bold, so a bold
+/// face would be a difference anyone comparing the two would see; the colour carries the
+/// meaning on its own.
+fn row_style(
+    theme: &Theme,
+    highlight: &crate::Highlight,
+    e: &Entry,
+    selected: bool,
+    cursor: bool,
+    focused: bool,
+) -> Style {
     let fg = if selected {
         theme.color("selected.fg")
-    } else if e.flags.contains(EntryFlags::BROKEN_LINK) {
-        theme.color("file.broken")
     } else {
-        match e.kind {
-            EntryKind::Dir | EntryKind::Parent => theme.color("file.dir"),
-            EntryKind::Symlink => theme.color("file.symlink"),
-            _ if e.flags.contains(EntryFlags::HIDDEN) => theme.color("file.hidden"),
-            _ if e.flags.contains(EntryFlags::EXECUTABLE) => theme.color("file.exec"),
-            _ => theme.color("panel.fg"),
-        }
+        theme.color(highlight.key(e))
     };
     if cursor {
         let (cfg, cbg) = if focused {
@@ -256,16 +267,15 @@ fn row_style(theme: &Theme, e: &Entry, selected: bool, cursor: bool, focused: bo
         };
         let mut s = Style::new(theme.color(cfg), theme.color(cbg));
         if selected {
+            // FAR's Panel.Cursor.Selected: yellow on the cursor bar.
             s.fg = theme.color("selected.fg");
-            s.bold = true;
+        } else if !focused {
+            // The passive panel's cursor is not a bar, so the file keeps its own colour.
+            s.fg = theme.color(highlight.key(e));
         }
         s
     } else {
-        let mut s = Style::new(fg, theme.color("panel.bg"));
-        if matches!(e.kind, EntryKind::Dir | EntryKind::Parent) {
-            s.bold = true;
-        }
-        s
+        Style::new(fg, theme.color("panel.bg"))
     }
 }
 
@@ -279,7 +289,7 @@ fn draw_brief(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect,
                 continue;
             };
             let selected = p.selection.contains(e.id);
-            let style = row_style(theme, e, selected, idx == p.cursor, p.focused);
+            let style = row_style(theme, p.highlight, e, selected, idx == p.cursor, p.focused);
             let x = inner.x + (col * col_w) as u16;
             let w = col_w as u16 - 1;
             buf.fill(Rect::new(x, inner.y + row as u16, w, 1), ' ', style);
@@ -328,7 +338,7 @@ fn draw_full(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect, 
         };
         let y = inner.y + row as u16;
         let selected = p.selection.contains(e.id);
-        let style = row_style(theme, e, selected, idx == p.cursor, p.focused);
+        let style = row_style(theme, p.highlight, e, selected, idx == p.cursor, p.focused);
         buf.fill(Rect::new(inner.x, y, inner.w, 1), ' ', style);
 
         let name = shift_name(&decorate(e), p.name_scroll);
@@ -340,13 +350,29 @@ fn draw_full(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect, 
             name_w,
         );
 
-        let size_text = match e.kind {
-            EntryKind::Parent => "UP--".to_string(),
-            EntryKind::Dir => "FOLDER".to_string(),
-            _ => format_size(e.size),
-        };
         let sx = inner.x + name_w + 1;
-        put_right(buf, sx, y, size_w, &size_text, style);
+        match e.kind {
+            // A word, not a number: FAR centres it in a field as wide as the longer of the
+            // two words, so `Up` and `Folder` line up with each other down the column
+            // whatever the language calls them.
+            EntryKind::Parent | EntryKind::Dir => {
+                let label = if e.kind == EntryKind::Parent {
+                    p.up_label
+                } else {
+                    p.folder_label
+                };
+                let field = p
+                    .up_label
+                    .width()
+                    .max(p.folder_label.width())
+                    .min(size_w as usize);
+                let text = truncate_cols(label, field);
+                let pad = (field - text.width()) / 2;
+                let x = sx + size_w.saturating_sub(field as u16) + pad as u16;
+                buf.put_str(x, y, &text, style, size_w);
+            }
+            _ => put_right(buf, sx, y, size_w, &format_size(e.size), style),
+        }
 
         let tx = sx + size_w + 1;
         let time_text = e.mtime.map(format_mtime).unwrap_or_default();
@@ -468,6 +494,13 @@ fn draw_footer(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>) {
     let tw = text.width() as u16;
     let style = if p.filter.is_some() || p.message.is_some() {
         style.with_fg(theme.color("filter.fg"))
+    } else if totals.selected_files > 0 {
+        // FAR puts the selected totals on their own background, which is what makes a
+        // selection impossible to miss from across the room.
+        Style::new(
+            theme.color("panel.info.selected.fg"),
+            theme.color("panel.info.selected.bg"),
+        )
     } else {
         style
     };
@@ -475,10 +508,18 @@ fn draw_footer(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>) {
 }
 
 /// The `F1..F12` bar. `labels` is `(number, label)`, already localised by the caller.
+///
+/// Three colours, as FAR has them: the number in `Keybar.Num`, the label in `Keybar.Text`,
+/// and whatever is left of the row in `Keybar.Background` — which is *not* the label colour,
+/// so a bar with room to spare ends in the background rather than in a cyan tail.
 pub fn draw_keybar(buf: &mut Buffer, theme: &Theme, area: Rect, labels: &[(u8, &str)]) {
     let bar = theme.keybar();
     let num = Style::new(theme.color("keybar.num.fg"), theme.color("keybar.num.bg"));
-    buf.fill(area, ' ', bar);
+    let background = Style::new(
+        theme.color("keybar.background.fg"),
+        theme.color("keybar.background.bg"),
+    );
+    buf.fill(area, ' ', background);
     if labels.is_empty() {
         return;
     }
@@ -490,14 +531,17 @@ pub fn draw_keybar(buf: &mut Buffer, theme: &Theme, area: Rect, labels: &[(u8, &
         }
         let n_text = n.to_string();
         let used = buf.put_str(x, area.y, &n_text, num, 2);
-        let avail = slot as u16 - used - 1;
-        buf.put_str(
-            x + used,
-            area.y,
-            &truncate_cols(label, avail as usize),
-            bar,
-            avail,
+        let avail = (slot as u16)
+            .saturating_sub(used)
+            .min(area.right() - x - used);
+        // The label block is padded to its slot, so the bar reads as one strip broken by the
+        // number boxes rather than as words floating on the background.
+        let text = format!(
+            "{:<width$}",
+            truncate_cols(label, avail as usize),
+            width = avail as usize
         );
+        buf.put_str(x + used, area.y, &text, bar, avail);
     }
 }
 
@@ -828,6 +872,8 @@ mod tests {
             kind,
             size,
             mtime: Some(SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000)),
+            btime: None,
+            atime: None,
             flags: EntryFlags::empty(),
             id: EntryId::Name(name.bytes().map(u64::from).sum()),
             link_target: None,
@@ -868,6 +914,9 @@ mod tests {
             free: None,
             scrollbar: false,
             name_scroll: 0,
+            highlight: &crate::Highlight::far_default(),
+            up_label: "Up",
+            folder_label: "Folder",
         };
         draw_panel(&mut buf, &theme, &p);
         buf.to_text()
@@ -878,7 +927,7 @@ mod tests {
         let out = render(ViewMode::Full, 0, &Selection::default());
         assert!(out.contains("/home/mb/project"), "{out}");
         assert!(out.contains("src/"), "{out}");
-        assert!(out.contains("FOLDER"), "{out}");
+        assert!(out.contains("Folder"), "{out}");
         assert!(out.contains("412 B"), "{out}");
         assert!(out.contains("2.00 K"), "{out}");
         assert!(!out.contains("22…"), "the time column is too narrow: {out}");
@@ -925,6 +974,9 @@ mod tests {
             free: None,
             scrollbar: false,
             name_scroll: 0,
+            highlight: &crate::Highlight::far_default(),
+            up_label: "Up",
+            folder_label: "Folder",
         };
         draw_panel(&mut buf, &theme, &p);
         let out = buf.to_text();
@@ -954,6 +1006,9 @@ mod tests {
             free: None,
             scrollbar: false,
             name_scroll: 0,
+            highlight: &crate::Highlight::far_default(),
+            up_label: "Up",
+            folder_label: "Folder",
         };
         draw_panel(&mut buf, &theme, &p);
         let first = buf.to_lines()[0].clone();
@@ -1033,6 +1088,9 @@ mod tests {
             free: None,
             scrollbar: false,
             name_scroll: 0,
+            highlight: &crate::Highlight::far_default(),
+            up_label: "Up",
+            folder_label: "Folder",
         };
         draw_panel(&mut buf, &theme, &p);
         for line in buf.to_lines() {
@@ -1215,6 +1273,9 @@ mod tests {
             free: None,
             scrollbar: false,
             name_scroll: 0,
+            highlight: &crate::Highlight::far_default(),
+            up_label: "Up",
+            folder_label: "Folder",
         };
         draw_panel(&mut buf, &theme, &p);
         assert!(buf.to_text().contains("[size]"));

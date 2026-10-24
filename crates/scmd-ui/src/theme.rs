@@ -96,6 +96,9 @@ const DEFAULTS: &[(&str, Color)] = &[
     ("panel.header.bg", Color::Default),
     ("panel.header.inactive.fg", Color::Default),
     ("panel.footer.fg", Color::Default),
+    // FAR's Panel.Info.Selected: the totals turn yellow on cyan while something is selected.
+    ("panel.info.selected.fg", Color::Ansi(11)),
+    ("panel.info.selected.bg", Color::Ansi(6)),
     // The active panel's path is drawn inverted, as FAR does it.
     ("panel.title.active.fg", Color::Ansi(0)),
     ("panel.title.active.bg", Color::Ansi(6)),
@@ -112,11 +115,16 @@ const DEFAULTS: &[(&str, Color)] = &[
     ("file.symlink", Color::Ansi(13)),
     ("file.archive", Color::Ansi(13)),
     ("file.hidden", Color::Ansi(8)),
+    // FAR's `<temp>` group: backups, swap files and the rest of the litter.
+    ("file.temp", Color::Ansi(3)),
     ("file.broken", Color::Ansi(9)),
     ("keybar.fg", Color::Ansi(0)),
     ("keybar.bg", Color::Ansi(6)),
     ("keybar.num.fg", Color::Ansi(7)),
     ("keybar.num.bg", Color::Ansi(0)),
+    // FAR's Keybar.Background: the row beyond the labels, which is not the label colour.
+    ("keybar.background.fg", Color::Ansi(7)),
+    ("keybar.background.bg", Color::Ansi(0)),
     ("status.fg", Color::Default),
     ("status.bg", Color::Default),
     ("cmdline.fg", Color::Default),

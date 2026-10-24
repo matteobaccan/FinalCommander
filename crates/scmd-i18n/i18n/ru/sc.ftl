@@ -9,6 +9,8 @@ key-delete = Удал
 key-pulldown = КонфМн
 key-quit = Выход
 
+list-up = Вверх
+list-folder = Папка
 panel-empty = (пусто)
 panel-up = ..
 panel-loading = чтение…
@@ -54,6 +56,7 @@ confirm-yes-no = [ Enter = да ]   [ Esc = нет ]
 job-copy = Копирование
 job-move = Перенос
 job-delete = Удаление
+job-wipe = Затирание
 job-mkdir = Создание каталога
 job-planning = подготовка…
 job-counters = { $files } / { $filestotal } файлов · { $bytes } / { $bytestotal }

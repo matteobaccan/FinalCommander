@@ -108,6 +108,8 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         app.panels[i].scroll_into_view(rows, cols);
     }
 
+    let up_label = app.i18n.t("list-up");
+    let folder_label = app.i18n.t("list-folder");
     for (i, area) in areas.iter().enumerate() {
         let panel = &app.panels[i];
         let path = panel.cwd.to_string();
@@ -139,6 +141,9 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             },
             scrollbar: app.cfg.panel.scrollbar,
             name_scroll: panel.name_scroll,
+            highlight: &app.highlight,
+            up_label: &up_label,
+            folder_label: &folder_label,
         };
         widgets::draw_panel(buf, &app.theme, &render);
     }
@@ -915,6 +920,8 @@ mod tests {
             kind,
             size,
             mtime: None,
+            btime: None,
+            atime: None,
             flags: EntryFlags::empty(),
             id: EntryId::Name(name.bytes().map(u64::from).sum()),
             link_target: None,
