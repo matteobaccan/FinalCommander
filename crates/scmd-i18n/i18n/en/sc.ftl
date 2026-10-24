@@ -139,7 +139,6 @@ viewer-derived = { $producer } of { $name }
 # Editor (F4)
 key-save = Save
 key-replace = Replac
-editor-prompt-search = Search for:
 editor-prompt-replace-from = Replace:
 editor-prompt-replace-with = With:
 editor-prompt-goto = Go to line, or line:column :
@@ -566,3 +565,15 @@ drive-home = Home
 drive-connection = Connection
 drive-objects = Object store
 drives-hint = ↑↓ choose · 0-9 the panels below · Enter apply · Esc close
+
+# The search dialog (F7), which asks the whole question in one place.
+search-title = Search
+search-for = Search for
+search-mode = As
+search-mode-text = text
+search-mode-hex = hex
+search-mode-regex = regular expression
+search-case = Case sensitive
+search-words = Whole words only
+btn-find-next = Find next
+btn-find-prev = Find previous

@@ -4,8 +4,10 @@ The viewer never loads a file. It reads the window it is showing, so a forty-gig
 opens at once and `End` is one seek rather than a count of lines.
 
 `F2` cycles the wrapping, `F4` switches between text and a hex dump, `F8` changes the code page
-and `F7` searches — plain text, a regular expression, or a run of hex bytes, with `Shift+F7`
-and `Alt+F7` for the next and previous hit. `F6` hands the file to the editor at the same place.
+and `F7` opens the search dialog: what to look for, whether it is plain text, a run of hex
+bytes or a regular expression, whether case matters, whether only whole words count — and
+then *Find next* or *Find previous*, because they are the same question asked twice.
+`Shift+F7` and `Alt+F7` repeat it forwards and backwards without asking again. `F6` hands the file to the editor at the same place.
 
 `Gray +` and `Gray -` step to the next and previous file of the panel without leaving the
 viewer, and `Ctrl+F10` makes the panel catch up with what you are reading.

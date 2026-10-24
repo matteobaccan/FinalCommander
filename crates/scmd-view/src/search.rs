@@ -65,6 +65,20 @@ pub fn compile(
     case_insensitive: bool,
     codepage: Codepage,
 ) -> Result<Pattern, SearchError> {
+    compile_with(query, mode, case_insensitive, false, codepage)
+}
+
+/// The same, with FAR's *whole words* as well: a hit has to have a word boundary on both
+/// sides, which is what makes searching for `set` in a file full of `offset` bearable.
+///
+/// It means nothing for a hex pattern — bytes have no words — so there it is ignored.
+pub fn compile_with(
+    query: &str,
+    mode: SearchMode,
+    case_insensitive: bool,
+    whole_words: bool,
+    codepage: Codepage,
+) -> Result<Pattern, SearchError> {
     if query.trim().is_empty() {
         return Err(SearchError::Empty);
     }
@@ -96,15 +110,26 @@ pub fn compile(
             }
         }
         SearchMode::Regex => {
-            let re = RegexBuilder::new(query)
+            let pattern = if whole_words {
+                format!(r"\b(?:{query})\b")
+            } else {
+                query.to_string()
+            };
+            let re = RegexBuilder::new(&pattern)
                 .case_insensitive(case_insensitive)
                 .build()
                 .map_err(|e| SearchError::Regex(e.to_string()))?;
             Ok(Pattern::Regex(re))
         }
-        SearchMode::Plain if case_insensitive => {
-            let re = RegexBuilder::new(&regex::escape(query))
-                .case_insensitive(true)
+        SearchMode::Plain if case_insensitive || whole_words => {
+            let escaped = regex::escape(query);
+            let pattern = if whole_words {
+                format!(r"\b{escaped}\b")
+            } else {
+                escaped
+            };
+            let re = RegexBuilder::new(&pattern)
+                .case_insensitive(case_insensitive)
                 .build()
                 .map_err(|e| SearchError::Regex(e.to_string()))?;
             Ok(Pattern::Regex(re))
@@ -280,6 +305,19 @@ pub fn find(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Whole words is the difference between finding `set` and finding `offset`.
+    #[test]
+    fn whole_words_wants_a_boundary_on_both_sides() {
+        let hay = b"offset = set + settle";
+        let loose = compile("set", SearchMode::Plain, false, Codepage::Utf8).unwrap();
+        let tight = compile_with("set", SearchMode::Plain, false, true, Codepage::Utf8).unwrap();
+        assert_eq!(loose.find_in(hay, 0).map(|m| m.offset), Some(3));
+        assert_eq!(tight.find_in(hay, 0).map(|m| m.offset), Some(9));
+        // And it applies to a regular expression too, around the whole of it.
+        let re = compile_with("se.", SearchMode::Regex, false, true, Codepage::Utf8).unwrap();
+        assert_eq!(re.find_in(hay, 0).map(|m| m.offset), Some(9));
+    }
     use crate::source::BytesSource;
     use scmd_core::CancelToken;
 

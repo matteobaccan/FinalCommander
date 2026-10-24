@@ -131,7 +131,6 @@ viewer-derived = { $producer } de { $name }
 
 key-save = Enreg
 key-replace = Rempl
-editor-prompt-search = Chercher :
 editor-prompt-replace-from = Remplacer :
 editor-prompt-replace-with = Par :
 editor-prompt-goto = Aller à la ligne, ou ligne:colonne :
@@ -557,3 +556,15 @@ drive-home = Perso
 drive-connection = Connexion
 drive-objects = Stockage objet
 drives-hint = ↑↓ choisir · 0-9 les panneaux ci-dessous · Entrée appliquer · Échap fermer
+
+# The search dialog (F7), which asks the whole question in one place.
+search-title = Rechercher
+search-for = Rechercher
+search-mode = Comme
+search-mode-text = texte
+search-mode-hex = hex
+search-mode-regex = expression régulière
+search-case = Respecter la casse
+search-words = Mots entiers uniquement
+btn-find-next = Suivant
+btn-find-prev = Précédent

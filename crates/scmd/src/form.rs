@@ -91,8 +91,12 @@ pub struct Form {
     pub cursor: usize,
     /// For the session editor: which `[[site]]` this edits, or `None` for a new one.
     pub site: Option<usize>,
-    /// `Some(0)` = OK, `Some(1)` = Cancel; `None` while the cursor is in the rows.
+    /// Which button the cursor is on; `None` while it is in the rows. The last button is
+    /// always the one that closes the dialog without doing anything.
     pub button: Option<usize>,
+    /// What the buttons say. Most dialogs answer OK or Cancel; a search has three answers,
+    /// because *next* and *previous* are the same question asked in two directions.
+    pub buttons: Vec<String>,
 }
 
 fn choice(key: &'static str, label: String, options: &[(&str, String)], current: &str) -> Field {
@@ -124,7 +128,8 @@ impl Form {
             | FormKind::Find
             | FormKind::Replace
             | FormKind::Pack
-            | FormKind::Unpack => Vec::new(),
+            | FormKind::Unpack
+            | FormKind::Search => Vec::new(),
             FormKind::System => vec![
                 Field::toggle(
                     "panel.natural_sort",
@@ -278,6 +283,7 @@ impl Form {
             FormKind::Replace => "replace-title",
             FormKind::Pack => "pack-title",
             FormKind::Unpack => "unpack-title",
+            FormKind::Search => "search-title",
             FormKind::System => "menu-system-settings",
             FormKind::Panel => "menu-panel-settings",
             FormKind::Interface => "menu-interface-settings",
@@ -291,6 +297,7 @@ impl Form {
             cursor,
             site: None,
             button: None,
+            buttons: vec![i18n.t("btn-ok"), i18n.t("btn-cancel")],
         }
     }
 
@@ -368,6 +375,7 @@ impl Form {
             cursor: 0,
             site: index,
             button: None,
+            buttons: vec![i18n.t("btn-ok"), i18n.t("btn-cancel")],
         }
     }
 
@@ -407,6 +415,7 @@ impl Form {
             cursor: 0,
             site: None,
             button: None,
+            buttons: vec![i18n.t("btn-ok"), i18n.t("btn-cancel")],
         }
     }
 
@@ -460,6 +469,7 @@ impl Form {
             cursor: 0,
             site: None,
             button: None,
+            buttons: vec![i18n.t("btn-ok"), i18n.t("btn-cancel")],
         }
     }
 
@@ -497,6 +507,40 @@ impl Form {
             cursor: 0,
             site: None,
             button: None,
+            buttons: vec![i18n.t("btn-ok"), i18n.t("btn-cancel")],
+        }
+    }
+
+    /// `F7`: what to look for, and how. FAR asks all of it in one dialog rather than
+    /// hiding the how behind keys you have to know, and it offers both directions as
+    /// buttons, because *next* and *previous* are the same question asked twice.
+    pub fn search(
+        what: &str,
+        mode: &str,
+        case_sensitive: bool,
+        whole_words: bool,
+        i18n: &I18n,
+    ) -> Form {
+        let t = |id: &str| i18n.t(id);
+        let modes = [
+            ("text", t("search-mode-text")),
+            ("hex", t("search-mode-hex")),
+            ("regex", t("search-mode-regex")),
+        ];
+        let fields = vec![
+            Field::text("search.what", t("search-for"), what.to_string()),
+            choice("search.mode", t("search-mode"), &modes, mode),
+            Field::toggle("search.case", t("search-case"), case_sensitive),
+            Field::toggle("search.words", t("search-words"), whole_words),
+        ];
+        Form {
+            kind: FormKind::Search,
+            title: t("search-title"),
+            fields,
+            cursor: 0,
+            site: None,
+            button: None,
+            buttons: vec![t("btn-find-next"), t("btn-find-prev"), t("btn-cancel")],
         }
     }
 
@@ -515,6 +559,7 @@ impl Form {
             cursor: 0,
             site: None,
             button: None,
+            buttons: vec![i18n.t("btn-ok"), i18n.t("btn-cancel")],
         }
     }
 

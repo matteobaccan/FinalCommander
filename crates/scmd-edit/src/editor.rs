@@ -89,6 +89,8 @@ pub struct Editor {
     pub last_replace: Option<String>,
     pub search_mode: SearchMode,
     pub search_case_insensitive: bool,
+    /// Only whole words count as a hit (FAR asks it in the dialog).
+    pub search_whole_words: bool,
     /// What the file is being read as, and how much of it has been scanned so far.
     pub highlight: crate::Highlight,
 }
@@ -133,6 +135,7 @@ impl Editor {
             last_replace: None,
             search_mode: SearchMode::Plain,
             search_case_insensitive: true,
+            search_whole_words: false,
             highlight,
         }
     }
@@ -583,6 +586,13 @@ impl Editor {
         let pattern = match self.search_mode {
             SearchMode::Regex => query.to_string(),
             _ => regex::escape(query),
+        };
+        // Whole words wraps whatever it is in boundaries, which is what makes looking for
+        // `set` in a file full of `offset` bearable.
+        let pattern = if self.search_whole_words {
+            format!(r"\b(?:{pattern})\b")
+        } else {
+            pattern
         };
         regex::RegexBuilder::new(&pattern)
             .case_insensitive(self.search_case_insensitive)

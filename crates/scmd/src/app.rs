@@ -370,7 +370,6 @@ pub enum PromptKind {
     ViewerSearch,
     /// Offset or percentage for the viewer.
     ViewerGoto,
-    EditorSearch,
     EditorReplaceFrom,
     EditorReplaceWith,
     EditorGoto,
@@ -853,6 +852,8 @@ pub struct App {
     pub viewer_size: (u16, u16),
     /// Remembered across files, like every commander does.
     pub search_mode: SearchMode,
+    /// Only whole words count as a hit. FAR asks it in the dialog; so do we.
+    pub search_whole_words: bool,
     pub search_case_insensitive: bool,
     pub last_search: Option<String>,
     /// The viewer, parked while one of its prompts is open.
@@ -1020,6 +1021,7 @@ impl App {
             columns: 1,
             viewer_size: (80, 20),
             search_mode: SearchMode::Plain,
+            search_whole_words: false,
             search_case_insensitive: true,
             last_search: None,
             viewer_under_prompt: None,
@@ -2664,28 +2666,6 @@ impl App {
                     }
                 }
             }
-            PromptKind::EditorSearch => {
-                let query = prompt.text.trim().to_string();
-                self.restore_editor();
-                if query.is_empty() {
-                    return;
-                }
-                let found = self
-                    .mode
-                    .editor_mut()
-                    .map(|e| e.find(&query, false))
-                    .unwrap_or(Ok(false));
-                match found {
-                    Ok(true) => {}
-                    Ok(false) => {
-                        let msg = self
-                            .i18n
-                            .t_args("editor-not-found", &[("query", query.into())]);
-                        self.set_error(msg);
-                    }
-                    Err(e) => self.set_error(e.to_string()),
-                }
-            }
             PromptKind::EditorReplaceFrom => {
                 let from = prompt.text.trim().to_string();
                 if from.is_empty() {
@@ -3951,20 +3931,28 @@ impl App {
                 self.viewer_to_editor();
             }
             Command::ViewerSearch if self.mode.viewer().is_some() => {
-                // The prompt says what will be searched. Over a disassembly that is not text,
-                // hex or a regular expression but an instruction pattern, so say so.
-                let what = match self.mode.viewer().map(|v| v.mode) {
-                    Some(ViewerMode::Disasm) => "instructions",
-                    _ => self.search_mode.as_str(),
-                };
-                let title = self
-                    .i18n
-                    .t_args("viewer-prompt-search", &[("mode", what.into())]);
-                self.mode_prompt_over_viewer(
-                    PromptKind::ViewerSearch,
-                    title,
-                    self.last_search.clone().unwrap_or_default(),
+                // Over a disassembly the query is an instruction pattern rather than text,
+                // hex or a regular expression, so the choice would be a lie: that one keeps
+                // the one-line prompt, which says what it is searching.
+                if self.mode.viewer().map(|v| v.mode) == Some(ViewerMode::Disasm) {
+                    let title = self
+                        .i18n
+                        .t_args("viewer-prompt-search", &[("mode", "instructions".into())]);
+                    self.mode_prompt_over_viewer(
+                        PromptKind::ViewerSearch,
+                        title,
+                        self.last_search.clone().unwrap_or_default(),
+                    );
+                    return;
+                }
+                let form = Form::search(
+                    &self.last_search.clone().unwrap_or_default(),
+                    self.search_mode.as_str(),
+                    !self.search_case_insensitive,
+                    self.search_whole_words,
+                    &self.i18n,
                 );
+                self.form_over_viewer(form);
             }
             Command::ViewerGoto if self.mode.viewer().is_some() => {
                 let title = self.i18n.t("viewer-prompt-goto");
@@ -4888,6 +4876,78 @@ impl App {
         )));
     }
 
+    /// `Find next` or `Find previous` in the search dialog, over whichever of the two is
+    /// open. Everything the dialog asked for is remembered, so `Shift+F7` repeats it.
+    fn apply_search_form(&mut self, form: &Form, button: usize) {
+        let query = form.text_value("search.what");
+        let mode = match form.choice_value("search.mode").as_str() {
+            "hex" => SearchMode::Hex,
+            "regex" => SearchMode::Regex,
+            _ => SearchMode::Plain,
+        };
+        let case_sensitive = form.toggle_value("search.case");
+        let whole_words = form.toggle_value("search.words");
+        let backwards = button == 1;
+
+        self.restore_viewer();
+        self.restore_editor();
+        if query.is_empty() {
+            return;
+        }
+
+        if self.mode.viewer().is_some() {
+            self.search_mode = mode;
+            self.search_case_insensitive = !case_sensitive;
+            self.search_whole_words = whole_words;
+            self.last_search = Some(query.clone());
+            let found = self.mode.viewer_mut().map(|v| {
+                v.search_with(
+                    &query,
+                    mode,
+                    !case_sensitive,
+                    whole_words,
+                    backwards,
+                    &CancelToken::new(),
+                )
+            });
+            match found {
+                Some(Ok(true)) => {}
+                Some(Ok(false)) => {
+                    let msg = self
+                        .i18n
+                        .t_args("viewer-not-found", &[("query", query.into())]);
+                    self.set_error(msg);
+                }
+                Some(Err(e)) => self.set_error(e.to_string()),
+                None => {}
+            }
+            return;
+        }
+
+        if self.mode.editor().is_some() {
+            if let Some(editor) = self.mode.editor_mut() {
+                editor.search_mode = mode;
+                editor.search_case_insensitive = !case_sensitive;
+                editor.search_whole_words = whole_words;
+            }
+            let found = self
+                .mode
+                .editor_mut()
+                .map(|e| e.find(&query, backwards))
+                .unwrap_or(Ok(false));
+            match found {
+                Ok(true) => {}
+                Ok(false) => {
+                    let msg = self
+                        .i18n
+                        .t_args("editor-not-found", &[("query", query.into())]);
+                    self.set_error(msg);
+                }
+                Err(e) => self.set_error(e.to_string()),
+            }
+        }
+    }
+
     /// OK in the archive dialog: work out the format, and start writing.
     fn apply_pack_form(&mut self, form: &Form) {
         let name = form.text_value("pack.name");
@@ -5488,7 +5548,13 @@ impl App {
         // in it can be typed.
         let text = form.on_text() && form.button.is_none();
         match key.code {
-            KeyCode::Esc => self.mode = Mode::Normal,
+            KeyCode::Esc => {
+                self.mode = Mode::Normal;
+                // A dialog opened over a viewer or an editor goes back to it, rather than
+                // dropping the reader onto the panels.
+                self.restore_viewer();
+                self.restore_editor();
+            }
             KeyCode::Up => {
                 if form.button.is_some() {
                     form.button = None;
@@ -5522,20 +5588,25 @@ impl App {
             KeyCode::Left => form.toggle(false),
             KeyCode::Right => form.toggle(true),
             KeyCode::Tab => {
+                let last = form.buttons.len().saturating_sub(1);
                 form.button = Some(match form.button {
                     None => 0,
-                    Some(0) => 1,
+                    Some(at) if at < last => at + 1,
                     Some(_) => 0,
                 })
             }
             KeyCode::Enter => {
-                // Enter on a row toggles it; on the buttons it answers the dialog. In a text
-                // row there is nothing to toggle, so Enter means OK.
+                // Enter answers the dialog wherever the cursor is, which is what a dialog
+                // does everywhere else and what FAR does here: `Space` is what turns a box
+                // on and off. On the last button it answers "nothing, thank you".
+                let cancel = form.buttons.len().saturating_sub(1);
                 match form.button {
-                    Some(1) => self.mode = Mode::Normal,
-                    Some(_) => self.apply_form(),
-                    None if text => self.apply_form(),
-                    None => form.toggle(true),
+                    Some(at) if at == cancel => {
+                        self.mode = Mode::Normal;
+                        self.restore_viewer();
+                        self.restore_editor();
+                    }
+                    _ => self.apply_form(),
                 }
             }
             KeyCode::F(10) => self.apply_form(),
@@ -5548,6 +5619,9 @@ impl App {
         let Mode::Form(form) = std::mem::replace(&mut self.mode, Mode::Normal) else {
             return;
         };
+        // Which button answered: most dialogs have one that does anything, the search has
+        // two — the same question in both directions.
+        let button = form.button.unwrap_or(0);
         if form.kind == FormKind::Site {
             self.apply_site_form(&form);
             return;
@@ -5566,6 +5640,10 @@ impl App {
         }
         if form.kind == FormKind::Unpack {
             self.apply_unpack_form(&form);
+            return;
+        }
+        if form.kind == FormKind::Search {
+            self.apply_search_form(&form, button);
             return;
         }
         let problems = form.apply(&mut self.cfg);
@@ -7447,12 +7525,22 @@ impl App {
                 return;
             }
             Command::EditorSearch => {
-                let text = self
-                    .mode
-                    .editor()
+                let editor = self.mode.editor();
+                let text = editor
                     .and_then(|e| e.last_search.clone())
                     .unwrap_or_default();
-                self.editor_prompt(PromptKind::EditorSearch, "editor-prompt-search", text);
+                let (mode, case, words) = editor
+                    .map(|e| {
+                        (
+                            e.search_mode.as_str(),
+                            !e.search_case_insensitive,
+                            e.search_whole_words,
+                        )
+                    })
+                    .unwrap_or(("text", false, false));
+                let form = Form::search(&text, mode, case, words, &self.i18n);
+                self.park_editor();
+                self.mode = Mode::Form(Box::new(form));
                 return;
             }
             Command::EditorReplace => {
@@ -7629,6 +7717,14 @@ impl App {
         };
         self.viewer_under_prompt = Some(viewer);
         self.mode = Mode::Prompt(Prompt::new(kind, title, text));
+    }
+
+    /// The same, for a dialog with rows rather than one line.
+    fn form_over_viewer(&mut self, form: Form) {
+        if let Mode::Viewer(viewer) = std::mem::replace(&mut self.mode, Mode::Normal) {
+            self.viewer_under_prompt = Some(viewer);
+        }
+        self.mode = Mode::Form(Box::new(form));
     }
 
     /// Put the viewer back when its prompt closes.
@@ -10858,7 +10954,7 @@ mod tests {
         app.run(Command::AppScreenPrev);
         assert!(app.mode.viewer().is_some());
         app.run(Command::ViewerSearch);
-        assert!(matches!(app.mode, Mode::Prompt(_)));
+        assert!(matches!(app.mode, Mode::Form(_)), "{:?}", app.mode);
         app.run(Command::AppScreens);
         let Mode::Pick(pick) = &app.mode else {
             panic!("{:?}", app.mode)
@@ -12248,7 +12344,8 @@ done
         press(&mut app, "F3");
 
         press(&mut app, "F7");
-        assert!(matches!(app.mode, Mode::Prompt(_)), "{:?}", app.mode);
+        // FAR asks the whole question in one dialog: what, as what, and which way.
+        assert!(matches!(app.mode, Mode::Form(_)), "{:?}", app.mode);
         for c in ["d", "i", "s", "k"] {
             press(&mut app, c);
         }
@@ -12266,6 +12363,68 @@ done
         assert!(app.status_error, "{}", app.status);
         assert!(app.status.contains("zzz"), "{}", app.status);
         assert!(app.mode.viewer().is_some());
+    }
+
+    /// The dialog asks the whole question: what, as what, whole words or not, and which
+    /// way. All four have to reach the search, and be there again next time.
+    #[test]
+    fn the_search_dialog_asks_the_whole_question() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("log.txt"),
+            b"offset one
+set two
+offset three
+",
+        )
+        .unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F3");
+        press(&mut app, "F7");
+
+        for c in ["s", "e", "t"] {
+            press(&mut app, c);
+        }
+        // Down to `Whole words only` and tick it.
+        let row = match &app.mode {
+            Mode::Form(form) => form
+                .fields
+                .iter()
+                .position(|f| matches!(f, crate::form::Field::Toggle { key, .. } if *key == "search.words"))
+                .expect("the dialog has the row"),
+            other => panic!("{other:?}"),
+        };
+        for _ in 0..row {
+            press(&mut app, "Down");
+        }
+        press(&mut app, "Space");
+        press(&mut app, "Enter");
+
+        let viewer = app.mode.viewer().expect("the viewer is back");
+        assert_eq!(viewer.query(), Some("set"));
+        let at = viewer.last_match.expect("a hit");
+        // Not the `set` inside `offset` on the first line: the second line's own word.
+        assert_eq!(at.offset, 11, "whole words was not applied");
+        assert!(app.search_whole_words, "the dialog's answer was not kept");
+
+        // And the second button searches the other way, with everything still filled in.
+        press(&mut app, "F7");
+        match &app.mode {
+            Mode::Form(form) => {
+                assert_eq!(form.text_value("search.what"), "set");
+                assert!(
+                    form.toggle_value("search.words"),
+                    "the box forgot it was ticked"
+                );
+                assert_eq!(form.buttons.len(), 3, "{:?}", form.buttons);
+            }
+            other => panic!("{other:?}"),
+        }
+        press(&mut app, "Tab"); // Find next
+        press(&mut app, "Tab"); // Find previous
+        press(&mut app, "Enter");
+        assert!(app.mode.viewer().is_some(), "{:?}", app.mode);
     }
 
     #[test]

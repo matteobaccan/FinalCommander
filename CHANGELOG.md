@@ -17,6 +17,16 @@ Notable changes, newest first. The format follows
   the keyboard protocol for this (kitty, foot, WezTerm, Ghostty and others do); where it does
   not, the bar simply stays as it was.
 
+- **The search dialog** (`F7`), in the viewer and the editor, is FAR's: what to look for,
+  whether it is text, hex or a regular expression, whether case matters, whether only whole
+  words count, and then *Find next* or *Find previous* — the same question asked in two
+  directions. It opens filled in with what was asked last. **Whole words** is new in the
+  engine too, for both the viewer and the editor and for plain text and regular expressions
+  alike: it is the difference between finding `set` and finding `offset`.
+
+  `Enter` now answers a dialog wherever the cursor is, as it does everywhere else and as it
+  does in FAR; `Space` is what turns a box on and off.
+
 - **Syntax highlighting**, in the editor and the viewer, for Rust, C, C++, Java, C#,
   JavaScript, TypeScript, PHP, Python, Ruby, Go, shell, SQL, HTML, XML, CSS, Markdown, JSON,
   TOML, YAML, INI, Make, Dockerfile, Lua and Perl. It is a scanner rather than a parser, and

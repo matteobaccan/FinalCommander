@@ -131,7 +131,6 @@ viewer-derived = { $producer } для { $name }
 
 key-save = Запись
 key-replace = Замена
-editor-prompt-search = Искать:
 editor-prompt-replace-from = Заменить:
 editor-prompt-replace-with = На:
 editor-prompt-goto = Перейти к строке или строка:столбец :
@@ -557,3 +556,15 @@ drive-home = Домашний
 drive-connection = Соединение
 drive-objects = Объектное хранилище
 drives-hint = ↑↓ выбрать · 0-9 панели ниже · Enter применить · Esc закрыть
+
+# The search dialog (F7), which asks the whole question in one place.
+search-title = Поиск
+search-for = Искать
+search-mode = Как
+search-mode-text = текст
+search-mode-hex = hex
+search-mode-regex = регулярное выражение
+search-case = Учитывать регистр
+search-words = Только слова целиком
+btn-find-next = Найти далее
+btn-find-prev = Найти ранее

@@ -36,10 +36,7 @@ pub struct Syntax {
 pub fn of_name(name: &str) -> Option<&'static Syntax> {
     let lower = name.to_ascii_lowercase();
     let stem = lower.rsplit('/').next().unwrap_or(&lower);
-    if let Some(found) = SYNTAXES
-        .iter()
-        .find(|s| s.filenames.contains(&stem))
-    {
+    if let Some(found) = SYNTAXES.iter().find(|s| s.filenames.contains(&stem)) {
         return Some(found);
     }
     let ext = stem.rsplit_once('.').map(|(_, e)| e)?;
@@ -47,9 +44,7 @@ pub fn of_name(name: &str) -> Option<&'static Syntax> {
     if stem.starts_with('.') && stem.matches('.').count() == 1 {
         return None;
     }
-    SYNTAXES
-        .iter()
-        .find(|s| s.extensions.contains(&ext))
+    SYNTAXES.iter().find(|s| s.extensions.contains(&ext))
 }
 
 const C_LIKE: Syntax = Syntax {

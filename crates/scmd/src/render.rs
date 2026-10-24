@@ -43,6 +43,24 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
                     );
                     return Some((cx, cy));
                 }
+                Mode::Form(form) => {
+                    let rows = form.rows();
+                    let area = widgets::draw_form(
+                        buf,
+                        &app.theme,
+                        screen,
+                        &widgets::FormView {
+                            title: &form.title,
+                            rows: &rows,
+                            selected: form.cursor,
+                            buttons: &form.buttons,
+                            button: form.button,
+                        },
+                    );
+                    return form
+                        .caret()
+                        .map(|(row, col)| (area.x + 2 + col as u16, area.y + 1 + row as u16));
+                }
                 Mode::Confirm(confirm) => {
                     widgets::draw_choice(
                         buf,
@@ -71,16 +89,38 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         draw_viewer(app, &mut viewer, buf);
         app.return_viewer(viewer, parked);
         if parked {
-            if let Mode::Prompt(prompt) = &app.mode {
-                let (_, cx, cy) = widgets::draw_prompt(
-                    buf,
-                    &app.theme,
-                    Rect::new(0, 0, w, h.saturating_sub(1)),
-                    &prompt.title,
-                    &prompt.text,
-                    prompt.text.chars().count(),
-                );
-                return Some((cx, cy));
+            let screen = Rect::new(0, 0, w, h.saturating_sub(1));
+            match &app.mode {
+                Mode::Prompt(prompt) => {
+                    let (_, cx, cy) = widgets::draw_prompt(
+                        buf,
+                        &app.theme,
+                        screen,
+                        &prompt.title,
+                        &prompt.text,
+                        prompt.text.chars().count(),
+                    );
+                    return Some((cx, cy));
+                }
+                Mode::Form(form) => {
+                    let rows = form.rows();
+                    let area = widgets::draw_form(
+                        buf,
+                        &app.theme,
+                        screen,
+                        &widgets::FormView {
+                            title: &form.title,
+                            rows: &rows,
+                            selected: form.cursor,
+                            buttons: &form.buttons,
+                            button: form.button,
+                        },
+                    );
+                    return form
+                        .caret()
+                        .map(|(row, col)| (area.x + 2 + col as u16, area.y + 1 + row as u16));
+                }
+                _ => {}
             }
         }
         return None;
@@ -329,7 +369,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         }
         Mode::Form(form) => {
             let rows = form.rows();
-            let buttons = vec![app.i18n.t("btn-ok"), app.i18n.t("btn-cancel")];
+            let buttons = form.buttons.clone();
             let area = widgets::draw_form(
                 buf,
                 &app.theme,
@@ -2832,6 +2872,18 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
     /// rows off them and give them to the user screen. Both are settings, so both are kept.
     #[test]
     #[ignore = "a look at the screen, not an assertion"]
+    fn eyeball_search() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("t.txt"), b"needle in here\n").unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F4");
+        press(&mut app, "F7");
+        println!("{}", frame(&mut app, 80, 16));
+    }
+
+    #[test]
+    #[ignore = "a look at the screen, not an assertion"]
     fn eyeball_drives() {
         let mut app = super::tests::app("far", "en");
         project(&mut app);
@@ -3461,9 +3513,15 @@ third line
         let mut buf = Buffer::new(60, 10);
         let cursor = draw(&mut app, &mut buf);
         let out = buf.to_text();
-        assert!(cursor.is_some(), "the prompt has no cursor");
+        assert!(cursor.is_some(), "the dialog has no cursor");
         assert!(out.contains("Search"), "{out}");
-        assert!(out.contains("needle in here"), "the editor is gone: {out}");
+        assert!(
+            out.contains("Whole words"),
+            "the dialog is not FAR's: {out}"
+        );
+        // The editor is still behind it: the dialog covers the middle of the screen, so what
+        // is left of the line is what shows at its left.
+        assert!(out.contains("needle"), "the editor is gone: {out}");
     }
 
     #[test]

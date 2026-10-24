@@ -131,7 +131,6 @@ viewer-derived = { $name } 的 { $producer }
 
 key-save = 保存
 key-replace = 替换
-editor-prompt-search = 查找：
 editor-prompt-replace-from = 替换：
 editor-prompt-replace-with = 为：
 editor-prompt-goto = 跳到行，或 行:列 ：
@@ -557,3 +556,15 @@ drive-home = 主目录
 drive-connection = 连接
 drive-objects = 对象存储
 drives-hint = ↑↓ 选择 · 0-9 下方面板 · Enter 应用 · Esc 关闭
+
+# The search dialog (F7), which asks the whole question in one place.
+search-title = 查找
+search-for = 查找内容
+search-mode = 方式
+search-mode-text = 文本
+search-mode-hex = 十六进制
+search-mode-regex = 正则表达式
+search-case = 区分大小写
+search-words = 全词匹配
+btn-find-next = 查找下一个
+btn-find-prev = 查找上一个

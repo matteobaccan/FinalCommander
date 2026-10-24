@@ -4,7 +4,7 @@ use unicode_width::UnicodeWidthChar;
 use crate::decode::{detect, looks_binary, Codepage};
 use crate::disasm::{self, Arch, Binary, DisasmError, Format};
 use crate::nav::{next_line_start, prev_line_start, read_line, snap_to_line};
-use crate::search::{compile, find, Match, Pattern, SearchError, SearchMode};
+use crate::search::{find, Match, Pattern, SearchError, SearchMode};
 use crate::source::Source;
 use crate::structure::{self, Structure};
 use crate::{il, jvm};
@@ -1096,7 +1096,21 @@ impl Viewer {
         backwards: bool,
         cancel: &CancelToken,
     ) -> Result<bool, SearchError> {
-        let pattern = compile(query, mode, case_insensitive, self.codepage)?;
+        self.search_with(query, mode, case_insensitive, false, backwards, cancel)
+    }
+
+    /// The same, with whole words as the dialog offers them.
+    pub fn search_with(
+        &mut self,
+        query: &str,
+        mode: SearchMode,
+        case_insensitive: bool,
+        whole_words: bool,
+        backwards: bool,
+        cancel: &CancelToken,
+    ) -> Result<bool, SearchError> {
+        let pattern =
+            crate::search::compile_with(query, mode, case_insensitive, whole_words, self.codepage)?;
         self.pattern = Some(pattern);
         self.query = Some(query.to_string());
         Ok(self.step(backwards, cancel))

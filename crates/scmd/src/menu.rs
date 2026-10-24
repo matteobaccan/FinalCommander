@@ -31,6 +31,8 @@ pub enum FormKind {
     Pack,
     /// Take an archive apart.
     Unpack,
+    /// Find text in what the viewer or the editor has open (SPEC 05 §1.4).
+    Search,
     System,
     Panel,
     Interface,

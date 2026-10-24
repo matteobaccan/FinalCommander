@@ -3,7 +3,9 @@
 Lines, with a block, undo over the whole session, and a save that writes a new file beside the
 old one and renames it over the top — so an interrupted save never leaves half a file.
 
-`F2` saves, `Shift+F2` saves under another name, `F7` searches and `Ctrl+F7` replaces.
+`F2` saves, `Shift+F2` saves under another name, `F7` opens the same search dialog the viewer
+has — text, hex or a regular expression, case, whole words, forwards or backwards — and
+`Ctrl+F7` replaces.
 `Ctrl+Z` and `Ctrl+Y` undo and redo. `F6` hands the file to the viewer at the same line.
 
 A column block is a rectangle rather than a run of lines, which is how a column of numbers is
