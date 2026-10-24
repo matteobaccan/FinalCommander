@@ -6,6 +6,20 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Finding things (0.0.4, in progress)
+
+- **A panel can be a list of files rather than a directory.** One method decides whether a
+  row's path is the panel's own path with the name on the end or something the panel was told,
+  and every operation, the viewer, the editor and the metasymbols go through it. A list panel
+  re-reads by asking about its own paths again, so a file deleted since the list was built
+  drops out; `Enter` on a row goes to the directory the file lives in; navigating away turns
+  the panel back into a directory.
+- **Find file (`Alt+F7`)**: masks in the filter grammar, text or a hex pattern, case
+  sensitivity, whole words, files that do *not* contain it, five scopes, following symbolic
+  links, folders in the results. It opens on the last search. Results stream into a list that
+  is usable while the walk runs — `Enter` goes to the file, `F3` reads it, `F5` turns the
+  results into the panel, `Esc` stops the search and keeps what it found.
+
 ## [0.0.3] — 2026-10-24
 
 A command line, and the keys a FAR user reaches for without thinking.

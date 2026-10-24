@@ -273,6 +273,18 @@ directory". Both are in `docs/BACKLOG.md` as decisions to settle when those feat
 | scroll long names | Alt+←/→ | **Ctrl+Shift+←/→** |
 | the panel's own status line, scrollbar, free space | settings | three settings in the Panel dialog; the status line is off by default because we also have a screen-wide status bar |
 
+## 8e. Find file (shipped in part)
+
+| Action | FAR | SC |
+| --- | --- | --- |
+| open the dialog | Alt+F7 | **Alt+F7**, filled in with the last search |
+| inside the dialog | ↑↓ rows, Space toggles, Tab to the buttons, Enter, Esc | the same, plus **F10** for OK |
+| in the results | ↑↓ PgUp PgDn Home End | the same |
+| go to the file | Enter | **Enter** — the panel changes directory and the cursor lands on it |
+| read it without leaving | F3 | **F3** |
+| turn the results into a panel | Panelize | **F5** |
+| stop the search, keep the results | Esc | **Esc**; a second Esc closes the list |
+
 ## 9. Terminal reality check (design constraints)
 
 A TUI cannot receive every combination the Windows console gives FAR. Decisions:
