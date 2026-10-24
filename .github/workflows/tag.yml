@@ -1,0 +1,114 @@
+# Create the tag for a release, and let `release.yml` build and publish it.
+#
+# Why this exists: a tag cannot always be pushed from where the work is done (an egress policy
+# that allows `refs/heads/*` and refuses `refs/tags/*` is a common one), while a workflow's own
+# token can create one. So the commit that cuts a release says so in two places — the version in
+# `Cargo.toml` and a dated heading in `CHANGELOG.md` — and this turns that into the tag.
+#
+# It is deliberately hard to fire by accident:
+#   * the version must have a *dated* heading in the changelog (`## [0.0.3] — 2026-10-24`), so a
+#     bump on its own, or an `## [Unreleased]` section, does nothing;
+#   * a tag that already exists is never moved or replaced;
+#   * only the default branch and the development branches are watched.
+# `workflow_dispatch` takes a version explicitly, for a release that was missed at the time.
+name: Tag
+
+on:
+  push:
+    branches: [main, "claude/**"]
+    paths:
+      - "Cargo.toml"
+      - "CHANGELOG.md"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to tag (default: whatever Cargo.toml says)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  tag:
+    name: Tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.decide.outputs.tag }}
+      created: ${{ steps.decide.outputs.created }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Which version, and is it ready to tag
+        id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ASKED: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          version="${ASKED#v}"
+          if [ -z "$version" ]; then
+            version=$(awk '/^\[workspace\.package\]/ { inside = 1; next }
+                           inside && /^\[/ { exit }
+                           inside && /^version[[:space:]]*=/ {
+                             gsub(/[^0-9A-Za-z.+-]/, "", $3); print $3; exit }' Cargo.toml)
+          fi
+          if [ -z "$version" ]; then
+            echo "no version in Cargo.toml" >&2
+            exit 1
+          fi
+          echo "version: $version"
+
+          # A dated heading is the signal that this version is finished. `## [Unreleased]` and a
+          # heading with no date are both "not yet".
+          if ! grep -qE "^## \[${version//./\\.}\][[:space:]]+[—-]" CHANGELOG.md; then
+            echo "CHANGELOG.md has no dated heading for $version — nothing to tag."
+            echo "created=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          tag="v$version"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "$tag exists already; leaving it alone."
+            echo "created=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # An annotated tag, with the changelog's own first line as its message.
+          summary=$(awk -v v="$version" '
+            $0 ~ "^## \\[" v "\\]" { found = 1; next }
+            found && /^## / { exit }
+            found && NF { print; exit }
+          ' CHANGELOG.md)
+          [ -n "$summary" ] || summary="$tag"
+
+          object=$(gh api "repos/$GITHUB_REPOSITORY/git/tags" \
+            -f tag="$tag" \
+            -f message="$tag — $summary" \
+            -f object="$GITHUB_SHA" \
+            -f type=commit \
+            -f tagger[name]="Matteo Baccan" \
+            -f tagger[email]="matteo.baccan@gmail.com" \
+            --jq .sha)
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f ref="refs/tags/$tag" \
+            -f sha="$object" >/dev/null
+          echo "created $tag at $GITHUB_SHA"
+          echo "created=true" >> "$GITHUB_OUTPUT"
+
+  release:
+    name: Release
+    needs: tag
+    if: needs.tag.outputs.created == 'true'
+    # A tag created with the workflow's own token does not start another workflow, so the
+    # release is called rather than waited for.
+    uses: ./.github/workflows/release.yml
+    permissions:
+      contents: write
+    with:
+      tag: ${{ needs.tag.outputs.tag }}

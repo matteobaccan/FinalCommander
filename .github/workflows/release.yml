@@ -8,12 +8,27 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build and publish (empty: build the archives, publish nothing)"
+        required: false
+        type: string
+  # Called by `tag.yml` right after it creates a tag: a tag created with a workflow's own token
+  # does not start a workflow of its own.
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 env:
   CARGO_TERM_COLOR: always
+  # What this run is releasing: the tag it was called or dispatched with, else the tag that was
+  # pushed. Empty means "no tag", which builds the archives and publishes nothing.
+  TAG: ${{ inputs.tag || (github.ref_type == 'tag' && github.ref_name) || '' }}
 
 jobs:
   build:
@@ -39,6 +54,10 @@ jobs:
             target: x86_64-pc-windows-msvc
     steps:
       - uses: actions/checkout@v5
+        with:
+          # `env.TAG` is not available to `with:`, so the expression is repeated; with no tag
+          # the run builds whatever it was started on.
+          ref: ${{ inputs.tag || (github.ref_type == 'tag' && github.ref_name) || github.sha }}
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -76,9 +95,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
-          if [ "$GITHUB_REF_TYPE" != "tag" ]; then
-            # Not a tag: the workspace version, so a dispatch run packages something sensible.
+          version="${TAG#v}"
+          if [ -z "$version" ]; then
+            # No tag: the workspace version, so a dispatch run packages something sensible.
             version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
           fi
           name="scmd-${version}-${{ matrix.name }}"
@@ -114,12 +133,15 @@ jobs:
   publish:
     name: Publish the release
     needs: build
-    if: github.ref_type == 'tag'
+    # Only a run that knows which tag it is for publishes anything.
+    if: inputs.tag != '' || github.ref_type == 'tag'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
       - uses: actions/download-artifact@v7
         with:
           path: dist
@@ -133,7 +155,7 @@ jobs:
 
       - name: Release notes from the changelog
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="${TAG#v}"
           # The section for this version, without its heading.
           awk -v v="$version" '
             $0 ~ "^## \\[" v "\\]" { found = 1; next }
@@ -150,14 +172,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # The tag may arrive from `git push`, or from a release created in the web interface.
-          # Either way this ends with one release carrying every archive.
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release edit "$GITHUB_REF_NAME" --notes-file notes.md
-            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          # The tag may arrive from `git push`, from `tag.yml`, or from a release created in the
+          # web interface. Either way this ends with one release carrying every archive.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --notes-file notes.md
+            gh release upload "$TAG" dist/* --clobber
           else
-            gh release create "$GITHUB_REF_NAME" \
-              --title "$GITHUB_REF_NAME" \
+            gh release create "$TAG" \
+              --title "$TAG" \
               --notes-file notes.md \
               dist/*
           fi

@@ -31,15 +31,38 @@ reviewable and testable.
 | 19 | snapshot test harness + keymap tests + job property tests + perf budget check | all |
 | 20 | docs: README, help pages generated from `docs/`, man page | all |
 
-**Done so far**: chunks 1–19 and 21–23 in some form, including the operation engine (13), the
-viewer (15), the editor (21), the netbox (22) — the three priority components of SPEC 08 §8 are
-all in the binary — and the menu bar with its settings dialogs (23). What M1 still owes: the
-command line and user screen (14), trash and wipe, the generated help/man pages (20), and the
-performance budget checks in CI. `docs/BACKLOG.md` lists every menu entry that is in the bar
-but not yet behind a feature.
+**Done so far**: chunks 1–19 and 21–23, including the operation engine (13), the viewer (15),
+the editor (21), the netbox (22) — the three priority components of SPEC 08 §8 are all in the
+binary — the menu bar with its settings dialogs (23), and the command line with the user screen
+(14, shipped in 0.0.3). What M1 still owes: the generated help and man pages (20), the trash,
+and the performance budget checks in CI. `docs/BACKLOG.md` lists every menu entry that is in the
+bar but not yet behind a feature.
 
 Exit criteria: the authors use it instead of `mc`/FAR for a week without reaching for the old
 tool for anything in M1 scope; all quality gates green on three platforms.
+
+## Release plan
+
+M1–M4 say what the thing becomes; this says what the next few tags contain. The order is by
+what is missed most, not by what is easiest, with one exception: anything that unblocks two
+later items goes first. Sizes are honest estimates of focused work, not of calendar time.
+
+| Release | Theme | What is in it | Size | Why here |
+| --- | --- | --- | --- | --- |
+| **0.0.4** | Finding things | **Find file** (`Alt+F7`) with FAR's dialog as the yardstick: masks and the filter object, text or hex, case and whole words, "not containing", one code page or all, six scopes, results that can be used while the search runs — then **go to**, **view**, **panelize**, **new search**, **stop**. Needs a **temporary panel** (a panel made of an arbitrary list), which is also what `tmppanel` is for. Then **search and replace across files** on top of it, as its own job with a dry run and a count per file. | A release of its own: the dialog is a week, the engine less | It is the most-used thing we do not have, and the panel that `panelize` needs unblocks three later items |
+| **0.0.5** | Archives | The **archive provider** in the VFS (read first): zip and the tar family, `Enter` to go in, copy out through the job engine, `Shift+F1`/`F2`/`F3` and their dialogs. Writing (add to archive, delete inside one) follows in the same release if the provider holds up. | The biggest single item in the backlog | Nothing else in the backlog is this visible, and the VFS was built for it |
+| **0.0.6** | The panels FAR has and we do not | **Info panel**, **quick view** (`Ctrl+Q`), **tree panel** (`Ctrl+T`) with its directory cache, **compare folders**, and the **view modes** we lack. Settles the `Ctrl+L` divergence. | A few days each; the tree cache is the real work | They all want the same cache and the same "a panel is not always a directory" shape, so they are cheaper together than apart |
+| **0.0.7** | The hex editor (the Hiew track) | **Hex mode of the editor** with a patch list and an atomic save, **block operations** (`F3` marks, `F12` operates), the **assembler**, a **calculator**, **search by instruction pattern**, and **raw devices**. SPEC 05 §2.5–§2.7 and `docs/02-features.md` §5b. | A release of its own | Deliberately in the editor, not the viewer: the viewer's read-only contract is what lets it seek through 40 GB |
+| **0.1.0** | Macros, plugins, and the screens | **Macro engine** (record and play per area, two play modes, a list) on top of the command vocabulary, the **screens list** (`F12`) and the background-screen counter, the **plugin host API** so a plugin can do more than carry data, the **help system** generated from `docs/`, and the **man page**. | The macro engine is the large one | Macros need everything else to be a command first, which is why they are last rather than first |
+
+Running alongside, each going out with whichever release it is ready for: **mouse support**, the
+**OS clipboard** (`scmd-platform`), the **trash**, **descriptions** (`descript.ion`), the
+**settings browser** for the ~50 keys we have, **AArch64 disassembly**, and the packaging work
+(`.deb`, `.rpm`, Homebrew, Scoop, AUR).
+
+Two things are explicitly *not* on this list, and `docs/BACKLOG.md` says why: Netware module
+formats, and anything that needs reverse engineering a proprietary program rather than reading
+its published description.
 
 ## M2 — mc/FAR parity
 
