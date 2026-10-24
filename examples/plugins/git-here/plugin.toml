@@ -1,0 +1,11 @@
+[plugin]
+id = "git-here"
+name = "Git here"
+scmd = ">=0.1.0"
+
+[[command]]
+id = "user.git.status"
+label = "Git: what has changed here"
+run = "status.sh"
+needs = ["panel"]
+timeout = 15

@@ -1563,6 +1563,45 @@ timeout = 10
         assert_eq!(count, 1, "{problems:?}");
     }
 
+    /// The example plugin in the repository loads and provides what its README says.
+    ///
+    /// An example that does not work is worse than no example, and this one is three files in
+    /// a folder — exactly the thing somebody copies to start from.
+    #[test]
+    fn the_example_plugin_loads() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(|p| p.parent())
+            .expect("the workspace is two directories up")
+            .join("examples/plugins");
+        assert!(root.is_dir(), "examples/plugins is missing");
+        let paths = Paths::discover(Some(&root.join("scmd.toml")), Some(&root));
+        let mut warnings = Vec::new();
+        let (_, _, commands) = load_plugins(&paths, ThemeSet::builtin_only(), &mut warnings);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert!(
+            commands.iter().any(|c| c.id == "user.git.status"),
+            "the example's command is missing: {:?}",
+            commands.iter().map(|c| &c.id).collect::<Vec<_>>()
+        );
+        // And its program is there, and executable where that is a thing.
+        let program = &commands
+            .iter()
+            .find(|c| c.id == "user.git.status")
+            .unwrap()
+            .program;
+        assert!(program.is_file(), "{}", program.display());
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(program).unwrap().permissions().mode();
+            assert!(
+                mode & 0o111 != 0,
+                "the host runs it, so it has to be executable"
+            );
+        }
+    }
+
     /// An app looking at two real directories.
     fn app_on(left: &std::path::Path, right: &std::path::Path) -> App {
         App::new(Startup {

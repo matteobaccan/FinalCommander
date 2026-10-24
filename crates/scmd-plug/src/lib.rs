@@ -473,12 +473,28 @@ impl Discovery {
             } else {
                 meta.name.as_str()
             };
+            // What it brings, counted separately: a plugin that provides one command and no
+            // data read as "(0 items)", which is the opposite of what it does.
+            let mut brings: Vec<String> = Vec::new();
+            if !p.items().is_empty() {
+                brings.push(format!("{} items", p.items().len()));
+            }
+            let commands = p.manifest.commands.len();
+            if commands > 0 {
+                brings.push(format!(
+                    "{commands} command{}",
+                    if commands == 1 { "" } else { "s" }
+                ));
+            }
+            if brings.is_empty() {
+                brings.push("nothing declared".to_string());
+            }
             out.push_str(&format!(
-                "{:<16} {:<10} {}   ({} items)\n",
+                "{:<16} {:<10} {}   ({})\n",
                 p.id(),
                 meta.version,
                 name,
-                p.items().len()
+                brings.join(", ")
             ));
         }
         for problem in &self.problems {
