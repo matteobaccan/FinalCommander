@@ -452,12 +452,12 @@ scope = "viewer"
 cmd = "nav.down"
 
 [[bind]]
-keys = ["PgUp", "Ctrl+B"]
+keys = ["PgUp", "Ctrl+B", "Ctrl+Up"]
 scope = "viewer"
 cmd = "nav.pageup"
 
 [[bind]]
-keys = ["PgDn", "Space"]
+keys = ["PgDn", "Space", "Ctrl+Down"]
 scope = "viewer"
 cmd = "nav.pagedown"
 

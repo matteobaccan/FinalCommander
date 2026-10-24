@@ -90,6 +90,8 @@ msg-nothing-to-do = nothing selected
 # Viewer (F3)
 key-wrap = Wrap
 key-hex = Hex
+key-text = Text
+key-dump = Dump
 key-search = Search
 key-code = Code
 key-follow = Follow

@@ -83,6 +83,8 @@ msg-nothing-to-do = 未选择任何内容
 
 key-wrap = 折行
 key-hex = 十六
+key-text = 文本
+key-dump = 转储
 key-search = 查找
 key-code = 编码
 key-follow = 跟随

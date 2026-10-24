@@ -8107,7 +8107,10 @@ impl App {
             (1, self.i18n.t("key-help")),
             (2, self.i18n.t("key-wrap")),
             (3, self.i18n.t("key-quit")),
-            (4, self.i18n.t("key-hex")),
+            // F4 is a toggle, so it is named after where it goes rather than after where it
+            // is: in hex it offers the way back, to text or to the dump, whichever the file
+            // was being read as.
+            (4, self.i18n.t(self.viewer_toggle_key())),
             (5, self.i18n.t("key-disasm")),
             (6, self.i18n.t("key-edit")),
             (7, self.i18n.t("key-search")),
@@ -8116,6 +8119,17 @@ impl App {
             (11, self.i18n.t("key-struct")),
             (12, self.i18n.t("key-screens")),
         ]
+    }
+
+    /// What F4 switches the viewer to from where it is now.
+    fn viewer_toggle_key(&self) -> &'static str {
+        match self.mode.viewer() {
+            Some(v) if v.mode == scmd_view::Mode::Hex => match v.base_mode {
+                scmd_view::Mode::Dump => "key-dump",
+                _ => "key-text",
+            },
+            _ => "key-hex",
+        }
     }
 
     /// The viewer's status line.
@@ -9571,13 +9585,14 @@ mod tests {
     #[test]
     fn the_panel_dialog_takes_effect_at_once() {
         let mut app = app();
-        assert!(!app.panels[0].show_hidden);
+        // Hidden files are shown by default, so the box starts ticked and Space clears it.
+        assert!(app.panels[0].show_hidden);
         open(&mut app, 3, "menu-panel-settings");
         press(&mut app, "Space"); // show hidden files
         press(&mut app, "F10"); // the shortcut for OK
-        assert!(app.cfg.panel.show_hidden);
+        assert!(!app.cfg.panel.show_hidden);
         assert!(
-            app.panels[0].show_hidden,
+            !app.panels[0].show_hidden,
             "the panel did not pick up the new setting"
         );
     }
@@ -11083,6 +11098,8 @@ mod tests {
     #[test]
     fn hidden_toggle_applies_to_both_panels() {
         let mut app = app();
+        press(&mut app, "Ctrl+H");
+        assert!(!app.panels[0].show_hidden && !app.panels[1].show_hidden);
         press(&mut app, "Ctrl+H");
         assert!(app.panels[0].show_hidden && app.panels[1].show_hidden);
         assert!(app.status.contains("hidden"), "{}", app.status);

@@ -83,6 +83,8 @@ msg-nothing-to-do = nichts ausgewählt
 
 key-wrap = Umbruch
 key-hex = Hex
+key-text = Text
+key-dump = Dump
 key-search = Suchen
 key-code = Kodier
 key-follow = Folgen

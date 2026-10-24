@@ -83,6 +83,8 @@ msg-nothing-to-do = ничего не отмечено
 
 key-wrap = Перенос
 key-hex = Hex
+key-text = Текст
+key-dump = Дамп
 key-search = Поиск
 key-code = Кодир
 key-follow = Следить
