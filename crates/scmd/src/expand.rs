@@ -74,17 +74,33 @@ pub enum ListKind {
 }
 
 /// Quote a path the way the platform's shell needs it, and only when it needs it.
+///
+/// The set of characters that need quoting is the platform's too, which matters most for the
+/// backslash: on Unix it escapes the next character, while on Windows it is the path
+/// separator — quoting for it there would put quotes around very nearly every path.
 pub fn quote(text: &str) -> String {
-    let needs = text.is_empty()
-        || text
-            .chars()
-            .any(|c| c.is_whitespace() || matches!(c, '"' | '\'' | '$' | '`' | '\\' | '*' | '?'));
-    if !needs {
-        return text.to_string();
-    }
     if cfg!(windows) {
+        let needs = text.is_empty()
+            || text.chars().any(|c| {
+                c.is_whitespace()
+                    || matches!(
+                        c,
+                        '"' | '\'' | '&' | '|' | '^' | '<' | '>' | '(' | ')' | '%' | '!'
+                    )
+            });
+        if !needs {
+            return text.to_string();
+        }
+        // `cmd` has no escape inside quotes; a doubled quote is the convention that works.
         format!("\"{}\"", text.replace('"', "\"\""))
     } else {
+        let needs = text.is_empty()
+            || text.chars().any(|c| {
+                c.is_whitespace() || matches!(c, '"' | '\'' | '$' | '`' | '\\' | '*' | '?')
+            });
+        if !needs {
+            return text.to_string();
+        }
         format!("'{}'", text.replace('\'', r"'\''"))
     }
 }
@@ -428,6 +444,35 @@ mod tests {
         match expand(text, &ctx(), None).unwrap() {
             Expanded::Line(l) => l,
             other => panic!("expected a line, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn quoting_follows_this_platform_and_not_the_other_one() {
+        // Nothing surprising in it, no quotes.
+        assert_eq!(quote("plain.txt"), "plain.txt");
+        // A space always needs them, in whichever spelling this platform uses.
+        let spaced = quote("two words");
+        assert!(
+            spaced.starts_with(if cfg!(windows) { '"' } else { '\'' }),
+            "{spaced}"
+        );
+        // And the separator is not a reason on its own: a backslash is the path separator on
+        // Windows, where quoting for it would quote nearly every path, and an escape on Unix,
+        // where it has to be quoted.
+        let joined = PathBuf::from("dir")
+            .join("file.txt")
+            .to_string_lossy()
+            .into_owned();
+        if cfg!(windows) {
+            assert_eq!(
+                quote(&joined),
+                joined,
+                "a plain Windows path needs no quotes"
+            );
+        } else {
+            assert_eq!(quote(&joined), joined);
+            assert_eq!(quote(r"back\slash"), r"'back\slash'");
         }
     }
 
