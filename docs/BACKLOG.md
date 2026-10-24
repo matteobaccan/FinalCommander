@@ -15,7 +15,7 @@ what we intend to do about it.
 | Info panel | Left/Right menu | SPEC 02 §7. FAR puts it on `Ctrl+L`, which we currently use for "change directory". **Open question:** move `nav.goto.path` to `Ctrl+\` (FAR's key) when the info panel lands, or give the info panel another key. |
 | Quick view | Left/Right menu (`Ctrl+Q`) | SPEC 02 §7. Needs the viewer to render into a panel-sized rect — the viewer already draws into a `Rect`, so this is mostly plumbing. |
 | Tree panel | Left/Right menu (`Ctrl+T`) | SPEC 02 §8. Wants a cached directory tree per root; the cache is the work, not the drawing. |
-| Panel on/off | Left/Right menu (`Ctrl+F1`/`Ctrl+F2`) | One panel full width. Touches the layout code that splits the screen. |
+| ~~Panel on/off~~ | Left/Right menu (`Ctrl+F1`/`Ctrl+F2`) | **Shipped**, and the focus follows the screen. |
 | Compare folders | Commands menu | SPEC 02 §9. FAR's version marks, in each panel, the files that the other panel does not have or has older — names, sizes and times only, no subfolders and no contents. Its `compare` plugin is the one that goes deeper (subfolders, contents), which is a good division for us too. |
 | Panelize a result set | SPEC 06 §1 | Needs a virtual listing that is not a directory — the panel already takes a `Listing`, so the shape is there. |
 
@@ -23,37 +23,37 @@ what we intend to do about it.
 
 | Item | Where | Notes |
 | --- | --- | --- |
-| The selection matrix | panel | FAR's modifiers pick the criterion, not just the action: `Ctrl+Gray ±` for the extension under the cursor, `Alt+Gray ±` for the name, `Shift+Gray ±` for everything, `Ctrl+Gray *` inverting folders too and `Alt+Gray *` clearing them. We have the mask, all/none/invert and restore. The rest is an afternoon and it is muscle memory for a FAR user. |
+| ~~The selection matrix~~ | panel | **Shipped.** `Ctrl++`/`Ctrl+−` by the current file's extension, `Alt++`/`Alt+−` by name, `Alt+*` inverting folders too, and one restore undoing a whole sweep. Needs a terminal that reports modified printable keys; the keymap doc says which. |
 | A `Select folders` setting | Panel settings | Decides whether the mask keys touch directories at all. One setting, three keys behave differently. |
-| `Shift+F5`, `Shift+F6`, `Shift+F8` | panel | Copy, move and delete **the item under the cursor**, ignoring the selection. Cheap, and they prevent accidents. |
-| Sort by creation time, access time, owner, description | `Ctrl+F8…F11` | `SortKey` needs the variants and the listing needs the fields; owner and description come with their own cost (a lookup per entry, a description file). |
+| ~~`Shift+F5`, `Shift+F6`, `Shift+F8`~~ | panel | **Shipped**, and the list travels with the dialog so a later selection cannot widen the copy. |
+| Sort by creation time, access time, owner, description | `Ctrl+F8…F11` | **Creation and access time shipped** (`Ctrl+F8`, `Ctrl+F9`), with the missing-field rule in SPEC 02 §4. Owner and description still cost a lookup per entry and a side file. |
 | Sort criteria chains | sort modes list, `F4` | Per sort mode, an ordered set of tie-breakers with its own editor (`Ins`/`Del`/`F4`/`+`/`-`/`*`/`=`/`Ctrl+↑↓`/`Ctrl+R`). SPEC 07 already has `chain` in the config shape, so this is filling in a designed hole. |
 | Sort groups | `Shift+F11` | Named mask groups that sort before or after everything else, ordered, with a separator marking "front" from "back". |
-| Scroll long names sideways | `Alt+←/→`, `Alt+Home/End` | Needed as soon as the name column is narrower than the names. |
+| ~~Scroll long names sideways~~ | `Ctrl+Shift+←/→` | **Shipped**, per panel, reset on a change of directory. `Alt+←/→` stays history here. |
 
 ## Masks, filters, groups
 
 | Item | Where | Notes |
 | --- | --- | --- |
-| Mask groups `<arc>`, `<temp>`, `<exec>` | Options menu | Named, nestable sets of masks, usable anywhere a mask is. The Options menu entry is specified (SPEC 10 §2.4) and the mask parser already needs extending for it. |
-| The full mask grammar | everywhere | `[c-f]` ranges, `/regex/i` for a whole mask, `include|exclude` with one `|`, quoting a mask that contains a delimiter. Ours does `*`, `?` and lists. |
-| Filters as a shared object | panel, find, copy | Named condition sets: mask, size range with binary and decimal suffixes, date range on any of four timestamps (absolute or relative in days), attributes as three-state include/exclude/ignore, "more than one hard link" — each condition separately switchable. FAR reuses one filter object for the panel, for find and for copy; building it once is the whole point. |
+| ~~Mask groups `<arc>`, `<temp>`, `<exec>`~~ | Options menu | **Shipped** as values (nestable, used by the filter bar and by file highlighting). The *editor* for them in the Options menu is still to come. |
+| ~~The full mask grammar~~ | everywhere | **Shipped**: `[c-f]` ranges, `/regex/i`, `include|exclude`, lists with either separator. |
+| ~~Filters as a shared object~~ | panel, find, copy | **Shipped** in `scmd-core::filter`: masks, size, four date fields (absolute or relative in days), attributes as three states, hard links — one value type, used by the panel's filter bar today. |
 | Files highlighting | Options menu | Colour by mask and attribute group, with its own list and editor. Wants the filter object above. |
 
 ## Files
 
 | Item | Where | Notes |
 | --- | --- | --- |
-| Create link | Files menu (`Alt+F6`) | Hard links and symlinks, local only to start with. |
-| Wipe | Files menu (`Alt+Del`) | Overwrite before unlink. Honest naming matters: on SSDs and copy-on-write filesystems it cannot promise much, and the dialog should say so. |
+| ~~Create link~~ | Files menu (`Alt+F6`) | **Shipped** as a relative symlink in the other panel. The engine does hard and absolute links too; the chooser is the remaining work. |
+| ~~Wipe~~ | Files menu (`Alt+Del`) | **Shipped**, and the dialog says what overwriting cannot promise on an SSD, on copy-on-write or with snapshots. |
 | File attributes | Files menu | SPEC 03 §7. Dialog for mode bits, times, Windows attributes, and the SFTP equivalents. **Open question:** FAR uses `Ctrl+A`, which we gave to `sel.all`; probable answer is `Ctrl+A` for attributes and `Ctrl+Shift+A` for select-all, matching FAR more closely. |
-| Apply command | Files menu (`Ctrl+G`) | Run a command line once per selected file, with `!.!`-style substitutions (SPEC 06 §5). Needs the command line first. |
+| ~~Apply command~~ | Files menu (`Ctrl+G`) | **Shipped.** One command per selected file, in sequence, counted, stopping at the first failure; a template that asks for a value says why it cannot (SPEC 06 §7.3). |
 | Copy: several destinations at once | copy dialog | `;`-separated, quoted when a name contains one. |
-| Copy: append to the existing file, and "only newer" as a policy | copy dialog | We ask, overwrite, skip, rename and the `…All` variants; FAR also appends and can be told up front to copy only newer files. |
+| Copy: append to the existing file, and "only newer" as a policy | copy dialog | **The engine has both** (`ConflictPolicy::Append`, `JobOptions::only_newer`); the dialog does not offer them yet. |
 | Copy: contents of symbolic links instead of the links | copy dialog | A real decision with data-loss consequences either way, so it belongs in the dialog rather than in a default. |
 | Copy: a filter, so only matching files travel | copy dialog | Wants the filter object above. An empty folder is not created when nothing in it matches. |
 | Copy: destination from a folder tree | `F10`, `Alt+F10`, `Shift+F10` in the dialog | Wants the tree panel's cache. |
-| Copy: average speed, elapsed and estimated time | progress dialog | We show the bars and the counters; the three numbers people actually watch are missing. |
+| ~~Copy: average speed, elapsed and estimated time~~ | progress dialog | **Shipped**, from the average rather than the last tick, and absent until there is enough to compute. |
 | Clipboard: names, full names and the files themselves | `Ctrl+Ins`, `Alt+Shift+Ins`, `Ctrl+Shift+C/X` | Needs the OS clipboard (SPEC 06). Copying *files* to the clipboard so another application can paste them is platform work, not a one-liner. |
 | Descriptions (`descript.ion`, `files.bbs`) | `Ctrl+Z`, description columns, info panel | A whole small feature: a side file per folder, kept in step through copy, move, rename and delete, shown in two view modes and in the info panel, with its own settings (names to look for, encoding, read-only update). |
 | Archives | Files menu (`Shift+F1`/`F2`/`F3`) | SPEC 04 §4: the archive VFS provider (read first, write later) and the three dialogs. The biggest single item in this list. |
@@ -62,10 +62,10 @@ what we intend to do about it.
 
 | Item | Where | Notes |
 | --- | --- | --- |
-| The command line itself | SPEC 06 §5 | A shell line under the panels, with output capture (`Ctrl+O`). Everything below depends on it. |
-| Command history | Commands menu (`Alt+F8`) | The list exists in the spec; the data does not until there is a command line. |
+| ~~The command line itself~~ | SPEC 06 §7 | **Shipped**: internal commands, prefixes, metasymbols, conditions, history, and `Ctrl+O` for the user screen. |
+| ~~Command history~~ | Commands menu (`Alt+F8`) | **Shipped**, and kept between sessions. |
 | View and edit history | Commands menu (`Alt+F11`) | Needs the "keep history between sessions" store below. |
-| Keep history between sessions | System settings | A small on-disk store (folders, commands, viewed and edited files). Until it exists, folder history lives only in the running session. |
+| ~~Keep history between sessions~~ | System settings | **Shipped** for commands, folders and both panels' directories. View/edit history still needs the list. |
 
 ## Histories and screens
 
@@ -74,7 +74,7 @@ what we intend to do about it.
 | Four histories with a size and a lifetime | commands, folders, view/edit, dialogs | FAR keeps each with its own count and a lifetime in days, saves them between sessions, and lets an item be **locked** so new entries never push it out. Ours is one folder list, in memory. |
 | Screens list and background screens | `F12` | Several viewers, editors and jobs open at once, a list to switch between them, and the count in the panel corner. The job engine already runs more than one job; the screen stack is what is missing. |
 | Task list | `Ctrl+W` | Worth being precise, because the name misleads: FAR's task list is the *operating system's* processes (PID, window title, `Del` kills one), not FAR's own windows — those are the screens list above. On Linux and macOS this is a process panel, closer to FAR's `proclist` plugin than to the core, so it belongs in a plugin once there are plugins. |
-| User screen | `Ctrl+O`, `Ctrl+Alt+Shift` to peek | Needs the command line first. |
+| ~~User screen~~ | `Ctrl+O` | **Shipped**, scrollable and capped, with each command as its heading. Peeking while a command runs is still to come. |
 | Screen grabber | `Alt+Ins` | Select any region of the screen, stream or block, extend, move, append to the clipboard. Small, self-contained, and oddly useful. |
 
 ## Binary viewer and hex editor
@@ -85,7 +85,7 @@ here is the order to build it in: each item needs only the ones above it.
 | Item | Where | Notes |
 | --- | --- | --- |
 | ~~Structure pane~~ | `F11` in the viewer | **Shipped.** ELF, PE, Mach-O (thin and universal) and `ar`: identity, the header field by field with its raw bytes, sections, segments, load commands, archive members, interpreter and build id, with `Enter` taking the bytes to an offset. Written here rather than taken from `object`, because the pane needs the raw bytes beside the meaning, has to survive a hostile or truncated file, and must read only the offsets that matter. Imports and exports (ELF `DT_NEEDED` and `.dynsym` with bindings and types, the PE import and export directories including forwarders and exports with no name, Mach-O `LC_LOAD_DYLIB` and `LC_SYMTAB`), the symbol table feeding names into the disassembly, and the .NET CLI header with the metadata root all shipped too. |
-| Following a branch | `Enter` in the disassembly | SPEC 05 §1.9. Go where a `call` or `jmp` points, `Backspace` to come back, the jumped-from stack at the foot of the pane, and `Alt+F8` learning to take a virtual address. Small, once the structure pane supplies the names. |
+| ~~Following a branch~~ | `Enter` in the disassembly | **Shipped**, with `Backspace` back and the jumped-from stack on screen. |
 | Hex mode of the editor | `F4` on a binary | SPEC 05 §2.5. Deliberately in the editor, not the viewer: the viewer is read-only by contract and that is what lets it seek through a 40 GB file. Overwrite and insert, a patch list, the editor's own undo and atomic save. |
 | Blocks | `F3` marks, `F12` operates | SPEC 05 §2.6. Write out, read in, fill, XOR, copy, move, insert, delete — the large ones through the job engine, each with the resulting length shown before it happens. |
 | Assembler | `F9` | SPEC 05 §2.7. One instruction at a time, showing the bytes, the instruction replaced and whether the length changed, writing into the patch list rather than straight to disk. |
@@ -101,9 +101,9 @@ here is the order to build it in: each item needs only the ones above it.
 
 | Item | Where | Notes |
 | --- | --- | --- |
-| Viewer ⇄ editor at the same position | `F6` | Both ways, keeping the byte offset. The two components already share a file source; this is bookkeeping. |
-| Jump to the open file in the panel | `Ctrl+F10` | |
-| Next and previous file of the panel from inside the viewer | `Gray +/-` | |
+| ~~Viewer ⇄ editor at the same position~~ | `F6` | **Shipped** both ways; the editor asks you to save first, because the viewer reads the file on disk. |
+| ~~Jump to the open file in the panel~~ | `Ctrl+F10` | **Shipped.** |
+| ~~Next and previous file of the panel from inside the viewer~~ | `+` / `−` | **Shipped**, skipping directories and keeping the mode. |
 | Remember per file: position, code page, view mode, wrap, bookmarks | viewer and editor settings | Wants the persistent store the histories need. |
 | Select and copy text in the viewer | mouse, `Ctrl+Ins` | Needs the OS clipboard. |
 | Key bar, status line and scrollbar toggles | `Ctrl+B`, `Ctrl+Shift+B`, `Ctrl+S` | The viewer carries the three flags; the drawing and the keys are not wired. `Ctrl+B` is page-up in our viewer (a vi habit), so that one needs a decision rather than a binding. |
@@ -127,8 +127,8 @@ here is the order to build it in: each item needs only the ones above it.
 
 | Item | Where | Notes |
 | --- | --- | --- |
-| A status line inside each panel | panel | FAR puts the item under the cursor in the panel's own bottom line, and keeps the screen's bottom rows for the command line and the key bar. We have one global status line instead. Worth settling together with the command line, since they compete for the same rows. |
-| Free space in the panel frame, a scrollbar, the background-screen counter, a clock | panel | Small drawing jobs, except the clock, which needs a repaint on a timer. |
+| ~~A status line inside each panel~~ | panel | **Shipped** behind `panel.status_line`, off by default because the screen-wide status bar says the same thing. |
+| Free space in the panel frame, a scrollbar, the background-screen counter, a clock | panel | **Free space and the scrollbar shipped**, each behind a setting. The counter needs the screens list; the clock needs a repaint on a timer. |
 | The six view modes we do not have | `LeftCtrl+1…0` | Medium, descriptions, long descriptions, owners, links, alternative full. Three of them need data we do not read yet (descriptions, owners, link counts). |
 | A settings browser | `far:config` equivalent | FAR has 311 settings and a searchable editor for all of them; we have ~45 and `--dump-config`. The browser matters more as the count grows. |
 | Colour groups and a theme editor | Options menu | Per-element colour editing with 16-colour, 256-colour and RGB pickers, on top of the themes we already load. |

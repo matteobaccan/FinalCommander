@@ -6,6 +6,76 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+## [0.0.3] — 2026-10-24
+
+A command line, and the keys a FAR user reaches for without thinking.
+
+### A command line, and the screen it writes on
+
+- A **command line under the panels** (`ui.command_line`): everything printable goes to it once
+  it has anything in it, and to quick search while it is empty — FAR's rule, so neither habit
+  gets in the other's way. Word jumps break on the separators a path uses, `Ctrl+K` cuts to the
+  end, and the history walks with `Ctrl+↑`/`Ctrl+↓` keeping the half-typed line safe.
+- **Commands we run ourselves**, because a commander that shells out for `cd` cannot keep the
+  panel in step: `cd`/`chdir` (with `~`, `-` and a remote panel's own notion of a path), `cls`,
+  `set`, `pushd`/`popd`/`clrd`, `title`, `exit`, and `if [not] exist` / `if [not] defined`
+  conditions, nestable.
+- **Prefixes**: `view:`, `edit:`, `goto:`, `whereis:`, and `run:` with its output to a file, the
+  screen, or nowhere.
+- **Metasymbols** (SPEC 06 §5): FAR's `!.!`, `!`, `` !` ``, `!\`, `!@!`, `!&`, `!?title?init!`
+  and the side prefixes, plus our own `{named}` forms, quoted per platform. An unrecognised
+  `{…}` passes through untouched, so `awk '{print $1}'` still works, which is the whole reason
+  for the rule.
+- **The user screen** (`Ctrl+O`): what the commands printed, scrollable, capped, with each
+  command as its heading.
+- **Command history** (`Alt+F8`) as a list, and a small on-disk store that keeps it, the folder
+  history and both panels' directories between sessions.
+- **`Ctrl+G` applies a command to every selected file**, each file taking its turn as "the
+  current file". They run in sequence rather than all at once, counted through in the status
+  line, and the run stops at the first failure instead of pushing ninety-nine more over a
+  broken one.
+
+### The keys a FAR user reaches for
+
+- **The selection matrix**: the modifier picks the criterion, not just the action. `Ctrl++` and
+  `Ctrl+−` take everything with the extension of the file under the cursor, `Alt++` and `Alt+−`
+  everything with the same name whatever its extension, `Alt+*` inverts folders too. One
+  restore (`Ctrl+Shift+M`) undoes a whole sweep rather than one row.
+- **`Shift+F5`, `Shift+F6`, `Shift+F8`** act on the item under the cursor whatever is selected —
+  the case they exist for is a selection you forgot about. The list travels with the dialog, so
+  selecting something else while it is open cannot widen the copy.
+- **`Ctrl+F1` / `Ctrl+F2`** give the screen to one panel, and the focus goes with it.
+- **`Ctrl+F8` / `Ctrl+F9`** sort by creation and access time. An entry whose filesystem does not
+  keep the field sorts with the others that do not, at the old end, so the order stays total.
+- **`Alt+Del` wipes**: the bytes are overwritten once, then the file is unlinked. The dialog
+  says plainly what that cannot promise on an SSD, on a copy-on-write filesystem or with
+  snapshots — including that the name survives in the directory and the journal.
+- **`Alt+F6` creates a link** in the other panel, as a copy would: a relative symbolic link, the
+  one that survives the tree being moved elsewhere. The engine does hard and absolute links
+  too; the chooser is still to come.
+- **Long names scroll sideways** with `Ctrl+Shift+←/→` (FAR's `Alt+←/→` is history here).
+
+### The panel's own frame
+
+- **Free space** on the device at the right-hand end of the bottom frame — the one thing that
+  needs a platform call, and honest about saying nothing on a server or on Windows.
+- **A scrollbar** in the right frame, drawn only when there is more than fits.
+- **The panel's own status line** (`panel.status_line`), a rule and a row inside the frame with
+  the item under the cursor. Off by default, because the screen-wide status bar says the same
+  thing and two rows saying it wastes a row.
+
+### One filter object
+
+- The quick filter bar now takes the whole grammar: a comma or semicolon list, `*`, `?`,
+  `[c-f]` ranges, `/regex/i`, an exclusion after `|`, and named groups (`<arc>`, `<temp>`,
+  `<exec>`, nestable). A bare word still means "contains", so nothing anybody was already doing
+  changed.
+- It is **one value type** rather than three, the way FAR has it, and it already carries the
+  conditions the find tool and the copy dialog will need: size ranges with binary and decimal
+  suffixes, date ranges that can be relative in days, attributes as three states, and a
+  hard-link condition. A mask that does not parse leaves the previous filter alone instead of
+  flickering the panel empty.
+
 ### The viewer says what a binary is
 
 - **Structure pane** (`F11`): beside the hex or disassembly rows, a pane that decodes the file —
@@ -14,18 +84,54 @@ Notable changes, newest first. The format follows
   sections, Mach-O load commands and dylibs, the slices of a universal binary, the members of
   an `ar` archive, plus an ELF's interpreter and build id. `Tab` moves the keys between the
   bytes and the pane, `Enter` on a row takes the bytes to that offset.
+- **Imports and exports**: an ELF's `DT_NEEDED` libraries and its `.dynsym` symbols with their
+  binding and type, the PE import and export directories including forwarders and exports with
+  no name at all, Mach-O's load-dylib commands and symbol table. The **.NET CLI header** too,
+  with the runtime version, the flags in words, the entry-point token and the metadata root —
+  and the identity line then says a PE is managed.
+- **Symbols feed the disassembly**, and `Enter` on a `call` or `jmp` follows it, `Backspace`
+  comes back, with the jumped-from stack on screen.
 - It reads only the offsets that matter: an ELF keeps its section table at the end of the file,
   and our own 162 MB debug binary is decoded in four reads rather than loaded.
 - Every offset is range-checked before it becomes a jump target, every table is capped, and a
   file that stops early fills the rows it can and says `truncated` — a corrupt binary is the
   normal case for this pane, not an error.
+- **A hex row now fits the window**: never more bytes than the setting, never fewer than four,
+  always a power of two so an offset stays aligned, and the structure pane takes the room left
+  over instead of cutting the printable gutter in half.
+- **`F6` crosses to the editor** on the line the bytes were showing, and `F6` in the editor
+  crosses back to the byte the cursor was on. **`+` and `−`** walk to the next and previous file
+  of the panel without going back to it, skipping directories and keeping the mode.
+  **`Ctrl+F10`** brings the panel to whatever is being viewed. Decompiling moved to `Shift+F6`,
+  since FAR's `F6` in the viewer means the editor.
+
+### Jobs
+
+- **Speed, elapsed and what is left** in the progress box. All three come from the average
+  rather than the last tick, and the estimate is absent until there is enough to compute it: a
+  number that jumps between four seconds and four hours is worse than no number.
+- **Append** and **only newer** as copy policies, beside ask / overwrite / skip / rename.
+- **Fixed, and it was a data-loss bug**: a move plans a copy and then a removal of every source,
+  and the removals ran whatever happened to the copy. Answering "skip" to a conflict in a move
+  left the destination alone *and deleted the source*. The runner now declines the removal of
+  any source whose copy did not happen, and of any directory above it.
+
+### Plugins
+
+- `scmd-plug`: manifests discovered from disk, with themes, keymaps, associations, decompile
+  rules and mask groups loaded from them, a version requirement checked against ours, and every
+  path inside a plugin verified to stay inside it — relative, no `..`, and the canonical target
+  inside the canonical directory, so a symlink cannot walk out either.
+- `--list-plugins` says what was found, what is waiting for a host API, and what was refused and
+  why.
 
 ### The screen looks like FAR's
 
 - A **`far` theme**: FAR Manager's own default palette, element for element, read from
-  `far/palette.cpp` of `FarGroup/FarManager` (BSD-3-Clause). Light cyan on blue panels, yellow
-  for marked files and column titles, a cyan bar on the active panel's path, cyan menus with
-  yellow shortcuts, light grey dialogs with cyan input fields, red warning dialogs.
+  `far/palette.cpp` and `far/colormix.cpp` of `FarGroup/FarManager` (BSD-3-Clause). Light cyan
+  on blue panels, yellow for marked files and column titles, a cyan bar on the active panel's
+  path, cyan menus with yellow shortcuts, light grey dialogs with cyan input fields, red warning
+  dialogs.
 - **Column titles** (`Name │ Size │ Date Time`) under the panel frame, with the sort-mode letter
   in the top-left corner — lower case for ascending order, upper case for descending — and a
   `*` beside it while a filter is on, exactly where FAR puts them. `panel.column_titles` turns
@@ -36,9 +142,17 @@ Notable changes, newest first. The format follows
 - **Shadows.** Dialogs, menus, lists and the progress window darken two columns to their right
   and one row below, which is FAR's `DropShadow` geometry. The shadow halves what is already
   there rather than painting a colour, so it works in every theme and in 16 colours.
-- Every theme gained the keys those three changes need (menu, menu bar, dialog fields and
-  buttons, warning dialogs, column titles, the active panel's title, the scrollbar) — all seven
-  built-in themes define every key, and a test keeps it that way.
+- **Four things that were not FAR's, checked against its source and corrected**: the key bar's
+  background between the labels is grey on black rather than the label's cyan; the totals turn
+  yellow on cyan while something is selected; file colours are FAR's six default highlighting
+  groups in FAR's order, so a hidden directory is cyan rather than white and `*.bak` is
+  litter-coloured; and the size column says `Up` and `Folder`, localised and centred the way
+  FAR fits them, instead of `UP--` and `FOLDER`. Nothing is bold any more either: FAR draws with
+  console attributes, which have no bold.
+- Every theme gained the keys those changes need (menu, menu bar, dialog fields and buttons,
+  warning dialogs, column titles, the active panel's title, the scrollbar, the key bar's
+  background, the selected totals, the `<temp>` group) — all seven built-in themes define every
+  key, and a test keeps it that way.
 - The key bar now uses FAR's own wording where FAR ships the language: `UserMn`, `MkFold`,
   `ConfMn`, and their Italian, German, Spanish and Russian forms.
 
@@ -48,6 +162,11 @@ Notable changes, newest first. The format follows
   settings keys — with every feature marked against what we do, the three grammars worth
   matching exactly (panel columns, file masks, metasymbols), and a section on exactly how close
   the screen now is and what is still different.
+- `docs/02-features.md` §5b: Hiew release VIII's published feature list, item for item, against
+  what we have — what is shipped, what is in the backlog, and the two we are not doing.
+- `docs/spec/02-panels.md` §9b (what FAR draws in a panel's frame and what each element costs),
+  `docs/spec/06-tools.md` §7.3 (the four decisions apply-command had to take), and
+  `docs/spec/10-menus-and-dialogs.md` for the menus and the dialogs.
 - Three facts corrected in `docs/03-keymap.md` and one in the backlog, now that the source
   rather than the documentation is the reference.
 

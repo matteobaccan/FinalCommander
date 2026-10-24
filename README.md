@@ -4,10 +4,13 @@ A cross-platform **orthodox file manager** (two panels, command line, function k
 keyboard-first) written in Rust — in the tradition of Norton Commander, FAR Manager,
 Total Commander, Midnight Commander and Krusader, with a modern engine underneath.
 
-> **Status: 0.0.2, a preview.** Two panels, navigation, selection, sorting, view modes, quick
-> search and filter, themes, keymap profiles and seven interface languages, real file
-> operations (`F5`–`F8`), the viewer (`F3`), the editor (`F4`), the netbox (`Alt+N`: SFTP
-> panels, transfers and a session editor) and the menu bar with its settings dialogs (`F9`).
+> **Status: 0.0.3, a preview.** Two panels, navigation, the selection matrix, sorting, view
+> modes, quick search, filters with FAR's whole mask grammar, themes (including FAR's own
+> palette), keymap profiles and seven interface languages, real file operations (`F5`–`F8`,
+> plus wipe and links), a command line with FAR's internal commands, prefixes and metasymbols
+> and the user screen behind it (`Ctrl+O`), the viewer (`F3`) with a structure pane for
+> binaries (`F11`), the editor (`F4`), the netbox (`Alt+N`: SFTP panels, transfers and a
+> session editor) and the menu bar with its settings dialogs (`F9`).
 > What is missing says so rather than failing quietly; the list is in
 > [`CHANGELOG.md`](CHANGELOG.md), item by item in [`docs/BACKLOG.md`](docs/BACKLOG.md), and the
 > plan in `docs/spec/09-roadmap.md`.
@@ -26,8 +29,8 @@ One file, nothing to install beside it. Download the archive for your machine fr
 
 ```sh
 # Linux, for example
-tar xzf scmd-0.0.2-linux-x86_64.tar.gz
-sudo install -m755 scmd-0.0.2-linux-x86_64/scmd /usr/local/bin/scmd
+tar xzf scmd-0.0.3-linux-x86_64.tar.gz
+sudo install -m755 scmd-0.0.3-linux-x86_64/scmd /usr/local/bin/scmd
 scmd --version
 ```
 
