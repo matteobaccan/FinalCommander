@@ -29,7 +29,7 @@ scmd-vfs = { workspace = true }
 scmd-view = { workspace = true }
 tokio = { version = "1.53.3", features = ["rt-multi-thread", "fs", "sync", "time", "macros"] }
 unicode-width = "0.2.2"
-clap_mangen = "0.2"
+clap_mangen = "0.3"
 
 # Free space in the panel frame needs `statvfs`, which `std` does not expose. Unix only:
 # Windows wants `GetDiskFreeSpaceEx` and gets its own answer when it gets its own crate.
