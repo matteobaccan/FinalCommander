@@ -45,6 +45,13 @@ pub struct VPath {
     /// `user@host:port` for a remote path; `None` for a local one.
     authority: Option<Arc<str>>,
     path: PathBuf,
+    /// Inside a container: one entry per nesting level, each a `/`-separated path within the
+    /// container the level before it names (SPEC 04 §4). `sftp://srv/x.tar.gz!/etc!/nginx.conf`
+    /// is `path = /x.tar.gz` with the levels `["/etc", "/nginx.conf"]`.
+    ///
+    /// Behind a pointer, and `None` for an ordinary path: a `VPath` is cloned on every row of
+    /// every listing, so the common case pays one word and no allocation.
+    inner: Option<Arc<Vec<Arc<str>>>>,
 }
 
 impl VPath {
@@ -53,6 +60,7 @@ impl VPath {
             scheme: Scheme::Local,
             authority: None,
             path: path.into(),
+            inner: None,
         }
     }
 
@@ -62,12 +70,23 @@ impl VPath {
             scheme,
             authority: Some(Arc::from(authority.as_ref())),
             path: PathBuf::from(normalise_remote(path.as_ref())),
+            inner: None,
         }
     }
 
     /// Parse `sftp://mb@host:22/srv/www`. Anything that is not a known remote URL is a local
     /// path, so a Windows path (`C:\x`) and a file with a colon in its name still work.
     pub fn parse(text: &str) -> VPath {
+        // `archive!/inside` opens a container (SPEC 04 §4). The separator is `!` followed by a
+        // path separator, which no single file name can contain; a directory actually named
+        // `x!` is the one ambiguity, and the syntax is the one FAR users already type.
+        if let Some(cut) = text.find("!/").or_else(|| text.find("!\\")) {
+            let mut base = VPath::parse(&text[..cut]);
+            for level in text[cut..].split('!').skip(1) {
+                base = base.enter(level);
+            }
+            return base;
+        }
         if let Some((head, rest)) = text.split_once("://") {
             if let Some(scheme) = Scheme::parse(head) {
                 if scheme.is_remote() {
@@ -114,10 +133,71 @@ impl VPath {
 
     /// Same provider and same connection?
     pub fn same_provider(&self, other: &VPath) -> bool {
-        self.scheme == other.scheme && self.authority == other.authority
+        self.scheme == other.scheme
+            && self.authority == other.authority
+            // Two paths in the same archive share a provider; two archives do not, and neither
+            // do an archive and the directory it sits in.
+            && self.depth() == other.depth()
+            && (!self.in_container()
+                || (self.path == other.path
+                    && self.inner()[..self.depth() - 1] == other.inner()[..other.depth() - 1]))
+    }
+
+    /// The levels of container this path is inside; empty for an ordinary path.
+    pub fn inner(&self) -> &[Arc<str>] {
+        match &self.inner {
+            Some(levels) => levels,
+            None => &[],
+        }
+    }
+
+    /// Is this path inside a container (an archive)?
+    pub fn in_container(&self) -> bool {
+        self.inner.is_some()
+    }
+
+    /// How many containers deep, for the nesting limit of SPEC 04 §4.
+    pub fn depth(&self) -> usize {
+        self.inner().len()
+    }
+
+    /// The path *within* the innermost container, `/`-separated; `/` at its root. Empty for a
+    /// path that is not in a container.
+    pub fn inner_path(&self) -> &str {
+        self.inner().last().map(|p| &**p).unwrap_or("")
+    }
+
+    /// Step into the container this path names, landing on `inside` (`/` for its root).
+    pub fn enter(&self, inside: impl AsRef<str>) -> VPath {
+        let mut levels = self.inner().to_vec();
+        levels.push(Arc::from(normalise_remote(inside.as_ref()).as_str()));
+        self.with_levels(levels)
+    }
+
+    /// Leave the innermost container: the path of the container file itself, so the panel lands
+    /// in the directory that holds it with the cursor on it. `None` outside a container.
+    pub fn leave(&self) -> Option<VPath> {
+        let mut levels = self.inner().to_vec();
+        levels.pop()?;
+        Some(self.with_levels(levels))
+    }
+
+    /// The same place within the innermost container, at `inside`.
+    pub fn with_inner(&self, inside: impl AsRef<str>) -> VPath {
+        match self.leave() {
+            Some(host) => host.enter(inside),
+            None => self.clone(),
+        }
     }
 
     pub fn file_name(&self) -> Option<&OsStr> {
+        if self.in_container() {
+            let name = self.inner_path().rsplit('/').next().unwrap_or("");
+            if !name.is_empty() {
+                return Some(OsStr::new(name));
+            }
+            // At the container's root the name is the container's own, so fall through.
+        }
         if self.is_remote() {
             let path = self.path.to_str()?;
             let name = path.rsplit('/').next()?;
@@ -139,6 +219,17 @@ impl VPath {
     }
 
     pub fn parent(&self) -> Option<VPath> {
+        if self.in_container() {
+            let path = self.inner_path();
+            if path == "/" {
+                // Up from the root of an archive is out of it, onto the archive itself — which
+                // is what `leave` gives, and then its own parent is the directory holding it.
+                return self.leave().and_then(|host| host.parent());
+            }
+            let cut = path.rfind('/')?;
+            let parent = if cut == 0 { "/" } else { &path[..cut] };
+            return Some(self.with_inner(parent));
+        }
         if self.is_remote() {
             let path = self.remote_path();
             if path == "/" {
@@ -152,6 +243,16 @@ impl VPath {
     }
 
     pub fn join(&self, name: impl AsRef<OsStr>) -> VPath {
+        if self.in_container() {
+            let name = name.as_ref().to_string_lossy();
+            let base = self.inner_path();
+            let joined = if base.ends_with('/') {
+                format!("{base}{name}")
+            } else {
+                format!("{base}/{name}")
+            };
+            return self.with_inner(&joined);
+        }
         if self.is_remote() {
             let name = name.as_ref().to_string_lossy();
             let base = self.remote_path();
@@ -167,6 +268,9 @@ impl VPath {
 
     /// The filesystem root of this path (`/`, `C:\`, …). A remote path's root is always `/`.
     pub fn root(&self) -> VPath {
+        if self.in_container() {
+            return self.with_inner("/");
+        }
         if self.is_remote() {
             return self.with_remote("/");
         }
@@ -185,6 +289,11 @@ impl VPath {
     }
 
     pub fn is_root(&self) -> bool {
+        // The root of an archive has a parent — the directory the archive lives in — so it is
+        // not a root, and `..` stays on the panel to get out.
+        if self.in_container() {
+            return false;
+        }
         if self.is_remote() {
             return self.remote_path() == "/";
         }
@@ -195,6 +304,11 @@ impl VPath {
     pub fn starts_with(&self, other: &VPath) -> bool {
         if !self.same_provider(other) {
             return false;
+        }
+        if self.in_container() {
+            let (a, b) = (self.inner_path(), other.inner_path());
+            return a == b
+                || a.starts_with(b) && (b.ends_with('/') || a.as_bytes().get(b.len()) == Some(&b'/'));
         }
         if self.is_remote() {
             let (a, b) = (self.remote_path(), other.remote_path());
@@ -207,6 +321,19 @@ impl VPath {
 
     /// Normalise `.`/`..` lexically, without touching the filesystem.
     pub fn normalised(&self) -> VPath {
+        if self.in_container() {
+            let mut out: Vec<&str> = Vec::new();
+            for part in self.inner_path().split('/') {
+                match part {
+                    "" | "." => {}
+                    ".." => {
+                        out.pop();
+                    }
+                    other => out.push(other),
+                }
+            }
+            return self.with_inner(format!("/{}", out.join("/")));
+        }
         if self.is_remote() {
             let path = self.remote_path();
             let mut out: Vec<&str> = Vec::new();
@@ -239,11 +366,21 @@ impl VPath {
         self.with_path(out)
     }
 
+    fn with_levels(&self, levels: Vec<Arc<str>>) -> VPath {
+        VPath {
+            scheme: self.scheme,
+            authority: self.authority.clone(),
+            path: self.path.clone(),
+            inner: (!levels.is_empty()).then(|| Arc::new(levels)),
+        }
+    }
+
     fn with_path(&self, path: PathBuf) -> VPath {
         VPath {
             scheme: self.scheme,
             authority: self.authority.clone(),
             path,
+            inner: self.inner.clone(),
         }
     }
 
@@ -252,6 +389,7 @@ impl VPath {
             scheme: self.scheme,
             authority: self.authority.clone(),
             path: PathBuf::from(normalise_remote(path)),
+            inner: self.inner.clone(),
         }
     }
 }
@@ -278,9 +416,13 @@ impl fmt::Display for VPath {
                 self.scheme.as_str(),
                 authority,
                 self.remote_path()
-            ),
-            None => write!(f, "{}", self.path.display()),
+            )?,
+            None => write!(f, "{}", self.path.display())?,
         }
+        for level in self.inner() {
+            write!(f, "!{level}")?;
+        }
+        Ok(())
     }
 }
 
@@ -360,6 +502,70 @@ mod tests {
                 .remote_path(),
             "/a/c/d"
         );
+    }
+
+    // ── containers (SPEC 04 §4) ─────────────────────────────────────────────────────────────
+
+    #[test]
+    fn a_container_path_round_trips_through_the_bang_syntax() {
+        let p = VPath::parse("/home/mb/src.zip!/doc/readme.md");
+        assert!(p.in_container() && p.is_local());
+        assert_eq!(p.as_path(), std::path::Path::new("/home/mb/src.zip"));
+        assert_eq!(p.inner_path(), "/doc/readme.md");
+        assert_eq!(p.depth(), 1);
+        assert_eq!(p.display_name(), "readme.md");
+        assert_eq!(p.to_string(), "/home/mb/src.zip!/doc/readme.md");
+
+        // Nesting, and over a remote path too.
+        let n = VPath::parse("sftp://srv/backups/x.tar.gz!/etc!/nginx.conf");
+        assert_eq!(n.depth(), 2);
+        assert_eq!(n.remote_path(), "/backups/x.tar.gz");
+        assert_eq!(n.inner(), ["/etc".into(), "/nginx.conf".into()]);
+        assert_eq!(n.to_string(), "sftp://srv/backups/x.tar.gz!/etc!/nginx.conf");
+
+        // A path with no `!/` in it is untouched, so an ordinary name keeps working.
+        assert!(!VPath::parse("/home/mb/hello!.txt").in_container());
+    }
+
+    #[test]
+    fn walking_inside_a_container_stays_inside_it_until_the_root() {
+        let root = VPath::local("/a/x.zip").enter("/");
+        assert_eq!(root.inner_path(), "/");
+        // The frame of a panel at the root of an archive says the archive's name.
+        assert_eq!(root.display_name(), "x.zip");
+        assert_eq!(root.to_string(), "/a/x.zip!/");
+
+        let file = root.join("dir").join("f.txt");
+        assert_eq!(file.inner_path(), "/dir/f.txt");
+        assert_eq!(file.as_path(), std::path::Path::new("/a/x.zip"));
+        assert_eq!(file.parent().unwrap().inner_path(), "/dir");
+        assert_eq!(file.parent().unwrap().parent().unwrap(), root);
+        assert_eq!(file.root(), root);
+        // An archive root is not a root: `..` has somewhere to go, which is out.
+        assert!(!root.is_root());
+        assert_eq!(root.parent(), Some(VPath::local("/a")));
+        assert_eq!(root.leave(), Some(VPath::local("/a/x.zip")));
+        assert_eq!(VPath::local("/a/x.zip").leave(), None);
+        // `..` inside is lexical, like everywhere else.
+        assert_eq!(
+            root.join("dir").join("..").join("g.txt").normalised(),
+            root.join("g.txt")
+        );
+    }
+
+    #[test]
+    fn two_archives_are_two_providers() {
+        let one = VPath::local("/a/x.zip").enter("/f.txt");
+        let two = VPath::local("/a/y.zip").enter("/f.txt");
+        let outside = VPath::local("/a/x.zip");
+        assert!(one.same_provider(&one.with_inner("/other.txt")));
+        assert!(!one.same_provider(&two));
+        // The archive and the directory it sits in are not one provider either: a copy out of
+        // it has to go through the job engine, not through a rename.
+        assert!(!one.same_provider(&outside));
+        assert!(one.starts_with(&one.root()));
+        assert!(!one.starts_with(&two.root()));
+        assert!(!one.starts_with(&outside));
     }
 
     #[test]
