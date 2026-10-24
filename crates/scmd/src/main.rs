@@ -700,6 +700,20 @@ fn interactive(mut app: App) -> Result<()> {
                         });
                     });
                 }
+                Request::Pack {
+                    id,
+                    archive,
+                    format,
+                    level,
+                    sources,
+                    cancel,
+                } => {
+                    let tx = tx.clone();
+                    let archives = archives.clone();
+                    runtime.spawn_blocking(move || {
+                        run_pack(id, archive, format, level, sources, cancel, tx, &archives)
+                    });
+                }
                 Request::Link { target, link, kind } => {
                     let tx = tx.clone();
                     let fs = RoutedFs::new(pool.clone(), runtime.handle().clone());
@@ -1009,6 +1023,101 @@ async fn fetch_remote(pool: &Pool, path: &VPath) -> Result<(PathBuf, RemoteStamp
     Ok((local, stamp))
 }
 
+/// Build an archive, reporting through the job channel so that the progress box, the counters
+/// and the status line are the ones every other job uses.
+///
+/// Not through the job engine: a zip's central directory and a compressed tar's single stream
+/// are not a sequence of independent file copies, so there is no plan to make. What the user
+/// sees is the same; what runs underneath is one pass through `scmd-arc`.
+#[allow(clippy::too_many_arguments)]
+fn run_pack(
+    id: u64,
+    archive: VPath,
+    format: scmd_arc::Format,
+    level: scmd_arc::Level,
+    sources: Vec<VPath>,
+    cancel: CancelToken,
+    tx: mpsc::Sender<Event>,
+    archives: &std::sync::Arc<scmd_arc::Cache>,
+) {
+    use scmd_jobs::{Outcome, Phase, Progress};
+
+    let started = std::time::Instant::now();
+    // A local pack only: writing an archive straight onto a server means uploading it as it
+    // grows, and SPEC 04 §4's rebuild is where that belongs.
+    let not_local = std::iter::once(&archive)
+        .chain(sources.iter())
+        .find(|p| !p.is_local() || p.in_container());
+    if let Some(path) = not_local {
+        let _ = tx.send(Event::JobDone {
+            id,
+            kind: scmd_jobs::JobKind::Pack,
+            outcome: Outcome {
+                errors: vec![(
+                    path.clone(),
+                    "an archive can only be built from local files, onto a local disk".to_string(),
+                )],
+                ..Outcome::default()
+            },
+        });
+        return;
+    }
+
+    let paths: Vec<std::path::PathBuf> =
+        sources.iter().map(|p| p.as_path().to_path_buf()).collect();
+    let mut last = std::time::Instant::now();
+    let mut progress = |current: &std::path::Path, bytes: u64| {
+        // Every file would be a redraw per file: a tree of ten thousand small files would
+        // spend its time painting. A tenth of a second is still a live bar.
+        if last.elapsed() < std::time::Duration::from_millis(100) {
+            return;
+        }
+        last = std::time::Instant::now();
+        let _ = tx.send(Event::JobProgress {
+            id,
+            progress: Progress {
+                phase: Phase::Running,
+                bytes_done: bytes,
+                current: Some(VPath::local(current)),
+                elapsed: started.elapsed(),
+                ..Progress::default()
+            },
+        });
+    };
+    let result = scmd_arc::create(
+        archive.as_path(),
+        format,
+        &paths,
+        level,
+        &cancel,
+        &mut progress,
+    );
+    // The archive on disk is new, so any index of a file by that name is not it any more.
+    archives.forget(archive.as_path());
+
+    let outcome = match result {
+        Ok(written) => Outcome {
+            files: written.files,
+            dirs: written.dirs,
+            bytes: written.bytes,
+            ..Outcome::default()
+        },
+        Err(scmd_arc::ArcError::Cancelled) => Outcome {
+            cancelled: true,
+            ..Outcome::default()
+        },
+        Err(e) => Outcome {
+            errors: vec![(archive.clone(), e.to_string())],
+            ..Outcome::default()
+        },
+    };
+    let _ = tx.send(Event::JobDone {
+        id,
+        kind: scmd_jobs::JobKind::Pack,
+        outcome,
+    });
+}
+
 /// Copy one entry out of an archive into the temporary directory, for the viewer and the
 /// editor — which both read a real file (SPEC 04 §5, the same shape as a remote fetch).
 fn fetch_entry(
@@ -1185,6 +1294,21 @@ mod tests {
                         purpose,
                         result,
                     });
+                }
+                Request::Pack {
+                    id,
+                    archive,
+                    format,
+                    level,
+                    sources,
+                    cancel,
+                } => {
+                    let (tx, rx) = mpsc::channel();
+                    let archives = std::sync::Arc::new(scmd_arc::Cache::new(Default::default()));
+                    run_pack(id, archive, format, level, sources, cancel, tx, &archives);
+                    while let Ok(event) = rx.try_recv() {
+                        app.handle_event(event);
+                    }
                 }
                 Request::DirSize { .. }
                 | Request::Shell { .. }
@@ -1468,6 +1592,100 @@ mod tests {
         serve(&mut app);
         assert!(!app.panel().cwd.in_container());
         assert_eq!(app.panel().cwd, VPath::local(root.path()));
+    }
+
+    /// `Shift+F1` builds an archive out of the selection, and `Shift+F2` takes one apart —
+    /// through the real writer, the real reader and the real job engine.
+    #[test]
+    fn an_archive_is_built_from_the_selection_and_taken_apart_again() {
+        let root = tempfile::tempdir().unwrap();
+        let left = root.path().join("left");
+        let right = root.path().join("right");
+        std::fs::create_dir_all(left.join("src")).unwrap();
+        std::fs::create_dir_all(&right).unwrap();
+        std::fs::write(left.join("src/main.rs"), b"fn main() {}\n").unwrap();
+        std::fs::write(left.join("readme.md"), b"# readme\n").unwrap();
+
+        let mut app = app_on(&left, &right);
+        serve(&mut app);
+
+        // Select both rows and pack them: the dialog offers the archive in the other panel,
+        // named after this directory.
+        key(&mut app, "Down");
+        key(&mut app, "Ins");
+        key(&mut app, "Ins");
+        assert_eq!(app.panel().selection.len(), 2);
+        key(&mut app, "Shift+F1");
+        let name = match &app.mode {
+            crate::app::Mode::Form(form) => form.text_value("pack.name"),
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(name, right.join("left.zip").to_string_lossy());
+        key(&mut app, "F10");
+        serve(&mut app);
+
+        let archive = right.join("left.zip");
+        assert!(archive.exists(), "{}", app.status);
+        let read =
+            scmd_arc::Archive::open(&archive, &scmd_arc::Limits::default(), &CancelToken::new())
+                .expect("the archive we just wrote");
+        let names: Vec<String> = read
+            .list("/")
+            .iter()
+            .map(|e| e.name_str().into_owned())
+            .collect();
+        assert_eq!(names, ["readme.md", "src"]);
+        assert_eq!(
+            read.read("/src/main.rs", &CancelToken::new()).unwrap(),
+            b"fn main() {}\n"
+        );
+
+        // Now the other way: the cursor onto the archive, `Shift+F2`, and its contents land
+        // in a directory of its own — not in one called `left.zip`.
+        key(&mut app, "Tab");
+        serve(&mut app);
+        while app.panel().current().map(|e| e.name_str().into_owned()) != Some("left.zip".into()) {
+            key(&mut app, "Down");
+        }
+        key(&mut app, "Shift+F2");
+        let to = match &app.mode {
+            crate::app::Mode::Form(form) => form.text_value("unpack.to"),
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(to, left.join("left").to_string_lossy());
+        key(&mut app, "F10");
+        serve(&mut app);
+        serve(&mut app);
+
+        assert_eq!(
+            std::fs::read(left.join("left/src/main.rs")).unwrap(),
+            b"fn main() {}\n"
+        );
+        assert!(
+            !left.join("left/left.zip").exists(),
+            "the contents were put inside a directory named after the archive"
+        );
+    }
+
+    /// A file that is not an archive, and a pack with nothing selected: both say so.
+    #[test]
+    fn the_two_ways_to_press_the_archive_keys_wrongly_both_say_why() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(root.path().join("notes.txt"), b"text").unwrap();
+        let mut app = app_on(root.path(), root.path());
+        serve(&mut app);
+
+        key(&mut app, "Down");
+        assert_eq!(app.panel().current().unwrap().name_str(), "notes.txt");
+        key(&mut app, "Shift+F2");
+        assert!(app.mode.is_normal(), "a dialog opened on a text file");
+        assert!(app.status_error, "{}", app.status);
+
+        // `..` is not something to pack.
+        key(&mut app, "Home");
+        key(&mut app, "Shift+F1");
+        assert!(app.mode.is_normal());
+        assert!(app.status_error, "{}", app.status);
     }
 
     /// A search that finds nothing has to say so, rather than leaving an empty list that

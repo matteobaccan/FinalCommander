@@ -15,6 +15,14 @@ pub enum JobKind {
     /// caller has already chosen: this searches inside files, never for them. What to look for
     /// lives in [`JobSpec::replace`].
     Replace,
+    /// Put [`JobSpec::sources`] into a new archive at [`JobSpec::target`].
+    ///
+    /// The engine does not run this one: an archive is written by `scmd-arc` in one pass,
+    /// because a format with a central directory or a compressed stream is not a sequence of
+    /// independent file copies and cannot be planned as one. The kind exists so that a pack
+    /// reports progress and finishes through the same box, counters and status line as every
+    /// other job — see `scmd::run_pack`.
+    Pack,
 }
 
 impl JobKind {
@@ -26,12 +34,16 @@ impl JobKind {
             JobKind::Wipe => "wipe",
             JobKind::Mkdir => "mkdir",
             JobKind::Replace => "replace",
+            JobKind::Pack => "pack",
         }
     }
 
     /// Does this job write into a target the user has to name?
     pub fn needs_target(self) -> bool {
-        matches!(self, JobKind::Copy | JobKind::Move | JobKind::Mkdir)
+        matches!(
+            self,
+            JobKind::Copy | JobKind::Move | JobKind::Mkdir | JobKind::Pack
+        )
     }
 }
 
@@ -89,6 +101,12 @@ pub struct JobOptions {
     pub buffer: usize,
     /// Plan and report, change nothing.
     pub dry_run: bool,
+    /// Copy what is *inside* each source directory rather than the directory itself.
+    ///
+    /// What extracting an archive means: the files land in the directory the user named, not
+    /// in one called `thing.zip` inside it. The target is treated as a directory and created
+    /// if it is not there.
+    pub contents: bool,
 }
 
 impl Default for JobOptions {
@@ -100,6 +118,7 @@ impl Default for JobOptions {
             only_newer: false,
             buffer: 256 * 1024,
             dry_run: false,
+            contents: false,
         }
     }
 }

@@ -43,6 +43,18 @@ pub enum Request {
         title: String,
         paths: Vec<VPath>,
     },
+    /// Build an archive. A job as far as the user is concerned — the same progress box, the
+    /// same counters — but the writing is one pass through `scmd-arc` rather than a plan of
+    /// file copies, because a central directory or a compressed stream is not a sequence of
+    /// independent files.
+    Pack {
+        id: u64,
+        archive: VPath,
+        format: scmd_arc::Format,
+        level: scmd_arc::Level,
+        sources: Vec<VPath>,
+        cancel: CancelToken,
+    },
     /// Create a link. Not a job: it is one syscall, with nothing to report progress on.
     Link {
         target: VPath,
@@ -630,6 +642,8 @@ pub struct App {
     pub hidden: Option<usize>,
     /// What was searched for last, so `Alt+F7` opens on it rather than on an empty dialog.
     pub last_find: FindSpec,
+    /// The archive format the last pack used, so the next one opens on it.
+    pub last_pack: scmd_arc::Format,
     /// The same for the replace dialog.
     pub last_replace: scmd_jobs::ReplaceOptions,
     /// A replacement runs twice: once to count, and then, if the user says so, for real. This
@@ -713,6 +727,7 @@ impl App {
             user_screen: Vec::new(),
             hidden: None,
             last_find: FindSpec::default(),
+            last_pack: scmd_arc::Format::Zip,
             last_replace: scmd_jobs::ReplaceOptions::default(),
             pending_replace: None,
             highlight: scmd_ui::Highlight::far_default(),
@@ -2060,6 +2075,7 @@ impl App {
             JobKind::Mkdir => "job-mkdir",
             JobKind::Wipe => "job-wipe",
             JobKind::Replace => "job-replace",
+            JobKind::Pack => "job-pack",
         })
     }
 
@@ -2143,6 +2159,35 @@ impl App {
             choice: 0,
         });
         self.requests.push(Request::Job { id, spec, cancel });
+    }
+
+    /// The same progress box as a job, with the archive writer behind it.
+    fn start_pack(
+        &mut self,
+        archive: VPath,
+        format: scmd_arc::Format,
+        level: scmd_arc::Level,
+        sources: Vec<VPath>,
+    ) {
+        let id = self.next_job_id;
+        self.next_job_id += 1;
+        let cancel = CancelToken::new();
+        self.mode = Mode::Job(JobView {
+            id,
+            kind: JobKind::Pack,
+            progress: Progress::default(),
+            question: None,
+            cancel: cancel.clone(),
+            choice: 0,
+        });
+        self.requests.push(Request::Pack {
+            id,
+            archive,
+            format,
+            level,
+            sources,
+            cancel,
+        });
     }
 
     fn job_done(&mut self, id: u64, kind: JobKind, outcome: Outcome) {
@@ -2625,6 +2670,8 @@ impl App {
                     sources: vec![target],
                 });
             }
+            Command::FilePack => self.open_pack_form(),
+            Command::FileUnpack => self.open_unpack_form(),
             Command::ToolFind => self.open_find_form(),
             Command::ToolReplace => {
                 let files = self.job_sources().len();
@@ -3724,6 +3771,129 @@ impl App {
 
     /// OK in the replace dialog: count first, always. The dry run and the write share the
     /// engine's one code path, so what the confirmation says is what the write will do.
+    /// `Shift+F1`: the dialog for a new archive out of what is selected.
+    fn open_pack_form(&mut self) {
+        let sources = self.job_sources();
+        if sources.is_empty() {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        }
+        // FAR's default: one item takes its own name, several take the directory's, and the
+        // archive is offered in the other panel — which is where a user looking at two panels
+        // means to put it.
+        let stem = if sources.len() == 1 {
+            sources[0].display_name()
+        } else {
+            self.panel().cwd.display_name()
+        };
+        let stem = stem.trim_end_matches('/').to_string();
+        let name = self
+            .other()
+            .cwd
+            .join(format!("{stem}.{}", self.last_pack.extension()))
+            .to_string();
+        self.mode = Mode::Form(Box::new(Form::pack(
+            name,
+            self.last_pack,
+            sources.len(),
+            &self.i18n,
+        )));
+    }
+
+    /// OK in the archive dialog: work out the format, and start writing.
+    fn apply_pack_form(&mut self, form: &Form) {
+        let name = form.text_value("pack.name");
+        if name.is_empty() {
+            let m = self.i18n.t("pack-needs-name");
+            self.set_error(m);
+            self.mode = Mode::Form(Box::new(form.clone()));
+            return;
+        }
+        let sources = self.job_sources();
+        if sources.is_empty() {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        }
+        let archive = self.resolve_path(&name);
+        // The name wins over the choice: a user who typed `.tar.gz` means that, whatever the
+        // row below says, and a name with no format in it takes the one that is chosen.
+        let chosen = scmd_arc::Format::ALL
+            .iter()
+            .copied()
+            .find(|f| f.extension() == form.text_value("pack.format"))
+            .unwrap_or(scmd_arc::Format::Zip);
+        let format = scmd_arc::Format::of_name(&archive.display_name()).unwrap_or(chosen);
+        let level = match form.text_value("pack.level").as_str() {
+            "fast" => scmd_arc::Level::Fast,
+            "best" => scmd_arc::Level::Best,
+            _ => scmd_arc::Level::Normal,
+        };
+        self.last_pack = format;
+        self.start_pack(archive, format, level, sources);
+    }
+
+    /// `Shift+F2`: the dialog for taking an archive apart.
+    fn open_unpack_form(&mut self) {
+        // Inside an archive this is a copy of what is selected, which `F5` already does well.
+        if self.panel().cwd.in_container() {
+            self.run(Command::FileCopy);
+            return;
+        }
+        let Some(entry) = self.panel().current().cloned() else {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        };
+        let path = self.panel().path_of(&entry);
+        let name = path.display_name();
+        if scmd_arc::Format::of_name(&name).is_none() {
+            let m = self.i18n.t("unpack-not-an-archive");
+            self.set_error(m);
+            return;
+        }
+        // A directory of its own, named after the archive without its extension: unpacking a
+        // hundred files straight into a panel is nobody's intention.
+        let stem = name
+            .strip_suffix(&format!(
+                ".{}",
+                scmd_arc::Format::of_name(&name)
+                    .map(|f| f.extension())
+                    .unwrap_or("")
+            ))
+            .unwrap_or(&name)
+            .to_string();
+        let to = self.other().cwd.join(stem).to_string();
+        self.mode = Mode::Form(Box::new(Form::unpack(to, name, &self.i18n)));
+    }
+
+    /// OK in the extract dialog: an ordinary copy job, out of the archive.
+    fn apply_unpack_form(&mut self, form: &Form) {
+        let to = form.text_value("unpack.to");
+        if to.is_empty() {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        }
+        let Some(entry) = self.panel().current().cloned() else {
+            return;
+        };
+        let archive = self.panel().path_of(&entry);
+        // The archive's contents, not a directory named after it.
+        let options = scmd_jobs::JobOptions {
+            contents: true,
+            ..Default::default()
+        };
+        let spec = JobSpec::new(
+            JobKind::Copy,
+            vec![archive.enter("/")],
+            Some(self.resolve_path(&to)),
+        )
+        .with_options(options);
+        self.start_job(spec);
+    }
+
     fn apply_replace_form(&mut self, form: &Form) {
         let needle = form.text_value("replace.needle");
         if needle.is_empty() {
@@ -4300,6 +4470,14 @@ impl App {
         }
         if form.kind == FormKind::Replace {
             self.apply_replace_form(&form);
+            return;
+        }
+        if form.kind == FormKind::Pack {
+            self.apply_pack_form(&form);
+            return;
+        }
+        if form.kind == FormKind::Unpack {
+            self.apply_unpack_form(&form);
             return;
         }
         let problems = form.apply(&mut self.cfg);
@@ -6697,9 +6875,10 @@ mod tests {
     #[test]
     fn an_entry_with_no_feature_behind_it_says_so_instead_of_pretending() {
         let mut app = app();
-        open(&mut app, 1, "menu-archive-add");
+        // The archive commands menu is the one archive entry still to come.
+        open(&mut app, 1, "menu-archive-commands");
         assert!(
-            app.status.contains("archive.add"),
+            app.status.contains("archive.commands"),
             "a missing feature must say so instead of doing nothing quietly: `{}`",
             app.status
         );

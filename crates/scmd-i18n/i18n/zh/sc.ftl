@@ -64,6 +64,7 @@ job-move = 移动
 job-delete = 删除
 job-wipe = 安全擦除
 job-replace = 替换中
+job-pack = 正在压缩
 job-mkdir = 新建目录
 job-planning = 正在分析…
 job-counters = { $files } / { $filestotal } 个文件 · { $bytes } / { $bytestotal }
@@ -385,3 +386,18 @@ replace-done = 已在 { $files } 个文件中替换 { $count } 处
 
 # ── 压缩包（SPEC 04 §4）─────────────────────────────────────────────────────────────────
 arc-read-only = 压缩包里的内容还不能修改 — F3 可以查看
+
+pack-title = 添加到压缩包
+pack-name = 压缩包
+pack-format = 格式
+pack-level = 压缩级别
+pack-level-normal = 普通
+pack-level-fast = 快速
+pack-level-best = 最大
+pack-scope = 已选择 { $count } 个文件
+pack-needs-name = 压缩包需要一个名字
+pack-done = { $name } 中有 { $files } 个文件
+unpack-title = 从压缩包解压
+unpack-to = 解压到
+unpack-scope = 来自 { $name }
+unpack-not-an-archive = 这不是我们能读取的压缩包

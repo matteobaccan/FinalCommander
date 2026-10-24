@@ -137,6 +137,10 @@ pub enum Command {
     CmdInsertNameOther,
     CmdInsertPath,
     CmdInsertPathOther,
+    /// Put the selected files into a new archive (`Shift+F1`).
+    FilePack,
+    /// Take an archive apart, into a directory (`Shift+F2`).
+    FileUnpack,
     ToolUserMenu,
     ToolFind,
     /// Replace across the selected files, with a dry run first.
@@ -297,6 +301,8 @@ impl Command {
             Command::CmdInsertNameOther,
             Command::CmdInsertPath,
             Command::CmdInsertPathOther,
+            Command::FilePack,
+            Command::FileUnpack,
             Command::ToolUserMenu,
             Command::ToolFind,
             Command::ToolReplace,
@@ -457,6 +463,8 @@ impl Command {
             Command::CmdInsertNameOther => "cmd.insert.name.other".into(),
             Command::CmdInsertPath => "cmd.insert.path".into(),
             Command::CmdInsertPathOther => "cmd.insert.path.other".into(),
+            Command::FilePack => "file.pack".into(),
+            Command::FileUnpack => "file.unpack".into(),
             Command::ToolUserMenu => "tool.usermenu".into(),
             Command::ToolFind => "tool.find".into(),
             Command::ToolReplace => "tool.replace".into(),
@@ -598,6 +606,8 @@ impl Command {
             ("cmd.insert.name.other", _) => Command::CmdInsertNameOther,
             ("cmd.insert.path", _) => Command::CmdInsertPath,
             ("cmd.insert.path.other", _) => Command::CmdInsertPathOther,
+            ("file.pack", _) => Command::FilePack,
+            ("file.unpack", _) => Command::FileUnpack,
             ("tool.usermenu", _) => Command::ToolUserMenu,
             ("tool.find", _) => Command::ToolFind,
             ("tool.replace", _) => Command::ToolReplace,

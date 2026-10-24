@@ -64,6 +64,7 @@ job-move = Spostamento
 job-delete = Eliminazione
 job-wipe = Cancellazione sicura
 job-replace = Sostituzione
+job-pack = Compressione
 job-mkdir = Creazione directory
 job-planning = analisi…
 job-counters = { $files } / { $filestotal } file · { $bytes } / { $bytestotal }
@@ -385,3 +386,18 @@ replace-done = { $count } occorrenze sostituite in { $files } file
 
 # ── archivi (SPEC 04 §4) ────────────────────────────────────────────────────────────────
 arc-read-only = il contenuto di un archivio non è ancora modificabile — F3 lo legge
+
+pack-title = Aggiungi all'archivio
+pack-name = Archivio
+pack-format = Formato
+pack-level = Compressione
+pack-level-normal = normale
+pack-level-fast = veloce
+pack-level-best = massima
+pack-scope = { $count } file selezionati
+pack-needs-name = l'archivio ha bisogno di un nome
+pack-done = { $files } file in { $name }
+unpack-title = Estrai dall'archivio
+unpack-to = Estrai in
+unpack-scope = da { $name }
+unpack-not-an-archive = non è un archivio che sappiamo leggere

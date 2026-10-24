@@ -79,6 +79,9 @@ pub enum PlanError {
     },
     #[error("cancelled")]
     Cancelled,
+    /// A kind the engine does not run, sent here by mistake.
+    #[error("a {} is not planned as file operations", kind.as_str())]
+    NotPlannable { kind: JobKind },
 }
 
 /// Expand a [`JobSpec`] into units, counting files and bytes, and refuse the impossible here
@@ -121,13 +124,33 @@ pub fn plan(fs: &dyn JobFs, spec: &JobSpec, cancel: &CancelToken) -> Result<Plan
         }
         JobKind::Copy | JobKind::Move => {
             let target = spec.target.clone().ok_or(PlanError::NoTarget)?;
+            // Extracting an archive means its contents, not a directory named after it, so
+            // each source is replaced by its children before anything else is decided.
+            let sources = if spec.options.contents {
+                contents_of(fs, &spec.sources, cancel)?
+            } else {
+                spec.sources.clone()
+            };
+            if sources.is_empty() {
+                return Err(PlanError::NoSources);
+            }
             let target_is_dir = fs
                 .facts(&target)
                 .map(|f| f.kind == EntryKind::Dir)
                 .unwrap_or(false);
-            let into_dir = target_is_dir || spec.sources.len() > 1;
+            let into_dir = target_is_dir || sources.len() > 1 || spec.options.contents;
+            // With `contents` the target holds the result and may not exist yet; the engine
+            // creates a directory it is given as a unit, which is what `Mkdir` plans too.
+            if spec.options.contents && !target_is_dir {
+                plan.units.push(Unit {
+                    src: None,
+                    dst: target.clone(),
+                    kind: UnitKind::Dir,
+                });
+                plan.dirs += 1;
+            }
 
-            for src in &spec.sources {
+            for src in &sources {
                 check_cancel(cancel)?;
                 let dst = if into_dir {
                     match src.file_name() {
@@ -155,7 +178,7 @@ pub fn plan(fs: &dyn JobFs, spec: &JobSpec, cancel: &CancelToken) -> Result<Plan
             // The removal units are appended but not counted: the counters describe the copy.
             if spec.kind == JobKind::Move {
                 let mut removals = Plan::default();
-                for src in &spec.sources {
+                for src in &sources {
                     walk_delete(fs, src, &mut removals, cancel, false)?;
                 }
                 plan.units.extend(removals.units);
@@ -193,9 +216,30 @@ pub fn plan(fs: &dyn JobFs, spec: &JobSpec, cancel: &CancelToken) -> Result<Plan
             }
         }
         JobKind::Mkdir => unreachable!("handled above"),
+        // An archive is written in one pass by `scmd-arc`, not as a sequence of file copies:
+        // there is nothing here to plan, and a caller that sends one here has the wrong road.
+        JobKind::Pack => return Err(PlanError::NotPlannable { kind: spec.kind }),
     }
 
     Ok(plan)
+}
+
+/// The children of each source directory, which is what `contents` plans instead.
+fn contents_of(
+    fs: &dyn JobFs,
+    sources: &[VPath],
+    cancel: &CancelToken,
+) -> Result<Vec<VPath>, PlanError> {
+    let mut out = Vec::new();
+    for src in sources {
+        check_cancel(cancel)?;
+        let children = fs.read_dir(src).map_err(|source| PlanError::Io {
+            path: src.clone(),
+            source,
+        })?;
+        out.extend(children.into_iter().map(|(name, _)| src.join(&name)));
+    }
+    Ok(out)
 }
 
 fn walk_copy(

@@ -64,6 +64,7 @@ job-move = Перенос
 job-delete = Удаление
 job-wipe = Затирание
 job-replace = Замена
+job-pack = Упаковка
 job-mkdir = Создание каталога
 job-planning = подготовка…
 job-counters = { $files } / { $filestotal } файлов · { $bytes } / { $bytestotal }
@@ -385,3 +386,18 @@ replace-done = заменено вхождений: { $count } в { $files } ф�
 
 # ── архивы (SPEC 04 §4) ─────────────────────────────────────────────────────────────────
 arc-read-only = содержимое архива пока нельзя изменить — F3 его читает
+
+pack-title = Добавить в архив
+pack-name = Архив
+pack-format = Формат
+pack-level = Сжатие
+pack-level-normal = обычное
+pack-level-fast = быстрое
+pack-level-best = максимальное
+pack-scope = выбрано файлов: { $count }
+pack-needs-name = архиву нужно имя
+pack-done = файлов в { $name }: { $files }
+unpack-title = Извлечь из архива
+unpack-to = Извлечь в
+unpack-scope = из { $name }
+unpack-not-an-archive = это не архив, который мы умеем читать

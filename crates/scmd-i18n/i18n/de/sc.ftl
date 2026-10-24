@@ -64,6 +64,7 @@ job-move = Verschieben
 job-delete = Löschen
 job-wipe = Sicheres Löschen
 job-replace = Ersetzen
+job-pack = Packen
 job-mkdir = Verzeichnis anlegen
 job-planning = planen…
 job-counters = { $files } / { $filestotal } Dateien · { $bytes } / { $bytestotal }
@@ -385,3 +386,18 @@ replace-done = { $count } Vorkommen in { $files } Dateien ersetzt
 
 # ── Archive (SPEC 04 §4) ────────────────────────────────────────────────────────────────
 arc-read-only = der Inhalt eines Archivs ist noch nicht änderbar — F3 liest ihn
+
+pack-title = Zum Archiv hinzufügen
+pack-name = Archiv
+pack-format = Format
+pack-level = Kompression
+pack-level-normal = normal
+pack-level-fast = schnell
+pack-level-best = maximal
+pack-scope = { $count } Dateien ausgewählt
+pack-needs-name = das Archiv braucht einen Namen
+pack-done = { $files } Dateien in { $name }
+unpack-title = Aus Archiv entpacken
+unpack-to = Entpacken nach
+unpack-scope = aus { $name }
+unpack-not-an-archive = kein Archiv, das wir lesen können

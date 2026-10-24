@@ -117,9 +117,14 @@ impl Form {
     pub fn build(kind: FormKind, cfg: &Config, i18n: &I18n) -> Form {
         let t = |id: &str| i18n.t(id);
         let fields = match kind {
-            // The session editor is built by `Form::site`, the find dialog by `Form::find` and
-            // the replace dialog by `Form::replace`: each needs more than the configuration.
-            FormKind::Site | FormKind::Find | FormKind::Replace => Vec::new(),
+            // The session editor is built by `Form::site`, the find dialog by `Form::find`,
+            // the replace dialog by `Form::replace` and the two archive dialogs by
+            // `Form::pack` and `Form::unpack`: each needs more than the configuration.
+            FormKind::Site
+            | FormKind::Find
+            | FormKind::Replace
+            | FormKind::Pack
+            | FormKind::Unpack => Vec::new(),
             FormKind::System => vec![
                 Field::toggle(
                     "panel.natural_sort",
@@ -271,6 +276,8 @@ impl Form {
             FormKind::Site => "site-new",
             FormKind::Find => "find-title",
             FormKind::Replace => "replace-title",
+            FormKind::Pack => "pack-title",
+            FormKind::Unpack => "unpack-title",
             FormKind::System => "menu-system-settings",
             FormKind::Panel => "menu-panel-settings",
             FormKind::Interface => "menu-interface-settings",
@@ -449,6 +456,58 @@ impl Form {
         Form {
             kind: FormKind::Replace,
             title: t("replace-title"),
+            fields,
+            cursor: 0,
+            site: None,
+            button: None,
+        }
+    }
+
+    /// `Shift+F1`: the archive to build, out of what is selected.
+    pub fn pack(name: String, format: scmd_arc::Format, files: usize, i18n: &I18n) -> Form {
+        let t = |id: &str| i18n.t(id);
+        let formats: Vec<(&str, String)> = scmd_arc::Format::ALL
+            .iter()
+            .map(|f| (f.extension(), f.label().to_string()))
+            .collect();
+        let levels = [
+            ("normal", t("pack-level-normal")),
+            ("fast", t("pack-level-fast")),
+            ("best", t("pack-level-best")),
+        ];
+        let fields = vec![
+            Field::text("pack.name", t("pack-name"), name),
+            choice(
+                "pack.format",
+                t("pack-format"),
+                &formats,
+                format.extension(),
+            ),
+            choice("pack.level", t("pack-level"), &levels, "normal"),
+            Field::Separator,
+            Field::Dim(i18n.t_args("pack-scope", &[("count", (files as i64).into())])),
+        ];
+        Form {
+            kind: FormKind::Pack,
+            title: t("pack-title"),
+            fields,
+            cursor: 0,
+            site: None,
+            button: None,
+        }
+    }
+
+    /// `Shift+F2`: where to put what is inside an archive.
+    pub fn unpack(to: String, archive: String, i18n: &I18n) -> Form {
+        let t = |id: &str| i18n.t(id);
+        let fields = vec![
+            Field::text("unpack.to", t("unpack-to"), to),
+            Field::Separator,
+            Field::Dim(i18n.t_args("unpack-scope", &[("name", archive.into())])),
+        ];
+        Form {
+            kind: FormKind::Unpack,
+            title: t("unpack-title"),
             fields,
             cursor: 0,
             site: None,

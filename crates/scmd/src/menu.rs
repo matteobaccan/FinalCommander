@@ -27,6 +27,10 @@ pub enum FormKind {
     Find,
     /// Replace across the selected files.
     Replace,
+    /// Put the selection into a new archive (SPEC 04 §4).
+    Pack,
+    /// Take an archive apart.
+    Unpack,
     System,
     Panel,
     Interface,
@@ -197,11 +201,15 @@ pub fn menus() -> Vec<Menu> {
                 item("menu-delete", "F8", Action::Run(Command::FileDelete)),
                 item("menu-wipe", "Alt+Del", Action::Run(Command::FileWipe)),
                 Entry::Separator,
-                item("menu-archive-add", "Shift+F1", Action::Todo("archive.add")),
+                item(
+                    "menu-archive-add",
+                    "Shift+F1",
+                    Action::Run(Command::FilePack),
+                ),
                 item(
                     "menu-archive-extract",
                     "Shift+F2",
-                    Action::Todo("archive.extract"),
+                    Action::Run(Command::FileUnpack),
                 ),
                 item(
                     "menu-archive-commands",

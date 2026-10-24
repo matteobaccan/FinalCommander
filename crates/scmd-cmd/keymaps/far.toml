@@ -51,6 +51,14 @@ keys = ["F8", "Del"]
 cmd = "file.delete"
 
 [[bind]]
+keys = ["Shift+F1"]
+cmd = "file.pack"
+
+[[bind]]
+keys = ["Shift+F2"]
+cmd = "file.unpack"
+
+[[bind]]
 keys = ["F9"]
 scope = "global"
 cmd = "app.menu"
