@@ -4,6 +4,67 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
+## [0.0.2] — 2026-10-24
+
+The menus. Everything the keys do can now be found by reading, which is the half of FAR that
+makes it learnable.
+
+### Menu bar (`F9`)
+
+- FAR's five menus — Left, Files, Commands, Options, Right — with `←`/`→` between them, `↑`/`↓`
+  over the entries, a letter to pick one, and a `√` on the view mode and the hidden-files
+  setting the panel is actually in.
+- `Left` and `Right` act on their own panel whichever one has the focus, as FAR's do.
+- Every entry is a command from the same vocabulary the keys use, so there is no behaviour
+  reachable only from a menu, and the shortcut shown beside an entry is read from the keymap in
+  force — rebind it in `scmd.toml` and the menu says the new key.
+- An entry whose feature is not here yet stays in the menu, drawn dim, and says
+  `not implemented: <command>` when chosen: the menu is a map of the program, and a map with
+  the gaps marked beats one that lies. A test stops those entries from advertising a key that
+  already does something else.
+
+### Settings dialogs
+
+- System, Panel, Interface and Confirmations. Every row is bound to a configuration key and
+  goes in through `Config::set` — the same code path as `--set key=value` — so a dialog cannot
+  write something the file format does not accept.
+- `OK` (or `F10`) applies to the running panels at once: no restart, nothing to save first.
+  `Esc` keeps nothing.
+- `Save setup` (`Shift+F9`) writes `scmd.toml` as the configuration now stands, themes that came
+  from the file included. What it writes parses back into the same configuration.
+
+### Lists to choose from
+
+- Languages — switches the whole interface on the spot — and themes.
+- Drives, mount points and open connections (`Alt+F1` left, `Alt+F2` right): the platform's
+  roots plus every live `sftp://` connection, and a configured-but-closed site connects first.
+- Folder history per panel (`Alt+F12`).
+- Sort modes (`Ctrl+F12`), where choosing the order already in force turns it round, the way FAR
+  does it, unless `panel.allow_reverse_sort` says otherwise. `Ctrl+Shift+F12` reverses directly.
+
+### Netbox session editor
+
+- `Alt+N` then `Ins`/`F7` stores a connection, `F4` edits the one under the cursor: name, host,
+  port, user, authentication (SSH agent, key file or ask), key file, remote folder, group,
+  keep-alive, compression. Connections no longer need `scmd.toml` to be edited by hand.
+- It is validated before it is stored — a host is required, port and keep-alive must be numbers,
+  the key authentication needs a file, and the result has to be a site the netbox can use. A
+  dialog that cannot be applied stays open with the reason in the status line.
+- No password or passphrase is ever a field: a session says *how* to authenticate and the secret
+  is asked for when the connection needs it.
+
+### Also
+
+- The dialog framework gained text rows with a real caret and the editing keys.
+- New commands: `app.themes`, `app.languages`, `app.setup.save`, `opt.system`, `opt.panel`,
+  `opt.interface`, `opt.confirmations`, `panel.sort.menu`, `panel.drive(left|right)`,
+  `panel.history`.
+- Two new settings: `panel.allow_reverse_sort` and `general.confirm_overwrite`.
+- 105 new messages in each of the seven languages.
+- `docs/spec/10-menus-and-dialogs.md` specifies all of it; `docs/BACKLOG.md` lists what is
+  specified but not built, with the open questions marked — including the two keys where we
+  differ from FAR today (`Ctrl+A` is select-all here, `Ctrl+L` is change-directory).
+
 ## [0.0.1] — 2026-10-24
 
 The first release anyone can download. It is a preview: the parts that are here are tested and
