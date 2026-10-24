@@ -6,6 +6,46 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+## [0.0.6] — 2026-10-24
+
+The panels FAR has and we did not, and the view modes to go with them.
+
+- **Quick view (`Ctrl+Q`)**: the viewer's own rows inside a panel's frame, following the other
+  panel's cursor — so text, a hex dump of something binary and the search machinery are the
+  same code the reader uses. The file is opened once and kept while the cursor stays on it. A
+  directory says what it is (measuring one is `F3`'s job) and a file whose bytes are not local
+  says that `F3` brings them out, because a preview that copies a file down on every cursor
+  movement is a trap.
+- **Info panel (`Ctrl+L`)**: where the other panel is, what kind of place that is — this
+  machine, a server, inside an archive, a list of files — the free space, what the directory
+  holds, what is selected, and the row under the cursor. Everything shown is already known:
+  nothing is read from the disk to draw it.
+- **Tree panel (`Ctrl+T`)**, with the directory cache that makes it bearable: rooted where the
+  other panel's path starts and opening its way down a level per read until the cursor is on
+  the directory that panel is showing. It is the one special kind that takes the focus, because
+  moving its cursor is how it changes the other panel's directory. `→`/`Enter` open a branch,
+  `←` closes it or climbs, `*` opens everything under the cursor up to two thousand rows, and
+  `Ctrl+R` forgets a branch and reads it again. The cache outlives the panel, so leaving the
+  tree and coming back costs no reads.
+- All three sit in the *passive* panel and the key that turns one on turns it off, as in FAR.
+- **`Ctrl+L` is settled**: it is FAR's info panel in both keymap profiles, and the
+  change-directory dialog moves to `Ctrl+Shift+L` — a key it can afford now that `cd` works on
+  the command line.
+- **Compare folders** (Commands menu): names, sizes and times, no subdirectories and no
+  contents, which is what makes it instant. Each panel keeps selected what the other does not
+  have or has in an older version, so what stays selected is what a copy would have to carry.
+- **FAR's five view modes on FAR's keys**: `Ctrl+1` brief (three columns of names), `Ctrl+2`
+  medium (two), `Ctrl+3` full, `Ctrl+4` wide (name and size, two columns), `Ctrl+5` detailed.
+  `Ctrl+3` and `Ctrl+4` therefore mean something different than they did in 0.0.5, which is the
+  point: a FAR user's fingers are the specification. A mode now says how many columns it draws
+  and whether it shows a size, so a column too narrow for what it holds falls back to fewer
+  columns.
+- **`Left` and `Right` move by a column** in the multi-column views, as they do in FAR, and do
+  nothing in the one-column views — also as in FAR.
+- The four view modes FAR has beyond ours (descriptions, long descriptions, owners, links), its
+  alternative full view, the deeper folder comparison, and the key tabs will need now that
+  `Ctrl+T` is the tree's are all lines in [`docs/BACKLOG.md`](docs/BACKLOG.md).
+
 ## [0.0.5] — 2026-10-24
 
 Archives: a panel can be inside one, and a key puts files into one.

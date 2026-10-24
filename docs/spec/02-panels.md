@@ -68,6 +68,13 @@ Built-in presets (names kept close to FAR's so veterans recognise them): `brief`
 N columns), `medium`, `full` (name, size, mtime), `wide`, `detail` (name, size, mtime, attrs,
 owner), `links`, `owners`, `descr`, plus `custom:0..9` from config:
 
+**Shipped (0.0.6)**: the first five, in FAR's order and on FAR's keys — `Ctrl+1` brief (three
+columns of names), `Ctrl+2` medium (two), `Ctrl+3` full, `Ctrl+4` wide (name and size, two
+columns), `Ctrl+5` detailed. A mode says how many columns it draws and whether it shows a size,
+so the layout follows from the mode rather than from a width guess, and a column too narrow for
+what it holds falls back to fewer columns. `links`, `owners`, `descr` and the custom sets want
+data we do not collect yet and are lines in `docs/BACKLOG.md`.
+
 ```toml
 [[panel.view.custom]]
 id = 0
@@ -177,12 +184,37 @@ is highlighted inside the name. `Esc` restores the previous cursor position.
 When the active panel is Tree/QuickView/Info, directory-changing commands apply to the other
 panel (FAR's rule) — this keeps `Enter` meaningful everywhere.
 
+### 7a. What shipped in 0.0.6, and the rule they share
+
+**Quick view** (`Ctrl+Q`), **Info** (`Ctrl+L`) and **Tree** (`Ctrl+T`), all three in the
+*passive* panel, each key turning its kind off again, and all three following the other
+panel's cursor.
+
+| | Quick view | Info | Tree |
+| --- | --- | --- | --- |
+| What it shows | the viewer's own rows for the file under the other panel's cursor | where that panel is, what kind of place that is, the free space, what the directory holds, what is selected, the row under the cursor | the directories under that panel's root |
+| Where the focus goes | to the files: there is nothing to select in a preview | the same | **into the tree**, because moving its cursor is how it changes the other panel's directory |
+| What it reads | the file, once, and again only when the cursor moves to another | nothing: everything shown is already known | one directory per expansion, through the worker, cached beyond the panel's life |
+| What it refuses | a directory (`F3` measures one) and a file whose bytes are not local (`F3` brings them out) | — | nothing: a directory it cannot read is an empty branch |
+
+The tree is rooted where the other panel's path starts — the drive, the archive, the server —
+and opens its way down a level per read until the cursor is on the directory that panel is
+showing, so it comes up where the user already is. `*` opens everything under the cursor up to
+two thousand rows, so `*` at the root of a disk cannot hang the panel.
+
+`Ctrl+L`'s divergence is settled with this: it is FAR's info panel, and our
+change-directory dialog moved to `Ctrl+Shift+L`, which it can afford now that `cd` works on
+the command line.
+
 ## 8. Tabs
 
 Per panel, each tab holds cwd, view, sort, filter, selection, cursor. Lockable (path reverts
 on close), nameable, reorderable, movable to the other side, duplicable. Persisted in
 `session.toml`. Default keys: `Ctrl+T` new, `Ctrl+W` close, `Ctrl+Tab` next, `Alt+1..9` jump
 (see `03-keymap.md` §9 for the conflict notes).
+
+`Ctrl+T` is the tree panel's as of 0.0.6, which is what FAR uses it for — FAR has no tabs.
+Tabs will need a key of their own when they land; `docs/BACKLOG.md` holds the question.
 
 ## 9. Layout
 
@@ -238,3 +270,13 @@ What FAR draws in and around a panel's frame, and what we do about it:
 | one panel full width | `Ctrl+F1` / `Ctrl+F2` | — | shipped; the focus follows the screen |
 | long names scrolled sideways | `Ctrl+Shift+←/→` | — | shipped, per panel, reset on a change of directory |
 | free space, screen counter, clock in the corner | — | — | the counter and the clock want a repaint on a timer; see the backlog |
+
+### 9c. Comparing the two panels (shipped)
+
+FAR's own rule, which is why it is instant: names, sizes and times — no subdirectories and no
+contents. In each panel it selects the files the other does not have and the ones it has in an
+older version, so what stays selected is exactly what a copy would have to carry, and a file
+that is the same on both sides is selected in neither. Case is ignored when matching names,
+because the two panels may be on filesystems that disagree about it; a pair that differs only
+in case is then a difference the user sees rather than a pair we quietly match up. With no
+timestamp on either side the size is all there is to go on. Directories are left alone.
