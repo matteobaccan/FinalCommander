@@ -56,6 +56,11 @@ scope = "global"
 cmd = "app.menu"
 
 [[bind]]
+keys = ["Shift+F9"]
+scope = "global"
+cmd = "app.setup.save"
+
+[[bind]]
 keys = ["F10"]
 scope = "global"
 cmd = "app.quit"
@@ -125,8 +130,14 @@ cmd = "panel.sort.by(size)"
 keys = ["Ctrl+F7"]
 cmd = "panel.sort.by(none)"
 
+# FAR opens the sort list on Ctrl+F12; reversing is a choice inside it, so the direct
+# toggle moves one key further out.
 [[bind]]
 keys = ["Ctrl+F12"]
+cmd = "panel.sort.menu"
+
+[[bind]]
+keys = ["Ctrl+Shift+F12"]
 cmd = "panel.sort.reverse"
 
 # ---------------------------------------------------------------- navigation
@@ -465,3 +476,19 @@ cmd = "editor.readonly.toggle"
 keys = ["Ctrl+R"]
 scope = "editor"
 cmd = "editor.reload"
+
+# ---------------------------------------------------------------- menus and dialogs (SPEC 10)
+[[bind]]
+keys = ["Alt+F1"]
+scope = "panel"
+cmd = "panel.drive(left)"
+
+[[bind]]
+keys = ["Alt+F2"]
+scope = "panel"
+cmd = "panel.drive(right)"
+
+[[bind]]
+keys = ["Alt+F12"]
+scope = "panel"
+cmd = "panel.history"

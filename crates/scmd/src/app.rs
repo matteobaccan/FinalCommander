@@ -1,6 +1,6 @@
 use std::sync::mpsc::Sender;
 
-use scmd_cmd::{Command, Key, KeyCode, Keymap, Mods, Scope};
+use scmd_cmd::{Command, Key, KeyCode, Keymap, Mods, Scope, Side};
 use scmd_config::DecompileRule;
 use scmd_config::{Config, Paths, QuickSearch};
 use scmd_core::{CancelToken, Entry, MaskScope, Sort, SortKey, VPath, ViewMode};
@@ -12,6 +12,8 @@ use scmd_tui::Input;
 use scmd_ui::{Theme, ThemeSet};
 use scmd_view::{FileSource, SearchMode, Viewer};
 
+use crate::form::{Form, Pick, PickRow};
+use crate::menu::{self, Action, FormKind, Mark, PickKind};
 use crate::panel::Panel;
 
 /// Work the application wants done off the UI thread. The runner drains these.
@@ -296,6 +298,15 @@ pub enum Mode {
     Sites {
         cursor: usize,
     },
+    /// The menu bar (`F9`): which menu is open and which entry is under the cursor.
+    Menu {
+        menu: usize,
+        item: usize,
+    },
+    /// A settings dialog.
+    Form(Box<Form>),
+    /// A list to choose one row from.
+    Pick(Box<Pick>),
 }
 
 impl Mode {
@@ -771,6 +782,18 @@ impl App {
             Mode::Sites { cursor } => {
                 self.mode = Mode::Sites { cursor };
                 self.sites_key(key, cursor);
+            }
+            Mode::Menu { menu, item } => {
+                self.mode = Mode::Menu { menu, item };
+                self.menu_key(key, menu, item);
+            }
+            Mode::Form(form) => {
+                self.mode = Mode::Form(form);
+                self.form_key(key);
+            }
+            Mode::Pick(pick) => {
+                self.mode = Mode::Pick(pick);
+                self.pick_key(key);
             }
             Mode::Normal => self.normal_key(key),
         }
@@ -1863,6 +1886,24 @@ impl App {
             Command::FileView => self.open_viewer(),
             Command::FileEdit => self.open_editor(),
             Command::FileEditNew => self.open_new_editor(),
+            Command::AppMenu => self.open_menu(),
+            Command::AppThemes => self.open_pick(PickKind::Themes, self.active),
+            Command::AppLanguages => self.open_pick(PickKind::Languages, self.active),
+            Command::AppSetupSave => self.save_setup(),
+            Command::OptSystem => self.open_form(FormKind::System),
+            Command::OptPanel => self.open_form(FormKind::Panel),
+            Command::OptInterface => self.open_form(FormKind::Interface),
+            Command::OptConfirmations => self.open_form(FormKind::Confirmations),
+            Command::PanelSortMenu => self.open_pick(PickKind::SortModes, self.active),
+            Command::PanelHistory => self.open_pick(PickKind::FoldersHistory, self.active),
+            Command::PanelDrive(side) => {
+                let side = match side {
+                    Side::Left => 0,
+                    Side::Right => 1,
+                    Side::Active => self.active,
+                };
+                self.open_pick(PickKind::Drives, side)
+            }
             Command::NetSites => self.mode = Mode::Sites { cursor: 0 },
             Command::NetConnect => {
                 let title = self.i18n.t("net-prompt-url");
@@ -2203,6 +2244,427 @@ impl App {
             None => {
                 let m = self.i18n.t("net-local-panel");
                 self.set_status(m);
+            }
+        }
+    }
+
+    // ── the menu bar and its dialogs (SPEC 10) ─────────────────────────────────────────────
+
+    /// `F9`: open the menu bar.
+    fn open_menu(&mut self) {
+        let menu = if self.active == 1 { 4 } else { 0 };
+        self.mode = Mode::Menu {
+            menu,
+            item: self.first_item(menu),
+        };
+    }
+
+    fn first_item(&self, menu: usize) -> usize {
+        menu::menus()
+            .get(menu)
+            .and_then(|m| {
+                m.items
+                    .iter()
+                    .position(|e| matches!(e, menu::Entry::Item(_)))
+            })
+            .unwrap_or(0)
+    }
+
+    /// Walk to the next or previous entry, stepping over separators.
+    fn menu_step(&self, menu: usize, item: usize, down: bool) -> usize {
+        let menus = menu::menus();
+        let Some(m) = menus.get(menu) else {
+            return item;
+        };
+        let len = m.items.len();
+        if len == 0 {
+            return item;
+        }
+        let mut i = item;
+        for _ in 0..len {
+            i = if down {
+                (i + 1) % len
+            } else {
+                (i + len - 1) % len
+            };
+            if matches!(m.items.get(i), Some(menu::Entry::Item(_))) {
+                return i;
+            }
+        }
+        item
+    }
+
+    fn menu_key(&mut self, key: Key, menu: usize, item: usize) {
+        let menus = menu::menus();
+        let count = menus.len();
+        match key.code {
+            KeyCode::Esc | KeyCode::F(9) | KeyCode::F(10) => self.mode = Mode::Normal,
+            KeyCode::Left => {
+                let menu = (menu + count - 1) % count;
+                self.mode = Mode::Menu {
+                    menu,
+                    item: self.first_item(menu),
+                };
+            }
+            KeyCode::Right => {
+                let menu = (menu + 1) % count;
+                self.mode = Mode::Menu {
+                    menu,
+                    item: self.first_item(menu),
+                };
+            }
+            KeyCode::Up => {
+                self.mode = Mode::Menu {
+                    menu,
+                    item: self.menu_step(menu, item, false),
+                }
+            }
+            KeyCode::Down => {
+                self.mode = Mode::Menu {
+                    menu,
+                    item: self.menu_step(menu, item, true),
+                }
+            }
+            KeyCode::Home => {
+                self.mode = Mode::Menu {
+                    menu,
+                    item: self.first_item(menu),
+                }
+            }
+            KeyCode::End => {
+                self.mode = Mode::Menu {
+                    menu,
+                    item: self.menu_step(menu, 0, false),
+                }
+            }
+            KeyCode::Enter => self.run_menu_item(menu, item),
+            // A letter picks the first entry whose label starts with it, as FAR does.
+            KeyCode::Char(c) if c.is_alphanumeric() => {
+                let wanted = c.to_lowercase().next().unwrap_or(c);
+                let found = menus.get(menu).and_then(|m| {
+                    m.items.iter().position(|e| match e {
+                        menu::Entry::Item(i) => self
+                            .i18n
+                            .t(i.label)
+                            .chars()
+                            .next()
+                            .map(|f| f.to_lowercase().next().unwrap_or(f) == wanted)
+                            .unwrap_or(false),
+                        menu::Entry::Separator => false,
+                    })
+                });
+                if let Some(index) = found {
+                    self.run_menu_item(menu, index);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Do what the entry says. Left and Right aim at their own panel, as FAR does.
+    fn run_menu_item(&mut self, menu_index: usize, item: usize) {
+        let menus = menu::menus();
+        let Some(m) = menus.get(menu_index) else {
+            self.mode = Mode::Normal;
+            return;
+        };
+        let side = m.side;
+        let Some(menu::Entry::Item(entry)) = m.items.get(item) else {
+            return;
+        };
+        let action = entry.action.clone();
+        self.mode = Mode::Normal;
+        if let Some(side) = side {
+            self.active = side;
+        }
+        match action {
+            Action::Run(cmd) => self.run(cmd),
+            Action::Todo(what) => self.not_implemented(what),
+        }
+    }
+
+    /// Is the `√` on? The left and right menus mark the state of their own panel.
+    pub fn menu_mark(&self, mark: &Mark, side: Option<usize>) -> bool {
+        let panel = &self.panels[side.unwrap_or(self.active)];
+        match mark {
+            Mark::None => false,
+            Mark::View(mode) => panel.view == *mode,
+            Mark::Hidden => panel.show_hidden,
+        }
+    }
+
+    pub fn open_form(&mut self, kind: FormKind) {
+        self.mode = Mode::Form(Box::new(Form::build(kind, &self.cfg, &self.i18n)));
+    }
+
+    fn form_key(&mut self, key: Key) {
+        let Mode::Form(form) = &mut self.mode else {
+            return;
+        };
+        match key.code {
+            KeyCode::Esc => self.mode = Mode::Normal,
+            KeyCode::Up => {
+                if form.button.is_some() {
+                    form.button = None;
+                } else {
+                    form.move_cursor(false)
+                }
+            }
+            KeyCode::Down => form.move_cursor(true),
+            KeyCode::Char(' ') => form.toggle(true),
+            KeyCode::Left => form.toggle(false),
+            KeyCode::Right => form.toggle(true),
+            KeyCode::Tab => {
+                form.button = Some(match form.button {
+                    None => 0,
+                    Some(0) => 1,
+                    Some(_) => 0,
+                })
+            }
+            KeyCode::Enter => {
+                // Enter on a row toggles it; on the buttons it answers the dialog.
+                match form.button {
+                    Some(1) => self.mode = Mode::Normal,
+                    Some(_) => self.apply_form(),
+                    None => form.toggle(true),
+                }
+            }
+            KeyCode::F(10) => self.apply_form(),
+            _ => {}
+        }
+    }
+
+    /// OK: write the dialog into the configuration and act on what changed at once.
+    fn apply_form(&mut self) {
+        let Mode::Form(form) = std::mem::replace(&mut self.mode, Mode::Normal) else {
+            return;
+        };
+        let problems = form.apply(&mut self.cfg);
+        if !problems.is_empty() {
+            self.set_error(problems.join("; "));
+            return;
+        }
+        self.apply_config();
+        let msg = self.i18n.t("opt-applied");
+        self.set_status(msg);
+    }
+
+    /// Push the configuration into the running panels: the dialogs are useless if the change
+    /// only shows up after a restart.
+    pub fn apply_config(&mut self) {
+        let sort = Sort {
+            key: parse_sort(&self.cfg.panel.sort),
+            reverse: self.cfg.panel.reverse,
+            dirs_first: self.cfg.panel.dirs_first,
+            selected_first: self.cfg.panel.selected_first,
+            natural: self.cfg.panel.natural_sort,
+            ..Sort::default()
+        };
+        let view = ViewMode::parse(&self.cfg.panel.view).unwrap_or(ViewMode::Full);
+        for panel in &mut self.panels {
+            panel.sort = sort;
+            panel.view = view;
+            panel.show_hidden = self.cfg.panel.show_hidden;
+            panel.rebuild();
+        }
+    }
+
+    /// Write the configuration file, so the dialogs are not lost on exit.
+    fn save_setup(&mut self) {
+        let path = self.paths.config_file.clone();
+        if let Some(parent) = path.parent() {
+            if let Err(e) = std::fs::create_dir_all(parent) {
+                self.set_error(format!("{}: {e}", parent.display()));
+                return;
+            }
+        }
+        let mut text = self.cfg.dump();
+        for theme in self.themes.iter() {
+            if theme.source == scmd_ui::ThemeSource::Config {
+                text.push('\n');
+                text.push_str(&theme.to_toml());
+            }
+        }
+        match std::fs::write(&path, text) {
+            Ok(()) => {
+                let msg = self
+                    .i18n
+                    .t_args("opt-saved", &[("path", path.display().to_string().into())]);
+                self.set_status(msg);
+            }
+            Err(e) => self.set_error(format!("{}: {e}", path.display())),
+        }
+    }
+
+    pub fn open_pick(&mut self, kind: PickKind, side: usize) {
+        let pick = match kind {
+            PickKind::Languages => Pick::new(
+                kind,
+                self.i18n.t("menu-languages"),
+                scmd_i18n::LANGUAGES
+                    .iter()
+                    .map(|(tag, name)| PickRow {
+                        label: format!("{name}  ({tag})"),
+                        value: (*tag).to_string(),
+                        current: *tag == self.i18n.tag(),
+                    })
+                    .collect(),
+                side,
+            ),
+            PickKind::Themes => Pick::new(
+                kind,
+                self.i18n.t("menu-themes"),
+                self.themes
+                    .iter()
+                    .map(|theme| PickRow {
+                        label: theme.name.clone(),
+                        value: theme.id.clone(),
+                        current: theme.id == self.theme.id,
+                    })
+                    .collect(),
+                side,
+            ),
+            PickKind::Drives => {
+                let mut rows: Vec<PickRow> = local_roots()
+                    .into_iter()
+                    .map(|path| PickRow {
+                        label: path.clone(),
+                        value: path,
+                        current: false,
+                    })
+                    .collect();
+                for authority in &self.connected {
+                    rows.push(PickRow {
+                        label: format!("sftp://{authority}"),
+                        value: format!("sftp://{authority}/"),
+                        current: self.panels[side].cwd.authority() == Some(authority.as_str()),
+                    });
+                }
+                Pick::new(kind, self.i18n.t("menu-change-drive"), rows, side)
+            }
+            PickKind::FoldersHistory => {
+                let panel = &self.panels[side];
+                let current = panel.cwd.to_string();
+                let mut rows: Vec<PickRow> = panel
+                    .history
+                    .iter()
+                    .rev()
+                    .map(|p| PickRow {
+                        label: p.to_string(),
+                        value: p.to_string(),
+                        current: p.to_string() == current,
+                    })
+                    .collect();
+                rows.dedup_by(|a, b| a.value == b.value);
+                Pick::new(kind, self.i18n.t("menu-folders-history"), rows, side)
+            }
+            PickKind::SortModes => {
+                let panel = &self.panels[side];
+                let keys = [
+                    (SortKey::Name, "sort-name"),
+                    (SortKey::Ext, "sort-ext"),
+                    (SortKey::Size, "sort-size"),
+                    (SortKey::MTime, "sort-mtime"),
+                    (SortKey::Unsorted, "sort-none"),
+                ];
+                Pick::new(
+                    kind,
+                    self.i18n.t("menu-sort-modes"),
+                    keys.iter()
+                        .map(|(key, id)| PickRow {
+                            label: self.i18n.t(id),
+                            value: format!("{key:?}").to_lowercase(),
+                            current: panel.sort.key == *key,
+                        })
+                        .collect(),
+                    side,
+                )
+            }
+        };
+        self.mode = Mode::Pick(Box::new(pick));
+    }
+
+    fn pick_key(&mut self, key: Key) {
+        let Mode::Pick(pick) = &mut self.mode else {
+            return;
+        };
+        match key.code {
+            KeyCode::Esc | KeyCode::F(10) => self.mode = Mode::Normal,
+            KeyCode::Up => pick.move_cursor(-1),
+            KeyCode::Down => pick.move_cursor(1),
+            KeyCode::PageUp => pick.move_cursor(-10),
+            KeyCode::PageDown => pick.move_cursor(10),
+            KeyCode::Home => pick.cursor = 0,
+            KeyCode::End => pick.cursor = pick.rows.len().saturating_sub(1),
+            KeyCode::Enter => self.apply_pick(),
+            _ => {}
+        }
+    }
+
+    fn apply_pick(&mut self) {
+        let Mode::Pick(pick) = std::mem::replace(&mut self.mode, Mode::Normal) else {
+            return;
+        };
+        let Some(row) = pick.chosen().cloned() else {
+            return;
+        };
+        match pick.kind {
+            PickKind::Languages => {
+                self.i18n = I18n::new(&row.value);
+                self.cfg.ui.language = row.value.clone();
+                let msg = self
+                    .i18n
+                    .t_args("opt-language-set", &[("name", row.label.clone().into())]);
+                self.set_status(msg);
+            }
+            PickKind::Themes => {
+                if let Some(theme) = self.themes.get(&row.value).cloned() {
+                    self.cfg.ui.theme = theme.id.clone();
+                    let name = theme.name.clone();
+                    self.theme = theme;
+                    let msg = self.i18n.t_args("msg-theme", &[("name", name.into())]);
+                    self.set_status(msg);
+                }
+            }
+            PickKind::Drives | PickKind::FoldersHistory => {
+                self.active = pick.side;
+                let target = VPath::parse(&row.value);
+                if target.is_remote() {
+                    match scmd_net::Site::parse_url(&row.value) {
+                        Ok(site) => match self.connected_site_path(&site) {
+                            Some(path) => self.goto(path),
+                            None => self.connect_to(site, None, false),
+                        },
+                        Err(e) => self.set_error(e.to_string()),
+                    }
+                } else {
+                    self.goto(target.normalised());
+                }
+            }
+            PickKind::SortModes => {
+                let key = match row.value.as_str() {
+                    "ext" => SortKey::Ext,
+                    "size" => SortKey::Size,
+                    "mtime" => SortKey::MTime,
+                    "unsorted" | "none" => SortKey::Unsorted,
+                    _ => SortKey::Name,
+                };
+                let panel = &mut self.panels[pick.side];
+                // Choosing the order that is already in force turns it round, the way FAR
+                // does it — unless the setting says reverse sorting is not wanted.
+                if panel.sort.key == key && self.cfg.panel.allow_reverse_sort {
+                    panel.sort.reverse = !panel.sort.reverse;
+                } else {
+                    panel.sort.key = key;
+                }
+                let reversed = panel.sort.reverse;
+                panel.rebuild();
+                let mut name = row.label.clone();
+                if reversed {
+                    name.push_str(" ↓");
+                }
+                let msg = self.i18n.t_args("sort-set", &[("name", name.into())]);
+                self.set_status(msg);
             }
         }
     }
@@ -2963,6 +3425,29 @@ fn parse_sort(s: &str) -> SortKey {
     }
 }
 
+/// The places a panel can jump to: `/` and the home directory on Unix, the drive letters that
+/// answer on Windows. No platform crate yet, so this is what `std` can tell us.
+pub fn local_roots() -> Vec<String> {
+    let mut roots = Vec::new();
+    if cfg!(windows) {
+        for letter in b'A'..=b'Z' {
+            let path = format!("{}:\\", letter as char);
+            if std::path::Path::new(&path).exists() {
+                roots.push(path);
+            }
+        }
+    } else {
+        roots.push("/".to_string());
+    }
+    if let Some(home) = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")) {
+        let home = home.to_string_lossy().into_owned();
+        if !home.is_empty() && !roots.contains(&home) {
+            roots.push(home);
+        }
+    }
+    roots
+}
+
 /// Where a panel goes when the connection it was on is closed.
 pub fn local_home() -> VPath {
     VPath::local(
@@ -3041,6 +3526,242 @@ mod tests {
 
     fn press(app: &mut App, key: &str) {
         app.handle_input(Input::Key(key.parse().unwrap()));
+    }
+
+    // ── the menu bar and the dialogs (SPEC 10) ──────────────────────────────────────────────
+
+    /// Where in the open menu is the entry with this label?
+    fn menu_row(menu: usize, label: &str) -> usize {
+        menu::menus()[menu]
+            .items
+            .iter()
+            .position(|e| matches!(e, menu::Entry::Item(i) if i.label == label))
+            .unwrap_or_else(|| panic!("no `{label}` in menu {menu}"))
+    }
+
+    fn open(app: &mut App, menu: usize, label: &str) {
+        press(app, "F9");
+        let item = menu_row(menu, label);
+        app.mode = Mode::Menu { menu, item };
+        press(app, "Enter");
+    }
+
+    #[test]
+    fn f9_opens_the_menu_on_the_side_that_has_the_focus() {
+        let mut app = app();
+        press(&mut app, "F9");
+        assert!(matches!(app.mode, Mode::Menu { menu: 0, .. }));
+        press(&mut app, "Esc");
+        assert!(app.mode.is_normal());
+
+        app.active = 1;
+        press(&mut app, "F9");
+        assert!(matches!(app.mode, Mode::Menu { menu: 4, .. }));
+    }
+
+    #[test]
+    fn the_menu_walks_sideways_and_skips_separators() {
+        let mut app = app();
+        press(&mut app, "F9");
+        press(&mut app, "Right");
+        let Mode::Menu { menu, item } = app.mode else {
+            panic!("the menu closed")
+        };
+        assert_eq!(menu, 1);
+        assert_eq!(item, 0);
+        press(&mut app, "Left");
+        press(&mut app, "Left");
+        assert!(matches!(app.mode, Mode::Menu { menu: 4, .. }));
+
+        // Down from the last entry before a separator must land on an entry, never on the line.
+        press(&mut app, "Esc");
+        press(&mut app, "F9");
+        for _ in 0..40 {
+            press(&mut app, "Down");
+            let Mode::Menu { menu, item } = app.mode else {
+                panic!("the menu closed")
+            };
+            assert!(
+                matches!(menu::menus()[menu].items[item], menu::Entry::Item(_)),
+                "the cursor stopped on a separator"
+            );
+        }
+    }
+
+    #[test]
+    fn a_menu_entry_runs_its_command_on_its_own_panel() {
+        let mut app = app();
+        app.active = 0;
+        // The Right menu acts on the right panel even when the left one has the focus.
+        open(&mut app, 4, "menu-brief");
+        assert_eq!(app.panels[1].view, ViewMode::Brief);
+        assert_eq!(app.panels[0].view, ViewMode::Full);
+        assert_eq!(app.active, 1);
+    }
+
+    #[test]
+    fn an_entry_with_no_feature_behind_it_says_so_instead_of_pretending() {
+        let mut app = app();
+        open(&mut app, 1, "menu-archive-add");
+        assert!(
+            app.status.contains("archive.add"),
+            "a missing feature must say so instead of doing nothing quietly: `{}`",
+            app.status
+        );
+        assert!(app.mode.is_normal());
+    }
+
+    #[test]
+    fn the_system_dialog_writes_through_to_the_configuration() {
+        let mut app = app();
+        app.cfg.panel.natural_sort = false;
+        open(&mut app, 3, "menu-system-settings");
+        let Mode::Form(form) = &app.mode else {
+            panic!("the dialog did not open")
+        };
+        assert_eq!(form.kind, FormKind::System);
+
+        press(&mut app, "Space"); // the first row: natural number order
+        press(&mut app, "Tab"); // to OK
+        press(&mut app, "Enter");
+        assert!(app.mode.is_normal());
+        assert!(app.cfg.panel.natural_sort, "the dialog was not applied");
+
+        // Esc throws the change away.
+        open(&mut app, 3, "menu-system-settings");
+        press(&mut app, "Space");
+        press(&mut app, "Esc");
+        assert!(app.cfg.panel.natural_sort);
+    }
+
+    #[test]
+    fn the_panel_dialog_takes_effect_at_once() {
+        let mut app = app();
+        assert!(!app.panels[0].show_hidden);
+        open(&mut app, 3, "menu-panel-settings");
+        press(&mut app, "Space"); // show hidden files
+        press(&mut app, "F10"); // the shortcut for OK
+        assert!(app.cfg.panel.show_hidden);
+        assert!(
+            app.panels[0].show_hidden,
+            "the panel did not pick up the new setting"
+        );
+    }
+
+    #[test]
+    fn the_language_list_switches_the_interface() {
+        let mut app = app();
+        open(&mut app, 3, "menu-languages");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("the list did not open")
+        };
+        let row = pick
+            .rows
+            .iter()
+            .position(|r| r.value == "it")
+            .expect("Italian is shipped");
+        let Mode::Pick(pick) = &mut app.mode else {
+            unreachable!()
+        };
+        pick.cursor = row;
+        press(&mut app, "Enter");
+        assert_eq!(app.i18n.tag(), "it");
+        assert_eq!(app.cfg.ui.language, "it");
+        assert_eq!(menu::menus()[1].title, "menu-files");
+        assert_eq!(app.i18n.t("menu-files"), "File");
+    }
+
+    #[test]
+    fn the_sort_list_turns_the_order_round_when_the_same_order_is_chosen_again() {
+        let mut app = app();
+        press(&mut app, "Ctrl+F12");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("the sort list did not open")
+        };
+        assert_eq!(pick.kind, PickKind::SortModes);
+        assert!(
+            pick.rows[pick.cursor].current,
+            "the cursor starts on the order in force"
+        );
+        assert!(!app.panels[0].sort.reverse);
+        press(&mut app, "Enter");
+        assert!(
+            app.panels[0].sort.reverse,
+            "choosing it again did not reverse it"
+        );
+
+        // With reverse sorting switched off in the settings, it stays as it is.
+        app.cfg.panel.allow_reverse_sort = false;
+        press(&mut app, "Ctrl+F12");
+        press(&mut app, "Enter");
+        assert!(app.panels[0].sort.reverse);
+    }
+
+    #[test]
+    fn the_folders_list_goes_back_to_a_folder_this_panel_has_been_in() {
+        let mut app = app();
+        app.goto(VPath::local("/home/mb/docs"));
+        press(&mut app, "Alt+F12");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("the history did not open")
+        };
+        assert_eq!(pick.kind, PickKind::FoldersHistory);
+        assert!(
+            pick.rows.iter().any(|r| r.value.contains("/home/mb")),
+            "the folder we came from is not in the list: {:?}",
+            pick.rows
+        );
+    }
+
+    #[test]
+    fn save_setup_writes_a_configuration_file_that_can_be_read_back() {
+        let dir = std::env::temp_dir().join(format!("scmd-setup-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("scmd.toml");
+        let mut app = app();
+        app.paths.config_file = file.clone();
+        app.cfg.panel.show_hidden = true;
+        press(&mut app, "Shift+F9");
+        assert!(!app.status_error, "{}", app.status);
+        let text = std::fs::read_to_string(&file).unwrap();
+        let (back, problems) =
+            Config::parse("scmd.toml", &text).expect("what we write, we can read");
+        assert!(problems.is_empty(), "{problems:?}");
+        assert!(back.panel.show_hidden);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn every_menu_entry_either_runs_something_or_admits_it_cannot() {
+        let mut app = app();
+        for (index, m) in menu::menus().iter().enumerate() {
+            for entry in &m.items {
+                let menu::Entry::Item(item) = entry else {
+                    continue;
+                };
+                if matches!(item.action, Action::Run(Command::AppQuit)) {
+                    continue;
+                }
+                app.mode = Mode::Normal;
+                app.status.clear();
+                app.status_error = false;
+                let row = menu_row(index, item.label);
+                app.mode = Mode::Menu {
+                    menu: index,
+                    item: row,
+                };
+                press(&mut app, "Enter");
+                if let Action::Todo(what) = item.action {
+                    assert!(
+                        app.status.contains(what),
+                        "{}: expected a `not here yet` for {what}, got `{}`",
+                        item.label,
+                        app.status
+                    );
+                }
+                assert!(!app.quit, "{} quit the program", item.label);
+            }
+        }
     }
 
     #[test]

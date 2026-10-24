@@ -2,6 +2,35 @@ use std::fmt;
 
 use scmd_core::{SortKey, ViewMode};
 
+/// Which panel a command acts on. FAR gives the two panels their own keys (`Alt+F1` and
+/// `Alt+F2` for the drive list), so the side has to be part of the command.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Side {
+    Left,
+    Right,
+    /// Whichever panel has the focus.
+    Active,
+}
+
+impl Side {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Side::Left => "left",
+            Side::Right => "right",
+            Side::Active => "active",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Side> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "left" | "l" => Some(Side::Left),
+            "right" | "r" => Some(Side::Right),
+            "active" | "current" | "" => Some(Side::Active),
+            _ => None,
+        }
+    }
+}
+
 /// Everything the application can be asked to do.
 ///
 /// Keys, menu entries, macros and (later) plugins all resolve to one of these — nothing binds
@@ -13,6 +42,18 @@ pub enum Command {
     AppMenu,
     AppPalette,
     AppThemeNext,
+    /// The theme list (SPEC 10 §4).
+    AppThemes,
+    /// The language list (SPEC 10 §4).
+    AppLanguages,
+    /// Write the configuration file.
+    AppSetupSave,
+
+    // The settings dialogs (SPEC 10 §3).
+    OptSystem,
+    OptPanel,
+    OptInterface,
+    OptConfirmations,
 
     PanelFocusToggle,
     PanelSwap,
@@ -23,6 +64,12 @@ pub enum Command {
     PanelSortReverse,
     PanelFilterQuick,
     PanelOtherSync,
+    /// Choose the sort order from a list.
+    PanelSortMenu,
+    /// Drives, mount points and open connections.
+    PanelDrive(Side),
+    /// Where this panel has been.
+    PanelHistory,
 
     NavUp,
     NavDown,
@@ -124,6 +171,13 @@ impl Command {
             Command::AppMenu,
             Command::AppPalette,
             Command::AppThemeNext,
+            Command::AppThemes,
+            Command::AppLanguages,
+            Command::AppSetupSave,
+            Command::OptSystem,
+            Command::OptPanel,
+            Command::OptInterface,
+            Command::OptConfirmations,
             Command::PanelFocusToggle,
             Command::PanelSwap,
             Command::PanelReread,
@@ -131,6 +185,11 @@ impl Command {
             Command::PanelSortReverse,
             Command::PanelFilterQuick,
             Command::PanelOtherSync,
+            Command::PanelSortMenu,
+            Command::PanelDrive(Side::Active),
+            Command::PanelDrive(Side::Left),
+            Command::PanelDrive(Side::Right),
+            Command::PanelHistory,
             Command::NavUp,
             Command::NavDown,
             Command::NavPageUp,
@@ -235,6 +294,13 @@ impl Command {
             Command::AppMenu => "app.menu".into(),
             Command::AppPalette => "app.palette".into(),
             Command::AppThemeNext => "app.theme.next".into(),
+            Command::AppThemes => "app.themes".into(),
+            Command::AppLanguages => "app.languages".into(),
+            Command::AppSetupSave => "app.setup.save".into(),
+            Command::OptSystem => "opt.system".into(),
+            Command::OptPanel => "opt.panel".into(),
+            Command::OptInterface => "opt.interface".into(),
+            Command::OptConfirmations => "opt.confirmations".into(),
             Command::PanelFocusToggle => "panel.focus.toggle".into(),
             Command::PanelSwap => "panel.swap".into(),
             Command::PanelReread => "panel.reread".into(),
@@ -244,6 +310,10 @@ impl Command {
             Command::PanelSortReverse => "panel.sort.reverse".into(),
             Command::PanelFilterQuick => "panel.filter.quick".into(),
             Command::PanelOtherSync => "panel.other.sync".into(),
+            Command::PanelSortMenu => "panel.sort.menu".into(),
+            Command::PanelDrive(Side::Active) => "panel.drive".into(),
+            Command::PanelDrive(side) => format!("panel.drive({})", side.as_str()),
+            Command::PanelHistory => "panel.history".into(),
             Command::NavUp => "nav.up".into(),
             Command::NavDown => "nav.down".into(),
             Command::NavPageUp => "nav.pageup".into(),
@@ -333,6 +403,16 @@ impl Command {
             ("app.menu", _) => Command::AppMenu,
             ("app.palette", _) => Command::AppPalette,
             ("app.theme.next", _) => Command::AppThemeNext,
+            ("app.themes", _) => Command::AppThemes,
+            ("app.languages", _) => Command::AppLanguages,
+            ("app.setup.save", _) => Command::AppSetupSave,
+            ("opt.system", _) => Command::OptSystem,
+            ("opt.panel", _) => Command::OptPanel,
+            ("opt.interface", _) => Command::OptInterface,
+            ("opt.confirmations", _) => Command::OptConfirmations,
+            ("panel.sort.menu", _) => Command::PanelSortMenu,
+            ("panel.drive", a) => Command::PanelDrive(Side::parse(a.unwrap_or(""))?),
+            ("panel.history", _) => Command::PanelHistory,
             ("panel.focus.toggle", _) => Command::PanelFocusToggle,
             ("panel.swap", _) => Command::PanelSwap,
             ("panel.reread", _) => Command::PanelReread,

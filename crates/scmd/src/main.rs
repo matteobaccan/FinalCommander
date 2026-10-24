@@ -3,6 +3,8 @@
 //! The interface is strictly TUI; see `docs/spec/00-overview.md`.
 
 mod app;
+mod form;
+mod menu;
 mod panel;
 mod render;
 

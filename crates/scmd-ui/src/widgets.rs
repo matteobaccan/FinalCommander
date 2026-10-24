@@ -947,3 +947,251 @@ mod tests {
         assert!(buf.to_text().contains("[size]"));
     }
 }
+
+// ── menu bar and drop-down menus (SPEC 10) ─────────────────────────────────────────────────
+
+/// One row of a drop-down menu.
+#[derive(Debug, Clone, Default)]
+pub struct MenuRow {
+    pub label: String,
+    /// The keyboard shortcut, shown right-aligned.
+    pub keys: String,
+    /// `√` for the mode or toggle that is currently on.
+    pub checked: bool,
+    pub separator: bool,
+    /// Drawn dim: the item exists in the menu but the feature is not here yet.
+    pub dim: bool,
+}
+
+impl MenuRow {
+    pub fn separator() -> MenuRow {
+        MenuRow {
+            separator: true,
+            ..MenuRow::default()
+        }
+    }
+}
+
+/// The menu bar across the top. Returns the column each title starts at, so the drop-down can
+/// be drawn under its own title.
+pub fn draw_menu_bar(
+    buf: &mut Buffer,
+    theme: &Theme,
+    area: Rect,
+    titles: &[String],
+    active: usize,
+) -> Vec<u16> {
+    let bar = Style::new(theme.color("keybar.fg"), theme.color("keybar.bg"));
+    let picked = Style::new(theme.color("cursor.fg"), theme.color("cursor.bg"));
+    buf.fill(area, ' ', bar);
+    let mut x = area.x + 2;
+    let mut starts = Vec::with_capacity(titles.len());
+    for (i, title) in titles.iter().enumerate() {
+        starts.push(x);
+        let text = format!(" {title} ");
+        let width = text.width() as u16;
+        if x + width > area.right() {
+            break;
+        }
+        buf.put_str(
+            x,
+            area.y,
+            &text,
+            if i == active { picked } else { bar },
+            width,
+        );
+        x += width + 1;
+    }
+    starts
+}
+
+/// A drop-down menu under `at`, growing down. Returns the area it covers.
+pub fn draw_menu(
+    buf: &mut Buffer,
+    theme: &Theme,
+    screen: Rect,
+    at: u16,
+    rows: &[MenuRow],
+    selected: usize,
+) -> Rect {
+    let label_w = rows.iter().map(|r| r.label.width()).max().unwrap_or(8);
+    let keys_w = rows.iter().map(|r| r.keys.width()).max().unwrap_or(0);
+    // mark + label + gap + keys, inside a frame with one column of padding.
+    let inner = 2 + label_w + if keys_w > 0 { keys_w + 2 } else { 0 };
+    let w = (inner as u16 + 4).min(screen.w);
+    let h = (rows.len() as u16 + 2).min(screen.h.saturating_sub(1));
+    let x = at.min(screen.right().saturating_sub(w));
+    let y = screen.y + 1;
+    let area = Rect::new(x, y, w, h);
+
+    let style = theme.dialog();
+    let frame = Style::new(theme.color("dialog.frame"), theme.color("dialog.bg"));
+    let picked = Style::new(theme.color("cursor.fg"), theme.color("cursor.bg"));
+    let dim = Style::new(theme.color("panel.footer.fg"), theme.color("dialog.bg"));
+    let keys_style = Style::new(theme.color("dialog.title"), theme.color("dialog.bg"));
+    buf.fill(area, ' ', style);
+    buf.draw_frame(area, frame, None);
+
+    for (i, row) in rows.iter().enumerate() {
+        let y = area.y + 1 + i as u16;
+        if y >= area.bottom() - 1 {
+            break;
+        }
+        if row.separator {
+            for x in area.x + 1..area.right() - 1 {
+                buf.set(x, y, '─', frame);
+            }
+            continue;
+        }
+        let on = i == selected;
+        let line = Style::new(
+            if on {
+                theme.color("cursor.fg")
+            } else if row.dim {
+                theme.color("panel.footer.fg")
+            } else {
+                theme.color("dialog.fg")
+            },
+            if on {
+                theme.color("cursor.bg")
+            } else {
+                theme.color("dialog.bg")
+            },
+        );
+        let width = area.w - 2;
+        buf.fill(
+            Rect::new(area.x + 1, y, width, 1),
+            ' ',
+            if on { picked } else { style },
+        );
+        let mark = if row.checked { '√' } else { ' ' };
+        buf.set(area.x + 2, y, mark, line);
+        buf.put_str(area.x + 4, y, &row.label, line, width.saturating_sub(3));
+        if !row.keys.is_empty() {
+            put_right(
+                buf,
+                area.x + 1,
+                y,
+                width.saturating_sub(1),
+                &row.keys,
+                if on { picked } else { keys_style },
+            );
+        }
+        let _ = dim;
+    }
+    area
+}
+
+// ── forms: the settings dialogs (SPEC 10) ──────────────────────────────────────────────────
+
+/// One row of a settings dialog: a checkbox, a field, a heading or a separator.
+#[derive(Debug, Clone, Default)]
+pub struct FormRow {
+    pub text: String,
+    pub separator: bool,
+    /// Drawn dim: shown for completeness, not settable yet.
+    pub dim: bool,
+}
+
+impl FormRow {
+    pub fn new(text: impl Into<String>) -> FormRow {
+        FormRow {
+            text: text.into(),
+            ..FormRow::default()
+        }
+    }
+
+    pub fn separator() -> FormRow {
+        FormRow {
+            separator: true,
+            ..FormRow::default()
+        }
+    }
+}
+
+/// What a settings dialog has to draw.
+pub struct FormView<'a> {
+    pub title: &'a str,
+    pub rows: &'a [FormRow],
+    /// The row the cursor is on.
+    pub selected: usize,
+    pub buttons: &'a [String],
+    /// Which button has the focus, if the cursor has left the rows.
+    pub button: Option<usize>,
+}
+
+/// A settings dialog: rows, then a row of buttons. Returns the area it covers.
+pub fn draw_form(buf: &mut Buffer, theme: &Theme, screen: Rect, view: &FormView) -> Rect {
+    let FormView {
+        title,
+        rows,
+        selected,
+        buttons,
+        button,
+    } = *view;
+    let buttons_w: usize = buttons.iter().map(|b| b.width() + 4).sum();
+    let content_w = rows
+        .iter()
+        .map(|r| r.text.width())
+        .chain(std::iter::once(title.width() + 4))
+        .chain(std::iter::once(buttons_w))
+        .max()
+        .unwrap_or(20)
+        .min(screen.w.saturating_sub(4) as usize);
+    let w = content_w as u16 + 4;
+    let h = (rows.len() as u16 + 4).min(screen.h);
+    let x = screen.x + (screen.w.saturating_sub(w)) / 2;
+    let y = screen.y + (screen.h.saturating_sub(h)) / 2;
+    let area = Rect::new(x, y, w, h);
+
+    let style = theme.dialog();
+    let frame = Style::new(theme.color("dialog.frame"), theme.color("dialog.bg"));
+    let picked = Style::new(theme.color("cursor.fg"), theme.color("cursor.bg"));
+    buf.fill(area, ' ', style);
+    buf.draw_frame(area, frame, Some(title));
+
+    for (i, row) in rows.iter().enumerate() {
+        let ry = area.y + 1 + i as u16;
+        if ry >= area.bottom() - 2 {
+            break;
+        }
+        if row.separator {
+            for x in area.x + 1..area.right() - 1 {
+                buf.set(x, ry, '─', frame);
+            }
+            continue;
+        }
+        let on = i == selected && button.is_none();
+        let line = Style::new(
+            if on {
+                theme.color("cursor.fg")
+            } else if row.dim {
+                theme.color("panel.footer.fg")
+            } else {
+                theme.color("dialog.fg")
+            },
+            if on {
+                theme.color("cursor.bg")
+            } else {
+                theme.color("dialog.bg")
+            },
+        );
+        buf.fill(
+            Rect::new(area.x + 1, ry, area.w - 2, 1),
+            ' ',
+            if on { picked } else { style },
+        );
+        buf.put_str(area.x + 2, ry, &row.text, line, area.w - 4);
+    }
+
+    if !buttons.is_empty() {
+        draw_buttons(
+            buf,
+            theme,
+            Rect::new(area.x + 1, area.bottom() - 2, area.w - 2, 1),
+            buttons,
+            button.unwrap_or(usize::MAX),
+        );
+    }
+    area
+}

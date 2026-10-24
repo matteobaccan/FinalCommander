@@ -183,11 +183,93 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             draw_sites(app, buf, screen, *cursor);
             None
         }
+        Mode::Menu { menu, item } => {
+            draw_menus(app, buf, Rect::new(0, 0, w, panels_h), *menu, *item);
+            None
+        }
+        Mode::Form(form) => {
+            let rows = form.rows();
+            let buttons = vec![app.i18n.t("btn-ok"), app.i18n.t("btn-cancel")];
+            widgets::draw_form(
+                buf,
+                &app.theme,
+                screen,
+                &widgets::FormView {
+                    title: &form.title,
+                    rows: &rows,
+                    selected: form.cursor,
+                    buttons: &buttons,
+                    button: form.button,
+                },
+            );
+            None
+        }
+        Mode::Pick(pick) => {
+            draw_pick(app, buf, screen, pick);
+            None
+        }
         Mode::Help { scroll } => {
             let scroll = *scroll;
             draw_help(app, buf, scroll, screen);
             None
         }
+    }
+}
+
+/// The menu bar across the top with one menu pulled down (SPEC 10 §2).
+fn draw_menus(app: &App, buf: &mut Buffer, screen: Rect, menu: usize, item: usize) {
+    let menus = crate::menu::menus();
+    let titles: Vec<String> = menus.iter().map(|m| app.i18n.t(m.title)).collect();
+    let starts =
+        widgets::draw_menu_bar(buf, &app.theme, Rect::new(0, 0, screen.w, 1), &titles, menu);
+    let Some(open) = menus.get(menu) else { return };
+    let rows: Vec<widgets::MenuRow> = open
+        .items
+        .iter()
+        .map(|entry| match entry {
+            crate::menu::Entry::Separator => widgets::MenuRow::separator(),
+            crate::menu::Entry::Item(i) => widgets::MenuRow {
+                label: app.i18n.t(i.label),
+                // The shortcut comes from the keymap in force, so a rebinding shows here too;
+                // the entry's own string is only the hint for what is not wired up yet.
+                keys: match &i.action {
+                    crate::menu::Action::Run(cmd) => app
+                        .keymap
+                        .key_for(*cmd)
+                        .map(|k| k.to_string())
+                        .unwrap_or_default(),
+                    // For what is not here yet, the entry's own string: FAR's key, kept free
+                    // for the feature. A test makes sure it is still free.
+                    crate::menu::Action::Todo(_) => i.keys.to_string(),
+                },
+                checked: app.menu_mark(&i.mark, open.side),
+                separator: false,
+                dim: matches!(i.action, crate::menu::Action::Todo(_)),
+            },
+        })
+        .collect();
+    let at = starts.get(menu).copied().unwrap_or(0);
+    let below = Rect::new(screen.x, 1, screen.w, screen.h.saturating_sub(1));
+    widgets::draw_menu(buf, &app.theme, below, at, &rows, item);
+}
+
+/// A choose-one list: languages, themes, drives, folder history, sort modes (SPEC 10 §4).
+fn draw_pick(app: &App, buf: &mut Buffer, screen: Rect, pick: &crate::form::Pick) {
+    let mut lines = pick.lines();
+    if lines.is_empty() {
+        lines.push(app.i18n.t("pick-empty"));
+    }
+    let hint = app.i18n.t("pick-hint");
+    let area = widgets::draw_dialog(buf, &app.theme, screen, &pick.title, &lines, Some(&hint));
+    if pick.rows.is_empty() {
+        return;
+    }
+    let style = Style::new(app.theme.color("cursor.fg"), app.theme.color("cursor.bg"));
+    let y = area.y + 1 + pick.cursor as u16;
+    if y < area.y + area.h.saturating_sub(1) {
+        let width = area.w.saturating_sub(2) as usize;
+        let text = format!(" {:<w$}", lines[pick.cursor], w = width.saturating_sub(1));
+        buf.put_str(area.x + 1, y, &text, style, width as u16);
     }
 }
 
@@ -504,8 +586,10 @@ fn draw_sites(app: &App, buf: &mut Buffer, screen: Rect, cursor: usize) {
         if row == cursor && !rows.is_empty() {
             let y = area.y + 1 + index as u16;
             if y < area.y + area.h {
+                // The bar spans the inside of the frame, with the text where the other
+                // rows have it: one column of padding.
                 let width = area.w.saturating_sub(2);
-                let text = format!("{line:<w$}", w = width as usize);
+                let text = format!(" {line:<w$}", w = width.saturating_sub(1) as usize);
                 buf.put_str(area.x + 1, y, &text, selected, width);
             }
             break;
@@ -697,6 +781,122 @@ mod tests {
             let mut app = app(id, "en");
             let out = frame(&mut app, 60, 15);
             assert!(out.contains("src/"), "theme {id} rendered nothing: {out}");
+        }
+    }
+
+    #[test]
+    fn the_menu_bar_shows_five_menus_and_pulls_one_down() {
+        let mut app = app("commander", "en");
+        app.handle_input(Input::Key("F9".parse().unwrap()));
+        let out = frame(&mut app, 80, 24);
+        let bar = out.lines().next().unwrap();
+        for title in ["Left", "Files", "Commands", "Options", "Right"] {
+            assert!(bar.contains(title), "`{title}` is not on the bar: {bar}");
+        }
+        // The open menu shows its entries, the key that does the same thing, and a mark on
+        // the view the panel is in.
+        assert!(out.contains("Brief"), "{out}");
+        assert!(out.contains("Ctrl+1"), "{out}");
+        assert!(
+            out.contains('√'),
+            "nothing is marked as being in force: {out}"
+        );
+    }
+
+    #[test]
+    fn the_menu_never_advertises_a_key_that_does_something_else() {
+        let app = app("commander", "en");
+        for m in crate::menu::menus() {
+            for entry in &m.items {
+                let crate::menu::Entry::Item(item) = entry else {
+                    continue;
+                };
+                let crate::menu::Action::Todo(_) = item.action else {
+                    continue;
+                };
+                let Ok(key) = item.keys.parse::<scmd_cmd::Key>() else {
+                    continue;
+                };
+                if let Some(cmd) = app.keymap.resolve(&[scmd_cmd::Scope::Panel], key) {
+                    panic!(
+                        "{} shows {} as its key, but that key runs {cmd}",
+                        item.label, item.keys
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_settings_dialog_is_drawn_with_its_checkboxes_and_buttons() {
+        let mut app = app("commander", "en");
+        app.run(scmd_cmd::Command::OptConfirmations);
+        let out = frame(&mut app, 80, 24);
+        assert!(out.contains("Confirmations"), "{out}");
+        assert!(out.contains("[x] Delete"), "{out}");
+        assert!(out.contains("OK") && out.contains("Cancel"), "{out}");
+    }
+
+    #[test]
+    fn the_language_list_is_drawn_with_the_current_language_marked() {
+        let mut app = app("commander", "en");
+        app.run(scmd_cmd::Command::AppLanguages);
+        let out = frame(&mut app, 80, 24);
+        assert!(out.contains("Italiano"), "{out}");
+        assert!(out.contains("√ English"), "{out}");
+    }
+
+    #[test]
+    fn every_menu_and_dialog_fits_a_small_terminal_in_every_language() {
+        for (tag, _) in scmd_i18n::LANGUAGES {
+            let mut app = app("commander", tag);
+            app.handle_input(Input::Key("F9".parse().unwrap()));
+            for menu in 0..5 {
+                for size in [(80u16, 24u16), (60, 15), (40, 10)] {
+                    app.mode = crate::app::Mode::Menu { menu, item: 0 };
+                    let out = frame(&mut app, size.0, size.1);
+                    assert_eq!(out.lines().count(), size.1 as usize, "{tag} menu {menu}");
+                }
+            }
+            for cmd in [
+                scmd_cmd::Command::OptSystem,
+                scmd_cmd::Command::OptPanel,
+                scmd_cmd::Command::OptInterface,
+                scmd_cmd::Command::OptConfirmations,
+                scmd_cmd::Command::AppLanguages,
+                scmd_cmd::Command::AppThemes,
+                scmd_cmd::Command::PanelSortMenu,
+                scmd_cmd::Command::PanelHistory,
+                scmd_cmd::Command::PanelDrive(scmd_cmd::Side::Left),
+            ] {
+                app.run(cmd);
+                for size in [(80u16, 24u16), (60, 15), (40, 10)] {
+                    let out = frame(&mut app, size.0, size.1);
+                    assert_eq!(out.lines().count(), size.1 as usize, "{tag} {cmd}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "a look at the screen, not an assertion"]
+    fn eyeball() {
+        for cmd in [
+            scmd_cmd::Command::AppMenu,
+            scmd_cmd::Command::OptSystem,
+            scmd_cmd::Command::OptPanel,
+            scmd_cmd::Command::OptInterface,
+            scmd_cmd::Command::OptConfirmations,
+            scmd_cmd::Command::AppLanguages,
+            scmd_cmd::Command::PanelSortMenu,
+            scmd_cmd::Command::PanelDrive(scmd_cmd::Side::Left),
+        ] {
+            let mut app = app("commander", "en");
+            app.run(cmd);
+            if let crate::app::Mode::Menu { .. } = app.mode {
+                app.mode = crate::app::Mode::Menu { menu: 1, item: 0 };
+            }
+            println!("=== {cmd} ===\n{}", frame(&mut app, 80, 24));
         }
     }
 

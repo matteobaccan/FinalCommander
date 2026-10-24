@@ -449,8 +449,10 @@ impl Config {
                     .parse()
                     .map_err(|_| format!("net.fetch_limit_mb: `{value}` is not a number"))?
             }
+            "panel.allow_reverse_sort" => self.panel.allow_reverse_sort = parse_bool(value)?,
             "general.confirm_exit" => self.general.confirm_exit = parse_bool(value)?,
             "general.confirm_delete" => self.general.confirm_delete = parse_bool(value)?,
+            "general.confirm_overwrite" => self.general.confirm_overwrite = parse_bool(value)?,
             other => return Err(format!("unknown setting `{other}`")),
         }
         Ok(())
