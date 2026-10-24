@@ -424,3 +424,6 @@ info-selected-value = { $count } 个文件，{ $bytes }
 info-cursor = 光标
 info-size = 大小
 info-modified = 修改时间
+key-mark = 标记
+hex-needs-a-file = 这个缓冲区没有可读取字节的文件
+hex-save-first = 先保存：两个编辑器无法互相交接未保存的修改

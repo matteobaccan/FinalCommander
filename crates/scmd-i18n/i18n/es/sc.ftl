@@ -424,3 +424,6 @@ info-selected-value = { $count } archivos, { $bytes }
 info-cursor = Cursor
 info-size = Tamaño
 info-modified = Modificado
+key-mark = Marca
+hex-needs-a-file = este búfer no tiene un archivo del que leer bytes
+hex-save-first = guarda primero: los dos editores no pueden pasarse los cambios sin guardar

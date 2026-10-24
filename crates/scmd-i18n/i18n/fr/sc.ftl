@@ -424,3 +424,6 @@ info-selected-value = { $count } fichiers, { $bytes }
 info-cursor = Curseur
 info-size = Taille
 info-modified = Modifié
+key-mark = Marque
+hex-needs-a-file = ce tampon n'a pas de fichier d'où lire des octets
+hex-save-first = enregistrez d'abord : les deux éditeurs ne peuvent pas se passer les modifications

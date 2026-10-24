@@ -12,6 +12,15 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         return None;
     }
 
+    // The hex editor takes the whole screen too, and has no prompts of its own yet.
+    if app.mode.hex().is_some() {
+        if let Mode::Hex(mut editor) = std::mem::replace(&mut app.mode, Mode::Normal) {
+            let cursor = draw_hex(app, &mut editor, buf);
+            app.mode = Mode::Hex(editor);
+            return cursor;
+        }
+    }
+
     // The editor takes the whole screen; its prompts and confirmations draw on top of it.
     if app.mode.editor().is_some() || app.editor_parked_for_render() {
         if let Some((mut editor, parked)) = app.editor_for_render() {
@@ -259,7 +268,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         }
         Mode::Job(_) => None,    // handled above, through `Mode::job()`
         Mode::Viewer(_) => None, // handled above, before the panels are drawn
-        Mode::Editor(_) => None, // handled above, before the panels are drawn
+        Mode::Editor(_) | Mode::Hex(_) => None, // handled above, before the panels are drawn
         Mode::Message { title, lines } => {
             widgets::draw_dialog(buf, &app.theme, screen, title, lines, None);
             None
@@ -569,6 +578,163 @@ fn draw_job(app: &App, view: &crate::app::JobView, buf: &mut Buffer, screen: Rec
 }
 
 /// The editor, full screen. Returns where the text cursor sits.
+/// The hex editor (SPEC 05 §2.5): offsets, bytes, and the same bytes as characters, with the
+/// ones that have changed in their own colour and the block behind them.
+fn draw_hex(
+    app: &mut App,
+    editor: &mut scmd_edit::HexEdit,
+    buf: &mut Buffer,
+) -> Option<(u16, u16)> {
+    let (w, h) = (buf.width(), buf.height());
+    let keybar_h = u16::from(app.cfg.ui.key_bar);
+    let body = Rect::new(0, 1, w, h.saturating_sub(1 + keybar_h));
+    let base = app.theme.panel();
+    buf.fill(Rect::new(0, 0, w, h.saturating_sub(keybar_h)), ' ', base);
+
+    // How many bytes fit: eight offset columns, then three per byte, then one per character,
+    // in groups of eight with a space between. Powers of two only, so the offsets stay round.
+    let room = w.saturating_sub(12) as usize;
+    let per = [32usize, 16, 8, 4]
+        .into_iter()
+        .find(|n| 8 + 2 + n * 3 + n / 8 + 1 + n <= room + 12)
+        .unwrap_or(4);
+    editor.bytes_per_row = per;
+    app.editor_size = (body.w, body.h);
+    editor.scroll_into_view(body.h as usize);
+
+    // The header: the file, and where the cursor is in it.
+    let header = Style::new(
+        app.theme.color("panel.header.fg"),
+        app.theme.color("status.bg"),
+    );
+    buf.fill(Rect::new(0, 0, w, 1), ' ', header);
+    let status = format!(
+        "{:08X}/{:08X}  {}  {}{}",
+        editor.cursor,
+        editor.len(),
+        if editor.insert { "ins" } else { "ovr" },
+        match editor.pane {
+            scmd_edit::Pane::Hex => "hex",
+            scmd_edit::Pane::Text => "txt",
+        },
+        if editor.modified() { "  *" } else { "" },
+    );
+    let status_w = (status.chars().count() as u16).min(w);
+    let name_w = w.saturating_sub(status_w + 2);
+    let title = editor
+        .path
+        .as_ref()
+        .map(|p| p.to_string())
+        .unwrap_or_else(|| editor.name());
+    buf.put_str(
+        0,
+        0,
+        &scmd_ui::elide_middle(&title, name_w as usize),
+        header,
+        name_w,
+    );
+    buf.put_str(w.saturating_sub(status_w), 0, &status, header, status_w);
+
+    let changed = Style::new(app.theme.color("selected.fg"), app.theme.color("panel.bg"));
+    let marked = Style::new(
+        app.theme.color("panel.info.selected.fg"),
+        app.theme.color("panel.info.selected.bg"),
+    );
+    let on = Style::new(app.theme.color("cursor.fg"), app.theme.color("cursor.bg"));
+    let offset_style = Style::new(
+        app.theme.color("panel.column.fg"),
+        app.theme.color("panel.bg"),
+    );
+    let mut cursor_at = None;
+
+    for row in 0..body.h {
+        let at = editor.top + row as u64 * per as u64;
+        if at > editor.len() {
+            break;
+        }
+        let y = body.y + row;
+        let bytes = editor.read(at, per);
+        buf.put_str(0, y, &format!("{at:08X}"), offset_style, 8);
+
+        for (i, byte) in bytes.iter().enumerate() {
+            let offset = at + i as u64;
+            // Three columns a byte, with a wider gap every eight: the shape every hex dump
+            // has had since DOS, so the eye can count.
+            let x = 10 + (i * 3 + i / 8) as u16;
+            let text_x = 10 + (per * 3 + per / 8) as u16 + 1 + i as u16;
+            let in_block = editor
+                .block
+                .map(|(a, b)| offset >= a && offset < b)
+                .unwrap_or(false);
+            let style = if in_block {
+                marked
+            } else if editor.is_changed(offset) {
+                changed
+            } else {
+                base
+            };
+            let hex_style = if offset == editor.cursor && editor.pane == scmd_edit::Pane::Hex {
+                on
+            } else {
+                style
+            };
+            let txt_style = if offset == editor.cursor && editor.pane == scmd_edit::Pane::Text {
+                on
+            } else {
+                style
+            };
+            buf.put_str(x, y, &format!("{byte:02X}"), hex_style, 2);
+            // A byte that is not a printable character shows as a dot, as every dump does.
+            let shown = if (0x20..0x7f).contains(byte) {
+                *byte as char
+            } else {
+                '.'
+            };
+            buf.put_str(text_x, y, &shown.to_string(), txt_style, 1);
+            if offset == editor.cursor {
+                cursor_at = Some(match editor.pane {
+                    scmd_edit::Pane::Hex => (x, y),
+                    scmd_edit::Pane::Text => (text_x, y),
+                });
+            }
+        }
+    }
+
+    // The patch list, when there is one: what would change if this were saved now.
+    let changes = editor.changes();
+    if !changes.is_empty() && body.h > 6 {
+        let rows = (changes.len() as u16).min(4) + 1;
+        let top = body.y + body.h - rows;
+        buf.fill(Rect::new(0, top, w, rows), ' ', base);
+        let rule = Style::new(app.theme.color("panel.frame"), app.theme.color("panel.bg"));
+        buf.put_str(0, top, &"─".repeat(w as usize), rule, w);
+        for (i, change) in changes.iter().take(4).enumerate() {
+            let hex = |bytes: &[u8]| {
+                bytes
+                    .iter()
+                    .take(8)
+                    .map(|b| format!("{b:02X}"))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            };
+            let line = format!(
+                "{:08X}  {:<24}  →  {}",
+                change.at,
+                hex(&change.old),
+                hex(&change.new)
+            );
+            buf.put_str(1, top + 1 + i as u16, &line, changed, w.saturating_sub(1));
+        }
+    }
+
+    if app.cfg.ui.key_bar {
+        let labels = app.hex_keybar();
+        let pairs: Vec<(u8, &str)> = labels.iter().map(|(n, t)| (*n, t.as_str())).collect();
+        widgets::draw_keybar(buf, &app.theme, Rect::new(0, h - 1, w, 1), &pairs);
+    }
+    cursor_at
+}
+
 fn draw_editor(
     app: &mut App,
     editor: &mut scmd_edit::Editor,
@@ -2557,6 +2723,52 @@ third line
         assert!(
             !out.contains("secret"),
             "the password is on the screen: {out}"
+        );
+    }
+
+    #[test]
+    fn f4_on_a_binary_opens_the_hex_editor_and_draws_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("program.bin");
+        // Something a text view would mangle: NULs and control bytes.
+        let bytes: Vec<u8> = (0u8..64).collect();
+        std::fs::write(&path, &bytes).unwrap();
+
+        let mut app = app("commander", "en");
+        app.panels[0].cwd = VPath::local(dir.path());
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation: app.panels[0].generation,
+            result: Ok(vec![
+                Entry::parent_entry(),
+                entry("program.bin", EntryKind::File, 64),
+            ]),
+        });
+        app.panels[0].cursor_to(1);
+        app.handle_input(Input::Key("F4".parse().unwrap()));
+
+        assert!(app.mode.hex().is_some(), "a binary should open as bytes");
+        let out = frame(&mut app, 100, 20);
+        assert!(out.contains("program.bin"), "{out}");
+        // The offsets, the bytes and the characters, as every dump has them.
+        assert!(out.contains("00000000"), "{out}");
+        assert!(out.contains("00 01 02 03"), "{out}");
+        assert!(out.contains("00000010"), "{out}");
+        assert!(out.contains("ovr"), "overwrite is the default: {out}");
+
+        // Typing two hex digits changes a byte and the patch list says so.
+        app.handle_input(Input::Key("4".parse().unwrap()));
+        app.handle_input(Input::Key("1".parse().unwrap()));
+        let out = frame(&mut app, 100, 20);
+        assert!(out.contains("41"), "{out}");
+        assert!(out.contains("→"), "the patch list should be shown: {out}");
+
+        // `Esc` on a modified buffer asks rather than throwing the edits away.
+        app.handle_input(Input::Key("Esc".parse().unwrap()));
+        assert!(
+            matches!(app.mode, crate::app::Mode::Confirm(_)),
+            "{:?}",
+            app.mode
         );
     }
 

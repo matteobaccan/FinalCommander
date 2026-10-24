@@ -221,6 +221,10 @@ pub enum Command {
     EditorSelectAll,
     /// `F6`: the same file in the viewer, at the same place.
     EditorToViewer,
+    /// `Alt+H`: the same file as bytes instead of lines, or back again (SPEC 05 §2.5).
+    EditorHexToggle,
+    /// `F3` in hex mode: start or finish marking a block (SPEC 05 §2.6).
+    EditorBlockMark,
     EditorCopy,
     EditorCut,
     EditorPaste,
@@ -374,6 +378,8 @@ impl Command {
             Command::EditorGoto,
             Command::EditorSelectAll,
             Command::EditorToViewer,
+            Command::EditorHexToggle,
+            Command::EditorBlockMark,
             Command::EditorCopy,
             Command::EditorCut,
             Command::EditorPaste,
@@ -546,6 +552,8 @@ impl Command {
             Command::EditorGoto => "editor.goto".into(),
             Command::EditorSelectAll => "editor.select.all".into(),
             Command::EditorToViewer => "editor.to.viewer".into(),
+            Command::EditorHexToggle => "editor.hex.toggle".into(),
+            Command::EditorBlockMark => "editor.block.mark".into(),
             Command::EditorCopy => "editor.copy".into(),
             Command::EditorCut => "editor.cut".into(),
             Command::EditorPaste => "editor.paste".into(),
@@ -695,6 +703,8 @@ impl Command {
             ("editor.goto", _) => Command::EditorGoto,
             ("editor.select.all", _) => Command::EditorSelectAll,
             ("editor.to.viewer", _) => Command::EditorToViewer,
+            ("editor.hex.toggle", _) => Command::EditorHexToggle,
+            ("editor.block.mark", _) => Command::EditorBlockMark,
             ("editor.copy", _) => Command::EditorCopy,
             ("editor.cut", _) => Command::EditorCut,
             ("editor.paste", _) => Command::EditorPaste,

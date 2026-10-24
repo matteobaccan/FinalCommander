@@ -424,3 +424,6 @@ info-selected-value = файлов: { $count }, { $bytes }
 info-cursor = Курсор
 info-size = Размер
 info-modified = Изменён
+key-mark = Метка
+hex-needs-a-file = у этого буфера нет файла, откуда читать байты
+hex-save-first = сначала сохраните: редакторы не могут передать друг другу несохранённые правки

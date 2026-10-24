@@ -432,3 +432,6 @@ info-selected-value = { $count } files, { $bytes }
 info-cursor = Cursor
 info-size = Size
 info-modified = Modified
+key-mark = Mark
+hex-needs-a-file = this buffer has no file to read bytes from
+hex-save-first = save first: the two editors cannot hold each other's unsaved changes

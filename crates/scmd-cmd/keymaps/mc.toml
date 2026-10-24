@@ -61,3 +61,16 @@ cmd = "nav.left"
 keys = ["Right"]
 scope = "panel"
 cmd = "nav.right"
+
+# Bytes instead of lines, and back. `F4` already opens a binary this way; this is for the
+# times the guess was wrong, either way round.
+[[bind]]
+keys = ["Alt+H"]
+scope = "editor"
+cmd = "editor.hex.toggle"
+
+# A block of bytes: the same key Hiew marks one with.
+[[bind]]
+keys = ["F3"]
+scope = "editor"
+cmd = "editor.block.mark"

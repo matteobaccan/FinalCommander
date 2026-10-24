@@ -424,3 +424,6 @@ info-selected-value = { $count } Dateien, { $bytes }
 info-cursor = Cursor
 info-size = Größe
 info-modified = Geändert
+key-mark = Marke
+hex-needs-a-file = dieser Puffer hat keine Datei, aus der Bytes kämen
+hex-save-first = zuerst speichern: die beiden Editoren können einander keine ungespeicherten Änderungen übergeben

@@ -4,7 +4,7 @@ use scmd_cmd::{Command, Key, KeyCode, Keymap, Mods, Scope, Side};
 use scmd_config::DecompileRule;
 use scmd_config::{Config, Paths, QuickSearch};
 use scmd_core::{CancelToken, Entry, MaskScope, Sort, SortKey, VPath, ViewMode};
-use scmd_edit::{BlockKind, Editor};
+use scmd_edit::{BlockKind, Editor, HexEdit};
 use scmd_i18n::I18n;
 use scmd_jobs::{Decision, JobKind, JobSpec, Outcome, Progress, Question};
 use scmd_net::{SecretKind, Site};
@@ -352,6 +352,8 @@ pub enum ConfirmAction {
     Job(JobSpec),
     /// Leave the editor, losing unsaved changes.
     DiscardEdits,
+    /// The same, for the hex editor: its buffer is bytes, not lines.
+    DiscardHex,
     /// Save over a file that changed on disk since it was opened.
     OverwriteChanged,
     /// Write the editor's copy over a remote file that changed on the server.
@@ -520,6 +522,8 @@ pub enum Mode {
     Viewer(Box<Viewer>),
     /// `F4`: the internal editor, full screen.
     Editor(Box<Editor>),
+    /// `F4` on a binary: the same editor, editing bytes (SPEC 05 §2.5).
+    Hex(Box<HexEdit>),
     Help {
         scroll: usize,
     },
@@ -584,6 +588,20 @@ impl Mode {
     pub fn editor_mut(&mut self) -> Option<&mut Editor> {
         match self {
             Mode::Editor(e) => Some(e),
+            _ => None,
+        }
+    }
+
+    pub fn hex(&self) -> Option<&HexEdit> {
+        match self {
+            Mode::Hex(e) => Some(e),
+            _ => None,
+        }
+    }
+
+    pub fn hex_mut(&mut self) -> Option<&mut HexEdit> {
+        match self {
+            Mode::Hex(e) => Some(e),
             _ => None,
         }
     }
@@ -1251,6 +1269,10 @@ impl App {
                 self.mode = Mode::Editor(editor);
                 self.editor_key(key);
             }
+            Mode::Hex(editor) => {
+                self.mode = Mode::Hex(editor);
+                self.hex_key(key);
+            }
             Mode::Sites { cursor } => {
                 self.mode = Mode::Sites { cursor };
                 self.sites_key(key, cursor);
@@ -1357,6 +1379,11 @@ impl App {
                         self.editor_parked = None;
                         self.remote_edit = None;
                     }
+                    ConfirmAction::DiscardHex => {
+                        // The mode is already Normal: the bytes go with it.
+                        self.read_panel(0);
+                        self.read_panel(1);
+                    }
                     ConfirmAction::OverwriteChanged => {
                         self.restore_editor();
                         self.save_editor(true);
@@ -1424,6 +1451,181 @@ impl App {
 
     /// The editor consumes movement and typing keys itself — binding thirty arrow-plus-modifier
     /// combinations as commands would buy nothing — and the keymap drives its commands.
+    /// The editor commands that mean something when the buffer is bytes.
+    fn hex_command(&mut self, cmd: Command) {
+        match cmd {
+            Command::EditorQuit => self.close_hex(),
+            Command::EditorHexToggle => self.toggle_hex(),
+            Command::EditorSave => {
+                let result = self.mode.hex_mut().map(|e| e.save(None));
+                match result {
+                    Some(Ok(bytes)) => {
+                        let name = self.mode.hex().map(|e| e.name()).unwrap_or_default();
+                        let msg = self.i18n.t_args(
+                            "editor-saved",
+                            &[("name", name.into()), ("lines", (bytes as i64).into())],
+                        );
+                        self.set_status(msg);
+                    }
+                    Some(Err(e)) => self.set_error(e.to_string()),
+                    None => {}
+                }
+            }
+            Command::EditorUndo => {
+                if let Some(editor) = self.mode.hex_mut() {
+                    if !editor.undo() {
+                        let m = self.i18n.t("editor-nothing-to-undo");
+                        self.set_status(m);
+                    }
+                }
+            }
+            Command::EditorRedo => {
+                if let Some(editor) = self.mode.hex_mut() {
+                    if !editor.redo() {
+                        let m = self.i18n.t("editor-nothing-to-redo");
+                        self.set_status(m);
+                    }
+                }
+            }
+            Command::EditorBlockMark => {
+                if let Some(editor) = self.mode.hex_mut() {
+                    editor.toggle_mark();
+                }
+            }
+            Command::EditorToggleReadOnly => {
+                if let Some(editor) = self.mode.hex_mut() {
+                    editor.read_only = !editor.read_only;
+                }
+            }
+            other => self.not_implemented(&format!("{} (in hex)", other.id())),
+        }
+    }
+
+    /// `Esc` or `F10` in the hex editor: the same question the text editor asks.
+    fn close_hex(&mut self) {
+        let dirty = self.mode.hex().map(|e| e.modified()).unwrap_or(false);
+        if !dirty {
+            self.mode = Mode::Normal;
+            self.read_panel(0);
+            self.read_panel(1);
+            return;
+        }
+        let name = self.mode.hex().map(|e| e.name()).unwrap_or_default();
+        let title = self.i18n.t("editor-discard-title");
+        let body = self
+            .i18n
+            .t_args("editor-discard-body", &[("name", name.into())]);
+        self.mode = Mode::Confirm(Confirm {
+            title,
+            lines: vec![body, String::new(), self.i18n.t("confirm-yes-no")],
+            action: ConfirmAction::DiscardHex,
+        });
+    }
+
+    /// Keys in the hex editor (SPEC 05 §2.5). Movement is in bytes and rows, typing goes to
+    /// whichever pane has the cursor, and everything else falls through to the keymap — so
+    /// `F2`, `Esc` and undo are the same keys as in the text editor, because they are the
+    /// same commands.
+    fn hex_key(&mut self, key: Key) {
+        let rows = self.editor_size.1.max(1) as usize;
+        let handled = {
+            let Some(editor) = self.mode.hex_mut() else {
+                return;
+            };
+            let per = editor.bytes_per_row as i64;
+            let handled = match key.code {
+                KeyCode::Up => {
+                    editor.move_cursor(-per);
+                    true
+                }
+                KeyCode::Down => {
+                    editor.move_cursor(per);
+                    true
+                }
+                KeyCode::Left => {
+                    editor.move_cursor(-1);
+                    true
+                }
+                KeyCode::Right => {
+                    editor.move_cursor(1);
+                    true
+                }
+                KeyCode::PageUp => {
+                    editor.move_cursor(-per * rows as i64);
+                    true
+                }
+                KeyCode::PageDown => {
+                    editor.move_cursor(per * rows as i64);
+                    true
+                }
+                KeyCode::Home if key.mods.contains(Mods::CTRL) => {
+                    editor.move_cursor(-(editor.len() as i64));
+                    true
+                }
+                KeyCode::End if key.mods.contains(Mods::CTRL) => {
+                    editor.move_cursor(editor.len() as i64);
+                    true
+                }
+                // Home and End are the row's own ends, as they are in a text editor.
+                KeyCode::Home => {
+                    let back = (editor.cursor % editor.bytes_per_row as u64) as i64;
+                    editor.move_cursor(-back);
+                    true
+                }
+                KeyCode::End => {
+                    let forward = per - 1 - (editor.cursor % editor.bytes_per_row as u64) as i64;
+                    editor.move_cursor(forward);
+                    true
+                }
+                KeyCode::Tab => {
+                    editor.pane = match editor.pane {
+                        scmd_edit::Pane::Hex => scmd_edit::Pane::Text,
+                        scmd_edit::Pane::Text => scmd_edit::Pane::Hex,
+                    };
+                    editor.half = None;
+                    true
+                }
+                KeyCode::Insert => {
+                    editor.insert = !editor.insert;
+                    editor.half = None;
+                    true
+                }
+                KeyCode::Backspace if editor.cursor > 0 => {
+                    // In insert mode it takes the byte before the cursor out; in overwrite it
+                    // steps back, because removing a byte there would shift the file.
+                    if editor.insert {
+                        let at = editor.cursor - 1;
+                        editor.delete(at, 1);
+                        editor.cursor = at;
+                    } else {
+                        editor.move_cursor(-1);
+                    }
+                    true
+                }
+                KeyCode::Delete if editor.insert && editor.cursor < editor.len() => {
+                    let at = editor.cursor;
+                    editor.delete(at, 1);
+                    true
+                }
+                KeyCode::Char(c) if key.mods == Mods::NONE || key.mods == Mods::SHIFT => {
+                    match editor.pane {
+                        scmd_edit::Pane::Hex => editor.type_hex(c),
+                        scmd_edit::Pane::Text => editor.type_char(c),
+                    }
+                }
+                _ => false,
+            };
+            editor.scroll_into_view(rows);
+            handled
+        };
+        if handled {
+            return;
+        }
+        if let Some(cmd) = self.keymap.resolve(&[Scope::Editor, Scope::Global], key) {
+            self.run(cmd);
+        }
+    }
+
     fn editor_key(&mut self, key: Key) {
         let (width, height) = self.editor_size;
         let shift = key.mods.contains(Mods::SHIFT);
@@ -2389,7 +2591,10 @@ impl App {
             return;
         }
         if is_editor_command(cmd) {
-            if self.mode.editor().is_some() || self.editor_parked.is_some() {
+            if self.mode.editor().is_some()
+                || self.editor_parked.is_some()
+                || self.mode.hex().is_some()
+            {
                 self.editor_command(cmd);
                 return;
             }
@@ -4942,6 +5147,12 @@ impl App {
             self.fetch_remote(path, entry.size, Fetched::Edit);
             return;
         }
+        // A file a text view would mangle opens in hex instead (SPEC 05 §2.5). The reader's
+        // own test decides, so `F3` and `F4` agree about what a binary is.
+        if looks_binary_file(path.as_path()) {
+            self.open_hex(path.as_path());
+            return;
+        }
         match Editor::open(path.as_path()) {
             Ok(editor) => {
                 if editor.buffer.read_only {
@@ -4954,6 +5165,53 @@ impl App {
             }
             Err(e) => self.set_error(format!("{path}: {e}")),
         }
+    }
+
+    /// Open the editor on bytes rather than lines.
+    pub(crate) fn open_hex(&mut self, path: &std::path::Path) {
+        match HexEdit::open(path) {
+            Ok(mut editor) => {
+                if editor.read_only {
+                    let msg = self
+                        .i18n
+                        .t_args("editor-read-only", &[("name", editor.name().into())]);
+                    self.set_status(msg);
+                }
+                editor.bytes_per_row = 16;
+                self.mode = Mode::Hex(Box::new(editor));
+            }
+            Err(e) => self.set_error(e.to_string()),
+        }
+    }
+
+    /// `Alt+H`: the same file the other way round — bytes instead of lines, or back again.
+    ///
+    /// It reopens from disk, so a buffer with unsaved changes is asked about first rather
+    /// than quietly thrown away: the two models cannot hold each other's edits.
+    fn toggle_hex(&mut self) {
+        let (path, dirty) = match &self.mode {
+            Mode::Editor(editor) => (editor.path.clone(), editor.buffer.modified()),
+            Mode::Hex(editor) => (editor.path.clone(), editor.modified()),
+            _ => return,
+        };
+        let Some(path) = path.filter(|p| p.is_local() && !p.in_container()) else {
+            let m = self.i18n.t("hex-needs-a-file");
+            self.set_error(m);
+            return;
+        };
+        if dirty {
+            let m = self.i18n.t("hex-save-first");
+            self.set_error(m);
+            return;
+        }
+        if self.mode.hex().is_some() {
+            match Editor::open(path.as_path()) {
+                Ok(editor) => self.mode = Mode::Editor(Box::new(editor)),
+                Err(e) => self.set_error(format!("{path}: {e}")),
+            }
+            return;
+        }
+        self.open_hex(path.as_path());
     }
 
     /// `Shift+F4`: a new file in the active panel's directory.
@@ -5172,6 +5430,12 @@ impl App {
     }
 
     fn editor_command(&mut self, cmd: Command) {
+        // The hex editor shares the editor's keys because it shares its commands; the few
+        // that mean something there are handled on their own, and the rest say so.
+        if self.mode.hex().is_some() {
+            self.hex_command(cmd);
+            return;
+        }
         let (width, height) = self.editor_size;
         let mut message: Option<String> = None;
         let mut error: Option<String> = None;
@@ -5921,6 +6185,16 @@ impl App {
         ]
     }
 
+    /// The key bar while the hex editor is open.
+    pub fn hex_keybar(&self) -> Vec<(u8, String)> {
+        vec![
+            (1, self.i18n.t("key-help")),
+            (2, self.i18n.t("key-save")),
+            (3, self.i18n.t("key-mark")),
+            (10, self.i18n.t("key-quit")),
+        ]
+    }
+
     /// The key bar while the viewer is open.
     pub fn keybar_viewer(&self) -> Vec<(u8, String)> {
         vec![
@@ -5999,6 +6273,19 @@ impl App {
 }
 
 /// Commands that only make sense inside the editor.
+/// Would a text view mangle this file? The viewer's own test, on the first few kilobytes.
+fn looks_binary_file(path: &std::path::Path) -> bool {
+    use std::io::Read;
+    let Ok(mut file) = std::fs::File::open(path) else {
+        return false;
+    };
+    let mut head = [0u8; 4096];
+    match file.read(&mut head) {
+        Ok(read) => scmd_view::looks_binary(&head[..read]),
+        Err(_) => false,
+    }
+}
+
 fn is_editor_command(cmd: Command) -> bool {
     cmd.id().starts_with("editor.")
 }
