@@ -117,8 +117,9 @@ impl Form {
     pub fn build(kind: FormKind, cfg: &Config, i18n: &I18n) -> Form {
         let t = |id: &str| i18n.t(id);
         let fields = match kind {
-            // The session editor is built by `Form::site`, which needs the site itself.
-            FormKind::Site => Vec::new(),
+            // The session editor is built by `Form::site`, which needs the site itself, and
+            // the find dialog by `Form::find`, which needs what was searched for last.
+            FormKind::Site | FormKind::Find => Vec::new(),
             FormKind::System => vec![
                 Field::toggle(
                     "panel.natural_sort",
@@ -268,6 +269,7 @@ impl Form {
         };
         let title = i18n.t(match kind {
             FormKind::Site => "site-new",
+            FormKind::Find => "find-title",
             FormKind::System => "menu-system-settings",
             FormKind::Panel => "menu-panel-settings",
             FormKind::Interface => "menu-interface-settings",
@@ -359,6 +361,74 @@ impl Form {
             site: index,
             button: None,
         }
+    }
+
+    /// Find file (SPEC 06 §1), filled in with what was searched for last — a search is very
+    /// often the same one again with one thing changed.
+    pub fn find(last: &crate::app::FindSpec, i18n: &I18n) -> Form {
+        let t = |id: &str| i18n.t(id);
+        let fields = vec![
+            Field::text("find.mask", t("find-mask"), last.mask.clone()),
+            Field::text("find.text", t("find-text"), last.text.clone()),
+            Field::toggle("find.case", t("find-case"), last.case_sensitive),
+            Field::toggle("find.words", t("find-words"), last.whole_words),
+            Field::toggle("find.hex", t("find-hex"), last.hex),
+            Field::toggle("find.not", t("find-not"), last.not_containing),
+            Field::Separator,
+            choice(
+                "find.scope",
+                t("find-scope"),
+                &[
+                    ("tree", t("find-scope-tree")),
+                    ("panel", t("find-scope-panel")),
+                    ("selection", t("find-scope-selection")),
+                    ("root", t("find-scope-root")),
+                    ("other", t("find-scope-other")),
+                ],
+                last.scope.as_str(),
+            ),
+            Field::toggle("find.links", t("find-links"), last.follow_links),
+            Field::toggle("find.dirs", t("find-dirs"), last.directories),
+            Field::Separator,
+            Field::Dim(t("find-archives")),
+        ];
+        Form {
+            kind: FormKind::Find,
+            title: t("find-title"),
+            fields,
+            cursor: 0,
+            site: None,
+            button: None,
+        }
+    }
+
+    /// Whether a toggle row is on, by key. `false` when there is no such row, which is what a
+    /// dialog that does not offer the option should mean.
+    pub fn toggle_value(&self, want: &str) -> bool {
+        self.fields
+            .iter()
+            .any(|f| matches!(f, Field::Toggle { key, on, .. } if *key == want && *on))
+    }
+
+    /// The value a choice row is on, by key.
+    pub fn choice_value(&self, want: &str) -> String {
+        for field in &self.fields {
+            if let Field::Choice {
+                key,
+                options,
+                chosen,
+                ..
+            } = field
+            {
+                if *key == want {
+                    return options
+                        .get(*chosen)
+                        .map(|(v, _)| v.clone())
+                        .unwrap_or_default();
+                }
+            }
+        }
+        String::new()
     }
 
     /// What a text row holds now, by key.

@@ -23,6 +23,8 @@ pub enum Action {
 pub enum FormKind {
     /// A stored connection (SPEC 10 §3.5).
     Site,
+    /// Find file (SPEC 06 §1).
+    Find,
     System,
     Panel,
     Interface,

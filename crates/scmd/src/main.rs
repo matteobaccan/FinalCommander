@@ -543,6 +543,20 @@ fn interactive(mut app: App) -> Result<()> {
                         let _ = tx.send(Event::Uploaded { id, remote, result });
                     });
                 }
+                Request::Find { id, spec, cancel } => {
+                    // The dialog, the results list and the keys are here; the walk itself is
+                    // `scmd-find`, which is not in this build yet. Saying so is better than a
+                    // search that always finds nothing.
+                    let _ = (&spec, &cancel);
+                    let _ = tx.send(Event::FindDone {
+                        id,
+                        files: 0,
+                        dirs: 0,
+                        elapsed: std::time::Duration::ZERO,
+                        problems: Vec::new(),
+                        error: Some(app.find_not_available()),
+                    });
+                }
                 Request::TempRefresh {
                     panel,
                     generation,
@@ -1052,6 +1066,17 @@ mod tests {
                                 .map(|e| e.to_string());
                         app.handle_event(Event::LinkDone { link, error });
                     }
+                    Request::Find { id, .. } => {
+                        let message = app.find_not_available();
+                        app.handle_event(Event::FindDone {
+                            id,
+                            files: 0,
+                            dirs: 0,
+                            elapsed: std::time::Duration::ZERO,
+                            problems: Vec::new(),
+                            error: Some(message),
+                        });
+                    }
                     Request::TempRefresh {
                         panel,
                         generation,
@@ -1158,6 +1183,17 @@ mod tests {
                                 .err()
                                 .map(|e| e.to_string());
                         app.handle_event(Event::LinkDone { link, error });
+                    }
+                    Request::Find { id, .. } => {
+                        let message = app.find_not_available();
+                        app.handle_event(Event::FindDone {
+                            id,
+                            files: 0,
+                            dirs: 0,
+                            elapsed: std::time::Duration::ZERO,
+                            problems: Vec::new(),
+                            error: Some(message),
+                        });
                     }
                     Request::TempRefresh {
                         panel,

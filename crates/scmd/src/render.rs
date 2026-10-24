@@ -206,6 +206,10 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
     }
     match &app.mode {
         Mode::Normal => None,
+        Mode::Find(view) => {
+            draw_find(app, view, buf, screen);
+            None
+        }
         Mode::Prompt(prompt) => {
             // A password is never put on the screen, not even for a frame.
             let shown = if prompt.secret {
@@ -818,6 +822,109 @@ fn cursor_line(app: &App, panel: &crate::panel::Panel) -> String {
         None if panel.loading => app.i18n.t("panel-loading"),
         None => app.i18n.t("panel-empty"),
     }
+}
+
+/// A search: its results so far, what it is scanning, and what the keys do. Full screen,
+/// because a list of results is the thing you are working with, not a message about one.
+fn draw_find(app: &App, view: &crate::app::FindView, buf: &mut Buffer, screen: Rect) {
+    let base = app.theme.panel();
+    let frame = Style::new(app.theme.color("panel.frame"), app.theme.color("panel.bg"));
+    let dim = Style::new(
+        app.theme.color("panel.footer.fg"),
+        app.theme.color("panel.bg"),
+    );
+    let picked = Style::new(app.theme.color("cursor.fg"), app.theme.color("cursor.bg"));
+
+    buf.fill(screen, ' ', base);
+    buf.draw_frame(screen, frame, Some(&view.label));
+    let inner = screen.inner();
+    if inner.h < 3 {
+        return;
+    }
+    // Two rows at the foot: what is happening, and what the keys do.
+    let list_h = inner.h.saturating_sub(2) as usize;
+    let name_w = inner.w.saturating_sub(28) as usize;
+
+    for i in 0..list_h {
+        let Some((path, entry)) = view.rows.get(view.top + i) else {
+            break;
+        };
+        let y = inner.y + i as u16;
+        let on = view.top + i == view.cursor;
+        let style = if on { picked } else { base };
+        if on {
+            buf.fill(Rect::new(inner.x, y, inner.w, 1), ' ', style);
+        }
+        // The whole path, elided in the middle: on a results list the directory is the half
+        // of the answer, so it cannot be the half that is cut off.
+        let shown = scmd_ui::elide_middle(&path.to_string(), name_w);
+        buf.put_str(inner.x, y, &shown, style, name_w as u16);
+        let size = if entry.kind.is_dirlike() {
+            String::new()
+        } else {
+            scmd_core::format_size(entry.size)
+        };
+        let when = entry.mtime.map(widgets::format_mtime).unwrap_or_default();
+        let right = format!("{size:>9}  {when:>16}");
+        let x = inner.x + name_w as u16 + 1;
+        if x < inner.right() {
+            buf.put_str(x, y, &right, style, inner.right() - x);
+        }
+    }
+
+    let counters = if view.done {
+        let seconds = view.elapsed.as_secs_f64();
+        app.i18n.t_args(
+            if view.stopped {
+                "find-stopped"
+            } else {
+                "find-done"
+            },
+            &[
+                ("count", (view.rows.len() as i64).into()),
+                ("files", (view.files as i64).into()),
+                ("elapsed", format!("{seconds:.1} s").into()),
+            ],
+        )
+    } else {
+        app.i18n.t_args(
+            "find-results",
+            &[
+                ("count", (view.rows.len() as i64).into()),
+                ("files", (view.files as i64).into()),
+                ("dirs", (view.dirs as i64).into()),
+            ],
+        )
+    };
+    let scanning = view.scanning.as_deref().unwrap_or_default();
+    let status = if scanning.is_empty() || view.done {
+        counters
+    } else {
+        format!("{counters}  ·  {}", scmd_ui::elide_middle(scanning, 40))
+    };
+    let y = inner.bottom() - 2;
+    buf.put_str(
+        inner.x,
+        y,
+        &scmd_ui::truncate_cols(&status, inner.w as usize),
+        dim,
+        inner.w,
+    );
+    let hint = app.i18n.t(if view.done {
+        "find-hint-done"
+    } else {
+        "find-hint"
+    });
+    buf.put_str(
+        inner.x,
+        inner.bottom() - 1,
+        &scmd_ui::truncate_cols(&hint, inner.w as usize),
+        Style::new(
+            app.theme.color("panel.column.fg"),
+            app.theme.color("panel.bg"),
+        ),
+        inner.w,
+    );
 }
 
 /// The connection manager: the site list, what is connected, and what the keys do.

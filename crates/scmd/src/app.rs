@@ -30,6 +30,12 @@ pub enum Request {
         panel: usize,
         path: VPath,
     },
+    /// Walk and match. The engine is `scmd-find`; this carries what the dialog asked for.
+    Find {
+        id: u64,
+        spec: Box<FindSpec>,
+        cancel: CancelToken,
+    },
     /// Re-stat the paths a list panel is made of, and drop what is no longer there.
     TempRefresh {
         panel: usize,
@@ -139,6 +145,32 @@ pub enum Event {
     FreeSpace {
         panel: usize,
         bytes: Option<u64>,
+    },
+    // These two are sent by the worker as the walk goes; until `scmd-find` is in the build,
+    // only the tests construct them. The attribute goes away with the engine.
+    /// One file a search matched.
+    #[allow(dead_code)]
+    FindHit {
+        id: u64,
+        path: VPath,
+        entry: Box<Entry>,
+    },
+    /// Where a search has got to, so the list can say it is still working.
+    #[allow(dead_code)]
+    FindProgress {
+        id: u64,
+        scanning: String,
+        files: u64,
+        dirs: u64,
+    },
+    /// A search finished, was stopped, or could not start.
+    FindDone {
+        id: u64,
+        files: u64,
+        dirs: u64,
+        elapsed: std::time::Duration,
+        problems: Vec<String>,
+        error: Option<String>,
     },
     /// A list panel's rows, with the real path of each: find results, `panelize`, a re-read.
     TempListed {
@@ -339,6 +371,126 @@ pub struct JobView {
     pub choice: usize,
 }
 
+/// What to search for (SPEC 06 §1). Plain data on purpose: the engine lives in `scmd-find`,
+/// and this is what the dialog produces and the worker turns into a query, so neither the
+/// dialog nor the screen depends on the engine's own types.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FindSpec {
+    /// Masks, in the grammar of `scmd-core`'s filter: a list, `*`, `?`, ranges, groups.
+    pub mask: String,
+    /// Text or a hex pattern the file must contain. Empty means "match on the name alone".
+    pub text: String,
+    pub case_sensitive: bool,
+    pub whole_words: bool,
+    /// The text above is a hex byte pattern rather than characters.
+    pub hex: bool,
+    /// Files that do *not* contain it, which FAR offers and is surprisingly useful.
+    pub not_containing: bool,
+    pub scope: FindScope,
+    pub follow_links: bool,
+    /// Directories in the results, not only files.
+    pub directories: bool,
+    /// Where the walk starts. Worked out from the scope when the dialog is accepted, so the
+    /// worker never has to know what a panel is.
+    pub roots: Vec<VPath>,
+}
+
+impl Default for FindSpec {
+    fn default() -> Self {
+        FindSpec {
+            // Every file, which is what a user who presses Enter straight away means.
+            mask: "*".to_string(),
+            text: String::new(),
+            case_sensitive: false,
+            whole_words: false,
+            hex: false,
+            not_containing: false,
+            scope: FindScope::Tree,
+            follow_links: false,
+            directories: false,
+            roots: Vec::new(),
+        }
+    }
+}
+
+/// Where a search starts. FAR has six; these are the five that mean something on every
+/// platform we run on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FindScope {
+    /// This panel's directory and everything below it.
+    Tree,
+    /// This panel's directory alone.
+    Panel,
+    /// The directories selected in this panel, each with everything below it.
+    Selection,
+    /// From the root of the drive this panel is on.
+    Root,
+    /// The other panel's directory and everything below it.
+    Other,
+}
+
+impl FindScope {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            FindScope::Tree => "tree",
+            FindScope::Panel => "panel",
+            FindScope::Selection => "selection",
+            FindScope::Root => "root",
+            FindScope::Other => "other",
+        }
+    }
+
+    pub fn parse(text: &str) -> FindScope {
+        match text {
+            "panel" => FindScope::Panel,
+            "selection" => FindScope::Selection,
+            "root" => FindScope::Root,
+            "other" => FindScope::Other,
+            _ => FindScope::Tree,
+        }
+    }
+}
+
+/// A search while it runs, and its results afterwards.
+#[derive(Debug)]
+pub struct FindView {
+    pub id: u64,
+    /// What was asked for, for the frame.
+    pub label: String,
+    pub rows: Vec<(VPath, Entry)>,
+    pub cursor: usize,
+    pub top: usize,
+    /// The directory being scanned right now, while it is running.
+    pub scanning: Option<String>,
+    pub files: u64,
+    pub dirs: u64,
+    pub done: bool,
+    pub stopped: bool,
+    pub elapsed: std::time::Duration,
+    pub cancel: CancelToken,
+    /// What could not be read. Kept rather than shown one by one, because a search over a
+    /// whole drive hits a dozen unreadable directories and saying so each time is noise.
+    pub problems: Vec<String>,
+}
+
+impl FindView {
+    pub fn move_cursor(&mut self, delta: isize, page: usize) {
+        if self.rows.is_empty() {
+            self.cursor = 0;
+            return;
+        }
+        let last = self.rows.len() - 1;
+        let next = self.cursor as isize + delta;
+        self.cursor = next.clamp(0, last as isize) as usize;
+        // Keep the cursor on screen, which for a list that grows means following it down.
+        if self.cursor < self.top {
+            self.top = self.cursor;
+        } else if page > 0 && self.cursor >= self.top + page {
+            self.top = self.cursor + 1 - page;
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum Mode {
     Normal,
@@ -369,6 +521,8 @@ pub enum Mode {
     Form(Box<Form>),
     /// A list to choose one row from.
     Pick(Box<Pick>),
+    /// `Alt+F7`: a search, running or finished, with its results.
+    Find(Box<FindView>),
     /// `Ctrl+O`: the output of the commands that have run, full screen.
     UserScreen {
         scroll: usize,
@@ -478,6 +632,8 @@ pub struct App {
     pub user_screen: Vec<String>,
     /// Which panel is hidden, if either: `Ctrl+F1` and `Ctrl+F2` give the screen to one.
     pub hidden: Option<usize>,
+    /// What was searched for last, so `Alt+F7` opens on it rather than on an empty dialog.
+    pub last_find: FindSpec,
     /// Which group gives a file its colour. Compiled once: it parses mask lists.
     pub highlight: scmd_ui::Highlight,
     /// What `Ctrl+G` has left to run, one command per file. They go one at a time: a hundred
@@ -555,6 +711,7 @@ impl App {
             cmd: CmdLine::new(),
             user_screen: Vec::new(),
             hidden: None,
+            last_find: FindSpec::default(),
             highlight: scmd_ui::Highlight::far_default(),
             apply_queue: Vec::new(),
             apply_total: 0,
@@ -635,6 +792,52 @@ impl App {
     pub fn handle_event(&mut self, event: Event) {
         match event {
             Event::Input(input) => self.handle_input(input),
+            Event::FindHit { id, path, entry } => {
+                if let Some(view) = self.find_mut() {
+                    if view.id == id {
+                        view.rows.push((path, *entry));
+                    }
+                }
+            }
+            Event::FindProgress {
+                id,
+                scanning,
+                files,
+                dirs,
+            } => {
+                if let Some(view) = self.find_mut() {
+                    if view.id == id {
+                        view.scanning = Some(scanning);
+                        view.files = files;
+                        view.dirs = dirs;
+                    }
+                }
+            }
+            Event::FindDone {
+                id,
+                files,
+                dirs,
+                elapsed,
+                problems,
+                error,
+            } => {
+                let mine = self.find_mut().map(|v| v.id) == Some(id);
+                if let (true, Some(view)) = (mine, self.find_mut()) {
+                    view.done = true;
+                    view.scanning = None;
+                    view.files = files;
+                    view.dirs = dirs;
+                    view.elapsed = elapsed;
+                    view.problems = problems;
+                }
+                if let Some(error) = error {
+                    // A search that could not even start says why, where the dialog was.
+                    if mine {
+                        self.mode = Mode::Normal;
+                    }
+                    self.set_error(error);
+                }
+            }
             Event::TempListed {
                 panel,
                 generation,
@@ -955,6 +1158,10 @@ impl App {
             Mode::UserScreen { scroll } => {
                 self.mode = Mode::UserScreen { scroll };
                 self.user_screen_key(key, scroll);
+            }
+            Mode::Find(view) => {
+                self.mode = Mode::Find(view);
+                self.find_key(key);
             }
             Mode::Prompt(prompt) => {
                 self.mode = Mode::Prompt(prompt.clone());
@@ -2390,6 +2597,7 @@ impl App {
                     sources: vec![target],
                 });
             }
+            Command::ToolFind => self.open_find_form(),
             Command::FileApply => {
                 let sources = self.job_sources();
                 if sources.is_empty() {
@@ -3472,6 +3680,244 @@ impl App {
         }
     }
 
+    /// `Alt+F7`: the dialog, filled in with the last search.
+    fn open_find_form(&mut self) {
+        self.mode = Mode::Form(Box::new(Form::find(&self.last_find, &self.i18n)));
+    }
+
+    /// OK in the find dialog: work out where to search, and start.
+    fn apply_find_form(&mut self, form: &Form) {
+        let mask = form.text_value("find.mask");
+        if mask.is_empty() {
+            let m = self.i18n.t("find-needs-mask");
+            self.set_error(m);
+            self.mode = Mode::Form(Box::new(form.clone()));
+            return;
+        }
+        let scope = FindScope::parse(&form.choice_value("find.scope"));
+        let mut spec = FindSpec {
+            mask,
+            text: form.text_value("find.text"),
+            case_sensitive: form.toggle_value("find.case"),
+            whole_words: form.toggle_value("find.words"),
+            hex: form.toggle_value("find.hex"),
+            not_containing: form.toggle_value("find.not"),
+            scope,
+            follow_links: form.toggle_value("find.links"),
+            directories: form.toggle_value("find.dirs"),
+            roots: Vec::new(),
+        };
+        spec.roots = self.find_roots(scope);
+        if spec.roots.is_empty() {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        }
+        self.last_find = spec.clone();
+        self.start_find(spec);
+    }
+
+    /// Where a scope starts. Worked out here, where the panels are, so that neither the
+    /// engine nor the worker has to know what a panel is.
+    fn find_roots(&self, scope: FindScope) -> Vec<VPath> {
+        let panel = self.panel();
+        match scope {
+            FindScope::Tree | FindScope::Panel => vec![panel.cwd.clone()],
+            FindScope::Other => vec![self.other().cwd.clone()],
+            FindScope::Root => vec![panel.cwd.root()],
+            FindScope::Selection => {
+                // The directories that are selected; with none selected, the one under the
+                // cursor if it is a directory, and otherwise nothing rather than silently
+                // searching the whole tree.
+                let mut out = Vec::new();
+                for row in 0..panel.listing.len() {
+                    let Some(e) = panel.listing.row(row) else {
+                        continue;
+                    };
+                    if e.kind.is_dirlike()
+                        && e.kind != scmd_core::EntryKind::Parent
+                        && panel.selection.contains(e.id)
+                    {
+                        out.push(panel.path_of(e));
+                    }
+                }
+                if out.is_empty() {
+                    if let Some(e) = panel.current() {
+                        if e.kind.is_dirlike() && e.kind != scmd_core::EntryKind::Parent {
+                            out.push(panel.path_of(e));
+                        }
+                    }
+                }
+                out
+            }
+        }
+    }
+
+    /// Until the engine is wired, a search says so rather than looking like one that found
+    /// nothing. One place, one string, and it goes away with the engine.
+    pub fn find_not_available(&self) -> String {
+        self.i18n.t("find-no-engine")
+    }
+
+    fn start_find(&mut self, spec: FindSpec) {
+        let id = self.next_job_id;
+        self.next_job_id += 1;
+        let cancel = CancelToken::new();
+        let label = self.find_label(&spec);
+        self.requests.push(Request::Find {
+            id,
+            spec: Box::new(spec),
+            cancel: cancel.clone(),
+        });
+        self.mode = Mode::Find(Box::new(FindView {
+            id,
+            label,
+            rows: Vec::new(),
+            cursor: 0,
+            top: 0,
+            scanning: None,
+            files: 0,
+            dirs: 0,
+            done: false,
+            stopped: false,
+            elapsed: std::time::Duration::ZERO,
+            cancel,
+            problems: Vec::new(),
+        }));
+    }
+
+    /// What the results frame says: the mask, the text, and where it looked.
+    fn find_label(&self, spec: &FindSpec) -> String {
+        let mut label = spec.mask.clone();
+        if !spec.text.is_empty() {
+            label.push_str(" · ");
+            label.push_str(&spec.text);
+        }
+        let root = spec
+            .roots
+            .first()
+            .map(|p| p.to_string())
+            .unwrap_or_default();
+        let more = spec.roots.len().saturating_sub(1);
+        if more > 0 {
+            format!("{label} · {root} +{more}")
+        } else {
+            format!("{label} · {root}")
+        }
+    }
+
+    /// Keys in the results of a search. The list grows under the cursor while the search runs,
+    /// which is the point: a result is useful before the search has finished.
+    fn find_key(&mut self, key: Key) {
+        let page = self.rows.max(1) as isize;
+        let (rows, done, cancel) = {
+            let Some(view) = self.find_mut() else { return };
+            (view.rows.len(), view.done, view.cancel.clone())
+        };
+        match key.code {
+            KeyCode::Esc | KeyCode::F(10) => {
+                if done {
+                    self.mode = Mode::Normal;
+                } else {
+                    // The first Esc stops the search and keeps what it found; the second
+                    // closes the list. Nothing is thrown away by accident.
+                    cancel.cancel();
+                    if let Some(view) = self.find_mut() {
+                        view.stopped = true;
+                    }
+                }
+            }
+            KeyCode::Up => self.find_move(-1),
+            KeyCode::Down => self.find_move(1),
+            KeyCode::PageUp => self.find_move(-page),
+            KeyCode::PageDown => self.find_move(page),
+            KeyCode::Home => self.find_move(-(rows as isize)),
+            KeyCode::End => self.find_move(rows as isize),
+            KeyCode::Enter => self.find_go_to(),
+            KeyCode::F(3) => self.find_view_file(),
+            KeyCode::F(5) => self.find_panelise(),
+            _ => {}
+        }
+    }
+
+    fn find_mut(&mut self) -> Option<&mut FindView> {
+        match &mut self.mode {
+            Mode::Find(view) => Some(view),
+            _ => None,
+        }
+    }
+
+    fn find_move(&mut self, delta: isize) {
+        let page = self.rows.max(1);
+        if let Some(view) = self.find_mut() {
+            view.move_cursor(delta, page);
+        }
+    }
+
+    /// `Enter`: go to the file — the panel changes directory and the cursor lands on it.
+    fn find_go_to(&mut self) {
+        let chosen = match &self.mode {
+            Mode::Find(view) => view.rows.get(view.cursor).cloned(),
+            _ => None,
+        };
+        let Some((path, entry)) = chosen else { return };
+        self.mode = Mode::Normal;
+        let dir = if entry.kind.is_dirlike() {
+            path.clone()
+        } else {
+            match path.parent() {
+                Some(dir) => dir.normalised(),
+                None => path.clone(),
+            }
+        };
+        let index = self.active;
+        self.panels[index].want_cursor = Some(path.display_name());
+        self.panels[index].go(dir, true);
+        self.read_panel(index);
+    }
+
+    /// `F3`: read the file without leaving the results.
+    fn find_view_file(&mut self) {
+        let chosen = match &self.mode {
+            Mode::Find(view) => view.rows.get(view.cursor).cloned(),
+            _ => None,
+        };
+        let Some((path, entry)) = chosen else { return };
+        if entry.kind.is_dirlike() {
+            return;
+        }
+        if path.is_remote() {
+            self.fetch_remote(path, entry.size, Fetched::View);
+            return;
+        }
+        let local = path.as_path().to_path_buf();
+        self.open_viewer_on(&local, path);
+    }
+
+    /// `F5`: put the results in the panel, which is what makes them worth something — every
+    /// key that works on a panel then works on them.
+    fn find_panelise(&mut self) {
+        let (rows, label) = match &mut self.mode {
+            Mode::Find(view) => (std::mem::take(&mut view.rows), view.label.clone()),
+            _ => return,
+        };
+        if rows.is_empty() {
+            let m = self.i18n.t("find-none");
+            self.set_error(m);
+            return;
+        }
+        let count = rows.len();
+        self.mode = Mode::Normal;
+        let index = self.active;
+        let generation = self.panels[index].generation + 1;
+        self.panels[index].generation = generation;
+        self.panels[index].set_temp(label, rows, generation);
+        let msg = self
+            .i18n
+            .t_args("find-panelised", &[("count", (count as i64).into())]);
+        self.set_status(msg);
+    }
+
     /// Keep what a command printed, capped, with the command itself as its heading.
     fn push_user_screen(&mut self, line: &str, output: &str) {
         const MAX_LINES: usize = 10_000;
@@ -3729,6 +4175,10 @@ impl App {
         };
         if form.kind == FormKind::Site {
             self.apply_site_form(&form);
+            return;
+        }
+        if form.kind == FormKind::Find {
+            self.apply_find_form(&form);
             return;
         }
         let problems = form.apply(&mut self.cfg);
@@ -5282,6 +5732,185 @@ mod tests {
         app.run(Command::ViewerToPanel);
         assert_eq!(app.panel().current().unwrap().name_str(), viewed);
         assert!(app.status.contains(&viewed), "{}", app.status);
+    }
+
+    // ── find file (SPEC 06 §1) ──────────────────────────────────────────────────────────────
+
+    #[test]
+    fn the_find_dialog_opens_on_the_last_search() {
+        let mut app = app();
+        app.run(Command::ToolFind);
+        let Mode::Form(form) = std::mem::replace(&mut app.mode, Mode::Normal) else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(form.kind, crate::menu::FormKind::Find);
+        // Every file, which is what pressing Enter straight away should mean.
+        assert_eq!(form.text_value("find.mask"), "*");
+
+        // What was searched for last comes back next time.
+        app.last_find = FindSpec {
+            mask: "*.rs".into(),
+            text: "TODO".into(),
+            case_sensitive: true,
+            scope: FindScope::Panel,
+            ..FindSpec::default()
+        };
+        app.run(Command::ToolFind);
+        let Mode::Form(form) = std::mem::replace(&mut app.mode, Mode::Normal) else {
+            panic!("no dialog")
+        };
+        assert_eq!(form.text_value("find.mask"), "*.rs");
+        assert_eq!(form.text_value("find.text"), "TODO");
+        assert!(form.toggle_value("find.case"));
+        assert_eq!(form.choice_value("find.scope"), "panel");
+    }
+
+    #[test]
+    fn the_scope_decides_where_the_walk_starts() {
+        let mut app = app();
+        // The panel is on /home/mb, the other on /tmp.
+        assert_eq!(
+            app.find_roots(FindScope::Tree),
+            vec![VPath::local("/home/mb")]
+        );
+        assert_eq!(
+            app.find_roots(FindScope::Panel),
+            vec![VPath::local("/home/mb")]
+        );
+        assert_eq!(app.find_roots(FindScope::Other), vec![VPath::local("/tmp")]);
+        assert_eq!(
+            app.find_roots(FindScope::Root),
+            vec![app.panel().cwd.root()]
+        );
+
+        // With nothing selected, the folders scope takes the directory under the cursor.
+        press(&mut app, "Down"); // docs
+        assert_eq!(app.panel().current().unwrap().name_str(), "docs");
+        assert_eq!(
+            app.find_roots(FindScope::Selection),
+            vec![VPath::local("/home/mb/docs")]
+        );
+        // And a file under the cursor is not a place to search, so it says nothing rather
+        // than quietly searching the whole tree.
+        press(&mut app, "Down"); // a.txt
+        assert!(app.find_roots(FindScope::Selection).is_empty());
+    }
+
+    #[test]
+    fn a_search_starts_from_the_dialog_and_can_be_stopped_without_losing_what_it_found() {
+        let mut app = app();
+        app.run(Command::ToolFind);
+        let Mode::Form(mut form) = std::mem::replace(&mut app.mode, Mode::Normal) else {
+            panic!("no dialog")
+        };
+        // Type a mask and a text, then OK.
+        for field in &mut form.fields {
+            if let crate::form::Field::Text {
+                key, value, caret, ..
+            } = field
+            {
+                if *key == "find.text" {
+                    *value = "needle".to_string();
+                    *caret = value.chars().count();
+                }
+            }
+        }
+        app.mode = Mode::Form(form);
+        press(&mut app, "F10");
+
+        let (id, cancel) = match &app.mode {
+            Mode::Find(view) => {
+                assert!(view.label.contains("needle"), "{}", view.label);
+                (view.id, view.cancel.clone())
+            }
+            other => panic!("{other:?}"),
+        };
+        match app.take_requests().into_iter().next() {
+            Some(Request::Find { spec, .. }) => {
+                assert_eq!(spec.text, "needle");
+                assert_eq!(spec.mask, "*");
+                assert_eq!(spec.roots, vec![VPath::local("/home/mb")]);
+            }
+            other => panic!("{other:?}"),
+        }
+
+        // Two hits arrive while it runs, and the list shows them.
+        for name in ["one.rs", "two.rs"] {
+            app.handle_event(Event::FindHit {
+                id,
+                path: VPath::local(format!("/home/mb/{name}")),
+                entry: Box::new(entry(name, scmd_core::EntryKind::File, 10)),
+            });
+        }
+        assert!(matches!(&app.mode, Mode::Find(v) if v.rows.len() == 2));
+
+        // Esc stops the search and keeps the results; a second Esc closes the list.
+        press(&mut app, "Esc");
+        assert!(cancel.is_cancelled(), "the search was not stopped");
+        assert!(matches!(&app.mode, Mode::Find(v) if v.rows.len() == 2 && v.stopped));
+        app.handle_event(Event::FindDone {
+            id,
+            files: 7,
+            dirs: 2,
+            elapsed: std::time::Duration::from_millis(120),
+            problems: vec![],
+            error: None,
+        });
+        press(&mut app, "Esc");
+        assert!(matches!(app.mode, Mode::Normal));
+    }
+
+    #[test]
+    fn f5_turns_the_results_into_the_panel() {
+        let mut app = app();
+        app.run(Command::ToolFind);
+        press(&mut app, "F10");
+        let id = match &app.mode {
+            Mode::Find(view) => view.id,
+            other => panic!("{other:?}"),
+        };
+        app.handle_event(Event::FindHit {
+            id,
+            path: VPath::local("/home/mb/deep/one.rs"),
+            entry: Box::new(entry("one.rs", scmd_core::EntryKind::File, 10)),
+        });
+        app.handle_event(Event::FindDone {
+            id,
+            files: 1,
+            dirs: 1,
+            elapsed: std::time::Duration::from_millis(5),
+            problems: vec![],
+            error: None,
+        });
+        press(&mut app, "F5");
+        assert!(matches!(app.mode, Mode::Normal));
+        // The panel is now the results, and the row knows where it really lives.
+        assert!(app.panel().temp.is_some(), "the panel is not a list");
+        assert_eq!(app.panel().listing.len(), 1);
+        assert_eq!(
+            app.panel().current_path().unwrap(),
+            VPath::local("/home/mb/deep/one.rs")
+        );
+    }
+
+    #[test]
+    fn enter_on_a_result_goes_to_the_file() {
+        let mut app = app();
+        app.run(Command::ToolFind);
+        press(&mut app, "F10");
+        let id = match &app.mode {
+            Mode::Find(view) => view.id,
+            other => panic!("{other:?}"),
+        };
+        app.handle_event(Event::FindHit {
+            id,
+            path: VPath::local("/home/mb/deep/one.rs"),
+            entry: Box::new(entry("one.rs", scmd_core::EntryKind::File, 10)),
+        });
+        press(&mut app, "Enter");
+        assert!(matches!(app.mode, Mode::Normal));
+        assert_eq!(app.panel().cwd, VPath::local("/home/mb/deep"));
+        assert_eq!(app.panel().want_cursor.as_deref(), Some("one.rs"));
     }
 
     // ── a panel that is a list rather than a directory ──────────────────────────────────────
