@@ -346,6 +346,16 @@ scope = "viewer"
 cmd = "viewer.right"
 
 [[bind]]
+keys = ["F11"]
+scope = "viewer"
+cmd = "viewer.structure"
+
+[[bind]]
+keys = ["Tab"]
+scope = "viewer"
+cmd = "viewer.pane.next"
+
+[[bind]]
 keys = ["F5"]
 scope = "viewer"
 cmd = "viewer.disasm"

@@ -281,3 +281,11 @@ site-needs-host = соединению нужен узел
 site-needs-key = выберите файл ключа или другой способ входа
 site-bad-port = «{ $port }» — не число
 site-stored = соединение сохранено: { $name } (Shift+F9 — записать)
+# ------------------------------------------------- панель структуры (SPEC 05 §1.8)
+key-struct = Структ
+viewer-structure = Структура
+viewer-structure-hint = ↑↓ строка · Enter — перейти · Tab — содержимое · F11 — закрыть
+viewer-structure-hint-tab = Tab передаёт клавиши сюда
+viewer-no-structure = нечего разбирать: панель не знает этот формат
+viewer-no-target = эта строка никуда в файле не указывает
+viewer-went-to = переход на { $offset }

@@ -289,3 +289,11 @@ site-needs-host = a connection needs a host
 site-needs-key = choose the key file, or another way to authenticate
 site-bad-port = `{ $port }` is not a number
 site-stored = connection stored: { $name } (Shift+F9 to keep it)
+# ------------------------------------------------- structure pane (SPEC 05 §1.8)
+key-struct = Struct
+viewer-structure = Structure
+viewer-structure-hint = ↑↓ row · Enter go to · Tab content · F11 close
+viewer-structure-hint-tab = Tab moves the keys here
+viewer-no-structure = nothing to decode: this is not a format the pane knows
+viewer-no-target = this row points nowhere in the file
+viewer-went-to = went to { $offset }

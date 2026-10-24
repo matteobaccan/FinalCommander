@@ -11,6 +11,7 @@ pub mod jvm;
 pub mod nav;
 pub mod search;
 pub mod source;
+pub mod structure;
 pub mod view;
 
 pub use decode::{detect, looks_binary, sniff_bom, Codepage};

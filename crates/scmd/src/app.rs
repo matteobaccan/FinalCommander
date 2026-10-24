@@ -1075,9 +1075,80 @@ impl App {
     }
 
     fn viewer_key(&mut self, key: Key) {
+        // While the structure pane has the focus, the arrows move its cursor rather than the
+        // file's position, and `Enter` follows the row. Everything else still goes to the
+        // keymap, so `F3` still closes the viewer from inside the pane.
+        if self.structure_pane_key(key) {
+            return;
+        }
         if let Some(cmd) = self.keymap.resolve(&[Scope::Viewer, Scope::Global], key) {
             self.run(cmd);
         }
+    }
+
+    /// Returns true when the key belonged to the structure pane.
+    fn structure_pane_key(&mut self, key: Key) -> bool {
+        let height = self.viewer_size.1;
+        let mut target = None;
+        let handled = match self.mode.viewer_mut() {
+            Some(viewer) if viewer.show_structure && viewer.struct_focus => match key.code {
+                KeyCode::Up => {
+                    viewer.structure_move(-1, height);
+                    true
+                }
+                KeyCode::Down => {
+                    viewer.structure_move(1, height);
+                    true
+                }
+                KeyCode::PageUp => {
+                    viewer.structure_move(-(height as isize), height);
+                    true
+                }
+                KeyCode::PageDown => {
+                    viewer.structure_move(height as isize, height);
+                    true
+                }
+                KeyCode::Home => {
+                    viewer.structure_home();
+                    true
+                }
+                KeyCode::End => {
+                    viewer.structure_end(height);
+                    true
+                }
+                KeyCode::Enter => {
+                    target = Some(viewer.structure_target());
+                    true
+                }
+                _ => false,
+            },
+            _ => false,
+        };
+        // `Enter` on a row that points nowhere says so instead of moving the file silently.
+        if let Some(target) = target {
+            match target {
+                Some(offset) => {
+                    let (width, height) = self.viewer_size;
+                    if let Some(viewer) = self.mode.viewer_mut() {
+                        viewer.jump(offset);
+                        if viewer.mode == scmd_view::Mode::Text {
+                            viewer.set_mode(scmd_view::Mode::Hex);
+                        }
+                        let _ = (width, height);
+                    }
+                    let msg = self.i18n.t_args(
+                        "viewer-went-to",
+                        &[("offset", format!("{offset:#X}").into())],
+                    );
+                    self.set_status(msg);
+                }
+                None => {
+                    let msg = self.i18n.t("viewer-no-target");
+                    self.set_status(msg);
+                }
+            }
+        }
+        handled
     }
 
     /// Unblock the engine with a decision.
@@ -3315,6 +3386,12 @@ impl App {
                     };
                     viewer.set_mode(next);
                 }
+                Command::ViewerStructure => {
+                    if !viewer.toggle_structure() {
+                        error = Some("viewer-no-structure".into());
+                    }
+                }
+                Command::ViewerPaneNext => viewer.toggle_struct_focus(),
                 Command::ViewerCodepageNext => viewer.next_codepage(),
                 Command::ViewerFollow => viewer.toggle_follow(),
                 Command::ViewerBytesLess => viewer.set_bytes_per_row(-8),
@@ -3482,6 +3559,7 @@ impl App {
             (7, self.i18n.t("key-search")),
             (8, self.i18n.t("key-code")),
             (10, self.i18n.t("key-quit")),
+            (11, self.i18n.t("key-struct")),
         ]
     }
 
@@ -3563,6 +3641,8 @@ fn is_viewer_movement(cmd: Command) -> bool {
             | Command::NavBottom
             | Command::ViewerWrap
             | Command::ViewerHex
+            | Command::ViewerStructure
+            | Command::ViewerPaneNext
             | Command::ViewerModeNext
             | Command::ViewerCodepageNext
             | Command::ViewerFollow

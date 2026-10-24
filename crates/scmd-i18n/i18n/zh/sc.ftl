@@ -281,3 +281,11 @@ site-needs-host = 连接需要一个主机
 site-needs-key = 请选择密钥文件，或改用其他认证方式
 site-bad-port = `{ $port }` 不是数字
 site-stored = 连接已保存：{ $name }（Shift+F9 永久保留）
+# ------------------------------------------------- 结构面板 (SPEC 05 §1.8)
+key-struct = 结构
+viewer-structure = 结构
+viewer-structure-hint = ↑↓ 选行 · Enter 跳转 · Tab 回内容 · F11 关闭
+viewer-structure-hint-tab = Tab 把按键交到这里
+viewer-no-structure = 没有可解析的内容：本面板不认识这种格式
+viewer-no-target = 这一行在文件中没有对应位置
+viewer-went-to = 已跳转到 { $offset }

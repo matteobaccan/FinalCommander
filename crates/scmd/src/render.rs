@@ -220,6 +220,93 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
     }
 }
 
+/// The structure pane beside the content: what the file is, and where anything in it lives
+/// (SPEC 05 §1.8). A group heading is a label, a field shows its raw bytes and their meaning,
+/// and a row that points somewhere is what `Enter` follows.
+fn draw_structure(app: &App, viewer: &mut scmd_view::Viewer, buf: &mut Buffer, area: Rect) {
+    let base = app.theme.panel();
+    let frame = Style::new(app.theme.color("panel.frame"), app.theme.color("panel.bg"));
+    let group = Style::new(
+        app.theme.color("panel.column.fg"),
+        app.theme.color("panel.bg"),
+    );
+    let dim = Style::new(
+        app.theme.color("panel.footer.fg"),
+        app.theme.color("panel.bg"),
+    );
+    let picked = Style::new(app.theme.color("cursor.fg"), app.theme.color("cursor.bg"));
+    let unfocused = Style::new(
+        app.theme.color("cursor.inactive.fg"),
+        app.theme.color("cursor.inactive.bg"),
+    );
+
+    buf.fill(area, ' ', base);
+    for y in area.y..area.bottom() {
+        buf.set(area.x, y, '│', frame);
+    }
+    let title = app.i18n.t("viewer-structure");
+    buf.put_str(area.x + 2, area.y, &title, group, area.w.saturating_sub(3));
+
+    let inner = Rect::new(
+        area.x + 1,
+        area.y + 1,
+        area.w.saturating_sub(1),
+        area.h.saturating_sub(2),
+    );
+    let focus = viewer.struct_focus;
+    let (rows, cursor) = viewer.structure_rows(inner.h);
+    for (i, row) in rows.iter().enumerate() {
+        let y = inner.y + i as u16;
+        let on = i == cursor;
+        let style = match (on, focus, row.kind) {
+            (true, true, _) => picked,
+            (true, false, _) => unfocused,
+            (_, _, scmd_view::structure::RowKind::Group) => group,
+            (_, _, scmd_view::structure::RowKind::Field) => base,
+            _ => base,
+        };
+        if on {
+            buf.fill(Rect::new(inner.x, y, inner.w, 1), ' ', style);
+        }
+        match row.kind {
+            scmd_view::structure::RowKind::Group => {
+                let text = scmd_ui::truncate_cols(&row.label, inner.w.saturating_sub(2) as usize);
+                buf.put_str(inner.x + 1, y, &text, style, inner.w.saturating_sub(1));
+            }
+            _ => {
+                // label on the left, value on the right, raw bytes in between when they fit.
+                let label_w = (inner.w / 2).max(8).min(inner.w.saturating_sub(4));
+                let label = scmd_ui::truncate_cols(&row.label, label_w as usize);
+                buf.put_str(inner.x + 1, y, &label, style, label_w);
+                let right_x = inner.x + 1 + label_w;
+                let right_w = inner.right().saturating_sub(right_x);
+                let value = if row.raw.is_empty() {
+                    row.value.clone()
+                } else {
+                    format!("{} {}", row.raw, row.value)
+                };
+                let value = scmd_ui::truncate_cols(&value, right_w as usize);
+                let value_style = if on {
+                    style
+                } else if row.is_target() {
+                    base
+                } else {
+                    dim
+                };
+                buf.put_str(right_x, y, &value, value_style, right_w);
+            }
+        }
+    }
+
+    let hint = app.i18n.t(if focus {
+        "viewer-structure-hint"
+    } else {
+        "viewer-structure-hint-tab"
+    });
+    let hint = scmd_ui::truncate_cols(&hint, area.w.saturating_sub(3) as usize);
+    buf.put_str(area.x + 2, area.bottom() - 1, &hint, dim, area.w - 3);
+}
+
 /// The menu bar across the top with one menu pulled down (SPEC 10 §2).
 fn draw_menus(app: &App, buf: &mut Buffer, screen: Rect, menu: usize, item: usize) {
     let menus = crate::menu::menus();
@@ -497,6 +584,22 @@ fn draw_viewer(app: &mut App, viewer: &mut scmd_view::Viewer, buf: &mut Buffer) 
     );
     buf.put_str(w - status_w, 0, &status_text, header, status_w);
 
+    // The structure pane takes the right-hand third, and the content keeps the rest.
+    let mut body = body;
+    let pane = if viewer.show_structure {
+        let pane_w = (body.w / 3).clamp(28, 48).min(body.w.saturating_sub(24));
+        if pane_w >= 24 {
+            let at = Rect::new(body.right() - pane_w, body.y, pane_w, body.h);
+            body = Rect::new(body.x, body.y, body.w - pane_w, body.h);
+            app.viewer_size = (body.w, body.h);
+            Some(at)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
     // Content.
     let hit = Style::new(app.theme.color("search.fg"), app.theme.color("panel.bg")).bold();
     let rows = viewer.rows(body.w, body.h);
@@ -521,6 +624,10 @@ fn draw_viewer(app: &mut App, viewer: &mut scmd_view::Viewer, buf: &mut Buffer) 
     }
     if rows.is_empty() {
         buf.put_str(0, body.y, &app.i18n.t("viewer-empty"), base, body.w);
+    }
+
+    if let Some(at) = pane {
+        draw_structure(app, viewer, buf, at);
     }
 
     if keybar_h == 1 {
@@ -931,6 +1038,150 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// A small but well-formed ELF64: enough header for the pane to decode, one section table
+    /// to jump into.
+    fn elf_bytes() -> Vec<u8> {
+        let mut f = vec![0u8; 0x200];
+        f[..4].copy_from_slice(b"\x7fELF");
+        f[4] = 2; // ELF64
+        f[5] = 1; // little endian
+        f[6] = 1;
+        f[16..18].copy_from_slice(&2u16.to_le_bytes()); // EXEC
+        f[18..20].copy_from_slice(&0x3Eu16.to_le_bytes()); // x86-64
+        f[24..32].copy_from_slice(&0x1000u64.to_le_bytes()); // entry
+        f[40..48].copy_from_slice(&0x80u64.to_le_bytes()); // e_shoff
+        f[58..60].copy_from_slice(&64u16.to_le_bytes()); // e_shentsize
+        f[60..62].copy_from_slice(&1u16.to_le_bytes()); // e_shnum
+        f
+    }
+
+    fn app_with_viewer(name: &str, bytes: &[u8]) -> (tempfile::TempDir, App) {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join(name), bytes).unwrap();
+        let mut app = App::new(Startup {
+            cfg: Config::default(),
+            paths: Paths::discover(Some(&dir.path().join("scmd.toml")), None),
+            i18n: I18n::new("en"),
+            keymap: Keymap::builtin("far").unwrap(),
+            themes: ThemeSet::builtin_only(),
+            theme: Theme::builtin("far").unwrap(),
+            left: VPath::local(dir.path()),
+            right: VPath::local(dir.path()),
+            sites: Vec::new(),
+        });
+        app.requests.clear();
+        let entries = scmd_vfs::local::list_blocking(
+            &VPath::local(dir.path()),
+            &scmd_core::CancelToken::new(),
+        )
+        .unwrap();
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation: 1,
+            result: Ok(entries),
+        });
+        app.handle_input(Input::Key("Down".parse().unwrap()));
+        app.handle_input(Input::Key("F3".parse().unwrap()));
+        (dir, app)
+    }
+
+    #[test]
+    fn f11_decodes_the_file_beside_the_bytes() {
+        let (_dir, mut app) = app_with_viewer("prog.bin", &elf_bytes());
+        app.handle_input(Input::Key("F4".parse().unwrap())); // hex
+        let out = frame(&mut app, 100, 20);
+        assert!(!out.contains("Structure"), "the pane starts closed");
+
+        app.handle_input(Input::Key("F11".parse().unwrap()));
+        let out = frame(&mut app, 100, 20);
+        assert!(out.contains("Structure"), "{out}");
+        assert!(out.contains("e_machine"), "{out}");
+        assert!(out.contains("x86-64"), "{out}");
+        assert!(out.contains("EXEC"), "{out}");
+        // The content keeps the rest of the width, and its rows are still hex.
+        assert!(out.contains("7F 45 4C 46"), "{out}");
+        assert!(app.viewer_size.0 < 100, "the content did not make room");
+
+        app.handle_input(Input::Key("F11".parse().unwrap()));
+        let out = frame(&mut app, 100, 20);
+        assert!(!out.contains("Structure"), "F11 closes it again");
+    }
+
+    #[test]
+    fn enter_in_the_pane_takes_the_bytes_there() {
+        let (_dir, mut app) = app_with_viewer("prog.bin", &elf_bytes());
+        app.handle_input(Input::Key("F11".parse().unwrap()));
+        let _ = frame(&mut app, 100, 20);
+        // Walk down to the row for the section table, which points at 0x80.
+        let mut found = false;
+        for _ in 0..24 {
+            let viewer = app.mode.viewer_mut().unwrap();
+            if viewer.structure_target() == Some(0x80) {
+                found = true;
+                break;
+            }
+            app.handle_input(Input::Key("Down".parse().unwrap()));
+        }
+        assert!(found, "no row pointed at the section table");
+        app.handle_input(Input::Key("Enter".parse().unwrap()));
+        let viewer = app.mode.viewer_mut().unwrap();
+        assert_eq!(viewer.top, 0x80, "Enter did not move the bytes");
+        // An offset into a binary is bytes: a file that opened in dump mode already shows
+        // them, and one that opened as text switches to hex rather than guessing a line.
+        assert!(
+            matches!(viewer.mode, scmd_view::Mode::Hex | scmd_view::Mode::Dump),
+            "{:?}",
+            viewer.mode
+        );
+        assert!(app.status.contains("0x80"), "{}", app.status);
+    }
+
+    #[test]
+    fn the_arrows_go_back_to_the_bytes_when_the_pane_lets_go() {
+        let (_dir, mut app) = app_with_viewer("prog.bin", &elf_bytes());
+        app.handle_input(Input::Key("F4".parse().unwrap()));
+        app.handle_input(Input::Key("F11".parse().unwrap()));
+        let _ = frame(&mut app, 100, 20);
+        let before = app.mode.viewer_mut().unwrap().top;
+        app.handle_input(Input::Key("Down".parse().unwrap()));
+        assert_eq!(
+            app.mode.viewer_mut().unwrap().top,
+            before,
+            "with the pane focused the arrows belong to it"
+        );
+        app.handle_input(Input::Key("Tab".parse().unwrap()));
+        app.handle_input(Input::Key("Down".parse().unwrap()));
+        assert_ne!(
+            app.mode.viewer_mut().unwrap().top,
+            before,
+            "after Tab the arrows scroll the file again"
+        );
+    }
+
+    #[test]
+    fn f11_on_a_text_file_says_there_is_nothing_to_decode() {
+        let (_dir, mut app) = app_with_viewer("notes.txt", b"nothing binary here\n");
+        app.handle_input(Input::Key("F11".parse().unwrap()));
+        assert!(app.status_error, "{}", app.status);
+        assert!(!app.mode.viewer().unwrap().show_structure);
+        let out = frame(&mut app, 100, 20);
+        assert!(!out.contains("Structure"), "{out}");
+    }
+
+    #[test]
+    #[ignore = "a look at the screen, not an assertion"]
+    fn eyeball_structure() {
+        // Our own binary is to hand and is a real ELF.
+        let path = std::env::current_exe().unwrap();
+        let mut app = app("far", "en");
+        let source = scmd_view::source::FileSource::open(&path).unwrap();
+        let mut viewer = scmd_view::Viewer::new(Box::new(source), VPath::local(&path));
+        viewer.set_mode(scmd_view::Mode::Hex);
+        assert!(viewer.toggle_structure(), "our own binary must decode");
+        app.mode = crate::app::Mode::Viewer(Box::new(viewer));
+        println!("=== structure pane ===\n{}", frame(&mut app, 100, 26));
     }
 
     #[test]

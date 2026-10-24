@@ -281,3 +281,11 @@ site-needs-host = una connessione ha bisogno di un host
 site-needs-key = scegli il file di chiave, o un altro modo di autenticarsi
 site-bad-port = `{ $port }` non è un numero
 site-stored = connessione salvata: { $name } (Shift+F9 per conservarla)
+# ------------------------------------------------- pannello struttura (SPEC 05 §1.8)
+key-struct = Strutt
+viewer-structure = Struttura
+viewer-structure-hint = ↑↓ riga · Invio vai a · Tab contenuto · F11 chiude
+viewer-structure-hint-tab = Tab porta i tasti qui
+viewer-no-structure = niente da decodificare: non è un formato che il pannello conosce
+viewer-no-target = questa riga non punta a nessun punto del file
+viewer-went-to = spostato a { $offset }

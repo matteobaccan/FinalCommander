@@ -130,6 +130,10 @@ pub enum Command {
     ViewerBytesLess,
     ViewerBytesMore,
     /// Disassemble: machine code as instructions.
+    /// The structure pane: what the file is and where anything inside it is (SPEC 05 §1.8).
+    ViewerStructure,
+    /// Move the keys between the content and the structure pane.
+    ViewerPaneNext,
     ViewerDisasm,
     /// Decompile: WebAssembly to text, or an external decompiler's output.
     ViewerDecompile,
@@ -238,6 +242,8 @@ impl Command {
             Command::ViewerUndoPosition,
             Command::ViewerBytesLess,
             Command::ViewerBytesMore,
+            Command::ViewerStructure,
+            Command::ViewerPaneNext,
             Command::ViewerDisasm,
             Command::ViewerDecompile,
             Command::EditorQuit,
@@ -362,6 +368,8 @@ impl Command {
             Command::ViewerUndoPosition => "viewer.undo".into(),
             Command::ViewerBytesLess => "viewer.bytes.less".into(),
             Command::ViewerBytesMore => "viewer.bytes.more".into(),
+            Command::ViewerStructure => "viewer.structure".into(),
+            Command::ViewerPaneNext => "viewer.pane.next".into(),
             Command::ViewerDisasm => "viewer.disasm".into(),
             Command::ViewerDecompile => "viewer.decompile".into(),
             Command::EditorQuit => "editor.quit".into(),
@@ -470,6 +478,8 @@ impl Command {
             ("viewer.undo", _) => Command::ViewerUndoPosition,
             ("viewer.bytes.less", _) => Command::ViewerBytesLess,
             ("viewer.bytes.more", _) => Command::ViewerBytesMore,
+            ("viewer.structure", _) => Command::ViewerStructure,
+            ("viewer.pane.next", _) => Command::ViewerPaneNext,
             ("viewer.disasm", _) => Command::ViewerDisasm,
             ("viewer.decompile", _) => Command::ViewerDecompile,
             ("editor.quit", _) => Command::EditorQuit,
@@ -545,6 +555,8 @@ mod tests {
             Command::ViewerQuit,
             Command::ViewerSearchNext,
             Command::ViewerBytesMore,
+            Command::ViewerStructure,
+            Command::ViewerPaneNext,
             Command::ViewerDisasm,
             Command::ViewerDecompile,
             Command::EditorSave,

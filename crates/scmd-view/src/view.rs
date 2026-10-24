@@ -6,6 +6,7 @@ use crate::disasm::{self, Arch, Binary, DisasmError, Format};
 use crate::nav::{next_line_start, prev_line_start, read_line, snap_to_line};
 use crate::search::{compile, find, Match, Pattern, SearchError, SearchMode};
 use crate::source::Source;
+use crate::structure::{self, Structure};
 use crate::{il, jvm};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -126,6 +127,15 @@ pub struct Viewer {
     pub bookmarks: [Option<u64>; 10],
     /// Structure of the compiled file, once we have looked.
     pub binary: Option<Binary>,
+    /// Is the structure pane open (SPEC 05 §1.8)?
+    pub show_structure: bool,
+    /// The decoded shape of the file: `None` = not looked yet, `Some(None)` = looked and it is
+    /// not a format the pane knows, which is the common case.
+    structure: Option<Option<Structure>>,
+    /// Cursor and scroll inside the pane, and whether the keys go to it.
+    pub struct_cursor: usize,
+    struct_top: usize,
+    pub struct_focus: bool,
     /// Name of the producer when the content is generated (`WAT`, `javap`, …).
     pub derived: Option<String>,
     /// Set when the file was too large to parse and we are sweeping raw bytes; carries the
@@ -139,6 +149,20 @@ pub struct Viewer {
     pub last_match: Option<Match>,
     /// Offsets the user came from, for "undo position".
     history: Vec<(u64, usize)>,
+}
+
+/// The structure reader asks for bytes at an offset; the viewer already has something that
+/// does exactly that, whatever the file is sitting on.
+struct SourceBytes<'a>(&'a mut dyn Source);
+
+impl structure::Bytes for SourceBytes<'_> {
+    fn at(&mut self, offset: u64, len: usize) -> Vec<u8> {
+        self.0.read_vec(offset, len).unwrap_or_default()
+    }
+
+    fn len(&mut self) -> u64 {
+        self.0.len()
+    }
 }
 
 impl std::fmt::Debug for Viewer {
@@ -176,6 +200,11 @@ impl Viewer {
             follow: false,
             bookmarks: [None; 10],
             binary: None,
+            show_structure: false,
+            structure: None,
+            struct_cursor: 0,
+            struct_top: 0,
+            struct_focus: false,
             derived: None,
             raw_disasm: None,
             disasm_trail: Vec::new(),
@@ -192,6 +221,103 @@ impl Viewer {
 
     pub fn is_empty(&mut self) -> bool {
         self.source.len() == 0
+    }
+
+    // ── structure pane (SPEC 05 §1.8) ──────────────────────────────────────────────────────
+
+    /// What this file is, decoded. Read once, lazily: a file that is not an executable costs
+    /// one 4 KiB read to find out.
+    pub fn structure(&mut self) -> Option<&Structure> {
+        if self.structure.is_none() {
+            let decoded = structure::read(&mut SourceBytes(self.source.as_mut()));
+            self.structure = Some(decoded);
+        }
+        self.structure.as_ref().and_then(|s| s.as_ref())
+    }
+
+    /// `F11`: open or close the pane. Returns false when there is nothing to show, so the
+    /// caller can say so instead of opening an empty frame.
+    pub fn toggle_structure(&mut self) -> bool {
+        if self.show_structure {
+            self.show_structure = false;
+            self.struct_focus = false;
+            return true;
+        }
+        if self.structure().is_none() {
+            return false;
+        }
+        self.show_structure = true;
+        self.struct_focus = true;
+        true
+    }
+
+    /// `Tab`: move the keys between the content and the pane.
+    pub fn toggle_struct_focus(&mut self) {
+        if self.show_structure {
+            self.struct_focus = !self.struct_focus;
+        }
+    }
+
+    /// The pane's visible rows, with the cursor's index among them.
+    pub fn structure_rows(&mut self, height: u16) -> (Vec<structure::Row>, usize) {
+        let top = self.struct_top;
+        let cursor = self.struct_cursor;
+        let Some(s) = self.structure() else {
+            return (Vec::new(), 0);
+        };
+        let rows: Vec<structure::Row> = s
+            .rows
+            .iter()
+            .skip(top)
+            .take(height as usize)
+            .cloned()
+            .collect();
+        (rows, cursor.saturating_sub(top))
+    }
+
+    pub fn structure_len(&mut self) -> usize {
+        self.structure().map(|s| s.rows.len()).unwrap_or(0)
+    }
+
+    /// Move the pane's cursor, keeping it on screen. Group headings are skipped on the way,
+    /// because they are labels, not destinations.
+    pub fn structure_move(&mut self, delta: isize, height: u16) {
+        let len = self.structure_len();
+        if len == 0 {
+            return;
+        }
+        let last = len - 1;
+        let mut at = self.struct_cursor.min(last) as isize + delta;
+        at = at.clamp(0, last as isize);
+        self.struct_cursor = at as usize;
+        let height = height.max(1) as usize;
+        if self.struct_cursor < self.struct_top {
+            self.struct_top = self.struct_cursor;
+        } else if self.struct_cursor >= self.struct_top + height {
+            self.struct_top = self.struct_cursor + 1 - height;
+        }
+    }
+
+    pub fn structure_home(&mut self) {
+        self.struct_cursor = 0;
+        self.struct_top = 0;
+    }
+
+    pub fn structure_end(&mut self, height: u16) {
+        let len = self.structure_len();
+        self.struct_cursor = len.saturating_sub(1);
+        self.struct_top = len.saturating_sub(height.max(1) as usize);
+    }
+
+    /// `Enter` in the pane: where the row points, if anywhere.
+    pub fn structure_target(&mut self) -> Option<u64> {
+        let at = self.struct_cursor;
+        self.structure()?.rows.get(at)?.offset
+    }
+
+    /// One line of identity for the pane's title.
+    pub fn structure_summary(&mut self) -> Option<String> {
+        self.structure().map(|s| s.summary.clone())
     }
 
     // ── modes ──────────────────────────────────────────────────────────────────────────────

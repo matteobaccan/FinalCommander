@@ -281,3 +281,11 @@ site-needs-host = eine Verbindung braucht einen Host
 site-needs-key = Schlüsseldatei wählen oder eine andere Anmeldung
 site-bad-port = `{ $port }` ist keine Zahl
 site-stored = Verbindung gespeichert: { $name } (Shift+F9 behält sie)
+# ------------------------------------------------- Strukturfenster (SPEC 05 §1.8)
+key-struct = Strukt
+viewer-structure = Struktur
+viewer-structure-hint = ↑↓ Zeile · Eingabe springen · Tab Inhalt · F11 schließen
+viewer-structure-hint-tab = Tab bringt die Tasten hierher
+viewer-no-structure = nichts zu entschlüsseln: dieses Format kennt das Fenster nicht
+viewer-no-target = diese Zeile zeigt auf keine Stelle der Datei
+viewer-went-to = gesprungen zu { $offset }

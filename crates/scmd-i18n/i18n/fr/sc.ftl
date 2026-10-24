@@ -281,3 +281,11 @@ site-needs-host = une connexion a besoin d'un hôte
 site-needs-key = choisissez le fichier de clé, ou une autre authentification
 site-bad-port = « { $port } » n'est pas un nombre
 site-stored = connexion enregistrée : { $name } (Shift+F9 pour la garder)
+# ------------------------------------------------- panneau structure (SPEC 05 §1.8)
+key-struct = Struct
+viewer-structure = Structure
+viewer-structure-hint = ↑↓ ligne · Entrée aller à · Tab contenu · F11 ferme
+viewer-structure-hint-tab = Tab amène les touches ici
+viewer-no-structure = rien à décoder : le panneau ne connaît pas ce format
+viewer-no-target = cette ligne ne pointe nulle part dans le fichier
+viewer-went-to = positionné à { $offset }
