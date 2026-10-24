@@ -1,0 +1,23 @@
+# Total Commander's "Open with" and FAR's associations, done the way a plugin can: hand the
+# file to whatever the desktop thinks should open it. The program has associations of its own
+# in the config file; this is for everything nobody configured.
+[plugin]
+id = "open-with"
+name = "Open with the desktop"
+scmd = ">=0.1.0"
+
+[[command]]
+id = "user.open.desktop"
+label = "Open this the way the desktop would"
+run = "open.sh"
+run_windows = "open.cmd"
+needs = ["panel", "cursor", "selection"]
+timeout = 10
+
+[[command]]
+id = "user.open.folder"
+label = "Open this folder in the file manager of the desktop"
+run = "open.sh"
+run_windows = "open.cmd"
+needs = ["panel"]
+timeout = 10

@@ -1,0 +1,13 @@
+# Not from FAR: from the twenty times a day one types `cd ../../..`. The panel goes to the top
+# of whatever this is — a git repository, a Rust workspace, a Node project.
+[plugin]
+id = "goto-root"
+name = "Go to the top"
+scmd = ">=0.1.0"
+
+[[command]]
+id = "user.go.root"
+label = "Go to the top of this project"
+run = "root.sh"
+needs = ["panel"]
+timeout = 10

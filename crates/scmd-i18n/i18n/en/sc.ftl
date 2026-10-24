@@ -482,6 +482,7 @@ macro-too-deep = a macro cannot play itself for ever
 plugin-list-title = Plugin commands
 plugin-none = no plugin provides a command here · plugins live in { $dir }
 plugin-running = { $label }…
+plugin-on-selected = on { $count } selected file(s)
 plugin-failed = { $id }: { $why }
 plugin-unknown-command = a plugin asked for `{ $id }`, which is not a command
 hex-copied = { $size } copied from { $from }

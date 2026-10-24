@@ -473,6 +473,7 @@ macro-too-deep = ein Makro kann sich nicht endlos selbst aufrufen
 plugin-list-title = Plugin-Befehle
 plugin-none = kein Plugin bietet hier einen Befehl · Plugins liegen in { $dir }
 plugin-running = { $label }…
+plugin-on-selected = für { $count } ausgewählte Datei(en)
 plugin-failed = { $id }: { $why }
 plugin-unknown-command = ein Plugin verlangte `{ $id }`, das ist kein Befehl
 hex-copied = { $size } von { $from } kopiert

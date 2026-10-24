@@ -1,0 +1,25 @@
+# Total Commander's packer plugins (WCX) exist for one reason: the formats the program itself
+# cannot read. Ours reads zip and the tar family; rar, 7z, iso, cab and the rest are what this
+# hands to whatever is installed.
+#
+# When the archive stack grows a format, this plugin gets shorter. That is the right shape for
+# a plugin: a gap, filled from outside, visibly.
+[plugin]
+id = "unpack-any"
+name = "Unpack anything"
+scmd = ">=0.1.0"
+
+[[command]]
+id = "user.arc.unpack-any"
+label = "Unpack this with whatever is installed"
+run = "unpack.sh"
+needs = ["panel", "cursor"]
+timeout = 600
+confirm = "This unpacks the archive into a folder here, using a program on this machine."
+
+[[command]]
+id = "user.arc.test-any"
+label = "Test this archive"
+run = "unpack.sh"
+needs = ["panel", "cursor"]
+timeout = 600

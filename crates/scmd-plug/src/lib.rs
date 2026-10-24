@@ -207,6 +207,14 @@ pub struct Command {
     /// How long it may take, in seconds. A plugin that hangs is killed and said so.
     #[serde(default)]
     pub timeout: Option<u64>,
+    /// A question to ask before running it, when it does something that cannot be undone.
+    ///
+    /// The host cannot know what a plugin's program will do, so the author says it: a plugin
+    /// that renames, moves or writes over files declares the sentence the user will read. A
+    /// macro's destructive steps are caught by their names, and this is the same guardrail
+    /// where the names are not ours to read.
+    #[serde(default)]
+    pub confirm: Option<String>,
 }
 
 impl Command {
@@ -843,6 +851,7 @@ mod tests {
             run_windows: Some("x.cmd".into()),
             needs: Vec::new(),
             timeout: None,
+            confirm: None,
         };
         // This platform's program, and the other one named for the shape check.
         if cfg!(windows) {

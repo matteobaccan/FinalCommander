@@ -474,6 +474,7 @@ macro-too-deep = una macro non può richiamare se stessa all'infinito
 plugin-list-title = Comandi dei plugin
 plugin-none = nessun plugin offre comandi qui · i plugin stanno in { $dir }
 plugin-running = { $label }…
+plugin-on-selected = su { $count } file selezionati
 plugin-failed = { $id }: { $why }
 plugin-unknown-command = un plugin ha chiesto `{ $id }`, che non è un comando
 hex-copied = { $size } copiati da { $from }

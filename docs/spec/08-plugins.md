@@ -32,6 +32,7 @@ run = "branch.sh"                 # inside the plugin's own directory, checked a
 run_windows = "branch.cmd"        # optional: a shell script and a .cmd are not one file
 needs = ["panel", "selection"]    # nothing is passed that is not asked for
 timeout = 20                      # seconds; a plugin that hangs is killed and said so
+confirm = "This renames files."   # optional: asked before running, for anything destructive
 ```
 
 `F11` lists the commands of the scope one is in. The host runs the program on the worker pool,
@@ -59,12 +60,26 @@ could have done. A `run` that names nothing is an error on screen, not a silence
 A line of output that is not an action is kept and shown rather than dropped: a plugin writing
 for a human is how a half-written plugin behaves, and swallowing it would make it undebuggable.
 
+**Asking first.** The host cannot know what somebody else's program will do, so a command that
+renames, moves or writes over files declares the sentence the user should read in `confirm`.
+The program shows it, counts what the command would act on from what it asked for, and runs
+nothing until the answer is yes. A macro's destructive steps are caught by their names (§5);
+this is the same guardrail where the names are not ours to read.
+
 **Two systems, two programs.** `run_windows` is run on Windows when it is given and `run`
 everywhere else, because a shell script and a `.cmd` are not interchangeable — and a program
 whose whole point is that habits carry across systems should let a plugin be portable too.
 Both are checked at load for leaving the plugin's folder; only the one this system would run
 has to exist, so a plugin written for both loads on either. `examples/plugins/` has four
 worked examples, one per action, and the one that ships a program for each system.
+
+**What they are for.** `examples/plugins/` is fifteen plugins rather than a demonstration,
+because the argument for this tier is what it can already replace: FAR's FileCase and ProcList,
+Total Commander's checksum tools, its packer plugins for the formats our archive stack does not
+read, its "Open with", its clipboard keys, FAR's line-ending converter and find-duplicates. The
+one thing they cannot do is the thing the tiers below are for — `what-is-this` says in a message
+what Total Commander's content plugins put in panel columns, and it will become a column
+provider with barely a change to the script the day there is a column API.
 
 Refused at load, not at the first press: a command id outside the plugin space, a `run` that
 leaves the plugin's directory (by `..`, by an absolute path or through a symlink), a `needs`

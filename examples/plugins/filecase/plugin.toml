@@ -1,0 +1,33 @@
+# FAR's FileCase, which is one of those plugins nobody misses until the day a camera hands
+# over four hundred files called IMG_0001.JPG.
+#
+# Three commands from one program: the id says which one was chosen, which is why the context
+# carries it.
+[plugin]
+id = "filecase"
+name = "File case"
+scmd = ">=0.1.0"
+
+[[command]]
+id = "user.case.lower"
+label = "Names: to lower case"
+run = "case.sh"
+run_windows = "case.cmd"
+needs = ["panel", "selection", "cursor"]
+confirm = "This renames files. The case of the names changes; nothing else does."
+
+[[command]]
+id = "user.case.upper"
+label = "Names: TO UPPER CASE"
+run = "case.sh"
+run_windows = "case.cmd"
+needs = ["panel", "selection", "cursor"]
+confirm = "This renames files. The case of the names changes; nothing else does."
+
+[[command]]
+id = "user.case.title"
+label = "Names: To Title Case"
+run = "case.sh"
+run_windows = "case.cmd"
+needs = ["panel", "selection", "cursor"]
+confirm = "This renames files. The case of the names changes; nothing else does."

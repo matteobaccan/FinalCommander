@@ -623,6 +623,7 @@ fn load_plugins(
                 program,
                 needs: declared.needs.clone(),
                 timeout: declared.timeout,
+                confirm: declared.confirm.clone(),
             });
         }
     }
@@ -1587,21 +1588,35 @@ timeout = 10
         let (_, _, commands) = load_plugins(&paths, ThemeSet::builtin_only(), &mut warnings);
         assert!(warnings.is_empty(), "{warnings:?}");
 
-        // Every folder under examples/plugins is a plugin, so every one of them must have
-        // produced a command: a folder nobody loads is an example nobody can use.
-        let folders = std::fs::read_dir(&root)
+        // Every folder under examples/plugins is a plugin, and every one of them has to have
+        // produced at least one command: a folder nobody loads is an example nobody can use.
+        // Several provide more than one — three ways to change the case of a name is one
+        // program answering to three ids — so this is per folder, not a total.
+        let folders: Vec<String> = std::fs::read_dir(&root)
             .unwrap()
             .flatten()
             .filter(|e| e.path().is_dir())
-            .count();
-        assert!(folders >= 4, "only {folders} example plugins?");
-        assert_eq!(
-            commands.len(),
-            folders,
-            "{folders} folders but {} commands: {:?}",
-            commands.len(),
-            commands.iter().map(|c| &c.id).collect::<Vec<_>>()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        assert!(
+            folders.len() >= 10,
+            "only {} example plugins?",
+            folders.len()
         );
+        for folder in &folders {
+            assert!(
+                commands.iter().any(|c| &c.plugin == folder),
+                "{folder} loaded no command: {:?}",
+                commands.iter().map(|c| &c.id).collect::<Vec<_>>()
+            );
+        }
+        // And no two of them answer to the same id, which the loader warns about rather than
+        // refusing — a warning this test has already insisted is absent.
+        let mut ids: Vec<&String> = commands.iter().map(|c| &c.id).collect();
+        ids.sort();
+        let before = ids.len();
+        ids.dedup();
+        assert_eq!(before, ids.len(), "two commands share an id");
 
         for command in &commands {
             assert!(
@@ -1630,6 +1645,43 @@ timeout = 10
                 );
             }
         }
+    }
+
+    /// Every shell script under `examples/plugins` parses. `sh -n` is cheap and catches the
+    /// mistake that matters: a plugin whose script does not even start, which in the program
+    /// looks like a command that quietly does nothing.
+    #[test]
+    #[cfg(unix)]
+    fn every_example_script_parses() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(|p| p.parent())
+            .unwrap()
+            .join("examples/plugins");
+        let mut checked = 0;
+        for folder in std::fs::read_dir(&root).unwrap().flatten() {
+            if !folder.path().is_dir() {
+                continue;
+            }
+            for file in std::fs::read_dir(folder.path()).unwrap().flatten() {
+                let path = file.path();
+                if path.extension().is_some_and(|e| e == "sh") {
+                    let out = std::process::Command::new("sh")
+                        .arg("-n")
+                        .arg(&path)
+                        .output()
+                        .expect("sh is here");
+                    assert!(
+                        out.status.success(),
+                        "{} does not parse:\n{}",
+                        path.display(),
+                        String::from_utf8_lossy(&out.stderr)
+                    );
+                    checked += 1;
+                }
+            }
+        }
+        assert!(checked >= 10, "only {checked} scripts checked?");
     }
 
     /// The one example that ships a program for each system: on Unix the host picks the shell

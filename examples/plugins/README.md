@@ -1,46 +1,68 @@
-# Example plugins
+# Plugins
 
-A plugin is a folder with a `plugin.toml` in it, put in the plugins directory —
-`scmd --paths` says where that is, and `scmd --plugins <dir>` points somewhere else for a
-try. `scmd --list-plugins` says what was found and what each one brings. `F11` in the panels
-lists the commands they provide.
+Fifteen of them, ready to copy. A plugin is a folder with a `plugin.toml` in it, put in the
+plugins directory — `scmd --paths` says where that is, and `scmd --plugins <dir>` points
+somewhere else for a try. `scmd --list-plugins` says what was found and what each one brings.
+`F11` in the panels lists the commands they provide, in the scope you are in.
 
 ```sh
-dir=$(scmd --paths | awk '/^macros|^plugins/ {print $2}' | tail -1)
-cp -r examples/plugins/git-here "$dir"/
-chmod +x "$dir"/git-here/*.sh      # the host runs it, so it has to be executable
+dir=$(scmd --paths | awk '/^plugins/ {print $2}')
+mkdir -p "$dir"
+cp -r examples/plugins/* "$dir"/
+chmod +x "$dir"/*/*.sh        # the host runs them, so they have to be executable
 ```
 
-Four of them, one per action of the protocol, each short enough to read in a minute:
+## What is here
 
-| Folder | Command | What it shows |
+Where a line says "FAR" or "Total Commander", that is where the idea comes from: these are the
+plugins people have been reaching for in those programs for twenty years, written against this
+one's plugin tier.
+
+| Plugin | Commands | Where the idea is from |
 | --- | --- | --- |
-| `git-here` | Git: what has changed here | `status`, and a program for each system |
-| `git-select` | Git: select the files that changed | `select` — the panel's selection, set from what only git knows |
-| `dated-folder` | Make a folder named today, and go into it | `run` and `chdir` together |
-| `big-here` | What is taking up the room here | `message`, and a timeout longer than the default |
+| `filecase` | names to lower, UPPER, Title case | FAR's **FileCase** — the day a camera hands over four hundred `IMG_0001.JPG` |
+| `proclist` | what is running; what has this file open | FAR's **ProcList**, plus the question one actually opens it for |
+| `duplicates` | which of these are the same file twice | FAR's find-duplicates, Total Commander's duplicate search |
+| `checksums` | write a `SHA256SUMS`; check files against one | Total Commander's **create/verify checksums** |
+| `unpack-any` | unpack with whatever is installed; test an archive | Total Commander's **packer plugins (WCX)**, for the formats we do not read |
+| `open-with` | open as the desktop would; open this folder | Total Commander's **Open with**, FAR's associations |
+| `clip-path` | the full path, or the names, to the clipboard | Total Commander's `Ctrl+Shift+C`, FAR's copy-name |
+| `line-endings` | to LF, to CRLF, and what do these have | FAR's line-ending converter |
+| `touch-now` | time these as now, or as the file under the cursor | the half of FAR's and TC's attributes dialog everybody uses |
+| `what-is-this` | what this file really is | Total Commander's **content plugins (WDX)**, as a message rather than columns |
+| `big-here` | what is taking up the room here | `du`, ranked, which is the question one has |
+| `git-here` | which branch, how many changed | — |
+| `git-select` | select what git says changed | — |
+| `dated-folder` | make a folder named today and go into it | — |
+| `goto-root` | go to the top of this project | the twenty times a day one types `cd ../../..` |
+
+Each one is short enough to read before trusting it, which is the point of shipping them as
+scripts rather than as binaries.
 
 ## What a plugin command is
 
 A **process**, not code inside the program. That is why one artifact works on every system,
-why there is no sandbox to get wrong, and why a plugin that crashes crashes alone. The cost
-is a process per invocation, which for "which branch is this" is nothing.
+why there is no sandbox to get wrong, and why a plugin that crashes crashes alone. The cost is
+a process per invocation, which for "which branch is this" is nothing.
 
-The conversation is short:
+The plugin does its own work — `filecase` renames the files itself, `checksums` writes the
+file itself — and the actions are only for driving the program afterwards. That division is
+the whole API: the plugin is a program with a working directory, and the actions are what a
+keystroke could have done.
 
-- the context arrives as **JSON on standard input** — `cat >/dev/null` at the top of each
+- The context arrives as **JSON on standard input** — `cat >/dev/null` at the top of each
   script is there so the program writing it does not get a broken pipe — and the same facts
   arrive in the **environment**, which is what a shell script actually wants:
-  `SCMD_DIR` is the panel's directory, `SCMD_CWD` the path as the program spells it,
+  `SCMD_DIR` the panel's directory, `SCMD_CWD` the path as the program spells it,
   `SCMD_CURSOR` the row under the cursor, `SCMD_SELECTED` the selected names one per line,
-  `SCMD_SELECTED_COUNT` how many;
-- what the plugin writes back is **one action per line**:
-  `{"status": "…"}` or `{"error": "…"}` for the status bar, `{"run": "panel.reread"}` to run a
-  command of the program's own vocabulary, `{"chdir": {"path": "…", "panel": "other"}}`,
-  `{"message": {"title": "…", "lines": [...]}}`, `{"cursor": "name"}`,
-  `{"select": ["a", "b"]}`;
-- anything else it writes is shown rather than dropped, so a half-written plugin is
-  debuggable rather than silent.
+  `SCMD_SELECTED_COUNT` how many, `SCMD_COMMAND` which command was chosen — which is how one
+  program answers to three ids, as `filecase` does.
+- What it writes back is **one action per line**: `{"status": "…"}` or `{"error": "…"}` for the
+  status bar, `{"run": "panel.reread"}` to run a command of the program's own vocabulary,
+  `{"chdir": {"path": "…", "panel": "other"}}`, `{"message": {"title": "…", "lines": [...]}}`,
+  `{"cursor": "name"}`, `{"select": ["a", "b"]}`.
+- Anything else it writes is shown rather than dropped, so a half-written plugin is debuggable
+  rather than silent.
 
 `needs` is why `SCMD_DIR` is set at all: nothing is passed that is not asked for, so a plugin
 that does not need the selection never sees it. A path inside an archive or on a server has no
@@ -50,6 +72,20 @@ that cannot be opened — which is why every script here checks it before using 
 An action that runs something names a command of **our** vocabulary, the one every key and
 macro uses, so everything a plugin can do a key can do too. `scmd --list-commands` prints all
 of them.
+
+## Asking first
+
+The host cannot know what somebody else's program will do, so a command that renames, moves or
+writes over files says the sentence the user should read:
+
+```toml
+confirm = "This renames files. The case of the names changes; nothing else does."
+```
+
+The program shows it, counts what it would act on, and runs nothing until the answer is yes.
+A macro's destructive steps are caught by their names; this is the same guardrail where the
+names are not ours to read. Every plugin here that changes a file declares one — `filecase`,
+`checksums`, `line-endings`, `touch-now`, `unpack-any` — and the ones that only look do not.
 
 ## Two systems, two programs
 
@@ -64,17 +100,25 @@ The host runs `run_windows` on Windows when it is there and `run` everywhere els
 checked at load for leaving the plugin's own folder; only the one this system would run has to
 exist, so a plugin written for both loads on either.
 
-`git-here` ships both, and the `.cmd` is the pattern to copy. For something longer than a few
-lines, a two-line `.cmd` that calls PowerShell is easier than batch:
+For something longer than a few lines, a two-line `.cmd` calling PowerShell beats batch:
 
 ```bat
 @echo off
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0status.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0case.ps1"
 ```
 
-> The shell scripts here are run and checked on Linux and macOS. **The `.cmd` is written but
-> not run on Windows** — if it misbehaves, that is a bug worth reporting, and the `.sh` beside
-> it says what it is meant to do.
+`filecase`, `git-here`, `proclist`, `open-with` and `clip-path` ship both halves.
+
+> The shell scripts here were each run against real directories on Linux. **The Windows halves
+> are written and reviewed but not run** — there is no Windows where this was built. If one
+> misbehaves that is a bug worth reporting, and the `.sh` beside it says what it is meant to do.
+
+## When a tool is missing
+
+Several of these lean on something that may not be installed: `7z` or `unar` for the formats we
+do not read, `xdg-open` for the desktop, `xclip` or `pbcopy` for the clipboard, `lsof` for what
+has a file open, `identify` or `ffprobe` for what a media file is. Each says which program it
+wanted rather than failing quietly, because "nothing happened" is the worst possible answer.
 
 ## What is refused, and when
 
@@ -86,4 +130,5 @@ another already provides. A plugin that would surprise somebody does not load at
 
 `docs/spec/08-plugins.md` §1b is the whole protocol, and §2 and §3 are the tiers above this
 one: a plugin that *adds* a panel column, a preview or a filesystem, and one that is asked a
-question rather than told to run.
+question rather than told to run. `what-is-this` is the clearest argument for the first of
+those — it says in a message what Total Commander puts in columns.

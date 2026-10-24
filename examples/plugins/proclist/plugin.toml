@@ -1,0 +1,21 @@
+# FAR's ProcList: what is running, without leaving the file manager. The one that gets used
+# when something is holding a file open and nobody knows what.
+[plugin]
+id = "proclist"
+name = "Process list"
+scmd = ">=0.1.0"
+
+[[command]]
+id = "user.sys.processes"
+label = "What is running"
+run = "procs.sh"
+run_windows = "procs.cmd"
+timeout = 15
+
+[[command]]
+id = "user.sys.who-has-this"
+label = "What has this file open"
+run = "procs.sh"
+run_windows = "procs.cmd"
+needs = ["panel", "cursor"]
+timeout = 20

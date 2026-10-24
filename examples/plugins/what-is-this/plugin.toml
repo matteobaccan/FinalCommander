@@ -1,0 +1,17 @@
+# Total Commander's content plugins (WDX) put this in panel columns — the ID3 tag, the EXIF
+# date, the dimensions of a picture. We have no column API yet, so this says the same things
+# in a message, from whatever is installed.
+#
+# When there is a column API this plugin becomes a column provider and the script barely
+# changes, which is the argument for keeping the vocabulary and not the plumbing in a plugin.
+[plugin]
+id = "what-is-this"
+name = "What is this"
+scmd = ">=0.1.0"
+
+[[command]]
+id = "user.info.what"
+label = "What is this file, really"
+run = "what.sh"
+needs = ["panel", "cursor"]
+timeout = 30

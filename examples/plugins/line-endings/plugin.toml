@@ -1,0 +1,27 @@
+# FAR's line-ending converter. The editor writes whatever a file already had, which is the
+# right default and exactly why one sometimes needs to change it on purpose — a shell script
+# with CRLF does not run, and a Windows tool fed LF shows one long line.
+[plugin]
+id = "line-endings"
+name = "Line endings"
+scmd = ">=0.1.0"
+
+[[command]]
+id = "user.eol.lf"
+label = "Line endings: to LF (Unix)"
+run = "eol.sh"
+needs = ["panel", "selection", "cursor"]
+confirm = "This rewrites the selected text files. Only the line endings change."
+
+[[command]]
+id = "user.eol.crlf"
+label = "Line endings: to CRLF (Windows)"
+run = "eol.sh"
+needs = ["panel", "selection", "cursor"]
+confirm = "This rewrites the selected text files. Only the line endings change."
+
+[[command]]
+id = "user.eol.what"
+label = "Line endings: what do these have"
+run = "eol.sh"
+needs = ["panel", "selection", "cursor"]

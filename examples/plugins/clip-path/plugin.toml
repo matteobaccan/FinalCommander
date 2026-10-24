@@ -1,0 +1,24 @@
+# The clipboard the program does not have yet (docs/BACKLOG.md), borrowed from whatever the
+# system uses. Total Commander's Ctrl+Shift+C; FAR's "copy name to clipboard".
+#
+# A plugin filling a gap in the host, visibly, is the plugin tier earning its keep.
+[plugin]
+id = "clip-path"
+name = "Path to the clipboard"
+scmd = ">=0.1.0"
+
+[[command]]
+id = "user.clip.path"
+label = "Copy the full path to the clipboard"
+run = "clip.sh"
+run_windows = "clip.cmd"
+needs = ["panel", "cursor", "selection"]
+timeout = 10
+
+[[command]]
+id = "user.clip.names"
+label = "Copy the names to the clipboard"
+run = "clip.sh"
+run_windows = "clip.cmd"
+needs = ["panel", "cursor", "selection"]
+timeout = 10

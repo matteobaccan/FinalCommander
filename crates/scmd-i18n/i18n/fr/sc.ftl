@@ -473,6 +473,7 @@ macro-too-deep = une macro ne peut pas s'appeler indéfiniment
 plugin-list-title = Commandes des greffons
 plugin-none = aucun greffon n'offre de commande ici · les greffons sont dans { $dir }
 plugin-running = { $label }…
+plugin-on-selected = sur { $count } fichier(s) sélectionné(s)
 plugin-failed = { $id } : { $why }
 plugin-unknown-command = un greffon a demandé « { $id } », qui n'est pas une commande
 hex-copied = { $size } copiés depuis { $from }

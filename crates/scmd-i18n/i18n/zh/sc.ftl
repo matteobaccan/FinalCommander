@@ -473,6 +473,7 @@ macro-too-deep = 宏不能无限地调用自己
 plugin-list-title = 插件命令
 plugin-none = 这里没有插件提供命令 · 插件放在 { $dir }
 plugin-running = { $label }…
+plugin-on-selected = 对 { $count } 个选中的文件
 plugin-failed = { $id }：{ $why }
 plugin-unknown-command = 插件请求了 `{ $id }`，那不是一个命令
 hex-copied = 已从 { $from } 复制 { $size }

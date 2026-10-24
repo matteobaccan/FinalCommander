@@ -1,0 +1,21 @@
+# Total Commander's "create checksum file" and "verify checksums", which is how one knows a
+# download arrived whole and how one notices a disk going quietly bad.
+[plugin]
+id = "checksums"
+name = "Checksums"
+scmd = ">=0.1.0"
+
+[[command]]
+id = "user.sum.create"
+label = "Write a SHA256SUMS for these"
+run = "sums.sh"
+needs = ["panel", "selection", "cursor"]
+timeout = 300
+confirm = "This writes SHA256SUMS in this directory, over one already there."
+
+[[command]]
+id = "user.sum.verify"
+label = "Check the files against a sums file"
+run = "sums.sh"
+needs = ["panel", "cursor"]
+timeout = 300

@@ -473,6 +473,7 @@ macro-too-deep = макрос не может вызывать себя беск
 plugin-list-title = Команды плагинов
 plugin-none = ни один плагин не даёт здесь команд · плагины лежат в { $dir }
 plugin-running = { $label }…
+plugin-on-selected = для { $count } выбранн(ого/ых) файл(а/ов)
 plugin-failed = { $id }: { $why }
 plugin-unknown-command = плагин запросил «{ $id }» — это не команда
 hex-copied = { $size } скопировано из { $from }

@@ -473,6 +473,7 @@ macro-too-deep = una macro no puede llamarse a sí misma sin fin
 plugin-list-title = Comandos de los complementos
 plugin-none = ningún complemento ofrece un comando aquí · están en { $dir }
 plugin-running = { $label }…
+plugin-on-selected = sobre { $count } archivo(s) seleccionado(s)
 plugin-failed = { $id }: { $why }
 plugin-unknown-command = un complemento pidió «{ $id }», que no es un comando
 hex-copied = { $size } copiados desde { $from }

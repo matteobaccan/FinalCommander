@@ -1,0 +1,13 @@
+# FAR has a find-duplicates plugin and Total Commander a "find duplicate files" mode. Both
+# answer the same question: of these files, which are the same file twice?
+[plugin]
+id = "duplicates"
+name = "Duplicates"
+scmd = ">=0.1.0"
+
+[[command]]
+id = "user.find.duplicates"
+label = "Which of these are the same file twice"
+run = "dupes.sh"
+needs = ["panel", "selection"]
+timeout = 120

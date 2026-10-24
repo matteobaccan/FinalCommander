@@ -402,6 +402,8 @@ pub enum ConfirmAction {
     QuitWithScreens,
     /// Play a macro that deletes or overwrites something, having said so first.
     PlayMacro(Box<scmd_cmd::Macro>),
+    /// Run a plugin's command, which said it should be asked about first.
+    RunPlugin(usize),
     /// Record a host key we have never seen and connect.
     AcceptHostKey {
         panel: usize,
@@ -700,6 +702,8 @@ pub struct PluginCommand {
     pub program: std::path::PathBuf,
     pub needs: Vec<String>,
     pub timeout: Option<u64>,
+    /// What to ask before running it, when the plugin says it should be asked.
+    pub confirm: Option<String>,
 }
 
 impl PluginCommand {
@@ -1577,6 +1581,7 @@ impl App {
                     }
                     ConfirmAction::QuitWithScreens => self.quit = true,
                     ConfirmAction::PlayMacro(which) => self.run_macro(&which),
+                    ConfirmAction::RunPlugin(which) => self.start_plugin_command(which),
                     ConfirmAction::DiscardHex => {
                         // The mode is already Normal: the bytes go with it.
                         self.read_panel(0);
@@ -5384,8 +5389,45 @@ impl App {
         self.mode = Mode::Pick(Box::new(Pick::new(PickKind::Plugins, title, rows, 0)));
     }
 
-    /// Ask for a plugin command to be run, with the context it asked for and nothing else.
+    /// Run a plugin's command, asking first when the plugin says to.
+    ///
+    /// The host cannot know what somebody else's program will do, so the plugin declares the
+    /// question — and a plugin that renames or writes over files is expected to.
     fn run_plugin_command(&mut self, which: usize) {
+        let Some(cmd) = self.plugin_commands.get(which).cloned() else {
+            return;
+        };
+        let Some(question) = cmd.confirm.clone() else {
+            self.start_plugin_command(which);
+            return;
+        };
+        let selected = self.panel().selection.len();
+        let title = cmd.label.clone();
+        let mut lines = vec![question, String::new()];
+        // What it will act on, counted by us rather than promised by the plugin.
+        if cmd.wants("selection") {
+            let what = if selected == 0 {
+                self.panel()
+                    .current()
+                    .map(|e| e.name_str().into_owned())
+                    .unwrap_or_default()
+            } else {
+                self.i18n
+                    .t_args("plugin-on-selected", &[("count", (selected as i64).into())])
+            };
+            lines.push(what);
+            lines.push(String::new());
+        }
+        lines.push(self.i18n.t("confirm-yes-no"));
+        self.mode = Mode::Confirm(Confirm {
+            title,
+            lines,
+            action: ConfirmAction::RunPlugin(which),
+        });
+    }
+
+    /// The part that actually asks for the program to be run.
+    fn start_plugin_command(&mut self, which: usize) {
         let Some(cmd) = self.plugin_commands.get(which).cloned() else {
             return;
         };
@@ -9540,6 +9582,91 @@ mod tests {
             "a trusted macro must not ask: {:?}",
             app.mode
         );
+    }
+
+    #[test]
+    fn a_plugin_command_that_says_to_ask_is_asked_about_first() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = app_with_macros(dir.path());
+        let program = dir.path().join("rename.sh");
+        std::fs::write(&program, "#!/bin/sh\n").unwrap();
+
+        // One that asks and one that does not: the plugin declares it, because the host
+        // cannot know what somebody else's program will do.
+        app.plugin_commands = vec![
+            PluginCommand {
+                plugin: "noisy".into(),
+                id: "user.noisy.rename".into(),
+                label: "Rename everything".into(),
+                scope: scmd_cmd::Scope::Panel,
+                program: program.clone(),
+                needs: vec!["panel".into(), "selection".into()],
+                timeout: None,
+                confirm: Some("This renames files.".into()),
+            },
+            PluginCommand {
+                plugin: "quiet".into(),
+                id: "user.quiet.look".into(),
+                label: "Just look".into(),
+                scope: scmd_cmd::Scope::Panel,
+                program,
+                needs: vec!["panel".into()],
+                timeout: None,
+                confirm: None,
+            },
+        ];
+
+        // Two files selected, so the question can count them.
+        app.panel_mut().cursor_to(1);
+        press(&mut app, "Insert");
+        press(&mut app, "Insert");
+        assert_eq!(app.panels[app.active].selection.len(), 2);
+
+        app.run(Command::PluginCommands);
+        let Mode::Pick(pick) = &mut app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(pick.rows.len(), 2);
+        pick.cursor = 0;
+        press(&mut app, "Enter");
+
+        // The question, with the plugin's own sentence and our count of what it will act on.
+        let Mode::Confirm(confirm) = &app.mode else {
+            panic!("a plugin that renames must ask: {:?}", app.mode)
+        };
+        assert_eq!(confirm.action, ConfirmAction::RunPlugin(0));
+        assert_eq!(confirm.title, "Rename everything");
+        assert!(
+            confirm
+                .lines
+                .iter()
+                .any(|l| l.contains("This renames files.")),
+            "{:?}",
+            confirm.lines
+        );
+        assert!(
+            confirm.lines.iter().any(|l| l.contains('2')),
+            "the question says how many files: {:?}",
+            confirm.lines
+        );
+        // Esc runs nothing.
+        press(&mut app, "Esc");
+        assert!(app.take_requests().is_empty(), "Esc must not run it");
+
+        // The one that does not ask goes straight to the worker.
+        app.run(Command::PluginCommands);
+        let Mode::Pick(pick) = &mut app.mode else {
+            unreachable!()
+        };
+        pick.cursor = 1;
+        press(&mut app, "Enter");
+        assert!(app.mode.is_normal(), "{:?}", app.mode);
+        let asked: Vec<_> = app
+            .take_requests()
+            .into_iter()
+            .filter(|r| matches!(r, Request::Plugin { .. }))
+            .collect();
+        assert_eq!(asked.len(), 1, "it should have been asked to run");
     }
 
     #[test]

@@ -1,0 +1,21 @@
+# FAR's and Total Commander's "change attributes" dialog, reduced to the half everybody uses:
+# make these files look as if they were written just now. A build system that goes by
+# timestamps, a sort by date that has to put something first.
+[plugin]
+id = "touch-now"
+name = "Touch"
+scmd = ">=0.1.0"
+
+[[command]]
+id = "user.touch.now"
+label = "Set the time of these to now"
+run = "touch.sh"
+needs = ["panel", "selection", "cursor"]
+confirm = "This changes the modification time of the selected files. The contents are untouched."
+
+[[command]]
+id = "user.touch.match"
+label = "Set the time of these to the file under the cursor"
+run = "touch.sh"
+needs = ["panel", "selection", "cursor"]
+confirm = "This changes the modification time of the selected files to match the one under the cursor."
