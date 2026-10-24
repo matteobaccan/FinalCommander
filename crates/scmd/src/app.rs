@@ -315,6 +315,8 @@ pub enum PromptKind {
     HexRead,
     /// How many bytes to insert at the cursor.
     HexInsert,
+    /// One line of arithmetic, answered in every base at once.
+    Calculator,
     /// A URL to connect to: `sftp://mb@host/srv`.
     NetConnect,
     /// A password or a key passphrase. Never echoed, never stored.
@@ -695,6 +697,8 @@ pub struct App {
     pub quick_why: Option<String>,
     /// The quick view's drawing area, so a page scroll in it is a page of what is on screen.
     pub quick_size: (u16, u16),
+    /// The last sum, so the calculator opens on it.
+    pub last_calc: String,
     /// The archive format the last pack used, so the next one opens on it.
     pub last_pack: scmd_arc::Format,
     /// The same for the replace dialog.
@@ -787,6 +791,7 @@ impl App {
             quick_of: None,
             quick_why: None,
             quick_size: (40, 20),
+            last_calc: String::new(),
             last_pack: scmd_arc::Format::Zip,
             last_replace: scmd_jobs::ReplaceOptions::default(),
             pending_replace: None,
@@ -1944,6 +1949,34 @@ impl App {
 
     fn prompt_accept(&mut self, prompt: Prompt) {
         match prompt.kind {
+            PromptKind::Calculator => {
+                let line = prompt.text.trim().to_string();
+                match scmd_core::calc::evaluate(&line) {
+                    Ok(answer) => {
+                        let [dec, hex, bin, oct, chars] = answer.lines();
+                        let title = self.i18n.t("calc-title");
+                        self.last_calc = line.clone();
+                        self.mode = Mode::Message {
+                            title,
+                            lines: vec![
+                                format!("{line} ="),
+                                String::new(),
+                                format!("  {:<12} {dec}", self.i18n.t("calc-decimal")),
+                                format!("  {:<12} {hex}", self.i18n.t("calc-hex")),
+                                format!("  {:<12} {oct}", self.i18n.t("calc-octal")),
+                                format!("  {:<12} {bin}", self.i18n.t("calc-binary")),
+                                format!("  {:<12} {chars}", self.i18n.t("calc-characters")),
+                            ],
+                        };
+                    }
+                    Err(e) => {
+                        self.set_error(e.to_string());
+                        // The line stays in the box, so a typo is fixed rather than retyped.
+                        let title = self.i18n.t("calc-title");
+                        self.mode = Mode::Prompt(Prompt::new(PromptKind::Calculator, title, line));
+                    }
+                }
+            }
             PromptKind::HexFill
             | PromptKind::HexXor
             | PromptKind::HexWrite
@@ -2966,6 +2999,12 @@ impl App {
             Command::FilePack => self.open_pack_form(),
             Command::FileUnpack => self.open_unpack_form(),
             Command::ToolCompareDirs => self.compare_dirs(),
+            Command::ToolCalculator => {
+                // It opens on the last sum: a calculator is used in runs.
+                let title = self.i18n.t("calc-title");
+                let last = self.last_calc.clone();
+                self.mode = Mode::Prompt(Prompt::new(PromptKind::Calculator, title, last));
+            }
             Command::ToolFind => self.open_find_form(),
             Command::ToolReplace => {
                 let files = self.job_sources().len();
@@ -8108,6 +8147,49 @@ mod tests {
         assert!(app.status.contains("size"), "{}", app.status);
         // biggest first now
         assert_eq!(app.panel().listing.row(2).unwrap().name_str(), "c.rs");
+    }
+
+    #[test]
+    fn the_calculator_answers_in_every_base_and_keeps_the_last_sum() {
+        let mut app = app();
+        app.run(Command::ToolCalculator);
+        let Mode::Prompt(prompt) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(prompt.kind, PromptKind::Calculator);
+
+        for c in "0x400+0x1c".chars() {
+            press(&mut app, &c.to_string());
+        }
+        press(&mut app, "Enter");
+        let Mode::Message { lines, .. } = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        let text = lines.join("\n");
+        assert!(text.contains("1052"), "{text}");
+        assert!(text.contains("0x41C"), "{text}");
+        assert!(text.contains("0b10000011100"), "{text}");
+        assert!(text.contains("0o2034"), "{text}");
+
+        // It opens again on the sum just worked out.
+        press(&mut app, "Esc");
+        app.run(Command::ToolCalculator);
+        let Mode::Prompt(prompt) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(prompt.text, "0x400+0x1c");
+
+        // Something that is not arithmetic says so and keeps what was typed.
+        press(&mut app, "End");
+        for c in "/0".chars() {
+            press(&mut app, &c.to_string());
+        }
+        press(&mut app, "Enter");
+        assert!(app.status.contains("divide by zero"), "{}", app.status);
+        let Mode::Prompt(prompt) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert!(prompt.text.contains("/0"), "the line should still be there");
     }
 
     #[test]

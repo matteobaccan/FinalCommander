@@ -3,6 +3,7 @@
 //! This crate is deliberately dependency-light and knows nothing about terminals, async
 //! runtimes or configuration files. See `docs/spec/01-architecture.md`.
 
+pub mod calc;
 pub mod cancel;
 pub mod entry;
 pub mod error;

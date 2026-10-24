@@ -308,6 +308,11 @@ pub fn menus() -> Vec<Menu> {
                     "",
                     Action::Run(Command::ToolCompareDirs),
                 ),
+                item(
+                    "menu-calculator",
+                    "Alt+=",
+                    Action::Run(Command::ToolCalculator),
+                ),
                 Entry::Separator,
                 item("menu-connections", "Alt+N", Action::Run(Command::NetSites)),
                 item(

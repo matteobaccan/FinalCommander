@@ -80,3 +80,9 @@ cmd = "editor.block.mark"
 keys = ["F12"]
 scope = "editor"
 cmd = "editor.block.ops"
+
+# The calculator, on the key that looks like one.
+[[bind]]
+keys = ["Alt+="]
+scope = "global"
+cmd = "tool.calculator"
