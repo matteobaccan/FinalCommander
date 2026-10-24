@@ -21,10 +21,14 @@ tokio = { version = "1", features = ["rt", "io-util", "time", "macros"] }
 [dependencies.reqwest]
 version = "0.12"
 default-features = false
-# `rustls` rather than the platform's TLS: one behaviour on every system, and the roots come
-# from `webpki-roots` so a container without a certificate store still works. No `default-tls`,
-# which would want OpenSSL on Linux and a C toolchain with it.
-features = ["rustls-tls-webpki-roots", "http2", "stream", "socks"]
+# `rustls` rather than the platform's TLS — one implementation on every system, and no
+# `default-tls`, which would want OpenSSL on Linux and a C toolchain with it. The trust
+# anchors, though, are the machine's own: an S3-compatible endpoint inside a company is very
+# often a MinIO or a Ceph behind that company's certificate authority, and a bundled root list
+# cannot be told about it. With the system store, the endpoint works as soon as the machine
+# trusts it, which it already does for every other tool. (It also keeps `webpki-roots` out of
+# the tree, whose licence for the Mozilla root data is not one `deny.toml` allows.)
+features = ["rustls-tls-native-roots", "http2", "stream", "socks"]
 
 [dev-dependencies]
 tempfile = "3"

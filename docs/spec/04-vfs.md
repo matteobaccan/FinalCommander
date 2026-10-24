@@ -260,7 +260,16 @@ endpoint says which, and two cases override it:
 - a service that answers "this bucket is in another region" and names it is followed once, and
   the answer remembered for that bucket, rather than leaving someone to find the setting.
 
-### 8.4 Credentials
+### 8.4 TLS, and the certificate authority a company runs
+
+`rustls`, so there is one TLS implementation on every platform and no OpenSSL to find or
+link — but the trust anchors come from the **machine's own store**, not from a root list
+compiled into the binary. The reason is the common case rather than the pretty one: an
+S3-compatible endpoint inside a company is usually a MinIO or a Ceph behind that company's own
+certificate authority, which the machine has been told about and a bundled list cannot be. With
+the system store the endpoint works as soon as everything else on that machine works.
+
+### 8.5 Credentials
 
 **Not in `scmd.toml`.** A secret access key is a password, and this program has never written a
 password into its configuration file. An `[[s3]]` block says *where* its keys come from and the
@@ -269,7 +278,7 @@ environment variables, and `~/.aws/credentials` — the file every AWS tool shar
 format they all write, profiles and session tokens included. `credentials = "anonymous"` signs
 nothing, which is how a bucket with a public read policy is browsed.
 
-### 8.5 What is not there yet
+### 8.6 What is not there yet
 
 Writing. The capabilities say `READ | SEEK | CASE_SENSITIVE` and nothing else, so the UI offers
 nothing it cannot do: no `F6` rename (object storage has no rename — it is a copy and a
@@ -278,7 +287,7 @@ increment; they are a different kind of operation (a multipart upload is a proto
 and they are not worth shipping half-done, because a half-finished upload of a large object is
 a charge on someone's account.
 
-### 8.6 How it is tested
+### 8.7 How it is tested
 
 Without an AWS account, and without pretending. There is an S3 service in the test process —
 `scmd_s3::fake` — with a map of buckets behind it, and it is stricter than the real thing in

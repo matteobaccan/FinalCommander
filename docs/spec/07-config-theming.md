@@ -135,7 +135,7 @@ group = "work"            # a heading in the site list
 
 # One block per object storage service (SPEC 04 §8). The name is what a path calls it:
 # `s3://work@bucket/2024/`. There is deliberately no place here for an access key — a secret
-# key is a password, and this file is not where passwords live (SPEC 04 §8.4).
+# key is a password, and this file is not where passwords live (SPEC 04 §8.5).
 [[s3]]
 name = "work"             # empty name = the default, reached by `s3://bucket/`
 endpoint = ""             # empty = AWS itself; else `https://minio.lan:9000`

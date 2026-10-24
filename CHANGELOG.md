@@ -25,7 +25,10 @@ Notable changes, newest first. The format follows
   No access key is stored in `scmd.toml`, ever: a block says *where* its keys come from, and
   they are read from the `AWS_*` variables or from `~/.aws/credentials`, the file every AWS
   tool shares. `credentials = "anonymous"` signs nothing, for a bucket with a public read
-  policy. The signature is AWS Signature Version 4, HMAC-SHA256 over a canonical request, and
+  policy. TLS is `rustls` — one implementation on every system, and no OpenSSL to find — but
+  the trust anchors are the machine's own, because an S3-compatible endpoint inside a company
+  is usually a MinIO or a Ceph behind that company's certificate authority, and a root list
+  bundled into the binary cannot be told about it. The signature is AWS Signature Version 4, HMAC-SHA256 over a canonical request, and
   it is tested against `botocore` — the library the AWS command line signs with — on a frozen
   clock, one of those vectors being the worked example AWS publishes the signature of.
 
