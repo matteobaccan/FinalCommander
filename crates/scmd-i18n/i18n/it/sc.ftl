@@ -289,3 +289,24 @@ viewer-structure-hint-tab = Tab porta i tasti qui
 viewer-no-structure = niente da decodificare: non è un formato che il pannello conosce
 viewer-no-target = questa riga non punta a nessun punto del file
 viewer-went-to = spostato a { $offset }
+# ------------------------------------------------- riga di comando (SPEC 06 §7)
+cmd-running = in corso: { $command }
+cmd-done = { $command } terminato
+cmd-failed = { $command } è uscito con { $code }
+cmd-busy = c'è già un comando in corso
+cmd-not-remote = un comando ha bisogno di una cartella locale; questo pannello è su un server
+cmd-no-history = la cronologia dei comandi è vuota
+cmd-no-previous = non c'è un posto dove tornare
+cmd-no-such-dir = { $path }: cartella inesistente
+cmd-no-such-path = { $path }: file o cartella inesistente
+cmd-no-selection = non c'è niente di selezionato
+cmd-condition-false = non eseguito: { $command }
+cmd-screen-cleared = schermo pulito
+cmd-stack-empty = la pila delle cartelle è vuota
+cmd-stack-cleared = pila delle cartelle svuotata
+cmd-pushed = { $count } cartelle nella pila
+cmd-environment = ambiente
+cmd-set = { $name } = { $value }
+cmd-not-set = { $name } non è impostata
+user-screen-title = Output — { $lines } righe, dalla riga { $at }
+user-screen-empty = (non è stato eseguito ancora niente)

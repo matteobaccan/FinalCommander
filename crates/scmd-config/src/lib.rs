@@ -189,6 +189,10 @@ pub struct UiCfg {
     pub language: String,
     pub key_bar: bool,
     pub status_bar: bool,
+    /// The command line under the panels. Without it, typing goes to quick search.
+    pub command_line: bool,
+    /// How many command lines to keep between sessions.
+    pub command_history: usize,
 }
 
 impl Default for UiCfg {
@@ -199,6 +203,8 @@ impl Default for UiCfg {
             language: "auto".into(),
             key_bar: true,
             status_bar: true,
+            command_line: true,
+            command_history: 512,
         }
     }
 }
@@ -440,6 +446,13 @@ impl Config {
             "ui.keymap" => self.ui.keymap = value.to_string(),
             "ui.language" => self.ui.language = value.to_string(),
             "ui.key_bar" => self.ui.key_bar = parse_bool(value)?,
+            "ui.command_line" => self.ui.command_line = parse_bool(value)?,
+            "ui.command_history" => {
+                self.ui.command_history = value
+                    .trim()
+                    .parse()
+                    .map_err(|_| format!("`{value}` is not a number"))?
+            }
             "ui.status_bar" => self.ui.status_bar = parse_bool(value)?,
             "panel.view" => self.panel.view = value.to_string(),
             "panel.sort" => self.panel.sort = value.to_string(),
@@ -545,6 +558,37 @@ mod tests {
     fn broken_toml_is_an_error_naming_the_file() {
         let err = Config::parse("broken.toml", "[ui\ntheme =").unwrap_err();
         assert!(err.to_string().starts_with("broken.toml:"), "{err}");
+    }
+
+    #[test]
+    fn the_state_file_survives_a_round_trip_and_a_broken_file_is_not_fatal() {
+        let dir = std::env::temp_dir().join(format!("scmd-state-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let paths = Paths::discover(Some(&dir.join("scmd.toml")), None);
+        let (state, problem) = State::load(&paths);
+        assert!(problem.is_none(), "a missing state file is the first run");
+        assert!(state.command_history.is_empty());
+
+        let state = State {
+            command_history: vec!["make".into(), "cargo test".into()],
+            folder_history: vec!["/tmp".into()],
+            left: "/home".into(),
+            right: "/tmp".into(),
+        };
+        state.save(&paths).unwrap();
+        let (back, problem) = State::load(&paths);
+        assert!(problem.is_none());
+        assert_eq!(back, state);
+
+        std::fs::write(&paths.state_file, "this is not toml {{{").unwrap();
+        let (back, problem) = State::load(&paths);
+        assert_eq!(
+            back,
+            State::default(),
+            "a broken file falls back to nothing"
+        );
+        assert!(problem.unwrap().contains("scmd-state.toml"));
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
@@ -687,5 +731,48 @@ mod tests {
         assert_eq!(cfg.keymaps.len(), 1);
         assert_eq!(cfg.themes[0]["id"].as_str(), Some("mine"));
         assert_eq!(cfg.keymaps[0]["name"].as_str(), Some("mine"));
+    }
+}
+
+/// What survives between sessions and is not configuration: the histories, and where the
+/// panels were. A missing file is the normal first run; a broken one is reported and ignored,
+/// because losing a history is never a reason to refuse to start.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct State {
+    /// Oldest first, as the command line walks it.
+    #[serde(default)]
+    pub command_history: Vec<String>,
+    /// Where each panel had been, oldest first.
+    #[serde(default)]
+    pub folder_history: Vec<String>,
+    #[serde(default)]
+    pub left: String,
+    #[serde(default)]
+    pub right: String,
+}
+
+impl State {
+    /// Read the state file. The second value is a problem to report, not an error to die on.
+    pub fn load(paths: &Paths) -> (State, Option<String>) {
+        let file = &paths.state_file;
+        if !file.exists() {
+            return (State::default(), None);
+        }
+        match std::fs::read_to_string(file) {
+            Ok(src) => match toml::from_str::<State>(&src) {
+                Ok(state) => (state, None),
+                Err(e) => (State::default(), Some(format!("{}: {e}", file.display()))),
+            },
+            Err(e) => (State::default(), Some(format!("{}: {e}", file.display()))),
+        }
+    }
+
+    pub fn save(&self, paths: &Paths) -> std::io::Result<()> {
+        if let Some(parent) = paths.state_file.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let body = toml::to_string_pretty(self)
+            .unwrap_or_else(|e| format!("# cannot serialise the state: {e}\n"));
+        std::fs::write(&paths.state_file, body)
     }
 }

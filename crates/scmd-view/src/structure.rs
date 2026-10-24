@@ -75,6 +75,26 @@ impl Row {
     }
 }
 
+/// A function symbol: the same three fields as `disasm::SymbolInfo`, so whichever of the two a
+/// caller managed to read can label a disassembly line (SPEC 05 §1.9).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Symbol {
+    pub name: String,
+    /// Where it loads, not where it is in the file.
+    pub address: u64,
+    /// 0 when the format does not record one — Mach-O never does.
+    pub size: u64,
+}
+
+/// A stretch of the file that loads at a virtual address. This is what turns a symbol's
+/// address or a branch target into a place the other pane can go to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Mapping {
+    pub address: u64,
+    pub size: u64,
+    pub offset: u64,
+}
+
 /// The decoded shape of a file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Structure {
@@ -83,6 +103,10 @@ pub struct Structure {
     /// One line of identity, for the pane's title.
     pub summary: String,
     pub rows: Vec<Row>,
+    /// Function symbols, sorted by address, so a lookup is a binary search.
+    pub symbols: Vec<Symbol>,
+    /// What loads where, sorted by address.
+    pub maps: Vec<Mapping>,
     /// The file ended inside something we were reading.
     pub truncated: bool,
 }
@@ -91,6 +115,31 @@ impl Structure {
     /// The rows `Enter` can act on, for the tests and for "jump to the next table".
     pub fn targets(&self) -> impl Iterator<Item = &Row> {
         self.rows.iter().filter(|r| r.is_target())
+    }
+
+    /// The name of the symbol covering `address`, so a disassembly line can read
+    /// `call 0000001F80 <scmd_main>` instead of a bare number — SPEC 05 §1.9.
+    pub fn symbol_at(&self, address: u64) -> Option<&str> {
+        self.symbol_entry(address).map(|s| s.name.as_str())
+    }
+
+    /// The symbol covering `address`: the last one at or below it, and only while `address` is
+    /// inside the size it declares. A size of 0 means the file never said, so the symbol owns
+    /// everything after it — the same rule `disasm::Binary::function_at` follows.
+    pub fn symbol_entry(&self, address: u64) -> Option<&Symbol> {
+        let at = match self.symbols.binary_search_by(|s| s.address.cmp(&address)) {
+            Ok(i) => i,
+            Err(0) => return None,
+            Err(i) => i - 1,
+        };
+        let s = &self.symbols[at];
+        (s.size == 0 || address < s.address.saturating_add(s.size)).then_some(s)
+    }
+
+    /// File offset for a virtual address, following whatever the file says it loads where.
+    /// `None` for an address that is not backed by bytes in this file.
+    pub fn offset_for_va(&self, va: u64) -> Option<u64> {
+        map_offset(&self.maps, va)
     }
 }
 
@@ -207,6 +256,9 @@ impl<'a> Cur<'a> {
 const MAX_ENTRIES: usize = 512;
 /// The most we read for a name table.
 const MAX_STRTAB: usize = 1 << 20;
+/// The most we read looking for the end of one name. A name table with no NUL in it is a
+/// corrupt file, not a reason to read the whole file looking.
+const MAX_NAME: usize = 256;
 
 /// Decode what we can. `None` means "not a format this pane knows", which is not an error:
 /// most files are not executables.
@@ -313,6 +365,7 @@ fn elf(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
     let mut entry_row = Row::field("e_entry", format!("{entry:016X}"), "entry point");
     entry_row.kind = RowKind::Entry;
     entry_row.offset = None; // a virtual address; resolved below if a section maps it
+    let entry_at = rows.len();
     rows.push(entry_row);
     rows.push(Row::entry(
         "e_phoff",
@@ -338,53 +391,45 @@ fn elf(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
         len,
     );
 
+    // The section table is decoded once and kept: the symbol, string and dynamic tables all
+    // have to find each other through it, and re-reading it per name is a read per name.
+    let (sections, cut) = elf_section_headers(
+        src,
+        shoff,
+        shentsize,
+        shnum,
+        is64,
+        c.big_endian,
+        &strtab,
+        len,
+    );
+    truncated |= cut;
+    let mut maps = Vec::new();
+
     if shnum > 0 && shentsize as usize >= 40 {
         rows.push(Row::group(format!("Sections ({shnum})")));
-        let count = (shnum as usize).min(MAX_ENTRIES);
-        let table = read_table(src, shoff, shentsize as usize, count, len);
-        if table.is_empty() && shnum > 0 {
-            truncated = true;
-        }
-        for i in 0..count {
-            let from = i * shentsize as usize;
-            if from + shentsize as usize > table.len() {
-                truncated = true;
-                break;
-            }
-            let mut s = Cur::new(&table[from..from + shentsize as usize]);
-            s.big_endian = c.big_endian;
-            let sh_name = s.u32();
-            let sh_type = s.u32();
-            let (sh_flags, sh_addr, sh_offset, sh_size) = if is64 {
-                (s.u64(), s.u64(), s.u64(), s.u64())
-            } else {
-                (
-                    s.u32() as u64,
-                    s.u32() as u64,
-                    s.u32() as u64,
-                    s.u32() as u64,
-                )
-            };
-            let name = str_at(&strtab, sh_name as usize);
-            let name = if name.is_empty() {
-                format!("[{i}]")
-            } else {
-                name
-            };
+        for (i, s) in sections.iter().enumerate() {
             // SHT_NOBITS (8) occupies no file space, so it has no offset to go to.
-            let offset = if sh_type == 8 {
+            let offset = if s.kind == 8 {
                 None
             } else {
-                in_file(sh_offset, len)
+                add_map(&mut maps, s.addr, s.size, s.offset, len);
+                in_file(s.offset, len)
+            };
+            let name = if s.name.is_empty() {
+                format!("[{i}]")
+            } else {
+                s.name.clone()
             };
             rows.push(Row::entry(
                 format!("  {name}"),
                 format!(
-                    "{sh_offset:08X}  {} {}  {}",
-                    size_cell(sh_size),
-                    elf_flags(sh_flags),
-                    if sh_addr != 0 {
-                        format!("@ {sh_addr:X}")
+                    "{:08X}  {} {}  {}",
+                    s.offset,
+                    size_cell(s.size),
+                    elf_flags(s.flags),
+                    if s.addr != 0 {
+                        format!("@ {:X}", s.addr)
                     } else {
                         String::new()
                     }
@@ -392,10 +437,13 @@ fn elf(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
                 offset,
             ));
         }
-        if shnum as usize > count {
+        if shnum as usize > sections.len() {
             rows.push(Row::entry(
                 "  …",
-                format!("{} more sections not shown", shnum as usize - count),
+                format!(
+                    "{} more sections not shown",
+                    shnum as usize - sections.len()
+                ),
                 None,
             ));
         }
@@ -425,6 +473,11 @@ fn elf(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
                 let _memsz = s.u32();
                 (s.u32(), offset, vaddr, paddr, filesz)
             };
+            // A PT_LOAD is the authoritative answer to "what loads where"; a stripped file has
+            // these when it has no section addresses left.
+            if p_type == 1 {
+                add_map(&mut maps, p_vaddr, p_filesz, p_offset, len);
+            }
             rows.push(Row::entry(
                 format!("  {}", elf_ptype(p_type)),
                 format!(
@@ -437,21 +490,113 @@ fn elf(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
         }
     }
 
-    // The interpreter and the build id are the two things worth reading the bytes for: they say
-    // how the file will be loaded and which build it came from.
+    maps.sort_by_key(|m| m.address);
+    // The entry point is a virtual address; now that we know what loads where, it can be a
+    // place to jump to rather than a number to read.
+    if let Some(row) = rows.get_mut(entry_at) {
+        row.offset = map_offset(&maps, entry);
+    }
+
+    // Symbols, imports and exports — SPEC 05 §1.8. `.symtab` is the whole table and `.dynsym`
+    // only what the loader needs, so the fuller one names the code while the dynamic one says
+    // what crosses a library boundary.
+    let (static_syms, static_claim) = match elf_find(&sections, ".symtab") {
+        Some(s) => elf_symbol_table(src, &sections, s, is64, c.big_endian, len),
+        None => (Vec::new(), 0),
+    };
+    let (dynamic_syms, dynamic_claim) = match elf_find(&sections, ".dynsym") {
+        Some(s) => elf_symbol_table(src, &sections, s, is64, c.big_endian, len),
+        None => (Vec::new(), 0),
+    };
+
+    // The lookup takes functions from both tables, because a symbol stripped from one may
+    // still be in the other; the pane lists only the fuller table, to say each name once.
+    let mut symbols: Vec<Symbol> = static_syms
+        .iter()
+        .chain(dynamic_syms.iter())
+        .filter(|s| s.is_function())
+        .map(|s| Symbol {
+            name: s.name.clone(),
+            address: s.value,
+            size: s.size,
+        })
+        .collect();
+
+    let (listed, claimed) = if static_syms.is_empty() {
+        (&dynamic_syms, dynamic_claim)
+    } else {
+        (&static_syms, static_claim)
+    };
+    let functions: Vec<&ElfSym> = listed.iter().filter(|s| s.is_function()).collect();
+    if !functions.is_empty() {
+        rows.push(Row::group(format!("Symbols ({})", functions.len())));
+        for f in &functions {
+            let at = map_offset(&maps, f.value);
+            rows.push(Row::entry(
+                format!("  {}", f.name),
+                sym_cell(at, f.value, f.size),
+                at,
+            ));
+        }
+        if claimed > listed.len() {
+            rows.push(Row::entry(
+                "  …",
+                format!("{} more entries not read", claimed - listed.len()),
+                None,
+            ));
+        }
+    }
+
+    let dynamic = elf_dynamic(src, &sections, is64, c.big_endian, len);
+    // A file with no `.dynsym` is usually an object file, whose undefined symbols are what it
+    // will need at link time — the same question, answered one stage earlier.
+    let dynamic_table = if dynamic_syms.is_empty() {
+        &static_syms
+    } else {
+        &dynamic_syms
+    };
+    let undefined: Vec<&ElfSym> = dynamic_table
+        .iter()
+        .filter(|s| s.shndx == 0 && !s.name.is_empty())
+        .collect();
+    if !dynamic.needed.is_empty() || !undefined.is_empty() {
+        rows.push(Row::group(format!(
+            "Imports ({} libraries, {} symbols)",
+            dynamic.needed.len(),
+            undefined.len()
+        )));
+        for lib in &dynamic.needed {
+            rows.push(Row::entry(format!("  {lib}"), "needed library", None));
+        }
+        // ELF has one flat namespace: nothing in the file says which of the libraries above
+        // will supply a given symbol, so none is claimed here. The offset is the symbol's own
+        // entry, which is the only place it exists in this file.
+        for s in &undefined {
+            rows.push(Row::entry(
+                format!("  {}", s.name),
+                format!("{}  undefined", off_cell(s.at)),
+                s.at,
+            ));
+        }
+    }
+
+    let exported: Vec<&ElfSym> = dynamic_table.iter().filter(|s| s.is_export()).collect();
+    if !exported.is_empty() {
+        rows.push(Row::group(format!("Exports ({})", exported.len())));
+        for e in &exported {
+            let at = map_offset(&maps, e.value);
+            rows.push(Row::entry(
+                format!("  {}", e.name),
+                sym_cell(at, e.value, e.size),
+                at,
+            ));
+        }
+    }
+
+    // The interpreter, the SONAME, the run path and the build id are the strings worth reading
+    // the bytes for: they say how the file will be loaded and which build it came from.
     let mut notes = Vec::new();
-    if let Some(interp) = elf_section_data(
-        src,
-        shoff,
-        shentsize,
-        shnum,
-        is64,
-        c.big_endian,
-        &strtab,
-        ".interp",
-        len,
-        256,
-    ) {
+    if let Some(interp) = elf_find(&sections, ".interp").and_then(|s| elf_data(src, s, len, 256)) {
         let text = String::from_utf8_lossy(&interp)
             .trim_end_matches('\0')
             .to_string();
@@ -459,18 +604,16 @@ fn elf(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
             notes.push(Row::field("interpreter", String::new(), text));
         }
     }
-    if let Some(note) = elf_section_data(
-        src,
-        shoff,
-        shentsize,
-        shnum,
-        is64,
-        c.big_endian,
-        &strtab,
-        ".note.gnu.build-id",
-        len,
-        64,
-    ) {
+    if let Some(soname) = dynamic.soname {
+        notes.push(Row::field("soname", String::new(), soname));
+    }
+    if let Some(runpath) = dynamic.runpath {
+        notes.push(Row::field("run path", String::new(), runpath));
+    }
+    if let Some(note) = elf_find(&sections, ".note.gnu.build-id")
+        .and_then(|s| elf_data(src, s, len, 64))
+        .filter(|n| !n.is_empty())
+    {
         // A note is namesz, descsz, type, then the padded name, then the descriptor.
         if note.len() > 16 {
             let id: String = note[16..]
@@ -488,10 +631,13 @@ fn elf(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
         rows.extend(notes);
     }
 
+    sort_symbols(&mut symbols);
     Structure {
         format: "ELF",
         summary,
         rows,
+        symbols,
+        maps,
         truncated,
     }
 }
@@ -505,6 +651,8 @@ fn truncated_elf(e_type: u16, len: u64) -> Structure {
             Row::field("e_type", format!("{e_type:04X}"), "unknown"),
             Row::field("file size", String::new(), size_cell(len)),
         ],
+        symbols: Vec::new(),
+        maps: Vec::new(),
         truncated: false,
     }
 }
@@ -545,9 +693,25 @@ fn elf_strtab(
     src.at(offset, size)
 }
 
-/// The bytes of a named section, up to `cap`.
+/// A section header, decoded. Only the fields a later pass asks about are kept.
+#[derive(Debug, Clone)]
+struct ElfSection {
+    name: String,
+    /// `sh_type`: 2 `SYMTAB`, 3 `STRTAB`, 6 `DYNAMIC`, 8 `NOBITS`, 11 `DYNSYM`.
+    kind: u32,
+    flags: u64,
+    addr: u64,
+    offset: u64,
+    size: u64,
+    /// `sh_link`: for a symbol table, the section holding its names.
+    link: u32,
+    entsize: u64,
+}
+
+/// Decode the section table once. The second value is set when the table stopped early, which
+/// is the file saying it was cut off mid-header.
 #[allow(clippy::too_many_arguments)]
-fn elf_section_data(
+fn elf_section_headers(
     src: &mut dyn Bytes,
     shoff: u64,
     shentsize: u16,
@@ -555,40 +719,240 @@ fn elf_section_data(
     is64: bool,
     big_endian: bool,
     strtab: &[u8],
-    want: &str,
     len: u64,
-    cap: usize,
-) -> Option<Vec<u8>> {
+) -> (Vec<ElfSection>, bool) {
     if shentsize == 0 || shnum == 0 {
-        return None;
+        return (Vec::new(), false);
     }
     let count = (shnum as usize).min(MAX_ENTRIES);
     let table = read_table(src, shoff, shentsize as usize, count, len);
+    let mut out = Vec::with_capacity(count.min(64));
     for i in 0..count {
         let from = i * shentsize as usize;
         if from + shentsize as usize > table.len() {
-            break;
+            return (out, true);
         }
         let mut s = Cur::new(&table[from..from + shentsize as usize]);
         s.big_endian = big_endian;
         let sh_name = s.u32();
-        if str_at(strtab, sh_name as usize) != want {
-            continue;
-        }
-        let (offset, size) = if is64 {
-            s.seek(24);
-            (s.u64(), s.u64())
+        let kind = s.u32();
+        let (flags, addr, offset, size) = if is64 {
+            (s.u64(), s.u64(), s.u64(), s.u64())
         } else {
-            s.seek(16);
-            (s.u32() as u64, s.u32() as u64)
+            (
+                s.u32() as u64,
+                s.u32() as u64,
+                s.u32() as u64,
+                s.u32() as u64,
+            )
         };
-        if offset >= len {
-            return None;
-        }
-        let size = size.min(cap as u64).min(len - offset) as usize;
-        return Some(src.at(offset, size));
+        let link = s.u32();
+        let _info = s.u32();
+        let entsize = if is64 {
+            s.seek(56);
+            s.u64()
+        } else {
+            s.seek(36);
+            s.u32() as u64
+        };
+        out.push(ElfSection {
+            name: str_at(strtab, sh_name as usize),
+            kind,
+            flags,
+            addr,
+            offset,
+            size,
+            link,
+            entsize,
+        });
     }
-    None
+    (out, false)
+}
+
+fn elf_find<'a>(sections: &'a [ElfSection], name: &str) -> Option<&'a ElfSection> {
+    sections.iter().find(|s| s.name == name)
+}
+
+/// The bytes of a section, up to `cap`, range-checked against the real file length.
+fn elf_data(src: &mut dyn Bytes, s: &ElfSection, len: u64, cap: usize) -> Option<Vec<u8>> {
+    if s.kind == 8 || s.offset >= len {
+        return None;
+    }
+    let size = s.size.min(cap as u64).min(len - s.offset) as usize;
+    (size > 0).then(|| src.at(s.offset, size))
+}
+
+/// One entry of an ELF symbol table, and where that entry sits in the file.
+#[derive(Debug, Clone)]
+struct ElfSym {
+    name: String,
+    value: u64,
+    size: u64,
+    /// `STT_*`: 2 is a function.
+    kind: u8,
+    /// `STB_*`: 1 global, 2 weak.
+    bind: u8,
+    /// `SHN_UNDEF` (0) is a symbol this file needs from somewhere else.
+    shndx: u16,
+    at: Option<u64>,
+}
+
+impl ElfSym {
+    /// A named function with an address: what a disassembly can be labelled with.
+    fn is_function(&self) -> bool {
+        self.kind == 2 && self.shndx != 0 && self.value != 0 && !self.name.is_empty()
+    }
+
+    /// A defined symbol anything else can bind to.
+    fn is_export(&self) -> bool {
+        self.shndx != 0 && (self.bind == 1 || self.bind == 2) && !self.name.is_empty()
+    }
+}
+
+/// Read a symbol table, capped like every other table here. The second value is how many
+/// entries the table claimed, which is what a capped one has to own up to.
+fn elf_symbol_table(
+    src: &mut dyn Bytes,
+    sections: &[ElfSection],
+    s: &ElfSection,
+    is64: bool,
+    big_endian: bool,
+    len: u64,
+) -> (Vec<ElfSym>, usize) {
+    let natural = if is64 { 24usize } else { 16 };
+    // A table that claims an entry size of its own is believed, up to the point where the
+    // number stops being a size at all.
+    let entry = if s.entsize == 0 {
+        natural
+    } else {
+        s.entsize.min(1 << 16) as usize
+    };
+    // An entry smaller than the format's own layout cannot be a symbol table at all.
+    if entry < natural || s.offset >= len {
+        return (Vec::new(), 0);
+    }
+    let claimed = (s.size / entry as u64) as usize;
+    let count = claimed.min(MAX_ENTRIES);
+    let table = read_table(src, s.offset, entry, count, len);
+    let names = elf_symbol_names(src, sections, s, len);
+    let mut out = Vec::with_capacity(count.min(64));
+    for i in 0..count {
+        let from = i * entry;
+        let to = (from + entry).min(table.len());
+        if to - from < natural {
+            break;
+        }
+        let mut e = Cur::new(&table[from..to]);
+        e.big_endian = big_endian;
+        let st_name = e.u32();
+        let (value, size, info, shndx) = if is64 {
+            let info = e.take(1).first().copied().unwrap_or(0);
+            let _other = e.take(1);
+            let shndx = e.u16();
+            (e.u64(), e.u64(), info, shndx)
+        } else {
+            let value = e.u32() as u64;
+            let size = e.u32() as u64;
+            let info = e.take(1).first().copied().unwrap_or(0);
+            let _other = e.take(1);
+            (value, size, info, e.u16())
+        };
+        out.push(ElfSym {
+            // A name index past the end of the string table names nothing, and nothing is
+            // invented for it.
+            name: str_at(&names, st_name as usize),
+            value,
+            size,
+            kind: info & 0x0F,
+            bind: info >> 4,
+            shndx,
+            at: in_file(s.offset + from as u64, len),
+        });
+    }
+    (out, claimed)
+}
+
+/// Where a symbol table's names live. `sh_link` says; a link out of range is a corrupt file,
+/// and then the conventional name is the next best guess.
+fn elf_symbol_names(
+    src: &mut dyn Bytes,
+    sections: &[ElfSection],
+    s: &ElfSection,
+    len: u64,
+) -> Vec<u8> {
+    if let Some(linked) = sections.get(s.link as usize) {
+        if linked.kind == 3 {
+            if let Some(data) = elf_data(src, linked, len, MAX_STRTAB) {
+                return data;
+            }
+        }
+    }
+    let fallback = if s.name == ".dynsym" {
+        ".dynstr"
+    } else {
+        ".strtab"
+    };
+    elf_find(sections, fallback)
+        .and_then(|l| elf_data(src, l, len, MAX_STRTAB))
+        .unwrap_or_default()
+}
+
+/// What `.dynamic` says about the libraries this file needs and the names it goes by.
+#[derive(Debug, Default)]
+struct ElfDynamic {
+    needed: Vec<String>,
+    soname: Option<String>,
+    runpath: Option<String>,
+}
+
+fn elf_dynamic(
+    src: &mut dyn Bytes,
+    sections: &[ElfSection],
+    is64: bool,
+    big_endian: bool,
+    len: u64,
+) -> ElfDynamic {
+    let mut out = ElfDynamic::default();
+    let Some(dynamic) = elf_find(sections, ".dynamic") else {
+        return out;
+    };
+    let entry = if is64 { 16usize } else { 8 };
+    if dynamic.offset >= len {
+        return out;
+    }
+    let count = ((dynamic.size / entry as u64) as usize).min(MAX_ENTRIES);
+    let table = read_table(src, dynamic.offset, entry, count, len);
+    let strings = elf_find(sections, ".dynstr")
+        .and_then(|s| elf_data(src, s, len, MAX_STRTAB))
+        .unwrap_or_default();
+    for i in 0..count {
+        let from = i * entry;
+        if from + entry > table.len() {
+            break;
+        }
+        let mut e = Cur::new(&table[from..from + entry]);
+        e.big_endian = big_endian;
+        let (tag, val) = if is64 {
+            (e.u64(), e.u64())
+        } else {
+            (e.u32() as u64, e.u32() as u64)
+        };
+        // DT_NULL ends the list, however much room the section claims.
+        match tag {
+            0 => break,
+            1 => {
+                let name = str_at(&strings, val as usize);
+                if !name.is_empty() {
+                    out.needed.push(name);
+                }
+            }
+            14 => out.soname = Some(str_at(&strings, val as usize)).filter(|s| !s.is_empty()),
+            // DT_RPATH (15) and DT_RUNPATH (29) answer the same question.
+            15 | 29 => out.runpath = Some(str_at(&strings, val as usize)).filter(|s| !s.is_empty()),
+            _ => {}
+        }
+    }
+    out
 }
 
 fn elf_machine(m: u16) -> &'static str {
@@ -677,6 +1041,8 @@ fn pe(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
             format: "MZ",
             summary: "DOS executable (no PE header)".to_string(),
             rows,
+            symbols: Vec::new(),
+            maps: Vec::new(),
             truncated: nt.len() < 24,
         };
     }
@@ -731,12 +1097,20 @@ fn pe(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
     ));
 
     // The optional header, which is not optional in an image.
+    let mut image_base = 0u64;
+    let mut dirs = Vec::new();
     if opt_size >= 24 {
         n.seek(24 + 16);
         let entry = n.u32();
         let base_of_code = n.u32();
-        let _base_of_data = n.u32();
-        let image_base = if plus { n.u64() } else { n.u32() as u64 };
+        // PE32 has a BaseOfData before ImageBase; PE32+ drops it and widens ImageBase, so the
+        // field sits eight bytes earlier there.
+        image_base = if plus {
+            n.u64()
+        } else {
+            let _base_of_data = n.u32();
+            n.u32() as u64
+        };
         rows.push(Row::group("Optional header"));
         rows.push(Row::field(
             "Magic",
@@ -767,10 +1141,20 @@ fn pe(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
             format!("{subsystem:04X}"),
             pe_subsystem(subsystem),
         ));
+        // The data directories are the index to everything else in the image. They sit at the
+        // end of the optional header, whose two shapes put them in different places.
+        let dd_base = if plus { 112u64 } else { 96 };
+        n.seek(24 + dd_base as usize - 4);
+        let count = n.u32().min(16) as usize;
+        if count > 0 && opt_size as u64 >= dd_base {
+            dirs = src.at(lfanew + 24 + dd_base, count * 8);
+        }
     }
 
     let mut truncated = n.short;
     let sec_at = lfanew + 24 + opt_size as u64;
+    let mut maps = Vec::new();
+    let mut pe_sections: Vec<PeSection> = Vec::new();
     if nsections > 0 {
         rows.push(Row::group(format!("Sections ({nsections})")));
         let count = (nsections as usize).min(MAX_ENTRIES);
@@ -792,6 +1176,25 @@ fn pe(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
             let raw_ptr = s.u32();
             s.seek(36);
             let flags = s.u32();
+            // Only the bytes the section really has in the file can be mapped: the rest of a
+            // larger virtual size is zero-filled by the loader, not read from here.
+            let mapped = if virtual_size == 0 {
+                raw_size
+            } else {
+                raw_size.min(virtual_size)
+            };
+            pe_sections.push(PeSection {
+                rva: virtual_address,
+                raw_ptr,
+                raw_size,
+            });
+            add_map(
+                &mut maps,
+                image_base.saturating_add(virtual_address as u64),
+                mapped as u64,
+                raw_ptr as u64,
+                len,
+            );
             rows.push(Row::entry(
                 format!("  {name}"),
                 format!(
@@ -803,13 +1206,279 @@ fn pe(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
             ));
         }
     }
+    maps.sort_by_key(|m| m.address);
 
+    // Imports and exports — SPEC 05 §1.8. An image with neither is unusual but legal, and a
+    // directory that points nowhere simply contributes no rows.
+    let (import_rva, _) = pe_dir(&dirs, 1);
+    if import_rva != 0 {
+        rows.extend(pe_imports(src, &pe_sections, import_rva, plus, len));
+    }
+    let (export_rva, export_size) = pe_dir(&dirs, 0);
+    let mut symbols = Vec::new();
+    if export_rva != 0 {
+        let (export_rows, exported) =
+            pe_exports(src, &pe_sections, export_rva, export_size, image_base, len);
+        rows.extend(export_rows);
+        symbols = exported;
+    }
+
+    sort_symbols(&mut symbols);
     Structure {
         format: "PE",
         summary,
         rows,
+        symbols,
+        maps,
         truncated,
     }
+}
+
+/// A section, reduced to what mapping an RVA needs.
+#[derive(Debug, Clone, Copy)]
+struct PeSection {
+    rva: u32,
+    raw_ptr: u32,
+    raw_size: u32,
+}
+
+/// One data directory: its RVA and its size. Each entry is eight bytes, and an index past the
+/// end of the array is a directory the file does not have.
+fn pe_dir(dirs: &[u8], index: usize) -> (u32, u32) {
+    let at = index * 8;
+    if at + 8 > dirs.len() {
+        return (0, 0);
+    }
+    let w = |k: usize| u32::from_le_bytes([dirs[k], dirs[k + 1], dirs[k + 2], dirs[k + 3]]);
+    (w(at), w(at + 4))
+}
+
+/// File offset for an RVA, through the section that covers it. An RVA inside a section's
+/// virtual size but past the bytes it has in the file maps nowhere, and says so.
+fn pe_offset(sections: &[PeSection], rva: u32, len: u64) -> Option<u64> {
+    for s in sections {
+        if rva >= s.rva && rva - s.rva < s.raw_size {
+            return in_file(s.raw_ptr as u64 + (rva - s.rva) as u64, len);
+        }
+    }
+    None
+}
+
+/// Up to `want` bytes at an RVA, and nothing at all for an RVA that is not in the file.
+fn pe_bytes(
+    src: &mut dyn Bytes,
+    sections: &[PeSection],
+    rva: u32,
+    want: usize,
+    len: u64,
+) -> Vec<u8> {
+    match pe_offset(sections, rva, len) {
+        Some(at) => src.at(at, (want as u64).min(len - at) as usize),
+        None => Vec::new(),
+    }
+}
+
+/// A NUL-terminated name at an RVA, capped: a name is not a reason to read a megabyte.
+fn pe_name(src: &mut dyn Bytes, sections: &[PeSection], rva: u32, len: u64) -> String {
+    let bytes = pe_bytes(src, sections, rva, MAX_NAME, len);
+    str_at(&bytes, 0)
+}
+
+/// The import directory: a library per descriptor, and a symbol per thunk under it.
+fn pe_imports(
+    src: &mut dyn Bytes,
+    sections: &[PeSection],
+    rva: u32,
+    plus: bool,
+    len: u64,
+) -> Vec<Row> {
+    // The descriptor array ends with an all-zero entry. A file that forgets one would walk
+    // forever, so the read is as long as the walk is allowed to be and no longer.
+    let table = pe_bytes(src, sections, rva, MAX_ENTRIES * 20, len);
+    let step = if plus { 8usize } else { 4 };
+    let ordinal_flag = if plus { 1u64 << 63 } else { 1 << 31 };
+    let mut rows = Vec::new();
+    let mut libraries = 0usize;
+    // One budget for the symbols of all libraries together: 512 libraries of 512 symbols is a
+    // pane that hangs just as surely as 65 535 sections.
+    let mut budget = MAX_ENTRIES;
+    let mut at = 0usize;
+    while at + 20 <= table.len() && libraries < MAX_ENTRIES {
+        let w = |k: usize| {
+            u32::from_le_bytes([
+                table[at + k],
+                table[at + k + 1],
+                table[at + k + 2],
+                table[at + k + 3],
+            ])
+        };
+        let lookup = w(0);
+        let name_rva = w(12);
+        let iat = w(16);
+        if lookup == 0 && name_rva == 0 && iat == 0 {
+            break;
+        }
+        let library = pe_name(src, sections, name_rva, len);
+        let library = if library.is_empty() {
+            format!("[{libraries}]")
+        } else {
+            library
+        };
+        let descriptor = pe_offset(sections, rva.saturating_add(at as u32), len);
+
+        // The lookup table holds the names; the address table holds what the loader patches,
+        // and that is the slot a `call [rip+…]` in the disassembly actually names — so the
+        // row points at the slot and the name comes from the lookup.
+        let from = if lookup != 0 { lookup } else { iat };
+        let thunks = pe_bytes(src, sections, from, MAX_ENTRIES * step, len);
+        let mut names: Vec<(String, Option<u64>)> = Vec::new();
+        let mut k = 0usize;
+        while (k + 1) * step <= thunks.len() && names.len() < budget {
+            let v = if plus {
+                let mut b = [0u8; 8];
+                b.copy_from_slice(&thunks[k * step..k * step + 8]);
+                u64::from_le_bytes(b)
+            } else {
+                let mut b = [0u8; 4];
+                b.copy_from_slice(&thunks[k * step..k * step + 4]);
+                u32::from_le_bytes(b) as u64
+            };
+            if v == 0 {
+                break;
+            }
+            let slot = pe_offset(sections, iat.saturating_add((k * step) as u32), len);
+            if v & ordinal_flag != 0 {
+                names.push((format!("ordinal {}", v & 0xFFFF), slot));
+            } else {
+                // IMAGE_IMPORT_BY_NAME: a two-byte hint, then the name.
+                let name_at = (v as u32 & 0x7FFF_FFFF).saturating_add(2);
+                let name = pe_name(src, sections, name_at, len);
+                if !name.is_empty() {
+                    names.push((name, slot));
+                }
+            }
+            k += 1;
+        }
+
+        rows.push(Row::entry(
+            format!("  {library}"),
+            format!("{}  {} symbols", off_cell(descriptor), names.len()),
+            descriptor,
+        ));
+        for (name, slot) in &names {
+            rows.push(Row::entry(format!("    {name}"), off_cell(*slot), *slot));
+        }
+        budget = budget.saturating_sub(names.len());
+        libraries += 1;
+        at += 20;
+    }
+    if budget == 0 {
+        rows.push(Row::entry("  …", "more imports not shown", None));
+    }
+    if !rows.is_empty() {
+        rows.insert(0, Row::group(format!("Imports ({libraries} libraries)")));
+    }
+    rows
+}
+
+/// The export directory: the names a DLL offers, and where each one is.
+fn pe_exports(
+    src: &mut dyn Bytes,
+    sections: &[PeSection],
+    rva: u32,
+    dir_size: u32,
+    image_base: u64,
+    len: u64,
+) -> (Vec<Row>, Vec<Symbol>) {
+    let dir = pe_bytes(src, sections, rva, 40, len);
+    if dir.len() < 40 {
+        return (Vec::new(), Vec::new());
+    }
+    let w = |k: usize| u32::from_le_bytes([dir[k], dir[k + 1], dir[k + 2], dir[k + 3]]);
+    let library = pe_name(src, sections, w(12), len);
+    let ordinal_base = w(16);
+    let n_functions = w(20) as usize;
+    let n_names = w(24) as usize;
+    let shown_names = n_names.min(MAX_ENTRIES);
+    let shown_functions = n_functions.min(MAX_ENTRIES);
+    let functions = pe_bytes(src, sections, w(28), shown_functions * 4, len);
+    let names = pe_bytes(src, sections, w(32), shown_names * 4, len);
+    let ordinals = pe_bytes(src, sections, w(36), shown_names * 2, len);
+
+    let mut rows = vec![Row::group(format!("Exports ({n_names})"))];
+    if !library.is_empty() {
+        rows.push(Row::field("library name", String::new(), library));
+    }
+    let mut symbols = Vec::new();
+    for i in 0..shown_names {
+        if (i + 1) * 4 > names.len() || (i + 1) * 2 > ordinals.len() {
+            break;
+        }
+        let name = pe_name(
+            src,
+            sections,
+            u32::from_le_bytes([
+                names[i * 4],
+                names[i * 4 + 1],
+                names[i * 4 + 2],
+                names[i * 4 + 3],
+            ]),
+            len,
+        );
+        if name.is_empty() {
+            continue;
+        }
+        // The name list and the address list are only parallel through the ordinal table.
+        let ordinal = u16::from_le_bytes([ordinals[i * 2], ordinals[i * 2 + 1]]) as usize;
+        let function = if (ordinal + 1) * 4 <= functions.len() {
+            u32::from_le_bytes([
+                functions[ordinal * 4],
+                functions[ordinal * 4 + 1],
+                functions[ordinal * 4 + 2],
+                functions[ordinal * 4 + 3],
+            ])
+        } else {
+            0
+        };
+        // An address inside the export directory itself is not code: it is the name of the
+        // DLL that really has the symbol, which this one only forwards to.
+        let forwarded = dir_size > 0 && function >= rva && function - rva < dir_size;
+        if forwarded {
+            let to = pe_name(src, sections, function, len);
+            rows.push(Row::entry(
+                format!("  {name}"),
+                format!("forwarded to {to}"),
+                None,
+            ));
+            continue;
+        }
+        let at = pe_offset(sections, function, len);
+        let address = image_base.saturating_add(function as u64);
+        rows.push(Row::entry(
+            format!("  {name}"),
+            format!(
+                "{}  ordinal {}",
+                sym_cell(at, address, 0),
+                ordinal as u32 + ordinal_base
+            ),
+            at,
+        ));
+        if function != 0 {
+            symbols.push(Symbol {
+                name,
+                address,
+                size: 0,
+            });
+        }
+    }
+    if n_names > shown_names {
+        rows.push(Row::entry(
+            "  …",
+            format!("{} more exports not shown", n_names - shown_names),
+            None,
+        ));
+    }
+    (rows, symbols)
 }
 
 fn pe_machine(m: u16) -> &'static str {
@@ -898,6 +1567,11 @@ fn macho(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
     let mut at = 0usize;
     let mut shown = 0usize;
     let mut truncated = c.short;
+    let mut maps = Vec::new();
+    // The dylibs in the order their commands appear: a two-level-namespace symbol names its
+    // library by its position in exactly this list.
+    let mut dylibs: Vec<String> = Vec::new();
+    let mut symtab: Option<(u64, u32, u64, u32)> = None;
     rows.push(Row::group("Load commands"));
     for _ in 0..ncmds.min(MAX_ENTRIES as u32) {
         if at + 8 > table.len() {
@@ -930,6 +1604,7 @@ fn macho(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
                         s.u32() as u64,
                     )
                 };
+                add_map(&mut maps, vmaddr, filesize, fileoff, len);
                 rows.push(Row::entry(
                     format!("  {name}"),
                     format!("{fileoff:08X}  {}  @ {vmaddr:X}", size_cell(filesize)),
@@ -942,12 +1617,32 @@ fn macho(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
                     let name = String::from_utf8_lossy(&body[24..])
                         .trim_end_matches('\0')
                         .to_string();
+                    // LC_ID_DYLIB is this file's own name, not a dependency, so it takes no
+                    // place in the ordinals.
+                    if cmd != 0x0D {
+                        dylibs.push(name.clone());
+                    }
                     rows.push(Row::entry(
                         if cmd == 0x0D { "  id" } else { "  dylib" },
                         name,
                         None,
                     ));
                 }
+            }
+            // LC_SYMTAB says where the symbol table and its names are.
+            2 => {
+                let mut s = Cur::new(body);
+                s.seek(8);
+                let symoff = s.u32() as u64;
+                let nsyms = s.u32();
+                let stroff = s.u32() as u64;
+                let strsize = s.u32();
+                symtab = Some((symoff, nsyms, stroff, strsize));
+                rows.push(Row::entry(
+                    format!("  {}", macho_cmd(cmd)),
+                    format!("{symoff:08X}  {nsyms} symbols"),
+                    in_file(symoff, len),
+                ));
             }
             _ => {
                 rows.push(Row::entry(
@@ -967,11 +1662,120 @@ fn macho(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
             None,
         ));
     }
+    maps.sort_by_key(|m| m.address);
 
+    // The symbol table is one bounded read, and it answers all three questions at once: what
+    // is defined here, what is wanted from elsewhere, and what the rest of the world may bind
+    // to. Mach-O records no symbol sizes, so every size here is 0 — "we were not told".
+    let mut symbols = Vec::new();
+    if let Some((symoff, nsyms, stroff, strsize)) = symtab {
+        let entry = if is64 { 16usize } else { 12 };
+        let count = (nsyms as usize).min(MAX_ENTRIES);
+        let table = read_table(src, symoff, entry, count, len);
+        let strings = if stroff < len {
+            src.at(
+                stroff,
+                (strsize as u64).min(MAX_STRTAB as u64).min(len - stroff) as usize,
+            )
+        } else {
+            Vec::new()
+        };
+        let mut defined: Vec<(String, u64)> = Vec::new();
+        let mut undefined: Vec<(String, Option<String>, Option<u64>)> = Vec::new();
+        let mut exported: Vec<(String, u64)> = Vec::new();
+        for i in 0..count {
+            let from = i * entry;
+            if from + entry > table.len() {
+                break;
+            }
+            let mut e = Cur::new(&table[from..from + entry]);
+            let n_strx = e.u32();
+            let n_type = e.take(1).first().copied().unwrap_or(0);
+            let _n_sect = e.take(1);
+            let n_desc = e.u16();
+            let n_value = if is64 { e.u64() } else { e.u32() as u64 };
+            let name = str_at(&strings, n_strx as usize);
+            // N_STAB: a debugger's entry, not a symbol anything binds to.
+            if name.is_empty() || n_type & 0xE0 != 0 {
+                continue;
+            }
+            match n_type & 0x0E {
+                // N_SECT: defined in a section of this file.
+                0x0E if n_value != 0 => {
+                    defined.push((name.clone(), n_value));
+                    // N_EXT: and visible outside it.
+                    if n_type & 0x01 != 0 {
+                        exported.push((name, n_value));
+                    }
+                }
+                // N_UNDF: wanted from a library, which the ordinal in n_desc names.
+                0x00 => {
+                    let library = ((n_desc >> 8) as usize)
+                        .checked_sub(1)
+                        .and_then(|at| dylibs.get(at))
+                        .cloned();
+                    undefined.push((name, library, in_file(symoff + from as u64, len)));
+                }
+                _ => {}
+            }
+        }
+
+        if !defined.is_empty() {
+            rows.push(Row::group(format!("Symbols ({})", defined.len())));
+            for (name, address) in &defined {
+                let at = map_offset(&maps, *address);
+                rows.push(Row::entry(
+                    format!("  {name}"),
+                    sym_cell(at, *address, 0),
+                    at,
+                ));
+                symbols.push(Symbol {
+                    name: name.clone(),
+                    address: *address,
+                    size: 0,
+                });
+            }
+            if nsyms as usize > count {
+                rows.push(Row::entry(
+                    "  …",
+                    format!("{} more entries not read", nsyms as usize - count),
+                    None,
+                ));
+            }
+        }
+        if !undefined.is_empty() {
+            rows.push(Row::group(format!("Imports ({})", undefined.len())));
+            for (name, library, entry_at) in &undefined {
+                rows.push(Row::entry(
+                    format!("  {name}"),
+                    match library {
+                        Some(lib) => format!("{}  {lib}", off_cell(*entry_at)),
+                        None => format!("{}  undefined", off_cell(*entry_at)),
+                    },
+                    *entry_at,
+                ));
+            }
+        }
+        if !exported.is_empty() {
+            rows.push(Row::group(format!("Exports ({})", exported.len())));
+            for (name, address) in &exported {
+                let at = map_offset(&maps, *address);
+                rows.push(Row::entry(
+                    format!("  {name}"),
+                    sym_cell(at, *address, 0),
+                    at,
+                ));
+            }
+        }
+    }
+
+    sort_symbols(&mut symbols);
     Structure {
         format: "Mach-O",
         summary,
         rows,
+        symbols,
+        maps,
         truncated,
     }
 }
@@ -997,6 +1801,9 @@ fn fat_macho(head: &[u8], count: u32, len: u64) -> Structure {
         format: "Mach-O",
         summary: format!("Mach-O universal binary · {count} slices"),
         rows,
+        // A slice is a whole file of its own: opening one is what answers for it.
+        symbols: Vec::new(),
+        maps: Vec::new(),
         truncated: c.short,
     }
 }
@@ -1098,6 +1905,9 @@ fn ar(src: &mut dyn Bytes, len: u64) -> Structure {
         format: "ar",
         summary: format!("ar archive · {count} members"),
         rows,
+        // The members are the binaries; the archive itself defines nothing.
+        symbols: Vec::new(),
+        maps: Vec::new(),
         truncated,
     }
 }
@@ -1107,6 +1917,56 @@ fn ar(src: &mut dyn Bytes, len: u64) -> Structure {
 /// An offset is only a target if it is really inside the file.
 fn in_file(offset: u64, len: u64) -> Option<u64> {
     (offset < len).then_some(offset)
+}
+
+/// Remember that `size` bytes at `offset` load at `address` — but only the bytes the file
+/// really has, so every offset this mapping ever produces is inside the file.
+fn add_map(maps: &mut Vec<Mapping>, address: u64, size: u64, offset: u64, len: u64) {
+    if address == 0 || size == 0 || offset >= len {
+        return;
+    }
+    let size = size.min(len - offset);
+    if size > 0 {
+        maps.push(Mapping {
+            address,
+            size,
+            offset,
+        });
+    }
+}
+
+/// File offset for a virtual address. Mappings may overlap — a segment covers the sections
+/// inside it — and any of them answers correctly, so the first hit wins.
+fn map_offset(maps: &[Mapping], va: u64) -> Option<u64> {
+    maps.iter()
+        .find(|m| va >= m.address && va - m.address < m.size)
+        .map(|m| m.offset + (va - m.address))
+}
+
+/// Symbols are sorted by address so that a lookup is a binary search, and the duplicates two
+/// tables of the same file are bound to agree on are dropped.
+fn sort_symbols(symbols: &mut Vec<Symbol>) {
+    symbols.sort_by(|a, b| a.address.cmp(&b.address).then_with(|| a.name.cmp(&b.name)));
+    symbols.dedup();
+}
+
+/// An offset cell: where the bytes are, or the dots the rest of this file uses to admit that
+/// they are nowhere.
+fn off_cell(offset: Option<u64>) -> String {
+    match offset {
+        Some(at) => format!("{at:08X}"),
+        None => "········".to_string(),
+    }
+}
+
+/// The value cell of a row that names an address: where it is in the file, how big it is where
+/// the format says, and where it loads.
+fn sym_cell(offset: Option<u64>, address: u64, size: u64) -> String {
+    if size == 0 {
+        format!("{}  @ {address:X}", off_cell(offset))
+    } else {
+        format!("{}  {}  @ {address:X}", off_cell(offset), size_cell(size))
+    }
 }
 
 fn read_table(src: &mut dyn Bytes, at: u64, entry: usize, count: usize, len: u64) -> Vec<u8> {
@@ -1338,5 +2198,441 @@ mod tests {
     fn a_timestamp_becomes_a_date() {
         assert_eq!(unix_time(0), "0");
         assert_eq!(unix_time(1_000_000_000), "2001-09-09 01:46:40 UTC");
+    }
+
+    // ── symbols, imports and exports (SPEC 05 §1.8, §1.9) ───────────────────────────────
+
+    #[allow(clippy::too_many_arguments)]
+    fn sh(
+        f: &mut [u8],
+        i: usize,
+        name: u32,
+        kind: u32,
+        flags: u64,
+        addr: u64,
+        off: u64,
+        size: u64,
+        link: u32,
+        entsize: u64,
+    ) {
+        let at = 0x80 + i * 64;
+        f[at..at + 4].copy_from_slice(&name.to_le_bytes());
+        f[at + 4..at + 8].copy_from_slice(&kind.to_le_bytes());
+        f[at + 8..at + 16].copy_from_slice(&flags.to_le_bytes());
+        f[at + 16..at + 24].copy_from_slice(&addr.to_le_bytes());
+        f[at + 24..at + 32].copy_from_slice(&off.to_le_bytes());
+        f[at + 32..at + 40].copy_from_slice(&size.to_le_bytes());
+        f[at + 40..at + 44].copy_from_slice(&link.to_le_bytes());
+        f[at + 56..at + 64].copy_from_slice(&entsize.to_le_bytes());
+    }
+
+    fn sym(f: &mut [u8], at: usize, name: u32, info: u8, shndx: u16, value: u64, size: u64) {
+        f[at..at + 4].copy_from_slice(&name.to_le_bytes());
+        f[at + 4] = info;
+        f[at + 6..at + 8].copy_from_slice(&shndx.to_le_bytes());
+        f[at + 8..at + 16].copy_from_slice(&value.to_le_bytes());
+        f[at + 16..at + 24].copy_from_slice(&size.to_le_bytes());
+    }
+
+    /// The offsets this fixture puts its tables at, so a test can corrupt one by name.
+    const SYMTAB: usize = 0x380;
+    const DYNSYM: usize = 0x3D0;
+
+    /// An ELF64 with the five tables that say what it defines and what it needs: `.symtab`
+    /// with `.strtab`, `.dynsym` with `.dynstr`, and `.dynamic`. Built by hand for the same
+    /// reason as `elf64()` above — a test should not depend on a binary in the tree.
+    ///
+    /// `.text` loads at 0x1000 from offset 0x300, so every address here has a known offset.
+    fn elf64_with_symbols() -> Vec<u8> {
+        let mut f = vec![0u8; 0x600];
+        f[..4].copy_from_slice(b"\x7fELF");
+        f[4] = 2; // ELF64
+        f[5] = 1; // little endian
+        f[6] = 1;
+        f[7] = 3;
+        f[16..18].copy_from_slice(&3u16.to_le_bytes()); // DYN
+        f[18..20].copy_from_slice(&0x3Eu16.to_le_bytes()); // x86-64
+        f[20..24].copy_from_slice(&1u32.to_le_bytes());
+        f[24..32].copy_from_slice(&0x1000u64.to_le_bytes()); // e_entry, inside .text
+        f[40..48].copy_from_slice(&0x80u64.to_le_bytes()); // e_shoff
+        f[58..60].copy_from_slice(&64u16.to_le_bytes()); // e_shentsize
+        f[60..62].copy_from_slice(&8u16.to_le_bytes()); // e_shnum
+        f[62..64].copy_from_slice(&1u16.to_le_bytes()); // e_shstrndx
+
+        // The section names, in section order, so each index is the one its header needs.
+        let names = [
+            ".shstrtab",
+            ".text",
+            ".symtab",
+            ".strtab",
+            ".dynsym",
+            ".dynstr",
+            ".dynamic",
+        ];
+        let mut shstr = vec![0u8];
+        let mut idx = Vec::new();
+        for n in names {
+            idx.push(shstr.len() as u32);
+            shstr.extend_from_slice(n.as_bytes());
+            shstr.push(0);
+        }
+        f[0x480..0x480 + shstr.len()].copy_from_slice(&shstr);
+
+        sh(&mut f, 1, idx[0], 3, 0, 0, 0x480, shstr.len() as u64, 0, 0);
+        sh(&mut f, 2, idx[1], 1, 6, 0x1000, 0x300, 0x40, 0, 0); // .text
+        sh(&mut f, 3, idx[2], 2, 0, 0, SYMTAB as u64, 72, 4, 24); // .symtab → .strtab
+        sh(&mut f, 4, idx[3], 3, 0, 0, 0x500, 18, 0, 0); // .strtab
+        sh(&mut f, 5, idx[4], 11, 2, 0, DYNSYM as u64, 72, 6, 24); // .dynsym → .dynstr
+        sh(&mut f, 6, idx[5], 3, 0, 0, 0x540, 40, 0, 0); // .dynstr
+        sh(&mut f, 7, idx[6], 6, 3, 0, 0x420, 48, 6, 16); // .dynamic
+
+        f[0x500..0x512].copy_from_slice(b"\0scmd_main\0helper\0");
+        sym(&mut f, SYMTAB + 24, 1, 0x12, 2, 0x1000, 0x20); // global function
+        sym(&mut f, SYMTAB + 48, 11, 0x02, 2, 0x1030, 0x10); // local function
+
+        f[0x540..0x568].copy_from_slice(b"\0printf\0libc.so.6\0scmd_run\0libscmd.so.1\0");
+        sym(&mut f, DYNSYM + 24, 1, 0x12, 0, 0, 0); // printf, undefined
+        sym(&mut f, DYNSYM + 48, 18, 0x12, 2, 0x1020, 0x10); // scmd_run, exported
+
+        // .dynamic: DT_NEEDED libc.so.6, DT_SONAME libscmd.so.1, DT_NULL
+        f[0x420..0x428].copy_from_slice(&1u64.to_le_bytes());
+        f[0x428..0x430].copy_from_slice(&8u64.to_le_bytes());
+        f[0x430..0x438].copy_from_slice(&14u64.to_le_bytes());
+        f[0x438..0x440].copy_from_slice(&27u64.to_le_bytes());
+        f
+    }
+
+    fn row<'a>(s: &'a Structure, label: &str) -> Option<&'a Row> {
+        s.rows.iter().find(|r| r.label.trim() == label)
+    }
+
+    /// No row may ever offer to jump outside the file.
+    fn targets_stay_inside(s: &Structure, len: u64) {
+        for r in s.targets() {
+            assert!(r.offset.unwrap() < len, "{r:?} points past the end");
+        }
+    }
+
+    #[test]
+    fn an_elf_lists_its_functions_imports_and_exports() {
+        let bytes = elf64_with_symbols();
+        let s = read(&mut bytes.as_slice()).expect("ELF recognised");
+        assert!(!s.truncated);
+
+        // `.symtab` is the fuller table, so it is the one the pane lists.
+        assert!(
+            s.rows.iter().any(|r| r.label == "Symbols (2)"),
+            "{:?}",
+            s.rows
+        );
+        let main = row(&s, "scmd_main").expect("scmd_main is listed");
+        assert_eq!(
+            main.offset,
+            Some(0x300),
+            "Enter goes to the function's bytes"
+        );
+        assert!(main.value.contains("@ 1000"), "{}", main.value);
+        assert!(row(&s, "helper").is_some());
+
+        assert!(
+            s.rows
+                .iter()
+                .any(|r| r.label == "Imports (1 libraries, 1 symbols)"),
+            "{:?}",
+            s.rows
+        );
+        let lib = row(&s, "libc.so.6").expect("the needed library is listed");
+        assert_eq!(lib.value, "needed library");
+        let printf = row(&s, "printf").expect("the undefined symbol is listed");
+        assert_eq!(printf.offset, Some(DYNSYM as u64 + 24), "its own entry");
+        assert!(printf.value.contains("undefined"), "{}", printf.value);
+
+        assert!(
+            s.rows.iter().any(|r| r.label == "Exports (1)"),
+            "{:?}",
+            s.rows
+        );
+        let exported = row(&s, "scmd_run").expect("the exported symbol is listed");
+        assert_eq!(exported.offset, Some(0x320));
+
+        // The SONAME comes from the same two sections, and the pane says it.
+        let soname = row(&s, "soname").expect("soname");
+        assert_eq!(soname.value, "libscmd.so.1");
+
+        // Nothing was capped, so nothing claims to have been.
+        assert!(row(&s, "…").is_none(), "{:?}", s.rows);
+        // The entry point is a virtual address until something maps it.
+        assert_eq!(row(&s, "e_entry").unwrap().offset, Some(0x300));
+        targets_stay_inside(&s, bytes.len() as u64);
+    }
+
+    #[test]
+    fn a_symbol_resolves_an_address_to_a_name() {
+        let bytes = elf64_with_symbols();
+        let s = read(&mut bytes.as_slice()).unwrap();
+        // Both tables feed the lookup, so a symbol only one of them has is still found.
+        assert_eq!(s.symbols.len(), 3, "{:?}", s.symbols);
+        assert_eq!(s.symbol_at(0x1000), Some("scmd_main"));
+        assert_eq!(s.symbol_at(0x1005), Some("scmd_main"));
+        assert_eq!(s.symbol_at(0x1025), Some("scmd_run"));
+        assert_eq!(s.symbol_at(0x1035), Some("helper"));
+        assert_eq!(s.symbol_at(0x900), None, "below every symbol");
+        assert_eq!(s.symbol_at(0x1045), None, "past the end of the last one");
+        assert_eq!(s.symbol_entry(0x1000).unwrap().size, 0x20);
+
+        assert_eq!(s.offset_for_va(0x1000), Some(0x300));
+        assert_eq!(s.offset_for_va(0x103F), Some(0x33F));
+        assert_eq!(s.offset_for_va(0x2000), None, "nothing loads there");
+    }
+
+    #[test]
+    fn a_symbol_table_pointing_past_the_end_adds_no_rows() {
+        let mut bytes = elf64_with_symbols();
+        // .symtab claims to live past the end of the file.
+        let at = 0x80 + 3 * 64 + 24;
+        bytes[at..at + 8].copy_from_slice(&0xFFFF_FFFFu64.to_le_bytes());
+        let s = read(&mut bytes.as_slice()).expect("still an ELF");
+        assert!(row(&s, "scmd_main").is_none(), "it was never read");
+        assert!(row(&s, "helper").is_none());
+        // `.dynsym` is still readable, so the pane falls back to what it has.
+        assert_eq!(s.symbols.len(), 1, "{:?}", s.symbols);
+        assert_eq!(s.symbol_at(0x1025), Some("scmd_run"));
+        targets_stay_inside(&s, bytes.len() as u64);
+    }
+
+    #[test]
+    fn a_string_table_index_out_of_range_leaves_the_symbol_nameless() {
+        let mut bytes = elf64_with_symbols();
+        // scmd_main's name is somewhere beyond the end of .strtab.
+        bytes[SYMTAB + 24..SYMTAB + 28].copy_from_slice(&0xFFFF_FFFFu32.to_le_bytes());
+        let s = read(&mut bytes.as_slice()).unwrap();
+        assert!(row(&s, "scmd_main").is_none(), "no name is invented for it");
+        assert!(row(&s, "helper").is_some(), "the next symbol still decodes");
+        assert_eq!(s.symbol_at(0x1005), None);
+        targets_stay_inside(&s, bytes.len() as u64);
+    }
+
+    #[test]
+    fn a_symbol_count_of_ffff_is_capped_like_any_other_table() {
+        let mut bytes = elf64_with_symbols();
+        // .symtab claims 65 535 symbols from an offset near the end of the file.
+        let at = 0x80 + 3 * 64 + 32;
+        bytes[at..at + 8].copy_from_slice(&(0xFFFFu64 * 24).to_le_bytes());
+        let s = read(&mut bytes.as_slice()).unwrap();
+        let entries = s.rows.iter().filter(|r| r.kind == RowKind::Entry).count();
+        assert!(entries <= MAX_ENTRIES + 16, "{entries} rows is too many");
+        assert!(s.symbols.len() <= MAX_ENTRIES * 2);
+        // And the pane owns up to the entries it did not read, rather than pretending the
+        // table was that short.
+        let capped = row(&s, "…").expect("a capped table says so");
+        assert!(capped.value.contains("not read"), "{}", capped.value);
+        targets_stay_inside(&s, bytes.len() as u64);
+    }
+
+    /// A PE32+ DLL with one section, an export directory and an import directory. `.text`
+    /// loads at RVA 0x1000 from offset 0x200, on an image base of 0x1_4000_0000.
+    fn pe64() -> Vec<u8> {
+        let mut f = vec![0u8; 0x600];
+        f[..2].copy_from_slice(b"MZ");
+        f[0x3C..0x40].copy_from_slice(&0x80u32.to_le_bytes());
+        f[0x80..0x84].copy_from_slice(b"PE\0\0");
+        f[0x84..0x86].copy_from_slice(&0x8664u16.to_le_bytes()); // x86-64
+        f[0x86..0x88].copy_from_slice(&1u16.to_le_bytes()); // one section
+        f[0x94..0x96].copy_from_slice(&0xF0u16.to_le_bytes()); // SizeOfOptionalHeader
+        f[0x96..0x98].copy_from_slice(&0x2022u16.to_le_bytes()); // DLL
+        let opt = 0x98;
+        f[opt..opt + 2].copy_from_slice(&0x20Bu16.to_le_bytes()); // PE32+
+        f[opt + 24..opt + 32].copy_from_slice(&0x1_4000_0000u64.to_le_bytes()); // ImageBase
+        f[opt + 108..opt + 112].copy_from_slice(&16u32.to_le_bytes()); // NumberOfRvaAndSizes
+        let dd = opt + 112;
+        f[dd..dd + 4].copy_from_slice(&0x1100u32.to_le_bytes()); // export directory
+        f[dd + 4..dd + 8].copy_from_slice(&40u32.to_le_bytes());
+        f[dd + 8..dd + 12].copy_from_slice(&0x1300u32.to_le_bytes()); // import directory
+        f[dd + 12..dd + 16].copy_from_slice(&40u32.to_le_bytes());
+
+        let sec = 0x80 + 24 + 0xF0;
+        f[sec..sec + 5].copy_from_slice(b".text");
+        f[sec + 8..sec + 12].copy_from_slice(&0x400u32.to_le_bytes()); // VirtualSize
+        f[sec + 12..sec + 16].copy_from_slice(&0x1000u32.to_le_bytes()); // VirtualAddress
+        f[sec + 16..sec + 20].copy_from_slice(&0x400u32.to_le_bytes()); // SizeOfRawData
+        f[sec + 20..sec + 24].copy_from_slice(&0x200u32.to_le_bytes()); // PointerToRawData
+        f[sec + 36..sec + 40].copy_from_slice(&0x6000_0020u32.to_le_bytes()); // r-x
+
+        // The export directory at RVA 0x1100 (offset 0x300).
+        let ed = 0x300;
+        f[ed + 12..ed + 16].copy_from_slice(&0x1200u32.to_le_bytes()); // Name
+        f[ed + 16..ed + 20].copy_from_slice(&1u32.to_le_bytes()); // Base
+        f[ed + 20..ed + 24].copy_from_slice(&2u32.to_le_bytes()); // NumberOfFunctions
+        f[ed + 24..ed + 28].copy_from_slice(&2u32.to_le_bytes()); // NumberOfNames
+        f[ed + 28..ed + 32].copy_from_slice(&0x1140u32.to_le_bytes()); // AddressOfFunctions
+        f[ed + 32..ed + 36].copy_from_slice(&0x1150u32.to_le_bytes()); // AddressOfNames
+        f[ed + 36..ed + 40].copy_from_slice(&0x1160u32.to_le_bytes()); // AddressOfNameOrdinals
+        f[0x340..0x344].copy_from_slice(&0x1000u32.to_le_bytes());
+        f[0x344..0x348].copy_from_slice(&0x1050u32.to_le_bytes());
+        f[0x350..0x354].copy_from_slice(&0x1210u32.to_le_bytes());
+        f[0x354..0x358].copy_from_slice(&0x1220u32.to_le_bytes());
+        f[0x362..0x364].copy_from_slice(&1u16.to_le_bytes()); // the second name is ordinal 1
+        f[0x400..0x40B].copy_from_slice(b"scmdlib.dll");
+        f[0x410..0x418].copy_from_slice(b"scmd_run");
+        f[0x420..0x429].copy_from_slice(b"scmd_quit");
+
+        // The import directory at RVA 0x1300 (offset 0x500), one descriptor and a terminator.
+        let id = 0x500;
+        f[id..id + 4].copy_from_slice(&0x1360u32.to_le_bytes()); // OriginalFirstThunk
+        f[id + 12..id + 16].copy_from_slice(&0x1340u32.to_le_bytes()); // Name
+        f[id + 16..id + 20].copy_from_slice(&0x13A0u32.to_le_bytes()); // FirstThunk
+        f[0x540..0x54C].copy_from_slice(b"kernel32.dll");
+        f[0x572..0x580].copy_from_slice(b"GetProcAddress"); // past a two-byte hint
+        f[0x560..0x568].copy_from_slice(&0x1370u64.to_le_bytes());
+        f[0x568..0x570].copy_from_slice(&0x8000_0000_0000_0007u64.to_le_bytes());
+        f
+    }
+
+    #[test]
+    fn a_pe_lists_its_imports_and_exports() {
+        let bytes = pe64();
+        let s = read(&mut bytes.as_slice()).expect("PE recognised");
+        assert!(s.rows.iter().any(|r| r.label == "Imports (1 libraries)"));
+        let lib = row(&s, "kernel32.dll").expect("the library is listed");
+        assert_eq!(lib.offset, Some(0x500), "its descriptor");
+        assert!(lib.value.contains("2 symbols"), "{}", lib.value);
+        let import = row(&s, "GetProcAddress").expect("the imported symbol is listed");
+        assert_eq!(
+            import.offset,
+            Some(0x5A0),
+            "the slot the code calls through"
+        );
+        // An import by ordinal has no name, and none is invented for it.
+        assert!(row(&s, "ordinal 7").is_some(), "{:?}", s.rows);
+
+        assert!(s.rows.iter().any(|r| r.label == "Exports (2)"));
+        assert_eq!(row(&s, "library name").unwrap().value, "scmdlib.dll");
+        let run = row(&s, "scmd_run").expect("the export is listed");
+        assert_eq!(run.offset, Some(0x200));
+        assert!(run.value.contains("ordinal 1"), "{}", run.value);
+        assert!(row(&s, "scmd_quit").unwrap().value.contains("ordinal 2"));
+
+        assert_eq!(s.symbols.len(), 2, "{:?}", s.symbols);
+        assert_eq!(s.symbol_at(0x1_4000_1004), Some("scmd_run"));
+        assert_eq!(s.symbol_at(0x1_4000_1050), Some("scmd_quit"));
+        assert_eq!(s.offset_for_va(0x1_4000_1000), Some(0x200));
+        targets_stay_inside(&s, bytes.len() as u64);
+    }
+
+    #[test]
+    fn an_import_with_a_bogus_offset_is_not_a_target() {
+        let mut bytes = pe64();
+        // The descriptor's name and thunk list both point outside every section.
+        bytes[0x500..0x504].copy_from_slice(&0x9999_9999u32.to_le_bytes());
+        bytes[0x50C..0x510].copy_from_slice(&0x9999_9999u32.to_le_bytes());
+        bytes[0x510..0x514].copy_from_slice(&0x9999_9999u32.to_le_bytes());
+        let s = read(&mut bytes.as_slice()).unwrap();
+        assert!(row(&s, "kernel32.dll").is_none(), "no name is invented");
+        assert!(row(&s, "GetProcAddress").is_none(), "nor any symbol");
+        assert!(
+            row(&s, "[0]").is_some(),
+            "the descriptor itself is still shown"
+        );
+        targets_stay_inside(&s, bytes.len() as u64);
+
+        // And a directory that is nowhere at all contributes nothing.
+        let mut bytes = pe64();
+        bytes[0x98 + 120..0x98 + 124].copy_from_slice(&0x9999_9999u32.to_le_bytes());
+        let s = read(&mut bytes.as_slice()).unwrap();
+        assert!(!s.rows.iter().any(|r| r.label.starts_with("Imports")));
+        targets_stay_inside(&s, bytes.len() as u64);
+    }
+
+    #[test]
+    fn an_import_directory_that_loops_still_ends() {
+        let mut bytes = pe64();
+        // A descriptor array with no terminator, repeating over a whole page.
+        bytes[0x98 + 120..0x98 + 124].copy_from_slice(&0x1200u32.to_le_bytes());
+        let mut at = 0x400;
+        while at + 20 <= 0x500 {
+            bytes[at..at + 4].copy_from_slice(&0x1360u32.to_le_bytes());
+            bytes[at + 12..at + 16].copy_from_slice(&0x1340u32.to_le_bytes());
+            bytes[at + 16..at + 20].copy_from_slice(&0x13A0u32.to_le_bytes());
+            at += 20;
+        }
+        let s = read(&mut bytes.as_slice()).unwrap();
+        let libraries = s
+            .rows
+            .iter()
+            .filter(|r| r.label.trim() == "kernel32.dll")
+            .count();
+        assert!(libraries > 1 && libraries <= MAX_ENTRIES, "{libraries}");
+        assert!(s.rows.len() < 2048, "{} rows is too many", s.rows.len());
+        targets_stay_inside(&s, bytes.len() as u64);
+    }
+
+    /// A 64-bit Mach-O with a segment, a dylib and a symbol table: `__TEXT` loads at
+    /// 0x1_0000_0000 from offset 0.
+    fn macho64_with_symbols() -> Vec<u8> {
+        let mut f = vec![0u8; 0x400];
+        f[..4].copy_from_slice(&0xFEED_FACFu32.to_le_bytes());
+        f[4..8].copy_from_slice(&0x0100_0007u32.to_le_bytes()); // x86-64
+        f[12..16].copy_from_slice(&6u32.to_le_bytes()); // dylib
+        f[16..20].copy_from_slice(&3u32.to_le_bytes()); // three commands
+        f[20..24].copy_from_slice(&152u32.to_le_bytes()); // sizeofcmds
+
+        let lc = 32;
+        f[lc..lc + 4].copy_from_slice(&0x19u32.to_le_bytes()); // LC_SEGMENT_64
+        f[lc + 4..lc + 8].copy_from_slice(&72u32.to_le_bytes());
+        f[lc + 8..lc + 15].copy_from_slice(b"__TEXT\0");
+        f[lc + 24..lc + 32].copy_from_slice(&0x1_0000_0000u64.to_le_bytes()); // vmaddr
+        f[lc + 32..lc + 40].copy_from_slice(&0x400u64.to_le_bytes()); // vmsize
+        f[lc + 48..lc + 56].copy_from_slice(&0x400u64.to_le_bytes()); // filesize
+
+        let lc = 104;
+        f[lc..lc + 4].copy_from_slice(&2u32.to_le_bytes()); // LC_SYMTAB
+        f[lc + 4..lc + 8].copy_from_slice(&24u32.to_le_bytes());
+        f[lc + 8..lc + 12].copy_from_slice(&0x200u32.to_le_bytes()); // symoff
+        f[lc + 12..lc + 16].copy_from_slice(&2u32.to_le_bytes()); // nsyms
+        f[lc + 16..lc + 20].copy_from_slice(&0x280u32.to_le_bytes()); // stroff
+        f[lc + 20..lc + 24].copy_from_slice(&20u32.to_le_bytes()); // strsize
+
+        let lc = 128;
+        f[lc..lc + 4].copy_from_slice(&0x0Cu32.to_le_bytes()); // LC_LOAD_DYLIB
+        f[lc + 4..lc + 8].copy_from_slice(&56u32.to_le_bytes());
+        f[lc + 24..lc + 50].copy_from_slice(b"/usr/lib/libSystem.B.dylib");
+
+        // nlist_64: a defined external symbol, and one wanted from dylib ordinal 1.
+        f[0x200..0x204].copy_from_slice(&1u32.to_le_bytes());
+        f[0x204] = 0x0F; // N_SECT | N_EXT
+        f[0x205] = 1;
+        f[0x208..0x210].copy_from_slice(&0x1_0000_0100u64.to_le_bytes());
+        f[0x210..0x214].copy_from_slice(&12u32.to_le_bytes());
+        f[0x214] = 0x01; // N_UNDF | N_EXT
+        f[0x216..0x218].copy_from_slice(&(1u16 << 8).to_le_bytes()); // library ordinal 1
+        f[0x280..0x294].copy_from_slice(b"\0_scmd_main\0_printf\0");
+        f
+    }
+
+    #[test]
+    fn a_macho_reads_its_symbol_table_and_names_each_import() {
+        let bytes = macho64_with_symbols();
+        let s = read(&mut bytes.as_slice()).expect("Mach-O recognised");
+        let main = row(&s, "_scmd_main").expect("the defined symbol is listed");
+        assert_eq!(main.offset, Some(0x100), "Enter goes to its bytes");
+        // Two-level namespace: the ordinal in the entry names the library.
+        let printf = row(&s, "_printf").expect("the undefined symbol is listed");
+        assert_eq!(
+            printf.value.split_whitespace().last().unwrap(),
+            "/usr/lib/libSystem.B.dylib"
+        );
+        assert_eq!(printf.offset, Some(0x210), "its own entry");
+        assert!(
+            s.rows.iter().any(|r| r.label == "Exports (1)"),
+            "{:?}",
+            s.rows
+        );
+
+        // Mach-O records no sizes, so the symbol owns everything after it.
+        assert_eq!(s.symbols.len(), 1);
+        assert_eq!(s.symbol_at(0x1_0000_0180), Some("_scmd_main"));
+        assert_eq!(s.symbol_at(0x1_0000_0000), None, "below the only symbol");
+        assert_eq!(s.offset_for_va(0x1_0000_0100), Some(0x100));
+        targets_stay_inside(&s, bytes.len() as u64);
     }
 }

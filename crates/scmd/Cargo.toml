@@ -9,6 +9,7 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
+thiserror = "2"
 anyhow = "1.0.104"
 clap = { version = "4.5.61", features = ["derive"] }
 scmd-cmd = { version = "0.0.2", path = "../scmd-cmd" }

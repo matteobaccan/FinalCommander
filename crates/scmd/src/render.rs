@@ -50,6 +50,12 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         }
     }
 
+    // `Ctrl+O`: what the commands printed, full screen.
+    if let Mode::UserScreen { scroll } = app.mode {
+        draw_user_screen(app, buf, scroll);
+        return None;
+    }
+
     // The viewer takes the whole screen; its prompts draw on top of it.
     if let Some((mut viewer, parked)) = app.viewer_for_render() {
         draw_viewer(app, &mut viewer, buf);
@@ -72,7 +78,8 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
 
     let keybar_h = u16::from(app.cfg.ui.key_bar);
     let status_h = u16::from(app.cfg.ui.status_bar);
-    let panels_h = h.saturating_sub(keybar_h + status_h).max(3);
+    let cmd_h = u16::from(app.cfg.ui.command_line);
+    let panels_h = h.saturating_sub(keybar_h + status_h + cmd_h).max(3);
 
     let left_w = w / 2;
     let areas = [
@@ -114,6 +121,29 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         widgets::draw_panel(buf, &app.theme, &render);
     }
 
+    // The command line: the panel's path as the prompt, then what is being typed.
+    let mut cursor = None;
+    if cmd_h == 1 {
+        let y = panels_h;
+        let style = Style::new(app.theme.color("cmdline.fg"), app.theme.color("cmdline.bg"));
+        buf.fill(Rect::new(0, y, w, 1), ' ', style);
+        let prompt = format!("{}> ", app.panels[app.active].cwd);
+        let prompt = scmd_ui::elide_middle(&prompt, (w / 2) as usize);
+        let prompt_w = unicode_width::UnicodeWidthStr::width(prompt.as_str()) as u16;
+        buf.put_str(0, y, &prompt, style, prompt_w);
+        let room = w.saturating_sub(prompt_w);
+        let text = scmd_ui::truncate_cols(&app.cmd.text, room as usize);
+        buf.put_str(prompt_w, y, &text, style, room);
+        let caret = app
+            .cmd
+            .text
+            .chars()
+            .take(app.cmd.caret)
+            .filter_map(unicode_width::UnicodeWidthChar::width)
+            .sum::<usize>() as u16;
+        cursor = Some((prompt_w + caret.min(room.saturating_sub(1)), y));
+    }
+
     if status_h == 1 {
         let text = if app.status.is_empty() {
             status_hint(app)
@@ -123,7 +153,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         widgets::draw_status(
             buf,
             &app.theme,
-            Rect::new(0, panels_h, w, 1),
+            Rect::new(0, panels_h + cmd_h, w, 1),
             &text,
             app.status_error,
         );
@@ -137,7 +167,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
 
     let screen = Rect::new(0, 0, w, panels_h);
     if app.mode.is_normal() {
-        return None;
+        return cursor;
     }
     if let Some(view) = app.mode.job() {
         draw_job(app, view, buf, screen);
@@ -212,11 +242,65 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             draw_pick(app, buf, screen, pick);
             None
         }
+        Mode::UserScreen { .. } => None, // drawn full screen, before the panels
         Mode::Help { scroll } => {
             let scroll = *scroll;
             draw_help(app, buf, scroll, screen);
             None
         }
+    }
+}
+
+/// `Ctrl+O`: the output of the commands that have run. Plain text, scrollable, and it keeps
+/// the key bar so the way out is on the screen.
+fn draw_user_screen(app: &App, buf: &mut Buffer, scroll: usize) {
+    let (w, h) = (buf.width(), buf.height());
+    let keybar_h = u16::from(app.cfg.ui.key_bar);
+    let base = app.theme.panel();
+    buf.fill(Rect::new(0, 0, w, h.saturating_sub(keybar_h)), ' ', base);
+
+    let header = Style::new(
+        app.theme.color("panel.header.fg"),
+        app.theme.color("status.bg"),
+    );
+    buf.fill(Rect::new(0, 0, w, 1), ' ', header);
+    let title = app.i18n.t_args(
+        "user-screen-title",
+        &[
+            ("lines", (app.user_screen.len() as i64).into()),
+            ("at", (scroll as i64 + 1).into()),
+        ],
+    );
+    buf.put_str(1, 0, &title, header, w.saturating_sub(2));
+
+    let body = Rect::new(0, 1, w, h.saturating_sub(1 + keybar_h));
+    if app.user_screen.is_empty() {
+        buf.put_str(1, body.y, &app.i18n.t("user-screen-empty"), base, w - 1);
+    }
+    let heading = Style::new(
+        app.theme.color("panel.column.fg"),
+        app.theme.color("panel.bg"),
+    );
+    for (i, line) in app
+        .user_screen
+        .iter()
+        .skip(scroll)
+        .take(body.h as usize)
+        .enumerate()
+    {
+        let style = if line.starts_with("$ ") {
+            heading
+        } else {
+            base
+        };
+        let text = scmd_ui::truncate_cols(line, w as usize);
+        buf.put_str(0, body.y + i as u16, &text, style, w);
+    }
+
+    if keybar_h == 1 {
+        let labels = [(1u8, app.i18n.t("key-help")), (10, app.i18n.t("key-quit"))];
+        let refs: Vec<(u8, &str)> = labels.iter().map(|(n, s)| (*n, s.as_str())).collect();
+        widgets::draw_keybar(buf, &app.theme, Rect::new(0, h - 1, w, 1), &refs);
     }
 }
 
@@ -893,6 +977,38 @@ mod tests {
             let out = frame(&mut app, 60, 15);
             assert!(out.contains("src/"), "theme {id} rendered nothing: {out}");
         }
+    }
+
+    #[test]
+    fn the_command_line_takes_a_row_and_shows_where_it_will_run() {
+        let mut app = app("far", "en");
+        let out = frame(&mut app, 80, 24);
+        let lines: Vec<&str> = out.lines().collect();
+        // One row above the status line, with the panel's path as the prompt.
+        let cmd_row = lines[lines.len() - 3];
+        assert!(cmd_row.contains("/home/mb/project>"), "{cmd_row}");
+
+        app.cmd.set("make -j8");
+        let out = frame(&mut app, 80, 24);
+        let lines: Vec<&str> = out.lines().collect();
+        assert!(lines[lines.len() - 3].contains("make -j8"), "{out}");
+
+        // Switched off, the panels take the row back.
+        app.cfg.ui.command_line = false;
+        let taller = frame(&mut app, 80, 24);
+        assert!(!taller.contains("make -j8"), "{taller}");
+    }
+
+    #[test]
+    fn the_user_screen_shows_what_ran_and_how_it_went() {
+        let mut app = app("far", "en");
+        app.user_screen = vec!["$ make".into(), "cc -c main.c".into(), "error: no".into()];
+        app.mode = crate::app::Mode::UserScreen { scroll: 0 };
+        let out = frame(&mut app, 80, 12);
+        assert!(out.contains("$ make"), "{out}");
+        assert!(out.contains("cc -c main.c"), "{out}");
+        // The panels are gone: the output owns the screen.
+        assert!(!out.contains("Cargo.toml"), "{out}");
     }
 
     #[test]

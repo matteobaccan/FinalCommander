@@ -289,3 +289,24 @@ viewer-structure-hint-tab = Tab amène les touches ici
 viewer-no-structure = rien à décoder : le panneau ne connaît pas ce format
 viewer-no-target = cette ligne ne pointe nulle part dans le fichier
 viewer-went-to = positionné à { $offset }
+# ------------------------------------------------- ligne de commande (SPEC 06 §7)
+cmd-running = en cours : { $command }
+cmd-done = { $command } terminé
+cmd-failed = { $command } s'est terminé avec { $code }
+cmd-busy = une commande est déjà en cours
+cmd-not-remote = une commande a besoin d'un dossier local ; ce panneau est sur un serveur
+cmd-no-history = l'historique des commandes est vide
+cmd-no-previous = nulle part où revenir
+cmd-no-such-dir = { $path } : dossier introuvable
+cmd-no-such-path = { $path } : fichier ou dossier introuvable
+cmd-no-selection = rien n'est sélectionné
+cmd-condition-false = non exécuté : { $command }
+cmd-screen-cleared = écran effacé
+cmd-stack-empty = la pile de dossiers est vide
+cmd-stack-cleared = pile de dossiers vidée
+cmd-pushed = { $count } dossiers dans la pile
+cmd-environment = environnement
+cmd-set = { $name } = { $value }
+cmd-not-set = { $name } n'est pas définie
+user-screen-title = Sortie — { $lines } lignes, à partir de la ligne { $at }
+user-screen-empty = (rien n'a encore été exécuté)

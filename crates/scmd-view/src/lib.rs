@@ -15,7 +15,10 @@ pub mod structure;
 pub mod view;
 
 pub use decode::{detect, looks_binary, sniff_bom, Codepage};
-pub use disasm::{analyze, disassemble, probe, wasm_text, Arch, Binary, DisasmError, Format};
+pub use disasm::{
+    analyze, disassemble, probe, resolve_targets, wasm_text, Arch, Binary, DisasmError, Format,
+    Line, Target, TargetKind,
+};
 pub use search::{compile, Match, Pattern, SearchError, SearchMode};
 pub use source::{BytesSource, FileSource, Source};
 pub use view::{Mode, Row, RowKind, Started, Status, Viewer, Wrap};

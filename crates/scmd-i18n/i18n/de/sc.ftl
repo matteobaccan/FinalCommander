@@ -289,3 +289,24 @@ viewer-structure-hint-tab = Tab bringt die Tasten hierher
 viewer-no-structure = nichts zu entschlüsseln: dieses Format kennt das Fenster nicht
 viewer-no-target = diese Zeile zeigt auf keine Stelle der Datei
 viewer-went-to = gesprungen zu { $offset }
+# ------------------------------------------------- Befehlszeile (SPEC 06 §7)
+cmd-running = läuft: { $command }
+cmd-done = { $command } beendet
+cmd-failed = { $command } endete mit { $code }
+cmd-busy = es läuft schon ein Befehl
+cmd-not-remote = ein Befehl braucht ein lokales Verzeichnis; dieses Fenster ist auf einem Server
+cmd-no-history = der Befehlsverlauf ist leer
+cmd-no-previous = es gibt kein Zurück
+cmd-no-such-dir = { $path }: kein solches Verzeichnis
+cmd-no-such-path = { $path }: keine solche Datei oder Verzeichnis
+cmd-no-selection = nichts ausgewählt
+cmd-condition-false = nicht ausgeführt: { $command }
+cmd-screen-cleared = Bildschirm geleert
+cmd-stack-empty = der Verzeichnisstapel ist leer
+cmd-stack-cleared = Verzeichnisstapel geleert
+cmd-pushed = { $count } Verzeichnisse auf dem Stapel
+cmd-environment = Umgebung
+cmd-set = { $name } = { $value }
+cmd-not-set = { $name } ist nicht gesetzt
+user-screen-title = Ausgabe — { $lines } Zeilen, ab Zeile { $at }
+user-screen-empty = (noch nichts ausgeführt)

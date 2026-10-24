@@ -297,3 +297,24 @@ viewer-structure-hint-tab = Tab moves the keys here
 viewer-no-structure = nothing to decode: this is not a format the pane knows
 viewer-no-target = this row points nowhere in the file
 viewer-went-to = went to { $offset }
+# ------------------------------------------------- command line (SPEC 06 §7)
+cmd-running = running: { $command }
+cmd-done = { $command } finished
+cmd-failed = { $command } exited with { $code }
+cmd-busy = a command is already running
+cmd-not-remote = a command needs a local directory; this panel is on a server
+cmd-no-history = the command history is empty
+cmd-no-previous = nowhere to go back to
+cmd-no-such-dir = { $path }: no such directory
+cmd-no-such-path = { $path }: no such file or directory
+cmd-no-selection = nothing is selected
+cmd-condition-false = not run: { $command }
+cmd-screen-cleared = screen cleared
+cmd-stack-empty = the directory stack is empty
+cmd-stack-cleared = directory stack cleared
+cmd-pushed = { $count } directories on the stack
+cmd-environment = environment
+cmd-set = { $name } = { $value }
+cmd-not-set = { $name } is not set
+user-screen-title = Output — { $lines } lines, from line { $at }
+user-screen-empty = (nothing has run yet)

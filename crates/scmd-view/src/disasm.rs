@@ -14,7 +14,7 @@
 
 use std::fmt;
 
-use iced_x86::{Decoder, DecoderOptions, Formatter, Instruction, IntelFormatter};
+use iced_x86::{Decoder, DecoderOptions, Formatter, Instruction, IntelFormatter, Mnemonic, OpKind};
 use object::read::{Object, ObjectSection, ObjectSymbol};
 use object::{Architecture, BinaryFormat, SectionKind};
 
@@ -164,6 +164,13 @@ impl Binary {
             .find(|s| s.executable && s.file_offset.is_some())
     }
 
+    /// The name of the function containing `address` — the same question
+    /// `structure::Structure::symbol_at` answers, asked the same way, so a caller can use
+    /// whichever of the two it managed to read (SPEC 05 §1.9).
+    pub fn symbol_at(&self, address: u64) -> Option<&str> {
+        self.function_at(address).map(|f| f.name.as_str())
+    }
+
     /// The function containing `address`, if any.
     pub fn function_at(&self, address: u64) -> Option<&SymbolInfo> {
         self.functions
@@ -195,6 +202,85 @@ impl Binary {
         }
         None
     }
+
+    /// Fill in the file offset of each line's branch target, so `Enter` on a `call` has
+    /// somewhere to go.
+    pub fn resolve_targets(&self, lines: &mut [Line]) {
+        resolve_targets(lines, |va| self.offset_for_va(va));
+    }
+}
+
+/// What kind of address an instruction's operand is: the pane follows a code target in the
+/// disassembly and a data one in the hex view.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TargetKind {
+    Call,
+    /// An unconditional `jmp`.
+    Jump,
+    /// A conditional branch, which may or may not be taken.
+    Branch,
+    /// A `lea` or a memory operand relative to the instruction pointer: the address of
+    /// something, not of code to run.
+    Data,
+}
+
+/// Where an instruction's operand points — SPEC 05 §1.9.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Target {
+    /// The address the operand names, as the loaded program sees it.
+    pub address: u64,
+    /// Where that is in the file, when something could map it. `None` for an address outside
+    /// this file: a `jmp` into a library, or a nonsense address in data decoded as code.
+    pub offset: Option<u64>,
+    pub kind: TargetKind,
+}
+
+/// Fill in the file offset of every branch target `map` can place. A caller with the structure
+/// pane's mapping rather than a parsed [`Binary`] passes its own lookup.
+pub fn resolve_targets(lines: &mut [Line], map: impl Fn(u64) -> Option<u64>) {
+    for line in lines {
+        if let Some(target) = line.target.as_mut() {
+            target.offset = map(target.address);
+        }
+    }
+}
+
+/// The address an instruction's operand names, where it names one.
+///
+/// This asks `iced-x86` what the operands *are* rather than reading the formatted text: the
+/// text is for people, and a branch target that has to survive a formatter option is not a
+/// branch target.
+fn branch_target(instruction: &Instruction) -> Option<Target> {
+    for i in 0..instruction.op_count() {
+        if matches!(
+            instruction.op_kind(i),
+            OpKind::NearBranch16 | OpKind::NearBranch32 | OpKind::NearBranch64
+        ) {
+            let kind = match instruction.mnemonic() {
+                Mnemonic::Call => TargetKind::Call,
+                Mnemonic::Jmp => TargetKind::Jump,
+                // Everything else that takes a branch operand is conditional: `jcc`, `loop`,
+                // `jrcxz`, `xbegin`.
+                _ => TargetKind::Branch,
+            };
+            return Some(Target {
+                address: instruction.near_branch_target(),
+                offset: None,
+                kind,
+            });
+        }
+    }
+    // A RIP-relative operand is an address computed from this instruction's own position: a
+    // `lea` of a string, or the import slot a `call [rip+…]` reads its destination out of.
+    // Either way the address names where the bytes are, not code to run, so it is data.
+    if instruction.is_ip_rel_memory_operand() {
+        return Some(Target {
+            address: instruction.ip_rel_memory_address(),
+            offset: None,
+            kind: TargetKind::Data,
+        });
+    }
+    None
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -290,6 +376,20 @@ pub struct Line {
     pub text: String,
     /// `true` when the decoder could not make sense of the bytes.
     pub invalid: bool,
+    /// Where this instruction's operand points, when it points anywhere — SPEC 05 §1.9. An
+    /// `Option`, so everything that read a `Line` before this existed still does.
+    pub target: Option<Target>,
+}
+
+impl Line {
+    /// `call 0000001F80 <scmd_main>`: the text with its target named, where something can
+    /// name it. The viewer never invents a name, so a target nothing knows changes nothing.
+    pub fn annotated<'a>(&self, name: impl Fn(u64) -> Option<&'a str>) -> String {
+        match self.target.and_then(|t| name(t.address)) {
+            Some(symbol) => format!("{} <{}>", self.text, symbol),
+            None => self.text.clone(),
+        }
+    }
 }
 
 impl fmt::Display for Line {
@@ -338,6 +438,7 @@ pub fn disassemble(
                 bytes: vec![code[position]],
                 text: "(bad)".to_string(),
                 invalid: true,
+                target: None,
             });
             let next = position + 1;
             if next >= code.len() {
@@ -358,6 +459,7 @@ pub fn disassemble(
             bytes,
             text,
             invalid: false,
+            target: branch_target(&instruction),
         });
     }
     Ok(out)
@@ -607,5 +709,110 @@ mod tests {
         assert_eq!(binary.function_at(0x1045).unwrap().name, "main");
         assert!(binary.function_at(0x1070).is_none(), "outside main's size");
         assert_eq!(binary.function_at(0x2000).unwrap().name, "helper");
+        assert_eq!(binary.symbol_at(0x1045), Some("main"));
+        assert_eq!(binary.symbol_at(0x1070), None);
+    }
+
+    // ── following a branch (SPEC 05 §1.9) ───────────────────────────────────────────────────
+
+    /// `call +0xB`, `jmp -2`, `je +5`, `lea rax,[rip+0x10]`, `ret` — one of each kind of
+    /// operand §1.9 names, and one instruction with no address in it at all.
+    fn branching_code() -> [u8; 16] {
+        [
+            0xE8, 0x0B, 0x00, 0x00, 0x00, // call 401010h
+            0xEB, 0xFE, // jmp 401005h
+            0x74, 0x05, // je 40100Eh
+            0x48, 0x8D, 0x05, 0x10, 0x00, 0x00, 0x00, // lea rax,[rip+10h]
+        ]
+    }
+
+    #[test]
+    fn a_call_carries_the_address_it_calls() {
+        let lines = disassemble(&branching_code(), 0x200, 0x401000, Arch::X86_64, 10).unwrap();
+        let target = lines[0].target.expect("a call has a target");
+        assert_eq!(target.kind, TargetKind::Call);
+        assert_eq!(target.address, 0x401010, "{}", lines[0].text);
+        assert_eq!(target.offset, None, "nothing has mapped it yet");
+    }
+
+    #[test]
+    fn a_conditional_branch_and_a_jump_are_both_targets() {
+        let lines = disassemble(&branching_code(), 0, 0x401000, Arch::X86_64, 10).unwrap();
+        let jmp = lines[1].target.expect("jmp");
+        assert_eq!(jmp.kind, TargetKind::Jump);
+        assert_eq!(jmp.address, 0x401005, "a backwards jump: {}", lines[1].text);
+        let jcc = lines[2].target.expect("je");
+        assert_eq!(jcc.kind, TargetKind::Branch, "it may not be taken");
+        assert_eq!(jcc.address, 0x40100E);
+    }
+
+    #[test]
+    fn a_rip_relative_lea_points_at_data() {
+        let code = [0x48, 0x8D, 0x05, 0x10, 0x00, 0x00, 0x00, 0xC3];
+        let lines = disassemble(&code, 0, 0x401000, Arch::X86_64, 10).unwrap();
+        let lea = lines[0].target.expect("a lea of an address has one");
+        assert_eq!(lea.kind, TargetKind::Data, "it is an address, not code");
+        // RIP is the *next* instruction: 0x401007 + 0x10.
+        assert_eq!(lea.address, 0x401017, "{}", lines[0].text);
+        assert_eq!(lines[1].target, None, "ret goes nowhere nameable");
+    }
+
+    #[test]
+    fn an_instruction_without_an_address_operand_has_no_target() {
+        // push rbp; mov rbp,rsp; xor eax,eax; ret
+        let code = [0x55, 0x48, 0x89, 0xE5, 0x31, 0xC0, 0xC3];
+        let lines = disassemble(&code, 0, 0x401000, Arch::X86_64, 10).unwrap();
+        assert!(lines.iter().all(|l| l.target.is_none()), "{lines:?}");
+        // And invalid bytes certainly do not acquire one.
+        let bad = disassemble(&[0xff, 0xff, 0xff], 0, 0, Arch::X86_64, 4).unwrap();
+        assert!(bad.iter().all(|l| l.target.is_none()));
+    }
+
+    #[test]
+    fn a_branch_target_gets_a_file_offset_from_the_binary() {
+        let binary = Binary {
+            format: Format::Elf,
+            arch: Arch::X86_64,
+            bits: 64,
+            entry: 0x401000,
+            sections: vec![SectionInfo {
+                name: ".text".into(),
+                address: 0x401000,
+                size: 0x200,
+                file_offset: Some(0x200),
+                executable: true,
+            }],
+            functions: vec![SymbolInfo {
+                name: "scmd_main".into(),
+                address: 0x401010,
+                size: 0x10,
+                is_function: true,
+            }],
+            truncated: false,
+        };
+        let mut lines = disassemble(&branching_code(), 0x200, 0x401000, Arch::X86_64, 10).unwrap();
+        binary.resolve_targets(&mut lines);
+        assert_eq!(lines[0].target.unwrap().offset, Some(0x210));
+        // The lea's address is data in the same section, so it has an offset too.
+        assert_eq!(lines[3].target.unwrap().offset, Some(0x220));
+        // An address no section maps gets no offset invented for it.
+        let mut away = disassemble(
+            &[0xE8, 0x00, 0x00, 0x10, 0x00],
+            0x200,
+            0x401000,
+            Arch::X86_64,
+            1,
+        )
+        .unwrap();
+        binary.resolve_targets(&mut away);
+        assert_eq!(away[0].target.unwrap().address, 0x501005);
+        assert_eq!(away[0].target.unwrap().offset, None);
+
+        // And with a symbol table, the line can say whose code that is.
+        assert_eq!(
+            lines[0].annotated(|va| binary.symbol_at(va)),
+            format!("{} <scmd_main>", lines[0].text)
+        );
+        assert_eq!(lines[1].annotated(|va| binary.symbol_at(va)), lines[1].text);
     }
 }

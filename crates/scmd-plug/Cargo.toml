@@ -1,0 +1,17 @@
+[package]
+name = "scmd-plug"
+description = "SupremeCommander: declarative plugins (plugin.toml manifests, no code execution)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+thiserror = "2"
+toml = "1.0.7"
+
+[dev-dependencies]
+tempfile = "3"

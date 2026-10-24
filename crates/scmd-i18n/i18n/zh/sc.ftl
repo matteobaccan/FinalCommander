@@ -289,3 +289,24 @@ viewer-structure-hint-tab = Tab 把按键交到这里
 viewer-no-structure = 没有可解析的内容：本面板不认识这种格式
 viewer-no-target = 这一行在文件中没有对应位置
 viewer-went-to = 已跳转到 { $offset }
+# ------------------------------------------------- 命令行 (SPEC 06 §7)
+cmd-running = 正在执行：{ $command }
+cmd-done = { $command } 已结束
+cmd-failed = { $command } 退出码 { $code }
+cmd-busy = 已有命令在执行
+cmd-not-remote = 命令需要本地目录；此面板在服务器上
+cmd-no-history = 命令历史为空
+cmd-no-previous = 没有可返回的位置
+cmd-no-such-dir = { $path }：没有这个目录
+cmd-no-such-path = { $path }：没有这个文件或目录
+cmd-no-selection = 没有选中任何项
+cmd-condition-false = 未执行：{ $command }
+cmd-screen-cleared = 屏幕已清空
+cmd-stack-empty = 目录栈为空
+cmd-stack-cleared = 目录栈已清空
+cmd-pushed = 栈中有 { $count } 个目录
+cmd-environment = 环境变量
+cmd-set = { $name } = { $value }
+cmd-not-set = { $name } 未设置
+user-screen-title = 输出 — { $lines } 行，自第 { $at } 行
+user-screen-empty = （还没有执行任何命令）

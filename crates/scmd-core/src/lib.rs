@@ -6,6 +6,7 @@
 pub mod cancel;
 pub mod entry;
 pub mod error;
+pub mod filter;
 pub mod listing;
 pub mod selection;
 pub mod size;
@@ -16,6 +17,10 @@ pub mod vpath;
 pub use cancel::CancelToken;
 pub use entry::{Entry, EntryFlags, EntryId, EntryKind};
 pub use error::{Error, Result};
+pub use filter::{
+    default_groups, parse_size, AttrConditions, AttrState, DateCondition, DateRange, Filter,
+    FilterError, Groups, HardLinks, KindFilter, MaskSet, SizeRange, TimeField,
+};
 pub use listing::{Listing, Totals};
 pub use selection::{MaskScope, Selection};
 pub use size::{format_count, format_size};

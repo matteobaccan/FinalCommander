@@ -289,3 +289,24 @@ viewer-structure-hint-tab = Tab передаёт клавиши сюда
 viewer-no-structure = нечего разбирать: панель не знает этот формат
 viewer-no-target = эта строка никуда в файле не указывает
 viewer-went-to = переход на { $offset }
+# ------------------------------------------------- командная строка (SPEC 06 §7)
+cmd-running = выполняется: { $command }
+cmd-done = { $command } завершено
+cmd-failed = { $command } завершилось с кодом { $code }
+cmd-busy = команда уже выполняется
+cmd-not-remote = команде нужна локальная папка; эта панель на сервере
+cmd-no-history = история команд пуста
+cmd-no-previous = возвращаться некуда
+cmd-no-such-dir = { $path }: такой папки нет
+cmd-no-such-path = { $path }: такого файла или папки нет
+cmd-no-selection = ничего не отмечено
+cmd-condition-false = не выполнено: { $command }
+cmd-screen-cleared = экран очищен
+cmd-stack-empty = стек папок пуст
+cmd-stack-cleared = стек папок очищен
+cmd-pushed = папок в стеке: { $count }
+cmd-environment = окружение
+cmd-set = { $name } = { $value }
+cmd-not-set = { $name } не задана
+user-screen-title = Вывод — строк: { $lines }, со строки { $at }
+user-screen-empty = (пока ничего не выполнялось)

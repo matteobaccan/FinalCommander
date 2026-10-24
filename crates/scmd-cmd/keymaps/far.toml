@@ -502,3 +502,48 @@ cmd = "panel.drive(right)"
 keys = ["Alt+F12"]
 scope = "panel"
 cmd = "panel.history"
+
+[[bind]]
+keys = ["Alt+F8"]
+scope = "panel"
+cmd = "cmd.history"
+
+# ------------------------------------------------- command line (SPEC 06 §7)
+# Enter, Esc and Backspace are shared with the panel: the command line takes them only when it
+# has something on it, which is FAR's rule and the reason it needs no focus of its own.
+[[bind]]
+keys = ["Ctrl+E"]
+scope = "panel"
+cmd = "cmd.history.prev"
+
+[[bind]]
+keys = ["Ctrl+X"]
+scope = "panel"
+cmd = "cmd.history.next"
+
+[[bind]]
+keys = ["Ctrl+Y"]
+scope = "panel"
+cmd = "cmd.clear"
+
+# FAR's own second binding for these two: a terminal cannot deliver Ctrl+J (it *is* a
+# newline), so Ctrl+Enter and Ctrl+Shift+Enter are the ones we keep. See docs/03-keymap.md §9.
+[[bind]]
+keys = ["Ctrl+Enter"]
+scope = "panel"
+cmd = "cmd.insert.name"
+
+[[bind]]
+keys = ["Ctrl+Shift+Enter"]
+scope = "panel"
+cmd = "cmd.insert.name.other"
+
+[[bind]]
+keys = ["Ctrl+["]
+scope = "panel"
+cmd = "cmd.insert.path"
+
+[[bind]]
+keys = ["Ctrl+]"]
+scope = "panel"
+cmd = "cmd.insert.path.other"

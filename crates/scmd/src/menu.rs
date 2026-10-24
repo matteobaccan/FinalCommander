@@ -38,6 +38,8 @@ pub enum PickKind {
     Drives,
     /// Where this panel has been.
     FoldersHistory,
+    /// The command lines that have run.
+    CommandHistory,
     /// The sort order for this panel.
     SortModes,
 }
@@ -224,7 +226,7 @@ pub fn menus() -> Vec<Menu> {
             side: None,
             items: vec![
                 item("menu-find-file", "Alt+F7", Action::Run(Command::ToolFind)),
-                item("menu-history", "Alt+F8", Action::Todo("history.commands")),
+                item("menu-history", "Alt+F8", Action::Run(Command::CmdHistory)),
                 item(
                     "menu-view-history",
                     "Alt+F11",

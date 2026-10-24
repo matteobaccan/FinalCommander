@@ -18,6 +18,9 @@ pub struct Panel {
     pub loading: bool,
     pub error: Option<String>,
     pub message: Option<String>,
+    /// A name to put the cursor on when the next listing arrives — `goto:` asks for this, and
+    /// the read it waits for has not happened yet.
+    pub want_cursor: Option<String>,
 }
 
 impl Panel {
@@ -33,6 +36,7 @@ impl Panel {
             view,
             show_hidden,
             filter: None,
+            want_cursor: None,
             history_pos: 0,
             generation: 0,
             loading: true,
@@ -61,8 +65,11 @@ impl Panel {
         self.listing = Listing::new(entries, generation);
         self.selection.retain_existing(&self.listing);
         self.rebuild();
-        self.cursor = keep
+        // A name somebody asked for wins over the one we were on, once.
+        let wanted = self.want_cursor.take();
+        self.cursor = wanted
             .and_then(|name| self.listing.row_of_name(&name))
+            .or_else(|| keep.and_then(|name| self.listing.row_of_name(&name)))
             .unwrap_or(0);
         self.loading = false;
         self.error = None;

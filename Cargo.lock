@@ -1899,6 +1899,7 @@ dependencies = [
  "scmd-vfs",
  "scmd-view",
  "tempfile",
+ "thiserror",
  "tokio",
  "unicode-width",
 ]
@@ -1929,6 +1930,8 @@ name = "scmd-core"
 version = "0.0.2"
 dependencies = [
  "globset",
+ "regex",
+ "serde",
  "thiserror",
  "unicode-width",
 ]
@@ -1977,6 +1980,16 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+]
+
+[[package]]
+name = "scmd-plug"
+version = "0.0.2"
+dependencies = [
+ "serde",
+ "tempfile",
+ "thiserror",
+ "toml",
 ]
 
 [[package]]

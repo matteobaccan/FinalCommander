@@ -3,6 +3,8 @@
 //! The interface is strictly TUI; see `docs/spec/00-overview.md`.
 
 mod app;
+mod cmdline;
+mod expand;
 mod form;
 mod menu;
 mod panel;
@@ -211,6 +213,12 @@ fn run(cli: Cli) -> Result<()> {
     let (sites, site_problems) = Site::list_from_config(&cfg);
     warnings.extend(site_problems);
 
+    // The histories from the last session. A broken state file is a warning, never a stop.
+    let (state, state_problem) = scmd_config::State::load(&paths);
+    if let Some(problem) = state_problem {
+        warnings.push(problem);
+    }
+
     let mut app = App::new(Startup {
         cfg,
         paths,
@@ -222,6 +230,7 @@ fn run(cli: Cli) -> Result<()> {
         right,
         sites,
     });
+    app.cmd.load_history(state.command_history);
     if !warnings.is_empty() {
         // Startup problems are shown once, as a dialog: they are easy to miss in a status line.
         app.show_message("Startup warnings", warnings.clone());
@@ -346,6 +355,23 @@ fn interactive(mut app: App) -> Result<()> {
                     let fs = RoutedFs::new(pool.clone(), runtime.handle().clone());
                     runtime.spawn_blocking(move || run_job(id, spec, cancel, tx, &fs));
                 }
+                Request::Shell {
+                    id,
+                    line,
+                    cwd,
+                    into,
+                } => {
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || {
+                        let (output, status) = run_shell(&line, &cwd, into.as_deref());
+                        let _ = tx.send(Event::ShellDone {
+                            id,
+                            line,
+                            output,
+                            status,
+                        });
+                    });
+                }
                 Request::Decompile { id, rule, path } => {
                     let tx = tx.clone();
                     runtime.spawn_blocking(move || {
@@ -463,6 +489,23 @@ fn interactive(mut app: App) -> Result<()> {
     }
 
     term.restore();
+
+    // What survives the session: the command history, and where the panels ended up. A failure
+    // here is reported on the way out rather than swallowed — losing a history silently is how
+    // a program teaches people not to trust it.
+    let state = scmd_config::State {
+        command_history: app.cmd.history().to_vec(),
+        folder_history: app.panels[app.active]
+            .history
+            .iter()
+            .map(|p| p.to_string())
+            .collect(),
+        left: app.panels[0].cwd.to_string(),
+        right: app.panels[1].cwd.to_string(),
+    };
+    if let Err(e) = state.save(&app.paths) {
+        eprintln!("scmd: cannot write {}: {e}", app.paths.state_file.display());
+    }
     Ok(())
 }
 
@@ -540,6 +583,80 @@ fn run_job(
 /// The command is executed **directly**, never through a shell, so a path with spaces or
 /// shell characters cannot turn into a command. Output is capped: a decompiler pointed at the
 /// wrong file can print for ever.
+/// Run a command line the way a command line is meant to run: through the user's own shell, so
+/// pipes, redirections and aliases work as they type them. Output is merged and capped; a file
+/// given by `run:file<command` gets it instead of the user screen.
+///
+/// The two reader threads are not decoration: a child that fills the 64 KiB pipe buffer while
+/// we wait for it to exit deadlocks, so somebody has to be draining both pipes meanwhile.
+fn run_shell(
+    line: &str,
+    cwd: &std::path::Path,
+    into: Option<&std::path::Path>,
+) -> (String, Option<i32>) {
+    use std::io::Read;
+    use std::process::{Command, Stdio};
+    const MAX_OUTPUT: usize = 4 * 1024 * 1024;
+
+    let mut command = if cfg!(windows) {
+        let mut c = Command::new(std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".into()));
+        c.arg("/C").arg(line);
+        c
+    } else {
+        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into());
+        let mut c = Command::new(shell);
+        c.arg("-c").arg(line);
+        c
+    };
+    command
+        .current_dir(cwd)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    let mut child = match command.spawn() {
+        Ok(child) => child,
+        Err(e) => return (format!("{line}: {e}\n"), Some(-1)),
+    };
+
+    let mut out = child.stdout.take();
+    let mut err = child.stderr.take();
+    let reader = |pipe: Option<std::process::ChildStdout>| {
+        std::thread::spawn(move || {
+            let mut buf = Vec::new();
+            if let Some(mut pipe) = pipe {
+                let _ = pipe.read_to_end(&mut buf);
+            }
+            buf
+        })
+    };
+    let out_thread = reader(out.take());
+    let err_thread = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        if let Some(pipe) = err.as_mut() {
+            let _ = pipe.read_to_end(&mut buf);
+        }
+        buf
+    });
+
+    let status = child.wait().ok().and_then(|s| s.code());
+    let mut bytes = out_thread.join().unwrap_or_default();
+    bytes.extend(err_thread.join().unwrap_or_default());
+
+    let mut text = String::from_utf8_lossy(&bytes).into_owned();
+    if text.len() > MAX_OUTPUT {
+        text.truncate(MAX_OUTPUT);
+        text.push_str("\n… output truncated\n");
+    }
+    if let Some(path) = into {
+        return match std::fs::write(path, text.as_bytes()) {
+            Ok(()) => (format!("output written to {}\n", path.display()), status),
+            Err(e) => (format!("{}: {e}\n", path.display()), Some(-1)),
+        };
+    }
+    (text, status)
+}
+
 fn run_decompiler(rule: &scmd_config::DecompileRule, path: &VPath) -> Result<String, String> {
     const MAX_OUTPUT: usize = 32 * 1024 * 1024;
 
@@ -809,6 +926,7 @@ mod tests {
                         }
                     }
                     Request::DirSize { .. }
+                    | Request::Shell { .. }
                     | Request::Decompile { .. }
                     | Request::Connect { .. }
                     | Request::Disconnect { .. }
@@ -887,6 +1005,7 @@ mod tests {
                         }
                     }
                     Request::DirSize { .. }
+                    | Request::Shell { .. }
                     | Request::Decompile { .. }
                     | Request::Connect { .. }
                     | Request::Disconnect { .. }

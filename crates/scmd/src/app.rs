@@ -12,6 +12,8 @@ use scmd_tui::Input;
 use scmd_ui::{Theme, ThemeSet};
 use scmd_view::{FileSource, SearchMode, Viewer};
 
+use crate::cmdline::{self, CmdLine, Internal, Parsed, Prefix};
+use crate::expand;
 use crate::form::{Form, Pick, PickRow, TextEdit};
 use crate::menu::{self, Action, FormKind, Mark, PickKind};
 use crate::panel::Panel;
@@ -33,6 +35,14 @@ pub enum Request {
         id: u64,
         rule: DecompileRule,
         path: VPath,
+    },
+    /// Run a command line through the user's shell, off the UI thread.
+    Shell {
+        id: u64,
+        line: String,
+        cwd: std::path::PathBuf,
+        /// Where to put the output instead of the user screen (`run:file<command`).
+        into: Option<std::path::PathBuf>,
     },
     /// Run a file operation off the UI thread.
     Job {
@@ -110,6 +120,13 @@ pub enum Event {
         path: VPath,
         bytes: u64,
         files: u64,
+    },
+    /// A shell command finished: its merged output, capped, and how it ended.
+    ShellDone {
+        id: u64,
+        line: String,
+        output: String,
+        status: Option<i32>,
     },
     JobProgress {
         id: u64,
@@ -210,6 +227,11 @@ pub enum PromptKind {
     QuickSearch {
         origin: usize,
     },
+    /// A command line that asked for a value before it could run (SPEC 06 §5b): the text with
+    /// `{answer}` where the answer goes.
+    CommandAnswer {
+        pending: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -307,6 +329,10 @@ pub enum Mode {
     Form(Box<Form>),
     /// A list to choose one row from.
     Pick(Box<Pick>),
+    /// `Ctrl+O`: the output of the commands that have run, full screen.
+    UserScreen {
+        scroll: usize,
+    },
 }
 
 impl Mode {
@@ -406,6 +432,14 @@ pub struct App {
     pending_connect: Option<(usize, Box<Site>, Option<String>)>,
     /// The fetch we are waiting for, if any.
     fetch_id: Option<u64>,
+    /// The command line under the panels (SPEC 06 §7).
+    pub cmd: CmdLine,
+    /// What the commands that have run printed, for `Ctrl+O`. Capped.
+    pub user_screen: Vec<String>,
+    /// The shell command we are waiting for, if any, and the line that started it.
+    shell: Option<(u64, String)>,
+    /// Where each panel was before the last `cd`, so `cd -` has somewhere to go.
+    prev_dir: [Option<VPath>; 2],
     /// The file the editor is editing on behalf of a server: where it came from, the local
     /// copy, and what it looked like when it was fetched.
     remote_edit: Option<RemoteEdit>,
@@ -469,6 +503,10 @@ impl App {
             connected: Vec::new(),
             pending_connect: None,
             fetch_id: None,
+            cmd: CmdLine::new(),
+            user_screen: Vec::new(),
+            shell: None,
+            prev_dir: [None, None],
             remote_edit: None,
             upload_id: None,
             next_job_id: 1,
@@ -646,6 +684,39 @@ impl App {
                     }
                 }
             }
+            Event::ShellDone {
+                id,
+                line,
+                output,
+                status,
+            } => {
+                if self.shell.as_ref().map(|(running, _)| *running) != Some(id) {
+                    return; // a command we already stopped waiting for
+                }
+                self.shell = None;
+                self.push_user_screen(&line, &output);
+                match status {
+                    Some(0) | None => {
+                        let msg = self
+                            .i18n
+                            .t_args("cmd-done", &[("command", line.clone().into())]);
+                        self.set_status(msg);
+                    }
+                    Some(code) => {
+                        let msg = self.i18n.t_args(
+                            "cmd-failed",
+                            &[
+                                ("command", line.clone().into()),
+                                ("code", (code as i64).into()),
+                            ],
+                        );
+                        self.set_error(msg);
+                    }
+                }
+                // A command may have changed what is on disk, so both panels are re-read.
+                self.read_panel(0);
+                self.read_panel(1);
+            }
             Event::JobProgress { id, progress } => {
                 if let Mode::Job(view) = &mut self.mode {
                     if view.id == id {
@@ -758,6 +829,10 @@ impl App {
                 if !close {
                     self.mode = Mode::Message { title, lines };
                 }
+            }
+            Mode::UserScreen { scroll } => {
+                self.mode = Mode::UserScreen { scroll };
+                self.user_screen_key(key, scroll);
             }
             Mode::Prompt(prompt) => {
                 self.mode = Mode::Prompt(prompt.clone());
@@ -1242,6 +1317,12 @@ impl App {
 
     fn prompt_accept(&mut self, prompt: Prompt) {
         match prompt.kind {
+            PromptKind::CommandAnswer { ref pending } => {
+                // The answer goes in and the line runs; an empty answer still counts, because
+                // "search for nothing" is a decision the user is allowed to make.
+                let line = pending.replace("{answer}", prompt.text.trim());
+                self.run_line(&line);
+            }
             PromptKind::NetConnect => {
                 let raw = prompt.text.trim().to_string();
                 if raw.is_empty() {
@@ -1712,6 +1793,11 @@ impl App {
     }
 
     fn normal_key(&mut self, key: Key) {
+        // The command line has no focus of its own: it takes the shared keys only while it has
+        // something on it, which is FAR's rule and the reason typing never feels modal.
+        if self.command_line_key(key) {
+            return;
+        }
         if let Some(cmd) = self.keymap.resolve(&[Scope::Panel, Scope::Global], key) {
             self.run(cmd);
             return;
@@ -1731,6 +1817,15 @@ impl App {
                 }
             }
         };
+        // With quick search on Alt (the default), a plain letter belongs to the command line.
+        if typed.is_none() && self.cfg.ui.command_line {
+            if let Some(c) = key.as_typed_char() {
+                if !matches!(self.cfg.panel.quick_search, QuickSearch::Plain) {
+                    self.cmd.insert(c);
+                    return;
+                }
+            }
+        }
         if let Some(c) = typed {
             let origin = self.panel().cursor;
             let title = self.i18n.t("prompt-search");
@@ -1968,6 +2063,23 @@ impl App {
             Command::FileEdit => self.open_editor(),
             Command::FileEditNew => self.open_new_editor(),
             Command::AppMenu => self.open_menu(),
+            Command::CmdRun => self.run_command_line(),
+            Command::CmdClear => self.cmd.clear(),
+            Command::CmdHistoryPrev => {
+                if !self.cmd.history_prev() {
+                    let msg = self.i18n.t("cmd-no-history");
+                    self.set_status(msg);
+                }
+            }
+            Command::CmdHistoryNext => {
+                self.cmd.history_next();
+            }
+            Command::CmdHistory => self.open_pick(PickKind::CommandHistory, self.active),
+            Command::CmdInsertName => self.insert_into_line(false, false),
+            Command::CmdInsertNameOther => self.insert_into_line(false, true),
+            Command::CmdInsertPath => self.insert_into_line(true, false),
+            Command::CmdInsertPathOther => self.insert_into_line(true, true),
+            Command::ShellOutputShow => self.mode = Mode::UserScreen { scroll: 0 },
             Command::AppThemes => self.open_pick(PickKind::Themes, self.active),
             Command::AppLanguages => self.open_pick(PickKind::Languages, self.active),
             Command::AppSetupSave => self.save_setup(),
@@ -2326,6 +2438,505 @@ impl App {
                 let m = self.i18n.t("net-local-panel");
                 self.set_status(m);
             }
+        }
+    }
+
+    // ── the command line (SPEC 06 §7) ──────────────────────────────────────────────────────
+
+    /// Keys the command line owns while it has something on it. Returns true when it took one.
+    fn command_line_key(&mut self, key: Key) -> bool {
+        if !self.cfg.ui.command_line {
+            return false;
+        }
+        let ctrl = key.mods.contains(Mods::CTRL);
+        let empty = self.cmd.is_empty();
+        // A line with something on it takes every printable character, `+`, `-`, `*` and
+        // Space included: those keys belong to the panel only while the line is empty, which
+        // is FAR's rule and the reason the command line needs no focus of its own.
+        if !empty {
+            if let Some(c) = key.as_typed_char() {
+                self.cmd.insert(c);
+                return true;
+            }
+        }
+        match key.code {
+            KeyCode::Enter if !empty && !ctrl => {
+                self.run_command_line();
+                true
+            }
+            KeyCode::Esc if !empty => {
+                self.cmd.clear();
+                true
+            }
+            KeyCode::Backspace if !empty && ctrl => {
+                self.cmd.delete_word_left();
+                true
+            }
+            KeyCode::Backspace if !empty => {
+                self.cmd.backspace();
+                true
+            }
+            KeyCode::Delete if !empty && ctrl => {
+                self.cmd.delete_word_right();
+                true
+            }
+            KeyCode::Delete if !empty => {
+                self.cmd.delete();
+                true
+            }
+            KeyCode::Left if !empty && ctrl => {
+                self.cmd.word_left();
+                true
+            }
+            KeyCode::Right if !empty && ctrl => {
+                self.cmd.word_right();
+                true
+            }
+            KeyCode::Left if !empty => {
+                self.cmd.left();
+                true
+            }
+            KeyCode::Right if !empty => {
+                self.cmd.right();
+                true
+            }
+            KeyCode::Home if !empty => {
+                self.cmd.home();
+                true
+            }
+            KeyCode::End if !empty => {
+                self.cmd.end();
+                true
+            }
+            KeyCode::Char('k') if !empty && ctrl => {
+                self.cmd.kill_to_end();
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// `Ctrl+J` and friends: put a name or a path from one of the panels on the line, quoted
+    /// when it needs to be, with a trailing space so the next word can be typed straight away.
+    fn insert_into_line(&mut self, path_only: bool, other: bool) {
+        let panel = if other {
+            &self.panels[1 - self.active]
+        } else {
+            self.panel()
+        };
+        let text = if path_only {
+            panel.cwd.to_string()
+        } else {
+            match panel
+                .current()
+                .filter(|e| e.kind != scmd_core::EntryKind::Parent)
+            {
+                Some(entry) => entry.name.to_string_lossy().into_owned(),
+                None => panel.cwd.to_string(),
+            }
+        };
+        let quoted = expand::quote(&text);
+        self.cmd.insert_str(&quoted);
+        self.cmd.insert(' ');
+    }
+
+    /// What the panels hold, for the substitutions (SPEC 06 §5b).
+    fn expand_context(&self) -> expand::Context {
+        let active = self.panel();
+        let passive = &self.panels[1 - self.active];
+        let name_of = |p: &Panel| {
+            p.current()
+                .filter(|e| e.kind != scmd_core::EntryKind::Parent)
+                .map(|e| e.name.to_string_lossy().into_owned())
+        };
+        // The selection, or the item under the cursor when nothing is marked — which is what
+        // every commander means by "the selection".
+        let selection: Vec<String> = {
+            let mut marked: Vec<String> = Vec::new();
+            for row in 0..active.listing.len() {
+                if let Some(e) = active.listing.row(row) {
+                    if e.kind != scmd_core::EntryKind::Parent && active.selection.contains(e.id) {
+                        marked.push(e.name.to_string_lossy().into_owned());
+                    }
+                }
+            }
+            if marked.is_empty() {
+                name_of(active).into_iter().collect()
+            } else {
+                marked
+            }
+        };
+        expand::Context {
+            active_dir: active.cwd.as_path().to_path_buf(),
+            active_file: name_of(active),
+            passive_dir: passive.cwd.as_path().to_path_buf(),
+            passive_file: name_of(passive),
+            left_dir: self.panels[0].cwd.as_path().to_path_buf(),
+            right_dir: self.panels[1].cwd.as_path().to_path_buf(),
+            selection,
+        }
+    }
+
+    /// `Enter` on a non-empty command line.
+    fn run_command_line(&mut self) {
+        let line = self.cmd.text.trim().to_string();
+        if line.is_empty() {
+            return;
+        }
+        self.cmd.remember(&line);
+        self.cmd.trim_history(self.cfg.ui.command_history);
+        self.cmd.clear();
+        self.run_line(&line);
+    }
+
+    /// Run a line that has already been remembered: substitutions, then conditions, then
+    /// whatever kind of command it turns out to be.
+    fn run_line(&mut self, line: &str) {
+        let ctx = self.expand_context();
+        let list_file = if expand::wants_list_file(line) {
+            match self.write_list_file(&ctx.selection) {
+                Ok(path) => Some(path),
+                Err(e) => {
+                    self.set_error(e);
+                    return;
+                }
+            }
+        } else {
+            None
+        };
+        let expanded = match expand::expand(line, &ctx, list_file.as_deref()) {
+            Ok(expand::Expanded::Line(line)) => line,
+            Ok(expand::Expanded::Ask {
+                title,
+                initial,
+                pending,
+                ..
+            }) => {
+                // A line that asks is put back as a prompt; the answer goes in and it runs.
+                self.mode = Mode::Prompt(Prompt {
+                    kind: PromptKind::CommandAnswer { pending },
+                    title,
+                    text: initial,
+                    secret: false,
+                });
+                return;
+            }
+            Err(e) => {
+                self.set_error(e.to_string());
+                return;
+            }
+        };
+
+        let cwd = self.panel().cwd.clone();
+        let local = cwd.as_path().to_path_buf();
+        let kept = expanded.clone();
+        let resolved = cmdline::resolve_conditions(
+            &expanded,
+            &|path: &str| {
+                let candidate = std::path::Path::new(path);
+                if candidate.is_absolute() {
+                    candidate.exists()
+                } else {
+                    local.join(candidate).exists()
+                }
+            },
+            &|name: &str| std::env::var_os(name).is_some(),
+        );
+        let Some(to_run) = resolved else {
+            let msg = self
+                .i18n
+                .t_args("cmd-condition-false", &[("command", kept.into())]);
+            self.set_status(msg);
+            return;
+        };
+
+        match cmdline::parse(&to_run) {
+            Parsed::Empty => {}
+            Parsed::Internal(internal) => self.run_internal(internal),
+            Parsed::Prefix(prefix) => self.run_prefix(prefix),
+            Parsed::Shell(line) => self.run_shell(line, None),
+        }
+    }
+
+    /// The selection as a file, one name per line, for `{list}`.
+    fn write_list_file(&self, names: &[String]) -> Result<std::path::PathBuf, String> {
+        if names.is_empty() {
+            return Err(self.i18n.t("cmd-no-selection"));
+        }
+        let dir = std::env::temp_dir();
+        let path = dir.join(format!("scmd-list-{}.txt", std::process::id()));
+        let body = names.join("\n") + "\n";
+        std::fs::write(&path, body).map_err(|e| format!("{}: {e}", path.display()))?;
+        Ok(path)
+    }
+
+    fn run_internal(&mut self, internal: Internal) {
+        match internal {
+            Internal::Cd { path, local_only } => self.run_cd(&path, local_only),
+            Internal::Cls => {
+                self.user_screen.clear();
+                let msg = self.i18n.t("cmd-screen-cleared");
+                self.set_status(msg);
+            }
+            Internal::Exit => self.quit = true,
+            Internal::Set { name, value } => self.run_set(name, value),
+            Internal::PushD(path) => {
+                let here = self.panel().cwd.as_path().to_path_buf();
+                self.cmd.dirs.push(here);
+                match path {
+                    Some(path) => self.run_cd(&path, false),
+                    None => {
+                        let msg = self.i18n.t_args(
+                            "cmd-pushed",
+                            &[("count", (self.cmd.dirs.len() as i64).into())],
+                        );
+                        self.set_status(msg);
+                    }
+                }
+            }
+            Internal::PopD => match self.cmd.dirs.pop() {
+                Some(path) => self.goto(VPath::local(path)),
+                None => {
+                    let msg = self.i18n.t("cmd-stack-empty");
+                    self.set_error(msg);
+                }
+            },
+            Internal::ClrD => {
+                self.cmd.dirs.clear();
+                let msg = self.i18n.t("cmd-stack-cleared");
+                self.set_status(msg);
+            }
+            Internal::Title(_) => self.not_implemented("title"),
+        }
+    }
+
+    /// `cd`, `chdir`, and a bare drive letter on Windows. A remote panel takes `cd` inside the
+    /// provider; `chdir` always means the local filesystem.
+    fn run_cd(&mut self, argument: &str, local_only: bool) {
+        let panel = self.panel();
+        let here = panel.cwd.clone();
+        let remote = here.is_remote() && !local_only;
+        let argument = argument.trim();
+
+        if remote {
+            // On a remote panel the path is the provider's, so it is resolved as a string.
+            let target = match argument {
+                "" | "~" => here.root(),
+                "-" => match self.prev_dir[self.active].clone() {
+                    Some(previous) => previous,
+                    None => {
+                        let msg = self.i18n.t("cmd-no-previous");
+                        self.set_error(msg);
+                        return;
+                    }
+                },
+                // An absolute remote path is parsed as a whole, so the authority travels with
+                // it; anything else hangs off where we are.
+                _ if argument.starts_with('/') => VPath::parse(&format!(
+                    "{}://{}{}",
+                    here.scheme().as_str(),
+                    here.authority().unwrap_or(""),
+                    argument
+                )),
+                ".." => here.parent().unwrap_or_else(|| here.clone()),
+                _ => here.join(argument),
+            };
+            self.prev_dir[self.active] = Some(here);
+            self.goto(target);
+            return;
+        }
+
+        let home = dirs_home().map(std::path::PathBuf::from);
+        let previous = self.prev_dir[self.active]
+            .clone()
+            .map(|p| p.as_path().to_path_buf());
+        let Some(target) = cmdline::resolve_cd(
+            argument,
+            here.as_path(),
+            home.as_deref(),
+            previous.as_deref(),
+        ) else {
+            let msg = self.i18n.t("cmd-no-previous");
+            self.set_error(msg);
+            return;
+        };
+        if !target.is_dir() {
+            let msg = self.i18n.t_args(
+                "cmd-no-such-dir",
+                &[("path", target.display().to_string().into())],
+            );
+            self.set_error(msg);
+            return;
+        }
+        self.prev_dir[self.active] = Some(here);
+        self.goto(VPath::local(target).normalised());
+    }
+
+    /// `set`, which only ever affects the children we start — never the shell that started us.
+    fn run_set(&mut self, name: Option<String>, value: Option<String>) {
+        match (name, value) {
+            (None, _) => {
+                let mut lines: Vec<String> =
+                    std::env::vars().map(|(k, v)| format!("{k}={v}")).collect();
+                lines.sort();
+                let title = self.i18n.t("cmd-environment");
+                self.push_user_screen(&title, &lines.join("\n"));
+                self.mode = Mode::UserScreen { scroll: 0 };
+            }
+            (Some(name), None) => match std::env::var(&name) {
+                Ok(value) => {
+                    let msg = format!("{name}={value}");
+                    self.set_status(msg);
+                }
+                Err(_) => {
+                    let msg = self
+                        .i18n
+                        .t_args("cmd-not-set", &[("name", name.clone().into())]);
+                    self.set_status(msg);
+                }
+            },
+            (Some(name), Some(value)) => {
+                if value.is_empty() {
+                    std::env::remove_var(&name);
+                } else {
+                    std::env::set_var(&name, &value);
+                }
+                let msg = self
+                    .i18n
+                    .t_args("cmd-set", &[("name", name.into()), ("value", value.into())]);
+                self.set_status(msg);
+            }
+        }
+    }
+
+    fn run_prefix(&mut self, prefix: Prefix) {
+        match prefix {
+            Prefix::View(arg) => match self.resolve_argument(&arg) {
+                Some(path) if path.as_path().is_file() => {
+                    let local = path.as_path().to_path_buf();
+                    self.open_viewer_on(&local, path);
+                }
+                _ => self.argument_missing(&arg),
+            },
+            Prefix::Edit(arg) => match self.resolve_argument(&arg) {
+                // A name that does not exist yet is a new file, which is what `edit:` is for.
+                Some(path) => match Editor::open(path.as_path()) {
+                    Ok(editor) => self.mode = Mode::Editor(Box::new(editor)),
+                    Err(e) => self.set_error(format!("{path}: {e}")),
+                },
+                None => self.argument_missing(&arg),
+            },
+            Prefix::Goto(arg) | Prefix::WhereIs(arg) => {
+                let Some(path) = self.resolve_argument(&arg) else {
+                    self.argument_missing(&arg);
+                    return;
+                };
+                // A directory is where we go; a file is where we go *and* what the cursor
+                // lands on, which is the whole point of `goto:`.
+                let as_path = path.as_path().to_path_buf();
+                if as_path.is_dir() {
+                    self.goto(path);
+                } else if let Some(parent) = path.parent() {
+                    let name = as_path
+                        .file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_default();
+                    self.goto(parent);
+                    self.panels[self.active].want_cursor = Some(name);
+                } else {
+                    self.argument_missing(&arg);
+                }
+            }
+            Prefix::Run { into, command } => {
+                let into = into
+                    .and_then(|f| self.resolve_argument(&f))
+                    .map(|p| p.as_path().to_path_buf());
+                self.run_shell(command, into);
+            }
+        }
+    }
+
+    /// A prefix argument: absolute, or relative to the active panel.
+    fn resolve_argument(&self, argument: &str) -> Option<VPath> {
+        let argument = argument.trim().trim_matches('"');
+        if argument.is_empty() {
+            return None;
+        }
+        let path = std::path::Path::new(argument);
+        if path.is_absolute() {
+            return Some(VPath::local(path).normalised());
+        }
+        Some(self.panel().cwd.join(argument))
+    }
+
+    fn argument_missing(&mut self, argument: &str) {
+        let msg = self
+            .i18n
+            .t_args("cmd-no-such-path", &[("path", argument.to_string().into())]);
+        self.set_error(msg);
+    }
+
+    /// Hand a line to the user's shell, off the UI thread.
+    fn run_shell(&mut self, line: String, into: Option<std::path::PathBuf>) {
+        if self.shell.is_some() {
+            let msg = self.i18n.t("cmd-busy");
+            self.set_error(msg);
+            return;
+        }
+        let cwd = self.panel().cwd.clone();
+        if cwd.is_remote() {
+            let msg = self.i18n.t("cmd-not-remote");
+            self.set_error(msg);
+            return;
+        }
+        let id = self.next_job_id;
+        self.next_job_id += 1;
+        self.shell = Some((id, line.clone()));
+        self.requests.push(Request::Shell {
+            id,
+            line: line.clone(),
+            cwd: cwd.as_path().to_path_buf(),
+            into,
+        });
+        let msg = self.i18n.t_args("cmd-running", &[("command", line.into())]);
+        self.set_status(msg);
+    }
+
+    /// Keep what a command printed, capped, with the command itself as its heading.
+    fn push_user_screen(&mut self, line: &str, output: &str) {
+        const MAX_LINES: usize = 10_000;
+        if !self.user_screen.is_empty() {
+            self.user_screen.push(String::new());
+        }
+        self.user_screen.push(format!("$ {line}"));
+        for row in output.lines() {
+            self.user_screen.push(row.to_string());
+        }
+        if self.user_screen.len() > MAX_LINES {
+            let drop = self.user_screen.len() - MAX_LINES;
+            self.user_screen.drain(..drop);
+        }
+    }
+
+    fn user_screen_key(&mut self, key: Key, scroll: usize) {
+        let step = self.rows.max(1);
+        let last = self.user_screen.len().saturating_sub(1);
+        let set = |app: &mut App, at: usize| {
+            app.mode = Mode::UserScreen {
+                scroll: at.min(last),
+            }
+        };
+        match key.code {
+            KeyCode::Esc | KeyCode::F(10) | KeyCode::Char('q') | KeyCode::Char('o') => {
+                self.mode = Mode::Normal
+            }
+            KeyCode::Up => set(self, scroll.saturating_sub(1)),
+            KeyCode::Down => set(self, scroll + 1),
+            KeyCode::PageUp => set(self, scroll.saturating_sub(step)),
+            KeyCode::PageDown => set(self, scroll + step),
+            KeyCode::Home => set(self, 0),
+            KeyCode::End => set(self, last),
+            _ => {}
         }
     }
 
@@ -2788,6 +3399,21 @@ impl App {
                     .collect();
                 Pick::new(kind, self.i18n.t("menu-folders-history"), rows, side)
             }
+            PickKind::CommandHistory => {
+                // Newest first, which is the order someone reaching for a past command wants.
+                let rows: Vec<PickRow> = self
+                    .cmd
+                    .history()
+                    .iter()
+                    .rev()
+                    .map(|line| PickRow {
+                        label: line.clone(),
+                        value: line.clone(),
+                        current: false,
+                    })
+                    .collect();
+                Pick::new(kind, self.i18n.t("menu-history"), rows, side)
+            }
             PickKind::SortModes => {
                 let panel = &self.panels[side];
                 let keys = [
@@ -2870,6 +3496,11 @@ impl App {
                 } else {
                     self.goto(target.normalised());
                 }
+            }
+            PickKind::CommandHistory => {
+                // Chosen from the list, the line goes back on the command line rather than
+                // running at once: a command from history is usually a command to edit.
+                self.cmd.set(row.value.clone());
             }
             PickKind::SortModes => {
                 let key = match row.value.as_str() {
@@ -3915,6 +4546,229 @@ mod tests {
             app.cfg.sites.first().and_then(|s| s.auth.clone()),
             Some("key:~/.ssh/id_ed25519".to_string())
         );
+    }
+
+    // ── the command line (SPEC 06 §7) ──────────────────────────────────────────────────────
+
+    /// Type text the way a terminal delivers it, rather than through the key parser, which
+    /// lowercases a bare letter because that is what a *binding* means.
+    fn typed(app: &mut App, text: &str) {
+        for c in text.chars() {
+            app.handle_input(Input::Key(Key::new(KeyCode::Char(c), Mods::NONE)));
+        }
+    }
+
+    fn shell_requests(app: &App) -> Vec<String> {
+        app.requests
+            .iter()
+            .filter_map(|r| match r {
+                Request::Shell { line, .. } => Some(line.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn typing_lands_on_the_command_line_and_enter_runs_it() {
+        let mut app = app();
+        typed(&mut app, "echo hi");
+        assert_eq!(app.cmd.text, "echo hi");
+        // A letter must not have moved the cursor or started a quick search.
+        assert!(app.mode.is_normal());
+        press(&mut app, "Enter");
+        assert_eq!(shell_requests(&app), ["echo hi"]);
+        assert!(app.cmd.is_empty(), "the line is cleared once it runs");
+        assert_eq!(app.cmd.history(), ["echo hi"], "and remembered");
+    }
+
+    #[test]
+    fn the_shared_keys_belong_to_the_line_only_while_it_has_something_on_it() {
+        let mut app = app();
+        let before = app.panel().cwd.clone();
+        // Empty line: Backspace is the parent directory, as it always was.
+        press(&mut app, "Backspace");
+        assert_ne!(app.panel().cwd, before, "Backspace went to the parent");
+
+        typed(&mut app, "ls");
+        press(&mut app, "Backspace");
+        assert_eq!(app.cmd.text, "l", "now Backspace edits the line");
+        press(&mut app, "Esc");
+        assert!(app.cmd.is_empty(), "Esc clears the line");
+        // And Enter on an empty line is the panel's again.
+        let cwd = app.panel().cwd.clone();
+        press(&mut app, "Enter");
+        assert!(
+            app.panel().cwd != cwd || app.mode.is_normal(),
+            "Enter with an empty line is the panel's"
+        );
+    }
+
+    #[test]
+    fn cd_moves_the_panel_and_never_reaches_a_shell() {
+        let dir = std::env::temp_dir();
+        let mut app = app();
+        typed(&mut app, &format!("cd {}", dir.display()));
+        press(&mut app, "Enter");
+        assert!(
+            shell_requests(&app).is_empty(),
+            "cd is ours, not the shell's"
+        );
+        assert_eq!(
+            app.panel().cwd.as_path(),
+            dir.canonicalize()
+                .unwrap_or(dir.clone())
+                .as_path()
+                .to_path_buf()
+                .as_path()
+                .parent()
+                .map(|_| dir.as_path())
+                .unwrap_or(dir.as_path())
+        );
+    }
+
+    #[test]
+    fn cd_to_nowhere_says_so_instead_of_moving() {
+        let mut app = app();
+        let before = app.panel().cwd.clone();
+        typed(&mut app, "cd /no/such/place/at/all");
+        press(&mut app, "Enter");
+        assert!(app.status_error, "{}", app.status);
+        assert_eq!(app.panel().cwd, before);
+    }
+
+    #[test]
+    fn a_condition_that_does_not_hold_runs_nothing() {
+        let mut app = app();
+        typed(&mut app, "if exist no-such-file make");
+        press(&mut app, "Enter");
+        assert!(shell_requests(&app).is_empty());
+        assert!(app.status.contains("make"), "{}", app.status);
+    }
+
+    #[test]
+    fn the_history_is_walked_and_the_half_typed_line_comes_back() {
+        let mut app = app();
+        typed(&mut app, "make");
+        press(&mut app, "Enter");
+        typed(&mut app, "half");
+        press(&mut app, "Ctrl+E");
+        assert_eq!(app.cmd.text, "make");
+        press(&mut app, "Ctrl+X");
+        assert_eq!(app.cmd.text, "half");
+        press(&mut app, "Ctrl+Y");
+        assert!(app.cmd.is_empty());
+    }
+
+    #[test]
+    fn the_history_list_puts_a_line_back_to_be_edited_rather_than_running_it() {
+        let mut app = app();
+        typed(&mut app, "cargo test -p scmd");
+        press(&mut app, "Enter");
+        app.requests.clear();
+        press(&mut app, "Alt+F8");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("no history list")
+        };
+        assert_eq!(pick.rows[0].value, "cargo test -p scmd");
+        press(&mut app, "Enter");
+        assert_eq!(app.cmd.text, "cargo test -p scmd");
+        assert!(shell_requests(&app).is_empty(), "it must not run by itself");
+    }
+
+    #[test]
+    fn ctrl_j_and_ctrl_bracket_put_names_and_paths_on_the_line() {
+        let mut app = app();
+        press(&mut app, "Down"); // onto `docs`
+        press(&mut app, "Ctrl+Enter");
+        assert_eq!(app.cmd.text, "docs ");
+        app.cmd.clear();
+        press(&mut app, "Ctrl+[");
+        assert!(app.cmd.text.starts_with("/home/mb"), "{}", app.cmd.text);
+        app.cmd.clear();
+        press(&mut app, "Ctrl+]");
+        assert!(app.cmd.text.starts_with("/tmp"), "{}", app.cmd.text);
+    }
+
+    #[test]
+    fn a_substitution_is_expanded_before_the_shell_sees_it() {
+        let mut app = app();
+        press(&mut app, "Down"); // `docs`
+        typed(&mut app, "wc -l {name}");
+        press(&mut app, "Enter");
+        assert_eq!(shell_requests(&app), ["wc -l docs"]);
+    }
+
+    #[test]
+    fn a_line_that_asks_opens_a_prompt_and_runs_with_the_answer() {
+        let mut app = app();
+        typed(&mut app, "grep {ask:Search for} .");
+        press(&mut app, "Enter");
+        let Mode::Prompt(prompt) = &app.mode else {
+            panic!("no prompt: {:?}", app.mode)
+        };
+        assert_eq!(prompt.title, "Search for");
+        assert!(
+            shell_requests(&app).is_empty(),
+            "nothing runs before the answer"
+        );
+        typed(&mut app, "TODO");
+        press(&mut app, "Enter");
+        assert_eq!(shell_requests(&app), ["grep TODO ."]);
+    }
+
+    #[test]
+    fn the_view_prefix_opens_the_viewer_on_a_file() {
+        let dir = std::env::temp_dir().join(format!("scmd-cmd-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("hello.txt");
+        std::fs::write(&file, b"hello\n").unwrap();
+        let mut app = app();
+        typed(&mut app, &format!("view:{}", file.display()));
+        press(&mut app, "Enter");
+        assert!(app.mode.viewer().is_some(), "{:?}", app.mode);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn ctrl_o_shows_what_a_command_printed_and_the_exit_code_is_not_hidden() {
+        let mut app = app();
+        typed(&mut app, "false");
+        press(&mut app, "Enter");
+        let id = match app.requests.iter().find_map(|r| match r {
+            Request::Shell { id, .. } => Some(*id),
+            _ => None,
+        }) {
+            Some(id) => id,
+            None => panic!("no shell request"),
+        };
+        app.handle_event(Event::ShellDone {
+            id,
+            line: "false".into(),
+            output: "nothing to say\n".into(),
+            status: Some(1),
+        });
+        assert!(
+            app.status_error,
+            "a non-zero exit is not hidden: {}",
+            app.status
+        );
+        press(&mut app, "Ctrl+O");
+        assert!(matches!(app.mode, Mode::UserScreen { .. }));
+        assert!(app.user_screen.iter().any(|l| l == "$ false"));
+        assert!(app.user_screen.iter().any(|l| l == "nothing to say"));
+        press(&mut app, "Esc");
+        assert!(app.mode.is_normal());
+    }
+
+    #[test]
+    fn two_commands_at_once_are_refused_rather_than_queued_silently() {
+        let mut app = app();
+        typed(&mut app, "sleep 10");
+        press(&mut app, "Enter");
+        typed(&mut app, "echo second");
+        press(&mut app, "Enter");
+        assert_eq!(shell_requests(&app), ["sleep 10"]);
+        assert!(app.status_error, "{}", app.status);
     }
 
     #[test]
