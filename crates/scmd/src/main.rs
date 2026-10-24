@@ -130,9 +130,12 @@ fn run(cli: Cli) -> Result<()> {
 
     let i18n = I18n::new(&cfg.ui.language);
     let origin = paths.config_file.display().to_string();
-    let keymap = load_keymap(&cfg, &origin)?;
     let themes = ThemeSet::builtin_only().with_tables(&origin, &cfg.themes);
+    // Plugins are read before the theme and the keymap are chosen, so a plugin can supply
+    // either one.
+    let (themes, plugin_keymaps) = load_plugins(&paths, themes, &mut warnings);
     warnings.extend(themes.load_errors.clone());
+    let keymap = load_keymap(&cfg, &origin, &plugin_keymaps)?;
 
     let theme = match themes.get(&cfg.ui.theme) {
         Some(t) => t.clone(),
@@ -239,41 +242,99 @@ fn run(cli: Cli) -> Result<()> {
 }
 
 /// A `[[keymap]]` block from the config file wins over a built-in profile of the same name.
-fn load_keymap(cfg: &Config, origin: &str) -> Result<Keymap> {
+fn load_keymap(
+    cfg: &Config,
+    origin: &str,
+    from_plugins: &[(String, toml::Table)],
+) -> Result<Keymap> {
     let wanted = cfg.ui.keymap.trim();
-    for table in &cfg.keymaps {
-        let name = table
+    let named = |table: &toml::Table| -> bool {
+        table
             .get("name")
             .and_then(|v| v.as_str())
-            .unwrap_or_default();
-        if name == wanted {
+            .unwrap_or_default()
+            == wanted
+    };
+    // The config file wins over a plugin, so a plugin can never take a keymap away.
+    for table in &cfg.keymaps {
+        if named(table) {
             return Keymap::from_table(origin, table).map_err(anyhow::Error::new);
+        }
+    }
+    for (plugin_origin, table) in from_plugins {
+        if named(table) {
+            return Keymap::from_table(plugin_origin, table).map_err(anyhow::Error::new);
         }
     }
     Keymap::builtin(wanted).map_err(anyhow::Error::new)
 }
 
-/// Everything in the plugins directory, with a note that the host is not here yet.
+/// What is in the plugins directory, as the discovery sees it.
 fn list_plugins(paths: &Paths) {
-    if !paths.plugins_dir.is_dir() {
-        println!("no plugins directory at {}", paths.plugins_dir.display());
-        return;
-    }
-    let mut found = Vec::new();
+    let found = scmd_plug::discover(&paths.plugins_dir);
+    println!("{}", paths.plugins_dir.display());
+    print!("{}", found.describe());
+
+    // A `.wasm` or a `.lua` in there is somebody waiting for the plugin host. Saying nothing
+    // about it would leave them guessing why their plugin does nothing.
+    let mut waiting: Vec<String> = Vec::new();
     if let Ok(read) = std::fs::read_dir(&paths.plugins_dir) {
         for entry in read.flatten() {
-            found.push(entry.file_name().to_string_lossy().into_owned());
+            if entry.path().is_file() {
+                waiting.push(entry.file_name().to_string_lossy().into_owned());
+            }
         }
     }
-    found.sort();
-    if found.is_empty() {
-        println!("{}: empty", paths.plugins_dir.display());
-        return;
+    waiting.sort();
+    if !waiting.is_empty() {
+        println!();
+        for name in &waiting {
+            println!("?  {name}");
+        }
+        println!(
+            "({} file{} needing a plugin host; there is no plugin host in this build yet — \
+             the declarative tier above is a folder with a plugin.toml, see \
+             docs/spec/08-plugins.md)",
+            waiting.len(),
+            if waiting.len() == 1 { "" } else { "s" }
+        );
+    } else if found.is_empty() && found.problems.is_empty() {
+        println!(
+            "(nothing here: a plugin is a folder with a plugin.toml — docs/spec/08-plugins.md)"
+        );
     }
-    for name in found {
-        println!("{name}");
+}
+
+/// Everything the plugins declare, folded into what the program already loads. A plugin that
+/// does not load is a warning on the startup screen, never a reason not to start.
+fn load_plugins(
+    paths: &Paths,
+    themes: ThemeSet,
+    warnings: &mut Vec<String>,
+) -> (ThemeSet, Vec<(String, toml::Table)>) {
+    let found = scmd_plug::discover(&paths.plugins_dir);
+    warnings.extend(found.problems.iter().cloned());
+    warnings.extend(found.warnings.iter().cloned());
+    let mut themes = themes;
+    let mut keymaps = Vec::new();
+    for plugin in &found.plugins {
+        if !plugin.supports(env!("CARGO_PKG_VERSION")) {
+            warnings.push(format!(
+                "{}: declares scmd {} and this is {} — loaded anyway, it may not fit",
+                plugin.id(),
+                plugin.manifest.plugin.scmd,
+                env!("CARGO_PKG_VERSION")
+            ));
+        }
+        let theme_tables = plugin.tables(scmd_plug::ItemKind::Theme);
+        if !theme_tables.is_empty() {
+            themes = themes.with_plugin_tables(plugin.id(), &theme_tables);
+        }
+        for table in plugin.tables(scmd_plug::ItemKind::Keymap) {
+            keymaps.push((plugin.origin(), table));
+        }
     }
-    println!("(no plugin host in this build yet: viewer, editor and netbox come first — see docs/spec/08-plugins.md)");
+    (themes, keymaps)
 }
 
 fn command_ids() -> Vec<String> {
@@ -1087,10 +1148,10 @@ mod tests {
     #[test]
     fn keymap_comes_from_the_config_block_or_falls_back_to_a_builtin() {
         let mut cfg = Config::default();
-        assert!(load_keymap(&cfg, "scmd.toml").unwrap().len() > 30);
+        assert!(load_keymap(&cfg, "scmd.toml", &[]).unwrap().len() > 30);
 
         cfg.ui.keymap = "klingon".into();
-        assert!(load_keymap(&cfg, "scmd.toml").is_err());
+        assert!(load_keymap(&cfg, "scmd.toml", &[]).is_err());
 
         let (with_block, _) = Config::parse(
             "scmd.toml",
@@ -1106,7 +1167,7 @@ mod tests {
             "#,
         )
         .unwrap();
-        let km = load_keymap(&with_block, "scmd.toml").unwrap();
+        let km = load_keymap(&with_block, "scmd.toml", &[]).unwrap();
         assert_eq!(km.name(), "klingon");
     }
 

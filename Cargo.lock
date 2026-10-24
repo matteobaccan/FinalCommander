@@ -1894,6 +1894,7 @@ dependencies = [
  "scmd-i18n",
  "scmd-jobs",
  "scmd-net",
+ "scmd-plug",
  "scmd-tui",
  "scmd-ui",
  "scmd-vfs",
@@ -1901,6 +1902,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+ "toml",
  "unicode-width",
 ]
 

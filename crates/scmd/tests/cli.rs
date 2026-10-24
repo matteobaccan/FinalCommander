@@ -130,6 +130,38 @@ fn the_plugins_directory_is_the_only_directory_read() {
         "{stdout}"
     );
     assert!(stdout.contains("no plugin host"), "{stdout}");
+
+    // A declarative plugin — a folder with a manifest — does load, and a broken one is
+    // reported rather than skipped in silence.
+    let good = plugins.join("sunset");
+    fs::create_dir(&good).unwrap();
+    fs::write(
+        good.join("plugin.toml"),
+        br#"
+[plugin]
+id = "sunset"
+name = "Sunset"
+version = "1.0.0"
+[[theme]]
+id = "sunset"
+name = "Sunset"
+inherit = "far"
+"#,
+    )
+    .unwrap();
+    let bad = plugins.join("wrongname");
+    fs::create_dir(&bad).unwrap();
+    fs::write(bad.join("plugin.toml"), b"[plugin]\nid = \"other\"\n").unwrap();
+
+    let (stdout, stderr, ok) = run(&["--plugins", plugins.to_str().unwrap(), "--list-plugins"]);
+    assert!(ok, "{stderr}");
+    assert!(stdout.contains("sunset"), "{stdout}");
+    assert!(stdout.contains("wrongname"), "{stdout}");
+
+    // And the theme it declares is in the theme list, saying where it came from.
+    let (stdout, stderr, ok) = run(&["--plugins", plugins.to_str().unwrap(), "--list-themes"]);
+    assert!(ok, "{stderr}");
+    assert!(stdout.contains("plugin:sunset"), "{stdout}");
 }
 
 #[test]
