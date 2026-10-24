@@ -561,7 +561,12 @@ fn draw_pick(app: &App, buf: &mut Buffer, screen: Rect, pick: &crate::form::Pick
     if lines.is_empty() {
         lines.push(app.i18n.t("pick-empty"));
     }
-    let hint = app.i18n.t("pick-hint");
+    // The drive dialog has keys of its own, so it says so rather than repeating the general
+    // line — which is FAR's habit: every dialog's footer is about that dialog.
+    let hint = app.i18n.t(match pick.kind {
+        crate::menu::PickKind::Drives => "drives-hint",
+        _ => "pick-hint",
+    });
 
     // A list longer than the screen is windowed, not clipped. The folder and command
     // histories are the long ones in practice — and the plugin commands now — and before
@@ -2742,6 +2747,16 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
 
     /// `Ctrl+Left`/`Ctrl+Right` move the line between the panels; `Ctrl+Up`/`Ctrl+Down` take
     /// rows off them and give them to the user screen. Both are settings, so both are kept.
+    #[test]
+    #[ignore = "a look at the screen, not an assertion"]
+    fn eyeball_drives() {
+        let mut app = super::tests::app("far", "en");
+        project(&mut app);
+        app.connected.push("mb@host:22".into());
+        app.run(scmd_cmd::Command::PanelDrive(scmd_cmd::Side::Left));
+        println!("{}", frame(&mut app, 100, 28));
+    }
+
     #[test]
     fn the_panels_can_be_resized_and_what_they_give_up_shows_the_user_screen() {
         let width_of_left = |app: &mut App| {

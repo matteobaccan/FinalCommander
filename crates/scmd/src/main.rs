@@ -4,6 +4,7 @@
 
 mod app;
 mod cmdline;
+mod drives;
 mod expand;
 mod form;
 mod help;

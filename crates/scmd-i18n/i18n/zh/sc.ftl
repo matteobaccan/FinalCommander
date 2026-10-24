@@ -546,3 +546,14 @@ msg-dirs-first-on = 目录在前
 msg-dirs-first-off = 目录与文件混排
 msg-selected-first-on = 已选文件在前
 msg-selected-first-off = 已选文件按顺序
+
+# The change-drive dialog (Alt+F1, Alt+F2): the type column, and its footer.
+drive-fixed = 磁盘
+drive-removable = 可移动
+drive-optical = 光盘
+drive-network = 网络
+drive-memory = 内存
+drive-home = 主目录
+drive-connection = 连接
+drive-objects = 对象存储
+drives-hint = ↑↓ 选择 · 0-9 下方面板 · Enter 应用 · Esc 关闭

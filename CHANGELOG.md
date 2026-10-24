@@ -17,6 +17,15 @@ Notable changes, newest first. The format follows
   the keyboard protocol for this (kitty, foot, WezTerm, Ghostty and others do); where it does
   not, the bar simply stays as it was.
 
+- **The change-drive dialog is a table** (`Alt+F1`, `Alt+F2`), as it is in FAR: every row
+  says what the thing is — disk, removable, optical, network, memory — what it is called,
+  what it is formatted as, how big it is and how much is left, read from the real mount
+  table rather than guessed. The things that are not filesystems come underneath, numbered
+  `0` to `9` the way FAR numbers its plugin panels, and the number takes the row. Mounts that
+  are part of how the system runs (`/proc`, `/sys`, `/dev`, `/run`) are left out: a `tmpfs`
+  under `/run` is plumbing, while a `tmpfs` someone mounted on `/mnt/fast` is a choice, so
+  where a thing is mounted decides and not what it is.
+
 - **The panels can be resized.** `Ctrl+←` and `Ctrl+→` move the line between them,
   `Ctrl+↑` and `Ctrl+↓` take rows off both and give them to the user screen — the output of
   the last command, right there under the panels, which is what those keys are for in FAR.

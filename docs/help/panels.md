@@ -5,7 +5,13 @@ with the cursor to the other one, which is what makes a two-panel manager faster
 the destination is already on screen.
 
 `Enter` enters a directory or runs a file, `Backspace` or `..` climbs. `Alt+F1` and `Alt+F2`
-offer the drives, mount points and open connections for the left and right panel.
+open the change-drive dialog for the left and right panel: a table of everything mounted —
+what each one is (disk, removable, optical, network, memory), what it is called, what it is
+formatted as, how big it is and how much is left. Underneath, numbered `0` to `9`, are the
+things that are not filesystems: the open connections and the object stores that are
+configured. The number takes you there without the arrows. What the system runs on —
+anything under `/proc`, `/sys`, `/dev`, `/run` — is left out, because none of it is
+somewhere to put a file.
 
 # Looking at a directory
 

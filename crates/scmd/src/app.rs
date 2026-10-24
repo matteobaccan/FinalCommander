@@ -3023,6 +3023,107 @@ impl App {
         scmd_arc::Format::of_name(&path.display_name()).map(|_| path)
     }
 
+    /// `Alt+F1` and `Alt+F2`: everything a panel can be sent to, as a table.
+    ///
+    /// FAR's change-drive dialog has columns rather than a list of paths — what the thing is,
+    /// what it is called, what it is formatted as, how big it is and how much is left — and
+    /// then the plugin panels under them, numbered, because a number is how anyone who uses
+    /// it twice a day picks one. Ours are the open connections and the object stores that are
+    /// configured.
+    fn drive_list(&self, side: usize) -> Pick {
+        let mounted = crate::drives::list();
+        let cells: Vec<[String; 5]> = mounted
+            .iter()
+            .map(|drive| {
+                [
+                    self.i18n.t(drive.kind.label_key()),
+                    drive.label.clone().unwrap_or_default(),
+                    drive.fs.clone().unwrap_or_default(),
+                    drive.total.map(scmd_core::format_size).unwrap_or_default(),
+                    drive.free.map(scmd_core::format_size).unwrap_or_default(),
+                ]
+            })
+            .collect();
+        // Each column as wide as its widest value, so the table lines up without a layout
+        // engine and a column nothing filled takes no room at all.
+        let mut widths = [0usize; 5];
+        for row in &cells {
+            for (i, text) in row.iter().enumerate() {
+                widths[i] = widths[i].max(unicode_width::UnicodeWidthStr::width(text.as_str()));
+            }
+        }
+        let path_w = mounted
+            .iter()
+            .map(|d| unicode_width::UnicodeWidthStr::width(d.path.as_str()))
+            .max()
+            .unwrap_or(0)
+            .min(40);
+
+        let here = self.panels[side].cwd.to_string();
+        let mut rows: Vec<PickRow> = Vec::new();
+        for (drive, cell) in mounted.iter().zip(cells.iter()) {
+            let mut label = format!("{:<path_w$}", scmd_ui::truncate_cols(&drive.path, path_w));
+            for (i, text) in cell.iter().enumerate() {
+                if widths[i] == 0 {
+                    continue;
+                }
+                label.push_str("  ");
+                // The two sizes read right-aligned; the words read left.
+                if i >= 3 {
+                    label.push_str(&format!("{text:>w$}", w = widths[i]));
+                } else {
+                    label.push_str(&format!("{text:<w$}", w = widths[i]));
+                }
+            }
+            rows.push(PickRow::plain(
+                label.trim_end(),
+                drive.path.clone(),
+                // The one the panel is already on. `/` matches everything, so it only counts
+                // when nothing longer does.
+                drive.path != "/" && here.starts_with(&drive.path),
+            ));
+        }
+        if !rows.iter().any(|r| r.current) {
+            if let Some(root) = rows.iter_mut().find(|r| r.value == "/") {
+                root.current = true;
+            }
+        }
+
+        // The panels that are not filesystems, numbered the way FAR numbers them.
+        let mut number = 0u32;
+        let mut keyed = |label: String, value: String, current: bool| {
+            let row = PickRow::plain(label, value, current);
+            let row = match char::from_digit(number, 10) {
+                Some(key) => row.with_key(key),
+                None => row,
+            };
+            number += 1;
+            row
+        };
+        for authority in &self.connected {
+            let kind = self.i18n.t(crate::drives::Kind::Connection.label_key());
+            rows.push(keyed(
+                format!("sftp://{authority}  {kind}"),
+                format!("sftp://{authority}/"),
+                self.panels[side].cwd.authority() == Some(authority.as_str()),
+            ));
+        }
+        for service in &self.cfg.s3 {
+            let kind = self.i18n.t("drive-objects");
+            rows.push(keyed(
+                format!("s3://{}@  {kind}", service.name),
+                format!("s3://{}@/", service.name),
+                false,
+            ));
+        }
+        Pick::new(
+            PickKind::Drives,
+            self.i18n.t("menu-change-drive"),
+            rows,
+            side,
+        )
+    }
+
     /// `Shift+F3`: what can be done with the archive at hand, as a menu. MultiArc calls it
     /// `ArcCmd`, and the list is short because everything on it is something we really do.
     fn open_arc_commands(&mut self) {
@@ -3040,6 +3141,7 @@ impl App {
                     label: self.i18n.t_args(id, &[("name", name.clone().into())]),
                     value: value.to_string(),
                     current: false,
+                    hotkey: None,
                 });
             }
         }
@@ -3047,6 +3149,7 @@ impl App {
             label: self.i18n.t("arc-op-add"),
             value: "add".to_string(),
             current: false,
+            hotkey: None,
         });
         let title = self.i18n.t("arc-commands-title");
         self.mode = Mode::Pick(Box::new(Pick::new(PickKind::ArcCommands, title, rows, 0)));
@@ -5658,6 +5761,7 @@ impl App {
                     .t_args("hex-op-read", &[("at", format!("{cursor:08X}").into())]),
                 value: "read".to_string(),
                 current: false,
+                hotkey: None,
             },
             PickRow {
                 label: self
@@ -5665,6 +5769,7 @@ impl App {
                     .t_args("hex-op-insert", &[("at", format!("{cursor:08X}").into())]),
                 value: "insert".to_string(),
                 current: false,
+                hotkey: None,
             },
             PickRow {
                 label: self
@@ -5672,6 +5777,7 @@ impl App {
                     .t_args("hex-op-copy", &[("at", format!("{cursor:08X}").into())]),
                 value: "copy".to_string(),
                 current: false,
+                hotkey: None,
             },
             PickRow {
                 label: self
@@ -5679,6 +5785,7 @@ impl App {
                     .t_args("hex-op-move", &[("at", format!("{cursor:08X}").into())]),
                 value: "move".to_string(),
                 current: false,
+                hotkey: None,
             },
         ];
         if span > 0 {
@@ -5692,6 +5799,7 @@ impl App {
                         .t_args("hex-op-write", &[("size", size.clone().into())]),
                     value: "write".to_string(),
                     current: true,
+                    hotkey: None,
                 },
             );
             rows.push(PickRow {
@@ -5700,6 +5808,7 @@ impl App {
                     .t_args("hex-op-fill", &[("size", size.clone().into())]),
                 value: "fill".to_string(),
                 current: false,
+                hotkey: None,
             });
             rows.push(PickRow {
                 label: self
@@ -5707,6 +5816,7 @@ impl App {
                     .t_args("hex-op-xor", &[("size", size.clone().into())]),
                 value: "xor".to_string(),
                 current: false,
+                hotkey: None,
             });
             rows.push(PickRow {
                 label: self.i18n.t_args(
@@ -5719,6 +5829,7 @@ impl App {
                 ),
                 value: "delete".to_string(),
                 current: false,
+                hotkey: None,
             });
         }
         let title = t(self, "hex-block-title");
@@ -5782,6 +5893,7 @@ impl App {
                 label: format!("{:<40} {}", c.label, c.plugin),
                 value: i.to_string(),
                 current: false,
+                hotkey: None,
             })
             .collect();
         if rows.is_empty() {
@@ -5832,6 +5944,7 @@ impl App {
                 ),
                 value: t.id.to_string(),
                 current: false,
+                hotkey: None,
             })
             .collect();
         let title = self.i18n.t("tunnel-list-title");
@@ -6076,11 +6189,13 @@ impl App {
                 label: self.i18n.t("macro-play-once"),
                 value: scmd_cmd::Play::Once.as_str().to_string(),
                 current: true,
+                hotkey: None,
             },
             PickRow {
                 label: self.i18n.t("macro-play-each"),
                 value: scmd_cmd::Play::EachSelected.as_str().to_string(),
                 current: false,
+                hotkey: None,
             },
         ];
         let title = self.i18n.t("macro-play-title");
@@ -6130,6 +6245,7 @@ impl App {
                 label: m.summary(),
                 value: i.to_string(),
                 current: false,
+                hotkey: None,
             })
             .collect();
         let title = self.i18n.t("macro-list-title");
@@ -6233,6 +6349,7 @@ impl App {
             label: self.i18n.t("screens-panels"),
             value: "panels".to_string(),
             current: self.mode.screen_title().is_none(),
+            hotkey: None,
         }];
         // The one in front first, then the ones behind it, newest first: the order one
         // stepped away from them, which is the order one comes back through.
@@ -6241,6 +6358,7 @@ impl App {
                 label: self.screen_label(&title, self.mode.screen_modified()),
                 value: "front".to_string(),
                 current: true,
+                hotkey: None,
             });
         }
         for (i, screen) in self.background.iter().enumerate().rev() {
@@ -6251,6 +6369,7 @@ impl App {
                 label: self.screen_label(&title, screen.screen_modified()),
                 value: i.to_string(),
                 current: false,
+                hotkey: None,
             });
         }
         let at = rows.iter().position(|r| r.current).unwrap_or(0);
@@ -6688,6 +6807,7 @@ impl App {
                         label: format!("{name}  ({tag})"),
                         value: (*tag).to_string(),
                         current: *tag == self.i18n.tag(),
+                        hotkey: None,
                     })
                     .collect(),
                 side,
@@ -6701,28 +6821,12 @@ impl App {
                         label: theme.name.clone(),
                         value: theme.id.clone(),
                         current: theme.id == self.theme.id,
+                        hotkey: None,
                     })
                     .collect(),
                 side,
             ),
-            PickKind::Drives => {
-                let mut rows: Vec<PickRow> = local_roots()
-                    .into_iter()
-                    .map(|path| PickRow {
-                        label: path.clone(),
-                        value: path,
-                        current: false,
-                    })
-                    .collect();
-                for authority in &self.connected {
-                    rows.push(PickRow {
-                        label: format!("sftp://{authority}"),
-                        value: format!("sftp://{authority}/"),
-                        current: self.panels[side].cwd.authority() == Some(authority.as_str()),
-                    });
-                }
-                Pick::new(kind, self.i18n.t("menu-change-drive"), rows, side)
-            }
+            PickKind::Drives => self.drive_list(side),
             PickKind::FoldersHistory => {
                 let panel = &self.panels[side];
                 let current = panel.cwd.to_string();
@@ -6739,6 +6843,7 @@ impl App {
                         current: path == current,
                         label: path.clone(),
                         value: path,
+                        hotkey: None,
                     })
                     .collect();
                 Pick::new(kind, self.i18n.t("menu-folders-history"), rows, side)
@@ -6754,6 +6859,7 @@ impl App {
                         label: line.clone(),
                         value: line.clone(),
                         current: false,
+                        hotkey: None,
                     })
                     .collect();
                 Pick::new(kind, self.i18n.t("menu-history"), rows, side)
@@ -6777,6 +6883,7 @@ impl App {
                             label: self.i18n.t(id),
                             value: format!("{key:?}").to_lowercase(),
                             current: panel.sort.key == *key,
+                            hotkey: None,
                         })
                         .collect(),
                     side,
@@ -6812,6 +6919,13 @@ impl App {
             KeyCode::Home => pick.cursor = 0,
             KeyCode::End => pick.cursor = pick.rows.len().saturating_sub(1),
             KeyCode::Enter => self.apply_pick(),
+            // A row with a key of its own: the key takes it, without the arrows.
+            KeyCode::Char(c) => {
+                if let Some(row) = pick.by_hotkey(c) {
+                    pick.cursor = row;
+                    self.apply_pick();
+                }
+            }
             _ => {}
         }
     }
@@ -8560,29 +8674,6 @@ fn parse_sort(s: &str) -> SortKey {
     }
 }
 
-/// The places a panel can jump to: `/` and the home directory on Unix, the drive letters that
-/// answer on Windows. No platform crate yet, so this is what `std` can tell us.
-pub fn local_roots() -> Vec<String> {
-    let mut roots = Vec::new();
-    if cfg!(windows) {
-        for letter in b'A'..=b'Z' {
-            let path = format!("{}:\\", letter as char);
-            if std::path::Path::new(&path).exists() {
-                roots.push(path);
-            }
-        }
-    } else {
-        roots.push("/".to_string());
-    }
-    if let Some(home) = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")) {
-        let home = home.to_string_lossy().into_owned();
-        if !home.is_empty() && !roots.contains(&home) {
-            roots.push(home);
-        }
-    }
-    roots
-}
-
 /// Where a panel goes when the connection it was on is closed.
 pub fn local_home() -> VPath {
     VPath::local(
@@ -9920,6 +10011,51 @@ mod tests {
         assert!(
             run(false).is_none(),
             "a pack that failed must not delete the files it was given"
+        );
+    }
+
+    /// `Alt+F1` is a table, not a list of paths: every row says what the thing is, and the
+    /// rows that are not filesystems carry a number to reach them by.
+    #[test]
+    fn the_drive_dialog_is_a_table_and_its_panels_are_numbered() {
+        let mut app = app();
+        app.connected.push("mb@host:22".into());
+        app.run(Command::PanelDrive(scmd_cmd::Side::Left));
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("no dialog: {:?}", app.mode)
+        };
+        assert_eq!(pick.kind, PickKind::Drives);
+
+        // The root is there, and it says what it is rather than only where it is.
+        let root = pick
+            .rows
+            .iter()
+            .find(|r| r.value == "/")
+            .expect("the root is a drive");
+        assert!(
+            root.label.contains('/') && root.label.split_whitespace().count() > 1,
+            "the row has no columns: {}",
+            root.label
+        );
+
+        // The connection is at the bottom, numbered, and the number reaches it.
+        let last = pick.rows.last().expect("a row");
+        assert_eq!(last.value, "sftp://mb@host:22/");
+        assert_eq!(last.hotkey, Some('0'));
+        assert_eq!(pick.by_hotkey('0'), Some(pick.rows.len() - 1));
+        // And the number column is drawn for everyone once anybody has one.
+        let lines = pick.lines();
+        assert!(lines.last().unwrap().contains('0'), "{:?}", lines.last());
+
+        press(&mut app, "0");
+        assert!(app.mode.is_normal(), "the number did not take the row");
+        assert!(
+            app.panels[0]
+                .cwd
+                .to_string()
+                .starts_with("sftp://mb@host:22"),
+            "{}",
+            app.panels[0].cwd
         );
     }
 

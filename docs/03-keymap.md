@@ -244,7 +244,7 @@ there are no plugins yet. When they arrive the pane moves rather than the plugin
 | --- | --- | --- |
 | open the menu bar | F9 | **F9** (the menu of the panel that has the focus) |
 | inside the bar | ←→ menus, ↑↓ entries, letter, Enter, Esc | the same |
-| drive / connection list | Alt+F1 left, Alt+F2 right | **Alt+F1** / **Alt+F2** |
+| drive / connection list | Alt+F1 left, Alt+F2 right | **Alt+F1** / **Alt+F2**, as a table: type, label, filesystem, size, free — then the connections and object stores, numbered |
 | folder history | Alt+F12 | **Alt+F12** |
 | sort modes list | Ctrl+F12 | **Ctrl+F12** (choosing the current order again reverses it) |
 | reverse the order directly | — | **Ctrl+Shift+F12** |

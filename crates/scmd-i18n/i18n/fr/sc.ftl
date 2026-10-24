@@ -546,3 +546,14 @@ msg-dirs-first-on = dossiers d'abord
 msg-dirs-first-off = dossiers mêlés aux fichiers
 msg-selected-first-on = fichiers sélectionnés d'abord
 msg-selected-first-off = fichiers sélectionnés dans l'ordre
+
+# The change-drive dialog (Alt+F1, Alt+F2): the type column, and its footer.
+drive-fixed = Disque
+drive-removable = Amovible
+drive-optical = Optique
+drive-network = Réseau
+drive-memory = Mémoire
+drive-home = Perso
+drive-connection = Connexion
+drive-objects = Stockage objet
+drives-hint = ↑↓ choisir · 0-9 les panneaux ci-dessous · Entrée appliquer · Échap fermer

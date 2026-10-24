@@ -755,6 +755,27 @@ pub struct PickRow {
     pub value: String,
     /// The row that is in force now.
     pub current: bool,
+    /// A key that jumps straight to this row and takes it, shown at the start of the line.
+    /// FAR numbers the plugin panels in the drive dialog this way, and the number is how
+    /// anyone who uses it twice a day actually picks one.
+    pub hotkey: Option<char>,
+}
+
+impl PickRow {
+    /// A row with no key of its own.
+    pub fn plain(label: impl Into<String>, value: impl Into<String>, current: bool) -> PickRow {
+        PickRow {
+            label: label.into(),
+            value: value.into(),
+            current,
+            hotkey: None,
+        }
+    }
+
+    pub fn with_key(mut self, key: char) -> PickRow {
+        self.hotkey = Some(key);
+        self
+    }
 }
 
 impl Pick {
@@ -782,9 +803,27 @@ impl Pick {
     }
 
     pub fn lines(&self) -> Vec<String> {
+        // The hotkey column exists only if some row has one, so every other list looks
+        // exactly as it did.
+        let keyed = self.rows.iter().any(|r| r.hotkey.is_some());
         self.rows
             .iter()
-            .map(|r| format!("{} {}", if r.current { '√' } else { ' ' }, r.label))
+            .map(|r| {
+                let mark = if r.current { '√' } else { ' ' };
+                match (keyed, r.hotkey) {
+                    (true, Some(k)) => format!("{mark} {k}  {}", r.label),
+                    (true, None) => format!("{mark}    {}", r.label),
+                    _ => format!("{mark} {}", r.label),
+                }
+            })
             .collect()
+    }
+
+    /// The row a typed character goes to, if any.
+    pub fn by_hotkey(&self, typed: char) -> Option<usize> {
+        let typed = typed.to_ascii_lowercase();
+        self.rows
+            .iter()
+            .position(|r| r.hotkey.map(|k| k.to_ascii_lowercase()) == Some(typed))
     }
 }
