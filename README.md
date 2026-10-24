@@ -1,8 +1,24 @@
-# SupremeCommander
+<p align="center">
+  <img src="assets/logo.svg" alt="SupremeCommander — an orthodox file manager for the terminal. One program, every system." width="880">
+</p>
+
+<h1 align="center">SupremeCommander</h1>
+
+<p align="center">
+  <b>One program. Every system.</b><br>
+  The shape Norton Commander gave the terminal and the keys FAR kept, in one program that
+  works the same way on systems its ancestors never shared.
+</p>
 
 A cross-platform **orthodox file manager** (two panels, command line, function keys,
 keyboard-first) written in Rust — in the tradition of Norton Commander, FAR Manager,
 Total Commander, Midnight Commander and Krusader, with a modern engine underneath.
+
+The idea has always been one idea and never one program: FAR is Windows, far2l is its Linux
+port, Midnight Commander is Unix, Total Commander is Windows again, Double Commander is a
+third codebase. Same shape, five times over, with different keys and different gaps on every
+system. This is that idea written once, as one binary per platform from one source tree —
+with FAR's keymap as the default, because a user's fingers are a specification too.
 
 > **Status: 0.0.7, a preview.** Two panels, navigation, the selection matrix, sorting, view
 > modes, quick search, filters with FAR's whole mask grammar, themes (including FAR's own
@@ -262,6 +278,17 @@ rules in [`docs/01-licensing.md`](docs/01-licensing.md).
 
 No telemetry, no accounts, no cloud service, no bundled proprietary blobs, no GTK/Qt dependency
 in the core, and no attempt to be an Explorer/Finder replacement.
+
+## The pictures
+
+`assets/` holds the logo, the banner and the icon, all in FAR's own palette and all drawn as
+SVG — `assets/README.md` says what each is for and how the PNGs and the `.ico` are made from
+them. The banner is sized for the repository's social preview (Settings → Social preview takes
+`assets/banner.png`).
+
+<p align="center">
+  <img src="assets/icon-128.png" alt="The SupremeCommander icon" width="96">
+</p>
 
 ---
 
