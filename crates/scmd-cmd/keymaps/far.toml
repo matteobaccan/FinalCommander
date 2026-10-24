@@ -733,6 +733,28 @@ keys = ["F9"]
 scope = "editor"
 cmd = "editor.assemble"
 
+# The viewers and editors left open. `F12` in the panels and in the viewer; in the hex editor
+# that key belongs to the block operations, and `Ctrl+Tab` is there for this.
+[[bind]]
+keys = ["F12"]
+scope = "panel"
+cmd = "app.screens"
+
+[[bind]]
+keys = ["F12"]
+scope = "viewer"
+cmd = "app.screens"
+
+[[bind]]
+keys = ["Ctrl+Tab"]
+scope = "global"
+cmd = "app.screen.next"
+
+[[bind]]
+keys = ["Ctrl+Shift+Tab"]
+scope = "global"
+cmd = "app.screen.prev"
+
 # The calculator, on the key that looks like one.
 [[bind]]
 keys = ["Alt+="]

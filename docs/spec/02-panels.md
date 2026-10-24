@@ -210,11 +210,35 @@ the command line.
 
 Per panel, each tab holds cwd, view, sort, filter, selection, cursor. Lockable (path reverts
 on close), nameable, reorderable, movable to the other side, duplicable. Persisted in
-`session.toml`. Default keys: `Ctrl+T` new, `Ctrl+W` close, `Ctrl+Tab` next, `Alt+1..9` jump
-(see `03-keymap.md` §9 for the conflict notes).
+`session.toml`. Default keys: `Alt+1..9` jump (see `03-keymap.md` §9 for the conflict notes).
 
-`Ctrl+T` is the tree panel's as of 0.0.6, which is what FAR uses it for — FAR has no tabs.
-Tabs will need a key of their own when they land; `docs/BACKLOG.md` holds the question.
+Tabs are not a FAR feature, and both keys this once asked for are FAR's own: `Ctrl+T` is the
+tree panel as of 0.0.6, and `Ctrl+Tab` is the screens of §10 as of 0.1.0. Tabs will need keys
+of their own when they land; `docs/BACKLOG.md` holds the question.
+
+## 10. Screens (`F12`)
+
+A viewer or an editor is a **screen**, not a dialog: one steps away from it and comes back,
+and it keeps its position, its search, and its unsaved changes while the panels, or another
+file, are worked on. The panels are screen zero — always there, never closed.
+
+`F12` lists them: the panels first, then each screen with its kind and its file, and a `*` in
+front of one holding changes nobody has written. Choosing a row brings that screen forward and
+puts the one that was in front behind it. The number of screens behind the panels is drawn in
+the corner, `[2]`, and only when there is one.
+
+`Ctrl+Tab` and `Ctrl+Shift+Tab` round the ring without the list. The panels are its first
+member and the screen in front its last, so `Ctrl+Tab` from a screen steps out to the panels
+and from the panels steps in to the next screen: the panels are never more than one key away,
+and every screen is reached by pressing it again. Going straight from one screen to another is
+what the list is for — a ring that walked screen to screen would have to own the application's
+mode rather than shadow it, and the backlog carries that.
+
+A dialog is not a screen. A question asked over a viewer belongs to that viewer, and stepping
+away puts it back on the screen it was asked about rather than leaving it in front of the
+panels. Nothing in the list is ever closed by switching: a screen leaves only through its own
+`F10`, which is what asks about unsaved changes — and `F10` from the panels asks too, naming
+every background screen that holds some, because the panels cannot otherwise know.
 
 ## 9. Layout
 

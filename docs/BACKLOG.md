@@ -84,6 +84,8 @@ what we intend to do about it.
 | ~~User screen~~ | `Ctrl+O` | **Shipped**, scrollable and capped, with each command as its heading. Peeking while a command runs is still to come. |
 | Screen grabber | `Alt+Ins` | Select any region of the screen, stream or block, extend, move, append to the clipboard. Small, self-contained, and oddly useful. |
 
+| Screen to screen without the panels | `Ctrl+Tab` | SPEC 02 §10. The ring steps out to the panels between screens, because the screens shadow the application's mode rather than owning it. A ring that walked screen to screen wants `screens: Vec<Mode>` with the front swapped in and out, which means every `self.mode = Mode::Normal` that closes a viewer has to say which screen it is closing. Worth doing when something else needs that list anyway — the task list (`Ctrl+W`) probably will. |
+
 ## Binary viewer and hex editor
 
 What a dedicated binary tool does and we do not (SPEC 05 §1.8–§1.10 and §2.5–§2.8). The order

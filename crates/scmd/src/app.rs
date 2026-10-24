@@ -376,6 +376,8 @@ pub enum ConfirmAction {
     OverwriteChanged,
     /// Write the editor's copy over a remote file that changed on the server.
     OverwriteRemote,
+    /// Leave the program with screens in the background that hold unsaved changes.
+    QuitWithScreens,
     /// Record a host key we have never seen and connect.
     AcceptHostKey {
         panel: usize,
@@ -575,6 +577,32 @@ impl Mode {
         matches!(self, Mode::Normal)
     }
 
+    /// A screen is something one can step away from and come back to: a viewer, an editor,
+    /// the hex editor. A dialog is not — it is a question about the screen under it, and
+    /// leaving it half-answered in the background would be a way to lose work quietly.
+    ///
+    /// The string is what the screens list shows: the kind and the file.
+    pub fn screen_title(&self) -> Option<String> {
+        match self {
+            Mode::Viewer(v) => Some(format!("View  {}", v.path.display_name())),
+            Mode::Editor(e) => Some(format!("Edit  {}", e.name())),
+            Mode::Hex(e) => Some(format!("Hex   {}", e.name())),
+            _ => None,
+        }
+    }
+
+    /// Does this screen hold changes nobody has written yet? The screens list says so, and
+    /// quitting the program asks about it.
+    pub fn screen_modified(&self) -> bool {
+        match self {
+            Mode::Editor(e) => e.buffer.modified(),
+            Mode::Hex(e) => e.modified(),
+            _ => false,
+        }
+    }
+}
+
+impl Mode {
     pub fn job(&self) -> Option<&JobView> {
         match self {
             Mode::Job(view) => Some(view),
@@ -705,6 +733,10 @@ pub struct App {
     pub quick_size: (u16, u16),
     /// The last sum, so the calculator opens on it.
     pub last_calc: String,
+    /// The screens one has stepped away from: a viewer or an editor left open while the
+    /// panels, or another file, are worked on (SPEC 02 §7). The panels are not in this list —
+    /// they are what is underneath, always there, and never closed.
+    pub background: Vec<Mode>,
     /// The last instruction assembled, so `F9` opens on it: patching is repetitive work.
     pub last_asm: Option<String>,
     /// The archive format the last pack used, so the next one opens on it.
@@ -800,6 +832,7 @@ impl App {
             quick_why: None,
             quick_size: (40, 20),
             last_calc: String::new(),
+            background: Vec::new(),
             last_asm: None,
             last_pack: scmd_arc::Format::Zip,
             last_replace: scmd_jobs::ReplaceOptions::default(),
@@ -1406,6 +1439,7 @@ impl App {
                         self.editor_parked = None;
                         self.remote_edit = None;
                     }
+                    ConfirmAction::QuitWithScreens => self.quit = true,
                     ConfirmAction::DiscardHex => {
                         // The mode is already Normal: the bytes go with it.
                         self.read_panel(0);
@@ -2690,7 +2724,7 @@ impl App {
             return;
         }
         match cmd {
-            Command::AppQuit => self.quit = true,
+            Command::AppQuit => self.ask_before_quitting(),
             Command::AppHelp => self.mode = Mode::Help { scroll: 0 },
             Command::AppThemeNext => {
                 let next = self.themes.next_after(&self.theme.id).clone();
@@ -3110,6 +3144,9 @@ impl App {
             Command::CmdHistoryNext => {
                 self.cmd.history_next();
             }
+            Command::AppScreens => self.open_screens(),
+            Command::AppScreenNext => self.cycle_screen(false),
+            Command::AppScreenPrev => self.cycle_screen(true),
             Command::CmdHistory => self.open_pick(PickKind::CommandHistory, self.active),
             Command::CmdInsertName => self.insert_into_line(false, false),
             Command::CmdInsertNameOther => self.insert_into_line(false, true),
@@ -5104,6 +5141,147 @@ impl App {
         self.mode = Mode::Pick(Box::new(Pick::new(PickKind::HexBlock, title, rows, 0)));
     }
 
+    /// `F10` from the panels. A viewer or an editor left in the background can hold changes
+    /// nobody has written, and the panels know nothing about them — so the one place that
+    /// can ask is here, by name, before the program ends.
+    fn ask_before_quitting(&mut self) {
+        let dirty: Vec<String> = self
+            .background
+            .iter()
+            .filter(|s| s.screen_modified())
+            .filter_map(|s| s.screen_title())
+            .collect();
+        if dirty.is_empty() {
+            self.quit = true;
+            return;
+        }
+        let title = self.i18n.t("screens-quit-title");
+        let mut lines = vec![self.i18n.t("screens-quit-body"), String::new()];
+        lines.extend(dirty);
+        lines.push(String::new());
+        lines.push(self.i18n.t("confirm-yes-no"));
+        self.mode = Mode::Confirm(Confirm {
+            title,
+            lines,
+            action: ConfirmAction::QuitWithScreens,
+        });
+    }
+
+    // ── the screens (SPEC 02 §7) ──────────────────────────────────────────────────────────
+
+    /// `F12`: the viewers and editors left open, with the panels at the top.
+    ///
+    /// The list is always offered, even with nothing in the background, because the answer
+    /// "only the panels" is an answer — and because a key that sometimes does nothing is
+    /// worse than a list with one row in it.
+    fn open_screens(&mut self) {
+        let mut rows = vec![PickRow {
+            label: self.i18n.t("screens-panels"),
+            value: "panels".to_string(),
+            current: self.mode.screen_title().is_none(),
+        }];
+        // The one in front first, then the ones behind it, newest first: the order one
+        // stepped away from them, which is the order one comes back through.
+        if let Some(title) = self.mode.screen_title() {
+            rows.push(PickRow {
+                label: self.screen_label(&title, self.mode.screen_modified()),
+                value: "front".to_string(),
+                current: true,
+            });
+        }
+        for (i, screen) in self.background.iter().enumerate().rev() {
+            let Some(title) = screen.screen_title() else {
+                continue;
+            };
+            rows.push(PickRow {
+                label: self.screen_label(&title, screen.screen_modified()),
+                value: i.to_string(),
+                current: false,
+            });
+        }
+        let at = rows.iter().position(|r| r.current).unwrap_or(0);
+        let title = self.i18n.t("screens-title");
+        self.park_screen_dialogs();
+        self.mode = Mode::Pick(Box::new(Pick::new(PickKind::Screens, title, rows, at)));
+    }
+
+    /// A row of the screens list: the title, and a star if it holds unsaved changes.
+    fn screen_label(&self, title: &str, modified: bool) -> String {
+        if modified {
+            format!("* {title}")
+        } else {
+            format!("  {title}")
+        }
+    }
+
+    /// Put the screen that is in front into the background and bring `which` forward.
+    ///
+    /// Nothing is dropped and nothing is closed: a screen only leaves this world through its
+    /// own `F10`, which is what asks about unsaved changes.
+    fn show_screen(&mut self, which: Option<usize>) {
+        let front = std::mem::replace(&mut self.mode, Mode::Normal);
+        let coming = match which {
+            Some(i) if i < self.background.len() => Some(self.background.remove(i)),
+            _ => None,
+        };
+        if front.screen_title().is_some() {
+            self.background.push(front);
+        }
+        if let Some(screen) = coming {
+            self.mode = screen;
+        }
+        // A screen that comes forward may be looking at a file the panels have changed.
+        if self.mode.is_normal() {
+            self.read_panel(0);
+            self.read_panel(1);
+        }
+    }
+
+    /// `Ctrl+Tab` / `Ctrl+Shift+Tab`: round the screens without the list.
+    ///
+    /// The panels are screen zero of the ring and the one in front is its last member, so
+    /// `Ctrl+Tab` from a screen steps out to the panels and `Ctrl+Tab` from the panels steps
+    /// in to the next screen behind them: the panels are never more than one key away, and
+    /// every screen is reached by pressing it again. `Ctrl+Shift+Tab` walks the other way,
+    /// which from the panels is the screen one most recently stepped away from.
+    ///
+    /// Going straight from one screen to another, without the panels in between, is `F12` —
+    /// and that is what the list is for. A ring that walks screen to screen would have to own
+    /// the mode rather than shadow it; `docs/BACKLOG.md` carries that.
+    fn cycle_screen(&mut self, backwards: bool) {
+        self.park_screen_dialogs();
+        let behind = self.background.len();
+        let in_front = self.mode.screen_title().is_some();
+        // The ring: the panels, then the background oldest first, then the one in front.
+        let ring = behind + 1 + usize::from(in_front);
+        if ring < 2 {
+            return; // only the panels: nowhere to go
+        }
+        let at = if in_front { ring - 1 } else { 0 };
+        let next = if backwards {
+            (at + ring - 1) % ring
+        } else {
+            (at + 1) % ring
+        };
+        // Index 0 is the panels; 1..=behind are the background screens, oldest first.
+        if next == 0 {
+            self.show_screen(None);
+        } else {
+            self.show_screen(Some(next - 1));
+        }
+    }
+
+    /// A dialog is not a screen, so one open over a viewer is put back on its screen before
+    /// the screen is moved. Without this, stepping away from a prompt would leave the viewer
+    /// behind it in the background and the prompt in front of the panels.
+    fn park_screen_dialogs(&mut self) {
+        if self.mode.screen_title().is_none() {
+            self.restore_viewer();
+            self.restore_editor();
+            self.restore_hex();
+        }
+    }
+
     /// `F9`: ask for one instruction, with the address it will sit at in the title.
     ///
     /// The dialog is deliberately the plainest one in the program: the hard part is not
@@ -5408,6 +5586,8 @@ impl App {
         let pick = match kind {
             // Built by `open_block_menu`, which knows what is marked; nothing opens it here.
             PickKind::HexBlock => return,
+            // The same: `open_screens` knows what is open, and this does not.
+            PickKind::Screens => return,
             PickKind::Languages => Pick::new(
                 kind,
                 self.i18n.t("menu-languages"),
@@ -5544,6 +5724,15 @@ impl App {
             return;
         };
         match pick.kind {
+            PickKind::Screens => match row.value.as_str() {
+                "panels" => self.show_screen(None),
+                "front" => {} // already there
+                other => {
+                    if let Ok(i) = other.parse::<usize>() {
+                        self.show_screen(Some(i));
+                    }
+                }
+            },
             PickKind::HexBlock => {
                 self.restore_hex();
                 match row.value.as_str() {
@@ -6793,6 +6982,7 @@ impl App {
             (8, "key-delete"),
             (9, "key-pulldown"),
             (10, "key-quit"),
+            (12, "key-screens"),
         ]
         .iter()
         .map(|(n, id)| (*n, self.i18n.t(id)))
@@ -8424,6 +8614,112 @@ mod tests {
             panic!("{:?}", app.mode)
         };
         assert!(prompt.text.contains("/0"), "the line should still be there");
+    }
+
+    #[test]
+    fn screens_keep_a_viewer_and_an_editor_open_behind_the_panels() {
+        let dir = tempfile::tempdir().unwrap();
+        let text = dir.path().join("notes.txt");
+        let bin = dir.path().join("prog.bin");
+        std::fs::write(&text, "one\ntwo\n").unwrap();
+        std::fs::write(&bin, [0x55, 0x48, 0x89, 0xE5]).unwrap();
+        let mut app = app();
+
+        // Nothing open: the list still answers, with the panels alone.
+        app.run(Command::AppScreens);
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(pick.rows.len(), 1);
+        assert_eq!(pick.rows[0].value, "panels");
+        press(&mut app, "Esc");
+
+        // Open the viewer, then step back to the panels: it stays open behind them. The
+        // panels are screen zero of the ring, so Ctrl+Tab from the only screen lands there.
+        app.open_viewer_on(&text, VPath::local(&text));
+        assert!(app.mode.viewer().is_some());
+        app.run(Command::AppScreenNext);
+        assert!(app.mode.is_normal(), "{:?}", app.mode);
+        assert_eq!(app.background.len(), 1);
+
+        // And the hex editor on top of that: Ctrl+Tab steps out to the panels again, and
+        // both screens are now behind them.
+        app.open_hex(&bin);
+        app.run(Command::AppScreenNext);
+        assert!(app.mode.is_normal(), "{:?}", app.mode);
+        assert_eq!(app.background.len(), 2, "both are behind the panels now");
+
+        // The list shows both, the panels first and the newest screen last.
+        app.run(Command::AppScreens);
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        let labels: Vec<&str> = pick.rows.iter().map(|r| r.label.as_str()).collect();
+        assert_eq!(labels.len(), 3, "{labels:?}");
+        assert!(labels[1].contains("prog.bin"), "{labels:?}");
+        assert!(labels[2].contains("notes.txt"), "{labels:?}");
+
+        // Choose the viewer: it comes forward and the panels are no longer in front.
+        let at = pick
+            .rows
+            .iter()
+            .position(|r| r.label.contains("notes"))
+            .unwrap();
+        let Mode::Pick(pick) = &mut app.mode else {
+            unreachable!()
+        };
+        pick.cursor = at;
+        press(&mut app, "Enter");
+        assert!(app.mode.viewer().is_some(), "{:?}", app.mode);
+        assert_eq!(app.background.len(), 1, "the hex editor is still behind");
+
+        // Ctrl+Tab from a screen steps out to the panels, and again steps in to the next
+        // one behind them: every screen is reachable, and the panels are one key away.
+        app.run(Command::AppScreenNext);
+        assert!(app.mode.is_normal(), "{:?}", app.mode);
+        app.run(Command::AppScreenNext);
+        assert!(app.mode.hex().is_some(), "{:?}", app.mode);
+        // Backwards from the panels is the screen one stepped away from last.
+        app.run(Command::AppScreenNext);
+        assert!(app.mode.is_normal());
+        app.run(Command::AppScreenPrev);
+        assert!(app.mode.hex().is_some(), "{:?}", app.mode);
+    }
+
+    #[test]
+    fn quitting_asks_about_a_screen_left_with_unsaved_changes() {
+        let dir = tempfile::tempdir().unwrap();
+        let bin = dir.path().join("prog.bin");
+        std::fs::write(&bin, [0x55, 0x48, 0x89, 0xE5]).unwrap();
+        let mut app = app();
+
+        // Change a byte, then step away from the hex editor without saving.
+        app.open_hex(&bin);
+        app.mode.hex_mut().unwrap().set_byte(0, 0xC3);
+        app.run(Command::AppScreenNext);
+        assert_eq!(app.background.len(), 1);
+        assert!(app.background[0].screen_modified());
+
+        // F10 from the panels does not end the program silently: it names the screen.
+        app.run(Command::AppQuit);
+        assert!(!app.quit, "quitting must ask first");
+        let Mode::Confirm(confirm) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(confirm.action, ConfirmAction::QuitWithScreens);
+        assert!(
+            confirm.lines.iter().any(|l| l.contains("prog.bin")),
+            "{:?}",
+            confirm.lines
+        );
+
+        // No leaves it alone; yes ends it.
+        press(&mut app, "Esc");
+        assert!(!app.quit);
+        assert_eq!(app.background.len(), 1, "the screen is still there");
+        app.run(Command::AppQuit);
+        press(&mut app, "Enter");
+        assert!(app.quit);
     }
 
     #[test]

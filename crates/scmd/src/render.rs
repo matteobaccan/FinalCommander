@@ -208,13 +208,18 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         } else {
             app.status.clone()
         };
-        widgets::draw_status(
-            buf,
-            &app.theme,
-            Rect::new(0, panels_h + cmd_h, w, 1),
-            &text,
-            app.status_error,
-        );
+        let row = Rect::new(0, panels_h + cmd_h, w, 1);
+        widgets::draw_status(buf, &app.theme, row, &text, app.status_error);
+        // The background-screen counter, in the corner FAR keeps it in. It is drawn only when
+        // there is something behind the panels, because `[0]` is noise.
+        if !app.background.is_empty() {
+            let mark = format!("[{}]", app.background.len());
+            let width = unicode_width::UnicodeWidthStr::width(mark.as_str()) as u16;
+            if width < w {
+                let style = Style::new(app.theme.color("status.fg"), app.theme.color("status.bg"));
+                buf.put_str(w - width, row.y, &mark, style, width);
+            }
+        }
     }
 
     if keybar_h == 1 {

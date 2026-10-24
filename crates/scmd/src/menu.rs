@@ -52,6 +52,8 @@ pub enum PickKind {
     SortModes,
     /// What to do with the block of bytes that is marked (SPEC 05 §2.6).
     HexBlock,
+    /// The viewers and editors left open, with the panels at the top (SPEC 02 §7).
+    Screens,
 }
 
 /// A mark (`√`) next to the entry that is currently in force.
@@ -330,7 +332,7 @@ pub fn menus() -> Vec<Menu> {
                     "F11",
                     Action::Todo("plugin.commands"),
                 ),
-                item("menu-screens-list", "F12", Action::Todo("screens.list")),
+                item("menu-screens-list", "F12", Action::Run(Command::AppScreens)),
                 item("menu-task-list", "Ctrl+W", Action::Todo("task.list")),
             ],
         },
