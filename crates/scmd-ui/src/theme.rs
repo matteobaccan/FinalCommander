@@ -77,6 +77,7 @@ pub enum ThemeSource {
 /// The six themes compiled into the binary. `commander` is the default.
 pub const BUILTIN_THEMES: &[(&str, &str)] = &[
     ("commander", include_str!("../themes/commander.toml")),
+    ("far", include_str!("../themes/far.toml")),
     ("black", include_str!("../themes/black.toml")),
     ("white", include_str!("../themes/white.toml")),
     ("matrix", include_str!("../themes/matrix.toml")),
@@ -95,6 +96,12 @@ const DEFAULTS: &[(&str, Color)] = &[
     ("panel.header.bg", Color::Default),
     ("panel.header.inactive.fg", Color::Default),
     ("panel.footer.fg", Color::Default),
+    // The active panel's path is drawn inverted, as FAR does it.
+    ("panel.title.active.fg", Color::Ansi(0)),
+    ("panel.title.active.bg", Color::Ansi(6)),
+    // Column titles, the sort-mode letter and the filter mark.
+    ("panel.column.fg", Color::Ansi(11)),
+    ("panel.scrollbar.fg", Color::Default),
     ("cursor.fg", Color::Ansi(0)),
     ("cursor.bg", Color::Ansi(7)),
     ("cursor.inactive.fg", Color::Default),
@@ -114,10 +121,32 @@ const DEFAULTS: &[(&str, Color)] = &[
     ("status.bg", Color::Default),
     ("cmdline.fg", Color::Default),
     ("cmdline.bg", Color::Default),
+    // The menu bar (horizontal) and a pulled-down menu or list.
+    ("hmenu.fg", Color::Ansi(0)),
+    ("hmenu.bg", Color::Ansi(6)),
+    ("hmenu.selected.fg", Color::Ansi(15)),
+    ("hmenu.selected.bg", Color::Ansi(0)),
+    ("menu.fg", Color::Ansi(15)),
+    ("menu.bg", Color::Ansi(6)),
+    ("menu.frame", Color::Ansi(15)),
+    ("menu.title.fg", Color::Ansi(15)),
+    ("menu.selected.fg", Color::Ansi(15)),
+    ("menu.selected.bg", Color::Ansi(0)),
+    ("menu.hotkey.fg", Color::Ansi(11)),
+    ("menu.dim.fg", Color::Ansi(8)),
     ("dialog.fg", Color::Ansi(0)),
     ("dialog.bg", Color::Ansi(7)),
     ("dialog.frame", Color::Ansi(0)),
     ("dialog.title", Color::Ansi(4)),
+    ("dialog.edit.fg", Color::Ansi(0)),
+    ("dialog.edit.bg", Color::Ansi(6)),
+    ("dialog.button.fg", Color::Ansi(0)),
+    ("dialog.button.bg", Color::Ansi(7)),
+    ("dialog.button.selected.fg", Color::Ansi(0)),
+    ("dialog.button.selected.bg", Color::Ansi(6)),
+    ("warn.fg", Color::Ansi(15)),
+    ("warn.bg", Color::Ansi(1)),
+    ("warn.frame", Color::Ansi(15)),
     ("error.fg", Color::Ansi(9)),
     ("filter.fg", Color::Ansi(11)),
     ("search.fg", Color::Ansi(11)),
@@ -373,12 +402,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn all_six_builtin_themes_load_and_define_every_key() {
+    fn every_builtin_theme_loads_and_defines_every_key() {
         let set = ThemeSet::builtin_only();
-        assert_eq!(set.len(), 6);
+        assert_eq!(set.len(), 7);
         assert_eq!(
             set.ids(),
-            vec!["commander", "black", "white", "matrix", "tron", "blade"]
+            vec![
+                "commander",
+                "far",
+                "black",
+                "white",
+                "matrix",
+                "tron",
+                "blade"
+            ]
         );
         for theme in set.iter() {
             assert!(
@@ -401,7 +438,7 @@ mod tests {
     fn white_is_light_and_the_rest_are_dark() {
         let set = ThemeSet::builtin_only();
         assert_eq!(set.get("white").unwrap().variant, Variant::Light);
-        for id in ["commander", "black", "matrix", "tron", "blade"] {
+        for id in ["commander", "far", "black", "matrix", "tron", "blade"] {
             assert_eq!(set.get(id).unwrap().variant, Variant::Dark, "{id}");
         }
     }
@@ -497,7 +534,7 @@ mod tests {
                 "##,
             )],
         );
-        assert_eq!(set.len(), 6, "the config theme replaced the built-in one");
+        assert_eq!(set.len(), 7, "the config theme replaced the built-in one");
         let t = set.get("commander").unwrap();
         assert_eq!(t.name, "Mine");
         assert_eq!(t.color("panel.bg"), Color::Rgb(1, 2, 3));
@@ -516,7 +553,7 @@ mod tests {
                 "##,
             )],
         );
-        assert_eq!(set.len(), 6, "the broken theme was not added");
+        assert_eq!(set.len(), 7, "the broken theme was not added");
         assert_eq!(set.load_errors.len(), 1);
         assert!(
             set.load_errors[0].contains("chartreuse"),
@@ -538,9 +575,9 @@ mod tests {
     #[test]
     fn theme_cycling_wraps() {
         let set = ThemeSet::builtin_only();
-        assert_eq!(set.next_after("commander").id, "black");
+        assert_eq!(set.next_after("commander").id, "far");
         assert_eq!(set.next_after("blade").id, "commander");
-        assert_eq!(set.next_after("nonexistent").id, "black");
+        assert_eq!(set.next_after("nonexistent").id, "far");
     }
 
     #[test]

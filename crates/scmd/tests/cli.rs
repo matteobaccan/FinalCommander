@@ -65,8 +65,8 @@ inherit = "commander"
     assert!(ok, "{stderr}");
     assert!(stdout.contains("Mine"), "{stdout}");
     assert!(stdout.contains("scmd.toml"), "{stdout}");
-    // Still six: the block replaced the built-in rather than adding a seventh.
-    assert_eq!(stdout.lines().count(), 6, "{stdout}");
+    // Still seven: the block replaced the built-in rather than adding an eighth.
+    assert_eq!(stdout.lines().count(), 7, "{stdout}");
 }
 
 #[test]

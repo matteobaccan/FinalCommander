@@ -1,13 +1,13 @@
 # Key bar labels: short, they must fit in a few columns.
 key-help = Help
-key-menu = Menu
+key-menu = UserMn
 key-view = View
 key-edit = Edit
 key-copy = Copy
 key-move = RenMov
-key-mkdir = MkDir
+key-mkdir = MkFold
 key-delete = Delete
-key-pulldown = PullDn
+key-pulldown = ConfMn
 key-quit = Quit
 
 # Panel chrome

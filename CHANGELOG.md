@@ -4,6 +4,39 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
+## [Unreleased]
+
+### The screen looks like FAR's
+
+- A **`far` theme**: FAR Manager's own default palette, element for element, read from
+  `far/palette.cpp` of `FarGroup/FarManager` (BSD-3-Clause). Light cyan on blue panels, yellow
+  for marked files and column titles, a cyan bar on the active panel's path, cyan menus with
+  yellow shortcuts, light grey dialogs with cyan input fields, red warning dialogs.
+- **Column titles** (`Name │ Size │ Date Time`) under the panel frame, with the sort-mode letter
+  in the top-left corner — lower case for ascending order, upper case for descending — and a
+  `*` beside it while a filter is on, exactly where FAR puts them. `panel.column_titles` turns
+  the row off; with it off the sort mode goes back to the footer.
+- The **active panel's path** is drawn inverted, as FAR draws it.
+- **Menus have their own colours** instead of borrowing the dialog's: a dropdown is cyan with
+  yellow shortcuts and a black selection bar, and the bar across the top is black on cyan.
+- **Shadows.** Dialogs, menus, lists and the progress window darken two columns to their right
+  and one row below, which is FAR's `DropShadow` geometry. The shadow halves what is already
+  there rather than painting a colour, so it works in every theme and in 16 colours.
+- Every theme gained the keys those three changes need (menu, menu bar, dialog fields and
+  buttons, warning dialogs, column titles, the active panel's title, the scrollbar) — all seven
+  built-in themes define every key, and a test keeps it that way.
+- The key bar now uses FAR's own wording where FAR ships the language: `UserMn`, `MkFold`,
+  `ConfMn`, and their Italian, German, Spanish and Russian forms.
+
+### Documentation
+
+- `docs/04-far-inventory.md`: FAR 3.x read from its own repository — 283 help topics, 311
+  settings keys — with every feature marked against what we do, the three grammars worth
+  matching exactly (panel columns, file masks, metasymbols), and a section on exactly how close
+  the screen now is and what is still different.
+- Three facts corrected in `docs/03-keymap.md` and one in the backlog, now that the source
+  rather than the documentation is the reference.
+
 ## [0.0.2] — 2026-10-24
 
 The menus. Everything the keys do can now be found by reading, which is the half of FAR that

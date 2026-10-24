@@ -1,12 +1,12 @@
 key-help = Aide
-key-menu = Menu
+key-menu = MenuUt
 key-view = Voir
 key-edit = Éditer
 key-copy = Copier
 key-move = Déplac
-key-mkdir = NouvRép
+key-mkdir = CréDos
 key-delete = Suppr
-key-pulldown = MenuDér
+key-pulldown = Config
 key-quit = Quitter
 
 panel-empty = (vide)

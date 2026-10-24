@@ -4,9 +4,9 @@ key-view = Ver
 key-edit = Editar
 key-copy = Copiar
 key-move = Mover
-key-mkdir = NuevoD
+key-mkdir = CrDIR
 key-delete = Borrar
-key-pulldown = MenúDs
+key-pulldown = BarMnú
 key-quit = Salir
 
 panel-empty = (vacío)

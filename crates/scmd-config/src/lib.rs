@@ -159,6 +159,8 @@ pub struct PanelCfg {
     pub natural_sort: bool,
     pub show_hidden: bool,
     pub allow_reverse_sort: bool,
+    /// The `Name | Size | Date | Time` row under the panel frame (FAR has it on by default).
+    pub column_titles: bool,
     pub quick_search: QuickSearch,
 }
 
@@ -173,6 +175,7 @@ impl Default for PanelCfg {
             natural_sort: true,
             show_hidden: false,
             allow_reverse_sort: true,
+            column_titles: true,
             quick_search: QuickSearch::Alt,
         }
     }
@@ -469,6 +472,7 @@ impl Config {
                     .map_err(|_| format!("net.fetch_limit_mb: `{value}` is not a number"))?
             }
             "panel.allow_reverse_sort" => self.panel.allow_reverse_sort = parse_bool(value)?,
+            "panel.column_titles" => self.panel.column_titles = parse_bool(value)?,
             "general.confirm_exit" => self.general.confirm_exit = parse_bool(value)?,
             "general.confirm_delete" => self.general.confirm_delete = parse_bool(value)?,
             "general.confirm_overwrite" => self.general.confirm_overwrite = parse_bool(value)?,

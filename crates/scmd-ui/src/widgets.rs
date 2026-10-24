@@ -20,13 +20,17 @@ pub struct PanelRender<'a> {
     pub focused: bool,
     pub view: ViewMode,
     pub sort_label: &'a str,
+    /// Ascending or descending, for the letter in the corner.
+    pub sort_reverse: bool,
+    /// Draw the column titles row (FAR's `Show column titles`, on by default).
+    pub column_titles: bool,
     pub filter: Option<&'a str>,
     pub message: Option<&'a str>,
 }
 
 /// Rows that fit in a panel of this height.
-pub fn panel_rows(area: Rect) -> usize {
-    area.h.saturating_sub(2) as usize
+pub fn panel_rows(area: Rect, column_titles: bool) -> usize {
+    area.h.saturating_sub(if column_titles { 3 } else { 2 }) as usize
 }
 
 /// Columns of names in brief view.
@@ -46,22 +50,32 @@ pub fn draw_panel(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>) {
     buf.draw_frame(area, frame, None);
 
     // ── header: the path, elided in the middle so both ends stay readable
-    let header_style = Style::new(
-        if p.focused {
-            theme.color("panel.header.fg")
-        } else {
-            theme.color("panel.header.inactive.fg")
-        },
-        theme.color("panel.header.bg"),
-    );
+    let header_style = if p.focused {
+        Style::new(
+            theme.color("panel.title.active.fg"),
+            theme.color("panel.title.active.bg"),
+        )
+    } else {
+        Style::new(
+            theme.color("panel.header.inactive.fg"),
+            theme.color("panel.header.bg"),
+        )
+    };
     let header_w = area.w.saturating_sub(4) as usize;
     let title = elide_middle(p.path, header_w);
     let tw = title.width() as u16;
     let tx = area.x + 1 + (area.w.saturating_sub(2).saturating_sub(tw + 2)) / 2;
     buf.put_str(tx, area.y, &format!(" {title} "), header_style, tw + 2);
 
-    let inner = area.inner();
-    let rows = panel_rows(area);
+    let mut inner = area.inner();
+    let rows = panel_rows(area, p.column_titles);
+    if p.column_titles {
+        draw_column_titles(buf, theme, p, inner);
+        inner = Rect::new(inner.x, inner.y + 1, inner.w, inner.h.saturating_sub(1));
+    } else {
+        // Without a titles row the sort letter sits on the frame itself, as FAR does.
+        draw_sort_mark(buf, theme, p, area.y);
+    }
 
     if p.listing.is_empty() {
         buf.put_str(inner.x + 1, inner.y, "(empty)", base, inner.w);
@@ -72,6 +86,77 @@ pub fn draw_panel(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>) {
     }
 
     draw_footer(buf, theme, p);
+}
+
+/// The shadow a floating window drops: two columns to the right and one row below, which is
+/// the geometry FAR uses (`DropShadow` in `interf.cpp`).
+pub fn drop_shadow(buf: &mut Buffer, area: Rect) {
+    buf.shadow(Rect::new(area.x + 2, area.bottom(), area.w, 1));
+    buf.shadow(Rect::new(area.right(), area.y + 1, 2, area.h));
+}
+
+/// Centre a column title in its column, the way FAR does.
+fn centre(buf: &mut Buffer, x: u16, y: u16, w: u16, text: &str, style: Style) {
+    let tw = text.width() as u16;
+    if tw >= w {
+        buf.put_str(x, y, &truncate_cols(text, w as usize), style, w);
+        return;
+    }
+    buf.put_str(x + (w - tw) / 2, y, text, style, tw);
+}
+
+/// The sort-mode letter, and a `*` when a filter is on: lower case for ascending order and
+/// upper case for descending, in the column-title colour, exactly where FAR puts it.
+fn draw_sort_mark(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, y: u16) {
+    let style = Style::new(theme.color("panel.column.fg"), theme.color("panel.bg"));
+    let letter = p.sort_label.chars().next().unwrap_or('n');
+    let letter = if p.sort_reverse {
+        letter.to_ascii_uppercase()
+    } else {
+        letter.to_ascii_lowercase()
+    };
+    buf.set(p.area.x + 1, y, letter, style);
+    if p.filter.is_some() {
+        buf.set(p.area.x + 2, y, '*', style);
+    }
+}
+
+/// `Name | Size | Date | Time` under the top frame, with the sort letter at its left.
+fn draw_column_titles(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect) {
+    let style = Style::new(theme.color("panel.column.fg"), theme.color("panel.bg"));
+    let y = inner.y;
+    buf.fill(Rect::new(inner.x, y, inner.w, 1), ' ', style);
+    draw_sort_mark(buf, theme, p, y);
+    let frame = Style::new(theme.color("panel.frame"), theme.color("panel.bg"));
+    match p.view {
+        ViewMode::Brief | ViewMode::Wide => {
+            let cols = brief_columns(p.area);
+            let col_w = (inner.w as usize / cols).max(4);
+            for col in 0..cols {
+                let x = inner.x + (col * col_w) as u16;
+                centre(buf, x, y, col_w as u16 - 1, "Name", style);
+                if col + 1 < cols {
+                    buf.set(x + col_w as u16 - 1, y, '│', frame);
+                }
+            }
+        }
+        _ => {
+            let (name_w, size_w, time_w, attr_w) = full_columns(inner.w, p.view);
+            let mut x = inner.x;
+            centre(buf, x, y, name_w, "Name", style);
+            x += name_w;
+            buf.set(x, y, '│', frame);
+            centre(buf, x + 1, y, size_w, "Size", style);
+            x += size_w + 1;
+            buf.set(x, y, '│', frame);
+            centre(buf, x + 1, y, time_w, "Date       Time", style);
+            if attr_w > 0 {
+                x += time_w + 1;
+                buf.set(x, y, '│', frame);
+                centre(buf, x + 1, y, attr_w, "Attr", style);
+            }
+        }
+    }
 }
 
 fn row_style(theme: &Theme, e: &Entry, selected: bool, cursor: bool, focused: bool) -> Style {
@@ -135,13 +220,19 @@ fn draw_brief(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect,
     }
 }
 
-fn draw_full(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect, rows: usize) {
+/// (name, size, time, attributes) widths, so the titles row and the file rows cannot drift.
+fn full_columns(inner_w: u16, view: ViewMode) -> (u16, u16, u16, u16) {
     let size_w: u16 = 9;
     let time_w: u16 = 16; // `2026-10-23 17:42`
-    let detail = p.view == ViewMode::Detail;
+    let detail = view == ViewMode::Detail;
     let attr_w: u16 = if detail { 5 } else { 0 };
     let fixed = size_w + time_w + attr_w + 2 + u16::from(detail);
-    let name_w = inner.w.saturating_sub(fixed).max(4);
+    (inner_w.saturating_sub(fixed).max(4), size_w, time_w, attr_w)
+}
+
+fn draw_full(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect, rows: usize) {
+    let (name_w, size_w, time_w, attr_w) = full_columns(inner.w, p.view);
+    let detail = p.view == ViewMode::Detail;
 
     for row in 0..rows {
         let idx = p.top + row;
@@ -258,12 +349,21 @@ fn draw_footer(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>) {
             format_size(totals.selected_bytes)
         )
     } else {
-        format!(
-            "{} files, {}  [{}]",
-            format_count(totals.files),
-            format_size(totals.bytes),
-            p.sort_label
-        )
+        // The sort mode is in the corner when the titles row is on, so it is not repeated.
+        if p.column_titles {
+            format!(
+                "{} files, {}",
+                format_count(totals.files),
+                format_size(totals.bytes)
+            )
+        } else {
+            format!(
+                "{} files, {}  [{}]",
+                format_count(totals.files),
+                format_size(totals.bytes),
+                p.sort_label
+            )
+        }
     };
     let text = truncate_cols(&text, w as usize);
     let tw = text.width() as u16;
@@ -381,6 +481,7 @@ pub fn draw_dialog(
             w - 4,
         );
     }
+    drop_shadow(buf, area);
     area
 }
 
@@ -406,10 +507,11 @@ pub fn draw_prompt(
         Some(title),
     );
     let field = Rect::new(area.x + 2, area.y + 1, w - 4, 1);
-    let input = Style::new(theme.color("dialog.fg"), theme.color("dialog.bg")).bold();
+    let input = Style::new(theme.color("dialog.edit.fg"), theme.color("dialog.edit.bg"));
     buf.fill(field, ' ', input);
     let shown = truncate_cols(text, field.w as usize);
     buf.put_str(field.x, field.y, &shown, input, field.w);
+    drop_shadow(buf, area);
     (
         area,
         field.x + (cursor as u16).min(field.w.saturating_sub(1)),
@@ -521,6 +623,7 @@ pub fn draw_progress(
         accent,
         inner.w,
     );
+    drop_shadow(buf, area);
     area
 }
 
@@ -533,8 +636,15 @@ pub fn draw_buttons(
     labels: &[String],
     selected: usize,
 ) -> Vec<u16> {
-    let normal = theme.dialog();
-    let active = Style::new(theme.color("cursor.fg"), theme.color("cursor.bg")).bold();
+    let normal = Style::new(
+        theme.color("dialog.button.fg"),
+        theme.color("dialog.button.bg"),
+    );
+    let active = Style::new(
+        theme.color("dialog.button.selected.fg"),
+        theme.color("dialog.button.selected.bg"),
+    )
+    .bold();
     let total: usize = labels.iter().map(|l| l.width() + 4).sum();
     let mut x = area.x + (area.w as usize).saturating_sub(total) as u16 / 2;
     let mut starts = Vec::with_capacity(labels.len());
@@ -603,6 +713,7 @@ pub fn draw_choice(
         buttons,
         selected,
     );
+    drop_shadow(buf, area);
     area
 }
 
@@ -650,6 +761,8 @@ mod tests {
             focused: true,
             view,
             sort_label: "name",
+            sort_reverse: false,
+            column_titles: false,
             filter: None,
             message: None,
         };
@@ -701,6 +814,8 @@ mod tests {
             focused: true,
             view: ViewMode::Full,
             sort_label: "name",
+            sort_reverse: false,
+            column_titles: false,
             filter: None,
             message: None,
         };
@@ -724,6 +839,8 @@ mod tests {
             focused: false,
             view: ViewMode::Full,
             sort_label: "name",
+            sort_reverse: false,
+            column_titles: false,
             filter: None,
             message: None,
         };
@@ -797,6 +914,8 @@ mod tests {
             focused: true,
             view: ViewMode::Full,
             sort_label: "name",
+            sort_reverse: false,
+            column_titles: false,
             filter: None,
             message: None,
         };
@@ -897,18 +1016,51 @@ mod tests {
             "{out}"
         );
 
-        // The selected button is drawn with the cursor colours, not the dialog ones.
-        let row = buf.height() - 1;
-        let mut found = false;
+        // The selected button is drawn with the selected-button colours, and the others are
+        // not: a dialog where every button looks chosen is a dialog nobody can answer.
+        let mut selected = 0;
+        let mut plain = 0;
         for y in 0..buf.height() {
             for x in 0..buf.width() {
                 let cell = buf.get(x, y).unwrap();
-                if cell.ch == 'S' && cell.style.bg == theme.color("cursor.bg") {
-                    found = true;
+                if cell.ch != 'S' && cell.ch != 'O' {
+                    continue;
+                }
+                if cell.style.bg == theme.color("dialog.button.selected.bg") {
+                    selected += 1;
+                } else if cell.style.bg == theme.color("dialog.button.bg") {
+                    plain += 1;
                 }
             }
         }
-        assert!(found, "the selected button is not highlighted (row {row})");
+        assert_eq!(selected, 1, "expected exactly one highlighted button");
+        assert!(plain >= 1, "the other buttons lost their colours");
+    }
+
+    #[test]
+    fn a_dialog_drops_a_shadow_on_what_is_behind_it() {
+        let theme = Theme::builtin("far").unwrap();
+        let mut buf = Buffer::new(40, 12);
+        // Something bright behind the dialog, so the darkening is visible.
+        let bright = Style::new(theme.color("panel.fg"), theme.color("panel.bg"));
+        buf.clear(bright);
+        let screen = buf.area();
+        let area = draw_dialog(&mut buf, &theme, screen, "T", &["hello".into()], None);
+        let under = buf
+            .get(area.x + 2, area.bottom())
+            .expect("a cell below the dialog");
+        assert_eq!(
+            under.style.fg,
+            theme.color("panel.fg").darkened(),
+            "the shadow did not darken the cell below the dialog"
+        );
+        let beside = buf
+            .get(area.right(), area.y + 1)
+            .expect("a cell beside the dialog");
+        assert_eq!(beside.style.bg, theme.color("panel.bg").darkened());
+        // The row above the dialog is untouched: a shadow falls down and to the right.
+        let above = buf.get(area.x + 2, area.y.saturating_sub(1)).unwrap();
+        assert_eq!(above.style.fg, theme.color("panel.fg"));
     }
 
     #[test]
@@ -940,6 +1092,8 @@ mod tests {
             focused: true,
             view: ViewMode::Full,
             sort_label: SortKey::Size.as_str(),
+            sort_reverse: false,
+            column_titles: false,
             filter: None,
             message: None,
         };
@@ -981,8 +1135,11 @@ pub fn draw_menu_bar(
     titles: &[String],
     active: usize,
 ) -> Vec<u16> {
-    let bar = Style::new(theme.color("keybar.fg"), theme.color("keybar.bg"));
-    let picked = Style::new(theme.color("cursor.fg"), theme.color("cursor.bg"));
+    let bar = Style::new(theme.color("hmenu.fg"), theme.color("hmenu.bg"));
+    let picked = Style::new(
+        theme.color("hmenu.selected.fg"),
+        theme.color("hmenu.selected.bg"),
+    );
     buf.fill(area, ' ', bar);
     let mut x = area.x + 2;
     let mut starts = Vec::with_capacity(titles.len());
@@ -1024,11 +1181,15 @@ pub fn draw_menu(
     let y = screen.y + 1;
     let area = Rect::new(x, y, w, h);
 
-    let style = theme.dialog();
-    let frame = Style::new(theme.color("dialog.frame"), theme.color("dialog.bg"));
-    let picked = Style::new(theme.color("cursor.fg"), theme.color("cursor.bg"));
-    let dim = Style::new(theme.color("panel.footer.fg"), theme.color("dialog.bg"));
-    let keys_style = Style::new(theme.color("dialog.title"), theme.color("dialog.bg"));
+    // A menu has its own colours, not the dialog ones: in FAR the dropdowns are cyan with
+    // yellow shortcuts while dialogs are grey.
+    let style = Style::new(theme.color("menu.fg"), theme.color("menu.bg"));
+    let frame = Style::new(theme.color("menu.frame"), theme.color("menu.bg"));
+    let picked = Style::new(
+        theme.color("menu.selected.fg"),
+        theme.color("menu.selected.bg"),
+    );
+    let keys_style = Style::new(theme.color("menu.hotkey.fg"), theme.color("menu.bg"));
     buf.fill(area, ' ', style);
     buf.draw_frame(area, frame, None);
 
@@ -1046,16 +1207,16 @@ pub fn draw_menu(
         let on = i == selected;
         let line = Style::new(
             if on {
-                theme.color("cursor.fg")
+                theme.color("menu.selected.fg")
             } else if row.dim {
-                theme.color("panel.footer.fg")
+                theme.color("menu.dim.fg")
             } else {
-                theme.color("dialog.fg")
+                theme.color("menu.fg")
             },
             if on {
-                theme.color("cursor.bg")
+                theme.color("menu.selected.bg")
             } else {
-                theme.color("dialog.bg")
+                theme.color("menu.bg")
             },
         );
         let width = area.w - 2;
@@ -1077,8 +1238,8 @@ pub fn draw_menu(
                 if on { picked } else { keys_style },
             );
         }
-        let _ = dim;
     }
+    drop_shadow(buf, area);
     area
 }
 
@@ -1193,5 +1354,6 @@ pub fn draw_form(buf: &mut Buffer, theme: &Theme, screen: Rect, view: &FormView)
             button.unwrap_or(usize::MAX),
         );
     }
+    drop_shadow(buf, area);
     area
 }

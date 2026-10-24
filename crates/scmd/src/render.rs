@@ -81,7 +81,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
     ];
 
     // Remember the geometry so key handling knows how far a page is.
-    app.rows = widgets::panel_rows(areas[0]);
+    app.rows = widgets::panel_rows(areas[0], app.cfg.panel.column_titles);
     app.columns = widgets::brief_columns(areas[0]);
     for i in 0..2 {
         let (rows, cols) = (app.rows, app.columns);
@@ -106,6 +106,8 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             focused: i == app.active,
             view: panel.view,
             sort_label: panel.sort.key.as_str(),
+            sort_reverse: panel.sort.reverse,
+            column_titles: app.cfg.panel.column_titles,
             filter: panel.filter.as_deref(),
             message: message.as_deref(),
         };
@@ -784,6 +786,57 @@ mod tests {
             let out = frame(&mut app, 60, 15);
             assert!(out.contains("src/"), "theme {id} rendered nothing: {out}");
         }
+    }
+
+    #[test]
+    fn the_panel_wears_fars_chrome() {
+        let mut app = app("far", "en");
+        let out = frame(&mut app, 80, 24);
+        let lines: Vec<&str> = out.lines().collect();
+        // Row 1 is the column titles, with the sort letter in the corner: lower case for
+        // ascending order, upper case for descending.
+        assert!(
+            lines[1].contains("Name") && lines[1].contains("Size"),
+            "{out}"
+        );
+        assert!(
+            lines[1].starts_with("│n"),
+            "no sort letter in the corner: {}",
+            lines[1]
+        );
+        // The footer no longer repeats the sort mode.
+        assert!(!out.contains("[name]"), "{out}");
+
+        app.panels[0].sort.reverse = true;
+        app.panels[0].rebuild();
+        let out = frame(&mut app, 80, 24);
+        let lines: Vec<&str> = out.lines().collect();
+        assert!(lines[1].starts_with("│N"), "{}", lines[1]);
+
+        // A filter puts a mark next to the letter, as FAR does.
+        app.panels[0].filter = Some("rs".into());
+        app.panels[0].rebuild();
+        let out = frame(&mut app, 80, 24);
+        let lines: Vec<&str> = out.lines().collect();
+        assert!(lines[1].starts_with("│N*"), "{}", lines[1]);
+    }
+
+    #[test]
+    fn the_titles_row_costs_one_file_row_and_the_panel_knows_it() {
+        let mut with = app("far", "en");
+        let rows_with = {
+            let mut buf = Buffer::new(80, 24);
+            draw(&mut with, &mut buf);
+            with.rows
+        };
+        let mut without = app("far", "en");
+        without.cfg.panel.column_titles = false;
+        let rows_without = {
+            let mut buf = Buffer::new(80, 24);
+            draw(&mut without, &mut buf);
+            without.rows
+        };
+        assert_eq!(rows_without, rows_with + 1);
     }
 
     #[test]

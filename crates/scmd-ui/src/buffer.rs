@@ -154,6 +154,21 @@ impl Buffer {
         }
     }
 
+    /// Darken what is already in this rectangle, keeping the characters: the shadow a dialog
+    /// drops. Cells outside the buffer are ignored.
+    pub fn shadow(&mut self, area: Rect) {
+        for y in area.y..area.bottom() {
+            for x in area.x..area.right() {
+                if let Some(i) = self.index(x, y) {
+                    let cell = &mut self.cells[i];
+                    cell.style.fg = cell.style.fg.darkened();
+                    cell.style.bg = cell.style.bg.darkened();
+                    cell.style.bold = false;
+                }
+            }
+        }
+    }
+
     pub fn clear(&mut self, style: Style) {
         self.cells.fill(Cell {
             ch: ' ',

@@ -4231,8 +4231,8 @@ mod tests {
         let mut app = app();
         assert_eq!(app.theme.id, "commander");
         press(&mut app, "Alt+T");
-        assert_eq!(app.theme.id, "black");
-        assert!(app.status.contains("Black"), "{}", app.status);
+        assert_eq!(app.theme.id, "far");
+        assert!(app.status.contains("FAR"), "{}", app.status);
     }
 
     #[test]

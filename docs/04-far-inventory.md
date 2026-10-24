@@ -64,7 +64,7 @@ and 3 built-in providers. That gap is the roadmap.
 | Selected files first | `Shift+F12` | ✅ (setting) |
 | Folder shortcuts: 10 slots, set and jump | `Ctrl+Shift+0…9`, `RightCtrl+0…9` | ✗ |
 | Scroll long names and descriptions sideways | `Alt+←/→`, `Alt+Home/End` | ✗ |
-| Column titles, status line, file totals, free size, scrollbar, sort-mode letter, `..` in root, background-screen count — each a setting | — | ◐ titles/status/totals yes, the rest no |
+| Column titles, status line, file totals, free size, scrollbar, sort-mode letter, `..` in root, background-screen count — each a setting | — | ◐ column titles, the sort letter and the filter mark, file totals yes (`panel.column_titles`); free size, the per-panel status line, the scrollbar, `..` in root and the screen count no |
 | Automatic update on filesystem change, with a size threshold that turns it off, and a separate switch for network drives | — | ✗ (no watch yet) |
 | Detect volume mount points, distinguish junctions | — | ⊘ |
 | Drag and drop between panels and with the OS | — | ⊘ |
@@ -268,6 +268,36 @@ What FAR ships as **plugins**, and what it tells us about scope:
 The lesson is architectural, not feature-by-feature: FAR's core is a panel engine, a dialog
 engine, a macro engine and a plugin API — and *everything else*, archives included, is a plugin.
 Our SPEC 08 says the same thing; this confirms the shape rather than changing it.
+
+## 10b. How close the screen is
+
+The question "can it look like FAR?" has a short answer: yes, because it is all character cells
+and sixteen colours, and nothing in FAR's screen needs anything a terminal cannot do. What is
+already identical:
+
+- **The palette.** The `far` theme is FAR's own default table from `far/palette.cpp`, element for
+  element: light cyan on blue panels, yellow for marked files and column titles, a cyan bar on
+  the active panel's path, cyan menus with yellow shortcuts, light grey dialogs with cyan input
+  fields, red warning dialogs, light grey numbers on black in the key bar.
+- **The panel chrome.** The column titles row under the frame, with the sort-mode letter in the
+  top-left corner — lower case for ascending, upper case for descending — and a `*` beside it
+  while a filter is on. The active panel's path is drawn inverted.
+- **Menus are menus.** A pulled-down menu is cyan with yellow shortcuts and a black selection
+  bar, not a grey dialog; the bar across the top is black on cyan with a black selection.
+- **Shadows.** A dialog, a menu, a list or a progress window darkens two columns to its right
+  and one row below it, which is `DropShadow`'s geometry, by halving what is there rather than
+  painting a colour — so it works in any theme and degrades to 16 colours.
+- **The key bar wording**, taken from FAR's own catalogues in each language we share with it
+  (`UserMn`, `MkFold`, `ConfMn`, and their Italian, German, Spanish and Russian forms).
+
+What is still different, and why:
+
+| Difference | Why |
+| --- | --- |
+| One status line at the bottom of the screen, not one inside each panel | FAR shows the item under the cursor in the panel's own bottom line. Ours is global, which is a real design choice to revisit when the command line lands, because that is what competes for the same rows. |
+| No free space in the panel frame, no scrollbar, no screens counter, no clock | Each is a small drawing job; the clock also needs a repaint on a timer, which the input-driven loop does not do yet. |
+| Four view modes, not ten | The missing six are descriptions, long descriptions, owners, links, medium and alternative full — and most of them need data we do not read yet (descriptions, owners). |
+| No dialog shadow *under* a dropped-down list inside a dialog | We have no nested floating windows yet. |
 
 ## 11. What this changes for us
 

@@ -217,11 +217,26 @@ hidden = "#808080"
 
 - Colours accept hex, `palette` names, 256-index, and `ansi:N` for 16-colour terminals; the
   backend degrades automatically and themes may declare a `[fallback16]` section.
+- **Every built-in theme defines every key** — there is a test for it — so adding a key means
+  adding it to all of them, and a theme can never be half-coloured. The groups are: `panel.*`
+  (background, text, frame, the path in the header, the active panel's inverted title, column
+  titles, footer, scrollbar), `cursor.*` and `selected.fg`, `file.*` (the semantic file
+  colours), `keybar.*`, `status.*`, `cmdline.*`, `hmenu.*` (the menu bar), `menu.*` (a
+  pulled-down menu or a list: text, frame, title, selection, shortcut, dim), `dialog.*`
+  (text, frame, title, input fields, buttons, the chosen button), `warn.*` (a dialog that
+  reports a failure), and `error.fg` / `filter.fg` / `search.fg`.
+- Menus are not dialogs and do not borrow their colours: in FAR a dropdown is cyan with yellow
+  shortcuts while a dialog is grey with cyan fields, and a theme has to be able to say both.
+- A floating window **drops a shadow** on what is behind it — two columns to the right, one row
+  below, which is FAR's geometry. The shadow darkens whatever is already there (RGB halved, or
+  one step down the ANSI palette) instead of painting a colour of its own, so it works in every
+  theme and in 16 colours.
 - **Built-in themes (compiled in, always available, no files needed):**
 
   | id | look |
   | --- | --- |
   | `commander` | the classic orthodox blue: dark blue panels, cyan text, yellow selection, cyan key bar — the default |
+  | `far` | FAR Manager's own default palette, element for element, from `far/palette.cpp` of `FarGroup/FarManager` (BSD-3-Clause): the sixteen console colours, a cyan bar on the active panel's path, yellow column titles, cyan menus with yellow shortcuts, light grey dialogs with cyan input fields, red warning dialogs. For a user who wants the screen they already know |
   | `black` | near-monochrome dark: black background, grey text, white cursor; for low-contrast terminals and e-ink |
   | `white` | light theme: white background, dark text, blue accents; readable in daylight and on projectors |
   | `matrix` | green phosphor on black, bright green cursor, dim green chrome |

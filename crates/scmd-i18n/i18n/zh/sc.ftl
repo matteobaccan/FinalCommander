@@ -1,12 +1,12 @@
 key-help = 帮助
-key-menu = 菜单
+key-menu = 用户菜
 key-view = 查看
 key-edit = 编辑
 key-copy = 复制
 key-move = 移动
 key-mkdir = 新建夹
 key-delete = 删除
-key-pulldown = 主菜单
+key-pulldown = 配置菜
 key-quit = 退出
 
 panel-empty = （空）

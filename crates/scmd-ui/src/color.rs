@@ -24,6 +24,21 @@ pub enum ColorDepth {
 }
 
 impl Color {
+    /// Half as bright, for the shadow a dialog drops on what is behind it. FAR merges the
+    /// cell with half-transparent black where it can and walks the palette down where it
+    /// cannot; this does both, depending on what kind of colour it is.
+    pub fn darkened(self) -> Color {
+        match self {
+            Color::Rgb(r, g, b) => Color::Rgb(r / 2, g / 2, b / 2),
+            // 8..15 are the bright half of the ANSI palette: their dark twin is eight below.
+            Color::Ansi(n) if n >= 8 => Color::Ansi(n - 8),
+            Color::Ansi(0) => Color::Ansi(0),
+            Color::Ansi(_) => Color::Ansi(0),
+            Color::Indexed(n) => Color::Indexed(n),
+            Color::Default => Color::Ansi(0),
+        }
+    }
+
     pub fn parse(s: &str) -> Option<Color> {
         let s = s.trim();
         if s.is_empty() || s.eq_ignore_ascii_case("default") || s == "-" {

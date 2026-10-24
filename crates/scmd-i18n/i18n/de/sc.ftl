@@ -1,12 +1,12 @@
 key-help = Hilfe
-key-menu = Menü
+key-menu = BenuMn
 key-view = Ansehen
 key-edit = Bearb
 key-copy = Kopier
 key-move = Verschb
-key-mkdir = NeuOrd
+key-mkdir = VerzEr
 key-delete = Löschen
-key-pulldown = MenüLs
+key-pulldown = KonfMn
 key-quit = Ende
 
 panel-empty = (leer)

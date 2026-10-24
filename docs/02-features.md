@@ -26,6 +26,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 1.9 | Tree panel (directory tree in a panel, synced with the other side) | FAR/MC | M2 |
 | 1.10 | More than two panels / floating panel windows | DN/MTN2 | M4 |
 | 1.11 | Status line (name, size, date of the current item) and total/selected counters | FAR | M1 |
+| 1.11b | Column titles row (`Name │ Size │ Date Time`), with the sort-mode letter in the corner — lower case ascending, upper case descending — and a `*` beside it while a filter is on | FAR | M1 |
 | 1.12 | Function-key bar (`F1..F12`, follows modifiers: Shift/Alt/Ctrl rows) | NC | M1 |
 | 1.13 | Sort by name/ext/size/mtime/ctime/atime/owner/unsorted, reversible, group dirs first, selected first, natural ("version") sort, locale-aware collation | FAR/TC | M1 core, M2 full |
 | 1.14 | Secondary sort criteria chain (tie-breakers, configurable): per sort mode an ordered set, with its own editor (add, remove, replace, direction, inherit, reorder, reset) | FAR | M3 |
@@ -176,7 +177,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | --- | --- | --- | --- |
 | 9.1 | Human-editable config files (TOML) + in-app settings dialogs (System, Panel, Interface, Confirmations — every row bound to a config key and applied through the same code as `--set`, SPEC 10 §3); portable mode (config next to the binary) | MTN2 | M1 |
 | 9.2 | Full keymap remapping, multiple **keymap profiles** (`far`, `tc`, `mc`, `nc`, `vi`) switchable at runtime | KRU/MTN2 | M1 (far+mc), M2 rest |
-| 9.3 | Themes: 6 built-in (`commander`, `black`, `white`, `matrix`, `tron`, `blade`) + `[[theme]]` blocks in `scmd.toml` or from plugins, hot-reloaded, `inherit`-able, exportable with `--export-theme`; 24-bit colour with 256/16/mono degradation | MTN2 | M1 |
+| 9.3 | Themes: 7 built-in (`commander`, `far` — FAR's own default palette element for element, `black`, `white`, `matrix`, `tron`, `blade`) + `[[theme]]` blocks in `scmd.toml` or from plugins, hot-reloaded, `inherit`-able, exportable with `--export-theme`; 24-bit colour with 256/16/mono degradation | MTN2 | M1 |
 | 9.4 | Localisation (fluent-based): EN, IT, DE, FR, ES, RU, ZH-Hans; UI + help + key names, runtime switchable from the `Languages` list, drop-in language dirs | FAR/MTN2 | M2 |
 | 9.5 | CJK/wide-character correct layout, combining marks, RTL-safe truncation, emoji width | MTN2 | M2 |
 | 9.6 | Accessibility: no-colour mode, screen-reader-friendly output mode, configurable focus indication | NEW | M3 |

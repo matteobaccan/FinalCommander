@@ -1,12 +1,12 @@
 key-help = Помощь
-key-menu = Меню
+key-menu = ПользМ
 key-view = Просм
 key-edit = Правка
 key-copy = Копир
 key-move = Перенос
 key-mkdir = Папка
 key-delete = Удал
-key-pulldown = МенюВв
+key-pulldown = КонфМн
 key-quit = Выход
 
 panel-empty = (пусто)

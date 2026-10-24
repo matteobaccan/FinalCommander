@@ -107,6 +107,9 @@ what we intend to do about it.
 
 | Item | Where | Notes |
 | --- | --- | --- |
+| A status line inside each panel | panel | FAR puts the item under the cursor in the panel's own bottom line, and keeps the screen's bottom rows for the command line and the key bar. We have one global status line instead. Worth settling together with the command line, since they compete for the same rows. |
+| Free space in the panel frame, a scrollbar, the background-screen counter, a clock | panel | Small drawing jobs, except the clock, which needs a repaint on a timer. |
+| The six view modes we do not have | `LeftCtrl+1…0` | Medium, descriptions, long descriptions, owners, links, alternative full. Three of them need data we do not read yet (descriptions, owners, link counts). |
 | A settings browser | `far:config` equivalent | FAR has 311 settings and a searchable editor for all of them; we have ~45 and `--dump-config`. The browser matters more as the count grows. |
 | Colour groups and a theme editor | Options menu | Per-element colour editing with 16-colour, 256-colour and RGB pickers, on top of the themes we already load. |
 | Auto-save setup on exit | System settings | Including both panels' folders, so the next start is where the last one ended. |

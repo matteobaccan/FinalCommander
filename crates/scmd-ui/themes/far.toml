@@ -1,0 +1,99 @@
+id = "far"
+name = "FAR classic"
+author = "SupremeCommander"
+variant = "dark"
+# FAR Manager's own default palette, element for element, from `far/palette.cpp` of
+# FarGroup/FarManager (BSD-3-Clause): blue panels with light cyan text, yellow for marked files
+# and column titles, a cyan bar on the active panel's path, cyan menus with yellow hotkeys,
+# light grey dialogs with cyan input fields, and red warning dialogs.
+# The sixteen values are the console palette FAR inherits from the Windows console.
+
+[palette]
+black = "#000000"
+blue = "#000080"
+green = "#008000"
+cyan = "#008080"
+red = "#800000"
+magenta = "#800080"
+brown = "#808000"
+lightgray = "#c0c0c0"
+darkgray = "#808080"
+lightblue = "#0000ff"
+lightgreen = "#00ff00"
+lightcyan = "#00ffff"
+lightred = "#ff0000"
+lightmagenta = "#ff00ff"
+yellow = "#ffff00"
+white = "#ffffff"
+
+[colors]
+# Panel.Text / Panel.Box / Panel.Title
+"panel.bg" = "blue"
+"panel.fg" = "lightcyan"
+"panel.frame" = "lightcyan"
+"panel.header.fg" = "lightcyan"
+"panel.header.bg" = "blue"
+"panel.header.inactive.fg" = "lightcyan"
+# Panel.Title.Selected: the active panel's path, inverted
+"panel.title.active.fg" = "black"
+"panel.title.active.bg" = "cyan"
+# Panel.Title.Column, also the sort letter and the filter mark
+"panel.column.fg" = "yellow"
+# Panel.Info.Total
+"panel.footer.fg" = "lightcyan"
+"panel.scrollbar.fg" = "lightcyan"
+# Panel.Cursor / Panel.Text.Selected
+"cursor.fg" = "black"
+"cursor.bg" = "cyan"
+"cursor.inactive.fg" = "lightcyan"
+"cursor.inactive.bg" = "blue"
+"selected.fg" = "yellow"
+# Highlight groups: FAR ships none by default, these are ours and stay out of the way
+"file.dir" = "white"
+"file.exec" = "lightgreen"
+"file.symlink" = "lightmagenta"
+"file.archive" = "lightmagenta"
+"file.hidden" = "darkgray"
+"file.broken" = "lightred"
+# Keybar.Num / Keybar.Text
+"keybar.fg" = "black"
+"keybar.bg" = "cyan"
+"keybar.num.fg" = "lightgray"
+"keybar.num.bg" = "black"
+# HMenu.Text / HMenu.Text.Selected: the menu bar across the top
+"hmenu.fg" = "black"
+"hmenu.bg" = "cyan"
+"hmenu.selected.fg" = "white"
+"hmenu.selected.bg" = "black"
+# Menu.Text / Menu.Box / Menu.Highlight: a pulled-down menu or a list
+"menu.fg" = "white"
+"menu.bg" = "cyan"
+"menu.frame" = "white"
+"menu.title.fg" = "white"
+"menu.selected.fg" = "white"
+"menu.selected.bg" = "black"
+"menu.hotkey.fg" = "yellow"
+"menu.dim.fg" = "darkgray"
+# Dialog.Text / Dialog.Box / Dialog.Edit / Dialog.Button
+"dialog.fg" = "black"
+"dialog.bg" = "lightgray"
+"dialog.frame" = "black"
+"dialog.title" = "black"
+"dialog.edit.fg" = "black"
+"dialog.edit.bg" = "cyan"
+"dialog.button.fg" = "black"
+"dialog.button.bg" = "lightgray"
+"dialog.button.selected.fg" = "black"
+"dialog.button.selected.bg" = "cyan"
+# WarnDialog.*
+"warn.fg" = "white"
+"warn.bg" = "red"
+"warn.frame" = "white"
+# Viewer.Status / Editor.Status share the key bar's colours in FAR
+"status.fg" = "black"
+"status.bg" = "cyan"
+"cmdline.fg" = "lightgray"
+"cmdline.bg" = "black"
+"error.fg" = "lightred"
+"filter.fg" = "yellow"
+"search.fg" = "yellow"
