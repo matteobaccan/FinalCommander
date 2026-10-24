@@ -962,8 +962,11 @@ mod tests {
     #[test]
     fn an_absolute_file_entry_is_a_problem() {
         let root = tempfile::tempdir().unwrap();
+        // Forward slashes: a backslash in a bare TOML string is an escape, so `C:\W` would
+        // fail to parse and the test would pass for the wrong reason. `C:/…` is just as
+        // absolute to Windows.
         let absolute = if cfg!(windows) {
-            "C:\\Windows\\win.ini"
+            "C:/Windows/win.ini"
         } else {
             "/etc/passwd"
         };
