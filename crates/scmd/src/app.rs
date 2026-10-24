@@ -2700,17 +2700,21 @@ impl App {
             PickKind::FoldersHistory => {
                 let panel = &self.panels[side];
                 let current = panel.cwd.to_string();
-                let mut rows: Vec<PickRow> = panel
+                // Newest first, and a folder visited three times is one row, not three —
+                // `dedup` would only catch the repeats that happen to be adjacent.
+                let mut seen = std::collections::HashSet::new();
+                let rows: Vec<PickRow> = panel
                     .history
                     .iter()
                     .rev()
-                    .map(|p| PickRow {
-                        label: p.to_string(),
-                        value: p.to_string(),
-                        current: p.to_string() == current,
+                    .map(|p| p.to_string())
+                    .filter(|path| seen.insert(path.clone()))
+                    .map(|path| PickRow {
+                        current: path == current,
+                        label: path.clone(),
+                        value: path,
                     })
                     .collect();
-                rows.dedup_by(|a, b| a.value == b.value);
                 Pick::new(kind, self.i18n.t("menu-folders-history"), rows, side)
             }
             PickKind::SortModes => {
@@ -4021,6 +4025,22 @@ mod tests {
             "the folder we came from is not in the list: {:?}",
             pick.rows
         );
+
+        // Walking back and forth must not fill the list with the same two folders.
+        for _ in 0..3 {
+            app.goto(came_from.join("docs"));
+            app.goto(came_from.clone());
+        }
+        press(&mut app, "Esc");
+        press(&mut app, "Alt+F12");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("the history did not open")
+        };
+        let mut paths: Vec<&String> = pick.rows.iter().map(|r| &r.value).collect();
+        let before = paths.len();
+        paths.sort();
+        paths.dedup();
+        assert_eq!(before, paths.len(), "the history repeats itself: {paths:?}");
     }
 
     #[test]
