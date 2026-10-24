@@ -149,6 +149,20 @@ What works today:
   uploaded beside the original and renamed into place, so the file on the server keeps its old
   bytes until the new ones are all there, and a file someone else changed in the meantime asks
   before being overwritten. `Alt+Shift+N` disconnects.
+- **Object storage** (`s3://`): a bucket as a panel, on AWS or on anything else that speaks the
+  protocol — MinIO, Ceph, Garage, R2, Wasabi, a LocalStack in a container — with the endpoint,
+  the region and the addressing style in an `[[s3]]` block of the config. `s3://logs/2024/08/`
+  opens a prefix, `s3://work@logs/` picks a service by name, `s3://work@/` lists the buckets.
+  A bucket has no directories in it — `2024/08/13/access.log` is one key with slashes — so what
+  the panel shows as a folder is a common prefix the *service* computes, which is why opening
+  one costs a single request in a bucket of ten million objects as in a bucket of ten. Asking
+  for everything under a prefix is the other thing, and it is bounded: the listing stops at
+  `listing_cap` rows and the footer then says `(partial)` for as long as it is on screen,
+  because a count that is not the whole count must not look like one. No access key is ever
+  written into `scmd.toml`: they come from the `AWS_*` variables or from `~/.aws/credentials`,
+  and `credentials = "anonymous"` reads a public bucket with no keys at all. Read-only in this
+  release, and the capabilities say so, so nothing offers to rename an object — object storage
+  has no rename.
 - **Menus and settings** (`F9`): FAR's five menus — Left, Files, Commands, Options, Right.
   Every entry is a command from the same vocabulary the keys use, the shortcut shown beside it
   is read from the keymap in force, and an entry whose feature is not here yet is drawn dim and
@@ -235,6 +249,7 @@ crates/scmd-jobs     the operation engine: plan, execute, settle; conflicts and 
 crates/scmd-view     the viewer: windowed reads, encodings, text/dump/hex, search, disasm
 crates/scmd-edit     the editor: buffer, undo, blocks, search/replace, atomic save
 crates/scmd-net      netbox: SFTP, sites, connection pool, routed job filesystem
+crates/scmd-s3       object storage: SigV4, listings, the S3 provider and a fake service
 crates/scmd-cmd      command vocabulary, keys, keymap profiles (far, mc)
 crates/scmd-config   TOML configuration, discovery, overrides
 crates/scmd-i18n     fluent catalogues for seven languages

@@ -502,6 +502,14 @@ fn draw_footer(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>) {
             )
         }
     };
+    // A listing the provider cut short says so for as long as it is on screen. The note
+    // explaining why is a message, and a message lasts until the next keystroke; this does
+    // not, because "2034 files" is otherwise a number that reads like the whole truth.
+    let text = if p.listing.truncated && p.message.is_none() {
+        format!("{text} (partial)")
+    } else {
+        text
+    };
     // Free space takes the right-hand end of the frame, as it does in FAR, so the totals
     // have what is left.
     let free = p
@@ -1018,6 +1026,50 @@ mod tests {
         draw_panel(&mut buf, &theme, &p);
         let out = buf.to_text();
         assert!(out.contains("1 of 2 selected"), "{out}");
+    }
+
+    /// A listing the provider cut short must not read like a complete one.
+    #[test]
+    fn a_partial_listing_says_so_in_the_footer() {
+        let theme = Theme::default_theme();
+        let mut listing = listing();
+        let mut buf = Buffer::new(44, 9);
+        let mut render = |listing: &Listing, buf: &mut Buffer| {
+            let p = PanelRender {
+                area: Rect::new(0, 0, 44, 9),
+                path: "s3://logs/2024/",
+                listing,
+                selection: &Selection::default(),
+                cursor: 0,
+                top: 0,
+                focused: true,
+                view: ViewMode::Full,
+                sort_label: "name",
+                sort_reverse: false,
+                column_titles: false,
+                filter: None,
+                message: None,
+                status: None,
+                free: None,
+                scrollbar: false,
+                name_scroll: 0,
+                highlight: &crate::Highlight::far_default(),
+                up_label: "Up",
+                folder_label: "Folder",
+            };
+            draw_panel(buf, &theme, &p);
+            buf.to_text()
+        };
+
+        let whole = render(&listing, &mut buf);
+        assert!(!whole.contains("partial"), "{whole}");
+
+        listing.truncated = true;
+        let mut buf = Buffer::new(44, 9);
+        let cut = render(&listing, &mut buf);
+        assert!(cut.contains("(partial)"), "{cut}");
+        // The count is still there: the marker qualifies it, it does not replace it.
+        assert!(cut.contains("files"), "{cut}");
     }
 
     #[test]

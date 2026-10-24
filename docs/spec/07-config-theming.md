@@ -132,6 +132,17 @@ user = "mb"               # the local account name when left out
 auth = "agent"            # agent | key:~/.ssh/id_ed25519 | ask
 start_dir = "/srv"
 group = "work"            # a heading in the site list
+
+# One block per object storage service (SPEC 04 §8). The name is what a path calls it:
+# `s3://work@bucket/2024/`. There is deliberately no place here for an access key — a secret
+# key is a password, and this file is not where passwords live (SPEC 04 §8.4).
+[[s3]]
+name = "work"             # empty name = the default, reached by `s3://bucket/`
+endpoint = ""             # empty = AWS itself; else `https://minio.lan:9000`
+region = "eu-west-1"      # empty = $AWS_REGION, then $AWS_DEFAULT_REGION, then us-east-1
+path_style = false        # left out = by host for AWS, by path for everything else
+credentials = "env"       # env | aws | aws:<profile> | anonymous
+listing_cap = 100000      # rows a listing with no delimiter may gather; 0 = no limit
 ```
 
 ## 2d. The keys the settings dialogs write (implemented today)

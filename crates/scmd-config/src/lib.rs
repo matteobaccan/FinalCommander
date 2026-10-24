@@ -256,6 +256,48 @@ impl Default for NetCfg {
     }
 }
 
+/// `[[s3]]` blocks: the object storage services a path may name.
+///
+/// There is deliberately no place here for an access key. A secret key is a password, and a
+/// password in `scmd.toml` is a password in a backup, in a dotfiles repository and in a screen
+/// share. The two places the rest of the world already keeps these are read instead: the
+/// `AWS_*` environment variables and `~/.aws/credentials`, which every AWS tool shares.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct S3Cfg {
+    /// What a path calls this service: `s3://work@bucket/` names `work`. The service with an
+    /// empty name is the default, reached by `s3://bucket/`.
+    pub name: String,
+    /// `https://minio.lan:9000`, `http://127.0.0.1:9000`, or empty for AWS itself.
+    pub endpoint: String,
+    /// The region the signature is scoped to. Empty means `AWS_REGION`, then `us-east-1`.
+    pub region: String,
+    /// Put the bucket in the path rather than in front of the host. Unset means the sensible
+    /// default for the endpoint: AWS is addressed by host, everything else by path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path_style: Option<bool>,
+    /// `env`, `aws`, `aws:<profile>`, or `anonymous` for a bucket with a public read policy.
+    pub credentials: String,
+    /// How many rows a listing with no delimiter — every key under a prefix, however deep —
+    /// will gather before it stops and says that it stopped. Zero means no limit, which on a
+    /// bucket with millions of objects in it means a listing that takes minutes and a panel
+    /// that holds all of them.
+    pub listing_cap: usize,
+}
+
+impl Default for S3Cfg {
+    fn default() -> S3Cfg {
+        S3Cfg {
+            name: String::new(),
+            endpoint: String::new(),
+            region: String::new(),
+            path_style: None,
+            credentials: "env".into(),
+            listing_cap: 100_000,
+        }
+    }
+}
+
 /// `[arc]`: the guards every archive read goes through (SPEC 04 §4).
 ///
 /// They are configuration because a zip bomb and a legitimate archive of a disk image look
@@ -452,6 +494,9 @@ pub struct Config {
     /// `[[site]]` blocks: the netbox's site list.
     #[serde(rename = "site")]
     pub sites: Vec<SiteCfg>,
+    /// `[[s3]]` blocks: object storage services.
+    #[serde(rename = "s3")]
+    pub s3: Vec<S3Cfg>,
     /// Anything we did not recognise, kept so `--dump-config` can show it and warn.
     #[serde(flatten, skip_serializing)]
     pub unknown: BTreeMap<String, toml::Value>,

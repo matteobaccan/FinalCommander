@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use scmd_core::{CancelToken, Entry, Error, Result as CoreResult, VPath};
-use scmd_vfs::{ArcVfs, Caps, LocalVfs, Vfs};
+use scmd_vfs::{ArcVfs, Caps, Dir, LocalVfs, Vfs};
 
 use crate::pool::Pool;
 
@@ -60,12 +60,24 @@ impl Vfs for NetVfs {
 
 /// Sends each path to the provider that owns it. This is what the application holds, so that
 /// nothing above it has to know whether a panel is local or remote.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Router {
     local: LocalVfs,
     net: NetVfs,
     /// Archives, with the one container cache behind them.
     arc: Arc<ArcVfs>,
+    /// Object storage, when any is configured. Held as a trait object rather than as the S3
+    /// provider itself: the netbox knows how to route a scheme, and nothing more about it.
+    objects: Arc<dyn Vfs>,
+}
+
+impl std::fmt::Debug for Router {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Router")
+            .field("net", &self.net)
+            .field("objects", &self.objects.scheme())
+            .finish()
+    }
 }
 
 impl Router {
@@ -79,7 +91,15 @@ impl Router {
             local: LocalVfs,
             net: NetVfs::new(pool),
             arc: Arc::new(ArcVfs::new(limits)),
+            objects: Arc::new(Unconfigured),
         }
+    }
+
+    /// Hand the router the object storage provider. Without this, an `s3://` path is refused
+    /// with the reason rather than with a failure that reads like a network problem.
+    pub fn with_objects(mut self, objects: Arc<dyn Vfs>) -> Router {
+        self.objects = objects;
+        self
     }
 
     pub fn pool(&self) -> &Arc<Pool> {
@@ -98,6 +118,8 @@ impl Router {
             &*self.arc
         } else if path.is_local() {
             &self.local
+        } else if path.scheme() == scmd_core::Scheme::S3 {
+            &*self.objects
         } else {
             &self.net
         }
@@ -127,8 +149,45 @@ impl Vfs for Router {
         self.provider(path).stat(path).await
     }
 
+    async fn list_dir(&self, path: &VPath, cancel: CancelToken) -> CoreResult<Dir> {
+        self.provider(path).list_dir(path, cancel).await
+    }
+
     fn random_access(&self) -> bool {
         true
+    }
+}
+
+/// What an `s3://` path meets when no object storage is configured. It is a provider so that
+/// the routing has one answer for every scheme, and its answer is the sentence that says what
+/// to do about it.
+#[derive(Debug, Clone, Copy)]
+struct Unconfigured;
+
+#[async_trait]
+impl Vfs for Unconfigured {
+    fn scheme(&self) -> &'static str {
+        "s3 (not configured)"
+    }
+
+    fn caps(&self) -> Caps {
+        Caps::empty()
+    }
+
+    async fn list(&self, path: &VPath, _cancel: CancelToken) -> CoreResult<Vec<Entry>> {
+        Err(self.refusal(path))
+    }
+
+    async fn stat(&self, path: &VPath) -> CoreResult<Entry> {
+        Err(self.refusal(path))
+    }
+}
+
+impl Unconfigured {
+    fn refusal(&self, path: &VPath) -> Error {
+        Error::Other(format!(
+            "{path}: no object storage is configured — add an `[[s3]]` block to scmd.toml"
+        ))
     }
 }
 

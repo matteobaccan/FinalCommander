@@ -665,7 +665,8 @@ fn interactive(mut app: App) -> Result<()> {
             accept_new: false,
         });
     }
-    let vfs = Router::with_limits(pool.clone(), app.cfg.arc.limits());
+    let vfs = Router::with_limits(pool.clone(), app.cfg.arc.limits())
+        .with_objects(std::sync::Arc::new(object_storage(&app.cfg)));
     // One container cache for the whole program: the index a panel read to draw itself is the
     // one an unpack then reads from.
     let archives = vfs.archives().cache();
@@ -697,12 +698,31 @@ fn interactive(mut app: App) -> Result<()> {
                     let tx = tx.clone();
                     let vfs = vfs.clone();
                     runtime.spawn(async move {
-                        let result = vfs.list(&path, token).await.map_err(|e| e.to_string());
+                        // `list_dir` rather than `list`: a provider that stopped before the
+                        // end of the directory says so here, and the panel has to be told.
+                        let read = vfs.list_dir(&path, token).await.map_err(|e| e.to_string());
+                        let mut cut = None;
+                        let result = read.map(|dir| {
+                            if !dir.complete {
+                                cut = dir
+                                    .note
+                                    .clone()
+                                    .or_else(|| Some("this listing is not all of it".to_string()));
+                            }
+                            dir.entries
+                        });
                         let _ = tx.send(Event::Listed {
                             panel,
                             generation,
                             result,
                         });
+                        if let Some(note) = cut {
+                            let _ = tx.send(Event::ListingCut {
+                                panel,
+                                generation,
+                                note,
+                            });
+                        }
                         let _ = tx.send(Event::FreeSpace {
                             panel,
                             bytes: free_space(&path),
@@ -1407,6 +1427,54 @@ async fn write_back(
         .upload_in_place(local, remote_path, &mut ignore)
         .await
         .map_err(|e| UploadError::Failed(e.to_string()))
+}
+
+/// The object storage provider, built from the `[[s3]]` blocks of the configuration.
+///
+/// A configuration with none of them gets an empty provider, and an `s3://` path then meets
+/// the sentence that says to add one. Credentials are never read from the configuration file:
+/// each block says *where* its keys come from, and `scmd-s3` reads them from the environment
+/// or from `~/.aws/credentials` like every other tool on the machine.
+fn object_storage(cfg: &scmd_config::Config) -> scmd_s3::vfs::S3Vfs {
+    use scmd_s3::creds;
+    use scmd_s3::endpoint::Endpoint;
+    use scmd_s3::vfs::Service;
+
+    let home = dirs_home();
+    let services = cfg
+        .s3
+        .iter()
+        .map(|block| {
+            let region = if block.region.trim().is_empty() {
+                creds::region_from_env().unwrap_or_else(|| "us-east-1".to_string())
+            } else {
+                block.region.trim().to_string()
+            };
+            let endpoint = if block.endpoint.trim().is_empty() {
+                Endpoint::aws(region)
+            } else {
+                Endpoint::parse(block.endpoint.trim(), region)
+            };
+            let endpoint = match block.path_style {
+                Some(path_style) => endpoint.with_path_style(path_style),
+                None => endpoint,
+            };
+            let source = creds::Source::parse(&block.credentials);
+            Service::new(block.name.trim(), endpoint)
+                .with_credentials(creds::resolve(&source, home.as_deref()))
+                .with_listing_cap(block.listing_cap)
+        })
+        .collect();
+    scmd_s3::vfs::S3Vfs::new(services)
+}
+
+/// Where `~` is. The same answer the configuration paths use, asked again here because the
+/// credentials file is not ours to find any other way.
+fn dirs_home() -> Option<std::path::PathBuf> {
+    std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(std::path::PathBuf::from)
+        .filter(|p| !p.as_os_str().is_empty())
 }
 
 #[cfg(test)]

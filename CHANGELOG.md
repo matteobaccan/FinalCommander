@@ -6,6 +6,49 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Object storage in the panels.** `s3://logs/2024/08/` opens a bucket as a tree of prefixes,
+  on AWS or on anything else that speaks the protocol — MinIO, Ceph, Garage, R2, Wasabi, a
+  LocalStack in a container — with the endpoint, the region and the addressing style named in
+  an `[[s3]]` block of `scmd.toml`. `s3://work@bucket/` picks a service by name and
+  `s3://work@/` lists the buckets it can see.
+
+  A bucket has no directories: `2024/08/13/access.log` is one key with slashes in it. What the
+  panel shows as a folder is a *common prefix*, which the service computes, so opening a prefix
+  costs one request whether the bucket holds a thousand keys or ten million. Asked for
+  everything under a prefix instead, the listing really is the whole bucket and it stops at
+  `listing_cap` rows (100 000 by default) — and when it stops the footer says `(partial)` for
+  as long as that listing is on screen, with a line saying why. SPEC 04 §8 has the measured
+  numbers for a bucket of 1.7 million objects, since that is the question this started from.
+
+  No access key is stored in `scmd.toml`, ever: a block says *where* its keys come from, and
+  they are read from the `AWS_*` variables or from `~/.aws/credentials`, the file every AWS
+  tool shares. `credentials = "anonymous"` signs nothing, for a bucket with a public read
+  policy. The signature is AWS Signature Version 4, HMAC-SHA256 over a canonical request, and
+  it is tested against `botocore` — the library the AWS command line signs with — on a frozen
+  clock, one of those vectors being the worked example AWS publishes the signature of.
+
+  Objects are read-only in this release. The provider claims `READ | SEEK | CASE_SENSITIVE` and
+  nothing else, so nothing in the UI offers to rename an object (object storage has no rename),
+  set permissions on one or write to one. Upload, delete and server-side copy come next.
+
+### Changed
+
+- **A provider may now say that a listing is not all of it**, through the new `Dir` the panel
+  reads directories with. Nothing local changes — a local directory is always read whole, and
+  `list` still answers with the rows alone for the job engine, the finder and the dialogs.
+  `Listing::truncated` existed since the first release and was read by nobody; it now means
+  something and is shown.
+- **Ordering a panel by name is about twice as fast**, and three times with selected-first on,
+  which matters on a directory or a prefix with a hundred thousand rows in it. The comparison
+  now works on the bytes of a name instead of validating every name as UTF-8 twice per
+  comparison, skips the head two names share with a word-at-a-time comparison, and answers
+  "is this row selected" once per row rather than hashing it on every comparison.
+- Two names that differ only in how a number is padded — `img2` and `img02`, `0` and `00` —
+  no longer compare **equal**. They are different files, and an order that called them equal
+  left the two rows wherever the sort happened to drop them. The padding decides, but last.
+
 ## [0.1.1] — 2026-10-24
 
 Three things found by reading 0.1.0's own code an hour after cutting it. Two of them could

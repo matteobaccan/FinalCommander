@@ -1,0 +1,31 @@
+[package]
+name = "scmd-s3"
+description = "SupremeCommander: object storage — S3 and the services that speak its protocol"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+scmd-core = { workspace = true }
+scmd-vfs = { workspace = true }
+async-trait = "0.1"
+# The signature is HMAC-SHA256 over a canonical request, and `ring` is already in the tree
+# under the SSH client, so signing costs no new dependency.
+ring = "0.17"
+thiserror = "2"
+tokio = { version = "1", features = ["rt", "io-util", "time", "macros"] }
+
+[dependencies.reqwest]
+version = "0.12"
+default-features = false
+# `rustls` rather than the platform's TLS: one behaviour on every system, and the roots come
+# from `webpki-roots` so a container without a certificate store still works. No `default-tls`,
+# which would want OpenSSL on Linux and a C toolchain with it.
+features = ["rustls-tls-webpki-roots", "http2", "stream", "socks"]
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }

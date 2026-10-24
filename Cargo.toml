@@ -27,6 +27,7 @@ scmd-i18n = { path = "crates/scmd-i18n" }
 scmd-jobs = { path = "crates/scmd-jobs" }
 scmd-net = { path = "crates/scmd-net" }
 scmd-plug = { path = "crates/scmd-plug" }
+scmd-s3 = { path = "crates/scmd-s3" }
 scmd-tui = { path = "crates/scmd-tui" }
 scmd-ui = { path = "crates/scmd-ui" }
 scmd-vfs = { path = "crates/scmd-vfs" }

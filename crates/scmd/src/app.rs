@@ -167,6 +167,15 @@ pub enum Event {
         generation: u64,
         result: Result<Vec<Entry>, String>,
     },
+    /// What a provider said about the listing it just gave: it stopped before the end, and
+    /// why. Sent after `Listed` and only when there is something to say, the way `FreeSpace`
+    /// is sent separately — a local directory is always read whole and should not pay for the
+    /// question.
+    ListingCut {
+        panel: usize,
+        generation: u64,
+        note: String,
+    },
     DirSized {
         panel: usize,
         path: VPath,
@@ -1222,6 +1231,20 @@ impl App {
                         self.set_error(e);
                     }
                 }
+            }
+            Event::ListingCut {
+                panel,
+                generation,
+                note,
+            } => {
+                if self.panels[panel].generation != generation {
+                    return;
+                }
+                // The listing carries the fact, so the footer can keep saying `(partial)`
+                // after the message has gone; the message says why, once.
+                self.panels[panel].listing.truncated = true;
+                self.panels[panel].message = Some(note.clone());
+                self.set_status(note);
             }
             Event::ShellDone {
                 id,
@@ -10033,6 +10056,59 @@ mod tests {
         editor.cursor = 2;
         app.hex_operation(PromptKind::HexMove, "0 6");
         assert_eq!(app.mode.hex_mut().unwrap().read(0, 10), b"ABCDEFGHGH");
+    }
+
+    /// A listing the provider stopped short of the end must not pass for a whole one. The
+    /// panel keeps the fact with the listing — a message lasts until the next keystroke, and
+    /// this has to outlive that — and says why, once.
+    #[test]
+    fn a_listing_cut_short_is_marked_and_explained() {
+        let mut app = app();
+        let generation = app.panels[0].generation;
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation,
+            result: Ok(vec![
+                Entry::parent_entry(),
+                entry("000001.json", EntryKind::File, 10),
+                entry("000002.json", EntryKind::File, 10),
+            ]),
+        });
+        assert!(!app.panels[0].listing.truncated);
+
+        app.handle_event(Event::ListingCut {
+            panel: 0,
+            generation,
+            note: "the first 2 of this prefix, in 1 requests; there are more".into(),
+        });
+        assert!(app.panels[0].listing.truncated);
+        let message = app.panels[0].message.clone().expect("a note");
+        assert!(message.contains("there are more"), "{message}");
+
+        // A keystroke clears the note, and the listing still knows.
+        app.run(Command::NavDown);
+        assert_eq!(app.panels[0].message, None);
+        assert!(app.panels[0].listing.truncated);
+
+        // Reading the directory again starts from a clean slate: a listing that came back
+        // whole must not inherit the last one's mark.
+        let next = app.panels[0].generation + 1;
+        app.panels[0].generation = next;
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation: next,
+            result: Ok(vec![Entry::parent_entry()]),
+        });
+        assert!(!app.panels[0].listing.truncated);
+
+        // And a note for a listing we have already left is dropped, like the listing itself.
+        app.handle_event(Event::ListingCut {
+            panel: 0,
+            generation: next - 1,
+            note: "stale".into(),
+        });
+        assert!(!app.panels[0].listing.truncated);
+        assert_eq!(app.panels[0].message, None);
     }
 
     #[test]

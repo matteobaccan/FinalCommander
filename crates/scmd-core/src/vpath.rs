@@ -9,6 +9,11 @@ use std::sync::Arc;
 pub enum Scheme {
     Local,
     Sftp,
+    /// Object storage that speaks the S3 protocol — AWS itself, and MinIO, Ceph, R2, Wasabi
+    /// and the rest. The authority is `[profile@]bucket` rather than a host: which host to
+    /// talk to is a matter of configuration, while which bucket a path is in is part of the
+    /// path. An empty bucket (`s3://work@/`) is the list of buckets the credentials can see.
+    S3,
 }
 
 impl Scheme {
@@ -16,6 +21,7 @@ impl Scheme {
         match self {
             Scheme::Local => "file",
             Scheme::Sftp => "sftp",
+            Scheme::S3 => "s3",
         }
     }
 
@@ -23,6 +29,7 @@ impl Scheme {
         match text.to_ascii_lowercase().as_str() {
             "file" | "local" => Some(Scheme::Local),
             "sftp" | "ssh" | "scp" => Some(Scheme::Sftp),
+            "s3" => Some(Scheme::S3),
             _ => None,
         }
     }

@@ -23,6 +23,7 @@ scmd-i18n = { workspace = true }
 scmd-jobs = { workspace = true }
 scmd-net = { workspace = true }
 scmd-plug = { workspace = true }
+scmd-s3 = { workspace = true }
 scmd-tui = { workspace = true }
 scmd-ui = { workspace = true }
 scmd-vfs = { workspace = true }

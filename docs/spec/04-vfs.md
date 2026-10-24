@@ -76,7 +76,7 @@ where the code lives, not whether it is linked into the binary.
 | `sftp` | `russh` + `russh-sftp` (**implemented**, `scmd-net`) | READ WRITE CREATE DELETE RENAME SEEK TRUNCATE META_TIMES META_MODE META_OWNER LINKS RESUME RANDOM_WRITE CASE_SENSITIVE | M1 |
 | `ftp`/`ftps` | `suppaftp` | READ WRITE CREATE DELETE RENAME RESUME | M3 |
 | `webdav` | `reqwest-dav` | READ WRITE CREATE DELETE RENAME | M3 |
-| `s3` | `aws-sdk-s3` (any S3-compatible endpoint) | READ WRITE CREATE DELETE SERVER_SIDE_COPY, no RENAME | M3 |
+| `s3` | hand-written client over `reqwest` + `ring` (**implemented, read**, `scmd-s3`; any S3-compatible endpoint) | READ SEEK CASE_SENSITIVE; WRITE CREATE DELETE SERVER_SIDE_COPY to come, never RENAME | M3 |
 | `smb` | `pavao`/system mount | varies | M3 |
 | `adb`, `mtp` | external `adb` binary / `libmtp` | READ WRITE DELETE | M4 |
 | `rclone` | `rclone rcd` JSON API bridge — one provider, dozens of backends | READ WRITE DELETE RENAME | M3 |
@@ -186,3 +186,114 @@ Two layers, because a provider that can only be tested against someone's server 
   continuation prefetch).
 - Every provider has a conformance test and a latency-injection test (500 ms per call) that the
   UI must survive without a dropped frame.
+
+## 8. Object storage
+
+A bucket is not a filesystem, and the provider does not pretend otherwise. There are no
+directories in it: `2024/08/13/access.log` is **one key with slashes in it**, not four nested
+things, and nothing in the service holds a list of what is "in" `2024/08/`.
+
+What makes it browsable is one parameter of a listing. Ask for the keys under `2024/08/` with
+`/` as the **delimiter** and the service answers with two lists: the objects directly there,
+and the set of prefixes one level below — which is a directory's files and its subdirectories,
+computed by the service rather than by us. That is the whole trick, and it is what makes the
+size of the bucket beside the point: a prefix with forty objects under it costs **one request**
+whether the bucket holds a thousand keys or ten million, because the service never sends the
+rest.
+
+### 8.1 A bucket with 1.7 million objects in it
+
+The question is worth answering with figures rather than with confidence, so the figures are
+measured — `cargo test --release -p scmd-core --lib a_bucket_sized_listing -- --ignored
+--nocapture` builds a listing of 1.7 million rows whose names are shaped like the keys such a
+bucket really holds (`2024/08/13/customer-00012345/event-0000000678.json`) and times it.
+
+| | |
+| --- | --- |
+| Memory for the rows | ~310 MiB (136 bytes per row, 81 MiB of names, 6 MiB of order) |
+| Ordering them by name | ~6 s |
+| Ordering them by size or date | ~0.7 s |
+| Requests to list them | ~1700, one per thousand keys |
+| Wall clock for those requests | one to three minutes, and no way around it |
+
+So the honest answer has two halves:
+
+- **Browsing that bucket by prefix is instant**, and stays instant at ten times the size. Each
+  level is one request and a few dozen rows. This is how the panel works by default, and it is
+  the shape the service is built for.
+- **A flat listing of all 1.7 million keys is a different thing**: minutes of requests, a third
+  of a gigabyte, and six seconds every time the sort order changes. It is allowed, because
+  sometimes it is what someone needs, and it is capped: `listing_cap` (default 100 000 rows)
+  stops it at a number the panel can work with, and the panel then says `(partial)` in the
+  footer for as long as that listing is on screen, with a line explaining why. A listing that
+  was cut short and does not say so is the only unacceptable outcome.
+
+The cap is enforced through [`Dir`], which is what a provider returns to the panel: the rows,
+whether that is all of them, and a line to show when it is not. Every other caller uses `list`
+and gets the rows alone, because a local directory is always read whole and should not pay for
+the question.
+
+### 8.2 The shape of a path
+
+`s3://[profile@]bucket/prefix`. The profile names an `[[s3]]` block of the configuration —
+which host, which region, which credentials — because unlike SFTP the host is not part of the
+path: two buckets of one account live at the same host, and the same bucket name at two
+providers is two different things. An empty bucket (`s3://work@/`) lists the buckets the
+credentials can see.
+
+A path cannot say whether it means a prefix or a key — underneath it is a `PathBuf`, and
+nothing in it survives the difference between `2024/08` and `2024/08/`. So a prefix is derived
+by appending the delimiter, and asking what one path *is* takes a request: a `HEAD` that
+answers makes it an object, and a `HEAD` that does not is followed by a one-key listing, since
+a prefix nothing lives under does not exist at all.
+
+### 8.3 Addressing, and the services that are not AWS
+
+AWS wants the bucket in front of the host (`logs.s3.eu-west-1.amazonaws.com`); MinIO, Ceph,
+Garage, a LocalStack in a container and an IP address want it at the front of the path. The
+endpoint says which, and two cases override it:
+
+- a bucket whose name is not a DNS label — a dot in it, an upper-case letter, over 63
+  characters — goes in the path whatever the endpoint prefers, because `my.bucket.s3.amazonaws.com`
+  is a host no certificate covers and the request would fail at the handshake, where no error
+  message can explain itself;
+- a service that answers "this bucket is in another region" and names it is followed once, and
+  the answer remembered for that bucket, rather than leaving someone to find the setting.
+
+### 8.4 Credentials
+
+**Not in `scmd.toml`.** A secret access key is a password, and this program has never written a
+password into its configuration file. An `[[s3]]` block says *where* its keys come from and the
+provider reads them from the two places the rest of the machine already keeps them: the `AWS_*`
+environment variables, and `~/.aws/credentials` — the file every AWS tool shares, in the INI
+format they all write, profiles and session tokens included. `credentials = "anonymous"` signs
+nothing, which is how a bucket with a public read policy is browsed.
+
+### 8.5 What is not there yet
+
+Writing. The capabilities say `READ | SEEK | CASE_SENSITIVE` and nothing else, so the UI offers
+nothing it cannot do: no `F6` rename (object storage has no rename — it is a copy and a
+delete), no permissions, no timestamps. Upload, delete and server-side copy are the next
+increment; they are a different kind of operation (a multipart upload is a protocol of its own)
+and they are not worth shipping half-done, because a half-finished upload of a large object is
+a charge on someone's account.
+
+### 8.6 How it is tested
+
+Without an AWS account, and without pretending. There is an S3 service in the test process —
+`scmd_s3::fake` — with a map of buckets behind it, and it is stricter than the real thing in
+two ways that matter:
+
+- **It verifies the signature**, recomputed from the request line it received rather than from
+  anything the client passed in. That catches the whole class of bug where the URL and the
+  canonical request disagree — a key encoded twice, a query sorted differently, a port in the
+  host header — which against a real service is a `SignatureDoesNotMatch` with no indication of
+  which byte was wrong.
+- **It pages**, and the page size can be set to three, so a listing that forgets to follow the
+  continuation token fails in a test rather than in a bucket with a million objects in it. It
+  caught exactly that: a token that was percent-encoded on the way out and so asked for the
+  same page for ever.
+
+The signature itself is tested against `botocore`, the library the AWS command line signs with,
+run against a frozen clock — and one of those vectors is the worked example AWS publishes the
+signature of, so the chain is anchored at both ends.
