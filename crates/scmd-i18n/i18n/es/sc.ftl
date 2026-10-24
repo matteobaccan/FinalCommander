@@ -411,6 +411,7 @@ compare-contents-done = { $differ } de { $pairs } parejas son distintas
 compare-contents-same = las { $pairs } parejas son idénticas
 compare-contents-none = ningún archivo tiene el mismo nombre en ambos lados
 compare-contents-local = comparar por contenido necesita ambos paneles en un sistema de archivos local
+compare-contents-eol = { $count } solo en los fines de línea
 compare-contents-only = { $count } solo en un lado
 compare-contents-unread = { $count } no se han podido leer
 compare-contents-stopped = comparación detenida

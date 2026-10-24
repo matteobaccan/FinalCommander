@@ -411,6 +411,7 @@ compare-contents-done = { $differ } von { $pairs } Paaren unterscheiden sich
 compare-contents-same = alle { $pairs } Paare sind identisch
 compare-contents-none = keine Datei hat auf beiden Seiten denselben Namen
 compare-contents-local = der Inhaltsvergleich braucht beide Fenster auf einem lokalen Dateisystem
+compare-contents-eol = { $count } nur in den Zeilenenden
 compare-contents-only = { $count } nur auf einer Seite
 compare-contents-unread = { $count } nicht lesbar
 compare-contents-stopped = Vergleich abgebrochen

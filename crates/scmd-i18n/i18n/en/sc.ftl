@@ -419,6 +419,7 @@ compare-contents-done = { $differ } of { $pairs } pairs differ
 compare-contents-same = all { $pairs } pairs are identical
 compare-contents-none = no file has the same name on both sides
 compare-contents-local = comparing by content needs both panels on a local filesystem
+compare-contents-eol = { $count } only in the line endings
 compare-contents-only = { $count } only on one side
 compare-contents-unread = { $count } could not be read
 compare-contents-stopped = comparison stopped

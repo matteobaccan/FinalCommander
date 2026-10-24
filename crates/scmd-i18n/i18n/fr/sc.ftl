@@ -411,6 +411,7 @@ compare-contents-done = { $differ } paires sur { $pairs } diffèrent
 compare-contents-same = les { $pairs } paires sont identiques
 compare-contents-none = aucun fichier ne porte le même nom des deux côtés
 compare-contents-local = comparer par contenu demande les deux panneaux sur un système de fichiers local
+compare-contents-eol = { $count } seulement dans les fins de ligne
 compare-contents-only = { $count } d'un seul côté
 compare-contents-unread = { $count } illisibles
 compare-contents-stopped = comparaison interrompue

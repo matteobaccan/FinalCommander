@@ -59,6 +59,117 @@ pub fn same_contents(
     }
 }
 
+/// Do these two differ only in how their lines end?
+///
+/// FAR's own compare plugin has this as a checkbox in a dialog — "ignore differences in new
+/// line characters" — and it is there because the question comes up constantly: the same tree
+/// checked out on Windows and on Linux, a file edited once in an editor that rewrote every
+/// line, a patch that went through a mail client. Every byte after the first line differs, and
+/// none of it means anything.
+///
+/// Rather than a checkbox, this is asked *after* the bytes have been found to differ, so the
+/// answer can be a third thing instead of a setting: the same, different, or the same but for
+/// the line endings. Nobody has to know in advance which question they wanted.
+///
+/// `\r\n` and a lone `\r` both count as a line ending, because old Mac files exist and a
+/// file half converted has both. A zero byte on either side ends it: a binary file has no
+/// lines, and treating its bytes as text would make two different files look alike.
+pub fn same_but_for_line_endings(
+    a: &mut dyn Read,
+    b: &mut dyn Read,
+    cancel: &CancelToken,
+) -> io::Result<bool> {
+    let mut left = Lines::new(a);
+    let mut right = Lines::new(b);
+    loop {
+        if cancel.is_cancelled() {
+            return Err(io::Error::new(io::ErrorKind::Interrupted, "cancelled"));
+        }
+        let (x, y) = (left.next_byte()?, right.next_byte()?);
+        if left.binary || right.binary {
+            return Ok(false);
+        }
+        match (x, y) {
+            (None, None) => return Ok(true),
+            (Some(x), Some(y)) if x == y => {}
+            _ => return Ok(false),
+        }
+    }
+}
+
+/// A byte stream with its line endings all turned into `\n`.
+struct Lines<'a> {
+    source: &'a mut dyn Read,
+    buffer: Vec<u8>,
+    filled: usize,
+    at: usize,
+    /// A `\r` was the last byte of the last block: whether it is `\r\n` or a lone `\r` is
+    /// not known until the next block arrives.
+    held_cr: bool,
+    /// A zero byte was seen, so this is not text and the comparison is over.
+    binary: bool,
+}
+
+impl<'a> Lines<'a> {
+    fn new(source: &'a mut dyn Read) -> Lines<'a> {
+        Lines {
+            source,
+            buffer: vec![0u8; CHUNK],
+            filled: 0,
+            at: 0,
+            held_cr: false,
+            binary: false,
+        }
+    }
+
+    fn raw(&mut self) -> io::Result<Option<u8>> {
+        if self.at == self.filled {
+            self.filled = fill(self.source, &mut self.buffer)?;
+            self.at = 0;
+            if self.filled == 0 {
+                return Ok(None);
+            }
+        }
+        let byte = self.buffer[self.at];
+        self.at += 1;
+        if byte == 0 {
+            self.binary = true;
+        }
+        Ok(Some(byte))
+    }
+
+    /// The next byte, with `\r\n` and a lone `\r` both reported as `\n`.
+    fn next_byte(&mut self) -> io::Result<Option<u8>> {
+        loop {
+            let byte = match self.raw()? {
+                Some(byte) => byte,
+                None => {
+                    // A `\r` at the very end of the file is a line ending of its own.
+                    return Ok(if std::mem::take(&mut self.held_cr) {
+                        Some(b'\n')
+                    } else {
+                        None
+                    });
+                }
+            };
+            if self.held_cr {
+                self.held_cr = byte == b'\r';
+                // `\r\n` is one ending; `\r` then anything else is an ending and that byte.
+                if byte == b'\n' || byte == b'\r' {
+                    return Ok(Some(b'\n'));
+                }
+                self.at -= 1;
+                return Ok(Some(b'\n'));
+            }
+            if byte == b'\r' {
+                self.held_cr = true;
+                continue;
+            }
+            return Ok(Some(byte));
+        }
+    }
+}
+
 /// Read until the buffer is full or the stream ends, which is not what one `read` promises.
 fn fill(source: &mut dyn Read, buffer: &mut [u8]) -> io::Result<usize> {
     let mut filled = 0;
@@ -175,6 +286,59 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::Interrupted);
+    }
+
+    fn only_eol(a: &[u8], b: &[u8]) -> bool {
+        same_but_for_line_endings(
+            &mut io::Cursor::new(a.to_vec()),
+            &mut io::Cursor::new(b.to_vec()),
+            &CancelToken::new(),
+        )
+        .unwrap()
+    }
+
+    /// The same file checked out twice, on two systems. Every line differs and none of it
+    /// means anything.
+    #[test]
+    fn the_same_text_with_other_line_endings() {
+        assert!(only_eol(b"one\ntwo\n", b"one\r\ntwo\r\n"));
+        assert!(only_eol(b"one\r\ntwo\r\n", b"one\ntwo\n"));
+        // An old Mac file, and one that is half converted.
+        assert!(only_eol(b"one\rtwo\r", b"one\ntwo\n"));
+        assert!(only_eol(b"one\r\ntwo\nthree\r", b"one\ntwo\nthree\n"));
+        // A `\r` at the very end is a line ending of its own and not a lost byte.
+        assert!(only_eol(b"x\r", b"x\n"));
+        assert!(only_eol(b"", b""));
+        // The same bytes are also "only" the line endings, trivially.
+        assert!(only_eol(b"same\n", b"same\n"));
+        // Across a block boundary, where the `\r` and its `\n` are read separately.
+        let long: Vec<u8> = b"line\r\n"
+            .iter()
+            .copied()
+            .cycle()
+            .take(CHUNK * 2 + 6)
+            .collect();
+        let unix: Vec<u8> = long.iter().copied().filter(|b| *b != b'\r').collect();
+        assert!(only_eol(&long, &unix));
+    }
+
+    #[test]
+    fn a_real_difference_is_still_a_difference() {
+        assert!(!only_eol(b"one\ntwo\n", b"one\nTWO\n"));
+        assert!(!only_eol(b"one\n", b"one\ntwo\n"));
+        assert!(!only_eol(b"one two\n", b"one  two\n"));
+        // Whitespace that is not a line ending is a difference: FAR has a second checkbox for
+        // that one, and a file manager that quietly called two different files the same would
+        // be worse than one that asked.
+        assert!(!only_eol(b"a\tb\n", b"a b\n"));
+    }
+
+    /// A binary file has no lines, and two different binaries must not look alike because one
+    /// of them happens to hold a `\r`.
+    #[test]
+    fn bytes_that_are_not_text_are_compared_as_bytes() {
+        assert!(!only_eol(b"\x00\r\n", b"\x00\n"));
+        assert!(!only_eol(b"head\x00\r\ntail", b"head\x00\ntail"));
     }
 
     #[test]

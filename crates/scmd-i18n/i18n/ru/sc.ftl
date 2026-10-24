@@ -411,6 +411,7 @@ compare-contents-done = различаются { $differ } пар из { $pairs 
 compare-contents-same = все { $pairs } пар совпадают
 compare-contents-none = нет файлов с одинаковым именем с обеих сторон
 compare-contents-local = сравнение по содержимому требует обеих панелей на локальной файловой системе
+compare-contents-eol = { $count } только в концах строк
 compare-contents-only = { $count } только с одной стороны
 compare-contents-unread = не удалось прочитать: { $count }
 compare-contents-stopped = сравнение прервано

@@ -411,6 +411,7 @@ compare-contents-done = { $pairs } 对中有 { $differ } 对不同
 compare-contents-same = { $pairs } 对完全相同
 compare-contents-none = 两侧没有同名文件
 compare-contents-local = 按内容比较需要两个面板都在本地文件系统上
+compare-contents-eol = { $count } 个只是换行符不同
 compare-contents-only = { $count } 个只在一侧
 compare-contents-unread = { $count } 个无法读取
 compare-contents-stopped = 比较已停止

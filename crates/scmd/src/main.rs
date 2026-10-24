@@ -1354,6 +1354,7 @@ fn run_compare(
     let fs = scmd_vfs::LocalVfs;
     let total = pairs.len() as u64;
     let mut differ = Vec::new();
+    let mut line_endings = Vec::new();
     let mut unreadable = 0u64;
     let mut stopped = false;
 
@@ -1397,7 +1398,24 @@ fn run_compare(
             break;
         }
         if same == Some(false) {
-            differ.push(pair.name.clone());
+            // Different bytes. Before calling it a difference, ask the other question: two
+            // checkouts of one tree on two systems differ in every line and in nothing that
+            // means anything, and FAR's compare plugin has a checkbox for that. Asking it
+            // here, after the fact, means nobody has to have ticked it in advance.
+            let eol = pair.left_size > 0
+                && pair.right_size > 0
+                && match (fs.open(&pair.left), fs.open(&pair.right)) {
+                    (Ok(mut left), Ok(mut right)) => scmd_core::compare::same_but_for_line_endings(
+                        &mut left, &mut right, &cancel,
+                    )
+                    .unwrap_or(false),
+                    _ => false,
+                };
+            if eol {
+                line_endings.push(pair.name.clone());
+            } else {
+                differ.push(pair.name.clone());
+            }
         }
         let done = index as u64 + 1;
         if done.is_multiple_of(8) || done == total {
@@ -1408,6 +1426,7 @@ fn run_compare(
     let _ = tx.send(Event::CompareDone {
         id,
         differ,
+        line_endings,
         unreadable,
         stopped,
     });
