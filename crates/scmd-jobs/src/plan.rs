@@ -290,9 +290,11 @@ mod tests {
             VPath::local(dir.path().join("dst/src")),
             "a directory target means `into`, not `rename to`"
         );
-        // every file's destination lives under dst/src
+        // Every destination lives under dst/src. Compared as paths, not as strings, because
+        // a joined path carries the platform's separator.
+        let into = VPath::local(dir.path().join("dst").join("src"));
         for u in &p.units {
-            assert!(u.dst.to_string().contains("dst/src"), "{:?}", u.dst);
+            assert!(u.dst.starts_with(&into), "{:?}", u.dst);
         }
     }
 
@@ -325,10 +327,11 @@ mod tests {
         );
         let p = plan(&LocalFs, &spec, &CancelToken::new()).unwrap();
         assert_eq!(p.files, 2);
+        let target = VPath::local(dir.path().join("newdir"));
         assert!(p
             .units
             .iter()
-            .all(|u| u.dst.to_string().contains("newdir/")));
+            .all(|u| u.dst.starts_with(&target) && u.dst != target));
     }
 
     #[test]
