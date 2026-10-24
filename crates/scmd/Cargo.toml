@@ -28,5 +28,10 @@ scmd-view = { version = "0.0.2", path = "../scmd-view" }
 tokio = { version = "1.53.3", features = ["rt-multi-thread", "fs", "sync", "time", "macros"] }
 unicode-width = "0.2.2"
 
+# Free space in the panel frame needs `statvfs`, which `std` does not expose. Unix only:
+# Windows wants `GetDiskFreeSpaceEx` and gets its own answer when it gets its own crate.
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.31.3", features = ["fs"] }
+
 [dev-dependencies]
 tempfile = "3.27.0"

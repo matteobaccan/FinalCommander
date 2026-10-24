@@ -119,17 +119,26 @@ impl FromStr for Key {
         if s.is_empty() {
             return Err(KeyParseError::Empty);
         }
-        // A lone `+` is a key, not a separator.
-        if s == "+" {
-            return Ok(Key::char('+'));
-        }
+        // A trailing `+` is the key itself rather than a separator, which is why the split
+        // happens from the right: `+`, `Ctrl++`, `Alt+Shift++`. Reading it from the left
+        // instead loses the modifiers, and a `Ctrl++` that quietly means `+` is a binding
+        // that fires on the wrong key.
+        let (modifiers, name) = match s.strip_suffix('+') {
+            Some("") => ("", "+"),
+            Some(rest) => match rest.strip_suffix('+') {
+                Some(mods) => (mods, "+"),
+                // `Ctrl+` names a modifier and no key.
+                None => return Err(KeyParseError::UnknownKey(s.to_string())),
+            },
+            None => match s.rsplit_once('+') {
+                Some((mods, name)) => (mods, name),
+                None => ("", s),
+            },
+        };
 
         let mut mods = Mods::NONE;
-        let parts: Vec<&str> = s.split('+').collect();
-        let (name, modifiers) = parts.split_last().expect("non-empty");
-        for m in modifiers {
+        for m in modifiers.split('+').filter(|m| !m.trim().is_empty()) {
             match m.trim().to_ascii_lowercase().as_str() {
-                "" => return Ok(Key::char('+')), // "Ctrl++" style
                 "ctrl" | "c" => mods.insert(Mods::CTRL),
                 "shift" | "s" => mods.insert(Mods::SHIFT),
                 "alt" | "a" | "meta" => mods.insert(Mods::ALT),
@@ -248,6 +257,23 @@ mod tests {
         assert!("Hyper+F1".parse::<Key>().is_err());
         assert!("F99".parse::<Key>().is_err());
         assert!("".parse::<Key>().is_err());
+    }
+
+    #[test]
+    fn the_plus_key_keeps_its_modifiers() {
+        // FAR's selection matrix is built on the grey plus and minus with every modifier, so
+        // `Ctrl++` has to survive the parser as plus *with* control.
+        let plus: Key = "+".parse().unwrap();
+        assert_eq!(plus, Key::char('+'));
+        let ctrl: Key = "Ctrl++".parse().unwrap();
+        assert_eq!(ctrl, Key::new(KeyCode::Char('+'), Mods::CTRL));
+        assert_ne!(ctrl, plus, "the modifier was dropped");
+        let both: Key = "Alt+Shift++".parse().unwrap();
+        assert_eq!(both, Key::new(KeyCode::Char('+'), Mods::ALT | Mods::SHIFT));
+        assert_eq!(ctrl.to_string(), "Ctrl++");
+        assert_eq!(ctrl.to_string().parse::<Key>().unwrap(), ctrl);
+        // A modifier with no key is a mistake in a keymap, not the plus key.
+        assert!("Ctrl+".parse::<Key>().is_err());
     }
 
     #[test]

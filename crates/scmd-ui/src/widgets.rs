@@ -26,11 +26,22 @@ pub struct PanelRender<'a> {
     pub column_titles: bool,
     pub filter: Option<&'a str>,
     pub message: Option<&'a str>,
+    /// The item under the cursor, spelled out in the panel's own bottom row. `None` keeps
+    /// the row out of the layout entirely (FAR's `Show status line`).
+    pub status: Option<&'a str>,
+    /// Free bytes on the device the panel is on, for the bottom frame.
+    pub free: Option<u64>,
+    /// Draw the bar in the right frame when the listing is longer than the panel.
+    pub scrollbar: bool,
+    /// Columns the name column is scrolled by, for names wider than it.
+    pub name_scroll: usize,
 }
 
-/// Rows that fit in a panel of this height.
-pub fn panel_rows(area: Rect, column_titles: bool) -> usize {
-    area.h.saturating_sub(if column_titles { 3 } else { 2 }) as usize
+/// Rows that fit in a panel of this height. The titles row and the panel's own status line
+/// each cost one row, and the status line costs a second for the rule above it.
+pub fn panel_rows(area: Rect, column_titles: bool, status_line: bool) -> usize {
+    let chrome = 2 + usize::from(column_titles) + if status_line { 2 } else { 0 };
+    (area.h as usize).saturating_sub(chrome)
 }
 
 /// Columns of names in brief view.
@@ -68,7 +79,7 @@ pub fn draw_panel(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>) {
     buf.put_str(tx, area.y, &format!(" {title} "), header_style, tw + 2);
 
     let mut inner = area.inner();
-    let rows = panel_rows(area, p.column_titles);
+    let rows = panel_rows(area, p.column_titles, p.status.is_some());
     if p.column_titles {
         draw_column_titles(buf, theme, p, inner);
         inner = Rect::new(inner.x, inner.y + 1, inner.w, inner.h.saturating_sub(1));
@@ -85,7 +96,71 @@ pub fn draw_panel(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>) {
         draw_full(buf, theme, p, inner, rows);
     }
 
+    if let Some(status) = p.status {
+        draw_panel_status(buf, theme, p, status);
+    }
+    if p.scrollbar {
+        draw_scrollbar(buf, theme, p, inner, rows);
+    }
     draw_footer(buf, theme, p);
+}
+
+/// FAR's own status line: a rule across the panel and, under it, the item the cursor is on.
+/// It is the panel's row rather than the screen's, which is why it is drawn inside the frame.
+fn draw_panel_status(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, status: &str) {
+    let area = p.area;
+    if area.h < 6 {
+        return;
+    }
+    let frame = Style::new(theme.color("panel.frame"), theme.color("panel.bg"));
+    let rule = area.bottom() - 3;
+    buf.set(area.x, rule, '├', frame);
+    for x in area.x + 1..area.right() - 1 {
+        buf.set(x, rule, '─', frame);
+    }
+    buf.set(area.right() - 1, rule, '┤', frame);
+    let style = theme.panel();
+    let w = area.w.saturating_sub(2);
+    buf.fill(Rect::new(area.x + 1, rule + 1, w, 1), ' ', style);
+    buf.put_str(
+        area.x + 1,
+        rule + 1,
+        &truncate_cols(status, w as usize),
+        style,
+        w,
+    );
+}
+
+/// The bar in the right frame: a thumb as tall as the share of the listing on screen, in the
+/// place FAR draws it, and nothing at all when everything fits.
+fn draw_scrollbar(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect, rows: usize) {
+    let total = p.listing.len();
+    let per_screen = rows.max(1)
+        * if p.view == ViewMode::Brief || p.view == ViewMode::Wide {
+            brief_columns(p.area)
+        } else {
+            1
+        };
+    if total <= per_screen || inner.h == 0 {
+        return;
+    }
+    let style = Style::new(theme.color("panel.scrollbar.fg"), theme.color("panel.bg"));
+    let x = p.area.right() - 1;
+    let track = inner.h as usize;
+    let thumb = ((per_screen * track) / total).clamp(1, track);
+    // Where the first visible row sits in what is left to scroll through. `span` cannot be
+    // zero here — everything fitting on screen returned above — but say so with the maximum
+    // rather than with a branch.
+    let span = total.saturating_sub(per_screen).max(1);
+    let at = (p.top.min(span) * (track - thumb) + span / 2) / span;
+    for i in 0..track {
+        let ch = if i >= at && i < at + thumb {
+            '█'
+        } else {
+            '░'
+        };
+        buf.set(x, inner.y + i as u16, ch, style);
+    }
 }
 
 /// The shadow a floating window drops: two columns to the right and one row below, which is
@@ -208,7 +283,7 @@ fn draw_brief(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect,
             let x = inner.x + (col * col_w) as u16;
             let w = col_w as u16 - 1;
             buf.fill(Rect::new(x, inner.y + row as u16, w, 1), ' ', style);
-            let name = decorate(e);
+            let name = shift_name(&decorate(e), p.name_scroll);
             buf.put_str(
                 x,
                 inner.y + row as u16,
@@ -218,6 +293,18 @@ fn draw_brief(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect,
             );
         }
     }
+}
+
+/// A name shifted sideways by `by` columns, for a column narrower than the names. Scrolling
+/// past the end of a short name would blank its row, so a name that would disappear entirely
+/// keeps its last column on screen.
+fn shift_name(name: &str, by: usize) -> String {
+    if by == 0 {
+        return name.to_string();
+    }
+    let total = name.chars().count();
+    let by = by.min(total.saturating_sub(1));
+    name.chars().skip(by).collect()
 }
 
 /// (name, size, time, attributes) widths, so the titles row and the file rows cannot drift.
@@ -244,7 +331,7 @@ fn draw_full(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect, 
         let style = row_style(theme, e, selected, idx == p.cursor, p.focused);
         buf.fill(Rect::new(inner.x, y, inner.w, 1), ' ', style);
 
-        let name = decorate(e);
+        let name = shift_name(&decorate(e), p.name_scroll);
         buf.put_str(
             inner.x,
             y,
@@ -365,7 +452,19 @@ fn draw_footer(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>) {
             )
         }
     };
-    let text = truncate_cols(&text, w as usize);
+    // Free space takes the right-hand end of the frame, as it does in FAR, so the totals
+    // have what is left.
+    let free = p
+        .free
+        .map(|bytes| format!(" {} free ", format_size(bytes)))
+        .filter(|s| s.width() as u16 + 6 < area.w);
+    let room = w.saturating_sub(free.as_ref().map_or(0, |s| s.width() as u16));
+    if let Some(free) = &free {
+        let fw = free.width() as u16;
+        buf.put_str(area.right() - 2 - fw, y, free, style, fw);
+    }
+
+    let text = truncate_cols(&text, room as usize);
     let tw = text.width() as u16;
     let style = if p.filter.is_some() || p.message.is_some() {
         style.with_fg(theme.color("filter.fg"))
@@ -765,6 +864,10 @@ mod tests {
             column_titles: false,
             filter: None,
             message: None,
+            status: None,
+            free: None,
+            scrollbar: false,
+            name_scroll: 0,
         };
         draw_panel(&mut buf, &theme, &p);
         buf.to_text()
@@ -818,6 +921,10 @@ mod tests {
             column_titles: false,
             filter: None,
             message: None,
+            status: None,
+            free: None,
+            scrollbar: false,
+            name_scroll: 0,
         };
         draw_panel(&mut buf, &theme, &p);
         let out = buf.to_text();
@@ -843,6 +950,10 @@ mod tests {
             column_titles: false,
             filter: None,
             message: None,
+            status: None,
+            free: None,
+            scrollbar: false,
+            name_scroll: 0,
         };
         draw_panel(&mut buf, &theme, &p);
         let first = buf.to_lines()[0].clone();
@@ -918,6 +1029,10 @@ mod tests {
             column_titles: false,
             filter: None,
             message: None,
+            status: None,
+            free: None,
+            scrollbar: false,
+            name_scroll: 0,
         };
         draw_panel(&mut buf, &theme, &p);
         for line in buf.to_lines() {
@@ -1096,6 +1211,10 @@ mod tests {
             column_titles: false,
             filter: None,
             message: None,
+            status: None,
+            free: None,
+            scrollbar: false,
+            name_scroll: 0,
         };
         draw_panel(&mut buf, &theme, &p);
         assert!(buf.to_text().contains("[size]"));

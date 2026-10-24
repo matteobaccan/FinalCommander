@@ -121,6 +121,12 @@ pub enum Event {
         bytes: u64,
         files: u64,
     },
+    /// Free space on the device a panel's directory is on, which the read reports separately
+    /// because a listing is the same work whether or not the platform can answer this.
+    FreeSpace {
+        panel: usize,
+        bytes: Option<u64>,
+    },
     /// A shell command finished: its merged output, capped, and how it ended.
     ShellDone {
         id: u64,
@@ -219,6 +225,8 @@ pub enum PromptKind {
     MoveTarget,
     /// Name for F7.
     Mkdir,
+    /// `Ctrl+G`: one command line, run once per selected file (SPEC 06 §5).
+    ApplyCommand,
     /// A URL to connect to: `sftp://mb@host/srv`.
     NetConnect,
     /// A password or a key passphrase. Never echoed, never stored.
@@ -241,6 +249,10 @@ pub struct Prompt {
     pub text: String,
     /// Render as `****`: a password is never put on the screen.
     pub secret: bool,
+    /// The items the answer applies to. Empty means "whatever is selected when the answer
+    /// comes in", which is what every prompt wants except the ones that deliberately work on
+    /// the item under the cursor alone (`Shift+F5`, `Shift+F6`).
+    pub sources: Vec<VPath>,
 }
 
 impl Prompt {
@@ -250,6 +262,7 @@ impl Prompt {
             title,
             text,
             secret: false,
+            sources: Vec::new(),
         }
     }
 }
@@ -436,6 +449,13 @@ pub struct App {
     pub cmd: CmdLine,
     /// What the commands that have run printed, for `Ctrl+O`. Capped.
     pub user_screen: Vec<String>,
+    /// Which panel is hidden, if either: `Ctrl+F1` and `Ctrl+F2` give the screen to one.
+    pub hidden: Option<usize>,
+    /// What `Ctrl+G` has left to run, one command per file. They go one at a time: a hundred
+    /// copies of a converter started at once is not what anybody asked for.
+    apply_queue: Vec<String>,
+    /// How many commands that run started with, for counting through it.
+    apply_total: usize,
     /// The shell command we are waiting for, if any, and the line that started it.
     shell: Option<(u64, String)>,
     /// Where each panel was before the last `cd`, so `cd -` has somewhere to go.
@@ -505,6 +525,9 @@ impl App {
             fetch_id: None,
             cmd: CmdLine::new(),
             user_screen: Vec::new(),
+            hidden: None,
+            apply_queue: Vec::new(),
+            apply_total: 0,
             shell: None,
             prev_dir: [None, None],
             remote_edit: None,
@@ -570,6 +593,11 @@ impl App {
     pub fn handle_event(&mut self, event: Event) {
         match event {
             Event::Input(input) => self.handle_input(input),
+            Event::FreeSpace { panel, bytes } => {
+                if let Some(p) = self.panels.get_mut(panel) {
+                    p.free = bytes;
+                }
+            }
             Event::Connected {
                 panel,
                 site,
@@ -716,6 +744,27 @@ impl App {
                 // A command may have changed what is on disk, so both panels are re-read.
                 self.read_panel(0);
                 self.read_panel(1);
+                // A `Ctrl+G` run carries on where the last command left off, and stops at the
+                // first failure rather than running ninety-nine more over a broken one.
+                if !self.apply_queue.is_empty() {
+                    if matches!(status, Some(code) if code != 0) {
+                        let done = self.apply_total - self.apply_queue.len();
+                        let total = self.apply_total;
+                        self.apply_queue.clear();
+                        self.apply_total = 0;
+                        let msg = self.i18n.t_args(
+                            "cmd-apply-stopped",
+                            &[
+                                ("command", line.into()),
+                                ("done", (done as i64).into()),
+                                ("total", (total as i64).into()),
+                            ],
+                        );
+                        self.set_error(msg);
+                    } else {
+                        self.run_next_apply();
+                    }
+                }
             }
             Event::JobProgress { id, progress } => {
                 if let Mode::Job(view) = &mut self.mode {
@@ -1423,7 +1472,11 @@ impl App {
                 } else {
                     JobKind::Move
                 };
-                let sources = self.job_sources();
+                let sources = if prompt.sources.is_empty() {
+                    self.job_sources()
+                } else {
+                    prompt.sources.clone()
+                };
                 if sources.is_empty() {
                     let m = self.i18n.t("msg-nothing-to-do");
                     self.set_error(m);
@@ -1431,6 +1484,42 @@ impl App {
                 }
                 let target = self.resolve_path(raw);
                 self.start_job(JobSpec::new(kind, sources, Some(target)));
+            }
+            PromptKind::ApplyCommand => {
+                let template = prompt.text.trim().to_string();
+                if template.is_empty() {
+                    return;
+                }
+                let base = self.expand_context();
+                let mut lines = Vec::with_capacity(prompt.sources.len());
+                for path in &prompt.sources {
+                    // Each file takes its turn as "the current file", which is what makes
+                    // `!.!` and the rest mean one file at a time rather than the whole list.
+                    let name = path.display_name();
+                    let ctx = expand::Context {
+                        active_file: Some(name.clone()),
+                        selection: vec![name],
+                        ..base.clone()
+                    };
+                    match expand::expand(&template, &ctx, None) {
+                        Ok(expand::Expanded::Line(line)) => lines.push(line),
+                        Ok(expand::Expanded::Ask { .. }) => {
+                            // One answer for a hundred files would be a different feature,
+                            // and guessing which it is would be worse than saying so.
+                            let m = self.i18n.t("cmd-apply-no-ask");
+                            self.set_error(m);
+                            return;
+                        }
+                        Err(e) => {
+                            self.set_error(e.to_string());
+                            return;
+                        }
+                    }
+                }
+                self.cmd.remember(&template);
+                self.apply_total = lines.len();
+                self.apply_queue = lines;
+                self.run_next_apply();
             }
             PromptKind::Mkdir => {
                 let raw = prompt.text.trim();
@@ -1530,6 +1619,7 @@ impl App {
                     title,
                     text: String::new(),
                     secret: false,
+                    sources: Vec::new(),
                 });
             }
             PromptKind::EditorReplaceWith => {
@@ -1634,6 +1724,16 @@ impl App {
             }
             return out;
         }
+        match panel.current() {
+            Some(e) if e.is_selectable() => vec![panel.cwd.join(&e.name)],
+            _ => Vec::new(),
+        }
+    }
+
+    /// Only the item under the cursor, which is what `Shift+F5`, `Shift+F6` and `Shift+F8`
+    /// mean whatever is selected.
+    fn cursor_source(&self) -> Vec<VPath> {
+        let panel = self.panel();
         match panel.current() {
             Some(e) if e.is_selectable() => vec![panel.cwd.join(&e.name)],
             _ => Vec::new(),
@@ -1848,6 +1948,7 @@ impl App {
                 title,
                 text: c.to_string(),
                 secret: false,
+                sources: Vec::new(),
             });
             let text = c.to_string();
             self.prompt_changed(&text);
@@ -1943,6 +2044,7 @@ impl App {
                     title,
                     text: self.panel().filter.clone().unwrap_or_default(),
                     secret: false,
+                    sources: Vec::new(),
                 });
             }
             Command::PanelOtherSync => {
@@ -2019,6 +2121,7 @@ impl App {
                     title,
                     text: String::new(),
                     secret: false,
+                    sources: Vec::new(),
                 });
             }
 
@@ -2066,10 +2169,107 @@ impl App {
                     title,
                     text: "*".to_string(),
                     secret: false,
+                    sources: Vec::new(),
                 });
             }
             Command::SelRestore => {
                 self.panel_mut().selection.restore_previous();
+                self.panel_mut().rebuild();
+            }
+            Command::SelExtAdd
+            | Command::SelExtRemove
+            | Command::SelNameAdd
+            | Command::SelNameRemove => {
+                let Some(current) = self.panel().current().cloned() else {
+                    let m = self.i18n.t("msg-nothing-to-do");
+                    self.set_error(m);
+                    return;
+                };
+                let by_extension = matches!(cmd, Command::SelExtAdd | Command::SelExtRemove);
+                let on = matches!(cmd, Command::SelExtAdd | Command::SelNameAdd);
+                // A file with no extension groups with the other files with no extension,
+                // and a name is compared without its extension — both the way FAR reads the
+                // current file to decide what "the same" means.
+                let fold = |s: Option<&std::ffi::OsStr>| {
+                    s.map(|s| s.to_string_lossy().to_lowercase())
+                        .unwrap_or_default()
+                };
+                let here = std::path::Path::new(&current.name);
+                let wanted = if by_extension {
+                    fold(here.extension())
+                } else {
+                    fold(here.file_stem())
+                };
+                let listing = self.panel().listing.clone();
+                let changed = self.panel_mut().selection.apply_where(
+                    &listing,
+                    MaskScope::FilesOnly,
+                    on,
+                    |e| {
+                        let p = std::path::Path::new(&e.name);
+                        let theirs = if by_extension {
+                            fold(p.extension())
+                        } else {
+                            fold(p.file_stem())
+                        };
+                        theirs == wanted
+                    },
+                );
+                self.panel_mut().rebuild();
+                let msg = self.i18n.t_args(
+                    if on { "msg-selected" } else { "msg-deselected" },
+                    &[("count", (changed as i64).into())],
+                );
+                self.set_status(msg);
+            }
+            Command::FileApply => {
+                let sources = self.job_sources();
+                if sources.is_empty() {
+                    let m = self.i18n.t("msg-nothing-to-do");
+                    self.set_error(m);
+                    return;
+                }
+                let title = self
+                    .i18n
+                    .t_args("prompt-apply", &[("count", (sources.len() as i64).into())]);
+                self.mode = Mode::Prompt(Prompt {
+                    kind: PromptKind::ApplyCommand,
+                    title,
+                    text: String::new(),
+                    secret: false,
+                    sources,
+                });
+            }
+            Command::PanelToggle(side) => {
+                let which = match side {
+                    Side::Active => self.active,
+                    Side::Left => 0,
+                    Side::Right => 1,
+                };
+                self.hidden = if self.hidden == Some(which) {
+                    None
+                } else {
+                    Some(which)
+                };
+                // Keeping the focus on a panel nobody can see would send every key into the
+                // dark, so it moves across with the screen.
+                if self.hidden == Some(self.active) {
+                    self.active = 1 - self.active;
+                }
+            }
+            Command::PanelScrollNames(delta) => {
+                let panel = self.panel_mut();
+                panel.name_scroll = if delta < 0 {
+                    panel.name_scroll.saturating_sub(1)
+                } else {
+                    panel.name_scroll + 1
+                };
+            }
+            Command::SelInvertAll => {
+                let listing = self.panel().listing.clone();
+                self.panel_mut()
+                    .selection
+                    .invert(&listing, MaskScope::FilesAndDirs);
                 self.panel_mut().rebuild();
             }
 
@@ -2196,15 +2396,27 @@ impl App {
                 self.set_status(m);
             }
 
-            Command::FileCopy | Command::FileMove => {
-                let sources = self.job_sources();
+            Command::FileCopy
+            | Command::FileMove
+            | Command::FileCopyCurrent
+            | Command::FileMoveCurrent => {
+                // `Shift+F5` and `Shift+F6` ignore the selection on purpose: they exist for
+                // the moment when something is selected and the file under the cursor is not
+                // part of what you meant to touch.
+                let only_current =
+                    matches!(cmd, Command::FileCopyCurrent | Command::FileMoveCurrent);
+                let sources = if only_current {
+                    self.cursor_source()
+                } else {
+                    self.job_sources()
+                };
                 if sources.is_empty() {
                     let m = self.i18n.t("msg-nothing-to-do");
                     self.set_error(m);
                     return;
                 }
                 let what = self.sources_label(&sources);
-                let copy = cmd == Command::FileCopy;
+                let copy = matches!(cmd, Command::FileCopy | Command::FileCopyCurrent);
                 let title = self.i18n.t_args(
                     if copy {
                         "prompt-copy-to"
@@ -2227,6 +2439,9 @@ impl App {
                     title,
                     text,
                     secret: false,
+                    // The cursor-only keys carry their list with them, so that selecting
+                    // something else while the prompt is open cannot change what moves.
+                    sources: if only_current { sources } else { Vec::new() },
                 });
             }
             Command::FileMkdir => {
@@ -2236,10 +2451,15 @@ impl App {
                     title,
                     text: String::new(),
                     secret: false,
+                    sources: Vec::new(),
                 });
             }
-            Command::FileDelete => {
-                let sources = self.job_sources();
+            Command::FileDelete | Command::FileDeleteCurrent => {
+                let sources = if cmd == Command::FileDeleteCurrent {
+                    self.cursor_source()
+                } else {
+                    self.job_sources()
+                };
                 if sources.is_empty() {
                     let m = self.i18n.t("msg-nothing-to-do");
                     self.set_error(m);
@@ -2410,6 +2630,7 @@ impl App {
                     title,
                     text: String::new(),
                     secret: true,
+                    sources: Vec::new(),
                 });
             }
             ConnectOutcome::UnknownHostKey { fingerprint } => {
@@ -2632,6 +2853,7 @@ impl App {
                     title,
                     text: initial,
                     secret: false,
+                    sources: Vec::new(),
                 });
                 return;
             }
@@ -2914,6 +3136,30 @@ impl App {
         });
         let msg = self.i18n.t_args("cmd-running", &[("command", line.into())]);
         self.set_status(msg);
+    }
+
+    /// Start the next command `Ctrl+G` has queued, counting through the list in the status
+    /// line so a long run says where it is.
+    fn run_next_apply(&mut self) {
+        if self.apply_queue.is_empty() {
+            self.apply_total = 0;
+            return;
+        }
+        let line = self.apply_queue.remove(0);
+        let done = self.apply_total - self.apply_queue.len();
+        let total = self.apply_total;
+        self.run_shell(line.clone(), None);
+        if self.shell.is_some() {
+            let msg = self.i18n.t_args(
+                "cmd-apply-progress",
+                &[
+                    ("command", line.into()),
+                    ("done", (done as i64).into()),
+                    ("total", (total as i64).into()),
+                ],
+            );
+            self.set_status(msg);
+        }
     }
 
     /// Keep what a command printed, capped, with the command itself as its heading.
@@ -4572,6 +4818,151 @@ mod tests {
             app.cfg.sites.first().and_then(|s| s.auth.clone()),
             Some("key:~/.ssh/id_ed25519".to_string())
         );
+    }
+
+    // ── selection and the keys that ignore it ───────────────────────────────────────────────
+
+    #[test]
+    fn the_modifier_picks_the_criterion_not_just_the_action() {
+        let mut app = app();
+        // The cursor on `b.rs`, so "the same extension" means `.rs`.
+        press(&mut app, "Down");
+        press(&mut app, "Down");
+        press(&mut app, "Down");
+        assert_eq!(app.panel().current().unwrap().name_str(), "b.rs");
+        app.run(Command::SelExtAdd);
+        assert_eq!(app.panel().selection.len(), 2, "both .rs files");
+        // The name criterion, from a file whose stem nothing else shares.
+        app.run(Command::SelNone);
+        app.run(Command::SelNameAdd);
+        assert_eq!(app.panel().selection.len(), 1);
+        // Inverting without folders leaves `docs` alone; the Alt variant takes it too.
+        app.run(Command::SelNone);
+        app.run(Command::SelInvert);
+        assert_eq!(app.panel().selection.len(), 3, "the three files");
+        app.run(Command::SelNone);
+        app.run(Command::SelInvertAll);
+        assert_eq!(app.panel().selection.len(), 4, "the folder as well");
+        // And one restore undoes a whole sweep.
+        app.run(Command::SelRestore);
+        assert!(app.panel().selection.is_empty());
+    }
+
+    #[test]
+    fn shift_f8_deletes_the_file_under_the_cursor_and_not_the_selection() {
+        let mut app = app();
+        // Select `a.txt` by its extension, then move the cursor onto `b.rs`.
+        press(&mut app, "Down");
+        press(&mut app, "Down");
+        assert_eq!(app.panel().current().unwrap().name_str(), "a.txt");
+        app.run(Command::SelExtAdd);
+        assert_eq!(app.panel().selection.len(), 1, "a.txt is selected");
+        press(&mut app, "Down");
+        assert_eq!(app.panel().current().unwrap().name_str(), "b.rs");
+
+        app.run(Command::FileDeleteCurrent);
+        let spec = match &app.mode {
+            Mode::Confirm(c) => match &c.action {
+                ConfirmAction::Job(spec) => spec.clone(),
+                other => panic!("{other:?}"),
+            },
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(spec.sources.len(), 1, "{:?}", spec.sources);
+        assert!(
+            spec.sources[0].to_string().ends_with("b.rs"),
+            "{:?}",
+            spec.sources
+        );
+    }
+
+    #[test]
+    fn shift_f5_carries_its_own_list_so_a_later_selection_cannot_change_it() {
+        let mut app = app();
+        press(&mut app, "Down");
+        press(&mut app, "Down");
+        press(&mut app, "Down"); // b.rs
+        app.run(Command::FileCopyCurrent);
+        let Mode::Prompt(prompt) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(prompt.kind, PromptKind::CopyTarget);
+        assert_eq!(prompt.sources.len(), 1);
+        // Selecting everything while the prompt is open must not widen the copy.
+        let listing = app.panel().listing.clone();
+        app.panel_mut()
+            .selection
+            .select_all(&listing, scmd_core::MaskScope::FilesAndDirs);
+        let Mode::Prompt(prompt) = std::mem::replace(&mut app.mode, Mode::Normal) else {
+            unreachable!()
+        };
+        app.prompt_accept(prompt);
+        let spec = match app.take_requests().into_iter().next() {
+            Some(Request::Job { spec, .. }) => spec,
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(spec.sources.len(), 1, "{:?}", spec.sources);
+    }
+
+    #[test]
+    fn ctrl_g_runs_one_command_per_file_in_turn() {
+        let mut app = app();
+        press(&mut app, "Down");
+        press(&mut app, "Down");
+        press(&mut app, "Down");
+        app.run(Command::SelExtAdd);
+        assert_eq!(app.panel().selection.len(), 2);
+
+        app.run(Command::FileApply);
+        let Mode::Prompt(mut prompt) = std::mem::replace(&mut app.mode, Mode::Normal) else {
+            panic!("the apply prompt did not open")
+        };
+        assert_eq!(prompt.kind, PromptKind::ApplyCommand);
+        prompt.text = "wc -l !.!".to_string();
+        app.prompt_accept(prompt);
+
+        // The first command is out; the second waits for it.
+        let first = shell_requests(&app);
+        assert_eq!(first.len(), 1, "{first:?}");
+        assert!(first[0].starts_with("wc -l "), "{first:?}");
+        assert_eq!(app.apply_queue.len(), 1);
+
+        let (id, line) = app.shell.clone().expect("a command is running");
+        app.handle_event(Event::ShellDone {
+            id,
+            line,
+            output: "12 b.rs\n".into(),
+            status: Some(0),
+        });
+        let all = shell_requests(&app);
+        assert_eq!(all.len(), 2, "the second did not follow: {all:?}");
+        assert_ne!(all[0], all[1], "the same file twice");
+        assert!(app.apply_queue.is_empty());
+    }
+
+    #[test]
+    fn a_failure_stops_the_rest_of_an_apply_run() {
+        let mut app = app();
+        press(&mut app, "Down");
+        press(&mut app, "Down");
+        press(&mut app, "Down");
+        app.run(Command::SelExtAdd);
+        app.run(Command::FileApply);
+        let Mode::Prompt(mut prompt) = std::mem::replace(&mut app.mode, Mode::Normal) else {
+            panic!("the apply prompt did not open")
+        };
+        prompt.text = "false !.!".to_string();
+        app.prompt_accept(prompt);
+        let (id, line) = app.shell.clone().expect("running");
+        app.handle_event(Event::ShellDone {
+            id,
+            line,
+            output: String::new(),
+            status: Some(1),
+        });
+        assert!(app.apply_queue.is_empty(), "it carried on after a failure");
+        assert!(app.status_error, "{}", app.status);
+        assert_eq!(shell_requests(&app).len(), 1);
     }
 
     // ── the command line (SPEC 06 §7) ──────────────────────────────────────────────────────

@@ -148,7 +148,15 @@ fn panel_menu(title: &'static str, side: usize) -> Menu {
                 Action::Run(Command::PanelFilterQuick),
             ),
             Entry::Separator,
-            item("menu-panel-onoff", ctrl, Action::Todo("panel.onoff")),
+            item(
+                "menu-panel-onoff",
+                ctrl,
+                Action::Run(Command::PanelToggle(if side == 0 {
+                    Side::Left
+                } else {
+                    Side::Right
+                })),
+            ),
             item("menu-reread", "Ctrl+R", Action::Run(Command::PanelReread)),
             item(
                 "menu-change-drive",
@@ -198,7 +206,11 @@ pub fn menus() -> Vec<Menu> {
                 ),
                 Entry::Separator,
                 item("menu-attributes", "", Action::Todo("file.attributes")),
-                item("menu-apply-command", "Ctrl+G", Action::Todo("file.apply")),
+                item(
+                    "menu-apply-command",
+                    "Ctrl+G",
+                    Action::Run(Command::FileApply),
+                ),
                 Entry::Separator,
                 item("menu-select-group", "+", Action::Run(Command::SelMaskAdd)),
                 item(

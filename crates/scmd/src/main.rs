@@ -96,6 +96,26 @@ struct Cli {
     list_plugins: bool,
 }
 
+/// Free bytes on the device a local directory is on, for the panel frame. `std` does not
+/// expose `statvfs`, so this is the one call that needs a platform crate; a remote provider
+/// does not report free space at all, and Windows wants `GetDiskFreeSpaceEx`, so both answer
+/// `None` rather than a figure nobody checked.
+#[cfg(unix)]
+fn free_space(path: &scmd_core::VPath) -> Option<u64> {
+    if path.is_remote() {
+        return None;
+    }
+    let stat = nix::sys::statvfs::statvfs(path.as_path()).ok()?;
+    // `blocks_available` is what an unprivileged process may actually use, which is the
+    // number a user is asking about; the free count includes the reserve only root can touch.
+    Some(stat.blocks_available() as u64 * stat.fragment_size())
+}
+
+#[cfg(not(unix))]
+fn free_space(_path: &scmd_core::VPath) -> Option<u64> {
+    None
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match run(cli) {
@@ -406,6 +426,10 @@ fn interactive(mut app: App) -> Result<()> {
                             panel,
                             generation,
                             result,
+                        });
+                        let _ = tx.send(Event::FreeSpace {
+                            panel,
+                            bytes: free_space(&path),
                         });
                     });
                 }

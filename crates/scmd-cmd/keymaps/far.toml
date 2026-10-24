@@ -219,6 +219,67 @@ cmd = "sel.mask.remove"
 keys = ["Ctrl+Shift+M"]
 cmd = "sel.restore"
 
+# FAR's selection matrix: the modifier picks the criterion. These need a terminal that
+# reports modified printable keys (kitty, foot, WezTerm, Windows Terminal, xterm with
+# modifyOtherKeys); where it does not, the menu and Ctrl+A still reach the same work.
+[[bind]]
+keys = ["Ctrl++"]
+cmd = "sel.ext.add"
+
+[[bind]]
+keys = ["Ctrl+-"]
+cmd = "sel.ext.remove"
+
+[[bind]]
+keys = ["Alt++"]
+cmd = "sel.name.add"
+
+[[bind]]
+keys = ["Alt+-"]
+cmd = "sel.name.remove"
+
+# FAR inverts folders too on Ctrl+*; Alt+* is the one a terminal delivers.
+[[bind]]
+keys = ["Alt+*"]
+cmd = "sel.invert.all"
+
+# ---------------------------------------------------------------- files
+# The item under the cursor, whatever is selected.
+[[bind]]
+keys = ["Shift+F5"]
+cmd = "file.copy.current"
+
+[[bind]]
+keys = ["Shift+F6"]
+cmd = "file.move.current"
+
+[[bind]]
+keys = ["Shift+F8"]
+cmd = "file.delete.current"
+
+[[bind]]
+keys = ["Ctrl+G"]
+cmd = "file.apply"
+
+
+# ---------------------------------------------------------------- layout
+[[bind]]
+keys = ["Ctrl+F1"]
+cmd = "panel.toggle(left)"
+
+[[bind]]
+keys = ["Ctrl+F2"]
+cmd = "panel.toggle(right)"
+
+# FAR scrolls long names with Alt+Left/Right; those are history here (docs/03-keymap.md §9).
+[[bind]]
+keys = ["Ctrl+Shift+Left"]
+cmd = "panel.names.left"
+
+[[bind]]
+keys = ["Ctrl+Shift+Right"]
+cmd = "panel.names.right"
+
 # ---------------------------------------------------------------- misc
 [[bind]]
 keys = ["Space"]

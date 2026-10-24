@@ -161,6 +161,13 @@ pub struct PanelCfg {
     pub allow_reverse_sort: bool,
     /// The `Name | Size | Date | Time` row under the panel frame (FAR has it on by default).
     pub column_titles: bool,
+    /// The item under the cursor, spelled out in the panel's own bottom row (FAR's
+    /// `Show status line`). Off by default, because we also have a status bar.
+    pub status_line: bool,
+    /// A bar in the right frame showing where the view sits in a long listing.
+    pub scrollbar: bool,
+    /// Free space on the device, in the bottom frame.
+    pub free_space: bool,
     pub quick_search: QuickSearch,
 }
 
@@ -176,6 +183,9 @@ impl Default for PanelCfg {
             show_hidden: false,
             allow_reverse_sort: true,
             column_titles: true,
+            status_line: false,
+            scrollbar: true,
+            free_space: true,
             quick_search: QuickSearch::Alt,
         }
     }
@@ -486,6 +496,9 @@ impl Config {
             }
             "panel.allow_reverse_sort" => self.panel.allow_reverse_sort = parse_bool(value)?,
             "panel.column_titles" => self.panel.column_titles = parse_bool(value)?,
+            "panel.status_line" => self.panel.status_line = parse_bool(value)?,
+            "panel.scrollbar" => self.panel.scrollbar = parse_bool(value)?,
+            "panel.free_space" => self.panel.free_space = parse_bool(value)?,
             "general.confirm_exit" => self.general.confirm_exit = parse_bool(value)?,
             "general.confirm_delete" => self.general.confirm_delete = parse_bool(value)?,
             "general.confirm_overwrite" => self.general.confirm_overwrite = parse_bool(value)?,

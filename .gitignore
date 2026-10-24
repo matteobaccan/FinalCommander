@@ -3,3 +3,6 @@
 *.pdb
 .DS_Store
 /dist
+
+# Scratch worktrees for parallel work: never part of a commit.
+/.claude/worktrees

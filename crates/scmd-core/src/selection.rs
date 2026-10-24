@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use globset::{Glob, GlobSetBuilder};
 
-use crate::entry::{EntryId, EntryKind};
+use crate::entry::{Entry, EntryId, EntryKind};
 use crate::listing::Listing;
 
 /// What a mask operation applies to.
@@ -136,6 +136,32 @@ impl Selection {
         Ok(changed)
     }
 
+    /// Select or deselect exactly the rows a predicate picks, remembering what was selected
+    /// before so that `restore_previous` undoes the whole sweep rather than one row. FAR's
+    /// modifiers on the grey keys all come down to this: the criterion changes, the mechanics
+    /// do not. Returns how many rows changed state.
+    pub fn apply_where(
+        &mut self,
+        listing: &Listing,
+        scope: MaskScope,
+        on: bool,
+        mut pick: impl FnMut(&Entry) -> bool,
+    ) -> usize {
+        self.remember();
+        let mut changed = 0;
+        for row in 0..listing.len() {
+            let e = listing.row(row).expect("row in range");
+            if !e.is_selectable() || (scope == MaskScope::FilesOnly && e.kind == EntryKind::Dir) {
+                continue;
+            }
+            if pick(e) && self.contains(e.id) != on {
+                self.set(e.id, on);
+                changed += 1;
+            }
+        }
+        changed
+    }
+
     /// Drop ids that are no longer present, after a re-read.
     pub fn retain_existing(&mut self, listing: &Listing) {
         let present: HashSet<EntryId> = listing.entries.iter().map(|e| e.id).collect();
@@ -216,5 +242,22 @@ mod tests {
                 .map(|r| l.row(r).unwrap().id)
                 .unwrap()
         ));
+    }
+
+    #[test]
+    fn a_predicate_selects_a_group_and_one_restore_undoes_it() {
+        let l = listing();
+        let mut s = Selection::default();
+        // Everything with the same extension as a `.rs` file, the way Ctrl+Gray+ works.
+        let picked = s.apply_where(&l, MaskScope::FilesOnly, true, |e| {
+            std::path::Path::new(&e.name)
+                .extension()
+                .is_some_and(|x| x.eq_ignore_ascii_case("rs"))
+        });
+        assert!(picked > 0, "nothing matched");
+        assert_eq!(s.len(), picked);
+        // One restore puts the whole sweep back, not the last row of it.
+        s.restore_previous();
+        assert!(s.is_empty(), "restore did not undo the sweep");
     }
 }

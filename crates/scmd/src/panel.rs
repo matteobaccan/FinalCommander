@@ -24,6 +24,11 @@ pub struct Panel {
     /// A name to put the cursor on when the next listing arrives — `goto:` asks for this, and
     /// the read it waits for has not happened yet.
     pub want_cursor: Option<String>,
+    /// Free bytes on the device this directory is on, as the last read reported them. `None`
+    /// where the platform or the provider cannot say.
+    pub free: Option<u64>,
+    /// Columns the name column is scrolled by, for names wider than it.
+    pub name_scroll: usize,
 }
 
 impl Panel {
@@ -41,6 +46,8 @@ impl Panel {
             filter: None,
             filter_set: None,
             want_cursor: None,
+            free: None,
+            name_scroll: 0,
             history_pos: 0,
             generation: 0,
             loading: true,
@@ -146,6 +153,8 @@ impl Panel {
         self.top = 0;
         self.filter = None;
         self.filter_set = None;
+        self.name_scroll = 0;
+        self.free = None;
         self.selection.clear();
         self.loading = true;
         self.listing = Listing::default();

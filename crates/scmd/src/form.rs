@@ -176,6 +176,23 @@ impl Form {
                 ),
                 Field::toggle("panel.reverse", t("opt-reverse"), cfg.panel.reverse),
                 Field::Separator,
+                Field::toggle(
+                    "panel.column_titles",
+                    t("opt-column-titles"),
+                    cfg.panel.column_titles,
+                ),
+                Field::toggle(
+                    "panel.status_line",
+                    t("opt-status-line"),
+                    cfg.panel.status_line,
+                ),
+                Field::toggle("panel.scrollbar", t("opt-scrollbar"), cfg.panel.scrollbar),
+                Field::toggle(
+                    "panel.free_space",
+                    t("opt-free-space"),
+                    cfg.panel.free_space,
+                ),
+                Field::Separator,
                 choice(
                     "panel.view",
                     t("opt-view"),

@@ -81,15 +81,28 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
     let cmd_h = u16::from(app.cfg.ui.command_line);
     let panels_h = h.saturating_sub(keybar_h + status_h + cmd_h).max(3);
 
-    let left_w = w / 2;
-    let areas = [
-        Rect::new(0, 0, left_w, panels_h),
-        Rect::new(left_w, 0, w - left_w, panels_h),
-    ];
+    // `Ctrl+F1`/`Ctrl+F2` hide one panel and give the screen to the other: a zero-width area
+    // draws nothing, which is all "panel off" has to mean.
+    let areas = match app.hidden {
+        Some(0) => [Rect::new(0, 0, 0, panels_h), Rect::new(0, 0, w, panels_h)],
+        Some(_) => [Rect::new(0, 0, w, panels_h), Rect::new(w, 0, 0, panels_h)],
+        None => {
+            let left_w = w / 2;
+            [
+                Rect::new(0, 0, left_w, panels_h),
+                Rect::new(left_w, 0, w - left_w, panels_h),
+            ]
+        }
+    };
 
-    // Remember the geometry so key handling knows how far a page is.
-    app.rows = widgets::panel_rows(areas[0], app.cfg.panel.column_titles);
-    app.columns = widgets::brief_columns(areas[0]);
+    // Remember the geometry so key handling knows how far a page is. It is the active
+    // panel's, because that is the one the keys move through.
+    app.rows = widgets::panel_rows(
+        areas[app.active],
+        app.cfg.panel.column_titles,
+        app.cfg.panel.status_line,
+    );
+    app.columns = widgets::brief_columns(areas[app.active]);
     for i in 0..2 {
         let (rows, cols) = (app.rows, app.columns);
         app.panels[i].scroll_into_view(rows, cols);
@@ -98,6 +111,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
     for (i, area) in areas.iter().enumerate() {
         let panel = &app.panels[i];
         let path = panel.cwd.to_string();
+        let status = app.cfg.panel.status_line.then(|| cursor_line(app, panel));
         let message = panel
             .error
             .as_deref()
@@ -117,6 +131,14 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             column_titles: app.cfg.panel.column_titles,
             filter: panel.filter.as_deref(),
             message: message.as_deref(),
+            status: status.as_deref(),
+            free: if app.cfg.panel.free_space {
+                panel.free
+            } else {
+                None
+            },
+            scrollbar: app.cfg.panel.scrollbar,
+            name_scroll: panel.name_scroll,
         };
         widgets::draw_panel(buf, &app.theme, &render);
     }
@@ -734,7 +756,12 @@ fn draw_viewer(app: &mut App, viewer: &mut scmd_view::Viewer, buf: &mut Buffer) 
 }
 
 fn status_hint(app: &App) -> String {
-    let panel = app.panel();
+    cursor_line(app, app.panel())
+}
+
+/// The item under the cursor, spelled out: what the screen's status bar shows for the active
+/// panel, and what each panel's own status line shows for itself.
+fn cursor_line(app: &App, panel: &crate::panel::Panel) -> String {
     match panel.current() {
         Some(e) => {
             let size = if e.kind.is_dirlike() {
@@ -1572,6 +1599,106 @@ mod tests {
         s.replace('&', "&amp;")
             .replace('<', "&lt;")
             .replace('>', "&gt;")
+    }
+
+    #[test]
+    fn one_panel_can_take_the_whole_screen() {
+        let mut app = app("far", "en");
+        project(&mut app);
+        app.run(scmd_cmd::Command::PanelToggle(scmd_cmd::Side::Left));
+        assert_eq!(app.hidden, Some(0));
+        assert_eq!(app.active, 1, "the keys followed the screen");
+        let out = frame(&mut app, 100, 28);
+        let top = out.lines().next().unwrap();
+        assert_eq!(
+            top.matches('┌').count(),
+            1,
+            "two panels are still drawn: {top}"
+        );
+        assert!(top.contains("/tmp"), "{top}");
+        // The same key brings it back.
+        app.run(scmd_cmd::Command::PanelToggle(scmd_cmd::Side::Left));
+        assert_eq!(app.hidden, None);
+        let out = frame(&mut app, 100, 28);
+        assert_eq!(out.lines().next().unwrap().matches('┌').count(), 2);
+    }
+
+    #[test]
+    fn the_panel_status_line_shows_the_item_under_the_cursor() {
+        let mut app = app("far", "en");
+        project(&mut app);
+        let without = frame(&mut app, 100, 28);
+        app.cfg.panel.status_line = true;
+        app.handle_input(Input::Key("Down".parse().unwrap()));
+        let with = frame(&mut app, 100, 28);
+        assert!(with.contains("├"), "no rule above the status row: {with}");
+        // The name is on its own row inside the panel, not only in the screen's status bar.
+        let rows: Vec<&str> = with
+            .lines()
+            .filter(|l| l.contains("crates") && !l.contains("FOLDER"))
+            .collect();
+        assert!(!rows.is_empty(), "the status row is missing: {with}");
+        assert!(
+            app.rows < without.lines().count(),
+            "the status row has to cost a file row"
+        );
+    }
+
+    #[test]
+    fn the_scrollbar_appears_only_when_there_is_more_than_fits() {
+        let mut app = app("far", "en");
+        project(&mut app);
+        let short = frame(&mut app, 100, 28);
+        assert!(!short.contains('█'), "a short listing drew a bar: {short}");
+        let many: Vec<Entry> = (0..200)
+            .map(|i| entry(&format!("file{i:03}.rs"), EntryKind::File, 10))
+            .collect();
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation: 1,
+            result: Ok(many),
+        });
+        let long = frame(&mut app, 100, 28);
+        assert!(long.contains('█'), "no thumb: {long}");
+        assert!(long.contains('░'), "no track: {long}");
+    }
+
+    #[test]
+    fn free_space_sits_in_the_frame_and_the_setting_takes_it_away() {
+        let mut app = app("far", "en");
+        project(&mut app);
+        app.handle_event(Event::FreeSpace {
+            panel: 0,
+            bytes: Some(12 * 1024 * 1024 * 1024),
+        });
+        let out = frame(&mut app, 100, 28);
+        assert!(out.contains("12.0 G free"), "{out}");
+        app.cfg.panel.free_space = false;
+        let out = frame(&mut app, 100, 28);
+        assert!(!out.contains("free"), "{out}");
+    }
+
+    #[test]
+    fn a_long_name_scrolls_sideways() {
+        let mut app = app("far", "en");
+        let long = "a-name-longer-than-the-column-will-ever-be.tar.gz";
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation: 1,
+            result: Ok(vec![Entry::parent_entry(), entry(long, EntryKind::File, 1)]),
+        });
+        let before = frame(&mut app, 100, 12);
+        assert!(before.contains("a-name-longer"), "{before}");
+        app.run(scmd_cmd::Command::PanelScrollNames(1));
+        app.run(scmd_cmd::Command::PanelScrollNames(1));
+        let after = frame(&mut app, 100, 12);
+        assert!(after.contains("name-longer"), "{after}");
+        assert!(!after.contains("a-name-longer"), "it did not move: {after}");
+        // Going back past the start stops at the start rather than wrapping.
+        for _ in 0..5 {
+            app.run(scmd_cmd::Command::PanelScrollNames(-1));
+        }
+        assert_eq!(app.panels[0].name_scroll, 0);
     }
 
     #[test]
