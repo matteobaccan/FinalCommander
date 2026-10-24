@@ -95,6 +95,28 @@ pub struct Mapping {
     pub offset: u64,
 }
 
+/// What a PE's COM descriptor directory says: that the file is managed, and which runtime it
+/// asks for — ECMA-335 §II.25.3.3 for the CLI header, §II.24.2.1 for the metadata root.
+///
+/// Deciding managed from native happens here and nowhere else in this crate: `il::is_managed`
+/// asks `clr()` rather than walking the headers a second time, so `F5` and `F11` can never
+/// disagree about the same file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Clr {
+    /// `cb`: the length the header gives for itself. 72 for every runtime so far.
+    pub size: u32,
+    /// `MajorRuntimeVersion.MinorRuntimeVersion` — 2.5 since .NET 2.0, and still 2.5.
+    pub runtime: (u16, u16),
+    /// `COMIMAGE_FLAGS_*`: IL only, 32-bit required, strong-name signed, and the rest.
+    pub flags: u32,
+    /// `EntryPointToken`: a metadata token, or an RVA when the entry point is native.
+    pub entry_point: u32,
+    /// The version string of the metadata root: `v4.0.30319`, `v2.0.50727`.
+    pub metadata_version: String,
+    /// Where the metadata root is in this file, when it is in this file at all.
+    pub metadata_at: Option<u64>,
+}
+
 /// The decoded shape of a file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Structure {
@@ -107,6 +129,9 @@ pub struct Structure {
     pub symbols: Vec<Symbol>,
     /// What loads where, sorted by address.
     pub maps: Vec<Mapping>,
+    /// Set for a managed PE: what its CLI header asks for. `None` means native, which is what
+    /// every other format is.
+    pub clr: Option<Clr>,
     /// The file ended inside something we were reading.
     pub truncated: bool,
 }
@@ -287,6 +312,16 @@ pub fn read(src: &mut dyn Bytes) -> Option<Structure> {
         return Some(ar(src, len));
     }
     None
+}
+
+/// Is this a managed image, and what does its CLI header ask for? `None` for a native PE, for
+/// a DOS stub, and for everything that is not a PE at all.
+///
+/// This is the crate's one answer to "managed or native". It goes through `read` rather than
+/// walking the PE headers again, because a second walk is a second set of bounds checks to get
+/// right and a second place to disagree with the pane about the same file.
+pub fn clr(src: &mut dyn Bytes) -> Option<Clr> {
+    read(src)?.clr
 }
 
 // ── ELF ─────────────────────────────────────────────────────────────────────────────────────
@@ -550,11 +585,14 @@ fn elf(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
     let dynamic = elf_dynamic(src, &sections, is64, c.big_endian, len);
     // A file with no `.dynsym` is usually an object file, whose undefined symbols are what it
     // will need at link time — the same question, answered one stage earlier.
-    let dynamic_table = if dynamic_syms.is_empty() {
-        &static_syms
+    let (dynamic_table, dynamic_claimed) = if dynamic_syms.is_empty() {
+        (&static_syms, static_claim)
     } else {
-        &dynamic_syms
+        (&dynamic_syms, dynamic_claim)
     };
+    // The table both groups below are drawn from is capped like every other one here, and a
+    // cap it does not own up to is a file the pane has quietly misreported.
+    let unread = dynamic_claimed.saturating_sub(dynamic_table.len());
     let undefined: Vec<&ElfSym> = dynamic_table
         .iter()
         .filter(|s| s.shndx == 0 && !s.name.is_empty())
@@ -565,17 +603,35 @@ fn elf(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
             dynamic.needed.len(),
             undefined.len()
         )));
-        for lib in &dynamic.needed {
-            rows.push(Row::entry(format!("  {lib}"), "needed library", None));
+        for (lib, at) in &dynamic.needed {
+            rows.push(Row::entry(
+                format!("  {lib}"),
+                format!("{}  needed library", off_cell(*at)),
+                *at,
+            ));
         }
         // ELF has one flat namespace: nothing in the file says which of the libraries above
         // will supply a given symbol, so none is claimed here. The offset is the symbol's own
-        // entry, which is the only place it exists in this file.
+        // entry, which is the only place it exists in this file. What the file does say is
+        // what kind of thing it wants and how badly — a weak symbol it can do without, a
+        // global one it cannot.
         for s in &undefined {
             rows.push(Row::entry(
                 format!("  {}", s.name),
-                format!("{}  undefined", off_cell(s.at)),
+                format!(
+                    "{}  {} {}  undefined",
+                    off_cell(s.at),
+                    elf_sym_bind(s.bind),
+                    elf_sym_type(s.kind)
+                ),
                 s.at,
+            ));
+        }
+        if unread > 0 {
+            rows.push(Row::entry(
+                "  …",
+                format!("{unread} more entries not read"),
+                None,
             ));
         }
     }
@@ -587,8 +643,20 @@ fn elf(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
             let at = map_offset(&maps, e.value);
             rows.push(Row::entry(
                 format!("  {}", e.name),
-                sym_cell(at, e.value, e.size),
+                format!(
+                    "{}  {} {}",
+                    sym_cell(at, e.value, e.size),
+                    elf_sym_bind(e.bind),
+                    elf_sym_type(e.kind)
+                ),
                 at,
+            ));
+        }
+        if unread > 0 {
+            rows.push(Row::entry(
+                "  …",
+                format!("{unread} more entries not read"),
+                None,
             ));
         }
     }
@@ -638,6 +706,7 @@ fn elf(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
         rows,
         symbols,
         maps,
+        clr: None,
         truncated,
     }
 }
@@ -653,6 +722,7 @@ fn truncated_elf(e_type: u16, len: u64) -> Structure {
         ],
         symbols: Vec::new(),
         maps: Vec::new(),
+        clr: None,
         truncated: false,
     }
 }
@@ -900,7 +970,9 @@ fn elf_symbol_names(
 /// What `.dynamic` says about the libraries this file needs and the names it goes by.
 #[derive(Debug, Default)]
 struct ElfDynamic {
-    needed: Vec<String>,
+    /// Each `DT_NEEDED`, with the offset of the entry that asked for it: that entry is the
+    /// only place in the file where the dependency exists, so it is where `Enter` goes.
+    needed: Vec<(String, Option<u64>)>,
     soname: Option<String>,
     runpath: Option<String>,
 }
@@ -943,7 +1015,8 @@ fn elf_dynamic(
             1 => {
                 let name = str_at(&strings, val as usize);
                 if !name.is_empty() {
-                    out.needed.push(name);
+                    out.needed
+                        .push((name, in_file(dynamic.offset + from as u64, len)));
                 }
             }
             14 => out.soname = Some(str_at(&strings, val as usize)).filter(|s| !s.is_empty()),
@@ -982,6 +1055,33 @@ fn elf_osabi(v: u8) -> &'static str {
         6 => "Solaris",
         9 => "FreeBSD",
         12 => "OpenBSD",
+        _ => "other",
+    }
+}
+
+/// `STT_*`: what the symbol names.
+fn elf_sym_type(t: u8) -> &'static str {
+    match t {
+        0 => "notype",
+        1 => "object",
+        2 => "func",
+        3 => "section",
+        4 => "file",
+        5 => "common",
+        6 => "tls",
+        10 => "ifunc",
+        _ => "other",
+    }
+}
+
+/// `STB_*`: how hard the linker has to try. A weak symbol may go unresolved and the file still
+/// loads; a global one may not.
+fn elf_sym_bind(b: u8) -> &'static str {
+    match b {
+        0 => "local",
+        1 => "global",
+        2 => "weak",
+        10 => "gnu-unique",
         _ => "other",
     }
 }
@@ -1043,6 +1143,7 @@ fn pe(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
             rows,
             symbols: Vec::new(),
             maps: Vec::new(),
+            clr: None,
             truncated: nt.len() < 24,
         };
     }
@@ -1152,6 +1253,10 @@ fn pe(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
     }
 
     let mut truncated = n.short;
+    // The CLI header belongs with the other headers, but it is behind a data directory and a
+    // data directory is an RVA, which needs the section table that has not been read yet. So
+    // the place for its rows is remembered now and filled in once the sections are known.
+    let clr_at = rows.len();
     let sec_at = lfanew + 24 + opt_size as u64;
     let mut maps = Vec::new();
     let mut pe_sections: Vec<PeSection> = Vec::new();
@@ -1208,6 +1313,26 @@ fn pe(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
     }
     maps.sort_by_key(|m| m.address);
 
+    // The COM descriptor directory (14) is what makes a PE managed: a .NET assembly is a PE
+    // whose code is IL and whose entry point is a metadata token, and this one directory is
+    // the whole difference. SPEC 05 §1.8.
+    let (clr_rva, _) = pe_dir(&dirs, 14);
+    let clr = match pe_clr(src, &pe_sections, clr_rva, len) {
+        Some((decoded, clr_rows)) => {
+            rows.splice(clr_at..clr_at, clr_rows);
+            Some(decoded)
+        }
+        None => None,
+    };
+    // One line of identity, so the pane's title says what the file is before any row does.
+    let summary = match &clr {
+        Some(c) if !c.metadata_version.is_empty() => {
+            format!("{summary} · managed, .NET {}", c.metadata_version)
+        }
+        Some(c) => format!("{summary} · managed, CLI {}.{}", c.runtime.0, c.runtime.1),
+        None => summary,
+    };
+
     // Imports and exports — SPEC 05 §1.8. An image with neither is unusual but legal, and a
     // directory that points nowhere simply contributes no rows.
     let (import_rva, _) = pe_dir(&dirs, 1);
@@ -1230,6 +1355,7 @@ fn pe(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
         rows,
         symbols,
         maps,
+        clr,
         truncated,
     }
 }
@@ -1405,11 +1531,26 @@ fn pe_exports(
     let names = pe_bytes(src, sections, w(32), shown_names * 4, len);
     let ordinals = pe_bytes(src, sections, w(36), shown_names * 2, len);
 
-    let mut rows = vec![Row::group(format!("Exports ({n_names})"))];
+    // The address table has one slot per ordinal and the name table only covers some of them,
+    // so the number of exports is the number of addresses, not the number of names.
+    let mut rows = Vec::new();
     if !library.is_empty() {
         rows.push(Row::field("library name", String::new(), library));
     }
+    let slot = |k: usize| -> u32 {
+        if (k + 1) * 4 > functions.len() {
+            return 0;
+        }
+        u32::from_le_bytes([
+            functions[k * 4],
+            functions[k * 4 + 1],
+            functions[k * 4 + 2],
+            functions[k * 4 + 3],
+        ])
+    };
     let mut symbols = Vec::new();
+    // Which slots a name points at, so the ones no name points at can be listed afterwards.
+    let mut named = vec![false; shown_functions];
     for i in 0..shown_names {
         if (i + 1) * 4 > names.len() || (i + 1) * 2 > ordinals.len() {
             break;
@@ -1430,40 +1571,18 @@ fn pe_exports(
         }
         // The name list and the address list are only parallel through the ordinal table.
         let ordinal = u16::from_le_bytes([ordinals[i * 2], ordinals[i * 2 + 1]]) as usize;
-        let function = if (ordinal + 1) * 4 <= functions.len() {
-            u32::from_le_bytes([
-                functions[ordinal * 4],
-                functions[ordinal * 4 + 1],
-                functions[ordinal * 4 + 2],
-                functions[ordinal * 4 + 3],
-            ])
-        } else {
-            0
-        };
-        // An address inside the export directory itself is not code: it is the name of the
-        // DLL that really has the symbol, which this one only forwards to.
-        let forwarded = dir_size > 0 && function >= rva && function - rva < dir_size;
-        if forwarded {
-            let to = pe_name(src, sections, function, len);
-            rows.push(Row::entry(
-                format!("  {name}"),
-                format!("forwarded to {to}"),
-                None,
-            ));
-            continue;
+        if let Some(seen) = named.get_mut(ordinal) {
+            *seen = true;
         }
-        let at = pe_offset(sections, function, len);
-        let address = image_base.saturating_add(function as u64);
+        let function = slot(ordinal);
+        let (cell, at, address) =
+            pe_export_cell(src, sections, function, (rva, dir_size), image_base, len);
         rows.push(Row::entry(
             format!("  {name}"),
-            format!(
-                "{}  ordinal {}",
-                sym_cell(at, address, 0),
-                ordinal as u32 + ordinal_base
-            ),
+            format!("{cell}  ordinal {}", ordinal as u32 + ordinal_base),
             at,
         ));
-        if function != 0 {
+        if let Some(address) = address.filter(|_| function != 0) {
             symbols.push(Symbol {
                 name,
                 address,
@@ -1474,11 +1593,247 @@ fn pe_exports(
     if n_names > shown_names {
         rows.push(Row::entry(
             "  …",
-            format!("{} more exports not shown", n_names - shown_names),
+            format!("{} more named exports not shown", n_names - shown_names),
             None,
         ));
     }
+
+    // An export by ordinal has no name anywhere in the file, and none is invented for it: a
+    // DLL whose whole interface is ordinals is a real DLL, and `Exports (0)` would be a lie.
+    // The budget is shared with the names, so the group is capped exactly as the others are.
+    let mut room = MAX_ENTRIES.saturating_sub(rows.len());
+    let mut unnamed = 0usize;
+    for i in 0..shown_functions {
+        if named.get(i).copied().unwrap_or(false) {
+            continue;
+        }
+        // A zero slot is a hole in the ordinal range, not an export.
+        let function = slot(i);
+        if function == 0 {
+            continue;
+        }
+        if room == 0 {
+            rows.push(Row::entry("  …", "more exports not shown", None));
+            break;
+        }
+        let (cell, at, _) =
+            pe_export_cell(src, sections, function, (rva, dir_size), image_base, len);
+        rows.push(Row::entry(
+            format!("  ordinal {}", i as u32 + ordinal_base),
+            format!("{cell}  no name"),
+            at,
+        ));
+        room -= 1;
+        unnamed += 1;
+    }
+    if n_functions > shown_functions {
+        rows.push(Row::entry(
+            "  …",
+            format!("{} more exports not shown", n_functions - shown_functions),
+            None,
+        ));
+    }
+
+    if rows.is_empty() {
+        return (Vec::new(), symbols);
+    }
+    rows.insert(
+        0,
+        Row::group(format!("Exports ({})", n_names.saturating_add(unnamed))),
+    );
     (rows, symbols)
+}
+
+/// One export's value cell: where its bytes are and where it loads, or the library that really
+/// has the symbol when this one only forwards to it.
+fn pe_export_cell(
+    src: &mut dyn Bytes,
+    sections: &[PeSection],
+    function: u32,
+    dir: (u32, u32),
+    image_base: u64,
+    len: u64,
+) -> (String, Option<u64>, Option<u64>) {
+    // An address inside the export directory itself is not code: it is the name of the DLL
+    // that really has the symbol, which this one only forwards to.
+    let (rva, dir_size) = dir;
+    if dir_size > 0 && function >= rva && function - rva < dir_size {
+        let to = pe_name(src, sections, function, len);
+        return (format!("forwarded to {to}"), None, None);
+    }
+    let at = pe_offset(sections, function, len);
+    let address = image_base.saturating_add(function as u64);
+    (sym_cell(at, address, 0), at, Some(address))
+}
+
+/// The CLI header and the metadata root it points at — ECMA-335 §II.25.3.3 and §II.24.2.1.
+///
+/// A managed image is a PE with this one directory, so the test is narrow on purpose: the
+/// header has to be there, has to declare a length that covers the fields being read, and the
+/// metadata it points at has to start with `BSJB`. A file that fails any of those is native as
+/// far as this crate is concerned, and the IL listing agrees because it asks the same question
+/// here instead of asking it again itself.
+fn pe_clr(
+    src: &mut dyn Bytes,
+    sections: &[PeSection],
+    rva: u32,
+    len: u64,
+) -> Option<(Clr, Vec<Row>)> {
+    if rva == 0 {
+        return None;
+    }
+    // The header is 72 bytes of fixed fields and has been since the first runtime shipped.
+    const CLI_HEADER: usize = 72;
+    let header = pe_bytes(src, sections, rva, CLI_HEADER, len);
+    if header.len() < CLI_HEADER {
+        return None;
+    }
+    let mut c = Cur::new(&header);
+    let size = c.u32();
+    let runtime = (c.u16(), c.u16());
+    let meta_rva = c.u32();
+    let meta_size = c.u32();
+    let flags = c.u32();
+    let entry_point = c.u32();
+    let resources = (c.u32(), c.u32());
+    let strong_name = (c.u32(), c.u32());
+    // `cb` is the file telling us how long it thinks the header is. One shorter than the
+    // fields we just read is a file saying this is not that header.
+    if (size as usize) < CLI_HEADER {
+        return None;
+    }
+
+    // The metadata root: a signature, a version string with its own length, and the streams.
+    // Only the first two are read here — the tables are `il`'s job, not the pane's.
+    let root = pe_bytes(src, sections, meta_rva, 16 + MAX_NAME, len);
+    if root.first_chunk::<4>() != Some(b"BSJB") {
+        return None;
+    }
+    let mut r = Cur::new(&root);
+    r.seek(12);
+    // A length out of a file is never a length to allocate for: the string is whatever of it
+    // the bytes already read can show. It is NUL-padded to a multiple of four, so the name
+    // ends at the first NUL and not at the length.
+    let version_len = (r.u32() as usize).min(MAX_NAME);
+    let to = (16usize.saturating_add(version_len)).min(root.len());
+    let metadata_version = str_at(&root[..to], 16);
+    let metadata_at = pe_offset(sections, meta_rva, len);
+
+    let mut rows = vec![Row::group("CLI header")];
+    rows.push(Row::field("cb", format!("{size:08X}"), format!("{size} B")));
+    rows.push(Row::field(
+        "RuntimeVersion",
+        format!("{:04X} {:04X}", runtime.0, runtime.1),
+        format!("{}.{}", runtime.0, runtime.1),
+    ));
+    rows.push(Row::field(
+        "Flags",
+        format!("{flags:08X}"),
+        clr_flags(flags),
+    ));
+    rows.push(Row::field(
+        "EntryPointToken",
+        format!("{entry_point:08X}"),
+        clr_entry_point(entry_point, flags),
+    ));
+    rows.push(Row::entry(
+        "MetaData",
+        format!(
+            "{}  RVA {meta_rva:X}  {}",
+            off_cell(metadata_at),
+            size_cell(meta_size as u64)
+        ),
+        metadata_at,
+    ));
+    rows.push(Row::field("MetaData signature", "42 53 4A 42", "BSJB"));
+    rows.push(Row::field(
+        "MetaData version",
+        String::new(),
+        if metadata_version.is_empty() {
+            "(none)".to_string()
+        } else {
+            metadata_version.clone()
+        },
+    ));
+    // The two directories worth a row of their own, and only when the file has them.
+    if resources.0 != 0 {
+        let at = pe_offset(sections, resources.0, len);
+        rows.push(Row::entry(
+            "Resources",
+            format!("{}  {}", off_cell(at), size_cell(resources.1 as u64)),
+            at,
+        ));
+    }
+    if strong_name.0 != 0 {
+        let at = pe_offset(sections, strong_name.0, len);
+        rows.push(Row::entry(
+            "StrongNameSignature",
+            format!("{}  {}", off_cell(at), size_cell(strong_name.1 as u64)),
+            at,
+        ));
+    }
+
+    Some((
+        Clr {
+            size,
+            runtime,
+            flags,
+            entry_point,
+            metadata_version,
+            metadata_at,
+        },
+        rows,
+    ))
+}
+
+/// `COMIMAGE_FLAGS_*`, in words.
+fn clr_flags(f: u32) -> String {
+    let mut parts = Vec::new();
+    if f & 0x0000_0001 != 0 {
+        parts.push("IL only");
+    }
+    if f & 0x0000_0002 != 0 {
+        parts.push("32-bit required");
+    }
+    if f & 0x0000_0004 != 0 {
+        parts.push("IL library");
+    }
+    if f & 0x0000_0008 != 0 {
+        parts.push("strong-name signed");
+    }
+    if f & 0x0000_0010 != 0 {
+        parts.push("native entry point");
+    }
+    if f & 0x0001_0000 != 0 {
+        parts.push("track debug data");
+    }
+    if f & 0x0002_0000 != 0 {
+        parts.push("32-bit preferred");
+    }
+    if parts.is_empty() {
+        format!("{f:#X}")
+    } else {
+        parts.join(", ")
+    }
+}
+
+/// The entry point of a managed image is a metadata token — a table in the top byte and a row
+/// number in the other three — unless the header says the entry point is native code, and then
+/// the same four bytes are an RVA instead.
+fn clr_entry_point(token: u32, flags: u32) -> String {
+    if token == 0 {
+        return "none".to_string();
+    }
+    if flags & 0x0000_0010 != 0 {
+        return format!("native code at RVA {token:X}");
+    }
+    let row = token & 0x00FF_FFFF;
+    match token >> 24 {
+        0x06 => format!("MethodDef({row})"),
+        // A multi-module assembly names the file its entry point is in instead.
+        0x26 => format!("File({row})"),
+        other => format!("table {other:#04X}, row {row}"),
+    }
 }
 
 fn pe_machine(m: u16) -> &'static str {
@@ -1569,8 +1924,10 @@ fn macho(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
     let mut truncated = c.short;
     let mut maps = Vec::new();
     // The dylibs in the order their commands appear: a two-level-namespace symbol names its
-    // library by its position in exactly this list.
-    let mut dylibs: Vec<String> = Vec::new();
+    // library by its position in exactly this list. Each one carries whether it is weak — a
+    // weak dylib may be missing at run time and the process still starts — and the offset of
+    // the load command that asked for it, which is where `Enter` goes.
+    let mut dylibs: Vec<(String, bool, Option<u64>)> = Vec::new();
     let mut symtab: Option<(u64, u32, u64, u32)> = None;
     rows.push(Row::group("Load commands"));
     for _ in 0..ncmds.min(MAX_ENTRIES as u32) {
@@ -1617,13 +1974,18 @@ fn macho(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
                     let name = String::from_utf8_lossy(&body[24..])
                         .trim_end_matches('\0')
                         .to_string();
+                    let weak = cmd == 0x8000_0018;
                     // LC_ID_DYLIB is this file's own name, not a dependency, so it takes no
                     // place in the ordinals.
                     if cmd != 0x0D {
-                        dylibs.push(name.clone());
+                        dylibs.push((name.clone(), weak, in_file(start + at as u64, len)));
                     }
                     rows.push(Row::entry(
-                        if cmd == 0x0D { "  id" } else { "  dylib" },
+                        match cmd {
+                            0x0D => "  id",
+                            0x8000_0018 => "  weak dylib",
+                            _ => "  dylib",
+                        },
                         name,
                         None,
                     ));
@@ -1668,9 +2030,15 @@ fn macho(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
     // is defined here, what is wanted from elsewhere, and what the rest of the world may bind
     // to. Mach-O records no symbol sizes, so every size here is 0 — "we were not told".
     let mut symbols = Vec::new();
+    let mut defined: Vec<(String, u64)> = Vec::new();
+    let mut undefined: Vec<(String, Option<String>, Option<u64>)> = Vec::new();
+    let mut exported: Vec<(String, u64)> = Vec::new();
+    // How many entries the table claimed and we did not read, for the groups to own up to.
+    let mut unread = 0usize;
     if let Some((symoff, nsyms, stroff, strsize)) = symtab {
         let entry = if is64 { 16usize } else { 12 };
         let count = (nsyms as usize).min(MAX_ENTRIES);
+        unread = (nsyms as usize).saturating_sub(count);
         let table = read_table(src, symoff, entry, count, len);
         let strings = if stroff < len {
             src.at(
@@ -1680,9 +2048,6 @@ fn macho(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
         } else {
             Vec::new()
         };
-        let mut defined: Vec<(String, u64)> = Vec::new();
-        let mut undefined: Vec<(String, Option<String>, Option<u64>)> = Vec::new();
-        let mut exported: Vec<(String, u64)> = Vec::new();
         for i in 0..count {
             let from = i * entry;
             if from + entry > table.len() {
@@ -1713,60 +2078,89 @@ fn macho(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
                     let library = ((n_desc >> 8) as usize)
                         .checked_sub(1)
                         .and_then(|at| dylibs.get(at))
-                        .cloned();
+                        .map(|(name, _, _)| name.clone());
                     undefined.push((name, library, in_file(symoff + from as u64, len)));
                 }
                 _ => {}
             }
         }
+    }
 
-        if !defined.is_empty() {
-            rows.push(Row::group(format!("Symbols ({})", defined.len())));
-            for (name, address) in &defined {
-                let at = map_offset(&maps, *address);
-                rows.push(Row::entry(
-                    format!("  {name}"),
-                    sym_cell(at, *address, 0),
-                    at,
-                ));
-                symbols.push(Symbol {
-                    name: name.clone(),
-                    address: *address,
-                    size: 0,
-                });
-            }
-            if nsyms as usize > count {
-                rows.push(Row::entry(
-                    "  …",
-                    format!("{} more entries not read", nsyms as usize - count),
-                    None,
-                ));
-            }
+    let capped = |rows: &mut Vec<Row>| {
+        if unread > 0 {
+            rows.push(Row::entry(
+                "  …",
+                format!("{unread} more entries not read"),
+                None,
+            ));
         }
-        if !undefined.is_empty() {
-            rows.push(Row::group(format!("Imports ({})", undefined.len())));
-            for (name, library, entry_at) in &undefined {
-                rows.push(Row::entry(
-                    format!("  {name}"),
-                    match library {
-                        Some(lib) => format!("{}  {lib}", off_cell(*entry_at)),
-                        None => format!("{}  undefined", off_cell(*entry_at)),
-                    },
-                    *entry_at,
-                ));
-            }
+    };
+
+    if !defined.is_empty() {
+        rows.push(Row::group(format!("Symbols ({})", defined.len())));
+        for (name, address) in &defined {
+            let at = map_offset(&maps, *address);
+            rows.push(Row::entry(
+                format!("  {name}"),
+                sym_cell(at, *address, 0),
+                at,
+            ));
+            symbols.push(Symbol {
+                name: name.clone(),
+                address: *address,
+                size: 0,
+            });
         }
-        if !exported.is_empty() {
-            rows.push(Row::group(format!("Exports ({})", exported.len())));
-            for (name, address) in &exported {
-                let at = map_offset(&maps, *address);
-                rows.push(Row::entry(
-                    format!("  {name}"),
-                    sym_cell(at, *address, 0),
-                    at,
-                ));
-            }
+        capped(&mut rows);
+    }
+    // A dylib this file loads is an import whether or not the symbol table survived, so the
+    // libraries are listed from the load commands and the symbols are added under them.
+    if !dylibs.is_empty() || !undefined.is_empty() {
+        rows.push(Row::group(format!(
+            "Imports ({} libraries, {} symbols)",
+            dylibs.len(),
+            undefined.len()
+        )));
+        for (name, weak, at) in &dylibs {
+            rows.push(Row::entry(
+                format!("  {name}"),
+                format!(
+                    "{}  {}",
+                    off_cell(*at),
+                    if *weak {
+                        "weak library"
+                    } else {
+                        "needed library"
+                    }
+                ),
+                *at,
+            ));
         }
+        // Two-level namespace: unlike ELF, a Mach-O symbol says which library will supply it,
+        // and the row says so when the ordinal names one of the libraries above.
+        for (name, library, entry_at) in &undefined {
+            rows.push(Row::entry(
+                format!("  {name}"),
+                match library {
+                    Some(lib) => format!("{}  {lib}", off_cell(*entry_at)),
+                    None => format!("{}  undefined", off_cell(*entry_at)),
+                },
+                *entry_at,
+            ));
+        }
+        capped(&mut rows);
+    }
+    if !exported.is_empty() {
+        rows.push(Row::group(format!("Exports ({})", exported.len())));
+        for (name, address) in &exported {
+            let at = map_offset(&maps, *address);
+            rows.push(Row::entry(
+                format!("  {name}"),
+                sym_cell(at, *address, 0),
+                at,
+            ));
+        }
+        capped(&mut rows);
     }
 
     sort_symbols(&mut symbols);
@@ -1776,6 +2170,7 @@ fn macho(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
         rows,
         symbols,
         maps,
+        clr: None,
         truncated,
     }
 }
@@ -1804,6 +2199,7 @@ fn fat_macho(head: &[u8], count: u32, len: u64) -> Structure {
         // A slice is a whole file of its own: opening one is what answers for it.
         symbols: Vec::new(),
         maps: Vec::new(),
+        clr: None,
         truncated: c.short,
     }
 }
@@ -1908,6 +2304,7 @@ fn ar(src: &mut dyn Bytes, len: u64) -> Structure {
         // The members are the binaries; the archive itself defines nothing.
         symbols: Vec::new(),
         maps: Vec::new(),
+        clr: None,
         truncated,
     }
 }
@@ -2188,6 +2585,130 @@ mod tests {
         assert_eq!(seg.offset, Some(0));
     }
 
+    /// Bytes straight off a file handle, so a test reads what the pane reads: the offsets that
+    /// matter and not the file. Nothing here loads a binary to look at its header.
+    struct FileBytes(std::fs::File);
+
+    impl Bytes for FileBytes {
+        fn at(&mut self, offset: u64, want: usize) -> Vec<u8> {
+            use std::io::{Read, Seek, SeekFrom};
+            if self.0.seek(SeekFrom::Start(offset)).is_err() {
+                return Vec::new();
+            }
+            let mut out = vec![0u8; want];
+            let mut filled = 0usize;
+            while filled < want {
+                match self.0.read(&mut out[filled..]) {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => filled += n,
+                }
+            }
+            out.truncate(filled);
+            out
+        }
+
+        fn len(&mut self) -> u64 {
+            self.0.metadata().map(|m| m.len()).unwrap_or(0)
+        }
+    }
+
+    /// The groups a real binary must have, whichever of the three formats it is.
+    #[test]
+    fn our_own_executable_says_what_it_loads_and_what_it_needs() {
+        let path = std::env::current_exe().expect("a test binary has a path");
+        let file = std::fs::File::open(&path).expect("and we can open it");
+        let mut src = FileBytes(file);
+        let len = src.len();
+        let s = read(&mut src).expect("this test binary is one of the three formats");
+
+        assert!(!s.truncated, "a whole file is not a truncated one");
+        assert!(!s.summary.is_empty());
+        assert!(
+            s.clr.is_none(),
+            "a Rust binary is not managed: {}",
+            s.summary
+        );
+        targets_stay_inside(&s, len);
+        // Nothing may claim a size or an address it did not read.
+        for m in &s.maps {
+            assert!(m.offset + m.size <= len, "{m:?} runs past the end");
+        }
+
+        let imports = s
+            .rows
+            .iter()
+            .position(|r| r.kind == RowKind::Group && r.label.starts_with("Imports"))
+            .unwrap_or_else(|| panic!("a dynamically linked binary has imports: {:?}", s.summary));
+        // Every entry under the heading is a real row: a name, and an offset that is either
+        // inside the file or honestly absent.
+        let under: Vec<&Row> = s.rows[imports + 1..]
+            .iter()
+            .take_while(|r| r.kind == RowKind::Entry)
+            .collect();
+        assert!(!under.is_empty(), "{:?}", &s.rows[imports..]);
+        for r in &under {
+            assert!(!r.label.trim().is_empty(), "{r:?}");
+        }
+
+        let libraries: Vec<&&Row> = under
+            .iter()
+            .filter(|r| r.value.ends_with("library"))
+            .collect();
+        match s.format {
+            // A dynamically linked ELF or Mach-O names the libraries it loads, and each name
+            // is the file name of a real library.
+            "ELF" => {
+                assert!(
+                    libraries.iter().any(|r| r.label.contains(".so")),
+                    "{libraries:?}"
+                );
+                let undefined = under
+                    .iter()
+                    .find(|r| r.value.contains("undefined"))
+                    .expect("something is wanted from those libraries");
+                // The symbol's binding and type are read off the entry, not guessed.
+                assert!(
+                    ["local", "global", "weak", "gnu-unique", "other"]
+                        .iter()
+                        .any(|b| undefined.value.contains(b)),
+                    "{}",
+                    undefined.value
+                );
+                assert!(!s.symbols.is_empty(), "a debug build keeps its symbols");
+                let first = s.symbols[0].clone();
+                assert_eq!(s.symbol_at(first.address), Some(first.name.as_str()));
+                assert!(s.offset_for_va(first.address).is_some());
+            }
+            "Mach-O" => assert!(
+                libraries.iter().any(|r| r.label.contains(".dylib")),
+                "{libraries:?}"
+            ),
+            // A native PE lists a DLL per descriptor and the names imported from it.
+            "PE" => assert!(
+                under.iter().any(|r| r.value.contains("symbols")),
+                "{:?}",
+                &s.rows[imports..]
+            ),
+            other => panic!("{other} is not a format a test binary should be"),
+        }
+    }
+
+    /// The same file, read twice: once through a handle and once from a buffer. The pane must
+    /// not care which, because that is the whole promise of `Bytes`.
+    #[test]
+    fn reading_a_real_binary_by_seeking_gives_what_reading_it_whole_gives() {
+        let path = std::env::current_exe().unwrap();
+        let seeking = read(&mut FileBytes(std::fs::File::open(&path).unwrap())).unwrap();
+        let whole = std::fs::read(&path).unwrap();
+        let loaded = read(&mut whole.as_slice()).unwrap();
+        assert_eq!(seeking.format, loaded.format);
+        assert_eq!(seeking.summary, loaded.summary);
+        assert_eq!(seeking.rows, loaded.rows);
+        assert_eq!(seeking.symbols, loaded.symbols);
+        assert_eq!(seeking.maps, loaded.maps);
+        assert_eq!(seeking.clr, loaded.clr);
+    }
+
     #[test]
     fn plain_text_is_not_a_binary_and_says_nothing() {
         let text = b"#!/bin/sh\necho hello\n";
@@ -2342,10 +2863,15 @@ mod tests {
             s.rows
         );
         let lib = row(&s, "libc.so.6").expect("the needed library is listed");
-        assert_eq!(lib.value, "needed library");
+        assert!(lib.value.ends_with("needed library"), "{}", lib.value);
+        // `Enter` on a library goes to the `DT_NEEDED` entry that asked for it, which is the
+        // only place in this file where the dependency exists.
+        assert_eq!(lib.offset, Some(0x420), "its own dynamic entry");
         let printf = row(&s, "printf").expect("the undefined symbol is listed");
         assert_eq!(printf.offset, Some(DYNSYM as u64 + 24), "its own entry");
         assert!(printf.value.contains("undefined"), "{}", printf.value);
+        // The file says what it wants and how badly, so the row does too.
+        assert!(printf.value.contains("global func"), "{}", printf.value);
 
         assert!(
             s.rows.iter().any(|r| r.label == "Exports (1)"),
@@ -2354,6 +2880,8 @@ mod tests {
         );
         let exported = row(&s, "scmd_run").expect("the exported symbol is listed");
         assert_eq!(exported.offset, Some(0x320));
+        assert!(exported.value.contains("@ 1020"), "{}", exported.value);
+        assert!(exported.value.contains("global func"), "{}", exported.value);
 
         // The SONAME comes from the same two sections, and the pane says it.
         let soname = row(&s, "soname").expect("soname");
@@ -2520,6 +3048,59 @@ mod tests {
     }
 
     #[test]
+    fn an_export_with_no_name_is_listed_by_its_ordinal() {
+        let mut bytes = pe64();
+        // A third slot in the address table that no name points at. Plenty of real DLLs
+        // export their whole interface this way, and `Exports (2)` would be a lie about them.
+        let ed = 0x300;
+        bytes[ed + 20..ed + 24].copy_from_slice(&3u32.to_le_bytes()); // NumberOfFunctions
+        bytes[0x348..0x34C].copy_from_slice(&0x1080u32.to_le_bytes());
+        let s = read(&mut bytes.as_slice()).unwrap();
+        assert!(
+            s.rows.iter().any(|r| r.label == "Exports (3)"),
+            "{:?}",
+            s.rows
+        );
+        let third = row(&s, "ordinal 3").expect("the unnamed export is listed");
+        assert!(third.value.contains("no name"), "{}", third.value);
+        assert_eq!(third.offset, Some(0x280), "RVA 1080 is offset 280");
+        // The named ones keep their own ordinals, and no slot is listed twice.
+        assert!(row(&s, "scmd_run").unwrap().value.contains("ordinal 1"));
+        assert_eq!(
+            s.rows
+                .iter()
+                .filter(|r| r.value.contains("no name"))
+                .count(),
+            1,
+            "{:?}",
+            s.rows
+        );
+        targets_stay_inside(&s, bytes.len() as u64);
+    }
+
+    #[test]
+    fn an_export_that_only_forwards_names_the_library_that_really_has_it() {
+        let mut bytes = pe64();
+        // The export directory covers its own data, and `scmd_run`'s address lands inside it:
+        // that is how a forwarder is written, and the bytes there are a name, not code.
+        let dd = 0x98 + 112;
+        bytes[dd + 4..dd + 8].copy_from_slice(&0x100u32.to_le_bytes());
+        bytes[0x340..0x344].copy_from_slice(&0x1170u32.to_le_bytes());
+        bytes[0x370..0x382].copy_from_slice(b"other.dll.scmd_run");
+        let s = read(&mut bytes.as_slice()).unwrap();
+        let run = row(&s, "scmd_run").expect("a forwarder is still an export");
+        assert_eq!(run.value, "forwarded to other.dll.scmd_run  ordinal 1");
+        assert_eq!(run.offset, None, "there are no bytes of it here to go to");
+        // And it is not offered as a symbol, because there is no code at that address.
+        assert!(
+            !s.symbols.iter().any(|s| s.name == "scmd_run"),
+            "{:?}",
+            s.symbols
+        );
+        targets_stay_inside(&s, bytes.len() as u64);
+    }
+
+    #[test]
     fn an_import_with_a_bogus_offset_is_not_a_target() {
         let mut bytes = pe64();
         // The descriptor's name and thunk list both point outside every section.
@@ -2564,6 +3145,183 @@ mod tests {
         assert!(libraries > 1 && libraries <= MAX_ENTRIES, "{libraries}");
         assert!(s.rows.len() < 2048, "{} rows is too many", s.rows.len());
         targets_stay_inside(&s, bytes.len() as u64);
+    }
+
+    // ── the .NET CLI header (SPEC 05 §1.8) ──────────────────────────────────────────────
+
+    /// Where `pe64_managed()` puts the two structures, so a test can corrupt one by name.
+    const CLI: usize = 0x430;
+    const ROOT: usize = 0x480;
+    /// The COM descriptor is data directory 14, and a directory entry is eight bytes.
+    const COM_DIR: usize = 0x98 + 112 + 14 * 8;
+
+    /// The same PE32+ with a COM descriptor directory: a managed assembly, because that one
+    /// directory is the whole difference between a .NET assembly and a native image. `.text`
+    /// still maps RVA 0x1000 to offset 0x200.
+    fn pe64_managed() -> Vec<u8> {
+        let mut f = pe64();
+        f[COM_DIR..COM_DIR + 4].copy_from_slice(&0x1230u32.to_le_bytes()); // RVA → offset 0x430
+        f[COM_DIR + 4..COM_DIR + 8].copy_from_slice(&72u32.to_le_bytes());
+
+        f[CLI..CLI + 4].copy_from_slice(&72u32.to_le_bytes()); // cb
+        f[CLI + 4..CLI + 6].copy_from_slice(&2u16.to_le_bytes()); // MajorRuntimeVersion
+        f[CLI + 6..CLI + 8].copy_from_slice(&5u16.to_le_bytes()); // MinorRuntimeVersion
+        f[CLI + 8..CLI + 12].copy_from_slice(&0x1280u32.to_le_bytes()); // MetaData → 0x480
+        f[CLI + 12..CLI + 16].copy_from_slice(&0x60u32.to_le_bytes()); // MetaData size
+        f[CLI + 16..CLI + 20].copy_from_slice(&0x0002_0001u32.to_le_bytes()); // IL only, 32-bit pref
+        f[CLI + 20..CLI + 24].copy_from_slice(&0x0600_0001u32.to_le_bytes()); // MethodDef(1)
+        f[CLI + 32..CLI + 36].copy_from_slice(&0x12E0u32.to_le_bytes()); // StrongNameSignature
+        f[CLI + 36..CLI + 40].copy_from_slice(&0x80u32.to_le_bytes());
+
+        f[ROOT..ROOT + 4].copy_from_slice(b"BSJB");
+        f[ROOT + 4..ROOT + 6].copy_from_slice(&1u16.to_le_bytes()); // MajorVersion
+        f[ROOT + 6..ROOT + 8].copy_from_slice(&1u16.to_le_bytes()); // MinorVersion
+        f[ROOT + 12..ROOT + 16].copy_from_slice(&12u32.to_le_bytes()); // the padded length
+        f[ROOT + 16..ROOT + 26].copy_from_slice(b"v4.0.30319");
+        f
+    }
+
+    #[test]
+    fn a_managed_pe_decodes_its_cli_header_and_its_metadata_root() {
+        let bytes = pe64_managed();
+        let s = read(&mut bytes.as_slice()).expect("PE recognised");
+        let clr = s
+            .clr
+            .as_ref()
+            .expect("the COM descriptor directory is what makes it managed");
+        assert_eq!(clr.size, 72);
+        assert_eq!(clr.runtime, (2, 5));
+        assert_eq!(clr.flags, 0x0002_0001);
+        assert_eq!(clr.entry_point, 0x0600_0001);
+        assert_eq!(clr.metadata_version, "v4.0.30319");
+        assert_eq!(clr.metadata_at, Some(ROOT as u64));
+
+        // The identity line says the file is managed and which runtime it asks for.
+        assert!(s.summary.contains("managed"), "{}", s.summary);
+        assert!(s.summary.contains("v4.0.30319"), "{}", s.summary);
+
+        assert_eq!(row(&s, "cb").unwrap().value, "72 B");
+        assert_eq!(row(&s, "RuntimeVersion").unwrap().value, "2.5");
+        assert_eq!(row(&s, "Flags").unwrap().value, "IL only, 32-bit preferred");
+        assert_eq!(row(&s, "EntryPointToken").unwrap().value, "MethodDef(1)");
+        assert_eq!(row(&s, "MetaData signature").unwrap().value, "BSJB");
+        assert_eq!(row(&s, "MetaData version").unwrap().value, "v4.0.30319");
+
+        // The rows sit with the other headers, not after the section list, even though the
+        // directory they come from could not be followed until the sections were known.
+        let header_at = s
+            .rows
+            .iter()
+            .position(|r| r.label == "CLI header")
+            .expect("the group");
+        let sections_at = s
+            .rows
+            .iter()
+            .position(|r| r.label.starts_with("Sections"))
+            .unwrap();
+        assert!(
+            header_at < sections_at,
+            "{header_at} came after {sections_at}"
+        );
+
+        // Both tables are places `Enter` can go.
+        assert_eq!(row(&s, "MetaData").unwrap().offset, Some(ROOT as u64));
+        assert_eq!(row(&s, "StrongNameSignature").unwrap().offset, Some(0x4E0));
+        assert!(row(&s, "Resources").is_none(), "the file has none");
+        targets_stay_inside(&s, bytes.len() as u64);
+    }
+
+    #[test]
+    fn the_pane_and_the_il_listing_never_disagree_about_managed_or_native() {
+        let managed = pe64_managed();
+        assert!(crate::il::is_managed(&managed));
+        assert!(clr(&mut managed.as_slice()).is_some());
+
+        let native = pe64();
+        assert!(!crate::il::is_managed(&native), "no COM descriptor");
+        assert!(clr(&mut native.as_slice()).is_none());
+
+        // And nothing that is not a PE at all is ever managed.
+        assert!(clr(&mut elf64().as_slice()).is_none());
+        assert!(clr(&mut (b"#!/bin/sh\n" as &[u8])).is_none());
+    }
+
+    #[test]
+    fn a_com_descriptor_pointing_outside_every_section_leaves_the_file_native() {
+        let mut bytes = pe64_managed();
+        bytes[COM_DIR..COM_DIR + 4].copy_from_slice(&0x9999_9999u32.to_le_bytes());
+        let s = read(&mut bytes.as_slice()).unwrap();
+        assert!(s.clr.is_none(), "nothing decoded, so nothing claimed");
+        assert!(!s.summary.contains("managed"), "{}", s.summary);
+        assert!(!s.rows.iter().any(|r| r.label == "CLI header"));
+        assert!(!crate::il::is_managed(&bytes), "and `F5` says the same");
+        targets_stay_inside(&s, bytes.len() as u64);
+    }
+
+    #[test]
+    fn metadata_without_the_bsjb_signature_is_not_managed_metadata() {
+        let mut bytes = pe64_managed();
+        bytes[ROOT..ROOT + 4].copy_from_slice(b"junk");
+        let s = read(&mut bytes.as_slice()).unwrap();
+        assert!(s.clr.is_none());
+        assert!(!crate::il::is_managed(&bytes));
+        targets_stay_inside(&s, bytes.len() as u64);
+    }
+
+    #[test]
+    fn a_cli_header_that_lies_about_its_own_length_is_refused() {
+        let mut bytes = pe64_managed();
+        // `cb` says eight bytes, which is shorter than the fields the format defines.
+        bytes[CLI..CLI + 4].copy_from_slice(&8u32.to_le_bytes());
+        let s = read(&mut bytes.as_slice()).unwrap();
+        assert!(s.clr.is_none());
+
+        // And so is a header whose bytes are simply not there: the RVA is inside the section
+        // but the last of its 72 bytes is past the end of the file.
+        let mut bytes = pe64_managed();
+        bytes[COM_DIR..COM_DIR + 4].copy_from_slice(&0x13E0u32.to_le_bytes());
+        bytes.truncate(0x5F0);
+        let s = read(&mut bytes.as_slice()).unwrap();
+        assert!(s.clr.is_none());
+        targets_stay_inside(&s, bytes.len() as u64);
+    }
+
+    #[test]
+    fn a_metadata_version_length_of_ffffffff_reads_only_the_bytes_that_are_there() {
+        let mut bytes = pe64_managed();
+        bytes[ROOT + 12..ROOT + 16].copy_from_slice(&0xFFFF_FFFFu32.to_le_bytes());
+        let s = read(&mut bytes.as_slice()).unwrap();
+        let clr = s.clr.as_ref().expect("still a CLI header");
+        // The name ends at its NUL, so an absurd length costs nothing and invents nothing.
+        assert_eq!(clr.metadata_version, "v4.0.30319");
+        assert!(clr.metadata_version.len() <= MAX_NAME);
+        targets_stay_inside(&s, bytes.len() as u64);
+    }
+
+    #[test]
+    fn a_native_entry_point_token_is_read_as_the_rva_it_is() {
+        // COMIMAGE_FLAGS_NATIVE_ENTRYPOINT turns the same four bytes into an address.
+        let mut bytes = pe64_managed();
+        bytes[CLI + 16..CLI + 20].copy_from_slice(&0x0000_0011u32.to_le_bytes());
+        bytes[CLI + 20..CLI + 24].copy_from_slice(&0x1000u32.to_le_bytes());
+        let s = read(&mut bytes.as_slice()).unwrap();
+        assert_eq!(
+            row(&s, "EntryPointToken").unwrap().value,
+            "native code at RVA 1000"
+        );
+        assert_eq!(
+            row(&s, "Flags").unwrap().value,
+            "IL only, native entry point"
+        );
+
+        // A token in a table the pane does not name is printed, never guessed.
+        let mut bytes = pe64_managed();
+        bytes[CLI + 20..CLI + 24].copy_from_slice(&0x1B00_0007u32.to_le_bytes());
+        let s = read(&mut bytes.as_slice()).unwrap();
+        assert_eq!(
+            row(&s, "EntryPointToken").unwrap().value,
+            "table 0x1B, row 7"
+        );
     }
 
     /// A 64-bit Mach-O with a segment, a dylib and a symbol table: `__TEXT` loads at
@@ -2634,5 +3392,55 @@ mod tests {
         assert_eq!(s.symbol_at(0x1_0000_0000), None, "below the only symbol");
         assert_eq!(s.offset_for_va(0x1_0000_0100), Some(0x100));
         targets_stay_inside(&s, bytes.len() as u64);
+    }
+
+    #[test]
+    fn a_macho_lists_the_dylibs_it_loads_among_its_imports() {
+        let bytes = macho64_with_symbols();
+        let s = read(&mut bytes.as_slice()).expect("Mach-O recognised");
+        assert!(
+            s.rows
+                .iter()
+                .any(|r| r.label == "Imports (1 libraries, 1 symbols)"),
+            "{:?}",
+            s.rows
+        );
+        let lib = row(&s, "/usr/lib/libSystem.B.dylib").expect("the library is listed");
+        assert!(lib.value.ends_with("needed library"), "{}", lib.value);
+        assert_eq!(lib.offset, Some(128), "its own load command");
+
+        // LC_LOAD_WEAK_DYLIB is the same command with one bit set, and the row says which it
+        // is, because a weak dylib may be missing at run time and the process still starts.
+        let mut weak = bytes.clone();
+        weak[128..132].copy_from_slice(&0x8000_0018u32.to_le_bytes());
+        let s = read(&mut weak.as_slice()).unwrap();
+        let lib = row(&s, "/usr/lib/libSystem.B.dylib").unwrap();
+        assert!(lib.value.ends_with("weak library"), "{}", lib.value);
+        assert!(row(&s, "weak dylib").is_some(), "{:?}", s.rows);
+        // The ordinal still names it, so the symbol under it is unchanged.
+        assert!(
+            row(&s, "_printf")
+                .unwrap()
+                .value
+                .ends_with("/usr/lib/libSystem.B.dylib"),
+            "{:?}",
+            row(&s, "_printf")
+        );
+
+        // And the libraries come from the load commands, so a file whose symbol table is
+        // unreadable still says what it loads.
+        let mut blind = bytes.clone();
+        blind[104 + 8..104 + 12].copy_from_slice(&0xFFFF_FFFFu32.to_le_bytes()); // symoff
+        let s = read(&mut blind.as_slice()).unwrap();
+        assert!(
+            s.rows
+                .iter()
+                .any(|r| r.label == "Imports (1 libraries, 0 symbols)"),
+            "{:?}",
+            s.rows
+        );
+        assert!(row(&s, "/usr/lib/libSystem.B.dylib").is_some());
+        assert!(row(&s, "_printf").is_none(), "nothing was read for it");
+        targets_stay_inside(&s, blind.len() as u64);
     }
 }

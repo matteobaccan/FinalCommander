@@ -825,9 +825,14 @@ pub fn method_flags(flags: u16) -> String {
     parts.join(" ")
 }
 
-/// Is this PE a managed (.NET) image? Checked by looking for the CLI data directory.
+/// Is this PE a managed (.NET) image?
+///
+/// The structure pane decodes the CLI header for `F11` already, and this is that same answer
+/// rather than a second one: `F5` and `F11` must never disagree about whether a file is
+/// managed, and the surest way to keep them agreeing is to have only one of them decide.
 pub fn is_managed(bytes: &[u8]) -> bool {
-    cli_metadata(bytes).is_ok()
+    let mut src = bytes;
+    crate::structure::clr(&mut src).is_some()
 }
 
 /// The metadata region of a .NET assembly, found through the PE headers.
