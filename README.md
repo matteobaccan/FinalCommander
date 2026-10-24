@@ -124,6 +124,12 @@ What works today:
   interface on the spot), themes, drives and open connections (`Alt+F1` / `Alt+F2`), folder
   history (`Alt+F12`) and sort modes (`Ctrl+F12`, where choosing the order already in force
   turns it round, as FAR does).
+- **Connections without editing TOML**: in the connection list (`Alt+N`), `Ins` stores a new
+  session and `F4` edits the one under the cursor — name, host, port, user, authentication
+  (agent, key file or ask), remote folder, group, keep-alive, compression. It is checked before
+  it is stored, so an unusable session is refused with the reason instead of being written; the
+  session is live at once and `Shift+F9` keeps it. No password is ever a field: a session says
+  how to authenticate and the secret is asked for when the connection needs it.
 - **The rest**: `Alt+T` cycles themes, `F1` is a help page generated from the live keymap,
   `F10` quits.
 

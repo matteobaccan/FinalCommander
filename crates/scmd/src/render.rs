@@ -190,7 +190,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         Mode::Form(form) => {
             let rows = form.rows();
             let buttons = vec![app.i18n.t("btn-ok"), app.i18n.t("btn-cancel")];
-            widgets::draw_form(
+            let area = widgets::draw_form(
                 buf,
                 &app.theme,
                 screen,
@@ -202,7 +202,9 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
                     button: form.button,
                 },
             );
-            None
+            // A text row shows a real caret; everything else leaves the cursor hidden.
+            form.caret()
+                .map(|(row, col)| (area.x + 2 + col as u16, area.y + 1 + row as u16))
         }
         Mode::Pick(pick) => {
             draw_pick(app, buf, screen, pick);
@@ -881,6 +883,9 @@ mod tests {
     #[test]
     #[ignore = "a look at the screen, not an assertion"]
     fn eyeball() {
+        let mut editor = app("commander", "en");
+        editor.open_site_form(None);
+        println!("=== session editor ===\n{}", frame(&mut editor, 80, 24));
         for cmd in [
             scmd_cmd::Command::AppMenu,
             scmd_cmd::Command::OptSystem,

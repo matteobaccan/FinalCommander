@@ -135,7 +135,7 @@ editor-failed = { $name }: { $error }
 
 # netbox (SPEC 04 §6)
 net-sites-title = Connections
-net-sites-hint = Enter connect · n new · d disconnect · Esc close
+net-sites-hint = Enter connect · n URL · Ins store · F4 edit · d disconnect · Esc close
 net-no-sites = No sites yet. Press `n` to type a URL, or add [[site]] blocks to the config.
 net-prompt-url = Connect to:
 net-prompt-password = Password for { $user }@{ $host }:
@@ -268,3 +268,24 @@ sort-set = sort: { $name }
 btn-ok = OK
 pick-hint = ↑↓ choose · Enter apply · Esc close
 pick-empty = (nothing to choose)
+
+# ------------------------------------------------- session editor (SPEC 10 §3.5)
+site-new = New connection
+site-edit = Edit connection
+site-name = Name
+site-host = Host
+site-port = Port
+site-user = User
+site-auth = Authentication
+site-auth-agent = SSH agent
+site-auth-key = key file
+site-auth-ask = ask for a password
+site-key-file = Key file
+site-start-dir = Remote folder
+site-group = Group
+site-keepalive = Keep-alive (s)
+site-compress = Compression
+site-needs-host = a connection needs a host
+site-needs-key = choose the key file, or another way to authenticate
+site-bad-port = `{ $port }` is not a number
+site-stored = connection stored: { $name } (Shift+F9 to keep it)

@@ -6,6 +6,7 @@
 use scmd_config::Config;
 use scmd_i18n::I18n;
 use scmd_ui::widgets::FormRow;
+use unicode_width::UnicodeWidthStr;
 
 use crate::menu::{FormKind, PickKind};
 
@@ -26,6 +27,16 @@ pub enum Field {
         options: Vec<(String, String)>,
         chosen: usize,
     },
+    /// A line of text. `Label: value` with a cursor while the row has the focus.
+    Text {
+        key: &'static str,
+        label: String,
+        value: String,
+        /// Where the caret is, in characters.
+        caret: usize,
+        /// Shown instead of the characters, for a secret.
+        secret: bool,
+    },
     /// In the dialog for completeness; not settable yet.
     Dim(String),
     Separator,
@@ -40,10 +51,35 @@ impl Field {
         }
     }
 
+    fn text(key: &'static str, label: impl Into<String>, value: impl Into<String>) -> Field {
+        let value: String = value.into();
+        Field::Text {
+            key,
+            label: label.into(),
+            caret: value.chars().count(),
+            value,
+            secret: false,
+        }
+    }
+
     /// Can the cursor stop here?
     fn selectable(&self) -> bool {
-        matches!(self, Field::Toggle { .. } | Field::Choice { .. })
+        matches!(
+            self,
+            Field::Toggle { .. } | Field::Choice { .. } | Field::Text { .. }
+        )
     }
+}
+
+/// What a key does inside a text row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TextEdit {
+    Backspace,
+    Delete,
+    Left,
+    Right,
+    Home,
+    End,
 }
 
 /// A settings dialog.
@@ -53,6 +89,8 @@ pub struct Form {
     pub title: String,
     pub fields: Vec<Field>,
     pub cursor: usize,
+    /// For the session editor: which `[[site]]` this edits, or `None` for a new one.
+    pub site: Option<usize>,
     /// `Some(0)` = OK, `Some(1)` = Cancel; `None` while the cursor is in the rows.
     pub button: Option<usize>,
 }
@@ -79,6 +117,8 @@ impl Form {
     pub fn build(kind: FormKind, cfg: &Config, i18n: &I18n) -> Form {
         let t = |id: &str| i18n.t(id);
         let fields = match kind {
+            // The session editor is built by `Form::site`, which needs the site itself.
+            FormKind::Site => Vec::new(),
             FormKind::System => vec![
                 Field::toggle(
                     "panel.natural_sort",
@@ -210,6 +250,7 @@ impl Form {
             ],
         };
         let title = i18n.t(match kind {
+            FormKind::Site => "site-new",
             FormKind::System => "menu-system-settings",
             FormKind::Panel => "menu-panel-settings",
             FormKind::Interface => "menu-interface-settings",
@@ -221,8 +262,187 @@ impl Form {
             title,
             fields,
             cursor,
+            site: None,
             button: None,
         }
+    }
+
+    /// The session editor: a stored connection, or a new one when `site` is `None`
+    /// (SPEC 10 §3.5).
+    pub fn site(site: Option<(usize, &scmd_config::SiteCfg)>, i18n: &I18n) -> Form {
+        let t = |id: &str| i18n.t(id);
+        let blank = scmd_config::SiteCfg::default();
+        let (index, cfg) = match site {
+            Some((index, cfg)) => (Some(index), cfg),
+            None => (None, &blank),
+        };
+        let auth = cfg.auth.clone().unwrap_or_else(|| "agent".to_string());
+        let (auth_kind, key_path) = match auth.split_once(':') {
+            Some(("key", path)) => ("key", path.to_string()),
+            _ => (auth.as_str(), String::new()),
+        };
+        let fields = vec![
+            Field::text("site.id", t("site-name"), cfg.id.clone()),
+            Field::text("site.host", t("site-host"), cfg.host.clone()),
+            Field::text(
+                "site.port",
+                t("site-port"),
+                cfg.port.map(|p| p.to_string()).unwrap_or_default(),
+            ),
+            Field::text(
+                "site.user",
+                t("site-user"),
+                cfg.user.clone().unwrap_or_default(),
+            ),
+            Field::Separator,
+            choice(
+                "site.auth",
+                t("site-auth"),
+                &[
+                    ("agent", t("site-auth-agent")),
+                    ("key", t("site-auth-key")),
+                    ("ask", t("site-auth-ask")),
+                ],
+                auth_kind,
+            ),
+            Field::text("site.key", t("site-key-file"), key_path),
+            Field::Separator,
+            Field::text(
+                "site.start_dir",
+                t("site-start-dir"),
+                cfg.start_dir.clone().unwrap_or_default(),
+            ),
+            Field::text(
+                "site.group",
+                t("site-group"),
+                cfg.group.clone().unwrap_or_default(),
+            ),
+            Field::text(
+                "site.keepalive_secs",
+                t("site-keepalive"),
+                cfg.keepalive_secs
+                    .map(|s| s.to_string())
+                    .unwrap_or_default(),
+            ),
+            Field::toggle(
+                "site.compress",
+                t("site-compress"),
+                cfg.compress == Some(true),
+            ),
+        ];
+        Form {
+            kind: FormKind::Site,
+            title: i18n.t(if index.is_some() {
+                "site-edit"
+            } else {
+                "site-new"
+            }),
+            fields,
+            cursor: 0,
+            site: index,
+            button: None,
+        }
+    }
+
+    /// What a text row holds now, by key.
+    pub fn text_value(&self, want: &str) -> String {
+        for field in &self.fields {
+            match field {
+                Field::Text { key, value, .. } if *key == want => return value.trim().to_string(),
+                Field::Choice {
+                    key,
+                    options,
+                    chosen,
+                    ..
+                } if *key == want => {
+                    return options
+                        .get(*chosen)
+                        .map(|(v, _)| v.clone())
+                        .unwrap_or_default();
+                }
+                Field::Toggle { key, on, .. } if *key == want => return on.to_string(),
+                _ => {}
+            }
+        }
+        String::new()
+    }
+
+    /// Typing into the row under the cursor. Returns false if the row takes no text.
+    pub fn type_char(&mut self, c: char) -> bool {
+        let Some(Field::Text { value, caret, .. }) = self.fields.get_mut(self.cursor) else {
+            return false;
+        };
+        let at = value
+            .char_indices()
+            .nth(*caret)
+            .map(|(i, _)| i)
+            .unwrap_or(value.len());
+        value.insert(at, c);
+        *caret += 1;
+        true
+    }
+
+    /// `Backspace`, `Del`, `←`, `→`, `Home`, `End` inside a text row.
+    pub fn edit_text(&mut self, what: TextEdit) -> bool {
+        let Some(Field::Text { value, caret, .. }) = self.fields.get_mut(self.cursor) else {
+            return false;
+        };
+        let len = value.chars().count();
+        match what {
+            TextEdit::Backspace if *caret > 0 => {
+                let at = value
+                    .char_indices()
+                    .nth(*caret - 1)
+                    .map(|(i, _)| i)
+                    .unwrap_or(0);
+                value.remove(at);
+                *caret -= 1;
+            }
+            TextEdit::Delete if *caret < len => {
+                let at = value
+                    .char_indices()
+                    .nth(*caret)
+                    .map(|(i, _)| i)
+                    .unwrap_or(0);
+                value.remove(at);
+            }
+            TextEdit::Left => *caret = caret.saturating_sub(1),
+            TextEdit::Right => *caret = (*caret + 1).min(len),
+            TextEdit::Home => *caret = 0,
+            TextEdit::End => *caret = len,
+            _ => {}
+        }
+        true
+    }
+
+    /// Where the caret sits in the dialog: the row, and the column inside the row's text.
+    /// `None` when the cursor is not in a text row, so the terminal cursor stays hidden.
+    pub fn caret(&self) -> Option<(usize, usize)> {
+        if self.button.is_some() {
+            return None;
+        }
+        match self.fields.get(self.cursor) {
+            Some(Field::Text {
+                label,
+                value,
+                caret,
+                ..
+            }) => {
+                let before: String = value.chars().take(*caret).collect();
+                Some((
+                    self.cursor,
+                    UnicodeWidthStr::width(label.as_str())
+                        + 2
+                        + UnicodeWidthStr::width(before.as_str()),
+                ))
+            }
+            _ => None,
+        }
+    }
+
+    /// Is the cursor on a row that takes typing?
+    pub fn on_text(&self) -> bool {
+        matches!(self.fields.get(self.cursor), Some(Field::Text { .. }))
     }
 
     /// The rows as the renderer wants them.
@@ -239,6 +459,19 @@ impl Form {
                 Field::Toggle { label, on, .. } => {
                     FormRow::new(format!("[{}] {label}", if *on { 'x' } else { ' ' }))
                 }
+                Field::Text {
+                    label,
+                    value,
+                    secret,
+                    ..
+                } => FormRow::new(format!(
+                    "{label}: {}",
+                    if *secret {
+                        "*".repeat(value.chars().count())
+                    } else {
+                        value.clone()
+                    }
+                )),
                 Field::Choice {
                     label,
                     options,

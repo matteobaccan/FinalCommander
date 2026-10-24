@@ -127,7 +127,7 @@ editor-failed = { $name }：{ $error }
 
 # netbox (SPEC 04 §6)
 net-sites-title = 连接
-net-sites-hint = 回车连接 · n 新建 · d 断开 · Esc 关闭
+net-sites-hint = 回车连接 · n 输入地址 · Ins 新建 · F4 编辑 · d 断开 · Esc 关闭
 net-no-sites = 还没有站点。按 `n` 输入 URL，或在配置中添加 [[site]] 块。
 net-prompt-url = 连接到：
 net-prompt-password = { $user }@{ $host } 的密码：
@@ -260,3 +260,24 @@ sort-set = 排序：{ $name }
 btn-ok = 确定
 pick-hint = ↑↓ 选择 · Enter 应用 · Esc 关闭
 pick-empty = （没有可选项）
+
+# ------------------------------------------------- session editor (SPEC 10 §3.5)
+site-new = 新建连接
+site-edit = 编辑连接
+site-name = 名称
+site-host = 主机
+site-port = 端口
+site-user = 用户
+site-auth = 认证方式
+site-auth-agent = SSH 代理
+site-auth-key = 密钥文件
+site-auth-ask = 询问密码
+site-key-file = 密钥文件
+site-start-dir = 远程目录
+site-group = 分组
+site-keepalive = 保活（秒）
+site-compress = 压缩
+site-needs-host = 连接需要一个主机
+site-needs-key = 请选择密钥文件，或改用其他认证方式
+site-bad-port = `{ $port }` 不是数字
+site-stored = 连接已保存：{ $name }（Shift+F9 永久保留）

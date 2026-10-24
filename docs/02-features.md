@@ -177,6 +177,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 9.9 | No telemetry, no network calls except explicit user actions; optional update check off by default | MTN2 | M1 |
 | 9.10 | Menu bar (`F9`) with FAR's five menus; every entry is a command from the vocabulary, the shortcut shown is read from the keymap in force, and an entry whose feature is missing is drawn dim and says so (SPEC 10 §2) | FAR | M1 |
 | 9.11 | `Save setup` (`Shift+F9`) writes the configuration as it stands, including themes that came from the file | FAR | M1 |
+| 9.13 | Session editor for stored connections (`Alt+N` → `Ins`/`F4`): name, host, port, user, authentication, key file, remote folder, group, keep-alive, compression — validated before it is stored, `Shift+F9` makes it permanent (SPEC 10 §3.5) | FAR (NetBox) | M1 |
 | 9.12 | Choose-one lists: languages, themes, drives and open connections (`Alt+F1`/`Alt+F2`), folder history (`Alt+F12`), sort modes (`Ctrl+F12`, where re-choosing the current order reverses it) (SPEC 10 §4) | FAR | M1 |
 
 ## 10. Extensibility

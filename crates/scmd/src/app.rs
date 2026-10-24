@@ -12,7 +12,7 @@ use scmd_tui::Input;
 use scmd_ui::{Theme, ThemeSet};
 use scmd_view::{FileSource, SearchMode, Viewer};
 
-use crate::form::{Form, Pick, PickRow};
+use crate::form::{Form, Pick, PickRow, TextEdit};
 use crate::menu::{self, Action, FormKind, Mark, PickKind};
 use crate::panel::Panel;
 
@@ -799,7 +799,8 @@ impl App {
         }
     }
 
-    /// The connection manager's keys: `Enter` connects, `n` types a URL, `d` disconnects.
+    /// The connection manager's keys: `Enter` connects, `n` types a URL, `d` disconnects,
+    /// `Ins`/`F7` stores a new session and `F4` edits the one under the cursor.
     fn sites_key(&mut self, key: Key, cursor: usize) {
         let rows = self.site_rows();
         match key.code {
@@ -820,9 +821,18 @@ impl App {
                     cursor: rows.len().saturating_sub(1),
                 }
             }
-            KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Insert => {
+            // `n` is FAR's "type a URL"; `Ins` and `F7` make a stored session, `F4` edits
+            // the one under the cursor (SPEC 10 §3.5).
+            KeyCode::Char('n') | KeyCode::Char('N') => {
                 self.mode = Mode::Normal;
                 self.run(Command::NetConnect);
+            }
+            KeyCode::Insert | KeyCode::F(7) => self.open_site_form(None),
+            KeyCode::F(4) => {
+                let stored = rows
+                    .get(cursor)
+                    .and_then(|site| self.cfg.sites.iter().position(|c| c.id == site.id));
+                self.open_site_form(stored);
             }
             KeyCode::Char('d') | KeyCode::Char('D') | KeyCode::Delete => {
                 if let Some(site) = rows.get(cursor) {
@@ -2401,6 +2411,9 @@ impl App {
         let Mode::Form(form) = &mut self.mode else {
             return;
         };
+        // A row that takes text takes the editing keys too, so a path with spaces or a minus
+        // in it can be typed.
+        let text = form.on_text() && form.button.is_none();
         match key.code {
             KeyCode::Esc => self.mode = Mode::Normal,
             KeyCode::Up => {
@@ -2411,6 +2424,27 @@ impl App {
                 }
             }
             KeyCode::Down => form.move_cursor(true),
+            KeyCode::Char(c) if text && !key.mods.contains(Mods::CTRL) => {
+                form.type_char(c);
+            }
+            KeyCode::Backspace if text => {
+                form.edit_text(TextEdit::Backspace);
+            }
+            KeyCode::Delete if text => {
+                form.edit_text(TextEdit::Delete);
+            }
+            KeyCode::Home if text => {
+                form.edit_text(TextEdit::Home);
+            }
+            KeyCode::End if text => {
+                form.edit_text(TextEdit::End);
+            }
+            KeyCode::Left if text => {
+                form.edit_text(TextEdit::Left);
+            }
+            KeyCode::Right if text => {
+                form.edit_text(TextEdit::Right);
+            }
             KeyCode::Char(' ') => form.toggle(true),
             KeyCode::Left => form.toggle(false),
             KeyCode::Right => form.toggle(true),
@@ -2422,10 +2456,12 @@ impl App {
                 })
             }
             KeyCode::Enter => {
-                // Enter on a row toggles it; on the buttons it answers the dialog.
+                // Enter on a row toggles it; on the buttons it answers the dialog. In a text
+                // row there is nothing to toggle, so Enter means OK.
                 match form.button {
                     Some(1) => self.mode = Mode::Normal,
                     Some(_) => self.apply_form(),
+                    None if text => self.apply_form(),
                     None => form.toggle(true),
                 }
             }
@@ -2439,6 +2475,10 @@ impl App {
         let Mode::Form(form) = std::mem::replace(&mut self.mode, Mode::Normal) else {
             return;
         };
+        if form.kind == FormKind::Site {
+            self.apply_site_form(&form);
+            return;
+        }
         let problems = form.apply(&mut self.cfg);
         if !problems.is_empty() {
             self.set_error(problems.join("; "));
@@ -2494,6 +2534,112 @@ impl App {
             }
             Err(e) => self.set_error(format!("{}: {e}", path.display())),
         }
+    }
+
+    /// `Alt+N` → `F4`/`Ins`: the session editor (SPEC 10 §3.5).
+    pub fn open_site_form(&mut self, index: Option<usize>) {
+        let site = index.and_then(|i| self.cfg.sites.get(i).map(|cfg| (i, cfg)));
+        if index.is_some() && site.is_none() {
+            // A row of the list that is a live connection rather than a stored site: there is
+            // nothing to edit, so offer a new one filled in from it.
+            self.mode = Mode::Form(Box::new(Form::site(None, &self.i18n)));
+            return;
+        }
+        self.mode = Mode::Form(Box::new(Form::site(site, &self.i18n)));
+    }
+
+    /// OK in the session editor: validate, store, and keep the site list in step.
+    fn apply_site_form(&mut self, form: &Form) {
+        let host = form.text_value("site.host");
+        if host.is_empty() {
+            self.set_error(self.i18n.t("site-needs-host"));
+            self.mode = Mode::Form(Box::new(form.clone()));
+            return;
+        }
+        let port = form.text_value("site.port");
+        let port = match port.as_str() {
+            "" => None,
+            other => match other.parse::<u16>() {
+                Ok(0) | Err(_) => {
+                    self.set_error(
+                        self.i18n
+                            .t_args("site-bad-port", &[("port", other.to_string().into())]),
+                    );
+                    self.mode = Mode::Form(Box::new(form.clone()));
+                    return;
+                }
+                Ok(n) => Some(n),
+            },
+        };
+        let keepalive = form.text_value("site.keepalive_secs");
+        let keepalive = match keepalive.as_str() {
+            "" => None,
+            other => match other.parse::<u64>() {
+                Ok(n) => Some(n),
+                Err(_) => {
+                    self.set_error(
+                        self.i18n
+                            .t_args("site-bad-port", &[("port", other.to_string().into())]),
+                    );
+                    self.mode = Mode::Form(Box::new(form.clone()));
+                    return;
+                }
+            },
+        };
+        let auth = match form.text_value("site.auth").as_str() {
+            "key" => {
+                let path = form.text_value("site.key");
+                if path.is_empty() {
+                    self.set_error(self.i18n.t("site-needs-key"));
+                    self.mode = Mode::Form(Box::new(form.clone()));
+                    return;
+                }
+                format!("key:{path}")
+            }
+            "ask" => "ask".to_string(),
+            _ => "agent".to_string(),
+        };
+        let id = match form.text_value("site.id") {
+            empty if empty.is_empty() => host.clone(),
+            given => given,
+        };
+        let empty_to_none = |s: String| if s.is_empty() { None } else { Some(s) };
+        let cfg = scmd_config::SiteCfg {
+            id,
+            scheme: "sftp".to_string(),
+            host,
+            port,
+            user: empty_to_none(form.text_value("site.user")),
+            auth: Some(auth),
+            start_dir: empty_to_none(form.text_value("site.start_dir")),
+            group: empty_to_none(form.text_value("site.group")),
+            keepalive_secs: keepalive,
+            compress: Some(form.text_value("site.compress") == "true"),
+        };
+
+        // What the editor produced has to be a site the netbox can actually use; if it is not,
+        // say so and keep the dialog open rather than storing something unusable.
+        if let Err(e) = Site::from_config(&cfg) {
+            self.set_error(e.to_string());
+            self.mode = Mode::Form(Box::new(form.clone()));
+            return;
+        }
+        let name = cfg.id.clone();
+        match form.site {
+            Some(index) if index < self.cfg.sites.len() => self.cfg.sites[index] = cfg,
+            _ => self.cfg.sites.push(cfg),
+        }
+        let (sites, problems) = Site::list_from_config(&self.cfg);
+        self.sites = sites;
+        if let Some(first) = problems.first() {
+            self.set_error(first.clone());
+            return;
+        }
+        self.mode = Mode::Sites {
+            cursor: self.sites.iter().position(|s| s.id == name).unwrap_or(0),
+        };
+        let msg = self.i18n.t_args("site-stored", &[("name", name.into())]);
+        self.set_status(msg);
     }
 
     pub fn open_pick(&mut self, kind: PickKind, side: usize) {
@@ -3544,6 +3690,138 @@ mod tests {
         let item = menu_row(menu, label);
         app.mode = Mode::Menu { menu, item };
         press(app, "Enter");
+    }
+
+    fn type_text(app: &mut App, text: &str) {
+        for c in text.chars() {
+            let key = if c == ' ' {
+                "Space".to_string()
+            } else {
+                c.to_string()
+            };
+            press(app, &key);
+        }
+    }
+
+    #[test]
+    fn the_session_editor_stores_a_connection_that_the_netbox_can_use() {
+        let mut app = app();
+        press(&mut app, "Alt+N");
+        press(&mut app, "Ins");
+        let Mode::Form(form) = &app.mode else {
+            panic!("the session editor did not open")
+        };
+        assert_eq!(form.kind, FormKind::Site);
+        assert_eq!(form.site, None, "Ins makes a new one, it does not edit");
+
+        type_text(&mut app, "jump");
+        press(&mut app, "Down");
+        type_text(&mut app, "jump.example.net");
+        press(&mut app, "Down");
+        type_text(&mut app, "2222");
+        press(&mut app, "Down");
+        type_text(&mut app, "mb");
+        press(&mut app, "F10");
+
+        assert_eq!(app.cfg.sites.len(), 1);
+        let stored = &app.cfg.sites[0];
+        assert_eq!(stored.id, "jump");
+        assert_eq!(stored.host, "jump.example.net");
+        assert_eq!(stored.port, Some(2222));
+        assert_eq!(stored.user.as_deref(), Some("mb"));
+        assert_eq!(stored.auth.as_deref(), Some("agent"));
+        // The list the dialog came from shows it straight away.
+        assert!(app.sites.iter().any(|s| s.id == "jump"));
+        assert!(matches!(app.mode, Mode::Sites { .. }));
+    }
+
+    #[test]
+    fn the_session_editor_keeps_the_dialog_open_on_something_it_cannot_store() {
+        let mut app = app();
+        app.open_site_form(None);
+        press(&mut app, "F10"); // no host at all
+        assert!(
+            matches!(app.mode, Mode::Form(_)),
+            "a dialog that cannot be applied must stay open"
+        );
+        assert!(app.status_error, "{}", app.status);
+        assert!(app.cfg.sites.is_empty());
+
+        // A port that is not a number is refused too, and nothing is stored.
+        press(&mut app, "Down");
+        type_text(&mut app, "host.example");
+        press(&mut app, "Down");
+        type_text(&mut app, "no");
+        press(&mut app, "F10");
+        assert!(matches!(app.mode, Mode::Form(_)));
+        assert!(app.status.contains("no"), "{}", app.status);
+        assert!(app.cfg.sites.is_empty());
+    }
+
+    #[test]
+    fn f4_edits_the_connection_under_the_cursor_instead_of_adding_one() {
+        let mut app = app();
+        app.cfg.sites.push(scmd_config::SiteCfg {
+            id: "box".into(),
+            host: "old.example.net".into(),
+            ..Default::default()
+        });
+        let (sites, problems) = Site::list_from_config(&app.cfg);
+        assert!(problems.is_empty(), "{problems:?}");
+        app.sites = sites;
+
+        press(&mut app, "Alt+N");
+        press(&mut app, "F4");
+        let Mode::Form(form) = &app.mode else {
+            panic!("the session editor did not open")
+        };
+        assert_eq!(form.site, Some(0));
+        assert_eq!(form.text_value("site.host"), "old.example.net");
+
+        // Clear the host and type another one: Backspace works where the caret is.
+        press(&mut app, "Down");
+        for _ in 0..40 {
+            press(&mut app, "Backspace");
+        }
+        type_text(&mut app, "new.example.net");
+        press(&mut app, "F10");
+        assert_eq!(app.cfg.sites.len(), 1, "F4 must edit, not add");
+        assert_eq!(app.cfg.sites[0].host, "new.example.net");
+        assert_eq!(app.cfg.sites[0].id, "box");
+    }
+
+    #[test]
+    fn a_key_file_is_asked_for_when_the_key_authentication_is_chosen() {
+        let mut app = app();
+        app.open_site_form(None);
+        press(&mut app, "Down");
+        type_text(&mut app, "host.example");
+        // Down to the authentication choice, and pick the key file.
+        press(&mut app, "Down");
+        press(&mut app, "Down");
+        press(&mut app, "Down");
+        let Mode::Form(form) = &app.mode else {
+            panic!("the dialog closed")
+        };
+        assert!(
+            matches!(
+                form.fields.get(form.cursor),
+                Some(crate::form::Field::Choice { .. })
+            ),
+            "expected to be on the authentication row"
+        );
+        press(&mut app, "Right"); // agent -> key
+        press(&mut app, "F10");
+        assert!(matches!(app.mode, Mode::Form(_)), "{}", app.status);
+        assert!(!app.status.is_empty());
+
+        press(&mut app, "Down"); // the key file row
+        type_text(&mut app, "~/.ssh/id_ed25519");
+        press(&mut app, "F10");
+        assert_eq!(
+            app.cfg.sites.first().and_then(|s| s.auth.clone()),
+            Some("key:~/.ssh/id_ed25519".to_string())
+        );
     }
 
     #[test]

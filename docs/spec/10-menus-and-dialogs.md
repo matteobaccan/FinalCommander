@@ -134,6 +134,28 @@ on the buttons answers the dialog, `F10` is `OK` from anywhere, `Esc` cancels an
 | Exit | `general.confirm_exit` |
 | Leaving the editor with unsaved changes | — dim: the editor always asks |
 
+### 3.5 Session editor (`Alt+N` → `Ins`/`F7` new, `F4` edit)
+
+The only dialog with text in it, and FAR's NetBox session editor is the model. Rows: name, host,
+port, user · authentication (SSH agent / key file / ask for a password) and the key file ·
+remote folder, group, keep-alive seconds, compression.
+
+A text row takes the editing keys — printable characters, `Backspace`, `Del`, `←`, `→`, `Home`,
+`End` — and shows a real caret; `↑`/`↓` leave the row, `Enter` in a text row means `OK` because
+there is nothing to toggle. No password or passphrase is ever a field: a session says *how* to
+authenticate and the secret is asked for when the connection needs it (SPEC 04 §6).
+
+`OK` validates before it stores: a host is required, a port and a keep-alive must be numbers, a
+key file is required when the key authentication is chosen, and what comes out has to be a site
+the netbox can actually use (`Site::from_config`). A dialog that cannot be applied stays open
+with the reason in the status line — nothing unusable is ever written. On success the site is
+added to, or replaced in, `[[site]]`, the site list is rebuilt, and the list reopens on the row
+that was just stored. The site lives in the running configuration; `Shift+F9` makes it permanent,
+and the status line says so.
+
+Defaults left empty mean what they mean in `scmd.toml`: no port is 22, no user is the local
+account name, no name is the host itself.
+
 ## 4. Choose-one lists
 
 One framed list, one `√` on the row in force, `↑`/`↓`/`PgUp`/`PgDn`/`Home`/`End` to move,

@@ -252,6 +252,25 @@ pub struct SiteCfg {
     pub compress: Option<bool>,
 }
 
+/// A blank site, as the session editor starts from: the scheme is the only field with a
+/// sensible value, and `serde` fills the same one in for a `[[site]]` that leaves it out.
+impl Default for SiteCfg {
+    fn default() -> SiteCfg {
+        SiteCfg {
+            id: String::new(),
+            scheme: default_scheme(),
+            host: String::new(),
+            port: None,
+            user: None,
+            auth: None,
+            start_dir: None,
+            group: None,
+            keepalive_secs: None,
+            compress: None,
+        }
+    }
+}
+
 fn default_scheme() -> String {
     "sftp".to_string()
 }
@@ -529,10 +548,22 @@ mod tests {
         let mut c = Config::default();
         c.ui.theme = "blade".into();
         c.panel.show_hidden = true;
+        // What the session editor stores has to survive `Save setup` as well.
+        c.sites.push(SiteCfg {
+            id: "jump".into(),
+            host: "jump.example.net".into(),
+            port: Some(2222),
+            auth: Some("key:~/.ssh/id_ed25519".into()),
+            ..Default::default()
+        });
         let (again, warnings) = Config::parse("dump.toml", &c.dump()).unwrap();
         assert!(warnings.is_empty(), "{warnings:?}");
         assert_eq!(again.ui.theme, "blade");
         assert!(again.panel.show_hidden);
+        assert_eq!(again.sites.len(), 1);
+        assert_eq!(again.sites[0].host, "jump.example.net");
+        assert_eq!(again.sites[0].port, Some(2222));
+        assert_eq!(again.sites[0].scheme, "sftp");
     }
 
     #[test]

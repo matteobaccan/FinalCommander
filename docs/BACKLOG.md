@@ -62,7 +62,7 @@ not that the work is large.
 
 | Item | Where | Notes |
 | --- | --- | --- |
-| Session editor | Connections (`Alt+N`) | FAR's NetBox has a dialog for a stored session (host, port, user, auth, remote directory, keep-alive, proxy). Today `[[site]]` blocks in `scmd.toml` are the only way to store one. Needs text fields in the dialog framework — the first dialog that is more than checkboxes and choices. |
+| Proxy / `ProxyJump` in the session editor | Connections (`Alt+N` → `F4`) | The session editor stores host, port, user, authentication, remote folder, group, keep-alive and compression. FAR's NetBox also has proxy settings; `ProxyJump` is not implemented in the transport yet, so the dialog does not offer it. |
 | FTP / FTPS / WebDAV / S3 | SPEC 04 §6 | The provider trait and the router are in place; each protocol is then its own crate behind a feature. |
 | Known-hosts editing | — | Accepting and changing a host key from inside the program, instead of editing the file. |
 
@@ -70,7 +70,7 @@ not that the work is large.
 
 | Item | Notes |
 | --- | --- |
-| Text input fields | The dialogs so far are checkboxes, choices and lists; the single-line prompt is a separate widget. The session editor needs real fields with a focus ring. |
+| A field that browses for a path | The key-file row in the session editor is typed by hand. A "pick a file" button wants the panel to open inside a dialog. |
 | Radio groups, dialog-wide `Tab` order | Needed as soon as a dialog has more than one kind of control. |
 | A different key bar inside dialogs | FAR changes the bottom row in a dialog. Cheap, cosmetic, not done. |
 

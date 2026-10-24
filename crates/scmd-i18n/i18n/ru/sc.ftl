@@ -127,7 +127,7 @@ editor-failed = { $name }: { $error }
 
 # netbox (SPEC 04 §6)
 net-sites-title = Соединения
-net-sites-hint = Enter — подключить · n — новое · d — отключить · Esc — закрыть
+net-sites-hint = Enter — подключить · n — URL · Ins — создать · F4 — изменить · d — отключить · Esc — закрыть
 net-no-sites = Сайтов пока нет. Нажмите `n`, чтобы ввести URL, или добавьте блоки [[site]] в настройки.
 net-prompt-url = Подключиться к:
 net-prompt-password = Пароль для { $user }@{ $host }:
@@ -260,3 +260,24 @@ sort-set = сортировка: { $name }
 btn-ok = ОК
 pick-hint = ↑↓ выбор · Enter применить · Esc закрыть
 pick-empty = (выбирать нечего)
+
+# ------------------------------------------------- session editor (SPEC 10 §3.5)
+site-new = Новое соединение
+site-edit = Изменить соединение
+site-name = Имя
+site-host = Узел
+site-port = Порт
+site-user = Пользователь
+site-auth = Проверка подлинности
+site-auth-agent = агент SSH
+site-auth-key = файл ключа
+site-auth-ask = спросить пароль
+site-key-file = Файл ключа
+site-start-dir = Удалённая папка
+site-group = Группа
+site-keepalive = Keep-alive (с)
+site-compress = Сжатие
+site-needs-host = соединению нужен узел
+site-needs-key = выберите файл ключа или другой способ входа
+site-bad-port = «{ $port }» — не число
+site-stored = соединение сохранено: { $name } (Shift+F9 — записать)

@@ -21,6 +21,8 @@ pub enum Action {
 /// The settings dialogs (checkboxes and choices).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FormKind {
+    /// A stored connection (SPEC 10 §3.5).
+    Site,
     System,
     Panel,
     Interface,

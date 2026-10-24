@@ -221,7 +221,8 @@ handled by the editor itself and are not bindable yet.
 | connection list | F11 → NetBox | — | **Alt+N** |
 | connect by URL | inside the plugin | `cd sftp://host/dir` | **Ctrl+L** with `sftp://user@host:port/dir` |
 | disconnect the active panel | Shift+F11-ish, per plugin | `cd /` | **Alt+Shift+N** |
-| inside the list | — | — | Enter connects · `n` a new URL · `d` disconnects · Esc closes |
+| inside the list | — | — | Enter connects · `n` a new URL · `Ins`/`F7` stores a session · `F4` edits one · `d` disconnects · Esc closes |
+| session editor | NetBox session dialog | — | **`Alt+N` → `Ins`/`F7`/`F4`**: name, host, port, user, authentication, key file, remote folder, group, keep-alive, compression (SPEC 10 §3.5) |
 
 ## 8c. The menu bar and the dialogs (shipped, SPEC 10)
 

@@ -127,7 +127,7 @@ editor-failed = { $name }: { $error }
 
 # netbox (SPEC 04 §6)
 net-sites-title = Verbindungen
-net-sites-hint = Eingabe verbinden · n neu · d trennen · Esc schließen
+net-sites-hint = Eingabe verbinden · n URL · Einfg neu · F4 ändern · d trennen · Esc schließen
 net-no-sites = Noch keine Sites. `n` für eine URL, oder [[site]]-Blöcke in die Konfiguration.
 net-prompt-url = Verbinden mit:
 net-prompt-password = Passwort für { $user }@{ $host }:
@@ -260,3 +260,24 @@ sort-set = Sortierung: { $name }
 btn-ok = OK
 pick-hint = ↑↓ wählen · Enter übernehmen · Esc schließen
 pick-empty = (nichts zur Auswahl)
+
+# ------------------------------------------------- session editor (SPEC 10 §3.5)
+site-new = Neue Verbindung
+site-edit = Verbindung ändern
+site-name = Name
+site-host = Host
+site-port = Port
+site-user = Benutzer
+site-auth = Anmeldung
+site-auth-agent = SSH-Agent
+site-auth-key = Schlüsseldatei
+site-auth-ask = nach Kennwort fragen
+site-key-file = Schlüsseldatei
+site-start-dir = Entfernter Ordner
+site-group = Gruppe
+site-keepalive = Keep-alive (s)
+site-compress = Komprimierung
+site-needs-host = eine Verbindung braucht einen Host
+site-needs-key = Schlüsseldatei wählen oder eine andere Anmeldung
+site-bad-port = `{ $port }` ist keine Zahl
+site-stored = Verbindung gespeichert: { $name } (Shift+F9 behält sie)
