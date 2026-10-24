@@ -10,6 +10,7 @@ authors.workspace = true
 
 [dependencies]
 scmd-config = { path = "../scmd-config" }
+scmd-arc = { version = "0.0.4", path = "../scmd-arc" }
 scmd-core = { path = "../scmd-core" }
 scmd-vfs = { path = "../scmd-vfs" }
 scmd-jobs = { path = "../scmd-jobs" }
@@ -25,3 +26,4 @@ rand = "0.10.3"
 russh-sftp = "3.0.1"
 tempfile = "3"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+zip = { version = "9", default-features = false, features = ["deflate-flate2"] }

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use scmd_core::{CancelToken, Entry, Error, Result as CoreResult, VPath};
-use scmd_vfs::{Caps, LocalVfs, Vfs};
+use scmd_vfs::{ArcVfs, Caps, LocalVfs, Vfs};
 
 use crate::pool::Pool;
 
@@ -64,13 +64,21 @@ impl Vfs for NetVfs {
 pub struct Router {
     local: LocalVfs,
     net: NetVfs,
+    /// Archives, with the one container cache behind them.
+    arc: Arc<ArcVfs>,
 }
 
 impl Router {
     pub fn new(pool: Arc<Pool>) -> Router {
+        Router::with_limits(pool, scmd_arc::Limits::default())
+    }
+
+    /// The same, with the archive guards of SPEC 04 §4 set from the configuration.
+    pub fn with_limits(pool: Arc<Pool>, limits: scmd_arc::Limits) -> Router {
         Router {
             local: LocalVfs,
             net: NetVfs::new(pool),
+            arc: Arc::new(ArcVfs::new(limits)),
         }
     }
 
@@ -78,9 +86,17 @@ impl Router {
         self.net.pool()
     }
 
-    /// The provider that owns `path`.
+    /// The archive provider, for the reads that do not go through the panel.
+    pub fn archives(&self) -> &ArcVfs {
+        &self.arc
+    }
+
+    /// The provider that owns `path`. A path inside a container belongs to the archive
+    /// provider whatever holds the archive itself, which is what the `!` in it says.
     pub fn provider(&self, path: &VPath) -> &dyn Vfs {
-        if path.is_local() {
+        if path.in_container() {
+            &*self.arc
+        } else if path.is_local() {
             &self.local
         } else {
             &self.net
@@ -151,6 +167,25 @@ mod tests {
             .await
             .unwrap();
         assert!(remote.iter().any(|e| e.name_str() == "remote.txt"));
+
+        // And a path with a `!` in it goes to the archive provider, wherever the archive is.
+        let zip = dir.path().join("tree.zip");
+        let file = std::fs::File::create(&zip).unwrap();
+        let mut writer = zip::ZipWriter::new(file);
+        writer
+            .start_file("inside.txt", zip::write::SimpleFileOptions::default())
+            .unwrap();
+        std::io::Write::write_all(&mut writer, b"zz").unwrap();
+        writer.finish().unwrap();
+        let inside = router
+            .list(&VPath::local(&zip).enter("/"), CancelToken::new())
+            .await
+            .unwrap();
+        assert!(inside.iter().any(|e| e.name_str() == "inside.txt"));
+        assert_eq!(
+            router.caps_for(&VPath::local(&zip).enter("/")),
+            Caps::READ | Caps::SEEK
+        );
         assert_eq!(
             router
                 .stat(&site.start().join("remote.txt"))

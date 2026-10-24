@@ -238,6 +238,11 @@ impl Archive {
         }
     }
 
+    /// One entry as a panel row, by its path inside the archive.
+    pub fn row(&self, inner: &str) -> Option<Entry> {
+        self.entry(inner).map(|e| e.to_entry())
+    }
+
     pub fn entry(&self, inner: &str) -> Option<&ArcEntry> {
         let inner = normalise(inner);
         self.by_path.get(&inner).map(|i| &self.entries[*i])
