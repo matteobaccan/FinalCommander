@@ -54,6 +54,8 @@ pub enum PickKind {
     HexBlock,
     /// The viewers and editors left open, with the panels at the top (SPEC 02 §7).
     Screens,
+    /// The recorded macros (SPEC 08 §5).
+    Macros,
 }
 
 /// A mark (`√`) next to the entry that is currently in force.
@@ -333,6 +335,16 @@ pub fn menus() -> Vec<Menu> {
                     Action::Todo("plugin.commands"),
                 ),
                 item("menu-screens-list", "F12", Action::Run(Command::AppScreens)),
+                item(
+                    "menu-macro-record",
+                    "Ctrl+.",
+                    Action::Run(Command::MacroRecord),
+                ),
+                item(
+                    "menu-macro-list",
+                    "Ctrl+Shift+.",
+                    Action::Run(Command::MacroList),
+                ),
                 item("menu-task-list", "Ctrl+W", Action::Todo("task.list")),
             ],
         },

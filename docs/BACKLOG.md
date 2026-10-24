@@ -147,7 +147,8 @@ here is the order to build it in: each item needs only the ones above it.
 | Dialogs: history in edit fields with lockable items, autocomplete, three-state checkboxes, move with `Ctrl+F5`, click outside to accept or cancel | dialog framework | The session editor gave us text rows (SPEC 10 §3.5); these are the next layers. |
 | Mouse wheel everywhere, with a per-area line count, and horizontal wheel | — | Comes with mouse support. |
 | Clock, screen saver, window title variables | Interface settings | Each needs a repaint on a timer, which the input-driven event loop does not do yet. |
-| Macros | `Ctrl+.` to record, 14 areas | Record and play key sequences per area, hotkeys with double modifiers, two play modes, a list, and eventually the Lua engine (SPEC 08). The command vocabulary is already the right foundation: a macro is a list of commands, not a list of keystrokes. |
+| ~~Macros~~ | `Ctrl+.` to record | **Shipped (0.1.0).** SPEC 08 §5: a macro is a list of commands in a readable TOML file, recorded by pressing keys and played by the key one assigns it to, with `once` and `each-selected` play modes, a list on `Ctrl+Shift+.`, and a question before anything destructive unless the file trusts it. |
+| Macro conditions, and the Lua engine | `Ctrl+.` | SPEC 08 §5 and §2. FAR's macros carry a condition (play only when the panel is a file panel, only when something is selected) and far2m's are Lua. Both want the same thing underneath — a macro step that can ask the application a question — which is the plugin host API's job, so they come together with it. FAR's fourteen areas are also finer than our five scopes; worth splitting when something needs it. |
 | XLat | — | Transliterate a typed line between keyboard layouts, with tables, rules and flags. Niche outside Cyrillic keyboards, cheap once the tables exist. |
 
 ## Settings not yet in the configuration

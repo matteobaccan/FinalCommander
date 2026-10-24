@@ -231,6 +231,10 @@ pub enum Command {
     EditorBlockOps,
     /// `F9` in hex mode: type one instruction and write its bytes (SPEC 05 §2.8).
     EditorAssemble,
+    /// `Ctrl+.`: start recording a macro, or stop and assign it to a key (SPEC 08 §5).
+    MacroRecord,
+    /// `Ctrl+Shift+.`: the recorded macros, to play or delete one.
+    MacroList,
     /// `F12`: the viewers and editors left open, to step back into one (SPEC 02 §7).
     AppScreens,
     /// `Ctrl+Tab` / `Ctrl+Shift+Tab`: the next or previous screen, without the list.
@@ -394,6 +398,8 @@ impl Command {
             Command::EditorBlockMark,
             Command::EditorBlockOps,
             Command::EditorAssemble,
+            Command::MacroRecord,
+            Command::MacroList,
             Command::AppScreens,
             Command::AppScreenNext,
             Command::AppScreenPrev,
@@ -574,6 +580,8 @@ impl Command {
             Command::EditorBlockMark => "editor.block.mark".into(),
             Command::EditorBlockOps => "editor.block.ops".into(),
             Command::EditorAssemble => "editor.assemble".into(),
+            Command::MacroRecord => "macro.record".into(),
+            Command::MacroList => "macro.list".into(),
             Command::AppScreens => "app.screens".into(),
             Command::AppScreenNext => "app.screen.next".into(),
             Command::AppScreenPrev => "app.screen.prev".into(),
@@ -731,6 +739,8 @@ impl Command {
             ("editor.block.mark", _) => Command::EditorBlockMark,
             ("editor.block.ops", _) => Command::EditorBlockOps,
             ("editor.assemble", _) => Command::EditorAssemble,
+            ("macro.record", _) => Command::MacroRecord,
+            ("macro.list", _) => Command::MacroList,
             ("app.screens", _) => Command::AppScreens,
             ("app.screen.next", _) => Command::AppScreenNext,
             ("app.screen.prev", _) => Command::AppScreenPrev,

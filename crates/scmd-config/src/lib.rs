@@ -14,6 +14,8 @@ use serde::{Deserialize, Serialize};
 pub const CONFIG_FILE_NAME: &str = "scmd.toml";
 /// Histories, panel paths and other remembered state: one file, next to the config.
 pub const STATE_FILE_NAME: &str = "scmd-state.toml";
+/// Recorded keyboard macros (SPEC 08 §5), beside the configuration.
+pub const MACROS_FILE_NAME: &str = "scmd-macros.toml";
 /// The one directory: optional, and the only thing that may live outside the binary.
 pub const PLUGINS_DIR_NAME: &str = "plugins";
 
@@ -40,6 +42,9 @@ pub struct Paths {
     pub exe_dir: PathBuf,
     pub config_file: PathBuf,
     pub state_file: PathBuf,
+    /// Recorded macros. Beside the configuration, because they are configuration one made by
+    /// pressing keys rather than by typing TOML.
+    pub macros_file: PathBuf,
     pub plugins_dir: PathBuf,
     /// True when the configuration sits next to the executable.
     pub portable: bool,
@@ -75,6 +80,7 @@ impl Paths {
             .map(Path::to_path_buf)
             .unwrap_or_else(|| PathBuf::from("."));
         let state_file = config_parent.join(STATE_FILE_NAME);
+        let macros_file = config_parent.join(MACROS_FILE_NAME);
 
         let plugins_dir = plugins
             .map(Path::to_path_buf)
@@ -92,6 +98,7 @@ impl Paths {
             exe_dir,
             config_file,
             state_file,
+            macros_file,
             plugins_dir,
             portable,
         }
@@ -100,7 +107,7 @@ impl Paths {
     /// Human-readable summary for `scmd --paths`: the first question anyone asks.
     pub fn describe(&self) -> String {
         format!(
-            "config   {}{}\nstate    {}\nplugins  {}{}\n",
+            "config   {}{}\nstate    {}\nmacros   {}{}\nplugins  {}{}\n",
             self.config_file.display(),
             if self.config_file.exists() {
                 ""
@@ -108,6 +115,12 @@ impl Paths {
                 "   (not present; defaults are compiled in)"
             },
             self.state_file.display(),
+            self.macros_file.display(),
+            if self.macros_file.exists() {
+                ""
+            } else {
+                "   (not present; nothing recorded yet)"
+            },
             self.plugins_dir.display(),
             if self.plugins_dir.is_dir() {
                 ""

@@ -210,13 +210,27 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         };
         let row = Rect::new(0, panels_h + cmd_h, w, 1);
         widgets::draw_status(buf, &app.theme, row, &text, app.status_error);
-        // The background-screen counter, in the corner FAR keeps it in. It is drawn only when
-        // there is something behind the panels, because `[0]` is noise.
+        // The corner: whether a macro is recording, and how many screens are behind the
+        // panels. The recording light comes first because it is the one that matters while it
+        // is on — every key is going into a file.
+        let mut mark = String::new();
+        if let Some(steps) = &app.recording {
+            mark.push_str(&format!("REC {} ", steps.len()));
+        }
         if !app.background.is_empty() {
-            let mark = format!("[{}]", app.background.len());
+            mark.push_str(&format!("[{}]", app.background.len()));
+        }
+        {
+            let mark = mark.trim_end().to_string();
             let width = unicode_width::UnicodeWidthStr::width(mark.as_str()) as u16;
-            if width < w {
-                let style = Style::new(app.theme.color("status.fg"), app.theme.color("status.bg"));
+            if width > 0 && width < w {
+                // While recording, the corner is drawn as an error is: it has to be noticed.
+                let mut style =
+                    Style::new(app.theme.color("status.fg"), app.theme.color("status.bg"));
+                if app.recording.is_some() {
+                    style.fg = app.theme.color("error.fg");
+                    style.bold = true;
+                }
                 buf.put_str(w - width, row.y, &mark, style, width);
             }
         }
@@ -307,6 +321,22 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         }
         Mode::Pick(pick) => {
             draw_pick(app, buf, screen, pick);
+            None
+        }
+        // Waiting for the key a just-recorded macro goes on: a message, with the step count.
+        Mode::MacroKey { steps } => {
+            let title = app.i18n.t("macro-key-title");
+            let lines = vec![
+                app.i18n
+                    .t_args("macro-key-body", &[("steps", (steps.len() as i64).into())]),
+                String::new(),
+                steps
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>()
+                    .join("  "),
+            ];
+            widgets::draw_dialog(buf, &app.theme, screen, &title, &lines, None);
             None
         }
         Mode::UserScreen { .. } => None, // drawn full screen, before the panels

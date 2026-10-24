@@ -128,10 +128,65 @@ the core stays clean.
 
 ## 5. Macros
 
-Recorded keystroke sequences (`Ctrl+.` to record) stored with a name, a scope and an optional
-condition; replayable, bindable to a key, and editable as a list of commands (a macro is just a
-command list, so a recorded macro can be promoted to a Lua script with one action). Guardrails:
-macros that invoke destructive commands prompt once per playback unless marked `trusted`.
+A macro is **a list of commands**, not a list of keystrokes. That distinction is the whole
+design: every action in the program is a named command already, so a recorded macro is a
+readable list of names in a TOML file rather than an opaque run of scan codes — one can read
+it, edit it, diff it, copy it to another machine, and later hand it to a plugin, because a
+plugin speaks the same vocabulary.
+
+What a key cannot say as a command is kept as a key: the letters typed into a prompt, the text
+typed into the editor, `Enter` on a dialog. So a step is either a command or a keystroke, and
+recording tells them apart by where the key went — if it reached the command bus it is a
+command, and if a mode consumed it first it is a keystroke. Nothing has to be listed by hand
+for that to be right.
+
+**Recording.** `Ctrl+.` starts; the corner of the screen says `REC` and counts the steps.
+`Ctrl+.` again stops and waits for the key the macro will answer to — pressed, not typed,
+which is how one finds out it is free — and then asks what the macro is for. The keys that
+start and stop the recording are not part of it.
+
+**Playing.** The key plays it. A macro is looked up before the keymap, so a macro can sit on
+`F5`: FAR allows that, and a macro one cannot put on a useful key is a macro one does not
+record. `Ctrl+Shift+.` lists them with their keys, scopes and descriptions, to play or inspect
+one. Playing is running the steps — there is no second interpreter, and no way for a macro to
+do something a key could not.
+
+Two play modes:
+
+| Mode | What it does |
+| --- | --- |
+| `once` | from where the cursor is; the default |
+| `each-selected` | once for every selected file, with the cursor put on each in turn first |
+
+The second is the one that makes a macro worth recording: "do this to each of the files I
+picked" is otherwise done by hand twenty times. The files are remembered by path rather than
+by row, because a step can change the listing under it. With nothing selected it runs once on
+the row under the cursor, which is the rule everywhere else in the program.
+
+**Guardrails.** A macro whose steps copy, move, delete, pack, overwrite or run a shell command
+asks once before it plays, showing the steps it would run — unless the file says
+`trusted = true`, which is a line one writes by hand. Recording never sets it. A macro that
+plays a macro is allowed; one that plays itself stops after thirty-two levels rather than
+filling the stack. A macro recorded in the panel plays in the panel: the scope it was recorded
+in is the scope it answers in, because a run of editor keys would mean something else entirely
+in a panel.
+
+**The file.** `scmd-macros.toml`, beside the configuration — `scmd --paths` names it. It is
+configuration one made by pressing keys rather than by typing TOML, and the writer generates
+the same shape a hand-written one has:
+
+```toml
+[[macro]]
+key = "Ctrl+Shift+D"
+scope = "panel"
+description = "the backups, gone"
+trusted = true
+steps = ["sel.mask.add", "key:*", "key:.", "key:b", "key:a", "key:k", "key:Enter", "file.delete"]
+```
+
+A file that does not parse is an error with the offending line named, not a warning: a macro
+half read is a key that does something unexpected. `scmd --list-commands` prints every name a
+step can hold.
 
 ## 6. Plugin registry (M4)
 

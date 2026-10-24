@@ -760,3 +760,14 @@ cmd = "app.screen.prev"
 keys = ["Alt+="]
 scope = "global"
 cmd = "tool.calculator"
+
+# Macros (SPEC 08 §5). FAR's own keys: record with Ctrl+., then press the key to put it on.
+[[bind]]
+keys = ["Ctrl+."]
+scope = "global"
+cmd = "macro.record"
+
+[[bind]]
+keys = ["Ctrl+Shift+."]
+scope = "global"
+cmd = "macro.list"

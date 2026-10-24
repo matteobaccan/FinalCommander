@@ -315,6 +315,12 @@ pub enum PromptKind {
     HexRead,
     /// How many bytes to insert at the cursor.
     HexInsert,
+    /// What a just-recorded macro is for, in the author's own words.
+    MacroDescription {
+        key: Key,
+        scope: scmd_cmd::Scope,
+        steps: Vec<scmd_cmd::Step>,
+    },
     /// One instruction to assemble over the bytes at the cursor (SPEC 05 §2.8).
     Assemble,
     /// `offset length`, in hex: bytes from elsewhere in this same file, copied to the cursor.
@@ -378,6 +384,8 @@ pub enum ConfirmAction {
     OverwriteRemote,
     /// Leave the program with screens in the background that hold unsaved changes.
     QuitWithScreens,
+    /// Play a macro that deletes or overwrites something, having said so first.
+    PlayMacro(Box<scmd_cmd::Macro>),
     /// Record a host key we have never seen and connect.
     AcceptHostKey {
         panel: usize,
@@ -571,6 +579,11 @@ pub enum Mode {
     Pick(Box<Pick>),
     /// `Alt+F7`: a search, running or finished, with its results.
     Find(Box<FindView>),
+    /// Recording has stopped and the macro is waiting for the key it will answer to: the next
+    /// key pressed is the answer, which is how FAR assigns one (SPEC 08 §5).
+    MacroKey {
+        steps: Vec<scmd_cmd::Step>,
+    },
     /// `Ctrl+O`: the output of the commands that have run, full screen.
     UserScreen {
         scroll: usize,
@@ -738,6 +751,16 @@ pub struct App {
     pub quick_size: (u16, u16),
     /// The last sum, so the calculator opens on it.
     pub last_calc: String,
+    /// Recorded macros (SPEC 08 §5), as `scmd-macros.toml` holds them.
+    pub macros: scmd_cmd::Macros,
+    /// The steps gathered so far, while `Ctrl+.` is recording.
+    pub recording: Option<Vec<scmd_cmd::Step>>,
+    /// The key being dispatched, while recording. `run` takes it to mean "this key became a
+    /// command"; whatever is left after dispatch was consumed as a keystroke instead.
+    record_key: Option<Key>,
+    /// How deep a macro is playing. A macro that plays a macro is allowed; one that plays
+    /// itself is not, and this is what says so.
+    playing: usize,
     /// The screens one has stepped away from: a viewer or an editor left open while the
     /// panels, or another file, are worked on (SPEC 02 §7). The panels are not in this list —
     /// they are what is underneath, always there, and never closed.
@@ -793,6 +816,20 @@ impl App {
         };
         let view = ViewMode::parse(&cfg.panel.view).unwrap_or(ViewMode::Full);
         let hidden = cfg.panel.show_hidden;
+        // The macros, read before the struct is built because `paths` moves into it. A file
+        // that does not parse is said out loud rather than silently ignored: a macro half
+        // read is a key that does something unexpected.
+        let mut macro_error: Option<String> = None;
+        let macros = match std::fs::read_to_string(&paths.macros_file) {
+            Ok(text) => match scmd_cmd::Macros::parse(&text) {
+                Ok(macros) => macros,
+                Err(e) => {
+                    macro_error = Some(e.to_string());
+                    scmd_cmd::Macros::default()
+                }
+            },
+            Err(_) => scmd_cmd::Macros::default(),
+        };
         let mut app = App {
             cfg,
             paths,
@@ -837,6 +874,10 @@ impl App {
             quick_why: None,
             quick_size: (40, 20),
             last_calc: String::new(),
+            macros,
+            recording: None,
+            record_key: None,
+            playing: 0,
             background: Vec::new(),
             last_asm: None,
             last_pack: scmd_arc::Format::Zip,
@@ -853,6 +894,9 @@ impl App {
         };
         app.read_panel(0);
         app.read_panel(1);
+        if let Some(e) = macro_error {
+            app.set_error(e);
+        }
         app
     }
 
@@ -1290,6 +1334,27 @@ impl App {
     }
 
     fn handle_key(&mut self, key: Key) {
+        // A macro answers the key before anything else does, which is what lets one put a
+        // macro on `F5` — FAR allows that, and a macro one cannot put on a useful key is a
+        // macro one does not record. Not while recording, or a macro would record itself.
+        if self.recording.is_none() && self.playing == 0 {
+            if let Some(found) = self.macros.find(key, self.scope()).cloned() {
+                self.play_macro(&found);
+                return;
+            }
+        }
+        // While recording, `run` turns this into a command step; anything it does not take
+        // was consumed by a mode as a keystroke, and is recorded as one.
+        if self.recording.is_some() {
+            self.record_key = Some(key);
+        }
+        self.dispatch_key(key);
+        if let (Some(key), Some(steps)) = (self.record_key.take(), self.recording.as_mut()) {
+            steps.push(scmd_cmd::Step::Press(key));
+        }
+    }
+
+    fn dispatch_key(&mut self, key: Key) {
         // `Mode` owns a reply channel while a job is asking, so it cannot be cloned: take it
         // out, dispatch, and put back whatever the handler did not replace.
         match std::mem::replace(&mut self.mode, Mode::Normal) {
@@ -1314,6 +1379,7 @@ impl App {
                     self.mode = Mode::Message { title, lines };
                 }
             }
+            Mode::MacroKey { steps } => self.macro_key(key, steps),
             Mode::UserScreen { scroll } => {
                 self.mode = Mode::UserScreen { scroll };
                 self.user_screen_key(key, scroll);
@@ -1453,6 +1519,7 @@ impl App {
                         self.remote_edit = None;
                     }
                     ConfirmAction::QuitWithScreens => self.quit = true,
+                    ConfirmAction::PlayMacro(which) => self.run_macro(&which),
                     ConfirmAction::DiscardHex => {
                         // The mode is already Normal: the bytes go with it.
                         self.read_panel(0);
@@ -2055,6 +2122,19 @@ impl App {
                         self.mode = Mode::Prompt(Prompt::new(PromptKind::Calculator, title, line));
                     }
                 }
+            }
+            PromptKind::MacroDescription { key, scope, steps } => {
+                let description = prompt.text.trim().to_string();
+                self.mode = Mode::Normal;
+                self.store_macro(scmd_cmd::Macro {
+                    key,
+                    scope,
+                    steps,
+                    play: scmd_cmd::Play::Once,
+                    description,
+                    // Never by recording: trusting a macro is a line one writes in the file.
+                    trusted: false,
+                });
             }
             PromptKind::Assemble => {
                 let text = prompt.text.trim().to_string();
@@ -2725,6 +2805,15 @@ impl App {
     }
 
     pub fn run(&mut self, cmd: Command) {
+        // The key that got here became a command, so that is what the macro remembers. The
+        // recording keys themselves are not part of the recording.
+        if self.record_key.take().is_some() {
+            if let Some(steps) = self.recording.as_mut() {
+                if cmd != Command::MacroRecord {
+                    steps.push(scmd_cmd::Step::Run(cmd));
+                }
+            }
+        }
         // While the viewer is open, movement and its own toggles belong to it, not the panel.
         if self.mode.viewer().is_some() && is_viewer_movement(cmd) {
             self.viewer_command(cmd);
@@ -3182,6 +3271,8 @@ impl App {
             Command::CmdHistoryNext => {
                 self.cmd.history_next();
             }
+            Command::MacroRecord => self.toggle_recording(),
+            Command::MacroList => self.open_macros(),
             Command::AppScreens => self.open_screens(),
             Command::AppScreenNext => self.cycle_screen(false),
             Command::AppScreenPrev => self.cycle_screen(true),
@@ -5205,6 +5296,190 @@ impl App {
         });
     }
 
+    // ── macros (SPEC 08 §5) ───────────────────────────────────────────────────────────────
+
+    /// Which scope the keymap — and a macro — is looked up in right now.
+    pub fn scope(&self) -> scmd_cmd::Scope {
+        use scmd_cmd::Scope;
+        match &self.mode {
+            Mode::Normal => Scope::Panel,
+            Mode::Viewer(_) => Scope::Viewer,
+            Mode::Editor(_) | Mode::Hex(_) => Scope::Editor,
+            // Everything else is a dialog of some kind: a question, a list, a form.
+            _ => Scope::Dialog,
+        }
+    }
+
+    /// `Ctrl+.`: start recording, or stop and ask which key the macro goes on.
+    fn toggle_recording(&mut self) {
+        match self.recording.take() {
+            None => {
+                self.recording = Some(Vec::new());
+                let m = self.i18n.t("macro-recording");
+                self.set_status(m);
+            }
+            Some(steps) if steps.is_empty() => {
+                let m = self.i18n.t("macro-empty");
+                self.set_status(m);
+            }
+            Some(steps) => {
+                // The key is pressed rather than typed, which is how one knows it is free.
+                self.mode = Mode::MacroKey { steps };
+            }
+        }
+    }
+
+    /// The key a just-recorded macro will answer to. `Esc` throws the recording away.
+    fn macro_key(&mut self, key: Key, steps: Vec<scmd_cmd::Step>) {
+        if key.code == KeyCode::Esc {
+            self.mode = Mode::Normal;
+            let m = self.i18n.t("macro-dropped");
+            self.set_status(m);
+            return;
+        }
+        // The scope it was recorded in is the scope it plays in: a macro of editor keys
+        // would do something else entirely in the panel.
+        let scope = scmd_cmd::Scope::Panel;
+        let title = self
+            .i18n
+            .t_args("macro-describe", &[("key", key.to_string().into())]);
+        self.mode = Mode::Prompt(Prompt::new(
+            PromptKind::MacroDescription { key, scope, steps },
+            title,
+            String::new(),
+        ));
+    }
+
+    /// Store a macro and write the file. A recording that cannot be saved is still in memory
+    /// for this session, and says so rather than pretending it was written.
+    fn store_macro(&mut self, new: scmd_cmd::Macro) {
+        let key = new.key.to_string();
+        let steps = new.steps.len();
+        self.macros.set(new);
+        match self.save_macros() {
+            Ok(()) => {
+                let msg = self.i18n.t_args(
+                    "macro-saved",
+                    &[("key", key.into()), ("steps", (steps as i64).into())],
+                );
+                self.set_status(msg);
+            }
+            Err(e) => self.set_error(e),
+        }
+    }
+
+    fn save_macros(&self) -> Result<(), String> {
+        let path = &self.paths.macros_file;
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+        }
+        std::fs::write(path, self.macros.to_toml()).map_err(|e| format!("{}: {e}", path.display()))
+    }
+
+    /// `Ctrl+Shift+.`: the macros, to play or delete one.
+    fn open_macros(&mut self) {
+        if self.macros.is_empty() {
+            let m = self.i18n.t("macro-none");
+            self.set_status(m);
+            return;
+        }
+        let rows: Vec<PickRow> = self
+            .macros
+            .all
+            .iter()
+            .enumerate()
+            .map(|(i, m)| PickRow {
+                label: m.summary(),
+                value: i.to_string(),
+                current: false,
+            })
+            .collect();
+        let title = self.i18n.t("macro-list-title");
+        self.mode = Mode::Pick(Box::new(Pick::new(PickKind::Macros, title, rows, 0)));
+    }
+
+    /// Play one, asking first when it does something that cannot be undone.
+    fn play_macro(&mut self, which: &scmd_cmd::Macro) {
+        if which.is_destructive() && !which.trusted {
+            let title = self.i18n.t("macro-sure-title");
+            let body = self
+                .i18n
+                .t_args("macro-sure-body", &[("key", which.key.to_string().into())]);
+            self.mode = Mode::Confirm(Confirm {
+                title,
+                lines: vec![
+                    body,
+                    String::new(),
+                    which
+                        .steps
+                        .iter()
+                        .map(|s| s.to_string())
+                        .collect::<Vec<_>>()
+                        .join("  "),
+                    String::new(),
+                    self.i18n.t("confirm-yes-no"),
+                ],
+                action: ConfirmAction::PlayMacro(Box::new(which.clone())),
+            });
+            return;
+        }
+        self.run_macro(which);
+    }
+
+    /// Hand the steps back to the application, in order.
+    ///
+    /// A macro is a list of commands, so playing one is running them — there is no second
+    /// interpreter and no way for a macro to do something a key could not.
+    fn run_macro(&mut self, which: &scmd_cmd::Macro) {
+        // Thirty-two deep is far more than anything sane and still finite, which is what
+        // matters: a macro that plays itself must stop rather than fill the stack.
+        if self.playing > 32 {
+            let m = self.i18n.t("macro-too-deep");
+            self.set_error(m);
+            return;
+        }
+        self.playing += 1;
+        match which.play {
+            scmd_cmd::Play::Once => self.run_steps(&which.steps),
+            scmd_cmd::Play::EachSelected => {
+                // The rows selected now, by path: the listing can change under a step, and a
+                // row number would then mean a different file.
+                let chosen: Vec<VPath> = {
+                    let panel = self.panel();
+                    (0..panel.listing.len())
+                        .filter_map(|row| panel.listing.row(row))
+                        .filter(|e| panel.selection.contains(e.id))
+                        .map(|e| panel.path_of(e))
+                        .collect()
+                };
+                if chosen.is_empty() {
+                    // Nothing selected is the row under the cursor, which is the rule
+                    // everywhere else in the program.
+                    self.run_steps(&which.steps);
+                } else {
+                    for path in chosen {
+                        let name = path.display_name();
+                        let row = self.panel().listing.row_of_name(&name);
+                        if let Some(row) = row {
+                            self.panel_mut().cursor_to(row);
+                            self.run_steps(&which.steps);
+                        }
+                    }
+                }
+            }
+        }
+        self.playing -= 1;
+    }
+
+    fn run_steps(&mut self, steps: &[scmd_cmd::Step]) {
+        for step in steps {
+            match step {
+                scmd_cmd::Step::Run(cmd) => self.run(*cmd),
+                scmd_cmd::Step::Press(key) => self.dispatch_key(*key),
+            }
+        }
+    }
+
     // ── the screens (SPEC 02 §7) ──────────────────────────────────────────────────────────
 
     /// `F12`: the viewers and editors left open, with the panels at the top.
@@ -5626,6 +5901,8 @@ impl App {
             PickKind::HexBlock => return,
             // The same: `open_screens` knows what is open, and this does not.
             PickKind::Screens => return,
+            // And `open_macros`, which knows what has been recorded.
+            PickKind::Macros => return,
             PickKind::Languages => Pick::new(
                 kind,
                 self.i18n.t("menu-languages"),
@@ -5762,6 +6039,13 @@ impl App {
             return;
         };
         match pick.kind {
+            PickKind::Macros => {
+                if let Ok(i) = row.value.parse::<usize>() {
+                    if let Some(which) = self.macros.all.get(i).cloned() {
+                        self.play_macro(&which);
+                    }
+                }
+            }
             PickKind::Screens => match row.value.as_str() {
                 "panels" => self.show_screen(None),
                 "front" => {} // already there
@@ -8729,6 +9013,146 @@ mod tests {
             panic!("{:?}", app.mode)
         };
         assert!(prompt.text.contains("/0"), "the line should still be there");
+    }
+
+    /// A macro is recorded in a temporary configuration directory, so the test writes a real
+    /// `scmd-macros.toml` and reads it back — which is the half of the feature that a unit
+    /// test of the type cannot reach.
+    fn app_with_macros(dir: &std::path::Path) -> App {
+        let mut app = App::new(Startup {
+            cfg: Config::default(),
+            paths: Paths::discover(Some(&dir.join("scmd.toml")), None),
+            i18n: I18n::new("en"),
+            keymap: Keymap::builtin("far").unwrap(),
+            themes: ThemeSet::builtin_only(),
+            theme: Theme::default_theme(),
+            left: VPath::local("/home/mb"),
+            right: VPath::local("/tmp"),
+            sites: Vec::new(),
+        });
+        app.requests.clear();
+        let entries = vec![
+            Entry::parent_entry(),
+            entry("a.txt", EntryKind::File, 100),
+            entry("b.rs", EntryKind::File, 200),
+            entry("c.rs", EntryKind::File, 300),
+        ];
+        for side in [0, 1] {
+            app.handle_event(Event::Listed {
+                panel: side,
+                generation: app.panels[side].generation,
+                result: Ok(entries.clone()),
+            });
+        }
+        app.requests.clear();
+        app
+    }
+
+    #[test]
+    fn a_macro_is_recorded_as_commands_assigned_to_a_key_and_played_back() {
+        use scmd_cmd::{Play, Step};
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = app_with_macros(dir.path());
+
+        // Ctrl+. starts recording, and says so.
+        press(&mut app, "Ctrl+.");
+        assert!(app.recording.is_some());
+        assert!(app.status.contains("Recording"), "{}", app.status);
+
+        // Three keys: two that are commands, and one the panel consumed as a keystroke.
+        press(&mut app, "Ctrl+H"); // panel.hidden.toggle
+        press(&mut app, "Down"); // nav.down
+        let steps = app.recording.clone().unwrap();
+        assert_eq!(steps.len(), 2, "{steps:?}");
+        assert!(
+            matches!(steps[0], Step::Run(cmd) if cmd.id() == "panel.hidden.toggle"),
+            "{steps:?}"
+        );
+
+        // Ctrl+. again asks for the key, and the recording keys are not in the recording.
+        press(&mut app, "Ctrl+.");
+        let Mode::MacroKey { steps } = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(steps.len(), 2);
+
+        // The key is pressed rather than typed; then a description, which may be empty.
+        press(&mut app, "Alt+9");
+        let Mode::Prompt(prompt) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert!(matches!(prompt.kind, PromptKind::MacroDescription { .. }));
+        for c in "hide-and-step".chars() {
+            press(&mut app, &c.to_string());
+        }
+        press(&mut app, "Enter");
+        assert!(app.recording.is_none());
+        assert_eq!(app.macros.all.len(), 1);
+        let saved = &app.macros.all[0];
+        assert_eq!(saved.key.to_string(), "Alt+9");
+        assert_eq!(saved.description, "hide-and-step");
+        assert_eq!(saved.play, Play::Once);
+        assert!(!saved.trusted, "recording never trusts a macro");
+
+        // It is on disk, and in the shape the file documents.
+        let written = std::fs::read_to_string(dir.path().join("scmd-macros.toml")).unwrap();
+        assert!(written.contains("key = \"Alt+9\""), "{written}");
+        assert!(written.contains("panel.hidden.toggle"), "{written}");
+
+        // Playing it: the key now does what was recorded, twice over.
+        let hidden_before = app.panels[app.active].show_hidden;
+        let cursor_before = app.panels[app.active].cursor;
+        press(&mut app, "Alt+9");
+        assert_ne!(app.panels[app.active].show_hidden, hidden_before);
+        assert_eq!(app.panels[app.active].cursor, cursor_before + 1);
+
+        // And a fresh application finds it again.
+        let again = app_with_macros(dir.path());
+        assert_eq!(again.macros.all.len(), 1);
+        assert_eq!(again.macros.all[0].description, "hide-and-step");
+    }
+
+    #[test]
+    fn a_macro_that_deletes_asks_before_it_plays_unless_the_file_trusts_it() {
+        use scmd_cmd::{Macro, Play, Scope, Step};
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = app_with_macros(dir.path());
+        let key = "Alt+8".parse::<Key>().unwrap();
+        let deleting = Macro {
+            key,
+            scope: Scope::Panel,
+            steps: vec![Step::Run(Command::parse("file.delete").unwrap())],
+            play: Play::Once,
+            description: "the-one-that-bites".into(),
+            trusted: false,
+        };
+        app.macros.set(deleting.clone());
+
+        // The key does not delete: it asks, and names what it would run.
+        press(&mut app, "Alt+8");
+        let Mode::Confirm(confirm) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert!(matches!(confirm.action, ConfirmAction::PlayMacro(_)));
+        assert!(
+            confirm.lines.iter().any(|l| l.contains("file.delete")),
+            "{:?}",
+            confirm.lines
+        );
+        press(&mut app, "Esc");
+        assert!(app.mode.is_normal());
+
+        // A macro the file trusts plays without the question.
+        app.macros.set(Macro {
+            trusted: true,
+            ..deleting
+        });
+        press(&mut app, "Alt+8");
+        assert!(
+            !matches!(app.mode, Mode::Confirm(_)),
+            "a trusted macro must not ask: {:?}",
+            app.mode
+        );
     }
 
     #[test]
