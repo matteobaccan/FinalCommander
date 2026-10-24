@@ -10,7 +10,7 @@ authors.workspace = true
 
 [dependencies]
 dirs = "7.0.0"
-scmd-core = { version = "0.0.3", path = "../scmd-core" }
+scmd-core = { version = "0.0.4", path = "../scmd-core" }
 serde = { version = "1.0.229", features = ["derive"] }
 thiserror = "2.0.21"
 toml = "1.0.7"

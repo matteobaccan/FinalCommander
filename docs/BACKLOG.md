@@ -17,7 +17,7 @@ what we intend to do about it.
 | Tree panel | Left/Right menu (`Ctrl+T`) | SPEC 02 §8. Wants a cached directory tree per root; the cache is the work, not the drawing. |
 | ~~Panel on/off~~ | Left/Right menu (`Ctrl+F1`/`Ctrl+F2`) | **Shipped**, and the focus follows the screen. |
 | Compare folders | Commands menu | SPEC 02 §9. FAR's version marks, in each panel, the files that the other panel does not have or has older — names, sizes and times only, no subfolders and no contents. Its `compare` plugin is the one that goes deeper (subfolders, contents), which is a good division for us too. |
-| Panelize a result set | SPEC 06 §1 | Needs a virtual listing that is not a directory — the panel already takes a `Listing`, so the shape is there. |
+| ~~Panelize a result set~~ | SPEC 06 §1 | **Shipped.** `F5` in the find results turns them into the panel, through the temporary panel below. |
 
 ## Selection and sorting
 
@@ -92,7 +92,7 @@ here is the order to build it in: each item needs only the ones above it.
 | Search by instruction pattern | `F7` in the disassembly | Search the decoded stream rather than the bytes: a mnemonic, an operand shape, a wildcard byte. Hiew has it (release VIII); the disassembly pane already produces the decoded instructions, so this is a matcher over them, not a new decoder. |
 | A calculator | hex pane | Hex, decimal, octal and binary with the bitwise operators and conversion between bases. What a hex editor is asked for every ten minutes, and self-contained enough to be an afternoon. |
 | Crypt / decrypt a block | `F12` on a block | As a block operation (XOR, and a named cipher with a key), never as a promise of security — the dialog has to say what it is and what it is not. Follows the block operations above. |
-| Search and replace across files | find tool | The find tool gets the files; replacing in them is a job of its own, with a dry run, a confirmation and a count per file. Hiew does this across multiple files, and it is the one thing on its list that belongs to the *panel* rather than to the viewer. |
+| ~~Search and replace across files~~ | find tool | **Shipped.** Its own job, over the files selected in the panel or the one under the cursor — a find result panelised with `F5` included, which is how it joins up with the find tool. The dry run is not optional: the confirmation counts the files and the matches by running the same engine that then writes, so the two cannot disagree. Hiew does this across multiple files, and it was the one thing on its list that belongs to the *panel* rather than to the viewer. |
 | ARM / AArch64 disassembly | `F5` | A decoder crate, not new design — and on an Apple Silicon machine a viewer that only decodes x86 is half a tool. |
 | Raw devices | hex pane | SPEC 05 §1.10. On Linux and macOS almost free, because a block device is a file: the size has to come from an `ioctl` rather than `stat`, the device opens read-only, and a write is confirmed loudly. Windows needs its own path. |
 | More executable formats | structure pane | NE, LE, LX, TE/TE64 — the DOS and EFI families. Rainy-day additions to the same pane now that ELF, PE and Mach-O are solid. Netware's NLM/DSK/LAN, which Hiew also reads, are *not* planned: there is no living platform behind them, and if anyone asks they belong in a plugin. |
@@ -116,8 +116,8 @@ here is the order to build it in: each item needs only the ones above it.
 
 | Item | Where | Notes |
 | --- | --- | --- |
-| Find file | Commands menu (`Alt+F7`) | SPEC 06 §1, and bigger than it sounds once FAR's dialog is the yardstick: masks, text or hex, case, whole words, fuzzy matching, "not containing", one code page or all or a chosen set, search inside archives, include folders, follow symlinks, alternate streams, six scopes, a filter, and an advanced page with a first-N-bytes limit and result columns in the column grammar. Results then need: new search, go to, view while the search continues behind it, panelize, stop. |
-| A temporary panel | — | A panel made of an arbitrary file list, which is what "panelize" needs and what FAR ships as `tmppanel`. |
+| ~~Find file~~ | Commands menu (`Alt+F7`) | **Shipped** in the shape SPEC 06 §1b describes: masks in the filter grammar, text or a hex pattern, case, whole words, "not containing", five scopes, follow symlinks, folders in the results, and results that stream into a list usable while the walk runs — go to, view, panelize, stop without losing what was found. Still owed, from FAR's dialog: a sixth scope, one code page or a chosen set, fuzzy matching, searching inside archives, alternate streams, the advanced page (a first-N-bytes limit, result columns in the column grammar), saving and loading a search, and a new search from the results. |
+| ~~A temporary panel~~ | — | **Shipped.** One method decides a row's real path, so every operation, the viewer, the editor and the metasymbols work on a list panel; it re-reads by asking about its own paths again, and navigating away turns it back into a directory. |
 | Find folder in the tree | `Alt+F10` | Wants the tree cache. |
 | User menu | Commands menu (`F2`) | SPEC 06 §4: `menu.toml` with conditions. |
 | File associations | Commands menu | SPEC 06 §6: what `Enter` does to a `.md`, a `.zip`, a `.wasm`. |

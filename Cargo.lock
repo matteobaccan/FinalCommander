@@ -1883,7 +1883,7 @@ dependencies = [
 
 [[package]]
 name = "scmd"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "anyhow",
  "clap",
@@ -1910,7 +1910,7 @@ dependencies = [
 
 [[package]]
 name = "scmd-cmd"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "scmd-core",
  "serde",
@@ -1920,7 +1920,7 @@ dependencies = [
 
 [[package]]
 name = "scmd-config"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "dirs",
  "scmd-core",
@@ -1931,7 +1931,7 @@ dependencies = [
 
 [[package]]
 name = "scmd-core"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "globset",
  "regex",
@@ -1942,7 +1942,7 @@ dependencies = [
 
 [[package]]
 name = "scmd-edit"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "regex",
  "scmd-core",
@@ -1954,7 +1954,7 @@ dependencies = [
 
 [[package]]
 name = "scmd-find"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "memchr",
  "scmd-core",
@@ -1966,7 +1966,7 @@ dependencies = [
 
 [[package]]
 name = "scmd-i18n"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "fluent-bundle",
  "unic-langid",
@@ -1974,7 +1974,7 @@ dependencies = [
 
 [[package]]
 name = "scmd-jobs"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "regex",
  "scmd-core",
@@ -1984,7 +1984,7 @@ dependencies = [
 
 [[package]]
 name = "scmd-net"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "async-trait",
  "rand",
@@ -2001,7 +2001,7 @@ dependencies = [
 
 [[package]]
 name = "scmd-plug"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "serde",
  "tempfile",
@@ -2011,7 +2011,7 @@ dependencies = [
 
 [[package]]
 name = "scmd-tui"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "crossterm",
  "scmd-cmd",
@@ -2021,7 +2021,7 @@ dependencies = [
 
 [[package]]
 name = "scmd-ui"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "chrono",
  "scmd-core",
@@ -2035,7 +2035,7 @@ dependencies = [
 
 [[package]]
 name = "scmd-vfs"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "async-trait",
  "scmd-core",
@@ -2046,7 +2046,7 @@ dependencies = [
 
 [[package]]
 name = "scmd-view"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "encoding_rs",
  "iced-x86",

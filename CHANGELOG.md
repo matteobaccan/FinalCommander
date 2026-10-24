@@ -6,7 +6,9 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
-### Finding things (0.0.4, in progress)
+## [0.0.4] — 2026-10-24
+
+Finding things: a search worth the name, and a panel that can hold what it found.
 
 - **A panel can be a list of files rather than a directory.** One method decides whether a
   row's path is the panel's own path with the name on the end or something the panel was told,
@@ -19,6 +21,18 @@ Notable changes, newest first. The format follows
   links, folders in the results. It opens on the last search. Results stream into a list that
   is usable while the walk runs — `Enter` goes to the file, `F3` reads it, `F5` turns the
   results into the panel, `Esc` stops the search and keeps what it found.
+- **The engine is its own crate** (`scmd-find`), so the dialog does not know how a walk works
+  and the walk does not know what a panel is: the dialog makes a plain specification, and one
+  place turns it into a query. Progress is throttled rather than sent per file, and the
+  directories a walk cannot read are collected and capped instead of announced one by one — a
+  search over a whole drive meets them by the dozen.
+- **Replace across files**: its own job over the selected files, with the needle as text, a
+  pattern or hex bytes. The dry run is not optional — the confirmation says how many matches in
+  how many files by running the same engine that then writes, so what it promises and what it
+  does cannot disagree. A rewritten file is left looking modified.
+- The documentation says what is *not* in this first version rather than half-building it:
+  searching inside archives, code pages, the size and date conditions, and saving a search are
+  lines in [`docs/BACKLOG.md`](docs/BACKLOG.md).
 
 ## [0.0.3] — 2026-10-24
 
