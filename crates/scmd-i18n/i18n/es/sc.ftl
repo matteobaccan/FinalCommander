@@ -32,7 +32,9 @@ dialog-yes = Sí
 dialog-no = No
 dialog-error = Error
 dialog-help-title = Referencia de teclado — { $profile }
-dialog-help-hint = Esc o F1 para cerrar · ↑↓ PgAnt PgSig para desplazar
+dialog-help-hint = Esc vuelve al índice · F1 cierra · ↑↓ PgArr PgAb para desplazar
+dialog-help-index = SupremeCommander { $version } — Ayuda
+dialog-help-hint-index = Entrar abre un capítulo · Esc cierra
 
 msg-not-implemented = { $command } aún no está implementado en esta versión
 msg-selected = { $count } elementos seleccionados

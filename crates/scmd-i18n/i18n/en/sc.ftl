@@ -36,7 +36,9 @@ dialog-yes = Yes
 dialog-no = No
 dialog-error = Error
 dialog-help-title = Keyboard reference — { $profile }
-dialog-help-hint = Esc or F1 closes this page · ↑↓ PgUp PgDn to scroll
+dialog-help-hint = Esc goes back to the contents · F1 closes · ↑↓ PgUp PgDn to scroll
+dialog-help-index = SupremeCommander { $version } — Help
+dialog-help-hint-index = Enter opens a chapter · Esc closes
 
 # Status messages
 msg-not-implemented = { $command } is not implemented in this build yet

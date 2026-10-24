@@ -6,6 +6,7 @@ mod app;
 mod cmdline;
 mod expand;
 mod form;
+mod help;
 mod menu;
 mod panel;
 mod render;
@@ -33,7 +34,17 @@ use crate::app::{App, ConnectOutcome, Event, RemoteStamp, Request, Startup, Uplo
     name = "scmd",
     version,
     about = "SupremeCommander — orthodox file manager for the terminal",
-    long_about = None
+    long_about = "SupremeCommander is a two-panel file manager for the terminal that \
+works the same way on Linux, macOS and Windows: one program, one set of keys, one \
+configuration file.\n\n\
+Two panels side by side, the function keys along the bottom saying what they do right now, \
+and a command line underneath. Copying, moving and deleting run as jobs with progress and a \
+way to stop them. Archives open as directories. The viewer streams a file of any size and \
+disassembles a binary; the editor edits lines or bytes. SFTP panels are panels like any \
+other.\n\n\
+The keys are FAR's by default, with a Midnight Commander profile; every action is a named \
+command and every command can be bound to a key. Press F1 inside the program for the manual, \
+whose key and command chapters are generated from the keymap in force."
 )]
 struct Cli {
     /// Directory for the left panel, and optionally for the right one.
@@ -95,6 +106,14 @@ struct Cli {
     /// List the plugins found in the plugins directory.
     #[arg(long)]
     list_plugins: bool,
+
+    /// Print the manual page, in roff, for a packager to install as scmd.1.
+    ///
+    /// It is generated from these very options, so it cannot describe a flag that does not
+    /// exist or miss one that does. `docs/scmd.1` in the repository is this output, and a
+    /// test fails if the two ever differ.
+    #[arg(long, hide = true)]
+    man: bool,
 }
 
 /// A search on a worker thread. The engine streams events; each one becomes an event the app
@@ -240,6 +259,102 @@ fn main() -> Result<()> {
     }
 }
 
+/// The manual page, in roff, from the options above plus the sections clap cannot know about.
+fn man_page() -> String {
+    use clap::CommandFactory;
+    let command = Cli::command();
+    let mut page = Vec::new();
+    clap_mangen::Man::new(command)
+        .title("SCMD")
+        .section("1")
+        .manual("SupremeCommander")
+        .render(&mut page)
+        .expect("writing to a vector cannot fail");
+    let mut text = String::from_utf8(page).expect("roff is text");
+    // What a man page has and a `--help` does not: where the files are, what the keys are, and
+    // where to look next. Written here rather than in the roff by hand, so the generated part
+    // stays generated.
+    text.push_str(
+        r#".SH FILES
+.TP
+.I ~/.config/scmd/config.toml
+The settings. B\-\-dump\-configR prints the effective ones. On macOS this is under
+.I ~/Library/Application Support/scmd
+and on Windows under
+.I %APPDATA%\scmd .
+.TP
+.I ~/.config/scmd/keymap.toml
+Your own key bindings, applied over the profile named by B\-\-keymapR.
+.TP
+.I ~/.config/scmd/session.toml
+Where the panels were when the program last exited.
+.TP
+.I ~/.config/scmd/themes/
+Colour schemes. A TOML file dropped in here is found at startup; B\-\-export\-themeR
+prints a built-in one to start from.
+.TP
+.I ~/.config/scmd/sites.toml
+Stored connections: the host, the user and the path, never a password.
+.SH KEYS
+.B F1
+help,
+.B F3
+view,
+.B F4
+edit,
+.B F5
+copy,
+.B F6
+move or rename,
+.B F7
+make a directory,
+.B F8
+delete,
+.B F9
+the menu bar,
+.B F10
+leave,
+.B F12
+the screens.
+.B Tab
+moves between the panels and
+.B Insert
+selects.
+.PP
+Those are the defaults of the
+.B far
+profile; the
+.B mc
+profile is Midnight Commander's. Every action is a named command,
+.B \-\-list\-commands
+prints them all, and
+.B \-\-check\-keymap
+says whether a keymap is sound. The help inside the program (BF1R) generates its key and
+command chapters from the keymap actually in force, so it cannot drift.
+.SH EXIT STATUS
+.TP
+0
+Normal exit, including every informational option above.
+.TP
+1
+The configuration, the keymap or an argument could not be used; the reason is on standard
+error.
+.SH SEE ALSO
+The documentation under
+.I docs/
+in the source tree: the specification in
+.IR docs/spec/ ,
+the feature inventory in
+.IR docs/02\-features.md ,
+and what is deliberately not done yet in
+.IR docs/BACKLOG.md .
+.SH BUGS
+https://github.com/matteobaccan/SupremeCommander/issues
+"#,
+    );
+    text
+}
+
 fn run(cli: Cli) -> Result<()> {
     let paths = Paths::discover(cli.config.as_deref(), cli.plugins.as_deref());
     let (mut cfg, mut warnings) = Config::load(&paths).context("loading the configuration")?;
@@ -326,6 +441,10 @@ fn run(cli: Cli) -> Result<()> {
             .or_else(|| Theme::builtin(id).ok())
             .with_context(|| format!("unknown theme `{id}`"))?;
         print!("{}", t.to_toml());
+        return Ok(());
+    }
+    if cli.man {
+        print!("{}", man_page());
         return Ok(());
     }
     if cli.dump_config {
@@ -1381,6 +1500,52 @@ mod tests {
     #[test]
     fn cli_definition_is_valid() {
         Cli::command().debug_assert();
+    }
+
+    /// The manual page in the repository is `--man`'s own output. A packager installs that
+    /// file, so it has to be the page this binary describes — including its version, which
+    /// is why a release that forgets to regenerate it fails here rather than shipping a page
+    /// that names the version before.
+    #[test]
+    fn the_manual_page_in_the_tree_is_the_one_this_binary_generates() {
+        let generated = man_page();
+        let committed = include_str!("../../../docs/scmd.1");
+        assert_eq!(
+            generated, committed,
+            "docs/scmd.1 is out of date — regenerate it with:\n\
+             \n    cargo run -p scmd -- --man > docs/scmd.1\n"
+        );
+        // And it is a manual page rather than a dump of `--help`: the sections a reader
+        // expects are there, and the ones clap cannot know about are the point of writing it.
+        for section in [
+            ".SH NAME",
+            ".SH SYNOPSIS",
+            ".SH DESCRIPTION",
+            ".SH OPTIONS",
+            ".SH FILES",
+            ".SH KEYS",
+            ".SH EXIT STATUS",
+            ".SH SEE ALSO",
+            ".SH BUGS",
+        ] {
+            assert!(
+                generated.contains(section),
+                "no {section} in the manual page"
+            );
+        }
+        // Every option of the command line is described. A flag added without a line in the
+        // page is impossible by construction, and this says so out loud.
+        for flag in [
+            "\\-\\-config",
+            "\\-\\-keymap",
+            "\\-\\-theme",
+            "\\-\\-lang",
+            "\\-\\-dump\\-config",
+            "\\-\\-check\\-keymap",
+            "\\-\\-list\\-commands",
+        ] {
+            assert!(generated.contains(flag), "{flag} is not in the manual page");
+        }
     }
 
     #[test]

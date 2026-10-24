@@ -112,6 +112,13 @@ jobs:
           fi
           cp "$bin" "$dir/"
           cp README.md LICENSE THIRD-PARTY.md CHANGELOG.md "$dir/"
+          # The manual page, for whoever installs this the Unix way. It is generated from the
+          # command line's own options and a test keeps the two equal, so this is a copy and
+          # not a second source of truth.
+          case "${{ matrix.name }}" in
+            windows-*) ;;
+            *) cp docs/scmd.1 "$dir/" ;;
+          esac
           # The binary must at least run on the machine that built it.
           case "${{ matrix.name }}" in
             windows-*) "$dir/scmd.exe" --version ;;

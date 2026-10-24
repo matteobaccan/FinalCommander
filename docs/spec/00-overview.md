@@ -93,6 +93,25 @@ and preview pipeline. Licensing basis: `docs/01-licensing.md`.
 | Snapshot tests of the rendered screen | all platforms |
 | Fuzz targets (path parsing, archive readers, keymap parser) | no new crashes |
 
+## 6b. The help, and the manual page
+
+`F1` opens a book with chapters. Half of them are prose, written under `docs/help/` and
+compiled into the binary so the program carries its own manual and a release is still one
+file; the other half — the keys, every command with the keys that reach it, every setting with
+its value — is **generated at the moment it is opened**, from the keymap as loaded and the
+configuration as it stands. A written list of keys is wrong the day after it is written, and a
+help page that lies is worse than no help page.
+
+The prose carries no tables and is wrapped by the renderer rather than by hand: the same page
+has to read on an eighty-column terminal and on a wide one. A test refuses a table in a help
+page for that reason.
+
+The manual page, `docs/scmd.1`, is generated from the command line's own options by
+`scmd --man`, with the sections `clap` cannot know about — files, keys, exit status — written
+once underneath. The file in the repository is that output and a test fails when the two
+differ, so a flag cannot exist without a line in the page, and a release that forgets to
+regenerate it does not build.
+
 ## 7. Milestones
 
 | M | Theme | Done when |

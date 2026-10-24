@@ -32,7 +32,9 @@ dialog-yes = Да
 dialog-no = Нет
 dialog-error = Ошибка
 dialog-help-title = Клавиатура — { $profile }
-dialog-help-hint = Esc или F1 — закрыть · ↑↓ PgUp PgDn — прокрутка
+dialog-help-hint = Esc — к содержанию · F1 закрывает · ↑↓ PgUp PgDn — прокрутка
+dialog-help-index = SupremeCommander { $version } — Справка
+dialog-help-hint-index = Enter открывает главу · Esc закрывает
 
 msg-not-implemented = { $command } пока не реализовано в этой сборке
 msg-selected = отмечено элементов: { $count }

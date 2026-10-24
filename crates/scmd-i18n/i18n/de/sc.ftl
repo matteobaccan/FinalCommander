@@ -32,7 +32,9 @@ dialog-yes = Ja
 dialog-no = Nein
 dialog-error = Fehler
 dialog-help-title = Tastaturreferenz — { $profile }
-dialog-help-hint = Esc oder F1 schließt · ↑↓ Bild↑ Bild↓ zum Blättern
+dialog-help-hint = Esc zurück zum Inhalt · F1 schließt · ↑↓ Bild↑ Bild↓ zum Blättern
+dialog-help-index = SupremeCommander { $version } — Hilfe
+dialog-help-hint-index = Eingabe öffnet ein Kapitel · Esc schließt
 
 msg-not-implemented = { $command } ist in dieser Version noch nicht umgesetzt
 msg-selected = { $count } Einträge ausgewählt

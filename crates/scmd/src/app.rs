@@ -544,8 +544,13 @@ pub enum Mode {
     Editor(Box<Editor>),
     /// `F4` on a binary: the same editor, editing bytes (SPEC 05 §2.5).
     Hex(Box<HexEdit>),
+    /// `F1`: the help, a book with chapters (SPEC 00 §4). `Chapter::Index` is its table of
+    /// contents, which is what the key opens.
     Help {
+        chapter: crate::help::Chapter,
         scroll: usize,
+        /// Where the index's cursor was, so coming back lands on the chapter one read.
+        at: usize,
     },
     Message {
         title: String,
@@ -1288,9 +1293,17 @@ impl App {
         // `Mode` owns a reply channel while a job is asking, so it cannot be cloned: take it
         // out, dispatch, and put back whatever the handler did not replace.
         match std::mem::replace(&mut self.mode, Mode::Normal) {
-            Mode::Help { scroll } => {
-                self.mode = Mode::Help { scroll };
-                self.help_key(key, scroll);
+            Mode::Help {
+                chapter,
+                scroll,
+                at,
+            } => {
+                self.mode = Mode::Help {
+                    chapter,
+                    scroll,
+                    at,
+                };
+                self.help_key(key, chapter, scroll, at);
             }
             Mode::Message { title, lines } => {
                 let close = matches!(
@@ -1897,29 +1910,48 @@ impl App {
         }
     }
 
-    fn help_key(&mut self, key: Key, scroll: usize) {
-        let step = self.rows.max(1);
+    /// The help's keys. The index is a list one chooses from; a chapter is a page one
+    /// scrolls, and `Esc` or `Left` goes back to the index rather than out of the help, which
+    /// is what makes a book a book.
+    fn help_key(&mut self, key: Key, chapter: crate::help::Chapter, scroll: usize, at: usize) {
+        use crate::help::Chapter;
+        let rows = self.rows.max(1);
+        let index = chapter == Chapter::Index;
+        let count = crate::help::chapters().len();
+        let lines = self.help_lines(chapter, self.help_width()).len();
+        let last = lines.saturating_sub(rows);
+        let go = |app: &mut App, chapter, scroll, at| {
+            app.mode = Mode::Help {
+                chapter,
+                scroll,
+                at,
+            }
+        };
         match key.code {
-            KeyCode::Esc | KeyCode::F(1) | KeyCode::F(10) | KeyCode::Char('q') => {
-                self.mode = Mode::Normal
+            KeyCode::Esc | KeyCode::F(10) | KeyCode::Char('q') if index => self.mode = Mode::Normal,
+            // Out of a chapter is back to the index; out of the index is out of the help.
+            KeyCode::Esc | KeyCode::Left | KeyCode::Backspace | KeyCode::Char('q') => {
+                go(self, Chapter::Index, 0, at)
             }
-            KeyCode::Up => {
-                self.mode = Mode::Help {
-                    scroll: scroll.saturating_sub(1),
+            KeyCode::F(1) | KeyCode::F(10) => self.mode = Mode::Normal,
+            KeyCode::Enter | KeyCode::Right if index => {
+                let chapters = crate::help::chapters();
+                if let Some((chapter, _)) = chapters.get(at) {
+                    go(self, *chapter, 0, at);
                 }
             }
-            KeyCode::Down => self.mode = Mode::Help { scroll: scroll + 1 },
-            KeyCode::PageUp => {
-                self.mode = Mode::Help {
-                    scroll: scroll.saturating_sub(step),
-                }
-            }
-            KeyCode::PageDown => {
-                self.mode = Mode::Help {
-                    scroll: scroll + step,
-                }
-            }
-            KeyCode::Home => self.mode = Mode::Help { scroll: 0 },
+            KeyCode::Up if index => go(self, chapter, scroll, at.saturating_sub(1)),
+            KeyCode::Down if index => go(self, chapter, scroll, (at + 1).min(count - 1)),
+            KeyCode::Home if index => go(self, chapter, scroll, 0),
+            KeyCode::End if index => go(self, chapter, scroll, count - 1),
+            KeyCode::PageUp if index => go(self, chapter, scroll, at.saturating_sub(rows)),
+            KeyCode::PageDown if index => go(self, chapter, scroll, (at + rows).min(count - 1)),
+            KeyCode::Up => go(self, chapter, scroll.saturating_sub(1), at),
+            KeyCode::Down => go(self, chapter, (scroll + 1).min(last), at),
+            KeyCode::PageUp => go(self, chapter, scroll.saturating_sub(rows), at),
+            KeyCode::PageDown => go(self, chapter, (scroll + rows).min(last), at),
+            KeyCode::Home => go(self, chapter, 0, at),
+            KeyCode::End => go(self, chapter, last, at),
             _ => {}
         }
     }
@@ -2725,7 +2757,13 @@ impl App {
         }
         match cmd {
             Command::AppQuit => self.ask_before_quitting(),
-            Command::AppHelp => self.mode = Mode::Help { scroll: 0 },
+            Command::AppHelp => {
+                self.mode = Mode::Help {
+                    chapter: crate::help::Chapter::Index,
+                    scroll: 0,
+                    at: 0,
+                }
+            }
             Command::AppThemeNext => {
                 let next = self.themes.next_after(&self.theme.id).clone();
                 let msg = self
@@ -6990,8 +7028,44 @@ impl App {
     }
 
     /// The help page, generated from the live keymap so it can never drift.
-    pub fn help_lines(&self) -> Vec<String> {
-        let mut lines: Vec<String> = Vec::new();
+    /// The lines of one chapter, ready to draw. The written ones are rendered from the text
+    /// compiled into the binary; the rest are built here, from what the program is running.
+    pub fn help_lines(&self, chapter: crate::help::Chapter, width: usize) -> Vec<String> {
+        use crate::help::Chapter;
+        match chapter {
+            Chapter::Index => crate::help::chapters()
+                .into_iter()
+                .map(|(_, title)| title)
+                .collect(),
+            Chapter::Prose(i) => match crate::help::PROSE.get(i) {
+                Some(page) => crate::help::render(page.text, width),
+                None => Vec::new(),
+            },
+            Chapter::Keys => self.help_keys(),
+            Chapter::Commands => self.help_commands(),
+            Chapter::Options => self.help_options(),
+        }
+    }
+
+    /// The width the help renders prose at: the dialog is the screen less its frame, and the
+    /// panel's own width is the nearest thing the application is told about. It only has to
+    /// agree with the renderer closely enough for the scroll limit to be right.
+    pub fn help_width(&self) -> usize {
+        (self.viewer_size.0 as usize)
+            .saturating_sub(4)
+            .clamp(20, 100)
+    }
+
+    /// Every binding of the keymap as loaded, by scope. Generated rather than written, so it
+    /// shows the profile in force and any binding of the reader's own.
+    fn help_keys(&self) -> Vec<String> {
+        let mut lines: Vec<String> = vec![
+            format!(
+                "The {} profile, plus your own bindings.",
+                self.cfg.ui.keymap
+            ),
+            String::new(),
+        ];
         let mut last_scope = None;
         for (scope, key, cmd) in self.keymap.bindings() {
             if last_scope != Some(scope) {
@@ -7003,6 +7077,47 @@ impl App {
             }
             lines.push(format!("  {:<16} {}", key.to_string(), cmd.id()));
         }
+        lines
+    }
+
+    /// Every command in the vocabulary with the keys that reach it — including the ones that
+    /// reach none, which is the list someone binding a key of their own needs.
+    fn help_commands(&self) -> Vec<String> {
+        let mut lines = vec![
+            "Every command, and the keys bound to it. One with no key is still a command:".into(),
+            "put it in keymap.toml, or type it on the command line.".into(),
+            String::new(),
+        ];
+        let mut unbound = 0usize;
+        for cmd in Command::all() {
+            let keys: Vec<String> = self
+                .keymap
+                .bindings()
+                .filter(|(_, _, c)| *c == cmd)
+                .map(|(_, k, _)| k.to_string())
+                .collect();
+            if keys.is_empty() {
+                unbound += 1;
+            }
+            lines.push(format!("  {:<28} {}", cmd.id(), keys.join(", ")));
+        }
+        lines.push(String::new());
+        lines.push(format!(
+            "{} commands, {unbound} of them with no key.",
+            Command::all().len()
+        ));
+        lines
+    }
+
+    /// The settings as they are now, in the same shape `--dump-config` prints them, because
+    /// that is the file one edits.
+    fn help_options(&self) -> Vec<String> {
+        let mut lines = vec![
+            "The settings this session is running with, as config.toml spells them.".into(),
+            "`scmd --dump-config` prints the same thing to a terminal.".into(),
+            String::new(),
+        ];
+        lines.extend(self.cfg.dump().lines().map(|l| l.to_string()));
         lines
     }
 }
@@ -8984,17 +9099,69 @@ mod tests {
     }
 
     #[test]
-    fn help_is_generated_from_the_keymap() {
+    fn the_help_is_a_book_whose_reference_chapters_are_generated() {
+        use crate::help::Chapter;
         let mut app = app();
+
+        // F1 opens the table of contents, not a wall of keys.
         press(&mut app, "F1");
-        assert!(matches!(app.mode, Mode::Help { .. }));
-        let lines = app.help_lines();
+        let Mode::Help { chapter, at, .. } = app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(chapter, Chapter::Index);
+        assert_eq!(at, 0);
+        let index = app.help_lines(Chapter::Index, 76);
+        assert_eq!(index.len(), crate::help::chapters().len());
+        assert!(index[0].contains("What this is"), "{index:?}");
+
+        // Down to the keys chapter and into it.
+        let keys_at = crate::help::chapters()
+            .iter()
+            .position(|(c, _)| *c == Chapter::Keys)
+            .unwrap();
+        for _ in 0..keys_at {
+            press(&mut app, "Down");
+        }
+        press(&mut app, "Enter");
+        let Mode::Help { chapter, .. } = app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(chapter, Chapter::Keys);
+        let lines = app.help_lines(Chapter::Keys, 76);
         assert!(lines
             .iter()
             .any(|l| l.contains("F5") && l.contains("file.copy")));
         assert!(lines.iter().any(|l| l.contains("[global]")));
+
+        // Esc out of a chapter is back to the index, on the chapter one was reading; Esc
+        // again leaves the help.
+        press(&mut app, "Esc");
+        let Mode::Help { chapter, at, .. } = app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(chapter, Chapter::Index);
+        assert_eq!(at, keys_at, "the index remembers where one was");
         press(&mut app, "Esc");
         assert!(matches!(app.mode, Mode::Normal));
+
+        // The command chapter names every command, bound or not, and the settings chapter is
+        // the configuration as this session has it.
+        let commands = app.help_lines(Chapter::Commands, 76);
+        assert!(commands.iter().any(|l| l.contains("file.copy")));
+        assert!(
+            commands.iter().any(|l| l.contains("editor.assemble")),
+            "a command added later must appear without anyone writing it down"
+        );
+        let options = app.help_lines(Chapter::Options, 76);
+        assert!(options.iter().any(|l| l.contains("keymap")));
+
+        // And a written chapter is wrapped prose, with no Markdown left in it.
+        let prose = app.help_lines(Chapter::Prose(0), 76);
+        assert!(!prose.is_empty());
+        assert!(
+            !prose.iter().any(|l| l.contains('`') || l.contains("**")),
+            "the marks must be stripped: {prose:?}"
+        );
     }
 
     #[test]

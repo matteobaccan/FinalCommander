@@ -310,9 +310,12 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             None
         }
         Mode::UserScreen { .. } => None, // drawn full screen, before the panels
-        Mode::Help { scroll } => {
-            let scroll = *scroll;
-            draw_help(app, buf, scroll, screen);
+        Mode::Help {
+            chapter,
+            scroll,
+            at,
+        } => {
+            draw_help(app, buf, *chapter, *scroll, *at, screen);
             None
         }
     }
@@ -1396,9 +1399,25 @@ fn draw_sites(app: &App, buf: &mut Buffer, screen: Rect, cursor: usize) {
     }
 }
 
-fn draw_help(app: &App, buf: &mut Buffer, scroll: usize, screen: Rect) {
-    let lines = app.help_lines();
-    let box_w = screen.w.saturating_sub(6).clamp(24, 60);
+fn draw_help(
+    app: &App,
+    buf: &mut Buffer,
+    chapter: crate::help::Chapter,
+    scroll: usize,
+    at: usize,
+    screen: Rect,
+) {
+    let index = chapter == crate::help::Chapter::Index;
+    // The written chapters are prose and want room to be read; the index is a short list and
+    // looks silly stretched across a wide terminal. Prose is also easier to read short of the
+    // full width, so a wide terminal gets a column rather than a sentence from edge to edge.
+    let box_w = if index {
+        screen.w.saturating_sub(6).clamp(24, 60)
+    } else {
+        screen.w.saturating_sub(4).clamp(24, 86)
+    };
+    // The text is laid out for the box it will be drawn in, not for the panel's width.
+    let lines = app.help_lines(chapter, box_w.saturating_sub(4) as usize);
     let box_h = screen.h.saturating_sub(2).max(6);
     let x = screen.x + (screen.w - box_w) / 2;
     let y = screen.y + (screen.h - box_h) / 2;
@@ -1406,10 +1425,19 @@ fn draw_help(app: &App, buf: &mut Buffer, scroll: usize, screen: Rect) {
 
     let style = app.theme.dialog();
     buf.fill(area, ' ', style);
-    let title = app.i18n.t_args(
-        "dialog-help-title",
-        &[("profile", app.keymap.name().into())],
-    );
+    // The frame names the chapter one is in, and the index names the program.
+    let title = match crate::help::chapters()
+        .into_iter()
+        .find(|(c, _)| *c == chapter)
+    {
+        Some((_, name)) => name,
+        // The index's frame names the program and the version: the first question a tester
+        // asks, and the one place it is always to hand.
+        None => app.i18n.t_args(
+            "dialog-help-index",
+            &[("version", env!("CARGO_PKG_VERSION").into())],
+        ),
+    };
     buf.draw_frame(
         area,
         Style::new(
@@ -1424,6 +1452,17 @@ fn draw_help(app: &App, buf: &mut Buffer, scroll: usize, screen: Rect) {
     let max_scroll = lines.len().saturating_sub(visible);
     let scroll = scroll.min(max_scroll);
     for (row, line) in lines.iter().skip(scroll).take(visible).enumerate() {
+        // In the index the row under the cursor is drawn as chosen, because the index is a
+        // list one picks from rather than a page one reads.
+        if index && scroll + row == at {
+            let style = Style::new(
+                app.theme.color("menu.selected.fg"),
+                app.theme.color("menu.selected.bg"),
+            );
+            let text = format!(" {line:<w$}", w = inner.w.saturating_sub(1) as usize);
+            buf.put_str(inner.x, inner.y + row as u16, &text, style, inner.w);
+            continue;
+        }
         let line_style = if line.starts_with('[') {
             Style::new(
                 app.theme.color("dialog.title"),
@@ -1436,7 +1475,7 @@ fn draw_help(app: &App, buf: &mut Buffer, scroll: usize, screen: Rect) {
         buf.put_str(inner.x, inner.y + row as u16, line, line_style, inner.w);
     }
     // The last body line names the configuration directory: the first thing anyone asks.
-    if lines.len().saturating_sub(scroll) < visible {
+    if index && lines.len().saturating_sub(scroll) < visible {
         let row = lines.len() - scroll;
         buf.put_str(
             inner.x,
@@ -1446,7 +1485,11 @@ fn draw_help(app: &App, buf: &mut Buffer, scroll: usize, screen: Rect) {
             inner.w,
         );
     }
-    let hint = app.i18n.t("dialog-help-hint");
+    let hint = app.i18n.t(if index {
+        "dialog-help-hint-index"
+    } else {
+        "dialog-help-hint"
+    });
     buf.put_str(
         inner.x,
         area.bottom() - 1,
@@ -1545,20 +1588,52 @@ mod tests {
     }
 
     #[test]
-    fn the_help_overlay_lists_bindings() {
+    #[ignore = "a look at the screen, not an assertion"]
+    fn eyeball_help() {
         let mut app = app("commander", "en");
         app.handle_input(Input::Key("F1".parse().unwrap()));
-        let out = frame(&mut app, 80, 24);
-        assert!(out.contains("Keyboard reference"), "{out}");
+        println!("{}", frame(&mut app, 100, 30));
+        app.handle_input(Input::Key("Enter".parse().unwrap()));
+        println!("{}", frame(&mut app, 100, 30));
+    }
+
+    #[test]
+    fn the_help_opens_on_its_contents_and_draws_a_chapter() {
+        let mut app = app("commander", "en");
+        app.handle_input(Input::Key("F1".parse().unwrap()));
+        let index = frame(&mut app, 80, 24);
+        // The frame names the program and the version, and the body is the chapter list.
+        assert!(index.contains("SupremeCommander"), "{index}");
+        assert!(index.contains("What this is"), "{index}");
+        assert!(index.contains("Every command"), "{index}");
+        assert!(index.contains("Enter opens a chapter"), "{index}");
+
+        // Into the keys chapter: its own title in the frame, and the bindings in the body.
+        let keys_at = crate::help::chapters()
+            .iter()
+            .position(|(c, _)| *c == crate::help::Chapter::Keys)
+            .unwrap();
+        for _ in 0..keys_at {
+            app.handle_input(Input::Key("Down".parse().unwrap()));
+        }
+        app.handle_input(Input::Key("Enter".parse().unwrap()));
+        let keys = frame(&mut app, 80, 24);
+        assert!(keys.contains("Keys, as they are bound now"), "{keys}");
         assert!(
-            out.contains("[global]") && out.contains("app.quit"),
-            "{out}"
+            keys.contains("[global]") && keys.contains("app.quit"),
+            "{keys}"
         );
-        assert!(out.contains("Esc or F1 closes"), "{out}");
         // Bindings further down are reachable by scrolling.
         app.handle_input(Input::Key("PgDn".parse().unwrap()));
         let scrolled = frame(&mut app, 80, 24);
-        assert_ne!(scrolled, out, "PgDn did not scroll the help page");
+        assert_ne!(scrolled, keys, "PgDn did not scroll the chapter");
+
+        // And a written chapter is prose, drawn wide.
+        app.handle_input(Input::Key("Esc".parse().unwrap()));
+        app.handle_input(Input::Key("Home".parse().unwrap()));
+        app.handle_input(Input::Key("Enter".parse().unwrap()));
+        let prose = frame(&mut app, 80, 24);
+        assert!(prose.contains("two-panel file manager"), "{prose}");
     }
 
     #[test]
