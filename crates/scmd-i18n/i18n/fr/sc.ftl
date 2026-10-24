@@ -172,6 +172,7 @@ menu-files = Fichiers
 menu-commands = Commandes
 menu-options = Options
 menu-brief = Bref
+menu-medium = &Moyen
 menu-full = Complet
 menu-detailed = Détaillé
 menu-wide = Large

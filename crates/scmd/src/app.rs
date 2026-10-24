@@ -2437,16 +2437,13 @@ impl App {
                 self.set_status(msg);
             }
             Command::PanelViewSet(view) => {
-                if view.is_implemented() {
-                    self.panel_mut().view = view;
-                    self.panel_mut().top = 0;
-                    let msg = self
-                        .i18n
-                        .t_args("msg-view", &[("mode", view.as_str().into())]);
-                    self.set_status(msg);
-                } else {
-                    self.not_implemented(&format!("panel.view.set({})", view.as_str()));
-                }
+                self.panel_mut().view = view;
+                self.panel_mut().top = 0;
+                self.scroll();
+                let msg = self
+                    .i18n
+                    .t_args("msg-view", &[("mode", view.as_str().into())]);
+                self.set_status(msg);
             }
             Command::PanelSortBy(key) => {
                 let allow = self.cfg.panel.allow_reverse_sort;

@@ -102,21 +102,26 @@ cmd = "panel.other.sync"
 keys = ["Alt+I"]
 cmd = "panel.filter.quick"
 
+# FAR's own numbering: brief, medium, full, wide, detailed.
 [[bind]]
 keys = ["Ctrl+1"]
 cmd = "panel.view.set(brief)"
 
 [[bind]]
 keys = ["Ctrl+2"]
-cmd = "panel.view.set(full)"
+cmd = "panel.view.set(medium)"
 
 [[bind]]
 keys = ["Ctrl+3"]
-cmd = "panel.view.set(detail)"
+cmd = "panel.view.set(full)"
 
 [[bind]]
 keys = ["Ctrl+4"]
 cmd = "panel.view.set(wide)"
+
+[[bind]]
+keys = ["Ctrl+5"]
+cmd = "panel.view.set(detail)"
 
 [[bind]]
 keys = ["Ctrl+F3"]

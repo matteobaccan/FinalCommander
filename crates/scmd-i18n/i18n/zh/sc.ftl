@@ -172,6 +172,7 @@ menu-files = 文件
 menu-commands = 命令
 menu-options = 选项
 menu-brief = 简略
+menu-medium = 中等(&M)
 menu-full = 完整
 menu-detailed = 详细
 menu-wide = 宽列

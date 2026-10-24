@@ -50,10 +50,12 @@ pub fn panel_rows(area: Rect, column_titles: bool, status_line: bool) -> usize {
     (area.h as usize).saturating_sub(chrome)
 }
 
-/// Columns of names in brief view.
-pub fn brief_columns(area: Rect) -> usize {
+/// Columns of rows in a multi-column view: the mode's own number, less when the panel is too
+/// narrow to give each column something readable.
+pub fn brief_columns(area: Rect, view: ViewMode) -> usize {
     let inner = area.inner().w as usize;
-    (inner / 20).clamp(1, 4)
+    let least = if view.shows_size() { 24 } else { 14 };
+    (inner / least).clamp(1, view.columns())
 }
 
 pub fn draw_panel(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>) {
@@ -152,7 +154,7 @@ fn draw_scrollbar(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: R
     let total = p.listing.len();
     let per_screen = rows.max(1)
         * if p.view == ViewMode::Brief || p.view == ViewMode::Wide {
-            brief_columns(p.area)
+            brief_columns(p.area, p.view)
         } else {
             1
         };
@@ -220,7 +222,7 @@ fn draw_column_titles(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inne
     let frame = Style::new(theme.color("panel.frame"), theme.color("panel.bg"));
     match p.view {
         ViewMode::Brief | ViewMode::Wide => {
-            let cols = brief_columns(p.area);
+            let cols = brief_columns(p.area, p.view);
             let col_w = (inner.w as usize / cols).max(4);
             for col in 0..cols {
                 let x = inner.x + (col * col_w) as u16;
@@ -289,8 +291,10 @@ fn row_style(
 }
 
 fn draw_brief(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect, rows: usize) {
-    let cols = brief_columns(p.area);
+    let cols = brief_columns(p.area, p.view);
     let col_w = (inner.w as usize / cols).max(4);
+    // FAR's wide view puts the size at the right-hand end of each column.
+    let size_w: u16 = if p.view.shows_size() { 9 } else { 0 };
     for col in 0..cols {
         for row in 0..rows {
             let idx = p.top + col * rows + row;
@@ -302,14 +306,25 @@ fn draw_brief(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect,
             let x = inner.x + (col * col_w) as u16;
             let w = col_w as u16 - 1;
             buf.fill(Rect::new(x, inner.y + row as u16, w, 1), ' ', style);
+            let name_w = w.saturating_sub(size_w);
             let name = shift_name(&decorate(e), p.name_scroll);
             buf.put_str(
                 x,
                 inner.y + row as u16,
-                &truncate_cols(&name, w as usize),
+                &truncate_cols(&name, name_w as usize),
                 style,
-                w,
+                name_w,
             );
+            if size_w > 0 {
+                // A directory says so in words, as it does in the full view, rather than
+                // showing a size that means nothing.
+                let text = match e.kind {
+                    EntryKind::Parent => p.up_label.to_string(),
+                    EntryKind::Dir => p.folder_label.to_string(),
+                    _ => format_size(e.size),
+                };
+                put_right(buf, x + name_w, inner.y + row as u16, size_w, &text, style);
+            }
         }
     }
 }

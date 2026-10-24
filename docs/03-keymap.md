@@ -102,7 +102,7 @@ Column `SC` = SupremeCommander default (profile `far`, our baseline).
 | toggle hidden files | Ctrl+H | Alt+. (Shift+Alt+H in some builds) | Alt+. | Ctrl+H |
 | short/long names | Ctrl+N | Alt+T (cycle formats) | Alt+Shift+B/D | Ctrl+N |
 | key bar on/off | Ctrl+B | — | — | Ctrl+B |
-| view modes 1..0 | LeftCtrl+1..0 | Alt+T cycles | Alt+Shift+B/D | Ctrl+1..0 |
+| view modes 1..0 | LeftCtrl+1..0 | Alt+T cycles | Alt+Shift+B/D | **Ctrl+1..5** in FAR's own order: brief, medium, full, wide, detailed. The four FAR has beyond those — descriptions, long descriptions, file owners, file links — and its alternative full view want data we do not collect yet; `docs/BACKLOG.md` says so |
 | parent directory | Ctrl+PgUp | Ctrl+PgUp | Ctrl+PgUp | Ctrl+PgUp, Backspace |
 | enter dir / archive | Ctrl+PgDn | Ctrl+PgDn | Enter | Ctrl+PgDn |
 | root directory | Ctrl+\ | — | Ctrl+Backspace | Ctrl+\ |
@@ -323,7 +323,7 @@ Naming: `<area>.<object>.<verb>`.
 
 ```
 panel.focus.toggle          panel.swap                 panel.reread
-panel.view.set(brief|full|wide|detail|custom:N)
+panel.view.set(brief|medium|full|wide|detail|custom:N)
 panel.sort.by(name|ext|size|mtime|ctime|atime|owner|none)   panel.sort.reverse
 panel.filter.quick          panel.filter.set            panel.hidden.toggle
 panel.tab.new|close|next|prev|move               panel.layout.toggle

@@ -180,6 +180,7 @@ menu-files = Files
 menu-commands = Commands
 menu-options = Options
 menu-brief = Brief
+menu-medium = &Medium
 menu-full = Full
 menu-detailed = Detailed
 menu-wide = Wide

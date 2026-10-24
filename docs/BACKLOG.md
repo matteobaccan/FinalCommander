@@ -12,12 +12,14 @@ what we intend to do about it.
 
 | Item | Where | Notes |
 | --- | --- | --- |
-| Info panel | Left/Right menu | SPEC 02 §7. FAR puts it on `Ctrl+L`, which we currently use for "change directory". **Open question:** move `nav.goto.path` to `Ctrl+\` (FAR's key) when the info panel lands, or give the info panel another key. |
-| Quick view | Left/Right menu (`Ctrl+Q`) | SPEC 02 §7. Needs the viewer to render into a panel-sized rect — the viewer already draws into a `Rect`, so this is mostly plumbing. |
-| Tree panel | Left/Right menu (`Ctrl+T`) | SPEC 02 §8. Wants a cached directory tree per root; the cache is the work, not the drawing. |
+| ~~Info panel~~ | Left/Right menu (`Ctrl+L`) | **Shipped.** Where the other panel is, what kind of place that is (this machine, a server, inside an archive, a list), the free space, what the directory holds, what is selected, and the row under the cursor. The `Ctrl+L` question is settled: it is FAR's key for this, and the change-directory dialog moved to `Ctrl+Shift+L`. Still to come: mount options and a git summary. |
+| ~~Quick view~~ | Left/Right menu (`Ctrl+Q`) | **Shipped.** The viewer's own rows inside a panel's frame, following the other panel's cursor, opened once per file. A directory says what it is rather than being measured, and a file whose bytes are not here says that `F3` brings them out. |
+| ~~Tree panel~~ | Left/Right menu (`Ctrl+T`) | **Shipped.** Rooted where the other panel's path starts and opening its way down to where that panel is, with a directory cache that outlives the panel. `→`/`Enter` open, `←` closes or climbs, `*` opens everything under the cursor up to two thousand rows, `Ctrl+R` re-reads a branch. Still to come: the tabs that wanted `Ctrl+T` will need a key of their own. |
 | ~~Panel on/off~~ | Left/Right menu (`Ctrl+F1`/`Ctrl+F2`) | **Shipped**, and the focus follows the screen. |
-| Compare folders | Commands menu | SPEC 02 §9. FAR's version marks, in each panel, the files that the other panel does not have or has older — names, sizes and times only, no subfolders and no contents. Its `compare` plugin is the one that goes deeper (subfolders, contents), which is a good division for us too. |
+| ~~Compare folders~~ | Commands menu | **Shipped.** FAR's own rule, and why it is instant: names, sizes and times, no subdirectories and no contents. Each panel keeps selected what the other does not have or has older, so what stays selected is what a copy would have to carry. The deeper comparison — subfolders and contents — is still to come, as FAR leaves it to its own `compare` plugin. |
 | ~~Panelize a result set~~ | SPEC 06 §1 | **Shipped.** `F5` in the find results turns them into the panel, through the temporary panel below. |
+| The view modes that need more data | `Ctrl+6..0` | FAR's descriptions and long descriptions (`descript.ion`, its own backlog line), file owners (a uid/gid lookup per row, cached), file links (the hard-link count), and the alternative full view (sizes with thousands separators). The five we have — brief, medium, full, wide, detailed — are FAR's first five, on FAR's own keys. |
+| Custom columns | `Ctrl+Shift+1..0` | SPEC 02 §3's column grammar: the user's own column sets, which is what makes the modes above a setting rather than a list. |
 
 ## Selection and sorting
 

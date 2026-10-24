@@ -172,6 +172,7 @@ menu-files = Файлы
 menu-commands = Команды
 menu-options = Параметры
 menu-brief = Краткий
+menu-medium = &Средний
 menu-full = Полный
 menu-detailed = Подробный
 menu-wide = Широкий

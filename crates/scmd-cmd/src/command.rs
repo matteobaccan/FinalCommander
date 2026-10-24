@@ -389,9 +389,10 @@ impl Command {
         ];
         for v in [
             ViewMode::Brief,
+            ViewMode::Medium,
             ViewMode::Full,
-            ViewMode::Detail,
             ViewMode::Wide,
+            ViewMode::Detail,
         ] {
             out.push(Command::PanelViewSet(v));
         }
