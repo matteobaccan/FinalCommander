@@ -8,6 +8,9 @@ pub enum SortKey {
     Ext,
     Size,
     MTime,
+    /// Creation time (`Ctrl+F10` in FAR's order) and last access time (`Ctrl+F11`).
+    BTime,
+    ATime,
     Unsorted,
 }
 
@@ -18,6 +21,8 @@ impl SortKey {
             SortKey::Ext => "ext",
             SortKey::Size => "size",
             SortKey::MTime => "mtime",
+            SortKey::BTime => "btime",
+            SortKey::ATime => "atime",
             SortKey::Unsorted => "none",
         }
     }
@@ -81,6 +86,13 @@ impl Sort {
                 .then_with(|| self.cmp_name(a, b)),
             SortKey::Size => a.size.cmp(&b.size).then_with(|| self.cmp_name(a, b)),
             SortKey::MTime => a.mtime.cmp(&b.mtime).then_with(|| self.cmp_name(a, b)),
+            // A timestamp the filesystem does not keep counts as older than any it does, so
+            // the entries nobody can date gather at the old end of the order and `reverse`
+            // carries them along with everything else. That is `Option`'s own ordering, which
+            // is what the write-time key has always done; the name breaks the remaining ties,
+            // so the comparison is total and the order stable whatever is missing.
+            SortKey::BTime => a.btime.cmp(&b.btime).then_with(|| self.cmp_name(a, b)),
+            SortKey::ATime => a.atime.cmp(&b.atime).then_with(|| self.cmp_name(a, b)),
             SortKey::Unsorted => Ordering::Equal,
         };
 
@@ -170,9 +182,24 @@ mod tests {
             kind,
             size,
             mtime: None,
+            btime: None,
+            atime: None,
             flags: EntryFlags::empty(),
             id: EntryId::Name(name.len() as u64),
             link_target: None,
+        }
+    }
+
+    /// A file whose creation and access times are given in seconds since the epoch, with
+    /// `None` standing for a filesystem that does not keep that field.
+    fn timed(name: &str, btime: Option<u64>, atime: Option<u64>) -> Entry {
+        let at = |secs: Option<u64>| {
+            secs.map(|s| std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(s))
+        };
+        Entry {
+            btime: at(btime),
+            atime: at(atime),
+            ..e(name, EntryKind::File, 0)
         }
     }
 
@@ -226,6 +253,62 @@ mod tests {
         assert_eq!((s.key, s.reverse), (SortKey::Size, true));
         s.toggle(SortKey::Name, true);
         assert_eq!((s.key, s.reverse), (SortKey::Name, false));
+    }
+
+    #[test]
+    fn sort_by_creation_time_groups_the_undated_entries_at_the_old_end() {
+        let v = vec![
+            timed("new", Some(2_000), None),
+            timed("unknown-b", None, None),
+            timed("old", Some(1_000), None),
+            timed("unknown-a", None, None),
+        ];
+        let sort = Sort {
+            key: SortKey::BTime,
+            ..Sort::default()
+        };
+        // Undated first, among themselves by name; reversed, the same group goes last.
+        assert_eq!(
+            names(v.clone(), sort),
+            vec!["unknown-a", "unknown-b", "old", "new"]
+        );
+        let reversed = Sort {
+            reverse: true,
+            ..sort
+        };
+        assert_eq!(
+            names(v, reversed),
+            vec!["new", "old", "unknown-b", "unknown-a"]
+        );
+    }
+
+    #[test]
+    fn sort_by_access_time_is_total_even_when_every_entry_lacks_one() {
+        let v = vec![
+            timed("c", Some(9), None),
+            timed("a", Some(1), None),
+            timed("b", Some(5), None),
+        ];
+        let sort = Sort {
+            key: SortKey::ATime,
+            ..Sort::default()
+        };
+        // None of them has an access time, so the name decides and nothing is lost.
+        assert_eq!(names(v, sort), vec!["a", "b", "c"]);
+
+        let v = vec![
+            timed("x", None, Some(2)),
+            timed("y", None, Some(1)),
+            timed("z", None, None),
+        ];
+        assert_eq!(names(v, sort), vec!["z", "y", "x"]);
+    }
+
+    #[test]
+    fn every_sort_key_has_its_column_spelling() {
+        assert_eq!(SortKey::BTime.as_str(), "btime");
+        assert_eq!(SortKey::ATime.as_str(), "atime");
+        assert_eq!(SortKey::MTime.as_str(), "mtime");
     }
 
     #[test]

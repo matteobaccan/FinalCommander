@@ -116,6 +116,11 @@ fn entry_from_meta(name: OsString, full: &Path, meta: &Metadata) -> Entry {
             meta.len()
         },
         mtime: meta.modified().ok(),
+        // Both are optional on purpose: `created` is an error on ext3 and on most network
+        // mounts, and a filesystem mounted `noatime` keeps a stale access time at best. A
+        // directory listing must not fail over either, so the field simply stays empty.
+        btime: meta.created().ok(),
+        atime: meta.accessed().ok(),
         flags,
         id: entry_id(full, meta),
         link_target: if kind == EntryKind::Symlink {
@@ -199,6 +204,28 @@ mod tests {
         let hidden = entries.iter().find(|e| e.name_str() == ".secret").unwrap();
         // A dotfile counts as hidden on every platform, Windows included.
         assert!(hidden.flags.contains(EntryFlags::HIDDEN));
+    }
+
+    #[test]
+    fn creation_and_access_times_are_read_when_the_filesystem_has_them() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("a.txt"), b"hello").unwrap();
+        let entries = list_blocking(&VPath::local(dir.path()), &CancelToken::new()).unwrap();
+        let file = entries.iter().find(|e| e.name_str() == "a.txt").unwrap();
+
+        // Whether the platform has a creation time is not ours to decide; that it never costs
+        // us the listing is. A time we did get must at least be no newer than now.
+        let now = std::time::SystemTime::now();
+        for stamp in [file.mtime, file.btime, file.atime].into_iter().flatten() {
+            assert!(
+                stamp <= now + std::time::Duration::from_secs(1),
+                "{stamp:?}"
+            );
+        }
+        assert!(
+            file.atime.is_some(),
+            "every supported platform has an atime"
+        );
     }
 
     #[test]

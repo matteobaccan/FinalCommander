@@ -921,7 +921,11 @@ impl DateCondition {
 fn timestamp(entry: &Entry, field: TimeField) -> Option<SystemTime> {
     match field {
         TimeField::Modified => entry.mtime,
-        TimeField::Created | TimeField::Accessed | TimeField::Changed => None,
+        TimeField::Created => entry.btime,
+        TimeField::Accessed => entry.atime,
+        // No entry carries a change time yet, and a missing timestamp lets the entry through
+        // rather than hiding it (see `DateCondition::matches`).
+        TimeField::Changed => None,
     }
 }
 
@@ -1209,6 +1213,8 @@ mod tests {
             kind,
             size: 0,
             mtime: None,
+            btime: None,
+            atime: None,
             flags: EntryFlags::empty(),
             id: EntryId::Name(name.bytes().map(u64::from).sum()),
             link_target: None,
@@ -1690,6 +1696,31 @@ mod tests {
         let mut ahead = entry("ahead", EntryKind::File);
         ahead.mtime = Some(now + Duration::from_secs(86_400));
         assert!(filter.matches_at(&ahead, now));
+    }
+
+    #[test]
+    fn a_date_condition_reads_the_field_it_names() {
+        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(100 * 86_400);
+        let young = |field| {
+            filter_with(|f| {
+                f.date = Some(DateCondition::new(
+                    field,
+                    DateRange::parse_age("<=1").unwrap(),
+                ))
+            })
+        };
+
+        // Created yesterday, last read a month ago: young by `btime`, old by `atime`.
+        let mut file = entry("restored", EntryKind::File);
+        file.btime = Some(now - Duration::from_secs(86_400));
+        file.atime = Some(now - Duration::from_secs(30 * 86_400));
+        assert!(young(TimeField::Created).matches_at(&file, now));
+        assert!(!young(TimeField::Accessed).matches_at(&file, now));
+
+        // A field this filesystem does not keep must not hide the file.
+        let bare = entry("bare", EntryKind::File);
+        assert!(young(TimeField::Created).matches_at(&bare, now));
+        assert!(young(TimeField::Changed).matches_at(&bare, now));
     }
 
     #[test]
