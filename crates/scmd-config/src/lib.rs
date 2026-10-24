@@ -137,9 +137,12 @@ pub struct General {
     pub confirm_exit: bool,
     pub confirm_delete: bool,
     pub confirm_overwrite: bool,
-    /// Never on: the program makes no network call the user did not ask for.
-    pub update_check: bool,
 }
+// There is no `update_check` here, and that is the point: a setting nobody reads is a setting
+// that lies, and this one was a promise wearing a setting's clothes. The promise is kept in
+// the code instead — the program opens no connection the user did not ask for, and the only
+// outbound code in the tree is the SFTP client behind `Alt+F1`. If a release check is ever
+// wanted it will be a command one runs, not a flag that phones home at startup.
 
 impl Default for General {
     fn default() -> Self {
@@ -147,7 +150,6 @@ impl Default for General {
             confirm_exit: false,
             confirm_delete: true,
             confirm_overwrite: true,
-            update_check: false,
         }
     }
 }
@@ -582,7 +584,10 @@ mod tests {
         assert_eq!(c.ui.keymap, "far");
         assert_eq!(c.panel.view, "full");
         assert!(c.panel.dirs_first);
-        assert!(!c.general.update_check, "no network calls by default");
+        // Nothing to assert about an update check: there is no such setting, on purpose.
+        // What there is to assert is that asking about an overwrite is on by default, which
+        // is the one of these three that costs data when it is wrong.
+        assert!(c.general.confirm_overwrite);
         assert_eq!(c.panel.quick_search, QuickSearch::Alt);
     }
 

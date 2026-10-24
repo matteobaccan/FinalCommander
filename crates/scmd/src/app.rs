@@ -2687,7 +2687,18 @@ impl App {
     }
 
     /// Hand a job to the runner and show its progress overlay.
-    pub fn start_job(&mut self, spec: JobSpec) {
+    pub fn start_job(&mut self, mut spec: JobSpec) {
+        // `general.confirm_overwrite = false` means "do not ask me about a file that is
+        // already there, write over it". It was a toggle in the settings dialog that changed
+        // nothing: the engine's policy stayed `Ask` whatever the file said.
+        //
+        // Only for the policy the engine would have asked with. A dialog that chose `skip` or
+        // `rename` on purpose is not overridden by a setting about asking.
+        if !self.cfg.general.confirm_overwrite
+            && spec.options.on_conflict == scmd_jobs::ConflictPolicy::Ask
+        {
+            spec.options.on_conflict = scmd_jobs::ConflictPolicy::Overwrite;
+        }
         let id = self.next_job_id;
         self.next_job_id += 1;
         let cancel = CancelToken::new();
@@ -5344,6 +5355,22 @@ impl App {
             .filter_map(|s| s.screen_title())
             .collect();
         if dirty.is_empty() {
+            // `general.confirm_exit` is FAR's own question, off by default. It was a toggle in
+            // the settings dialog that changed nothing.
+            if self.cfg.general.confirm_exit {
+                let title = self.i18n.t("quit-title");
+                let lines = vec![
+                    self.i18n.t("quit-body"),
+                    String::new(),
+                    self.i18n.t("confirm-yes-no"),
+                ];
+                self.mode = Mode::Confirm(Confirm {
+                    title,
+                    lines,
+                    action: ConfirmAction::QuitWithScreens,
+                });
+                return;
+            }
             self.quit = true;
             return;
         }
@@ -9785,6 +9812,73 @@ mod tests {
         );
         press(&mut app, "Esc");
         assert!(app.mode.viewer().is_some(), "{:?}", app.mode);
+    }
+
+    /// The two settings in the dialog that did nothing. Both were toggles one could turn and
+    /// watch change nothing at all, which is worse than not offering them.
+    #[test]
+    fn the_confirmation_settings_are_the_settings_they_claim_to_be() {
+        // Three applications rather than one reused: each half of this is about a setting's
+        // default, and a setting changed in one must not be read in the next.
+        let (mut quiet, mut asking, mut jobs) = (app(), app(), app());
+
+        // `confirm_exit` off (the default) leaves on the first F10.
+        assert!(!quiet.cfg.general.confirm_exit);
+        quiet.run(Command::AppQuit);
+        assert!(quiet.quit);
+
+        // On, it asks — and Esc stays.
+        asking.cfg.general.confirm_exit = true;
+        asking.run(Command::AppQuit);
+        assert!(!asking.quit, "it must ask first");
+        assert!(matches!(asking.mode, Mode::Confirm(_)), "{:?}", asking.mode);
+        press(&mut asking, "Esc");
+        assert!(!asking.quit);
+        asking.run(Command::AppQuit);
+        press(&mut asking, "Enter");
+        assert!(asking.quit);
+
+        // `confirm_overwrite` on (the default) leaves the engine asking about a file that is
+        // already there; off, the job is started with the policy that writes over it.
+        fn conflict_of(app: &mut App) -> scmd_jobs::ConflictPolicy {
+            app.requests.clear();
+            app.start_job(JobSpec::new(
+                JobKind::Copy,
+                vec![VPath::local("/a")],
+                Some(VPath::local("/b")),
+            ));
+            app.take_requests()
+                .into_iter()
+                .find_map(|r| match r {
+                    Request::Job { spec, .. } => Some(spec.options.on_conflict),
+                    _ => None,
+                })
+                .expect("a job was asked for")
+        }
+        assert!(jobs.cfg.general.confirm_overwrite);
+        assert_eq!(conflict_of(&mut jobs), scmd_jobs::ConflictPolicy::Ask);
+        jobs.cfg.general.confirm_overwrite = false;
+        assert_eq!(conflict_of(&mut jobs), scmd_jobs::ConflictPolicy::Overwrite);
+
+        // And a dialog that chose `skip` on purpose is not overridden by a setting about
+        // asking: the two mean different things.
+        jobs.requests.clear();
+        let mut spec = JobSpec::new(
+            JobKind::Copy,
+            vec![VPath::local("/a")],
+            Some(VPath::local("/b")),
+        );
+        spec.options.on_conflict = scmd_jobs::ConflictPolicy::Skip;
+        jobs.start_job(spec);
+        let chosen = jobs
+            .take_requests()
+            .into_iter()
+            .find_map(|r| match r {
+                Request::Job { spec, .. } => Some(spec.options.on_conflict),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(chosen, scmd_jobs::ConflictPolicy::Skip);
     }
 
     #[test]
