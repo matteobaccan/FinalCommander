@@ -125,6 +125,19 @@ pub struct Viewer {
     pub bytes_per_row: usize,
     pub follow: bool,
     pub bookmarks: [Option<u64>; 10],
+    /// Is the key bar drawn below the content? FAR's `Ctrl+B`.
+    ///
+    /// This and the two below are the chrome the reader is allowed to take away one piece at a
+    /// time, to give a long line or a wide hex dump the whole window. The viewer only keeps the
+    /// answer — it draws nothing itself, and a caller that has not asked about these fields
+    /// behaves exactly as it did before they existed. The defaults are therefore what the
+    /// screen shows today: a key bar and a status line, and no scrollbar, which the viewer has
+    /// never had.
+    pub show_key_bar: bool,
+    /// Is the status line drawn? FAR's `Ctrl+Shift+B`.
+    pub show_status_line: bool,
+    /// Is the scrollbar drawn? FAR's `Ctrl+S`.
+    pub show_scrollbar: bool,
     /// Structure of the compiled file, once we have looked.
     pub binary: Option<Binary>,
     /// Is the structure pane open (SPEC 05 §1.8)?
@@ -203,6 +216,9 @@ impl Viewer {
             bytes_per_row: 16,
             follow: false,
             bookmarks: [None; 10],
+            show_key_bar: true,
+            show_status_line: true,
+            show_scrollbar: false,
             binary: None,
             show_structure: false,
             structure: None,
@@ -260,6 +276,27 @@ impl Viewer {
             .iter()
             .find(|(offset, _)| *offset == self.top)
             .map(|(_, t)| t)
+    }
+
+    // ── chrome ─────────────────────────────────────────────────────────────────────────────
+
+    /// `Ctrl+B`: show or hide the key bar. Returns the state it left, which is what the caller
+    /// has to redraw for.
+    pub fn toggle_key_bar(&mut self) -> bool {
+        self.show_key_bar = !self.show_key_bar;
+        self.show_key_bar
+    }
+
+    /// `Ctrl+Shift+B`: show or hide the status line.
+    pub fn toggle_status_line(&mut self) -> bool {
+        self.show_status_line = !self.show_status_line;
+        self.show_status_line
+    }
+
+    /// `Ctrl+S`: show or hide the scrollbar.
+    pub fn toggle_scrollbar(&mut self) -> bool {
+        self.show_scrollbar = !self.show_scrollbar;
+        self.show_scrollbar
     }
 
     // ── structure pane (SPEC 05 §1.8) ──────────────────────────────────────────────────────
@@ -1553,6 +1590,51 @@ mod tests {
         assert!(s.percent > 0, "{s:?}");
         v.next_codepage();
         assert_eq!(v.status().codepage, "UTF-16LE");
+    }
+
+    #[test]
+    fn the_chrome_flags_start_as_what_the_viewer_draws_today() {
+        let v = viewer(b"hello\n");
+        assert!(v.show_key_bar, "the key bar is drawn today");
+        assert!(v.show_status_line, "so is the status line");
+        assert!(
+            !v.show_scrollbar,
+            "the viewer has never drawn a scrollbar, so asking for one is opting in"
+        );
+    }
+
+    #[test]
+    fn each_chrome_toggle_moves_only_its_own_flag() {
+        let mut v = viewer(b"hello\n");
+        assert!(!v.toggle_key_bar(), "Ctrl+B hides the key bar");
+        assert!(v.show_status_line, "and leaves the status line alone");
+        assert!(!v.show_scrollbar);
+        assert!(v.toggle_key_bar(), "and brings it back");
+
+        assert!(
+            !v.toggle_status_line(),
+            "Ctrl+Shift+B hides the status line"
+        );
+        assert!(v.show_key_bar);
+        assert!(v.toggle_status_line());
+
+        assert!(v.toggle_scrollbar(), "Ctrl+S asks for the scrollbar");
+        assert!(v.show_key_bar);
+        assert!(v.show_status_line);
+        assert!(!v.toggle_scrollbar());
+    }
+
+    #[test]
+    fn hiding_the_chrome_changes_nothing_the_viewer_itself_renders() {
+        // The viewer keeps the answer and draws none of it: the rows are the rows either way,
+        // so wiring the keys cannot change what the content pane shows.
+        let mut v = viewer(b"one\ntwo\nthree\n");
+        let before = texts(&mut v, 20, 3);
+        v.show_key_bar = false;
+        v.show_status_line = false;
+        v.show_scrollbar = true;
+        assert_eq!(texts(&mut v, 20, 3), before);
+        assert_eq!(v.status().mode, Mode::Text);
     }
 
     #[test]
