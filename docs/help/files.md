@@ -187,3 +187,42 @@ where the date proves nothing.
 Both panels have to be on a local filesystem for it, and anything with no counterpart on the
 other side is selected too, because it is a difference. A long comparison says how far it has
 got in the status line, and `Esc` on an empty command line stops it.
+
+# What opens a file
+
+`Enter` on a file that is not an archive and not a program runs what an association says to
+run. An association is a `[[assoc]]` block in `scmd.toml`, and it is three commands and a
+mask:
+
+    [[assoc]]
+    match = "*.md"
+    name  = "Markdown"
+    open  = "glow -p {file}"
+    view  = "bat --style=plain {file}"
+    edit  = "hx {file}"
+
+The mask is either a whole name (`Makefile`) or `*.` and an extension (`*.md`), matched
+without regard to case; the first block that matches wins, so the specific ones go first.
+`{file}` is the path **in quotes** and `{file.raw}` is the bare one — the same substitutions
+the user menu and `Ctrl+G` take, so `{name}`, `{dir}`, `{other.dir}`, `{list}` and
+`{ask:…}` all work here as well.
+
+With no block to go on, `Enter` hands the file to the desktop — `xdg-open` on Linux, `open`
+on macOS, `start` on Windows — which is what `general.desktop_open` turns off for a machine
+where that is the wrong thing to do. With that off too, it says there is nothing to open the
+file with rather than guessing.
+
+`F3` and `F4` are always *ours*: the viewer and the editor in this program, whatever any
+block says. A key that sometimes opened something else would be a key nobody could trust.
+What a block names for reading and writing is on `Alt+F3` and `Alt+F4` — FAR's keys for the
+other viewer and the other editor — and with nothing named there either, those two fall back
+to `$PAGER` and to `$VISUAL` or `$EDITOR`, which are already set on a machine that has an
+opinion. (On some desktops `Alt+F4` closes the window before the program sees it; that is the
+desktop's key, and the Commands menu has the same entry.)
+
+`Ctrl+PgDn` is still the way *into* an archive and `Enter` on one still opens it as a
+directory: an association for `*.zip` would stop that, so archives are checked first.
+
+**Open with** — in the Commands menu — lists every block that matches the file under the
+cursor, plus the desktop, and runs the one chosen. It is the way to use the `view` command of
+a block without rebinding anything.

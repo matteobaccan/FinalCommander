@@ -206,6 +206,13 @@ sync-nothing-to-do = todas las filas dicen dejar las cosas como están
 sync-local-only = una sincronización solo puede leer y escribir en esta máquina
 sync-same-directory = los dos paneles están en el mismo directorio
 
+# What to run for a kind of file (SPEC 06 §5)
+assoc-none = nada dice cómo abrir { $name }
+assoc-desktop = Entregarlo al escritorio
+assoc-open-with = Abrir { $name } con
+assoc-no-pager = ninguna asociación ni $PAGER dicen con qué leerlo
+assoc-no-editor = ninguna asociación ni $VISUAL dicen con qué escribirlo
+
 key-wrap = Ajuste
 key-hex = Hex
 key-text = Texto

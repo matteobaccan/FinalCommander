@@ -540,6 +540,18 @@ cmd = "file.apply"
 keys = ["Ctrl+Shift+R"]
 cmd = "tool.replace"
 
+# FAR's keys for the *other* viewer and editor: what an `[[assoc]]` block names for this kind
+# of file, and otherwise `$PAGER` / `$VISUAL`. `F3` and `F4` stay ours, always.
+[[bind]]
+keys = ["Alt+F3"]
+scope = "panel"
+cmd = "file.view.external"
+
+[[bind]]
+keys = ["Alt+F4"]
+scope = "panel"
+cmd = "file.edit.external"
+
 [[bind]]
 keys = ["Alt+F6"]
 cmd = "file.link"

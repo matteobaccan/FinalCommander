@@ -206,6 +206,13 @@ sync-nothing-to-do = jede Zeile sagt, alles so zu lassen
 sync-local-only = ein Abgleich kann nur auf diesem Rechner lesen und schreiben
 sync-same-directory = beide Fenster sind im gleichen Verzeichnis
 
+# What to run for a kind of file (SPEC 06 §5)
+assoc-none = nichts sagt, wie { $name } zu öffnen ist
+assoc-desktop = An den Desktop übergeben
+assoc-open-with = { $name } öffnen mit
+assoc-no-pager = keine Zuordnung und kein $PAGER sagen, womit das zu lesen ist
+assoc-no-editor = keine Zuordnung und kein $VISUAL sagen, womit das zu schreiben ist
+
 key-wrap = Umbruch
 key-hex = Hex
 key-text = Text

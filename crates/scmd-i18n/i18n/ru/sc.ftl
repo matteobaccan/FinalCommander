@@ -206,6 +206,13 @@ sync-nothing-to-do = каждая строка говорит оставить �
 sync-local-only = синхронизация работает только на этой машине
 sync-same-directory = обе панели в одном каталоге
 
+# What to run for a kind of file (SPEC 06 §5)
+assoc-none = нигде не сказано, чем открыть { $name }
+assoc-desktop = Передать системе
+assoc-open-with = Открыть { $name } с помощью
+assoc-no-pager = ни ассоциация, ни $PAGER не говорят, чем это читать
+assoc-no-editor = ни ассоциация, ни $VISUAL не говорят, чем это писать
+
 key-wrap = Перенос
 key-hex = Hex
 key-text = Текст

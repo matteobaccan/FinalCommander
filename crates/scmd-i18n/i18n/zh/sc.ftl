@@ -206,6 +206,13 @@ sync-nothing-to-do = 每一行都说保持原样
 sync-local-only = 同步只能在本机读写
 sync-same-directory = 两个面板在同一目录
 
+# What to run for a kind of file (SPEC 06 §5)
+assoc-none = 没有定义如何打开 { $name }
+assoc-desktop = 交给系统打开
+assoc-open-with = 打开 { $name } 的方式
+assoc-no-pager = 没有关联程序，$PAGER 也未设置，无从读取
+assoc-no-editor = 没有关联程序，$VISUAL 也未设置，无从写入
+
 key-wrap = 折行
 key-hex = 十六
 key-text = 文本

@@ -58,6 +58,8 @@ pub enum PickKind {
     FoldersHistory,
     /// The folders kept to hand (SPEC 02 §11).
     Bookmarks,
+    /// What could open the file under the cursor (SPEC 06 §5).
+    OpenWith,
     /// The command lines that have run.
     CommandHistory,
     /// The sort order for this panel.
@@ -433,8 +435,12 @@ pub fn menus() -> Vec<Menu> {
                 ),
                 Entry::Separator,
                 item("menu-user-menu", "F2", Action::Run(Command::ToolUserMenu)),
-                item("menu-associations", "", Action::Todo("tool.associations")),
-                item("menu-folder-shortcuts", "", Action::Todo("tool.shortcuts")),
+                item("menu-associations", "", Action::Run(Command::FileAssoc)),
+                item(
+                    "menu-folder-shortcuts",
+                    "Ctrl+D",
+                    Action::Run(Command::NavBookmarks),
+                ),
                 Entry::Separator,
                 item(
                     "menu-plugin-commands",

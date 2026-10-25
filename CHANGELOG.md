@@ -8,6 +8,30 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **File associations.** A `[[assoc]]` block in `scmd.toml` is a mask, a name and three
+  commands — `open` for `Enter`, `view` and `edit` for `Alt+F3` and `Alt+F4` — and the first
+  block whose mask matches the file wins. The mask is a whole name (`Makefile`) or `*.` and an
+  extension (`*.md`), compared without regard to case, by the same rule the decompile rules
+  use, so the two cannot drift apart. Commands take the substitutions the user menu and
+  `Ctrl+G` take: `{file}` quoted, `{file.raw}` bare, `{name}`, `{dir}`, `{other.dir}`,
+  `{list}`, `{ask:…}`.
+
+  `F3` and `F4` stay **ours** whatever a block says, which is FAR's arrangement and the reason
+  its alternative-viewer keys exist: a key that sometimes opened something else would be a key
+  nobody could trust. What a block names for reading and writing is on `Alt+F3` and `Alt+F4`,
+  and with nothing named there either those two fall back to `$PAGER` and to `$VISUAL` or
+  `$EDITOR` — already set on a machine that has an opinion.
+
+  With no block to go on, `Enter` hands the file to the desktop: `xdg-open`, `open`, or
+  `cmd /c start`. `general.desktop_open` turns that off for a machine where it is the wrong
+  thing to do, and with it off `Enter` says there is nothing to open the file with rather than
+  guessing. Archives are still checked first, so an association for `*.zip` cannot take away
+  `Enter` on an archive.
+
+  **Open with**, in the Commands menu, lists every block that matches the file under the
+  cursor plus the desktop, and runs the one chosen — the way to use a block's `view` without
+  rebinding anything.
+
 - **Synchronising two directories** (`Ctrl+Shift+Y`, and the Commands menu). Three steps, and
   the middle one is the point: a dialog saying how to decide, a **table** saying what was
   decided, and only `F2` setting anything going. Nothing is written before that, so the table

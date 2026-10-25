@@ -137,6 +137,14 @@ pub struct General {
     pub confirm_exit: bool,
     pub confirm_delete: bool,
     pub confirm_overwrite: bool,
+    /// With nothing in `[[assoc]]` to say otherwise, `Enter` on a file that is not a program
+    /// hands it to whatever the desktop has registered for it — `xdg-open`, `open`, `start`.
+    ///
+    /// On, because that is what `Enter` means in every file manager, and because the honest
+    /// alternative is a key that says "not implemented". Off, `Enter` says there is no
+    /// association instead, which is what somebody working over a connection with no desktop
+    /// at the other end will want.
+    pub desktop_open: bool,
     /// `F8` hands a file to the system's own wastebasket rather than unlinking it. On by
     /// default, as it is in FAR and in Total Commander: a wastebasket is a safety net, and
     /// the one key everybody presses by accident is the one that should land in it.
@@ -155,6 +163,7 @@ impl Default for General {
             confirm_exit: false,
             confirm_delete: true,
             confirm_overwrite: true,
+            desktop_open: true,
             use_trash: true,
         }
     }
@@ -456,21 +465,101 @@ pub struct DecompileRule {
     pub cmd: String,
 }
 
+/// Does `mask` apply to `name`? `*.ext` compares the extension, anything else the whole file
+/// name, both without regard to case.
+///
+/// One function for both the `[[decompile]]` and the `[[assoc]]` blocks, because it is one
+/// rule and the two had better agree about it. A name with no dot in it has no extension, so
+/// `*.md` does not match a file called `md` — which the first spelling of this got wrong, and
+/// which a test now says.
+pub fn mask_matches(mask: &str, name: &str) -> bool {
+    let name = name.to_ascii_lowercase();
+    let mask = mask.trim().to_ascii_lowercase();
+    if mask.is_empty() {
+        return false;
+    }
+    match mask.strip_prefix("*.") {
+        Some(ext) => match name.rsplit_once('.') {
+            Some((stem, found)) => !stem.is_empty() && found == ext,
+            None => false,
+        },
+        None => name == mask,
+    }
+}
+
 impl DecompileRule {
-    /// Does this rule apply to `name`? `*.ext` compares the extension, anything else the
-    /// whole file name, both case-insensitively.
+    /// Does this rule apply to `name`? See [`mask_matches`].
     pub fn matches(&self, name: &str) -> bool {
-        let name = name.to_ascii_lowercase();
-        let mask = self.mask.trim().to_ascii_lowercase();
-        match mask.strip_prefix("*.") {
-            Some(ext) => name.rsplit('.').next() == Some(ext),
-            None => name == mask,
-        }
+        mask_matches(&self.mask, name)
     }
 
     /// The program the rule runs, for an availability check.
     pub fn program(&self) -> &str {
         self.cmd.split_whitespace().next().unwrap_or("")
+    }
+}
+
+/// `[[assoc]]` blocks: what to run for a kind of file (SPEC 06 §5).
+///
+/// A mask and up to three commands, each optional: what `Enter` does, what `F3` does instead
+/// of the internal viewer, what `F4` does instead of the internal editor. A command goes
+/// through the same substitutions the command line and the user menu use, so `{file}` is the
+/// path and `{file}` is the path in quotes.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AssocCfg {
+    /// `*.md`, or an exact file name like `Makefile`.
+    #[serde(rename = "match")]
+    pub mask: String,
+    /// Shown in the *Open with* list; the mask is used when this is empty.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub name: String,
+    /// What `Enter` runs.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub open: String,
+    /// What `F3` runs instead of the internal viewer.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub view: String,
+    /// What `F4` runs instead of the internal editor.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub edit: String,
+}
+
+impl AssocCfg {
+    /// Does this block apply to `name`? See [`mask_matches`], which the `[[decompile]]`
+    /// blocks share: it is one rule and the two had better agree about it.
+    pub fn matches(&self, name: &str) -> bool {
+        mask_matches(&self.mask, name)
+    }
+
+    /// What the list calls it.
+    pub fn label(&self) -> &str {
+        if self.name.trim().is_empty() {
+            &self.mask
+        } else {
+            &self.name
+        }
+    }
+}
+
+/// The command that hands a file to whatever the desktop has registered for it.
+///
+/// Every platform has exactly one of these and they all take the path as their argument, so
+/// there is nothing to configure and nothing to guess: `xdg-open` on Unix (the freedesktop
+/// one, which is also what the BSDs ship), `open` on macOS, and `cmd /c start` on Windows,
+/// where the shell builtin is the opener and `start`'s first quoted argument is a window
+/// title rather than a file — hence the empty one.
+pub fn desktop_open_command() -> &'static str {
+    #[cfg(target_os = "macos")]
+    {
+        "open {file}"
+    }
+    #[cfg(target_os = "windows")]
+    {
+        "cmd /c start \"\" {file}"
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        "xdg-open {file}"
     }
 }
 
@@ -546,6 +635,9 @@ pub struct Config {
     /// `[[s3]]` blocks: object storage services.
     #[serde(rename = "s3")]
     pub s3: Vec<S3Cfg>,
+    /// `[[assoc]]` blocks: what to run for a kind of file (SPEC 06 §5).
+    #[serde(rename = "assoc")]
+    pub assocs: Vec<AssocCfg>,
     /// Anything we did not recognise, kept so `--dump-config` can show it and warn.
     #[serde(flatten, skip_serializing)]
     pub unknown: BTreeMap<String, toml::Value>,
@@ -670,6 +762,7 @@ impl Config {
             "general.confirm_exit" => self.general.confirm_exit = parse_bool(value)?,
             "general.confirm_delete" => self.general.confirm_delete = parse_bool(value)?,
             "general.use_trash" => self.general.use_trash = parse_bool(value)?,
+            "general.desktop_open" => self.general.desktop_open = parse_bool(value)?,
             "general.confirm_overwrite" => self.general.confirm_overwrite = parse_bool(value)?,
             other => return Err(format!("unknown setting `{other}`")),
         }
@@ -807,6 +900,67 @@ mod tests {
         );
         assert!(problem.unwrap().contains("scmd-state.toml"));
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn an_association_matches_an_extension_or_a_whole_name() {
+        let md = AssocCfg {
+            mask: "*.MD".into(),
+            open: "glow {file}".into(),
+            ..AssocCfg::default()
+        };
+        assert!(
+            md.matches("README.md"),
+            "the case of the mask does not matter"
+        );
+        assert!(md.matches("NOTES.MD"));
+        assert!(!md.matches("md"), "an extension is not a whole name");
+        assert!(!md.matches("readme.markdown"));
+
+        let make = AssocCfg {
+            mask: "Makefile".into(),
+            ..AssocCfg::default()
+        };
+        assert!(make.matches("makefile"));
+        assert!(!make.matches("Makefile.in"));
+
+        // An empty mask matches nothing rather than everything: a block somebody half wrote
+        // should do nothing at all.
+        assert!(!AssocCfg::default().matches("anything.txt"));
+
+        // A dotfile is a name, not an extension: `.md` is called `.md`, and `*.md` is about
+        // files whose *names* end in `.md`.
+        assert!(!md.matches(".md"));
+        let dotfile = AssocCfg {
+            mask: ".gitignore".into(),
+            ..AssocCfg::default()
+        };
+        assert!(dotfile.matches(".gitignore"));
+    }
+
+    #[test]
+    fn an_association_goes_by_its_name_in_the_list_and_by_its_mask_without_one() {
+        let mut a = AssocCfg {
+            mask: "*.md".into(),
+            ..AssocCfg::default()
+        };
+        assert_eq!(a.label(), "*.md");
+        a.name = "Markdown, laid out".into();
+        assert_eq!(a.label(), "Markdown, laid out");
+    }
+
+    #[test]
+    fn association_blocks_survive_a_round_trip_through_the_config_file() {
+        let mut c = Config::default();
+        c.assocs.push(AssocCfg {
+            mask: "*.md".into(),
+            name: "Markdown".into(),
+            open: "glow {file}".into(),
+            ..AssocCfg::default()
+        });
+        let back: Config = toml::from_str(&c.dump()).expect("what we wrote, we can read");
+        assert_eq!(back.assocs, c.assocs);
+        assert!(back.general.desktop_open, "and the default came back too");
     }
 
     #[test]

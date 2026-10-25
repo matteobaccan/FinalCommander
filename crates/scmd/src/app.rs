@@ -607,6 +607,13 @@ fn mode_of(path: &VPath) -> Option<u32> {
     }
 }
 
+/// Which of an `[[assoc]]` block's commands a key is after.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Which {
+    View,
+    Edit,
+}
+
 /// What a confirmation will do on `Enter`.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ConfirmAction {
@@ -3358,6 +3365,139 @@ impl App {
         self.requests.push(Request::Job { id, spec, cancel });
     }
 
+    // ── what to run for a kind of file (SPEC 06 §5) ─────────────────────────────────────
+
+    /// `Alt+F3` and `Alt+F4`: read or write this file with something that is not us.
+    ///
+    /// What an `[[assoc]]` block names comes first; with nothing to go on, the environment
+    /// does — `$PAGER` for reading, `$VISUAL` then `$EDITOR` for writing, which is the
+    /// convention every Unix program follows and the one a user has already set.
+    fn open_external(&mut self, which: Which) {
+        let Some(entry) = self.panel().current().cloned() else {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        };
+        let name = entry.name_str().into_owned();
+        let from_block = self
+            .assoc_for(&name)
+            .map(|a| match which {
+                Which::View => a.view.clone(),
+                Which::Edit => a.edit.clone(),
+            })
+            .filter(|cmd| !cmd.trim().is_empty());
+        let from_env = || {
+            let vars: &[&str] = match which {
+                Which::View => &["PAGER"],
+                Which::Edit => &["VISUAL", "EDITOR"],
+            };
+            vars.iter()
+                .filter_map(|name| std::env::var(name).ok())
+                .map(|v| v.trim().to_string())
+                .find(|v| !v.is_empty())
+                .map(|program| format!("{program} {{file}}"))
+        };
+        match from_block.or_else(from_env) {
+            Some(cmd) => self.run_line(&cmd),
+            None => {
+                let msg = self.i18n.t(match which {
+                    Which::View => "assoc-no-pager",
+                    Which::Edit => "assoc-no-editor",
+                });
+                self.set_error(msg);
+            }
+        }
+    }
+
+    /// The command an `[[assoc]]` block gives for the file under the cursor, if one does.
+    ///
+    /// The first block whose mask matches wins, which is why they are a list and not a map:
+    /// a user puts the narrow rule above the broad one and the order on the page is the order
+    /// of the decision.
+    fn assoc_for(&self, name: &str) -> Option<&scmd_config::AssocCfg> {
+        self.cfg.assocs.iter().find(|a| a.matches(name))
+    }
+
+    /// What `Enter` does to a file that is neither a directory nor an archive.
+    ///
+    /// Three answers in order, and the order is the whole of the behaviour: what the user
+    /// said in `[[assoc]]`, then the program the file *is*, then whatever the desktop has
+    /// registered for it. A key that did nothing and said nothing would be the worst of the
+    /// four possible answers, so the fourth is to say there is nothing to open it with.
+    fn open_file(&mut self) {
+        let Some(entry) = self.panel().current().cloned() else {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        };
+        let name = entry.name_str().into_owned();
+        if let Some(cmd) = self.assoc_for(&name).map(|a| a.open.clone()) {
+            if !cmd.trim().is_empty() {
+                self.run_line(&cmd);
+                return;
+            }
+        }
+        // A program is run as itself. `{file}` is the path in quotes, so a name with a
+        // space in it is one argument rather than two.
+        let is_program = entry.flags.contains(scmd_core::EntryFlags::EXECUTABLE)
+            || cfg!(windows)
+                && matches!(
+                    name.rsplit_once('.').map(|(_, ext)| ext.to_ascii_lowercase()),
+                    Some(ext) if matches!(ext.as_str(), "exe" | "bat" | "cmd" | "com")
+                );
+        let local = self.panel().current_path().is_some_and(|p| p.is_local());
+        if is_program && local {
+            self.run_line("{file}");
+            return;
+        }
+        if self.cfg.general.desktop_open && local {
+            self.run_line(scmd_config::desktop_open_command());
+            return;
+        }
+        let msg = self.i18n.t_args("assoc-none", &[("name", name.into())]);
+        self.set_error(msg);
+    }
+
+    /// Everything that could open the file under the cursor, as a list to choose from.
+    ///
+    /// FAR's own dialog for this edits the list; ours shows what *applies here*, which is the
+    /// half one reaches for with a file in front of them. Editing the list is editing
+    /// `[[assoc]]` blocks in `scmd.toml`, the way every other block in this program is edited.
+    fn open_with_list(&mut self) {
+        let Some(entry) = self.panel().current().cloned() else {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        };
+        let name = entry.name_str().into_owned();
+        let mut rows: Vec<PickRow> = Vec::new();
+        for assoc in self.cfg.assocs.iter().filter(|a| a.matches(&name)) {
+            for cmd in [&assoc.open, &assoc.view, &assoc.edit] {
+                if !cmd.trim().is_empty() && !rows.iter().any(|r| r.value == *cmd) {
+                    rows.push(PickRow::plain(
+                        format!("{}  —  {cmd}", assoc.label()),
+                        cmd.clone(),
+                        false,
+                    ));
+                }
+            }
+        }
+        rows.push(PickRow::plain(
+            self.i18n.t("assoc-desktop"),
+            scmd_config::desktop_open_command().to_string(),
+            false,
+        ));
+        let title = self
+            .i18n
+            .t_args("assoc-open-with", &[("name", name.into())]);
+        self.mode = Mode::Pick(Box::new(Pick::new(
+            PickKind::OpenWith,
+            title,
+            rows,
+            self.active,
+        )));
+    }
+
     // ── synchronising two directories (SPEC 03 §10) ─────────────────────────────────────
 
     /// The dialog: which way, how deep, what counts as the same, and what to do with extras.
@@ -4604,10 +4744,11 @@ impl App {
             }
             Command::NavEnter => match self.panel().enter_target() {
                 Some(path) => self.goto(path),
-                // Not a directory: it may still be an archive, which `Enter` goes into.
+                // Not a directory: it may still be an archive, which `Enter` goes into, and
+                // otherwise it is a file to open (SPEC 06 §5).
                 None => match self.archive_target() {
                     Some(path) => self.goto(path),
-                    None => self.not_implemented("nav.enter (running files)"),
+                    None => self.open_file(),
                 },
             },
             Command::NavParent => {
@@ -4910,6 +5051,13 @@ impl App {
 
             Command::FileView => self.open_viewer(),
             Command::FileEdit => self.open_editor(),
+            // `Alt+F3` and `Alt+F4` are FAR's keys for the *other* viewer and editor: what an
+            // `[[assoc]]` block names for this kind of file, and otherwise what the
+            // environment says one reads and writes with. `F3` and `F4` stay ours, always,
+            // which is the half of this that matters — a key that sometimes opened something
+            // else would be a key nobody trusts.
+            Command::FileViewAlt => self.open_external(Which::View),
+            Command::FileEditAlt => self.open_external(Which::Edit),
             Command::FileEditNew => self.open_new_editor(),
             Command::AppMenu => self.open_menu(),
             Command::CmdRun => self.run_command_line(),
@@ -5153,6 +5301,7 @@ impl App {
                     sources: Vec::new(),
                 });
             }
+            Command::FileAssoc => self.open_with_list(),
             Command::ToolSyncDirs => self.open_sync_form(),
             Command::FileChecksum => self.open_checksum_form(),
             Command::FileChecksumVerify => self.start_verify(),
@@ -8369,6 +8518,8 @@ impl App {
             PickKind::Tunnels => return,
             // And `open_arc_commands`, which knows which archive it is about.
             PickKind::ArcCommands => return,
+            // And `open_with_list`, which knows what the cursor is on.
+            PickKind::OpenWith => return,
             PickKind::Languages => Pick::new(
                 kind,
                 self.i18n.t("menu-languages"),
@@ -8561,6 +8712,11 @@ impl App {
             return;
         };
         match pick.kind {
+            PickKind::OpenWith => {
+                // The command goes the same road a typed line does: substitutions,
+                // `{ask:…}`, conditions and all.
+                self.run_line(&row.value);
+            }
             PickKind::Plugins => {
                 if let Ok(i) = row.value.parse::<usize>() {
                     self.run_plugin_command(i);
@@ -12968,14 +13124,152 @@ mod tests {
         assert_eq!(app.panel().cwd, VPath::local("/home/mb/docs"));
     }
 
+    // ── what to run for a kind of file (SPEC 06 §5) ─────────────────────────────────────────
+
+    /// The command line a key asked to run, if it asked for one.
+    fn shell_line(app: &mut App) -> Option<String> {
+        app.take_requests().into_iter().find_map(|r| match r {
+            Request::Shell { line, .. } => Some(line),
+            _ => None,
+        })
+    }
+
     #[test]
-    fn enter_on_a_file_says_so_instead_of_doing_nothing() {
+    fn enter_runs_what_an_association_says_for_that_kind_of_file() {
         let mut app = app();
-        press(&mut app, "Down");
-        press(&mut app, "Down"); // a.txt
+        app.cfg.assocs.push(scmd_config::AssocCfg {
+            mask: "*.txt".into(),
+            open: "less {file}".into(),
+            ..scmd_config::AssocCfg::default()
+        });
+        app.panel_mut().cursor_to(2); // a.txt
         press(&mut app, "Enter");
-        assert!(app.status.contains("not implemented"), "{}", app.status);
-        assert!(app.take_requests().is_empty());
+        let line = shell_line(&mut app).expect("a command was asked for");
+        assert!(line.starts_with("less "), "{line}");
+        assert!(line.contains("a.txt"), "with the file in it: {line}");
+    }
+
+    #[test]
+    fn the_alternative_keys_use_what_an_association_names_and_f3_stays_ours() {
+        let block = || scmd_config::AssocCfg {
+            mask: "*.txt".into(),
+            view: "bat {file}".into(),
+            edit: "nano {file}".into(),
+            ..scmd_config::AssocCfg::default()
+        };
+
+        // The file under the cursor is a.txt, which the block above matches.
+        let on_a_txt = || {
+            let mut app = app();
+            app.cfg.assocs.push(block());
+            app.panel_mut().cursor_to(2);
+            app
+        };
+
+        let mut alt_f3 = on_a_txt();
+        press(&mut alt_f3, "Alt+F3");
+        let line = shell_line(&mut alt_f3).expect("the viewer command ran");
+        assert!(line.starts_with("bat "), "{line}");
+        assert!(
+            alt_f3.mode.viewer().is_none(),
+            "and ours did not open underneath it"
+        );
+
+        let mut alt_f4 = on_a_txt();
+        press(&mut alt_f4, "Alt+F4");
+        let line = shell_line(&mut alt_f4).expect("the editor command ran");
+        assert!(line.starts_with("nano "), "{line}");
+
+        // `F3` is ours and asks the association nothing, which is the point of having two keys.
+        let mut f3 = on_a_txt();
+        press(&mut f3, "F3");
+        assert!(
+            shell_line(&mut f3).is_none(),
+            "nothing else was asked to read it"
+        );
+    }
+
+    #[test]
+    fn a_file_no_block_matches_is_not_opened_with_somebody_elses_command() {
+        let mut app = app();
+        app.cfg.assocs.push(scmd_config::AssocCfg {
+            mask: "*.txt".into(),
+            open: "less {file}".into(),
+            ..scmd_config::AssocCfg::default()
+        });
+        app.panel_mut().cursor_to(3); // b.rs, which no block matches
+        press(&mut app, "Enter");
+        let line = shell_line(&mut app).expect("a command was asked for");
+        assert!(!line.starts_with("less "), "{line}");
+        assert!(line.contains("b.rs"), "{line}");
+    }
+
+    #[test]
+    fn with_nothing_to_say_otherwise_enter_hands_the_file_to_the_desktop() {
+        let mut app = app();
+        app.panel_mut().cursor_to(2);
+        press(&mut app, "Enter");
+        let line = shell_line(&mut app).expect("a command was asked for");
+        assert_eq!(
+            line.split_whitespace().next(),
+            scmd_config::desktop_open_command()
+                .split_whitespace()
+                .next(),
+            "the platform's own opener: {line}"
+        );
+        assert!(line.contains("a.txt"), "{line}");
+    }
+
+    #[test]
+    fn with_the_desktop_turned_off_enter_says_there_is_nothing_to_open_it_with() {
+        let mut app = app();
+        app.cfg.general.desktop_open = false;
+        app.panel_mut().cursor_to(2);
+        press(&mut app, "Enter");
+        assert!(app.status_error, "{}", app.status);
+        assert!(app.status.contains("a.txt"), "{}", app.status);
+        assert!(
+            shell_line(&mut app).is_none(),
+            "and nothing was run behind the message"
+        );
+    }
+
+    #[test]
+    fn open_with_lists_what_applies_here_and_runs_the_one_chosen() {
+        let mut app = app();
+        app.cfg.assocs.push(scmd_config::AssocCfg {
+            mask: "*.txt".into(),
+            name: "Pager".into(),
+            open: "less {file}".into(),
+            edit: "nano {file}".into(),
+            ..scmd_config::AssocCfg::default()
+        });
+        app.cfg.assocs.push(scmd_config::AssocCfg {
+            mask: "*.rs".into(),
+            open: "rustfmt {file}".into(),
+            ..scmd_config::AssocCfg::default()
+        });
+        app.panel_mut().cursor_to(2); // a.txt
+        app.run(Command::FileAssoc);
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("the list opens")
+        };
+        let values: Vec<&str> = pick.rows.iter().map(|r| r.value.as_str()).collect();
+        assert!(values.contains(&"less {file}"), "{values:?}");
+        assert!(values.contains(&"nano {file}"), "both commands: {values:?}");
+        assert!(
+            !values.iter().any(|v| v.starts_with("rustfmt")),
+            "and nothing from a block that does not match: {values:?}"
+        );
+        assert_eq!(
+            values.last().copied(),
+            Some(scmd_config::desktop_open_command()),
+            "with the desktop's own opener at the end: {values:?}"
+        );
+        assert!(pick.rows[0].label.contains("Pager"), "{:?}", pick.rows[0]);
+        press(&mut app, "Enter");
+        let line = shell_line(&mut app).expect("the chosen command ran");
+        assert!(line.starts_with("less "), "{line}");
     }
 
     #[test]

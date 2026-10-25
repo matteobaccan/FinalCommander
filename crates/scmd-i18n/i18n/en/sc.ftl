@@ -212,6 +212,13 @@ sync-nothing-to-do = every row says to leave things as they are
 sync-local-only = a synchronisation can only read and write on this machine
 sync-same-directory = both panels are in the same directory
 
+# What to run for a kind of file (SPEC 06 §5)
+assoc-none = nothing here says how to open { $name }
+assoc-desktop = Hand it to the desktop
+assoc-open-with = Open { $name } with
+assoc-no-pager = no association and no $PAGER says what to read this with
+assoc-no-editor = no association and no $VISUAL says what to write this with
+
 # Viewer (F3)
 key-wrap = Wrap
 key-hex = Hex

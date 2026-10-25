@@ -171,7 +171,7 @@ a binary into something readable rather than only into instructions.
 | 6.6 | Keep the original encoding, EOL, BOM and final newline on save | FAR | M1 (explicit conversion commands M2) |
 | 6.7 | Syntax highlighting (tree-sitter), bracket matching, auto-indent, tabs/spaces policy, trailing-space trim | MTN2/NEW | M3 |
 | 6.8 | Insert file name / path / current date, character by code, macros | FAR | M3 |
-| 6.9 | External editor delegation (`$EDITOR`, per-type associations) | all | M1 |
+| 6.9 | External editor delegation (`$EDITOR`, per-type associations) | all | **0.4.0**: `Alt+F4` takes what an association names, else `$VISUAL` or `$EDITOR`; `Alt+F3` the same for `$PAGER` |
 | 6.10 | LSP-lite: completion/diagnostics for the open file (optional plugin) | NEW | M4 |
 | 6.11 | **Atomic save** (`name.scmd-tmp` + rename, permissions carried over) and a save-as prompt | NEW | M1 |
 | 6.12 | **External-change detection**: a file changed on disk is never overwritten without a confirmation; reload on demand | FAR | M1 (diff-on-conflict M3) |
@@ -186,7 +186,7 @@ a binary into something readable rather than only into instructions.
 | 7.2 | Grep-like content search with result navigation and jump-to-match in the editor | NEW | M2 |
 | 7.3 | Disk usage / occupied space view (per-dir sizes, sortable, graphical bars) | KRU/TC | M2 |
 | 7.4 | User menu (`F2`) with user-defined entries, submenus, hotkeys, per-directory menus | FAR/MC | M2 |
-| 7.5 | File associations by mask: view/edit/execute/alternative commands | FAR/MC | M2 |
+| 7.5 | File associations by mask: view/edit/execute/alternative commands | FAR/MC | **`[[assoc]]` blocks with `open`, `view` and `edit`: 0.4.0** — `Enter`, `Alt+F3` and `Alt+F4`, with the desktop opener and `$PAGER`/`$VISUAL` behind them and an *Open with* list. Defaults read off the OS, a dialog to edit the blocks and the `execute`/`extract`/`preview` entries: M3 |
 | 7.6 | Command history, view/edit history, folder history — all searchable and persisted | FAR | M1 |
 | 7.7 | Macro recorder/player, keyboard macros with conditions, assignable to any key | FAR/far2m | **Recorder, player and list: 0.1.0** (`Ctrl+.`, `Ctrl+Shift+.`) — a macro is a list of commands in a readable file, assigned to the key one presses after recording, with `once` and `each-selected` play modes. Conditions and the Lua form need a macro step that can ask the application a question, which is the plugin host's job: M3 |
 | 7.8 | Scripting console (Lua) with the full command vocabulary | far2m/YAZI | M3 |

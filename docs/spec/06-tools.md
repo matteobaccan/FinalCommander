@@ -81,18 +81,46 @@ submenu = [
 
 A directory may carry its own `.scmd-menu.toml`, merged above the global menu (FAR/mc local menus).
 
-## 5. File associations (`assoc.toml`)
+## 5. File associations (`[[assoc]]`)
 
-Per mask: `view`, `edit`, `execute`, `alt_view`, `alt_edit`, `extract`, plus an optional
-`preview` entry (SPEC 05 §1.6). Macros available in commands: `{file}`, `{file.q}` (quoted),
-`{name}`, `{ext}`, `{dir}`, `{other.dir}`, `{list}` (a temp file with the selection),
-`{line}`, `{col}`. Default associations are derived from the OS where possible (xdg-mime,
-`LSCopyDefaultRoleHandler`, registry) and overridable.
+Per mask: `open` (what `Enter` runs), `view` and `edit` (what `Alt+F3` and `Alt+F4` run), and
+an optional `name` for the *Open with* list. They are `[[assoc]]` blocks in `scmd.toml` rather
+than a file of their own — this spec first said `assoc.toml`, and one file for four blocks is
+one file too many when `scmd.toml` is already open in front of the user.
+
+```toml
+[[assoc]]
+match = "*.md"
+name  = "Markdown"
+open  = "glow -p {file}"
+view  = "bat --style=plain {file}"
+edit  = "hx {file}"
+```
+
+The mask is a whole name (`Makefile`) or `*.` and an extension (`*.md`), compared without
+regard to case; the first matching block wins. The rule is `scmd_config::mask_matches`, shared
+with the decompile rules so the two cannot drift apart.
+
+Macros available in commands: `{file}` (the path, **in quotes**, because a name with a space in
+it has to be one argument) and `{file.raw}` for the bare path, `{name}`, `{stem}`, `{ext}`,
+`{dir}`, `{other.dir}`, `{other.file}`, `{left.dir}`, `{right.dir}`, `{selection}`, `{list}` (a
+temp file holding the selection), and `{ask:…}`. This spec first said `{file.q}` for the quoted
+one and the code settled the other way round — quoted by default, since that is what nine
+commands in ten want — and the code is right: a substitution that needs to be remembered to be
+safe is the wrong default.
+
+`F3` and `F4` stay the internal viewer and editor whatever a block says, which is FAR's
+arrangement and the reason the alternative keys exist; `Alt+F3` and `Alt+F4` take what a block
+names and otherwise `$PAGER` and `$VISUAL`/`$EDITOR`. With nothing to go on at all, `Enter`
+hands the file to the desktop opener (`xdg-open`, `open`, `cmd /c start`), which
+`general.desktop_open` turns off. Deriving the defaults from the OS (xdg-mime,
+`LSCopyDefaultRoleHandler`, the registry) is still to come; the desktop opener is the stand-in
+and it is the same answer for most files.
 
 ### 5b. Substitutions, and FAR's spelling of them
 
 The same substitution table serves the user menu, the associations and apply-command. Ours is
-named (`{file}`, `{file.q}`, `{list}`, `{other.dir}`); FAR's is punctuation, and it is what a
+named (`{file}`, `{file.raw}`, `{list}`, `{other.dir}`); FAR's is punctuation, and it is what a
 migrating user's `FarMenu.ini` and associations are written in, so we accept it too and document
 the mapping (`docs/04-far-inventory.md` §8):
 

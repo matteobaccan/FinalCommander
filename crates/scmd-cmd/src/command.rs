@@ -165,6 +165,12 @@ pub enum Command {
     FileDeleteCurrent,
     /// Delete outright, past the system's wastebasket, whatever the setting says.
     FileDeleteForce,
+    /// Everything that could open the file under the cursor, as a list (SPEC 06 §5).
+    FileAssoc,
+    /// Read this file with what an `[[assoc]]` block names, or with `$PAGER`.
+    FileViewAlt,
+    /// Write it with what a block names, or with `$VISUAL` / `$EDITOR`.
+    FileEditAlt,
     /// Write a list of digests for what is selected (SPEC 03 §9).
     FileChecksum,
     /// Check the files beside a list of digests against it.
@@ -395,6 +401,9 @@ impl Command {
             Command::FileMoveCurrent,
             Command::FileDeleteCurrent,
             Command::FileDeleteForce,
+            Command::FileAssoc,
+            Command::FileViewAlt,
+            Command::FileEditAlt,
             Command::FileChecksum,
             Command::FileChecksumVerify,
             Command::FileApply,
@@ -617,6 +626,9 @@ impl Command {
             Command::FileMoveCurrent => "file.move.current".into(),
             Command::FileDeleteCurrent => "file.delete.current".into(),
             Command::FileDeleteForce => "file.delete.permanent".into(),
+            Command::FileAssoc => "file.assoc".into(),
+            Command::FileViewAlt => "file.view.external".into(),
+            Command::FileEditAlt => "file.edit.external".into(),
             Command::FileChecksum => "file.checksum.create".into(),
             Command::FileChecksumVerify => "file.checksum.verify".into(),
             Command::FileApply => "file.apply".into(),
@@ -810,6 +822,9 @@ impl Command {
             ("file.move.current", _) => Command::FileMoveCurrent,
             ("file.delete.current", _) => Command::FileDeleteCurrent,
             ("file.delete.permanent", _) => Command::FileDeleteForce,
+            ("file.assoc", _) => Command::FileAssoc,
+            ("file.view.external", _) => Command::FileViewAlt,
+            ("file.edit.external", _) => Command::FileEditAlt,
             ("file.checksum.create", _) => Command::FileChecksum,
             ("file.checksum.verify", _) => Command::FileChecksumVerify,
             ("file.apply", _) => Command::FileApply,
