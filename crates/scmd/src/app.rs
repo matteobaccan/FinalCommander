@@ -258,6 +258,12 @@ pub enum Event {
         generation: u64,
         note: String,
     },
+    /// A directory a panel is looking at has changed on disk, as the filesystem itself
+    /// reported it (see the `watch` module). Debounced there: one of these stands for every
+    /// change in the burst it arrived with.
+    DirChanged {
+        panel: usize,
+    },
     /// The tunnels that are open, with their counters — the answer to `TunnelList`, and what
     /// is sent after one opens or closes.
     Tunnels {
@@ -1784,6 +1790,27 @@ impl App {
                         self.set_error(e);
                     }
                 }
+            }
+            Event::DirChanged { panel } => {
+                if panel >= self.panels.len() || !self.cfg.panel.auto_refresh {
+                    return;
+                }
+                let p = &self.panels[panel];
+                // Only a local directory is watched, so only a local directory can be told
+                // about; a panel that is reading already has the change coming. A directory
+                // that has just been removed would re-read straight into an error dialog,
+                // which is not what noticing a change is for: leave it on screen as it was.
+                if p.temp.is_some()
+                    || !p.cwd.is_local()
+                    || p.cwd.in_container()
+                    || p.loading
+                    || !p.cwd.os().is_dir()
+                {
+                    return;
+                }
+                // `set_listing` keeps the cursor on the name it was on and the selection on
+                // the names that are still there, so this moves nothing under the user.
+                self.read_panel(panel);
             }
             Event::Tunnels { items } => {
                 let opened = items.len() > self.tunnels.len();
@@ -11793,6 +11820,44 @@ mod tests {
 
     fn press(app: &mut App, key: &str) {
         app.handle_input(Input::Key(key.parse().unwrap()));
+    }
+
+    // ── the filesystem watch (SPEC 02 §1.25) ───────────────────────────────────────────────
+
+    #[test]
+    fn a_directory_that_changed_is_re_read_and_the_setting_takes_it_away() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let mut app = app();
+        app.panels[0].cwd = VPath::local(dir.path());
+        app.requests.clear();
+        app.handle_event(Event::DirChanged { panel: 0 });
+        assert!(
+            matches!(app.requests.first(), Some(Request::Read { panel: 0, .. })),
+            "a change in the directory is a re-read of that panel: {:?}",
+            app.requests
+        );
+        app.requests.clear();
+        app.cfg.panel.auto_refresh = false;
+        app.handle_event(Event::DirChanged { panel: 0 });
+        assert!(app.requests.is_empty(), "the setting is the whole switch");
+    }
+
+    #[test]
+    fn a_remote_panel_and_a_directory_that_went_away_are_left_as_they_are() {
+        let mut app = app();
+        app.panels[0].cwd = VPath::parse("sftp://mb@host:22/srv");
+        app.requests.clear();
+        app.handle_event(Event::DirChanged { panel: 0 });
+        assert!(app.requests.is_empty(), "a server sends no local events");
+        app.panels[0].cwd = VPath::local("/no/such/directory/at/all");
+        app.handle_event(Event::DirChanged { panel: 0 });
+        assert!(
+            app.requests.is_empty(),
+            "re-reading a directory that is gone would only raise an error"
+        );
+        // A panel index from a watch that outlived the panel it was armed for.
+        app.handle_event(Event::DirChanged { panel: 9 });
+        assert!(app.requests.is_empty());
     }
 
     // ── tabs (SPEC 02 §1.6) ─────────────────────────────────────────────────────────────────

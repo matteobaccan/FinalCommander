@@ -213,6 +213,9 @@ pub struct PanelCfg {
     pub scrollbar: bool,
     /// Free space on the device, in the bottom frame.
     pub free_space: bool,
+    /// Re-read a local directory when something in it changes, without `Ctrl+R`. On by
+    /// default: a panel that is showing a directory as it was ten minutes ago is lying.
+    pub auto_refresh: bool,
     /// How much of the width the left panel takes, as a percentage. `Ctrl+Left` and
     /// `Ctrl+Right` move it; 50 is the even split FAR starts from.
     pub split: u16,
@@ -238,6 +241,7 @@ impl Default for PanelCfg {
             status_line: true,
             scrollbar: true,
             free_space: true,
+            auto_refresh: true,
             split: 50,
             height_cut: 0,
             quick_search: QuickSearch::Alt,
@@ -903,6 +907,7 @@ impl Config {
             "panel.status_line" => self.panel.status_line = parse_bool(value)?,
             "panel.scrollbar" => self.panel.scrollbar = parse_bool(value)?,
             "panel.free_space" => self.panel.free_space = parse_bool(value)?,
+            "panel.auto_refresh" => self.panel.auto_refresh = parse_bool(value)?,
             "general.confirm_exit" => self.general.confirm_exit = parse_bool(value)?,
             "general.confirm_delete" => self.general.confirm_delete = parse_bool(value)?,
             "general.use_trash" => self.general.use_trash = parse_bool(value)?,

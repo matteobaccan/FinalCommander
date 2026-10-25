@@ -27,6 +27,12 @@ the whole screen, and `Ctrl+O` hides both to show the output of the commands tha
 `Ctrl+R` re-reads. `Ctrl+L` turns the other panel into an information panel, `Ctrl+Q` into a
 preview of the file under the cursor, `Ctrl+T` into a directory tree.
 
+A local panel also re-reads itself: a file that arrives from a build, a download or another
+program appears without being asked for, and the cursor stays on the name it was on. The
+setting is `Refresh the panel automatically` in `Options → Panel settings`
+(`panel.auto_refresh`); `Ctrl+R` is still there for a server, an archive, and the times a
+watch has nothing to report.
+
 `Ctrl+←` and `Ctrl+→` move the line between the two panels. `Ctrl+↑` brings the panels' bottom
 edge up — they get shorter, and the rows they give up show the output of the last command,
 which is how you watch a build go by without leaving the panels; `Ctrl+↓` gives the rows back.

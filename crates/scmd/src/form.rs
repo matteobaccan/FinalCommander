@@ -293,6 +293,11 @@ impl Form {
                     t("opt-free-space"),
                     cfg.panel.free_space,
                 ),
+                Field::toggle(
+                    "panel.auto_refresh",
+                    t("opt-auto-refresh"),
+                    cfg.panel.auto_refresh,
+                ),
                 Field::Separator,
                 choice(
                     "panel.view",

@@ -33,6 +33,10 @@ scmd-view = { workspace = true }
 tokio = { version = "1.53.3", features = ["rt-multi-thread", "fs", "sync", "time", "macros"] }
 unicode-width = "0.2.2"
 clap_mangen = "0.3"
+# The filesystem watch behind `panel.auto_refresh` (SPEC 02 §1.25): inotify on Linux,
+# FSEvents on macOS, `ReadDirectoryChangesW` on Windows, which is three platform APIs we
+# are not going to write three times. CC0-1.0, no runtime of its own.
+notify = { version = "8.2.1", default-features = false, features = ["macos_fsevent"] }
 
 # Free space in the panel frame needs `statvfs`, which `std` does not expose. Unix only:
 # Windows wants `GetDiskFreeSpaceEx` and gets its own answer when it gets its own crate.

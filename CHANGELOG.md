@@ -6,6 +6,18 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **A panel notices what it did not do itself.** A local panel watches the directory it is
+  looking at — `inotify` on Linux, FSEvents on macOS, `ReadDirectoryChangesW` on Windows — and
+  re-reads it when something lands there: a build that wrote a file, a download that finished,
+  another program that moved one out. Until now the directory stayed as it was read and
+  `Ctrl+R` was the only way to find out. The watch is debounced, so a `git checkout` that
+  touches a thousand files is one re-read and not a thousand, and the re-read keeps the cursor
+  on the name it was on and the selection on the names that are still there. One watch per
+  panel and local paths only: a server reports nothing locally, and an archive is a file.
+  `panel.auto_refresh` turns it off, and `Options → Panel settings` has the box.
+
 ### Fixed
 
 - **The attributes dialog was taking bits away on Windows.** `Hidden`, `System` and `Archive`

@@ -433,6 +433,7 @@ opt-column-titles = Show the column titles
 opt-status-line = Show the status line
 opt-scrollbar = Show the scrollbar
 opt-free-space = Show free space
+opt-auto-refresh = Refresh the panel automatically
 opt-dirs-first = Folders first
 opt-selected-first = Selected files first
 opt-reverse = Reverse order

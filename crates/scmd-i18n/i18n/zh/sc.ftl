@@ -425,6 +425,7 @@ opt-column-titles = 显示列标题
 opt-status-line = 显示状态行
 opt-scrollbar = 显示滚动条
 opt-free-space = 显示剩余空间
+opt-auto-refresh = 自动刷新面板
 opt-dirs-first = 文件夹优先
 opt-selected-first = 已选文件优先
 opt-reverse = 反向顺序

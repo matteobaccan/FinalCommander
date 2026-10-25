@@ -47,8 +47,14 @@ pub struct Listing {
    second pass and merged by `EntryId`, re-rendering only the affected rows.
 5. Directory sizes are never computed implicitly; `file.dirsize` (`F3`/`Space` on a dir) starts
    a cancellable recursive scan whose partial result is shown live.
-6. A `notify` watcher on the cwd triggers a debounced (200 ms) incremental re-read: only the
-   changed names are re-stat'ed, cursor and selection are preserved.
+6. A `notify` watcher on the cwd triggers a debounced (300 ms) re-read of the directory, so a
+   file that arrives from somewhere else appears without `Ctrl+R`. One watch per panel, local
+   paths only — a server reports nothing locally and an archive is a file — and the whole
+   directory is re-read rather than the changed names re-stat'ed: a local listing is cheap and
+   a partial update is a cache to get wrong. `set_listing` keeps the cursor on the name it was
+   on and the selection on the names that are still there, so nothing moves under the user.
+   `panel.auto_refresh` turns it off; a directory that has just been deleted is left on screen
+   as it was rather than re-read into an error.
 
 Failure modes: permission denied → show the directory with an error banner and whatever was
 readable; path vanished → walk up to the nearest existing ancestor; stalled provider → the

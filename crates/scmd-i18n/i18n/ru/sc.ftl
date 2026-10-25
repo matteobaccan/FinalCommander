@@ -425,6 +425,7 @@ opt-column-titles = Показывать заголовки колонок
 opt-status-line = Показывать строку состояния
 opt-scrollbar = Показывать полосу прокрутки
 opt-free-space = Показывать свободное место
+opt-auto-refresh = Обновлять панель автоматически
 opt-dirs-first = Папки первыми
 opt-selected-first = Отмеченные файлы первыми
 opt-reverse = Обратный порядок

@@ -425,6 +425,7 @@ opt-column-titles = Afficher les titres de colonnes
 opt-status-line = Afficher la ligne d'état
 opt-scrollbar = Afficher la barre de défilement
 opt-free-space = Afficher l'espace libre
+opt-auto-refresh = Actualiser le panneau automatiquement
 opt-dirs-first = Dossiers d'abord
 opt-selected-first = Fichiers sélectionnés d'abord
 opt-reverse = Ordre inverse

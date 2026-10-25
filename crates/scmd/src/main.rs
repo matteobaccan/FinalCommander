@@ -15,6 +15,7 @@ mod render;
 mod tabs;
 mod termkeys;
 mod tree;
+mod watch;
 
 use std::path::PathBuf;
 use std::sync::mpsc;
@@ -689,6 +690,10 @@ fn interactive(mut app: App) -> Result<()> {
     }
     let (tx, rx) = mpsc::channel::<Event>();
 
+    // The filesystem watch. It reports on the same channel the listings arrive on, so a
+    // directory that changes under us needs no timer in the loop (see `watch`).
+    let watch = watch::Watch::start(tx.clone());
+
     // Terminal input lives on its own thread: `read` blocks.
     let input_tx = tx.clone();
     std::thread::spawn(move || {
@@ -747,6 +752,13 @@ fn interactive(mut app: App) -> Result<()> {
                     path,
                     generation,
                 } => {
+                    // Watch what we are about to read, if it is a directory a watch can see:
+                    // a remote one has no local events, and one inside an archive is a file.
+                    watch.set(
+                        panel,
+                        (app.cfg.panel.auto_refresh && path.is_local() && !path.in_container())
+                            .then(|| path.os().to_path_buf()),
+                    );
                     if let Some(old) = cancels[panel].replace(CancelToken::new()) {
                         old.cancel();
                     }
@@ -1028,6 +1040,8 @@ fn interactive(mut app: App) -> Result<()> {
                     title,
                     paths,
                 } => {
+                    // A list of results is not a directory: there is nothing to watch.
+                    watch.set(panel, None);
                     let tx = tx.clone();
                     let vfs = vfs.clone();
                     runtime.spawn(async move {
