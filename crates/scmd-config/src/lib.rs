@@ -758,11 +758,33 @@ mod tests {
             folder_history: vec!["/tmp".into()],
             left: "/home".into(),
             right: "/tmp".into(),
+            left_tabs: vec![
+                TabState {
+                    path: "/home".into(),
+                    name: String::new(),
+                    locked: false,
+                },
+                TabState {
+                    path: "/etc".into(),
+                    name: "config".into(),
+                    locked: true,
+                },
+            ],
+            right_tabs: Vec::new(),
+            left_tab: 0,
+            right_tab: 0,
         };
         state.save(&paths).unwrap();
         let (back, problem) = State::load(&paths);
         assert!(problem.is_none());
         assert_eq!(back, state);
+
+        // A file from a version that had no tabs: the row is simply empty.
+        std::fs::write(&paths.state_file, "left = \"/srv\"\nright = \"/tmp\"\n").unwrap();
+        let (back, problem) = State::load(&paths);
+        assert!(problem.is_none(), "{problem:?}");
+        assert_eq!(back.left, "/srv");
+        assert!(back.left_tabs.is_empty());
 
         std::fs::write(&paths.state_file, "this is not toml {{{").unwrap();
         let (back, problem) = State::load(&paths);
@@ -933,6 +955,29 @@ pub struct State {
     pub left: String,
     #[serde(default)]
     pub right: String,
+    /// The tabs each side had, in the order they were drawn, and which of them was on
+    /// screen. Empty is a session that ran before tabs existed, or one that never opened a
+    /// second tab: one tab is then built from `left` / `right` above, which is why those two
+    /// are still written.
+    #[serde(default)]
+    pub left_tabs: Vec<TabState>,
+    #[serde(default)]
+    pub right_tabs: Vec<TabState>,
+    #[serde(default)]
+    pub left_tab: usize,
+    #[serde(default)]
+    pub right_tab: usize,
+}
+
+/// One tab of one side, as the state file holds it.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TabState {
+    pub path: String,
+    /// What it was called, or empty for a tab that goes by its directory.
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub locked: bool,
 }
 
 impl State {

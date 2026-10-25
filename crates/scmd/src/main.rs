@@ -11,6 +11,7 @@ mod help;
 mod menu;
 mod panel;
 mod render;
+mod tabs;
 mod termkeys;
 mod tree;
 
@@ -326,6 +327,20 @@ moves between the panels and
 .B Insert
 selects.
 .PP
+A panel holds more than one directory at a time:
+.B Ctrl+Alt+T
+opens another tab,
+.B Ctrl+Alt+N
+and
+.B Ctrl+Alt+P
+step along the row,
+.B Ctrl+Alt+W
+closes one,
+.B Ctrl+Alt+M
+hands it to the other panel and
+.B Ctrl+Alt+K
+locks it to its directory.
+.PP
 Those are the defaults of the
 .B far
 profile; the
@@ -492,6 +507,8 @@ fn run(cli: Cli) -> Result<()> {
         plugin_commands,
     });
     app.cmd.load_history(state.command_history);
+    app.restore_tabs(0, &state.left_tabs, state.left_tab);
+    app.restore_tabs(1, &state.right_tabs, state.right_tab);
     if !warnings.is_empty() {
         // Startup problems are shown once, as a dialog: they are easy to miss in a status line.
         app.show_message("Startup warnings", warnings.clone());
@@ -1123,6 +1140,10 @@ fn interactive(mut app: App) -> Result<()> {
             .collect(),
         left: app.panels[0].cwd.to_string(),
         right: app.panels[1].cwd.to_string(),
+        left_tabs: app.tabs[0].tabs_state(&app.panels[0]),
+        right_tabs: app.tabs[1].tabs_state(&app.panels[1]),
+        left_tab: app.tabs[0].current(),
+        right_tab: app.tabs[1].current(),
     };
     if let Err(e) = state.save(&app.paths) {
         eprintln!("scmd: cannot write {}: {e}", app.paths.state_file.display());

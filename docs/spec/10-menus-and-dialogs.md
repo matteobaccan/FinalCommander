@@ -42,15 +42,18 @@ Keys inside the bar: `←`/`→` move between menus, `↑`/`↓` move over the e
 separators, `Home`/`End` jump to the first and last entry, a letter picks the first entry whose
 (translated) label starts with it, `Enter` chooses, `Esc`/`F9`/`F10` close.
 
-A `√` marks the entry that describes the state the panel is in now — the current view mode, and
-`Hidden and system files` when they are shown.
+A `√` marks the entry that describes the state the panel is in now — the current view mode,
+`Hidden and system files` when they are shown, and `Lock the tab to its directory` when it is.
 
 ### 2.1 Left / Right
 
 | Entry | Does | State |
 | --- | --- | --- |
 | Brief / Full / Detailed / Wide | `panel.view.set(...)` | `√` on the current view |
-| Info panel · Quick view · Tree panel | — (backlog) | |
+| Info panel · Quick view · Tree panel | `panel.info` · `panel.quickview` · `panel.tree` | |
+| New tab · Close tab · Next · Previous · Move to the other panel | `panel.tab.new|close|next|prev|move` | |
+| Lock the tab to its directory | `panel.tab.lock` | `√` when locked |
+| Name this tab | `panel.tab.name` | |
 | Sort modes | opens the sort list (§4.5) | |
 | Hidden and system files | `panel.hidden.toggle` | `√` when shown |
 | File filter | `panel.filter.quick` | |

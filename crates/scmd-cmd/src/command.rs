@@ -59,6 +59,19 @@ pub enum Command {
     PanelSwap,
     PanelReread,
     PanelHiddenToggle,
+    /// A new tab on this side, on the directory under the cursor if the cursor is on one and
+    /// otherwise on the one this tab is already showing (SPEC 02 §1.6).
+    PanelTabNew,
+    /// Close this tab. A side always has one, so the last one stays.
+    PanelTabClose,
+    PanelTabNext,
+    PanelTabPrev,
+    /// Hand this tab to the other side.
+    PanelTabMove,
+    /// Keep this tab on its directory, or let it move again.
+    PanelTabLock,
+    /// Give this tab a name, so the row says what it is for rather than where it is.
+    PanelTabName,
     PanelViewSet(ViewMode),
     /// Turn the quick view on or off. The panel it names shows the viewer for whatever the
     /// *other* panel's cursor is on (SPEC 02 §7).
@@ -305,6 +318,13 @@ impl Command {
             Command::PanelSwap,
             Command::PanelReread,
             Command::PanelHiddenToggle,
+            Command::PanelTabNew,
+            Command::PanelTabClose,
+            Command::PanelTabNext,
+            Command::PanelTabPrev,
+            Command::PanelTabMove,
+            Command::PanelTabLock,
+            Command::PanelTabName,
             Command::PanelSortReverse,
             Command::PanelSplit(-1),
             Command::PanelSplit(1),
@@ -507,6 +527,13 @@ impl Command {
             Command::PanelSwap => "panel.swap".into(),
             Command::PanelReread => "panel.reread".into(),
             Command::PanelHiddenToggle => "panel.hidden.toggle".into(),
+            Command::PanelTabNew => "panel.tab.new".into(),
+            Command::PanelTabClose => "panel.tab.close".into(),
+            Command::PanelTabNext => "panel.tab.next".into(),
+            Command::PanelTabPrev => "panel.tab.prev".into(),
+            Command::PanelTabMove => "panel.tab.move".into(),
+            Command::PanelTabLock => "panel.tab.lock".into(),
+            Command::PanelTabName => "panel.tab.name".into(),
             Command::PanelViewSet(v) => format!("panel.view.set({})", v.as_str()),
             Command::PanelSortBy(k) => format!("panel.sort.by({})", k.as_str()),
             Command::PanelSortReverse => "panel.sort.reverse".into(),
@@ -689,6 +716,13 @@ impl Command {
             ("panel.swap", _) => Command::PanelSwap,
             ("panel.reread", _) => Command::PanelReread,
             ("panel.hidden.toggle", _) => Command::PanelHiddenToggle,
+            ("panel.tab.new", _) => Command::PanelTabNew,
+            ("panel.tab.close", _) => Command::PanelTabClose,
+            ("panel.tab.next", _) => Command::PanelTabNext,
+            ("panel.tab.prev", _) => Command::PanelTabPrev,
+            ("panel.tab.move", _) => Command::PanelTabMove,
+            ("panel.tab.lock", _) => Command::PanelTabLock,
+            ("panel.tab.name", _) => Command::PanelTabName,
             ("panel.view.set", Some(a)) => Command::PanelViewSet(ViewMode::parse(a)?),
             ("panel.sort.by", Some(a)) => Command::PanelSortBy(parse_sort_key(a)?),
             ("panel.sort.reverse", _) => Command::PanelSortReverse,

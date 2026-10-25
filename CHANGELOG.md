@@ -8,6 +8,35 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **Tabs per panel.** A panel can hold more than one directory at a time: `Ctrl+Alt+T` opens
+  another tab — on the directory under the cursor if the cursor is on one, and otherwise a
+  duplicate of this one — `Ctrl+Alt+N` and `Ctrl+Alt+P` step along the row, `Ctrl+Alt+W` closes
+  one, and `Ctrl+Alt+M` hands one to the other panel, which is a move rather than a copy. The
+  Left and Right menus hold all of it, and *Name this tab*.
+
+  A tab **is** a panel, and that is the whole design: everything a tab has to remember is
+  already what a panel remembers, so a side's tabs are a list of panels with one of them on
+  screen — and the one on screen is deliberately not in the list, because a parked copy of it
+  beside the live one would be a second answer to where the panel is. Switching a tab is a
+  move rather than a copy, whatever the directory holds.
+
+  `Ctrl+Alt+K` locks a tab to its directory. A locked tab refuses to move whichever way it is
+  asked — `Enter`, the history, the tree driving it from the other side, a plugin — and says
+  why rather than doing nothing; the one thing that takes the lock off is the connection under
+  it closing, because a tab cannot keep a promise about a directory it can no longer reach.
+
+  The row is drawn only by a panel that has more than one tab: a bar that was always there
+  would cost every panel a row of files to say that it has one tab. Tabs are kept between
+  sessions, with their names and their locks; the directory the shell was in still wins for
+  the tab one lands on, unless that tab is locked.
+
+  The keys are the `Ctrl+Alt` row and not FAR's, because FAR has no tabs and the two keys this
+  once wanted are taken: `Ctrl+T` is the tree panel and `Ctrl+Tab` steps between the open
+  screens. `Ctrl+Alt` with an arrow is avoided because most desktops switch workspaces with
+  it, and `Ctrl+Alt+L` because most of them lock the screen.
+
+  Still to come: reordering a tab within its row, and a list of them to pick from.
+
 - **A real terminal** (`Ctrl+Alt+E`). The command line under the panels runs a command and
   keeps what it printed; this runs `vim`, `top` and `ssh`. It is a pseudo-terminal — `openpty`
   on Unix, ConPTY on Windows — so the program asks the system what it is talking to and gets

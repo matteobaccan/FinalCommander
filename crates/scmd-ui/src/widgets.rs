@@ -1080,6 +1080,65 @@ mod tests {
         buf.to_text()
     }
 
+    fn tab_row(width: u16, labels: &[&str], current: usize, locked: &[bool]) -> String {
+        let theme = Theme::default_theme();
+        let mut buf = Buffer::new(width, 1);
+        let labels: Vec<String> = labels.iter().map(|s| s.to_string()).collect();
+        draw_tabs(
+            &mut buf,
+            &theme,
+            &TabRow {
+                area: Rect::new(0, 0, width, 1),
+                labels: &labels,
+                current,
+                locked,
+                focused: true,
+            },
+        );
+        buf.to_text().trim_end().to_string()
+    }
+
+    #[test]
+    fn the_tab_row_is_the_names_one_after_another() {
+        let out = tab_row(40, &["src", "docs", "target"], 1, &[false; 3]);
+        assert_eq!(out, " src  docs  target");
+    }
+
+    #[test]
+    fn a_locked_tab_is_marked() {
+        let out = tab_row(40, &["src", "docs"], 0, &[false, true]);
+        assert_eq!(out, " src  \u{25aa}docs");
+    }
+
+    #[test]
+    fn a_name_longer_than_the_room_for_one_is_cut() {
+        let out = tab_row(
+            40,
+            &["a-directory-with-a-very-long-name", "docs"],
+            0,
+            &[false; 2],
+        );
+        assert!(out.contains('\u{2026}'), "{out}");
+        assert!(out.ends_with(" docs"), "the second tab still fits: {out}");
+    }
+
+    #[test]
+    fn the_row_scrolls_to_the_tab_that_is_on_screen() {
+        let labels = ["one", "two", "three", "four", "five", "six"];
+        // Narrow enough that they cannot all be drawn.
+        let out = tab_row(20, &labels, 5, &[false; 6]);
+        assert!(
+            out.contains("six"),
+            "the current tab is always whole: {out}"
+        );
+        assert!(out.starts_with('\u{2039}'), "and the row says so: {out}");
+        assert!(!out.contains("one"), "{out}");
+        // On the first tab the row starts at the left and says there is more to the right.
+        let out = tab_row(20, &labels, 0, &[false; 6]);
+        assert!(out.starts_with(" one "), "{out}");
+        assert!(out.ends_with('\u{203a}'), "{out}");
+    }
+
     #[test]
     fn full_view_shows_names_sizes_and_times() {
         let out = render(ViewMode::Full, 0, &Selection::default());
@@ -1548,6 +1607,95 @@ pub fn draw_menu_bar(
         x += width + 1;
     }
     starts
+}
+
+/// What a side's tab row is drawn from.
+pub struct TabRow<'a> {
+    pub area: Rect,
+    /// What each tab is called, left to right.
+    pub labels: &'a [String],
+    /// Which of them is on screen.
+    pub current: usize,
+    /// Which of them refuse to leave their directory.
+    pub locked: &'a [bool],
+    pub focused: bool,
+}
+
+/// The row of tabs above a panel.
+///
+/// It is drawn only by a side that has more than one tab, so the width is never generous:
+/// the current tab is kept whole and the row is scrolled to it, with the guillemets saying
+/// that there are more tabs off either end. A name longer than `NAME_COLS` is cut, because
+/// one tab called after a deeply nested directory must not take the row from the other six.
+pub fn draw_tabs(buf: &mut Buffer, theme: &Theme, row: &TabRow) {
+    const NAME_COLS: usize = 18;
+    let area = row.area;
+    if area.w == 0 || area.h == 0 || row.labels.is_empty() {
+        return;
+    }
+    let bar = Style::new(theme.color("panel.tab.fg"), theme.color("panel.tab.bg"));
+    let picked = if row.focused {
+        Style::new(
+            theme.color("panel.tab.active.fg"),
+            theme.color("panel.tab.active.bg"),
+        )
+    } else {
+        Style::new(
+            theme.color("panel.header.inactive.fg"),
+            theme.color("panel.tab.bg"),
+        )
+    };
+    buf.fill(area, ' ', bar);
+
+    let cells: Vec<String> = row
+        .labels
+        .iter()
+        .enumerate()
+        .map(|(i, label)| {
+            let lock = if row.locked.get(i).copied().unwrap_or(false) {
+                "\u{25aa}"
+            } else {
+                ""
+            };
+            format!(" {lock}{} ", truncate_cols(label, NAME_COLS))
+        })
+        .collect();
+    let widths: Vec<usize> = cells.iter().map(|c| c.width()).collect();
+    let room = area.w as usize;
+    let current = row.current.min(cells.len() - 1);
+
+    // Where the row starts. Everything fits until it does not, and then the current tab is
+    // what has to be whole: walk left from it while there is still room, keeping a column
+    // for the mark that says the row goes on.
+    let mut first = 0;
+    if widths.iter().sum::<usize>() > room {
+        let mut used = widths[current] + 1;
+        first = current;
+        while first > 0 && used + widths[first - 1] <= room {
+            first -= 1;
+            used += widths[first];
+        }
+    }
+
+    let mut x = area.x + u16::from(first > 0);
+    let mut last = first;
+    for (i, cell) in cells.iter().enumerate().skip(first) {
+        let w = widths[i] as u16;
+        // The last column is left for the closing mark unless this is the last tab there is.
+        let edge = area.right() - u16::from(i + 1 < cells.len());
+        if x + w > edge {
+            break;
+        }
+        buf.put_str(x, area.y, cell, if i == current { picked } else { bar }, w);
+        x += w;
+        last = i;
+    }
+    if first > 0 {
+        buf.put_str(area.x, area.y, "\u{2039}", bar, 1);
+    }
+    if last + 1 < cells.len() {
+        buf.put_str(area.right() - 1, area.y, "\u{203a}", bar, 1);
+    }
 }
 
 /// A drop-down menu under `at`, growing down. Returns the area it covers.

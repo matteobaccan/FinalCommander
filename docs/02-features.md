@@ -20,7 +20,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 1.3 | Resizable split, saved per session; restore defaults | FAR | M2 |
 | 1.4 | View modes: brief (multi-column names), medium, full (size/date), wide, detailed, owners, links, custom columns | FAR | M1 brief+full, M2 rest |
 | 1.5 | User-definable column sets (which fields, widths, alignment, formats) | FAR/TC | M3 |
-| 1.6 | Tabs per panel, named, persisted, lockable, duplicate/move-to-other-side | TC/MTN2 | M2 |
+| 1.6 | ~~Tabs per panel, named, persisted, lockable, duplicate/move-to-other-side~~ | TC/MTN2 | **shipped** (reordering within the row still owed) |
 | 1.7 | Quick view panel (preview of the file under the cursor in the other panel) | FAR/MC | M2 |
 | 1.8 | Info panel (drive/fs info, disk usage, selected size, archive/VFS metadata) | FAR/MC | M2 |
 | 1.9 | Tree panel (directory tree in a panel, synced with the other side) | FAR/MC | M2 |

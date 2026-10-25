@@ -78,6 +78,8 @@ pub enum Mark {
     None,
     View(ViewMode),
     Hidden,
+    /// This tab stays on its directory.
+    TabLocked,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -176,6 +178,39 @@ fn panel_menu(title: &'static str, side: usize) -> Menu {
                 "Ctrl+T",
                 Action::Run(Command::PanelTree(Side::Active)),
             ),
+            Entry::Separator,
+            item(
+                "menu-tab-new",
+                "Ctrl+Alt+T",
+                Action::Run(Command::PanelTabNew),
+            ),
+            item(
+                "menu-tab-close",
+                "Ctrl+Alt+W",
+                Action::Run(Command::PanelTabClose),
+            ),
+            item(
+                "menu-tab-next",
+                "Ctrl+Alt+N",
+                Action::Run(Command::PanelTabNext),
+            ),
+            item(
+                "menu-tab-prev",
+                "Ctrl+Alt+P",
+                Action::Run(Command::PanelTabPrev),
+            ),
+            item(
+                "menu-tab-move",
+                "Ctrl+Alt+M",
+                Action::Run(Command::PanelTabMove),
+            ),
+            marked(
+                "menu-tab-lock",
+                "Ctrl+Alt+K",
+                Action::Run(Command::PanelTabLock),
+                Mark::TabLocked,
+            ),
+            item("menu-tab-name", "", Action::Run(Command::PanelTabName)),
             Entry::Separator,
             item(
                 "menu-sort-modes",

@@ -36,6 +36,13 @@ impl Command {
             Command::PanelSwap => "swap the panels over",
             Command::PanelReread => "read this directory again",
             Command::PanelHiddenToggle => "show or hide the hidden files",
+            Command::PanelTabNew => "another tab on this side",
+            Command::PanelTabClose => "close this tab",
+            Command::PanelTabNext => "the next tab",
+            Command::PanelTabPrev => "the previous tab",
+            Command::PanelTabMove => "hand this tab to the other side",
+            Command::PanelTabLock => "keep this tab on its directory, or let it move again",
+            Command::PanelTabName => "give this tab a name",
             Command::PanelViewSet(mode) => match mode {
                 ViewMode::Brief => "names only, three columns",
                 ViewMode::Medium => "names only, two columns",

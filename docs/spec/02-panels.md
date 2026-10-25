@@ -206,15 +206,58 @@ two thousand rows, so `*` at the root of a disk cannot hang the panel.
 change-directory dialog moved to `Ctrl+Shift+L`, which it can afford now that `cd` works on
 the command line.
 
-## 8. Tabs
+## 8. Tabs (shipped)
 
-Per panel, each tab holds cwd, view, sort, filter, selection, cursor. Lockable (path reverts
-on close), nameable, reorderable, movable to the other side, duplicable. Persisted in
-`session.toml`. Default keys: `Alt+1..9` jump (see `03-keymap.md` §9 for the conflict notes).
+A tab **is** a panel. There is no tab object holding a panel beside a name and a lock,
+because everything a tab has to remember — where it is, its view and sort, its filter, what
+is selected, where the cursor is, where it has been, what it is called, whether it is
+locked — is already what a panel remembers. So one side's tabs are a list of panels with one
+of them on screen, and `crates/scmd/src/tabs.rs` is that list.
+
+The one on screen is **not** in the list: it is `App::panels[side]`, and its slot in the row
+is empty. A parked copy of it beside the live one would be a second answer to where the panel
+is, and the two would drift apart within a keystroke. Switching is therefore a move out of
+the slot and the live panel's move into it — no copy, whatever the directory holds.
+
+What the keys do:
+
+| | |
+|---|---|
+| `Ctrl+Alt+T` | another tab, on the directory under the cursor if the cursor is on one and otherwise on this one — a duplicate |
+| `Ctrl+Alt+W` | close this tab; a side always has one, so the last one stays and says so |
+| `Ctrl+Alt+N` / `Ctrl+Alt+P` | the next tab, the previous one; the row is a ring |
+| `Ctrl+Alt+M` | hand this tab to the other side, which is a move: it leaves this one |
+| `Ctrl+Alt+K` | lock this tab to its directory, or let it move again |
+| Left/Right menu | the same six, and *Name this tab* |
+
+A **locked** tab refuses to change directory, whichever way it is asked — `Enter`, the
+history, the tree driving it from the other side, a plugin, a connection opening on it — and
+says why rather than doing nothing, which would read as a key that had stopped working. The
+one case that overrides it is a connection closing under the tab: a tab locked to a directory
+on that connection cannot keep its promise, so the lock comes off rather than the panel
+staying on a directory that is no longer reachable.
+
+The row is drawn above the panel, in its own row, and **only by a side that has more than one
+tab**: a bar that was always there would cost every panel a row of files to say that it has
+one tab. The current tab is drawn as the path is — inverted, and in the header's inactive
+colour on the panel without the focus — a locked one is marked, and the row scrolls to keep
+the current tab whole, with guillemets where it goes on.
+
+Tabs are **persisted** in the state file (`scmd-state.toml`), with their names and their
+locks. Two rules on the way back in, both about what the user asked for most recently: the
+directory this session was started in wins for the tab that is on screen, because that is
+what running a program in a directory means — unless that tab is locked, since staying put is
+the whole of what a lock promises. And a tab that was on a server or in a bucket is not
+restored at all: the connection it needs is not open, and a row of tabs that each say "not
+connected" is worse than a row that is not there.
 
 Tabs are not a FAR feature, and both keys this once asked for are FAR's own: `Ctrl+T` is the
-tree panel as of 0.0.6, and `Ctrl+Tab` is the screens of §10 as of 0.1.0. Tabs will need keys
-of their own when they land; `docs/BACKLOG.md` holds the question.
+tree panel as of 0.0.6, and `Ctrl+Tab` is the screens of §10 as of 0.1.0. Hence the `Ctrl+Alt`
+row, which is also where the terminal lives — and not `Ctrl+Alt` with an arrow, which most
+desktops take for themselves before a terminal ever sees it, nor `Ctrl+Alt+L`, which locks
+the screen on most of them.
+
+Still owed: reordering a tab within its row, and a list of them to pick from.
 
 ## 10. Screens (`F12`)
 

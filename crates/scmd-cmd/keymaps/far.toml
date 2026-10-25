@@ -263,6 +263,41 @@ cmd = "panel.quickview"
 keys = ["Ctrl+T"]
 cmd = "panel.tree"
 
+# Tabs (SPEC 02 §1.6). FAR has none, so there is no key of FAR's to keep: Total Commander's
+# `Ctrl+T` is the tree panel here, and `Ctrl+Tab` steps between the open screens. That
+# leaves the `Ctrl+Alt` row, which is also where the terminal lives — and not `Ctrl+Alt` with
+# an arrow, which most desktops take for themselves before a terminal ever sees it.
+[[bind]]
+keys = ["Ctrl+Alt+T"]
+scope = "panel"
+cmd = "panel.tab.new"
+
+[[bind]]
+keys = ["Ctrl+Alt+W"]
+scope = "panel"
+cmd = "panel.tab.close"
+
+[[bind]]
+keys = ["Ctrl+Alt+N"]
+scope = "panel"
+cmd = "panel.tab.next"
+
+[[bind]]
+keys = ["Ctrl+Alt+P"]
+scope = "panel"
+cmd = "panel.tab.prev"
+
+[[bind]]
+keys = ["Ctrl+Alt+M"]
+scope = "panel"
+cmd = "panel.tab.move"
+
+# `Ctrl+Alt+K`, and not `L` for lock: that one locks the screen on most desktops.
+[[bind]]
+keys = ["Ctrl+Alt+K"]
+scope = "panel"
+cmd = "panel.tab.lock"
+
 # In a multi-column view these move by a column, as they do in FAR; in the tree panel they
 # expand and collapse.
 [[bind]]

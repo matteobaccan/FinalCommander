@@ -170,6 +170,9 @@ every key on the screen you are looking at does.
   `Ctrl+H` hidden files, `Alt+I` live filter, quick search by typing, `Space` for a recursive
   directory size, `Ctrl+=` to sync the other panel, `Ctrl` with the arrows to reshape the two
   panels, and the panels FAR has: quick view (`Ctrl+Q`), info (`Ctrl+L`), tree (`Ctrl+T`).
+  A panel holds more than one directory at a time: `Ctrl+Alt+T` opens a tab, `Ctrl+Alt+N` and
+  `Ctrl+Alt+P` step along the row, `Ctrl+Alt+M` hands one to the other panel, `Ctrl+Alt+K`
+  locks one to its directory, and the row comes back with its names between sessions.
 - **Viewer** (`F3`): text, dump and hex on files of any size — position is a byte offset, so
   opening a 40 GB log costs one read and `End` costs one seek. Encoding detected (UTF-8,
   UTF-16 with or without a BOM, CP1252, CP437) and switchable with `F8`; `F2` cycles

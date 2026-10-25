@@ -102,6 +102,13 @@ const DEFAULTS: &[(&str, Color)] = &[
     // The active panel's path is drawn inverted, as FAR does it.
     ("panel.title.active.fg", Color::Ansi(0)),
     ("panel.title.active.bg", Color::Ansi(6)),
+    // The tab row, which a side draws only when it has more than one tab. The tab that is
+    // on screen is drawn as the path is: inverted, and in the header's inactive colour on
+    // the panel that does not have the focus.
+    ("panel.tab.fg", Color::Default),
+    ("panel.tab.bg", Color::Default),
+    ("panel.tab.active.fg", Color::Ansi(0)),
+    ("panel.tab.active.bg", Color::Ansi(6)),
     // Column titles, the sort-mode letter and the filter mark.
     ("panel.column.fg", Color::Ansi(11)),
     ("panel.scrollbar.fg", Color::Default),

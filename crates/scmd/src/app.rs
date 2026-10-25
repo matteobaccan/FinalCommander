@@ -395,6 +395,8 @@ pub enum PromptKind {
     EditorSaveAs,
     /// Name for F7.
     Mkdir,
+    /// What to call this tab. An empty answer takes the name off again.
+    TabName,
     /// `Ctrl+G`: one command line, run once per selected file (SPEC 06 §5).
     ApplyCommand,
     /// Where a tunnel goes: `[local:]host:port`, or a port on its own.
@@ -942,6 +944,10 @@ pub struct App {
     pub themes: ThemeSet,
     pub theme: Theme,
     pub panels: [Panel; 2],
+    /// Each side's tabs (SPEC 02 §1.6). The tab that is on screen is `panels[side]`; the
+    /// others are parked in the row, so nothing that works on a panel has to know that tabs
+    /// exist. A side always has at least one.
+    pub tabs: [crate::tabs::Row; 2],
     pub active: usize,
     pub mode: Mode,
     pub status: String,
@@ -1142,6 +1148,7 @@ impl App {
                 Panel::new(left, sort, view, hidden),
                 Panel::new(right, sort, view, hidden),
             ],
+            tabs: [crate::tabs::Row::one(), crate::tabs::Row::one()],
             active: 0,
             mode: Mode::Normal,
             status: String::new(),
@@ -1394,6 +1401,10 @@ impl App {
                 // A panel left on a closed connection goes home instead of showing a corpse.
                 for panel in 0..2 {
                     if self.panels[panel].cwd.authority() == Some(authority.as_str()) {
+                        // A tab locked to a directory on that connection cannot keep its
+                        // promise: the lock comes off rather than the panel staying on a
+                        // directory that is no longer reachable.
+                        self.panels[panel].locked = false;
                         self.panels[panel].go(local_home(), true);
                         self.read_panel(panel);
                     }
@@ -2755,6 +2766,10 @@ impl App {
                 let target = self.resolve_path(raw);
                 self.start_job(JobSpec::new(JobKind::Mkdir, vec![], Some(target)));
             }
+            PromptKind::TabName => {
+                let raw = prompt.text.trim().to_string();
+                self.panel_mut().name = (!raw.is_empty()).then_some(raw);
+            }
             PromptKind::ViewerSearch => {
                 let query = prompt.text.trim().to_string();
                 self.restore_viewer();
@@ -3687,6 +3702,38 @@ impl App {
                 });
                 self.set_status(msg);
             }
+            Command::PanelTabNew => self.tab_new(),
+            Command::PanelTabClose => self.tab_close(),
+            Command::PanelTabNext => {
+                let to = self.tabs[self.active].next();
+                self.tab_switch(to);
+            }
+            Command::PanelTabPrev => {
+                let to = self.tabs[self.active].prev();
+                self.tab_switch(to);
+            }
+            Command::PanelTabMove => self.tab_move(),
+            Command::PanelTabLock => {
+                let locked = !self.panel().locked;
+                self.panel_mut().locked = locked;
+                let msg = self.i18n.t(if locked {
+                    "msg-tab-locked-on"
+                } else {
+                    "msg-tab-locked-off"
+                });
+                self.set_status(msg);
+            }
+            Command::PanelTabName => {
+                let title = self.i18n.t("prompt-tab-name");
+                let text = self.panel().name.clone().unwrap_or_default();
+                self.mode = Mode::Prompt(Prompt {
+                    kind: PromptKind::TabName,
+                    title,
+                    text,
+                    secret: false,
+                    sources: Vec::new(),
+                });
+            }
             Command::PanelViewSet(view) => {
                 self.panel_mut().view = view;
                 self.panel_mut().top = 0;
@@ -3782,8 +3829,9 @@ impl App {
                     return;
                 }
                 let other = 1 - self.active;
-                self.panels[other].go(path, true);
-                self.read_panel(other);
+                if self.panel_go(other, path, true) {
+                    self.read_panel(other);
+                }
             }
 
             Command::NavUp => self.move_cursor(-1),
@@ -3836,8 +3884,9 @@ impl App {
             Command::NavBack => match self.panel_mut().history_back() {
                 Some(path) => {
                     let a = self.active;
-                    self.panels[a].go(path, false);
-                    self.read_panel(a);
+                    if self.panel_go(a, path, false) {
+                        self.read_panel(a);
+                    }
                 }
                 None => {
                     let m = self.i18n.t("msg-no-history");
@@ -3847,8 +3896,9 @@ impl App {
             Command::NavForward => match self.panel_mut().history_forward() {
                 Some(path) => {
                     let a = self.active;
-                    self.panels[a].go(path, false);
-                    self.read_panel(a);
+                    if self.panel_go(a, path, false) {
+                        self.read_panel(a);
+                    }
                 }
                 None => {
                     let m = self.i18n.t("msg-no-history");
@@ -4592,8 +4642,9 @@ impl App {
                     .i18n
                     .t_args("net-connected", &[("host", site.authority().into())]);
                 self.set_status(msg);
-                self.panels[panel].go(start, true);
-                self.read_panel(panel);
+                if self.panel_go(panel, start, true) {
+                    self.read_panel(panel);
+                }
             }
             ConnectOutcome::NeedsSecret(kind) => {
                 let title = self.i18n.t_args(
@@ -5977,8 +6028,9 @@ impl App {
         };
         let index = self.active;
         self.panels[index].want_cursor = Some(path.display_name());
-        self.panels[index].go(dir, true);
-        self.read_panel(index);
+        if self.panel_go(index, dir, true) {
+            self.read_panel(index);
+        }
     }
 
     /// `F3`: read the file without leaving the results.
@@ -6203,6 +6255,7 @@ impl App {
             Mark::None => false,
             Mark::View(mode) => panel.view == *mode,
             Mark::Hidden => panel.show_hidden,
+            Mark::TabLocked => panel.locked,
         }
     }
 
@@ -6827,8 +6880,9 @@ impl App {
                         _ => self.active,
                     };
                     let target = self.resolve_path(&path);
-                    self.panels[side].go(target, true);
-                    self.read_panel(side);
+                    if self.panel_go(side, target, true) {
+                        self.read_panel(side);
+                    }
                 }
                 Action::Message { title, lines } => {
                     self.mode = Mode::Message { title, lines };
@@ -8987,8 +9041,7 @@ impl App {
             // The other panel follows the cursor: that is the whole point of the tree.
             if let Some(path) = chosen {
                 let other = 1 - index;
-                if self.panels[other].cwd != path {
-                    self.panels[other].go(path, true);
+                if self.panels[other].cwd != path && self.panel_go(other, path, true) {
                     self.read_panel(other);
                 }
             }
@@ -9114,11 +9167,130 @@ impl App {
             .map(|parent| parent.normalised())
             .filter(|parent| *parent == path.normalised())
             .map(|_| leaving.display_name());
-        self.panels[index].go(path, true);
+        if !self.panel_go(index, path, true) {
+            return;
+        }
         if let Some(name) = came_from {
             self.panels[index].want_cursor = Some(name);
         }
         self.read_panel(index);
+    }
+
+    /// Put back the tabs a previous session had on this side (SPEC 02 §1.6).
+    ///
+    /// Two rules, both of them about what a user asked for most recently. The directory this
+    /// session was started in wins for the tab that is on screen, because that is what
+    /// running a program in a directory means — unless that tab is locked, since staying put
+    /// is the whole of what a lock promises. And a tab that was on a server or in a bucket is
+    /// not restored at all: the connection it needs is not open, and a row of tabs that each
+    /// say "not connected" is worse than a row that is not there.
+    pub fn restore_tabs(&mut self, side: usize, saved: &[scmd_config::TabState], current: usize) {
+        let keep: Vec<&scmd_config::TabState> = saved
+            .iter()
+            .filter(|t| VPath::parse(&t.path).is_local())
+            .collect();
+        if keep.len() < 2 {
+            return;
+        }
+        // Which of the ones that survived was on screen: the saved index counts the dropped
+        // ones too, so it is the nearest survivor rather than the number itself.
+        let current = saved
+            .get(current)
+            .and_then(|want| keep.iter().position(|t| std::ptr::eq(*t, want)))
+            .unwrap_or(0);
+        let here = self.panels[side].cwd.clone();
+        let panel = &self.panels[side];
+        let (sort, view, hidden) = (panel.sort, panel.view, panel.show_hidden);
+        let mut row = crate::tabs::Row::one();
+        for (i, saved) in keep.iter().enumerate() {
+            let at = if i == current && !saved.locked {
+                here.clone()
+            } else {
+                VPath::parse(&saved.path)
+            };
+            let mut panel = Panel::new(at, sort, view, hidden);
+            panel.name = (!saved.name.trim().is_empty()).then(|| saved.name.clone());
+            panel.locked = saved.locked;
+            if i == 0 {
+                self.panels[side] = panel;
+            } else {
+                row.append(panel);
+            }
+        }
+        self.tabs[side] = row;
+        self.tabs[side].switch(current, &mut self.panels[side], &mut self.trees[side]);
+        self.read_panel(side);
+    }
+
+    /// Another tab on this side: the directory under the cursor if the cursor is on one, and
+    /// otherwise the one this tab is already showing — a duplicate, which is what one wants
+    /// before going two different ways from the same place.
+    fn tab_new(&mut self) {
+        let side = self.active;
+        let panel = &self.panels[side];
+        let under = panel
+            .current()
+            .filter(|e| e.kind != scmd_core::EntryKind::Parent && e.kind.is_dirlike());
+        let where_to = match under {
+            Some(entry) => panel.path_of(entry),
+            None => panel.cwd.clone(),
+        };
+        let fresh = Panel::new(where_to, panel.sort, panel.view, panel.show_hidden);
+        self.tabs[side].open(fresh, &mut self.panels[side], &mut self.trees[side]);
+        self.read_panel(side);
+    }
+
+    /// Close this tab and show its neighbour.
+    fn tab_close(&mut self) {
+        let side = self.active;
+        if self.tabs[side].close(&mut self.panels[side], &mut self.trees[side]) {
+            self.read_panel(side);
+        } else {
+            let msg = self.i18n.t("msg-tab-last");
+            self.set_error(msg);
+        }
+    }
+
+    /// Show tab `to` of the active side. The directory is read again: a tab left open for an
+    /// hour is showing what was there an hour ago.
+    fn tab_switch(&mut self, to: usize) {
+        let side = self.active;
+        if self.tabs[side].switch(to, &mut self.panels[side], &mut self.trees[side]) {
+            self.read_panel(side);
+        }
+    }
+
+    /// Hand this tab to the other side. The focus stays where it is, on the tab that took
+    /// its place: moving a tab across is about where the directory should live, not about
+    /// which panel one is working in.
+    fn tab_move(&mut self) {
+        let side = self.active;
+        let other = 1 - side;
+        let taken = self.tabs[side].take(&mut self.panels[side], &mut self.trees[side]);
+        let Some(tab) = taken else {
+            let msg = self.i18n.t("msg-tab-last");
+            self.set_error(msg);
+            return;
+        };
+        self.tabs[other].give(tab, &mut self.panels[other], &mut self.trees[other]);
+        self.read_panel(side);
+        self.read_panel(other);
+        let msg = self.i18n.t("msg-tab-moved");
+        self.set_status(msg);
+    }
+
+    /// Change a panel's directory, unless its tab is locked.
+    ///
+    /// The refusal lives in `Panel::go`, which has nothing but the panel to say it with; this
+    /// is the half with a status line in it. A lock that silently did nothing would read as a
+    /// key that had stopped working.
+    fn panel_go(&mut self, index: usize, path: VPath, push_history: bool) -> bool {
+        if self.panels[index].go(path, push_history) {
+            return true;
+        }
+        let msg = self.i18n.t("msg-tab-locked");
+        self.set_error(msg);
+        false
     }
 
     /// Hand the viewer to the renderer (it needs `&mut` to read its windows) and say whether
@@ -9690,6 +9862,191 @@ mod tests {
 
     fn press(app: &mut App, key: &str) {
         app.handle_input(Input::Key(key.parse().unwrap()));
+    }
+
+    // ── tabs (SPEC 02 §1.6) ─────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn a_new_tab_opens_on_the_directory_under_the_cursor_and_the_other_one_waits() {
+        let mut app = app();
+        app.panel_mut().cursor_to(1); // docs
+        press(&mut app, "Ctrl+Alt+T");
+        assert_eq!(app.tabs[0].len(), 2);
+        assert_eq!(app.tabs[0].current(), 1, "the new one is the one on screen");
+        assert_eq!(app.panels[0].cwd, VPath::local("/home/mb/docs"));
+        // The one it came from is where it was, cursor and all.
+        press(&mut app, "Ctrl+Alt+P");
+        assert_eq!(app.panels[0].cwd, VPath::local("/home/mb"));
+        assert_eq!(app.panels[0].cursor, 1);
+        // And the right panel knows nothing about any of it.
+        assert_eq!(app.tabs[1].len(), 1);
+    }
+
+    #[test]
+    fn a_new_tab_on_a_file_is_a_duplicate_of_the_one_it_came_from() {
+        let mut app = app();
+        app.panel_mut().cursor_to(2); // a.txt
+        press(&mut app, "Ctrl+Alt+T");
+        assert_eq!(app.panels[0].cwd, VPath::local("/home/mb"));
+        assert_eq!(app.tabs[0].len(), 2);
+    }
+
+    #[test]
+    fn the_ring_of_tabs_wraps_and_every_tab_keeps_its_own_place() {
+        let mut app = app();
+        press(&mut app, "Ctrl+Alt+T");
+        app.panels[0].go(VPath::local("/srv"), true);
+        press(&mut app, "Ctrl+Alt+N");
+        assert_eq!(app.tabs[0].current(), 0, "past the end is the first one");
+        assert_eq!(app.panels[0].cwd, VPath::local("/home/mb"));
+        press(&mut app, "Ctrl+Alt+P");
+        assert_eq!(app.panels[0].cwd, VPath::local("/srv"));
+    }
+
+    #[test]
+    fn the_last_tab_of_a_panel_is_neither_closed_nor_moved() {
+        let mut app = app();
+        press(&mut app, "Ctrl+Alt+W");
+        assert_eq!(app.tabs[0].len(), 1);
+        assert!(app.status_error, "it says why rather than doing nothing");
+        app.status_error = false;
+        press(&mut app, "Ctrl+Alt+M");
+        assert_eq!(app.tabs[0].len(), 1);
+        assert_eq!(app.tabs[1].len(), 1);
+        assert!(app.status_error);
+    }
+
+    #[test]
+    fn closing_a_tab_shows_its_neighbour() {
+        let mut app = app();
+        press(&mut app, "Ctrl+Alt+T");
+        app.panels[0].go(VPath::local("/srv"), true);
+        press(&mut app, "Ctrl+Alt+W");
+        assert_eq!(app.tabs[0].len(), 1);
+        assert_eq!(app.panels[0].cwd, VPath::local("/home/mb"));
+    }
+
+    #[test]
+    fn a_tab_is_handed_to_the_other_panel_and_the_focus_stays_put() {
+        let mut app = app();
+        press(&mut app, "Ctrl+Alt+T");
+        app.panels[0].go(VPath::local("/srv"), true);
+        press(&mut app, "Ctrl+Alt+M");
+        assert_eq!(app.tabs[0].len(), 1);
+        assert_eq!(app.tabs[1].len(), 2);
+        assert_eq!(app.panels[1].cwd, VPath::local("/srv"));
+        assert_eq!(app.panels[0].cwd, VPath::local("/home/mb"));
+        assert_eq!(app.active, 0, "one is still working in the left panel");
+    }
+
+    #[test]
+    fn a_locked_tab_stays_on_its_directory_and_says_so() {
+        let mut app = app();
+        press(&mut app, "Ctrl+Alt+K");
+        assert!(app.panels[0].locked);
+        app.panel_mut().cursor_to(1); // docs
+        press(&mut app, "Enter");
+        assert_eq!(app.panels[0].cwd, VPath::local("/home/mb"));
+        assert!(
+            app.status_error,
+            "a lock that said nothing would read as a bug"
+        );
+        // Off again, and the same key goes in.
+        press(&mut app, "Ctrl+Alt+K");
+        press(&mut app, "Enter");
+        assert_eq!(app.panels[0].cwd, VPath::local("/home/mb/docs"));
+    }
+
+    #[test]
+    fn a_locked_panel_cannot_be_driven_from_the_other_side_either() {
+        let mut app = app();
+        press(&mut app, "Ctrl+Alt+K");
+        press(&mut app, "Tab"); // the right panel has the focus
+        press(&mut app, "Ctrl+="); // the other panel follows this one
+        assert_eq!(app.panels[0].cwd, VPath::local("/home/mb"));
+        assert!(app.status_error);
+    }
+
+    #[test]
+    fn a_tab_can_be_given_a_name_and_an_empty_one_takes_it_off() {
+        let mut app = app();
+        open(&mut app, 0, "menu-tab-name");
+        type_text(&mut app, "work");
+        press(&mut app, "Enter");
+        assert_eq!(app.panels[0].name.as_deref(), Some("work"));
+        assert_eq!(app.tabs[0].labels(&app.panels[0]), ["work"]);
+        open(&mut app, 0, "menu-tab-name");
+        for _ in 0..4 {
+            press(&mut app, "Backspace");
+        }
+        press(&mut app, "Enter");
+        assert_eq!(app.panels[0].name, None);
+        assert_eq!(app.tabs[0].labels(&app.panels[0]), ["mb"]);
+    }
+
+    #[test]
+    fn the_tabs_of_the_last_session_come_back_and_the_one_on_screen_is_where_the_shell_was() {
+        let mut app = app();
+        let saved = vec![
+            scmd_config::TabState {
+                path: "/etc".into(),
+                name: "config".into(),
+                locked: false,
+            },
+            scmd_config::TabState {
+                path: "/var".into(),
+                name: String::new(),
+                locked: false,
+            },
+            // A tab on a server: there is no connection to it, so it is not restored.
+            scmd_config::TabState {
+                path: "sftp://mb@host/srv".into(),
+                name: String::new(),
+                locked: false,
+            },
+        ];
+        app.restore_tabs(0, &saved, 1);
+        assert_eq!(app.tabs[0].len(), 2);
+        assert_eq!(app.tabs[0].current(), 1);
+        assert_eq!(
+            app.panels[0].cwd,
+            VPath::local("/home/mb"),
+            "the directory this session started in wins for the tab on screen"
+        );
+        assert_eq!(app.tabs[0].labels(&app.panels[0]), ["config", "mb"]);
+    }
+
+    #[test]
+    fn a_locked_tab_keeps_its_own_directory_when_the_session_comes_back() {
+        let mut app = app();
+        let saved = vec![
+            scmd_config::TabState {
+                path: "/etc".into(),
+                name: String::new(),
+                locked: false,
+            },
+            scmd_config::TabState {
+                path: "/var/log".into(),
+                name: "logs".into(),
+                locked: true,
+            },
+        ];
+        app.restore_tabs(0, &saved, 1);
+        assert_eq!(app.panels[0].cwd, VPath::local("/var/log"));
+        assert!(app.panels[0].locked);
+    }
+
+    #[test]
+    fn one_saved_tab_leaves_the_panel_as_it_is() {
+        let mut app = app();
+        let saved = vec![scmd_config::TabState {
+            path: "/etc".into(),
+            name: String::new(),
+            locked: false,
+        }];
+        app.restore_tabs(0, &saved, 0);
+        assert_eq!(app.tabs[0].len(), 1);
+        assert_eq!(app.panels[0].cwd, VPath::local("/home/mb"));
     }
 
     // ── the menu bar and the dialogs (SPEC 10) ──────────────────────────────────────────────

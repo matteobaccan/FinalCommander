@@ -31,6 +31,37 @@ preview of the file under the cursor, `Ctrl+T` into a directory tree.
 off both of them and give them to the output of the last command, which is how you watch a
 build go by without leaving the panels. Both are settings, so `Shift+F9` keeps them.
 
+# Tabs
+
+A panel can hold more than one directory at a time. `Ctrl+Alt+T` opens another tab — on the
+directory under the cursor if the cursor is on one, and otherwise on the one you are in, which
+is a duplicate and what you want before going two different ways from the same place.
+`Ctrl+Alt+N` and `Ctrl+Alt+P` step along the row, which is a ring: past the last tab is the
+first one. `Ctrl+Alt+W` closes one. A panel always has a tab, so the last one stays.
+
+A tab remembers everything the panel does — where it is, how it is sorted, what is selected,
+where the cursor is, where it has been — so coming back to a tab is coming back to the work
+you left in it.
+
+`Ctrl+Alt+M` hands the tab to the other panel. It is a move: the tab leaves this side.
+
+`Ctrl+Alt+K` locks a tab to its directory. A locked tab will not go anywhere — not with
+`Enter`, not with the history, not driven from the other panel — and says so when asked,
+rather than doing nothing. It is marked in the row. The one thing that unlocks it is the
+connection under it closing: a tab cannot keep a promise about a directory it can no longer
+reach.
+
+The Left and Right menus hold all of that, and *Name this tab*, which is how a row comes to
+read `src  build  logs` instead of three directory names. An empty name takes it off again.
+
+The row of tabs is only drawn by a panel that has more than one: one tab looks exactly as it
+always did, rather than costing a row of files to say that there is one tab.
+
+Tabs come back when you start the program again, with their names and their locks. The
+directory the shell was in still wins for the tab you land on — that is what running a
+program in a directory means — unless that tab is locked. A tab that was on a server or in a
+bucket is not restored, because the connection it needs is not open yet.
+
 # A real terminal
 
 The command line under the panels runs a command and keeps what it printed, which is what you

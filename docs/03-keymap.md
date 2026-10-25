@@ -111,8 +111,11 @@ Column `SC` = SupremeCommander default (profile `far`, our baseline).
 | directory hotlist/bookmarks | folder shortcuts: Ctrl+Shift+0..9 set, RightCtrl+0..9 go (and insert the path when in an edit line), plus a list in the Commands menu | Ctrl+\ | Ctrl+D / Ctrl+B add | Ctrl+D; Ctrl+Shift+0..9 set; Alt+0..9 go |
 | directory history | Alt+F12 | Alt+Shift+H; Alt+Y / Alt+U back/forward | Ctrl+H; Alt+←/→ | Alt+F12; Alt+←/→ |
 | quick cd / path entry | — | Alt+C | Ctrl+L | Ctrl+L |
-| new tab / close tab | — | — | Ctrl+Alt+N / Ctrl+W | Ctrl+T… see note | 
-| next/prev tab | — | — | Alt+←/→ (tabs: Shift+←/→) | Ctrl+PgDn is taken → Alt+1..9, Ctrl+Tab |
+| new tab / close tab | — | — | Ctrl+Alt+N / Ctrl+W | **Ctrl+Alt+T / Ctrl+Alt+W** |
+| next/prev tab | — | — | Alt+←/→ (tabs: Shift+←/→) | **Ctrl+Alt+N / Ctrl+Alt+P** |
+| move the tab to the other panel | — | — | — | **Ctrl+Alt+M** |
+| lock the tab to its directory | — | — | — | **Ctrl+Alt+K** |
+| name the tab | — | — | — | Left/Right menu |
 | find file | Alt+F7 | Alt+? | Ctrl+S | Alt+F7 |
 | disk usage | — | Ctrl+Space on a dir | Alt+Shift+S | Alt+Shift+S |
 | compare directories | Commands menu, no default key (marks what is missing or newer in the other panel; names, sizes and times only, no subfolders) | — | Alt+Shift+C | Alt+Shift+C |
@@ -312,6 +315,11 @@ A TUI cannot receive every combination the Windows console gives FAR. Decisions:
 5. **Conflicts with the terminal emulator and the desktop** (`Ctrl+Shift+C/V`, `Alt+F4`,
    `Ctrl+W`, `F10` on GNOME, `Ctrl+Q`) are listed in the keymap docs; every one of them has an
    alternative binding, listed next to it in the help, and a `keys.local.toml` override.
+   The **tabs** sit on the `Ctrl+Alt` row for this reason and no other: `Ctrl+T` is the tree
+   panel and `Ctrl+Tab` steps between the open screens, both of them FAR's own, so there was
+   no key of FAR's left to keep. `Ctrl+Alt` with an *arrow* is avoided because most desktops
+   switch workspaces with it before a terminal ever sees it, and `Ctrl+Alt+L` because most of
+   them lock the screen — hence `Ctrl+Alt+K` for locking a tab.
 6. **`Ctrl+I` is `Tab`, `Ctrl+M` is `Enter`, `Ctrl+J` is a newline** in every terminal, so
    they are not bindable: quick filter is `Alt+I`, "restore selection" is `Ctrl+Shift+M`, and
    the help page states the rule instead of letting a user wonder why nothing happens.
@@ -328,7 +336,7 @@ panel.focus.toggle          panel.swap                 panel.reread
 panel.view.set(brief|medium|full|wide|detail|custom:N)
 panel.sort.by(name|ext|size|mtime|ctime|atime|owner|none)   panel.sort.reverse
 panel.filter.quick          panel.filter.set            panel.hidden.toggle
-panel.tab.new|close|next|prev|move               panel.layout.toggle
+panel.tab.new|close|next|prev|move|lock|name     panel.layout.toggle
 nav.enter  nav.parent  nav.root  nav.history.back|forward  nav.bookmark.set(N)|go(N)
 nav.goto.path  nav.goto.fuzzy  nav.drives  nav.other.sync
 sel.toggle  sel.all  sel.none  sel.invert  sel.mask(+|-)  sel.ext  sel.restore

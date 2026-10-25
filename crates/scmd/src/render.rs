@@ -160,6 +160,37 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         }
     };
 
+    // A side with more than one tab gives its top row to the tab bar (SPEC 02 §1.6). A bar
+    // that was always there would cost every panel a row of files to say that it has one
+    // tab, so one tab draws nothing and the screen is what it always was.
+    let mut areas = areas;
+    let mut bars = [None, None];
+    for i in 0..2 {
+        if app.tabs[i].many() && areas[i].w > 0 && areas[i].h > 6 {
+            bars[i] = Some(Rect::new(areas[i].x, areas[i].y, areas[i].w, 1));
+            areas[i] = Rect::new(areas[i].x, areas[i].y + 1, areas[i].w, areas[i].h - 1);
+        }
+    }
+    for (i, bar) in bars.iter().enumerate() {
+        let Some(bar) = bar else { continue };
+        let labels = app.tabs[i].labels(&app.panels[i]);
+        let locked: Vec<bool> = (0..app.tabs[i].len())
+            .filter_map(|n| app.tabs[i].panel(n, &app.panels[i]))
+            .map(|p| p.locked)
+            .collect();
+        widgets::draw_tabs(
+            buf,
+            &app.theme,
+            &widgets::TabRow {
+                area: *bar,
+                labels: &labels,
+                current: app.tabs[i].current(),
+                locked: &locked,
+                focused: i == app.active,
+            },
+        );
+    }
+
     // Remember the geometry so key handling knows how far a page is. It is the active
     // panel's, because that is the one the keys move through.
     app.rows = widgets::panel_rows(
@@ -3224,6 +3255,48 @@ Some **bold** text and a [link](https://example.com).
             std::thread::sleep(std::time::Duration::from_millis(25));
         }
         println!("{}", frame(&mut app, 76, 16));
+    }
+
+    #[test]
+    fn the_tab_bar_appears_only_when_a_side_has_more_than_one_tab() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = app_on_disk(dir.path());
+        app.panels[0].name = Some("first".into());
+        let one = frame(&mut app, 76, 20);
+        assert!(
+            !one.contains("first"),
+            "a side with one tab draws what it always drew: {one}"
+        );
+        press(&mut app, "Ctrl+Alt+T");
+        app.panels[0].name = Some("second".into());
+        app.panels[0].locked = true;
+        let two = frame(&mut app, 76, 20);
+        let top = two.lines().next().expect("a first row");
+        assert!(top.contains("first"), "{two}");
+        assert!(top.contains("\u{25aa}second"), "the lock is marked: {two}");
+        // It is the panel's own row, not the screen's: the screen is as tall as it was, the
+        // right panel's frame still starts at the top, and the left one's starts one lower.
+        assert_eq!(one.lines().count(), two.lines().count());
+        assert!(top.contains('\u{2554}'), "the right panel's corner: {top}");
+        let under = two.lines().nth(1).expect("a second row");
+        assert!(
+            under.contains('\u{2554}'),
+            "the left panel's corner: {under}"
+        );
+    }
+
+    #[test]
+    #[ignore = "a look at the screen, not an assertion"]
+    fn eyeball_tabs() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("report.txt"), b"x").unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Ctrl+Alt+T");
+        app.panels[0].name = Some("src".into());
+        press(&mut app, "Ctrl+Alt+T");
+        app.panels[0].name = Some("logs".into());
+        app.panels[0].locked = true;
+        println!("{}", frame(&mut app, 76, 20));
     }
 
     #[test]

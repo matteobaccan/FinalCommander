@@ -37,6 +37,10 @@ white = "#ffffff"
 # Panel.Title.Selected: the active panel's path, inverted
 "panel.title.active.fg" = "black"
 "panel.title.active.bg" = "cyan"
+"panel.tab.fg" = "lightcyan"
+"panel.tab.bg" = "blue"
+"panel.tab.active.fg" = "black"
+"panel.tab.active.bg" = "cyan"
 # Panel.Title.Column, also the sort letter and the filter mark
 "panel.column.fg" = "yellow"
 # Panel.Info.Total

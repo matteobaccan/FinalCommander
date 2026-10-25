@@ -88,6 +88,12 @@ pub struct Panel {
     pub temp: Option<TempList>,
     /// What this panel shows: rows, or one of the special kinds.
     pub content: Content,
+    /// What this panel's tab is called, if it was given a name. A tab is a panel
+    /// (`crate::tabs`), so what the tab remembers is what the panel remembers.
+    pub name: Option<String>,
+    /// A locked tab stays on its directory: it is how a tab becomes a place one keeps rather
+    /// than a place one is passing through.
+    pub locked: bool,
 }
 
 impl Panel {
@@ -109,6 +115,8 @@ impl Panel {
             name_scroll: 0,
             temp: None,
             content: Content::default(),
+            name: None,
+            locked: false,
             history_pos: 0,
             generation: 0,
             loading: true,
@@ -203,7 +211,13 @@ impl Panel {
     }
 
     /// Change directory, recording history. `push_history` is false when walking history.
-    pub fn go(&mut self, path: VPath, push_history: bool) {
+    ///
+    /// A locked tab refuses, and says so by returning `false`: the caller has a status line
+    /// to put the reason in, and this has nothing but the panel.
+    pub fn go(&mut self, path: VPath, push_history: bool) -> bool {
+        if self.locked && path.normalised() != self.cwd.normalised() {
+            return false;
+        }
         if push_history && path != self.cwd {
             self.history.truncate(self.history_pos + 1);
             self.history.push(path.clone());
@@ -220,6 +234,7 @@ impl Panel {
         self.selection.clear();
         self.loading = true;
         self.listing = Listing::default();
+        true
     }
 
     pub fn history_back(&mut self) -> Option<VPath> {
