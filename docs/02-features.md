@@ -18,12 +18,12 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 1.1 | Two equal panels, active/passive, `Tab` to switch | NC | M1 |
 | 1.2 | Panel layouts: side-by-side and stacked (horizontal split) | KRU | M2 |
 | 1.3 | Resizable split, saved per session; restore defaults | FAR | M2 |
-| 1.4 | View modes: brief (multi-column names), medium, full (size/date), wide, detailed, owners, links, custom columns | FAR | M1 brief+full, M2 rest |
+| 1.4 | ~~View modes: brief (multi-column names), medium, full (size/date), wide, detailed~~, owners, links, custom columns | FAR | **shipped**: the five FAR has on `Ctrl+1..5`, with the extension in its own column in `full` and FAR's dates and allocated size in `detailed`. Owners, links and custom column sets want data we do not collect yet — `docs/BACKLOG.md` |
 | 1.5 | User-definable column sets (which fields, widths, alignment, formats) | FAR/TC | M3 |
 | 1.6 | ~~Tabs per panel, named, persisted, lockable, duplicate/move-to-other-side~~ | TC/MTN2 | **shipped** (reordering within the row still owed) |
-| 1.7 | Quick view panel (preview of the file under the cursor in the other panel) | FAR/MC | M2 |
-| 1.8 | Info panel (drive/fs info, disk usage, selected size, archive/VFS metadata) | FAR/MC | M2 |
-| 1.9 | Tree panel (directory tree in a panel, synced with the other side) | FAR/MC | M2 |
+| 1.7 | ~~Quick view panel (preview of the file under the cursor in the other panel)~~ | FAR/MC | **shipped** (`Ctrl+Q`), and on a folder it shows what the device under it has to say, as FAR does |
+| 1.8 | ~~Info panel (drive info, disk usage, selected size, archive/VFS metadata)~~ | FAR/MC | **shipped** (`Ctrl+L`): what the device holds, what is left, its allocation unit and what that costs the listing, the machine's memory, what the directory holds, what is selected, and the row under the cursor. The filesystem's *name* is still only in the drives dialog |
+| 1.9 | ~~Tree panel (directory tree in a panel, synced with the other side)~~ | FAR/MC | **shipped** (`Ctrl+T`) |
 | 1.10 | More than two panels / floating panel windows | DN/MTN2 | M4 |
 | 1.11 | Status line (name, size, date of the current item) and total/selected counters | FAR | M1 |
 | 1.11b | Column titles row (`Name │ Size │ Date Time`), with the sort-mode letter in the corner — lower case ascending, upper case descending — and a `*` beside it while a filter is on | FAR | M1 |
