@@ -358,6 +358,52 @@ impl Theme {
         out
     }
 
+    /// Every key the interface asks for, in the order they are declared — which groups them
+    /// by what they colour (the panel, then the dialogs, then the viewer, and so on), and is
+    /// therefore the order to show a person editing them.
+    pub fn keys() -> impl Iterator<Item = &'static str> {
+        DEFAULTS.iter().map(|(key, _)| *key)
+    }
+
+    /// Change one colour. A key the interface does not ask for is kept all the same: a theme
+    /// may carry colours for a plugin that is not loaded in this run.
+    pub fn set_color(&mut self, key: &str, color: Color) {
+        self.colors.insert(key.to_string(), color);
+    }
+
+    /// The theme as a `[[theme]]` block's table, for writing into the configuration file.
+    ///
+    /// Every key is written out, not only the ones this theme set: a block that leaves a key
+    /// out falls back to the built-in default, so writing the lot is what makes the file say
+    /// what is on the screen.
+    pub fn to_table(&self) -> toml::Table {
+        let mut colors = toml::Table::new();
+        for key in Theme::keys() {
+            colors.insert(
+                key.to_string(),
+                toml::Value::String(self.color(key).to_string()),
+            );
+        }
+        let mut table = toml::Table::new();
+        table.insert("id".into(), toml::Value::String(self.id.clone()));
+        table.insert("name".into(), toml::Value::String(self.name.clone()));
+        if !self.author.is_empty() {
+            table.insert("author".into(), toml::Value::String(self.author.clone()));
+        }
+        table.insert(
+            "variant".into(),
+            toml::Value::String(
+                match self.variant {
+                    Variant::Dark => "dark",
+                    Variant::Light => "light",
+                }
+                .to_string(),
+            ),
+        );
+        table.insert("colors".into(), toml::Value::Table(colors));
+        table
+    }
+
     /// Write the theme out as a `[[theme]]` block, ready to paste into the config file
     /// (`scmd --export-theme`).
     pub fn to_toml(&self) -> String {

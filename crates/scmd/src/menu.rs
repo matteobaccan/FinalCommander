@@ -476,6 +476,7 @@ pub fn menus() -> Vec<Menu> {
                 ),
                 item("menu-languages", "", Action::Run(Command::AppLanguages)),
                 item("menu-themes", "", Action::Run(Command::AppThemes)),
+                item("menu-colors", "", Action::Run(Command::OptColors)),
                 Entry::Separator,
                 item(
                     "menu-confirmations",

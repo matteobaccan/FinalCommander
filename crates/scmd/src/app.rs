@@ -497,6 +497,8 @@ pub enum PromptKind {
     HexMove,
     /// One line of arithmetic, answered in every base at once.
     Calculator,
+    /// A colour for the palette editor's current row: a name, one of the 256, or `#rrggbb`.
+    Color,
     /// A URL to connect to: `sftp://mb@host/srv`.
     NetConnect,
     /// A password or a key passphrase. Never echoed, never stored.
@@ -807,6 +809,62 @@ pub struct SyncView {
     pub cancel: CancelToken,
 }
 
+/// The palette editor: every colour the interface asks for, and what it is set to.
+///
+/// It edits the *live* theme, so every change is on the screen the moment it is made — which
+/// is the only way to judge a colour. `F2` writes it into the configuration file as a
+/// `[[theme]]` block under the theme's own id, which is the path the theme loader already has
+/// for retuning a built-in without renaming it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PaletteView {
+    /// Every key, in the order the interface declares them — which groups them by what they
+    /// colour, and so is the order to read them in.
+    pub keys: Vec<String>,
+    pub cursor: usize,
+    pub top: usize,
+    /// Whether anything has been changed, so leaving can say the file has not been written.
+    pub dirty: bool,
+}
+
+impl PaletteView {
+    pub fn new() -> PaletteView {
+        PaletteView {
+            keys: scmd_ui::Theme::keys().map(|k| k.to_string()).collect(),
+            cursor: 0,
+            top: 0,
+            dirty: false,
+        }
+    }
+
+    pub fn move_cursor(&mut self, delta: isize) {
+        if self.keys.is_empty() {
+            self.cursor = 0;
+            return;
+        }
+        let last = self.keys.len() as isize - 1;
+        self.cursor = (self.cursor as isize + delta).clamp(0, last) as usize;
+    }
+
+    pub fn scroll_into_view(&mut self, rows: usize) {
+        let rows = rows.max(1);
+        if self.cursor < self.top {
+            self.top = self.cursor;
+        } else if self.cursor >= self.top + rows {
+            self.top = self.cursor + 1 - rows;
+        }
+    }
+
+    pub fn key(&self) -> Option<&str> {
+        self.keys.get(self.cursor).map(String::as_str)
+    }
+}
+
+impl Default for PaletteView {
+    fn default() -> PaletteView {
+        PaletteView::new()
+    }
+}
+
 impl SyncView {
     pub fn move_cursor(&mut self, delta: isize) {
         if self.pairs.is_empty() {
@@ -929,6 +987,8 @@ pub enum Mode {
     Find(Box<FindView>),
     /// The synchronisation table, before anything has happened (SPEC 03 §10).
     Sync(Box<SyncView>),
+    /// The palette editor: the live theme, one colour per row (SPEC 10 §5).
+    Palette(Box<PaletteView>),
     /// Recording has stopped and the macro is waiting for the key it will answer to: the next
     /// key pressed is the answer, which is how FAR assigns one (SPEC 08 §5).
     MacroKey {
@@ -2254,6 +2314,10 @@ impl App {
                 self.mode = Mode::Sync(view);
                 self.sync_key(key);
             }
+            Mode::Palette(view) => {
+                self.mode = Mode::Palette(view);
+                self.palette_key(key);
+            }
             Mode::Prompt(prompt) => {
                 self.mode = Mode::Prompt(prompt.clone());
                 self.prompt_key(key, prompt);
@@ -3014,6 +3078,30 @@ impl App {
                     authority,
                     spec: text,
                 });
+            }
+            PromptKind::Color => {
+                let text = prompt.text.trim().to_string();
+                // Back to the list either way: the editor is where the answer is judged, and
+                // a refusal that threw the list away would be a refusal one could not fix.
+                let Mode::Palette(view) = std::mem::replace(&mut self.mode, Mode::Normal) else {
+                    return;
+                };
+                let mut view = view;
+                match scmd_ui::Color::parse(&text) {
+                    Some(color) => {
+                        if let Some(key) = view.key().map(str::to_string) {
+                            self.theme.set_color(&key, color);
+                            view.dirty = true;
+                        }
+                    }
+                    None => {
+                        let msg = self
+                            .i18n
+                            .t_args("palette-bad-color", &[("value", text.into())]);
+                        self.set_error(msg);
+                    }
+                }
+                self.mode = Mode::Palette(view);
             }
             PromptKind::Calculator => {
                 let line = prompt.text.trim().to_string();
@@ -3849,6 +3937,87 @@ impl App {
     }
 
     /// The keys of the review table.
+    /// The palette editor's keys. Every change is applied to the live theme at once: a colour
+    /// one cannot see is a colour one cannot choose.
+    fn palette_key(&mut self, key: Key) {
+        let rows = self.rows.max(1);
+        let Mode::Palette(view) = &mut self.mode else {
+            return;
+        };
+        match key.code {
+            KeyCode::Esc | KeyCode::F(10) => {
+                let dirty = view.dirty;
+                self.mode = Mode::Normal;
+                if dirty {
+                    // Said plainly, because the colours on the screen are already the new
+                    // ones and nothing else would tell the user the file is not.
+                    let m = self.i18n.t("palette-unsaved");
+                    self.set_status(m);
+                }
+                return;
+            }
+            KeyCode::Up => view.move_cursor(-1),
+            KeyCode::Down => view.move_cursor(1),
+            KeyCode::PageUp => view.move_cursor(-(rows as isize)),
+            KeyCode::PageDown => view.move_cursor(rows as isize),
+            KeyCode::Home => view.cursor = 0,
+            KeyCode::End => view.cursor = view.keys.len().saturating_sub(1),
+            // Enter types a colour: a name (`red`, `brightwhite`), a number for one of the
+            // 256, or `#rrggbb`. The field opens on what the row is set to, so a shade is
+            // nudged rather than retyped.
+            KeyCode::Enter => {
+                let Some(key) = view.key().map(str::to_string) else {
+                    return;
+                };
+                let current = self.theme.color(&key).to_string();
+                let title = self
+                    .i18n
+                    .t_args("palette-ask", &[("key", key.clone().into())]);
+                self.mode = Mode::Prompt(Prompt {
+                    kind: PromptKind::Color,
+                    title,
+                    text: current,
+                    secret: false,
+                    sources: Vec::new(),
+                });
+                return;
+            }
+            KeyCode::F(2) => {
+                self.save_palette();
+                return;
+            }
+            _ => {}
+        }
+        if let Mode::Palette(view) = &mut self.mode {
+            view.scroll_into_view(rows);
+        }
+    }
+
+    /// `F2` in the palette editor: write the live theme into the configuration file.
+    ///
+    /// It goes in under the theme's own id, which the theme loader already treats as an
+    /// override of the built-in of that name — so the next run starts with these colours and
+    /// `Shift+F12` still cycles the themes as it did.
+    fn save_palette(&mut self) {
+        let table = self.theme.to_table();
+        let id = self.theme.id.clone();
+        let mine = self
+            .cfg
+            .themes
+            .iter()
+            .position(|t| t.get("id").and_then(|v| v.as_str()) == Some(id.as_str()));
+        match mine {
+            Some(at) => self.cfg.themes[at] = table,
+            None => self.cfg.themes.push(table),
+        }
+        self.save_setup();
+        if let Mode::Palette(view) = &mut self.mode {
+            view.dirty = false;
+        }
+        let msg = self.i18n.t_args("palette-saved", &[("theme", id.into())]);
+        self.set_status(msg);
+    }
+
     fn sync_key(&mut self, key: Key) {
         let rows = self.rows.max(1);
         let Mode::Sync(view) = &mut self.mode else {
@@ -5290,6 +5459,9 @@ impl App {
             Command::OptPanel => self.open_form(FormKind::Panel),
             Command::OptInterface => self.open_form(FormKind::Interface),
             Command::OptConfirmations => self.open_form(FormKind::Confirmations),
+            Command::OptColors => {
+                self.mode = Mode::Palette(Box::default());
+            }
             Command::PanelSortMenu => self.open_pick(PickKind::SortModes, self.active),
             Command::PanelHistory => self.open_pick(PickKind::FoldersHistory, self.active),
             Command::PanelDrive(side) => {
@@ -17501,5 +17673,105 @@ abcdefghij
                 .any(|r| matches!(r, Request::Mouse { on: false })),
             "turning it off did not reach the terminal either"
         );
+    }
+    // ── the palette editor ─────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn the_palette_editor_changes_a_colour_on_the_screen_and_then_in_the_file() {
+        let mut app = app();
+        app.run(Command::OptColors);
+        let Mode::Palette(view) = &app.mode else {
+            panic!("the palette editor did not open: {:?}", app.mode)
+        };
+        assert!(view.keys.len() > 20, "every colour the interface asks for");
+        assert_eq!(view.keys[0], "panel.bg");
+        assert!(!view.dirty);
+
+        // Down to a key worth looking at, then Enter to type a colour. The field opens on
+        // what the row is set to, so a shade is nudged rather than retyped.
+        press(&mut app, "Down");
+        let Mode::Palette(view) = &app.mode else {
+            panic!("it closed")
+        };
+        let key = view.key().expect("a row").to_string();
+        assert_eq!(key, "panel.fg");
+        press(&mut app, "Enter");
+        let Mode::Prompt(prompt) = &app.mode else {
+            panic!("no colour was asked for: {:?}", app.mode)
+        };
+        assert_eq!(prompt.kind, PromptKind::Color);
+        assert_eq!(prompt.text, app.theme.color("panel.fg").to_string());
+
+        let Mode::Prompt(prompt) = std::mem::replace(&mut app.mode, Mode::Normal) else {
+            unreachable!()
+        };
+        let mut typed = prompt.clone();
+        typed.text = "#ff8000".into();
+        app.mode = Mode::Palette(Box::new(PaletteView {
+            cursor: 1,
+            ..PaletteView::new()
+        }));
+        app.prompt_accept(typed);
+        // On the screen at once: a colour one cannot see is a colour one cannot choose.
+        assert_eq!(
+            app.theme.color("panel.fg"),
+            scmd_ui::Color::Rgb(255, 128, 0)
+        );
+        let Mode::Palette(view) = &app.mode else {
+            panic!("it did not go back to the list: {:?}", app.mode)
+        };
+        assert!(view.dirty, "and it knows the file has not been written");
+
+        // Rubbish is refused by name and changes nothing.
+        let before = app.theme.color("panel.bg");
+        let mut bad = Prompt::new(PromptKind::Color, "x".into(), "octarine".into());
+        bad.kind = PromptKind::Color;
+        app.mode = Mode::Palette(Box::default());
+        app.prompt_accept(bad);
+        assert_eq!(app.theme.color("panel.bg"), before);
+        assert!(app.status_error, "{}", app.status);
+
+        // F2 writes the live theme into the configuration as a `[[theme]]` block under its
+        // own id, which is the path the loader already has for retuning a built-in.
+        app.mode = Mode::Palette(Box::default());
+        press(&mut app, "F2");
+        assert_eq!(app.cfg.themes.len(), 1);
+        let block = &app.cfg.themes[0];
+        assert_eq!(block.get("id").and_then(|v| v.as_str()), Some("commander"));
+        let colors = block
+            .get("colors")
+            .and_then(|v| v.as_table())
+            .expect("the colours are in the block");
+        assert_eq!(
+            colors.get("panel.fg").and_then(|v| v.as_str()),
+            Some("#ff8000"),
+            "the edited colour was not written"
+        );
+        let Mode::Palette(view) = &app.mode else {
+            panic!("saving closed the editor")
+        };
+        assert!(!view.dirty, "saved, so there is nothing unwritten left");
+
+        // Saving again replaces the block rather than adding a second one with the same id.
+        press(&mut app, "F2");
+        assert_eq!(app.cfg.themes.len(), 1);
+    }
+
+    #[test]
+    fn leaving_the_palette_editor_with_unsaved_colours_says_so() {
+        let mut app = app();
+        app.mode = Mode::Palette(Box::new(PaletteView {
+            dirty: true,
+            ..PaletteView::new()
+        }));
+        press(&mut app, "Esc");
+        assert!(matches!(app.mode, Mode::Normal));
+        assert!(!app.status.is_empty(), "nothing was said about the change");
+
+        // With nothing changed it closes quietly.
+        app.set_status(String::new());
+        app.mode = Mode::Palette(Box::default());
+        press(&mut app, "Esc");
+        assert!(app.status.is_empty(), "{}", app.status);
     }
 }

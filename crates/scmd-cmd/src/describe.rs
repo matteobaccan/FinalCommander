@@ -36,6 +36,7 @@ impl Command {
             Command::OptPanel => "the panel settings",
             Command::OptInterface => "the interface settings",
             Command::OptConfirmations => "which questions are asked",
+            Command::OptColors => "edit the colours of the theme in use",
 
             Command::PanelFocusToggle => "move between the two panels",
             Command::PanelSwap => "swap the panels over",

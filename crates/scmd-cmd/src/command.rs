@@ -58,6 +58,8 @@ pub enum Command {
     OptPanel,
     OptInterface,
     OptConfirmations,
+    /// The palette editor: every colour the interface uses, on the live theme.
+    OptColors,
 
     PanelFocusToggle,
     PanelSwap,
@@ -345,6 +347,7 @@ impl Command {
             Command::OptPanel,
             Command::OptInterface,
             Command::OptConfirmations,
+            Command::OptColors,
             Command::PanelFocusToggle,
             Command::PanelSwap,
             Command::PanelReread,
@@ -569,6 +572,7 @@ impl Command {
             Command::OptPanel => "opt.panel".into(),
             Command::OptInterface => "opt.interface".into(),
             Command::OptConfirmations => "opt.confirmations".into(),
+            Command::OptColors => "opt.colors".into(),
             Command::PanelFocusToggle => "panel.focus.toggle".into(),
             Command::PanelSwap => "panel.swap".into(),
             Command::PanelReread => "panel.reread".into(),
@@ -766,6 +770,7 @@ impl Command {
             ("opt.panel", _) => Command::OptPanel,
             ("opt.interface", _) => Command::OptInterface,
             ("opt.confirmations", _) => Command::OptConfirmations,
+            ("opt.colors", _) => Command::OptColors,
             ("panel.sort.menu", _) => Command::PanelSortMenu,
             ("panel.drive", a) => Command::PanelDrive(Side::parse(a.unwrap_or(""))?),
             ("panel.history", _) => Command::PanelHistory,

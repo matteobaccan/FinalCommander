@@ -33,3 +33,14 @@ of colour names, and one dropped into `themes/` is found at startup — there is
 register and nothing to rebuild.
 
 The default theme is FAR's own palette, taken from its source rather than from a screenshot.
+
+# Colours
+
+`F9 → Options → Colours…` lists every colour the interface uses, with the value as a theme file
+writes it and two samples of it: the colour as ink, and the colour as a background. `Enter` asks
+for a new one — a name (`red`, `brightcyan`, `default`), one of the 256 (`idx:208`), or
+`#ff8000` — and the screen changes as you answer, which is the only way to judge a colour.
+
+`F2` writes the result into `scmd.toml` as a `[[theme]]` block under the theme's own id, so the
+next run starts with it and `Shift+F12` still cycles the themes. Leaving without `F2` keeps the
+colours for this session and says so.

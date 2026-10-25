@@ -385,6 +385,10 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             draw_sync(app, view, buf, screen);
             None
         }
+        Mode::Palette(view) => {
+            draw_palette(app, view, buf, screen);
+            None
+        }
         Mode::Prompt(prompt) => {
             // A password is never put on the screen, not even for a frame.
             let shown = if prompt.secret {
@@ -1668,6 +1672,90 @@ fn cursor_line(app: &App, panel: &crate::panel::Panel) -> String {
 /// The shape is the point. The arrow is in the middle, between the two sides' sizes and
 /// times, so which way a file is about to go is read in the same place on every row — and the
 /// rows that will do nothing are dim, so what the eye lands on is what is about to change.
+/// The palette editor: one row per colour, with the colour itself shown twice — as ink on the
+/// panel background and as a background behind the panel's ink — because a colour is only ever
+/// used as one or the other, and a swatch that showed one of them would be half an answer.
+fn draw_palette(app: &App, view: &crate::app::PaletteView, buf: &mut Buffer, screen: Rect) {
+    let base = app.theme.panel();
+    let frame = Style::new(app.theme.color("panel.frame"), app.theme.color("panel.bg"));
+    let dim = Style::new(
+        app.theme.color("panel.footer.fg"),
+        app.theme.color("panel.bg"),
+    );
+    let picked = Style::new(app.theme.color("cursor.fg"), app.theme.color("cursor.bg"));
+
+    buf.fill(screen, ' ', base);
+    let title = app
+        .i18n
+        .t_args("palette-title", &[("theme", app.theme.id.clone().into())]);
+    buf.draw_frame(screen, frame, Some(&title));
+    let inner = screen.inner();
+    if inner.h < 3 {
+        return;
+    }
+    // One row at the foot for what the keys do.
+    let list_h = inner.h.saturating_sub(1) as usize;
+    // `#rrggbb` is the longest a colour is written as, and the two swatches are four cells
+    // each; the name takes what is left.
+    let value_w = 10u16;
+    let swatch_w = 5u16;
+    // The longest key is about thirty columns, so the name column stops there rather than
+    // stretching to the frame and leaving the colour it names a screen away from it.
+    let name_w = inner
+        .w
+        .saturating_sub(value_w + swatch_w * 2 + 2)
+        .clamp(8, 32);
+
+    for i in 0..list_h {
+        let Some(key) = view.keys.get(view.top + i) else {
+            break;
+        };
+        let y = inner.y + i as u16;
+        let on = view.top + i == view.cursor;
+        let row = if on { picked } else { base };
+        buf.fill(Rect::new(inner.x, y, inner.w, 1), ' ', row);
+
+        let mut x = inner.x;
+        buf.put_str(
+            x,
+            y,
+            &scmd_ui::truncate_cols(key, name_w as usize),
+            row,
+            name_w,
+        );
+        x += name_w + 1;
+
+        let color = app.theme.color(key);
+        let text = color.to_string();
+        buf.put_str(
+            x,
+            y,
+            &scmd_ui::truncate_cols(&text, value_w as usize),
+            row,
+            value_w,
+        );
+        x += value_w + 1;
+
+        // As ink, then as background. `Default` means "whatever the terminal does", which is
+        // exactly what the two swatches then show.
+        let as_ink = Style::new(color, app.theme.color("panel.bg"));
+        buf.put_str(x, y, " Abc ", as_ink, swatch_w);
+        x += swatch_w;
+        let as_paper = Style::new(app.theme.color("panel.fg"), color);
+        buf.put_str(x, y, " Abc ", as_paper, swatch_w);
+    }
+
+    let hint = app.i18n.t("palette-hint");
+    let y = inner.y + inner.h.saturating_sub(1);
+    buf.put_str(
+        inner.x,
+        y,
+        &scmd_ui::truncate_cols(&hint, inner.w as usize),
+        dim,
+        inner.w,
+    );
+}
+
 fn draw_sync(app: &App, view: &crate::app::SyncView, buf: &mut Buffer, screen: Rect) {
     use scmd_jobs::sync::{Action, Verdict};
 
@@ -3604,6 +3692,34 @@ Some **bold** text and a [link](https://example.com).
         let mut app = app("commander", "en");
         app.mode = crate::app::Mode::Sync(Box::new(sync_view()));
         println!("{}", frame(&mut app, 100, 18));
+    }
+
+    #[test]
+    #[ignore = "a look at the screen, not an assertion"]
+    fn eyeball_palette() {
+        let mut app = app("commander", "en");
+        app.mode = crate::app::Mode::Palette(Box::default());
+        println!("{}", frame(&mut app, 76, 24));
+    }
+
+    #[test]
+    fn the_palette_editor_shows_every_colour_with_its_value_and_two_swatches() {
+        let mut app = app("commander", "en");
+        app.mode = crate::app::Mode::Palette(Box::default());
+        let out = frame(&mut app, 76, 24);
+        assert!(out.contains("panel.bg"), "{out}");
+        assert!(out.contains("panel.fg"), "{out}");
+        // The colour as it is written in a theme file, and the two samples.
+        let value = app.theme.color("panel.fg").to_string();
+        assert!(
+            out.contains(&value),
+            "the value {value} is not shown: {out}"
+        );
+        assert!(out.contains("Abc"), "no swatch: {out}");
+        assert!(
+            out.contains("F2"),
+            "the foot does not say how to save: {out}"
+        );
     }
 
     #[test]

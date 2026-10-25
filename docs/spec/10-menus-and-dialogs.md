@@ -79,8 +79,8 @@ commands (backlog), Screens list (backlog: our own viewers, editors and jobs), T
 
 ### 2.4 Options
 
-System settings, Panel settings, Interface settings, Languages, Themes · Confirmations, Viewer
-settings (backlog), Editor settings (backlog), Code pages (backlog), Files highlighting
+System settings, Panel settings, Interface settings, Languages, Themes, Colours · Confirmations,
+Viewer settings (backlog), Editor settings (backlog), Code pages (backlog), Files highlighting
 (backlog), Plugins configuration (backlog) · Help, Save setup, Quit.
 
 ## 3. Settings dialogs
@@ -270,6 +270,28 @@ says so. `Enter` goes to the folder, connecting first where it is on a server.
 Name · Extension · Size · Modified · Unsorted, `√` on the one in force. Choosing the order that
 is already in force turns it round, the way FAR does it — unless `panel.allow_reverse_sort` is
 off, in which case nothing changes. `Ctrl+Shift+F12` reverses without opening the list.
+
+## 4b. The palette editor (`opt.colors`, Options → Colours)
+
+Every colour the interface asks for, one per row, in the order they are declared — which groups
+them by what they colour. Each row shows the key, the colour as a theme file writes it
+(`#rrggbb`, a name, or one of the 256), and the colour twice: as ink on the panel background and
+as a background behind the panel's ink. Both, because a colour is only ever used as one or the
+other and a single swatch would be half an answer.
+
+`Enter` asks for a colour, with the field opened on what the row is set to, so a shade is nudged
+rather than retyped. It takes everything a theme file takes: `red`, `brightcyan`, `default`,
+`idx:208`, `ansi:4`, `#ff8000`, `#f80`. Anything else is refused by name and changes nothing.
+
+The change is applied to the **live** theme at once, because a colour one cannot see is a
+colour one cannot choose. It is therefore on the screen before it is in a file: `F2` writes the
+theme into `scmd.toml` as a `[[theme]]` block under its own id — which the loader already
+treats as an override of the built-in of that name, so `Shift+F12` still cycles the themes —
+and `Esc` without `F2` says plainly that the colours changed on the screen only.
+
+Still to come: a grid of the sixteen and the two hundred and fifty-six to pick from rather than
+typing a name, and the colour *groups* FAR has (one change for every "selected" colour at
+once).
 
 ## 5. Save setup (`Shift+F9`)
 

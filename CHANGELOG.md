@@ -8,6 +8,24 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **A palette editor** (`F9 → Options → Colours…`, or `opt.colors`). Every colour the
+  interface asks for, one per row and in the order they are declared, with the value as a theme
+  file writes it and the colour shown twice — as ink on the panel background, and as a
+  background behind the panel's ink. Both, because a colour is only ever used as one or the
+  other and one swatch would be half an answer.
+
+  `Enter` asks for a colour and takes everything a theme file takes: a name, `default`,
+  `idx:208`, `ansi:4`, `#ff8000`, `#f80`. The field opens on what the row is set to, so a shade
+  is nudged rather than retyped, and anything that is not a colour is refused by name and
+  changes nothing.
+
+  The change goes onto the **live** theme at once — a colour one cannot see is a colour one
+  cannot choose — so it is on the screen before it is in a file. `F2` writes the theme into
+  `scmd.toml` as a `[[theme]]` block under its own id, which the theme loader already treats as
+  an override of the built-in of that name, so the next run starts with these colours and
+  `Shift+F12` still cycles the themes. `Esc` without `F2` says plainly that the colours changed
+  on the screen only.
+
 - **The mouse**, behind `ui.mouse` in *Interface settings* and **off** by default. That
   default is a decision: while a terminal is reporting the mouse it stops acting on it, so
   selecting text with the mouse and the middle-click paste go away — the user's own tools,
