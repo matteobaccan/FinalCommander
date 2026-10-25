@@ -266,23 +266,23 @@ pub const PART_SUFFIX: &str = ".scmd-part";
 impl JobFs for LocalFs {
     fn facts(&self, path: &VPath) -> io::Result<Facts> {
         not_mine(path)?;
-        let meta = fs::symlink_metadata(path.as_path())?;
+        let meta = fs::symlink_metadata(path.os())?;
         Ok(facts_from(&meta))
     }
 
     fn facts_following(&self, path: &VPath) -> io::Result<Facts> {
         not_mine(path)?;
-        let meta = fs::metadata(path.as_path())?;
+        let meta = fs::metadata(path.os())?;
         Ok(facts_from(&meta))
     }
 
     fn exists(&self, path: &VPath) -> bool {
-        fs::symlink_metadata(path.as_path()).is_ok()
+        fs::symlink_metadata(path.os()).is_ok()
     }
 
     fn read_dir(&self, path: &VPath) -> io::Result<Vec<(OsString, Facts)>> {
         let mut out = Vec::new();
-        for entry in fs::read_dir(path.as_path())? {
+        for entry in fs::read_dir(path.os())? {
             let entry = entry?;
             let meta = match entry.metadata() {
                 Ok(m) => m,
@@ -295,30 +295,30 @@ impl JobFs for LocalFs {
     }
 
     fn create_dir(&self, path: &VPath) -> io::Result<()> {
-        match fs::create_dir(path.as_path()) {
+        match fs::create_dir(path.os()) {
             Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Ok(()),
             other => other,
         }
     }
 
     fn create_dir_all(&self, path: &VPath) -> io::Result<()> {
-        fs::create_dir_all(path.as_path())
+        fs::create_dir_all(path.os())
     }
 
     fn rename(&self, from: &VPath, to: &VPath) -> io::Result<()> {
-        fs::rename(from.as_path(), to.as_path())
+        fs::rename(from.os(), to.os())
     }
 
     fn remove_file(&self, path: &VPath) -> io::Result<()> {
         // A read-only file still has to go when the user says delete.
-        if let Ok(meta) = fs::symlink_metadata(path.as_path()) {
+        if let Ok(meta) = fs::symlink_metadata(path.os()) {
             clear_readonly(path, &meta);
         }
-        fs::remove_file(path.as_path())
+        fs::remove_file(path.os())
     }
 
     fn remove_dir(&self, path: &VPath) -> io::Result<()> {
-        fs::remove_dir(path.as_path())
+        fs::remove_dir(path.os())
     }
 
     fn trash(&self, path: &VPath) -> io::Result<()> {
@@ -326,7 +326,7 @@ impl JobFs for LocalFs {
         // `.trashinfo` beside it records where it was), `NSFileManager` on macOS and
         // `IFileOperation` on Windows, each of which is what that desktop's own file manager
         // shows and restores from.
-        ::trash::delete(path.as_path()).map_err(|e| match e {
+        ::trash::delete(path.os()).map_err(|e| match e {
             // The wastebasket cannot take it: on Linux a path on a device with no trash
             // directory, on any system one the desktop refuses. It is not a bug and it is
             // not a missing file — the caller offers to delete it outright instead.
@@ -338,12 +338,12 @@ impl JobFs for LocalFs {
     }
 
     fn read_link(&self, path: &VPath) -> io::Result<PathBuf> {
-        fs::read_link(path.as_path())
+        fs::read_link(path.os())
     }
 
     #[cfg(unix)]
     fn symlink(&self, target: &std::path::Path, link: &VPath) -> io::Result<()> {
-        std::os::unix::fs::symlink(target, link.as_path())
+        std::os::unix::fs::symlink(target, link.os())
     }
 
     #[cfg(windows)]
@@ -351,14 +351,14 @@ impl JobFs for LocalFs {
         // Without developer mode or elevation this fails; the engine turns that into a normal
         // error decision point rather than a crash.
         if target.is_dir() {
-            std::os::windows::fs::symlink_dir(target, link.as_path())
+            std::os::windows::fs::symlink_dir(target, link.os())
         } else {
-            std::os::windows::fs::symlink_file(target, link.as_path())
+            std::os::windows::fs::symlink_file(target, link.os())
         }
     }
 
     fn same_file(&self, a: &VPath, b: &VPath) -> bool {
-        match (fs::canonicalize(a.as_path()), fs::canonicalize(b.as_path())) {
+        match (fs::canonicalize(a.os()), fs::canonicalize(b.os())) {
             (Ok(x), Ok(y)) => x == y,
             _ => false,
         }
@@ -369,7 +369,7 @@ impl JobFs for LocalFs {
             if let Some(mtime) = facts.mtime {
                 // Opening for write would truncate nothing but does need write access; a
                 // failure here is not worth losing the copy over.
-                if let Ok(file) = File::options().write(true).open(path.as_path()) {
+                if let Ok(file) = File::options().write(true).open(path.os()) {
                     let _ = file.set_modified(mtime);
                 }
             }
@@ -378,7 +378,7 @@ impl JobFs for LocalFs {
         if preserve.mode {
             use std::os::unix::fs::PermissionsExt;
             if let Some(mode) = facts.mode {
-                let _ = fs::set_permissions(path.as_path(), fs::Permissions::from_mode(mode));
+                let _ = fs::set_permissions(path.os(), fs::Permissions::from_mode(mode));
             }
         }
         Ok(())
@@ -386,21 +386,21 @@ impl JobFs for LocalFs {
 
     fn set_attrs(&self, path: &VPath, change: &crate::attrs::Change) -> io::Result<()> {
         not_mine(path)?;
-        let target = path.as_path();
+        let target = path.os();
         // A directory's own times cannot be set on Windows through the standard library: it
         // has no way to open a directory as a handle (that needs `FILE_FLAG_BACKUP_SEMANTICS`
         // on `CreateFileW`), so there is nothing to call `set_times` on. The files inside it
         // are set as asked; the folder itself keeps its own times, and the help page says so.
-        let times_here = !cfg!(windows) || !path_is_dir(target);
+        let times_here = !cfg!(windows) || !path_is_dir(target.as_ref());
         if let Some(when) = change.mtime.filter(|_| times_here) {
             // The times go through a handle rather than through the path, which is the only
             // way the standard library offers and also the right one: a path that changed
             // underneath us would otherwise have its successor's times set.
-            let file = File::options().write(true).open(target).or_else(|e| {
+            let file = File::options().write(true).open(&target).or_else(|e| {
                 // A read-only file still has its times set by whoever may write the
                 // directory, and a directory cannot be opened for writing at all on Unix.
-                if path_is_dir(target) {
-                    File::open(target)
+                if path_is_dir(target.as_ref()) {
+                    File::open(&target)
                 } else {
                     Err(e)
                 }
@@ -411,7 +411,7 @@ impl JobFs for LocalFs {
             }
             file.set_times(times)?;
         } else if let Some(atime) = change.atime.filter(|_| times_here) {
-            let file = File::open(target)?;
+            let file = File::open(&target)?;
             file.set_times(fs::FileTimes::new().set_accessed(atime))?;
         }
 
@@ -419,7 +419,7 @@ impl JobFs for LocalFs {
         {
             use std::os::unix::fs::PermissionsExt;
             let current =
-                || -> io::Result<u32> { Ok(fs::metadata(target)?.permissions().mode() & 0o7777) };
+                || -> io::Result<u32> { Ok(fs::metadata(&target)?.permissions().mode() & 0o7777) };
             let mut mode = match change.mode {
                 Some(mode) => Some(mode),
                 None if change.readonly.is_some() => Some(current()?),
@@ -443,7 +443,7 @@ impl JobFs for LocalFs {
                 }
             }
             if let Some(mode) = mode {
-                fs::set_permissions(target, fs::Permissions::from_mode(mode))?;
+                fs::set_permissions(&target, fs::Permissions::from_mode(mode))?;
             }
         }
 
@@ -456,7 +456,7 @@ impl JobFs for LocalFs {
             const HIDDEN: u32 = 0x2;
             const SYSTEM: u32 = 0x4;
             const ARCHIVE: u32 = 0x20;
-            let mut attributes = fs::metadata(target)?.file_attributes();
+            let mut attributes = fs::metadata(&target)?.file_attributes();
             for (wanted, bit) in [
                 (change.readonly, READONLY),
                 (change.hidden, HIDDEN),
@@ -469,7 +469,7 @@ impl JobFs for LocalFs {
                     None => {}
                 }
             }
-            set_windows_attributes(target, attributes)?;
+            set_windows_attributes(target.as_ref(), attributes)?;
         }
 
         Ok(())
@@ -483,8 +483,8 @@ impl JobFs for LocalFs {
         on_bytes: &mut dyn FnMut(u64) -> bool,
     ) -> io::Result<u64> {
         let part = part_path(dst);
-        let mut reader = File::open(src.as_path())?;
-        let mut writer = File::create(part.as_path())?;
+        let mut reader = File::open(src.os())?;
+        let mut writer = File::create(part.os())?;
         let mut buf = vec![0u8; buffer.clamp(16 * 1024, 8 * 1024 * 1024)];
         let mut total = 0u64;
 
@@ -495,19 +495,19 @@ impl JobFs for LocalFs {
                 Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
                 Err(e) => {
                     drop(writer);
-                    let _ = fs::remove_file(part.as_path());
+                    let _ = fs::remove_file(part.os());
                     return Err(e);
                 }
             };
             if let Err(e) = writer.write_all(&buf[..read]) {
                 drop(writer);
-                let _ = fs::remove_file(part.as_path());
+                let _ = fs::remove_file(part.os());
                 return Err(e);
             }
             total += read as u64;
             if !on_bytes(read as u64) {
                 drop(writer);
-                let _ = fs::remove_file(part.as_path());
+                let _ = fs::remove_file(part.os());
                 return Err(io::Error::new(io::ErrorKind::Interrupted, "cancelled"));
             }
         }
@@ -515,8 +515,8 @@ impl JobFs for LocalFs {
         writer.flush()?;
         drop(writer);
         // Only now does the destination appear under its final name.
-        if let Err(e) = fs::rename(part.as_path(), dst.as_path()) {
-            let _ = fs::remove_file(part.as_path());
+        if let Err(e) = fs::rename(part.os(), dst.os()) {
+            let _ = fs::remove_file(part.os());
             return Err(e);
         }
         Ok(total)
@@ -529,15 +529,12 @@ impl JobFs for LocalFs {
         buffer: usize,
         on_bytes: &mut dyn FnMut(u64) -> bool,
     ) -> io::Result<u64> {
-        let mut reader = File::open(src.as_path())?;
+        let mut reader = File::open(src.os())?;
         // `append` seeks to the end on every write, so bytes already in the destination are
         // kept whatever else writes to it meanwhile; `create` rather than `create_new`
         // because appending to a destination that is not there yet is just a copy. Neither
         // touches the permissions of a file that exists, which `File::create` would not do.
-        let mut writer = File::options()
-            .append(true)
-            .create(true)
-            .open(dst.as_path())?;
+        let mut writer = File::options().append(true).create(true).open(dst.os())?;
         let mut buf = vec![0u8; buffer.clamp(16 * 1024, 8 * 1024 * 1024)];
         let mut total = 0u64;
 
@@ -563,7 +560,7 @@ impl JobFs for LocalFs {
     }
 
     fn hard_link(&self, target: &VPath, link: &VPath) -> io::Result<()> {
-        fs::hard_link(target.as_path(), link.as_path())
+        fs::hard_link(target.os(), link.os())
     }
 
     fn read_chunks(
@@ -573,7 +570,7 @@ impl JobFs for LocalFs {
         on_chunk: &mut dyn FnMut(&[u8]) -> bool,
     ) -> io::Result<u64> {
         not_mine(path)?;
-        let mut file = File::open(path.as_path())?;
+        let mut file = File::open(path.os())?;
         let mut buf = vec![0u8; buffer.clamp(8 * 1024, 8 * 1024 * 1024)];
         let mut total = 0u64;
         loop {
@@ -602,7 +599,7 @@ impl JobFs for LocalFs {
                 "a wipe can only overwrite a file on a local filesystem",
             ));
         }
-        let meta = fs::symlink_metadata(path.as_path())?;
+        let meta = fs::symlink_metadata(path.os())?;
         if !meta.is_file() {
             // A symlink, a device or a socket has no bytes of its own; overwriting what one
             // of them points at would destroy something the user never selected.
@@ -613,7 +610,7 @@ impl JobFs for LocalFs {
         }
         clear_readonly(path, &meta);
 
-        let mut file = File::options().write(true).open(path.as_path())?;
+        let mut file = File::options().write(true).open(path.os())?;
         let zeros = vec![0u8; buffer.clamp(16 * 1024, 8 * 1024 * 1024)];
         let mut left = meta.len();
         while left > 0 {
@@ -647,7 +644,7 @@ impl JobFs for LocalFs {
                 "a replacement can only rewrite a file on a local filesystem",
             ));
         }
-        let meta = fs::symlink_metadata(path.as_path())?;
+        let meta = fs::symlink_metadata(path.os())?;
         if !meta.is_file() {
             // A directory, a symlink, a device or a socket has no bytes of its own. Rewriting
             // what a link points at would replace a file the user never chose.
@@ -656,7 +653,7 @@ impl JobFs for LocalFs {
                 "only a regular file has bytes of its own to replace in",
             ));
         }
-        let mut reader = File::open(path.as_path())?;
+        let mut reader = File::open(path.os())?;
 
         if pass == ReplacePass::Count {
             return replace::pass(&mut reader, None, matcher, buffer, on_bytes);
@@ -670,13 +667,13 @@ impl JobFs for LocalFs {
         // Buffered, because the result arrives as a long run of bytes that did not change, a
         // short replacement, another long run: a file with a thousand matches is not worth a
         // thousand extra syscalls.
-        let mut writer = io::BufWriter::new(File::create(part.as_path())?);
+        let mut writer = io::BufWriter::new(File::create(part.os())?);
         let report = match replace::pass(&mut reader, Some(&mut writer), matcher, buffer, on_bytes)
         {
             Ok(report) => report,
             Err(e) => {
                 drop(writer);
-                let _ = fs::remove_file(part.as_path());
+                let _ = fs::remove_file(part.os());
                 return Err(e);
             }
         };
@@ -685,7 +682,7 @@ impl JobFs for LocalFs {
             // Nothing to do. The original keeps its inode, its permissions and its modification
             // time, rather than being replaced by a file with the same bytes and none of that.
             drop(writer);
-            let _ = fs::remove_file(part.as_path());
+            let _ = fs::remove_file(part.os());
             return Ok(report);
         }
 
@@ -693,13 +690,13 @@ impl JobFs for LocalFs {
         // to go back to, so the bytes have to be on the device before the name moves.
         if let Err(e) = flush_and_sync(&mut writer) {
             drop(writer);
-            let _ = fs::remove_file(part.as_path());
+            let _ = fs::remove_file(part.os());
             return Err(e);
         }
         drop(writer);
         // Only now does the file the user is watching change at all.
-        if let Err(e) = fs::rename(part.as_path(), path.as_path()) {
-            let _ = fs::remove_file(part.as_path());
+        if let Err(e) = fs::rename(part.os(), path.os()) {
+            let _ = fs::remove_file(part.os());
             return Err(e);
         }
         Ok(Replaced {
@@ -725,7 +722,7 @@ fn clear_readonly(path: &VPath, meta: &fs::Metadata) {
     let mut perms = meta.permissions();
     #[allow(clippy::permissions_set_readonly_false)]
     perms.set_readonly(false);
-    let _ = fs::set_permissions(path.as_path(), perms);
+    let _ = fs::set_permissions(path.os(), perms);
 }
 
 pub fn part_path(dst: &VPath) -> VPath {
@@ -1127,5 +1124,58 @@ mod tests {
             .unwrap();
         assert!(LocalFs.same_file(&real, &link));
         assert!(!LocalFs.same_file(&real, &VPath::local(dir.path().join("nope"))));
+    }
+    #[test]
+    fn a_path_past_the_windows_limit_is_still_a_file_we_can_work_with() {
+        // This is the test for `scmd_core::longpath`, and it is here rather than there
+        // because the point is not the string: it is that the operating system accepts what
+        // comes out of it. On a Unix it passes because `PATH_MAX` is 4096; on Windows it
+        // passes only because every call in `LocalFs` goes through `VPath::os`, and the CI
+        // runner is the machine that proves it.
+        let dir = tempfile::tempdir().unwrap();
+        let mut deep = dir.path().to_path_buf();
+        // Twelve directories of twenty-four characters: past 260 even from a short root.
+        for i in 0..12 {
+            deep.push(format!("a-directory-no-{i:02}-xxxxxx"));
+        }
+        let folder = VPath::local(&deep);
+        assert!(
+            scmd_core::is_long(folder.as_path()),
+            "the fixture is not long enough: {} characters",
+            folder.as_path().as_os_str().len()
+        );
+
+        LocalFs.create_dir_all(&folder).expect("mkdir -p");
+        assert!(LocalFs.exists(&folder));
+        assert!(LocalFs.facts(&folder).expect("stat").is_dir());
+
+        let file = VPath::local(deep.join("notes.txt"));
+        {
+            // Through the engine's own writer, which is what a copy uses.
+            let source = VPath::local(dir.path().join("source.txt"));
+            fs::write(source.as_path(), b"a long way down\n").unwrap();
+            let mut nothing = |_: u64| true;
+            LocalFs
+                .copy_file(&source, &file, 64 * 1024, &mut nothing)
+                .expect("the copy");
+        }
+        let mut read = Vec::new();
+        LocalFs
+            .read_chunks(&file, 64 * 1024, &mut |chunk| {
+                read.extend_from_slice(chunk);
+                true
+            })
+            .expect("read it back");
+        assert_eq!(read, b"a long way down\n");
+        assert_eq!(LocalFs.facts(&file).expect("stat").size, 16);
+
+        // And the whole way back out again: a rename, then a delete.
+        let moved = VPath::local(deep.join("renamed.txt"));
+        LocalFs.rename(&file, &moved).expect("rename");
+        assert!(!LocalFs.exists(&file));
+        assert!(LocalFs.exists(&moved));
+        LocalFs.remove_file(&moved).expect("delete");
+        LocalFs.remove_dir(&folder).expect("rmdir");
+        assert!(!LocalFs.exists(&folder));
     }
 }

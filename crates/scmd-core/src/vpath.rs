@@ -189,6 +189,17 @@ impl VPath {
         &self.path
     }
 
+    /// The path as it should be handed to the **operating system**.
+    ///
+    /// The same thing as [`VPath::as_path`] on every platform but Windows, where a path long
+    /// enough to meet `MAX_PATH` comes back with the verbatim prefix that gets round it (see
+    /// [`crate::longpath`]). Anything that calls `std::fs` wants this one; anything that shows
+    /// a path to a person, or compares two of them, wants `as_path`, because the prefix is not
+    /// something a user typed or would recognise.
+    pub fn os(&self) -> std::borrow::Cow<'_, Path> {
+        crate::longpath::os_path(&self.path)
+    }
+
     /// The `/`-separated path a remote provider puts on the wire.
     pub fn remote_path(&self) -> String {
         self.path.to_string_lossy().replace('\\', "/")

@@ -8,6 +8,29 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **Paths past `MAX_PATH` on Windows.** A Windows API call given a path of 260 characters or
+  more fails, however much room the filesystem has — NTFS has allowed 32,767 since 1993, and it
+  is the Win32 layer in front of it that does not. A file manager meets the difference every
+  day: `node_modules` nested four deep, a build tree, a path from a server that was fine where
+  it came from.
+
+  So every path handed to the operating system now goes through `scmd_core::os_path`, which on
+  Windows adds the verbatim prefix — `\\?\`, or `\\?\UNC\` for a share — to an absolute path of
+  240 characters or more, and on every other platform is the identity. 240 rather than 260
+  because a directory is allowed twelve fewer characters than a file: what goes in it has to
+  fit too.
+
+  Two things it deliberately does not do. It does not prefix a path holding `.` or `..`,
+  because a verbatim path is *not* normalised by Windows and the `..` would arrive at the
+  filesystem as a name — such a path keeps the behaviour it had, rather than gaining a new way
+  to fail. And it is not a manifest declaring the process long-path aware, because that also
+  needs a registry setting on the machine and is not something a program can rely on by itself.
+
+  The test is end-to-end rather than about the string: a directory twelve deep, a file copied
+  into it through the job engine, read back, renamed and deleted. It passes on a Unix because
+  `PATH_MAX` is 4096; on Windows it passes only because the prefix is there, and the CI runner
+  is what proves it.
+
 - **Editor settings** (`F9 → Options → Editor settings`), and the `[editor]` section behind
   them. The tab policy is three choices and not a box, as FAR has it: `keep` leaves every tab
   alone, `typed` turns a newly typed tab into spaces, and `all` also expands the tabs already in

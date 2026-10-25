@@ -1622,7 +1622,7 @@ fn run_checksums(
 /// Check the files beside a list of digests against it.
 fn run_verify(id: u64, list: &VPath, cancel: CancelToken, tx: mpsc::Sender<Event>) {
     let fs = scmd_jobs::LocalFs;
-    let text = match std::fs::read_to_string(list.as_path()) {
+    let text = match std::fs::read_to_string(list.os()) {
         Ok(text) => text,
         Err(e) => {
             let _ = tx.send(Event::VerifyDone {
@@ -1885,7 +1885,7 @@ fn run_pack(
         &mut progress,
     );
     // The archive on disk is new, so any index of a file by that name is not it any more.
-    archives.forget(archive.as_path());
+    archives.forget(&archive.os());
 
     let outcome = match result {
         Ok(written) => Outcome {
@@ -1925,7 +1925,7 @@ fn run_test(
     use scmd_jobs::{Outcome, Phase, Progress};
 
     let started = std::time::Instant::now();
-    let outcome = match archives.open(archive.as_path(), &cancel) {
+    let outcome = match archives.open(&archive.os(), &cancel) {
         Ok(handle) => {
             let total = handle
                 .entries()
@@ -2003,7 +2003,7 @@ fn run_rebuild(
     use scmd_jobs::{Outcome, Phase, Progress};
 
     let started = std::time::Instant::now();
-    archives.forget(archive.as_path());
+    archives.forget(&archive.os());
     let total = changes.len() as u64;
     let mut done = 0u64;
     let mut last = std::time::Instant::now();
@@ -2032,7 +2032,7 @@ fn run_rebuild(
             });
         },
     );
-    archives.forget(archive.as_path());
+    archives.forget(&archive.os());
     let outcome = match result {
         Ok(written) => Outcome {
             files: written.files,
@@ -2066,7 +2066,7 @@ fn fetch_entry(
         .leave()
         .ok_or_else(|| format!("{path}: not a path inside an archive"))?;
     let archive = archives
-        .open(host.as_path(), &CancelToken::new())
+        .open(&host.os(), &CancelToken::new())
         .map_err(|e| e.to_string())?;
     let inner = path.inner_path();
     let entry = archive

@@ -604,7 +604,7 @@ fn mode_of(path: &VPath) -> Option<u32> {
         if !path.is_local() || path.in_container() {
             return None;
         }
-        std::fs::metadata(path.as_path())
+        std::fs::metadata(path.os())
             .ok()
             .map(|m| m.permissions().mode() & 0o7777)
     }
@@ -5799,7 +5799,7 @@ impl App {
             self.set_error(m);
             return;
         };
-        match Editor::open(path.as_path()) {
+        match Editor::open(&path.os()) {
             Ok(mut editor) => {
                 self.tune_editor(&mut editor);
                 let line = line_at_offset(&editor, offset);
@@ -6408,7 +6408,7 @@ impl App {
             },
             Prefix::Edit(arg) => match self.resolve_argument(&arg) {
                 // A name that does not exist yet is a new file, which is what `edit:` is for.
-                Some(path) => match Editor::open(path.as_path()) {
+                Some(path) => match Editor::open(&path.os()) {
                     Ok(mut editor) => {
                         self.tune_editor(&mut editor);
                         self.mode = Mode::Editor(Box::new(editor));
@@ -8786,7 +8786,7 @@ impl App {
             }
             PromptKind::HexRead => {
                 let Some(path) = path else { return };
-                match std::fs::read(path.as_path()) {
+                match std::fs::read(path.os()) {
                     Ok(bytes) => {
                         // Overwrite where the cursor is, or insert when insert mode is on:
                         // the mode the user can see decides, not a second question.
@@ -9319,20 +9319,20 @@ impl App {
         }
         // A raw device is bytes by definition and never lines: it opens in hex, read-only,
         // without the text editor being given a chance to try (SPEC 05 §1.10).
-        if std::fs::metadata(path.as_path())
+        if std::fs::metadata(path.os())
             .map(|m| scmd_core::is_device(&m))
             .unwrap_or(false)
         {
-            self.open_hex(path.as_path());
+            self.open_hex(&path.os());
             return;
         }
         // A file a text view would mangle opens in hex instead (SPEC 05 §2.5). The reader's
         // own test decides, so `F3` and `F4` agree about what a binary is.
-        if looks_binary_file(path.as_path()) {
-            self.open_hex(path.as_path());
+        if looks_binary_file(&path.os()) {
+            self.open_hex(&path.os());
             return;
         }
-        match Editor::open(path.as_path()) {
+        match Editor::open(&path.os()) {
             Ok(mut editor) => {
                 self.tune_editor(&mut editor);
                 if editor.buffer.read_only {
@@ -9396,7 +9396,7 @@ impl App {
             return;
         }
         if self.mode.hex().is_some() {
-            match Editor::open(path.as_path()) {
+            match Editor::open(&path.os()) {
                 Ok(mut editor) => {
                     self.tune_editor(&mut editor);
                     self.mode = Mode::Editor(Box::new(editor));
@@ -9405,7 +9405,7 @@ impl App {
             }
             return;
         }
-        self.open_hex(path.as_path());
+        self.open_hex(&path.os());
     }
 
     /// `Shift+F4`: a new file in the active panel's directory.
@@ -10554,7 +10554,7 @@ impl App {
             self.quick_why = Some(self.i18n.t("quick-view-not-here"));
             return;
         }
-        match scmd_view::FileSource::open(path.as_path()) {
+        match scmd_view::FileSource::open(&path.os()) {
             Ok(source) => {
                 self.quick = Some(Box::new(Viewer::new(Box::new(source), path.clone())));
                 self.quick_of = Some(path);

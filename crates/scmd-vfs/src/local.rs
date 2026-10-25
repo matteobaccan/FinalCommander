@@ -50,7 +50,7 @@ impl Vfs for LocalVfs {
     async fn stat(&self, path: &VPath) -> Result<Entry> {
         let owned = path.clone();
         tokio::task::spawn_blocking(move || {
-            let meta = fs::symlink_metadata(owned.as_path()).map_err(|e| Error::io(&owned, e))?;
+            let meta = fs::symlink_metadata(owned.os()).map_err(|e| Error::io(&owned, e))?;
             let name = owned
                 .file_name()
                 .map(OsString::from)
@@ -76,7 +76,7 @@ pub fn real_path(path: &VPath) -> VPath {
     if !path.is_local() || path.in_container() {
         return path.clone();
     }
-    match fs::canonicalize(path.as_path()) {
+    match fs::canonicalize(path.os()) {
         Ok(real) => VPath::local(strip_verbatim(real)),
         Err(_) => path.clone(),
     }
@@ -105,7 +105,7 @@ pub fn list_blocking(path: &VPath, cancel: &CancelToken) -> Result<Vec<Entry>> {
         // directory the archive sits in. The archive provider owns these paths.
         return Err(Error::Unsupported { path: path.clone() });
     }
-    let read = fs::read_dir(path.as_path()).map_err(|e| Error::io(path, e))?;
+    let read = fs::read_dir(path.os()).map_err(|e| Error::io(path, e))?;
     let mut out = Vec::with_capacity(64);
     if !path.is_root() {
         out.push(Entry::parent_entry());
@@ -135,7 +135,7 @@ pub fn stat_blocking(path: &VPath) -> Result<Entry> {
     let real = path.as_path();
     // The link itself, not what it points at: a results panel should say a link is a link,
     // and a broken one must not vanish from the list.
-    let meta = fs::symlink_metadata(real).map_err(|e| Error::io(path, e))?;
+    let meta = fs::symlink_metadata(path.os()).map_err(|e| Error::io(path, e))?;
     let name = real
         .file_name()
         .map(OsString::from)

@@ -11,6 +11,7 @@ pub mod entry;
 pub mod error;
 pub mod filter;
 pub mod listing;
+pub mod longpath;
 pub mod selection;
 pub mod size;
 pub mod sort;
@@ -26,6 +27,7 @@ pub use filter::{
     FilterError, Groups, HardLinks, KindFilter, MaskSet, SizeRange, TimeField,
 };
 pub use listing::{Listing, Totals};
+pub use longpath::{is_long, os_path};
 pub use selection::{MaskScope, Selection};
 pub use size::{format_count, format_size};
 pub use sort::{Sort, SortKey};

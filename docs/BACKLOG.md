@@ -194,6 +194,7 @@ backlog items; they are decisions already taken.
 
 | FAR | Our answer |
 | --- | --- |
+| Paths past `MAX_PATH` | **Handled.** Every path handed to the operating system goes through `scmd_core::os_path`, which on Windows puts the verbatim prefix (`\\?\`, or `\\?\UNC\` for a share) on an absolute path of 240 characters or more. That is the way round `MAX_PATH` that works on every Windows this runs on — the alternative, a manifest declaring the process long-path aware, also needs a registry setting on the machine. A path holding `.` or `..` is *not* prefixed, because a verbatim path is not normalised and the `..` would reach the filesystem as a name. There is an end-to-end test — make a directory twelve deep, copy a file into it, read it back, rename it, delete it — and the Windows CI runner is what proves it. |
 | Short (8.3) names, `Ctrl+N` | Dropped. No equivalent on Unix, and dying on Windows. |
 | NTFS alternate data streams (columns, search, copy warnings) | Dropped from the core; a provider may expose them as entries if it wants to. |
 | SUBST drives, VHD attach/detach, USB safe removal, CD eject, volume labels | The drive list shows what the platform can tell us (roots, mount points, connections). The rest belongs in a platform plugin, if ever. |
