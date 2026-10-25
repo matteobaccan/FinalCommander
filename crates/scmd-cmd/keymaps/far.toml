@@ -455,13 +455,36 @@ cmd = "sel.restore"
 # FAR's selection matrix: the modifier picks the criterion. These need a terminal that
 # reports modified printable keys (kitty, foot, WezTerm, Windows Terminal, xterm with
 # modifyOtherKeys); where it does not, the Select menu reaches the same work.
+#
+# FAR's own key for "by extension" is `Ctrl+Gray +`, which is `Ctrl++` here — and that pair
+# is the one every graphical program zooms with, so it is the font's (below) and this keeps
+# the Ctrl mnemonic one modifier along.
 [[bind]]
-keys = ["Ctrl++"]
+keys = ["Ctrl+Shift++"]
 cmd = "sel.ext.add"
 
 [[bind]]
-keys = ["Ctrl+-"]
+keys = ["Ctrl+Shift+-"]
 cmd = "sel.ext.remove"
+
+# The font, on the keys every graphical program uses for it. A terminal program does not own
+# its font: these send xterm's `OSC 50` and the terminal decides (docs/03-keymap.md §9). On
+# most emulators `Ctrl` with plus or minus is the emulator's own zoom and never arrives here
+# at all, which is the same outcome by a shorter road.
+[[bind]]
+keys = ["Ctrl++"]
+scope = "global"
+cmd = "app.font(1)"
+
+[[bind]]
+keys = ["Ctrl+-"]
+scope = "global"
+cmd = "app.font(-1)"
+
+[[bind]]
+keys = ["Ctrl+0"]
+scope = "global"
+cmd = "app.font(0)"
 
 [[bind]]
 keys = ["Alt++"]

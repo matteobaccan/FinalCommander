@@ -98,10 +98,11 @@ Column `SC` = SupremeCommander default (profile `far`, our baseline).
 | tree panel | Ctrl+T | — | — | Ctrl+T |
 | hide both panels | Ctrl+O (user screen) | Ctrl+O | — | Ctrl+O |
 | hide inactive panel | Ctrl+P | — | — | Ctrl+P |
-| panel height / width | Ctrl+↑/↓, Ctrl+←/→ | — | — | Ctrl+↑/↓, Ctrl+←/→ |
+| panel height / width | Ctrl+↑/↓, Ctrl+←/→ | — | — | Ctrl+↑/↓, Ctrl+←/→ — `Ctrl+↑` brings the panels' bottom edge **up**, so they get shorter and the command output below them gets the rows |
 | toggle hidden files | Ctrl+H | Alt+. (Shift+Alt+H in some builds) | Alt+. | Ctrl+H |
 | short/long names | Ctrl+N | Alt+T (cycle formats) | Alt+Shift+B/D | Ctrl+N |
 | key bar on/off | Ctrl+B | — | — | Ctrl+B |
+| font larger / smaller / as it was | — | — | — | **Ctrl++ / Ctrl+− / Ctrl+0**, as every graphical program does it; §9 says what a terminal program can actually do about its font |
 | view modes 1..0 | LeftCtrl+1..0 | Alt+T cycles | Alt+Shift+B/D | **Ctrl+1..5** in FAR's own order: brief, medium, full, wide, detailed. The four FAR has beyond those — descriptions, long descriptions, file owners, file links — and its alternative full view want data we do not collect yet; `docs/BACKLOG.md` says so |
 | parent directory | Ctrl+PgUp | Ctrl+PgUp | Ctrl+PgUp | Ctrl+PgUp, Backspace |
 | enter dir / archive | Ctrl+PgDn | Ctrl+PgDn | Enter | Ctrl+PgDn |
@@ -126,7 +127,7 @@ Column `SC` = SupremeCommander default (profile `far`, our baseline).
 | select group / unselect group | Gray + / Gray − | + / \ | Ctrl++ / Ctrl+− | + / − |
 | invert selection | Gray * | — | Alt+* | `*` (files), `Alt+*` (folders too, FAR's `Ctrl+Gray *`) |
 | select all / none | Shift+Gray + / Shift+Gray − | — | Alt++ / Alt+− | **Shift++ / Shift+−**, and `Ctrl+Shift+A` for *all* where a terminal does not report Shift with a printable key |
-| by extension of the current file | Ctrl+Gray + / − | — | — | **Ctrl++ / Ctrl+−** |
+| by extension of the current file | Ctrl+Gray + / − | — | — | **Ctrl+Shift++ / Ctrl+Shift+−** (FAR's own `Ctrl++` is the font, below), and the Select menu |
 | by name, any extension | Alt+Gray + / − | — | — | **Alt++ / Alt+−** |
 | scroll long names sideways | Alt+←/→, Alt+Home/End | — | — | **Ctrl+Shift+←/→** (Alt+←/→ is history here) |
 | restore previous selection | Ctrl+M | — | — | Ctrl+Shift+M |
@@ -315,6 +316,15 @@ A TUI cannot receive every combination the Windows console gives FAR. Decisions:
 5. **Conflicts with the terminal emulator and the desktop** (`Ctrl+Shift+C/V`, `Alt+F4`,
    `Ctrl+W`, `F10` on GNOME, `Ctrl+Q`) are listed in the keymap docs; every one of them has an
    alternative binding, listed next to it in the help, and a `keys.local.toml` override.
+   **The font is not ours to set.** A terminal program does not own its font: the emulator
+   does, and there is exactly one control sequence for asking — xterm's `OSC 50`, where a `#`
+   and a signed number step through the font menu. So `Ctrl++`, `Ctrl+−` and `Ctrl+0` send
+   that, and what happens next is the terminal's business: xterm and the terminals that copy
+   it change font, the rest ignore it. On most emulators (VTE, Konsole, Windows Terminal,
+   alacritty, foot) `Ctrl` with plus or minus is the emulator's *own* zoom and never reaches a
+   program at all — the same outcome by a shorter road, which is why taking those keys costs
+   nothing there. The status line says the request was made, not that it was granted, because
+   there is no reply to wait for.
    The **tabs** sit on the `Ctrl+Alt` row for this reason and no other: `Ctrl+T` is the tree
    panel and `Ctrl+Tab` steps between the open screens, both of them FAR's own, so there was
    no key of FAR's left to keep. `Ctrl+Alt` with an *arrow* is avoided because most desktops
@@ -350,6 +360,7 @@ tool.sync.dirs  tool.usermenu  tool.history(cmd|view|folder)  tool.macro.record|
 job.queue.show  job.pause  job.resume  job.cancel
 shell.run  shell.output.show  shell.term.toggle  shell.insert(name|path|other)
 app.menu  app.help  app.settings  app.palette  app.theme.next  app.keymap.profile(name)
+app.font(N)
 app.quit  app.suspend
 ```
 

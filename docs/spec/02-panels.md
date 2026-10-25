@@ -325,6 +325,11 @@ every background screen that holds some, because the panels cannot otherwise kno
 
 - Split: vertical (default) or horizontal; ratio draggable and settable (`Ctrl+←/→`), reset
   with `Ctrl+Alt+=`.
+- Height: `Ctrl+↑` brings the panels' bottom edge **up** — shorter panels, and the rows they
+  give up go to the user screen underneath (`06-tools.md` §7a); `Ctrl+↓` gives them back. The
+  command is `panel.height(N)` and its sign is the panels' *height*, which is what the keys
+  read as; the setting it moves (`panel.height_cut`) is what they give up, so the two have
+  opposite signs and exactly one place says so.
 - Any element can be hidden; hiding both panels gives the full-screen shell (FAR `Ctrl+O`).
 - Minimum usable size 60x15; below that the panels stack and the key bar collapses to one row.
 

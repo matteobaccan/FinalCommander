@@ -24,6 +24,11 @@ impl Command {
             Command::AppMenu => "the menu bar",
             Command::AppPalette => "every command, searchable",
             Command::AppThemeNext => "the next colour theme",
+            Command::AppFont(by) => match by {
+                0 => "ask the terminal for the font it started with",
+                by if by < 0 => "ask the terminal for a smaller font",
+                _ => "ask the terminal for a larger font",
+            },
             Command::AppThemes => "choose a colour theme",
             Command::AppLanguages => "choose the language",
             Command::AppSetupSave => "write the settings to scmd.toml",
@@ -75,9 +80,9 @@ impl Command {
             }
             Command::PanelHeight(by) => {
                 if by < 0 {
-                    "give the panels a row back from the command output"
-                } else {
                     "take a row off the panels for the command output"
+                } else {
+                    "give the panels a row back from the command output"
                 }
             }
             Command::PanelDirsFirst => "directories first, or mixed in with the files",

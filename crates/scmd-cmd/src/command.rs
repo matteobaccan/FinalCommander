@@ -42,6 +42,10 @@ pub enum Command {
     AppMenu,
     AppPalette,
     AppThemeNext,
+    /// Ask the terminal for a font one step larger, one step smaller, or the one it started
+    /// with. A program does not own its font; this is a request, and `docs/03-keymap.md` §9
+    /// says which terminals answer it.
+    AppFont(i8),
     /// The theme list (SPEC 10 §4).
     AppThemes,
     /// The language list (SPEC 10 §4).
@@ -85,7 +89,10 @@ pub enum Command {
     PanelSortReverse,
     /// Move the line between the two panels: a negative step gives the left one less.
     PanelSplit(i8),
-    /// Take a row off the panels, or give one back: the user screen gets what they lose.
+    /// Make the panels a row shorter or a row taller: the user screen gets what they give up.
+    ///
+    /// The sign is the panels' *height*, which is what the keys read as — `Ctrl+Up` brings the
+    /// bottom edge up, so the panels get shorter and the output below them gets longer.
     PanelHeight(i8),
     /// Directories before files, or mixed in with them (`Shift+F11`, FAR's `Group`).
     PanelDirsFirst,
@@ -319,6 +326,9 @@ impl Command {
             Command::AppMenu,
             Command::AppPalette,
             Command::AppThemeNext,
+            Command::AppFont(-1),
+            Command::AppFont(1),
+            Command::AppFont(0),
             Command::AppThemes,
             Command::AppLanguages,
             Command::AppSetupSave,
@@ -538,6 +548,7 @@ impl Command {
             Command::AppMenu => "app.menu".into(),
             Command::AppPalette => "app.palette".into(),
             Command::AppThemeNext => "app.theme.next".into(),
+            Command::AppFont(by) => format!("app.font({by})"),
             Command::AppThemes => "app.themes".into(),
             Command::AppLanguages => "app.languages".into(),
             Command::AppSetupSave => "app.setup.save".into(),
@@ -730,6 +741,7 @@ impl Command {
             ("app.menu", _) => Command::AppMenu,
             ("app.palette", _) => Command::AppPalette,
             ("app.theme.next", _) => Command::AppThemeNext,
+            ("app.font", Some(a)) => Command::AppFont(a.trim().parse().ok()?),
             ("app.themes", _) => Command::AppThemes,
             ("app.languages", _) => Command::AppLanguages,
             ("app.setup.save", _) => Command::AppSetupSave,

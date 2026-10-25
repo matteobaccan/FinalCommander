@@ -349,6 +349,16 @@ goes to it, and
 .B Ctrl+D
 opens the whole list.
 .PP
+.B Ctrl+Up
+and
+.B Ctrl+Down
+change how much of the screen the panels take, and
+.B Ctrl++
+and
+.B Ctrl+\-
+ask the terminal for a larger or smaller font \(em which xterm answers and most other
+terminals handle themselves before the program ever sees the key.
+.PP
 Those are the defaults of the
 .B far
 profile; the
@@ -951,6 +961,11 @@ fn interactive(mut app: App) -> Result<()> {
                 Request::Verify { id, list, cancel } => {
                     let tx = tx.clone();
                     runtime.spawn_blocking(move || run_verify(id, &list, cancel, tx));
+                }
+                // The only request the loop answers itself: the terminal is here, and asking
+                // it for a font is one write and no waiting.
+                Request::Font { by } => {
+                    let _ = term.font_step(by);
                 }
                 Request::TunnelOpen {
                     id,
@@ -2926,6 +2941,8 @@ timeout = 10
                         app.handle_event(event);
                     }
                 }
+                // No terminal in a test: what the request carries is checked where it is made.
+                Request::Font { .. } => {}
                 Request::Find { id, spec, cancel } => {
                     let (tx, rx) = mpsc::channel();
                     run_find(id, *spec, cancel, tx);

@@ -27,9 +27,17 @@ the whole screen, and `Ctrl+O` hides both to show the output of the commands tha
 `Ctrl+R` re-reads. `Ctrl+L` turns the other panel into an information panel, `Ctrl+Q` into a
 preview of the file under the cursor, `Ctrl+T` into a directory tree.
 
-`Ctrl+←` and `Ctrl+→` move the line between the two panels; `Ctrl+↑` and `Ctrl+↓` take rows
-off both of them and give them to the output of the last command, which is how you watch a
-build go by without leaving the panels. Both are settings, so `Shift+F9` keeps them.
+`Ctrl+←` and `Ctrl+→` move the line between the two panels. `Ctrl+↑` brings the panels' bottom
+edge up — they get shorter, and the rows they give up show the output of the last command,
+which is how you watch a build go by without leaving the panels; `Ctrl+↓` gives the rows back.
+Both are settings, so `Shift+F9` keeps them.
+
+`Ctrl++` and `Ctrl+−` ask the terminal for a larger or smaller font, and `Ctrl+0` for the one
+it started with. Whether anything happens is the terminal's business and not ours: a program
+in a terminal does not own its font, it can only ask. xterm and the terminals that copy it
+answer; on most others (GNOME Terminal, Konsole, Windows Terminal, alacritty, foot) those keys
+are the emulator's own zoom and never reach us at all — which gets you the same thing by a
+shorter road.
 
 # Folders kept to hand
 

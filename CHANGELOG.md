@@ -8,6 +8,19 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **`Ctrl++`, `Ctrl+−` and `Ctrl+0`** ask the terminal for a larger font, a smaller one, or
+  the one it started with. A program in a terminal does not own its font — the emulator does,
+  and there is exactly one control sequence for asking: xterm's `OSC 50`, where a `#` and a
+  signed number step through the font menu. So that is what these send, and what happens next
+  is the terminal's business. On most emulators (VTE, Konsole, Windows Terminal, alacritty,
+  foot) `Ctrl` with plus or minus is the emulator's own zoom and never reaches a program at
+  all, which gets the same result by a shorter road. The status line says the request was
+  made, not that it was granted, because there is no reply to wait for.
+
+  FAR's `Ctrl+Gray +`/`−` — select and unselect by the current file's extension — moves one
+  modifier along to `Ctrl+Shift++`/`Ctrl+Shift+−`, and both are now in the Select block of the
+  Files menu, which the keymap file already claimed and did not have.
+
 - **Checksums.** MD5, SHA-1 and SHA-256 over what is selected, written in the format
   `md5sum`, `sha1sum` and `sha256sum` read — `<hex>  <name>` — because the point of a checksum
   file is that whoever you send it to can check it with the tool they already have. One list
@@ -108,6 +121,13 @@ Notable changes, newest first. The format follows
 
   Still to come: scrollback one can scroll (the lines are kept, nothing shows them yet),
   searching the output, and the mouse.
+
+### Fixed
+
+- **`Ctrl+↑` made the panels taller.** It brings their bottom edge *up*, so they get shorter
+  and the command output underneath gets the rows; `Ctrl+↓` gives them back. The keys were
+  right and the sign behind them was not: `panel.height(N)` now means the panels' height,
+  which is what the keys read as, rather than the number of rows they give up.
 
 ## [0.3.0] — 2026-10-25
 

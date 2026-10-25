@@ -3520,14 +3520,15 @@ See the [docs](https://example.com/docs) for more.
         assert_eq!(app.cfg.panel.split, 10);
         assert!(width_of_left(&mut app) >= 10);
 
-        // And the height: four rows off the panels, four rows of user screen.
+        // And the height. `Ctrl+Up` brings the panels' bottom edge *up*: they get shorter and
+        // the output underneath them gets the rows. Four presses, four rows of user screen.
         let mut app = super::tests::app("far", "en");
         project(&mut app);
         app.user_screen = vec!["$ cargo test".into(), "   Compiling scmd".into()];
         let before = frame(&mut app, 100, 28);
         assert!(!before.contains("Compiling scmd"), "{before}");
         for _ in 0..4 {
-            app.handle_input(Input::Key("Ctrl+Down".parse().unwrap()));
+            app.handle_input(Input::Key("Ctrl+Up".parse().unwrap()));
         }
         assert_eq!(app.cfg.panel.height_cut, 4);
         let after = frame(&mut app, 100, 28);
@@ -3548,10 +3549,16 @@ See the [docs](https://example.com/docs) for more.
         );
 
         for _ in 0..4 {
-            app.handle_input(Input::Key("Ctrl+Up".parse().unwrap()));
+            app.handle_input(Input::Key("Ctrl+Down".parse().unwrap()));
         }
         assert_eq!(app.cfg.panel.height_cut, 0);
         assert_eq!(frame(&mut app, 100, 28), before);
+        // And it does not run past the bottom of the screen: the panels cannot be given rows
+        // they never gave up.
+        for _ in 0..4 {
+            app.handle_input(Input::Key("Ctrl+Down".parse().unwrap()));
+        }
+        assert_eq!(app.cfg.panel.height_cut, 0);
     }
 
     #[test]

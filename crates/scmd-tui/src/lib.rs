@@ -194,6 +194,31 @@ impl Term {
         self.prev = Buffer::new(0, 0);
     }
 
+    /// Ask the terminal for a font one step larger or smaller, or for the one it started with.
+    ///
+    /// A terminal program does not own its font: the emulator does, and there is exactly one
+    /// control sequence for asking — xterm's `OSC 50`, where a `#` and a signed number step
+    /// through the font menu and `#0` is the entry it started on. xterm and the terminals that
+    /// copy it do this; the rest ignore it, and on most of them `Ctrl` with plus or minus is
+    /// the emulator's own zoom and never reaches a program at all. Either way the request is
+    /// the same four-and-a-bit bytes, nothing else depends on the answer, and the next frame
+    /// reads the size again — so a font that did change is drawn at the new size.
+    ///
+    /// `by` is a step: negative smaller, positive larger, zero back to the first font.
+    pub fn font_step(&mut self, by: i8) -> io::Result<()> {
+        let request = match by {
+            0 => "\x1b]50;#0\x1b\\".to_string(),
+            by if by < 0 => format!("\x1b]50;#-{}\x1b\\", -(by as i32)),
+            by => format!("\x1b]50;#+{by}\x1b\\"),
+        };
+        self.out.write_all(request.as_bytes())?;
+        self.out.flush()?;
+        // A font the terminal did change leaves the cells a different size and the screen in
+        // whatever state the reflow left it, so the next frame paints all of it.
+        self.invalidate();
+        Ok(())
+    }
+
     pub fn restore(&mut self) {
         if !self.raw {
             return;
@@ -395,6 +420,20 @@ mod tests {
         assert_eq!(
             key(CKey::PageUp, KeyModifiers::CONTROL),
             Some(Input::Key("Ctrl+PgUp".parse().unwrap()))
+        );
+    }
+
+    /// The one sequence there is for asking: xterm's `OSC 50` with a relative font-menu index.
+    #[test]
+    fn a_font_step_is_xterms_own_request_and_nothing_else() {
+        let (mut term, written) = Term::capturing();
+        term.font_step(1).unwrap();
+        term.font_step(-1).unwrap();
+        term.font_step(0).unwrap();
+        let bytes = written.lock().unwrap().clone();
+        assert_eq!(
+            String::from_utf8(bytes).unwrap(),
+            "\x1b]50;#+1\x1b\\\x1b]50;#-1\x1b\\\x1b]50;#0\x1b\\"
         );
     }
 

@@ -26,7 +26,7 @@ what we intend to do about it.
 
 | Item | Where | Notes |
 | --- | --- | --- |
-| ~~The selection matrix~~ | panel | **Shipped.** `Ctrl++`/`Ctrl+−` by the current file's extension, `Alt++`/`Alt+−` by name, `Alt+*` inverting folders too, and one restore undoing a whole sweep. Needs a terminal that reports modified printable keys; the keymap doc says which. |
+| ~~The selection matrix~~ | panel, Select block of the Files menu | **Shipped.** `Ctrl+Shift++`/`Ctrl+Shift+−` by the current file's extension — FAR's own `Ctrl+Gray +` is the font's key now — `Alt++`/`Alt+−` by name, `Alt+*` inverting folders too, and one restore undoing a whole sweep. Needs a terminal that reports modified printable keys; the keymap doc says which, and the two by-extension rows are in the menu for the terminals that do not. |
 | A `Select folders` setting | Panel settings | Decides whether the mask keys touch directories at all. One setting, three keys behave differently. |
 | ~~`Shift+F5`, `Shift+F6`, `Shift+F8`~~ | panel | **Shipped**, and the list travels with the dialog so a later selection cannot widen the copy. |
 | Sort by creation time, access time, owner, description | `Ctrl+F8…F11` | **Creation and access time shipped** (`Ctrl+F8`, `Ctrl+F9`), with the missing-field rule in SPEC 02 §4. Owner and description still cost a lookup per entry and a side file. |
@@ -152,6 +152,7 @@ here is the order to build it in: each item needs only the ones above it.
 | ~~Macros~~ | `Ctrl+.` to record | **Shipped (0.1.0).** SPEC 08 §5: a macro is a list of commands in a readable TOML file, recorded by pressing keys and played by the key one assigns it to, with `once` and `each-selected` play modes, a list on `Ctrl+Shift+.`, and a question before anything destructive unless the file trusts it. |
 | Macro conditions, and the Lua engine | `Ctrl+.` | SPEC 08 §5 and §2. FAR's macros carry a condition (play only when the panel is a file panel, only when something is selected) and far2m's are Lua. Both want the same thing underneath — a macro step that can ask the application a question — which is the plugin host API's job, so they come together with it. FAR's fourteen areas are also finer than our five scopes; worth splitting when something needs it. |
 | XLat | — | Transliterate a typed line between keyboard layouts, with tables, rules and flags. Niche outside Cyrillic keyboards, cheap once the tables exist. |
+| ~~Font size~~ | `Ctrl++` / `Ctrl+−` / `Ctrl+0` | **Shipped** as far as a terminal program can: xterm's `OSC 50` with a relative font-menu index. xterm and its copies answer it; the rest ignore it, and on most emulators those keys are the emulator's own zoom and never reach us. Detecting which — querying `OSC 50 ; ?` and waiting for a reply — would let the status line stop hedging, and wants the startup probe the keyboard protocol already has. |
 
 ## Settings not yet in the configuration
 

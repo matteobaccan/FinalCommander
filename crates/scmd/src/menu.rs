@@ -335,6 +335,19 @@ pub fn menus() -> Vec<Menu> {
                     "*",
                     Action::Run(Command::SelInvert),
                 ),
+                // FAR's selection matrix by the hardest route: `Ctrl+Shift` with a grey key
+                // is the kind of binding a terminal often eats, and the keymap file says the
+                // menu reaches the same work — so it has to.
+                item(
+                    "menu-select-ext",
+                    "Ctrl+Shift++",
+                    Action::Run(Command::SelExtAdd),
+                ),
+                item(
+                    "menu-unselect-ext",
+                    "Ctrl+Shift+-",
+                    Action::Run(Command::SelExtRemove),
+                ),
                 item("menu-select-all", "Ctrl+A", Action::Run(Command::SelAll)),
                 item(
                     "menu-restore-selection",

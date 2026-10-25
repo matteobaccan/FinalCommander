@@ -64,6 +64,11 @@ pub enum Request {
         list: VPath,
         cancel: CancelToken,
     },
+    /// Ask the terminal for a font a step larger, a step smaller, or the one it started with.
+    /// Only the loop that owns the terminal can send it, so it travels as a request.
+    Font {
+        by: i8,
+    },
     /// Walk and match. The engine is `scmd-find`; this carries what the dialog asked for.
     Find {
         id: u64,
@@ -4043,6 +4048,15 @@ impl App {
                     at: 0,
                 }
             }
+            Command::AppFont(by) => {
+                self.requests.push(Request::Font { by });
+                let msg = self.i18n.t(match by {
+                    0 => "msg-font-reset",
+                    by if by < 0 => "msg-font-smaller",
+                    _ => "msg-font-bigger",
+                });
+                self.set_status(msg);
+            }
             Command::AppThemeNext => {
                 let next = self.themes.next_after(&self.theme.id).clone();
                 let msg = self
@@ -4145,9 +4159,11 @@ impl App {
             }
             Command::PanelHeight(by) => {
                 let was = self.cfg.panel.height_cut as i32;
-                // Never more than what leaves a panel worth looking at; the renderer has the
-                // final say, but the setting should not run away either.
-                self.cfg.panel.height_cut = (was + by as i32).clamp(0, 40) as u16;
+                // The step is the panels' height and the setting is what they give up, so the
+                // two have opposite signs: `Ctrl+Up` is a row shorter, which is a row more for
+                // the output underneath. Never more than what leaves a panel worth looking at;
+                // the renderer has the final say, but the setting should not run away either.
+                self.cfg.panel.height_cut = (was - by as i32).clamp(0, 40) as u16;
             }
             // FAR's `Group` and `SelUp`: the two parts of the order that are not the key
             // itself. Both are panel-wide settings, so both panels follow — as the view and
@@ -10598,6 +10614,43 @@ mod tests {
         app.restore_tabs(0, &saved, 0);
         assert_eq!(app.tabs[0].len(), 1);
         assert_eq!(app.panels[0].cwd, VPath::local("/home/mb"));
+    }
+
+    // ── the panels' height, and the font ────────────────────────────────────────────────────
+
+    /// `Ctrl+Up` brings the panels' bottom edge *up*, which is less panel and more of the
+    /// output underneath. It read the other way round until somebody pressed it.
+    #[test]
+    fn ctrl_up_makes_the_panels_shorter_and_ctrl_down_gives_the_rows_back() {
+        let mut app = app();
+        assert_eq!(app.cfg.panel.height_cut, 0);
+        press(&mut app, "Ctrl+Up");
+        press(&mut app, "Ctrl+Up");
+        assert_eq!(app.cfg.panel.height_cut, 2, "two rows off the panels");
+        press(&mut app, "Ctrl+Down");
+        assert_eq!(app.cfg.panel.height_cut, 1);
+        press(&mut app, "Ctrl+Down");
+        press(&mut app, "Ctrl+Down");
+        assert_eq!(app.cfg.panel.height_cut, 0, "and no further");
+    }
+
+    #[test]
+    fn the_font_keys_ask_the_terminal_and_say_that_is_what_they_did() {
+        let mut app = app();
+        for (key, want) in [("Ctrl++", 1i8), ("Ctrl+-", -1), ("Ctrl+0", 0)] {
+            press(&mut app, key);
+            let by = app
+                .take_requests()
+                .into_iter()
+                .find_map(|r| match r {
+                    Request::Font { by } => Some(by),
+                    _ => None,
+                })
+                .unwrap_or_else(|| panic!("{key} asked for nothing"));
+            assert_eq!(by, want, "{key}");
+            // A program cannot know whether the terminal did it, and the line says so.
+            assert!(app.status.contains("terminal"), "{}", app.status);
+        }
     }
 
     // ── checksums (SPEC 03 §9) ──────────────────────────────────────────────────────────────
