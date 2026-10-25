@@ -36,6 +36,14 @@ key-plugins = Plugin
 # Panel chrome
 list-up = Up
 list-folder = Folder
+col-name = Name
+col-size = Size
+col-allocated = Allocated
+col-modified = Modified
+col-created = Created
+col-accessed = Accessed
+col-attr = Attr
+col-date-time = Date       Time
 panel-list-count = { $count } items in the list
 panel-empty = (empty)
 panel-loading = reading…

@@ -34,6 +34,14 @@ key-plugins = Plugin
 
 list-up = Hoch
 list-folder = Ordner
+col-name = Name
+col-size = Größe
+col-allocated = Belegt
+col-modified = Geändert
+col-created = Erstellt
+col-accessed = Zugriff
+col-attr = Attr
+col-date-time = Datum      Zeit
 panel-list-count = { $count } Einträge in der Liste
 panel-empty = (leer)
 panel-loading = lese…

@@ -8,6 +8,12 @@ Notable changes, newest first. The format follows
 
 ### Fixed
 
+- **The panel's column titles were English in every language.** `Name`, `Size`, `Date
+  Time` and `Attr` were literals in the drawing code, beside `Up` and `Folder`, which have
+  been translated since the panels were written. They go through the catalogues now, with
+  the three new headings of the detailed view, so a panel in Italian says `Nome` and
+  `Dimens.` and one in Russian says `Имя` and `Размер`.
+
 - **The keyboard reference says what the program does.** The rows that named a key nothing was
   bound to now say what is true: the command line's path insertion is `Ctrl+[` / `Ctrl+]` (one
   row, not two contradicting each other), `Esc` clears the line and `Ctrl+U` swaps the panels,

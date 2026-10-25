@@ -34,6 +34,14 @@ key-plugins = Плагин
 
 list-up = Вверх
 list-folder = Папка
+col-name = Имя
+col-size = Размер
+col-allocated = Занято
+col-modified = Изменён
+col-created = Создан
+col-accessed = Доступ
+col-attr = Атр
+col-date-time = Дата        Время
 panel-list-count = { $count } объектов в списке
 panel-empty = (пусто)
 panel-loading = чтение…

@@ -34,6 +34,14 @@ key-plugins = 插件
 
 list-up = 上层
 list-folder = 文件夹
+col-name = 名称
+col-size = 大小
+col-allocated = 占用
+col-modified = 修改
+col-created = 创建
+col-accessed = 访问
+col-attr = 属性
+col-date-time = 日期        时间
 panel-list-count = 列表中有 { $count } 个项目
 panel-empty = （空）
 panel-loading = 读取中…

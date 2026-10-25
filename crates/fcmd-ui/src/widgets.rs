@@ -9,6 +9,21 @@ use unicode_width::UnicodeWidthStr;
 use crate::buffer::{elide_middle, truncate_cols, Border, Buffer, Rect, Style};
 use crate::theme::Theme;
 
+/// The heading of each column of a panel, already translated.
+#[derive(Debug, Clone, Copy)]
+pub struct ColumnTitles<'a> {
+    pub name: &'a str,
+    pub size: &'a str,
+    pub allocated: &'a str,
+    /// What the full view calls its one date column: a date and a time in one heading.
+    pub date_time: &'a str,
+    /// What the detailed view calls the same column when it has three of them.
+    pub modified: &'a str,
+    pub created: &'a str,
+    pub accessed: &'a str,
+    pub attr: &'a str,
+}
+
 /// Everything the panel widget needs to know. The panel owns no state of its own.
 pub struct PanelRender<'a> {
     pub area: Rect,
@@ -42,6 +57,10 @@ pub struct PanelRender<'a> {
     /// The allocation unit of the device the panel is on, in bytes, or zero where nothing
     /// said: it is what the detailed view's allocated column is computed from.
     pub cluster: u64,
+    /// What the columns are called, in the language the program is running in. Passed in
+    /// like the two words below rather than looked up here: this crate draws and does not
+    /// know about catalogues.
+    pub titles: ColumnTitles<'a>,
     pub up_label: &'a str,
     pub folder_label: &'a str,
 }
@@ -321,7 +340,7 @@ fn draw_column_titles(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inne
             let col_w = (inner.w as usize / cols).max(4);
             for col in 0..cols {
                 let x = inner.x + (col * col_w) as u16;
-                centre(buf, x, y, col_w as u16 - 1, "Name", style);
+                centre(buf, x, y, col_w as u16 - 1, p.titles.name, style);
             }
         }
         _ => {
@@ -329,20 +348,20 @@ fn draw_column_titles(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inne
             // With one date column it is the panel's date, as the full view has always
             // titled it; with three they have to say which is which.
             let write = if c.created > 0 {
-                "Modified"
+                p.titles.modified
             } else {
-                "Date       Time"
+                p.titles.date_time
             };
             let mut x = inner.x;
-            centre(buf, x, y, c.name, "Name", style);
+            centre(buf, x, y, c.name, p.titles.name, style);
             x += c.name + 1;
             for (w, title) in [
-                (c.size, "Size"),
-                (c.allocated, "Allocated"),
+                (c.size, p.titles.size),
+                (c.allocated, p.titles.allocated),
                 (c.write, write),
-                (c.created, "Created"),
-                (c.accessed, "Accessed"),
-                (c.attr, "Attr"),
+                (c.created, p.titles.created),
+                (c.accessed, p.titles.accessed),
+                (c.attr, p.titles.attr),
             ] {
                 if w == 0 {
                     continue;
@@ -1207,6 +1226,20 @@ mod tests {
     use fcmd_core::{EntryId, Sort, SortKey};
     use std::ffi::OsString;
 
+    /// What the program's own catalogue says in English, so a test reads like the screen.
+    fn english_titles() -> ColumnTitles<'static> {
+        ColumnTitles {
+            name: "Name",
+            size: "Size",
+            allocated: "Allocated",
+            date_time: "Date       Time",
+            modified: "Modified",
+            created: "Created",
+            accessed: "Accessed",
+            attr: "Attr",
+        }
+    }
+
     fn entry(name: &str, kind: EntryKind, size: u64) -> Entry {
         Entry {
             name: OsString::from(name),
@@ -1267,6 +1300,7 @@ mod tests {
             name_scroll: 0,
             highlight: &crate::Highlight::far_default(),
             cluster,
+            titles: english_titles(),
             up_label: "Up",
             folder_label: "Folder",
         };
@@ -1352,6 +1386,7 @@ mod tests {
             name_scroll: 0,
             highlight: &crate::Highlight::far_default(),
             cluster: 4096,
+            titles: english_titles(),
             up_label: "Up",
             folder_label: "Folder",
         };
@@ -1502,6 +1537,7 @@ mod tests {
             name_scroll: 0,
             highlight: &crate::Highlight::far_default(),
             cluster: 4096,
+            titles: english_titles(),
             up_label: "Up",
             folder_label: "Folder",
         };
@@ -1538,6 +1574,7 @@ mod tests {
                 name_scroll: 0,
                 highlight: &crate::Highlight::far_default(),
                 cluster: 4096,
+                titles: english_titles(),
                 up_label: "Up",
                 folder_label: "Folder",
             };
@@ -1581,6 +1618,7 @@ mod tests {
             name_scroll: 0,
             highlight: &crate::Highlight::far_default(),
             cluster: 4096,
+            titles: english_titles(),
             up_label: "Up",
             folder_label: "Folder",
         };
@@ -1664,6 +1702,7 @@ mod tests {
             name_scroll: 0,
             highlight: &crate::Highlight::far_default(),
             cluster: 4096,
+            titles: english_titles(),
             up_label: "Up",
             folder_label: "Folder",
         };
@@ -1853,6 +1892,7 @@ mod tests {
             name_scroll: 0,
             highlight: &crate::Highlight::far_default(),
             cluster: 4096,
+            titles: english_titles(),
             up_label: "Up",
             folder_label: "Folder",
         };

@@ -221,6 +221,29 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
 
     let up_label = app.i18n.t("list-up");
     let folder_label = app.i18n.t("list-folder");
+    // The column headings, in the language the program is running in. Gathered once per
+    // frame rather than per panel: both sides use the same words.
+    let titles = [
+        "col-name",
+        "col-size",
+        "col-allocated",
+        "col-date-time",
+        "col-modified",
+        "col-created",
+        "col-accessed",
+        "col-attr",
+    ]
+    .map(|id| app.i18n.t(id));
+    let titles = widgets::ColumnTitles {
+        name: &titles[0],
+        size: &titles[1],
+        allocated: &titles[2],
+        date_time: &titles[3],
+        modified: &titles[4],
+        created: &titles[5],
+        accessed: &titles[6],
+        attr: &titles[7],
+    };
     for (i, area) in areas.iter().enumerate() {
         // The special kinds have no rows, so they draw themselves inside the same frame and
         // the row machinery below never sees them (SPEC 02 §7).
@@ -267,6 +290,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             message: message.as_deref(),
             status: status.as_deref(),
             cluster: panel.disk.map(|d| d.cluster).unwrap_or(0),
+            titles,
             free: if app.cfg.panel.free_space {
                 panel.disk.map(|d| d.free)
             } else {
@@ -2558,6 +2582,25 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
         // two pieces: `Cargo` down the left of the field and `toml` against the size column.
         assert!(out.contains("Cargo") && out.contains("toml"), "{out}");
         assert!(!out.contains("Cargo.toml"), "{out}");
+    }
+
+    #[test]
+    fn the_column_titles_are_in_the_language_the_program_is_running_in() {
+        let mut app = app("commander", "it");
+        app.cfg.panel.column_titles = true;
+        project(&mut app);
+        let out = frame(&mut app, 100, 28);
+        assert!(out.contains("Nome"), "{out}");
+        assert!(out.contains("Dimens."), "{out}");
+        assert!(!out.contains("Size"), "{out}");
+        // The detailed view's own headings come from the same catalogue.
+        app.panels[0].view = fcmd_core::ViewMode::Detail;
+        app.hidden = Some(1);
+        let out = frame(&mut app, 120, 28);
+        assert!(
+            out.contains("Creazione") && out.contains("Accesso"),
+            "{out}"
+        );
     }
 
     #[test]

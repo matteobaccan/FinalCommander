@@ -34,6 +34,14 @@ key-plugins = PlugIN
 
 list-up = Su
 list-folder = Cartella
+col-name = Nome
+col-size = Dimens.
+col-allocated = Occupato
+col-modified = Modifica
+col-created = Creazione
+col-accessed = Accesso
+col-attr = Attr
+col-date-time = Data        Ora
 panel-list-count = { $count } elementi nella lista
 panel-empty = (vuota)
 panel-loading = lettura…
