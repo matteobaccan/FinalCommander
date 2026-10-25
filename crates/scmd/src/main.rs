@@ -8,6 +8,7 @@ mod drives;
 mod expand;
 mod form;
 mod help;
+mod hit;
 mod menu;
 mod panel;
 mod render;
@@ -682,6 +683,10 @@ fn interactive(mut app: App) -> Result<()> {
         .context("starting the async runtime")?;
 
     let mut term = Term::new().context("taking over the terminal")?;
+    // Only if the configuration asks: see `UiCfg::mouse` for why it is not the default.
+    if app.cfg.ui.mouse {
+        let _ = term.set_mouse(true);
+    }
     let (tx, rx) = mpsc::channel::<Event>();
 
     // Terminal input lives on its own thread: `read` blocks.
@@ -966,6 +971,12 @@ fn interactive(mut app: App) -> Result<()> {
                 // it for a font is one write and no waiting.
                 Request::Font { by } => {
                     let _ = term.font_step(by);
+                }
+                Request::Mouse { on } => {
+                    // A terminal that was never asked to report the mouse is not asked to
+                    // stop, and one that is already reporting is not asked twice: `set_mouse`
+                    // answers both, and a failure is the terminal's to refuse.
+                    let _ = term.set_mouse(on);
                 }
                 Request::SyncPlan {
                     id,
@@ -2996,7 +3007,7 @@ timeout = 10
                     }
                 }
                 // No terminal in a test: what the request carries is checked where it is made.
-                Request::Font { .. } => {}
+                Request::Font { .. } | Request::Mouse { .. } => {}
                 Request::SyncPlan {
                     id,
                     left,

@@ -8,6 +8,34 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **The mouse**, behind `ui.mouse` in *Interface settings* and **off** by default. That
+  default is a decision: while a terminal is reporting the mouse it stops acting on it, so
+  selecting text with the mouse and the middle-click paste go away — the user's own tools,
+  which this program cannot replace. Somebody who wants the mouse says so once.
+
+  A click moves the cursor to the row and makes that panel active; past the last row it only
+  moves the focus. A double click is `Enter` on the row. The right button toggles a row's
+  selection, which is the button FAR and Midnight Commander both use for it. The wheel scrolls
+  whatever is **under the pointer**, three rows a notch, without taking the focus — reading the
+  other panel is not working in it. The key bar is clickable and presses the key written in the
+  cell with whatever modifiers are held, so `Shift` and a click is `Shift+F5`; the menu bar
+  opens a menu and one click on a dropdown row runs it; a dialog's list moves its cursor and a
+  double click answers it. A click *outside* an open dialog does nothing at all, because it must
+  not move a cursor nobody can see.
+
+  Every one of those ends up in the same `run` the keyboard uses, so the macro recorder, the
+  confirmations and the error reporting are the ones that were already there. Where a click
+  lands is worked out from a layout the renderer records as it draws, which is arithmetic over
+  rectangles and therefore tested without a terminal — including the awkward case, a brief
+  view whose columns run down and then across.
+
+- **A dialog for `Alt+F6`**, where there was one line and a fixed kind of link. It offers the
+  three kinds and says what each one is for: a *relative* symbolic link survives the whole tree
+  being moved or copied elsewhere, an *absolute* one survives the link alone being moved, and a
+  *hard* link is a second name for the same bytes, which survives the original name being
+  deleted and cannot cross a filesystem or name a directory. The choice is remembered for the
+  next one, as the pack and checksum dialogs remember theirs.
+
 - **WebDAV panels**, `webdav://` and `webdavs://`, the netbox's third protocol. The ports are
   80 and 443 when a URL does not say; the path is the one the server publishes, which on
   Nextcloud is `/remote.php/dav/files/<user>/`; a share that needs no login is reached by

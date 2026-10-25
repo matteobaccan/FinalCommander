@@ -8,9 +8,9 @@ use std::sync::mpsc::Sender;
 use std::time::Duration;
 
 use crossterm::event::{
-    self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyCode as CKey, KeyEvent,
-    KeyEventKind, KeyModifiers, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags,
-    PushKeyboardEnhancementFlags,
+    self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
+    Event, KeyCode as CKey, KeyEvent, KeyEventKind, KeyModifiers, KeyboardEnhancementFlags,
+    PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
 };
 use crossterm::style::{
     Attribute, Color as CColor, Print, SetAttribute, SetBackgroundColor, SetForegroundColor,
@@ -24,6 +24,8 @@ use scmd_ui::{Buffer, Color, ColorDepth};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Input {
     Key(Key),
+    /// Something the mouse did, when mouse reporting is on.
+    Mouse(Mouse),
     /// The modifiers being held right now, with no key pressed yet. Only terminals that
     /// speak the keyboard protocol report this; the rest never send it, and the key bar
     /// simply does not change for them.
@@ -32,6 +34,36 @@ pub enum Input {
     Resize(u16, u16),
     /// The terminal closed on us.
     Eof,
+}
+
+/// Which button, for the events that have one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Button {
+    Left,
+    Right,
+    Middle,
+}
+
+/// What the mouse did. A terminal reports rather less than a windowing system does: there is
+/// no double click (the application times two presses itself), and movement is only reported
+/// while a button is down unless the program asks for more.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MouseKind {
+    Press(Button),
+    Release(Button),
+    /// Moved with a button held.
+    Drag(Button),
+    ScrollUp,
+    ScrollDown,
+}
+
+/// One mouse event, in cells from the top left of the screen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Mouse {
+    pub kind: MouseKind,
+    pub col: u16,
+    pub row: u16,
+    pub mods: Mods,
 }
 
 /// The writer behind [`Term::capturing`].
@@ -58,6 +90,10 @@ pub struct Term {
     raw: bool,
     /// Whether the keyboard protocol was turned on, so that it is turned off again.
     enhanced: bool,
+    /// Whether the terminal is reporting the mouse. Off until something asks for it, because
+    /// a terminal in mouse mode no longer lets the user select text with the mouse, and that
+    /// is the user's own tool being taken away.
+    mouse: bool,
 }
 
 impl Term {
@@ -92,6 +128,7 @@ impl Term {
             depth: detect_depth(),
             raw: true,
             enhanced,
+            mouse: false,
         })
     }
 
@@ -103,6 +140,7 @@ impl Term {
             depth: ColorDepth::TrueColor,
             raw: false,
             enhanced: false,
+            mouse: false,
         }
     }
 
@@ -121,6 +159,7 @@ impl Term {
             depth: ColorDepth::TrueColor,
             raw: true,
             enhanced: false,
+            mouse: false,
         };
         (term, sink)
     }
@@ -219,9 +258,37 @@ impl Term {
         Ok(())
     }
 
+    /// Turn mouse reporting on or off. Returns whether anything changed.
+    ///
+    /// It is a setting rather than a fact about the terminal: while it is on, the terminal
+    /// hands us the clicks and stops handling them itself, which means no selecting text with
+    /// the mouse and no middle-click paste. So it is only on when the configuration asks for
+    /// it, and `ui.mouse = false` gives the terminal back.
+    pub fn set_mouse(&mut self, on: bool) -> io::Result<bool> {
+        if !self.raw || self.mouse == on {
+            return Ok(false);
+        }
+        if on {
+            queue!(self.out, EnableMouseCapture)?;
+        } else {
+            queue!(self.out, DisableMouseCapture)?;
+        }
+        self.out.flush()?;
+        self.mouse = on;
+        Ok(true)
+    }
+
+    pub fn mouse_on(&self) -> bool {
+        self.mouse
+    }
+
     pub fn restore(&mut self) {
         if !self.raw {
             return;
+        }
+        if self.mouse {
+            let _ = queue!(self.out, DisableMouseCapture);
+            self.mouse = false;
         }
         if self.enhanced {
             let _ = queue!(self.out, PopKeyboardEnhancementFlags);
@@ -255,6 +322,9 @@ pub fn install_panic_hook() {
             SetAttribute(Attribute::Reset),
             cursor::Show,
             DisableBracketedPaste,
+            // Unconditional: a terminal that was not reporting the mouse ignores this, and one
+            // that was would otherwise be left reporting it to a shell that cannot read it.
+            DisableMouseCapture,
             LeaveAlternateScreen
         );
         let _ = out.flush();
@@ -285,6 +355,13 @@ pub fn read_input_loop(tx: Sender<Input>) {
                     return;
                 }
             }
+            Ok(Event::Mouse(m)) => {
+                if let Some(input) = map_mouse_event(m) {
+                    if tx.send(input).is_err() {
+                        return;
+                    }
+                }
+            }
             Ok(_) => {}
             Err(_) => {
                 let _ = tx.send(Input::Eof);
@@ -303,8 +380,48 @@ pub fn poll_input(timeout: Duration) -> io::Result<Option<Input>> {
         Event::Key(k) => map_key_event(k),
         Event::Resize(w, h) => Some(Input::Resize(w, h)),
         Event::Paste(s) => Some(Input::Paste(s)),
+        Event::Mouse(m) => map_mouse_event(m),
         _ => None,
     })
+}
+
+/// Translate a crossterm mouse event into our own.
+///
+/// Plain movement with no button down is dropped: nothing here follows the pointer, and a
+/// terminal that reports every move would wake the application a hundred times a second for
+/// nothing.
+pub fn map_mouse_event(m: crossterm::event::MouseEvent) -> Option<Input> {
+    use crossterm::event::{MouseButton as CButton, MouseEventKind as CKind};
+    let button = |b: CButton| match b {
+        CButton::Left => Button::Left,
+        CButton::Right => Button::Right,
+        CButton::Middle => Button::Middle,
+    };
+    let kind = match m.kind {
+        CKind::Down(b) => MouseKind::Press(button(b)),
+        CKind::Up(b) => MouseKind::Release(button(b)),
+        CKind::Drag(b) => MouseKind::Drag(button(b)),
+        CKind::ScrollUp => MouseKind::ScrollUp,
+        CKind::ScrollDown => MouseKind::ScrollDown,
+        // Sideways scrolling and bare movement: nothing here reads them.
+        CKind::Moved | CKind::ScrollLeft | CKind::ScrollRight => return None,
+    };
+    let mut mods = Mods::NONE;
+    if m.modifiers.contains(KeyModifiers::CONTROL) {
+        mods.insert(Mods::CTRL);
+    }
+    if m.modifiers.contains(KeyModifiers::ALT) {
+        mods.insert(Mods::ALT);
+    }
+    if m.modifiers.contains(KeyModifiers::SHIFT) {
+        mods.insert(Mods::SHIFT);
+    }
+    Some(Input::Mouse(Mouse {
+        kind,
+        col: m.column,
+        row: m.row,
+        mods,
+    }))
 }
 
 /// Translate a crossterm key event into our own key type. Key *releases* are dropped: with the

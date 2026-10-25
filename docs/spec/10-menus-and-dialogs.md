@@ -129,7 +129,7 @@ on the buttons answers the dialog, `F10` is `OK` from anywhere, `Esc` cancels an
 | Show the status bar | `ui.status_bar` | on/off |
 | Keymap | `ui.keymap` | far / mc |
 | Clock in the corner | — | dim (backlog) |
-| Mouse support | — | dim (backlog) |
+| Mouse support | `ui.mouse` | **shipped**, off by default (SPEC 02 §12) |
 | Always show the menu bar | — | dim (backlog) |
 
 ### 3.4 Confirmations

@@ -69,6 +69,11 @@ pub enum Request {
     Font {
         by: i8,
     },
+    /// Start or stop asking the terminal to report the mouse. Like the font, only the loop
+    /// that owns the terminal can do it.
+    Mouse {
+        on: bool,
+    },
     /// Decide about every pair in two trees. Nothing is written: the answer is a table.
     SyncPlan {
         id: u64,
@@ -468,8 +473,6 @@ pub enum PromptKind {
     ApplyCommand,
     /// Where a tunnel goes: `[local:]host:port`, or a port on its own.
     Tunnel,
-    /// `Alt+F6`: where the new link goes. The target travels in `Prompt::sources`.
-    LinkName,
     /// The byte to fill a block with, in hex.
     HexFill,
     /// The key to exclusive-or a block with, in hex.
@@ -1119,6 +1122,11 @@ pub struct App {
     /// Panel geometry from the last frame, so key handling knows how far a page is.
     pub rows: usize,
     pub columns: usize,
+    /// Where everything clickable was drawn on the last frame (`crate::hit`). Written by the
+    /// renderer, read by the mouse.
+    pub layout: crate::hit::Layout,
+    /// The last press, for telling a double click from two single ones.
+    last_click: Option<(u16, u16, std::time::Instant)>,
     /// Size of the viewer's text area, from the last frame.
     pub viewer_size: (u16, u16),
     /// Size of a terminal's grid, from the last frame — the room a screen has once the key
@@ -1150,6 +1158,8 @@ pub struct App {
     /// The connection we are in the middle of opening, kept so a password prompt or a
     /// host-key confirmation can resume it.
     pending_connect: Option<(usize, Box<Site>, Option<String>)>,
+    /// What `Alt+F6` is making a link to, while its dialog is open.
+    pending_link: Option<VPath>,
     /// The fetch we are waiting for, if any.
     fetch_id: Option<u64>,
     /// The comparison by content that is running, and the token that stops it. `Esc` on a
@@ -1165,6 +1175,8 @@ pub struct App {
     sum: Option<(u64, CancelToken)>,
     /// What the checksum dialog was last answered with, so the next one opens on it.
     last_sum: scmd_jobs::Algorithm,
+    /// Which kind of link `Alt+F6` offers first: the last one that was made.
+    last_link: scmd_jobs::LinkKind,
     /// The same for the synchronisation dialog: the rules somebody set once are the rules
     /// they want again.
     last_sync: scmd_jobs::sync::Options,
@@ -1314,6 +1326,8 @@ impl App {
             requests: Vec::new(),
             rows: 20,
             columns: 1,
+            layout: crate::hit::Layout::default(),
+            last_click: None,
             viewer_size: (80, 20),
             term_area: (80, 20),
             wake: None,
@@ -1329,11 +1343,13 @@ impl App {
             sites,
             connected: Vec::new(),
             pending_connect: None,
+            pending_link: None,
             fetch_id: None,
             tunnels: Vec::new(),
             compare: None,
             sum: None,
             last_sum: scmd_jobs::Algorithm::default(),
+            last_link: scmd_jobs::LinkKind::SymlinkRelative,
             last_sync: scmd_jobs::sync::Options {
                 // The two a sync is almost always asked for, and neither can lose anything:
                 // walk the trees, and leave alone what the other side does not have.
@@ -1982,6 +1998,7 @@ impl App {
                     self.prompt_changed(&text);
                 }
             }
+            Input::Mouse(mouse) => self.handle_mouse(mouse),
             Input::Mods(mods) => self.held = mods,
             // A terminal's program has to be told, or a full-screen one stays the shape of
             // the window it started in. Everything else works out its own size while drawing.
@@ -1992,6 +2009,186 @@ impl App {
                 self.term_resized(w, h.saturating_sub(chrome.max(1)));
             }
             Input::Eof => self.quit = true,
+        }
+    }
+
+    /// What the mouse did, answered against the layout the last frame recorded.
+    ///
+    /// The rule throughout is that the mouse does what a key already does — it moves the
+    /// cursor, it presses a function key, it opens a menu — rather than having powers of its
+    /// own. That keeps one path through the application: a click ends up in `run`, where the
+    /// macro recorder, the confirmations and the error reporting already live.
+    fn handle_mouse(&mut self, mouse: scmd_tui::Mouse) {
+        use scmd_tui::{Button, MouseKind};
+        let (col, row) = (mouse.col, mouse.row);
+        match mouse.kind {
+            MouseKind::ScrollUp => self.wheel(col, row, -1),
+            MouseKind::ScrollDown => self.wheel(col, row, 1),
+            MouseKind::Press(Button::Left) => {
+                let double = self.is_double_click(col, row);
+                self.click(col, row, double);
+            }
+            // The right button selects, which is what both FAR and Midnight Commander do with
+            // it. Nothing here opens a context menu, so there is nothing to take it away from.
+            MouseKind::Press(Button::Right) => self.right_click(col, row),
+            // A drag over the panels extends nothing yet, and a release ends whatever the
+            // press did. Said here rather than left to a catch-all so that the day a drag
+            // means something there is one place to put it.
+            MouseKind::Press(Button::Middle) | MouseKind::Release(_) | MouseKind::Drag(_) => {}
+        }
+    }
+
+    /// Two presses in the same cell inside a short while: a double click, which the terminal
+    /// does not report and the application has to notice for itself.
+    fn is_double_click(&mut self, col: u16, row: u16) -> bool {
+        const WINDOW: std::time::Duration = std::time::Duration::from_millis(400);
+        let now = std::time::Instant::now();
+        let double = matches!(
+            self.last_click,
+            Some((c, r, when)) if c == col && r == row && now.duration_since(when) < WINDOW
+        );
+        // A double click does not start a third: the next press is a fresh single one, or a
+        // slow triple click would open the same file twice.
+        self.last_click = if double { None } else { Some((col, row, now)) };
+        double
+    }
+
+    fn click(&mut self, col: u16, row: u16, double: bool) {
+        let Some(hit) = self.layout.hit(col, row) else {
+            return;
+        };
+        match hit {
+            crate::hit::Hit::Row { side, index } => {
+                self.focus_side(side);
+                self.panel_mut().cursor_to(index);
+                self.scroll();
+                if double {
+                    // The same as pressing Enter on the row, which is what it looks like it
+                    // should do: into a directory, into an archive, or open the file.
+                    self.run(Command::NavEnter);
+                }
+            }
+            crate::hit::Hit::Panel { side } => self.focus_side(side),
+            crate::hit::Hit::Key(n) => {
+                // The modifiers that are held decide which key bar is on the screen, so a
+                // click on the bar presses the key that is written on it.
+                self.handle_key(Key {
+                    code: KeyCode::F(n),
+                    mods: self.held,
+                });
+            }
+            crate::hit::Hit::Menu(which) => {
+                let item = self.first_item(which);
+                self.mode = Mode::Menu { menu: which, item };
+            }
+            crate::hit::Hit::CommandLine => {}
+            crate::hit::Hit::ListRow(index) => match &mut self.mode {
+                Mode::Pick(pick) => {
+                    pick.cursor = index.min(pick.rows.len().saturating_sub(1));
+                    if double {
+                        self.apply_pick();
+                    }
+                }
+                Mode::Menu { menu, .. } => {
+                    let menu = *menu;
+                    // One click is enough in a menu: the row under the pointer is the one
+                    // being asked for, and a dropdown that needed two would feel broken.
+                    self.mode = Mode::Menu { menu, item: index };
+                    self.run_menu_item(menu, index);
+                }
+                _ => {}
+            },
+            crate::hit::Hit::Text { col, row } => self.click_text(col, row),
+        }
+    }
+
+    /// The right button toggles the selection of the row under it, and makes that panel the
+    /// active one first — selecting in the panel one is not looking at is a selection one
+    /// then loses track of.
+    fn right_click(&mut self, col: u16, row: u16) {
+        let Some(crate::hit::Hit::Row { side, index }) = self.layout.hit(col, row) else {
+            return;
+        };
+        self.focus_side(side);
+        self.panel_mut().cursor_to(index);
+        self.scroll();
+        if let Some(entry) = self.panel().current() {
+            if entry.is_selectable() {
+                let id = entry.id;
+                self.panel_mut().selection.toggle(id);
+                self.panel_mut().rebuild();
+            }
+        }
+    }
+
+    /// The wheel scrolls whatever is under the pointer, without moving the focus: looking at
+    /// the other panel is not working in it.
+    fn wheel(&mut self, col: u16, row: u16, by: isize) {
+        // In the editor, the viewer and a list the wheel is the arrow keys: three rows at a
+        // time, which is what every other program does and what a terminal's own scrollback
+        // does when the mouse is not captured.
+        const STEP: isize = 3;
+        match self.layout.hit(col, row) {
+            Some(crate::hit::Hit::Row { side, .. }) | Some(crate::hit::Hit::Panel { side }) => {
+                let rows = self.rows.max(1);
+                let len = self.panels[side].listing.len();
+                let top = self.panels[side].top;
+                let last = len.saturating_sub(rows);
+                let top = (top as isize + by * STEP).clamp(0, last as isize) as usize;
+                self.panels[side].top = top;
+                // The cursor follows the window rather than the window following the cursor:
+                // scrolling past the cursor and then typing a key would otherwise jump the
+                // view back to where it was.
+                let cursor = self.panels[side].cursor.clamp(top, top + rows - 1);
+                self.panels[side].cursor_to(cursor);
+            }
+            Some(crate::hit::Hit::ListRow(_)) => {
+                for _ in 0..STEP {
+                    match &mut self.mode {
+                        Mode::Pick(pick) => pick.move_cursor(by),
+                        Mode::Menu { menu, item } => {
+                            let (menu, item) = (*menu, *item);
+                            let item = self.menu_step(menu, item, by > 0);
+                            self.mode = Mode::Menu { menu, item };
+                        }
+                        _ => break,
+                    }
+                }
+            }
+            Some(crate::hit::Hit::Text { .. }) => {
+                let code = if by < 0 { KeyCode::Up } else { KeyCode::Down };
+                for _ in 0..STEP {
+                    self.handle_key(Key {
+                        code,
+                        mods: Mods::NONE,
+                    });
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// A click inside the editor's text puts the caret there. The viewer and the hex editor
+    /// have no caret to put, so a click in them does nothing at all.
+    fn click_text(&mut self, col: u16, row: u16) {
+        let Some(editor) = self.mode.editor_mut() else {
+            return;
+        };
+        let line = editor.top + row as usize;
+        let line = line.min(editor.buffer.len().saturating_sub(1));
+        let col = editor.left + col as usize;
+        let col = col.min(editor.buffer.line_chars(line));
+        editor.move_to(
+            scmd_edit::buffer::Position::new(line, col),
+            false,
+            scmd_edit::BlockKind::Stream,
+        );
+    }
+
+    /// Make `side` the active panel, if it is not already and if it is on the screen.
+    fn focus_side(&mut self, side: usize) {
+        if self.active != side && self.hidden != Some(side) {
+            self.active = side;
         }
     }
 
@@ -2958,25 +3155,6 @@ impl App {
                     }
                 }
             }
-            PromptKind::LinkName => {
-                let raw = prompt.text.trim();
-                let Some(target) = prompt.sources.first().cloned() else {
-                    return;
-                };
-                if raw.is_empty() {
-                    return;
-                }
-                let link = self.resolve_path(raw);
-                // A relative symbolic link, which is the one that survives the whole tree
-                // being moved or copied elsewhere. The dialog that offers a hard link and an
-                // absolute one is a backlog item; `link:` on the command line will carry the
-                // choice when it lands.
-                self.requests.push(Request::Link {
-                    target,
-                    link,
-                    kind: scmd_jobs::LinkKind::SymlinkRelative,
-                });
-            }
             PromptKind::ApplyCommand => {
                 let template = prompt.text.trim().to_string();
                 if template.is_empty() {
@@ -3532,6 +3710,28 @@ impl App {
     }
 
     /// What the dialog asked for: walk both trees and decide.
+    /// OK in the link dialog: the name, and which of the three kinds of link to make.
+    fn apply_link_form(&mut self, form: &Form) {
+        let Some(target) = self.pending_link.take() else {
+            return;
+        };
+        let raw = form.text_value("link.name");
+        let raw = raw.trim();
+        if raw.is_empty() {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        }
+        let kind = match form.text_value("link.kind").as_str() {
+            "hard" => scmd_jobs::LinkKind::Hard,
+            "symlink-absolute" => scmd_jobs::LinkKind::SymlinkAbsolute,
+            _ => scmd_jobs::LinkKind::SymlinkRelative,
+        };
+        self.last_link = kind;
+        let link = self.resolve_path(raw);
+        self.requests.push(Request::Link { target, link, kind });
+    }
+
     fn apply_sync_form(&mut self, form: &Form) {
         let filter = match form.text_value("sync.filter") {
             empty if empty.trim().is_empty() => None,
@@ -4956,16 +5156,12 @@ impl App {
                     text.push(std::path::MAIN_SEPARATOR);
                 }
                 text.push_str(&entry.name.to_string_lossy());
-                let title = self
+                let what = self
                     .i18n
                     .t_args("prompt-link", &[("name", target.display_name().into())]);
-                self.mode = Mode::Prompt(Prompt {
-                    kind: PromptKind::LinkName,
-                    title,
-                    text,
-                    secret: false,
-                    sources: vec![target],
-                });
+                self.pending_link = Some(target);
+                self.mode =
+                    Mode::Form(Box::new(Form::link(what, text, self.last_link, &self.i18n)));
             }
             Command::PanelQuickView(side) => {
                 self.set_content(side, crate::panel::Content::QuickView)
@@ -7288,6 +7484,10 @@ impl App {
             self.apply_sync_form(&form);
             return;
         }
+        if form.kind == FormKind::Link {
+            self.apply_link_form(&form);
+            return;
+        }
         let problems = form.apply(&mut self.cfg);
         if !problems.is_empty() {
             self.set_error(problems.join("; "));
@@ -7324,6 +7524,14 @@ impl App {
             if touched {
                 panel.rebuild();
             }
+        }
+        // The mouse is the terminal's business rather than a panel's, so it travels as a
+        // request to the loop that owns it — and it is sent whenever the dialog touched the
+        // setting, in either direction.
+        if keys.contains(&"ui.mouse") {
+            self.requests.push(Request::Mouse {
+                on: self.cfg.ui.mouse,
+            });
         }
     }
 
@@ -11661,25 +11869,24 @@ mod tests {
     }
 
     #[test]
-    fn alt_f6_puts_a_relative_symlink_in_the_other_panel() {
+    fn alt_f6_offers_the_three_kinds_of_link_and_remembers_the_last_one() {
         let mut app = app();
         press(&mut app, "Down");
         press(&mut app, "Down"); // a.txt
         app.run(Command::FileLink);
-        let Mode::Prompt(prompt) = std::mem::replace(&mut app.mode, Mode::Normal) else {
-            panic!("the link prompt did not open")
+        let Mode::Form(form) = &app.mode else {
+            panic!("the link dialog did not open: {:?}", app.mode)
         };
-        assert_eq!(prompt.kind, PromptKind::LinkName);
+        assert_eq!(form.kind, FormKind::Link);
         // Pre-filled with the passive panel's directory, as a copy would be — joined with
         // whatever separator this platform uses.
         let expected = std::path::PathBuf::from("/tmp").join("a.txt");
-        assert_eq!(prompt.text, expected.to_string_lossy());
-        assert_eq!(
-            prompt.sources.len(),
-            1,
-            "the target travels with the prompt"
-        );
-        app.prompt_accept(prompt);
+        assert_eq!(form.text_value("link.name"), expected.to_string_lossy());
+        // A relative symbolic link is the default: it is the one that survives the whole tree
+        // being moved somewhere else.
+        assert_eq!(form.text_value("link.kind"), "symlink-relative");
+
+        press(&mut app, "F10");
         match app.take_requests().into_iter().next() {
             Some(Request::Link { target, link, kind }) => {
                 assert!(target.to_string().ends_with("a.txt"), "{target}");
@@ -11688,6 +11895,25 @@ mod tests {
             }
             other => panic!("{other:?}"),
         }
+
+        // Choose a hard link, and the next dialog opens on it: the choice is made once per
+        // run of them, which is how the pack and checksum dialogs behave too.
+        app.run(Command::FileLink);
+        press(&mut app, "Down"); // off the name, onto the kind
+        press(&mut app, "Right"); // relative -> absolute
+        press(&mut app, "Right"); // absolute -> hard
+        press(&mut app, "F10");
+        match app.take_requests().into_iter().next() {
+            Some(Request::Link { kind, .. }) => {
+                assert_eq!(kind, scmd_jobs::LinkKind::Hard)
+            }
+            other => panic!("{other:?}"),
+        }
+        app.run(Command::FileLink);
+        let Mode::Form(form) = &app.mode else {
+            panic!("the link dialog did not open again")
+        };
+        assert_eq!(form.text_value("link.kind"), "hard");
     }
 
     #[test]
@@ -17061,5 +17287,219 @@ abcdefghij
         press(&mut app, "F10");
         assert!(app.mode.is_normal());
         assert!(app.remote_edit().is_none());
+    }
+    // ── the mouse ──────────────────────────────────────────────────────────────────────────
+
+    /// A frame has to have been drawn for a click to mean anything, since the layout is what
+    /// the renderer recorded. This draws one at a known size.
+    fn drawn(app: &mut App, w: u16, h: u16) {
+        let mut buf = scmd_ui::Buffer::new(w, h);
+        crate::render::draw(app, &mut buf);
+    }
+
+    fn click(app: &mut App, col: u16, row: u16) {
+        app.handle_input(Input::Mouse(scmd_tui::Mouse {
+            kind: scmd_tui::MouseKind::Press(scmd_tui::Button::Left),
+            col,
+            row,
+            mods: Mods::NONE,
+        }));
+    }
+
+    fn wheel(app: &mut App, col: u16, row: u16, down: bool) {
+        app.handle_input(Input::Mouse(scmd_tui::Mouse {
+            kind: if down {
+                scmd_tui::MouseKind::ScrollDown
+            } else {
+                scmd_tui::MouseKind::ScrollUp
+            },
+            col,
+            row,
+            mods: Mods::NONE,
+        }));
+    }
+
+    #[test]
+    fn a_click_moves_the_cursor_and_a_second_one_opens_the_row() {
+        let mut app = app();
+        drawn(&mut app, 80, 25);
+        let row = app.layout.panels[0].expect("the left panel was drawn").area;
+
+        // The third row of the left panel is `a.txt`: `..`, `docs`, `a.txt`.
+        click(&mut app, row.x + 1, row.y + 2);
+        assert_eq!(app.active, 0);
+        assert_eq!(app.panel().cursor, 2);
+        assert_eq!(app.panel().current().unwrap().name_str(), "a.txt");
+        assert!(app.take_requests().is_empty(), "one click opens nothing");
+
+        // Two clicks in the same place in quick succession are a double click, which is
+        // Enter: on a file that is the viewer or whatever opens it, and either way it is not
+        // nothing.
+        click(&mut app, row.x + 1, row.y + 1); // `docs`, a directory
+        click(&mut app, row.x + 1, row.y + 1);
+        assert!(
+            app.take_requests()
+                .iter()
+                .any(|r| matches!(r, Request::Read { .. })),
+            "a double click on a directory did not go into it"
+        );
+    }
+
+    #[test]
+    fn a_click_in_the_other_panel_makes_it_the_active_one() {
+        let mut app = app();
+        drawn(&mut app, 80, 25);
+        assert_eq!(app.active, 0);
+        let right = app.layout.panels[1].expect("the right panel").area;
+        click(&mut app, right.x + 1, right.y + 1);
+        assert_eq!(app.active, 1, "the click did not change panels");
+    }
+
+    #[test]
+    fn a_click_on_the_key_bar_presses_that_key() {
+        let mut app = app();
+        drawn(&mut app, 80, 25);
+        let (bar, keys) = app.layout.key_bar.clone().expect("the key bar was drawn");
+        let slot = 80 / keys.len() as u16;
+        // Whichever cell `F5` is in — the bar holds only the keys that are bound, so counting
+        // from one would be wrong — clicking it opens the copy dialog on the file under the
+        // cursor, which is what pressing `F5` does.
+        let fifth = keys.iter().position(|n| *n == 5).expect("F5 is on the bar");
+        app.panel_mut().cursor_to(2);
+        click(&mut app, slot * fifth as u16, bar);
+        assert!(
+            matches!(&app.mode, Mode::Form(f) if f.kind == FormKind::Copy),
+            "F5 did not open the copy dialog: {:?}",
+            app.mode
+        );
+
+        // And a cell is the key written in it: `F1` is help, wherever it sits.
+        app.mode = Mode::Normal;
+        let first = keys.iter().position(|n| *n == 1).expect("F1 is on the bar");
+        click(&mut app, slot * first as u16, bar);
+        assert!(
+            matches!(&app.mode, Mode::Help { .. }),
+            "F1 did not open the help: {:?}",
+            app.mode
+        );
+    }
+
+    #[test]
+    fn a_click_on_the_menu_bar_opens_that_menu_and_a_click_on_a_row_runs_it() {
+        let mut app = app();
+        drawn(&mut app, 80, 25);
+        // The menu bar is only on the screen while a menu is open, so F9 comes first.
+        press(&mut app, "F9");
+        drawn(&mut app, 80, 25);
+        let (bar, starts) = app.layout.menu_bar.clone().expect("the menu bar");
+        assert!(starts.len() > 2, "{starts:?}");
+        click(&mut app, starts[2], bar);
+        assert!(
+            matches!(app.mode, Mode::Menu { menu: 2, .. }),
+            "{:?}",
+            app.mode
+        );
+    }
+
+    #[test]
+    fn the_wheel_scrolls_the_panel_under_it_without_taking_the_focus() {
+        let mut app = app();
+        // A listing longer than the panel, so there is something to scroll.
+        let mut entries = vec![Entry::parent_entry()];
+        for i in 0..100 {
+            entries.push(entry(&format!("file{i:03}.txt"), EntryKind::File, 10));
+        }
+        app.handle_event(Event::Listed {
+            panel: 1,
+            generation: app.panels[1].generation,
+            result: Ok(entries),
+        });
+        drawn(&mut app, 80, 25);
+        let right = app.layout.panels[1].expect("the right panel").area;
+        assert_eq!(app.panels[1].top, 0);
+
+        wheel(&mut app, right.x + 1, right.y + 1, true);
+        assert_eq!(app.panels[1].top, 3, "three rows a notch");
+        assert_eq!(app.active, 0, "scrolling is not working in it");
+        // The cursor is dragged along rather than left behind the window.
+        assert!(app.panels[1].cursor >= 3);
+
+        wheel(&mut app, right.x + 1, right.y + 1, false);
+        assert_eq!(app.panels[1].top, 0);
+        // And it stops at the top rather than going negative.
+        wheel(&mut app, right.x + 1, right.y + 1, false);
+        assert_eq!(app.panels[1].top, 0);
+    }
+
+    #[test]
+    fn the_right_button_selects_the_row_it_is_on() {
+        let mut app = app();
+        drawn(&mut app, 80, 25);
+        let area = app.layout.panels[0].expect("the left panel").area;
+        app.handle_input(Input::Mouse(scmd_tui::Mouse {
+            kind: scmd_tui::MouseKind::Press(scmd_tui::Button::Right),
+            col: area.x + 1,
+            row: area.y + 2,
+            mods: Mods::NONE,
+        }));
+        assert_eq!(app.panel().cursor, 2, "the cursor went to the row");
+        assert_eq!(
+            app.panel().listing.totals.selected_files,
+            1,
+            "the row was not selected"
+        );
+        // And again takes it back off: it is a toggle, not a select.
+        app.handle_input(Input::Mouse(scmd_tui::Mouse {
+            kind: scmd_tui::MouseKind::Press(scmd_tui::Button::Right),
+            col: area.x + 1,
+            row: area.y + 2,
+            mods: Mods::NONE,
+        }));
+        assert_eq!(app.panel().listing.totals.selected_files, 0);
+    }
+
+    #[test]
+    fn a_click_outside_an_open_dialog_does_not_reach_the_panel_behind_it() {
+        let mut app = app();
+        app.run(Command::AppLanguages);
+        drawn(&mut app, 80, 25);
+        let before = app.panel().cursor;
+        // The top left corner: the dialog is centred, so this is outside it.
+        click(&mut app, 0, 1);
+        assert!(matches!(app.mode, Mode::Pick(_)), "the dialog closed");
+        assert_eq!(app.panel().cursor, before, "the cursor moved underneath it");
+
+        // On a row of the list it moves the list's cursor instead.
+        let list = app.layout.list.expect("the list was drawn");
+        click(&mut app, list.area.x + 1, list.area.y + 1);
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("the dialog closed")
+        };
+        assert_eq!(pick.cursor, 1);
+    }
+
+    #[test]
+    fn the_mouse_is_only_asked_for_when_the_setting_says_so() {
+        let mut app = app();
+        assert!(
+            !app.cfg.ui.mouse,
+            "off by default: the terminal keeps its own"
+        );
+        app.cfg.ui.mouse = true;
+        app.apply_config(&["ui.mouse"]);
+        assert!(
+            app.take_requests()
+                .iter()
+                .any(|r| matches!(r, Request::Mouse { on: true })),
+            "turning it on did not reach the terminal"
+        );
+        app.cfg.ui.mouse = false;
+        app.apply_config(&["ui.mouse"]);
+        assert!(
+            app.take_requests()
+                .iter()
+                .any(|r| matches!(r, Request::Mouse { on: false })),
+            "turning it off did not reach the terminal either"
+        );
     }
 }

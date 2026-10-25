@@ -1,11 +1,15 @@
 use scmd_ui::{widgets, Buffer, Rect, Style};
 
 use crate::app::{App, Mode};
+use crate::hit::{Layout, ListArea, PanelArea};
 use crate::panel as scmd_panel;
 
 /// Draw a whole frame. Returns where the text cursor should sit, if anywhere.
 pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
     let (w, h) = (buf.width(), buf.height());
+    // Where things end up is recorded as they are drawn, for the mouse to read afterwards.
+    // Cleared first, so that what is not on the screen this frame cannot be clicked.
+    app.layout = Layout::default();
     buf.clear(app.theme.panel());
     if w < 20 || h < 5 {
         buf.put_str(0, 0, "terminal too small", app.theme.panel(), w);
@@ -263,6 +267,23 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             folder_label: &folder_label,
         };
         widgets::draw_panel(buf, &app.theme, &render);
+
+        // Where its rows landed, so a click can be turned back into an entry. The same
+        // arithmetic as `draw_panel`'s own, which is why both read it from `panel_rows`.
+        let rows = widgets::panel_rows(*area, app.cfg.panel.column_titles, status.is_some());
+        let mut inner = area.inner();
+        if app.cfg.panel.column_titles {
+            inner = Rect::new(inner.x, inner.y + 1, inner.w, inner.h.saturating_sub(1));
+        }
+        if rows > 0 && !inner.is_empty() {
+            app.layout.panels[i] = Some(PanelArea {
+                area: Rect::new(inner.x, inner.y, inner.w, rows as u16),
+                top: panel.top,
+                rows,
+                columns: widgets::brief_columns(*area, panel.view),
+                len: panel.listing.len(),
+            });
+        }
     }
 
     // What the panels gave up: the last lines of the user screen, which is the point of
@@ -302,6 +323,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             .filter_map(unicode_width::UnicodeWidthChar::width)
             .sum::<usize>() as u16;
         cursor = Some((prompt_w + caret.min(room.saturating_sub(1)), y));
+        app.layout.command_line = Some(y);
     }
 
     if status_h == 1 {
@@ -342,6 +364,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         let labels = app.keybar_for(app.held);
         let refs: Vec<(u8, &str)> = labels.iter().map(|(n, s)| (*n, s.as_str())).collect();
         widgets::draw_keybar(buf, &app.theme, Rect::new(0, h - 1, w, 1), &refs);
+        app.layout.key_bar = Some((h - 1, labels.iter().map(|(n, _)| *n).collect()));
     }
 
     let screen = Rect::new(0, 0, w, panels_h);
@@ -403,7 +426,9 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             None
         }
         Mode::Menu { menu, item } => {
-            draw_menus(app, buf, Rect::new(0, 0, w, panels_h), *menu, *item);
+            let (bar, list) = draw_menus(app, buf, Rect::new(0, 0, w, panels_h), *menu, *item);
+            app.layout.menu_bar = Some((0, bar));
+            app.layout.list = list;
             None
         }
         Mode::Form(form) => {
@@ -426,7 +451,8 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
                 .map(|(row, col)| (area.x + 2 + col as u16, area.y + 1 + row as u16))
         }
         Mode::Pick(pick) => {
-            draw_pick(app, buf, screen, pick);
+            let list = draw_pick(app, buf, screen, pick);
+            app.layout.list = list;
             None
         }
         // Waiting for the key a just-recorded macro goes on: a message, with the step count.
@@ -663,12 +689,21 @@ fn draw_structure(app: &App, viewer: &mut scmd_view::Viewer, buf: &mut Buffer, a
 }
 
 /// The menu bar across the top with one menu pulled down (SPEC 10 §2).
-fn draw_menus(app: &App, buf: &mut Buffer, screen: Rect, menu: usize, item: usize) {
+/// Returns where each title starts on the bar, and where the open menu's rows landed.
+fn draw_menus(
+    app: &App,
+    buf: &mut Buffer,
+    screen: Rect,
+    menu: usize,
+    item: usize,
+) -> (Vec<u16>, Option<ListArea>) {
     let menus = crate::menu::menus();
     let titles: Vec<String> = menus.iter().map(|m| app.i18n.t(m.title)).collect();
     let starts =
         widgets::draw_menu_bar(buf, &app.theme, Rect::new(0, 0, screen.w, 1), &titles, menu);
-    let Some(open) = menus.get(menu) else { return };
+    let Some(open) = menus.get(menu) else {
+        return (starts, None);
+    };
     let rows: Vec<widgets::MenuRow> = open
         .items
         .iter()
@@ -696,11 +731,26 @@ fn draw_menus(app: &App, buf: &mut Buffer, screen: Rect, menu: usize, item: usiz
         .collect();
     let at = starts.get(menu).copied().unwrap_or(0);
     let below = Rect::new(screen.x, 1, screen.w, screen.h.saturating_sub(1));
-    widgets::draw_menu(buf, &app.theme, below, at, &rows, item);
+    let area = widgets::draw_menu(buf, &app.theme, below, at, &rows, item);
+    let shown = area.h.saturating_sub(2);
+    let list = (shown > 0).then(|| ListArea {
+        area: Rect::new(area.x + 1, area.y + 1, area.w.saturating_sub(2), shown),
+        // A dropdown is not windowed: it is as tall as it needs to be, so the first row
+        // shown is the first item.
+        top: 0,
+        len: rows.len(),
+    });
+    (starts, list)
 }
 
 /// A choose-one list: languages, themes, drives, folder history, sort modes (SPEC 10 §4).
-fn draw_pick(app: &App, buf: &mut Buffer, screen: Rect, pick: &crate::form::Pick) {
+/// Returns where the rows landed, so that a click can pick one.
+fn draw_pick(
+    app: &App,
+    buf: &mut Buffer,
+    screen: Rect,
+    pick: &crate::form::Pick,
+) -> Option<ListArea> {
     let mut lines = pick.lines();
     if lines.is_empty() {
         lines.push(app.i18n.t("pick-empty"));
@@ -750,8 +800,18 @@ fn draw_pick(app: &App, buf: &mut Buffer, screen: Rect, pick: &crate::form::Pick
 
     let area = widgets::draw_dialog(buf, &app.theme, screen, &pick.title, &shown, Some(&hint));
     if pick.rows.is_empty() {
-        return;
+        return None;
     }
+    let list = ListArea {
+        area: Rect::new(
+            area.x + 1,
+            area.y + 1,
+            area.w.saturating_sub(2),
+            shown.len() as u16,
+        ),
+        top: start,
+        len: lines.len(),
+    };
     let style = Style::new(app.theme.color("cursor.fg"), app.theme.color("cursor.bg"));
     let row = pick.cursor.saturating_sub(start);
     let y = area.y + 1 + row as u16;
@@ -760,6 +820,7 @@ fn draw_pick(app: &App, buf: &mut Buffer, screen: Rect, pick: &crate::form::Pick
         let text = format!(" {:<w$}", shown[row], w = width.saturating_sub(1));
         buf.put_str(area.x + 1, y, &text, style, width as u16);
     }
+    Some(list)
 }
 
 /// The progress overlay, or the question the engine is blocked on.

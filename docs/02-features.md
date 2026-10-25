@@ -59,7 +59,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 2.7 | Mark-and-act across directory changes (persistent selection set / "staging area") | NEW | M4 |
 | 2.8 | Sync panel paths (`=`), open current dir in the other panel, swap panels | all | M1 |
 | 2.9 | Command line under the panels with history, completion, insert-current-name macros | FAR/MC | M1 |
-| 2.10 | Mouse: click, drag-select, wheel scroll, drag&drop between panels and with the OS | FAR/TC | M2 (TUI), M3 (OS DnD) |
+| 2.10 | Mouse: click, drag-select, wheel scroll, drag&drop between panels and with the OS | FAR/TC | **click, double click, right-click select, wheel, key bar and menus: done** (SPEC 02 §12, `ui.mouse`, off by default). Drag-select, dragging a column rule and OS drag-and-drop: M3 |
 
 ## 3. File operations
 

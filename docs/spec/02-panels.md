@@ -377,3 +377,34 @@ that is the same on both sides is selected in neither. Case is ignored when matc
 because the two panels may be on filesystems that disagree about it; a pair that differs only
 in case is then a difference the user sees rather than a pair we quietly match up. With no
 timestamp on either side the size is all there is to go on. Directories are left alone.
+
+## 12. The mouse (shipped, off by default)
+
+`ui.mouse` turns it on; it is **off** until somebody asks, and that is a decision rather than
+an oversight. While a terminal is reporting the mouse it stops acting on it: selecting text
+with the mouse and the middle-click paste go away, and those are the user's own tools, which
+this program cannot replace. Somebody who wants the mouse says so once in *Interface settings*
+and keeps it; everybody else keeps their terminal.
+
+What it does, and why it is this and not more:
+
+| Action | What happens |
+| --- | --- |
+| left click on a row | that panel becomes the active one and the cursor goes to the row |
+| left click inside a panel, past the last row | the panel becomes active and the cursor stays where it was |
+| double click on a row | the same as `Enter` on it: into a directory, into an archive, or open the file |
+| right click on a row | the cursor goes there and the row's selection is toggled — FAR's and mc's button, and nothing here wants it for a context menu |
+| wheel | scrolls what is **under the pointer**, three rows a notch, without taking the focus: looking at the other panel is not working in it |
+| left click on the key bar | presses the key written in the cell, with whatever modifiers are held — so `Shift` and a click is `Shift+F5` |
+| left click on the menu bar | opens that menu; one click on a dropdown row runs it |
+| left click on a dialog's list | moves its cursor; a double click answers the dialog |
+| left click outside an open dialog | nothing at all, and in particular not the panel underneath: a click must not move a cursor the user cannot see |
+| left click in the editor | puts the caret there |
+
+Every one of them ends up in the same `run` the keyboard uses, so the macro recorder, the
+confirmations and the error reporting are the ones already there — the mouse does what a key
+does rather than having powers of its own.
+
+Still to come: dragging to extend a selection, dragging a column rule to resize it, dragging
+between the panels, and the sideways wheel. Each wants state the click handling does not keep
+yet, and none of them is the difference between having a mouse and not.

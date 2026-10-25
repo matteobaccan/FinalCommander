@@ -118,3 +118,16 @@ mask; `Gray *` inverts. `Ctrl+A` of a mask, `Alt+letters` to find a name as you 
 
 What is selected is what the next operation acts on. With nothing selected it is the row under
 the cursor — so `F5` on one file copies that file, and nobody has to select it first.
+
+# The mouse
+
+Off until you ask for it, in `F9 → Options → Interface settings`, and the reason is worth
+knowing: while a terminal is reporting the mouse it stops acting on it, so selecting text with
+the mouse and the middle-click paste stop working. Those are your terminal's own tools and this
+program cannot replace them, so it does not take them away unasked.
+
+With it on: a click moves the cursor to the row and makes that panel the active one, a double
+click is `Enter` on it, the right button selects a row, and the wheel scrolls whatever is under
+the pointer — three rows a notch, without taking the focus, so you can read the other panel
+without leaving this one. The key bar is clickable (hold `Shift` and click for `Shift+F5`), so
+is the menu bar and a dialog's list. A click outside an open dialog does nothing at all.

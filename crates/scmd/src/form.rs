@@ -137,6 +137,7 @@ impl Form {
             | FormKind::Copy
             | FormKind::Checksum
             | FormKind::Sync
+            | FormKind::Link
             | FormKind::Search => Vec::new(),
             FormKind::System => vec![
                 Field::toggle(
@@ -262,9 +263,9 @@ impl Form {
                     &[("far", "far".into()), ("mc", "mc".into())],
                     &cfg.ui.keymap,
                 ),
+                Field::toggle("ui.mouse", t("opt-mouse"), cfg.ui.mouse),
                 Field::Separator,
                 Field::Dim(t("opt-clock")),
-                Field::Dim(t("opt-mouse")),
                 Field::Dim(t("opt-menu-always")),
             ],
             FormKind::Confirmations => vec![
@@ -298,6 +299,7 @@ impl Form {
             FormKind::Checksum => "sum-title",
             FormKind::Sync => "sync-title",
             FormKind::Search => "search-title",
+            FormKind::Link => "link-title",
             FormKind::System => "menu-system-settings",
             FormKind::Panel => "menu-panel-settings",
             FormKind::Interface => "menu-interface-settings",
@@ -693,6 +695,40 @@ impl Form {
             kind: FormKind::Checksum,
             title: t("sum-title"),
             fields,
+            cursor: 1,
+            site: None,
+            button: None,
+            buttons: vec![i18n.t("btn-ok"), i18n.t("btn-cancel")],
+        }
+    }
+
+    /// `Alt+F6`: a link to the file under the cursor.
+    ///
+    /// Three kinds, and which one to use is a real choice rather than a detail. A **relative**
+    /// symbolic link survives the whole tree being moved, copied or mounted somewhere else,
+    /// because it says "the file next to me"; an **absolute** one survives the link alone
+    /// being moved to another directory, because it says where the file is; a **hard** link is
+    /// not a pointer at all but a second name for the same bytes, which survives the original
+    /// name being deleted and cannot cross a filesystem or name a directory.
+    pub fn link(what: String, name: String, kind: scmd_jobs::LinkKind, i18n: &I18n) -> Form {
+        let t = |id: &str| i18n.t(id);
+        let kinds = [
+            ("symlink-relative", t("link-kind-relative")),
+            ("symlink-absolute", t("link-kind-absolute")),
+            ("hard", t("link-kind-hard")),
+        ];
+        let fields = vec![
+            Field::Note(what),
+            Field::text("link.name", t("link-name"), name),
+            Field::Separator,
+            choice("link.kind", t("link-kind"), &kinds, kind.as_str()),
+        ];
+        Form {
+            kind: FormKind::Link,
+            title: t("link-title"),
+            fields,
+            // On the name: it is the one field anybody edits, and the kind is remembered from
+            // the last time.
             cursor: 1,
             site: None,
             button: None,

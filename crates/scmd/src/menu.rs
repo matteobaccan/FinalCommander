@@ -39,6 +39,8 @@ pub enum FormKind {
     Checksum,
     /// Which way to synchronise, and what counts as the same (SPEC 03 §10).
     Sync,
+    /// A link to the file under the cursor: its name, and which kind of link it is.
+    Link,
     /// Find text in what the viewer or the editor has open (SPEC 05 §1.4).
     Search,
     System,

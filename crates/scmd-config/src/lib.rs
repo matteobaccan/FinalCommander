@@ -247,6 +247,13 @@ pub struct UiCfg {
     pub markdown: bool,
     /// The command line under the panels. Without it, typing goes to quick search.
     pub command_line: bool,
+    /// Let the mouse move the cursor, press the key bar and open the menus.
+    ///
+    /// Off by default, and that is a decision rather than an oversight: while a terminal is
+    /// reporting the mouse it stops handling it, so selecting text with the mouse and the
+    /// middle-click paste — the user's own tools, which this program cannot replace — go
+    /// away. Somebody who wants the mouse says so once; everybody else keeps their terminal.
+    pub mouse: bool,
     /// How many command lines to keep between sessions.
     pub command_history: usize,
 }
@@ -262,6 +269,7 @@ impl Default for UiCfg {
             syntax: true,
             markdown: true,
             command_line: true,
+            mouse: false,
             command_history: 512,
         }
     }

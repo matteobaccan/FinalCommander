@@ -27,6 +27,11 @@ impl Rect {
         self.w == 0 || self.h == 0
     }
 
+    /// Is this cell inside the rectangle? The one question a mouse asks.
+    pub const fn contains(&self, x: u16, y: u16) -> bool {
+        x >= self.x && x < self.right() && y >= self.y && y < self.bottom()
+    }
+
     /// Shrink by one cell on every side (the inside of a frame).
     pub fn inner(&self) -> Rect {
         Rect {
