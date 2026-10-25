@@ -158,8 +158,15 @@ fn entry_from_meta(name: OsString, full: &Path, meta: &Metadata) -> Entry {
     flags.set(EntryFlags::HIDDEN, is_hidden(&name, meta));
     flags.set(EntryFlags::READONLY, meta.permissions().readonly());
     flags.set(EntryFlags::EXECUTABLE, is_executable(meta));
-    if kind == EntryKind::Symlink && fs::metadata(full).is_err() {
-        flags.insert(EntryFlags::BROKEN_LINK);
+    set_platform_flags(&mut flags, meta);
+    // One `stat` through the link answers both questions worth asking about it: whether it
+    // leads anywhere, and whether what it leads to is a directory — which is what decides
+    // where it sorts and what the size column says.
+    if kind == EntryKind::Symlink {
+        match fs::metadata(full) {
+            Err(_) => flags.insert(EntryFlags::BROKEN_LINK),
+            Ok(target) => flags.set(EntryFlags::LINK_DIR, target.is_dir()),
+        }
     }
 
     Entry {
@@ -205,6 +212,24 @@ fn is_hidden(name: &OsString, meta: &Metadata) -> bool {
     // `.git` and `.env` would be in the way here and out of the way everywhere else.
     name.to_string_lossy().starts_with('.')
         || meta.file_attributes() & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM) != 0
+}
+
+/// The attribute bits only one platform has. On a Unix there are none: the mode is the whole
+/// of it, and the dialog offers the twelve boxes rather than these.
+#[cfg(not(windows))]
+fn set_platform_flags(_flags: &mut EntryFlags, _meta: &Metadata) {}
+
+#[cfg(windows)]
+fn set_platform_flags(flags: &mut EntryFlags, meta: &Metadata) {
+    use std::os::windows::fs::MetadataExt;
+    const FILE_ATTRIBUTE_SYSTEM: u32 = 0x4;
+    const FILE_ATTRIBUTE_ARCHIVE: u32 = 0x20;
+    let attributes = meta.file_attributes();
+    flags.set(EntryFlags::SYSTEM, attributes & FILE_ATTRIBUTE_SYSTEM != 0);
+    flags.set(
+        EntryFlags::ARCHIVE,
+        attributes & FILE_ATTRIBUTE_ARCHIVE != 0,
+    );
 }
 
 #[cfg(unix)]

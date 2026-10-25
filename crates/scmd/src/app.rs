@@ -3491,7 +3491,17 @@ impl App {
                     _ => {}
                 }
             }
-            PromptKind::Filter | PromptKind::QuickSearch { .. } => {}
+            // `Enter` on a quick search is FAR's: it closes the search *and* opens what was
+            // found. Every keystroke has already moved the cursor, so a first `Enter` that
+            // only confirmed what the screen had been showing all along would do nothing one
+            // could see, and the second would be the one that worked. One key, one result.
+            PromptKind::QuickSearch { .. } => {
+                self.scroll();
+                self.run(Command::NavEnter);
+            }
+            // The filter bar is the other way round: it is applied as it is typed, and
+            // `Enter` means "keep it and give me the panel back".
+            PromptKind::Filter => {}
         }
     }
 
@@ -6851,7 +6861,7 @@ impl App {
             &what,
             sources.len(),
             mode,
-            entry.flags.contains(scmd_core::EntryFlags::READONLY),
+            entry.flags,
             entry.mtime,
             directories,
             &self.i18n,
@@ -18455,6 +18465,50 @@ abcdefghij
         press(&mut app, "Ctrl+E");
         let editor = app.mode.editor().expect("the editor");
         assert_eq!(editor.cursor.line, 119, "the last line on the screen");
+    }
+
+    #[test]
+    fn one_enter_ends_the_quick_search_and_opens_what_it_found() {
+        let mut app = app();
+        app.cfg.panel.quick_search = QuickSearch::Plain;
+        let was = app.panel().cwd.clone();
+        // `d` lands on `docs`, the only directory in the fixture.
+        press(&mut app, "d");
+        assert!(
+            matches!(&app.mode, Mode::Prompt(p) if matches!(p.kind, PromptKind::QuickSearch { .. })),
+            "the quick search did not open"
+        );
+
+        press(&mut app, "Enter");
+        assert!(matches!(app.mode, Mode::Normal), "the search is still open");
+        // One key, one result: the panel went into the directory, rather than waiting for a
+        // second `Enter` to do what the first looked like it had done.
+        assert_eq!(
+            app.panel().cwd.display_name(),
+            "docs",
+            "the first Enter did not open it (was {was})"
+        );
+    }
+
+    #[test]
+    fn the_attributes_dialog_opens_on_what_the_file_carries() {
+        let mut app = app();
+        app.panel_mut().cursor_to(2); // a.txt
+                                      // A read-only file: the box has to open ticked, because `OK` writes every box and an
+                                      // empty one would take the bit away from a file nobody meant to change.
+        let mut entries = app.panels[0].listing.entries.clone();
+        entries[2].flags.insert(scmd_core::EntryFlags::READONLY);
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation: app.panels[0].generation,
+            result: Ok(entries),
+        });
+        app.panel_mut().cursor_to(2);
+        app.run(Command::FileAttributes);
+        let Mode::Form(form) = &app.mode else {
+            panic!("the attributes dialog did not open: {:?}", app.mode)
+        };
+        assert_eq!(form.text_value("attr.readonly"), "true");
     }
 
     #[test]

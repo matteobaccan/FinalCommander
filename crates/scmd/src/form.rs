@@ -833,7 +833,7 @@ impl Form {
         what: &str,
         count: usize,
         mode: Option<u32>,
-        readonly: bool,
+        flags: scmd_core::EntryFlags,
         mtime: Option<std::time::SystemTime>,
         directories: bool,
         i18n: &I18n,
@@ -885,14 +885,33 @@ impl Form {
 
         // Read-only is the one row both platforms have, and the only one a server has beyond
         // the mode.
-        fields.push(Field::toggle("attr.readonly", t("attr-readonly"), readonly));
+        fields.push(Field::toggle(
+            "attr.readonly",
+            t("attr-readonly"),
+            flags.contains(scmd_core::EntryFlags::READONLY),
+        ));
         if cfg!(windows) {
-            for (key, label) in [
-                ("attr.hidden", "attr-hidden"),
-                ("attr.system", "attr-system"),
-                ("attr.archive", "attr-archive"),
+            // Seeded from what the file carries, not from `false`. A box that opened empty on
+            // a hidden file would not merely look wrong: `OK` writes every box, so it would
+            // take the bit away from a file nobody meant to change.
+            for (key, label, on) in [
+                (
+                    "attr.hidden",
+                    "attr-hidden",
+                    flags.contains(scmd_core::EntryFlags::HIDDEN),
+                ),
+                (
+                    "attr.system",
+                    "attr-system",
+                    flags.contains(scmd_core::EntryFlags::SYSTEM),
+                ),
+                (
+                    "attr.archive",
+                    "attr-archive",
+                    flags.contains(scmd_core::EntryFlags::ARCHIVE),
+                ),
             ] {
-                fields.push(Field::toggle(key, t(label), false));
+                fields.push(Field::toggle(key, t(label), on));
             }
         }
         fields.push(Field::Separator);

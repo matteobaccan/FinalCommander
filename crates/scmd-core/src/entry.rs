@@ -37,6 +37,16 @@ impl EntryFlags {
     pub const EXECUTABLE: EntryFlags = EntryFlags(1 << 2);
     pub const SYSTEM: EntryFlags = EntryFlags(1 << 3);
     pub const BROKEN_LINK: EntryFlags = EntryFlags(1 << 4);
+    /// Windows' archive bit. It has no meaning on a Unix and is never set there; it is here
+    /// because the attributes dialog offers it on Windows and has to show what the file
+    /// actually carries rather than an empty box.
+    pub const ARCHIVE: EntryFlags = EntryFlags(1 << 5);
+    /// A link that points at a directory — a symbolic link on any platform, and a junction on
+    /// Windows. It is *not* `EntryKind::Dir`, because the entry is the link and deleting it
+    /// does not touch what it points at; but it opens as a directory and therefore sorts and
+    /// reads as one. The listing already pays for the second `stat` to know whether a link is
+    /// broken, so this costs nothing.
+    pub const LINK_DIR: EntryFlags = EntryFlags(1 << 6);
 
     pub const fn empty() -> Self {
         EntryFlags(0)
@@ -109,6 +119,19 @@ impl Entry {
 
     pub fn name_str(&self) -> std::borrow::Cow<'_, str> {
         self.name.to_string_lossy()
+    }
+
+    /// Does this entry *open* as a directory? A directory does, and so does a link that
+    /// points at one — a symbolic link or a Windows junction. Everything that asks "where
+    /// does the cursor go when this is opened", and therefore everything that groups the
+    /// directories together, asks this rather than the kind: FAR sorts a junction among the
+    /// folders because that is what it behaves like, and a user reading a `C:\` listing is
+    /// looking for `Documents and Settings` up there and not down among the files.
+    ///
+    /// What it deliberately does not change is what the entry *is*: deleting a link deletes
+    /// the link, and the name still carries its `@`.
+    pub fn opens_as_dir(&self) -> bool {
+        self.kind.is_dirlike() || self.flags.contains(EntryFlags::LINK_DIR)
     }
 
     /// Extension used for sorting and masks: empty for directories and for dotfiles.

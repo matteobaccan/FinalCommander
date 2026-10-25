@@ -454,7 +454,14 @@ fn draw_full(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect, 
         );
 
         let sx = inner.x + name_w + 1;
-        match e.kind {
+        // A link to a directory says `Folder` too: its own size is the size of the link, a
+        // number that means nothing to anybody, and what the row opens as is a directory.
+        // The `@` on the name is what says it is a link.
+        match if e.opens_as_dir() && e.kind != EntryKind::Parent {
+            EntryKind::Dir
+        } else {
+            e.kind
+        } {
             // A word, not a number: FAR centres it in a field as wide as the longer of the
             // two words, so `Up` and `Folder` line up with each other down the column
             // whatever the language calls them.

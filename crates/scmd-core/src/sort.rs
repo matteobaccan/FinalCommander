@@ -72,7 +72,9 @@ impl Sort {
             _ => {}
         }
         if self.dirs_first {
-            match (a.kind.is_dirlike(), b.kind.is_dirlike()) {
+            // What opens as a directory sorts as one, so a junction to a folder is up with
+            // the folders where somebody reading the listing looks for it.
+            match (a.opens_as_dir(), b.opens_as_dir()) {
                 (true, false) => return Ordering::Less,
                 (false, true) => return Ordering::Greater,
                 _ => {}
@@ -404,6 +406,39 @@ mod tests {
     fn names(mut v: Vec<Entry>, sort: Sort) -> Vec<String> {
         v.sort_by(|a, b| sort.compare(a, b));
         v.into_iter().map(|e| e.name_str().into_owned()).collect()
+    }
+
+    /// A junction to a folder is a folder as far as the eye is concerned.
+    #[test]
+    fn a_link_that_points_at_a_directory_sorts_with_the_directories() {
+        let link = Entry {
+            flags: EntryFlags::LINK_DIR,
+            ..e("Documents and Settings", EntryKind::Symlink, 0)
+        };
+        let to_a_file = e("shortcut", EntryKind::Symlink, 12);
+        let rows = vec![
+            e("readme.txt", EntryKind::File, 10),
+            link.clone(),
+            e("inetpub", EntryKind::Dir, 0),
+            to_a_file.clone(),
+        ];
+        let sort = Sort::default();
+        assert_eq!(
+            names(rows, sort),
+            [
+                "Documents and Settings",
+                "inetpub",
+                "readme.txt",
+                "shortcut"
+            ],
+            "a junction belongs with the folders, and a link to a file with the files"
+        );
+
+        // And what it *is* has not changed: it is still a link, which is what decides what
+        // deleting it does.
+        assert_eq!(link.kind, EntryKind::Symlink);
+        assert!(link.opens_as_dir());
+        assert!(!to_a_file.opens_as_dir());
     }
 
     /// Two names that differ only in how a number is padded are still two names.
