@@ -76,7 +76,12 @@ owner), `links`, `owners`, `descr`, plus `custom:0..9` from config:
 
 **Shipped (0.0.6)**: the first five, in FAR's order and on FAR's keys — `Ctrl+1` brief (three
 columns of names), `Ctrl+2` medium (two), `Ctrl+3` full, `Ctrl+4` wide (name and size, two
-columns), `Ctrl+5` detailed. A mode says how many columns it draws and whether it shows a size,
+columns), `Ctrl+5` detailed. The full view draws the extension in a column of its own, as FAR
+does: the names run down the left of the name field and the extensions down its right, against
+the size column, which is what makes a directory of one kind of file read as a list rather than
+as a paragraph. Five columns of the field, four of them the extension — a directory (`docs.old`
+is a folder, not a `.old` file), a dotfile, and an extension too long for the column keep their
+name whole across both. A mode says how many columns it draws and whether it shows a size,
 so the layout follows from the mode rather than from a width guess, and a column too narrow for
 what it holds falls back to fewer columns. `links`, `owners`, `descr` and the custom sets want
 data we do not collect yet and are lines in `docs/BACKLOG.md`.

@@ -16,7 +16,10 @@ somewhere to put a file.
 # Looking at a directory
 
 `Ctrl+1` to `Ctrl+5` choose how rows are drawn: brief, medium, full, wide, detailed. The
-multi-column views run down a column and then across, as the originals do.
+multi-column views run down a column and then across, as the originals do. The full view keeps
+the extension in a column of its own, against the size: names down the left, extensions down
+the right. A folder with a dot in its name, a dotfile and an extension too long for the column
+keep their name whole.
 
 `Ctrl+F3` to `Ctrl+F6` sort by name, extension, time and size; choosing the order already in
 force reverses it. `Ctrl+F12` offers the orders as a list.

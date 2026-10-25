@@ -23,6 +23,14 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **The full view separates the extension from the name**, as FAR does: the names run down the
+  left of the name field and the extensions down its right, against the size column, so a
+  directory of one kind of file reads as a list rather than as a paragraph. A folder with a dot
+  in its name is not a file with an extension (`docs.old` stays whole), a dotfile's leading dot
+  starts its name rather than an extension, and an extension too long for the column is left
+  where it was written. The other views, the status line and everything that names a file still
+  show the name whole.
+
 - **A panel notices what it did not do itself.** A local panel watches the directory it is
   looking at — `inotify` on Linux, FSEvents on macOS, `ReadDirectoryChangesW` on Windows — and
   re-reads it when something lands there: a build that wrote a file, a download that finished,

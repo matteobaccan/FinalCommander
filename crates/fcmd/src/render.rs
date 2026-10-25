@@ -2492,7 +2492,10 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
             lines[23].contains("Help") && lines[23].contains("Quit"),
             "{out}"
         );
-        assert!(out.contains("Cargo.toml"), "{out}");
+        // The full view keeps the extension in a column of its own, so the name is drawn in
+        // two pieces: `Cargo` down the left of the field and `toml` against the size column.
+        assert!(out.contains("Cargo") && out.contains("toml"), "{out}");
+        assert!(!out.contains("Cargo.toml"), "{out}");
     }
 
     #[test]
@@ -4949,6 +4952,7 @@ third line
         });
         let out = frame(&mut app, 100, 12);
         assert!(out.contains("sftp://mb@host.example:22/srv/www"), "{out}");
-        assert!(out.contains("index.html"), "{out}");
+        // Split into the name field and the extension column, as the full view draws it.
+        assert!(out.contains("index") && out.contains("html"), "{out}");
     }
 }

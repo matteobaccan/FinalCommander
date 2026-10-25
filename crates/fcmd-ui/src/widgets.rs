@@ -420,6 +420,32 @@ fn shift_name(name: &str, by: usize) -> String {
     name.chars().skip(by).collect()
 }
 
+/// What the extension column takes out of the name field in the full view: four columns for
+/// the extension itself and one that keeps it off the end of the name. Four because `toml`,
+/// `json`, `html` and `yaml` are the longest extensions common enough to size a column for;
+/// anything longer stays in the name, where it is read as part of it anyway.
+const EXT_W: u16 = 5;
+
+/// A name split the way the full view draws it: what goes in the name field, and the
+/// extension that goes in the column of its own, right-aligned against the size.
+///
+/// `None` for everything that has no extension to speak of — a directory (a folder named
+/// `docs.old` is not a `.old` file), a dotfile, whose leading dot starts a name rather than
+/// an extension, a trailing dot, and an extension too long for the column. In each of those
+/// the name is drawn whole, across both fields.
+fn split_ext<'a>(name: &'a str, e: &Entry) -> Option<(&'a str, &'a str)> {
+    if e.opens_as_dir() || matches!(e.kind, EntryKind::Dir | EntryKind::Parent) {
+        return None;
+    }
+    let cut = name.rfind('.')?;
+    let (stem, dotted) = name.split_at(cut);
+    let ext = &dotted[1..];
+    if stem.is_empty() || ext.is_empty() || ext.width() > (EXT_W - 1) as usize {
+        return None;
+    }
+    Some((stem, ext))
+}
+
 /// (name, size, time, attributes) widths, so the titles row and the file rows cannot drift.
 fn full_columns(inner_w: u16, view: ViewMode) -> (u16, u16, u16, u16) {
     let size_w: u16 = 9;
@@ -445,13 +471,38 @@ fn draw_full(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect, 
         buf.fill(Rect::new(inner.x, y, inner.w, 1), ' ', style);
 
         let name = shift_name(&decorate(e), p.name_scroll);
-        buf.put_str(
-            inner.x,
-            y,
-            &truncate_cols(&name, name_w as usize),
-            style,
-            name_w,
-        );
+        // The extension in a column of its own, as FAR draws the full view: the names line up
+        // down the left and the extensions down the right of the same field. Not while the
+        // names are being scrolled sideways — the field is then a window onto one long name
+        // and there is no room to keep a column in it — and not in the detailed view, which
+        // has columns of its own after the time.
+        let split = if p.view == ViewMode::Full && p.name_scroll == 0 && name_w > EXT_W + 3 {
+            split_ext(&name, e)
+        } else {
+            None
+        };
+        match split {
+            Some((stem, ext)) => {
+                let stem_w = name_w - EXT_W;
+                buf.put_str(
+                    inner.x,
+                    y,
+                    &truncate_cols(stem, stem_w as usize),
+                    style,
+                    stem_w,
+                );
+                put_right(buf, inner.x + stem_w, y, EXT_W, ext, style);
+            }
+            None => {
+                buf.put_str(
+                    inner.x,
+                    y,
+                    &truncate_cols(&name, name_w as usize),
+                    style,
+                    name_w,
+                );
+            }
+        }
 
         let sx = inner.x + name_w + 1;
         // A link to a directory says `Folder` too: its own size is the size of the link, a
@@ -1073,13 +1124,21 @@ mod tests {
     }
 
     fn render(view: ViewMode, cursor: usize, selection: &Selection) -> String {
+        render_listing(&listing(), view, cursor, selection)
+    }
+
+    fn render_listing(
+        listing: &Listing,
+        view: ViewMode,
+        cursor: usize,
+        selection: &Selection,
+    ) -> String {
         let theme = Theme::default_theme();
-        let listing = listing();
         let mut buf = Buffer::new(44, 10);
         let p = PanelRender {
             area: Rect::new(0, 0, 44, 9),
             path: "/home/mb/project",
-            listing: &listing,
+            listing,
             selection,
             cursor,
             top: 0,
@@ -1159,6 +1218,34 @@ mod tests {
         let out = tab_row(20, &labels, 0, &[false; 6]);
         assert!(out.starts_with(" one "), "{out}");
         assert!(out.ends_with('\u{203a}'), "{out}");
+    }
+
+    #[test]
+    fn the_full_view_puts_the_extension_in_a_column_of_its_own() {
+        let listing = Listing::new(
+            vec![
+                Entry::parent_entry(),
+                entry("docs.old", EntryKind::Dir, 0),
+                entry("Cargo.toml", EntryKind::File, 412),
+                entry(".gitignore", EntryKind::File, 40),
+                entry("notes", EntryKind::File, 10),
+                entry("db.backup", EntryKind::File, 10),
+            ],
+            1,
+        );
+        let out = render_listing(&listing, ViewMode::Full, 0, &Selection::default());
+        // The name on the left, the extension right-aligned against the size column.
+        assert!(out.contains("Cargo      toml"), "{out}");
+        // A folder with a dot in its name is not a file with an extension.
+        assert!(out.contains("docs.old"), "{out}");
+        // A dotfile's leading dot starts its name; there is nothing to move right.
+        assert!(out.contains(".gitignore"), "{out}");
+        assert!(out.contains("notes"), "{out}");
+        // An extension too long for the column stays where it was written.
+        assert!(out.contains("db.backup"), "{out}");
+        // In the other views the name is whole, extension and all.
+        let brief = render_listing(&listing, ViewMode::Brief, 0, &Selection::default());
+        assert!(brief.contains("Cargo.toml"), "{brief}");
     }
 
     #[test]
