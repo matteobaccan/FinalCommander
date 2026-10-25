@@ -100,8 +100,16 @@ fn run(mut watcher: notify::RecommendedWatcher, rx: mpsc::Receiver<Msg>, events:
         let Some(msg) = msg else { return };
         match msg {
             Msg::Set { panel, path } => {
+                // The path the platform will report events under, which is not always the one
+                // the panel shows: on macOS a directory under `/tmp` or `/var` is reached
+                // through a symlink and FSEvents answers with `/private/...`, so a watch armed
+                // on the name the user typed would never match anything that happened in it.
+                // Resolved here, on this thread, because `canonicalize` touches the disk.
                 match path {
-                    Some(path) => dirs.insert(panel, path),
+                    Some(path) => {
+                        let real = std::fs::canonicalize(&path).unwrap_or(path);
+                        dirs.insert(panel, real)
+                    }
                     None => dirs.remove(&panel),
                 };
                 let want: HashSet<PathBuf> = dirs.values().cloned().collect();
