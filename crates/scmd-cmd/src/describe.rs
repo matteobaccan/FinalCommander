@@ -134,6 +134,8 @@ impl Command {
             Command::FileMoveCurrent => "rename this one file",
             Command::FileDeleteCurrent => "delete this one file",
             Command::FileDeleteForce => "delete outright, past the wastebasket",
+            Command::FileChecksum => "write a list of digests for what is selected",
+            Command::FileChecksumVerify => "check the files beside a list of digests",
             Command::FileApply => "run a command over each selected file",
             Command::FileLink => "make a link",
             Command::FileWipe => "delete, overwriting the bytes first",

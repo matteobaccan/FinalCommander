@@ -165,7 +165,8 @@ every key on the screen you are looking at does.
   rename, not a copy. A copy is written to `name.scmd-part` and renamed only when complete, so
   an interrupted operation never leaves a file that looks finished. `F8` hands what you chose
   to the system's own wastebasket — the one your desktop's file manager shows — and `Shift+Del`
-  deletes outright.
+  deletes outright. Checksums (MD5, SHA-1, SHA-256) are written in the format `sha256sum`
+  reads, and a list can be checked back against the files beside it.
 - **Panels**: `Tab` / `Ctrl+U`, arrows / `PgUp` / `PgDn` / `Home` / `End` / `Enter` /
   `Ctrl+PgUp` / `Backspace` / `Ctrl+\` with history (`Alt+←/→`), `Ins` and `+` / `-` / `*`
   selection by mask, `Ctrl+F3..F9` sorting (press twice to reverse), `Ctrl+1..5` view modes,

@@ -10,7 +10,7 @@ same-filesystem rename fast path), recursive delete, nested mkdir, the conflict 
 per-file and a total bar, cancellation, metadata preservation (mtime, Unix mode), symlinks
 copied as links, write-to-`.scmd-part`-then-rename, the guards in §2, and a dry-run mode.
 **Still to come**: the job queue and journal (§5), verification and
-resume (§3), attribute dialogs (§7), multi-rename (§8), checksums and split (§9), compare and
+resume (§3), attribute dialogs (§7), multi-rename (§8), split and combine (§9), compare and
 synchronise (§10).
 
 ## 1. Job model
@@ -165,13 +165,37 @@ The dialog shows a live before/after table with collisions marked in red; applyi
 rename plan that handles cycles (`a→b, b→a`) via temporary names, and the plan can be exported
 and re-imported. Undo restores the previous names from the journal.
 
-## 9. Checksums, split, combine
+## 9. Checksums (shipped), split, combine
 
-- Create `.sha256`/`.sha1`/`.md5`/`.sfv` (crc32) for the selection, one file or per-file,
-  verify with a result panel listing OK/FAILED/MISSING and a "panelize failures" action.
-- Hashing uses rayon across files and blake3/sha2 with hardware acceleration where available.
-- Split into volumes by size or count, with an optional self-recombining script; combine
-  detects `.001`/`.part1`/`.zNN` series automatically.
+**Checksums.** MD5, SHA-1 and SHA-256 over what is selected, written as a list of digests, and
+a list checked against the files beside it. The dialog asks three things: which hash, whether
+one list holds them all or each file gets its own, and what the list is called.
+
+- The format written is the one `md5sum`, `sha1sum` and `sha256sum` write and read —
+  `<hex>  <name>`, two spaces — because the point of a checksum file is that somebody else can
+  check it with the tool they already have. The formats *read* are wider: the same line with
+  ` *name` (what those tools call binary mode), and BSD's `SHA256 (name) = <hex>`, which is
+  what macOS and FreeBSD produce. Blank lines and `#` comments are skipped.
+- **Which hash made a list is read off the digests in it**, not off the file's name: 32 hex
+  characters is MD5, 40 is SHA-1, 64 is SHA-256. A list is called `SHA256SUMS` or `sums.txt`
+  or nothing in particular, and a name can lie where a length cannot. A list whose digests do
+  not agree on one length is not guessed at — it is reported as a list this cannot check.
+- The name offered is `<directory>.<hash>`, which is what a commander writes, and it is a text
+  row because a Linux release writes `SHA256SUMS` instead and both are read by `sha256sum -c`.
+- **What does not match is left selected** in the panel, the way a comparison by content leaves
+  what differs: the next thing one does with a bad download is fetch it again or delete it, and
+  both of those work on the selection. The report names the first twenty and says how many
+  more.
+- Reading the bytes is `JobFs::read_chunks` — the reading half of a copy with the writing half
+  left out — so when a provider implements it, checksums work there with nothing else changed.
+  Today only the local filesystem does, and anything else is refused before the dialog opens
+  rather than halfway through a run. `Esc` stops a run, as it stops a comparison.
+- The three hashes come from `md5`, `sha1` and `sha2`, all three of which were already in the
+  tree under the SSH client, so this costs nothing to build. CRC32 and `.sfv` are not here:
+  that is a different file format, and `docs/BACKLOG.md` says so.
+
+**Split and combine** are still to come: into volumes by size or count, with an optional
+self-recombining script; combine detects `.001`/`.part1`/`.zNN` series automatically.
 
 ## 10. Compare and synchronise
 

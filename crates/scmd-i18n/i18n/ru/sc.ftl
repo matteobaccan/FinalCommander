@@ -169,6 +169,24 @@ btn-cancel = Отмена
 msg-nothing-to-do = ничего не отмечено
 msg-trash-refused = { $path }: корзина его не принимает — Shift+Del удалит насовсем
 
+# Checksums (SPEC 03 §9)
+sum-title = Контрольные суммы
+sum-algorithm = Хеш
+sum-one-file = Один список на всех
+sum-name = Имя
+sum-working = { $name }: { $done } из { $total }
+sum-verifying = проверка по { $name }
+sum-stopped = остановлено
+sum-written = { $name } записан
+sum-no-name = списку нужно имя
+sum-local-only = контрольная сумма считывает только файл на этой машине
+sum-all-match = все { $count } совпадают
+sum-verify-title = Контрольные суммы
+sum-verify-summary = { $ok } совпадают, { $bad } нет
+sum-differs = не совпадает
+sum-missing = нет такого файла
+sum-unreadable = не читается
+
 key-wrap = Перенос
 key-hex = Hex
 key-text = Текст
@@ -284,6 +302,8 @@ menu-link = Создать ссылку
 menu-mkdir = Создать папку
 menu-delete = Удалить
 menu-wipe = Уничтожить
+menu-checksum = Контрольные суммы…
+menu-checksum-verify = Проверить по списку
 menu-delete-permanent = Удалить насовсем
 menu-archive-add = Добавить в архив
 menu-archive-extract = Распаковать файлы

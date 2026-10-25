@@ -35,6 +35,8 @@ pub enum FormKind {
     Attributes,
     /// Copy or move: where to, and under what rules (SPEC 03 §4).
     Copy,
+    /// Which hash, and where the list of digests goes (SPEC 03 §9).
+    Checksum,
     /// Find text in what the viewer or the editor has open (SPEC 05 §1.4).
     Search,
     System,
@@ -297,6 +299,13 @@ pub fn menus() -> Vec<Menu> {
                     Action::Run(Command::ArcCommands),
                 ),
                 item("menu-archive-test", "", Action::Run(Command::ArcTest)),
+                Entry::Separator,
+                item("menu-checksum", "", Action::Run(Command::FileChecksum)),
+                item(
+                    "menu-checksum-verify",
+                    "",
+                    Action::Run(Command::FileChecksumVerify),
+                ),
                 Entry::Separator,
                 item(
                     "menu-attributes",

@@ -169,6 +169,24 @@ btn-cancel = Annuler
 msg-nothing-to-do = rien de sélectionné
 msg-trash-refused = { $path } : la corbeille le refuse — Maj+Suppr le supprime définitivement
 
+# Checksums (SPEC 03 §9)
+sum-title = Sommes de contrôle
+sum-algorithm = Hachage
+sum-one-file = Une seule liste pour tous
+sum-name = Nom
+sum-working = { $name } : { $done } sur { $total }
+sum-verifying = vérification avec { $name }
+sum-stopped = arrêté
+sum-written = { $name } écrit
+sum-no-name = la liste a besoin d’un nom
+sum-local-only = une somme ne peut lire qu’un fichier de cette machine
+sum-all-match = tous les { $count } correspondent
+sum-verify-title = Sommes de contrôle
+sum-verify-summary = { $ok } correspondent, { $bad } non
+sum-differs = ne correspond pas
+sum-missing = absent
+sum-unreadable = illisible
+
 key-wrap = Retour
 key-hex = Hex
 key-text = Texte
@@ -284,6 +302,8 @@ menu-link = Créer un lien
 menu-mkdir = Créer un dossier
 menu-delete = Supprimer
 menu-wipe = Effacer définitivement
+menu-checksum = Sommes de contrôle…
+menu-checksum-verify = Vérifier avec une liste
 menu-delete-permanent = Supprimer définitivement
 menu-archive-add = Ajouter à l'archive
 menu-archive-extract = Extraire les fichiers

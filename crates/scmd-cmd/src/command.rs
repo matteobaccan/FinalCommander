@@ -158,6 +158,10 @@ pub enum Command {
     FileDeleteCurrent,
     /// Delete outright, past the system's wastebasket, whatever the setting says.
     FileDeleteForce,
+    /// Write a list of digests for what is selected (SPEC 03 §9).
+    FileChecksum,
+    /// Check the files beside a list of digests against it.
+    FileChecksumVerify,
     /// `Ctrl+G`: run a command line once per selected file (SPEC 06 §5).
     FileApply,
     /// `Alt+F6`: a hard link or a symbolic link.
@@ -378,6 +382,8 @@ impl Command {
             Command::FileMoveCurrent,
             Command::FileDeleteCurrent,
             Command::FileDeleteForce,
+            Command::FileChecksum,
+            Command::FileChecksumVerify,
             Command::FileApply,
             Command::FileLink,
             Command::FileWipe,
@@ -596,6 +602,8 @@ impl Command {
             Command::FileMoveCurrent => "file.move.current".into(),
             Command::FileDeleteCurrent => "file.delete.current".into(),
             Command::FileDeleteForce => "file.delete.permanent".into(),
+            Command::FileChecksum => "file.checksum.create".into(),
+            Command::FileChecksumVerify => "file.checksum.verify".into(),
             Command::FileApply => "file.apply".into(),
             Command::FileLink => "file.link".into(),
             Command::FileWipe => "file.wipe".into(),
@@ -785,6 +793,8 @@ impl Command {
             ("file.move.current", _) => Command::FileMoveCurrent,
             ("file.delete.current", _) => Command::FileDeleteCurrent,
             ("file.delete.permanent", _) => Command::FileDeleteForce,
+            ("file.checksum.create", _) => Command::FileChecksum,
+            ("file.checksum.verify", _) => Command::FileChecksumVerify,
             ("file.apply", _) => Command::FileApply,
             ("file.link", _) => Command::FileLink,
             ("file.wipe", _) => Command::FileWipe,

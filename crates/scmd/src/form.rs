@@ -135,6 +135,7 @@ impl Form {
             | FormKind::Unpack
             | FormKind::Attributes
             | FormKind::Copy
+            | FormKind::Checksum
             | FormKind::Search => Vec::new(),
             FormKind::System => vec![
                 Field::toggle(
@@ -293,6 +294,7 @@ impl Form {
             FormKind::Unpack => "unpack-title",
             FormKind::Attributes => "attr-title",
             FormKind::Copy => "copy-title",
+            FormKind::Checksum => "sum-title",
             FormKind::Search => "search-title",
             FormKind::System => "menu-system-settings",
             FormKind::Panel => "menu-panel-settings",
@@ -572,6 +574,48 @@ impl Form {
             } else {
                 "copy-title"
             }),
+            fields,
+            cursor: 1,
+            site: None,
+            button: None,
+            buttons: vec![i18n.t("btn-ok"), i18n.t("btn-cancel")],
+        }
+    }
+
+    /// What to hash, with what, and where the list goes (SPEC 03 §9).
+    ///
+    /// The name is offered rather than fixed because the two conventions disagree and both are
+    /// right: a commander writes `project.sha256` beside the directory it is about, and a
+    /// Linux release writes `SHA256SUMS`. Either is read by `sha256sum -c`.
+    pub fn checksum(
+        what: String,
+        algorithm: scmd_jobs::Algorithm,
+        name: String,
+        i18n: &I18n,
+    ) -> Form {
+        let t = |id: &str| i18n.t(id);
+        let algorithms = [
+            ("sha256", "SHA-256".to_string()),
+            ("sha1", "SHA-1".to_string()),
+            ("md5", "MD5".to_string()),
+        ];
+        let fields = vec![
+            Field::Note(what),
+            choice(
+                "sum.algorithm",
+                t("sum-algorithm"),
+                &algorithms,
+                algorithm.as_str(),
+            ),
+            Field::Separator,
+            // On: one list for the lot is what `sha256sum * > SHA256SUMS` gives and what the
+            // tool that checks it expects to be handed.
+            Field::toggle("sum.one_file", t("sum-one-file"), true),
+            Field::text("sum.name", t("sum-name"), name),
+        ];
+        Form {
+            kind: FormKind::Checksum,
+            title: t("sum-title"),
             fields,
             cursor: 1,
             site: None,

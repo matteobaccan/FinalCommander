@@ -169,6 +169,24 @@ btn-cancel = 取消
 msg-nothing-to-do = 未选择任何内容
 msg-trash-refused = { $path }：回收站不接收它 — Shift+Del 可永久删除
 
+# Checksums (SPEC 03 §9)
+sum-title = 校验和
+sum-algorithm = 散列
+sum-one-file = 全部写入一个清单
+sum-name = 名称
+sum-working = { $name }：{ $done } / { $total }
+sum-verifying = 正在按 { $name } 校验
+sum-stopped = 已停止
+sum-written = 已写入 { $name }
+sum-no-name = 清单需要一个名称
+sum-local-only = 校验和只能读取本机的文件
+sum-all-match = 全部 { $count } 个均匹配
+sum-verify-title = 校验和
+sum-verify-summary = { $ok } 个匹配，{ $bad } 个不匹配
+sum-differs = 不匹配
+sum-missing = 文件不存在
+sum-unreadable = 无法读取
+
 key-wrap = 折行
 key-hex = 十六
 key-text = 文本
@@ -284,6 +302,8 @@ menu-link = 创建链接
 menu-mkdir = 新建文件夹
 menu-delete = 删除
 menu-wipe = 安全擦除
+menu-checksum = 校验和…
+menu-checksum-verify = 按清单校验
 menu-delete-permanent = 永久删除
 menu-archive-add = 添加到压缩包
 menu-archive-extract = 解压文件

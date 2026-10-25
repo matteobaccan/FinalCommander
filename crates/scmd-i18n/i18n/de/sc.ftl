@@ -169,6 +169,24 @@ btn-cancel = Abbrechen
 msg-nothing-to-do = nichts ausgewählt
 msg-trash-refused = { $path }: der Papierkorb nimmt es nicht — Shift+Entf löscht endgültig
 
+# Checksums (SPEC 03 §9)
+sum-title = Prüfsummen
+sum-algorithm = Hash
+sum-one-file = Eine Liste für alle
+sum-name = Name
+sum-working = { $name }: { $done } von { $total }
+sum-verifying = Prüfung gegen { $name }
+sum-stopped = abgebrochen
+sum-written = { $name } geschrieben
+sum-no-name = die Liste braucht einen Namen
+sum-local-only = eine Prüfsumme kann nur eine Datei auf diesem Rechner lesen
+sum-all-match = alle { $count } stimmen
+sum-verify-title = Prüfsummen
+sum-verify-summary = { $ok } stimmen, { $bad } nicht
+sum-differs = stimmt nicht
+sum-missing = nicht vorhanden
+sum-unreadable = nicht lesbar
+
 key-wrap = Umbruch
 key-hex = Hex
 key-text = Text
@@ -284,6 +302,8 @@ menu-link = Verknüpfung erstellen
 menu-mkdir = Ordner erstellen
 menu-delete = Löschen
 menu-wipe = Sicher löschen
+menu-checksum = Prüfsummen…
+menu-checksum-verify = Gegen eine Liste prüfen
 menu-delete-permanent = Endgültig löschen
 menu-archive-add = Zum Archiv hinzufügen
 menu-archive-extract = Dateien entpacken

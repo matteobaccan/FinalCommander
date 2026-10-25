@@ -8,6 +8,26 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **Checksums.** MD5, SHA-1 and SHA-256 over what is selected, written in the format
+  `md5sum`, `sha1sum` and `sha256sum` read — `<hex>  <name>` — because the point of a checksum
+  file is that whoever you send it to can check it with the tool they already have. One list
+  for the lot, named after the directory or anything else you type, or one beside each file.
+  *Check against a list* goes the other way, on the list under the cursor.
+
+  Which hash made a list is read off the digests in it rather than off the file's name: 32 hex
+  characters is MD5, 40 is SHA-1, 64 is SHA-256. A list is called `SHA256SUMS` or `sums.txt`
+  or nothing in particular, and a name can lie where a length cannot. BSD's
+  `SHA256 (name) = …`, which macOS and FreeBSD write, is read too.
+
+  What does not match is named in the report and **left selected in the panel**, the way a
+  comparison by content leaves what differs: the next thing one does with a bad download is
+  fetch it again or delete it, and both of those work on the selection. `Esc` stops a run.
+
+  The reading is `JobFs::read_chunks`, the reading half of a copy with the writing half left
+  out, so the day a provider implements it this works there unchanged. Today the local
+  filesystem is the one that does, and anything else is refused before the dialog opens. The
+  three hashes were already in the tree under the SSH client, so this costs no new dependency.
+
 - **The system's own wastebasket.** `F8` hands what you chose to the wastebasket your
   desktop's file manager shows, so what goes in can be taken back out from there — the XDG
   trash spec on Linux, `NSFileManager` on macOS, `IFileOperation` on Windows, through the

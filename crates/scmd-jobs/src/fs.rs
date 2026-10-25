@@ -146,6 +146,28 @@ pub trait JobFs: Send + Sync {
         ))
     }
 
+    /// Read the file in chunks, handing each one to `on_chunk`.
+    ///
+    /// It is the reading half of a copy with the writing half left out, which is what a
+    /// checksum needs: the bytes go through a hash and nowhere else. Returning `false` from
+    /// `on_chunk` abandons the read, and the caller gets `Interrupted`.
+    ///
+    /// The default is a refusal. Every provider that can copy a file out of itself could
+    /// implement this, and when one does, checksums work there with nothing else changed —
+    /// but a default that guessed would hash the archive instead of the entry inside it.
+    fn read_chunks(
+        &self,
+        path: &VPath,
+        buffer: usize,
+        on_chunk: &mut dyn FnMut(&[u8]) -> bool,
+    ) -> io::Result<u64> {
+        let _ = (buffer, on_chunk);
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            format!("{path}: this filesystem cannot be read a chunk at a time"),
+        ))
+    }
+
     /// Replace every match of `matcher` in a regular file.
     ///
     /// A [`ReplacePass::Count`] pass writes nothing and reports what a [`ReplacePass::Rewrite`]
@@ -542,6 +564,31 @@ impl JobFs for LocalFs {
 
     fn hard_link(&self, target: &VPath, link: &VPath) -> io::Result<()> {
         fs::hard_link(target.as_path(), link.as_path())
+    }
+
+    fn read_chunks(
+        &self,
+        path: &VPath,
+        buffer: usize,
+        on_chunk: &mut dyn FnMut(&[u8]) -> bool,
+    ) -> io::Result<u64> {
+        not_mine(path)?;
+        let mut file = File::open(path.as_path())?;
+        let mut buf = vec![0u8; buffer.clamp(8 * 1024, 8 * 1024 * 1024)];
+        let mut total = 0u64;
+        loop {
+            let read = match file.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => n,
+                Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                Err(e) => return Err(e),
+            };
+            total += read as u64;
+            if !on_chunk(&buf[..read]) {
+                return Err(io::Error::new(io::ErrorKind::Interrupted, "cancelled"));
+            }
+        }
+        Ok(total)
     }
 
     fn wipe_file(

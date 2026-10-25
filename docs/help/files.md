@@ -37,6 +37,22 @@ question, and says so in its own title.
 `Alt+F6` makes a link. `Ctrl+G` runs one command over everything selected, with the name of
 each file put into the line where you mark it.
 
+# Checksums
+
+*Checksums…* in the Files menu writes a list of digests for what is selected: SHA-256, SHA-1
+or MD5. One list for the lot — named after the directory, or anything else you type — or one
+beside each file. The format is the one `sha256sum` and friends write, so the list can be
+checked by whoever you send it to with the tool they already have, and the one they send you
+can be checked here.
+
+*Check against a list* works on the list under the cursor. Which hash made it is read off the
+digests inside it rather than off its name, so a file called `SHA256SUMS`, `sums.txt` or
+`release.md5` all work. What does not match is named in the report **and left selected in the
+panel**, because the next thing you do with a bad download is fetch it again or delete it, and
+both of those work on the selection.
+
+`Esc` stops a long run.
+
 # Deleting, and the wastebasket
 
 `F8` hands what you chose to the system's own wastebasket — the same one your desktop's file

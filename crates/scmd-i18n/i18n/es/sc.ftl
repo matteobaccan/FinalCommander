@@ -169,6 +169,24 @@ btn-cancel = Cancelar
 msg-nothing-to-do = nada seleccionado
 msg-trash-refused = { $path }: la papelera no lo acepta — Mayús+Supr lo borra definitivamente
 
+# Checksums (SPEC 03 §9)
+sum-title = Sumas de verificación
+sum-algorithm = Hash
+sum-one-file = Una sola lista para todos
+sum-name = Nombre
+sum-working = { $name }: { $done } de { $total }
+sum-verifying = comprobando con { $name }
+sum-stopped = detenido
+sum-written = { $name } escrito
+sum-no-name = la lista necesita un nombre
+sum-local-only = una suma solo puede leer un archivo de esta máquina
+sum-all-match = todos { $count } coinciden
+sum-verify-title = Sumas de verificación
+sum-verify-summary = { $ok } coinciden, { $bad } no
+sum-differs = no coincide
+sum-missing = no está
+sum-unreadable = no se puede leer
+
 key-wrap = Ajuste
 key-hex = Hex
 key-text = Texto
@@ -284,6 +302,8 @@ menu-link = Crear enlace
 menu-mkdir = Crear carpeta
 menu-delete = Borrar
 menu-wipe = Borrar de forma segura
+menu-checksum = Sumas de verificación…
+menu-checksum-verify = Comprobar con una lista
 menu-delete-permanent = Borrar definitivamente
 menu-archive-add = Añadir al archivo
 menu-archive-extract = Extraer archivos

@@ -169,6 +169,24 @@ btn-cancel = Annulla
 msg-nothing-to-do = niente selezionato
 msg-trash-refused = { $path }: il cestino non lo accetta — Shift+Canc lo elimina definitivamente
 
+# Checksums (SPEC 03 §9)
+sum-title = Checksum
+sum-algorithm = Hash
+sum-one-file = Un solo elenco per tutti
+sum-name = Nome
+sum-working = { $name }: { $done } di { $total }
+sum-verifying = verifica con { $name }
+sum-stopped = interrotto
+sum-written = { $name } scritto
+sum-no-name = l’elenco ha bisogno di un nome
+sum-local-only = un checksum può leggere solo un file su questa macchina
+sum-all-match = tutti { $count } corrispondono
+sum-verify-title = Checksum
+sum-verify-summary = { $ok } corrispondono, { $bad } no
+sum-differs = non corrisponde
+sum-missing = non c’è
+sum-unreadable = non si può leggere
+
 key-wrap = Ritorno
 key-hex = Hex
 key-text = Testo
@@ -284,6 +302,8 @@ menu-link = Crea collegamento
 menu-mkdir = Crea cartella
 menu-delete = Elimina
 menu-wipe = Cancella in modo sicuro
+menu-checksum = Checksum…
+menu-checksum-verify = Verifica con un elenco
 menu-delete-permanent = Elimina definitivamente
 menu-archive-add = Aggiungi all'archivio
 menu-archive-extract = Estrai file

@@ -2641,9 +2641,12 @@ dependencies = [
 name = "scmd-jobs"
 version = "0.3.0"
 dependencies = [
+ "md5",
  "regex",
  "scmd-arc",
  "scmd-core",
+ "sha1",
+ "sha2",
  "tempfile",
  "thiserror 2.0.21",
  "trash",

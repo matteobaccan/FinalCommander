@@ -175,6 +175,24 @@ btn-cancel = Cancel
 msg-nothing-to-do = nothing selected
 msg-trash-refused = { $path }: the wastebasket would not take it — Shift+Del deletes it outright
 
+# Checksums (SPEC 03 §9)
+sum-title = Checksums
+sum-algorithm = Hash
+sum-one-file = One list for all of them
+sum-name = Called
+sum-working = { $name }: { $done } of { $total }
+sum-verifying = checking against { $name }
+sum-stopped = stopped
+sum-written = { $name } written
+sum-no-name = the list needs a name
+sum-local-only = a checksum can only read a file on this machine
+sum-all-match = all { $count } match
+sum-verify-title = Checksums
+sum-verify-summary = { $ok } match, { $bad } do not
+sum-differs = does not match
+sum-missing = not there
+sum-unreadable = cannot be read
+
 # Viewer (F3)
 key-wrap = Wrap
 key-hex = Hex
@@ -292,6 +310,8 @@ menu-link = Create link
 menu-mkdir = Make folder
 menu-delete = Delete
 menu-wipe = Wipe
+menu-checksum = Checksums…
+menu-checksum-verify = Check against a list
 menu-delete-permanent = Delete permanently
 menu-archive-add = Add to archive
 menu-archive-extract = Extract files

@@ -63,10 +63,10 @@ A `√` marks the entry that describes the state the panel is in now — the cur
 
 ### 2.2 Files
 
-View, Edit, Edit new file, Copy, Rename or move, Create link (backlog), Make folder, Delete,
-Wipe (backlog) · Add to archive / Extract files / Archive commands (backlog) · File attributes
-(§3.8), Apply command (backlog) · Select group, Unselect group, Invert selection, Select all,
-Restore selection · Folder size.
+View, Edit, Edit new file, Copy, Rename or move, Create link, Make folder, Delete, Delete
+permanently, Wipe · Add to archive / Extract files / Archive commands / Test archive ·
+Checksums (§3.9), Check against a list · File attributes (§3.8), Apply command · Select group,
+Unselect group, Invert selection, Select all, Restore selection · Folder size.
 
 ### 2.3 Commands
 
@@ -198,6 +198,26 @@ it and an access policy that is not a mode.
 **Still to come:** the owner and the group (`chown`), which needs a user and group picker and
 the privilege to use it; and Windows' advanced bits (compressed, encrypted, not indexed,
 sparse, temporary, offline), which FAR offers behind a second page.
+
+### 3.9 Checksums (Files menu)
+
+Three rows: which hash (SHA-256, SHA-1, MD5), whether one list holds them all, and what the
+list is called. The hash the last dialog was answered with is what the next one opens on, as
+the copy dialog does, and the name follows it — `<directory>.sha256` becoming
+`<directory>.md5`.
+
+The name is a text row rather than a fixed name because the two conventions disagree and both
+are right: a commander writes `project.sha256` beside what it is about, a Linux release writes
+`SHA256SUMS`, and `sha256sum -c` reads either. With *one list for all of them* off, each file
+gets `<file>.<hash>` beside it, which is what a download page offers next to each file.
+
+*Check against a list* takes no dialog: the cursor is on a list, and what it says is read off
+the digests in it (`03-file-operations.md` §9). The result is a report naming what does not
+match, and those files are left selected in the panel.
+
+Both read the bytes and write nothing but the list, so `Esc` stops a run the way it stops a
+comparison by content, and a path this filesystem cannot read a chunk at a time is refused
+before the dialog opens rather than halfway through.
 
 ## 4. Choose-one lists
 

@@ -936,6 +936,22 @@ fn interactive(mut app: App) -> Result<()> {
                     let tx = tx.clone();
                     runtime.spawn_blocking(move || run_compare(id, pairs, cancel, tx));
                 }
+                Request::Checksums {
+                    id,
+                    paths,
+                    algorithm,
+                    target,
+                    cancel,
+                } => {
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || {
+                        run_checksums(id, &paths, algorithm, target, cancel, tx)
+                    });
+                }
+                Request::Verify { id, list, cancel } => {
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || run_verify(id, &list, cancel, tx));
+                }
                 Request::TunnelOpen {
                     id,
                     authority,
@@ -1449,6 +1465,144 @@ fn tunnel_infos(tunnels: &Tunnels) -> Vec<app::TunnelInfo> {
 /// On a blocking thread, because the reading is blocking and a comparison of a thousand files
 /// must not sit in front of the panels. Progress goes out every few pairs rather than every
 /// pair: a thousand messages a second is a slower program than no messages at all.
+/// Hash what was chosen and write the list (SPEC 03 §9).
+///
+/// `target` is the one file they all go into; `None` writes a list beside each file, named
+/// after it. Writing is `std::fs` rather than the job filesystem because a checksum is a
+/// local operation today: the reading half (`JobFs::read_chunks`) is implemented by the local
+/// filesystem alone, and the app refuses anything else before the dialog opens.
+fn run_checksums(
+    id: u64,
+    paths: &[VPath],
+    algorithm: scmd_jobs::Algorithm,
+    target: Option<VPath>,
+    cancel: CancelToken,
+    tx: mpsc::Sender<Event>,
+) {
+    let fs = scmd_jobs::LocalFs;
+    let total = paths.len() as u64;
+    let mut last = std::time::Instant::now();
+    let (lines, outcome) = scmd_jobs::sum::create(
+        &fs,
+        paths,
+        algorithm,
+        256 * 1024,
+        &cancel,
+        &mut |path, done| {
+            if last.elapsed() < std::time::Duration::from_millis(100) {
+                return;
+            }
+            last = std::time::Instant::now();
+            let _ = tx.send(Event::SumProgress {
+                id,
+                name: path.display_name(),
+                done,
+                total,
+            });
+        },
+    );
+
+    let mut written = Vec::new();
+    let mut errors = outcome.errors.clone();
+    if !outcome.cancelled {
+        match &target {
+            Some(file) => {
+                let body = scmd_jobs::sum::write_list(&lines);
+                match std::fs::write(file.as_path(), body) {
+                    Ok(()) => written.push(file.clone()),
+                    Err(e) => errors.push((file.clone(), e.to_string())),
+                }
+            }
+            None => {
+                // One list beside each file, named `file.sha256` — which is what a release
+                // page offers next to each download.
+                for (line, path) in lines.iter().zip(paths.iter()) {
+                    let beside = VPath::local(format!(
+                        "{}.{}",
+                        path.as_path().display(),
+                        algorithm.extension()
+                    ));
+                    let body = scmd_jobs::sum::write_list(std::slice::from_ref(line));
+                    match std::fs::write(beside.as_path(), body) {
+                        Ok(()) => written.push(beside),
+                        Err(e) => errors.push((beside, e.to_string())),
+                    }
+                }
+            }
+        }
+    }
+    let _ = tx.send(Event::SumsDone {
+        id,
+        written,
+        errors,
+        cancelled: outcome.cancelled,
+    });
+}
+
+/// Check the files beside a list of digests against it.
+fn run_verify(id: u64, list: &VPath, cancel: CancelToken, tx: mpsc::Sender<Event>) {
+    let fs = scmd_jobs::LocalFs;
+    let text = match std::fs::read_to_string(list.as_path()) {
+        Ok(text) => text,
+        Err(e) => {
+            let _ = tx.send(Event::VerifyDone {
+                id,
+                verdicts: Vec::new(),
+                cancelled: false,
+                problem: Some(format!("{}: {e}", list.display_name())),
+            });
+            return;
+        }
+    };
+    let (lines, algorithm) = scmd_jobs::sum::parse_list(&text);
+    let Some(algorithm) = algorithm.filter(|_| !lines.is_empty()) else {
+        let _ = tx.send(Event::VerifyDone {
+            id,
+            verdicts: Vec::new(),
+            cancelled: false,
+            // Said as the file's own problem rather than as a failure of the check: a file
+            // that is not a list of digests was never going to be checked.
+            problem: Some(format!(
+                "{}: not a list of digests this can check",
+                list.display_name()
+            )),
+        });
+        return;
+    };
+    let dir = list
+        .parent()
+        .map(|p| p.normalised())
+        .unwrap_or_else(|| list.clone());
+    let total = lines.len() as u64;
+    let mut last = std::time::Instant::now();
+    let (verdicts, outcome) = scmd_jobs::sum::verify(
+        &fs,
+        &dir,
+        &lines,
+        algorithm,
+        256 * 1024,
+        &cancel,
+        &mut |name, done| {
+            if last.elapsed() < std::time::Duration::from_millis(100) {
+                return;
+            }
+            last = std::time::Instant::now();
+            let _ = tx.send(Event::SumProgress {
+                id,
+                name: name.to_string(),
+                done,
+                total,
+            });
+        },
+    );
+    let _ = tx.send(Event::VerifyDone {
+        id,
+        verdicts,
+        cancelled: outcome.cancelled,
+        problem: None,
+    });
+}
+
 fn run_compare(
     id: u64,
     pairs: Vec<app::ComparePair>,
@@ -2752,6 +2906,26 @@ timeout = 10
                         app.handle_event(event);
                     }
                 }
+                Request::Checksums {
+                    id,
+                    paths,
+                    algorithm,
+                    target,
+                    cancel,
+                } => {
+                    let (tx, rx) = mpsc::channel();
+                    run_checksums(id, &paths, algorithm, target, cancel, tx);
+                    while let Ok(event) = rx.try_recv() {
+                        app.handle_event(event);
+                    }
+                }
+                Request::Verify { id, list, cancel } => {
+                    let (tx, rx) = mpsc::channel();
+                    run_verify(id, &list, cancel, tx);
+                    while let Ok(event) = rx.try_recv() {
+                        app.handle_event(event);
+                    }
+                }
                 Request::Find { id, spec, cancel } => {
                     let (tx, rx) = mpsc::channel();
                     run_find(id, *spec, cancel, tx);
@@ -3036,6 +3210,71 @@ timeout = 10
             "the passive panel was not refreshed"
         );
         assert!(app.status.contains("11 B"), "{}", app.status);
+    }
+
+    #[test]
+    fn a_checksum_list_is_written_and_then_checks_out() {
+        let root = tempfile::tempdir().unwrap();
+        let dir = root.path().join("rel");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("one.bin"), b"abc").unwrap();
+        std::fs::write(dir.join("two.bin"), b"def").unwrap();
+
+        let mut app = app_on(&dir, root.path());
+        serve(&mut app);
+
+        // Select both files and open the dialog from the Files menu.
+        key(&mut app, "Down");
+        key(&mut app, "Ins");
+        key(&mut app, "Ins");
+        assert_eq!(app.panel().selection.len(), 2);
+        app.run(scmd_cmd::Command::FileChecksum);
+        assert!(
+            matches!(&app.mode, app::Mode::Form(f) if f.kind == menu::FormKind::Checksum),
+            "the dialog opens first"
+        );
+        // Accept the defaults: SHA-256, one list, named after the directory.
+        key(&mut app, "F10");
+        serve(&mut app);
+        serve(&mut app); // the panel read the list queued
+
+        let list = dir.join("rel.sha256");
+        let body = std::fs::read_to_string(&list).expect("the list was written");
+        assert!(body.contains("  one.bin\n"), "{body}");
+        assert!(
+            body.starts_with("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"),
+            "the digest of `abc`: {body}"
+        );
+
+        // Now change one of the files and check the list: the bad one is named and selected.
+        std::fs::write(dir.join("two.bin"), b"something else").unwrap();
+        serve(&mut app);
+        let row = app
+            .panel()
+            .listing
+            .row_of_name("rel.sha256")
+            .expect("the list is in the panel");
+        app.panel_mut().cursor_to(row);
+        app.run(scmd_cmd::Command::FileChecksumVerify);
+        serve(&mut app);
+        match &app.mode {
+            app::Mode::Message { lines, .. } => {
+                assert!(
+                    lines.iter().any(|l| l.contains("two.bin")),
+                    "the one that changed is named: {lines:?}"
+                );
+                assert!(
+                    !lines.iter().any(|l| l.contains("one.bin")),
+                    "and the one that did not is not: {lines:?}"
+                );
+            }
+            other => panic!("expected the report, got {other:?}"),
+        }
+        assert_eq!(
+            app.panel().selection.len(),
+            1,
+            "what does not match is left selected"
+        );
     }
 
     #[test]

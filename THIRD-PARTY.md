@@ -48,6 +48,7 @@ Unicode-3.0, or MPL-2.0 at file level). The policy and the allow-list live in `d
 | `portable-pty` | MIT | the pseudo-terminal: `openpty` on Unix, ConPTY on Windows |
 | `vte` | Apache-2.0 OR MIT | recognising the escape sequences a program writes to a terminal |
 | `trash` (with `urlencoding`, `scopeguard`, `once_cell`; `objc2-foundation` on macOS) | MIT | handing a file to the system's own wastebasket: the XDG trash spec, `NSFileManager`, `IFileOperation` |
+| `md5`, `sha1`, `sha2` | MIT OR Apache-2.0 | the three hashes the checksum dialog offers (all three were already in the tree under the SSH client) |
 | `nix` | MIT | the Unix calls the terminal needs that `std` does not expose |
 | `shell-words` | MIT OR Apache-2.0 | splitting a command line the way a shell would |
 | `rand` | MIT OR Apache-2.0 | the random name a wipe renames to, and test fixtures |

@@ -49,6 +49,21 @@ pub enum Request {
         pairs: Vec<ComparePair>,
         cancel: CancelToken,
     },
+    /// Hash each path and write the list (SPEC 03 §9). `target` is the one file they all go
+    /// into; `None` means one list beside each file.
+    Checksums {
+        id: u64,
+        paths: Vec<VPath>,
+        algorithm: scmd_jobs::Algorithm,
+        target: Option<VPath>,
+        cancel: CancelToken,
+    },
+    /// Read a list of digests and check the files beside it against it.
+    Verify {
+        id: u64,
+        list: VPath,
+        cancel: CancelToken,
+    },
     /// Walk and match. The engine is `scmd-find`; this carries what the dialog asked for.
     Find {
         id: u64,
@@ -241,6 +256,27 @@ pub enum Event {
     },
     /// A comparison by content finished, or was stopped: the names whose bytes differ, and
     /// how many pairs could not be read at all.
+    /// One file of a checksum run is finished: `done` of `total`.
+    SumProgress {
+        id: u64,
+        name: String,
+        done: u64,
+        total: u64,
+    },
+    SumsDone {
+        id: u64,
+        /// The lists that were written.
+        written: Vec<VPath>,
+        errors: Vec<(VPath, String)>,
+        cancelled: bool,
+    },
+    VerifyDone {
+        id: u64,
+        verdicts: Vec<scmd_jobs::sum::Verdict>,
+        cancelled: bool,
+        /// The list could not be read, or its digests do not agree on one hash.
+        problem: Option<String>,
+    },
     CompareDone {
         id: u64,
         differ: Vec<String>,
@@ -1024,6 +1060,11 @@ pub struct App {
     /// shows and what a status line counts.
     pub tunnels: Vec<TunnelInfo>,
     compare: Option<(u64, CancelToken)>,
+    /// The checksum run that is going, and the token that stops it. `Esc` on a panel with an
+    /// empty command line stops it, the way it stops a comparison.
+    sum: Option<(u64, CancelToken)>,
+    /// What the checksum dialog was last answered with, so the next one opens on it.
+    last_sum: scmd_jobs::Algorithm,
     /// Files with no counterpart on the other side, kept while the reading runs: they are
     /// differences too, and they are selected with the rest when it finishes.
     compare_alone: Vec<String>,
@@ -1188,6 +1229,8 @@ impl App {
             fetch_id: None,
             tunnels: Vec::new(),
             compare: None,
+            sum: None,
+            last_sum: scmd_jobs::Algorithm::default(),
             compare_alone: Vec::new(),
             compare_pairs: 0,
             cmd: CmdLine::new(),
@@ -1531,6 +1574,49 @@ impl App {
                     &[("what", spec.into()), ("why", error.into())],
                 );
                 self.set_error(msg);
+            }
+            Event::SumProgress {
+                id,
+                name,
+                done,
+                total,
+            } => {
+                if self.sum.as_ref().map(|(running, _)| *running) != Some(id) {
+                    return;
+                }
+                let msg = self.i18n.t_args(
+                    "sum-working",
+                    &[
+                        ("name", name.clone().into()),
+                        ("done", (done as i64).into()),
+                        ("total", (total as i64).into()),
+                    ],
+                );
+                self.set_status(msg);
+            }
+            Event::SumsDone {
+                id,
+                written,
+                errors,
+                cancelled,
+            } => {
+                if self.sum.as_ref().map(|(running, _)| *running) != Some(id) {
+                    return;
+                }
+                self.sum = None;
+                self.finish_sums(&written, &errors, cancelled);
+            }
+            Event::VerifyDone {
+                id,
+                verdicts,
+                cancelled,
+                problem,
+            } => {
+                if self.sum.as_ref().map(|(running, _)| *running) != Some(id) {
+                    return;
+                }
+                self.sum = None;
+                self.finish_verify(&verdicts, cancelled, problem.clone());
             }
             Event::CompareProgress { id, done, total } => {
                 if self.compare.as_ref().map(|(running, _)| *running) != Some(id) {
@@ -3121,6 +3207,237 @@ impl App {
         self.requests.push(Request::Job { id, spec, cancel });
     }
 
+    // ── checksums (SPEC 03 §9) ──────────────────────────────────────────────────────────
+
+    /// The files a checksum is of: what is selected, less the directories.
+    ///
+    /// A directory has no bytes of its own, and walking into it is a feature of its own — the
+    /// other commanders hash a tree, and that wants its own counting and its own names in the
+    /// list. Until it is here, a folder among the selection is left out rather than reported
+    /// as unreadable once per folder.
+    fn sum_sources(&self) -> Vec<VPath> {
+        let panel = self.panel();
+        self.job_sources()
+            .into_iter()
+            .filter(|path| {
+                let name = path.display_name();
+                match panel
+                    .listing
+                    .row_of_name(&name)
+                    .and_then(|r| panel.listing.row(r))
+                {
+                    Some(entry) => !entry.kind.is_dirlike(),
+                    // Not a row of this panel: the caller knows what it asked for.
+                    None => true,
+                }
+            })
+            .collect()
+    }
+
+    /// The dialog: which hash, and where the list goes.
+    fn open_checksum_form(&mut self) {
+        let sources = self.sum_sources();
+        if sources.is_empty() {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        }
+        // Reading the bytes is the whole of the work, so a path this filesystem cannot read a
+        // chunk at a time is refused before the dialog rather than inside the run.
+        if sources.iter().any(|p| !p.is_local() || p.in_container()) {
+            let m = self.i18n.t("sum-local-only");
+            self.set_error(m);
+            return;
+        }
+        let what = self.sources_label(&sources);
+        let name = format!(
+            "{}.{}",
+            self.panel().cwd.display_name(),
+            self.last_sum.extension()
+        );
+        self.mode = Mode::Form(Box::new(Form::checksum(
+            what,
+            self.last_sum,
+            name,
+            &self.i18n,
+        )));
+    }
+
+    /// What the dialog asked for: hash these, with that, into there.
+    fn apply_checksum_form(&mut self, form: &Form) {
+        let algorithm =
+            scmd_jobs::Algorithm::parse(&form.text_value("sum.algorithm")).unwrap_or_default();
+        self.last_sum = algorithm;
+        let one_file = form.text_value("sum.one_file") == "true";
+        let name = form.text_value("sum.name");
+        let paths = self.sum_sources();
+        if paths.is_empty() {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        }
+        let target = if one_file {
+            let name = name.trim();
+            if name.is_empty() {
+                let m = self.i18n.t("sum-no-name");
+                self.set_error(m);
+                return;
+            }
+            Some(self.panel().cwd.join(std::ffi::OsStr::new(name)))
+        } else {
+            None
+        };
+        let id = self.next_job_id;
+        self.next_job_id += 1;
+        let cancel = CancelToken::new();
+        self.sum = Some((id, cancel.clone()));
+        let msg = self.i18n.t_args(
+            "sum-working",
+            &[
+                ("name", paths[0].display_name().into()),
+                ("done", 0.into()),
+                ("total", (paths.len() as i64).into()),
+            ],
+        );
+        self.set_status(msg);
+        self.requests.push(Request::Checksums {
+            id,
+            paths,
+            algorithm,
+            target,
+            cancel,
+        });
+    }
+
+    /// Check the files beside the list under the cursor against it.
+    fn start_verify(&mut self) {
+        let Some(list) = self.panel().current_path() else {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        };
+        if !list.is_local() || list.in_container() {
+            let m = self.i18n.t("sum-local-only");
+            self.set_error(m);
+            return;
+        }
+        let id = self.next_job_id;
+        self.next_job_id += 1;
+        let cancel = CancelToken::new();
+        self.sum = Some((id, cancel.clone()));
+        let msg = self
+            .i18n
+            .t_args("sum-verifying", &[("name", list.display_name().into())]);
+        self.set_status(msg);
+        self.requests.push(Request::Verify { id, list, cancel });
+    }
+
+    /// What a finished run of digests says, and what it leaves on the disk.
+    fn finish_sums(&mut self, written: &[VPath], errors: &[(VPath, String)], cancelled: bool) {
+        // The lists are new files in the directory, so the panel has to be read again or they
+        // are not there until something else happens to ask.
+        let side = self.active;
+        self.read_panel(side);
+        if cancelled {
+            let m = self.i18n.t("sum-stopped");
+            self.set_status(m);
+            return;
+        }
+        if !errors.is_empty() {
+            let title = self.i18n.t("sum-title");
+            let lines = errors
+                .iter()
+                .map(|(path, why)| format!("{}: {why}", path.display_name()))
+                .collect();
+            self.mode = Mode::Message { title, lines };
+            return;
+        }
+        let msg = self.i18n.t_args(
+            "sum-written",
+            &[(
+                "name",
+                written
+                    .iter()
+                    .map(|p| p.display_name())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+                    .into(),
+            )],
+        );
+        self.set_status(msg);
+    }
+
+    /// What a finished check says, and what it leaves selected.
+    ///
+    /// The files that do not match are selected, the way a comparison by content selects what
+    /// differs: the next thing one does with a bad download is copy it again or delete it, and
+    /// both of those work on the selection.
+    fn finish_verify(
+        &mut self,
+        verdicts: &[scmd_jobs::sum::Verdict],
+        cancelled: bool,
+        problem: Option<String>,
+    ) {
+        use scmd_jobs::sum::State;
+        if let Some(problem) = problem {
+            self.set_error(problem);
+            return;
+        }
+        if cancelled {
+            let m = self.i18n.t("sum-stopped");
+            self.set_status(m);
+            return;
+        }
+        let bad: Vec<&scmd_jobs::sum::Verdict> = verdicts
+            .iter()
+            .filter(|v| v.state != State::Matches)
+            .collect();
+        let matched = verdicts.len() - bad.len();
+        let side = self.active;
+        let listing = self.panels[side].listing.clone();
+        self.panels[side].selection.clear();
+        for verdict in &bad {
+            if let Some(entry) = listing
+                .row_of_name(&verdict.name)
+                .and_then(|r| listing.row(r))
+            {
+                self.panels[side].selection.set(entry.id, true);
+            }
+        }
+        self.panels[side].rebuild();
+        if bad.is_empty() {
+            let msg = self
+                .i18n
+                .t_args("sum-all-match", &[("count", (matched as i64).into())]);
+            self.set_status(msg);
+            return;
+        }
+        let title = self.i18n.t("sum-verify-title");
+        let mut lines = vec![
+            self.i18n.t_args(
+                "sum-verify-summary",
+                &[
+                    ("ok", (matched as i64).into()),
+                    ("bad", (bad.len() as i64).into()),
+                ],
+            ),
+            String::new(),
+        ];
+        for verdict in bad.iter().take(20) {
+            let what = self.i18n.t(match verdict.state {
+                State::Differs => "sum-differs",
+                State::Missing => "sum-missing",
+                State::Unreadable => "sum-unreadable",
+                State::Matches => unreachable!("only the bad ones are listed"),
+            });
+            lines.push(format!("  {}  {what}", verdict.name));
+        }
+        if bad.len() > 20 {
+            lines.push(format!("  … {}", bad.len() - 20));
+        }
+        self.mode = Mode::Message { title, lines };
+    }
+
     /// Ask before deleting, unless the setting says not to, and then do it.
     ///
     /// `force` is `Shift+Del`: delete outright, whatever the wastebasket setting says.
@@ -4470,6 +4787,8 @@ impl App {
                     sources: Vec::new(),
                 });
             }
+            Command::FileChecksum => self.open_checksum_form(),
+            Command::FileChecksumVerify => self.start_verify(),
             Command::FileDelete | Command::FileDeleteCurrent | Command::FileDeleteForce => {
                 let sources = if cmd == Command::FileDeleteCurrent {
                     self.cursor_source()
@@ -4801,6 +5120,15 @@ impl App {
                     cancel.cancel();
                 }
                 let m = self.i18n.t("compare-contents-stopped");
+                self.set_status(m);
+                true
+            }
+            // And out of a checksum run, which reads just as many bytes.
+            KeyCode::Esc if self.sum.is_some() => {
+                if let Some((_, cancel)) = self.sum.take() {
+                    cancel.cancel();
+                }
+                let m = self.i18n.t("sum-stopped");
                 self.set_status(m);
                 true
             }
@@ -6433,6 +6761,10 @@ impl App {
         }
         if form.kind == FormKind::Copy {
             self.apply_copy_form(&form);
+            return;
+        }
+        if form.kind == FormKind::Checksum {
+            self.apply_checksum_form(&form);
             return;
         }
         let problems = form.apply(&mut self.cfg);
@@ -10266,6 +10598,144 @@ mod tests {
         app.restore_tabs(0, &saved, 0);
         assert_eq!(app.tabs[0].len(), 1);
         assert_eq!(app.panels[0].cwd, VPath::local("/home/mb"));
+    }
+
+    // ── checksums (SPEC 03 §9) ──────────────────────────────────────────────────────────────
+
+    #[test]
+    fn the_checksum_dialog_opens_on_the_hash_and_the_name_a_commander_would_use() {
+        let mut app = app();
+        app.panel_mut().cursor_to(2);
+        app.run(Command::FileChecksum);
+        let Mode::Form(form) = &app.mode else {
+            panic!("the dialog opens")
+        };
+        assert_eq!(form.kind, FormKind::Checksum);
+        assert_eq!(form.text_value("sum.algorithm"), "sha256");
+        assert_eq!(form.text_value("sum.name"), "mb.sha256");
+        assert_eq!(form.text_value("sum.one_file"), "true");
+    }
+
+    #[test]
+    fn a_checksum_is_refused_where_the_bytes_are_not_on_this_machine() {
+        let mut app = app();
+        app.panels[0].cwd = VPath::remote(scmd_core::Scheme::Sftp, "mb@host", "/srv");
+        app.panel_mut().cursor_to(2);
+        app.run(Command::FileChecksum);
+        assert!(
+            matches!(&app.mode, Mode::Normal),
+            "no dialog for something it cannot read"
+        );
+        assert!(app.status_error);
+    }
+
+    #[test]
+    fn the_checksum_dialog_asks_the_engine_for_what_it_was_answered_with() {
+        let mut app = app();
+        app.panel_mut().cursor_to(2);
+        app.run(Command::FileChecksum);
+        // MD5 instead, and one list beside each file: the rows are answered the way the keys
+        // answer them, found by key rather than by where they happen to be.
+        let on_row = |app: &mut App, key: &str| {
+            let Mode::Form(form) = &mut app.mode else {
+                panic!("the dialog is open")
+            };
+            form.cursor = form
+                .fields
+                .iter()
+                .position(|f| match f {
+                    crate::form::Field::Choice { key: k, .. } => *k == key,
+                    crate::form::Field::Toggle { key: k, .. } => *k == key,
+                    _ => false,
+                })
+                .unwrap_or_else(|| panic!("no row `{key}`"));
+        };
+        on_row(&mut app, "sum.algorithm");
+        press(&mut app, "Right"); // sha256 → sha1
+        press(&mut app, "Right"); // sha1 → md5
+        on_row(&mut app, "sum.one_file");
+        press(&mut app, "Space");
+        press(&mut app, "F10");
+        let request = app
+            .take_requests()
+            .into_iter()
+            .find_map(|r| match r {
+                Request::Checksums {
+                    paths,
+                    algorithm,
+                    target,
+                    ..
+                } => Some((paths, algorithm, target)),
+                _ => None,
+            })
+            .expect("a checksum request");
+        assert_eq!(request.0, vec![VPath::local("/home/mb/a.txt")]);
+        assert_eq!(request.1, scmd_jobs::Algorithm::Md5);
+        assert_eq!(request.2, None, "one list beside each file");
+        // And the next dialog opens on the hash that was chosen.
+        app.run(Command::FileChecksum);
+        let Mode::Form(form) = &app.mode else {
+            panic!("the dialog opens")
+        };
+        assert_eq!(form.text_value("sum.algorithm"), "md5");
+        assert_eq!(form.text_value("sum.name"), "mb.md5");
+    }
+
+    #[test]
+    fn a_list_that_is_not_a_list_of_digests_says_so() {
+        let mut app = app();
+        app.panel_mut().cursor_to(2); // a.txt, which is not a list
+        app.run(Command::FileChecksumVerify);
+        let id = app
+            .take_requests()
+            .into_iter()
+            .find_map(|r| match r {
+                Request::Verify { id, .. } => Some(id),
+                _ => None,
+            })
+            .expect("a verify request");
+        app.handle_event(Event::VerifyDone {
+            id,
+            verdicts: Vec::new(),
+            cancelled: false,
+            problem: Some("a.txt: not a list of digests this can check".into()),
+        });
+        assert!(app.status_error);
+        assert!(app.status.contains("a.txt"), "{}", app.status);
+    }
+
+    #[test]
+    fn a_check_that_all_matches_says_so_and_selects_nothing() {
+        use scmd_jobs::sum::{State, Verdict};
+        let mut app = app();
+        app.panel_mut().cursor_to(2);
+        app.run(Command::FileChecksumVerify);
+        let id = app
+            .take_requests()
+            .into_iter()
+            .find_map(|r| match r {
+                Request::Verify { id, .. } => Some(id),
+                _ => None,
+            })
+            .expect("a verify request");
+        app.handle_event(Event::VerifyDone {
+            id,
+            verdicts: vec![
+                Verdict {
+                    name: "a.txt".into(),
+                    state: State::Matches,
+                },
+                Verdict {
+                    name: "b.rs".into(),
+                    state: State::Matches,
+                },
+            ],
+            cancelled: false,
+            problem: None,
+        });
+        assert!(matches!(&app.mode, Mode::Normal), "no report to read");
+        assert!(app.panel().selection.is_empty());
+        assert!(app.status.contains('2'), "{}", app.status);
     }
 
     // ── the wastebasket (SPEC 03 §4) ────────────────────────────────────────────────────────

@@ -3288,6 +3288,18 @@ Some **bold** text and a [link](https://example.com).
 
     #[test]
     #[ignore = "a look at the screen, not an assertion"]
+    fn eyeball_checksum() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("release.tar.gz"), b"x").unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "Ins");
+        app.run(scmd_cmd::Command::FileChecksum);
+        println!("{}", frame(&mut app, 76, 20));
+    }
+
+    #[test]
+    #[ignore = "a look at the screen, not an assertion"]
     fn eyeball_bookmarks() {
         let dir = tempfile::tempdir().unwrap();
         let mut app = app_on_disk(dir.path());

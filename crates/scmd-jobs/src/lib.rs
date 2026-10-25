@@ -18,6 +18,7 @@ pub mod plan;
 pub mod replace;
 pub mod run;
 pub mod spec;
+pub mod sum;
 
 pub use arcfs::ArcFs;
 pub use attrs::{set_attributes, Change, Mode};
@@ -29,3 +30,4 @@ pub use replace::{
 };
 pub use run::{execute, Outcome, Progress, Reporter};
 pub use spec::{ConflictPolicy, Decision, JobKind, JobOptions, JobSpec, Phase, Preserve, Question};
+pub use sum::Algorithm;
