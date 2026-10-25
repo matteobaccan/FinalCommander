@@ -15,8 +15,11 @@ fcmd-net         netbox: SFTP today, site list, connection pool, routed job file
 fcmd-cmd         command vocabulary, keymap, macro engine, command palette
 fcmd-config      TOML config, themes, profiles, portable-mode discovery, migration
 fcmd-plugin      Lua (mlua) + WASM (wasmtime) hosts, capability-scoped plugin API
-fcmd-platform    the only crate allowed `unsafe`: OS specifics (ADS, xattr, trash, elevation,
-               long paths, FS watch, PTY, clipboard, drives/mounts)
+fcmd-platform    the only crate allowed `unsafe`: OS specifics. **Shipped**, with what the
+               panels ask for — free space, the device's size, its allocation unit, and how
+               much memory the machine has (`statvfs`, `GetDiskFreeSpaceEx`, `/proc/meminfo`,
+               `sysctl`, `GlobalMemoryStatusEx`). Still to come here: ADS, xattr, elevation,
+               the clipboard, drives and mounts
 fcmd-i18n        fluent catalogues, pluralisation, width-aware formatting
 fcmd           the binary: wiring, CLI, session, panic/crash handling
 ```

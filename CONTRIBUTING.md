@@ -22,7 +22,8 @@ thing.
    - No GPL/LGPL dependency in the default feature set; see `docs/01-licensing.md` §5.
 3. **Strictly TUI.** No GUI toolkit, no GPU backend, no "windowed mode". Terminal features
    (inline images, kitty keyboard protocol, OSC 52) are capability-detected extras.
-4. **No `unsafe`** outside `fcmd-platform` (which does not exist yet).
+4. **No `unsafe`** outside `fcmd-platform`, which is where the calls `std` does not make
+   live — each one with a `SAFETY:` line saying why it holds.
 5. **New dependencies** need one line of justification in the PR description.
 
 ## Working on it

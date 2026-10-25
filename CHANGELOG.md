@@ -34,14 +34,29 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **Free space on Windows, and the rest of what a device can say.** The panel frame has
+  shown the free space on Unix since it had a frame and nothing at all on Windows, because
+  `statvfs` is not a call Windows has. There is now one crate — `fcmd-platform` — for the
+  handful of answers the standard library does not have, and it makes each platform's own
+  call: `statvfs`, `GetDiskFreeSpaceEx` and `GetDiskFreeSpace`, `/proc/meminfo`, `sysctl`,
+  `GlobalMemoryStatusEx`. It is the only place in the workspace allowed `unsafe`, and every
+  call in it carries a line saying why it is sound.
+
+  What it buys, beyond the frame: the information panel (`Ctrl+L`) now says what the device
+  holds, what is left on it and how big its allocation unit is, how much memory the machine
+  has and how much of it is free, and what the cluster size costs the directory on screen —
+  the figure FAR calls slack. And the detailed view has its **allocated** column: what each
+  file takes on the device rather than what it holds, rounded to whole clusters, which is
+  the column FAR puts second. A panel whose device said nothing — a server, an archive —
+  has no such column rather than a blank one.
+
 - **The detailed view has FAR's columns.** `Ctrl+5` showed the name, the size, one date and
   the attributes; it now shows what the file was written, when it was made and when it was
   last read, in FAR's order, with the attributes after them. The two extra dates are dropped,
   the last one first, as soon as keeping them would leave the name unreadable, so a half-width
   panel shows what the full view shows with the attributes after it; a filesystem that does
   not keep one of the dates leaves that column blank rather than inventing an epoch. The
-  allocated size — FAR's seventh column — is on the backlog, with the reason: it needs a
-  Windows API call that `std` does not expose.
+  allocated size is the column above.
 
 - **The keys the keyboard reference had promised.** A sweep through `docs/03-keymap.md`
   comparing every row against the keymap the program actually resolves turned up keys that

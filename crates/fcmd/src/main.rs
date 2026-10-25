@@ -236,24 +236,13 @@ fn run_find(id: u64, spec: app::FindSpec, cancel: CancelToken, tx: mpsc::Sender<
     }
 }
 
-/// Free bytes on the device a local directory is on, for the panel frame. `std` does not
-/// expose `statvfs`, so this is the one call that needs a platform crate; a remote provider
-/// does not report free space at all, and Windows wants `GetDiskFreeSpaceEx`, so both answer
-/// `None` rather than a figure nobody checked.
-#[cfg(unix)]
-fn free_space(path: &fcmd_core::VPath) -> Option<u64> {
-    if path.is_remote() {
+/// The device a local directory is on: free space for the panel frame, and the size and the
+/// allocation unit for the information panel. A remote provider has no such thing to report.
+fn device(path: &fcmd_core::VPath) -> Option<fcmd_platform::Disk> {
+    if path.is_remote() || path.in_container() {
         return None;
     }
-    let stat = nix::sys::statvfs::statvfs(path.as_path()).ok()?;
-    // `blocks_available` is what an unprivileged process may actually use, which is the
-    // number a user is asking about; the free count includes the reserve only root can touch.
-    Some(stat.blocks_available() as u64 * stat.fragment_size())
-}
-
-#[cfg(not(unix))]
-fn free_space(_path: &fcmd_core::VPath) -> Option<u64> {
-    None
+    fcmd_platform::disk(&path.os())
 }
 
 fn main() -> Result<()> {
@@ -793,7 +782,7 @@ fn interactive(mut app: App) -> Result<()> {
                         }
                         let _ = tx.send(Event::FreeSpace {
                             panel,
-                            bytes: free_space(&path),
+                            disk: device(&path),
                         });
                     });
                 }

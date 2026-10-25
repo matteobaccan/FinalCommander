@@ -33,7 +33,9 @@ takes both off to show what the commands have printed. With the panels off every
 still works — the command line, the menus, the keys — and `PgUp` and `PgDn` turn pages through
 the output; `Ctrl+O` brings the panels back.
 
-`Ctrl+R` re-reads. `Ctrl+L` turns the other panel into an information panel, `Ctrl+Q` into a
+`Ctrl+R` re-reads. `Ctrl+L` turns the other panel into an information panel — what the device
+holds and what is left on it, how big its clusters are and what they cost this directory, how
+much memory the machine has, and the row under the cursor — `Ctrl+Q` into a
 preview of the file under the cursor, `Ctrl+T` into a directory tree.
 
 A local panel also re-reads itself: a file that arrives from a build, a download or another

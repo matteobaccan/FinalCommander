@@ -943,6 +943,7 @@ dependencies = [
  "fcmd-i18n",
  "fcmd-jobs",
  "fcmd-net",
+ "fcmd-platform",
  "fcmd-plug",
  "fcmd-s3",
  "fcmd-syntax",
@@ -1083,6 +1084,15 @@ dependencies = [
  "tokio",
  "tokio-util",
  "zip",
+]
+
+[[package]]
+name = "fcmd-platform"
+version = "0.4.0"
+dependencies = [
+ "libc",
+ "nix 0.31.3",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

@@ -30,7 +30,8 @@ redirects the old repository URL to the new one.
 - **English in the repository, Italian with the author.**
 - **Nothing half-done is reported as done.** If a part is blocked, finish everything else and
   say plainly what was left and why.
-- **No `unsafe`**, no GUI toolkit, no GPL dependency. A new dependency needs a line of
+- **No `unsafe`** outside `fcmd-platform`, where every call carries a `SAFETY:` line; no GUI
+  toolkit, no GPL dependency. A new dependency needs a line of
   justification where it is declared and an entry in `THIRD-PARTY.md`.
 
 ## The gate, before every commit
@@ -64,6 +65,7 @@ is the usual cause.
 | `fcmd-view` / `fcmd-edit` | the viewer (text, dump, hex) and the editor |
 | `fcmd-arc` / `fcmd-net` / `fcmd-s3` | archives, SFTP/FTP/WebDAV, object storage |
 | `fcmd-find` / `fcmd-syntax` / `fcmd-term` / `fcmd-plug` | find files, syntax, the PTY, plugins |
+| `fcmd-platform` | the only crate allowed `unsafe`: free space, cluster size, memory, per platform |
 | `fcmd-site` | the static site generator — not part of the program, `fcmd` does not link it |
 | `fcmd` | the binary: the app, the panels, the rendering, the event loop |
 
@@ -124,7 +126,10 @@ keeps it as the run's artifact; publishing happens only through `workflow_dispat
    the menus and the keys all keep working, and `PgUp`/`PgDn` page through the output.
 5. **The detailed view draws FAR's dates** (written, made, last read) and drops the extras
    before the name becomes unreadable.
-6. **The keymap table swept** against the bindings the program resolves: `Ctrl+P`,
+6. **`fcmd-platform`**, the crate the rules always named: free space (on Windows too now),
+   the device's size and allocation unit, and the machine's memory. It feeds the panel frame,
+   the information panel (device, memory, slack) and the detailed view's allocated column.
+7. **The keymap table swept** against the bindings the program resolves: `Ctrl+P`,
    `Shift+F10`, `Ctrl+W` and the editor's delete-word-right built, the rest of the rows
    corrected to what is true.
 
@@ -134,12 +139,9 @@ keeps it as the run's artifact; publishing happens only through `workflow_dispat
 
 In the order they were raised, all from a side-by-side comparison with FAR on Windows:
 
-- **View modes.** The extension column in `full` and the dates of the `detailed` view are
-  done. What is left: the `wide` layout (the author has a screenshot of FAR's), the allocated
-  size (a backlog line — it needs a Windows call behind a platform crate we do not have), and
-  the file-owners mode.
-- **The info panel and quick view on a folder** show less than FAR's: disk, memory, cluster
-  size and slack are missing.
+- **View modes.** The extension column in `full` and the `detailed` view's dates and
+  allocated column are done. What is left: the `wide` layout (the author has a screenshot of
+  FAR's) and the file-owners mode.
 - **Menu mnemonics.** The mechanism ships (`&` in a label marks the letter, the dropdown
   draws it highlighted), but only four labels carry a marker. The letters for the rest are
   the author's call.

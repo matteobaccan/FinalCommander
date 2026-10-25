@@ -79,9 +79,10 @@ pub struct Panel {
     /// A name to put the cursor on when the next listing arrives — `goto:` asks for this, and
     /// the read it waits for has not happened yet.
     pub want_cursor: Option<String>,
-    /// Free bytes on the device this directory is on, as the last read reported them. `None`
-    /// where the platform or the provider cannot say.
-    pub free: Option<u64>,
+    /// The device this directory is on, as the last read reported it: what is free, what it
+    /// holds in all, and how big its allocation unit is. `None` where the platform or the
+    /// provider cannot say — a server reports nothing of the sort.
+    pub disk: Option<fcmd_platform::Disk>,
     /// Columns the name column is scrolled by, for names wider than it.
     pub name_scroll: usize,
     /// Set when this panel is a list rather than a directory.
@@ -111,7 +112,7 @@ impl Panel {
             filter: None,
             filter_set: None,
             want_cursor: None,
-            free: None,
+            disk: None,
             name_scroll: 0,
             temp: None,
             content: Content::default(),
@@ -230,7 +231,7 @@ impl Panel {
         self.filter = None;
         self.filter_set = None;
         self.name_scroll = 0;
-        self.free = None;
+        self.disk = None;
         self.selection.clear();
         self.loading = true;
         self.listing = Listing::default();

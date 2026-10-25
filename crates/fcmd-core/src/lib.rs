@@ -29,7 +29,7 @@ pub use filter::{
 pub use listing::{Listing, Totals};
 pub use longpath::{is_long, os_path};
 pub use selection::{MaskScope, Selection};
-pub use size::{format_count, format_size};
+pub use size::{allocated, format_count, format_size};
 pub use sort::{Sort, SortKey};
 pub use view::ViewMode;
 pub use vpath::{Scheme, VPath};

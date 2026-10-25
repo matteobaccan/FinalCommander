@@ -22,6 +22,7 @@ fcmd-find = { workspace = true }
 fcmd-i18n = { workspace = true }
 fcmd-jobs = { workspace = true }
 fcmd-net = { workspace = true }
+fcmd-platform = { workspace = true }
 fcmd-plug = { workspace = true }
 fcmd-s3 = { workspace = true }
 fcmd-tui = { workspace = true }

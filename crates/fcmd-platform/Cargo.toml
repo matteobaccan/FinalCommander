@@ -1,0 +1,29 @@
+[package]
+name = "fcmd-platform"
+description = "FinalCommander: the calls the standard library does not make (free space, cluster size, memory)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+
+# `statvfs` for the free space and the cluster size. Already in the tree for the terminal.
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.31.3", features = ["fs"] }
+
+# How much memory the machine has, which on macOS is a `sysctl` and nothing else.
+[target.'cfg(target_os = "macos")'.dependencies]
+libc = "0.2"
+
+# The three calls Windows needs for the same answers: `GetDiskFreeSpaceExW` for the bytes,
+# `GetDiskFreeSpaceW` for the cluster, `GlobalMemoryStatusEx` for the memory. Microsoft's own
+# bindings, MIT, and already in the tree under `rustix` and `mio`.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_Storage_FileSystem",
+  "Win32_System_SystemInformation",
+] }

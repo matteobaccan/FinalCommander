@@ -333,7 +333,7 @@ pub enum Event {
     /// because a listing is the same work whether or not the platform can answer this.
     FreeSpace {
         panel: usize,
-        bytes: Option<u64>,
+        disk: Option<fcmd_platform::Disk>,
     },
     /// One file a search matched.
     FindHit {
@@ -1675,9 +1675,9 @@ impl App {
                     self.read_panel(1);
                 }
             },
-            Event::FreeSpace { panel, bytes } => {
+            Event::FreeSpace { panel, disk } => {
                 if let Some(p) = self.panels.get_mut(panel) {
-                    p.free = bytes;
+                    p.disk = disk;
                 }
             }
             Event::Connected {

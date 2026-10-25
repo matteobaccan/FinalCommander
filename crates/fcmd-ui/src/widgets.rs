@@ -39,6 +39,9 @@ pub struct PanelRender<'a> {
     pub highlight: &'a crate::Highlight,
     /// What the size column says for `..` and for a directory, localised by the caller
     /// (FAR's `MListUp` and `MListFolder`).
+    /// The allocation unit of the device the panel is on, in bytes, or zero where nothing
+    /// said: it is what the detailed view's allocated column is computed from.
+    pub cluster: u64,
     pub up_label: &'a str,
     pub folder_label: &'a str,
 }
@@ -115,11 +118,11 @@ fn column_rules(p: &PanelRender<'_>, inner: Rect) -> Vec<u16> {
                 .collect()
         }
         _ => {
-            let c = columns_of(inner.w, p.view);
+            let c = columns_of(inner.w, p.view, p.cluster);
             // One rule at the end of every column that has something after it.
             let mut xs = Vec::new();
             let mut x = inner.x + c.name;
-            for w in [c.size, c.write, c.created, c.accessed, c.attr] {
+            for w in [c.size, c.allocated, c.write, c.created, c.accessed, c.attr] {
                 xs.push(x);
                 if w == 0 {
                     break;
@@ -322,7 +325,7 @@ fn draw_column_titles(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inne
             }
         }
         _ => {
-            let c = columns_of(inner.w, p.view);
+            let c = columns_of(inner.w, p.view, p.cluster);
             // With one date column it is the panel's date, as the full view has always
             // titled it; with three they have to say which is which.
             let write = if c.created > 0 {
@@ -335,6 +338,7 @@ fn draw_column_titles(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inne
             x += c.name + 1;
             for (w, title) in [
                 (c.size, "Size"),
+                (c.allocated, "Allocated"),
                 (c.write, write),
                 (c.created, "Created"),
                 (c.accessed, "Accessed"),
@@ -473,6 +477,9 @@ fn split_ext<'a>(name: &'a str, e: &Entry) -> Option<(&'a str, &'a str)> {
 struct Cols {
     name: u16,
     size: u16,
+    /// What the file takes on the device. Only a device that has said how big its clusters
+    /// are can answer it, so a remote panel has no column here rather than a blank one.
+    allocated: u16,
     /// When the file was last written: the column the full view has always had.
     write: u16,
     /// When it was made, and when it was last read. The detailed view shows them when the
@@ -493,6 +500,7 @@ impl Cols {
     fn tail(&self) -> u16 {
         let widths = [
             self.size,
+            self.allocated,
             self.write,
             self.created,
             self.accessed,
@@ -502,29 +510,41 @@ impl Cols {
     }
 }
 
-fn columns_of(inner_w: u16, view: ViewMode) -> Cols {
+fn columns_of(inner_w: u16, view: ViewMode, cluster: u64) -> Cols {
     let detail = view == ViewMode::Detail;
     let mut c = Cols {
         name: 0,
         size: SIZE_W,
+        allocated: 0,
         write: TIME_W,
         created: 0,
         accessed: 0,
         attr: if detail { ATTR_W } else { 0 },
     };
-    // The two extra dates, one at a time and the more useful one first: a panel that is not
-    // wide enough for both keeps the name readable instead, and a half-width panel shows the
-    // same three columns the full view does, with the attributes after them.
+    // The extras of the detailed view, in the order they are drawn and one at a time: a panel
+    // that is not wide enough for the next one keeps the name readable instead. A half-width
+    // panel therefore shows what the full view shows with the attributes after it, and a
+    // maximised one shows FAR's whole row.
     if detail {
-        let mut with_created = c;
-        with_created.created = TIME_W;
-        if inner_w.saturating_sub(with_created.tail()) >= NAME_MIN {
-            c = with_created;
-            let mut with_accessed = c;
-            with_accessed.accessed = TIME_W;
-            if inner_w.saturating_sub(with_accessed.tail()) >= NAME_MIN {
-                c = with_accessed;
+        #[derive(Clone, Copy)]
+        enum Extra {
+            Allocated,
+            Created,
+            Accessed,
+        }
+        for extra in [Extra::Allocated, Extra::Created, Extra::Accessed] {
+            let mut wider = c;
+            match extra {
+                // Nothing to put in it: the device never said how big its clusters are.
+                Extra::Allocated if cluster == 0 => continue,
+                Extra::Allocated => wider.allocated = SIZE_W,
+                Extra::Created => wider.created = TIME_W,
+                Extra::Accessed => wider.accessed = TIME_W,
             }
+            if inner_w.saturating_sub(wider.tail()) < NAME_MIN {
+                break;
+            }
+            c = wider;
         }
     }
     c.name = inner_w.saturating_sub(c.tail()).max(4);
@@ -532,7 +552,7 @@ fn columns_of(inner_w: u16, view: ViewMode) -> Cols {
 }
 
 fn draw_full(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect, rows: usize) {
-    let c = columns_of(inner.w, p.view);
+    let c = columns_of(inner.w, p.view, p.cluster);
     let (name_w, size_w) = (c.name, c.size);
 
     for row in 0..rows {
@@ -610,10 +630,19 @@ fn draw_full(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect, 
             _ => put_right(buf, sx, y, size_w, &format_size(e.size), style),
         }
 
+        let mut x = sx + size_w + 1;
+        if c.allocated > 0 {
+            // A directory has no size of its own to round up, so it has nothing here either.
+            if !e.opens_as_dir() && e.kind != EntryKind::Parent {
+                let taken = fcmd_core::allocated(e.size, p.cluster);
+                put_right(buf, x, y, c.allocated, &format_size(taken), style);
+            }
+            x += c.allocated + 1;
+        }
+
         // The dates, in the order FAR puts them in, and only the ones this panel has room
         // for. A filesystem that does not keep one of them leaves the column blank rather
         // than inventing an epoch.
-        let mut x = sx + size_w + 1;
         for (w, when) in [
             (c.write, e.mtime),
             (c.created, e.btime),
@@ -1210,6 +1239,11 @@ mod tests {
 
     /// The same panel on a screen wide enough for every column the detailed view has.
     fn render_wide(listing: &Listing, view: ViewMode, width: u16) -> String {
+        render_device(listing, view, width, 4096)
+    }
+
+    /// With the device's allocation unit, or zero for a panel whose device said nothing.
+    fn render_device(listing: &Listing, view: ViewMode, width: u16, cluster: u64) -> String {
         let theme = Theme::default_theme();
         let mut buf = Buffer::new(width, 10);
         let selection = Selection::default();
@@ -1232,6 +1266,7 @@ mod tests {
             scrollbar: false,
             name_scroll: 0,
             highlight: &crate::Highlight::far_default(),
+            cluster,
             up_label: "Up",
             folder_label: "Folder",
         };
@@ -1249,9 +1284,17 @@ mod tests {
         // Wide: every column FAR's detailed row has, in FAR's order.
         let out = render_wide(&listing, ViewMode::Detail, 100);
         let titles = out.lines().nth(1).unwrap_or_default().to_string();
-        let order: Vec<&str> = ["Name", "Size", "Modified", "Created", "Accessed", "Attr"]
-            .into_iter()
-            .collect();
+        let order: Vec<&str> = [
+            "Name",
+            "Size",
+            "Allocated",
+            "Modified",
+            "Created",
+            "Accessed",
+            "Attr",
+        ]
+        .into_iter()
+        .collect();
         let mut at = 0;
         for title in &order {
             let Some(i) = titles[at..].find(title) else {
@@ -1262,6 +1305,15 @@ mod tests {
         // And the three dates are drawn, not just titled.
         assert!(out.contains("2020-09-13"), "the created date: {out}");
         assert!(out.contains("2025-06-15"), "the accessed date: {out}");
+        // 412 bytes of file in a 4 K cluster takes 4 K of device.
+        assert!(out.contains("4.00 K"), "the allocated size: {out}");
+
+        // A device that said nothing about its clusters has no column to put a figure in,
+        // rather than a column of blanks: that is what a remote panel looks like.
+        let out = render_device(&listing, ViewMode::Detail, 100, 0);
+        let titles = out.lines().nth(1).unwrap_or_default().to_string();
+        assert!(!titles.contains("Allocated"), "{titles:?}");
+        assert!(titles.contains("Accessed"), "the dates stay: {titles:?}");
 
         // Narrow: the extras go rather than the name, and the date column is the panel's
         // own again.
@@ -1299,6 +1351,7 @@ mod tests {
             scrollbar: false,
             name_scroll: 0,
             highlight: &crate::Highlight::far_default(),
+            cluster: 4096,
             up_label: "Up",
             folder_label: "Folder",
         };
@@ -1448,6 +1501,7 @@ mod tests {
             scrollbar: false,
             name_scroll: 0,
             highlight: &crate::Highlight::far_default(),
+            cluster: 4096,
             up_label: "Up",
             folder_label: "Folder",
         };
@@ -1483,6 +1537,7 @@ mod tests {
                 scrollbar: false,
                 name_scroll: 0,
                 highlight: &crate::Highlight::far_default(),
+                cluster: 4096,
                 up_label: "Up",
                 folder_label: "Folder",
             };
@@ -1525,6 +1580,7 @@ mod tests {
             scrollbar: false,
             name_scroll: 0,
             highlight: &crate::Highlight::far_default(),
+            cluster: 4096,
             up_label: "Up",
             folder_label: "Folder",
         };
@@ -1607,6 +1663,7 @@ mod tests {
             scrollbar: false,
             name_scroll: 0,
             highlight: &crate::Highlight::far_default(),
+            cluster: 4096,
             up_label: "Up",
             folder_label: "Folder",
         };
@@ -1795,6 +1852,7 @@ mod tests {
             scrollbar: false,
             name_scroll: 0,
             highlight: &crate::Highlight::far_default(),
+            cluster: 4096,
             up_label: "Up",
             folder_label: "Folder",
         };

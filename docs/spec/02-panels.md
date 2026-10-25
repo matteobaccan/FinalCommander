@@ -381,7 +381,7 @@ What FAR draws in and around a panel's frame, and what we do about it:
 | sort letter and filter mark | left end of the titles row, or of the top frame without it | `panel.column_titles` | shipped |
 | column titles | row under the top frame | `panel.column_titles` | shipped, on by default |
 | totals, or the selected count, or the filter | bottom frame, left | — | shipped |
-| free space on the device | bottom frame, right | `panel.free_space` | shipped; `statvfs` on Unix, nothing on a server or on Windows, and it says nothing rather than guessing |
+| free space on the device | bottom frame, right | `panel.free_space` | shipped on all three platforms through `fcmd-platform` (`statvfs`, `GetDiskFreeSpaceEx`); a server has none to report and the frame says nothing rather than guessing |
 | scrollbar | right frame | `panel.scrollbar` | shipped; drawn only when there is more than fits |
 | the panel's own status line | a rule and a row above the bottom frame | `panel.status_line` | shipped, **on** by default, as in FAR: the rule carries the selected totals and the row under it names the file the cursor is on. It costs two file rows |
 | one panel full width | `Ctrl+F1` / `Ctrl+F2` | — | shipped; the focus follows the screen |

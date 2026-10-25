@@ -266,8 +266,9 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             filter: panel.filter.as_deref(),
             message: message.as_deref(),
             status: status.as_deref(),
+            cluster: panel.disk.map(|d| d.cluster).unwrap_or(0),
             free: if app.cfg.panel.free_space {
-                panel.free
+                panel.disk.map(|d| d.free)
             } else {
                 None
             },
@@ -1434,8 +1435,40 @@ fn draw_info(app: &mut App, index: usize, area: Rect, buf: &mut Buffer) {
             t("info-kind-local")
         },
     ));
-    if let Some(free) = other.free {
-        lines.push((t("info-free"), fcmd_core::format_size(free)));
+    // The device, as FAR's information panel has it: what it holds, what is left, and how
+    // big its allocation unit is. A server and the inside of an archive have none of this.
+    if let Some(d) = other.disk {
+        lines.push((
+            t("info-device"),
+            app.i18n.t_args(
+                "info-device-value",
+                &[
+                    ("total", fcmd_core::format_size(d.total).into()),
+                    ("free", fcmd_core::format_size(d.free).into()),
+                    ("cluster", fcmd_core::format_size(d.cluster).into()),
+                ],
+            ),
+        ));
+    }
+    if let Some(m) = fcmd_platform::memory() {
+        lines.push((
+            t("info-memory"),
+            match m.available {
+                Some(free) => app.i18n.t_args(
+                    "info-memory-value",
+                    &[
+                        ("free", fcmd_core::format_size(free).into()),
+                        ("total", fcmd_core::format_size(m.total).into()),
+                    ],
+                ),
+                // macOS will say how much there is and not how much is free without a great
+                // deal more machinery; half an answer beats a wrong one.
+                None => app.i18n.t_args(
+                    "info-memory-total",
+                    &[("total", fcmd_core::format_size(m.total).into())],
+                ),
+            },
+        ));
     }
     let totals = &other.listing.totals;
     lines.push((
@@ -1449,6 +1482,18 @@ fn draw_info(app: &mut App, index: usize, area: Rect, buf: &mut Buffer) {
             ],
         ),
     ));
+    // What the cluster size costs: the tail of the last cluster of every file, which is the
+    // figure FAR calls slack and the reason a directory of small files takes more room than
+    // it holds. Only with a cluster size to count it with, and counted over the listing that
+    // is on screen rather than down the tree.
+    if let Some(cluster) = other.disk.map(|d| d.cluster).filter(|c| *c > 0) {
+        let slack: u64 = (0..other.listing.len())
+            .filter_map(|row| other.listing.row(row))
+            .filter(|e| !e.kind.is_dirlike())
+            .map(|e| fcmd_core::allocated(e.size, cluster) - e.size)
+            .sum();
+        lines.push((t("info-slack"), fcmd_core::format_size(slack)));
+    }
     if !other.selection.is_empty() {
         lines.push((
             t("info-selected"),
@@ -4144,7 +4189,11 @@ See the [docs](https://example.com/docs) for more.
         project(&mut app);
         app.handle_event(Event::FreeSpace {
             panel: 0,
-            bytes: Some(12 * 1024 * 1024 * 1024),
+            disk: Some(fcmd_platform::Disk {
+                total: 64 * 1024 * 1024 * 1024,
+                free: 12 * 1024 * 1024 * 1024,
+                cluster: 4096,
+            }),
         });
         let out = frame(&mut app, 100, 28);
         // FAR's own layout: what is in the panel, then a piece of double rule, then what
@@ -4943,7 +4992,11 @@ third line
         });
         app.handle_event(Event::FreeSpace {
             panel: 0,
-            bytes: Some(42 * 1024 * 1024),
+            disk: Some(fcmd_platform::Disk {
+                total: 256 * 1024 * 1024,
+                free: 42 * 1024 * 1024,
+                cluster: 4096,
+            }),
         });
         app.panels[0].cursor_to(2);
         app.active = 0;
@@ -4954,9 +5007,16 @@ third line
         assert!(out.contains("Info"), "{out}");
         assert!(out.contains("/home/mb/project"), "{out}");
         assert!(out.contains("a directory on this machine"), "{out}");
-        // The device, the directory's own totals, and the row under the cursor.
-        assert!(out.contains("42"), "{out}");
+        // The device as FAR's own panel has it — what it holds, what is left, how big its
+        // allocation unit is — then the directory's totals, what the cluster size costs on
+        // them, and the row under the cursor.
+        assert!(out.contains("256 M, 42.0 M free, 4.00 K clusters"), "{out}");
         assert!(out.contains("1 files, 1 directories"), "{out}");
+        assert!(out.contains("Slack"), "{out}");
+        assert!(
+            out.contains("3.00 K"),
+            "a 1 K file in a 4 K cluster wastes 3 K: {out}"
+        );
         assert!(out.contains("a.txt"), "{out}");
 
         app.handle_input(Input::Key("Ctrl+L".parse().unwrap()));

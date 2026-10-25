@@ -31,6 +31,7 @@ fcmd-find = { path = "crates/fcmd-find" }
 fcmd-i18n = { path = "crates/fcmd-i18n" }
 fcmd-jobs = { path = "crates/fcmd-jobs" }
 fcmd-net = { path = "crates/fcmd-net" }
+fcmd-platform = { path = "crates/fcmd-platform" }
 fcmd-plug = { path = "crates/fcmd-plug" }
 fcmd-s3 = { path = "crates/fcmd-s3" }
 fcmd-syntax = { path = "crates/fcmd-syntax" }

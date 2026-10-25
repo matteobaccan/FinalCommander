@@ -1,3 +1,18 @@
+/// What a file of `size` bytes takes on a device whose allocation unit is `cluster` bytes:
+/// the size rounded up to the next whole cluster, which is what every file manager calls the
+/// allocated size, and `size` again for a device that would not say.
+///
+/// Arithmetic rather than a syscall on purpose. Asking the system per file would cost a call
+/// per row of the panel, and the answer differs only for what a listing cannot show anyway —
+/// a sparse file, a compressed one, a stream small enough to live in the record itself. The
+/// cluster size comes from the device, once per directory.
+pub fn allocated(size: u64, cluster: u64) -> u64 {
+    if cluster == 0 {
+        return size;
+    }
+    size.div_ceil(cluster) * cluster
+}
+
 /// Human-readable size, binary units, three significant digits — the format panels use.
 pub fn format_size(bytes: u64) -> String {
     const UNITS: [&str; 7] = ["B", "K", "M", "G", "T", "P", "E"];
@@ -34,6 +49,17 @@ pub fn format_count(n: u64) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_file_takes_whole_clusters_and_an_empty_one_takes_none() {
+        use super::allocated;
+        assert_eq!(allocated(0, 4096), 0);
+        assert_eq!(allocated(1, 4096), 4096);
+        assert_eq!(allocated(4096, 4096), 4096);
+        assert_eq!(allocated(4097, 4096), 8192);
+        // A device that would not say its cluster size cannot round anything.
+        assert_eq!(allocated(4097, 0), 4097);
+    }
+
     use super::*;
 
     #[test]
