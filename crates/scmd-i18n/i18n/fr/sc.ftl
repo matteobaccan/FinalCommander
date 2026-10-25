@@ -81,11 +81,19 @@ prompt-tab-name = Nom de l’onglet :
 prompt-bookmark-name = Nom du dossier :
 what-selected = { $count } éléments sélectionnés
 confirm-delete-title = Supprimer
-confirm-delete-body = Supprimer { $count } éléments ({ $bytes }) ?
+confirm-delete-body =
+    { $count ->
+        [one] Supprimer { $name } ({ $bytes }) ?
+       *[other] Supprimer { $count } éléments ({ $bytes }) ?
+    }
 prompt-link = Créer un lien vers { $name } sous :
 link-created = { $name } créé
 confirm-wipe-title = Effacement sécurisé
-confirm-wipe-body = Écraser et supprimer { $count } éléments ({ $bytes }) ?
+confirm-wipe-body =
+    { $count ->
+        [one] Écraser et supprimer { $name } ({ $bytes }) ?
+       *[other] Écraser et supprimer { $count } éléments ({ $bytes }) ?
+    }
 confirm-wipe-honest = Les octets sont écrasés une fois, puis le fichier est supprimé. Sur un SSD, un système de fichiers copy-on-write ou avec des instantanés, des copies antérieures peuvent survivre — et le nom survit dans le répertoire et le journal.
 confirm-yes-no = [ Entrée = oui ]   [ Esc = non ]
 job-copy = Copie
@@ -291,7 +299,11 @@ net-changed-title = Modifié sur le serveur
 net-changed-body = { $name } a changé sur le serveur depuis sa récupération. L'écraser ?
 confirm-delete-permanent = Ceci supprime définitivement : il n’y a pas de corbeille pour ceux-là.
 confirm-trash-title = Mettre à la corbeille
-confirm-trash-body = Mettre { $count } éléments ({ $bytes }) à la corbeille ?
+confirm-trash-body =
+    { $count ->
+        [one] Mettre { $name } ({ $bytes }) à la corbeille ?
+       *[other] Mettre { $count } éléments ({ $bytes }) à la corbeille ?
+    }
 confirm-trash-where = Ils vont là où le bureau garde les fichiers supprimés, et peuvent en être repris.
 
 # ---------------------------------------------------------------- barre de menus (SPEC 10)

@@ -81,11 +81,19 @@ prompt-tab-name = Name des Reiters:
 prompt-bookmark-name = Name des Ordners:
 what-selected = { $count } ausgewählte Einträge
 confirm-delete-title = Löschen
-confirm-delete-body = { $count } Einträge ({ $bytes }) löschen?
+confirm-delete-body =
+    { $count ->
+        [one] { $name } ({ $bytes }) löschen?
+       *[other] { $count } Einträge ({ $bytes }) löschen?
+    }
 prompt-link = Verknüpfung auf { $name } erstellen als:
 link-created = { $name } erstellt
 confirm-wipe-title = Sicheres Löschen
-confirm-wipe-body = { $count } Einträge ({ $bytes }) überschreiben und löschen?
+confirm-wipe-body =
+    { $count ->
+        [one] { $name } ({ $bytes }) überschreiben und löschen?
+       *[other] { $count } Einträge ({ $bytes }) überschreiben und löschen?
+    }
 confirm-wipe-honest = Die Bytes werden einmal überschrieben, dann wird die Datei entfernt. Auf einer SSD, einem Copy-on-Write-Dateisystem oder mit Snapshots können ältere Kopien überleben — und der Name bleibt im Verzeichnis und im Journal.
 confirm-yes-no = [ Eingabe = ja ]   [ Esc = nein ]
 job-copy = Kopieren
@@ -291,7 +299,11 @@ net-changed-title = Auf dem Server geändert
 net-changed-body = { $name } wurde auf dem Server geändert, seit es geholt wurde. Überschreiben?
 confirm-delete-permanent = Das löscht endgültig: für diese gibt es keinen Papierkorb.
 confirm-trash-title = In den Papierkorb
-confirm-trash-body = { $count } Objekte ({ $bytes }) in den Papierkorb verschieben?
+confirm-trash-body =
+    { $count ->
+        [one] { $name } ({ $bytes }) in den Papierkorb verschieben?
+       *[other] { $count } Objekte ({ $bytes }) in den Papierkorb verschieben?
+    }
 confirm-trash-where = Sie landen dort, wo der Desktop gelöschte Dateien aufbewahrt, und lassen sich von dort zurückholen.
 
 # ---------------------------------------------------------------- Menüleiste (SPEC 10)

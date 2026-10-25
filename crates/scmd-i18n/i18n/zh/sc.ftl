@@ -81,11 +81,19 @@ prompt-tab-name = 标签页名称：
 prompt-bookmark-name = 文件夹名称：
 what-selected = 已选 { $count } 项
 confirm-delete-title = 删除
-confirm-delete-body = 删除 { $count } 项（{ $bytes }）？
+confirm-delete-body =
+    { $count ->
+        [one] 删除 { $name }（{ $bytes }）？
+       *[other] 删除 { $count } 项（{ $bytes }）？
+    }
 prompt-link = 创建指向 { $name } 的链接，名为：
 link-created = 已创建 { $name }
 confirm-wipe-title = 安全擦除
-confirm-wipe-body = 覆写并删除 { $count } 个项目（{ $bytes }）？
+confirm-wipe-body =
+    { $count ->
+        [one] 覆写并删除 { $name }（{ $bytes }）？
+       *[other] 覆写并删除 { $count } 个项目（{ $bytes }）？
+    }
 confirm-wipe-honest = 字节会被覆写一次，然后删除文件。在固态硬盘、写时复制文件系统或存在快照的情况下，旧副本可能仍然存在——文件名也会留在目录和日志中。
 confirm-yes-no = [ Enter = 是 ]   [ Esc = 否 ]
 job-copy = 复制
@@ -291,7 +299,11 @@ net-changed-title = 服务器上已更改
 net-changed-body = { $name } 自获取后在服务器上已更改。要覆盖吗？
 confirm-delete-permanent = 这是永久删除：这些没有回收站。
 confirm-trash-title = 移到回收站
-confirm-trash-body = 将 { $count } 个项目（{ $bytes }）移到回收站？
+confirm-trash-body =
+    { $count ->
+        [one] 将 { $name }（{ $bytes }）移到回收站？
+       *[other] 将 { $count } 个项目（{ $bytes }）移到回收站？
+    }
 confirm-trash-where = 它们会进入系统存放已删文件的位置，可以从那里恢复。
 
 # ---------------------------------------------------------------- 菜单栏 (SPEC 10)

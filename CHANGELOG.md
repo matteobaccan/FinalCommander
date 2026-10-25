@@ -28,6 +28,13 @@ Notable changes, newest first. The format follows
   the screen and a second one was needed to open the folder. It now closes the search *and*
   opens what it found, which is FAR's behaviour: one key, one result.
 
+- **"Delete 1 items".** The confirmation counted where it should have named: deleting one file
+  asked about `1 items`, in every language, which is the sentence nobody means to write — and
+  then listed the name underneath anyway. One file is now named in the question (`Delete
+  a.txt (4 K)?`) and not repeated below it; several are still a count with the first three
+  names under it. The three confirmations that count — delete, wastebasket, wipe — carry a
+  plural selector in all seven catalogues rather than one form that is wrong half the time.
+
 - **`Ctrl+PgDn` did nothing.** It is FAR's way into a directory or an archive and the other
   half of `Ctrl+PgUp`, which worked; the keymap document has listed it since the feature
   inventory and no profile ever bound it, so the key was dead. It opens what the cursor is on,

@@ -81,11 +81,19 @@ prompt-tab-name = Nombre de la pestaña:
 prompt-bookmark-name = Nombre de la carpeta:
 what-selected = { $count } elementos seleccionados
 confirm-delete-title = Borrar
-confirm-delete-body = ¿Borrar { $count } elementos ({ $bytes })?
+confirm-delete-body =
+    { $count ->
+        [one] ¿Borrar { $name } ({ $bytes })?
+       *[other] ¿Borrar { $count } elementos ({ $bytes })?
+    }
 prompt-link = Crear un enlace a { $name } como:
 link-created = { $name } creado
 confirm-wipe-title = Borrado seguro
-confirm-wipe-body = ¿Sobrescribir y eliminar { $count } elementos ({ $bytes })?
+confirm-wipe-body =
+    { $count ->
+        [one] ¿Sobrescribir y eliminar { $name } ({ $bytes })?
+       *[other] ¿Sobrescribir y eliminar { $count } elementos ({ $bytes })?
+    }
 confirm-wipe-honest = Los bytes se sobrescriben una vez y luego se desvincula el archivo. En un SSD, en un sistema de archivos copy-on-write o con instantáneas pueden sobrevivir copias anteriores — y el nombre sobrevive en el directorio y en el journal.
 confirm-yes-no = [ Intro = sí ]   [ Esc = no ]
 job-copy = Copia
@@ -291,7 +299,11 @@ net-changed-title = Cambiado en el servidor
 net-changed-body = { $name } cambió en el servidor desde que se descargó. ¿Sobrescribirlo?
 confirm-delete-permanent = Esto borra definitivamente: para estos no hay papelera.
 confirm-trash-title = Mover a la papelera
-confirm-trash-body = ¿Mover { $count } elementos ({ $bytes }) a la papelera?
+confirm-trash-body =
+    { $count ->
+        [one] ¿Mover { $name } ({ $bytes }) a la papelera?
+       *[other] ¿Mover { $count } elementos ({ $bytes }) a la papelera?
+    }
 confirm-trash-where = Van donde el escritorio guarda los archivos borrados, y de ahí se pueden recuperar.
 
 # ---------------------------------------------------------------- barra de menús (SPEC 10)

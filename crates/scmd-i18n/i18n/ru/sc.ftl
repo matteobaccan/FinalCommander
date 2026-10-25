@@ -81,11 +81,19 @@ prompt-tab-name = Название закладки:
 prompt-bookmark-name = Название папки:
 what-selected = отмечено элементов: { $count }
 confirm-delete-title = Удаление
-confirm-delete-body = Удалить { $count } элементов ({ $bytes })?
+confirm-delete-body =
+    { $count ->
+        [one] Удалить { $name } ({ $bytes })?
+       *[other] Удалить { $count } элементов ({ $bytes })?
+    }
 prompt-link = Создать ссылку на { $name } как:
 link-created = { $name } создана
 confirm-wipe-title = Затирание
-confirm-wipe-body = Затереть и удалить { $count } объектов ({ $bytes })?
+confirm-wipe-body =
+    { $count ->
+        [one] Затереть и удалить { $name } ({ $bytes })?
+       *[other] Затереть и удалить { $count } объектов ({ $bytes })?
+    }
 confirm-wipe-honest = Байты перезаписываются один раз, затем файл удаляется. На SSD, на файловой системе copy-on-write или при наличии снимков прежние копии могут сохраниться — и имя сохраняется в каталоге и в журнале.
 confirm-yes-no = [ Enter = да ]   [ Esc = нет ]
 job-copy = Копирование
@@ -291,7 +299,11 @@ net-changed-title = Изменён на сервере
 net-changed-body = { $name } изменился на сервере после загрузки. Перезаписать?
 confirm-delete-permanent = Это удаление насовсем: для этого корзины нет.
 confirm-trash-title = В корзину
-confirm-trash-body = Переместить { $count } объектов ({ $bytes }) в корзину?
+confirm-trash-body =
+    { $count ->
+        [one] Переместить { $name } ({ $bytes }) в корзину?
+       *[other] Переместить { $count } объектов ({ $bytes }) в корзину?
+    }
 confirm-trash-where = Они попадут туда, где система держит удалённые файлы, и оттуда их можно вернуть.
 
 # ---------------------------------------------------------------- строка меню (SPEC 10)

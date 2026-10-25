@@ -4406,19 +4406,24 @@ impl App {
             &[
                 ("count", (sources.len() as i64).into()),
                 ("bytes", scmd_core::format_size(bytes).into()),
+                // One file is a name, not a count: "Delete 1 items" is the sentence nobody
+                // means to write, and the name is the thing the reader is checking anyway.
+                ("name", sources[0].display_name().into()),
             ],
         );
         let mut lines = vec![body, String::new()];
-        lines.extend(
-            sources
-                .iter()
-                .take(3)
-                .map(|p| format!("  {}", p.display_name())),
-        );
-        if sources.len() > 3 {
-            lines.push(format!("  … {}", sources.len() - 3));
+        if sources.len() > 1 {
+            lines.extend(
+                sources
+                    .iter()
+                    .take(3)
+                    .map(|p| format!("  {}", p.display_name())),
+            );
+            if sources.len() > 3 {
+                lines.push(format!("  … {}", sources.len() - 3));
+            }
+            lines.push(String::new());
         }
-        lines.push(String::new());
         // Which of the two this is, in a sentence: the one word that separates a safety net
         // from a shredder is worth a line of the dialog.
         lines.push(self.i18n.t(if to_trash {
@@ -5353,19 +5358,22 @@ impl App {
                     &[
                         ("count", (sources.len() as i64).into()),
                         ("bytes", scmd_core::format_size(bytes).into()),
+                        ("name", sources[0].display_name().into()),
                     ],
                 );
                 let mut lines = vec![body, String::new()];
-                lines.extend(
-                    sources
-                        .iter()
-                        .take(3)
-                        .map(|p| format!("  {}", p.display_name())),
-                );
-                if sources.len() > 3 {
-                    lines.push(format!("  … {}", sources.len() - 3));
+                if sources.len() > 1 {
+                    lines.extend(
+                        sources
+                            .iter()
+                            .take(3)
+                            .map(|p| format!("  {}", p.display_name())),
+                    );
+                    if sources.len() > 3 {
+                        lines.push(format!("  … {}", sources.len() - 3));
+                    }
+                    lines.push(String::new());
                 }
-                lines.push(String::new());
                 // Overwriting is not a promise on modern hardware, and the dialog says so
                 // rather than letting a user believe something the filesystem cannot deliver.
                 lines.push(self.i18n.t("confirm-wipe-honest"));
@@ -18523,6 +18531,41 @@ abcdefghij
             panic!("the attributes dialog did not open: {:?}", app.mode)
         };
         assert_eq!(form.text_value("attr.readonly"), "true");
+    }
+
+    #[test]
+    fn deleting_one_file_asks_about_that_file_and_not_about_one_items() {
+        let mut app = app();
+        app.panel_mut().cursor_to(2); // a.txt
+        app.run(Command::FileDelete);
+        let Mode::Confirm(confirm) = &app.mode else {
+            panic!("the delete confirmation did not open: {:?}", app.mode)
+        };
+        let first = &confirm.lines[0];
+        assert!(first.contains("a.txt"), "{first}");
+        assert!(
+            !first.contains("1 item"),
+            "one file is a name, not a count: {first}"
+        );
+        // And the name is not then repeated underneath, which it was when the question
+        // counted instead of naming.
+        assert_eq!(
+            confirm.lines.iter().filter(|l| l.contains("a.txt")).count(),
+            1,
+            "{:?}",
+            confirm.lines
+        );
+
+        // Several are a count, with the names under it.
+        let mut many = super::tests::app();
+        many.panel_mut().cursor_to(2);
+        many.run(Command::SelToggle);
+        many.run(Command::SelToggle);
+        many.run(Command::FileDelete);
+        let Mode::Confirm(confirm) = &many.mode else {
+            panic!("no confirmation for the selection")
+        };
+        assert!(confirm.lines[0].contains('2'), "{:?}", confirm.lines);
     }
 
     #[test]

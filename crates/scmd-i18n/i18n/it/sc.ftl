@@ -81,11 +81,19 @@ prompt-tab-name = Nome della scheda:
 prompt-bookmark-name = Nome della cartella:
 what-selected = { $count } elementi selezionati
 confirm-delete-title = Elimina
-confirm-delete-body = Eliminare { $count } elementi ({ $bytes })?
+confirm-delete-body =
+    { $count ->
+        [one] Eliminare { $name } ({ $bytes })?
+       *[other] Eliminare { $count } elementi ({ $bytes })?
+    }
 prompt-link = Crea un collegamento a { $name } come:
 link-created = { $name } creato
 confirm-wipe-title = Cancellazione sicura
-confirm-wipe-body = Sovrascrivere ed eliminare { $count } elementi ({ $bytes })?
+confirm-wipe-body =
+    { $count ->
+        [one] Sovrascrivere ed eliminare { $name } ({ $bytes })?
+       *[other] Sovrascrivere ed eliminare { $count } elementi ({ $bytes })?
+    }
 confirm-wipe-honest = I byte vengono sovrascritti una volta, poi il file viene scollegato. Su SSD, su filesystem copy-on-write o con snapshot, copie precedenti possono sopravvivere — e il nome sopravvive nella directory e nel journal.
 confirm-yes-no = [ Invio = sì ]   [ Esc = no ]
 job-copy = Copia
@@ -291,7 +299,11 @@ net-changed-title = Cambiato sul server
 net-changed-body = { $name } è cambiato sul server dopo lo scaricamento. Sovrascriverlo?
 confirm-delete-permanent = Cancellazione definitiva: per questi non c’è cestino.
 confirm-trash-title = Sposta nel cestino
-confirm-trash-body = Spostare { $count } elementi ({ $bytes }) nel cestino?
+confirm-trash-body =
+    { $count ->
+        [one] Spostare { $name } ({ $bytes }) nel cestino?
+       *[other] Spostare { $count } elementi ({ $bytes }) nel cestino?
+    }
 confirm-trash-where = Vanno dove il sistema tiene i file eliminati, e da lì si possono recuperare.
 
 # ---------------------------------------------------------------- barra dei menu (SPEC 10)

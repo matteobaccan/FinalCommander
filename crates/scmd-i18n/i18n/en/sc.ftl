@@ -87,11 +87,19 @@ prompt-tab-name = Call this tab:
 prompt-bookmark-name = Call this folder:
 what-selected = { $count } selected items
 confirm-delete-title = Delete
-confirm-delete-body = Delete { $count } items ({ $bytes })?
+confirm-delete-body =
+    { $count ->
+        [one] Delete { $name } ({ $bytes })?
+       *[other] Delete { $count } items ({ $bytes })?
+    }
 prompt-link = Create a link to { $name } as:
 link-created = { $name } created
 confirm-wipe-title = Wipe
-confirm-wipe-body = Overwrite and delete { $count } items ({ $bytes })?
+confirm-wipe-body =
+    { $count ->
+        [one] Overwrite and delete { $name } ({ $bytes })?
+       *[other] Overwrite and delete { $count } items ({ $bytes })?
+    }
 confirm-wipe-honest = The bytes are overwritten once, then the file is unlinked. On an SSD, a copy-on-write filesystem or with snapshots, older copies may survive — and the name survives in the directory and the journal.
 confirm-yes-no = [ Enter = yes ]   [ Esc = no ]
 job-copy = Copying
@@ -299,7 +307,11 @@ net-changed-title = Changed on the server
 net-changed-body = { $name } changed on the server since it was fetched. Write over it?
 confirm-delete-permanent = This deletes permanently: there is no wastebasket for these.
 confirm-trash-title = Move to the wastebasket
-confirm-trash-body = Move { $count } items ({ $bytes }) to the wastebasket?
+confirm-trash-body =
+    { $count ->
+        [one] Move { $name } ({ $bytes }) to the wastebasket?
+       *[other] Move { $count } items ({ $bytes }) to the wastebasket?
+    }
 confirm-trash-where = They go where the desktop keeps deleted files, and can be put back from there.
 
 # ---------------------------------------------------------------- menu bar (SPEC 10)
