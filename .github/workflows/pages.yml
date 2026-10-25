@@ -10,9 +10,10 @@
 #     section was renamed has to fail here rather than silently publish a page with a hole in
 #     it. Only the default branch publishes; a development branch builds and stops;
 #   * publishing needs Pages switched on for the repository with "GitHub Actions" as the source
-#     (Settings → Pages). Until that is done the deploy step refuses with a 404, which is not a
-#     mistake in this file. `workflow_dispatch` publishes from whatever branch it runs on, for
-#     the first publication or to look at the site before the branch is merged.
+#     (Settings → Pages). That is a setting a workflow cannot change, so it is asked for rather
+#     than assumed: until it is done the run warns that the site was built and not published,
+#     instead of painting every push red. `workflow_dispatch` publishes from whatever branch it
+#     runs on, for the first publication or to look at the site before the branch is merged.
 name: Pages
 
 on:
@@ -65,5 +66,22 @@ jobs:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
+      # Pages has to be switched on by hand, once, and until it is the deployment comes back
+      # `404 Not Found` — which would paint every push red over a setting the workflow cannot
+      # change. So it is asked first: a warning that says what to do, and a run that is honest
+      # about having built the site and not published it.
+      - name: Is Pages switched on for this repository?
+        id: pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          if gh api "repos/$GITHUB_REPOSITORY/pages" >/dev/null 2>&1; then
+            echo "on=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "on=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=The site was built but not published::GitHub Pages is not switched on for this repository. Settings -> Pages -> Build and deployment -> Source: GitHub Actions. The next push then publishes it."
+          fi
       - id: deploy
+        if: steps.pages.outputs.on == 'true'
         uses: actions/deploy-pages@v5
