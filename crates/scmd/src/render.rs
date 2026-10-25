@@ -413,8 +413,8 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
                 screen,
                 &confirm.title,
                 &confirm.lines,
-                &[],
-                0,
+                &confirm.buttons(&app.i18n),
+                confirm.button,
             );
             None
         }
@@ -4171,7 +4171,10 @@ See the [docs](https://example.com/docs) for more.
         // The wastebasket is on by default, so that is what the dialog is about.
         assert!(out.contains("wastebasket"), "{out}");
         assert!(out.contains("src"), "{out}");
-        assert!(out.contains("Enter = yes"), "{out}");
+        // The buttons name the verb, as FAR's do — `{ Move }`, not `{ Yes }` — so a reader
+        // who glances at the button knows what is about to happen.
+        assert!(out.contains("Move"), "{out}");
+        assert!(out.contains("Cancel"), "{out}");
     }
 
     #[test]

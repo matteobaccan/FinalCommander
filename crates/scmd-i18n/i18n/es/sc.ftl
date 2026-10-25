@@ -95,7 +95,6 @@ confirm-wipe-body =
        *[other] ¿Sobrescribir y eliminar { $count } elementos ({ $bytes })?
     }
 confirm-wipe-honest = Los bytes se sobrescriben una vez y luego se desvincula el archivo. En un SSD, en un sistema de archivos copy-on-write o con instantáneas pueden sobrevivir copias anteriores — y el nombre sobrevive en el directorio y en el journal.
-confirm-yes-no = [ Intro = sí ]   [ Esc = no ]
 job-copy = Copia
 job-move = Movimiento
 job-delete = Borrado
@@ -176,6 +175,15 @@ btn-overwrite-all = Todos
 btn-skip = Omitir
 btn-skip-all = Omitir todos
 btn-retry = Reintentar
+btn-move = Mover
+btn-delete = Borrar
+btn-wipe = Borrar a fondo
+btn-copy = Copiar
+btn-discard = Descartar
+btn-quit = Salir
+btn-play = Reproducir
+btn-run = Ejecutar
+btn-accept = Aceptar
 btn-cancel = Cancelar
 msg-nothing-to-do = nada seleccionado
 msg-trash-refused = { $path }: la papelera no lo acepta — Mayús+Supr lo borra definitivamente

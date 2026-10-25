@@ -54,7 +54,25 @@ Notable changes, newest first. The format follows
   cursor one then has to press `Enter` on — thirty years of fingers expect the letter to be
   the key. The connections and buckets keep the numbers FAR gives them.
 
+- **`&Medium` in the menu.** The ampersand is the marker for the letter a row answers to —
+  the theme has had a colour for it (`menu.hotkey.fg`) since the first menu — and nothing ever
+  consumed it, so the rows whose labels carried one showed the marker instead of a key. It now
+  names the key: the letter is drawn in the hotkey colour and typing it takes the row, with
+  `&&` for a literal ampersand and the first marker winning. Rows with no marker still answer
+  to the letter they start with, which is what FAR does and what a catalogue with no markers
+  needs.
+
 ### Changed
+
+- **The confirmations have buttons, and the buttons name the verb.** `{ Move }` and
+  `[ Cancel ]`, as FAR has it, rather than a line of text explaining that Enter means yes: a
+  reader who glances at the dialog and its button should know what is about to happen without
+  reading the sentence again. The label comes from the action itself — the delete, the
+  wastebasket, the wipe, the overwrite, the discard, the quit — so a button cannot say one
+  thing and do another. The arrows and `Tab` move between the two, `Enter` takes the one that
+  is lit, `Esc` is still the way out, and the dialog opens on the action because that is what
+  the person who opened it meant to do.
+
 
 - **Three bindings moved off `Alt+<letter>`**, which belongs to the quick search. A binding
   always wins over the search, so each of them cost a letter one could never search a listing

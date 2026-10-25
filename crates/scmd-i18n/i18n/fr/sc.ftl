@@ -95,7 +95,6 @@ confirm-wipe-body =
        *[other] Écraser et supprimer { $count } éléments ({ $bytes }) ?
     }
 confirm-wipe-honest = Les octets sont écrasés une fois, puis le fichier est supprimé. Sur un SSD, un système de fichiers copy-on-write ou avec des instantanés, des copies antérieures peuvent survivre — et le nom survit dans le répertoire et le journal.
-confirm-yes-no = [ Entrée = oui ]   [ Esc = non ]
 job-copy = Copie
 job-move = Déplacement
 job-delete = Suppression
@@ -176,6 +175,15 @@ btn-overwrite-all = Tout
 btn-skip = Ignorer
 btn-skip-all = Tout ignorer
 btn-retry = Réessayer
+btn-move = Déplacer
+btn-delete = Supprimer
+btn-wipe = Effacer à fond
+btn-copy = Copier
+btn-discard = Abandonner
+btn-quit = Quitter
+btn-play = Jouer
+btn-run = Exécuter
+btn-accept = Accepter
 btn-cancel = Annuler
 msg-nothing-to-do = rien de sélectionné
 msg-trash-refused = { $path } : la corbeille le refuse — Maj+Suppr le supprime définitivement

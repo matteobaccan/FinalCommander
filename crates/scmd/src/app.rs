@@ -657,6 +657,32 @@ pub enum ConfirmAction {
     },
 }
 
+impl ConfirmAction {
+    /// What the button that does it says. FAR names the verb — `{ Move }`, not `{ Yes }` —
+    /// and the reason is that a reader who glances at the dialog and the button should know
+    /// what is about to happen without reading the sentence again. Keeping the label here,
+    /// next to the action, is what stops a button saying one thing and doing another.
+    pub fn verb_key(&self) -> &'static str {
+        match self {
+            ConfirmAction::Job(spec) => match spec.kind {
+                JobKind::Trash => "btn-move",
+                JobKind::Delete => "btn-delete",
+                JobKind::Wipe => "btn-wipe",
+                JobKind::Copy => "btn-copy",
+                JobKind::Move => "btn-move",
+                _ => "btn-ok",
+            },
+            ConfirmAction::ArcRebuild { .. } => "btn-delete",
+            ConfirmAction::DiscardEdits | ConfirmAction::DiscardHex => "btn-discard",
+            ConfirmAction::OverwriteChanged | ConfirmAction::OverwriteRemote => "btn-overwrite",
+            ConfirmAction::QuitWithScreens => "btn-quit",
+            ConfirmAction::PlayMacro(_) => "btn-play",
+            ConfirmAction::RunPlugin(_) => "btn-run",
+            ConfirmAction::AcceptHostKey { .. } => "btn-accept",
+        }
+    }
+}
+
 /// One open tunnel, as the panels know about it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TunnelInfo {
@@ -689,6 +715,17 @@ pub struct Confirm {
     pub title: String,
     pub lines: Vec<String>,
     pub action: ConfirmAction,
+    /// Which button is on: 0 does it, 1 cancels. It starts on the action, as FAR's does —
+    /// somebody who opened this dialog meant to do the thing — and `Esc` is always the way
+    /// out whichever button is lit.
+    pub button: usize,
+}
+
+impl Confirm {
+    /// The two buttons: what this will do, in a word, and the way out.
+    pub fn buttons(&self, i18n: &I18n) -> Vec<String> {
+        vec![i18n.t(self.action.verb_key()), i18n.t("btn-cancel")]
+    }
 }
 
 /// A decision point the engine is blocked on.
@@ -1712,6 +1749,7 @@ impl App {
                             title,
                             lines: vec![body],
                             action: ConfirmAction::OverwriteRemote,
+                            button: 0,
                         });
                     }
                     Err(UploadError::Failed(detail)) => {
@@ -2462,6 +2500,22 @@ impl App {
     }
 
     fn confirm_key(&mut self, key: Key, confirm: Confirm) {
+        // Two buttons, as every other dialog has: what this does, and the way out. The
+        // arrows and `Tab` move between them, `Enter` takes the one that is lit.
+        match key.code {
+            KeyCode::Left | KeyCode::Right | KeyCode::Tab | KeyCode::BackTab => {
+                if let Mode::Confirm(open) = &mut self.mode {
+                    open.button = 1 - open.button.min(1);
+                }
+                return;
+            }
+            KeyCode::Enter if confirm.button != 0 => {
+                self.mode = Mode::Normal;
+                self.restore_editor();
+                return;
+            }
+            _ => {}
+        }
         match key.code {
             KeyCode::Enter | KeyCode::Char('y') | KeyCode::Char('Y') => {
                 self.mode = Mode::Normal;
@@ -2617,8 +2671,9 @@ impl App {
             .t_args("editor-discard-body", &[("name", name.into())]);
         self.mode = Mode::Confirm(Confirm {
             title,
-            lines: vec![body, String::new(), self.i18n.t("confirm-yes-no")],
+            lines: vec![body],
             action: ConfirmAction::DiscardHex,
+            button: 0,
         });
     }
 
@@ -4431,11 +4486,11 @@ impl App {
         } else {
             "confirm-delete-permanent"
         }));
-        lines.push(self.i18n.t("confirm-yes-no"));
         self.mode = Mode::Confirm(Confirm {
             title,
             lines,
             action,
+            button: 0,
         });
     }
 
@@ -5377,11 +5432,11 @@ impl App {
                 // Overwriting is not a promise on modern hardware, and the dialog says so
                 // rather than letting a user believe something the filesystem cannot deliver.
                 lines.push(self.i18n.t("confirm-wipe-honest"));
-                lines.push(self.i18n.t("confirm-yes-no"));
                 self.mode = Mode::Confirm(Confirm {
                     title,
                     lines,
                     action: ConfirmAction::Job(Box::new(spec)),
+                    button: 0,
                 });
             }
             Command::FileAttributes => self.open_attributes_form(),
@@ -6032,6 +6087,7 @@ impl App {
                         site,
                         secret,
                     },
+                    button: 0,
                 });
             }
             ConnectOutcome::Failed(detail) => {
@@ -7247,11 +7303,11 @@ impl App {
             lines.push(format!("  … {}", outcome.replacements.len() - 5));
         }
         lines.push(String::new());
-        lines.push(self.i18n.t("confirm-yes-no"));
         self.mode = Mode::Confirm(Confirm {
             title,
             lines,
             action: ConfirmAction::Job(Box::new(real)),
+            button: 0,
         });
     }
 
@@ -7727,22 +7783,37 @@ impl App {
                 }
             }
             KeyCode::Enter => self.run_menu_item(menu, item),
-            // A letter picks the first entry whose label starts with it, as FAR does.
+            // A letter takes a row: the one whose label marks that letter with `&`, and
+            // failing that the first row the letter starts — which is what FAR does, and
+            // what a menu with no markers in its catalogue still needs.
             KeyCode::Char(c) if c.is_alphanumeric() => {
                 let wanted = c.to_lowercase().next().unwrap_or(c);
-                let found = menus.get(menu).and_then(|m| {
-                    m.items.iter().position(|e| match e {
-                        menu::Entry::Item(i) => self
-                            .i18n
-                            .t(i.label)
-                            .chars()
-                            .next()
-                            .map(|f| f.to_lowercase().next().unwrap_or(f) == wanted)
-                            .unwrap_or(false),
-                        menu::Entry::Separator => false,
+                let same = |a: char| a.to_lowercase().next().unwrap_or(a) == wanted;
+                let rows: Vec<Option<String>> = menus
+                    .get(menu)
+                    .map(|m| {
+                        m.items
+                            .iter()
+                            .map(|e| match e {
+                                menu::Entry::Item(i) => Some(self.i18n.t(i.label)),
+                                menu::Entry::Separator => None,
+                            })
+                            .collect()
                     })
+                    .unwrap_or_default();
+                let marked = rows.iter().position(|label| {
+                    label
+                        .as_deref()
+                        .and_then(|l| scmd_ui::mnemonic(l).1)
+                        .is_some_and(same)
                 });
-                if let Some(index) = found {
+                let starts = rows.iter().position(|label| {
+                    label
+                        .as_deref()
+                        .and_then(|l| scmd_ui::mnemonic(l).0.chars().next())
+                        .is_some_and(same)
+                });
+                if let Some(index) = marked.or(starts) {
                     self.run_menu_item(menu, index);
                 }
             }
@@ -8209,15 +8280,12 @@ impl App {
             // the settings dialog that changed nothing.
             if self.cfg.general.confirm_exit {
                 let title = self.i18n.t("quit-title");
-                let lines = vec![
-                    self.i18n.t("quit-body"),
-                    String::new(),
-                    self.i18n.t("confirm-yes-no"),
-                ];
+                let lines = vec![self.i18n.t("quit-body"), String::new()];
                 self.mode = Mode::Confirm(Confirm {
                     title,
                     lines,
                     action: ConfirmAction::QuitWithScreens,
+                    button: 0,
                 });
                 return;
             }
@@ -8228,11 +8296,11 @@ impl App {
         let mut lines = vec![self.i18n.t("screens-quit-body"), String::new()];
         lines.extend(dirty);
         lines.push(String::new());
-        lines.push(self.i18n.t("confirm-yes-no"));
         self.mode = Mode::Confirm(Confirm {
             title,
             lines,
             action: ConfirmAction::QuitWithScreens,
+            button: 0,
         });
     }
 
@@ -8338,11 +8406,11 @@ impl App {
             lines.push(what);
             lines.push(String::new());
         }
-        lines.push(self.i18n.t("confirm-yes-no"));
         self.mode = Mode::Confirm(Confirm {
             title,
             lines,
             action: ConfirmAction::RunPlugin(which),
+            button: 0,
         });
     }
 
@@ -8629,9 +8697,9 @@ impl App {
                         .collect::<Vec<_>>()
                         .join("  "),
                     String::new(),
-                    self.i18n.t("confirm-yes-no"),
                 ],
                 action: ConfirmAction::PlayMacro(Box::new(which.clone())),
+                button: 0,
             });
             return;
         }
@@ -9863,6 +9931,7 @@ impl App {
                     title,
                     lines: vec![body],
                     action: ConfirmAction::OverwriteChanged,
+                    button: 0,
                 });
             }
             Err(e) => {
@@ -9901,6 +9970,7 @@ impl App {
             title,
             lines: vec![body],
             action: ConfirmAction::DiscardEdits,
+            button: 0,
         });
     }
 
@@ -18531,6 +18601,20 @@ abcdefghij
             panic!("the attributes dialog did not open: {:?}", app.mode)
         };
         assert_eq!(form.text_value("attr.readonly"), "true");
+    }
+
+    #[test]
+    fn a_marked_letter_takes_its_menu_row_and_the_marker_is_never_drawn() {
+        let mut app = app();
+        // The Left menu's `&Medium` row: `m` takes it, and the view changes.
+        open(&mut app, 0, "menu-medium");
+        assert_eq!(app.panels[0].view, ViewMode::Medium);
+
+        let mut by_key = super::tests::app();
+        by_key.run(Command::AppMenu);
+        press(&mut by_key, "m");
+        assert_eq!(by_key.panels[0].view, ViewMode::Medium);
+        assert!(by_key.mode.is_normal(), "the menu stayed open");
     }
 
     #[test]

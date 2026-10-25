@@ -16,6 +16,6 @@ pub use theme::{Theme, ThemeError, ThemeSet, ThemeSource, Variant, BUILTIN_THEME
 
 pub use widgets::{
     brief_columns, draw_bar, draw_buttons, draw_choice, draw_cmdline, draw_dialog, draw_keybar,
-    draw_panel, draw_progress, draw_prompt, draw_status, format_mtime, format_stamp, panel_rows,
-    parse_stamp, PanelRender, ProgressView,
+    draw_panel, draw_progress, draw_prompt, draw_status, format_mtime, format_stamp, mnemonic,
+    panel_rows, parse_stamp, PanelRender, ProgressView,
 };

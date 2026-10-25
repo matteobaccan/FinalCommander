@@ -95,7 +95,6 @@ confirm-wipe-body =
        *[other] 覆写并删除 { $count } 个项目（{ $bytes }）？
     }
 confirm-wipe-honest = 字节会被覆写一次，然后删除文件。在固态硬盘、写时复制文件系统或存在快照的情况下，旧副本可能仍然存在——文件名也会留在目录和日志中。
-confirm-yes-no = [ Enter = 是 ]   [ Esc = 否 ]
 job-copy = 复制
 job-move = 移动
 job-delete = 删除
@@ -176,6 +175,15 @@ btn-overwrite-all = 全部
 btn-skip = 跳过
 btn-skip-all = 全部跳过
 btn-retry = 重试
+btn-move = 移动
+btn-delete = 删除
+btn-wipe = 彻底删除
+btn-copy = 复制
+btn-discard = 放弃
+btn-quit = 退出
+btn-play = 播放
+btn-run = 运行
+btn-accept = 接受
 btn-cancel = 取消
 msg-nothing-to-do = 未选择任何内容
 msg-trash-refused = { $path }：回收站不接收它 — Shift+Del 可永久删除

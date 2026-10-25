@@ -101,7 +101,6 @@ confirm-wipe-body =
        *[other] Overwrite and delete { $count } items ({ $bytes })?
     }
 confirm-wipe-honest = The bytes are overwritten once, then the file is unlinked. On an SSD, a copy-on-write filesystem or with snapshots, older copies may survive — and the name survives in the directory and the journal.
-confirm-yes-no = [ Enter = yes ]   [ Esc = no ]
 job-copy = Copying
 job-move = Moving
 job-delete = Deleting
@@ -182,6 +181,15 @@ btn-overwrite-all = All
 btn-skip = Skip
 btn-skip-all = Skip all
 btn-retry = Retry
+btn-move = Move
+btn-delete = Delete
+btn-wipe = Wipe
+btn-copy = Copy
+btn-discard = Discard
+btn-quit = Quit
+btn-play = Play
+btn-run = Run
+btn-accept = Accept
 btn-cancel = Cancel
 msg-nothing-to-do = nothing selected
 msg-trash-refused = { $path }: the wastebasket would not take it — Shift+Del deletes it outright

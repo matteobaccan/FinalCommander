@@ -95,7 +95,6 @@ confirm-wipe-body =
        *[other] { $count } Einträge ({ $bytes }) überschreiben und löschen?
     }
 confirm-wipe-honest = Die Bytes werden einmal überschrieben, dann wird die Datei entfernt. Auf einer SSD, einem Copy-on-Write-Dateisystem oder mit Snapshots können ältere Kopien überleben — und der Name bleibt im Verzeichnis und im Journal.
-confirm-yes-no = [ Eingabe = ja ]   [ Esc = nein ]
 job-copy = Kopieren
 job-move = Verschieben
 job-delete = Löschen
@@ -176,6 +175,15 @@ btn-overwrite-all = Alle
 btn-skip = Überspringen
 btn-skip-all = Alle überspringen
 btn-retry = Wiederholen
+btn-move = Verschieben
+btn-delete = Löschen
+btn-wipe = Überschreiben
+btn-copy = Kopieren
+btn-discard = Verwerfen
+btn-quit = Beenden
+btn-play = Abspielen
+btn-run = Ausführen
+btn-accept = Annehmen
 btn-cancel = Abbrechen
 msg-nothing-to-do = nichts ausgewählt
 msg-trash-refused = { $path }: der Papierkorb nimmt es nicht — Shift+Entf löscht endgültig

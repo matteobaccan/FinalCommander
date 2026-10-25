@@ -1027,6 +1027,21 @@ pub fn draw_choice(
 
 #[cfg(test)]
 mod tests {
+    use super::mnemonic;
+
+    #[test]
+    fn the_marker_names_a_key_and_never_reaches_the_screen() {
+        assert_eq!(mnemonic("&Medium"), ("Medium".into(), Some('M')));
+        assert_eq!(mnemonic("M&acros"), ("Macros".into(), Some('a')));
+        assert_eq!(mnemonic("Brief"), ("Brief".into(), None));
+        // The first marker wins; a second one is a typo, not a second key.
+        assert_eq!(mnemonic("&Save &as"), ("Save as".into(), Some('S')));
+        // `&&` is how one writes an ampersand, as in every toolkit with this convention.
+        assert_eq!(mnemonic("Find && replace"), ("Find & replace".into(), None));
+        // A trailing marker marks nothing and is simply gone.
+        assert_eq!(mnemonic("Quit&"), ("Quit".into(), None));
+    }
+
     use super::*;
     use scmd_core::{EntryId, Sort, SortKey};
     use std::ffi::OsString;
@@ -1571,6 +1586,35 @@ pub struct MenuRow {
     pub dim: bool,
 }
 
+/// A label and the letter `&` marks in it: `&Medium` is `Medium` with `M` as its key.
+///
+/// FAR underlines one letter per row and takes that key, and the theme has had a colour for
+/// it (`menu.hotkey.fg`) since the first menu — only nothing ever consumed the marker, so a
+/// row written `&Medium` was drawn with the ampersand in it. `&&` is a literal ampersand,
+/// which is the escape every toolkit with this convention uses.
+pub fn mnemonic(label: &str) -> (String, Option<char>) {
+    let mut text = String::with_capacity(label.len());
+    let mut key = None;
+    let mut chars = label.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c != '&' {
+            text.push(c);
+            continue;
+        }
+        match chars.peek() {
+            Some('&') => {
+                text.push('&');
+                chars.next();
+            }
+            // The first marker names the key; a second one is a typo rather than a second
+            // key, and a marker at the end of a label marks nothing.
+            Some(&next) if key.is_none() => key = Some(next),
+            _ => {}
+        }
+    }
+    (text, key)
+}
+
 impl MenuRow {
     pub fn separator() -> MenuRow {
         MenuRow {
@@ -1714,7 +1758,11 @@ pub fn draw_menu(
     rows: &[MenuRow],
     selected: usize,
 ) -> Rect {
-    let label_w = rows.iter().map(|r| r.label.width()).max().unwrap_or(8);
+    let label_w = rows
+        .iter()
+        .map(|r| mnemonic(&r.label).0.width())
+        .max()
+        .unwrap_or(8);
     let keys_w = rows.iter().map(|r| r.keys.width()).max().unwrap_or(0);
     // mark + label + gap + keys, inside a frame with one column of padding.
     let inner = 2 + label_w + if keys_w > 0 { keys_w + 2 } else { 0 };
@@ -1770,7 +1818,22 @@ pub fn draw_menu(
         );
         let mark = if row.checked { '√' } else { ' ' };
         buf.set(area.x + 2, y, mark, line);
-        buf.put_str(area.x + 4, y, &row.label, line, width.saturating_sub(3));
+        let (label, hotkey) = mnemonic(&row.label);
+        buf.put_str(area.x + 4, y, &label, line, width.saturating_sub(3));
+        // The letter the row answers to, in the colour the theme has always had for it. On
+        // the selected row it stays the selection's own ink: a second colour there would
+        // fight with the bar rather than help anybody find the key.
+        if let Some(hotkey) = hotkey {
+            if !on && !row.dim {
+                if let Some(at) = label.chars().position(|c| c == hotkey) {
+                    let before: String = label.chars().take(at).collect();
+                    let x = area.x + 4 + before.width() as u16;
+                    if x < area.right() - 1 {
+                        buf.set(x, y, hotkey, line.with_fg(theme.color("menu.hotkey.fg")));
+                    }
+                }
+            }
+        }
         if !row.keys.is_empty() {
             put_right(
                 buf,

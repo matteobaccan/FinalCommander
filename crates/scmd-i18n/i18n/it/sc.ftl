@@ -95,7 +95,6 @@ confirm-wipe-body =
        *[other] Sovrascrivere ed eliminare { $count } elementi ({ $bytes })?
     }
 confirm-wipe-honest = I byte vengono sovrascritti una volta, poi il file viene scollegato. Su SSD, su filesystem copy-on-write o con snapshot, copie precedenti possono sopravvivere — e il nome sopravvive nella directory e nel journal.
-confirm-yes-no = [ Invio = sì ]   [ Esc = no ]
 job-copy = Copia
 job-move = Spostamento
 job-delete = Eliminazione
@@ -176,6 +175,15 @@ btn-overwrite-all = Tutti
 btn-skip = Salta
 btn-skip-all = Salta tutti
 btn-retry = Riprova
+btn-move = Sposta
+btn-delete = Elimina
+btn-wipe = Cancella a fondo
+btn-copy = Copia
+btn-discard = Scarta
+btn-quit = Esci
+btn-play = Esegui
+btn-run = Esegui
+btn-accept = Accetta
 btn-cancel = Annulla
 msg-nothing-to-do = niente selezionato
 msg-trash-refused = { $path }: il cestino non lo accetta — Shift+Canc lo elimina definitivamente

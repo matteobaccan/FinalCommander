@@ -95,7 +95,6 @@ confirm-wipe-body =
        *[other] Затереть и удалить { $count } объектов ({ $bytes })?
     }
 confirm-wipe-honest = Байты перезаписываются один раз, затем файл удаляется. На SSD, на файловой системе copy-on-write или при наличии снимков прежние копии могут сохраниться — и имя сохраняется в каталоге и в журнале.
-confirm-yes-no = [ Enter = да ]   [ Esc = нет ]
 job-copy = Копирование
 job-move = Перенос
 job-delete = Удаление
@@ -176,6 +175,15 @@ btn-overwrite-all = Все
 btn-skip = Пропустить
 btn-skip-all = Пропустить все
 btn-retry = Повторить
+btn-move = Переместить
+btn-delete = Удалить
+btn-wipe = Затереть
+btn-copy = Копировать
+btn-discard = Отменить
+btn-quit = Выход
+btn-play = Выполнить
+btn-run = Запустить
+btn-accept = Принять
 btn-cancel = Отмена
 msg-nothing-to-do = ничего не отмечено
 msg-trash-refused = { $path }: корзина его не принимает — Shift+Del удалит насовсем
