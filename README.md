@@ -273,9 +273,11 @@ build it. It reads this file, the changelog, the commander survey, the help chap
 `docs/help/` and the screenshots in `docs/shots/`, and writes the static site published at
 <https://matteobaccan.github.io/SupremeCommander/> — 38 pages, no framework, no fonts or
 scripts fetched from anywhere, in the seven languages the interface speaks. `cargo run -p
-scmd-site -- --out site` writes it locally; a push to the default branch publishes it. The
-point of generating it is that a page cannot say something the document it came from does
-not: there is no second copy of the text to keep in step.
+scmd-site -- --out site` writes it locally, and the workflow builds it on every push and keeps
+it as the run's artifact. Nothing publishes by itself: a site on GitHub Pages is public to
+everyone, so it goes up only when somebody starts the workflow by hand and says so. The point
+of generating it is that a page cannot say something the document it came from does not: there
+is no second copy of the text to keep in step.
 
 Every push builds and tests on Linux, macOS and Windows, with `clippy -D warnings`, a licence
 check over every crate in the tree on every platform, and a release that cannot be tagged

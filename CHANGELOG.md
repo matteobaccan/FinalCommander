@@ -25,10 +25,13 @@ Notable changes, newest first. The format follows
   document is English says so in a note rather than pretending.
 
   `cargo run -p scmd-site -- --out site` writes it; `.github/workflows/pages.yml` builds it on
-  every push and publishes from the default branch. Publishing needs Pages switched on for the
-  repository with "GitHub Actions" as the source — a setting no workflow can change, so the
-  workflow asks for it instead of assuming it: until it is done the run says the site was built
-  and not published, rather than failing over something that is not in the code.
+  every push, checks that the pages that matter are there and not empty, and keeps them as the
+  run's artifact, which is downloadable and reads correctly off the disk. Publishing is a
+  separate decision and nothing takes it automatically: a site on GitHub Pages is public to
+  everyone, so it goes up only when a person starts that workflow from the Actions tab and
+  answers `yes` to its one question. It also needs Pages switched on for the repository with
+  "GitHub Actions" as the source, which no workflow can change, so a manual run that finds it
+  off says the site was built and not published rather than failing.
 
 - **Paths past `MAX_PATH` on Windows.** A Windows API call given a path of 260 characters or
   more fails, however much room the filesystem has — NTFS has allowed 32,767 since 1993, and it
