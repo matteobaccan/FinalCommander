@@ -9,7 +9,7 @@
 #   * the version must have a *dated* heading in the changelog (`## [0.0.3] — 2026-10-24`), so a
 #     bump on its own, or an `## [Unreleased]` section, does nothing;
 #   * a tag that already exists is never moved or replaced;
-#   * only the default branch and the development branches are watched;
+#   * only the default branch is watched;
 #   * CI on that very commit must be green first — a push that fires this waits for the build
 #     on all three platforms, and a failure refuses to tag.
 # `workflow_dispatch` takes a version and a commit explicitly, for a release that was missed at
@@ -26,7 +26,7 @@ name: Tag
 
 on:
   push:
-    branches: [main, "claude/**"]
+    branches: [main]
     paths:
       - "Cargo.toml"
       - "CHANGELOG.md"

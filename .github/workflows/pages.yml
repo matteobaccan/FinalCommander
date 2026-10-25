@@ -22,7 +22,7 @@ name: Pages
 
 on:
   push:
-    branches: [main, "claude/**"]
+    branches: [main]
   pull_request:
   workflow_dispatch:
     inputs:
