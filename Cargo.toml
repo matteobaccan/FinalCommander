@@ -1,6 +1,11 @@
 [workspace]
 resolver = "2"
 members = ["crates/*"]
+# The workspace holds two binaries — the program and the site generator — and `cargo run` has
+# to mean the program. Without this it refuses, naming both, and every `cargo run -- --…` in
+# CONTRIBUTING.md and in CI would have to say which. The explicit `--workspace` that the test,
+# clippy and licence runs pass is unaffected: this only decides what a bare command defaults to.
+default-members = ["crates/scmd"]
 
 [workspace.package]
 version = "0.3.0"
