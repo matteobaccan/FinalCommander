@@ -101,7 +101,9 @@ impl Default for Preserve {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Not `Copy`: the filter is a parsed mask list, which owns its strings. Everything else
+/// here is a flag, and a job's options are cloned once when the job starts.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JobOptions {
     pub on_conflict: ConflictPolicy,
     pub preserve: Preserve,
@@ -119,6 +121,15 @@ pub struct JobOptions {
     pub buffer: usize,
     /// Plan and report, change nothing.
     pub dry_run: bool,
+    /// Only the names that match travel.
+    ///
+    /// It applies to files, never to directories: a mask of `*.rs` means the Rust files under
+    /// a tree, not the directories whose own names end in `.rs`. A directory that ends up
+    /// with nothing in it is not created either, so copying `*.rs` out of a tree gives the
+    /// directories that have Rust in them and no others — which is what somebody who typed a
+    /// mask meant, and the one thing that makes the option worth having over a copy and a
+    /// cleanup afterwards.
+    pub filter: Option<scmd_core::MaskSet>,
     /// Copy what is *inside* each source directory rather than the directory itself.
     ///
     /// What extracting an archive means: the files land in the directory the user named, not
@@ -136,6 +147,7 @@ impl Default for JobOptions {
             only_newer: false,
             buffer: 256 * 1024,
             dry_run: false,
+            filter: None,
             contents: false,
         }
     }

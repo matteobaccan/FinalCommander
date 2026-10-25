@@ -33,6 +33,8 @@ pub enum FormKind {
     Unpack,
     /// What a file is, rather than what is in it (SPEC 10 §3.8).
     Attributes,
+    /// Copy or move: where to, and under what rules (SPEC 03 §4).
+    Copy,
     /// Find text in what the viewer or the editor has open (SPEC 05 §1.4).
     Search,
     System,

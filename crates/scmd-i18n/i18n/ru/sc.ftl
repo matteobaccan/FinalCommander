@@ -107,6 +107,24 @@ attr-recursive = И всё внутри папок
 attr-bad-time = `{ $text }` — это не дата и время (ГГГГ-ММ-ДД ЧЧ:ММ:СС)
 attr-in-archive = атрибуты записи — это атрибуты архива, менять нечего
 job-attrs = Установка атрибутов
+
+# ── the copy dialog (SPEC 03 §4) ───────────────────────────────────────────────────────
+copy-title = Копирование
+copy-title-move = Переименование или перенос
+copy-target = Куда
+copy-conflict = Если файл уже есть
+copy-conflict-ask = спросить
+copy-conflict-overwrite = перезаписать
+copy-conflict-newer = перезаписать, если источник новее
+copy-conflict-skip = пропустить
+copy-conflict-rename = дать копии свободное имя
+copy-conflict-append = дописать в конец
+copy-only-newer = Только файлы новее тех, что там
+copy-filter = Только подходящие имена
+copy-follow-links = Копировать то, на что указывает ссылка, а не ссылку
+copy-keep-times = Сохранять время
+copy-keep-mode = Сохранять права
+copy-several = Назначений: { $count }, по очереди
 job-mkdir = Создание каталога
 job-planning = подготовка…
 job-counters = { $files } / { $filestotal } файлов · { $bytes } / { $bytestotal }

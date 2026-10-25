@@ -7,6 +7,29 @@ Every one of them is a job: it runs in the background with a progress bar, `Esc`
 what it has already done stays done. A conflict — a file that is already there — stops and
 asks, with "all" and "none" answers so a long copy is not a thousand questions.
 
+The copy dialog has more in it than the destination, and all of it is optional — type a path,
+press `Enter`, and nothing below the first line applies:
+
+* **If it is already there**: ask, overwrite, overwrite when the source is newer, skip it,
+  give the copy a free name, or add to the end of it.
+* **Only files newer than the ones there** is a box beside that choice rather than one of its
+  values, and the two are not the same thing: the box holds even when the choice says
+  overwrite, and even after you have answered "overwrite all" to a question.
+* **Only the names that match** takes a mask, so only what matches travels. It applies to
+  files and never to directories, and a directory is only created once something under it has
+  matched — so `*.rs` out of a source tree gives you the directories that have Rust in them
+  and no others.
+* **Copy what a link points at, not the link** is off, and deliberately: a copy that turned
+  links into copies of their targets would duplicate a tree the first time you tried it.
+* **Keep the times** and **Keep the permissions** are on.
+
+Whatever you answer is what the next dialog opens on.
+
+The destination line takes more than one destination, separated by `;` — quote a path that has
+a `;` in its own name. They run one after the other rather than at once, and only the first of
+a *move* is a move: after it the source is gone, so the rest are copies of what landed first.
+Stopping one stops the ones behind it.
+
 `Shift+F5` and `Shift+F6` copy and move *into the same directory*, which is how a file is
 duplicated or renamed without touching the other panel. `Shift+F8` deletes without the
 question, and says so in its own title.

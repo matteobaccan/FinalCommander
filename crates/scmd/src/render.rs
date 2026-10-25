@@ -3040,6 +3040,17 @@ Some **bold** text and a [link](https://example.com).
 
     #[test]
     #[ignore = "a look at the screen, not an assertion"]
+    fn eyeball_copy() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("report.txt"), b"x").unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F5");
+        println!("{}", frame(&mut app, 76, 26));
+    }
+
+    #[test]
+    #[ignore = "a look at the screen, not an assertion"]
     fn eyeball_attributes() {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("report.txt"), b"x").unwrap();

@@ -107,6 +107,24 @@ attr-recursive = Et tout ce qui est dans les dossiers
 attr-bad-time = `{ $text }` n'est pas une date et heure (AAAA-MM-JJ HH:MM:SS)
 attr-in-archive = les attributs d'une entrée sont ceux de l'archive, il n'y a rien à régler
 job-attrs = Réglage des attributs
+
+# ── the copy dialog (SPEC 03 §4) ───────────────────────────────────────────────────────
+copy-title = Copier
+copy-title-move = Renommer ou déplacer
+copy-target = Vers
+copy-conflict = S'il est déjà là
+copy-conflict-ask = demander
+copy-conflict-overwrite = remplacer
+copy-conflict-newer = remplacer si la source est plus récente
+copy-conflict-skip = passer
+copy-conflict-rename = donner un nom libre à la copie
+copy-conflict-append = ajouter à la fin
+copy-only-newer = Seuls les fichiers plus récents que ceux présents
+copy-filter = Seuls les noms qui correspondent
+copy-follow-links = Copier ce que vise le lien, pas le lien
+copy-keep-times = Garder les dates
+copy-keep-mode = Garder les permissions
+copy-several = { $count } destinations, l'une après l'autre
 job-mkdir = Création du répertoire
 job-planning = analyse…
 job-counters = { $files } / { $filestotal } fichiers · { $bytes } / { $bytestotal }

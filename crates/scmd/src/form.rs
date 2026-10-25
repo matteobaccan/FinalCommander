@@ -134,6 +134,7 @@ impl Form {
             | FormKind::Pack
             | FormKind::Unpack
             | FormKind::Attributes
+            | FormKind::Copy
             | FormKind::Search => Vec::new(),
             FormKind::System => vec![
                 Field::toggle(
@@ -291,6 +292,7 @@ impl Form {
             FormKind::Pack => "pack-title",
             FormKind::Unpack => "unpack-title",
             FormKind::Attributes => "attr-title",
+            FormKind::Copy => "copy-title",
             FormKind::Search => "search-title",
             FormKind::System => "menu-system-settings",
             FormKind::Panel => "menu-panel-settings",
@@ -513,6 +515,65 @@ impl Form {
             title: t("pack-title"),
             fields,
             cursor: 0,
+            site: None,
+            button: None,
+            buttons: vec![i18n.t("btn-ok"), i18n.t("btn-cancel")],
+        }
+    }
+
+    /// `F5` and `F6`: where it goes, and under what rules.
+    ///
+    /// It replaces a one-line prompt, and every row below the first is something the engine
+    /// could already do and the prompt had no way to ask for. The defaults are the prompt's
+    /// behaviour exactly, so somebody who types a path and presses Enter gets what they got
+    /// before and need not read the rest.
+    #[allow(clippy::too_many_arguments)]
+    pub fn copy(
+        target: String,
+        moving: bool,
+        what: String,
+        conflict: &str,
+        only_newer: bool,
+        follow_links: bool,
+        filter: &str,
+        i18n: &I18n,
+    ) -> Form {
+        let t = |id: &str| i18n.t(id);
+        let policies = [
+            ("ask", t("copy-conflict-ask")),
+            ("overwrite", t("copy-conflict-overwrite")),
+            ("newer", t("copy-conflict-newer")),
+            ("skip", t("copy-conflict-skip")),
+            ("rename", t("copy-conflict-rename")),
+            ("append", t("copy-conflict-append")),
+        ];
+        let fields = vec![
+            Field::Note(what),
+            Field::text("copy.target", t("copy-target"), target),
+            Field::Separator,
+            choice("copy.conflict", t("copy-conflict"), &policies, conflict),
+            // FAR has this as a box of its own as well as a policy, and the two are not the
+            // same: the box holds even when the policy says to overwrite, or when the user
+            // has already answered "overwrite all" to a question.
+            Field::toggle("copy.only_newer", t("copy-only-newer"), only_newer),
+            Field::Separator,
+            Field::text("copy.filter", t("copy-filter"), filter.to_string()),
+            Field::Separator,
+            // Off, and FAR's default too: a copy that silently turned links into copies of
+            // what they point at would duplicate a tree the first time somebody tried it.
+            Field::toggle("copy.follow_links", t("copy-follow-links"), follow_links),
+            Field::toggle("copy.times", t("copy-keep-times"), true),
+            Field::toggle("copy.mode", t("copy-keep-mode"), true),
+        ];
+        Form {
+            kind: FormKind::Copy,
+            title: t(if moving {
+                "copy-title-move"
+            } else {
+                "copy-title"
+            }),
+            fields,
+            cursor: 1,
             site: None,
             button: None,
             buttons: vec![i18n.t("btn-ok"), i18n.t("btn-cancel")],

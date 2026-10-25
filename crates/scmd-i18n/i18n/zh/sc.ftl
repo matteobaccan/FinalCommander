@@ -107,6 +107,24 @@ attr-recursive = 以及文件夹里的全部内容
 attr-bad-time = `{ $text }` 不是日期时间（YYYY-MM-DD HH:MM:SS）
 attr-in-archive = 压缩包里一项的属性属于压缩包，没有什么可设置的
 job-attrs = 正在设置属性
+
+# ── the copy dialog (SPEC 03 §4) ───────────────────────────────────────────────────────
+copy-title = 复制
+copy-title-move = 重命名或移动
+copy-target = 到
+copy-conflict = 如果已经存在
+copy-conflict-ask = 询问
+copy-conflict-overwrite = 覆盖
+copy-conflict-newer = 源较新时覆盖
+copy-conflict-skip = 跳过
+copy-conflict-rename = 给副本一个空闲的名字
+copy-conflict-append = 追加到末尾
+copy-only-newer = 只要比那边更新的文件
+copy-filter = 只要匹配的名字
+copy-follow-links = 复制链接指向的内容，而不是链接
+copy-keep-times = 保留时间
+copy-keep-mode = 保留权限
+copy-several = { $count } 个目标，依次进行
 job-mkdir = 新建目录
 job-planning = 正在分析…
 job-counters = { $files } / { $filestotal } 个文件 · { $bytes } / { $bytestotal }

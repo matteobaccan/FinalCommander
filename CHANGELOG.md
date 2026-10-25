@@ -25,6 +25,25 @@ Notable changes, newest first. The format follows
   progress bar and `Esc`, and the archive cache is dropped either side of it so no panel
   answers from a stale index.
 
+- **The copy dialog** (`F5`, `F6`). The one-line prompt became a dialog, and every row below
+  the destination is something the engine could already do and the prompt had no way to ask
+  for: what to do if the file is already there (ask, overwrite, overwrite when the source is
+  newer, skip, give the copy a free name, add to the end of it), *only files newer than the
+  ones there* as a box of its own beside that choice, a mask so only the matching names
+  travel, whether to copy what a link points at instead of the link, and whether to keep the
+  times and the permissions. The defaults are the prompt's behaviour exactly, so typing a path
+  and pressing Enter does what it always did; the answers are remembered for the next dialog.
+
+  The destination line takes **several destinations**, `;`-separated and quoted when a name
+  contains one. They run one after the other, and only the first of a *move* is a move —
+  deleting the source after it would leave the second destination nothing to carry. A
+  cancelled or failed destination drops the rest.
+
+  The mask applies to files and never to directories, and a directory is planned only once
+  something under it has matched: copying `*.rs` out of a tree gives the directories that have
+  Rust in them and no others, which is the difference between a filtered copy and a copy
+  followed by a cleanup.
+
 - **The attributes dialog** (`Ctrl+A`). What a file *is*, rather than what is in it: on Unix
   the mode as twelve boxes — owner, group and world × read, write, run, plus setuid, setgid
   and sticky — with the line above them saying what it is now (`rw-r--r-- (0644)`); on Windows

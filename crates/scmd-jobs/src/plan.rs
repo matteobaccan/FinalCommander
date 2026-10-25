@@ -263,14 +263,21 @@ fn walk_copy(
         source,
     })?;
 
+    // A mask applies to files, never to directories: `*.rs` means the Rust files under a
+    // tree, not the directories whose names happen to end in `.rs`.
+    let wanted = |name: &str| match &spec.options.filter {
+        Some(masks) => masks.matches_name(name),
+        None => true,
+    };
+
     match facts.kind {
         EntryKind::Dir => {
-            plan.units.push(Unit {
-                src: Some(src.clone()),
-                dst: dst.clone(),
-                kind: UnitKind::Dir,
-            });
-            plan.dirs += 1;
+            // The directory goes in before what is under it — the engine creates it on the
+            // way past, and a file cannot land in a directory that is not there yet — but
+            // only once something under it has matched. A mask that nothing in a subtree
+            // matches should leave no empty directories behind, which is the difference
+            // between a filtered copy and a copy followed by a cleanup.
+            let at = plan.units.len();
             let children = fs.read_dir(src).map_err(|source| PlanError::Io {
                 path: src.clone(),
                 source,
@@ -278,8 +285,22 @@ fn walk_copy(
             for (name, _) in children {
                 walk_copy(fs, &src.join(&name), &dst.join(&name), spec, plan, cancel)?;
             }
+            if plan.units.len() > at || spec.options.filter.is_none() {
+                plan.units.insert(
+                    at,
+                    Unit {
+                        src: Some(src.clone()),
+                        dst: dst.clone(),
+                        kind: UnitKind::Dir,
+                    },
+                );
+                plan.dirs += 1;
+            }
         }
         EntryKind::Symlink => {
+            if !wanted(&src.display_name()) {
+                return Ok(());
+            }
             let target = fs.read_link(src).map_err(|source| PlanError::Io {
                 path: src.clone(),
                 source,
@@ -292,6 +313,9 @@ fn walk_copy(
             plan.files += 1;
         }
         _ => {
+            if !wanted(&src.display_name()) {
+                return Ok(());
+            }
             plan.units.push(Unit {
                 src: Some(src.clone()),
                 dst: dst.clone(),
@@ -704,6 +728,89 @@ mod tests {
         )
         .unwrap_err();
         assert!(matches!(err, PlanError::Io { .. }), "{err}");
+    }
+
+    /// A mask means only the matching files travel — and only the directories that have one
+    /// of them somewhere under them.
+    #[test]
+    fn a_filter_takes_the_matching_files_and_the_folders_that_hold_them() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(root.join("src/deep")).unwrap();
+        std::fs::create_dir_all(root.join("docs")).unwrap();
+        std::fs::write(root.join("src/main.rs"), b"fn main() {}").unwrap();
+        std::fs::write(root.join("src/deep/lib.rs"), b"pub fn x() {}").unwrap();
+        std::fs::write(root.join("src/notes.txt"), b"not rust").unwrap();
+        std::fs::write(root.join("docs/readme.md"), b"not rust either").unwrap();
+
+        let spec = JobSpec::new(
+            JobKind::Copy,
+            vec![
+                VPath::local(root.join("src")),
+                VPath::local(root.join("docs")),
+            ],
+            Some(VPath::local(root.join("out"))),
+        )
+        .with_options(JobOptions {
+            filter: Some(scmd_core::MaskSet::parse("*.rs").expect("a mask")),
+            ..JobOptions::default()
+        });
+        let plan = plan(&LocalFs, &spec, &CancelToken::new()).expect("it plans");
+
+        let names: Vec<String> = plan.units.iter().map(|u| u.dst.display_name()).collect();
+        assert_eq!(plan.files, 2, "two Rust files: {names:?}");
+        assert!(names.contains(&"main.rs".to_string()), "{names:?}");
+        assert!(names.contains(&"lib.rs".to_string()), "{names:?}");
+        assert!(!names.contains(&"notes.txt".to_string()), "{names:?}");
+
+        // `src` and `src/deep` hold Rust, so they travel; `docs` holds none, so it does not.
+        assert!(names.contains(&"src".to_string()), "{names:?}");
+        assert!(names.contains(&"deep".to_string()), "{names:?}");
+        assert!(
+            !names.contains(&"docs".to_string()),
+            "an empty folder is not created: {names:?}"
+        );
+        assert_eq!(plan.dirs, 2);
+
+        // A directory comes before what goes in it, or the engine would copy into a
+        // directory that is not there yet.
+        let src_at = plan
+            .units
+            .iter()
+            .position(|u| u.dst.display_name() == "src")
+            .expect("src is planned");
+        let deep_at = plan
+            .units
+            .iter()
+            .position(|u| u.dst.display_name() == "deep")
+            .expect("deep is planned");
+        let lib_at = plan
+            .units
+            .iter()
+            .position(|u| u.dst.display_name() == "lib.rs")
+            .expect("lib.rs is planned");
+        assert!(src_at < deep_at && deep_at < lib_at, "{names:?}");
+    }
+
+    /// Without a mask nothing changes, empty directories included: a copy of a tree is a copy
+    /// of the tree.
+    #[test]
+    fn no_filter_copies_the_empty_folders_too() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(root.join("tree/empty")).unwrap();
+        std::fs::write(root.join("tree/one.txt"), b"x").unwrap();
+
+        let spec = JobSpec::new(
+            JobKind::Copy,
+            vec![VPath::local(root.join("tree"))],
+            Some(VPath::local(root.join("out"))),
+        );
+        let plan = plan(&LocalFs, &spec, &CancelToken::new()).expect("it plans");
+        let names: Vec<String> = plan.units.iter().map(|u| u.dst.display_name()).collect();
+        assert!(names.contains(&"empty".to_string()), "{names:?}");
+        assert_eq!(plan.dirs, 2);
+        assert_eq!(plan.files, 1);
     }
 
     #[test]

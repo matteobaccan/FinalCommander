@@ -381,8 +381,6 @@ pub enum PromptKind {
     SelectMask,
     DeselectMask,
     Filter,
-    /// Destination for F5; pre-filled with the other panel's directory.
-    CopyTarget,
     /// Query for the viewer's search.
     ViewerSearch,
     /// Offset or percentage for the viewer.
@@ -391,8 +389,6 @@ pub enum PromptKind {
     EditorReplaceWith,
     EditorGoto,
     EditorSaveAs,
-    /// Destination for F6.
-    MoveTarget,
     /// Name for F7.
     Mkdir,
     /// `Ctrl+G`: one command line, run once per selected file (SPEC 06 §5).
@@ -461,6 +457,60 @@ impl Prompt {
             text,
             secret: false,
             sources: Vec::new(),
+        }
+    }
+}
+
+/// Split a destination line into destinations.
+///
+/// `;` separates them, and a path that has one in it is quoted — which is the convention FAR
+/// uses and the only one that can express a directory called `a;b`. A line with no separator
+/// is one destination, quotes and all, so a user who never copies to two places at once never
+/// meets any of this.
+fn split_targets(line: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut current = String::new();
+    let mut quoted = false;
+    for c in line.chars() {
+        match c {
+            '"' => quoted = !quoted,
+            ';' if !quoted => {
+                let trimmed = current.trim();
+                if !trimmed.is_empty() {
+                    out.push(trimmed.to_string());
+                }
+                current = String::new();
+            }
+            _ => current.push(c),
+        }
+    }
+    let trimmed = current.trim();
+    if !trimmed.is_empty() {
+        out.push(trimmed.to_string());
+    }
+    out
+}
+
+/// What the copy dialog was last answered with. Not the job's options: this is what the
+/// *dialog* should open on next time, which is a smaller thing and outlives any one job.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CopyChoices {
+    /// The conflict policy's key, as the dialog writes it.
+    pub conflict: &'static str,
+    pub only_newer: bool,
+    pub follow_links: bool,
+    pub filter: String,
+}
+
+impl Default for CopyChoices {
+    fn default() -> Self {
+        // The prompt's behaviour, exactly: ask about a conflict, follow nothing, filter
+        // nothing. Somebody who types a path and presses Enter gets what they always got.
+        CopyChoices {
+            conflict: "ask",
+            only_newer: false,
+            follow_links: false,
+            filter: String::new(),
         }
     }
 }
@@ -887,6 +937,15 @@ pub struct App {
     /// What the attributes dialog is about. The dialog is open while the selection could
     /// change under it, so what it will touch is settled when it opens.
     attr_targets: Vec<VPath>,
+    /// The same, for the copy dialog.
+    copy_sources: Vec<VPath>,
+    /// What the copy dialog was last answered with, so the next one opens on it. FAR does
+    /// the same: the rules somebody set once are usually the rules they want again.
+    last_copy: CopyChoices,
+    /// Jobs waiting for the one on screen to finish, for a copy to several destinations.
+    /// One at a time and in order, because two jobs writing at once would fight over the
+    /// progress box and over the disk.
+    queued_jobs: std::collections::VecDeque<JobSpec>,
     /// What to delete once the archive is written, when the dialog asked for it — or when
     /// `F6` put the files into the archive, which is a move and not a copy. It is held here
     /// rather than in the job because the delete only happens if the archive was written.
@@ -1066,6 +1125,9 @@ impl App {
             status_error: false,
             held: Mods::NONE,
             attr_targets: Vec::new(),
+            copy_sources: Vec::new(),
+            last_copy: CopyChoices::default(),
+            queued_jobs: std::collections::VecDeque::new(),
             pack_delete: None,
             quit: false,
             requests: Vec::new(),
@@ -2592,50 +2654,6 @@ impl App {
                     }
                 }
             }
-            PromptKind::CopyTarget | PromptKind::MoveTarget => {
-                let raw = prompt.text.trim();
-                if raw.is_empty() {
-                    return;
-                }
-                let kind = if prompt.kind == PromptKind::CopyTarget {
-                    JobKind::Copy
-                } else {
-                    JobKind::Move
-                };
-                let sources = if prompt.sources.is_empty() {
-                    self.job_sources()
-                } else {
-                    prompt.sources.clone()
-                };
-                if sources.is_empty() {
-                    let m = self.i18n.t("msg-nothing-to-do");
-                    self.set_error(m);
-                    return;
-                }
-                let target = self.resolve_path(raw);
-                // Four cases meet here, and three of them are the archive's (SPEC 04 §4).
-                // The filesystem cannot rename inside a container, so where it is a rebuild
-                // it has to be a rebuild and not a job that would fail halfway.
-                let into_archive = target.in_container();
-                let from_archive = sources.iter().all(|p| p.in_container());
-                if from_archive && kind == JobKind::Move {
-                    let dir = raw.ends_with('/') || raw.ends_with('\\') || sources.len() > 1;
-                    match Self::changes_renaming(&sources, &target, dir) {
-                        Some((archive, changes)) => self.start_rebuild(archive, changes),
-                        None => {
-                            let m = self.i18n.t("arc-move-out");
-                            self.set_error(m);
-                        }
-                    }
-                    return;
-                }
-                if into_archive {
-                    // `F6` into an archive is a move: the originals go once it is written.
-                    self.add_into_archive(sources, &target, kind == JobKind::Move);
-                    return;
-                }
-                self.start_job(JobSpec::new(kind, sources, Some(target)));
-            }
             PromptKind::LinkName => {
                 let raw = prompt.text.trim();
                 let Some(target) = prompt.sources.first().cloned() else {
@@ -3484,6 +3502,16 @@ impl App {
             }
         }
 
+        // The next destination of a copy to several places. A cancelled or failed job stops
+        // the rest: somebody who pressed `Esc` meant the whole thing, and a disk that filled
+        // up for the first destination will fill up for the second.
+        if outcome.cancelled || !outcome.errors.is_empty() {
+            self.queued_jobs.clear();
+        } else if let Some(next) = self.queued_jobs.pop_front() {
+            self.start_job(next);
+            return;
+        }
+
         // Both panels may be looking at what just changed.
         self.panels[self.active].selection.clear();
         self.read_panel(0);
@@ -4269,19 +4297,21 @@ impl App {
                     }
                     text
                 };
-                self.mode = Mode::Prompt(Prompt {
-                    kind: if copy {
-                        PromptKind::CopyTarget
-                    } else {
-                        PromptKind::MoveTarget
-                    },
-                    title,
+                let _ = title;
+                // The list is settled now rather than when the dialog is answered: the
+                // selection could change under an open dialog, and what the user was looking
+                // at when they pressed the key is what they meant.
+                self.copy_sources = sources;
+                self.mode = Mode::Form(Box::new(Form::copy(
                     text,
-                    secret: false,
-                    // The cursor-only keys carry their list with them, so that selecting
-                    // something else while the prompt is open cannot change what moves.
-                    sources: if only_current { sources } else { Vec::new() },
-                });
+                    !copy,
+                    self.sources_label(&self.copy_sources),
+                    self.last_copy.conflict,
+                    self.last_copy.only_newer,
+                    self.last_copy.follow_links,
+                    &self.last_copy.filter,
+                    &self.i18n,
+                )));
             }
             Command::FileMkdir => {
                 let title = self.i18n.t("prompt-mkdir");
@@ -5248,6 +5278,127 @@ impl App {
         self.attr_targets = sources;
     }
 
+    /// OK in the copy dialog: one job per destination, with the rules the rows asked for.
+    fn apply_copy_form(&mut self, form: &Form) {
+        let sources = std::mem::take(&mut self.copy_sources);
+        if sources.is_empty() {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        }
+        let raw = form.text_value("copy.target");
+        if raw.is_empty() {
+            return;
+        }
+        let moving = form.title == self.i18n.t("copy-title-move");
+
+        // The filter is parsed before anything starts: a mask with a syntax error should be
+        // said so about while the dialog is still on screen, not halfway down a tree.
+        let typed = form.text_value("copy.filter");
+        let filter = if typed.is_empty() {
+            None
+        } else {
+            match scmd_core::MaskSet::parse(&typed) {
+                Ok(masks) => Some(masks),
+                Err(e) => {
+                    let msg = self
+                        .i18n
+                        .t_args("msg-mask-invalid", &[("error", e.to_string().into())]);
+                    self.set_error(msg);
+                    self.copy_sources = sources;
+                    self.mode = Mode::Form(Box::new(form.clone()));
+                    return;
+                }
+            }
+        };
+
+        let conflict = form.text_value("copy.conflict");
+        let policy = match conflict.as_str() {
+            "overwrite" => scmd_jobs::ConflictPolicy::Overwrite,
+            "newer" => scmd_jobs::ConflictPolicy::OverwriteIfNewer,
+            "skip" => scmd_jobs::ConflictPolicy::Skip,
+            "rename" => scmd_jobs::ConflictPolicy::Rename,
+            "append" => scmd_jobs::ConflictPolicy::Append,
+            _ => scmd_jobs::ConflictPolicy::Ask,
+        };
+        let options = scmd_jobs::JobOptions {
+            on_conflict: policy,
+            preserve: scmd_jobs::Preserve {
+                mtime: form.toggle_value("copy.times"),
+                mode: form.toggle_value("copy.mode"),
+            },
+            follow_symlinks: form.toggle_value("copy.follow_links"),
+            only_newer: form.toggle_value("copy.only_newer"),
+            filter,
+            ..scmd_jobs::JobOptions::default()
+        };
+        self.last_copy = CopyChoices {
+            conflict: match conflict.as_str() {
+                "overwrite" => "overwrite",
+                "newer" => "newer",
+                "skip" => "skip",
+                "rename" => "rename",
+                "append" => "append",
+                _ => "ask",
+            },
+            only_newer: options.only_newer,
+            follow_links: options.follow_symlinks,
+            filter: typed,
+        };
+
+        let kind = if moving { JobKind::Move } else { JobKind::Copy };
+        let targets = split_targets(&raw);
+        if targets.is_empty() {
+            return;
+        }
+
+        // Three of the four cases are the archive's (SPEC 04 §4), and they are one
+        // destination each: there is no sense in renaming one entry into two places. The
+        // filesystem cannot rename inside a container, so where it is a rebuild it has to be
+        // a rebuild and not a job that would fail halfway.
+        if targets.len() == 1 {
+            let target = self.resolve_path(&targets[0]);
+            let from_archive = sources.iter().all(|p| p.in_container());
+            if from_archive && kind == JobKind::Move {
+                let dir =
+                    targets[0].ends_with('/') || targets[0].ends_with('\\') || sources.len() > 1;
+                match Self::changes_renaming(&sources, &target, dir) {
+                    Some((archive, changes)) => self.start_rebuild(archive, changes),
+                    None => {
+                        let m = self.i18n.t("arc-move-out");
+                        self.set_error(m);
+                    }
+                }
+                return;
+            }
+            if target.in_container() {
+                // Into an archive, `F6` is a move: the originals go once it is written.
+                self.add_into_archive(sources, &target, kind == JobKind::Move);
+                return;
+            }
+        }
+        // Several destinations are several jobs, in the order they were typed. A move to
+        // more than one place would mean deleting the source after the first, so the ones
+        // after it are copies — which is the only reading that does not lose data.
+        for (n, target) in targets.iter().enumerate() {
+            let target = self.resolve_path(target);
+            let kind = if n == 0 { kind } else { JobKind::Copy };
+            let spec =
+                JobSpec::new(kind, sources.clone(), Some(target)).with_options(options.clone());
+            if n == 0 {
+                self.start_job(spec);
+            } else {
+                self.queued_jobs.push_back(spec);
+            }
+        }
+        if targets.len() > 1 {
+            let msg = self
+                .i18n
+                .t_args("copy-several", &[("count", (targets.len() as i64).into())]);
+            self.set_status(msg);
+        }
+    }
+
     /// OK in the attributes dialog: what the boxes say, applied to what was selected.
     fn apply_attributes_form(&mut self, form: &Form) {
         let sources = std::mem::take(&mut self.attr_targets);
@@ -5440,7 +5591,7 @@ impl App {
         real_options.preserve.mtime = false;
         let real = JobSpec::new(JobKind::Replace, sources.clone(), None)
             .with_replace(options.clone())
-            .with_options(real_options);
+            .with_options(real_options.clone());
         self.pending_replace = Some(real);
 
         let mut counting = real_options;
@@ -6017,6 +6168,10 @@ impl App {
         }
         if form.kind == FormKind::Attributes {
             self.apply_attributes_form(&form);
+            return;
+        }
+        if form.kind == FormKind::Copy {
+            self.apply_copy_form(&form);
             return;
         }
         let problems = form.apply(&mut self.cfg);
@@ -10000,10 +10155,9 @@ mod tests {
 
         // An operation works on the real file, not on the panel's own directory joined to a name.
         app.run(Command::FileCopyCurrent);
-        let Mode::Prompt(prompt) = std::mem::replace(&mut app.mode, Mode::Normal) else {
-            panic!("no prompt")
-        };
-        assert_eq!(prompt.sources, vec![VPath::local(&two)]);
+        assert!(matches!(&app.mode, Mode::Form(f) if f.kind == FormKind::Copy));
+        assert_eq!(app.copy_sources, vec![VPath::local(&two)]);
+        app.mode = Mode::Normal;
 
         // `Enter` on a result goes to the directory it lives in.
         let target = app.panel().enter_target().expect("somewhere to go");
@@ -10112,20 +10266,17 @@ mod tests {
         press(&mut app, "Down");
         press(&mut app, "Down"); // b.rs
         app.run(Command::FileCopyCurrent);
-        let Mode::Prompt(prompt) = &app.mode else {
+        let Mode::Form(form) = &app.mode else {
             panic!("{:?}", app.mode)
         };
-        assert_eq!(prompt.kind, PromptKind::CopyTarget);
-        assert_eq!(prompt.sources.len(), 1);
-        // Selecting everything while the prompt is open must not widen the copy.
+        assert_eq!(form.kind, FormKind::Copy);
+        assert_eq!(app.copy_sources.len(), 1);
+        // Selecting everything while the dialog is open must not widen the copy.
         let listing = app.panel().listing.clone();
         app.panel_mut()
             .selection
             .select_all(&listing, scmd_core::MaskScope::FilesAndDirs);
-        let Mode::Prompt(prompt) = std::mem::replace(&mut app.mode, Mode::Normal) else {
-            unreachable!()
-        };
-        app.prompt_accept(prompt);
+        press(&mut app, "Enter");
         let spec = match app.take_requests().into_iter().next() {
             Some(Request::Job { spec, .. }) => spec,
             other => panic!("{other:?}"),
@@ -12591,20 +12742,242 @@ mod tests {
     }
 
     #[test]
-    fn f5_prompts_with_the_passive_panel_prefilled() {
+    fn f5_opens_the_copy_dialog_with_the_passive_panel_prefilled() {
         let mut app = app();
         press(&mut app, "Down"); // docs/
         press(&mut app, "F5");
         match &app.mode {
-            Mode::Prompt(p) => {
-                assert_eq!(p.kind, PromptKind::CopyTarget);
-                assert!(p.text.starts_with("/tmp"), "{}", p.text);
+            Mode::Form(form) => {
+                assert_eq!(form.kind, FormKind::Copy);
+                let target = form.text_value("copy.target");
+                assert!(target.starts_with("/tmp"), "{target}");
                 // The prefill ends with the platform's separator, so typing a name appends.
-                assert!(p.text.ends_with(std::path::MAIN_SEPARATOR), "{}", p.text);
-                assert!(p.title.contains("docs"), "{}", p.title);
+                assert!(
+                    form.fields.iter().any(|f| matches!(
+                        f,
+                        crate::form::Field::Text { key, value, .. }
+                            if *key == "copy.target" && value.ends_with(std::path::MAIN_SEPARATOR)
+                    )),
+                    "{target}"
+                );
+                // What is being copied is said in the dialog, which is where the prompt used
+                // to say it in its title.
+                let rows: String = form.rows().iter().map(|r| r.text.clone()).collect();
+                assert!(rows.contains("docs"), "{rows}");
+                // The cursor starts on the destination, not on the first row, which is text.
+                assert_eq!(form.cursor, 1);
             }
-            other => panic!("expected a prompt, got {other:?}"),
+            other => panic!("expected the copy dialog, got {other:?}"),
         }
+    }
+
+    /// Every row of the copy dialog reaches the job: the engine could already do all of this
+    /// and the one-line prompt had no way to ask for any of it.
+    #[test]
+    fn the_copy_dialog_carries_every_option_into_the_job() {
+        let mut app = app();
+        press(&mut app, "Down");
+        press(&mut app, "Down"); // a.txt
+        press(&mut app, "F5");
+
+        // Walk the rows and set each one, by key rather than by position.
+        let set_toggle = |app: &mut App, key: &str| {
+            let Mode::Form(form) = &mut app.mode else {
+                panic!("the dialog is open")
+            };
+            form.cursor = form
+                .fields
+                .iter()
+                .position(|f| matches!(f, crate::form::Field::Toggle { key: k, .. } if *k == key))
+                .unwrap_or_else(|| panic!("no row `{key}`"));
+            press(app, "Space");
+        };
+        let type_into = |app: &mut App, key: &str, text: &str| {
+            let Mode::Form(form) = &mut app.mode else {
+                panic!("the dialog is open")
+            };
+            form.cursor = form
+                .fields
+                .iter()
+                .position(|f| matches!(f, crate::form::Field::Text { key: k, .. } if *k == key))
+                .unwrap_or_else(|| panic!("no row `{key}`"));
+            clear_prompt(app);
+            type_text(app, text);
+        };
+
+        // The conflict policy is a choice row: Right steps it along.
+        {
+            let Mode::Form(form) = &mut app.mode else {
+                panic!("the dialog is open")
+            };
+            form.cursor = form
+                .fields
+                .iter()
+                .position(
+                    |f| matches!(f, crate::form::Field::Choice { key, .. } if *key == "copy.conflict"),
+                )
+                .expect("the policy row");
+        }
+        for _ in 0..5 {
+            press(&mut app, "Right");
+        }
+        set_toggle(&mut app, "copy.only_newer");
+        set_toggle(&mut app, "copy.follow_links");
+        set_toggle(&mut app, "copy.times");
+        type_into(&mut app, "copy.filter", "*.txt");
+        type_into(&mut app, "copy.target", "/tmp/out");
+        press(&mut app, "Enter");
+
+        let (_, spec) = job_request(&mut app);
+        assert_eq!(spec.kind, JobKind::Copy);
+        assert_eq!(spec.target, Some(VPath::local("/tmp/out")));
+        assert_eq!(spec.options.on_conflict, scmd_jobs::ConflictPolicy::Append);
+        assert!(spec.options.only_newer);
+        assert!(spec.options.follow_symlinks);
+        assert!(!spec.options.preserve.mtime, "the box was turned off");
+        assert!(spec.options.preserve.mode, "and this one was left on");
+        let masks = spec.options.filter.as_ref().expect("a filter was typed");
+        assert!(masks.matches_name("notes.txt"));
+        assert!(!masks.matches_name("notes.rs"));
+
+        // And the next dialog opens on the answers the last one was given. (The job's
+        // progress box is on screen now, so the test steps past it as finishing would.)
+        app.mode = Mode::Normal;
+        press(&mut app, "F5");
+        let Mode::Form(form) = &app.mode else {
+            panic!("the dialog reopens")
+        };
+        assert_eq!(form.text_value("copy.conflict"), "append");
+        assert!(form.toggle_value("copy.only_newer"));
+        assert_eq!(form.text_value("copy.filter"), "*.txt");
+    }
+
+    /// A mask that does not parse is said so about while the dialog is still on screen, not
+    /// halfway down a tree.
+    #[test]
+    fn a_filter_that_is_not_a_mask_keeps_the_dialog_open() {
+        let mut app = app();
+        press(&mut app, "Down");
+        press(&mut app, "Down");
+        press(&mut app, "F5");
+        {
+            let Mode::Form(form) = &mut app.mode else {
+                panic!("the dialog is open")
+            };
+            form.cursor = form
+                .fields
+                .iter()
+                .position(
+                    |f| matches!(f, crate::form::Field::Text { key, .. } if *key == "copy.filter"),
+                )
+                .expect("the filter row");
+        }
+        type_text(&mut app, "/[unclosed/");
+        press(&mut app, "Enter");
+        assert!(
+            matches!(&app.mode, Mode::Form(f) if f.kind == FormKind::Copy),
+            "the dialog stays: {:?}",
+            app.mode
+        );
+        assert!(app.take_requests().is_empty(), "and nothing starts");
+        assert!(!app.status.is_empty(), "and it says why");
+    }
+
+    /// Several destinations, `;`-separated: one job each, in order, and the second is a copy
+    /// even when the first was a move — deleting the source after the first would leave the
+    /// second nothing to carry.
+    #[test]
+    fn a_copy_to_several_destinations_runs_them_one_after_the_other() {
+        let mut app = app();
+        press(&mut app, "Down");
+        press(&mut app, "Down");
+        press(&mut app, "F6");
+        {
+            let Mode::Form(form) = &mut app.mode else {
+                panic!("the dialog is open")
+            };
+            form.cursor = form
+                .fields
+                .iter()
+                .position(
+                    |f| matches!(f, crate::form::Field::Text { key, .. } if *key == "copy.target"),
+                )
+                .expect("the target row");
+        }
+        clear_prompt(&mut app);
+        type_text(&mut app, "/tmp/one;/tmp/two");
+        press(&mut app, "Enter");
+
+        // The first is on its way, and the second is waiting rather than running too.
+        let (id, first) = job_request(&mut app);
+        assert_eq!(first.kind, JobKind::Move);
+        assert_eq!(first.target, Some(VPath::local("/tmp/one")));
+        assert_eq!(app.queued_jobs.len(), 1);
+        assert!(app.status.contains('2'), "{}", app.status);
+
+        // When it finishes cleanly, the next one starts — as a copy.
+        app.handle_event(Event::JobDone {
+            id,
+            kind: JobKind::Move,
+            outcome: Outcome::default(),
+        });
+        let (_, second) = job_request(&mut app);
+        assert_eq!(second.kind, JobKind::Copy, "the source is already gone");
+        assert_eq!(second.target, Some(VPath::local("/tmp/two")));
+        assert!(app.queued_jobs.is_empty());
+    }
+
+    /// A destination with a `;` in its name is quoted, and a line with no separator is one
+    /// destination whatever is in it.
+    #[test]
+    fn destinations_are_split_on_semicolons_unless_they_are_quoted() {
+        assert_eq!(split_targets("/tmp/a"), vec!["/tmp/a"]);
+        assert_eq!(split_targets("/tmp/a;/tmp/b"), vec!["/tmp/a", "/tmp/b"]);
+        assert_eq!(split_targets(" /tmp/a ; /tmp/b "), vec!["/tmp/a", "/tmp/b"]);
+        assert_eq!(split_targets("\"/tmp/a;b\""), vec!["/tmp/a;b"]);
+        assert_eq!(
+            split_targets("\"/tmp/a;b\";/tmp/c"),
+            vec!["/tmp/a;b", "/tmp/c"]
+        );
+        // Empty pieces are not destinations.
+        assert_eq!(split_targets(";;/tmp/a;;"), vec!["/tmp/a"]);
+        assert!(split_targets("   ").is_empty());
+    }
+
+    /// Cancelling one destination cancels the rest: `Esc` meant the whole thing.
+    #[test]
+    fn stopping_one_destination_stops_the_queue() {
+        let mut app = app();
+        press(&mut app, "Down");
+        press(&mut app, "Down");
+        press(&mut app, "F5");
+        {
+            let Mode::Form(form) = &mut app.mode else {
+                panic!("the dialog is open")
+            };
+            form.cursor = 1;
+        }
+        clear_prompt(&mut app);
+        type_text(&mut app, "/tmp/one;/tmp/two;/tmp/three");
+        press(&mut app, "Enter");
+        let (id, _) = job_request(&mut app);
+        assert_eq!(app.queued_jobs.len(), 2);
+
+        app.handle_event(Event::JobDone {
+            id,
+            kind: JobKind::Copy,
+            outcome: Outcome {
+                cancelled: true,
+                ..Outcome::default()
+            },
+        });
+        assert!(app.queued_jobs.is_empty(), "the rest is dropped");
+        assert!(
+            !app.take_requests()
+                .iter()
+                .any(|r| matches!(r, Request::Job { .. })),
+            "and nothing else starts"
+        );
     }
 
     #[test]
@@ -14315,15 +14688,24 @@ abcdefghij
         (app, zip)
     }
 
-    /// Empty the open prompt, so what a test types is all that is in it.
+    /// Empty whatever text row is open — a prompt's line, or the row the cursor is on in a
+    /// dialog — so what a test types is all that is in it.
     fn clear_prompt(app: &mut App) {
         for _ in 0..256 {
-            match &app.mode {
-                Mode::Prompt(p) if !p.text.is_empty() => press(app, "Backspace"),
-                _ => return,
+            let empty = match &app.mode {
+                Mode::Prompt(p) => p.text.is_empty(),
+                Mode::Form(form) => match form.fields.get(form.cursor) {
+                    Some(crate::form::Field::Text { value, .. }) => value.is_empty(),
+                    _ => true,
+                },
+                _ => true,
+            };
+            if empty {
+                return;
             }
+            press(app, "Backspace");
         }
-        panic!("the prompt would not empty");
+        panic!("the row would not empty");
     }
 
     /// Type a path, upper case included: `type_text` presses the character as a key name, and
@@ -14408,10 +14790,14 @@ abcdefghij
         let (mut app, zip) = app_inside_a_zip(dir.path());
         cursor_on(&mut app, "one.txt");
         press(&mut app, "Shift+F6");
-        let Mode::Prompt(prompt) = &app.mode else {
-            panic!("no prompt: {:?}", app.mode)
+        let Mode::Form(form) = &app.mode else {
+            panic!("no dialog: {:?}", app.mode)
         };
-        assert_eq!(prompt.text, "one.txt", "the offer is the name, not a path");
+        assert_eq!(
+            form.text_value("copy.target"),
+            "one.txt",
+            "the offer is the name, not a path"
+        );
         app.mode = Mode::Normal;
         app.run(Command::FileMoveCurrent);
         clear_prompt(&mut app);
