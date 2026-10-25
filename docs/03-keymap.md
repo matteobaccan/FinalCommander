@@ -198,7 +198,7 @@ indistinguishable in a TTY — see §9.
 | copy / move block to cursor | Ctrl+P / Ctrl+M (persistent blocks) | F5 / F6 | Ctrl+Shift+P / Ctrl+Shift+M |
 | delete block / line / to EOL | Ctrl+D / Ctrl+Y / Ctrl+K | F8 / Ctrl+Y / Ctrl+K | Ctrl+D / Ctrl+Y / Ctrl+K |
 | delete word left / right | Ctrl+Backspace / Ctrl+T, Ctrl+Del | Alt+Backspace | Ctrl+Backspace / Alt+D |
-| indent / outdent block | Alt+I / Alt+U | — | Tab / Shift+Tab (block), **Alt+I / Alt+U — which move the line the cursor is on when nothing is selected, where `Tab` types a tab** |
+| indent / outdent block | Alt+I / Alt+U | — | **Alt+I / Alt+U**, which move the block — or the line the cursor is on when nothing is selected. `Tab` types a tab here and does not indent a block: it is the key one presses while writing, and a key that did both would do the wrong one half the time |
 | start/end of file | Ctrl+Home, Ctrl+PgUp / Ctrl+End, Ctrl+PgDn | Ctrl+Home / Ctrl+End | Ctrl+Home / Ctrl+End |
 | start/end of screen | Ctrl+N / Ctrl+E | — | **Ctrl+N / Ctrl+E** |
 | scroll screen | Ctrl+↑ / Ctrl+↓ | — | Ctrl+↑ / Ctrl+↓ |
@@ -230,7 +230,7 @@ Alt+Shift+arrows (column block) are handled by the editor itself and are not bin
 | connect by URL | inside the plugin | `cd sftp://host/dir` | **Ctrl+L** with `sftp://user@host:port/dir` |
 | disconnect the active panel | Shift+F11-ish, per plugin | `cd /` | **Alt+Shift+N** |
 | inside the list | — | — | Enter connects · `n` a new URL · `Ins`/`F7` stores a session · `F4` edits one · `d` disconnects · Esc closes |
-| session editor | NetBox session dialog | — | **`Alt+N` → `Ins`/`F7`/`F4`**: name, host, port, user, authentication, key file, remote folder, group, keep-alive, compression (SPEC 10 §3.5) |
+| session editor | NetBox session dialog | — | **`Ctrl+Shift+N` → `Ins`/`F7`/`F4`**: name, host, port, user, authentication, key file, remote folder, group, keep-alive, compression (SPEC 10 §3.5) |
 
 ## 7b. Viewer: the structure pane (shipped, SPEC 05 §1.8)
 

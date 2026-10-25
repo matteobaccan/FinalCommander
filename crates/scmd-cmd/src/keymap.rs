@@ -296,6 +296,10 @@ mod tests {
             ("Ctrl+1", Command::PanelViewSet(ViewMode::Brief)),
             ("Ins", Command::SelToggle),
             ("Ctrl+PgUp", Command::NavParent),
+            // Both halves of the pair. `Ctrl+PgDn` was in the keymap document from the
+            // start and bound nowhere, so the key did nothing at all; a listed key that
+            // does nothing is worse than one nobody promised.
+            ("Ctrl+PgDn", Command::NavEnter),
         ];
         for (k, want) in cases {
             let key: Key = k.parse().unwrap();

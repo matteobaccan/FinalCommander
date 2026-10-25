@@ -28,6 +28,12 @@ Notable changes, newest first. The format follows
   the screen and a second one was needed to open the folder. It now closes the search *and*
   opens what it found, which is FAR's behaviour: one key, one result.
 
+- **`Ctrl+PgDn` did nothing.** It is FAR's way into a directory or an archive and the other
+  half of `Ctrl+PgUp`, which worked; the keymap document has listed it since the feature
+  inventory and no profile ever bound it, so the key was dead. It opens what the cursor is on,
+  and the keymap test now asserts both halves of the pair rather than only the one somebody
+  thought of.
+
 - **The hex dump widened in steps it could not draw.** The row width was a free number moved
   eight at a time, but a dump is only ever drawn at a power of two: from 16 the first press
   set 24 and drew 16 — nothing happened — the second set 32 and drew it, and every press past

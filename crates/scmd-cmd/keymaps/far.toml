@@ -237,7 +237,10 @@ keys = ["End"]
 cmd = "nav.bottom"
 
 [[bind]]
-keys = ["Enter"]
+# `Ctrl+PgDn` is FAR's way into a directory or an archive without leaving the keyboard's
+# right hand, and it is the other half of `Ctrl+PgUp`. The keymap document has listed it
+# since the inventory; only the binding was missing, so the key did nothing at all.
+keys = ["Enter", "Ctrl+PgDn"]
 cmd = "nav.enter"
 
 [[bind]]
