@@ -30,7 +30,7 @@ rustls-native-certs = "0.8"
 # WebDAV is six HTTP methods and one XML document, so the client is hand-written over
 # `reqwest` as the object store's is — same crate, same features, same reasoning about the
 # trust anchors (see `crates/fcmd-s3/Cargo.toml`, which says it at length).
-reqwest = { version = "0.12", default-features = false, features = [
+reqwest = { version = "0.13", default-features = false, features = [
   "rustls-tls-native-roots",
   "http2",
   "stream",
