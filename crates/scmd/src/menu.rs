@@ -241,7 +241,7 @@ fn panel_menu(title: &'static str, side: usize) -> Menu {
             ),
             item(
                 "menu-filter",
-                "Alt+I",
+                "Ctrl+Shift+I",
                 Action::Run(Command::PanelFilterQuick),
             ),
             Entry::Separator,
@@ -435,7 +435,7 @@ pub fn menus() -> Vec<Menu> {
                     Action::Run(Command::ToolTerminal),
                 ),
                 Entry::Separator,
-                item("menu-connections", "Alt+N", Action::Run(Command::NetSites)),
+                item("menu-connections", "Ctrl+Shift+N", Action::Run(Command::NetSites)),
                 item(
                     "menu-disconnect",
                     "Alt+Shift+N",

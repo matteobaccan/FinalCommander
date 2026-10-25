@@ -4,6 +4,42 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
+## [Unreleased]
+
+### Fixed
+
+- **The attributes dialog was taking bits away on Windows.** `Hidden`, `System` and `Archive`
+  were seeded with `false` rather than read off the file, and `OK` writes every box — so
+  opening `Ctrl+A` on a hidden file and pressing `OK` cleared all three on a file nobody meant
+  to change. The archive bit is set on nearly everything Windows writes, so it happened every
+  time the dialog was used. The boxes now open on what the file carries, which also means the
+  listing carries it: `SYSTEM` and a new `ARCHIVE` flag are read where `HIDDEN` and `READONLY`
+  already were.
+
+- **A junction sorted among the files.** A link that points at a directory is a link, and
+  `dirs_first` asked the kind, so `Documents and Settings` sat below every folder — where
+  nobody reading a `C:\` listing looks for it. What decides now is whether the row *opens* as
+  a directory, which is also what the size column answers (`Folder`, not the link's own
+  meaningless byte count). What the entry **is** has not changed: the `@` stays on the name,
+  and deleting it still deletes the link rather than the tree.
+
+- **The first `Enter` of a quick search did nothing one could see.** Every keystroke had
+  already moved the cursor, so the `Enter` that closed the search only confirmed what was on
+  the screen and a second one was needed to open the folder. It now closes the search *and*
+  opens what it found, which is FAR's behaviour: one key, one result.
+
+- **The drive letter takes the drive.** `Alt+F1` then `C` goes to `C:\` instead of moving a
+  cursor one then has to press `Enter` on — thirty years of fingers expect the letter to be
+  the key. The connections and buckets keep the numbers FAR gives them.
+
+### Changed
+
+- **Three bindings moved off `Alt+<letter>`**, which belongs to the quick search. A binding
+  always wins over the search, so each of them cost a letter one could never search a listing
+  for: the site list (`Alt+N` → `Ctrl+Shift+N`), the quick filter (`Alt+I` → `Ctrl+Shift+I`)
+  and the theme (`Alt+T` → `Ctrl+Shift+T`). The editor's `Alt+I` and `Alt+U` stay where FAR
+  has them — there is no quick search in an editor to collide with.
+
 ## [0.4.0] — 2026-10-25
 
 The things a user reaches for that were not there. Three more ways to reach files — FTP, FTPS

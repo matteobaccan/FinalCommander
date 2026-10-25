@@ -226,7 +226,7 @@ Alt+Shift+arrows (column block) are handled by the editor itself and are not bin
 
 | Action | FAR | MC | SC |
 | --- | --- | --- | --- |
-| connection list | F11 → NetBox | — | **Alt+N** |
+| connection list | F11 → NetBox | — | **Ctrl+Shift+N** |
 | connect by URL | inside the plugin | `cd sftp://host/dir` | **Ctrl+L** with `sftp://user@host:port/dir` |
 | disconnect the active panel | Shift+F11-ish, per plugin | `cd /` | **Alt+Shift+N** |
 | inside the list | — | — | Enter connects · `n` a new URL · `Ins`/`F7` stores a session · `F4` edits one · `d` disconnects · Esc closes |
@@ -254,7 +254,7 @@ there are no plugins yet. When they arrive the pane moves rather than the plugin
 | folder history | Alt+F12 | **Alt+F12** |
 | sort modes list | Ctrl+F12 | **Ctrl+F12** (choosing the current order again reverses it) |
 | reverse the order directly | — | **Ctrl+Shift+F12** |
-| themes | Options → Colors | **Alt+T** cycles · Options → Themes lists them |
+| themes | Options → Colors | **Ctrl+Shift+T** cycles · Options → Themes lists them |
 | languages | Options → Languages | Options → Languages, applied at once |
 | save the configuration | Shift+F9 | **Shift+F9** |
 | inside a settings dialog | ↑↓ rows, Space toggles, Tab to the buttons, Enter, Esc | the same, plus **F10** for OK |
@@ -333,8 +333,15 @@ A TUI cannot receive every combination the Windows console gives FAR. Decisions:
    switch workspaces with it before a terminal ever sees it, and `Ctrl+Alt+L` because most of
    them lock the screen — hence `Ctrl+Alt+K` for locking a tab.
 6. **`Ctrl+I` is `Tab`, `Ctrl+M` is `Enter`, `Ctrl+J` is a newline** in every terminal, so
-   they are not bindable: quick filter is `Alt+I`, "restore selection" is `Ctrl+Shift+M`, and
-   the help page states the rule instead of letting a user wonder why nothing happens.
+   they are not bindable: "restore selection" is `Ctrl+Shift+M`, and the help page states the
+   rule instead of letting a user wonder why nothing happens. The quick filter went to
+   `Ctrl+Shift+I` for the second reason below.
+8. **`Alt+<letter>` belongs to the quick search**, which is what FAR does with it. A binding
+   always wins over the search, so a plain `Alt+<letter>` anywhere a panel can see it is a
+   letter one can never search a listing for. Three of ours used to take one — the site list
+   (`Alt+N`), the quick filter (`Alt+I`) and the theme (`Alt+T`) — and they are now
+   `Ctrl+Shift+N`, `Ctrl+Shift+I` and `Ctrl+Shift+T`. The editor's `Alt+I` and `Alt+U` stay
+   where FAR has them: there is no quick search in the editor to collide with.
 7. **`Esc`** is both "cancel" and the Alt prefix: we use a 25 ms disambiguation timeout
    (configurable), and `Esc Esc` always means cancel.
 

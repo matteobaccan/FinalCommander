@@ -170,7 +170,7 @@ across panels and jobs, automatic reconnect with the operation queue paused, and
 "disconnect" command. Passwords/passphrases are only ever stored in the OS keyring, never in
 config; `--no-keyring` forces prompting.
 
-**Implemented today** (`Alt+N` opens the list, `Alt+Shift+N` closes the active panel's
+**Implemented today** (`Ctrl+Shift+N` opens the list, `Alt+Shift+N` closes the active panel's
 connection, and a `sftp://user@host:port/dir` URL typed into `Ctrl+L` connects): the site list
 with groups and a connected marker, `auth = "agent" | "key:<path>" | "ask"`, one pooled
 connection per `user@host:port` shared by both panels and every job, host-key verification

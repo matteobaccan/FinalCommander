@@ -23,7 +23,7 @@ reviewable and testable.
 | 14 | command line + `%`-macros + user screen (`Ctrl+O`) + run command | 6,12 |
 | 15 | ✅ `scmd-view`: viewer with wrap, windowed reader, encodings, plain/regex/hex search, hex and dump modes, follow, bookmarks | 5 |
 | 21 | ✅ `scmd-edit`: line buffer with encoding/EOL/BOM preserved, atomic save, undo, stream and column blocks, search/replace, go to line, bookmarks; `F4`/`Shift+F4` in the TUI | 5,12 |
-| 22 | ✅ `scmd-net` (netbox): SFTP provider, site list, connection pool, host-key policy, transfers through the job engine; `Alt+N`, remote panels, `sftp://` in `Ctrl+L` | 5,12,13 |
+| 22 | ✅ `scmd-net` (netbox): SFTP provider, site list, connection pool, host-key policy, transfers through the job engine; `Ctrl+Shift+N`, remote panels, `sftp://` in `Ctrl+L` | 5,12,13 |
 | 23 | ✅ menu bar (`F9`) with FAR's five menus, settings dialogs (System/Panel/Interface/Confirmations), languages, themes, drives, folder history and sort-mode lists, `Save setup` (SPEC 10) | 4,10,12 |
 | 16 | `scmd-platform` M1 slice: long paths, trash, clipboard, drives/mounts, FS watch | 1 |
 | 17 | theming: theme loader, `far-classic` + `mono`, colour degradation | 3,12 |

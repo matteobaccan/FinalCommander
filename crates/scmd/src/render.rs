@@ -4664,7 +4664,7 @@ third line
         site.group = Some("work".into());
         with_sites.sites = vec![site.clone()];
         with_sites.connected = vec![site.key()];
-        with_sites.handle_input(Input::Key("Alt+N".parse().unwrap()));
+        with_sites.handle_input(Input::Key("Ctrl+Shift+N".parse().unwrap()));
 
         let out = frame(&mut with_sites, 80, 24);
         assert!(out.contains("Connections"), "{out}");
@@ -4679,7 +4679,7 @@ third line
 
         // Nothing configured: the dialog says what to do instead of showing an empty box.
         let mut empty = app("commander", "en");
-        empty.handle_input(Input::Key("Alt+N".parse().unwrap()));
+        empty.handle_input(Input::Key("Ctrl+Shift+N".parse().unwrap()));
         let out = frame(&mut empty, 80, 24);
         assert!(out.contains("No sites"), "{out}");
     }

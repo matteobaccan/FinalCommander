@@ -4606,6 +4606,14 @@ impl App {
     /// it twice a day picks one. Ours are the open connections and the object stores that are
     /// configured.
     fn drive_list(&self, side: usize) -> Pick {
+        /// `C:\` and `C:` are the letter `c`; a Unix mount point has no letter and gets none,
+        /// because inventing one would make two rows answer to the same key.
+        fn drive_letter(path: &str) -> Option<char> {
+            let mut chars = path.chars();
+            let letter = chars.next()?;
+            (letter.is_ascii_alphabetic() && chars.next() == Some(':')).then_some(letter)
+        }
+
         let mounted = crate::drives::list();
         let cells: Vec<[String; 5]> = mounted
             .iter()
@@ -4650,13 +4658,20 @@ impl App {
                     label.push_str(&format!("{text:<w$}", w = widths[i]));
                 }
             }
-            rows.push(PickRow::plain(
+            let row = PickRow::plain(
                 label.trim_end(),
                 drive.path.clone(),
                 // The one the panel is already on. `/` matches everything, so it only counts
                 // when nothing longer does.
                 drive.path != "/" && here.starts_with(&drive.path),
-            ));
+            );
+            // On Windows the drive's own letter takes it, which is what thirty years of
+            // `Alt+F1` then `C` have taught everybody's fingers: the letter is the key, not a
+            // way to move the cursor to a row one then has to press `Enter` on.
+            rows.push(match drive_letter(&drive.path) {
+                Some(letter) => row.with_key(letter),
+                None => row,
+            });
         }
         if !rows.iter().any(|r| r.current) {
             if let Some(root) = rows.iter_mut().find(|r| r.value == "/") {
@@ -12271,7 +12286,7 @@ mod tests {
     #[test]
     fn the_session_editor_stores_a_connection_that_the_netbox_can_use() {
         let mut app = app();
-        press(&mut app, "Alt+N");
+        press(&mut app, "Ctrl+Shift+N");
         press(&mut app, "Ins");
         let Mode::Form(form) = &app.mode else {
             panic!("the session editor did not open")
@@ -12337,7 +12352,7 @@ mod tests {
         assert!(problems.is_empty(), "{problems:?}");
         app.sites = sites;
 
-        press(&mut app, "Alt+N");
+        press(&mut app, "Ctrl+Shift+N");
         press(&mut app, "F4");
         let Mode::Form(form) = &app.mode else {
             panic!("the session editor did not open")
@@ -15582,7 +15597,7 @@ run = ["echo one", "echo two", "echo three"]
     #[test]
     fn quick_filter_narrows_the_listing_live() {
         let mut app = app();
-        press(&mut app, "Alt+I");
+        press(&mut app, "Ctrl+Shift+I");
         for c in ["r", "s"] {
             press(&mut app, c);
         }
@@ -15607,7 +15622,7 @@ run = ["echo one", "echo two", "echo three"]
     fn theme_cycling_changes_the_active_theme() {
         let mut app = app();
         assert_eq!(app.theme.id, "commander");
-        press(&mut app, "Alt+T");
+        press(&mut app, "Ctrl+Shift+T");
         assert_eq!(app.theme.id, "far");
         assert!(app.status.contains("FAR"), "{}", app.status);
     }
@@ -17192,7 +17207,7 @@ abcdefghij
     #[test]
     fn the_site_list_connects_on_enter() {
         let mut app = net_app();
-        press(&mut app, "Alt+N");
+        press(&mut app, "Ctrl+Shift+N");
         assert!(
             matches!(app.mode, Mode::Sites { cursor: 0 }),
             "{:?}",
@@ -17500,7 +17515,7 @@ abcdefghij
         assert_eq!(rows[1].authority(), "root@other:2222");
 
         // `d` on a site that is not connected does not pretend to disconnect it.
-        press(&mut app, "Alt+N");
+        press(&mut app, "Ctrl+Shift+N");
         press(&mut app, "d");
         assert!(app.take_requests().is_empty());
         assert!(matches!(app.mode, Mode::Sites { .. }));

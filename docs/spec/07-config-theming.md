@@ -126,7 +126,7 @@ keepalive_secs = 30       # 0 turns it off
 fetch_limit_mb = 512      # the largest remote file `F3` will fetch into a temporary copy
 
 [[site]]
-id = "jump"               # shown in the list (Alt+N) and usable by name
+id = "jump"               # shown in the list (Ctrl+Shift+N) and usable by name
 host = "jump.example.net"
 port = 2222               # 22 when left out
 user = "mb"               # the local account name when left out

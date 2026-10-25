@@ -24,8 +24,11 @@ cmd = "file.edit"
 keys = ["Shift+F4"]
 cmd = "file.edit.new"
 
+# `Alt+<letter>` belongs to the quick search — that is what FAR does with it, and a binding
+# always wins over the search, so any plain `Alt+<letter>` here is a letter one can never
+# search for. These three used to take `n`, `i` and `t`; they are on `Ctrl+Shift` now.
 [[bind]]
-keys = ["Alt+N"]
+keys = ["Ctrl+Shift+N"]
 scope = "panel"
 cmd = "net.sites"
 
@@ -144,7 +147,7 @@ keys = ["Ctrl+="]
 cmd = "panel.other.sync"
 
 [[bind]]
-keys = ["Alt+I"]
+keys = ["Ctrl+Shift+I"]
 cmd = "panel.filter.quick"
 
 # FAR's own numbering: brief, medium, full, wide, detailed.
@@ -602,7 +605,7 @@ scope = "global"
 cmd = "app.palette"
 
 [[bind]]
-keys = ["Alt+T"]
+keys = ["Ctrl+Shift+T"]
 scope = "global"
 cmd = "app.theme.next"
 

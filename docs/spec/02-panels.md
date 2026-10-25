@@ -137,7 +137,9 @@ applies. This is what makes `*.cpp` files appear before `*.o` ones however the p
 
 ## 5. Filters
 
-- **Quick filter bar** (`Alt+I`): live substring/glob, applied to the visible order only.
+- **Quick filter bar** (`Ctrl+Shift+I`): live substring/glob, applied to the visible order
+  only. It was `Alt+I` and moved: `Alt+<letter>` is the quick search, and a binding always
+  wins over it, so that one key cost the letter `i` in every listing.
 - **Filter sets**: named rules combining masks (`*.rs,*.toml`), exclude masks, size range, age
   range, attributes, and entry kind; stored in `filters.toml`, selectable from a menu,
   lockable so a changed directory keeps the filter.

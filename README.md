@@ -171,7 +171,7 @@ every key on the screen you are looking at does.
 - **Panels**: `Tab` / `Ctrl+U`, arrows / `PgUp` / `PgDn` / `Home` / `End` / `Enter` /
   `Ctrl+PgUp` / `Backspace` / `Ctrl+\` with history (`Alt+←/→`), `Ins` and `+` / `-` / `*`
   selection by mask, `Ctrl+F3..F9` sorting (press twice to reverse), `Ctrl+1..5` view modes,
-  `Ctrl+H` hidden files, `Alt+I` live filter, quick search by typing, `Space` for a recursive
+  `Ctrl+H` hidden files, `Ctrl+Shift+I` live filter, quick search by typing (`Alt+<letter>`), `Space` for a recursive
   directory size, `Ctrl+=` to sync the other panel, `Ctrl` with the arrows to reshape the two
   panels, and the panels FAR has: quick view (`Ctrl+Q`), info (`Ctrl+L`), tree (`Ctrl+T`).
   A panel holds more than one directory at a time: `Ctrl+Alt+T` opens a tab, `Ctrl+Alt+N` and
