@@ -115,7 +115,7 @@ under the cursor into a directory of its own. `Shift+F3` is the archive menu: te
 entry is decompressed and checked, nothing is written), extract it here, extract it
 elsewhere, delete it, or add files to a new one.
 
-`Enter` on an archive opens it as if it were a directory — zip,
+`Enter` on an archive opens it as if it were a directory — zip, 7z,
 tar, and tar with gzip, bzip2, xz or zstd — and the path says where you are:
 
     /home/me/sources.tar.gz!/src/main.rs
@@ -123,12 +123,21 @@ tar, and tar with gzip, bzip2, xz or zstd — and the path says where you are:
 Everything that reads a file works in there: the viewer, the hex editor, the search.
 
 Writing works too, and it works the only way these formats allow. None of them can be edited
-in place — a `.tar.gz` is one compressed stream from end to end — so a change means writing
+in place — a `.tar.gz` is one compressed stream from end to end, and a 7z usually packs
+several files into one block — so a change means writing
 the archive again: the old one is streamed into a new file beside it with the change applied,
 the new one is read back and checked, and only then does it replace the original. An
 interrupted change therefore leaves the archive exactly as it was and a `.part` file to
 delete. Entries nobody touched are copied across as the compressed bytes they already are, so
-taking one file out of a hundred-megabyte zip is a copy and not a recompression.
+taking one file out of a hundred-megabyte zip is a copy and not a recompression. A 7z is the
+exception: its files share a compressed block, so changing one of them decodes and packs the
+rest again, which is the format and not us.
+
+A 7z this program *writes* puts each file in a block of its own. That is bigger than what
+7-Zip writes by default, and it is the right trade here: in a file manager the common act is
+reading one file out of an archive, and a solid archive makes that mean decoding everything in
+front of it. An encrypted 7z — even one whose header is encrypted, so not even the names show
+— says it wants a password, which there is nowhere to type yet.
 
 What that gives you, from inside an archive:
 

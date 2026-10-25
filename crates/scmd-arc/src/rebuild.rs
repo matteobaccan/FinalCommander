@@ -146,6 +146,9 @@ fn write_new(
     if format == Format::Zip {
         return rebuild_zip(path, part, plan, level, cancel, progress);
     }
+    if format == Format::SevenZ {
+        return rebuild_sevenz(path, part, plan, level, cancel, progress);
+    }
     rebuild_tar(path, part, format, plan, level, cancel, progress)
 }
 
@@ -329,6 +332,86 @@ fn rebuild_tar(
         let _ = std::fs::remove_file(&plain);
     }
     Ok(written)
+}
+
+fn rebuild_sevenz(
+    path: &Path,
+    part: &Path,
+    plan: &Plan,
+    level: Level,
+    cancel: &CancelToken,
+    progress: &mut dyn FnMut(&str, u64),
+) -> Result<Written> {
+    // Nothing is copied across as the bytes it already is, unlike the zip above: a 7z block
+    // holds several files in one compressed stream, so even the entries nobody asked about
+    // have to be decoded and packed again. That is the format, and it is why changing one
+    // file in a large 7z costs what it costs.
+    let mut old = crate::archive::sevenz_reader(path)?;
+    let target = File::create(part).map_err(|e| io_error(part, e))?;
+    let mut new =
+        sevenz_rust2::ArchiveWriter::new(BufWriter::new(target)).map_err(|e| sevenz(part, e))?;
+    new.set_content_methods(vec![crate::write::sevenz_method(level)]);
+    let mut written = Written::default();
+    let mut stopped: Option<ArcError> = None;
+
+    let walk = old.for_each_entries(|entry, bytes| {
+        if cancel.is_cancelled() {
+            stopped = Some(ArcError::Cancelled);
+            return Ok(false);
+        }
+        let inner = normalise(&entry.name);
+        if plan.is_removed(&inner) || plan.put.contains_key(&inner) {
+            // Even an entry on its way out has to be read past: in a solid block the files
+            // are one stream between them, and leaving one unread would leave the stream in
+            // the middle of it and make rubble of the next.
+            std::io::copy(bytes, &mut std::io::sink())?;
+            return Ok(true);
+        }
+        let name = plan.renamed.get(&inner).cloned().unwrap_or(inner);
+        let mut copy = entry.clone();
+        copy.name = name.trim_start_matches('/').to_string();
+        if entry.is_directory {
+            new.push_archive_entry::<&[u8]>(copy, None)?;
+            written.dirs += 1;
+            return Ok(true);
+        }
+        // The bytes have to come out of the block whatever happens to them, so holding one
+        // entry at a time is the floor: the same bound the tar rebuild works under.
+        let mut data = Vec::with_capacity(entry.size.min(8 * 1024 * 1024) as usize);
+        bytes.read_to_end(&mut data)?;
+        written.files += 1;
+        written.bytes += data.len() as u64;
+        new.push_archive_entry(copy, Some(data.as_slice()))?;
+        progress(&name, written.bytes);
+        Ok(true)
+    });
+    if let Some(e) = stopped {
+        let _ = std::fs::remove_file(part);
+        return Err(e);
+    }
+    walk.map_err(|e| sevenz(path, e))?;
+
+    for (inner, source) in &plan.put {
+        if cancel.is_cancelled() {
+            let _ = std::fs::remove_file(part);
+            return Err(ArcError::Cancelled);
+        }
+        let name = inner.trim_start_matches('/');
+        let file = File::open(source).map_err(|e| io_error(source, e))?;
+        let size = file.metadata().map(|m| m.len()).unwrap_or(0);
+        let entry = crate::write::sevenz_entry(source, name, false);
+        new.push_archive_entry(entry, Some(BufReader::new(file)))
+            .map_err(|e| sevenz(part, e))?;
+        written.files += 1;
+        written.bytes += size;
+        progress(name, written.bytes);
+    }
+    new.finish().map_err(|e| io_error(part, e))?;
+    Ok(written)
+}
+
+fn sevenz(path: &Path, e: sevenz_rust2::Error) -> ArcError {
+    crate::archive::sevenz_error(path, e)
 }
 
 /// Read the new archive back before it replaces the old one.
@@ -676,5 +759,47 @@ mod tests {
         .unwrap();
         let err = verify(&part, &plan, &CancelToken::new()).unwrap_err();
         assert!(err.to_string().contains("absent.txt"), "{err}");
+    }
+    #[test]
+    fn a_solid_7z_survives_having_one_entry_taken_out() {
+        // A 7-Zip archive is solid by default: several files in one compressed stream. The
+        // rebuild has to read past the entry it is dropping rather than ignoring it, or the
+        // stream stays in the middle of that file and the next one comes out as rubble.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("solid.7z");
+        let file = File::create(&path).unwrap();
+        let mut writer = sevenz_rust2::ArchiveWriter::new(file).unwrap();
+        let bodies: Vec<&[u8]> = TREE.iter().map(|(_, body)| *body).collect();
+        let entries = TREE
+            .iter()
+            .map(|(name, _)| {
+                let mut entry = sevenz_rust2::ArchiveEntry::new();
+                entry.name = (*name).to_string();
+                entry.has_stream = true;
+                entry
+            })
+            .collect();
+        writer
+            .push_archive_entries(
+                entries,
+                bodies.iter().map(|b| (*b).into()).collect::<Vec<_>>(),
+            )
+            .unwrap();
+        writer.finish().unwrap();
+
+        rebuild(
+            &path,
+            &[Change::Remove {
+                inner: "/readme.md".into(),
+            }],
+            Level::Fast,
+            &CancelToken::new(),
+            &mut |_, _| {},
+        )
+        .expect("the rebuild");
+
+        assert_eq!(names(&path), ["/src/deep/notes.txt", "/src/main.rs"]);
+        assert_eq!(read(&path, "/src/main.rs"), TREE[1].1);
+        assert_eq!(read(&path, "/src/deep/notes.txt"), TREE[2].1);
     }
 }

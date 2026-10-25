@@ -30,7 +30,7 @@ seven interface languages, the whole help and the manual page are compiled into 
 | What you open today | In SupremeCommander |
 | --- | --- |
 | A file manager | Two panels, the selection matrix, five view modes, sorting, filters, quick search, and the command line with the shell behind it (`Ctrl+O`) |
-| An archiver | `Enter` opens a zip or a tarball **as a panel**; `Shift+F1` builds one; `Shift+F2` extracts; `Shift+F3` tests every entry against the format's own checks |
+| An archiver | `Enter` opens a zip, a 7z or a tarball **as a panel**; `Shift+F1` builds one; `Shift+F2` extracts; `Shift+F3` tests every entry against the format's own checks |
 | An SFTP client | `sftp://user@host/dir` is a panel. Copy between two servers with `F5`; edit a remote file with `F4` and `F2` writes it back atomically |
 | `ssh -L` | `8080:db.internal:5432` forwards a port over the connection the panel is already on — no second login, no second terminal |
 | An S3 browser | `s3://logs/2024/08/` is a panel, on AWS or on MinIO, Ceph, Garage, R2, Wasabi. A bucket of 1.7 million objects opens as fast as one with ten |
@@ -190,8 +190,8 @@ every key on the screen you are looking at does.
   and syntax colouring for Rust, C, C++, Java, C#, JavaScript, TypeScript, PHP, Python, Ruby,
   Go, shell, SQL, HTML, XML, CSS, Markdown, JSON, TOML, YAML, INI, Make, Dockerfile, Lua and
   Perl. On a binary it is a hex editor instead, with a patch list and an assembler.
-- **Archives**: zip and the tar family (plain, gzip, bzip2, xz, zstd), all with pure-Rust
-  decoders — nothing shells out. `Enter` opens one as a panel, `F3` reads an entry, `F5` copies
+- **Archives**: zip, 7z and the tar family (plain, gzip, bzip2, xz, zstd), all with pure-Rust
+  decoders — nothing shells out, and no `7z.dll`. `Enter` opens one as a panel, `F3` reads an entry, `F5` copies
   out through the same job engine as any other copy.
 - **Servers and buckets**: SFTP panels and transfers, a session editor, host-key checking
   against `known_hosts`, port forwarding, and `s3://` panels with the credentials read from the
@@ -251,7 +251,7 @@ commander with a modern engine underneath.
 crates/scmd-core     paths, entries, listings, sorting, selection   (no dependencies of ours)
 crates/scmd-vfs      the Vfs trait + the local provider
 crates/scmd-jobs     the operation engine: plan, execute, settle; conflicts and progress
-crates/scmd-arc      archives: zip and the tar family, reading, writing and testing
+crates/scmd-arc      archives: zip, 7z and the tar family, reading, writing and testing
 crates/scmd-view     the viewer: windowed reads, encodings, text/dump/hex, search, disasm
 crates/scmd-edit     the editor: buffer, undo, blocks, search/replace, atomic save
 crates/scmd-syntax   the syntax scanner: one line, and the state the line before it left

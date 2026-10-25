@@ -8,6 +8,28 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **7z, read and written, in pure Rust.** `Enter` opens a `.7z` as a panel, `F3` reads an entry
+  out of it, `F5` copies out, `Shift+F1` builds one, `Shift+F2` extracts one, `Shift+F3` tests
+  every entry, and `F4`/`F6`/`F8` inside one change it — the same seven things that already
+  worked for a zip and a tarball, now for the seventh format, with no `7z.dll` and no external
+  program.
+
+  The format's own shape shows through in two places, and it is better to say so than to
+  pretend otherwise. Its index is a header read in one go, so *listing* a 7z is as quick as
+  listing a zip. Its files, on the other hand, are usually **solid** — several of them in one
+  compressed stream — so reading one means decoding what is in front of it, and changing one
+  means decoding and packing the rest again. A zip entry nobody touched is copied across as
+  the compressed bytes it already is; a 7z has no such shortcut.
+
+  What this program *writes* is LZMA2 with each file in a block of its own. That is larger than
+  what 7-Zip writes by default, and it is the right trade for a file manager: the common act
+  here is reading one file out of an archive, and a solid archive makes that mean decoding
+  everything before it.
+
+  An encrypted 7z — including one whose header is encrypted, where not even the names are
+  readable — is recognised and reported as wanting a password, rather than as a broken
+  archive. There is nowhere to type one yet, and the message says that too.
+
 - **File associations.** A `[[assoc]]` block in `scmd.toml` is a mask, a name and three
   commands — `open` for `Enter`, `view` and `edit` for `Alt+F3` and `Alt+F4` — and the first
   block whose mask matches the file wins. The mask is a whole name (`Makefile`) or `*.` and an

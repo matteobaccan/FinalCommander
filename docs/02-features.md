@@ -89,8 +89,8 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 
 | # | Feature | Origin | M |
 | --- | --- | --- | --- |
-| 4.1 | Archives browsable as directories, read: zip, tar(+gz/bz2/xz/zst), 7z, rar(read-only), cab, iso, ar/deb/rpm, cpio, lha, arj, zip64, encrypted zip/7z | FAR/TC/MC | M2 (zip/tar/7z), M3 rest |
-| 4.2 | Archive write: create/add/delete/update in zip, 7z, tar family; pack dialog with format options (level, solid, encryption, split volumes) | TC | M2/M3 |
+| 4.1 | Archives browsable as directories, read: zip, tar(+gz/bz2/xz/zst), 7z, rar(read-only), cab, iso, ar/deb/rpm, cpio, lha, arj, zip64, encrypted zip/7z | FAR/TC/MC | **zip, the tar family and 7z: done**; an encrypted 7z is recognised and says it wants a password. M3 for the rest |
+| 4.2 | Archive write: create/add/delete/update in zip, 7z, tar family; pack dialog with format options (level, solid, encryption, split volumes) | TC | **create, add, delete and update in all three: done** (a change rebuilds the container transactionally). Solid, encryption and split volumes in the pack dialog: M3 |
 | 4.3 | Pack/unpack shortcuts (`Alt+F5`/`Alt+F6`/`Shift+F1`/`Shift+F2`), test archive, extract-here vs extract-to | FAR/TC | M2 |
 | 4.4 | Open a file inside an archive in the viewer/editor; edit-in-place writes back | FAR | M3 |
 | 4.4b | **Remote file in the viewer and the editor**: `F3` views a fetched copy, `F4` edits it and `F2` writes it back (rename into place, change check, the local copy named if it fails) | FAR NetBox | M1 |

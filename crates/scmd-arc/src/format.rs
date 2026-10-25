@@ -6,6 +6,7 @@ use std::path::Path;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Format {
     Zip,
+    SevenZ,
     Tar,
     TarGz,
     TarBz2,
@@ -15,8 +16,9 @@ pub enum Format {
 
 impl Format {
     /// Every format, for the places that offer a choice.
-    pub const ALL: [Format; 6] = [
+    pub const ALL: [Format; 7] = [
         Format::Zip,
+        Format::SevenZ,
         Format::Tar,
         Format::TarGz,
         Format::TarBz2,
@@ -28,6 +30,7 @@ impl Format {
     pub fn label(self) -> &'static str {
         match self {
             Format::Zip => "zip",
+            Format::SevenZ => "7z",
             Format::Tar => "tar",
             Format::TarGz => "tar.gz",
             Format::TarBz2 => "tar.bz2",
@@ -40,6 +43,7 @@ impl Format {
     pub fn extension(self) -> &'static str {
         match self {
             Format::Zip => "zip",
+            Format::SevenZ => "7z",
             Format::Tar => "tar",
             Format::TarGz => "tar.gz",
             Format::TarBz2 => "tar.bz2",
@@ -48,14 +52,23 @@ impl Format {
         }
     }
 
-    /// Is this one of the tar family, rather than a zip?
+    /// Is this one of the tar family, rather than a zip or a 7z?
     pub fn is_tar(self) -> bool {
-        self != Format::Zip
+        matches!(
+            self,
+            Format::Tar | Format::TarGz | Format::TarBz2 | Format::TarXz | Format::TarZst
+        )
     }
 
     /// Can one entry be read without reading the ones before it? A zip has a directory at the
     /// end and a plain tar has fixed-size headers, so both can seek; a compressed tar is one
     /// stream from start to finish, and reading the last entry means decompressing all of it.
+    ///
+    /// A 7z says no for the same reason as a compressed tar, and for one more: its usual
+    /// setting is *solid*, where several files share one compressed block, so the bytes of one
+    /// of them cannot be found without decoding what is in front of them. Its index, on the
+    /// other hand, is a header read in one go — which is why listing a 7z is quick and reading
+    /// the last file in one is not.
     pub fn seekable(self) -> bool {
         matches!(self, Format::Zip | Format::Tar)
     }
@@ -63,7 +76,7 @@ impl Format {
     /// The format a *name* suggests. Longest suffix first, so `.tar.gz` is not read as `.gz`.
     pub fn of_name(name: &str) -> Option<Format> {
         let lower = name.to_ascii_lowercase();
-        const BY_SUFFIX: [(&str, Format); 12] = [
+        const BY_SUFFIX: [(&str, Format); 13] = [
             (".tar.gz", Format::TarGz),
             (".tgz", Format::TarGz),
             (".tar.bz2", Format::TarBz2),
@@ -74,6 +87,7 @@ impl Format {
             (".tar.zst", Format::TarZst),
             (".tzst", Format::TarZst),
             (".tar", Format::Tar),
+            (".7z", Format::SevenZ),
             (".zip", Format::Zip),
             (".jar", Format::Zip),
         ];
@@ -104,6 +118,11 @@ impl Format {
         if head.starts_with(&[0xfd, b'7', b'z', b'X', b'Z', 0x00]) {
             return Some(Format::TarXz);
         }
+        // 7z's own signature, tested after xz's: xz's starts with one byte and then the same
+        // two letters, so the order of these two is what keeps them apart.
+        if head.starts_with(&[b'7', b'z', 0xbc, 0xaf, 0x27, 0x1c]) {
+            return Some(Format::SevenZ);
+        }
         if head.starts_with(&[0x28, 0xb5, 0x2f, 0xfd]) {
             return Some(Format::TarZst);
         }
@@ -125,6 +144,7 @@ mod tests {
         assert_eq!(Format::of_name("src.TGZ"), Some(Format::TarGz));
         assert_eq!(Format::of_name("src.tar"), Some(Format::Tar));
         assert_eq!(Format::of_name("app.jar"), Some(Format::Zip));
+        assert_eq!(Format::of_name("backup.7Z"), Some(Format::SevenZ));
         assert_eq!(Format::of_name("notes.txt"), None);
         // `.gz` on its own is a compressed file, not an archive of several.
         assert_eq!(Format::of_name("notes.txt.gz"), None);
@@ -140,6 +160,14 @@ mod tests {
         // And a name with no magic behind it is still worth something.
         assert_eq!(Format::of_bytes(b"", "src.tar.xz"), Some(Format::TarXz));
         assert_eq!(Format::of_bytes(b"not an archive", "notes.txt"), None);
+
+        assert_eq!(
+            Format::of_bytes(
+                &[b'7', b'z', 0xbc, 0xaf, 0x27, 0x1c, 0x00, 0x04],
+                "whatever"
+            ),
+            Some(Format::SevenZ)
+        );
 
         let mut tar = vec![0u8; 512];
         tar[257..262].copy_from_slice(b"ustar");

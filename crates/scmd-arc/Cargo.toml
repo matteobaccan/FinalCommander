@@ -15,6 +15,18 @@ bzip2 = "0.6"
 flate2 = "1"
 lzma-rust2 = { version = "0.23", default-features = false, features = ["std", "xz", "encoder"] }
 ruzstd = "0.9"
+# 7z, reading and writing. The feature list is the codecs 7-Zip itself writes by default plus
+# the two optional ones a real-world archive turns out to use: `deflate` for an archive made
+# from a zip, `aes256` so an encrypted one is recognised and refused with a reason rather than
+# read as rubble. `util` (whole-archive convenience functions) and the codecs only 7-Zip ZS
+# writes (zstd, lz4, brotli) are left out.
+sevenz-rust2 = { version = "0.20.2", default-features = false, features = [
+  "compress",
+  "bzip2",
+  "ppmd",
+  "deflate",
+  "aes256",
+] }
 scmd-core = { workspace = true }
 tar = { version = "0.4", default-features = false }
 thiserror = "2"

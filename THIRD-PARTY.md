@@ -43,6 +43,9 @@ Unicode-3.0, or MPL-2.0 at file level). The policy and the allow-list live in `d
 | `bzip2` (with `libbz2-rs-sys`) | MIT OR Apache-2.0 / **bzip2-1.0.6** | bzip2, in pure Rust |
 | `lzma-rust2` | Apache-2.0 | xz, in pure Rust |
 | `ruzstd` | MIT | zstd, in pure Rust |
+| `sevenz-rust2` | Apache-2.0 | 7z, in pure Rust: LZMA, LZMA2, bzip2, deflate and PPMd, with the BCJ and delta filters |
+| `ppmd-rust` | CC0-1.0 OR MIT-0 (we take CC0-1.0) | the PPMd codec a 7z may be packed with |
+| `aes`, `cbc`, `cipher`, `digest` (RustCrypto) | MIT OR Apache-2.0 | recognising an AES-256 7z, so it asks for a password instead of looking broken |
 | `reqwest` (with `rustls`) | MIT OR Apache-2.0 | HTTPS for the object-storage client |
 | `tokio-util` | MIT | streaming an upload's body off the disk |
 | `portable-pty` | MIT | the pseudo-terminal: `openpty` on Unix, ConPTY on Windows |
@@ -75,6 +78,6 @@ backend instead. That also keeps the build free of `cmake`.
 | Component | Licence | Condition |
 | --- | --- | --- |
 | UnRAR library (RAR reading) | non-free: free to use, forbids re-creating the RAR compression algorithm from the source | optional cargo feature, **off** in distribution packages, own notice |
-| 7-Zip (`7z.dll` / `liblzma`) | LGPL-2.1 | dynamically loaded only, never statically linked into the default build |
+| 7-Zip (`7z.dll`) | LGPL-2.1 | **no longer planned**: `sevenz-rust2` reads and writes 7z in pure Rust, so there is nothing to load. It would only come back for the formats that library does not cover |
 | `wasmtime` (plugin host) | Apache-2.0 WITH LLVM-exception | fine as-is |
 | `mlua` + Lua | MIT | fine as-is |

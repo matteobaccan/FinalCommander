@@ -75,6 +75,9 @@ fn write_all(
     if format == Format::Zip {
         return write_zip(part, &items, level, cancel, progress);
     }
+    if format == Format::SevenZ {
+        return write_sevenz(part, &items, level, cancel, progress);
+    }
     write_tar(part, format, &items, level, cancel, progress)
 }
 
@@ -275,7 +278,9 @@ impl Sink {
                 )
                 .map_err(|e| broken(path, e))?,
             ),
-            Format::Zip => unreachable!("a zip is not written through a tar"),
+            Format::Zip | Format::SevenZ => {
+                unreachable!("a {} is not written through a tar", format.label())
+            }
         })
     }
 
@@ -349,6 +354,89 @@ fn broken(path: &Path, reason: impl std::fmt::Display) -> ArcError {
         path: path.display().to_string(),
         reason: reason.to_string(),
     }
+}
+
+/// What LZMA2 setting a level means, and the one encoder every 7z we write is made with.
+///
+/// LZMA2 is 7-Zip's own default and the method every tool that reads a 7z supports, so an
+/// archive written here opens in 7-Zip, in p7zip and in the file manager of whoever is handed
+/// it. The dictionary sizes are the levels `7z -mx1`, `-mx5` and `-mx9` use.
+pub(crate) fn sevenz_method(level: Level) -> sevenz_rust2::EncoderConfiguration {
+    let preset = match level {
+        Level::Fast => 1,
+        Level::Normal => 6,
+        Level::Best => 9,
+    };
+    sevenz_rust2::EncoderConfiguration::new(sevenz_rust2::EncoderMethod::LZMA2).with_options(
+        sevenz_rust2::encoder_options::EncoderOptions::Lzma2(
+            sevenz_rust2::encoder_options::Lzma2Options::from_level(preset),
+        ),
+    )
+}
+
+/// The entry a path takes inside a 7z: the name it is given, and the times and attributes the
+/// format can hold for it.
+pub(crate) fn sevenz_entry(source: &Path, inner: &str, is_dir: bool) -> sevenz_rust2::ArchiveEntry {
+    let mut entry = sevenz_rust2::ArchiveEntry::new();
+    entry.name = inner.to_string();
+    entry.is_directory = is_dir;
+    if let Ok(meta) = std::fs::metadata(source) {
+        if let Ok(mtime) = meta.modified() {
+            if let Ok(stamp) = sevenz_rust2::NtTime::try_from(mtime) {
+                entry.last_modified_date = stamp;
+                entry.has_last_modified_date = true;
+            }
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            // Bit 15 set says "the Unix mode is in the top half", which is how p7zip and
+            // 7-Zip both carry a mode through a 7z and the only way one survives at all.
+            entry.windows_attributes = (meta.mode() << 16) | 0x8000;
+            entry.has_windows_attributes = true;
+        }
+    }
+    entry
+}
+
+fn write_sevenz(
+    part: &Path,
+    items: &[Item],
+    level: Level,
+    cancel: &CancelToken,
+    progress: &mut dyn FnMut(&Path, u64),
+) -> Result<Written> {
+    let file = File::create(part).map_err(|e| io_error(part, e))?;
+    let mut writer =
+        sevenz_rust2::ArchiveWriter::new(BufWriter::new(file)).map_err(|e| sevenz(part, e))?;
+    writer.set_content_methods(vec![sevenz_method(level)]);
+    let mut written = Written::default();
+    for item in items {
+        if cancel.is_cancelled() {
+            return Err(ArcError::Cancelled);
+        }
+        let entry = sevenz_entry(&item.source, &item.inner, item.is_dir);
+        if item.is_dir {
+            writer
+                .push_archive_entry::<File>(entry, None)
+                .map_err(|e| sevenz(part, e))?;
+            written.dirs += 1;
+            continue;
+        }
+        let source = File::open(&item.source).map_err(|e| io_error(&item.source, e))?;
+        writer
+            .push_archive_entry(entry, Some(BufReader::new(source)))
+            .map_err(|e| sevenz(part, e))?;
+        written.files += 1;
+        written.bytes += item.size;
+        progress(&item.source, written.bytes);
+    }
+    writer.finish().map_err(|e| io_error(part, e))?;
+    Ok(written)
+}
+
+fn sevenz(path: &Path, e: sevenz_rust2::Error) -> ArcError {
+    crate::archive::sevenz_error(path, e)
 }
 
 #[cfg(test)]

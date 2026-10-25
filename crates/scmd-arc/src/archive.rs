@@ -137,6 +137,7 @@ impl Archive {
 
         let entries = match format {
             Format::Zip => index_zip(path, &name, limits, cancel)?,
+            Format::SevenZ => index_sevenz(path, &name, limits, cancel)?,
             _ => index_tar(path, &name, format, limits, cancel)?,
         };
 
@@ -355,7 +356,43 @@ impl Archive {
         progress: &mut dyn FnMut(&str, u64),
     ) -> Result<Report> {
         let mut report = Report::default();
-        if !self.format.seekable() {
+        if self.format == Format::SevenZ {
+            // One pass over the whole archive rather than one read per entry: a 7z block holds
+            // several files together, so asking for them one at a time would decode the block
+            // once per file in it. The decoder checks each entry's CRC as it goes, which is
+            // what makes reading it to nowhere a test.
+            let mut reader = sevenz_reader(&self.source)?;
+            let mut stopped = None;
+            let outcome = reader.for_each_entries(|entry, bytes| {
+                if cancel.is_cancelled() {
+                    stopped = Some(ArcError::Cancelled);
+                    return Ok(false);
+                }
+                if entry.is_directory {
+                    return Ok(true);
+                }
+                let path = normalise(&entry.name);
+                report.members += 1;
+                progress(&path, report.bytes);
+                match copy(bytes, &mut io::sink(), cancel, &mut |_| {}) {
+                    Ok(read) => report.bytes += read,
+                    Err(ArcError::Cancelled) => {
+                        stopped = Some(ArcError::Cancelled);
+                        return Ok(false);
+                    }
+                    Err(e) => report.bad.push((path, e.to_string())),
+                }
+                Ok(true)
+            });
+            if let Some(e) = stopped {
+                return Err(e);
+            }
+            // A failure here is the archive's framing or its header, not one entry's bytes:
+            // the entry-level failures are in the report above.
+            outcome.map_err(|e| self.sevenz_error(e))?;
+            return Ok(report);
+        }
+        if self.format.is_tar() && !self.format.seekable() {
             let mut stream = tar::Archive::new(decoder(&self.source, self.format)?);
             let items = stream.entries().map_err(|e| self.broken(e))?;
             for item in items {
@@ -437,6 +474,39 @@ impl Archive {
                 let mut window = file.take(entry.size);
                 copy(&mut window, out, cancel, progress)
             }
+            // A 7z is read through its own reader, which walks the blocks in order and hands
+            // each entry's bytes to a closure. For a solid archive that is the only way there
+            // is: the files in a block are one compressed stream between them.
+            Format::SevenZ => {
+                let mut reader = sevenz_reader(&self.source)?;
+                let mut result: Option<Result<u64>> = None;
+                let outcome = reader.for_each_entries(|entry, bytes| {
+                    if cancel.is_cancelled() {
+                        result = Some(Err(ArcError::Cancelled));
+                        return Ok(false);
+                    }
+                    if entry.is_directory || normalise(&entry.name) != inner {
+                        // Skipping an entry means *reading past* it. In a solid block the
+                        // files are one stream between them, so leaving one unread would
+                        // leave the stream in the middle of it and the next file would come
+                        // out as rubble — which the CRC then reports as a broken archive.
+                        io::copy(bytes, &mut io::sink())?;
+                        return Ok(true);
+                    }
+                    result = Some(copy(bytes, out, cancel, progress));
+                    Ok(false)
+                });
+                match result {
+                    Some(found) => found,
+                    None => {
+                        outcome.map_err(|e| self.sevenz_error(e))?;
+                        Err(ArcError::NoEntry {
+                            path: self.name(),
+                            entry: inner,
+                        })
+                    }
+                }
+            }
             // A compressed tar is one stream: the only way to the last entry is through all
             // of it. That is the format's doing, not ours, and it is why `seekable` says no.
             _ => {
@@ -479,6 +549,56 @@ impl Archive {
             path: self.name(),
             reason: reason.to_string(),
         }
+    }
+
+    fn sevenz_error(&self, e: sevenz_rust2::Error) -> ArcError {
+        sevenz_error(&self.source, e)
+    }
+}
+
+/// A 7z reader over the file at `path`, with no password.
+///
+/// Opening is the header read, so this is also where an encrypted archive is found out: a 7z
+/// can encrypt its own header, in which case even the list of names needs the password.
+pub(crate) fn sevenz_reader(path: &Path) -> Result<sevenz_rust2::ArchiveReader<BufReader<File>>> {
+    let file = File::open(path).map_err(|e| ArcError::Io {
+        path: path.display().to_string(),
+        source: e,
+    })?;
+    sevenz_rust2::ArchiveReader::new(
+        BufReader::with_capacity(64 * 1024, file),
+        sevenz_rust2::Password::empty(),
+    )
+    .map_err(|e| sevenz_error(path, e))
+}
+
+/// A 7z error in our words. The two that have an answer the user can act on — a password, and
+/// a codec we did not build in — are said as themselves; the rest are a broken archive.
+pub(crate) fn sevenz_error(path: &Path, e: sevenz_rust2::Error) -> ArcError {
+    let name = path.display().to_string();
+    match e {
+        sevenz_rust2::Error::PasswordRequired | sevenz_rust2::Error::MaybeBadPassword(_) => {
+            ArcError::NeedsPassword { path: name }
+        }
+        sevenz_rust2::Error::UnsupportedCompressionMethod(method) => ArcError::Refused {
+            path: name,
+            reason: format!("it is packed with {method}, which this build cannot read"),
+        },
+        sevenz_rust2::Error::Unsupported(what) => ArcError::Refused {
+            path: name,
+            reason: what.to_string(),
+        },
+        sevenz_rust2::Error::MaxMemLimited { max_kb, actaul_kb } => ArcError::Refused {
+            path: name,
+            reason: format!("unpacking it wants {actaul_kb} KiB of memory, over {max_kb} KiB"),
+        },
+        sevenz_rust2::Error::Io(source, _) | sevenz_rust2::Error::FileOpen(source, _) => {
+            ArcError::Io { path: name, source }
+        }
+        other => ArcError::Broken {
+            path: name,
+            reason: other.to_string(),
+        },
     }
 }
 
@@ -542,10 +662,10 @@ pub(crate) fn decoder(path: &Path, format: Format) -> Result<Box<dyn Read>> {
                 reason: e.to_string(),
             }
         })?),
-        Format::Zip => {
+        Format::Zip | Format::SevenZ => {
             return Err(ArcError::Broken {
                 path: name,
-                reason: "a zip is not a stream".to_string(),
+                reason: format!("a {} is not a stream", format.label()),
             })
         }
     })
@@ -631,6 +751,68 @@ fn index_zip(
             kind,
             link_target: None,
             at: Some(i as u64),
+        });
+    }
+    Ok(out)
+}
+
+/// The index of a 7z: its header, read in one go.
+///
+/// A 7z stores a Windows attribute word per entry and, when it was written on a Unix, the Unix
+/// mode in the top half of it with bit 15 set — which is the convention `p7zip` and `7-Zip`
+/// both follow, and the only way the mode of a file in a 7z is ever recorded.
+fn index_sevenz(
+    path: &Path,
+    name: &str,
+    limits: &Limits,
+    cancel: &CancelToken,
+) -> Result<Vec<ArcEntry>> {
+    let reader = sevenz_reader(path)?;
+    let files = &reader.archive().files;
+    if files.len() > limits.entries {
+        return Err(ArcError::Refused {
+            path: name.to_string(),
+            reason: format!(
+                "{} entries, over the limit of {}",
+                files.len(),
+                limits.entries
+            ),
+        });
+    }
+    let mut out = Vec::with_capacity(files.len());
+    for file in files {
+        if cancel.is_cancelled() {
+            return Err(ArcError::Cancelled);
+        }
+        let inner = normalise(&file.name);
+        if inner == "/" {
+            continue;
+        }
+        let mode = (file.has_windows_attributes && file.windows_attributes & 0x8000 != 0)
+            .then_some(file.windows_attributes >> 16);
+        let kind = if file.is_directory {
+            EntryKind::Dir
+        } else if mode.map(|m| m & 0o170000 == 0o120000).unwrap_or(false) {
+            EntryKind::Symlink
+        } else {
+            EntryKind::File
+        };
+        out.push(ArcEntry {
+            path: inner,
+            size: file.size,
+            // A 7z packs several files into one block, so the compressed size it reports is
+            // the block's share of them rather than this file's own — which would be a column
+            // that does not add up. The format says what it knows, and this is not it.
+            packed: None,
+            mtime: file
+                .has_last_modified_date
+                .then(|| SystemTime::from(file.last_modified_date)),
+            mode,
+            kind,
+            // A 7z stores a symlink's target as the entry's *contents*, so the target is one
+            // read away rather than in the header. The panel does not need it to show a row.
+            link_target: None,
+            at: None,
         });
     }
     Ok(out)
@@ -809,6 +991,17 @@ mod tests {
         zip.finish().unwrap();
     }
 
+    fn write_sevenz(path: &Path, names: &[(&str, &[u8])]) {
+        let file = File::create(path).unwrap();
+        let mut writer = sevenz_rust2::ArchiveWriter::new(file).unwrap();
+        for (name, body) in names {
+            let mut entry = sevenz_rust2::ArchiveEntry::new();
+            entry.name = (*name).to_string();
+            writer.push_archive_entry(entry, Some(*body)).unwrap();
+        }
+        writer.finish().unwrap();
+    }
+
     fn tar_bytes(names: &[(&str, &[u8])]) -> Vec<u8> {
         let mut builder = tar::Builder::new(Vec::new());
         for (name, body) in names {
@@ -825,6 +1018,9 @@ mod tests {
     fn write_archive(path: &Path, format: Format, names: &[(&str, &[u8])]) {
         if format == Format::Zip {
             return write_zip(path, names);
+        }
+        if format == Format::SevenZ {
+            return write_sevenz(path, names);
         }
         let tar = tar_bytes(names);
         let out = File::create(path).unwrap();
@@ -857,7 +1053,7 @@ mod tests {
                 );
                 out.write_all(&packed).unwrap();
             }
-            Format::Zip => unreachable!("handled above"),
+            Format::Zip | Format::SevenZ => unreachable!("handled above"),
         }
     }
 
@@ -1158,6 +1354,115 @@ mod tests {
         assert_eq!(
             when,
             SystemTime::UNIX_EPOCH + Duration::from_secs(20_750 * 86_400 + 9 * 3_600 + 30 * 60)
+        );
+    }
+    #[test]
+    fn a_solid_7z_gives_up_each_file_on_its_own() {
+        // Solid is 7z's own default and the case that could go wrong: several files share one
+        // compressed stream, so reading the third means decoding the two in front of it. What
+        // the caller asks for is still one file's bytes and nothing else.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("solid.7z");
+        let file = File::create(&path).unwrap();
+        let mut writer = sevenz_rust2::ArchiveWriter::new(file).unwrap();
+        let bodies: Vec<&[u8]> = TREE.iter().map(|(_, body)| *body).collect();
+        let entries = TREE
+            .iter()
+            .map(|(name, _)| {
+                let mut entry = sevenz_rust2::ArchiveEntry::new();
+                entry.name = (*name).to_string();
+                // Writing a whole block at once leaves this to the caller, unlike pushing one
+                // entry at a time; without it the archive says every file in the block is
+                // empty, and a reader believes it.
+                entry.has_stream = true;
+                entry
+            })
+            .collect();
+        writer
+            .push_archive_entries(
+                entries,
+                bodies.iter().map(|b| (*b).into()).collect::<Vec<_>>(),
+            )
+            .unwrap();
+        writer.finish().unwrap();
+
+        let archive = open(&path);
+        let cancel = CancelToken::new();
+        for (name, body) in TREE {
+            let inner = format!("/{name}");
+            assert_eq!(
+                archive.read(&inner, &cancel).expect(name),
+                body.to_vec(),
+                "{name}"
+            );
+        }
+        let report = archive.verify(&cancel, &mut |_, _| {}).expect("a test");
+        assert!(report.is_whole(), "{report:?}");
+        assert_eq!(report.members, TREE.len() as u64);
+    }
+
+    #[test]
+    fn an_encrypted_7z_says_it_wants_a_password_rather_than_looking_broken() {
+        // Both halves of this matter: the error has to be the one the user can act on, and it
+        // has to arrive at `open`, because a 7z can encrypt its own header and then even the
+        // list of names is behind the password.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("secret.7z");
+        let file = File::create(&path).unwrap();
+        let mut writer = sevenz_rust2::ArchiveWriter::new(file).unwrap();
+        writer.set_content_methods(vec![sevenz_rust2::EncoderConfiguration::new(
+            sevenz_rust2::EncoderMethod::AES256_SHA256,
+        )
+        .with_options(sevenz_rust2::encoder_options::EncoderOptions::Aes(
+            sevenz_rust2::encoder_options::AesEncoderOptions::new("hunter2".into()),
+        ))]);
+        writer.set_encrypt_header(true);
+        let mut entry = sevenz_rust2::ArchiveEntry::new();
+        entry.name = "notes.txt".to_string();
+        writer
+            .push_archive_entry(entry, Some(&b"private"[..]))
+            .unwrap();
+        writer.finish().unwrap();
+
+        match Archive::open(&path, &Limits::default(), &CancelToken::new()) {
+            Err(ArcError::NeedsPassword { .. }) => {}
+            other => panic!("expected a password to be asked for, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_7z_we_write_carries_the_mode_back_out_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("run.sh");
+        std::fs::write(&source, b"#!/bin/sh\necho hi\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&source, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        let path = dir.path().join("made.7z");
+        crate::create(
+            &path,
+            Format::SevenZ,
+            &[source],
+            crate::Level::Fast,
+            &CancelToken::new(),
+            &mut |_, _| {},
+        )
+        .expect("the archive was written");
+
+        let archive = open(&path);
+        let entry = archive.entry("/run.sh").expect("the entry is there");
+        assert_eq!(entry.kind, EntryKind::File);
+        #[cfg(unix)]
+        assert_eq!(
+            entry.mode.map(|m| m & 0o777),
+            Some(0o755),
+            "a 7z carries a Unix mode in the top half of its attribute word"
+        );
+        assert!(
+            entry.mtime.is_some(),
+            "and the time it was written with came back too"
         );
     }
 }

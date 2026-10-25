@@ -74,7 +74,7 @@ where the code lives, not whether it is linked into the binary.
 | `file` | `std::fs` + `scmd-platform` | all native | M1 |
 | `zip` | `zip` (**implemented, read + create**, deflate/deflate64/bzip2/lzma/xz, zip64) | READ SEEK, CREATE as a whole archive | M2 |
 | `tar` family | `tar` + `flate2`/`lzma-rust2`/`ruzstd`/`bzip2`, all pure Rust (**implemented, read + create**) | READ SEEK (plain tar and zip only), CREATE as a whole archive | M2 |
-| `7z` | `sevenz-rust2` | READ, WRITE (M3), no random write in solid blocks | M2/M3 |
+| `7z` | `sevenz-rust2` (**implemented, read + create + rebuild**, LZMA/LZMA2/bzip2/deflate/PPMd, BCJ and delta filters) | READ, CREATE as a whole archive, WRITE as a rebuild — and deliberately not SEEK: a solid block is one stream, so one entry cannot be found without decoding what is in front of it | M2 |
 | `rar` | `unrar` (read-only, non-free licence, optional feature, off by default in distro builds) | READ SEEK | M3 |
 | `iso`, `cab`, `ar`/`deb`, `rpm`, `cpio`, `lha`, `arj`, `squashfs` | `libarchive` binding as one fallback provider | READ | M3 |
 | `sftp` | `russh` + `russh-sftp` (**implemented**, `scmd-net`) | READ WRITE CREATE DELETE RENAME SEEK TRUNCATE META_TIMES META_MODE META_OWNER LINKS RESUME RANDOM_WRITE CASE_SENSITIVE | M1 |

@@ -47,6 +47,12 @@ pub enum ArcError {
     #[error("{path}: no entry {entry}")]
     NoEntry { path: String, entry: String },
 
+    /// The archive, or its header, is encrypted. Said as its own error because the answer is
+    /// a password and not a different archive — and because asking for one is a dialog this
+    /// does not have yet, so the message has to say why nothing opened.
+    #[error("{path}: encrypted; a password is needed and cannot be asked for yet")]
+    NeedsPassword { path: String },
+
     #[error("cancelled")]
     Cancelled,
 }
