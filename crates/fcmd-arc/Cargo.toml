@@ -13,7 +13,7 @@ authors.workspace = true
 # toolchain, which is the whole point of the release matrix.
 bzip2 = "0.6"
 flate2 = "1"
-lzma-rust2 = { version = "0.23", default-features = false, features = ["std", "xz", "encoder"] }
+lzma-rust2 = { version = "0.24", default-features = false, features = ["std", "xz", "encoder"] }
 ruzstd = "0.9"
 # 7z, reading and writing. The feature list is the codecs 7-Zip itself writes by default plus
 # the two optional ones a real-world archive turns out to use: `deflate` for an archive made
