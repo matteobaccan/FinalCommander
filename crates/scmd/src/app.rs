@@ -1304,6 +1304,13 @@ pub struct App {
     pending_replace: Option<JobSpec>,
     /// Which group gives a file its colour. Compiled once: it parses mask lists.
     pub highlight: scmd_ui::Highlight,
+    /// The user menu as it is on screen: one level per list, the top one first and the submenu
+    /// one is inside last, each with the title it is shown under. Kept as a stack so `Esc` in
+    /// a submenu goes back to the menu it was opened from rather than out of the menu.
+    menu_levels: Vec<(String, Vec<scmd_config::usermenu::Entry>)>,
+    /// The lines of the chosen menu entry still to run, **unexpanded**: each one gets the
+    /// substitutions and the questions a hand-typed line gets, at the moment it runs.
+    menu_queue: Vec<String>,
     /// What `Ctrl+G` has left to run, one command per file. They go one at a time: a hundred
     /// copies of a converter started at once is not what anybody asked for.
     apply_queue: Vec<String>,
@@ -1444,6 +1451,8 @@ impl App {
             last_replace: scmd_jobs::ReplaceOptions::default(),
             pending_replace: None,
             highlight: scmd_ui::Highlight::far_default(),
+            menu_levels: Vec::new(),
+            menu_queue: Vec::new(),
             apply_queue: Vec::new(),
             apply_total: 0,
             shell: None,
@@ -1943,6 +1952,16 @@ impl App {
                         self.set_error(msg);
                     } else {
                         self.run_next_apply();
+                    }
+                }
+                // A menu entry with several lines is the same promise: the next one runs when
+                // this one is done, and a failure stops the list rather than carrying on
+                // through it. The message above has already said which command failed.
+                if !self.menu_queue.is_empty() {
+                    if matches!(status, Some(code) if code != 0) {
+                        self.menu_queue.clear();
+                    } else {
+                        self.run_menu_next();
                     }
                 }
             }
@@ -5701,6 +5720,7 @@ impl App {
                 });
             }
             Command::FileAssoc => self.open_with_list(),
+            Command::ToolUserMenu => self.open_user_menu(),
             Command::ToolSyncDirs => self.open_sync_form(),
             Command::FileChecksum => self.open_checksum_form(),
             Command::FileChecksumVerify => self.start_verify(),
@@ -6243,6 +6263,173 @@ impl App {
             Parsed::Internal(internal) => self.run_internal(internal),
             Parsed::Prefix(prefix) => self.run_prefix(prefix),
             Parsed::Shell(line) => self.run_shell(line, None),
+        }
+    }
+
+    // ── the user menu (`F2`, SPEC 06 §4) ────────────────────────────────────────────────
+
+    /// `F2`: the menu the user wrote. The global one, with the directory's own menu above it
+    /// when the panel is a directory on this machine — which is where a `.scmd-menu.toml`
+    /// travelling with a project can be read from at all.
+    fn open_user_menu(&mut self) {
+        use scmd_config::usermenu::{UserMenu, LOCAL_MENU_FILE_NAME};
+
+        let global = match UserMenu::load(&self.paths.menu_file) {
+            Ok(menu) => menu,
+            Err(e) => {
+                self.set_error(e);
+                return;
+            }
+        };
+        let cwd = self.panel().cwd.clone();
+        let local = if cwd.is_local() && !cwd.in_container() {
+            match UserMenu::load(&cwd.as_path().join(LOCAL_MENU_FILE_NAME)) {
+                Ok(menu) => menu,
+                Err(e) => {
+                    self.set_error(e);
+                    return;
+                }
+            }
+        } else {
+            UserMenu::default()
+        };
+        let menu = UserMenu::merged(&local, &global);
+        if menu.entries.is_empty() {
+            // The feature is invisible until somebody writes the file, so the one thing `F2`
+            // can usefully do with no file is say where the file goes.
+            let msg = self.i18n.t_args(
+                "usermenu-empty",
+                &[("path", self.paths.menu_file.display().to_string().into())],
+            );
+            self.set_status(msg);
+            return;
+        }
+
+        let (rows, problems) = self.user_menu_rows(&menu.entries);
+        if let Some(first) = problems.first() {
+            // The row is still shown — an entry that vanished over a typo in its own `when`
+            // would be impossible to work out — and the reason is on the status line.
+            let msg = self.i18n.t_args(
+                "usermenu-bad-condition",
+                &[("problem", first.clone().into())],
+            );
+            self.set_error(msg);
+        }
+        let title = self.i18n.t("menu-user-menu");
+        self.menu_levels = vec![(title, rows)];
+        self.show_user_menu_level();
+    }
+
+    /// The rows of one level, with the conditions applied. What a `when` may ask about is
+    /// gathered here: the names in the panel, the one under the cursor, whether anything is
+    /// selected, and whether this is a directory a shell could be pointed at.
+    fn user_menu_rows(
+        &self,
+        entries: &[scmd_config::usermenu::Entry],
+    ) -> (Vec<scmd_config::usermenu::Entry>, Vec<String>) {
+        let panel = self.panel();
+        let mut names = Vec::with_capacity(panel.listing.len());
+        for row in 0..panel.listing.len() {
+            if let Some(entry) = panel.listing.row(row) {
+                if entry.kind != scmd_core::EntryKind::Parent {
+                    names.push(entry.name.to_string_lossy().into_owned());
+                }
+            }
+        }
+        let current = panel
+            .current()
+            .filter(|e| e.kind != scmd_core::EntryKind::Parent)
+            .map(|e| e.name.to_string_lossy().into_owned());
+        let facts = scmd_config::usermenu::Facts {
+            names: &names,
+            current: current.as_deref(),
+            selected: !panel.selection.is_empty(),
+            local: panel.cwd.is_local() && !panel.cwd.in_container(),
+        };
+        scmd_config::usermenu::UserMenu::visible(entries, &facts)
+    }
+
+    /// The level on top of the stack, as a list. A submenu row says it is one, because a row
+    /// that opened a list where every other row ran something would be a surprise.
+    fn show_user_menu_level(&mut self) {
+        let Some((title, level)) = self.menu_levels.last().cloned() else {
+            self.mode = Mode::Normal;
+            return;
+        };
+        let rows: Vec<PickRow> = level
+            .iter()
+            .enumerate()
+            .map(|(i, entry)| {
+                let label = if entry.is_submenu() {
+                    format!("{}  \u{25b8}", entry.label)
+                } else {
+                    entry.label.clone()
+                };
+                let row = PickRow::plain(label, i.to_string(), false);
+                match entry.key {
+                    Some(key) => row.with_key(key),
+                    None => row,
+                }
+            })
+            .collect();
+        self.mode = Mode::Pick(Box::new(Pick::new(
+            PickKind::UserMenu,
+            title,
+            rows,
+            self.active,
+        )));
+    }
+
+    /// A row of the user menu was taken: open the submenu, or run what it holds.
+    fn take_user_menu_row(&mut self, which: usize) {
+        let Some(entry) = self
+            .menu_levels
+            .last()
+            .and_then(|(_, level)| level.get(which))
+            .cloned()
+        else {
+            return;
+        };
+        if entry.is_submenu() {
+            let (rows, problems) = self.user_menu_rows(&entry.submenu);
+            if let Some(first) = problems.first() {
+                let msg = self.i18n.t_args(
+                    "usermenu-bad-condition",
+                    &[("problem", first.clone().into())],
+                );
+                self.set_error(msg);
+            }
+            self.menu_levels.push((entry.label.clone(), rows));
+            self.show_user_menu_level();
+            return;
+        }
+        self.menu_levels.clear();
+        self.menu_queue = entry.run.clone();
+        self.run_menu_next();
+    }
+
+    /// Run what is left of a menu entry, one line at a time and down the same road a typed
+    /// line takes: the substitutions, `{ask:…}`, the internal commands and the prefixes.
+    ///
+    /// Who owns the next step is the whole of the logic here. A line that started a shell
+    /// owns it — the queue carries on when that shell reports back, and stops if it failed. A
+    /// line that asked a question owns it too, because the answer is what starts the shell. A
+    /// line that was internal (`cd ..`) is finished the moment it returns, so the next one
+    /// goes now. And a line that put something else on the screen — the viewer, the editor —
+    /// ends the list: it is in front of the user, and commands running behind it is the
+    /// opposite of what the screen says.
+    fn run_menu_next(&mut self) {
+        while !self.menu_queue.is_empty() {
+            let line = self.menu_queue.remove(0);
+            self.status_error = false;
+            self.run_line(&line);
+            if self.shell.is_some() || matches!(self.mode, Mode::Prompt(_)) {
+                return;
+            }
+            if self.status_error || !matches!(self.mode, Mode::Normal) {
+                self.menu_queue.clear();
+                return;
+            }
         }
     }
 
@@ -8936,6 +9123,8 @@ impl App {
             PickKind::ArcCommands => return,
             // And `open_with_list`, which knows what the cursor is on.
             PickKind::OpenWith => return,
+            // And `open_user_menu`, which reads the file and keeps the level stack.
+            PickKind::UserMenu => return,
             PickKind::Languages => Pick::new(
                 kind,
                 self.i18n.t("menu-languages"),
@@ -9041,7 +9230,20 @@ impl App {
         let Mode::Pick(pick) = &mut self.mode else {
             return;
         };
+        let kind = pick.kind;
         match key.code {
+            // Inside a submenu, going back means the menu it was opened from — not out of the
+            // menu altogether, which is what one press of `Esc` would otherwise do.
+            KeyCode::Esc | KeyCode::Left
+                if kind == PickKind::UserMenu && self.menu_levels.len() > 1 =>
+            {
+                self.menu_levels.pop();
+                self.show_user_menu_level();
+            }
+            KeyCode::Esc | KeyCode::F(10) if kind == PickKind::UserMenu => {
+                self.menu_levels.clear();
+                self.mode = Mode::Normal;
+            }
             KeyCode::Esc | KeyCode::F(10) if self.macro_pending.is_some() => {
                 // Dismissing the last question is not throwing the recording away: it is
                 // saying "the ordinary way", which is what the first row says too.
@@ -9132,6 +9334,11 @@ impl App {
                 // The command goes the same road a typed line does: substitutions,
                 // `{ask:…}`, conditions and all.
                 self.run_line(&row.value);
+            }
+            PickKind::UserMenu => {
+                if let Ok(which) = row.value.parse::<usize>() {
+                    self.take_user_menu_row(which);
+                }
             }
             PickKind::Plugins => {
                 if let Ok(i) = row.value.parse::<usize>() {
@@ -13663,6 +13870,212 @@ mod tests {
             Request::Shell { line, .. } => Some(line),
             _ => None,
         })
+    }
+
+    // ── the user menu (`F2`, SPEC 06 §4) ────────────────────────────────────────────────
+
+    /// An app whose `F2` reads the menu written here, in a directory of this test's own.
+    fn app_with_menu(text: &str) -> (App, std::path::PathBuf) {
+        let dir = std::env::temp_dir().join(format!(
+            "scmd-menu-{}-{:p}",
+            std::process::id(),
+            text.as_ptr()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join(scmd_config::usermenu::MENU_FILE_NAME);
+        std::fs::write(&file, text).unwrap();
+        let mut app = app();
+        app.paths.menu_file = file;
+        (app, dir)
+    }
+
+    fn pick_labels(app: &App) -> Vec<String> {
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("no list is open; status: {}", app.status)
+        };
+        assert_eq!(pick.kind, PickKind::UserMenu);
+        pick.rows.iter().map(|r| r.label.clone()).collect()
+    }
+
+    #[test]
+    fn with_no_menu_file_f2_says_where_one_goes() {
+        let mut app = app();
+        app.paths.menu_file = std::path::PathBuf::from("/nowhere/scmd-menu.toml");
+        press(&mut app, "F2");
+        assert!(matches!(app.mode, Mode::Normal), "a list opened anyway");
+        assert!(
+            app.status.contains("/nowhere/scmd-menu.toml"),
+            "{}",
+            app.status
+        );
+    }
+
+    #[test]
+    fn the_menu_shows_what_the_file_holds_and_leaves_out_what_a_condition_rules_out() {
+        let (mut app, dir) = app_with_menu(
+            r#"
+[[menu]]
+key = "w"
+label = "Count the lines"
+run = ["wc -l {file}"]
+
+[[menu]]
+key = "m"
+label = "Make"
+when = "panel.has('Makefile')"
+run = ["make"]
+
+[[menu]]
+key = "t"
+label = "Touch the text"
+when = "panel.has('*.txt')"
+run = ["touch {file}"]
+"#,
+        );
+        press(&mut app, "F2");
+        // No Makefile in this panel, and an `a.txt` there is.
+        assert_eq!(pick_labels(&app), ["Count the lines", "Touch the text"]);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_row_runs_its_command_with_the_substitutions_already_in_it() {
+        let (mut app, dir) =
+            app_with_menu("[[menu]]\nkey = \"w\"\nlabel = \"Count\"\nrun = [\"wc -l {file}\"]\n");
+        app.panel_mut().cursor_to(2); // a.txt
+        press(&mut app, "F2");
+        press(&mut app, "Enter");
+        let line = shell_line(&mut app).expect("the command ran");
+        assert!(line.starts_with("wc -l "), "{line}");
+        assert!(line.contains("a.txt"), "{line}");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn the_key_a_row_carries_takes_it_without_the_arrows() {
+        let (mut app, dir) = app_with_menu(
+            r#"
+[[menu]]
+key = "a"
+label = "First"
+run = ["true"]
+
+[[menu]]
+key = "z"
+label = "Second"
+run = ["echo second"]
+"#,
+        );
+        press(&mut app, "F2");
+        press(&mut app, "z");
+        let line = shell_line(&mut app).expect("the second ran");
+        assert_eq!(line, "echo second");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_submenu_opens_and_esc_goes_back_to_the_menu_it_came_from() {
+        let (mut app, dir) = app_with_menu(
+            r#"
+[[menu]]
+key = "g"
+label = "Git"
+submenu = [
+  { key = "s", label = "status", run = ["git status -sb"] },
+  { key = "l", label = "log", run = ["git log --oneline"] },
+]
+
+[[menu]]
+key = "o"
+label = "Other"
+run = ["true"]
+"#,
+        );
+        press(&mut app, "F2");
+        let labels = pick_labels(&app);
+        assert!(labels[0].starts_with("Git"), "{labels:?}");
+        assert!(
+            labels[0].contains('\u{25b8}'),
+            "a submenu does not say so: {labels:?}"
+        );
+
+        press(&mut app, "Enter");
+        assert_eq!(pick_labels(&app), ["status", "log"]);
+
+        // One `Esc` is the way back up, not the way out.
+        press(&mut app, "Esc");
+        assert_eq!(pick_labels(&app).len(), 2);
+        assert!(pick_labels(&app)[1] == "Other");
+
+        // And the second closes the menu.
+        press(&mut app, "Esc");
+        assert!(matches!(app.mode, Mode::Normal));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn the_lines_of_one_row_run_in_order_and_a_failure_stops_the_rest() {
+        let (mut app, dir) = app_with_menu(
+            r#"
+[[menu]]
+label = "Three"
+run = ["echo one", "echo two", "echo three"]
+"#,
+        );
+        press(&mut app, "F2");
+        press(&mut app, "Enter");
+        let first = shell_requests(&app);
+        assert_eq!(first, ["echo one"], "{first:?}");
+        assert_eq!(app.menu_queue.len(), 2, "the rest is waiting");
+
+        let (id, line) = app.shell.clone().expect("one is running");
+        app.handle_event(Event::ShellDone {
+            id,
+            line,
+            output: String::new(),
+            status: Some(0),
+        });
+        assert_eq!(shell_requests(&app), ["echo one", "echo two"]);
+
+        // The second fails, and the third never runs.
+        let (id, line) = app.shell.clone().expect("two is running");
+        app.handle_event(Event::ShellDone {
+            id,
+            line,
+            output: String::new(),
+            status: Some(2),
+        });
+        assert!(app.menu_queue.is_empty(), "it carried on after a failure");
+        assert_eq!(shell_requests(&app).len(), 2, "the third ran anyway");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn an_internal_command_in_a_row_does_not_wait_for_a_shell_that_never_started() {
+        let (mut app, dir) = app_with_menu(
+            "[[menu]]\nlabel = \"There then run\"\nrun = [\"cd /tmp\", \"echo here\"]\n",
+        );
+        press(&mut app, "F2");
+        press(&mut app, "Enter");
+        // `cd` is ours and never reaches a shell, so the next line went at once.
+        assert_eq!(
+            shell_requests(&app),
+            ["echo here"],
+            "status: {}",
+            app.status
+        );
+        assert!(app.menu_queue.is_empty());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_menu_file_that_cannot_mean_anything_says_so_instead_of_opening_half_of_it() {
+        let (mut app, dir) = app_with_menu("[[menu]]\nlabel = \"Nothing\"\n");
+        press(&mut app, "F2");
+        assert!(matches!(app.mode, Mode::Normal), "a list opened anyway");
+        assert!(app.status_error, "{}", app.status);
+        assert!(app.status.contains("Nothing"), "{}", app.status);
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

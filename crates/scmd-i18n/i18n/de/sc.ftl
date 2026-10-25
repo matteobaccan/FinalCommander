@@ -208,6 +208,8 @@ sync-same-directory = beide Fenster sind im gleichen Verzeichnis
 
 # What to run for a kind of file (SPEC 06 §5)
 assoc-none = nichts sagt, wie { $name } zu öffnen ist
+usermenu-empty = Noch kein Benutzermenü: schreibe es in { $path }
+usermenu-bad-condition = Bedingung nicht verstanden — { $problem }
 assoc-desktop = An den Desktop übergeben
 assoc-open-with = { $name } öffnen mit
 assoc-no-pager = keine Zuordnung und kein $PAGER sagen, womit das zu lesen ist

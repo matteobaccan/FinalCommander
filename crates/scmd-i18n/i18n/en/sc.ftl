@@ -214,6 +214,8 @@ sync-same-directory = both panels are in the same directory
 
 # What to run for a kind of file (SPEC 06 §5)
 assoc-none = nothing here says how to open { $name }
+usermenu-empty = No user menu yet: write one in { $path }
+usermenu-bad-condition = Condition not understood — { $problem }
 assoc-desktop = Hand it to the desktop
 assoc-open-with = Open { $name } with
 assoc-no-pager = no association and no $PAGER says what to read this with

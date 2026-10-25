@@ -8,6 +8,35 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **The user menu** (`F2`), which is the feature that makes a commander somebody's own: a few
+  lines they run ten times a day, each with a label and a letter. It lives in `scmd-menu.toml`
+  beside the settings — `scmd --paths` prints where, and `F2` with no file says so rather than
+  opening an empty box — and a directory can carry its own `.scmd-menu.toml`, whose rows come
+  above the ones that are everywhere, because the menu of the project one is in is the one
+  wanted while in it.
+
+  A row holds **command lines**, not a dialect of its own: the same lines the command line
+  takes, so `{file}`, `{selection}`, `{list}` and `{ask:title=…}` all work, internal commands
+  and prefixes included. Several lines run in order and stop at the first failure, one at a
+  time. The rule that makes that work is who owns the next step: a line that started a shell
+  owns it and the rest waits for that shell to report; a line that asked a question owns it,
+  because the answer is what starts the shell; a line that was internal (`cd /tmp`) is finished
+  when it returns, so the next goes at once; and a line that put the viewer or the editor on
+  the screen ends the row, because commands running behind what the user is now looking at is
+  the opposite of what the screen says.
+
+  `when` keeps a row out of the way where it has no use: four facts — `panel.has('Cargo.toml')`,
+  `file.is('*.rs')`, `panel.selected`, `panel.local` — with `!`, `&&` and `||`. No parentheses,
+  because a condition that needs them belongs in a script. A condition it cannot read is
+  refused **by name** and the row stays on screen with the reason: an entry that vanished over
+  a typo in its own `when` would be impossible to work out, which is the argument against the
+  usual "evaluate to false and say nothing".
+
+  Submenus nest, a row that opens one says so (`▸`), and `Esc` inside a submenu goes back to
+  the menu it came from rather than out of the menu. Still to come, and in the backlog: reading
+  FAR's `FarMenu.ini` as it stands, separators between groups, a dialog to edit the entries,
+  and `Shift+F10` for the row taken last.
+
 - **A site for the project**, published on GitHub Pages from the repository's own documents.
   `crates/scmd-site` is a generator, not a site: it reads `README.md`, `CHANGELOG.md`, the
   commander survey in `docs/00-landscape.md`, the help chapters in `docs/help/` and the

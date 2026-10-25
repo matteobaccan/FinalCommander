@@ -36,14 +36,16 @@ fn paths_reports_every_file_it_reads_and_the_one_directory() {
     let (stdout, stderr, ok) = run(&["--config", cfg.to_str().unwrap(), "--paths"]);
     assert!(ok, "{stderr}");
     let lines: Vec<&str> = stdout.lines().collect();
-    assert_eq!(lines.len(), 4, "{stdout}");
+    assert_eq!(lines.len(), 5, "{stdout}");
     assert!(lines[0].contains("scmd.toml"), "{stdout}");
     assert!(lines[1].contains("scmd-state.toml"), "{stdout}");
     assert!(lines[2].contains("scmd-macros.toml"), "{stdout}");
-    assert!(lines[3].starts_with("plugins"), "{stdout}");
+    assert!(lines[3].contains("scmd-menu.toml"), "{stdout}");
+    assert!(lines[4].starts_with("plugins"), "{stdout}");
     // Each line says whether what it names is there: the point of the option is to answer
     // "where does it look", including for the files nobody has made yet.
     assert!(lines[2].contains("not present"), "{stdout}");
+    assert!(lines[3].contains("not present"), "{stdout}");
 }
 
 #[test]

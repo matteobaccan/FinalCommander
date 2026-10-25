@@ -8,6 +8,8 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+pub mod usermenu;
+
 /// The single configuration file. There is no configuration *directory*: SupremeCommander
 /// ships as one executable and the only directory it ever looks for is the plugins folder
 /// (see `docs/spec/07-config-theming.md` §1).
@@ -45,6 +47,9 @@ pub struct Paths {
     /// Recorded macros. Beside the configuration, because they are configuration one made by
     /// pressing keys rather than by typing TOML.
     pub macros_file: PathBuf,
+    /// The user menu `F2` opens (SPEC 06 §4). A file of its own, because a directory may
+    /// carry one too and a block inside `scmd.toml` could not travel with a project.
+    pub menu_file: PathBuf,
     pub plugins_dir: PathBuf,
     /// True when the configuration sits next to the executable.
     pub portable: bool,
@@ -81,6 +86,7 @@ impl Paths {
             .unwrap_or_else(|| PathBuf::from("."));
         let state_file = config_parent.join(STATE_FILE_NAME);
         let macros_file = config_parent.join(MACROS_FILE_NAME);
+        let menu_file = config_parent.join(usermenu::MENU_FILE_NAME);
 
         let plugins_dir = plugins
             .map(Path::to_path_buf)
@@ -99,6 +105,7 @@ impl Paths {
             config_file,
             state_file,
             macros_file,
+            menu_file,
             plugins_dir,
             portable,
         }
@@ -107,7 +114,7 @@ impl Paths {
     /// Human-readable summary for `scmd --paths`: the first question anyone asks.
     pub fn describe(&self) -> String {
         format!(
-            "config   {}{}\nstate    {}\nmacros   {}{}\nplugins  {}{}\n",
+            "config   {}{}\nstate    {}\nmacros   {}{}\nmenu     {}{}\nplugins  {}{}\n",
             self.config_file.display(),
             if self.config_file.exists() {
                 ""
@@ -120,6 +127,12 @@ impl Paths {
                 ""
             } else {
                 "   (not present; nothing recorded yet)"
+            },
+            self.menu_file.display(),
+            if self.menu_file.exists() {
+                ""
+            } else {
+                "   (not present; F2 says so and where to put it)"
             },
             self.plugins_dir.display(),
             if self.plugins_dir.is_dir() {

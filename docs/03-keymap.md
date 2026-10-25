@@ -39,7 +39,7 @@ Column `SC` = SupremeCommander default (profile `far`, our baseline).
 | Shift+F6 | rename/move the item under the cursor | — | rename in place | move by queue | rename in place |
 | Shift+F8 | delete only the item under the cursor | — | delete permanently | — | delete under cursor |
 | Shift+F9 | save configuration | — | — | — | save configuration |
-| Shift+F10 | select the last used item of the user menu | — | — | view all files | same, once the user menu exists (unbound today) |
+| Shift+F10 | select the last used item of the user menu | — | — | view all files | the user menu is there (`F2`); remembering which row was taken last is not, so this stays unbound |
 | Shift+F11 | sort groups on/off (named mask groups that sort ahead of or behind everything else — not the same as "directories first") | — | — | — | **directories first on/off**, which is the part of FAR's `Group` we have; named sort groups are still to come |
 | Shift+F12 | selected files first | — | — | custom view | **selected files first on/off** |
 | Shift+Del | delete skipping trash | delete | delete permanently | delete permanently | **delete permanently**, past the wastebasket |

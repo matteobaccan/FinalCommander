@@ -61,25 +61,56 @@ results cached per path+generation.
 
 ## 4. User menu (`F2`)
 
-`menu.toml` entries with label, hotkey, condition and command list:
+**Shipped.** `scmd-menu.toml` beside the configuration — `scmd --paths` prints where — and
+`.scmd-menu.toml` in a directory for a menu that travels with a project, merged above the
+global one. A row is a label, the key that takes it, and the command lines it runs:
 
 ```toml
 [[menu]]
 key = "c"
 label = "Build (cargo)"
 when = "panel.has('Cargo.toml')"
-run = ["shell.run('cargo build --release', wait=true, capture=true)"]
+run = ["cargo build --release"]
 
 [[menu]]
 key = "g"
 label = "Git"
 submenu = [
-  { key = "s", label = "status", run = ["shell.run('git status -sb', wait=false)"] },
-  { key = "l", label = "log",    run = ["shell.run('git log --oneline -40 | less')"] },
+  { key = "s", label = "status", run = ["git status -sb"] },
+  { key = "l", label = "log",    run = ["git log --oneline -40"] },
 ]
 ```
 
-A directory may carry its own `.scmd-menu.toml`, merged above the global menu (FAR/mc local menus).
+Three things settled differently from this spec's first sketch, and the code is right in each.
+
+The file is `scmd-menu.toml` and not `menu.toml`, because the three files beside it are already
+`scmd.toml`, `scmd-state.toml` and `scmd-macros.toml`, and one of four named differently is one
+too many to remember.
+
+A `run` entry is **a command line**, not a `shell.run('…', wait=true)` call. The command line
+already takes substitutions (§5b), internal commands and prefixes, so a menu row written this
+way gains whatever the command line gains, and there is no second dialect — which is also what
+FAR's own `FarMenu.ini` holds.
+
+The lines of one row run **in order, stopping at the first failure**, one at a time rather than
+at once. Who owns the next step is the rule that makes that work: a line that started a shell
+owns it and the rest waits for that shell to report; a line that asked a question (`{ask:…}`)
+owns it, because the answer is what starts the shell; a line that was internal (`cd /tmp`) is
+finished when it returns, so the next one goes at once; and a line that put something else on
+the screen — the viewer, the editor — ends the row, because commands running behind what the
+user is now looking at is the opposite of what the screen says.
+
+`when` is deliberately tiny: four facts — `panel.has('<mask>')` (the mask grammar of §5),
+`file.is('<mask>')`, `panel.selected`, `panel.local` — with `!`, `&&` and `||`, and `&&`
+binding tighter. There are no parentheses: a condition that needs them belongs in a script. A
+condition it cannot read is refused **by name**, and the row stays on screen with the reason on
+the status line — an entry that vanished over a typo in its own `when` would be impossible to
+work out.
+
+A submenu row says it is one (`▸`), and `Esc` inside it goes back to the menu it was opened
+from; the second `Esc` closes the menu. Still to come: reading FAR's `FarMenu.ini` as it
+stands, separators between groups, a dialog to edit the entries from inside the program, and
+FAR's `Shift+F10` for "the item I took last".
 
 ## 5. File associations (`[[assoc]]`)
 

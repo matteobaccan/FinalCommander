@@ -82,6 +82,8 @@ pub enum PickKind {
     Tunnels,
     /// What can be done with the archive at hand (`Shift+F3`).
     ArcCommands,
+    /// The menu the user wrote (`F2`, SPEC 06 §4), one level of it at a time.
+    UserMenu,
 }
 
 /// A mark (`√`) next to the entry that is currently in force.

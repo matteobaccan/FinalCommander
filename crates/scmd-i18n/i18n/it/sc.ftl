@@ -208,6 +208,8 @@ sync-same-directory = i due pannelli sono nella stessa directory
 
 # What to run for a kind of file (SPEC 06 §5)
 assoc-none = niente dice come aprire { $name }
+usermenu-empty = Nessun menu utente: scrivilo in { $path }
+usermenu-bad-condition = Condizione non riconosciuta — { $problem }
 assoc-desktop = Passalo al sistema
 assoc-open-with = Apri { $name } con
 assoc-no-pager = nessuna associazione e nessun $PAGER dicono con cosa leggerlo
