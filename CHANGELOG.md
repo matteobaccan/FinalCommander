@@ -4,7 +4,11 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
-## [Unreleased]
+## [0.3.0] — 2026-10-25
+
+An archive and a bucket stop being read-only windows, a `.md` file opens as a document, and
+the two dialogs that had the least to say — the copy prompt and the missing attributes one —
+say what the engine underneath them could already do.
 
 ### Added
 
