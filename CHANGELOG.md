@@ -30,7 +30,8 @@ Notable changes, newest first. The format follows
   the old name carries the new one: the command, the crates (`fcmd-core`, `fcmd-vfs`, …), the
   configuration (`fcmd.toml`, `fcmd-state.toml`, `fcmd-macros.toml`, `fcmd-menu.toml`,
   `fcmd-plugins/`), the manual page, the plugin environment (`$FCMD_CWD` and the rest) and the
-  release archives (`fcmd-linux-x86_64-<version>.tar.gz`). Nothing about what the program does
+  release archives (`FinalCommander-linux-x86_64-<version>.tar.gz`, with `fcmd` inside).
+  Nothing about what the program does
   has changed with it.
 
   A configuration from 0.4.0 keeps working untouched: every file is looked for under its new

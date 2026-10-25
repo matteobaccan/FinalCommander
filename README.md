@@ -105,16 +105,16 @@ screen says which one it found.
 
 | Platform | Archive |
 | --- | --- |
-| Linux (x86-64) | `fcmd-linux-x86_64-<version>.tar.gz`, or `fcmd-linux-x86_64-static-<version>.tar.gz` for a statically linked build that runs on any distribution |
-| macOS (Intel and Apple Silicon) | `fcmd-macos-universal-<version>.tar.gz` — one binary for both |
-| Windows (x86-64) | `fcmd-windows-x86_64-<version>.zip` |
+| Linux (x86-64) | `FinalCommander-linux-x86_64-<version>.tar.gz`, or `FinalCommander-linux-x86_64-static-<version>.tar.gz` for a statically linked build that runs on any distribution |
+| macOS (Intel and Apple Silicon) | `FinalCommander-macos-universal-<version>.tar.gz` — one binary for both |
+| Windows (x86-64) | `FinalCommander-windows-x86_64-<version>.zip` |
 
 The files sit at the root of the archive, so unpacking leaves `fcmd` where you are rather than
 one directory down.
 
 ```sh
 # Linux, for example
-tar xzf fcmd-linux-x86_64-0.2.0.tar.gz
+tar xzf FinalCommander-linux-x86_64-0.5.0.tar.gz
 sudo install -m755 fcmd /usr/local/bin/fcmd
 fcmd --version
 ```

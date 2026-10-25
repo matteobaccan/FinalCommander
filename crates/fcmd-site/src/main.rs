@@ -330,19 +330,19 @@ fn download(lang: &Text, version: &str) -> String {
     let rows = [
         (
             "Linux (x86-64)",
-            format!("fcmd-linux-x86_64-{version}.tar.gz"),
+            format!("FinalCommander-linux-x86_64-{version}.tar.gz"),
         ),
         (
             "Linux (x86-64, static)",
-            format!("fcmd-linux-x86_64-static-{version}.tar.gz"),
+            format!("FinalCommander-linux-x86_64-static-{version}.tar.gz"),
         ),
         (
             "macOS (Intel and Apple Silicon)",
-            format!("fcmd-macos-universal-{version}.tar.gz"),
+            format!("FinalCommander-macos-universal-{version}.tar.gz"),
         ),
         (
             "Windows (x86-64)",
-            format!("fcmd-windows-x86_64-{version}.zip"),
+            format!("FinalCommander-windows-x86_64-{version}.zip"),
         ),
     ];
     let mut body = format!(
@@ -361,7 +361,7 @@ fn download(lang: &Text, version: &str) -> String {
     }
     body.push_str("</table>\n");
     body.push_str(&format!(
-        "<p>{}</p>\n<pre><code>tar xzf fcmd-linux-x86_64-{version}.tar.gz\n\
+        "<p>{}</p>\n<pre><code>tar xzf FinalCommander-linux-x86_64-{version}.tar.gz\n\
          sudo install -m755 fcmd /usr/local/bin/fcmd\nfcmd --version</code></pre>\n",
         inline_code(lang.download_checksums)
     ));
@@ -562,10 +562,13 @@ mod tests {
         let version = version_of(&default_repo()).expect("a version");
         let page = page_text(&out, "download.html");
         for platform in ["linux-x86_64", "macos-universal", "windows-x86_64"] {
+            // The archives carry the project's name, as `release.yml` writes it; the
+            // executable inside is `fcmd`, and a page that mixed the two would send
+            // somebody to a link that is not there.
             let file = if platform == "windows-x86_64" {
-                format!("fcmd-{platform}-{version}.zip")
+                format!("FinalCommander-{platform}-{version}.zip")
             } else {
-                format!("fcmd-{platform}-{version}.tar.gz")
+                format!("FinalCommander-{platform}-{version}.tar.gz")
             };
             assert!(page.contains(&file), "{file} is not offered: {page}");
         }

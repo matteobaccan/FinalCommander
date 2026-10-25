@@ -102,7 +102,11 @@ jobs:
           fi
           # The platform first and the version last, so the archives of one release sort by
           # platform and a download is read left to right: what it runs on, then which build.
-          name="fcmd-${{ matrix.name }}-${version}"
+          # The project's name, not the command's: this is what somebody downloads and keeps
+          # in a folder of downloads, where `fcmd-windows-x86_64-0.5.0.zip` says less about
+          # what it is than the name on the page it came from. The executable inside is
+          # `fcmd`, which is what gets typed.
+          name="FinalCommander-${{ matrix.name }}-${version}"
           dir="dist/${name}"
           mkdir -p "$dir"
           bin="target/${{ matrix.target }}/release/fcmd"

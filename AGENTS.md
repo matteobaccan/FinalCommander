@@ -117,8 +117,9 @@ bug. The loop is input-driven and keeps no timer: anything that must happen on i
    a build so `Cargo.lock` follows.
 3. Commit and push to the development branch. `.github/workflows/tag.yml` notices the bump and
    the dated heading, **waits for CI to be green on that very commit**, and creates the tag;
-   `release.yml` then builds `fcmd-linux-x86_64-<v>.tar.gz`, `-static-`,
-   `fcmd-macos-universal-<v>.tar.gz`, `fcmd-windows-x86_64-<v>.zip` and `SHA256SUMS`.
+   `release.yml` then builds `FinalCommander-linux-x86_64-<v>.tar.gz`, `-static-`,
+   `FinalCommander-macos-universal-<v>.tar.gz`, `FinalCommander-windows-x86_64-<v>.zip` and
+   `SHA256SUMS`. The archives carry the project's name; the executable inside each is `fcmd`.
    No tag is pushed by hand.
 
 **GitHub Pages must not publish by itself.** `pages.yml` builds the site on every push and
