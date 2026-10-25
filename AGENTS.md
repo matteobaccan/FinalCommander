@@ -122,6 +122,9 @@ keeps it as the run's artifact; publishing happens only through `workflow_dispat
 3. **The extension in a column of its own** in the full view, as FAR draws it.
 4. **`Ctrl+O` takes the panels off** instead of opening a read-only screen: the command line,
    the menus and the keys all keep working, and `PgUp`/`PgDn` page through the output.
+5. **The keymap table swept** against the bindings the program resolves: `Ctrl+P`,
+   `Shift+F10`, `Ctrl+W` and the editor's delete-word-right built, the rest of the rows
+   corrected to what is true.
 
 `main` was created from that work and is where it goes on.
 
@@ -137,8 +140,6 @@ In the order they were raised, all from a side-by-side comparison with FAR on Wi
 - **Menu mnemonics.** The mechanism ships (`&` in a label marks the letter, the dropdown
   draws it highlighted), but only four labels carry a marker. The letters for the rest are
   the author's call.
-- **Sixteen keymap rows** in `docs/03-keymap.md` document keys that do nothing yet: each is
-  either an unbuilt feature, a small decision, or a false positive, and they need triaging.
 - **The `F4` keybar label in the viewer** — a question to the author that is still open.
 - **Tabular viewers** (dbf, csv, tsv, jsonl) are on the roadmap, not started.
 
