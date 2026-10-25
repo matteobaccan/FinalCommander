@@ -177,7 +177,7 @@ impl Command {
             Command::ToolTerminal => "a real terminal, with a shell in it",
             Command::ToolFind => "find files, by name or by what is in them",
             Command::ToolReplace => "replace across the selected files",
-            Command::ShellOutputShow => "what the commands printed",
+            Command::ShellOutputShow => "the panels off, and the screen the commands printed on",
             Command::NetSites => "the stored connections",
             Command::NetConnect => "connect to a server",
             Command::NetDisconnect => "close this connection",

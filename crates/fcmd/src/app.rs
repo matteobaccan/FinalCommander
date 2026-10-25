@@ -1294,6 +1294,13 @@ pub struct App {
     pub user_screen: Vec<String>,
     /// Which panel is hidden, if either: `Ctrl+F1` and `Ctrl+F2` give the screen to one.
     pub hidden: Option<usize>,
+    /// `Ctrl+O`: both panels off, the screen given to what the commands printed. Everything
+    /// else keeps working — the command line, the menus, the keys — which is the whole point
+    /// of hiding the panels rather than opening a screen of their own.
+    pub panels_off: bool,
+    /// How many lines back from the end of the user screen it is scrolled, for the pages
+    /// `PgUp`/`PgDn` turn while the panels are off.
+    pub user_scroll: usize,
     /// What was searched for last, so `Alt+F7` opens on it rather than on an empty dialog.
     pub last_find: FindSpec,
     /// The tree panel's rows, per panel, and the directory cache behind them. The cache
@@ -1471,6 +1478,8 @@ impl App {
             cmd: CmdLine::new(),
             user_screen: Vec::new(),
             hidden: None,
+            panels_off: false,
+            user_scroll: 0,
             last_find: FindSpec::default(),
             hex_parked: None,
             trees: [None, None],
@@ -4969,6 +4978,25 @@ impl App {
     }
 
     fn normal_key(&mut self, key: Key) {
+        // With the panels off the screen is what the commands printed, so the keys that would
+        // page through a listing page through that instead. Before the command line, which
+        // does not use these two, and before the keymap, whose panel commands have nothing to
+        // move while there is no panel on screen.
+        if self.panels_off && key.mods == Mods::NONE {
+            let step = self.rows.max(1);
+            match key.code {
+                KeyCode::PageUp => {
+                    let last = self.user_screen.len().saturating_sub(1);
+                    self.user_scroll = (self.user_scroll + step).min(last);
+                    return;
+                }
+                KeyCode::PageDown => {
+                    self.user_scroll = self.user_scroll.saturating_sub(step);
+                    return;
+                }
+                _ => {}
+            }
+        }
         // The command line has no focus of its own: it takes the shared keys only while it has
         // something on it, which is FAR's rule and the reason typing never feels modal.
         if self.command_line_key(key) {
@@ -5611,7 +5639,13 @@ impl App {
             Command::CmdInsertNameOther => self.insert_into_line(false, true),
             Command::CmdInsertPath => self.insert_into_line(true, false),
             Command::CmdInsertPathOther => self.insert_into_line(true, true),
-            Command::ShellOutputShow => self.mode = Mode::UserScreen { scroll: 0 },
+            // FAR's `Ctrl+O`: the panels go away and the screen underneath comes back, with
+            // the command line, the menus and the keys all still live. It is a toggle, and
+            // the same key brings the panels back.
+            Command::ShellOutputShow => {
+                self.panels_off = !self.panels_off;
+                self.user_scroll = 0;
+            }
             Command::AppThemes => self.open_pick(PickKind::Themes, self.active),
             Command::AppLanguages => self.open_pick(PickKind::Languages, self.active),
             Command::AppSetupSave => self.save_setup(),
@@ -13425,12 +13459,52 @@ mod tests {
             "a non-zero exit is not hidden: {}",
             app.status
         );
+        // `Ctrl+O` takes the panels off the screen rather than opening a screen of its own:
+        // the mode is still the normal one, so the command line and the keys keep working.
         press(&mut app, "Ctrl+O");
-        assert!(matches!(app.mode, Mode::UserScreen { .. }));
+        assert!(app.panels_off);
+        assert!(app.mode.is_normal());
         assert!(app.user_screen.iter().any(|l| l == "$ false"));
         assert!(app.user_screen.iter().any(|l| l == "nothing to say"));
-        press(&mut app, "Esc");
+        // A command typed with the panels off runs exactly as it does with them on.
+        typed(&mut app, "echo again");
+        press(&mut app, "Enter");
+        assert!(shell_requests(&app).iter().any(|c| c == "echo again"));
+        // And the same key brings them back.
+        press(&mut app, "Ctrl+O");
+        assert!(!app.panels_off);
         assert!(app.mode.is_normal());
+    }
+
+    #[test]
+    fn with_the_panels_off_the_pages_turn_through_what_was_printed() {
+        let mut app = app();
+        app.user_screen = (0..200).map(|n| format!("line {n}")).collect();
+        app.rows = 20;
+        press(&mut app, "Ctrl+O");
+        assert_eq!(
+            app.user_scroll, 0,
+            "it opens at the end, where the last command is"
+        );
+        press(&mut app, "PgUp");
+        assert_eq!(app.user_scroll, 20);
+        press(&mut app, "PgUp");
+        assert_eq!(app.user_scroll, 40);
+        press(&mut app, "PgDn");
+        assert_eq!(app.user_scroll, 20);
+        // Never past the first line, and never past the last.
+        for _ in 0..40 {
+            press(&mut app, "PgUp");
+        }
+        assert_eq!(app.user_scroll, 199);
+        for _ in 0..40 {
+            press(&mut app, "PgDn");
+        }
+        assert_eq!(app.user_scroll, 0);
+        // With the panels on, the same keys page through the listing again.
+        press(&mut app, "Ctrl+O");
+        press(&mut app, "PgUp");
+        assert_eq!(app.user_scroll, 0);
     }
 
     #[test]

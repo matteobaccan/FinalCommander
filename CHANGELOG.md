@@ -21,6 +21,15 @@ Notable changes, newest first. The format follows
   line on the startup screen saying which file it was and what to call it instead. The same
   goes for the state, the macros, the user menu and the plugins folder.
 
+### Changed
+
+- **`Ctrl+O` takes the panels off rather than opening a screen of its own.** It used to show
+  the output of past commands as a read-only view you could only scroll and leave; FAR's
+  `Ctrl+O` hides the panels and hands the screen back to the console with everything else still
+  live. It does that now: the command line, the menus and every key keep working with the
+  panels off, `PgUp` and `PgDn` turn pages through the output, and the same key brings the
+  panels back. The Commands menu row that says `Panels on/off` finally does.
+
 ### Added
 
 - **The full view separates the extension from the name**, as FAR does: the names run down the

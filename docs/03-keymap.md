@@ -96,7 +96,7 @@ Column `SC` = FinalCommander default (profile `far`, our baseline).
 | info panel | Ctrl+L | Ctrl+x i | Alt+↓ (sidebar) | Ctrl+L |
 | quick view panel | Ctrl+Q | Ctrl+x q | — | Ctrl+Q |
 | tree panel | Ctrl+T | — | — | Ctrl+T |
-| hide both panels | Ctrl+O (user screen) | Ctrl+O | — | Ctrl+O |
+| hide both panels | Ctrl+O | Ctrl+O | — | Ctrl+O |
 | hide inactive panel | Ctrl+P | — | — | Ctrl+P |
 | panel height / width | Ctrl+↑/↓, Ctrl+←/→ | — | — | Ctrl+↑/↓, Ctrl+←/→ — `Ctrl+↑` brings the panels' bottom edge **up**, so they get shorter and the command output below them gets the rows |
 | toggle hidden files | Ctrl+H | Alt+. (Shift+Alt+H in some builds) | Alt+. | Ctrl+H |

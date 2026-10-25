@@ -25,7 +25,9 @@ keep their name whole.
 force reverses it. `Ctrl+F12` offers the orders as a list.
 
 `Ctrl+H` shows the hidden files, `Ctrl+F1` and `Ctrl+F2` hide a panel to give the other one
-the whole screen, and `Ctrl+O` hides both to show the output of the commands that have run.
+the whole screen, and `Ctrl+O` takes both off to show what the commands have printed. With the
+panels off everything else still works — the command line, the menus, the keys — and `PgUp` and
+`PgDn` turn pages through the output; `Ctrl+O` brings the panels back.
 
 `Ctrl+R` re-reads. `Ctrl+L` turns the other panel into an information panel, `Ctrl+Q` into a
 preview of the file under the cursor, `Ctrl+T` into a directory tree.

@@ -142,10 +142,16 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
     // `Ctrl+Up`/`Ctrl+Down` take rows off the panels and give them to the user screen, which
     // is how FAR lets you watch what a command printed without leaving the panels. Six rows
     // is the least a panel is worth drawing at: a frame, a titles row, the foot and a file.
-    let panels_h = full_h
-        .saturating_sub(app.cfg.panel.height_cut)
-        .max(6)
-        .min(full_h);
+    let panels_h = if app.panels_off {
+        // `Ctrl+O`: no panels at all, and the whole screen above the command line is what the
+        // commands printed. The rest of the program is exactly where it was.
+        0
+    } else {
+        full_h
+            .saturating_sub(app.cfg.panel.height_cut)
+            .max(6)
+            .min(full_h)
+    };
 
     // `Ctrl+F1`/`Ctrl+F2` hide one panel and give the screen to the other: a zero-width area
     // draws nothing, which is all "panel off" has to mean.
@@ -197,11 +203,16 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
 
     // Remember the geometry so key handling knows how far a page is. It is the active
     // panel's, because that is the one the keys move through.
-    app.rows = widgets::panel_rows(
-        areas[app.active],
-        app.cfg.panel.column_titles,
-        app.cfg.panel.status_line,
-    );
+    app.rows = if app.panels_off {
+        // There is no panel to page through; a page is the screen the output is on.
+        full_h as usize
+    } else {
+        widgets::panel_rows(
+            areas[app.active],
+            app.cfg.panel.column_titles,
+            app.cfg.panel.status_line,
+        )
+    };
     app.columns = widgets::brief_columns(areas[app.active], app.panels[app.active].view);
     for i in 0..2 {
         let (rows, cols) = (app.rows, app.columns);
@@ -295,8 +306,14 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         let style = Style::new(fcmd_ui::Color::Default, fcmd_ui::Color::Default);
         buf.fill(area, ' ', style);
         let rows = area.h as usize;
-        let start = app.user_screen.len().saturating_sub(rows);
-        for (i, line) in app.user_screen[start..].iter().enumerate() {
+        // Scrolled back by whatever `PgUp` has asked for, and never past the first line.
+        let end = app
+            .user_screen
+            .len()
+            .saturating_sub(app.user_scroll)
+            .max(rows.min(app.user_screen.len()));
+        let start = end.saturating_sub(rows);
+        for (i, line) in app.user_screen[start..end].iter().enumerate() {
             let text = fcmd_ui::truncate_cols(line, w as usize);
             buf.put_str(0, area.y + i as u16, &text, style, w);
         }
@@ -2496,6 +2513,22 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
         // two pieces: `Cargo` down the left of the field and `toml` against the size column.
         assert!(out.contains("Cargo") && out.contains("toml"), "{out}");
         assert!(!out.contains("Cargo.toml"), "{out}");
+    }
+
+    #[test]
+    fn with_the_panels_off_the_screen_is_the_output_and_the_rest_still_works() {
+        let mut app = app("commander", "en");
+        app.user_screen = vec!["$ cargo build".into(), "Finished in 3.70s".into()];
+        app.panels_off = true;
+        let out = frame(&mut app, 80, 24);
+        assert!(!out.contains("Cargo.toml"), "the panels are gone: {out}");
+        assert!(!out.contains("Cargo"), "including their names: {out}");
+        assert!(out.contains("$ cargo build"), "{out}");
+        assert!(out.contains("Finished in 3.70s"), "{out}");
+        // The command line is where it was, with the path it had.
+        assert!(out.contains("/home/mb/project>"), "{out}");
+        // And so is the key bar: the keys all still work, which is the point.
+        assert!(out.contains("Help") && out.contains("Quit"), "{out}");
     }
 
     #[test]

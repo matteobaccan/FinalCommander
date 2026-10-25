@@ -119,6 +119,9 @@ keeps it as the run's artifact; publishing happens only through `workflow_dispat
 2. **The rename to FinalCommander** — crates, binary, configuration, plugin environment,
    release assets and pictures. Old configuration file names are still read and written, with
    one line on the startup screen saying so.
+3. **The extension in a column of its own** in the full view, as FAR draws it.
+4. **`Ctrl+O` takes the panels off** instead of opening a read-only screen: the command line,
+   the menus and the keys all keep working, and `PgUp`/`PgDn` page through the output.
 
 `main` was created from that work and is where it goes on.
 
@@ -126,12 +129,9 @@ keeps it as the run's artifact; publishing happens only through `workflow_dispat
 
 In the order they were raised, all from a side-by-side comparison with FAR on Windows:
 
-- **View modes.** In `full`, the extension should be a column of its own, right-aligned,
-  separate from the name. The `wide` layout and the `detailed` columns (Size, Allocated,
-  Write, Created, Accessed, Attributes) still differ from FAR's, and the file-owners mode is
-  not built.
-- **`Ctrl+O`** should hide both panels and leave the program fully operable; today it shows a
-  read-only, scrollable user screen.
+- **View modes.** The extension column in `full` is done. The `wide` layout and the
+  `detailed` columns (Size, Allocated, Write, Created, Accessed, Attributes) still differ
+  from FAR's, and the file-owners mode is not built.
 - **The info panel and quick view on a folder** show less than FAR's: disk, memory, cluster
   size and slack are missing.
 - **Menu mnemonics.** The mechanism ships (`&` in a label marks the letter, the dropdown
