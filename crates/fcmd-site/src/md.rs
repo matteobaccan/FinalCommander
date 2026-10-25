@@ -13,7 +13,7 @@
 use pulldown_cmark::{html, Options, Parser};
 
 /// Where the repository lives, for the links this site does not publish itself.
-pub const REPO: &str = "https://github.com/matteobaccan/SupremeCommander";
+pub const REPO: &str = "https://github.com/matteobaccan/FinalCommander";
 
 /// Markdown to HTML, with the extensions the repository's documents actually use.
 pub fn to_html(markdown: &str) -> String {

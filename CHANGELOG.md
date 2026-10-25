@@ -1470,4 +1470,4 @@ Archives, the trash (`F8` deletes permanently), the command line and the user sc
 open editor buffers, tabs, the diff viewer and the background job queue. Anything
 unimplemented says so rather than doing nothing.
 
-[0.0.1]: https://github.com/matteobaccan/SupremeCommander/releases/tag/v0.0.1
+[0.0.1]: https://github.com/matteobaccan/FinalCommander/releases/tag/v0.0.1

@@ -11,8 +11,9 @@ executable of about five megabytes with no runtime, no asset directory and no pl
 assemble. Linux, macOS and Windows, the same program on each. Rust, MSRV 1.89, MIT.
 
 It shipped as **SupremeCommander** with the command `scmd` up to 0.4.0; since then it is
-**FinalCommander**, command `fcmd`. The GitHub repository and the published releases still
-answer to the old name until the repository itself is renamed.
+**FinalCommander**, command `fcmd`, and the repository is `matteobaccan/FinalCommander`. The
+releases published before the rename still carry the old name in their archives, and GitHub
+redirects the old repository URL to the new one.
 
 ## House rules
 

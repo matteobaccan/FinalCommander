@@ -95,13 +95,13 @@ They cannot show a version of the program that no longer exists.
 ## Install
 
 One file, nothing to install beside it. Download the archive for your machine from the
-[releases page](https://github.com/matteobaccan/SupremeCommander/releases), unpack it, and put
+[releases page](https://github.com/matteobaccan/FinalCommander/releases), unpack it, and put
 `fcmd` somewhere on your `PATH`.
 
 Up to and including 0.4.0 the program was called SupremeCommander and its command was `scmd`,
-which is why the releases and the repository still answer to that name. A configuration from
-that version keeps working: every file is read under its new name first and its old one after,
-and the startup screen says which one it found.
+which is the name the archives of those releases carry. A configuration from that version keeps
+working: every file is read under its new name first and its old one after, and the startup
+screen says which one it found.
 
 | Platform | Archive |
 | --- | --- |
@@ -128,7 +128,7 @@ needs `xattr -d com.apple.quarantine fcmd` (or Open anyway in System Settings �
 From source, with Rust 1.89 or newer:
 
 ```sh
-cargo install --git https://github.com/matteobaccan/SupremeCommander fcmd
+cargo install --git https://github.com/matteobaccan/FinalCommander fcmd
 ```
 
 Everything the program keeps on disk is optional and amounts to three things: one settings
@@ -276,7 +276,7 @@ crates/fcmd-site     the generator for the project's site: the repository's own 
 The last one is not part of the program — `fcmd` does not link it, and a release does not
 build it. It reads this file, the changelog, the commander survey, the help chapters in
 `docs/help/` and the screenshots in `docs/shots/`, and writes the static site published at
-<https://matteobaccan.github.io/SupremeCommander/> — 38 pages, no framework, no fonts or
+<https://matteobaccan.github.io/FinalCommander/> — 38 pages, no framework, no fonts or
 scripts fetched from anywhere, in the seven languages the interface speaks. `cargo run -p
 fcmd-site -- --out site` writes it locally, and the workflow builds it on every push and keeps
 it as the run's artifact. Nothing publishes by itself: a site on GitHub Pages is public to

@@ -3,8 +3,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: What is deliberately not done yet
-    url: https://github.com/matteobaccan/SupremeCommander/blob/main/docs/BACKLOG.md
+    url: https://github.com/matteobaccan/FinalCommander/blob/main/docs/BACKLOG.md
     about: Every known gap, each with the reason it is still a gap
   - name: The specification
-    url: https://github.com/matteobaccan/SupremeCommander/tree/main/docs/spec
+    url: https://github.com/matteobaccan/FinalCommander/tree/main/docs/spec
     about: What the program is meant to do, section by section
