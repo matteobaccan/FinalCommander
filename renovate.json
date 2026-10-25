@@ -2,5 +2,17 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended"
+  ],
+  "packageRules": [
+    {
+      "description": "sevenz-rust2 still asks for lzma-rust2 0.23, so taking 0.24 here would build the LZMA codec into the binary twice. Lift this when sevenz-rust2 follows.",
+      "matchPackageNames": ["lzma-rust2"],
+      "allowedVersions": "<0.24"
+    },
+    {
+      "description": "reqwest 0.13 renamed the TLS features: rustls-tls-native-roots is gone, and 0.13's rustls feature brings aws-lc-rs, the backend this workspace refuses for its OpenSSL licence and its C toolchain. The port is rustls-no-provider plus installing the ring provider before the first request, in both fcmd-s3 and fcmd-net — a commit of its own rather than a version bump. See docs/BACKLOG.md.",
+      "matchPackageNames": ["reqwest"],
+      "allowedVersions": "<0.13"
+    }
   ]
 }
