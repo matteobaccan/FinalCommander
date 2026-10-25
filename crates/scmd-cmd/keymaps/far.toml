@@ -81,6 +81,14 @@ keys = ["Ctrl+Down"]
 scope = "panel"
 cmd = "panel.height(1)"
 
+# Synchronise the two panels' directories. Total Commander's key for this is `Ctrl+Y`, which
+# is FAR's own "clear the command line" and stays that — so one modifier along, and
+# `--check-keymap` is what said so.
+[[bind]]
+keys = ["Ctrl+Shift+Y"]
+scope = "panel"
+cmd = "tool.sync.dirs"
+
 # What can be done with the archive under the cursor, as a menu — MultiArc's `ArcCmd`.
 [[bind]]
 keys = ["Shift+F3"]

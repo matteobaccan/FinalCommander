@@ -190,6 +190,22 @@ sum-differs = non corrisponde
 sum-missing = non c’è
 sum-unreadable = non si può leggere
 
+# Synchronising two directories (SPEC 03 §10)
+sync-title = Sincronizza
+sync-between = { $left }  ↔  { $right }
+sync-recursive = Anche tutto nelle sottodirectory
+sync-both-ways = Nei due versi, vince il più recente
+sync-delete-extra = Proponi di togliere ciò che l’altro lato non ha
+sync-by-content = Confronta i byte, non dimensione e data
+sync-filter = Solo i nomi che corrispondono
+sync-walking = esamina { $at } — { $pairs } finora
+sync-planned = { $copies } da copiare ({ $bytes }), { $deletes } da togliere
+sync-hint = Spazio risposta successiva · ← → verso · = lascia · F2 esegui · Esc annulla
+sync-hint-walking = Esc interrompe la scansione
+sync-nothing-to-do = ogni riga dice di lasciare le cose come stanno
+sync-local-only = una sincronizzazione può leggere e scrivere solo su questa macchina
+sync-same-directory = i due pannelli sono nella stessa directory
+
 key-wrap = Ritorno
 key-hex = Hex
 key-text = Testo
@@ -332,6 +348,7 @@ menu-swap-panels = Scambia i pannelli
 menu-sync-panel = Allinea l'altro pannello
 menu-panels-onoff = Pannelli sì/no
 menu-compare-folders = Confronta cartelle
+menu-sync-folders = Sincronizza cartelle
 menu-compare-contents = Confronta per contenuto
 menu-tunnel = Apri un tunnel…
 menu-tunnels = Tunnel…

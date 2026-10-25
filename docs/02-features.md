@@ -78,7 +78,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 3.11 | Multi-rename tool: patterns (`[N]`, `[E]`, counters, date, regex, case changes), live preview, undo | TC/KRU | M2 |
 | 3.12 | Split / combine files; ~~checksum create & verify (`.md5`, `.sha1`, `.sha256`)~~ | TC/KRU | **checksums shipped** (MD5, SHA-1, SHA-256, in the format those tools read); split, combine and `.sfv` still to come |
 | 3.13 | Apply command to each selected file (`Ctrl+G` style), with `%`-macros | FAR | M2 |
-| 3.14 | Compare directories (by name/size/date/content), synchronise directories with preview and one-way/two-way modes | TC/KRU | M2 |
+| 3.14 | ~~Compare directories (by name/size/date/content), synchronise directories with preview and one-way/two-way modes~~ | TC/KRU | **shipped**; comparing subfolders in the *compare* command, and a saved sync job, still to come |
 | 3.15 | Compare files by content (internal diff viewer, side-by-side, word-level) | MC/KRU | M3 |
 | 3.16 | Change encoding / line endings in bulk (CRLF↔LF, codepage recode) | MC | M3 |
 | 3.17 | File descriptions/comments (`descript.ion`, `files.bbs`) | FAR | M3 |

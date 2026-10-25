@@ -37,6 +37,8 @@ pub enum FormKind {
     Copy,
     /// Which hash, and where the list of digests goes (SPEC 03 §9).
     Checksum,
+    /// Which way to synchronise, and what counts as the same (SPEC 03 §10).
+    Sync,
     /// Find text in what the viewer or the editor has open (SPEC 05 §1.4).
     Search,
     System,
@@ -399,6 +401,11 @@ pub fn menus() -> Vec<Menu> {
                     "menu-compare-folders",
                     "",
                     Action::Run(Command::ToolCompareDirs),
+                ),
+                item(
+                    "menu-sync-folders",
+                    "Ctrl+Shift+Y",
+                    Action::Run(Command::ToolSyncDirs),
                 ),
                 item("menu-tunnel", "", Action::Run(Command::NetTunnel)),
                 item("menu-tunnels", "", Action::Run(Command::NetTunnels)),

@@ -166,7 +166,8 @@ every key on the screen you are looking at does.
   an interrupted operation never leaves a file that looks finished. `F8` hands what you chose
   to the system's own wastebasket — the one your desktop's file manager shows — and `Shift+Del`
   deletes outright. Checksums (MD5, SHA-1, SHA-256) are written in the format `sha256sum`
-  reads, and a list can be checked back against the files beside it.
+  reads, and a list can be checked back against the files beside it. `Ctrl+Shift+Y`
+  synchronises two directories through a table you can edit before anything is written.
 - **Panels**: `Tab` / `Ctrl+U`, arrows / `PgUp` / `PgDn` / `Home` / `End` / `Enter` /
   `Ctrl+PgUp` / `Backspace` / `Ctrl+\` with history (`Alt+←/→`), `Ins` and `+` / `-` / `*`
   selection by mask, `Ctrl+F3..F9` sorting (press twice to reverse), `Ctrl+1..5` view modes,

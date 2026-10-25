@@ -72,6 +72,31 @@ of its own — the error says which key deletes it instead.
 honest about what that is worth on an SSD, on a copy-on-write filesystem and with snapshots
 about.
 
+# Keeping two folders the same
+
+`Ctrl+Shift+Y` synchronises the two panels' directories. It happens in three steps, and the
+middle one is the point:
+
+1. A dialog asks how to decide — one way (the left panel is the source) or both ways with the
+   newer file winning, whether to go into the subdirectories, whether to offer to take out
+   what the other side does not have, a mask, and whether to compare the bytes rather than the
+   size and the date.
+2. A **table** of every pair, with an arrow in the middle saying which way that file is about
+   to go. `Space` walks through the answers a row allows and steps down, `←` and `→` say which
+   way, `=` leaves it alone. Rows that will do nothing are dim; a clash — the same date and a
+   different size, or a file against a folder — is marked and does nothing until you choose.
+3. `F2` does it. **Nothing** is written before that, so the table is also the dry run.
+
+Two seconds of difference counts as the same file, because that is what a trip through a
+memory stick or a zip does to a timestamp, and treating it as a change would copy everything
+every time. If you need to catch a change that kept the same size and the same date, tick
+*Compare the bytes* — it reads both sides.
+
+The copies overwrite without asking: the table was the question, and you answered it row by
+row. A row that takes a file out puts it in the wastebasket, the same as `F8` does.
+
+Both folders have to be on this machine for now.
+
 # Finding things
 
 `Alt+F7` searches for files: a mask, text inside them, and where to look. The results are a

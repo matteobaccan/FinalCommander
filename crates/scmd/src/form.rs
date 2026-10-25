@@ -136,6 +136,7 @@ impl Form {
             | FormKind::Attributes
             | FormKind::Copy
             | FormKind::Checksum
+            | FormKind::Sync
             | FormKind::Search => Vec::new(),
             FormKind::System => vec![
                 Field::toggle(
@@ -295,6 +296,7 @@ impl Form {
             FormKind::Attributes => "attr-title",
             FormKind::Copy => "copy-title",
             FormKind::Checksum => "sum-title",
+            FormKind::Sync => "sync-title",
             FormKind::Search => "search-title",
             FormKind::System => "menu-system-settings",
             FormKind::Panel => "menu-panel-settings",
@@ -574,6 +576,59 @@ impl Form {
             } else {
                 "copy-title"
             }),
+            fields,
+            cursor: 1,
+            site: None,
+            button: None,
+            buttons: vec![i18n.t("btn-ok"), i18n.t("btn-cancel")],
+        }
+    }
+
+    /// Which way to synchronise two directories, and what counts as the same (SPEC 03 §10).
+    ///
+    /// Every row here changes what the *table* will say, not what will happen: the table is
+    /// the question, and this is only how it is worked out. So the defaults are the two that
+    /// cannot lose anything — walk the trees, leave extras alone — and the two that can are
+    /// off until somebody ticks them.
+    pub fn sync(
+        left: String,
+        right: String,
+        options: &scmd_jobs::sync::Options,
+        i18n: &I18n,
+    ) -> Form {
+        let t = |id: &str| i18n.t(id);
+        let fields = vec![
+            Field::Note(i18n.t_args(
+                "sync-between",
+                &[("left", left.into()), ("right", right.into())],
+            )),
+            Field::toggle("sync.recursive", t("sync-recursive"), options.recursive),
+            Field::Separator,
+            // Off: one way, the left panel being the source, which is what a backup is and
+            // what somebody who has not thought about it expects.
+            Field::toggle("sync.both_ways", t("sync-both-ways"), options.both_ways),
+            Field::toggle(
+                "sync.delete_extra",
+                t("sync-delete-extra"),
+                options.delete_extra,
+            ),
+            Field::Separator,
+            // Off: the size and the time answer it for almost nothing, and reading every byte
+            // of both trees to be sure is a choice somebody should make deliberately.
+            Field::toggle("sync.by_content", t("sync-by-content"), options.by_content),
+            Field::text(
+                "sync.filter",
+                t("sync-filter"),
+                options
+                    .filter
+                    .as_ref()
+                    .map(|f| f.source().to_string())
+                    .unwrap_or_default(),
+            ),
+        ];
+        Form {
+            kind: FormKind::Sync,
+            title: t("sync-title"),
             fields,
             cursor: 1,
             site: None,

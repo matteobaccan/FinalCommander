@@ -19,6 +19,7 @@ pub mod replace;
 pub mod run;
 pub mod spec;
 pub mod sum;
+pub mod sync;
 
 pub use arcfs::ArcFs;
 pub use attrs::{set_attributes, Change, Mode};

@@ -196,6 +196,22 @@ sum-differs = does not match
 sum-missing = not there
 sum-unreadable = cannot be read
 
+# Synchronising two directories (SPEC 03 §10)
+sync-title = Synchronise
+sync-between = { $left }  ↔  { $right }
+sync-recursive = Everything in the subdirectories too
+sync-both-ways = Both ways, the newer one winning
+sync-delete-extra = Offer to take out what the other side does not have
+sync-by-content = Compare the bytes, not the size and the time
+sync-filter = Only the names that match
+sync-walking = looking at { $at } — { $pairs } so far
+sync-planned = { $copies } to copy ({ $bytes }), { $deletes } to take out
+sync-hint = Space the next answer · ← → which way · = leave it · F2 do it · Esc cancel
+sync-hint-walking = Esc stops the walk
+sync-nothing-to-do = every row says to leave things as they are
+sync-local-only = a synchronisation can only read and write on this machine
+sync-same-directory = both panels are in the same directory
+
 # Viewer (F3)
 key-wrap = Wrap
 key-hex = Hex
@@ -340,6 +356,7 @@ menu-swap-panels = Swap panels
 menu-sync-panel = Sync other panel
 menu-panels-onoff = Panels on/off
 menu-compare-folders = Compare folders
+menu-sync-folders = Synchronise folders
 menu-compare-contents = Compare by content
 menu-tunnel = Open a tunnel…
 menu-tunnels = Tunnels…

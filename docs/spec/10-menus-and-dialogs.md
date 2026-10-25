@@ -219,6 +219,19 @@ Both read the bytes and write nothing but the list, so `Esc` stops a run the way
 comparison by content, and a path this filesystem cannot read a chunk at a time is refused
 before the dialog opens rather than halfway through.
 
+### 3.10 Synchronise (Commands menu, `Ctrl+Shift+Y`)
+
+Six rows: into the subdirectories, both ways, offer to take out the extras, compare the bytes,
+and a mask — and a line at the top naming the two directories, because which side is "left" is
+the whole of what the arrows in the table mean. What the dialog was last answered with is what
+the next one opens on, as the copy dialog does.
+
+The defaults are the two that cannot lose anything — walk the trees, leave extras alone — and
+the two that can are off until somebody ticks them.
+
+It is not the question, though: the *table* is (`03-file-operations.md` §10a), and this only
+says how to work it out.
+
 ## 4. Choose-one lists
 
 One framed list, one `√` on the row in force, `↑`/`↓`/`PgUp`/`PgDn`/`Home`/`End` to move,

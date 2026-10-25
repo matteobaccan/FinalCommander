@@ -358,6 +358,10 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             draw_find(app, view, buf, screen);
             None
         }
+        Mode::Sync(view) => {
+            draw_sync(app, view, buf, screen);
+            None
+        }
         Mode::Prompt(prompt) => {
             // A password is never put on the screen, not even for a frame.
             let shown = if prompt.secret {
@@ -1598,6 +1602,149 @@ fn cursor_line(app: &App, panel: &crate::panel::Panel) -> String {
 
 /// A search: its results so far, what it is scanning, and what the keys do. Full screen,
 /// because a list of results is the thing you are working with, not a message about one.
+/// The synchronisation table (SPEC 03 §10): one row per pair, with what will happen to it.
+///
+/// The shape is the point. The arrow is in the middle, between the two sides' sizes and
+/// times, so which way a file is about to go is read in the same place on every row — and the
+/// rows that will do nothing are dim, so what the eye lands on is what is about to change.
+fn draw_sync(app: &App, view: &crate::app::SyncView, buf: &mut Buffer, screen: Rect) {
+    use scmd_jobs::sync::{Action, Verdict};
+
+    let base = app.theme.panel();
+    let frame = Style::new(app.theme.color("panel.frame"), app.theme.color("panel.bg"));
+    let dim = Style::new(
+        app.theme.color("panel.footer.fg"),
+        app.theme.color("panel.bg"),
+    );
+    let picked = Style::new(app.theme.color("cursor.fg"), app.theme.color("cursor.bg"));
+    let gone = Style::new(app.theme.color("file.exec"), app.theme.color("panel.bg"));
+    let clash = Style::new(app.theme.color("selected.fg"), app.theme.color("panel.bg"));
+
+    buf.fill(screen, ' ', base);
+    let title = app.i18n.t("sync-title");
+    buf.draw_frame(screen, frame, Some(&title));
+    let inner = screen.inner();
+    if inner.h < 4 {
+        return;
+    }
+    // Three rows at the foot: the two roots, what the totals are, and what the keys do.
+    let list_h = inner.h.saturating_sub(3) as usize;
+    // ` size  time ` on each side of a three-column arrow, wide enough for the whole of a
+    // time: a date cut off halfway is worse than no date.
+    let side_w = 28u16;
+    let arrow_w = 4u16;
+    let name_w = inner.w.saturating_sub(side_w * 2 + arrow_w + 2).max(8);
+
+    for i in 0..list_h {
+        let Some(pair) = view.pairs.get(view.top + i) else {
+            break;
+        };
+        let y = inner.y + i as u16;
+        let on = view.top + i == view.cursor;
+        let style = if on {
+            picked
+        } else {
+            match (pair.verdict, pair.action) {
+                (_, Action::DeleteLeft | Action::DeleteRight) => gone,
+                (Verdict::Conflict, _) => clash,
+                (Verdict::Same, _) => dim,
+                _ => base,
+            }
+        };
+        if on {
+            buf.fill(Rect::new(inner.x, y, inner.w, 1), ' ', style);
+        }
+        let name = if pair.is_dir() {
+            format!("{}/", pair.rel)
+        } else {
+            pair.rel.clone()
+        };
+        buf.put_str(
+            inner.x,
+            y,
+            &scmd_ui::elide_middle(&name, name_w as usize),
+            style,
+            name_w,
+        );
+        let facts = |side: &Option<scmd_jobs::Facts>| -> String {
+            match side {
+                Some(f) if f.is_dir() => format!("{:>9}  {:<16}", "", ""),
+                Some(f) => format!(
+                    "{:>9}  {:<16}",
+                    scmd_core::format_size(f.size),
+                    f.mtime.map(widgets::format_mtime).unwrap_or_default()
+                ),
+                None => String::new(),
+            }
+        };
+        let mut x = inner.x + name_w + 1;
+        buf.put_str(x, y, &facts(&pair.left), style, side_w);
+        x += side_w;
+        buf.put_str(x, y, &format!(" {} ", pair.action.mark()), style, arrow_w);
+        x += arrow_w;
+        if x < inner.right() {
+            buf.put_str(x, y, &facts(&pair.right), style, inner.right() - x);
+        }
+    }
+
+    // The two roots, so there is never a doubt which side is which.
+    let roots = Rect::new(inner.x, inner.bottom() - 3, inner.w, 1);
+    let between = app.i18n.t_args(
+        "sync-between",
+        &[
+            ("left", view.left.to_string().into()),
+            ("right", view.right.to_string().into()),
+        ],
+    );
+    buf.put_str(
+        roots.x,
+        roots.y,
+        &scmd_ui::elide_middle(&between, roots.w as usize),
+        dim,
+        roots.w,
+    );
+
+    let (copies, deletes, bytes) = view.totals();
+    let foot = if view.done {
+        app.i18n.t_args(
+            "sync-planned",
+            &[
+                ("copies", (copies as i64).into()),
+                ("deletes", (deletes as i64).into()),
+                ("bytes", scmd_core::format_size(bytes).into()),
+            ],
+        )
+    } else {
+        app.i18n.t_args(
+            "sync-walking",
+            &[
+                ("at", view.scanning.clone().unwrap_or_default().into()),
+                ("pairs", (view.pairs.len() as i64).into()),
+            ],
+        )
+    };
+    let y = inner.bottom() - 2;
+    buf.put_str(
+        inner.x,
+        y,
+        &scmd_ui::truncate_cols(&foot, inner.w as usize),
+        base,
+        inner.w,
+    );
+    let hint = app.i18n.t(if view.done {
+        "sync-hint"
+    } else {
+        "sync-hint-walking"
+    });
+    buf.put_str(
+        inner.x,
+        inner.bottom() - 1,
+        &scmd_ui::truncate_cols(&hint, inner.w as usize),
+        dim,
+        inner.w,
+    );
+}
+
 fn draw_find(app: &App, view: &crate::app::FindView, buf: &mut Buffer, screen: Rect) {
     let base = app.theme.panel();
     let frame = Style::new(app.theme.color("panel.frame"), app.theme.color("panel.bg"));
@@ -3284,6 +3431,118 @@ Some **bold** text and a [link](https://example.com).
             under.contains('\u{2554}'),
             "the left panel's corner: {under}"
         );
+    }
+
+    /// The table, built by hand rather than by a walk: what it draws is the point, and a real
+    /// walk would put temporary directory names in a picture meant to be read.
+    fn sync_view() -> crate::app::SyncView {
+        use scmd_jobs::sync::{Action, Pair, Verdict};
+        let when = |secs: u64| {
+            Some(std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(secs))
+        };
+        let facts = |size: u64, secs: u64| {
+            Some(scmd_jobs::Facts {
+                kind: scmd_core::EntryKind::File,
+                size,
+                mtime: when(secs),
+                mode: None,
+                readonly: false,
+            })
+        };
+        let pair = |rel: &str, left, right, verdict, action| Pair {
+            rel: rel.to_string(),
+            left,
+            right,
+            verdict,
+            action,
+        };
+        crate::app::SyncView {
+            id: 1,
+            left: scmd_core::VPath::local("/home/mb/src/supreme"),
+            right: scmd_core::VPath::local("/media/stick/supreme"),
+            pairs: vec![
+                pair(
+                    "README.md",
+                    facts(4_210, 1_700_000_000),
+                    facts(3_980, 1_699_000_000),
+                    Verdict::Differ,
+                    Action::Right,
+                ),
+                pair(
+                    "Cargo.toml",
+                    facts(812, 1_700_000_000),
+                    facts(812, 1_700_000_000),
+                    Verdict::Same,
+                    Action::Skip,
+                ),
+                pair(
+                    "notes.txt",
+                    None,
+                    facts(1_024, 1_700_500_000),
+                    Verdict::OnlyRight,
+                    Action::DeleteRight,
+                ),
+                pair(
+                    "crates/scmd-view/src/markdown.rs",
+                    facts(31_002, 1_700_400_000),
+                    None,
+                    Verdict::OnlyLeft,
+                    Action::Right,
+                ),
+                pair(
+                    "docs/BACKLOG.md",
+                    facts(22_140, 1_700_000_000),
+                    facts(22_900, 1_700_000_000),
+                    Verdict::Conflict,
+                    Action::Skip,
+                ),
+            ],
+            cursor: 0,
+            top: 0,
+            scanning: None,
+            done: true,
+            stopped: false,
+            cancel: scmd_core::CancelToken::new(),
+        }
+    }
+
+    #[test]
+    fn the_sync_table_shows_both_sides_and_which_way_each_row_goes() {
+        let mut app = app("commander", "en");
+        app.mode = crate::app::Mode::Sync(Box::new(sync_view()));
+        let out = frame(&mut app, 100, 20);
+        assert!(out.contains("Synchronise"), "{out}");
+        // Both roots, so there is never a doubt which side is which.
+        assert!(out.contains("/home/mb/src/supreme"), "{out}");
+        assert!(out.contains("/media/stick/supreme"), "{out}");
+        // The arrow is what says which way, and the row that does nothing says so with `=`.
+        let readme = out
+            .lines()
+            .find(|l| l.contains("README.md"))
+            .expect("the README row");
+        assert!(readme.contains('\u{2192}'), "{readme}");
+        let cargo = out
+            .lines()
+            .find(|l| l.contains("Cargo.toml"))
+            .expect("the Cargo row");
+        assert!(cargo.contains('='), "{cargo}");
+        // A row with only one side has nothing in the other side's columns.
+        let only = out
+            .lines()
+            .find(|l| l.contains("notes.txt"))
+            .expect("the notes row");
+        assert!(only.contains('\u{2612}'), "taking it out is marked: {only}");
+        // The foot counts what will happen and what it will move.
+        assert!(out.contains("to copy"), "{out}");
+        assert!(out.contains("F2"), "and says which key does it: {out}");
+    }
+
+    #[test]
+    #[ignore = "a look at the screen, not an assertion"]
+    fn eyeball_sync() {
+        let mut app = app("commander", "en");
+        app.mode = crate::app::Mode::Sync(Box::new(sync_view()));
+        println!("{}", frame(&mut app, 100, 18));
     }
 
     #[test]

@@ -190,6 +190,22 @@ sum-differs = не совпадает
 sum-missing = нет такого файла
 sum-unreadable = не читается
 
+# Synchronising two directories (SPEC 03 §10)
+sync-title = Синхронизация
+sync-between = { $left }  ↔  { $right }
+sync-recursive = И всё в подкаталогах
+sync-both-ways = В две стороны, побеждает более новый
+sync-delete-extra = Предлагать удалить то, чего нет на другой стороне
+sync-by-content = Сравнивать байты, а не размер и время
+sync-filter = Только подходящие имена
+sync-walking = смотрим { $at } — пока { $pairs }
+sync-planned = скопировать { $copies } ({ $bytes }), удалить { $deletes }
+sync-hint = Пробел — следующий ответ · ← → направление · = оставить · F2 выполнить · Esc отмена
+sync-hint-walking = Esc прерывает обход
+sync-nothing-to-do = каждая строка говорит оставить всё как есть
+sync-local-only = синхронизация работает только на этой машине
+sync-same-directory = обе панели в одном каталоге
+
 key-wrap = Перенос
 key-hex = Hex
 key-text = Текст
@@ -332,6 +348,7 @@ menu-swap-panels = Поменять панели
 menu-sync-panel = Синхронизировать другую панель
 menu-panels-onoff = Панели вкл/выкл
 menu-compare-folders = Сравнить папки
+menu-sync-folders = Синхронизировать папки
 menu-compare-contents = Сравнить по содержимому
 menu-tunnel = Открыть туннель…
 menu-tunnels = Туннели…

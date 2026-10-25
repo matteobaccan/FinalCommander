@@ -206,6 +206,9 @@ pub enum Command {
     ToolUserMenu,
     /// Compare the two panels by name, size and time, and select what differs.
     ToolCompareDirs,
+    /// Make the two panels' directories hold the same thing: decide about every pair, show
+    /// the table, and only then copy and delete (SPEC 03 §10).
+    ToolSyncDirs,
     /// Compare the two panels by what is *in* the files: every pair with the same name is
     /// read on both sides and selected where the bytes differ. The slow, certain one.
     ToolCompareContents,
@@ -437,6 +440,7 @@ impl Command {
             Command::NetTunnels,
             Command::ToolUserMenu,
             Command::ToolCompareDirs,
+            Command::ToolSyncDirs,
             Command::ToolCompareContents,
             Command::ToolCalculator,
             Command::ToolTerminal,
@@ -654,6 +658,7 @@ impl Command {
             Command::NetTunnels => "net.tunnels".into(),
             Command::ToolUserMenu => "tool.usermenu".into(),
             Command::ToolCompareDirs => "tool.compare.dirs".into(),
+            Command::ToolSyncDirs => "tool.sync.dirs".into(),
             Command::ToolCompareContents => "tool.compare.contents".into(),
             Command::ToolCalculator => "tool.calculator".into(),
             Command::ToolTerminal => "tool.terminal".into(),
@@ -835,6 +840,7 @@ impl Command {
             ("cmd.insert.path", _) => Command::CmdInsertPath,
             ("cmd.insert.path.other", _) => Command::CmdInsertPathOther,
             ("tool.compare.dirs", _) => Command::ToolCompareDirs,
+            ("tool.sync.dirs", _) => Command::ToolSyncDirs,
             ("tool.compare.contents", _) => Command::ToolCompareContents,
             ("tool.calculator", _) => Command::ToolCalculator,
             ("tool.terminal", _) => Command::ToolTerminal,

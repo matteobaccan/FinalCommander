@@ -144,6 +144,15 @@ pub struct JobOptions {
     /// in one called `thing.zip` inside it. The target is treated as a directory and created
     /// if it is not there.
     pub contents: bool,
+    /// Keep each source's path relative to this root instead of copying it in by its name.
+    ///
+    /// A copy puts `src` at `target/name`, which is right for files a user picked out of a
+    /// panel and wrong for a set that came from walking a tree: `a/b/c.txt` has to land at
+    /// `target/a/b/c.txt` or the tree arrives flattened. A synchronisation is the one thing
+    /// that asks for this — it hands over a list of paths from under one root and means
+    /// "put each where it was" — and it is an option rather than a kind of its own because
+    /// everything else about the copy is the same copy.
+    pub relative_to: Option<VPath>,
 }
 
 impl Default for JobOptions {
@@ -157,6 +166,7 @@ impl Default for JobOptions {
             dry_run: false,
             filter: None,
             contents: false,
+            relative_to: None,
         }
     }
 }

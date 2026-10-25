@@ -120,7 +120,7 @@ Column `SC` = SupremeCommander default (profile `far`, our baseline).
 | find file | Alt+F7 | Alt+? | Ctrl+S | Alt+F7 |
 | disk usage | — | Ctrl+Space on a dir | Alt+Shift+S | Alt+Shift+S |
 | compare directories | Commands menu, no default key (marks what is missing or newer in the other panel; names, sizes and times only, no subfolders) | — | Alt+Shift+C | Alt+Shift+C |
-| synchronise directories | — | — | Ctrl+Y | Ctrl+Y |
+| synchronise directories | — | — | Ctrl+Y | **Ctrl+Shift+Y** — Total Commander's `Ctrl+Y` is FAR's *clear the command line*, and `--check-keymap` is what said so |
 | pack / unpack | Shift+F1 / Shift+F2 | — | Alt+Shift+P / Alt+Shift+U | Shift+F1 / Shift+F2 |
 | test archive | — | — | Alt+Shift+E | Alt+Shift+E |
 | multi-rename | — | — | Shift+F2 | Ctrl+M |

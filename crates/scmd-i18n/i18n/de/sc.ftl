@@ -190,6 +190,22 @@ sum-differs = stimmt nicht
 sum-missing = nicht vorhanden
 sum-unreadable = nicht lesbar
 
+# Synchronising two directories (SPEC 03 §10)
+sync-title = Abgleichen
+sync-between = { $left }  ↔  { $right }
+sync-recursive = Auch alles in den Unterverzeichnissen
+sync-both-ways = In beide Richtungen, das Neuere gewinnt
+sync-delete-extra = Anbieten zu entfernen, was die andere Seite nicht hat
+sync-by-content = Die Bytes vergleichen, nicht Größe und Zeit
+sync-filter = Nur die passenden Namen
+sync-walking = prüft { $at } — bisher { $pairs }
+sync-planned = { $copies } zu kopieren ({ $bytes }), { $deletes } zu entfernen
+sync-hint = Leer nächste Antwort · ← → Richtung · = lassen · F2 ausführen · Esc abbrechen
+sync-hint-walking = Esc bricht die Suche ab
+sync-nothing-to-do = jede Zeile sagt, alles so zu lassen
+sync-local-only = ein Abgleich kann nur auf diesem Rechner lesen und schreiben
+sync-same-directory = beide Fenster sind im gleichen Verzeichnis
+
 key-wrap = Umbruch
 key-hex = Hex
 key-text = Text
@@ -332,6 +348,7 @@ menu-swap-panels = Fenster tauschen
 menu-sync-panel = Anderes Fenster abgleichen
 menu-panels-onoff = Fenster ein/aus
 menu-compare-folders = Ordner vergleichen
+menu-sync-folders = Ordner abgleichen
 menu-compare-contents = Nach Inhalt vergleichen
 menu-tunnel = Tunnel öffnen…
 menu-tunnels = Tunnel…

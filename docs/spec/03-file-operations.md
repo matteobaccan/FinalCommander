@@ -10,7 +10,7 @@ same-filesystem rename fast path), recursive delete, nested mkdir, the conflict 
 per-file and a total bar, cancellation, metadata preservation (mtime, Unix mode), symlinks
 copied as links, write-to-`.scmd-part`-then-rename, the guards in §2, and a dry-run mode.
 **Still to come**: the job queue and journal (§5), verification and
-resume (§3), attribute dialogs (§7), multi-rename (§8), split and combine (§9), compare and
+resume (§3), attribute dialogs (§7), multi-rename (§8), split and combine (§9), and
 synchronise (§10).
 
 ## 1. Job model
@@ -202,6 +202,59 @@ self-recombining script; combine detects `.001`/`.part1`/`.zNN` series automatic
 - `tool.compare.dirs`: side-by-side compare by name/size/mtime(±tolerance)/content hash, with
   "ignore case / ignore date / subdirectories" options; result colours rows in both panels and
   can select the differing/newer/orphan sets.
-- `tool.sync.dirs`: a review table of planned actions (`→`, `←`, `=`, `≠`, `delete`), editable
-  per row, one-way or two-way with conflict rules, dry-run by default, then handed to the job
-  queue as a normal job.
+### 10a. Synchronise (shipped)
+
+`tool.sync.dirs` (`Ctrl+Shift+Y`, and the Commands menu) is three things in a row, and the
+order matters: a dialog that says how to decide, a **table** that says what was decided, and
+only then the jobs. Nothing is written until `F2` over the table, so what is on screen is the
+whole of what is about to happen, and every row of it can be changed first.
+
+**Deciding** is `scmd_jobs::sync`, which writes nothing at all. It walks both sides, pairs
+them up by the path they have in common, and gives each pair a verdict and a default action:
+
+| | |
+|---|---|
+| only on the left | `→` copy it over |
+| only on the right | `=` leave it, or `←` both ways, or `→☒` take it out when that was asked |
+| both, the same | `=` |
+| both, different | `→` one way; both ways, the newer side wins |
+| both, different, no rule to pick a side | nothing happens until somebody says which |
+
+Two directories both sides have are **walked**, not paired: what differs is inside them, and a
+row saying "these two directories differ" is a row nobody can act on. A directory only one
+side has is **one row**, because the copy takes its tree with it and a row per file inside it
+would be a hundred answers to one question.
+
+The same is decided by size and time, with **two seconds of slack** (`sync::TIME_SLACK`): FAT
+stores a time to the nearest two seconds and so does a zip's own directory, so a file that has
+been to a memory stick and back comes home one second different through nobody's fault.
+Treating that as a change would make every sync to a stick copy everything, every time —
+which is the one thing a sync must not do. *Compare the bytes* instead hashes both sides and
+compares the digests: two streams cannot be read side by side through a filesystem that pushes
+bytes at a callback rather than letting one pull them, so each is read once rather than both at
+once. It is the only option that sees a change of the same size at the same time.
+
+**Doing** is the copy and the delete that already exist — there is no `JobKind::Sync`. The
+table hands out up to four ordinary jobs, copies first so that a row saying "take this away"
+cannot run before the row that was going to put something in its place, and queued one at a
+time because two jobs writing at once would fight over the progress box and over the disk. The
+copies overwrite without asking, deliberately: the table *was* the question, answered row by
+row, and asking again about every file would undo the point of having reviewed it. A delete
+goes to the wastebasket when `general.use_trash` says so, exactly as `F8` does, because a sync
+that shredded what `F8` would have kept would be a nasty surprise.
+
+The one thing that made this fit in the existing engine is `JobOptions::relative_to`: a copy
+normally puts a source at `target/name`, which is right for files picked out of a panel and
+wrong for a set that came from walking a tree. With a root to be relative to, `a/b/c.txt`
+lands at `target/a/b/c.txt`, so one job carries a whole tree at the paths it had.
+
+Both sides have to be on this machine for now: the walk reads both and one of them is written,
+and it is said before the dialog opens rather than halfway through a run.
+
+Still to come: saving a pair of directories as a named job, and the dry run as a *report*
+rather than as the table (the table is already the dry run, but it does not write one down).
+
+### 10b. The rest
+
+- A named **job** that remembers a pair of directories and its rules, so a backup is one key
+  rather than a dialog each time, and the queue of §5 to run it in.

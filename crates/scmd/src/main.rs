@@ -967,6 +967,18 @@ fn interactive(mut app: App) -> Result<()> {
                 Request::Font { by } => {
                     let _ = term.font_step(by);
                 }
+                Request::SyncPlan {
+                    id,
+                    left,
+                    right,
+                    options,
+                    cancel,
+                } => {
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || {
+                        run_sync_plan(id, &left, &right, &options, cancel, tx)
+                    });
+                }
                 Request::TunnelOpen {
                     id,
                     authority,
@@ -1480,6 +1492,48 @@ fn tunnel_infos(tunnels: &Tunnels) -> Vec<app::TunnelInfo> {
 /// On a blocking thread, because the reading is blocking and a comparison of a thousand files
 /// must not sit in front of the panels. Progress goes out every few pairs rather than every
 /// pair: a thousand messages a second is a slower program than no messages at all.
+/// Walk both trees and decide about every pair (SPEC 03 §10).
+///
+/// Nothing is written here. What comes back is a table, and the jobs that follow are started
+/// by the user pressing `F2` over it.
+fn run_sync_plan(
+    id: u64,
+    left: &VPath,
+    right: &VPath,
+    options: &scmd_jobs::sync::Options,
+    cancel: CancelToken,
+    tx: mpsc::Sender<Event>,
+) {
+    let fs = scmd_jobs::LocalFs;
+    let mut last = std::time::Instant::now();
+    let result = scmd_jobs::sync::plan(&fs, left, right, options, &cancel, &mut |at, pairs| {
+        if last.elapsed() < std::time::Duration::from_millis(100) {
+            return;
+        }
+        last = std::time::Instant::now();
+        let _ = tx.send(Event::SyncProgress {
+            id,
+            at: at.to_string(),
+            pairs,
+        });
+    });
+    let event = match result {
+        Ok(pairs) => Event::SyncPlanned {
+            id,
+            pairs,
+            cancelled: cancel.is_cancelled(),
+            problem: None,
+        },
+        Err(e) => Event::SyncPlanned {
+            id,
+            pairs: Vec::new(),
+            cancelled: false,
+            problem: Some(e.to_string()),
+        },
+    };
+    let _ = tx.send(event);
+}
+
 /// Hash what was chosen and write the list (SPEC 03 §9).
 ///
 /// `target` is the one file they all go into; `None` writes a list beside each file, named
@@ -2943,6 +2997,19 @@ timeout = 10
                 }
                 // No terminal in a test: what the request carries is checked where it is made.
                 Request::Font { .. } => {}
+                Request::SyncPlan {
+                    id,
+                    left,
+                    right,
+                    options,
+                    cancel,
+                } => {
+                    let (tx, rx) = mpsc::channel();
+                    run_sync_plan(id, &left, &right, &options, cancel, tx);
+                    while let Ok(event) = rx.try_recv() {
+                        app.handle_event(event);
+                    }
+                }
                 Request::Find { id, spec, cancel } => {
                     let (tx, rx) = mpsc::channel();
                     run_find(id, *spec, cancel, tx);
@@ -3227,6 +3294,143 @@ timeout = 10
             "the passive panel was not refreshed"
         );
         assert!(app.status.contains("11 B"), "{}", app.status);
+    }
+
+    /// The whole chain: two trees on disk, the table, a row answered by hand, and then the
+    /// files where the table said they would be.
+    #[test]
+    fn a_synchronisation_does_what_its_table_said_and_nothing_else() {
+        let root = tempfile::tempdir().unwrap();
+        let left = root.path().join("source");
+        let right = root.path().join("backup");
+        std::fs::create_dir_all(left.join("shared")).unwrap();
+        std::fs::create_dir_all(left.join("fresh/deeper")).unwrap();
+        std::fs::create_dir_all(right.join("shared")).unwrap();
+        std::fs::write(left.join("new.txt"), b"brand new").unwrap();
+        // A file in a directory both sides have: it has to land at its own relative path.
+        std::fs::write(left.join("shared/under.txt"), b"in a subdirectory").unwrap();
+        // A whole directory only the left side has: one row, and the copy takes its tree.
+        std::fs::write(left.join("fresh/deeper/one.txt"), b"deep inside").unwrap();
+        // Different lengths on purpose: written in the same instant, two files of the same
+        // size would look identical to a comparison by size and time, which is what the
+        // *Compare the bytes* option exists for and not what this test is about.
+        std::fs::write(left.join("changed.txt"), b"the new text, which is longer").unwrap();
+        std::fs::write(right.join("changed.txt"), b"the old text").unwrap();
+        std::fs::write(right.join("extra.txt"), b"only on the right").unwrap();
+
+        let mut app = app_on(&left, &right);
+        serve(&mut app);
+        app.run(scmd_cmd::Command::ToolSyncDirs);
+        assert!(
+            matches!(&app.mode, app::Mode::Form(f) if f.kind == menu::FormKind::Sync),
+            "the options come first"
+        );
+        key(&mut app, "F10"); // the defaults: one way, into the subdirectories
+        serve(&mut app);
+
+        // The table, before anything has happened.
+        let app::Mode::Sync(view) = &app.mode else {
+            panic!("the table is on screen, not {:?}", app.mode)
+        };
+        assert!(view.done);
+        let action = |rel: &str| {
+            view.pairs
+                .iter()
+                .find(|p| p.rel == rel)
+                .unwrap_or_else(|| panic!("no row for {rel}"))
+                .action
+        };
+        use scmd_jobs::sync::Action;
+        assert_eq!(action("new.txt"), Action::Right);
+        assert_eq!(action("changed.txt"), Action::Right);
+        assert_eq!(action("shared/under.txt"), Action::Right);
+        assert_eq!(
+            action("fresh"),
+            Action::Right,
+            "a directory only one side has is one row, not one per file inside it"
+        );
+        assert_eq!(
+            action("extra.txt"),
+            Action::Skip,
+            "one way leaves an extra file alone unless asked"
+        );
+        // Nothing has been written yet: the table is a question.
+        assert!(!right.join("new.txt").exists());
+
+        // Answer one row by hand — the extra file is to go — and run it.
+        let row = view
+            .pairs
+            .iter()
+            .position(|p| p.rel == "extra.txt")
+            .expect("the extra row");
+        let app::Mode::Sync(view) = &mut app.mode else {
+            unreachable!("just matched")
+        };
+        view.cursor = row;
+        // `Space` answers the row *and steps down*, so answering one row twice means putting
+        // the cursor back on it first — otherwise the second press answers its neighbour.
+        let answer_again = |app: &mut App, row: usize| {
+            let app::Mode::Sync(view) = &mut app.mode else {
+                panic!("still the table")
+            };
+            view.cursor = row;
+            key(app, "Space");
+            let app::Mode::Sync(view) = &app.mode else {
+                panic!("still the table")
+            };
+            view.pairs[row].action
+        };
+        // The ring offers only what this pair allows. A row only the right side has cannot be
+        // copied rightwards and cannot be deleted on the left, so it is: leave it, bring it
+        // over, take it out.
+        assert_eq!(answer_again(&mut app, row), Action::Left, "bring it over");
+        assert_eq!(
+            answer_again(&mut app, row),
+            Action::DeleteRight,
+            "then take it out"
+        );
+        // And nothing else was answered on the way: every other row is as the walk left it.
+        let app::Mode::Sync(view) = &app.mode else {
+            panic!("still the table")
+        };
+        assert_eq!(
+            view.pairs
+                .iter()
+                .filter(|p| p.action == Action::Right)
+                .count(),
+            4,
+            "the four the walk decided are still the four"
+        );
+        // The wastebasket is off in these tests, so this is a plain delete.
+        key(&mut app, "F2");
+        for _ in 0..6 {
+            serve(&mut app);
+        }
+
+        assert_eq!(
+            std::fs::read(right.join("new.txt")).unwrap(),
+            b"brand new",
+            "the new file came over"
+        );
+        assert_eq!(
+            std::fs::read(right.join("changed.txt")).unwrap(),
+            b"the new text, which is longer",
+            "the changed one was overwritten without asking: the table was the question"
+        );
+        assert_eq!(
+            std::fs::read(right.join("shared/under.txt")).unwrap(),
+            b"in a subdirectory",
+            "and the one in a subdirectory kept its path"
+        );
+        assert_eq!(
+            std::fs::read(right.join("fresh/deeper/one.txt")).unwrap(),
+            b"deep inside",
+            "the new directory brought its whole tree"
+        );
+        assert!(
+            !right.join("extra.txt").exists(),
+            "the row that was answered by hand took it out"
+        );
     }
 
     #[test]

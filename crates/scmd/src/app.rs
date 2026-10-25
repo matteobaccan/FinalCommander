@@ -69,6 +69,14 @@ pub enum Request {
     Font {
         by: i8,
     },
+    /// Decide about every pair in two trees. Nothing is written: the answer is a table.
+    SyncPlan {
+        id: u64,
+        left: VPath,
+        right: VPath,
+        options: Box<scmd_jobs::sync::Options>,
+        cancel: CancelToken,
+    },
     /// Walk and match. The engine is `scmd-find`; this carries what the dialog asked for.
     Find {
         id: u64,
@@ -261,6 +269,17 @@ pub enum Event {
     },
     /// A comparison by content finished, or was stopped: the names whose bytes differ, and
     /// how many pairs could not be read at all.
+    SyncProgress {
+        id: u64,
+        at: String,
+        pairs: usize,
+    },
+    SyncPlanned {
+        id: u64,
+        pairs: Vec<scmd_jobs::sync::Pair>,
+        cancelled: bool,
+        problem: Option<String>,
+    },
     /// One file of a checksum run is finished: `done` of `total`.
     SumProgress {
         id: u64,
@@ -592,7 +611,10 @@ fn mode_of(path: &VPath) -> Option<u32> {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ConfirmAction {
     /// Start this file operation.
-    Job(JobSpec),
+    ///
+    /// Boxed, and clippy is right to ask: a `JobSpec` carries the sources, the target and
+    /// every option, which is most of a kilobyte, and every other answer here is a word.
+    Job(Box<JobSpec>),
     /// Leave the editor, losing unsaved changes.
     DiscardEdits,
     /// The same, for the hex editor: its buffer is bytes, not lines.
@@ -752,6 +774,65 @@ impl FindScope {
     }
 }
 
+/// The review table of a synchronisation (SPEC 03 §10).
+///
+/// It is a screen rather than a dialog because it is the whole of what was decided, and the
+/// point of it is that nothing has happened yet: every row can be changed, and only `F2` sets
+/// any of it going.
+#[derive(Debug)]
+pub struct SyncView {
+    pub id: u64,
+    pub left: VPath,
+    pub right: VPath,
+    pub pairs: Vec<scmd_jobs::sync::Pair>,
+    pub cursor: usize,
+    pub top: usize,
+    /// Where the walk is, while it is running.
+    pub scanning: Option<String>,
+    pub done: bool,
+    pub stopped: bool,
+    pub cancel: CancelToken,
+}
+
+impl SyncView {
+    pub fn move_cursor(&mut self, delta: isize) {
+        if self.pairs.is_empty() {
+            self.cursor = 0;
+            return;
+        }
+        let last = self.pairs.len() as isize - 1;
+        self.cursor = (self.cursor as isize + delta).clamp(0, last) as usize;
+    }
+
+    pub fn scroll_into_view(&mut self, rows: usize) {
+        let rows = rows.max(1);
+        if self.cursor < self.top {
+            self.top = self.cursor;
+        } else if self.cursor >= self.top + rows {
+            self.top = self.cursor + 1 - rows;
+        }
+    }
+
+    /// What the foot of the table says: how many rows do something, and how much they move.
+    pub fn totals(&self) -> (usize, usize, u64) {
+        use scmd_jobs::sync::Action;
+        let mut copies = 0;
+        let mut deletes = 0;
+        let mut bytes = 0;
+        for pair in &self.pairs {
+            match pair.action {
+                Action::Right | Action::Left => {
+                    copies += 1;
+                    bytes += pair.bytes();
+                }
+                Action::DeleteRight | Action::DeleteLeft => deletes += 1,
+                Action::Skip => {}
+            }
+        }
+        (copies, deletes, bytes)
+    }
+}
+
 /// A search while it runs, and its results afterwards.
 #[derive(Debug)]
 pub struct FindView {
@@ -797,7 +878,9 @@ pub enum Mode {
     Normal,
     Prompt(Prompt),
     Confirm(Confirm),
-    Job(JobView),
+    /// A job's progress box. Boxed like the other big ones: `JobView` carries the whole of a
+    /// job's progress and the question it may be asking, where most of `Mode` is a word.
+    Job(Box<JobView>),
     /// `F3`: the internal viewer, full screen.
     Viewer(Box<Viewer>),
     /// `F4`: the internal editor, full screen.
@@ -831,6 +914,8 @@ pub enum Mode {
     Pick(Box<Pick>),
     /// `Alt+F7`: a search, running or finished, with its results.
     Find(Box<FindView>),
+    /// The synchronisation table, before anything has happened (SPEC 03 §10).
+    Sync(Box<SyncView>),
     /// Recording has stopped and the macro is waiting for the key it will answer to: the next
     /// key pressed is the answer, which is how FAR assigns one (SPEC 08 §5).
     MacroKey {
@@ -1070,6 +1155,9 @@ pub struct App {
     sum: Option<(u64, CancelToken)>,
     /// What the checksum dialog was last answered with, so the next one opens on it.
     last_sum: scmd_jobs::Algorithm,
+    /// The same for the synchronisation dialog: the rules somebody set once are the rules
+    /// they want again.
+    last_sync: scmd_jobs::sync::Options,
     /// Files with no counterpart on the other side, kept while the reading runs: they are
     /// differences too, and they are selected with the rest when it finishes.
     compare_alone: Vec<String>,
@@ -1236,6 +1324,12 @@ impl App {
             compare: None,
             sum: None,
             last_sum: scmd_jobs::Algorithm::default(),
+            last_sync: scmd_jobs::sync::Options {
+                // The two a sync is almost always asked for, and neither can lose anything:
+                // walk the trees, and leave alone what the other side does not have.
+                recursive: true,
+                ..scmd_jobs::sync::Options::default()
+            },
             compare_alone: Vec::new(),
             compare_pairs: 0,
             cmd: CmdLine::new(),
@@ -1580,6 +1674,54 @@ impl App {
                 );
                 self.set_error(msg);
             }
+            Event::SyncProgress { id, at, pairs } => {
+                let Mode::Sync(view) = &mut self.mode else {
+                    return;
+                };
+                if view.id != id {
+                    return;
+                }
+                view.scanning = Some(at.clone());
+                let msg = self.i18n.t_args(
+                    "sync-walking",
+                    &[("at", at.clone().into()), ("pairs", (pairs as i64).into())],
+                );
+                self.set_status(msg);
+            }
+            Event::SyncPlanned {
+                id,
+                pairs,
+                cancelled,
+                problem,
+            } => {
+                let Mode::Sync(view) = &mut self.mode else {
+                    return;
+                };
+                if view.id != id {
+                    return;
+                }
+                if let Some(problem) = problem {
+                    self.mode = Mode::Normal;
+                    self.set_error(problem.clone());
+                    return;
+                }
+                view.pairs = pairs.clone();
+                view.done = true;
+                view.stopped = cancelled;
+                view.scanning = None;
+                view.cursor = 0;
+                view.top = 0;
+                let (copies, deletes, bytes) = view.totals();
+                let msg = self.i18n.t_args(
+                    "sync-planned",
+                    &[
+                        ("copies", (copies as i64).into()),
+                        ("deletes", (deletes as i64).into()),
+                        ("bytes", scmd_core::format_size(bytes).into()),
+                    ],
+                );
+                self.set_status(msg);
+            }
             Event::SumProgress {
                 id,
                 name,
@@ -1900,6 +2042,10 @@ impl App {
                 self.mode = Mode::Find(view);
                 self.find_key(key);
             }
+            Mode::Sync(view) => {
+                self.mode = Mode::Sync(view);
+                self.sync_key(key);
+            }
             Mode::Prompt(prompt) => {
                 self.mode = Mode::Prompt(prompt.clone());
                 self.prompt_key(key, prompt);
@@ -2029,7 +2175,7 @@ impl App {
             KeyCode::Enter | KeyCode::Char('y') | KeyCode::Char('Y') => {
                 self.mode = Mode::Normal;
                 match confirm.action {
-                    ConfirmAction::Job(spec) => self.start_job(spec),
+                    ConfirmAction::Job(spec) => self.start_job(*spec),
                     ConfirmAction::ArcRebuild { archive, changes } => {
                         self.start_rebuild(archive, changes)
                     }
@@ -3201,15 +3347,219 @@ impl App {
         self.next_job_id += 1;
         let cancel = CancelToken::new();
         let kind = spec.kind;
-        self.mode = Mode::Job(JobView {
+        self.mode = Mode::Job(Box::new(JobView {
             id,
             kind,
             progress: Progress::default(),
             question: None,
             cancel: cancel.clone(),
             choice: 0,
-        });
+        }));
         self.requests.push(Request::Job { id, spec, cancel });
+    }
+
+    // ── synchronising two directories (SPEC 03 §10) ─────────────────────────────────────
+
+    /// The dialog: which way, how deep, what counts as the same, and what to do with extras.
+    fn open_sync_form(&mut self) {
+        let (left, right) = (self.panels[0].cwd.clone(), self.panels[1].cwd.clone());
+        // Both sides are walked and one is written: a provider that cannot be read a chunk at
+        // a time cannot be compared by content, so the honest limit today is this machine,
+        // and it is said before the dialog opens rather than halfway through a run.
+        if [&left, &right]
+            .iter()
+            .any(|p| !p.is_local() || p.in_container())
+        {
+            let m = self.i18n.t("sync-local-only");
+            self.set_error(m);
+            return;
+        }
+        if left == right {
+            let m = self.i18n.t("sync-same-directory");
+            self.set_error(m);
+            return;
+        }
+        self.mode = Mode::Form(Box::new(Form::sync(
+            left.to_string(),
+            right.to_string(),
+            &self.last_sync,
+            &self.i18n,
+        )));
+    }
+
+    /// What the dialog asked for: walk both trees and decide.
+    fn apply_sync_form(&mut self, form: &Form) {
+        let filter = match form.text_value("sync.filter") {
+            empty if empty.trim().is_empty() => None,
+            mask => match scmd_core::MaskSet::parse(&mask) {
+                Ok(set) => Some(set),
+                Err(e) => {
+                    let msg = self
+                        .i18n
+                        .t_args("msg-mask-invalid", &[("error", e.to_string().into())]);
+                    self.set_error(msg);
+                    return;
+                }
+            },
+        };
+        let options = scmd_jobs::sync::Options {
+            recursive: form.text_value("sync.recursive") == "true",
+            both_ways: form.text_value("sync.both_ways") == "true",
+            delete_extra: form.text_value("sync.delete_extra") == "true",
+            by_content: form.text_value("sync.by_content") == "true",
+            filter,
+        };
+        self.last_sync = options.clone();
+        let (left, right) = (self.panels[0].cwd.clone(), self.panels[1].cwd.clone());
+        let id = self.next_job_id;
+        self.next_job_id += 1;
+        let cancel = CancelToken::new();
+        self.mode = Mode::Sync(Box::new(SyncView {
+            id,
+            left: left.clone(),
+            right: right.clone(),
+            pairs: Vec::new(),
+            cursor: 0,
+            top: 0,
+            scanning: None,
+            done: false,
+            stopped: false,
+            cancel: cancel.clone(),
+        }));
+        self.requests.push(Request::SyncPlan {
+            id,
+            left,
+            right,
+            options: Box::new(options),
+            cancel,
+        });
+    }
+
+    /// `F2` in the table: turn every row that says something into a job.
+    ///
+    /// Up to four, in an order that is not an accident: the copies go first, so a row saying
+    /// "take this away" cannot run before the row that was going to put something in its
+    /// place. They are queued rather than started together, because two jobs writing at once
+    /// would fight over the progress box and over the disk.
+    fn run_sync(&mut self) {
+        use scmd_jobs::sync::{at, Action};
+        let Mode::Sync(view) = &self.mode else {
+            return;
+        };
+        let gather = |want: Action, from: &VPath| -> Vec<VPath> {
+            view.pairs
+                .iter()
+                .filter(|p| p.action == want)
+                .map(|p| at(from, &p.rel))
+                .collect()
+        };
+        let to_right = gather(Action::Right, &view.left);
+        let to_left = gather(Action::Left, &view.right);
+        let cut_right = gather(Action::DeleteRight, &view.right);
+        let cut_left = gather(Action::DeleteLeft, &view.left);
+        let (left, right) = (view.left.clone(), view.right.clone());
+        let to_wastebasket = self.cfg.general.use_trash;
+
+        let copy = |sources: Vec<VPath>, from: &VPath, to: &VPath| -> Option<JobSpec> {
+            (!sources.is_empty()).then(|| {
+                JobSpec::new(JobKind::Copy, sources, Some(to.clone())).with_options(
+                    scmd_jobs::JobOptions {
+                        // Overwrite without asking: the table *is* the question, and it was
+                        // answered row by row. Asking again about every file would undo the
+                        // whole point of having reviewed it.
+                        on_conflict: scmd_jobs::ConflictPolicy::Overwrite,
+                        relative_to: Some(from.clone()),
+                        ..scmd_jobs::JobOptions::default()
+                    },
+                )
+            })
+        };
+        let mut jobs: Vec<JobSpec> = Vec::new();
+        if let Some(job) = copy(to_right, &left, &right) {
+            jobs.push(job);
+        }
+        if let Some(job) = copy(to_left, &right, &left) {
+            jobs.push(job);
+        }
+        for cut in [cut_right, cut_left] {
+            if !cut.is_empty() {
+                // The same wastebasket rule `F8` follows, for the same reason: a sync that
+                // shredded what `F8` would have kept would be a nasty surprise.
+                let kind = if to_wastebasket {
+                    JobKind::Trash
+                } else {
+                    JobKind::Delete
+                };
+                jobs.push(JobSpec::new(kind, cut, None));
+            }
+        }
+        if jobs.is_empty() {
+            let m = self.i18n.t("sync-nothing-to-do");
+            self.set_error(m);
+            return;
+        }
+        self.mode = Mode::Normal;
+        let first = jobs.remove(0);
+        self.queued_jobs.extend(jobs);
+        self.start_job(first);
+    }
+
+    /// The keys of the review table.
+    fn sync_key(&mut self, key: Key) {
+        let rows = self.rows.max(1);
+        let Mode::Sync(view) = &mut self.mode else {
+            return;
+        };
+        match key.code {
+            KeyCode::Esc | KeyCode::F(10) => {
+                view.cancel.cancel();
+                self.mode = Mode::Normal;
+                return;
+            }
+            KeyCode::Up => view.move_cursor(-1),
+            KeyCode::Down => view.move_cursor(1),
+            KeyCode::PageUp => view.move_cursor(-(rows as isize)),
+            KeyCode::PageDown => view.move_cursor(rows as isize),
+            KeyCode::Home => view.cursor = 0,
+            KeyCode::End => view.cursor = view.pairs.len().saturating_sub(1),
+            // Space walks the answers for this row, offering only what the pair allows, and
+            // steps down — so a run of rows is answered without reaching for an arrow.
+            KeyCode::Char(' ') => {
+                if let Some(pair) = view.pairs.get_mut(view.cursor) {
+                    pair.action = pair.action.next(pair.left.is_some(), pair.right.is_some());
+                }
+                view.move_cursor(1);
+            }
+            // The arrows say which way, which is what one reaches for on a row that should go
+            // the other way.
+            KeyCode::Right => {
+                if let Some(pair) = view.pairs.get_mut(view.cursor) {
+                    if pair.left.is_some() {
+                        pair.action = scmd_jobs::sync::Action::Right;
+                    }
+                }
+            }
+            KeyCode::Left => {
+                if let Some(pair) = view.pairs.get_mut(view.cursor) {
+                    if pair.right.is_some() {
+                        pair.action = scmd_jobs::sync::Action::Left;
+                    }
+                }
+            }
+            KeyCode::Char('=') => {
+                if let Some(pair) = view.pairs.get_mut(view.cursor) {
+                    pair.action = scmd_jobs::sync::Action::Skip;
+                }
+            }
+            KeyCode::F(2) if view.done => {
+                self.run_sync();
+                return;
+            }
+            _ => return,
+        }
+        if let Mode::Sync(view) = &mut self.mode {
+            view.scroll_into_view(rows);
+        }
     }
 
     // ── checksums (SPEC 03 §9) ──────────────────────────────────────────────────────────
@@ -3462,14 +3812,14 @@ impl App {
         // what `Enter` does changes.
         let action = match Self::changes_removing(&sources) {
             Some((archive, changes)) => ConfirmAction::ArcRebuild { archive, changes },
-            None => ConfirmAction::Job(JobSpec::new(kind, sources.clone(), None)),
+            None => ConfirmAction::Job(Box::new(JobSpec::new(kind, sources.clone(), None))),
         };
         if !self.cfg.general.confirm_delete {
             match action {
                 ConfirmAction::ArcRebuild { archive, changes } => {
                     self.start_rebuild(archive, changes)
                 }
-                ConfirmAction::Job(spec) => self.start_job(spec),
+                ConfirmAction::Job(spec) => self.start_job(*spec),
                 _ => unreachable!("ask_delete builds one of those two"),
             }
             return;
@@ -3603,14 +3953,14 @@ impl App {
         let id = self.next_job_id;
         self.next_job_id += 1;
         let cancel = CancelToken::new();
-        self.mode = Mode::Job(JobView {
+        self.mode = Mode::Job(Box::new(JobView {
             id,
             kind: JobKind::Test,
             progress: Progress::default(),
             question: None,
             cancel: cancel.clone(),
             choice: 0,
-        });
+        }));
         self.requests.push(Request::ArcTest {
             id,
             archive,
@@ -3632,14 +3982,14 @@ impl App {
         let id = self.next_job_id;
         self.next_job_id += 1;
         let cancel = CancelToken::new();
-        self.mode = Mode::Job(JobView {
+        self.mode = Mode::Job(Box::new(JobView {
             id,
             kind: JobKind::Rebuild,
             progress: Progress::default(),
             question: None,
             cancel: cancel.clone(),
             choice: 0,
-        });
+        }));
         self.requests.push(Request::ArcRebuild {
             id,
             archive,
@@ -3823,14 +4173,14 @@ impl App {
         let id = self.next_job_id;
         self.next_job_id += 1;
         let cancel = CancelToken::new();
-        self.mode = Mode::Job(JobView {
+        self.mode = Mode::Job(Box::new(JobView {
             id,
             kind: JobKind::Pack,
             progress: Progress::default(),
             question: None,
             cancel: cancel.clone(),
             choice: 0,
-        });
+        }));
         self.requests.push(Request::Pack {
             id,
             archive,
@@ -4439,7 +4789,7 @@ impl App {
                 self.mode = Mode::Confirm(Confirm {
                     title,
                     lines,
-                    action: ConfirmAction::Job(spec),
+                    action: ConfirmAction::Job(Box::new(spec)),
                 });
             }
             Command::FileAttributes => self.open_attributes_form(),
@@ -4803,6 +5153,7 @@ impl App {
                     sources: Vec::new(),
                 });
             }
+            Command::ToolSyncDirs => self.open_sync_form(),
             Command::FileChecksum => self.open_checksum_form(),
             Command::FileChecksumVerify => self.start_verify(),
             Command::FileDelete | Command::FileDeleteCurrent | Command::FileDeleteForce => {
@@ -5942,14 +6293,14 @@ impl App {
         let id = self.next_job_id;
         self.next_job_id += 1;
         let cancel = CancelToken::new();
-        self.mode = Mode::Job(JobView {
+        self.mode = Mode::Job(Box::new(JobView {
             id,
             kind: JobKind::Attrs,
             progress: Progress::default(),
             question: None,
             cancel: cancel.clone(),
             choice: 0,
-        });
+        }));
         self.requests.push(Request::SetAttrs {
             id,
             paths: sources,
@@ -6129,7 +6480,7 @@ impl App {
         self.mode = Mode::Confirm(Confirm {
             title,
             lines,
-            action: ConfirmAction::Job(real),
+            action: ConfirmAction::Job(Box::new(real)),
         });
     }
 
@@ -6781,6 +7132,10 @@ impl App {
         }
         if form.kind == FormKind::Checksum {
             self.apply_checksum_form(&form);
+            return;
+        }
+        if form.kind == FormKind::Sync {
+            self.apply_sync_form(&form);
             return;
         }
         let problems = form.apply(&mut self.cfg);

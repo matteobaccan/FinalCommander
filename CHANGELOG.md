@@ -8,6 +8,32 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **Synchronising two directories** (`Ctrl+Shift+Y`, and the Commands menu). Three steps, and
+  the middle one is the point: a dialog saying how to decide, a **table** saying what was
+  decided, and only `F2` setting anything going. Nothing is written before that, so the table
+  is the whole of what is about to happen and the dry run at the same time, and every row of
+  it can be changed first — `Space` walks the answers a row allows, `←` and `→` say which way,
+  `=` leaves it alone.
+
+  One way (the left panel is the source) or both ways with the newer side winning, into the
+  subdirectories, an offer to take out what the other side does not have, a mask, and *compare
+  the bytes* for the change that a size and a time cannot see. Two seconds of slack on the
+  times, because that is what a trip through a memory stick or a zip does to a timestamp and
+  treating it as a change would copy everything, every time.
+
+  Two directories both sides have are walked rather than paired — what differs is inside them
+  — and a directory only one side has is one row, because the copy takes its tree and a row
+  per file inside it would be a hundred answers to one question.
+
+  There is no sync job kind: the table hands out the ordinary copies and deletes, copies first
+  so a row that takes something away cannot run before the row that was going to replace it,
+  queued one at a time, overwriting without asking because the table *was* the question. A row
+  that takes a file out follows the wastebasket setting, as `F8` does. What made it fit the
+  existing engine is one new copy option, `relative_to`: with a root to be relative to,
+  `a/b/c.txt` lands at `target/a/b/c.txt`, so one job carries a whole tree at the paths it had.
+
+  Both sides have to be on this machine for now, and it is said before the dialog opens.
+
 - **`Ctrl++`, `Ctrl+−` and `Ctrl+0`** ask the terminal for a larger font, a smaller one, or
   the one it started with. A program in a terminal does not own its font — the emulator does,
   and there is exactly one control sequence for asking: xterm's `OSC 50`, where a `#` and a

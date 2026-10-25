@@ -178,13 +178,28 @@ pub fn plan(fs: &dyn JobFs, spec: &JobSpec, cancel: &CancelToken) -> Result<Plan
 
             for src in &sources {
                 check_cancel(cancel)?;
-                let dst = if into_dir {
-                    match src.file_name() {
+                let dst = match &spec.options.relative_to {
+                    // A set that came from walking a tree: each one lands where it was, under
+                    // the target, rather than in by its name alone.
+                    Some(root) => match relative(src, root) {
+                        Some(rel) => rel.iter().fold(target.clone(), |at, part| at.join(part)),
+                        // Not under the root it was supposed to be relative to: the caller
+                        // built the list, so this is a bug there rather than a user's mistake.
+                        None => {
+                            return Err(PlanError::Io {
+                                path: src.clone(),
+                                source: std::io::Error::new(
+                                    std::io::ErrorKind::InvalidInput,
+                                    format!("{src} is not under {root}"),
+                                ),
+                            })
+                        }
+                    },
+                    None if into_dir => match src.file_name() {
                         Some(name) => target.join(name),
                         None => target.clone(),
-                    }
-                } else {
-                    target.clone()
+                    },
+                    None => target.clone(),
                 };
 
                 if fs.same_file(src, &dst) {
@@ -250,6 +265,37 @@ pub fn plan(fs: &dyn JobFs, spec: &JobSpec, cancel: &CancelToken) -> Result<Plan
     }
 
     Ok(plan)
+}
+
+/// The parts of `path` below `root`, or `None` if it is not below it at all.
+///
+/// Spelled out part by part rather than as one string, because the caller joins them back on
+/// to a different root and a provider that builds its own paths wants one name at a time.
+fn relative(path: &VPath, root: &VPath) -> Option<Vec<String>> {
+    if !path.starts_with(root) {
+        return None;
+    }
+    let (full, base) = (parts_of(path), parts_of(root));
+    (full.len() >= base.len()).then(|| full[base.len()..].to_vec())
+}
+
+/// A path as its parts, whichever kind of path it is.
+fn parts_of(path: &VPath) -> Vec<String> {
+    let text = if path.in_container() {
+        path.inner_path().to_string()
+    } else if path.is_remote() {
+        path.remote_path().to_string()
+    } else {
+        return path
+            .as_path()
+            .components()
+            .map(|c| c.as_os_str().to_string_lossy().into_owned())
+            .collect();
+    };
+    text.split('/')
+        .filter(|p| !p.is_empty())
+        .map(|p| p.to_string())
+        .collect()
 }
 
 /// The children of each source directory, which is what `contents` plans instead.
@@ -494,6 +540,37 @@ mod tests {
             .units
             .iter()
             .all(|u| u.dst.starts_with(&target) && u.dst != target));
+    }
+
+    /// What a synchronisation hands over: a list of paths from under one root, each of which
+    /// has to land where it was and not in by its name alone.
+    #[test]
+    fn a_copy_relative_to_a_root_keeps_the_path_each_file_had() {
+        let dir = tree();
+        let root = VPath::local(dir.path().join("src"));
+        let target = VPath::local(dir.path().join("mirror"));
+        let spec = JobSpec::new(
+            JobKind::Copy,
+            vec![
+                VPath::local(dir.path().join("src/a.txt")),
+                VPath::local(dir.path().join("src/sub/b.txt")),
+            ],
+            Some(target.clone()),
+        )
+        .with_options(JobOptions {
+            relative_to: Some(root),
+            ..JobOptions::default()
+        });
+        let p = plan(&LocalFs, &spec, &CancelToken::new()).unwrap();
+        let destinations: Vec<String> = p.units.iter().map(|u| u.dst.to_string()).collect();
+        assert!(
+            destinations.contains(&target.join("a.txt").to_string()),
+            "{destinations:?}"
+        );
+        assert!(
+            destinations.contains(&target.join("sub").join("b.txt").to_string()),
+            "the one in a subdirectory keeps it: {destinations:?}"
+        );
     }
 
     #[test]

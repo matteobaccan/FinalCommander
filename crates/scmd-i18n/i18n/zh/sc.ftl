@@ -190,6 +190,22 @@ sum-differs = 不匹配
 sum-missing = 文件不存在
 sum-unreadable = 无法读取
 
+# Synchronising two directories (SPEC 03 §10)
+sync-title = 同步
+sync-between = { $left }  ↔  { $right }
+sync-recursive = 包括子目录中的一切
+sync-both-ways = 双向，较新者胜
+sync-delete-extra = 对另一侧没有的文件提议删除
+sync-by-content = 比较字节，而非大小和时间
+sync-filter = 仅匹配的名称
+sync-walking = 正在查看 { $at } — 已有 { $pairs }
+sync-planned = 待复制 { $copies } 个（{ $bytes }），待删除 { $deletes } 个
+sync-hint = 空格 下一个选择 · ← → 方向 · = 不动 · F2 执行 · Esc 取消
+sync-hint-walking = Esc 停止扫描
+sync-nothing-to-do = 每一行都说保持原样
+sync-local-only = 同步只能在本机读写
+sync-same-directory = 两个面板在同一目录
+
 key-wrap = 折行
 key-hex = 十六
 key-text = 文本
@@ -332,6 +348,7 @@ menu-swap-panels = 交换面板
 menu-sync-panel = 同步另一面板
 menu-panels-onoff = 面板开关
 menu-compare-folders = 比较文件夹
+menu-sync-folders = 同步文件夹
 menu-compare-contents = 按内容比较
 menu-tunnel = 打开隧道…
 menu-tunnels = 隧道…
