@@ -100,6 +100,7 @@ impl Command {
                 Side::Right => "hide the right panel, or bring it back",
                 Side::Active => "hide this panel, or bring it back",
             },
+            Command::PanelToggleOther => "hide the other panel, or bring it back",
             Command::PanelScrollNames(_) => "scroll the name column sideways",
 
             Command::NavUp => "up one row",
@@ -217,6 +218,7 @@ impl Command {
             Command::EditorQuit => "close the editor",
             Command::EditorSave => "save",
             Command::EditorSaveAs => "save under another name",
+            Command::EditorSaveQuit => "save and leave",
             Command::EditorReload => "read the file again, losing the changes",
             Command::EditorUndo => "undo",
             Command::EditorRedo => "redo",
@@ -247,6 +249,7 @@ impl Command {
             Command::EditorOutdent => "take one level of indent off the block",
             Command::EditorDeleteToEnd => "delete to the end of the line",
             Command::EditorDeleteWordLeft => "delete the word before the cursor",
+            Command::EditorDeleteWordRight => "delete the word after the cursor",
             Command::EditorToggleReadOnly => "allow changes, or refuse them",
 
             Command::PluginCommands => "the commands the plugins provide",

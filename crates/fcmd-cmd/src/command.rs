@@ -114,6 +114,9 @@ pub enum Command {
     PanelHistory,
     /// `Ctrl+F1`/`Ctrl+F2`: hide one panel and give the screen to the other.
     PanelToggle(Side),
+    /// `Ctrl+P`: hide the panel that does not have the focus, which is FAR's own key for
+    /// giving the screen to the one you are working in without first saying which it is.
+    PanelToggleOther,
     /// Scroll a name column that is narrower than the names.
     PanelScrollNames(i8),
 
@@ -296,6 +299,8 @@ pub enum Command {
     EditorQuit,
     EditorSave,
     EditorSaveAs,
+    /// `Shift+F10`: save and leave, in one key — FAR's own.
+    EditorSaveQuit,
     EditorReload,
     EditorUndo,
     EditorRedo,
@@ -346,6 +351,8 @@ pub enum Command {
     EditorOutdent,
     EditorDeleteToEnd,
     EditorDeleteWordLeft,
+    /// `Ctrl+Del`, `Ctrl+T`: the word after the cursor.
+    EditorDeleteWordRight,
     EditorToggleReadOnly,
 }
 
@@ -437,6 +444,7 @@ impl Command {
             Command::FileWipe,
             Command::FileAttributes,
             Command::PanelToggle(Side::Active),
+            Command::PanelToggleOther,
             Command::PanelToggle(Side::Left),
             Command::PanelToggle(Side::Right),
             Command::PanelScrollNames(-1),
@@ -519,6 +527,7 @@ impl Command {
             Command::EditorQuit,
             Command::EditorSave,
             Command::EditorSaveAs,
+            Command::EditorSaveQuit,
             Command::EditorReload,
             Command::EditorUndo,
             Command::EditorRedo,
@@ -555,6 +564,7 @@ impl Command {
             Command::EditorOutdent,
             Command::EditorDeleteToEnd,
             Command::EditorDeleteWordLeft,
+            Command::EditorDeleteWordRight,
             Command::EditorToggleReadOnly,
         ];
         for v in [
@@ -673,6 +683,7 @@ impl Command {
             Command::FileWipe => "file.wipe".into(),
             Command::FileAttributes => "file.attributes".into(),
             Command::PanelToggle(Side::Active) => "panel.toggle".into(),
+            Command::PanelToggleOther => "panel.toggle.other".into(),
             Command::PanelToggle(side) => format!("panel.toggle({})", side.as_str()),
             Command::PanelQuickView(Side::Active) => "panel.quickview".into(),
             Command::PanelQuickView(side) => format!("panel.quickview({})", side.as_str()),
@@ -751,6 +762,7 @@ impl Command {
             Command::EditorQuit => "editor.quit".into(),
             Command::EditorSave => "editor.save".into(),
             Command::EditorSaveAs => "editor.save.as".into(),
+            Command::EditorSaveQuit => "editor.save.quit".into(),
             Command::EditorReload => "editor.reload".into(),
             Command::EditorUndo => "editor.undo".into(),
             Command::EditorRedo => "editor.redo".into(),
@@ -787,6 +799,7 @@ impl Command {
             Command::EditorOutdent => "editor.outdent".into(),
             Command::EditorDeleteToEnd => "editor.delete.to.end".into(),
             Command::EditorDeleteWordLeft => "editor.delete.word.left".into(),
+            Command::EditorDeleteWordRight => "editor.delete.word.right".into(),
             Command::EditorToggleReadOnly => "editor.readonly.toggle".into(),
         }
     }
@@ -879,6 +892,7 @@ impl Command {
             ("file.link", _) => Command::FileLink,
             ("file.wipe", _) => Command::FileWipe,
             ("file.attributes", _) => Command::FileAttributes,
+            ("panel.toggle.other", _) => Command::PanelToggleOther,
             ("panel.toggle", a) => Command::PanelToggle(Side::parse(a.unwrap_or(""))?),
             ("panel.quickview", a) => Command::PanelQuickView(Side::parse(a.unwrap_or(""))?),
             ("panel.info", a) => Command::PanelInfo(Side::parse(a.unwrap_or(""))?),
@@ -954,6 +968,7 @@ impl Command {
             ("editor.quit", _) => Command::EditorQuit,
             ("editor.save", _) => Command::EditorSave,
             ("editor.save.as", _) => Command::EditorSaveAs,
+            ("editor.save.quit", _) => Command::EditorSaveQuit,
             ("editor.reload", _) => Command::EditorReload,
             ("editor.undo", _) => Command::EditorUndo,
             ("editor.redo", _) => Command::EditorRedo,
@@ -990,6 +1005,7 @@ impl Command {
             ("editor.outdent", _) => Command::EditorOutdent,
             ("editor.delete.to.end", _) => Command::EditorDeleteToEnd,
             ("editor.delete.word.left", _) => Command::EditorDeleteWordLeft,
+            ("editor.delete.word.right", _) => Command::EditorDeleteWordRight,
             ("editor.readonly.toggle", _) => Command::EditorToggleReadOnly,
             _ => return None,
         };

@@ -6,6 +6,17 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **The keyboard reference says what the program does.** The rows that named a key nothing was
+  bound to now say what is true: the command line's path insertion is `Ctrl+[` / `Ctrl+]` (one
+  row, not two contradicting each other), `Esc` clears the line and `Ctrl+U` swaps the panels,
+  multi-rename and copying names to the clipboard are named as not built yet, and compare
+  directories, test archive and "other panel follows cursor" are named as what they are —
+  menu entries with no default key, because `Alt+<letter>` belongs to the quick search. The
+  profile table listed five profiles where two are built; the other three are now under a
+  heading that says they are planned.
+
 ### Changed
 
 - **The program is called FinalCommander, and its command is `fcmd`.** It shipped as
@@ -20,6 +31,16 @@ Notable changes, newest first. The format follows
   name first and its old one after, so `scmd.toml` is still read — and still written — with one
   line on the startup screen saying which file it was and what to call it instead. The same
   goes for the state, the macros, the user menu and the plugins folder.
+
+### Added
+
+- **The keys the keyboard reference had promised.** A sweep through `docs/03-keymap.md`
+  comparing every row against the keymap the program actually resolves turned up keys that
+  were documented and dead. Three of them were worth having and are now bound: `Ctrl+P` hides
+  the panel that does not have the focus (FAR's own, and the focus stays where it is),
+  `Shift+F10` saves and leaves the editor in one key, and `Ctrl+W` takes the word before the
+  caret off the command line, as every readline does. The editor also gained delete-word-right
+  (`Ctrl+Del`, `Ctrl+T`), which it had only in one direction.
 
 ### Changed
 

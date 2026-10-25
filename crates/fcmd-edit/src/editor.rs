@@ -413,6 +413,25 @@ impl Editor {
         Ok(())
     }
 
+    /// The other half of the pair, and FAR's `Ctrl+T`: the word after the cursor goes, with
+    /// the run of spaces that follows it, so holding the key walks a line apart word by word.
+    pub fn delete_word_right(&mut self) -> Result<(), EditorError> {
+        let line = self.buffer.line(self.cursor.line);
+        let chars: Vec<char> = line.chars().collect();
+        let mut col = self.cursor.col;
+        while col < chars.len() && !chars[col].is_whitespace() {
+            col += 1;
+        }
+        while col < chars.len() && chars[col].is_whitespace() {
+            col += 1;
+        }
+        let end = Position::new(self.cursor.line, col);
+        self.buffer.begin_group(self.cursor);
+        self.buffer.delete(Range::new(self.cursor, end))?;
+        self.buffer.end_group(self.cursor);
+        Ok(())
+    }
+
     pub fn delete_line(&mut self) -> Result<(), EditorError> {
         self.buffer.delete_line(self.cursor.line)?;
         self.buffer.end_group(self.cursor);
@@ -1024,6 +1043,20 @@ mod tests {
         e.move_file_start(false);
         e.backspace().unwrap();
         assert_eq!(e.buffer.line(0), "abd");
+    }
+
+    #[test]
+    fn the_word_after_the_cursor_goes_with_the_spaces_behind_it() {
+        let mut e = editor("one two three\n");
+        e.move_file_start(false);
+        e.delete_word_right().unwrap();
+        assert_eq!(e.buffer.line(0), "two three");
+        e.delete_word_right().unwrap();
+        assert_eq!(e.buffer.line(0), "three");
+        // At the end of the line there is nothing after the cursor to take.
+        e.move_line_end(false);
+        e.delete_word_right().unwrap();
+        assert_eq!(e.buffer.line(0), "three");
     }
 
     #[test]

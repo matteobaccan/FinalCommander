@@ -5573,6 +5573,16 @@ impl App {
                     sources,
                 });
             }
+            // FAR's `Ctrl+P`: the panel you are not in goes away, and comes back on the same
+            // key. The focus never has to move, which is the difference from `Ctrl+F1`/`F2`.
+            Command::PanelToggleOther => {
+                let other = 1 - self.active;
+                self.hidden = if self.hidden == Some(other) {
+                    None
+                } else {
+                    Some(other)
+                };
+            }
             Command::PanelToggle(side) => {
                 let which = match side {
                     Side::Active => self.active,
@@ -6259,6 +6269,12 @@ impl App {
             }
             KeyCode::Char('k') if !empty && ctrl => {
                 self.cmd.kill_to_end();
+                true
+            }
+            // `Ctrl+W`, the one every readline has. `Ctrl+Backspace` above is FAR's own, and
+            // a terminal that cannot tell `Ctrl+Backspace` from `Backspace` leaves this one.
+            KeyCode::Char('w') if !empty && ctrl => {
+                self.cmd.delete_word_left();
                 true
             }
             _ => false,
@@ -10061,6 +10077,21 @@ impl App {
                 self.save_editor(false);
                 return;
             }
+            Command::EditorSaveQuit => {
+                self.save_editor(false);
+                // Only if the save really happened. A file with no name opens the Save As
+                // prompt and a file that changed under us opens a question: closing the
+                // editor under either would throw the work away to answer it.
+                let saved = self
+                    .mode
+                    .editor()
+                    .map(|e| !e.buffer.modified())
+                    .unwrap_or(false);
+                if saved {
+                    self.close_editor();
+                }
+                return;
+            }
             Command::EditorSaveAs => {
                 let text = self
                     .mode
@@ -10172,6 +10203,9 @@ impl App {
                 }
                 Command::EditorDeleteWordLeft => {
                     editor.delete_word_left().map_err(|e| e.to_string())?
+                }
+                Command::EditorDeleteWordRight => {
+                    editor.delete_word_right().map_err(|e| e.to_string())?
                 }
                 Command::EditorToggleReadOnly => {
                     editor.buffer.read_only = !editor.buffer.read_only;
@@ -16648,6 +16682,48 @@ five
 
         press(&mut app, "Esc");
         assert!(app.mode.is_normal(), "Esc should close the viewer");
+    }
+
+    #[test]
+    fn shift_f10_saves_the_file_and_leaves_the_editor() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("note.txt");
+        std::fs::write(&file, b"one\n").unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F4");
+        assert!(app.mode.editor().is_some(), "the editor is open");
+        type_text(&mut app, "two");
+        press(&mut app, "Shift+F10");
+        assert!(app.mode.is_normal(), "it saved and left");
+        let on_disk = std::fs::read_to_string(&file).unwrap();
+        assert!(on_disk.starts_with("two"), "{on_disk:?}");
+    }
+
+    #[test]
+    fn ctrl_p_hides_the_panel_that_does_not_have_the_focus() {
+        let mut app = app();
+        assert_eq!(app.active, 0);
+        press(&mut app, "Ctrl+P");
+        assert_eq!(app.hidden, Some(1), "the other one goes");
+        assert_eq!(app.active, 0, "and the focus stays where it was");
+        press(&mut app, "Ctrl+P");
+        assert_eq!(app.hidden, None);
+        // From the right panel it is the left one that goes.
+        press(&mut app, "Tab");
+        press(&mut app, "Ctrl+P");
+        assert_eq!(app.hidden, Some(0));
+        assert_eq!(app.active, 1);
+    }
+
+    #[test]
+    fn ctrl_w_takes_the_word_before_the_caret_off_the_command_line() {
+        let mut app = app();
+        typed(&mut app, "cp /usr/local/bin");
+        press(&mut app, "Ctrl+W");
+        assert_eq!(app.cmd.text, "cp /usr/local/");
+        press(&mut app, "Ctrl+W");
+        assert_eq!(app.cmd.text, "cp /usr/");
     }
 
     #[test]

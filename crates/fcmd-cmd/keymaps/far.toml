@@ -829,6 +829,11 @@ scope = "editor"
 cmd = "editor.quit"
 
 [[bind]]
+keys = ["Shift+F10"]
+scope = "editor"
+cmd = "editor.save.quit"
+
+[[bind]]
 keys = ["F7"]
 scope = "editor"
 cmd = "editor.search"
@@ -949,6 +954,12 @@ keys = ["Ctrl+Backspace"]
 scope = "editor"
 cmd = "editor.delete.word.left"
 
+# FAR's own pair for the other direction, and the one `Ctrl+Backspace` mirrors.
+[[bind]]
+keys = ["Ctrl+Delete", "Ctrl+T"]
+scope = "editor"
+cmd = "editor.delete.word.right"
+
 [[bind]]
 keys = ["Ctrl+Alt+L"]
 scope = "editor"
@@ -1000,6 +1011,12 @@ cmd = "cmd.clear"
 
 # FAR's own second binding for these two: a terminal cannot deliver Ctrl+J (it *is* a
 # newline), so Ctrl+Enter and Ctrl+Shift+Enter are the ones we keep. See docs/03-keymap.md §9.
+# FAR's own: the panel you are not in goes away, and the focus stays where it is.
+[[bind]]
+keys = ["Ctrl+P"]
+scope = "panel"
+cmd = "panel.toggle.other"
+
 [[bind]]
 keys = ["Ctrl+Enter"]
 scope = "panel"

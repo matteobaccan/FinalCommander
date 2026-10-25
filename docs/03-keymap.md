@@ -6,13 +6,13 @@ README, and third-party cheat sheets for Total Commander (proprietary — **seco
 marked `?` where unverified**). All descriptions below are written from scratch as factual
 key→action pairs; no documentation text is reproduced. See `01-licensing.md` §3.
 
-Column `SC` = FinalCommander default (profile `far`, our baseline).
+Column `FC` = FinalCommander default (profile `far`, our baseline).
 
 ---
 
 ## 1. Function keys — plain
 
-| Key | FAR | MC | TC | Krusader | SC |
+| Key | FAR | MC | TC | Krusader | FC |
 | --- | --- | --- | --- | --- | --- |
 | F1 | help (context) | help | help | help | help (context) |
 | F2 | user menu | user menu | reread panel? | rename | user menu |
@@ -29,7 +29,7 @@ Column `SC` = FinalCommander default (profile `far`, our baseline).
 
 ## 2. Shift + F-keys
 
-| Key | FAR | MC | TC `?` | Krusader | SC |
+| Key | FAR | MC | TC `?` | Krusader | FC |
 | --- | --- | --- | --- | --- | --- |
 | Shift+F1 | add to archive | — | — | what's this | **add to archive** (zip, tar, tar.gz, tar.bz2, tar.xz, tar.zst) |
 | Shift+F2 | extract from archive | — | compare by content | multi-rename | **extract archive** into a directory of its own; inside an archive it is `F5` |
@@ -48,7 +48,7 @@ Column `SC` = FinalCommander default (profile `far`, our baseline).
 
 ## 3. Alt + F-keys
 
-| Key | FAR | TC `?` | Krusader | SC |
+| Key | FAR | TC `?` | Krusader | FC |
 | --- | --- | --- | --- | --- |
 | Alt+F1 | drive menu, left panel | drive left | left bookmarks | drive/mount menu, left |
 | Alt+F2 | drive menu, right panel | drive right | right bookmarks | drive/mount menu, right |
@@ -70,7 +70,7 @@ Column `SC` = FinalCommander default (profile `far`, our baseline).
 
 ## 4. Ctrl + F-keys (panel modes and sorting)
 
-| Key | FAR | TC `?` | SC |
+| Key | FAR | TC `?` | FC |
 | --- | --- | --- | --- |
 | Ctrl+F1 | hide/show left panel | brief view | hide/show left panel |
 | Ctrl+F2 | hide/show right panel | detailed view | hide/show right panel |
@@ -88,7 +88,7 @@ Column `SC` = FinalCommander default (profile `far`, our baseline).
 
 ## 5. Panel control (FAR as baseline, verified)
 
-| Action | FAR | MC | Krusader | SC |
+| Action | FAR | MC | Krusader | FC |
 | --- | --- | --- | --- | --- |
 | switch panel | Tab | Tab, Ctrl+I, ←/→ | Tab | Tab |
 | swap panels | Ctrl+U | Ctrl+U | Ctrl+U | Ctrl+U |
@@ -97,7 +97,7 @@ Column `SC` = FinalCommander default (profile `far`, our baseline).
 | quick view panel | Ctrl+Q | Ctrl+x q | — | Ctrl+Q |
 | tree panel | Ctrl+T | — | — | Ctrl+T |
 | hide both panels | Ctrl+O | Ctrl+O | — | Ctrl+O |
-| hide inactive panel | Ctrl+P | — | — | Ctrl+P |
+| hide inactive panel | Ctrl+P | — | — | Ctrl+P (the focus stays where it is) |
 | panel height / width | Ctrl+↑/↓, Ctrl+←/→ | — | — | Ctrl+↑/↓, Ctrl+←/→ — `Ctrl+↑` brings the panels' bottom edge **up**, so they get shorter and the command output below them gets the rows |
 | toggle hidden files | Ctrl+H | Alt+. (Shift+Alt+H in some builds) | Alt+. | Ctrl+H |
 | short/long names | Ctrl+N | Alt+T (cycle formats) | Alt+Shift+B/D | Ctrl+N |
@@ -108,7 +108,7 @@ Column `SC` = FinalCommander default (profile `far`, our baseline).
 | enter dir / archive | Ctrl+PgDn | Ctrl+PgDn | Enter | Ctrl+PgDn |
 | root directory | Ctrl+\ | — | Ctrl+Backspace | Ctrl+\ |
 | same dir in other panel | — | Alt+I | Ctrl+= | Ctrl+= |
-| other panel follows cursor | — | Alt+O | Ctrl+←/→ | Alt+O |
+| other panel follows cursor | — | Alt+O | Ctrl+←/→ | Left/Right menu, no default key — `Alt+<letter>` is the quick search here |
 | directory hotlist/bookmarks | folder shortcuts: Ctrl+Shift+0..9 set, RightCtrl+0..9 go (and insert the path when in an edit line), plus a list in the Commands menu | Ctrl+\ | Ctrl+D / Ctrl+B add | **Ctrl+D** the list; **Ctrl+Shift+0..9** set; **Alt+0..9** go |
 | directory history | Alt+F12 | Alt+Shift+H; Alt+Y / Alt+U back/forward | Ctrl+H; Alt+←/→ | Alt+F12; Alt+←/→ |
 | quick cd / path entry | — | Alt+C | Ctrl+L | Ctrl+L |
@@ -118,12 +118,12 @@ Column `SC` = FinalCommander default (profile `far`, our baseline).
 | lock the tab to its directory | — | — | — | **Ctrl+Alt+K** |
 | name the tab | — | — | — | Left/Right menu |
 | find file | Alt+F7 | Alt+? | Ctrl+S | Alt+F7 |
-| disk usage | — | Ctrl+Space on a dir | Alt+Shift+S | Alt+Shift+S |
-| compare directories | Commands menu, no default key (marks what is missing or newer in the other panel; names, sizes and times only, no subfolders) | — | Alt+Shift+C | Alt+Shift+C |
+| disk usage | — | Ctrl+Space on a dir | Alt+Shift+S | `F3` on a directory computes its size; a report over a whole tree is on the backlog |
+| compare directories | Commands menu, no default key (marks what is missing or newer in the other panel; names, sizes and times only, no subfolders) | — | Alt+Shift+C | Commands menu, no default key, as in FAR |
 | synchronise directories | — | — | Ctrl+Y | **Ctrl+Shift+Y** — Total Commander's `Ctrl+Y` is FAR's *clear the command line*, and `--check-keymap` is what said so |
 | pack / unpack | Shift+F1 / Shift+F2 | — | Alt+Shift+P / Alt+Shift+U | Shift+F1 / Shift+F2 |
-| test archive | — | — | Alt+Shift+E | Alt+Shift+E |
-| multi-rename | — | — | Shift+F2 | Ctrl+M |
+| test archive | — | — | Alt+Shift+E | Commands menu, no default key |
+| multi-rename | — | — | Shift+F2 | not built yet — `docs/BACKLOG.md` (and FAR's own `Ctrl+M` restores the previous selection, which is what it does here too, on `Ctrl+Shift+M`) |
 | select group / unselect group | Gray + / Gray − | + / \ | Ctrl++ / Ctrl+− | + / − |
 | invert selection | Gray * | — | Alt+* | `*` (files), `Alt+*` (folders too, FAR's `Ctrl+Gray *`) |
 | select all / none | Shift+Gray + / Shift+Gray − | — | Alt++ / Alt+− | **Shift++ / Shift+−**, and `Ctrl+Shift+A` for *all* where a terminal does not report Shift with a printable key |
@@ -131,7 +131,7 @@ Column `SC` = FinalCommander default (profile `far`, our baseline).
 | by name, any extension | Alt+Gray + / − | — | — | **Alt++ / Alt+−** |
 | scroll long names sideways | Alt+←/→, Alt+Home/End | — | — | **Ctrl+Shift+←/→** (Alt+←/→ is history here) |
 | restore previous selection | Ctrl+M | — | — | Ctrl+Shift+M |
-| copy names to clipboard | Ctrl+Ins / Ctrl+Shift+Ins names, Alt+Shift+Ins full names, Ctrl+Alt+Ins real/UNC names, Ctrl+Shift+C / Ctrl+Shift+X copy/cut the files themselves | — | — | Ctrl+Shift+C (names), Alt+Shift+C (full paths) |
+| copy names to clipboard | Ctrl+Ins / Ctrl+Shift+Ins names, Alt+Shift+Ins full names, Ctrl+Alt+Ins real/UNC names, Ctrl+Shift+C / Ctrl+Shift+X copy/cut the files themselves | — | — | not built yet: it needs the OS clipboard, which is a backlog line of its own |
 | attributes / permissions | Ctrl+A | Ctrl+x c (chmod), Ctrl+x o (chown) | Alt+Enter | Ctrl+A |
 | apply command to selection | Ctrl+G | — | — | Ctrl+G |
 | describe files | Ctrl+Z | — | — | Ctrl+Shift+D |
@@ -144,25 +144,24 @@ indistinguishable in a TTY — see §9.
 
 ## 6. Command line
 
-| Action | FAR | MC | SC |
+| Action | FAR | MC | FC |
 | --- | --- | --- | --- |
 | char left/right | ←/→, Ctrl+S / Ctrl+D | ←/→ | ←/→ |
 | word left/right | Ctrl+←/→ | Alt+B / Alt+F | Ctrl+←/→ |
 | start/end of line | Ctrl+Home / Ctrl+End | Ctrl+A / Ctrl+E | Home / End |
-| delete word left/right | Ctrl+Backspace / Ctrl+Del | Alt+Backspace / Alt+D | Ctrl+W / Alt+D |
+| delete word left/right | Ctrl+Backspace / Ctrl+Del | Alt+Backspace / Alt+D | Ctrl+Backspace / Ctrl+Del, and `Ctrl+W` for the left one as every readline has it |
 | delete to end of line | Ctrl+K | Ctrl+K | Ctrl+K |
-| clear line | Ctrl+Y | Ctrl+U | Ctrl+U |
+| clear line | Ctrl+Y | Ctrl+U | `Esc` — `Ctrl+U` is FAR's swap the panels, and it is that here |
 | history prev/next | Ctrl+E / Ctrl+X | Alt+P / Alt+N | ↑/↓ (when non-empty), Alt+F8 list |
 | insert current file name | Ctrl+J, Ctrl+Enter | Alt+Enter | Ctrl+Enter |
 | insert name from other panel | Ctrl+Shift+Enter | — | Ctrl+Shift+Enter |
-| insert full path (active/passive) | Ctrl+F / Ctrl+; | — | Alt+Enter / Alt+Shift+Enter |
-| insert left/right panel path | Ctrl+[ / Ctrl+] | — | Ctrl+[ / Ctrl+] |
+| insert the panel's path (this one / the other) | Ctrl+F / Ctrl+; | — | Ctrl+[ / Ctrl+] |
 | completion | — | Tab (also Alt+Tab list) | Tab |
 | run keeping output | — | Ctrl+O after run | Ctrl+O |
 
 ## 7. Viewer
 
-| Action | FAR | MC | SC |
+| Action | FAR | MC | FC |
 | --- | --- | --- | --- |
 | line / page / file bounds | ↑↓, PgUp/PgDn, Home/End | same | same |
 | horizontal scroll | ←/→, Ctrl+←/→ (20 cols) | ←/→ | ←/→, Ctrl+←/→ |
@@ -181,7 +180,7 @@ indistinguishable in a TTY — see §9.
 
 ## 8. Editor
 
-| Action | FAR | MC (mcedit) | SC |
+| Action | FAR | MC (mcedit) | FC |
 | --- | --- | --- | --- |
 | save / save as | F2 / Shift+F2 | F2 / — | F2 / Shift+F2 |
 | quit / save+quit | F10, F4, Esc / Shift+F10 | F10 | F10, Esc / Shift+F10 |
@@ -197,7 +196,7 @@ indistinguishable in a TTY — see §9.
 | append to clipboard | Ctrl+Gray + | — | **Ctrl+Shift+Ins** |
 | copy / move block to cursor | Ctrl+P / Ctrl+M (persistent blocks) | F5 / F6 | Ctrl+Shift+P / Ctrl+Shift+M |
 | delete block / line / to EOL | Ctrl+D / Ctrl+Y / Ctrl+K | F8 / Ctrl+Y / Ctrl+K | Ctrl+D / Ctrl+Y / Ctrl+K |
-| delete word left / right | Ctrl+Backspace / Ctrl+T, Ctrl+Del | Alt+Backspace | Ctrl+Backspace / Alt+D |
+| delete word left / right | Ctrl+Backspace / Ctrl+T, Ctrl+Del | Alt+Backspace | Ctrl+Backspace / Ctrl+Del, Ctrl+T |
 | indent / outdent block | Alt+I / Alt+U | — | **Alt+I / Alt+U**, which move the block — or the line the cursor is on when nothing is selected. `Tab` types a tab here and does not indent a block: it is the key one presses while writing, and a key that did both would do the wrong one half the time |
 | start/end of file | Ctrl+Home, Ctrl+PgUp / Ctrl+End, Ctrl+PgDn | Ctrl+Home / Ctrl+End | Ctrl+Home / Ctrl+End |
 | start/end of screen | Ctrl+N / Ctrl+E | — | **Ctrl+N / Ctrl+E** |
@@ -224,7 +223,7 @@ Alt+Shift+arrows (column block) are handled by the editor itself and are not bin
 
 ## 8b. Netbox (connections)
 
-| Action | FAR | MC | SC |
+| Action | FAR | MC | FC |
 | --- | --- | --- | --- |
 | connection list | F11 → NetBox | — | **Ctrl+Shift+N** |
 | connect by URL | inside the plugin | `cd sftp://host/dir` | **Ctrl+L** with `sftp://user@host:port/dir` |
@@ -234,7 +233,7 @@ Alt+Shift+arrows (column block) are handled by the editor itself and are not bin
 
 ## 7b. Viewer: the structure pane (shipped, SPEC 05 §1.8)
 
-| Action | SC |
+| Action | FC |
 | --- | --- |
 | open or close the pane | **F11** |
 | move the keys between the bytes and the pane | **Tab** |
@@ -246,7 +245,7 @@ there are no plugins yet. When they arrive the pane moves rather than the plugin
 
 ## 8c. The menu bar and the dialogs (shipped, SPEC 10)
 
-| Action | FAR | SC |
+| Action | FAR | FC |
 | --- | --- | --- |
 | open the menu bar | F9 | **F9** (the menu of the panel that has the focus) |
 | inside the bar | ←→ menus, ↑↓ entries, letter, Enter, Esc | the same |
@@ -268,7 +267,7 @@ with `Ctrl+Shift+A` beside it.
 
 ## 8d. Selection, the keys that ignore it, and the panel chrome (shipped)
 
-| Action | FAR | SC |
+| Action | FAR | FC |
 | --- | --- | --- |
 | select / deselect by mask | Gray + / Gray − | **`+` / `−`** (the whole mask grammar: lists, `[c-f]`, `/regex/i`, `include\|exclude`, `<arc>`) |
 | by the current file's extension | Ctrl+Gray + / − | **Ctrl++ / Ctrl+−** |
@@ -283,7 +282,7 @@ with `Ctrl+Shift+A` beside it.
 
 ## 8e. Find file (shipped in part)
 
-| Action | FAR | SC |
+| Action | FAR | FC |
 | --- | --- | --- |
 | open the dialog | Alt+F7 | **Alt+F7**, filled in with the last search |
 | inside the dialog | ↑↓ rows, Space toggles, Tab to the buttons, Enter, Esc | the same, plus **F10** for OK |
@@ -377,12 +376,21 @@ Each command carries an id, a localisable label, an optional default key per pro
 "scope" (panel / viewer / editor / dialog / global). The palette (`Ctrl+Shift+P`) lists every
 command with its current binding — which also makes the whole keymap self-documenting.
 
-## 11. Profiles shipped
+## 11. Profiles
+
+Two are built in — `fcmd --list-themes`' sibling, `fcmd --keymap <name> --check-keymap`, says
+which, and refuses a name it does not have:
 
 | Profile | Base | Notes |
 | --- | --- | --- |
 | `far` (default) | FAR 3 | the table above |
 | `mc` | Midnight Commander | `Alt+.` hidden files, `Ctrl+x` prefix chords, `Insert` tag, `+`/`\` select/unselect, `Alt+?` find |
+
+Planned, and not built yet — each is a file of bindings rather than any new behaviour, and
+`docs/spec/09-roadmap.md` has them:
+
+| Profile | Base | What it would be |
+| --- | --- | --- |
 | `tc` | Total Commander | `Alt+F5` pack, `Alt+F9` unpack, `Ctrl+M` multi-rename, `Ctrl+B` branch view, `Ctrl+Q` quick view, `F2` reread |
 | `nc` | Norton Commander 5 | minimal set, no Ctrl+F-key sorting beyond name/ext/date/size |
 | `vi` | vifm/yazi-ish | modal: `hjkl`, `gg`/`G`, `dd`/`yy`/`p`, `/` search, `:` command line, `Space` select |
