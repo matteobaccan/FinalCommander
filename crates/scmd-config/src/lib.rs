@@ -773,6 +773,11 @@ mod tests {
             right_tabs: Vec::new(),
             left_tab: 0,
             right_tab: 0,
+            bookmarks: vec![Bookmark {
+                path: "/usr/share".into(),
+                name: "shared".into(),
+                digit: Some(3),
+            }],
         };
         state.save(&paths).unwrap();
         let (back, problem) = State::load(&paths);
@@ -967,6 +972,23 @@ pub struct State {
     pub left_tab: usize,
     #[serde(default)]
     pub right_tab: usize,
+    /// The folders kept to hand (SPEC 02 §11). They live here rather than in `scmd.toml`
+    /// because a key sets them: a shortcut that waited for *Save setup* and vanished without
+    /// it would be a bug, not a setting.
+    #[serde(default)]
+    pub bookmarks: Vec<Bookmark>,
+}
+
+/// One folder kept to hand: where it is, what it is called, and the digit it answers to.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Bookmark {
+    pub path: String,
+    /// What the list calls it, or empty for one that goes by its path.
+    #[serde(default)]
+    pub name: String,
+    /// `0` to `9` for a folder shortcut; `None` for one that is only in the list.
+    #[serde(default)]
+    pub digit: Option<u8>,
 }
 
 /// One tab of one side, as the state file holds it.

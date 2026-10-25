@@ -64,12 +64,18 @@ msg-tab-moved = scheda spostata nell’altro pannello
 msg-tab-locked = questa scheda è bloccata sulla sua directory
 msg-tab-locked-on = scheda bloccata sulla sua directory
 msg-tab-locked-off = scheda sbloccata
+msg-bookmark-set = scorciatoia { $digit }: { $path }
+msg-bookmark-unset = la scorciatoia { $digit } non è impostata
+msg-bookmark-added = { $path } aggiunta
+msg-bookmark-removed = { $path } rimossa
+msg-bookmark-known = quella cartella è già nell’elenco
 msg-dirsize = { $path }: { $bytes } in { $files } file
 
 prompt-copy-to = Copia { $what } in:
 prompt-move-to = Sposta/rinomina { $what } in:
 prompt-mkdir = Crea la directory:
 prompt-tab-name = Nome della scheda:
+prompt-bookmark-name = Nome della cartella:
 what-selected = { $count } elementi selezionati
 confirm-delete-title = Elimina
 confirm-delete-body = Eliminare { $count } elementi ({ $bytes })?
@@ -290,6 +296,7 @@ menu-find-file = Trova file
 menu-history = Cronologia comandi
 menu-view-history = Cronologia viste e modifiche
 menu-folders-history = Cronologia cartelle
+menu-bookmarks = Cartelle preferite
 menu-swap-panels = Scambia i pannelli
 menu-sync-panel = Allinea l'altro pannello
 menu-panels-onoff = Pannelli sì/no
@@ -628,6 +635,7 @@ drive-home = Home
 drive-connection = Connessione
 drive-objects = Object store
 drives-hint = ↑↓ scegli · 0-9 i pannelli in fondo · Invio applica · Esc chiudi
+bookmarks-hint = Invio vai · Ins aggiungi · Canc togli · F4 rinomina · Esc chiudi
 
 # The search dialog (F7), which asks the whole question in one place.
 search-title = Cerca

@@ -255,6 +255,115 @@ cmd = "panel.info"
 keys = ["Ctrl+Shift+L"]
 cmd = "nav.goto.path"
 
+# Folder shortcuts (SPEC 02 §11). FAR sets them with `Ctrl+Shift+0..9` and goes to them with
+# `RightCtrl+0..9`, and no terminal can tell the two control keys apart (docs/03-keymap.md §9),
+# so going to one is `Alt+0..9` — which is also Total Commander's key for its own tab list, and
+# free here. `Ctrl+D` opens the whole hotlist, as Total Commander does.
+[[bind]]
+keys = ["Ctrl+D"]
+scope = "panel"
+cmd = "nav.bookmarks"
+
+[[bind]]
+keys = ["Ctrl+Shift+0"]
+scope = "panel"
+cmd = "nav.bookmark.set(0)"
+
+[[bind]]
+keys = ["Ctrl+Shift+1"]
+scope = "panel"
+cmd = "nav.bookmark.set(1)"
+
+[[bind]]
+keys = ["Ctrl+Shift+2"]
+scope = "panel"
+cmd = "nav.bookmark.set(2)"
+
+[[bind]]
+keys = ["Ctrl+Shift+3"]
+scope = "panel"
+cmd = "nav.bookmark.set(3)"
+
+[[bind]]
+keys = ["Ctrl+Shift+4"]
+scope = "panel"
+cmd = "nav.bookmark.set(4)"
+
+[[bind]]
+keys = ["Ctrl+Shift+5"]
+scope = "panel"
+cmd = "nav.bookmark.set(5)"
+
+[[bind]]
+keys = ["Ctrl+Shift+6"]
+scope = "panel"
+cmd = "nav.bookmark.set(6)"
+
+[[bind]]
+keys = ["Ctrl+Shift+7"]
+scope = "panel"
+cmd = "nav.bookmark.set(7)"
+
+[[bind]]
+keys = ["Ctrl+Shift+8"]
+scope = "panel"
+cmd = "nav.bookmark.set(8)"
+
+[[bind]]
+keys = ["Ctrl+Shift+9"]
+scope = "panel"
+cmd = "nav.bookmark.set(9)"
+
+[[bind]]
+keys = ["Alt+0"]
+scope = "panel"
+cmd = "nav.bookmark.go(0)"
+
+[[bind]]
+keys = ["Alt+1"]
+scope = "panel"
+cmd = "nav.bookmark.go(1)"
+
+[[bind]]
+keys = ["Alt+2"]
+scope = "panel"
+cmd = "nav.bookmark.go(2)"
+
+[[bind]]
+keys = ["Alt+3"]
+scope = "panel"
+cmd = "nav.bookmark.go(3)"
+
+[[bind]]
+keys = ["Alt+4"]
+scope = "panel"
+cmd = "nav.bookmark.go(4)"
+
+[[bind]]
+keys = ["Alt+5"]
+scope = "panel"
+cmd = "nav.bookmark.go(5)"
+
+[[bind]]
+keys = ["Alt+6"]
+scope = "panel"
+cmd = "nav.bookmark.go(6)"
+
+[[bind]]
+keys = ["Alt+7"]
+scope = "panel"
+cmd = "nav.bookmark.go(7)"
+
+[[bind]]
+keys = ["Alt+8"]
+scope = "panel"
+cmd = "nav.bookmark.go(8)"
+
+[[bind]]
+keys = ["Alt+9"]
+scope = "panel"
+cmd = "nav.bookmark.go(9)"
+
 [[bind]]
 keys = ["Ctrl+Q"]
 cmd = "panel.quickview"

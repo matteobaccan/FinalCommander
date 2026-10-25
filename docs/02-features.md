@@ -43,7 +43,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 1.21 | Per-panel encoding/codepage for names and previews | MC/FAR | M3 |
 | 1.22 | Icons / nerd-font glyphs per file type, optional | YAZI | M2 |
 | 1.23 | Colour-by-file-type rules (mask, attrs, size, age) — "highlight groups" | FAR/TC | M2 |
-| 1.24 | Panel history (back/forward), directory history, folder shortcuts/bookmarks (0..9 + named), hotlist | FAR/TC/MC | M1 history, M2 rest |
+| 1.24 | ~~Panel history (back/forward), directory history, folder shortcuts/bookmarks (0..9 + named), hotlist~~ | FAR/TC/MC | **shipped** |
 | 1.25 | Auto-refresh via filesystem watch (inotify/FSEvents/ReadDirectoryChangesW), manual `Ctrl+R` | TC/MTN2 | M2 |
 
 ## 2. Navigation & selection

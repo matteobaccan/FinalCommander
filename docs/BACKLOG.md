@@ -131,7 +131,7 @@ here is the order to build it in: each item needs only the ones above it.
 | Find folder in the tree | `Alt+F10` | Wants the tree cache. |
 | User menu | Commands menu (`F2`) | SPEC 06 §4: `menu.toml` with conditions. |
 | File associations | Commands menu | SPEC 06 §6: what `Enter` does to a `.md`, a `.zip`, a `.wasm`. |
-| Folder shortcuts | Commands menu | FAR's `Ctrl+0..9`/`Right Ctrl+0..9` bookmarks. |
+| ~~Folder shortcuts~~ | Commands menu (`Ctrl+D`) | **Shipped.** Ten of them, FAR's own number: `Ctrl+Shift+0..9` puts this panel's directory on a digit and `Alt+0..9` goes to it, since no terminal can tell FAR's two control keys apart. `Ctrl+D` opens the whole hotlist, where `Ins` keeps a folder with no digit, `Del` gives one up, `F4` names it and the digit is the row's own key. Kept in the state file rather than in `scmd.toml`, because a key sets them and a shortcut that waited for *Save setup* would be a bug. A shortcut on a server is a connection first, the same route the drive list takes. |
 
 ## Interface and configuration
 

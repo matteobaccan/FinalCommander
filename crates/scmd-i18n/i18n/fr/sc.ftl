@@ -64,12 +64,18 @@ msg-tab-moved = onglet déplacé vers l’autre panneau
 msg-tab-locked = cet onglet est fixé à son répertoire
 msg-tab-locked-on = onglet fixé à son répertoire
 msg-tab-locked-off = onglet libéré
+msg-bookmark-set = raccourci { $digit } : { $path }
+msg-bookmark-unset = le raccourci { $digit } n’est pas défini
+msg-bookmark-added = { $path } gardé
+msg-bookmark-removed = { $path } retiré
+msg-bookmark-known = ce dossier est déjà dans la liste
 msg-dirsize = { $path } : { $bytes } dans { $files } fichiers
 
 prompt-copy-to = Copier { $what } vers :
 prompt-move-to = Déplacer/renommer { $what } vers :
 prompt-mkdir = Créer le répertoire :
 prompt-tab-name = Nom de l’onglet :
+prompt-bookmark-name = Nom du dossier :
 what-selected = { $count } éléments sélectionnés
 confirm-delete-title = Supprimer
 confirm-delete-body = Supprimer { $count } éléments ({ $bytes }) ?
@@ -290,6 +296,7 @@ menu-find-file = Chercher un fichier
 menu-history = Historique des commandes
 menu-view-history = Historique des vues et éditions
 menu-folders-history = Historique des dossiers
+menu-bookmarks = Dossiers favoris
 menu-swap-panels = Échanger les panneaux
 menu-sync-panel = Synchroniser l'autre panneau
 menu-panels-onoff = Panneaux actifs/inactifs
@@ -627,6 +634,7 @@ drive-home = Perso
 drive-connection = Connexion
 drive-objects = Stockage objet
 drives-hint = ↑↓ choisir · 0-9 les panneaux ci-dessous · Entrée appliquer · Échap fermer
+bookmarks-hint = Entrée aller · Inser garder · Suppr retirer · F4 nommer · Échap fermer
 
 # The search dialog (F7), which asks the whole question in one place.
 search-title = Rechercher

@@ -64,12 +64,18 @@ msg-tab-moved = Reiter in das andere Fenster verschoben
 msg-tab-locked = dieser Reiter ist auf sein Verzeichnis festgelegt
 msg-tab-locked-on = Reiter auf sein Verzeichnis festgelegt
 msg-tab-locked-off = Reiter freigegeben
+msg-bookmark-set = Verknüpfung { $digit }: { $path }
+msg-bookmark-unset = Verknüpfung { $digit } ist nicht gesetzt
+msg-bookmark-added = { $path } gemerkt
+msg-bookmark-removed = { $path } entfernt
+msg-bookmark-known = dieser Ordner ist schon in der Liste
 msg-dirsize = { $path }: { $bytes } in { $files } Dateien
 
 prompt-copy-to = { $what } kopieren nach:
 prompt-move-to = { $what } verschieben/umbenennen nach:
 prompt-mkdir = Verzeichnis anlegen:
 prompt-tab-name = Name des Reiters:
+prompt-bookmark-name = Name des Ordners:
 what-selected = { $count } ausgewählte Einträge
 confirm-delete-title = Löschen
 confirm-delete-body = { $count } Einträge ({ $bytes }) löschen?
@@ -290,6 +296,7 @@ menu-find-file = Datei suchen
 menu-history = Befehlsverlauf
 menu-view-history = Verlauf von Ansicht und Bearbeitung
 menu-folders-history = Ordnerverlauf
+menu-bookmarks = Ordner-Verknüpfungen
 menu-swap-panels = Fenster tauschen
 menu-sync-panel = Anderes Fenster abgleichen
 menu-panels-onoff = Fenster ein/aus
@@ -627,6 +634,7 @@ drive-home = Persönlich
 drive-connection = Verbindung
 drive-objects = Objektspeicher
 drives-hint = ↑↓ wählen · 0-9 die Panels unten · Enter anwenden · Esc schließen
+bookmarks-hint = Eingabe gehe · Einfg merken · Entf entfernen · F4 benennen · Esc schließen
 
 # The search dialog (F7), which asks the whole question in one place.
 search-title = Suchen

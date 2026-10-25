@@ -397,6 +397,10 @@ pub enum PromptKind {
     Mkdir,
     /// What to call this tab. An empty answer takes the name off again.
     TabName,
+    /// What to call a folder in the hotlist. An empty answer leaves it with its path.
+    BookmarkName {
+        row: usize,
+    },
     /// `Ctrl+G`: one command line, run once per selected file (SPEC 06 §5).
     ApplyCommand,
     /// Where a tunnel goes: `[local:]host:port`, or a port on its own.
@@ -948,6 +952,8 @@ pub struct App {
     /// others are parked in the row, so nothing that works on a panel has to know that tabs
     /// exist. A side always has at least one.
     pub tabs: [crate::tabs::Row; 2],
+    /// The folders kept to hand (SPEC 02 §11), as the state file holds them.
+    pub bookmarks: Vec<scmd_config::Bookmark>,
     pub active: usize,
     pub mode: Mode,
     pub status: String,
@@ -1149,6 +1155,7 @@ impl App {
                 Panel::new(right, sort, view, hidden),
             ],
             tabs: [crate::tabs::Row::one(), crate::tabs::Row::one()],
+            bookmarks: Vec::new(),
             active: 0,
             mode: Mode::Normal,
             status: String::new(),
@@ -2770,6 +2777,19 @@ impl App {
                 let raw = prompt.text.trim().to_string();
                 self.panel_mut().name = (!raw.is_empty()).then_some(raw);
             }
+            PromptKind::BookmarkName { row } => {
+                // The row is the one the list was showing, and the list is built from the
+                // folders in their order, so the row names the folder.
+                let name = prompt.text.trim().to_string();
+                let side = self.active;
+                let rows = self.bookmark_rows(side);
+                if let Some(path) = rows.get(row).map(|r| r.value.clone()) {
+                    if let Some(b) = self.bookmarks.iter_mut().find(|b| b.path == path) {
+                        b.name = name;
+                    }
+                }
+                self.reopen_bookmarks(side, row);
+            }
             PromptKind::ViewerSearch => {
                 let query = prompt.text.trim().to_string();
                 self.restore_viewer();
@@ -3702,6 +3722,9 @@ impl App {
                 });
                 self.set_status(msg);
             }
+            Command::NavBookmarkSet(digit) => self.bookmark_set(digit),
+            Command::NavBookmarkGo(digit) => self.bookmark_go(digit),
+            Command::NavBookmarks => self.open_pick(PickKind::Bookmarks, self.active),
             Command::PanelTabNew => self.tab_new(),
             Command::PanelTabClose => self.tab_close(),
             Command::PanelTabNext => {
@@ -7637,6 +7660,12 @@ impl App {
                 side,
             ),
             PickKind::Drives => self.drive_list(side),
+            PickKind::Bookmarks => Pick::new(
+                kind,
+                self.i18n.t("menu-bookmarks"),
+                self.bookmark_rows(side),
+                side,
+            ),
             PickKind::FoldersHistory => {
                 let panel = &self.panels[side];
                 let current = panel.cwd.to_string();
@@ -7729,6 +7758,52 @@ impl App {
             KeyCode::Home => pick.cursor = 0,
             KeyCode::End => pick.cursor = pick.rows.len().saturating_sub(1),
             KeyCode::Enter => self.apply_pick(),
+            // The hotlist is the one list one edits from inside it: a folder is kept, given
+            // up or named where it is read, rather than through a dialog of its own.
+            KeyCode::Insert if pick.kind == PickKind::Bookmarks => {
+                let (side, cursor) = (pick.side, pick.cursor);
+                // The cursor goes to what was just kept, which is the row one came for.
+                let kept = self.bookmark_add();
+                let cursor = kept
+                    .and_then(|path| {
+                        self.bookmark_rows(side)
+                            .iter()
+                            .position(|r| r.value == path)
+                    })
+                    .unwrap_or(cursor);
+                self.reopen_bookmarks(side, cursor);
+            }
+            KeyCode::Delete if pick.kind == PickKind::Bookmarks => {
+                let (side, cursor) = (pick.side, pick.cursor);
+                let gone = pick.chosen().map(|r| r.value.clone());
+                if let Some(path) = gone {
+                    self.bookmarks.retain(|b| b.path != path);
+                    let msg = self
+                        .i18n
+                        .t_args("msg-bookmark-removed", &[("path", path.into())]);
+                    self.set_status(msg);
+                }
+                self.reopen_bookmarks(side, cursor);
+            }
+            KeyCode::F(4) if pick.kind == PickKind::Bookmarks => {
+                let row = pick.cursor;
+                let path = pick.chosen().map(|r| r.value.clone());
+                let Some(path) = path else { return };
+                let text = self
+                    .bookmarks
+                    .iter()
+                    .find(|b| b.path == path)
+                    .map(|b| b.name.clone())
+                    .unwrap_or_default();
+                let title = self.i18n.t("prompt-bookmark-name");
+                self.mode = Mode::Prompt(Prompt {
+                    kind: PromptKind::BookmarkName { row },
+                    title,
+                    text,
+                    secret: false,
+                    sources: Vec::new(),
+                });
+            }
             // A row with a key of its own: the key takes it, without the arrows.
             KeyCode::Char(c) => {
                 if let Some(row) = pick.by_hotkey(c) {
@@ -7845,20 +7920,9 @@ impl App {
                     self.set_status(msg);
                 }
             }
-            PickKind::Drives | PickKind::FoldersHistory => {
+            PickKind::Drives | PickKind::FoldersHistory | PickKind::Bookmarks => {
                 self.active = pick.side;
-                let target = VPath::parse(&row.value);
-                if target.is_remote() {
-                    match scmd_net::Site::parse_url(&row.value) {
-                        Ok(site) => match self.connected_site_path(&site) {
-                            Some(path) => self.goto(path),
-                            None => self.connect_to(site, None, false),
-                        },
-                        Err(e) => self.set_error(e.to_string()),
-                    }
-                } else {
-                    self.goto(target.normalised());
-                }
+                self.go_to_bookmark(&row.value);
             }
             PickKind::CommandHistory => {
                 // Chosen from the list, the line goes back on the command line rather than
@@ -9176,6 +9240,126 @@ impl App {
         self.read_panel(index);
     }
 
+    // ── the folders kept to hand (SPEC 02 §11) ──────────────────────────────────────────
+
+    /// `Ctrl+Shift+0..9`: this panel's directory answers to that digit from now on.
+    ///
+    /// A digit holds one folder, so setting it over a folder that had it replaces that
+    /// folder — and the name with it, because the name belonged to the old one. A folder
+    /// already in the list without a digit is given the digit rather than added twice.
+    fn bookmark_set(&mut self, digit: u8) {
+        let path = self.panel().cwd.to_string();
+        self.bookmarks
+            .retain(|b| b.digit != Some(digit) || b.path == path);
+        match self.bookmarks.iter_mut().find(|b| b.path == path) {
+            Some(known) => {
+                if known.digit != Some(digit) {
+                    known.digit = Some(digit);
+                }
+            }
+            None => self.bookmarks.push(scmd_config::Bookmark {
+                path: path.clone(),
+                name: String::new(),
+                digit: Some(digit),
+            }),
+        }
+        let msg = self.i18n.t_args(
+            "msg-bookmark-set",
+            &[("digit", digit.to_string().into()), ("path", path.into())],
+        );
+        self.set_status(msg);
+    }
+
+    /// `Alt+0..9`: go to the folder that answers to that digit.
+    fn bookmark_go(&mut self, digit: u8) {
+        let Some(path) = self
+            .bookmarks
+            .iter()
+            .find(|b| b.digit == Some(digit))
+            .map(|b| b.path.clone())
+        else {
+            let msg = self
+                .i18n
+                .t_args("msg-bookmark-unset", &[("digit", digit.to_string().into())]);
+            self.set_error(msg);
+            return;
+        };
+        self.go_to_bookmark(&path);
+    }
+
+    /// Where a folder in the list takes you. A bookmark may be on a server, in which case
+    /// going there is connecting first — the same route the drive list takes.
+    fn go_to_bookmark(&mut self, path: &str) {
+        let target = VPath::parse(path);
+        if target.is_remote() {
+            match scmd_net::Site::parse_url(path) {
+                Ok(site) => match self.connected_site_path(&site) {
+                    Some(path) => self.goto(path),
+                    None => self.connect_to(site, None, false),
+                },
+                Err(e) => self.set_error(e.to_string()),
+            }
+        } else {
+            self.goto(target.normalised());
+        }
+    }
+
+    /// The rows of the hotlist: the ones with a digit first and in order, then the rest as
+    /// they were added. The digit is the row's own key, so one press takes it.
+    fn bookmark_rows(&self, side: usize) -> Vec<PickRow> {
+        let current = self.panels[side].cwd.to_string();
+        let mut order: Vec<usize> = (0..self.bookmarks.len()).collect();
+        order.sort_by_key(|&i| (self.bookmarks[i].digit.unwrap_or(u8::MAX), i));
+        order
+            .into_iter()
+            .map(|i| {
+                let b = &self.bookmarks[i];
+                // The digit is the row's key, and the list draws a column of those itself:
+                // putting it in the label too would print it twice.
+                let label = if b.name.trim().is_empty() {
+                    b.path.clone()
+                } else {
+                    format!("{}  —  {}", b.name, b.path)
+                };
+                let row = PickRow::plain(label, b.path.clone(), b.path == current);
+                match b.digit {
+                    Some(d) => row.with_key((b'0' + d) as char),
+                    None => row,
+                }
+            })
+            .collect()
+    }
+
+    /// `Ins` in the hotlist: keep this panel's directory, with no digit of its own. The
+    /// path is handed back so the list can reopen with the cursor on what was just kept.
+    fn bookmark_add(&mut self) -> Option<String> {
+        let path = self.panels[self.active].cwd.to_string();
+        if self.bookmarks.iter().any(|b| b.path == path) {
+            let msg = self.i18n.t("msg-bookmark-known");
+            self.set_error(msg);
+            return None;
+        }
+        self.bookmarks.push(scmd_config::Bookmark {
+            path: path.clone(),
+            name: String::new(),
+            digit: None,
+        });
+        let msg = self
+            .i18n
+            .t_args("msg-bookmark-added", &[("path", path.clone().into())]);
+        self.set_status(msg);
+        Some(path)
+    }
+
+    /// Open the hotlist again after a key that changed it, with the cursor where it was.
+    fn reopen_bookmarks(&mut self, side: usize, cursor: usize) {
+        let rows = self.bookmark_rows(side);
+        let title = self.i18n.t("menu-bookmarks");
+        let mut pick = Pick::new(PickKind::Bookmarks, title, rows, side);
+        pick.cursor = cursor.min(pick.rows.len().saturating_sub(1));
+        self.mode = Mode::Pick(Box::new(pick));
+    }
+
     /// Put back the tabs a previous session had on this side (SPEC 02 §1.6).
     ///
     /// Two rules, both of them about what a user asked for most recently. The directory this
@@ -10047,6 +10231,109 @@ mod tests {
         app.restore_tabs(0, &saved, 0);
         assert_eq!(app.tabs[0].len(), 1);
         assert_eq!(app.panels[0].cwd, VPath::local("/home/mb"));
+    }
+
+    // ── the folders kept to hand (SPEC 02 §11) ──────────────────────────────────────────────
+
+    #[test]
+    fn a_digit_holds_a_folder_and_takes_you_back_to_it() {
+        let mut app = app();
+        press(&mut app, "Ctrl+Shift+3");
+        assert_eq!(app.bookmarks.len(), 1);
+        assert_eq!(app.bookmarks[0].digit, Some(3));
+        assert_eq!(app.bookmarks[0].path, "/home/mb");
+        app.panel_mut().cursor_to(1); // docs
+        press(&mut app, "Enter");
+        assert_eq!(app.panels[0].cwd, VPath::local("/home/mb/docs"));
+        press(&mut app, "Alt+3");
+        assert_eq!(app.panels[0].cwd, VPath::local("/home/mb"));
+    }
+
+    #[test]
+    fn a_digit_that_holds_nothing_says_so() {
+        let mut app = app();
+        press(&mut app, "Alt+7");
+        assert!(app.status_error);
+        assert_eq!(app.panels[0].cwd, VPath::local("/home/mb"));
+    }
+
+    #[test]
+    fn setting_a_digit_over_a_folder_replaces_that_folder_and_its_name() {
+        let mut app = app();
+        press(&mut app, "Ctrl+Shift+1");
+        app.bookmarks[0].name = "home".into();
+        app.panels[0].go(VPath::local("/srv"), true);
+        press(&mut app, "Ctrl+Shift+1");
+        assert_eq!(app.bookmarks.len(), 1, "a digit holds one folder");
+        assert_eq!(app.bookmarks[0].path, "/srv");
+        assert_eq!(
+            app.bookmarks[0].name, "",
+            "the name belonged to the old one"
+        );
+    }
+
+    #[test]
+    fn a_folder_already_kept_is_given_the_digit_rather_than_kept_twice() {
+        let mut app = app();
+        press(&mut app, "Ctrl+D");
+        press(&mut app, "Ins"); // keep /home/mb, with no digit
+        press(&mut app, "Esc");
+        press(&mut app, "Ctrl+Shift+5");
+        assert_eq!(app.bookmarks.len(), 1);
+        assert_eq!(app.bookmarks[0].digit, Some(5));
+    }
+
+    #[test]
+    fn the_hotlist_keeps_names_gives_folders_up_and_goes_where_a_row_says() {
+        let mut app = app();
+        press(&mut app, "Ctrl+Shift+2"); // /home/mb on 2
+        app.panels[0].go(VPath::local("/srv"), true);
+        press(&mut app, "Ctrl+D");
+        press(&mut app, "Ins"); // and /srv in the list with no digit
+        assert_eq!(app.bookmarks.len(), 2);
+        // Named from inside the list, which is where one reads it.
+        press(&mut app, "F4");
+        type_text(&mut app, "server");
+        press(&mut app, "Enter");
+        assert_eq!(
+            app.bookmarks
+                .iter()
+                .find(|b| b.path == "/srv")
+                .unwrap()
+                .name,
+            "server"
+        );
+        // The digit comes first in the row, and its own key takes it.
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("the list is open again after naming a row")
+        };
+        assert_eq!(pick.rows.len(), 2);
+        assert!(pick.rows[0].label.contains("/home/mb"), "{:?}", pick.rows);
+        assert!(pick.rows[1].label.contains("server"), "{:?}", pick.rows);
+        assert_eq!(pick.rows[0].hotkey, Some('2'));
+        assert_eq!(pick.rows[1].hotkey, None);
+        assert_eq!(
+            pick.cursor, 1,
+            "the cursor stayed on the row that was named"
+        );
+        // The digit is the row's own key: one press takes it, without the arrows.
+        press(&mut app, "2");
+        assert_eq!(app.panels[0].cwd, VPath::local("/home/mb"));
+        // And given up from the same list.
+        press(&mut app, "Ctrl+D");
+        press(&mut app, "Del");
+        assert_eq!(app.bookmarks.len(), 1);
+        assert_eq!(app.bookmarks[0].path, "/srv");
+    }
+
+    #[test]
+    fn keeping_a_folder_that_is_already_kept_says_so_rather_than_keeping_it_twice() {
+        let mut app = app();
+        press(&mut app, "Ctrl+D");
+        press(&mut app, "Ins");
+        press(&mut app, "Ins");
+        assert_eq!(app.bookmarks.len(), 1);
+        assert!(app.status_error);
     }
 
     // ── the menu bar and the dialogs (SPEC 10) ──────────────────────────────────────────────

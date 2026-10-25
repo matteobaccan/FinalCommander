@@ -64,12 +64,18 @@ msg-tab-moved = 标签页已移到另一个面板
 msg-tab-locked = 此标签页已锁定在其目录
 msg-tab-locked-on = 标签页已锁定在其目录
 msg-tab-locked-off = 标签页已解锁
+msg-bookmark-set = 快捷方式 { $digit }：{ $path }
+msg-bookmark-unset = 快捷方式 { $digit } 未设置
+msg-bookmark-added = 已记住 { $path }
+msg-bookmark-removed = 已移除 { $path }
+msg-bookmark-known = 该文件夹已在列表中
 msg-dirsize = { $path }：{ $bytes }，共 { $files } 个文件
 
 prompt-copy-to = 复制 { $what } 到：
 prompt-move-to = 移动/重命名 { $what } 到：
 prompt-mkdir = 新建目录：
 prompt-tab-name = 标签页名称：
+prompt-bookmark-name = 文件夹名称：
 what-selected = 已选 { $count } 项
 confirm-delete-title = 删除
 confirm-delete-body = 删除 { $count } 项（{ $bytes }）？
@@ -290,6 +296,7 @@ menu-find-file = 查找文件
 menu-history = 命令历史
 menu-view-history = 查看与编辑历史
 menu-folders-history = 文件夹历史
+menu-bookmarks = 文件夹快捷方式
 menu-swap-panels = 交换面板
 menu-sync-panel = 同步另一面板
 menu-panels-onoff = 面板开关
@@ -627,6 +634,7 @@ drive-home = 主目录
 drive-connection = 连接
 drive-objects = 对象存储
 drives-hint = ↑↓ 选择 · 0-9 下方面板 · Enter 应用 · Esc 关闭
+bookmarks-hint = Enter 转到 · Ins 记住 · Del 移除 · F4 命名 · Esc 关闭
 
 # The search dialog (F7), which asks the whole question in one place.
 search-title = 查找

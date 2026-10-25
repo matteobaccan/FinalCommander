@@ -64,12 +64,18 @@ msg-tab-moved = закладка перенесена на другую пане
 msg-tab-locked = эта закладка закреплена за своим каталогом
 msg-tab-locked-on = закладка закреплена за каталогом
 msg-tab-locked-off = закладка освобождена
+msg-bookmark-set = закладка { $digit }: { $path }
+msg-bookmark-unset = закладка { $digit } не задана
+msg-bookmark-added = { $path } запомнена
+msg-bookmark-removed = { $path } убрана
+msg-bookmark-known = эта папка уже в списке
 msg-dirsize = { $path }: { $bytes } в { $files } файлах
 
 prompt-copy-to = Копировать { $what } в:
 prompt-move-to = Перенести/переименовать { $what } в:
 prompt-mkdir = Создать каталог:
 prompt-tab-name = Название закладки:
+prompt-bookmark-name = Название папки:
 what-selected = отмечено элементов: { $count }
 confirm-delete-title = Удаление
 confirm-delete-body = Удалить { $count } элементов ({ $bytes })?
@@ -290,6 +296,7 @@ menu-find-file = Найти файл
 menu-history = История команд
 menu-view-history = История просмотра и правки
 menu-folders-history = История папок
+menu-bookmarks = Закладки папок
 menu-swap-panels = Поменять панели
 menu-sync-panel = Синхронизировать другую панель
 menu-panels-onoff = Панели вкл/выкл
@@ -627,6 +634,7 @@ drive-home = Домашний
 drive-connection = Соединение
 drive-objects = Объектное хранилище
 drives-hint = ↑↓ выбрать · 0-9 панели ниже · Enter применить · Esc закрыть
+bookmarks-hint = Enter перейти · Ins запомнить · Del убрать · F4 назвать · Esc закрыть
 
 # The search dialog (F7), which asks the whole question in one place.
 search-title = Поиск

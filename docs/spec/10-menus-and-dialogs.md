@@ -70,9 +70,10 @@ Restore selection · Folder size.
 
 ### 2.3 Commands
 
-Find file, Command history (backlog), View and edit history (backlog), Folders history (§4.4) ·
+Find file, Command history (backlog), View and edit history (backlog), Folders history (§4.4),
+Folder shortcuts (§4.4b) ·
 Swap panels, Sync other panel, Panels on/off, Compare folders, Compare by content · Connections,
-Disconnect · User menu, File associations (backlog), Folder shortcuts (backlog) · Plugin
+Disconnect · User menu, File associations (backlog) · Plugin
 commands (backlog), Screens list (backlog: our own viewers, editors and jobs), Task list
 (backlog: the operating system's processes, as FAR's is — see `docs/BACKLOG.md`).
 
@@ -222,6 +223,14 @@ panel there; for a connection that is configured but not open, it connects first
 ### 4.4 Folders history (`Alt+F12`)
 
 Where this panel has been, newest first, without repeats. `Enter` goes back to it.
+
+### 4.4b Folder shortcuts (`Ctrl+D`)
+
+The folders kept to hand (`02-panels.md` §11): the ones on a digit first and in order, then
+the rest as they were added, each shown as its name and its path or, with no name, its path
+alone. The digit is the row's own key. It is the one list that is edited from inside it —
+`Ins` keeps the panel's directory, `Del` gives a folder up, `F4` names it — and its hint line
+says so. `Enter` goes to the folder, connecting first where it is on a server.
 
 ### 4.5 Sort modes (`Ctrl+F12`)
 

@@ -108,7 +108,7 @@ Column `SC` = SupremeCommander default (profile `far`, our baseline).
 | root directory | Ctrl+\ | — | Ctrl+Backspace | Ctrl+\ |
 | same dir in other panel | — | Alt+I | Ctrl+= | Ctrl+= |
 | other panel follows cursor | — | Alt+O | Ctrl+←/→ | Alt+O |
-| directory hotlist/bookmarks | folder shortcuts: Ctrl+Shift+0..9 set, RightCtrl+0..9 go (and insert the path when in an edit line), plus a list in the Commands menu | Ctrl+\ | Ctrl+D / Ctrl+B add | Ctrl+D; Ctrl+Shift+0..9 set; Alt+0..9 go |
+| directory hotlist/bookmarks | folder shortcuts: Ctrl+Shift+0..9 set, RightCtrl+0..9 go (and insert the path when in an edit line), plus a list in the Commands menu | Ctrl+\ | Ctrl+D / Ctrl+B add | **Ctrl+D** the list; **Ctrl+Shift+0..9** set; **Alt+0..9** go |
 | directory history | Alt+F12 | Alt+Shift+H; Alt+Y / Alt+U back/forward | Ctrl+H; Alt+←/→ | Alt+F12; Alt+←/→ |
 | quick cd / path entry | — | Alt+C | Ctrl+L | Ctrl+L |
 | new tab / close tab | — | — | Ctrl+Alt+N / Ctrl+W | **Ctrl+Alt+T / Ctrl+Alt+W** |
@@ -337,7 +337,7 @@ panel.view.set(brief|medium|full|wide|detail|custom:N)
 panel.sort.by(name|ext|size|mtime|ctime|atime|owner|none)   panel.sort.reverse
 panel.filter.quick          panel.filter.set            panel.hidden.toggle
 panel.tab.new|close|next|prev|move|lock|name     panel.layout.toggle
-nav.enter  nav.parent  nav.root  nav.history.back|forward  nav.bookmark.set(N)|go(N)
+nav.enter  nav.parent  nav.root  nav.history.back|forward  nav.bookmark.set(N)|go(N)  nav.bookmarks
 nav.goto.path  nav.goto.fuzzy  nav.drives  nav.other.sync
 sel.toggle  sel.all  sel.none  sel.invert  sel.mask(+|-)  sel.ext  sel.restore
 file.view  file.view.internal  file.edit  file.edit.internal  file.edit.new

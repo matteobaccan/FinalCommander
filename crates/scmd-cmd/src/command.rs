@@ -120,6 +120,12 @@ pub enum Command {
     NavBack,
     NavForward,
     NavGotoPath,
+    /// Put this panel's directory on folder shortcut `0`..`9` (SPEC 02 §11).
+    NavBookmarkSet(u8),
+    /// Go to the directory on folder shortcut `0`..`9`.
+    NavBookmarkGo(u8),
+    /// The whole hotlist, as a list to pick from.
+    NavBookmarks,
 
     SelToggle,
     SelAll,
@@ -353,6 +359,7 @@ impl Command {
             Command::NavBack,
             Command::NavForward,
             Command::NavGotoPath,
+            Command::NavBookmarks,
             Command::SelToggle,
             Command::SelAll,
             Command::SelNone,
@@ -493,6 +500,12 @@ impl Command {
         ] {
             out.push(Command::PanelViewSet(v));
         }
+        // Ten folder shortcuts, which is FAR's own number: a digit is the whole point of
+        // them, so they are written out rather than taking an argument from a dialog.
+        for n in 0..=9u8 {
+            out.push(Command::NavBookmarkSet(n));
+            out.push(Command::NavBookmarkGo(n));
+        }
         for k in [
             SortKey::Name,
             SortKey::Ext,
@@ -561,6 +574,9 @@ impl Command {
             Command::NavBack => "nav.history.back".into(),
             Command::NavForward => "nav.history.forward".into(),
             Command::NavGotoPath => "nav.goto.path".into(),
+            Command::NavBookmarkSet(n) => format!("nav.bookmark.set({n})"),
+            Command::NavBookmarkGo(n) => format!("nav.bookmark.go({n})"),
+            Command::NavBookmarks => "nav.bookmarks".into(),
             Command::SelToggle => "sel.toggle".into(),
             Command::SelAll => "sel.all".into(),
             Command::SelNone => "sel.none".into(),
@@ -746,6 +762,9 @@ impl Command {
             ("nav.history.back", _) => Command::NavBack,
             ("nav.history.forward", _) => Command::NavForward,
             ("nav.goto.path", _) => Command::NavGotoPath,
+            ("nav.bookmark.set", Some(a)) => Command::NavBookmarkSet(parse_digit(a)?),
+            ("nav.bookmark.go", Some(a)) => Command::NavBookmarkGo(parse_digit(a)?),
+            ("nav.bookmarks", _) => Command::NavBookmarks,
             ("sel.toggle", _) => Command::SelToggle,
             ("sel.all", _) => Command::SelAll,
             ("sel.none", _) => Command::SelNone,
@@ -878,6 +897,15 @@ impl Command {
         let id = self.id();
         let base = id.split('(').next().unwrap_or(&id);
         format!("cmd.{base}")
+    }
+}
+
+/// One digit, `0` to `9`: a folder shortcut's number. Anything else is not a shortcut, and a
+/// keymap that names one is wrong rather than clamped.
+fn parse_digit(s: &str) -> Option<u8> {
+    match s.trim().parse::<u8>() {
+        Ok(n) if n <= 9 => Some(n),
+        _ => None,
     }
 }
 

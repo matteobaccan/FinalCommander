@@ -69,6 +69,11 @@ msg-tab-moved = the tab moved to the other panel
 msg-tab-locked = this tab is locked to its directory
 msg-tab-locked-on = tab locked to its directory
 msg-tab-locked-off = tab unlocked
+msg-bookmark-set = shortcut { $digit }: { $path }
+msg-bookmark-unset = shortcut { $digit } is not set
+msg-bookmark-added = { $path } kept
+msg-bookmark-removed = { $path } given up
+msg-bookmark-known = that folder is already in the list
 msg-dirsize = { $path }: { $bytes } in { $files } files
 
 # Jobs: prompts, confirmations, progress, conflicts
@@ -76,6 +81,7 @@ prompt-copy-to = Copy { $what } to:
 prompt-move-to = Move/rename { $what } to:
 prompt-mkdir = Create the directory:
 prompt-tab-name = Call this tab:
+prompt-bookmark-name = Call this folder:
 what-selected = { $count } selected items
 confirm-delete-title = Delete
 confirm-delete-body = Delete { $count } items ({ $bytes })?
@@ -298,6 +304,7 @@ menu-find-file = Find file
 menu-history = Command history
 menu-view-history = View and edit history
 menu-folders-history = Folders history
+menu-bookmarks = Folder shortcuts
 menu-swap-panels = Swap panels
 menu-sync-panel = Sync other panel
 menu-panels-onoff = Panels on/off
@@ -636,6 +643,7 @@ drive-home = Home
 drive-connection = Connection
 drive-objects = Object store
 drives-hint = ↑↓ choose · 0-9 the panels below · Enter apply · Esc close
+bookmarks-hint = Enter go · Ins keep · Del remove · F4 name · Esc close
 
 # The search dialog (F7), which asks the whole question in one place.
 search-title = Search

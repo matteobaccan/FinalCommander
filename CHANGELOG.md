@@ -8,6 +8,19 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **The folders kept to hand.** `Ctrl+Shift+0` to `Ctrl+Shift+9` put the directory you are in
+  on a digit and `Alt+0` to `Alt+9` take you back to it — ten of them, which is FAR's own
+  number, with `Alt` rather than FAR's right-hand control key because no terminal can tell the
+  two control keys apart. `Ctrl+D` opens the whole hotlist, Total Commander's key for it: the
+  folders with a digit first and in order, then the rest, each with a name of its own if it
+  was given one. It is the one list that is edited from inside it — `Ins` keeps the directory
+  you are in, `Del` gives a folder up, `F4` names it — because that is where a folder is read.
+
+  They live in the state file rather than in `scmd.toml`, because a *key* sets them: a
+  shortcut that waited for *Save setup* and vanished without it would be a bug, not a setting.
+  A shortcut on a server or in a bucket works like any other and opens the connection first,
+  the same route the drive list takes.
+
 - **Tabs per panel.** A panel can hold more than one directory at a time: `Ctrl+Alt+T` opens
   another tab — on the directory under the cursor if the cursor is on one, and otherwise a
   duplicate of this one — `Ctrl+Alt+N` and `Ctrl+Alt+P` step along the row, `Ctrl+Alt+W` closes

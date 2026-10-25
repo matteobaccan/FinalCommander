@@ -705,6 +705,7 @@ fn draw_pick(app: &App, buf: &mut Buffer, screen: Rect, pick: &crate::form::Pick
     // line — which is FAR's habit: every dialog's footer is about that dialog.
     let hint = app.i18n.t(match pick.kind {
         crate::menu::PickKind::Drives => "drives-hint",
+        crate::menu::PickKind::Bookmarks => "bookmarks-hint",
         _ => "pick-hint",
     });
 
@@ -3283,6 +3284,32 @@ Some **bold** text and a [link](https://example.com).
             under.contains('\u{2554}'),
             "the left panel's corner: {under}"
         );
+    }
+
+    #[test]
+    #[ignore = "a look at the screen, not an assertion"]
+    fn eyeball_bookmarks() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = app_on_disk(dir.path());
+        app.bookmarks = vec![
+            scmd_config::Bookmark {
+                path: "/home/mb/src/supreme".into(),
+                name: "work".into(),
+                digit: Some(1),
+            },
+            scmd_config::Bookmark {
+                path: "/var/log".into(),
+                name: "logs".into(),
+                digit: Some(2),
+            },
+            scmd_config::Bookmark {
+                path: "sftp://mb@build.example.net/srv".into(),
+                name: String::new(),
+                digit: None,
+            },
+        ];
+        press(&mut app, "Ctrl+D");
+        println!("{}", frame(&mut app, 76, 20));
     }
 
     #[test]

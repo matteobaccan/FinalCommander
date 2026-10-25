@@ -31,6 +31,21 @@ preview of the file under the cursor, `Ctrl+T` into a directory tree.
 off both of them and give them to the output of the last command, which is how you watch a
 build go by without leaving the panels. Both are settings, so `Shift+F9` keeps them.
 
+# Folders kept to hand
+
+`Ctrl+Shift+0` to `Ctrl+Shift+9` put the directory you are in on a digit; `Alt+0` to `Alt+9`
+take you back to it. Ten of them, as FAR has — and `Alt` rather than FAR's right-hand control
+key because no terminal can tell the two control keys apart.
+
+A digit holds one folder: setting it again somewhere else moves it.
+
+`Ctrl+D` opens the whole list, where `Ins` keeps the directory you are in, `Del` gives one up
+and `F4` gives it a name, so the list can read `work`, `logs`, `server` instead of three
+paths. The ones with a digit come first, and the digit takes you there with one press.
+
+A folder on a server or in a bucket can be kept like any other; going to it opens the
+connection first.
+
 # Tabs
 
 A panel can hold more than one directory at a time. `Ctrl+Alt+T` opens another tab — on the

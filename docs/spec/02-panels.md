@@ -259,6 +259,31 @@ the screen on most of them.
 
 Still owed: reordering a tab within its row, and a list of them to pick from.
 
+## 11. The folders kept to hand (shipped)
+
+Ten **folder shortcuts**, which is FAR's own number: `Ctrl+Shift+0..9` puts the panel's
+directory on a digit, `Alt+0..9` goes to it. FAR goes to one with `RightCtrl+0..9`, and no
+terminal can tell the two control keys apart (`03-keymap.md` §9), so `Alt` is ours.
+
+A digit holds one folder. Setting it over a folder that had it replaces that folder and the
+name with it, because the name belonged to the old one; a folder already kept without a digit
+is given the digit rather than kept twice.
+
+`Ctrl+D` opens the whole **hotlist**, Total Commander's key for it: one list of folders, the
+ones with a digit first and in order, then the rest as they were added. It is the one list
+one edits from inside it — `Ins` keeps the panel's directory with no digit of its own, `Del`
+gives a folder up, `F4` names it — because a folder is read, kept and named in the same
+place. A row's digit is its own key, so one press takes it.
+
+A shortcut may be on a server or in a bucket, in which case going to it is connecting first:
+the hotlist takes the same route the drive list does (`04-vfs.md` §6).
+
+They are kept in `scmd-state.toml` rather than in `scmd.toml`, because a *key* sets them: a
+shortcut that waited for *Save setup* and vanished without it would be a bug, not a setting.
+
+Still owed: FAR's habit of inserting the path instead of going there when an edit line has
+the keys, and reordering the list.
+
 ## 10. Screens (`F12`)
 
 A viewer or an editor is a **screen**, not a dialog: one steps away from it and comes back,

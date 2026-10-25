@@ -64,12 +64,18 @@ msg-tab-moved = pestaña movida al otro panel
 msg-tab-locked = esta pestaña está fijada a su directorio
 msg-tab-locked-on = pestaña fijada a su directorio
 msg-tab-locked-off = pestaña liberada
+msg-bookmark-set = atajo { $digit }: { $path }
+msg-bookmark-unset = el atajo { $digit } no está definido
+msg-bookmark-added = { $path } guardada
+msg-bookmark-removed = { $path } quitada
+msg-bookmark-known = esa carpeta ya está en la lista
 msg-dirsize = { $path }: { $bytes } en { $files } archivos
 
 prompt-copy-to = Copiar { $what } a:
 prompt-move-to = Mover/renombrar { $what } a:
 prompt-mkdir = Crear el directorio:
 prompt-tab-name = Nombre de la pestaña:
+prompt-bookmark-name = Nombre de la carpeta:
 what-selected = { $count } elementos seleccionados
 confirm-delete-title = Borrar
 confirm-delete-body = ¿Borrar { $count } elementos ({ $bytes })?
@@ -290,6 +296,7 @@ menu-find-file = Buscar archivo
 menu-history = Historial de comandos
 menu-view-history = Historial de vistas y ediciones
 menu-folders-history = Historial de carpetas
+menu-bookmarks = Carpetas favoritas
 menu-swap-panels = Intercambiar los paneles
 menu-sync-panel = Sincronizar el otro panel
 menu-panels-onoff = Paneles sí/no
@@ -627,6 +634,7 @@ drive-home = Personal
 drive-connection = Conexión
 drive-objects = Almacén de objetos
 drives-hint = ↑↓ elegir · 0-9 los paneles de abajo · Enter aplicar · Esc cerrar
+bookmarks-hint = Intro ir · Ins guardar · Supr quitar · F4 nombrar · Esc cerrar
 
 # The search dialog (F7), which asks the whole question in one place.
 search-title = Buscar

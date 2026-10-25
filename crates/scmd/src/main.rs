@@ -341,6 +341,14 @@ hands it to the other panel and
 .B Ctrl+Alt+K
 locks it to its directory.
 .PP
+Folders are kept to hand on ten digits:
+.B Ctrl+Shift+0..9
+sets one,
+.B Alt+0..9
+goes to it, and
+.B Ctrl+D
+opens the whole list.
+.PP
 Those are the defaults of the
 .B far
 profile; the
@@ -507,6 +515,7 @@ fn run(cli: Cli) -> Result<()> {
         plugin_commands,
     });
     app.cmd.load_history(state.command_history);
+    app.bookmarks = state.bookmarks;
     app.restore_tabs(0, &state.left_tabs, state.left_tab);
     app.restore_tabs(1, &state.right_tabs, state.right_tab);
     if !warnings.is_empty() {
@@ -1144,6 +1153,7 @@ fn interactive(mut app: App) -> Result<()> {
         right_tabs: app.tabs[1].tabs_state(&app.panels[1]),
         left_tab: app.tabs[0].current(),
         right_tab: app.tabs[1].current(),
+        bookmarks: app.bookmarks.clone(),
     };
     if let Err(e) = state.save(&app.paths) {
         eprintln!("scmd: cannot write {}: {e}", app.paths.state_file.display());

@@ -52,6 +52,8 @@ pub enum PickKind {
     Drives,
     /// Where this panel has been.
     FoldersHistory,
+    /// The folders kept to hand (SPEC 02 §11).
+    Bookmarks,
     /// The command lines that have run.
     CommandHistory,
     /// The sort order for this panel.
@@ -344,6 +346,11 @@ pub fn menus() -> Vec<Menu> {
                     "menu-folders-history",
                     "Alt+F12",
                     Action::Run(Command::PanelHistory),
+                ),
+                item(
+                    "menu-bookmarks",
+                    "Ctrl+D",
+                    Action::Run(Command::NavBookmarks),
                 ),
                 Entry::Separator,
                 item(
