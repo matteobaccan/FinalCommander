@@ -77,17 +77,19 @@ impl Vfs for NetVfs {
 ///   and modes are extensions — `MFMT` and `SITE CHMOD` — that most servers do have, so they
 ///   are offered, and a server that refuses says so in its own words.
 /// * **WebDAV** is HTTP: a `PUT` replaces a whole file and there is nothing to seek with, so
-///   no SEEK, no TRUNCATE, no RANDOM_WRITE and no RESUME. `MOVE` is one request and is atomic
-///   as far as the client can tell, which is more than SFTP version 3 offers.
+///   no SEEK, no TRUNCATE, no RANDOM_WRITE and no RESUME. It says nothing about times or modes
+///   either, and that is the protocol rather than the client: `getlastmodified` is a *live*
+///   property in RFC 4918, which means the server owns it, and HTTP has no permission bits at
+///   all. `MOVE` is one request, but it is sent with `Overwrite: F` so that a rename cannot
+///   replace something without being asked to — which is not what ATOMIC_RENAME promises, so
+///   that is not claimed either.
 pub fn caps_of(scheme: scmd_core::Scheme) -> Caps {
     let common = Caps::READ | Caps::WRITE | Caps::CREATE | Caps::DELETE | Caps::RENAME;
     match scheme {
         scmd_core::Scheme::Ftp | scmd_core::Scheme::Ftps => {
             common | Caps::META_TIMES | Caps::META_MODE | Caps::CASE_SENSITIVE
         }
-        scmd_core::Scheme::Dav | scmd_core::Scheme::Davs => {
-            common | Caps::META_TIMES | Caps::ATOMIC_RENAME | Caps::CASE_SENSITIVE
-        }
+        scmd_core::Scheme::Dav | scmd_core::Scheme::Davs => common | Caps::CASE_SENSITIVE,
         // SFTP, and anything else that reaches the netbox.
         _ => {
             Caps::READ

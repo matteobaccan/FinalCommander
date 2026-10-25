@@ -5,6 +5,8 @@
     sftp://me@host/srv/www
     ftp://me@host/pub
     ftps://me@host/pub        the same server with TLS
+    webdavs://me@host/remote.php/dav/files/me/
+    webdav://me@host:8080/share
 
 A connected panel is an ordinary panel: the keys are the same, a copy to or from it is an
 ordinary job with an ordinary progress bar, and `F4` edits a remote file by bringing it here
@@ -38,6 +40,32 @@ FTPS is explicit TLS: the connection starts in the clear and is secured with `AU
 the password is sent, and the data connections are protected too. The certificate is checked
 against this machine's own authorities, which is what makes a server behind a company CA work
 without anything being turned off. Implicit FTPS on port 990 is deprecated and is not here.
+
+## WebDAV
+
+`webdav://` is HTTP and `webdavs://` is HTTPS — the ports are 80 and 443 when the URL does not
+say — and the path is the one the server publishes, which on Nextcloud and ownCloud is
+`/remote.php/dav/files/<user>/` and on an Apache `mod_dav` is whatever the `Alias` says.
+
+A listing is one request, a file is a `GET`, writing one is a `PUT` of the whole file, a
+directory is a `MKCOL`, and deleting a directory takes its tree in a single request. What that
+costs:
+
+* **A file is written whole.** There is nothing to truncate and nothing to write into the
+  middle of, so `F4` on a remote file saves it by sending all of it — which is what the
+  editor does anyway, since it brings the file here and writes it back.
+* **A time cannot be set and neither can a mode.** The server owns a file's modification time
+  in WebDAV — it is a *live* property — and HTTP has no permission bits. A copy to a WebDAV
+  panel therefore says that it could not carry the timestamp over, instead of reporting
+  success and leaving the file dated now. (`Ctrl+A` has nothing to offer on such a path.)
+* **A rename will not replace anything.** `F6` onto a name that is already taken is refused by
+  the server rather than silently overwriting it.
+* **A password is sent with every request**, as HTTP basic authentication over the connection —
+  which is why `webdavs://` is the one to use and `webdav://` is for a server on this machine
+  or behind a VPN. A share that needs no login is reached by leaving the user out of the URL.
+
+What is not there yet: digest authentication (basic is what every server in practice accepts
+over TLS), locking, and the quota properties.
 
 A host key the program has never seen stops and shows it before anything is sent, and records
 it only if you say so. A password is asked for when it is needed, never echoed and never

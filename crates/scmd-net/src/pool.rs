@@ -80,6 +80,9 @@ impl Pool {
             scmd_core::Scheme::Ftp | scmd_core::Scheme::Ftps => {
                 crate::ftp::connect(site, secret).await?
             }
+            scmd_core::Scheme::Dav | scmd_core::Scheme::Davs => {
+                crate::dav::connect(site, secret).await?
+            }
             // SFTP, and whatever else carries an authority: the SSH client says what it
             // cannot do more clearly than a match arm here could.
             _ => ssh::connect(site, secret, &self.policy()).await?,

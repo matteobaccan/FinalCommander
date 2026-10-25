@@ -27,6 +27,19 @@ suppaftp = { version = "12.2.1", default-features = false, features = [
 # The machine's own certificate authorities, for FTPS and WebDAV. Already in the tree under
 # `reqwest`, for the same reason: a server inside a company is behind that company's CA.
 rustls-native-certs = "0.8"
+# WebDAV is six HTTP methods and one XML document, so the client is hand-written over
+# `reqwest` as the object store's is — same crate, same features, same reasoning about the
+# trust anchors (see `crates/scmd-s3/Cargo.toml`, which says it at length).
+reqwest = { version = "0.12", default-features = false, features = [
+  "rustls-tls-native-roots",
+  "http2",
+  "stream",
+  "socks",
+] }
+# `StreamReader` and `ReaderStream`: a WebDAV body is read and written as it travels rather
+# than held in memory. Already in the tree under `reqwest`.
+tokio-util = { version = "0.7", default-features = false, features = ["io"] }
+futures-util = { version = "0.3", default-features = false }
 thiserror = "2"
 tokio = { version = "1", features = ["rt", "io-util", "net", "time", "macros", "fs"] }
 

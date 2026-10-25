@@ -73,25 +73,14 @@ pub fn mlsd_time(text: &str) -> Option<u32> {
         return None;
     }
     let num = |from: usize, to: usize| digits[from..to].parse::<i64>().ok();
-    let (year, month, day) = (num(0, 4)?, num(4, 6)?, num(6, 8)?);
-    let (hour, min, sec) = (num(8, 10)?, num(10, 12)?, num(12, 14)?);
-    let secs = days_from_civil(year, month, day)? * 86_400 + hour * 3_600 + min * 60 + sec;
-    u32::try_from(secs).ok()
-}
-
-/// Days since 1970-01-01 for a proleptic Gregorian date — Howard Hinnant's algorithm, the same
-/// one the archive provider uses for a zip's own clock.
-fn days_from_civil(year: i64, month: i64, day: i64) -> Option<i64> {
-    if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
-        return None;
-    }
-    let y = if month <= 2 { year - 1 } else { year };
-    let era = if y >= 0 { y } else { y - 399 } / 400;
-    let yoe = y - era * 400;
-    let mp = (month + 9) % 12;
-    let doy = (153 * mp + 2) / 5 + day - 1;
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    Some(era * 146_097 + doe - 719_468)
+    crate::clock::seconds_from_utc(
+        num(0, 4)?,
+        num(4, 6)?,
+        num(6, 8)?,
+        num(8, 10)?,
+        num(10, 12)?,
+        num(12, 14)?,
+    )
 }
 
 /// One line of a `LIST` answer, in either of the two layouts that turn up:

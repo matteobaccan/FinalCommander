@@ -8,6 +8,34 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **WebDAV panels**, `webdav://` and `webdavs://`, the netbox's third protocol. The ports are
+  80 and 443 when a URL does not say; the path is the one the server publishes, which on
+  Nextcloud is `/remote.php/dav/files/<user>/`; a share that needs no login is reached by
+  leaving the user out.
+
+  The client is hand-written over `reqwest`, in the same shape as the object store's: WebDAV is
+  six HTTP methods and one XML document, and a crate for it would have brought a date library
+  and a serialiser along to do what one readable, testable file does. A listing is a `PROPFIND`
+  of depth 1 asking for four properties by name — `allprop` would make some servers answer with
+  a page of locks and quotas per entry — and the reader skips a property the server reports as
+  missing, which is what keeps a directory from being shown as an empty file.
+
+  A `PUT` streams: the caller writes to one end of a pipe and the request reads the other, so a
+  four-gigabyte file is a transfer rather than an allocation. Closing the writer is the moment
+  the upload finishes and it waits for the server's answer — a refused `PUT` reported as a
+  success would be a save that silently did nothing.
+
+  What WebDAV cannot do is refused with the reason rather than quietly skipped. A file's
+  modification time is a *live* property in RFC 4918, which means the server owns it, and HTTP
+  has no permission bits at all — so a copy onto a WebDAV panel says it could not carry the
+  timestamp over instead of leaving the file dated now and reporting success. A `MOVE` is sent
+  with `Overwrite: F`, so `F6` onto a name that is already taken is refused rather than
+  replacing something.
+
+  Its tests run against a WebDAV server inside the test binary — a small HTTP server that
+  answers the six methods, including a chunked `PUT`, so the URL building, the XML reading, the
+  streamed body and the error messages are all exercised over a real socket.
+
 - **FTP and FTPS panels**, in the netbox beside SFTP. `ftp://me@host/pub` and
   `ftps://me@host/pub` are panels; the session editor has a protocol row; the port follows the
   protocol when a URL does not name one, and a server offering both spellings on port 21 is two

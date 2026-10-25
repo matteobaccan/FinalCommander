@@ -1,8 +1,10 @@
-//! netbox: the network panel's filesystems (SFTP, FTP and FTPS) and the site list.
+//! netbox: the network panel's filesystems (SFTP, FTP, FTPS and WebDAV) and the site list.
 //!
 //! See `docs/spec/04-vfs.md` for the provider contract and `docs/spec/08-plugins.md` §8 for
 //! why this is one of the three components that matter first.
 
+pub mod clock;
+pub mod dav;
 pub mod error;
 pub mod ftp;
 pub mod jobs;

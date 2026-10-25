@@ -2802,7 +2802,9 @@ name = "scmd-net"
 version = "0.3.0"
 dependencies = [
  "async-trait",
+ "futures-util",
  "rand",
+ "reqwest",
  "russh",
  "russh-sftp",
  "rustls-native-certs",
@@ -2815,6 +2817,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
+ "tokio-util",
  "zip",
 ]
 

@@ -48,8 +48,8 @@ Unicode-3.0, or MPL-2.0 at file level). The policy and the allow-list live in `d
 | `sevenz-rust2` | Apache-2.0 | 7z, in pure Rust: LZMA, LZMA2, bzip2, deflate and PPMd, with the BCJ and delta filters |
 | `ppmd-rust` | CC0-1.0 OR MIT-0 (we take CC0-1.0) | the PPMd codec a 7z may be packed with |
 | `aes`, `cbc`, `cipher`, `digest` (RustCrypto) | MIT OR Apache-2.0 | recognising an AES-256 7z, so it asks for a password instead of looking broken |
-| `reqwest` (with `rustls`) | MIT OR Apache-2.0 | HTTPS for the object-storage client |
-| `tokio-util` | MIT | streaming an upload's body off the disk |
+| `reqwest` (with `rustls`) | MIT OR Apache-2.0 | HTTPS for the object-storage client and for WebDAV |
+| `tokio-util` | MIT | streaming a body off the disk, and a WebDAV `PUT` through a pipe |
 | `portable-pty` | MIT | the pseudo-terminal: `openpty` on Unix, ConPTY on Windows |
 | `vte` | Apache-2.0 OR MIT | recognising the escape sequences a program writes to a terminal |
 | `trash` (with `urlencoding`, `scopeguard`, `once_cell`; `objc2-foundation` on macOS) | MIT | handing a file to the system's own wastebasket: the XDG trash spec, `NSFileManager`, `IFileOperation` |
