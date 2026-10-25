@@ -4,7 +4,14 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
-## [Unreleased]
+## [0.4.0] — 2026-10-25
+
+The things a user reaches for that were not there. Three more ways to reach files — FTP, FTPS
+and WebDAV in the netbox, 7z read *and* written in pure Rust — and the keys and dialogs that
+make the program somebody's own rather than everybody's: the user menu on `F2`, file
+associations behind `Enter`, the palette editor, the editor's and the viewer's own settings,
+the mouse, and the viewer's chrome on FAR's keys. Underneath, every path handed to Windows now
+goes past `MAX_PATH`. And the project has a site, generated from the repository's own documents.
 
 ### Added
 
