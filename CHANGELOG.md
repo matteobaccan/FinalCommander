@@ -34,6 +34,15 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **The detailed view has FAR's columns.** `Ctrl+5` showed the name, the size, one date and
+  the attributes; it now shows what the file was written, when it was made and when it was
+  last read, in FAR's order, with the attributes after them. The two extra dates are dropped,
+  the last one first, as soon as keeping them would leave the name unreadable, so a half-width
+  panel shows what the full view shows with the attributes after it; a filesystem that does
+  not keep one of the dates leaves that column blank rather than inventing an epoch. The
+  allocated size — FAR's seventh column — is on the backlog, with the reason: it needs a
+  Windows API call that `std` does not expose.
+
 - **The keys the keyboard reference had promised.** A sweep through `docs/03-keymap.md`
   comparing every row against the keymap the program actually resolves turned up keys that
   were documented and dead. Three of them were worth having and are now bound: `Ctrl+P` hides

@@ -122,7 +122,9 @@ keeps it as the run's artifact; publishing happens only through `workflow_dispat
 3. **The extension in a column of its own** in the full view, as FAR draws it.
 4. **`Ctrl+O` takes the panels off** instead of opening a read-only screen: the command line,
    the menus and the keys all keep working, and `PgUp`/`PgDn` page through the output.
-5. **The keymap table swept** against the bindings the program resolves: `Ctrl+P`,
+5. **The detailed view draws FAR's dates** (written, made, last read) and drops the extras
+   before the name becomes unreadable.
+6. **The keymap table swept** against the bindings the program resolves: `Ctrl+P`,
    `Shift+F10`, `Ctrl+W` and the editor's delete-word-right built, the rest of the rows
    corrected to what is true.
 
@@ -132,9 +134,10 @@ keeps it as the run's artifact; publishing happens only through `workflow_dispat
 
 In the order they were raised, all from a side-by-side comparison with FAR on Windows:
 
-- **View modes.** The extension column in `full` is done. The `wide` layout and the
-  `detailed` columns (Size, Allocated, Write, Created, Accessed, Attributes) still differ
-  from FAR's, and the file-owners mode is not built.
+- **View modes.** The extension column in `full` and the dates of the `detailed` view are
+  done. What is left: the `wide` layout (the author has a screenshot of FAR's), the allocated
+  size (a backlog line — it needs a Windows call behind a platform crate we do not have), and
+  the file-owners mode.
 - **The info panel and quick view on a folder** show less than FAR's: disk, memory, cluster
   size and slack are missing.
 - **Menu mnemonics.** The mechanism ships (`&` in a label marks the letter, the dropdown

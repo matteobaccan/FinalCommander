@@ -86,6 +86,13 @@ so the layout follows from the mode rather than from a width guess, and a column
 what it holds falls back to fewer columns. `links`, `owners`, `descr` and the custom sets want
 data we do not collect yet and are lines in `docs/BACKLOG.md`.
 
+The detailed view draws FAR's own row — name, size, when it was written, when it was made,
+when it was last read, attributes — and drops the two extra dates, the last one first, as soon
+as keeping them would leave the name unreadable: a half-width panel therefore shows what the
+full view shows, with the attributes after it. A filesystem that does not keep one of the
+dates leaves that column blank rather than inventing an epoch. The allocated size, FAR's
+seventh column, is a backlog line: it needs a platform call on Windows.
+
 ```toml
 [[panel.view.custom]]
 id = 0

@@ -115,11 +115,18 @@ fn column_rules(p: &PanelRender<'_>, inner: Rect) -> Vec<u16> {
                 .collect()
         }
         _ => {
-            let (name_w, size_w, time_w, attr_w) = full_columns(inner.w, p.view);
-            let mut xs = vec![inner.x + name_w, inner.x + name_w + size_w + 1];
-            if attr_w > 0 {
-                xs.push(inner.x + name_w + size_w + time_w + 2);
+            let c = columns_of(inner.w, p.view);
+            // One rule at the end of every column that has something after it.
+            let mut xs = Vec::new();
+            let mut x = inner.x + c.name;
+            for w in [c.size, c.write, c.created, c.accessed, c.attr] {
+                xs.push(x);
+                if w == 0 {
+                    break;
+                }
+                x += w + 1;
             }
+            xs.pop();
             xs
         }
     };
@@ -315,16 +322,29 @@ fn draw_column_titles(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inne
             }
         }
         _ => {
-            let (name_w, size_w, time_w, attr_w) = full_columns(inner.w, p.view);
+            let c = columns_of(inner.w, p.view);
+            // With one date column it is the panel's date, as the full view has always
+            // titled it; with three they have to say which is which.
+            let write = if c.created > 0 {
+                "Modified"
+            } else {
+                "Date       Time"
+            };
             let mut x = inner.x;
-            centre(buf, x, y, name_w, "Name", style);
-            x += name_w + 1;
-            centre(buf, x, y, size_w, "Size", style);
-            x += size_w + 1;
-            centre(buf, x, y, time_w, "Date       Time", style);
-            if attr_w > 0 {
-                x += time_w + 1;
-                centre(buf, x, y, attr_w, "Attr", style);
+            centre(buf, x, y, c.name, "Name", style);
+            x += c.name + 1;
+            for (w, title) in [
+                (c.size, "Size"),
+                (c.write, write),
+                (c.created, "Created"),
+                (c.accessed, "Accessed"),
+                (c.attr, "Attr"),
+            ] {
+                if w == 0 {
+                    continue;
+                }
+                centre(buf, x, y, w, title, style);
+                x += w + 1;
             }
         }
     }
@@ -446,19 +466,74 @@ fn split_ext<'a>(name: &'a str, e: &Entry) -> Option<(&'a str, &'a str)> {
     Some((stem, ext))
 }
 
-/// (name, size, time, attributes) widths, so the titles row and the file rows cannot drift.
-fn full_columns(inner_w: u16, view: ViewMode) -> (u16, u16, u16, u16) {
-    let size_w: u16 = 9;
-    let time_w: u16 = 16; // `2026-10-23 17:42`
+/// The columns of the one-column views, left to right, with the width each takes. A width of
+/// zero is a column this view or this panel has no room for. The titles row, the rules
+/// between the columns and the file rows all read this, so they cannot drift apart.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Cols {
+    name: u16,
+    size: u16,
+    /// When the file was last written: the column the full view has always had.
+    write: u16,
+    /// When it was made, and when it was last read. The detailed view shows them when the
+    /// panel is wide enough to keep a readable name as well — FAR's own detailed row.
+    created: u16,
+    accessed: u16,
+    attr: u16,
+}
+
+const SIZE_W: u16 = 9;
+const TIME_W: u16 = 16; // `2026-10-23 17:42`
+const ATTR_W: u16 = 5;
+/// Under this the name is no longer worth reading, so the dates that are extras go instead.
+const NAME_MIN: u16 = 16;
+
+impl Cols {
+    /// What everything to the right of the name takes, the one-column gaps included.
+    fn tail(&self) -> u16 {
+        let widths = [
+            self.size,
+            self.write,
+            self.created,
+            self.accessed,
+            self.attr,
+        ];
+        widths.iter().sum::<u16>() + widths.iter().filter(|w| **w > 0).count() as u16
+    }
+}
+
+fn columns_of(inner_w: u16, view: ViewMode) -> Cols {
     let detail = view == ViewMode::Detail;
-    let attr_w: u16 = if detail { 5 } else { 0 };
-    let fixed = size_w + time_w + attr_w + 2 + u16::from(detail);
-    (inner_w.saturating_sub(fixed).max(4), size_w, time_w, attr_w)
+    let mut c = Cols {
+        name: 0,
+        size: SIZE_W,
+        write: TIME_W,
+        created: 0,
+        accessed: 0,
+        attr: if detail { ATTR_W } else { 0 },
+    };
+    // The two extra dates, one at a time and the more useful one first: a panel that is not
+    // wide enough for both keeps the name readable instead, and a half-width panel shows the
+    // same three columns the full view does, with the attributes after them.
+    if detail {
+        let mut with_created = c;
+        with_created.created = TIME_W;
+        if inner_w.saturating_sub(with_created.tail()) >= NAME_MIN {
+            c = with_created;
+            let mut with_accessed = c;
+            with_accessed.accessed = TIME_W;
+            if inner_w.saturating_sub(with_accessed.tail()) >= NAME_MIN {
+                c = with_accessed;
+            }
+        }
+    }
+    c.name = inner_w.saturating_sub(c.tail()).max(4);
+    c
 }
 
 fn draw_full(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect, rows: usize) {
-    let (name_w, size_w, time_w, attr_w) = full_columns(inner.w, p.view);
-    let detail = p.view == ViewMode::Detail;
+    let c = columns_of(inner.w, p.view);
+    let (name_w, size_w) = (c.name, c.size);
 
     for row in 0..rows {
         let idx = p.top + row;
@@ -535,19 +610,25 @@ fn draw_full(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect, 
             _ => put_right(buf, sx, y, size_w, &format_size(e.size), style),
         }
 
-        let tx = sx + size_w + 1;
-        let time_text = e.mtime.map(format_mtime).unwrap_or_default();
-        buf.put_str(
-            tx,
-            y,
-            &truncate_cols(&time_text, time_w as usize),
-            style,
-            time_w,
-        );
+        // The dates, in the order FAR puts them in, and only the ones this panel has room
+        // for. A filesystem that does not keep one of them leaves the column blank rather
+        // than inventing an epoch.
+        let mut x = sx + size_w + 1;
+        for (w, when) in [
+            (c.write, e.mtime),
+            (c.created, e.btime),
+            (c.accessed, e.atime),
+        ] {
+            if w == 0 {
+                continue;
+            }
+            let text = when.map(format_mtime).unwrap_or_default();
+            buf.put_str(x, y, &truncate_cols(&text, w as usize), style, w);
+            x += w + 1;
+        }
 
-        if detail {
-            let ax = tx + time_w + 1;
-            buf.put_str(ax, y, &attrs(e), style, attr_w);
+        if c.attr > 0 {
+            buf.put_str(x, y, &attrs(e), style, c.attr);
         }
     }
 }
@@ -1125,6 +1206,70 @@ mod tests {
 
     fn render(view: ViewMode, cursor: usize, selection: &Selection) -> String {
         render_listing(&listing(), view, cursor, selection)
+    }
+
+    /// The same panel on a screen wide enough for every column the detailed view has.
+    fn render_wide(listing: &Listing, view: ViewMode, width: u16) -> String {
+        let theme = Theme::default_theme();
+        let mut buf = Buffer::new(width, 10);
+        let selection = Selection::default();
+        let p = PanelRender {
+            area: Rect::new(0, 0, width, 9),
+            path: "/home/mb/project",
+            listing,
+            selection: &selection,
+            cursor: 0,
+            top: 0,
+            focused: true,
+            view,
+            sort_label: "name",
+            sort_reverse: false,
+            column_titles: true,
+            filter: None,
+            message: None,
+            status: None,
+            free: None,
+            scrollbar: false,
+            name_scroll: 0,
+            highlight: &crate::Highlight::far_default(),
+            up_label: "Up",
+            folder_label: "Folder",
+        };
+        draw_panel(&mut buf, &theme, &p);
+        buf.to_text()
+    }
+
+    #[test]
+    fn the_detailed_view_shows_the_dates_the_panel_has_room_for() {
+        let mut made = entry("Cargo.toml", EntryKind::File, 412);
+        made.btime = Some(SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_600_000_000));
+        made.atime = Some(SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_750_000_000));
+        let listing = Listing::new(vec![Entry::parent_entry(), made], 1);
+
+        // Wide: every column FAR's detailed row has, in FAR's order.
+        let out = render_wide(&listing, ViewMode::Detail, 100);
+        let titles = out.lines().nth(1).unwrap_or_default().to_string();
+        let order: Vec<&str> = ["Name", "Size", "Modified", "Created", "Accessed", "Attr"]
+            .into_iter()
+            .collect();
+        let mut at = 0;
+        for title in &order {
+            let Some(i) = titles[at..].find(title) else {
+                panic!("`{title}` is not in the titles row: {titles:?}");
+            };
+            at += i + title.len();
+        }
+        // And the three dates are drawn, not just titled.
+        assert!(out.contains("2020-09-13"), "the created date: {out}");
+        assert!(out.contains("2025-06-15"), "the accessed date: {out}");
+
+        // Narrow: the extras go rather than the name, and the date column is the panel's
+        // own again.
+        let out = render_wide(&listing, ViewMode::Detail, 50);
+        let titles = out.lines().nth(1).unwrap_or_default().to_string();
+        assert!(titles.contains("Date"), "{titles:?}");
+        assert!(!titles.contains("Accessed"), "{titles:?}");
+        assert!(titles.contains("Attr"), "the attributes stay: {titles:?}");
     }
 
     fn render_listing(

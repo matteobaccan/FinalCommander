@@ -16,7 +16,10 @@ somewhere to put a file.
 # Looking at a directory
 
 `Ctrl+1` to `Ctrl+5` choose how rows are drawn: brief, medium, full, wide, detailed. The
-multi-column views run down a column and then across, as the originals do. The full view keeps
+multi-column views run down a column and then across, as the originals do. The detailed view
+adds, to what the full one shows, the date the file was made and the date it was last read,
+and the attributes after them — on a panel too narrow for all of that the extra dates go
+first, so the name stays readable. The full view keeps
 the extension in a column of its own, against the size: names down the left, extensions down
 the right. A folder with a dot in its name, a dotfile and an extension too long for the column
 keep their name whole.
