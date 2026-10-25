@@ -47,6 +47,8 @@ pub enum FormKind {
     Panel,
     Interface,
     Confirmations,
+    /// How the editor behaves (SPEC 10 §3.6).
+    EditorSettings,
 }
 
 /// The dialogs where one row is chosen.
@@ -484,7 +486,7 @@ pub fn menus() -> Vec<Menu> {
                     Action::Run(Command::OptConfirmations),
                 ),
                 item("menu-viewer-settings", "", Action::Todo("settings.viewer")),
-                item("menu-editor-settings", "", Action::Todo("settings.editor")),
+                item("menu-editor-settings", "", Action::Run(Command::OptEditor)),
                 item("menu-codepages", "", Action::Todo("settings.codepages")),
                 item(
                     "menu-highlighting",

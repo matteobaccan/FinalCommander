@@ -8,6 +8,29 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **Editor settings** (`F9 → Options → Editor settings`), and the `[editor]` section behind
+  them. The tab policy is three choices and not a box, as FAR has it: `keep` leaves every tab
+  alone, `typed` turns a newly typed tab into spaces, and `all` also expands the tabs already in
+  the file when it is opened — which changes the file, so it is not the default and the status
+  line says how many lines it touched, because the next save will write that difference. Beside
+  it: the tab width, the automatic indent, **spaces and tabs drawn** (`·`, and `→` followed by
+  its padding, which is how a mixed indent becomes visible), and whether the cursor lands at the
+  start of what a search found or just past it — the first is for reading, the second for typing
+  over it.
+
+  The cursor beyond the end of a line is in the dialog as a dim row and stays unimplemented:
+  every movement, every insert and the block arithmetic would have to agree about a column that
+  is not in the text, which is a change through the whole editor rather than a row in a dialog.
+
+- **Four editor keys** that were each somebody's habit. `Ctrl+Q` arms the next key to go in as
+  itself — a control character, or a real tab where tabs are expanded, which is the only way
+  either gets into a file; a key with no character of its own says so rather than inserting
+  nothing. `Ctrl+Shift+Ins` adds the block to what is on the clipboard instead of replacing it,
+  so a few pieces are gathered and pasted in one go. `Ctrl+N` and `Ctrl+E` put the cursor on the
+  first and the last line *on the screen*, leaving the screen where it is. And `Alt+I` now moves
+  the line the cursor is on by one indent when nothing is selected, instead of typing a tab —
+  `Tab` is the key for that, and `Alt+U` already worked this way.
+
 - **A palette editor** (`F9 → Options → Colours…`, or `opt.colors`). Every colour the
   interface asks for, one per row and in the order they are declared, with the value as a theme
   file writes it and the colour shown twice — as ink on the panel background, and as a

@@ -193,18 +193,18 @@ indistinguishable in a TTY — see §9.
 | **column (vertical) block** | Alt+arrows, Alt+Shift+arrows | — | Alt+Shift+arrows |
 | select all / deselect | Ctrl+A / Ctrl+U | — | Ctrl+A / Ctrl+U |
 | cut / copy / paste | Shift+Del, Ctrl+X / Ctrl+Ins, Ctrl+C / Shift+Ins, Ctrl+V | F6/F5/F7-ish | Ctrl+X / Ctrl+C / Ctrl+V |
-| append to clipboard | Ctrl+Gray + | — | Ctrl+Shift+C |
+| append to clipboard | Ctrl+Gray + | — | **Ctrl+Shift+Ins** |
 | copy / move block to cursor | Ctrl+P / Ctrl+M (persistent blocks) | F5 / F6 | Ctrl+Shift+P / Ctrl+Shift+M |
 | delete block / line / to EOL | Ctrl+D / Ctrl+Y / Ctrl+K | F8 / Ctrl+Y / Ctrl+K | Ctrl+D / Ctrl+Y / Ctrl+K |
 | delete word left / right | Ctrl+Backspace / Ctrl+T, Ctrl+Del | Alt+Backspace | Ctrl+Backspace / Alt+D |
-| indent / outdent block | Alt+I / Alt+U | — | Tab / Shift+Tab (block), Alt+I / Alt+U |
+| indent / outdent block | Alt+I / Alt+U | — | Tab / Shift+Tab (block), **Alt+I / Alt+U — which move the line the cursor is on when nothing is selected, where `Tab` types a tab** |
 | start/end of file | Ctrl+Home, Ctrl+PgUp / Ctrl+End, Ctrl+PgDn | Ctrl+Home / Ctrl+End | Ctrl+Home / Ctrl+End |
-| start/end of screen | Ctrl+N / Ctrl+E | — | — |
+| start/end of screen | Ctrl+N / Ctrl+E | — | **Ctrl+N / Ctrl+E** |
 | scroll screen | Ctrl+↑ / Ctrl+↓ | — | Ctrl+↑ / Ctrl+↓ |
 | bookmarks set / go | Ctrl+Shift+0..9 / LeftCtrl+0..9 | — | Ctrl+Shift+0..9 / Alt+0..9 |
 | codepage toggle / menu | F8 / Shift+F8 | — | Shift+F8 |
 | read-only lock | Ctrl+L | — | Ctrl+Alt+L |
-| literal next key (char code) | Ctrl+Q | — | Ctrl+Q |
+| literal next key (char code) | Ctrl+Q | — | **Ctrl+Q** — a control character, or a tab where tabs are expanded |
 | insert name of current file | Shift+Enter / Ctrl+Shift+Enter (other panel) | — | same |
 | duplicate line | Ctrl+Shift+D (via block) | — | Ctrl+Shift+D |
 | move line up / down | Alt+↑ / Alt+↓ (via block) | — | Alt+↑ / Alt+↓ |
@@ -217,8 +217,9 @@ Alt+F7 previous, Ctrl+F7 replace, Alt+F8 go to line, Ctrl+Z undo, Ctrl+Shift+Z r
 select all, Ctrl+C / Ctrl+Ins copy, Ctrl+X / Shift+Del cut, Ctrl+V / Shift+Ins paste, Ctrl+Y
 delete line, Ctrl+Shift+D duplicate line, Alt+↑ / Alt+↓ move line, Alt+I / Alt+U indent and
 outdent, Ctrl+K delete to end of line, Ctrl+Backspace delete word left, Ctrl+Alt+L read-only
-toggle. Movement, typing, Shift+arrows (stream block) and Alt+Shift+arrows (column block) are
-handled by the editor itself and are not bindable yet.
+toggle, Ctrl+Q literal next key, Ctrl+Shift+Ins append the block to the clipboard, Ctrl+N /
+Ctrl+E the first and last line on the screen. Movement, typing, Shift+arrows (stream block) and
+Alt+Shift+arrows (column block) are handled by the editor itself and are not bindable yet.
 
 ## 8b. Netbox (connections)
 

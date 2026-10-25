@@ -80,6 +80,14 @@ pub struct Editor {
     pub tab_width: usize,
     pub expand_tabs: bool,
     pub auto_indent: bool,
+    /// Draw a space as `·` and a tab as `→`. The editor does not draw itself, so this is only
+    /// kept here: it belongs to the file being edited, not to the window it is in.
+    pub show_whitespace: bool,
+    /// Where the cursor lands on a match: at its start, or just past its end.
+    pub cursor_after_match: bool,
+    /// The next key typed goes in as itself, whatever it means — `Ctrl+Q` armed it. It is how
+    /// a control character, or a tab where tabs are expanded, gets into a file at all.
+    pub literal_next: bool,
     pub bookmarks: [Option<Position>; 10],
     /// The editor's own clipboard: the OS one arrives with `scmd-platform`.
     pub clipboard: Option<(String, BlockKind)>,
@@ -128,6 +136,9 @@ impl Editor {
             tab_width: 4,
             expand_tabs: true,
             auto_indent: true,
+            show_whitespace: false,
+            cursor_after_match: false,
+            literal_next: false,
             bookmarks: [None; 10],
             clipboard: None,
             mtime,
@@ -303,6 +314,16 @@ impl Editor {
         Ok(())
     }
 
+    /// Insert a character exactly as it is, with none of the rules `insert_char` applies: a
+    /// tab stays a tab where tabs are expanded, and a control character goes in as itself.
+    /// This is what `Ctrl+Q` is for.
+    pub fn insert_literal(&mut self, ch: char) -> Result<(), EditorError> {
+        self.delete_block_if_any()?;
+        self.buffer.begin_group(self.cursor);
+        self.cursor = self.buffer.insert(self.cursor, &ch.to_string())?;
+        Ok(())
+    }
+
     pub fn insert_text(&mut self, text: &str) -> Result<(), EditorError> {
         self.delete_block_if_any()?;
         self.buffer.begin_group(self.cursor);
@@ -426,6 +447,23 @@ impl Editor {
         }
     }
 
+    /// `Alt+I`: move the block, or the line the cursor is on, one indent to the right.
+    ///
+    /// Not the same as `Tab`, which types a tab where there is no block — that is the key one
+    /// presses while writing, and this is the one for moving what is already written.
+    pub fn shift_right(&mut self) -> Result<(), EditorError> {
+        let (top, bottom) = match self.block {
+            Some(block) => {
+                let (top, bottom, _, _) = block.columns();
+                (top, bottom)
+            }
+            None => (self.cursor.line, self.cursor.line),
+        };
+        self.buffer.indent(top..bottom + 1, self.tab_width)?;
+        self.cursor = self.buffer.clamp(self.cursor);
+        Ok(())
+    }
+
     pub fn outdent(&mut self) -> Result<(), EditorError> {
         let (top, bottom) = match self.block {
             Some(block) => {
@@ -508,6 +546,61 @@ impl Editor {
             }
             _ => false,
         }
+    }
+
+    /// Add the block to what is already on the clipboard rather than replacing it, which is
+    /// how a few lines are gathered from here and there before being pasted in one go.
+    ///
+    /// The kind of the clipboard is kept: appending a column block to a stream one would make
+    /// a paste that is neither, so the text joins as lines either way and the first block's
+    /// kind decides how it goes back in.
+    pub fn append_block(&mut self) -> bool {
+        let Some(text) = self.block_text() else {
+            return false;
+        };
+        match &mut self.clipboard {
+            Some((held, _)) => {
+                if !held.ends_with('\n') {
+                    held.push('\n');
+                }
+                held.push_str(&text);
+            }
+            None => {
+                let kind = self.block.map(|b| b.kind).unwrap_or(BlockKind::Stream);
+                self.clipboard = Some((text, kind));
+            }
+        }
+        true
+    }
+
+    /// Turn every tab already in the file into spaces, as the `all` tab policy asks.
+    ///
+    /// It is done on open and it changes the file on the first save, which is why that policy
+    /// is not the default: expanding what somebody else wrote is a diff nobody asked for.
+    pub fn expand_all_tabs(&mut self) -> Result<usize, EditorError> {
+        let width = self.tab_width.max(1);
+        let mut touched = 0;
+        for line in 0..self.buffer.len() {
+            let text = self.buffer.line(line).to_string();
+            if !text.contains('\t') {
+                continue;
+            }
+            let mut out = String::with_capacity(text.len() + width);
+            for c in text.chars() {
+                if c == '\t' {
+                    let to = width - (out.chars().count() % width);
+                    out.push_str(&" ".repeat(to));
+                } else {
+                    out.push(c);
+                }
+            }
+            self.buffer.set_line(line, &out)?;
+            touched += 1;
+        }
+        if touched > 0 {
+            self.cursor = self.buffer.clamp(self.cursor);
+        }
+        Ok(touched)
     }
 
     pub fn cut_block(&mut self) -> Result<bool, EditorError> {
@@ -643,7 +736,11 @@ impl Editor {
                     start >= self.cursor.col
                 };
                 if ok {
-                    self.cursor = Position::new(line, start);
+                    self.cursor = if self.cursor_after_match {
+                        Position::new(line, end)
+                    } else {
+                        Position::new(line, start)
+                    };
                     self.block = Some(Block {
                         anchor: Position::new(line, start),
                         head: Position::new(line, end),
@@ -1255,5 +1352,113 @@ mod tests {
         assert!(e.backspace().is_err());
         assert!(e.delete_line().is_err());
         assert_eq!(e.buffer.line(0), "locked");
+    }
+    #[test]
+    fn a_block_is_added_to_the_clipboard_rather_than_replacing_it() {
+        let mut e = editor("one\ntwo\nthree\n");
+        // The first line, copied.
+        e.move_to(Position::new(0, 0), false, BlockKind::Stream);
+        e.move_to(Position::new(0, 3), true, BlockKind::Stream);
+        assert!(e.copy_block());
+        assert_eq!(e.clipboard.as_ref().unwrap().0, "one");
+
+        // The third, appended: the two are now one paste, in the order they were taken.
+        e.move_to(Position::new(2, 0), false, BlockKind::Stream);
+        e.move_to(Position::new(2, 5), true, BlockKind::Stream);
+        assert!(e.append_block());
+        assert_eq!(e.clipboard.as_ref().unwrap().0, "one\nthree");
+
+        // With nothing on the clipboard, appending is just a copy.
+        let mut e = editor("x\n");
+        e.move_to(Position::new(0, 0), false, BlockKind::Stream);
+        e.move_to(Position::new(0, 1), true, BlockKind::Stream);
+        assert!(e.append_block());
+        assert_eq!(e.clipboard.as_ref().unwrap().0, "x");
+        // And with no block there is nothing to add.
+        e.clear_block();
+        assert!(!e.append_block());
+    }
+
+    #[test]
+    fn a_literal_insert_puts_in_what_the_rules_would_have_changed() {
+        let mut e = editor("ab\n");
+        e.expand_tabs = true;
+        e.tab_width = 4;
+        e.move_to(Position::new(0, 0), false, BlockKind::Stream);
+
+        // An ordinary tab becomes spaces where tabs are expanded…
+        e.insert_char('\t').unwrap();
+        assert_eq!(e.buffer.line(0), "    ab");
+
+        // …and a literal one stays a tab, which is the whole point of the key.
+        e.insert_literal('\t').unwrap();
+        assert!(
+            e.buffer.line(0).starts_with("    \tab"),
+            "{}",
+            e.buffer.line(0)
+        );
+
+        // A control character goes in as itself.
+        e.insert_literal('\u{1b}').unwrap();
+        assert!(e.buffer.line(0).contains('\u{1b}'));
+    }
+
+    #[test]
+    fn shifting_right_moves_the_line_the_cursor_is_on_where_tab_would_type_one() {
+        let mut e = editor("one\ntwo\n");
+        e.tab_width = 2;
+        e.expand_tabs = true;
+        e.move_to(Position::new(0, 1), false, BlockKind::Stream);
+
+        e.shift_right().unwrap();
+        assert_eq!(e.buffer.line(0), "  one", "the line moved, not the caret");
+        e.outdent().unwrap();
+        assert_eq!(e.buffer.line(0), "one");
+
+        // With a block it moves every line of it, which is what it always did.
+        e.move_to(Position::new(0, 0), false, BlockKind::Stream);
+        e.move_to(Position::new(1, 1), true, BlockKind::Stream);
+        e.shift_right().unwrap();
+        assert_eq!(e.buffer.line(0), "  one");
+        assert_eq!(e.buffer.line(1), "  two");
+    }
+
+    #[test]
+    fn the_all_tabs_policy_expands_what_is_already_in_the_file() {
+        let mut e = editor("\tone\ntwo\n\t\tthree\n");
+        e.tab_width = 4;
+        assert_eq!(
+            e.expand_all_tabs().unwrap(),
+            2,
+            "two lines had tabs in them"
+        );
+        assert_eq!(e.buffer.line(0), "    one");
+        assert_eq!(e.buffer.line(1), "two");
+        assert_eq!(e.buffer.line(2), "        three");
+        // Again changes nothing: there are no tabs left.
+        assert_eq!(e.expand_all_tabs().unwrap(), 0);
+    }
+
+    #[test]
+    fn a_search_can_leave_the_cursor_after_what_it_found() {
+        let mut e = editor("the needle is here\n");
+        assert!(e.find("needle", false).unwrap());
+        assert_eq!(e.cursor, Position::new(0, 4), "at the start of the match");
+        let block = e.block.expect("the match is selected");
+        assert_eq!(block.anchor, Position::new(0, 4));
+        assert_eq!(block.head, Position::new(0, 10));
+
+        let mut e = editor("the needle is here\n");
+        e.cursor_after_match = true;
+        assert!(e.find("needle", false).unwrap());
+        assert_eq!(
+            e.cursor,
+            Position::new(0, 10),
+            "just past it, for typing over what was found"
+        );
+        // Either way the match itself is still what is selected.
+        let block = e.block.expect("the match is selected");
+        assert_eq!(block.anchor, Position::new(0, 4));
+        assert_eq!(block.head, Position::new(0, 10));
     }
 }

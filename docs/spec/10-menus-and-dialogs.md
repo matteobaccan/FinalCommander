@@ -141,6 +141,23 @@ on the buttons answers the dialog, `F10` is `OK` from anywhere, `Esc` cancels an
 | Exit | `general.confirm_exit` |
 | Leaving the editor with unsaved changes | — dim: the editor always asks |
 
+### 3.6 Editor settings (`opt.editor`, Options → Editor settings)
+
+The `[editor]` section, which this dialog is the front of:
+
+| Row | Key | What it does |
+| --- | --- | --- |
+| Tabs | `editor.tabs` | Three policies, as FAR has: `keep` leaves every tab alone, `typed` turns a newly typed tab into spaces, `all` also expands the tabs already in the file when it is opened |
+| Tab width | `editor.tab_width` | How wide a tab is drawn, and how far one indent moves a line |
+| Keep the indent of the line above | `editor.auto_indent` | |
+| Show spaces and tabs | `editor.show_whitespace` | A space is `·` and a tab is `→` followed by its padding, so trailing space and a mixed indent show |
+| The cursor lands after the text a search found | `editor.cursor_after_match` | The match is selected either way; this is where the cursor goes — the start is for reading, the end for typing over it |
+| The cursor may go past the end of a line | — | Dim: the setting does not exist. Every movement, every insert and the block arithmetic would have to agree about a column that is not in the text, which is a change through the whole editor rather than a row in a dialog |
+
+`all` is the one with a consequence: expanding what somebody else wrote is a diff nobody asked
+for, so it is not the default and the status line says how many lines it touched when it
+happens — the next save will write that difference.
+
 ### 3.5 Session editor (`Alt+N` → `Ins`/`F7` new, `F4` edit)
 
 The only dialog with text in it, and FAR's NetBox session editor is the model. Rows: name, host,

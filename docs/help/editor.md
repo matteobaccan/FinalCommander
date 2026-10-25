@@ -48,3 +48,23 @@ operations.
 On Linux and macOS a disk is a file, so the hex editor opens `/dev/sdb` read-only and the
 status line says what it is and how long it measured. The bytes are written *out* to a file,
 never back over the disk.
+
+# Tabs, whitespace and the odd key
+
+`F9 → Options → Editor settings` has the five that matter. **Tabs** is three choices and not a
+box: leave them as they are, turn a newly typed tab into spaces, or expand every tab in the file
+when it is opened — the last one changes the file, so it says how many lines it touched and the
+next save writes that. **Show spaces and tabs** draws a space as `·` and a tab as `→` and its
+padding, which is how a mixed indent becomes visible. **The cursor lands after the text a search
+found** is for typing over what was found rather than reading it.
+
+`Ctrl+Q` puts the next key in as itself: a control character, or a real tab where tabs are being
+expanded. There is no other way to get either into a file.
+
+`Alt+I` and `Alt+U` move the block — or, with nothing selected, the line the cursor is on — one
+indent right and left. `Tab` still types a tab, because that is the key one presses while
+writing.
+
+`Ctrl+Shift+Ins` adds the block to what is already on the clipboard instead of replacing it, so
+a few pieces can be gathered from here and there and pasted in one go. `Ctrl+N` and `Ctrl+E` put
+the cursor on the first and the last line *on the screen*, leaving the screen where it is.

@@ -879,10 +879,35 @@ keys = ["Alt+Down"]
 scope = "editor"
 cmd = "editor.line.down"
 
+# FAR's own pair for moving what is already written. `Tab` still types a tab, which is the key
+# one presses while writing.
 [[bind]]
 keys = ["Alt+I"]
 scope = "editor"
-cmd = "editor.indent"
+cmd = "editor.shift.right"
+
+# The next key goes in as itself: a control character, or a tab where tabs are expanded.
+[[bind]]
+keys = ["Ctrl+Q"]
+scope = "editor"
+cmd = "editor.literal"
+
+# Gather a few blocks from here and there before pasting them in one go.
+[[bind]]
+keys = ["Ctrl+Shift+Ins"]
+scope = "editor"
+cmd = "editor.block.append"
+
+# The first and the last line on the screen, without moving the screen.
+[[bind]]
+keys = ["Ctrl+N"]
+scope = "editor"
+cmd = "editor.screen.top"
+
+[[bind]]
+keys = ["Ctrl+E"]
+scope = "editor"
+cmd = "editor.screen.bottom"
 
 [[bind]]
 keys = ["Alt+U"]

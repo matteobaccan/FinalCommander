@@ -2725,6 +2725,32 @@ impl App {
         };
         let extend = shift;
 
+        // `Ctrl+Q` armed the literal insert: this key goes in as itself, whatever it means,
+        // and is not looked up in the keymap. It is the only way a control character — or a
+        // tab, where tabs are expanded — gets into a file.
+        if self.mode.editor().is_some_and(|e| e.literal_next) {
+            let literal = literal_of(key);
+            let Some(editor) = self.mode.editor_mut() else {
+                return;
+            };
+            editor.literal_next = false;
+            match literal {
+                Some(c) => {
+                    let outcome = editor.insert_literal(c);
+                    if let Err(e) = outcome {
+                        self.set_error(e.to_string());
+                    }
+                }
+                None => {
+                    // A key with no character of its own — an arrow, a function key — is not
+                    // something to insert, and saying so is better than inserting nothing.
+                    let m = self.i18n.t("editor-not-a-character");
+                    self.set_error(m);
+                }
+            }
+            return;
+        }
+
         let handled = {
             let Some(editor) = self.mode.editor_mut() else {
                 return;
@@ -5459,6 +5485,7 @@ impl App {
             Command::OptPanel => self.open_form(FormKind::Panel),
             Command::OptInterface => self.open_form(FormKind::Interface),
             Command::OptConfirmations => self.open_form(FormKind::Confirmations),
+            Command::OptEditor => self.open_form(FormKind::EditorSettings),
             Command::OptColors => {
                 self.mode = Mode::Palette(Box::default());
             }
@@ -5774,6 +5801,7 @@ impl App {
         };
         match Editor::open(path.as_path()) {
             Ok(mut editor) => {
+                self.tune_editor(&mut editor);
                 let line = line_at_offset(&editor, offset);
                 editor.goto(&line.to_string());
                 if editor.buffer.read_only {
@@ -6381,7 +6409,10 @@ impl App {
             Prefix::Edit(arg) => match self.resolve_argument(&arg) {
                 // A name that does not exist yet is a new file, which is what `edit:` is for.
                 Some(path) => match Editor::open(path.as_path()) {
-                    Ok(editor) => self.mode = Mode::Editor(Box::new(editor)),
+                    Ok(mut editor) => {
+                        self.tune_editor(&mut editor);
+                        self.mode = Mode::Editor(Box::new(editor));
+                    }
                     Err(e) => self.set_error(format!("{path}: {e}")),
                 },
                 None => self.argument_missing(&arg),
@@ -9239,6 +9270,35 @@ impl App {
     }
 
     /// `F4`: open the editor on the item under the cursor.
+    /// Apply `[editor]` to an editor that has just been opened.
+    ///
+    /// It is done here rather than inside `scmd-edit` because the editor crate knows nothing
+    /// about the configuration file — and because the `all` tab policy *changes the file*,
+    /// which is a decision the application makes and says out loud.
+    fn tune_editor(&mut self, editor: &mut Editor) {
+        let cfg = &self.cfg.editor;
+        editor.tab_width = cfg.tab_width.clamp(1, 16);
+        editor.expand_tabs = cfg.expand_typed();
+        editor.auto_indent = cfg.auto_indent;
+        editor.show_whitespace = cfg.show_whitespace;
+        editor.cursor_after_match = cfg.cursor_after_match;
+        if cfg.expand_on_open() {
+            match editor.expand_all_tabs() {
+                Ok(0) => {}
+                Ok(lines) => {
+                    // Said, because the file on the screen is now different from the file on
+                    // disk and the next save will write that difference.
+                    let msg = self.i18n.t_args(
+                        "editor-tabs-expanded",
+                        &[("lines", lines.to_string().into())],
+                    );
+                    self.set_status(msg);
+                }
+                Err(e) => self.set_error(e.to_string()),
+            }
+        }
+    }
+
     fn open_editor(&mut self) {
         let Some(entry) = self.panel().current().cloned() else {
             let m = self.i18n.t("msg-nothing-to-do");
@@ -9273,7 +9333,8 @@ impl App {
             return;
         }
         match Editor::open(path.as_path()) {
-            Ok(editor) => {
+            Ok(mut editor) => {
+                self.tune_editor(&mut editor);
                 if editor.buffer.read_only {
                     let msg = self
                         .i18n
@@ -9336,7 +9397,10 @@ impl App {
         }
         if self.mode.hex().is_some() {
             match Editor::open(path.as_path()) {
-                Ok(editor) => self.mode = Mode::Editor(Box::new(editor)),
+                Ok(mut editor) => {
+                    self.tune_editor(&mut editor);
+                    self.mode = Mode::Editor(Box::new(editor));
+                }
                 Err(e) => self.set_error(format!("{path}: {e}")),
             }
             return;
@@ -9346,7 +9410,9 @@ impl App {
 
     /// `Shift+F4`: a new file in the active panel's directory.
     pub(crate) fn open_new_editor(&mut self) {
-        self.mode = Mode::Editor(Box::new(Editor::empty(None)));
+        let mut editor = Editor::empty(None);
+        self.tune_editor(&mut editor);
+        self.mode = Mode::Editor(Box::new(editor));
     }
 
     /// Open the editor on a copy fetched from a server. The buffer is the local file; the
@@ -9358,7 +9424,8 @@ impl App {
         stamp: Option<RemoteStamp>,
     ) {
         match Editor::open(&local) {
-            Ok(editor) => {
+            Ok(mut editor) => {
+                self.tune_editor(&mut editor);
                 let msg = self
                     .i18n
                     .t_args("net-editing", &[("name", remote.to_string().into())]);
@@ -9647,6 +9714,7 @@ impl App {
             _ => {}
         }
 
+        let rows = self.editor_size.1.max(1) as usize;
         let Some(editor) = self.mode.editor_mut() else {
             return;
         };
@@ -9680,6 +9748,34 @@ impl App {
                 Command::EditorMoveLineUp => editor.move_line(false).map_err(|e| e.to_string())?,
                 Command::EditorMoveLineDown => editor.move_line(true).map_err(|e| e.to_string())?,
                 Command::EditorIndent => editor.indent().map_err(|e| e.to_string())?,
+                Command::EditorShiftRight => editor.shift_right().map_err(|e| e.to_string())?,
+                Command::EditorAppend => {
+                    if !editor.append_block() {
+                        return Err("editor-no-block".into());
+                    }
+                }
+                // Armed, not done: the next key goes in as itself, and `editor_key` is where
+                // that happens because that is where a key arrives.
+                Command::EditorLiteral => editor.literal_next = true,
+                // The screen rather than the file: the cursor goes to the top or the bottom
+                // of what is on it, and the view does not move.
+                Command::EditorScreenTop => {
+                    let line = editor.top.min(editor.buffer.len().saturating_sub(1));
+                    editor.move_to(
+                        scmd_edit::buffer::Position::new(line, editor.cursor.col),
+                        false,
+                        scmd_edit::BlockKind::Stream,
+                    );
+                }
+                Command::EditorScreenBottom => {
+                    let last = editor.buffer.len().saturating_sub(1);
+                    let line = (editor.top + rows.saturating_sub(1)).min(last);
+                    editor.move_to(
+                        scmd_edit::buffer::Position::new(line, editor.cursor.col),
+                        false,
+                        scmd_edit::BlockKind::Stream,
+                    );
+                }
                 Command::EditorOutdent => editor.outdent().map_err(|e| e.to_string())?,
                 Command::EditorDeleteToEnd => {
                     editor.delete_to_line_end().map_err(|e| e.to_string())?
@@ -11266,6 +11362,34 @@ fn help_group(id: &str) -> (usize, &'static str) {
         "cmd" | "shell" => (7, "The command line"),
         "tool" | "net" | "plugin" | "macro" => (8, "Tools"),
         _ => (9, "The program"),
+    }
+}
+
+/// The character a key means when `Ctrl+Q` has armed the literal insert.
+///
+/// `Ctrl+A` is byte 1 and so on up to `Ctrl+Z`; the five that follow in the ASCII table are
+/// the ones a terminal can send (`Ctrl+[` is escape, and `Ctrl+Space` is a NUL). A plain key
+/// is itself, `Tab` is a real tab even where tabs are expanded, and anything with no
+/// character of its own — an arrow, a function key — is nothing to insert.
+fn literal_of(key: Key) -> Option<char> {
+    match key.code {
+        KeyCode::Char(c) if key.mods.contains(Mods::CTRL) => {
+            let lower = c.to_ascii_lowercase();
+            match lower {
+                'a'..='z' => char::from_u32(lower as u32 - 'a' as u32 + 1),
+                '[' => Some('\u{1b}'),
+                '\\' => Some('\u{1c}'),
+                ']' => Some('\u{1d}'),
+                '^' => Some('\u{1e}'),
+                '_' => Some('\u{1f}'),
+                ' ' => Some('\0'),
+                _ => Some(c),
+            }
+        }
+        KeyCode::Char(c) => Some(c),
+        KeyCode::Tab => Some('\t'),
+        KeyCode::Esc => Some('\u{1b}'),
+        _ => None,
     }
 }
 
@@ -17773,5 +17897,128 @@ abcdefghij
         app.mode = Mode::Palette(Box::default());
         press(&mut app, "Esc");
         assert!(app.status.is_empty(), "{}", app.status);
+    }
+    // ── the editor's settings and its smaller keys ─────────────────────────────────────────
+
+    /// Open the editor on a file, the way `F4` does: the panel is read from the file's own
+    /// directory and the cursor put on it, so the path goes through the same code a key does.
+    fn editing(dir: &std::path::Path, name: &str) -> App {
+        let mut app = app_on_disk(dir);
+        let listing = &app.panel().listing;
+        let at = (0..listing.len())
+            .find(|i| listing.row(*i).map(|e| e.name_str()).as_deref() == Some(name))
+            .unwrap_or_else(|| panic!("{name} is not in the panel"));
+        app.panel_mut().cursor_to(at);
+        app
+    }
+
+    #[test]
+    fn the_editor_opens_with_what_the_configuration_says() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("mixed.txt"), b"\tone\n  two\n").unwrap();
+
+        let mut app = editing(dir.path(), "mixed.txt");
+        app.cfg.editor.tab_width = 8;
+        app.cfg.editor.tabs = "keep".into();
+        app.cfg.editor.auto_indent = false;
+        app.cfg.editor.show_whitespace = true;
+        app.cfg.editor.cursor_after_match = true;
+        press(&mut app, "F4");
+        let editor = app.mode.editor().expect("the editor opened");
+        assert_eq!(editor.tab_width, 8);
+        assert!(!editor.expand_tabs, "`keep` leaves a typed tab alone");
+        assert!(!editor.auto_indent);
+        assert!(editor.show_whitespace);
+        assert!(editor.cursor_after_match);
+        assert_eq!(
+            editor.buffer.line(0),
+            "\tone",
+            "`keep` leaves the file's own tabs where they are"
+        );
+
+        // `all` expands what is in the file when it is opened, and says so — the next save
+        // will write that difference.
+        let mut app = editing(dir.path(), "mixed.txt");
+        app.cfg.editor.tabs = "all".into();
+        app.cfg.editor.tab_width = 4;
+        press(&mut app, "F4");
+        let editor = app.mode.editor().expect("the editor opened");
+        assert_eq!(editor.buffer.line(0), "    one");
+        assert!(editor.expand_tabs, "`all` expands what is typed too");
+        assert!(!app.status.is_empty(), "nothing was said about the change");
+    }
+
+    #[test]
+    fn ctrl_q_puts_the_next_key_in_as_itself() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("x.txt"), b"ab\n").unwrap();
+        let mut app = editing(dir.path(), "x.txt");
+        app.cfg.editor.tabs = "typed".into();
+        press(&mut app, "F4");
+
+        press(&mut app, "Ctrl+Q");
+        assert!(
+            app.mode.editor().expect("the editor").literal_next,
+            "Ctrl+Q did not arm the literal insert"
+        );
+        press(&mut app, "Tab");
+        let editor = app.mode.editor().expect("the editor");
+        assert!(!editor.literal_next, "it is one key, not a mode");
+        assert_eq!(
+            editor.buffer.line(0),
+            "\tab",
+            "a literal tab where a typed one would have been spaces"
+        );
+
+        // A key with no character of its own says so rather than inserting nothing.
+        press(&mut app, "Ctrl+Q");
+        press(&mut app, "F5");
+        assert!(app.status_error, "{}", app.status);
+        assert_eq!(
+            app.mode.editor().expect("the editor").buffer.line(0),
+            "\tab"
+        );
+    }
+
+    #[test]
+    fn the_screen_keys_move_the_cursor_without_moving_the_screen() {
+        let dir = tempfile::tempdir().unwrap();
+        let text: String = (0..200).map(|i| format!("line {i}\n")).collect();
+        std::fs::write(dir.path().join("long.txt"), text).unwrap();
+        let mut app = editing(dir.path(), "long.txt");
+        app.editor_size = (80, 20);
+        press(&mut app, "F4");
+        // Somewhere in the middle, so there is a screen above and below.
+        {
+            let editor = app.mode.editor_mut().expect("the editor");
+            editor.top = 100;
+            editor.cursor = scmd_edit::buffer::Position::new(110, 0);
+        }
+        press(&mut app, "Ctrl+N");
+        let editor = app.mode.editor().expect("the editor");
+        assert_eq!(editor.cursor.line, 100, "the first line on the screen");
+        assert_eq!(editor.top, 100, "and the screen did not move");
+
+        press(&mut app, "Ctrl+E");
+        let editor = app.mode.editor().expect("the editor");
+        assert_eq!(editor.cursor.line, 119, "the last line on the screen");
+    }
+
+    #[test]
+    fn the_editor_settings_dialog_writes_what_it_was_told() {
+        let mut app = app();
+        app.run(Command::OptEditor);
+        let Mode::Form(form) = &app.mode else {
+            panic!("the editor settings did not open: {:?}", app.mode)
+        };
+        assert_eq!(form.kind, FormKind::EditorSettings);
+        assert_eq!(form.text_value("editor.tabs"), "typed");
+        assert_eq!(form.text_value("editor.show_whitespace"), "false");
+
+        // The tab policy is three values, not a box: one step along is `all`.
+        press(&mut app, "Right");
+        press(&mut app, "F10");
+        assert_eq!(app.cfg.editor.tabs, "all");
+        assert!(app.cfg.editor.expand_on_open());
     }
 }

@@ -1189,8 +1189,18 @@ fn expand_with_map(editor: &scmd_edit::Editor, line: usize) -> (String, Vec<usiz
         }
         if ch == '\t' {
             let pad = editor.tab_width - (column % editor.tab_width);
-            text.extend(std::iter::repeat_n(' ', pad));
+            // With whitespace shown, a tab is an arrow and then its padding, so a mixed
+            // indent — four spaces here, a tab there — can be seen rather than guessed at.
+            if editor.show_whitespace {
+                text.push('→');
+                text.extend(std::iter::repeat_n(' ', pad.saturating_sub(1)));
+            } else {
+                text.extend(std::iter::repeat_n(' ', pad));
+            }
             column += pad;
+        } else if ch == ' ' && editor.show_whitespace {
+            text.push('·');
+            column += 1;
         } else {
             text.push(ch);
             // Columns, not characters: the editor scrolls by what is on screen.

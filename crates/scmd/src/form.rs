@@ -139,6 +139,44 @@ impl Form {
             | FormKind::Sync
             | FormKind::Link
             | FormKind::Search => Vec::new(),
+            FormKind::EditorSettings => vec![
+                choice(
+                    "editor.tabs",
+                    t("opt-editor-tabs"),
+                    &[
+                        ("keep", t("opt-editor-tabs-keep")),
+                        ("typed", t("opt-editor-tabs-typed")),
+                        ("all", t("opt-editor-tabs-all")),
+                    ],
+                    &cfg.editor.tabs,
+                ),
+                choice(
+                    "editor.tab_width",
+                    t("opt-editor-tab-width"),
+                    &[("2", "2".into()), ("4", "4".into()), ("8", "8".into())],
+                    &cfg.editor.tab_width.to_string(),
+                ),
+                Field::toggle(
+                    "editor.auto_indent",
+                    t("opt-editor-auto-indent"),
+                    cfg.editor.auto_indent,
+                ),
+                Field::Separator,
+                Field::toggle(
+                    "editor.show_whitespace",
+                    t("opt-editor-whitespace"),
+                    cfg.editor.show_whitespace,
+                ),
+                Field::toggle(
+                    "editor.cursor_after_match",
+                    t("opt-editor-cursor-after"),
+                    cfg.editor.cursor_after_match,
+                ),
+                Field::Separator,
+                // In the dialog for completeness: the setting does not exist yet, and a row
+                // that pretended it did would be a row that lies.
+                Field::Dim(t("opt-editor-beyond-eol")),
+            ],
             FormKind::System => vec![
                 Field::toggle(
                     "panel.natural_sort",
@@ -300,6 +338,7 @@ impl Form {
             FormKind::Sync => "sync-title",
             FormKind::Search => "search-title",
             FormKind::Link => "link-title",
+            FormKind::EditorSettings => "menu-editor-settings",
             FormKind::System => "menu-system-settings",
             FormKind::Panel => "menu-panel-settings",
             FormKind::Interface => "menu-interface-settings",

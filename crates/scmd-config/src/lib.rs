@@ -404,6 +404,50 @@ impl ArcCfg {
     }
 }
 
+/// `[editor]`: how the editor behaves. The viewer's own settings are still to come.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct EditCfg {
+    /// How wide a tab is drawn, and how far one indent moves a line.
+    pub tab_width: usize,
+    /// What happens to tabs, which is three policies and not a boolean (FAR has the same
+    /// three): `keep` leaves every tab alone, `typed` turns a newly typed tab into spaces and
+    /// leaves the ones already in the file, and `all` also expands the ones in the file when
+    /// it is opened — which changes the file on the first save, and is why it is not default.
+    pub tabs: String,
+    /// A new line starts with the indent of the one above it.
+    pub auto_indent: bool,
+    /// Draw a space as `·` and a tab as `→`, so trailing space and a mixed indent show.
+    pub show_whitespace: bool,
+    /// Where the cursor lands on a match: at its start, or just after it. FAR offers both,
+    /// because the first is for reading and the second for typing over what was found.
+    pub cursor_after_match: bool,
+}
+
+impl Default for EditCfg {
+    fn default() -> Self {
+        EditCfg {
+            tab_width: 4,
+            tabs: "typed".into(),
+            auto_indent: true,
+            show_whitespace: false,
+            cursor_after_match: false,
+        }
+    }
+}
+
+impl EditCfg {
+    /// Should a tab typed now become spaces?
+    pub fn expand_typed(&self) -> bool {
+        matches!(self.tabs.trim(), "typed" | "all")
+    }
+
+    /// Should the tabs already in the file become spaces when it is opened?
+    pub fn expand_on_open(&self) -> bool {
+        self.tabs.trim() == "all"
+    }
+}
+
 /// A `[[site]]` block: one entry of the netbox's site list.
 ///
 /// Secrets are never here. A site says *how* to authenticate (`agent`, `key:<path>`, `ask`)
@@ -638,6 +682,7 @@ pub struct Config {
     pub net: NetCfg,
     pub arc: ArcCfg,
     pub term: TermCfg,
+    pub editor: EditCfg,
     /// `[[site]]` blocks: the netbox's site list.
     #[serde(rename = "site")]
     pub sites: Vec<SiteCfg>,
@@ -718,6 +763,19 @@ impl Config {
             "ui.status_bar" => self.ui.status_bar = parse_bool(value)?,
             "ui.syntax" => self.ui.syntax = parse_bool(value)?,
             "ui.markdown" => self.ui.markdown = parse_bool(value)?,
+            "editor.tab_width" => {
+                self.editor.tab_width = parse_usize(value)?.clamp(1, 16);
+            }
+            "editor.tabs" => {
+                let value = value.trim();
+                if !matches!(value, "keep" | "typed" | "all") {
+                    return Err(format!("`{value}` is not keep, typed or all"));
+                }
+                self.editor.tabs = value.to_string();
+            }
+            "editor.auto_indent" => self.editor.auto_indent = parse_bool(value)?,
+            "editor.show_whitespace" => self.editor.show_whitespace = parse_bool(value)?,
+            "editor.cursor_after_match" => self.editor.cursor_after_match = parse_bool(value)?,
             "term.shell" => self.term.shell = value.to_string(),
             "term.scrollback" => self.term.scrollback = parse_usize(value)?,
             "panel.view" => self.panel.view = value.to_string(),
