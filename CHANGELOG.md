@@ -10,6 +10,16 @@ An archive and a bucket stop being read-only windows, a `.md` file opens as a do
 the two dialogs that had the least to say — the copy prompt and the missing attributes one —
 say what the engine underneath them could already do.
 
+### Fixed
+
+- Three tests were written in the shape of Unix and had been failing on Windows: a path like
+  `/tmp/x` is *relative* there, where a path with no drive letter is; the dialog-scrolling
+  test assumed the attributes dialog is twenty rows tall, which it is only where there is a
+  mode to offer; and it looked for the file's name as the dialog's first row and found the
+  panel's row of the same name behind it. Reading them again turned up one real limit, now
+  documented: a folder's *own* times cannot be set on Windows through the standard library,
+  so they are left alone rather than reported once per folder.
+
 ### Added
 
 - **Writing into an archive.** An archive is no longer a read-only window. `F4` on an entry
