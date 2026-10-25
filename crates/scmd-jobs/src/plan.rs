@@ -17,6 +17,8 @@ pub enum UnitKind {
         target: PathBuf,
     },
     RemoveFile,
+    /// Hand `dst` to the system's own wastebasket, with everything under it.
+    Trash,
     /// Overwrite the file's bytes, then unlink it. `size` is what has to be written over.
     WipeFile {
         size: u64,
@@ -120,6 +122,30 @@ pub fn plan(fs: &dyn JobFs, spec: &JobSpec, cancel: &CancelToken) -> Result<Plan
                     return Err(PlanError::WipeNotLocal { path: src.clone() });
                 }
                 walk_delete(fs, src, &mut plan, cancel, wipe)?;
+            }
+        }
+        JobKind::Trash => {
+            // No walk: the wastebasket takes a directory whole, so what it is given is what
+            // the user chose and nothing below it. The counts are of those same things, which
+            // is what the progress box then counts down.
+            for src in &spec.sources {
+                check_cancel(cancel)?;
+                let facts = fs.facts(src).map_err(|source| PlanError::Io {
+                    path: src.clone(),
+                    source,
+                })?;
+                if facts.kind == scmd_core::EntryKind::Dir {
+                    plan.dirs += 1;
+                } else {
+                    plan.files += 1;
+                    plan.bytes += facts.size;
+                }
+                plan.units.push(Unit {
+                    src: None,
+                    dst: src.clone(),
+                    kind: UnitKind::Trash,
+                });
+                plan.top_level.push((src.clone(), src.clone()));
             }
         }
         JobKind::Copy | JobKind::Move => {
@@ -468,6 +494,27 @@ mod tests {
             .units
             .iter()
             .all(|u| u.dst.starts_with(&target) && u.dst != target));
+    }
+
+    #[test]
+    fn the_wastebasket_takes_a_tree_whole_rather_than_walking_it() {
+        let dir = tree();
+        let spec = JobSpec::new(
+            JobKind::Trash,
+            vec![
+                VPath::local(dir.path().join("src")),
+                VPath::local(dir.path().join("src/a.txt")),
+            ],
+            None,
+        );
+        let p = plan(&LocalFs, &spec, &CancelToken::new()).unwrap();
+        // One unit per thing the user chose, and nothing below it: a wastebasket is told what
+        // went in, so walking the directory would be work nobody asked for.
+        assert_eq!(p.units.len(), 2);
+        assert!(p.units.iter().all(|u| u.kind == UnitKind::Trash));
+        assert_eq!(p.units[0].dst, VPath::local(dir.path().join("src")));
+        assert_eq!(p.dirs, 1, "the directory counts as one thing");
+        assert_eq!(p.files, 1);
     }
 
     #[test]

@@ -89,6 +89,7 @@ job-copy = Kopieren
 job-move = Verschieben
 job-delete = Löschen
 job-wipe = Sicheres Löschen
+job-trash = In den Papierkorb
 job-replace = Ersetzen
 job-pack = Packen
 job-rebuild = Archiv wird geschrieben
@@ -166,6 +167,7 @@ btn-skip-all = Alle überspringen
 btn-retry = Wiederholen
 btn-cancel = Abbrechen
 msg-nothing-to-do = nichts ausgewählt
+msg-trash-refused = { $path }: der Papierkorb nimmt es nicht — Shift+Entf löscht endgültig
 
 key-wrap = Umbruch
 key-hex = Hex
@@ -241,7 +243,10 @@ net-written-back = { $name }: zurückgeschrieben, { $bytes } Bytes
 net-write-back-failed = Zurückschreiben fehlgeschlagen: { $error } — Ihre Änderungen liegen in { $local }
 net-changed-title = Auf dem Server geändert
 net-changed-body = { $name } wurde auf dem Server geändert, seit es geholt wurde. Überschreiben?
-confirm-delete-permanent = Endgültiges Löschen — einen Papierkorb gibt es noch nicht.
+confirm-delete-permanent = Das löscht endgültig: für diese gibt es keinen Papierkorb.
+confirm-trash-title = In den Papierkorb
+confirm-trash-body = { $count } Objekte ({ $bytes }) in den Papierkorb verschieben?
+confirm-trash-where = Sie landen dort, wo der Desktop gelöschte Dateien aufbewahrt, und lassen sich von dort zurückholen.
 
 # ---------------------------------------------------------------- Menüleiste (SPEC 10)
 menu-left = Links
@@ -279,6 +284,7 @@ menu-link = Verknüpfung erstellen
 menu-mkdir = Ordner erstellen
 menu-delete = Löschen
 menu-wipe = Sicher löschen
+menu-delete-permanent = Endgültig löschen
 menu-archive-add = Zum Archiv hinzufügen
 menu-archive-extract = Dateien entpacken
 menu-archive-commands = Archivbefehle

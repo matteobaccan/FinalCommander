@@ -21,7 +21,7 @@ Column `SC` = SupremeCommander default (profile `far`, our baseline).
 | F5 | copy | copy | copy | copy | copy |
 | F6 | rename / move | rename/move | move/rename | move | move / rename |
 | F7 | make directory | make directory | new folder | new folder | make directory |
-| F8 | delete (to trash per settings) | delete | delete | delete/trash | delete (to trash) |
+| F8 | delete (to trash per settings) | delete | delete | delete/trash | **delete, to the system's wastebasket when `general.use_trash` says so (it does by default)** |
 | F9 | menu bar | pull-down menus | left menu? | terminal | menu bar |
 | F10 | quit | quit | exit? | quit | quit |
 | F11 | plugin commands | — | — | — | plugin/command palette |
@@ -42,7 +42,7 @@ Column `SC` = SupremeCommander default (profile `far`, our baseline).
 | Shift+F10 | select the last used item of the user menu | — | — | view all files | same, once the user menu exists (unbound today) |
 | Shift+F11 | sort groups on/off (named mask groups that sort ahead of or behind everything else — not the same as "directories first") | — | — | — | **directories first on/off**, which is the part of FAR's `Group` we have; named sort groups are still to come |
 | Shift+F12 | selected files first | — | — | custom view | **selected files first on/off** |
-| Shift+Del | delete skipping trash | delete | delete permanently | delete permanently | delete permanently |
+| Shift+Del | delete skipping trash | delete | delete permanently | delete permanently | **delete permanently**, past the wastebasket |
 | Shift+Enter | run in a separate window / OS open | — | run in own window | — | OS-open item |
 | Shift+arrows | extend selection | extend selection | extend selection | extend selection | extend selection |
 

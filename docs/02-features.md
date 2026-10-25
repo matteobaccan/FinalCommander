@@ -66,7 +66,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | # | Feature | Origin | M |
 | --- | --- | --- | --- |
 | 3.1 | Copy / move / rename (`F5`/`F6`), same-panel copy (`Shift+F5`), rename in place (`Shift+F6`) | all | M1 |
-| 3.2 | Delete to trash and permanent delete; wipe (overwrite then delete) | FAR | M1 delete, M2 trash/wipe |
+| 3.2 | ~~Delete to trash and permanent delete; wipe (overwrite then delete)~~ | FAR | **shipped** |
 | 3.3 | Create directory (`F7`), create file (`Shift+F4`), create nested path `a/b/c` in one go | all | M1 |
 | 3.4 | Hard links, symlinks (absolute/relative), junctions/reparse points, link targets shown and followed | FAR/MC | M2 |
 | 3.5 | Attributes/permissions dialog: chmod (numeric + rwx matrix), chown, Windows attrs (RASH, compressed, encrypted), timestamps (m/a/c/birth), recursive apply | FAR/MC | M2 |

@@ -148,7 +148,7 @@ impl Form {
                     cfg.panel.allow_reverse_sort,
                 ),
                 Field::Separator,
-                Field::Dim(t("opt-trash")),
+                Field::toggle("general.use_trash", t("opt-trash"), cfg.general.use_trash),
                 Field::Dim(t("opt-system-copy")),
                 Field::Dim(t("opt-save-history")),
                 Field::Separator,

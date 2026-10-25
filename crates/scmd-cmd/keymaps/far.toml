@@ -517,6 +517,13 @@ cmd = "file.link"
 keys = ["Alt+Del"]
 cmd = "file.wipe"
 
+# `F8` goes to the system's wastebasket when `general.use_trash` says so; this one never
+# does, which is what `Shift+Del` means on every desktop.
+[[bind]]
+keys = ["Shift+Del"]
+scope = "panel"
+cmd = "file.delete.permanent"
+
 
 # ---------------------------------------------------------------- layout
 [[bind]]

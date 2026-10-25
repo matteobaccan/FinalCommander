@@ -64,6 +64,23 @@ pub trait JobFs: Send + Sync {
         ))
     }
 
+    /// Hand the path to the system's own wastebasket, with everything under it.
+    ///
+    /// It is one operation on the whole tree, not a walk: a wastebasket is told what went
+    /// into it and where it came from, so a directory arrives in it as a directory and comes
+    /// back as one. That is also why this cannot be built out of `rename` and `remove_file` —
+    /// the record of where it came from is the part that makes it a wastebasket.
+    ///
+    /// The default is a refusal. A server, an archive and a bucket have no wastebasket of
+    /// their own, and inventing one — a hidden directory we made up — would be a promise the
+    /// rest of the system knows nothing about.
+    fn trash(&self, path: &VPath) -> io::Result<()> {
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            format!("{path}: there is no wastebasket here"),
+        ))
+    }
+
     /// Copy `src` to `dst`, calling `on_bytes` as it goes. Returning `false` from `on_bytes`
     /// cancels the copy, and the partial file is removed.
     fn copy_file(
@@ -280,6 +297,22 @@ impl JobFs for LocalFs {
 
     fn remove_dir(&self, path: &VPath) -> io::Result<()> {
         fs::remove_dir(path.as_path())
+    }
+
+    fn trash(&self, path: &VPath) -> io::Result<()> {
+        // `trash` is the platform half: the XDG wastebasket on Linux (the file moves and a
+        // `.trashinfo` beside it records where it was), `NSFileManager` on macOS and
+        // `IFileOperation` on Windows, each of which is what that desktop's own file manager
+        // shows and restores from.
+        ::trash::delete(path.as_path()).map_err(|e| match e {
+            // The wastebasket cannot take it: on Linux a path on a device with no trash
+            // directory, on any system one the desktop refuses. It is not a bug and it is
+            // not a missing file — the caller offers to delete it outright instead.
+            ::trash::Error::Unknown { description } => {
+                io::Error::new(io::ErrorKind::Unsupported, description)
+            }
+            other => io::Error::other(other.to_string()),
+        })
     }
 
     fn read_link(&self, path: &VPath) -> io::Result<PathBuf> {
@@ -795,6 +828,30 @@ mod tests {
 
     fn remote() -> VPath {
         VPath::remote(Scheme::Sftp, "host", "/srv/x")
+    }
+
+    #[test]
+    fn a_filesystem_with_no_wastebasket_says_so_rather_than_inventing_one() {
+        let err = Barest
+            .trash(&remote())
+            .expect_err("there is no wastebasket on a server");
+        assert_eq!(err.kind(), io::ErrorKind::Unsupported);
+    }
+
+    /// Needs a desktop wastebasket, which a build machine does not have: on Linux the file has
+    /// to be on a filesystem with a trash directory, and `/tmp` on a container usually is not.
+    /// Run it by hand on a real machine — `cargo test -p scmd-jobs -- --ignored` — and then
+    /// look in the wastebasket.
+    #[test]
+    #[ignore = "needs the desktop's own wastebasket"]
+    fn the_local_wastebasket_takes_a_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("rubbish.txt");
+        fs::write(&file, b"out").unwrap();
+        LocalFs
+            .trash(&VPath::local(&file))
+            .expect("the wastebasket took it");
+        assert!(!file.exists(), "it is no longer where it was");
     }
 
     #[test]

@@ -3670,7 +3670,8 @@ See the [docs](https://example.com/docs) for more.
         app.handle_input(Input::Key("Down".parse().unwrap()));
         app.handle_input(Input::Key("F8".parse().unwrap()));
         let out = frame(&mut app, 70, 20);
-        assert!(out.contains("Delete"), "{out}");
+        // The wastebasket is on by default, so that is what the dialog is about.
+        assert!(out.contains("wastebasket"), "{out}");
         assert!(out.contains("src"), "{out}");
         assert!(out.contains("Enter = yes"), "{out}");
     }

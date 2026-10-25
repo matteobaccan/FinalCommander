@@ -156,6 +156,8 @@ pub enum Command {
     FileCopyCurrent,
     FileMoveCurrent,
     FileDeleteCurrent,
+    /// Delete outright, past the system's wastebasket, whatever the setting says.
+    FileDeleteForce,
     /// `Ctrl+G`: run a command line once per selected file (SPEC 06 §5).
     FileApply,
     /// `Alt+F6`: a hard link or a symbolic link.
@@ -375,6 +377,7 @@ impl Command {
             Command::FileCopyCurrent,
             Command::FileMoveCurrent,
             Command::FileDeleteCurrent,
+            Command::FileDeleteForce,
             Command::FileApply,
             Command::FileLink,
             Command::FileWipe,
@@ -592,6 +595,7 @@ impl Command {
             Command::FileCopyCurrent => "file.copy.current".into(),
             Command::FileMoveCurrent => "file.move.current".into(),
             Command::FileDeleteCurrent => "file.delete.current".into(),
+            Command::FileDeleteForce => "file.delete.permanent".into(),
             Command::FileApply => "file.apply".into(),
             Command::FileLink => "file.link".into(),
             Command::FileWipe => "file.wipe".into(),
@@ -780,6 +784,7 @@ impl Command {
             ("file.copy.current", _) => Command::FileCopyCurrent,
             ("file.move.current", _) => Command::FileMoveCurrent,
             ("file.delete.current", _) => Command::FileDeleteCurrent,
+            ("file.delete.permanent", _) => Command::FileDeleteForce,
             ("file.apply", _) => Command::FileApply,
             ("file.link", _) => Command::FileLink,
             ("file.wipe", _) => Command::FileWipe,

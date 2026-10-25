@@ -448,6 +448,23 @@ fn attempt(
             Attempt::Done
         }
 
+        UnitKind::Trash => {
+            if !dry {
+                match fs.trash(&unit.dst) {
+                    Ok(()) => {}
+                    // Something else already took it away: not an error, as in a delete.
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(e) => return Attempt::Failed(e.to_string()),
+                }
+            }
+            // One unit is one thing the user chose, whether it was a file or a tree: the
+            // wastebasket took it whole, and counting what was inside it would mean walking
+            // a directory that is no longer there.
+            state.outcome.files += 1;
+            state.progress.files_done += 1;
+            Attempt::Done
+        }
+
         UnitKind::WipeFile { size } => {
             if dry {
                 state.outcome.files += 1;
@@ -561,7 +578,7 @@ fn attempt(
 /// Is the removal the point of this job, or the cleanup half of a move? A move's counters
 /// describe the copy, so its removals are not counted again.
 fn destroys(kind: JobKind) -> bool {
-    matches!(kind, JobKind::Delete | JobKind::Wipe)
+    matches!(kind, JobKind::Delete | JobKind::Wipe | JobKind::Trash)
 }
 
 enum Conflict {

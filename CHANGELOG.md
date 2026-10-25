@@ -8,6 +8,22 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **The system's own wastebasket.** `F8` hands what you chose to the wastebasket your
+  desktop's file manager shows, so what goes in can be taken back out from there — the XDG
+  trash spec on Linux, `NSFileManager` on macOS, `IFileOperation` on Windows, through the
+  `trash` crate. On by default, as it is in FAR and in Total Commander: the one key everybody
+  presses by accident is the one that should land in a safety net. `Shift+Del` deletes
+  outright whatever the setting says, which is what that key means everywhere else, and *Use
+  the system recycle bin* in the system settings is the setting — a row that was in that
+  dialog, drawn dim, since the dialog existed.
+
+  It is a job kind of its own rather than an option on a delete, because the shape of the work
+  is different: a wastebasket takes a directory with everything in it in one operation, so
+  there is no tree to walk and no file to count. Only this machine has one — a server, an
+  archive and a bucket are deleted outright, and the dialog says which of the two is about to
+  happen rather than leaving it to be guessed. If the wastebasket refuses a path it ought to
+  have taken, the error names the key that deletes it instead.
+
 - **The folders kept to hand.** `Ctrl+Shift+0` to `Ctrl+Shift+9` put the directory you are in
   on a digit and `Alt+0` to `Alt+9` take you back to it — ten of them, which is FAR's own
   number, with `Alt` rather than FAR's right-hand control key because no terminal can tell the

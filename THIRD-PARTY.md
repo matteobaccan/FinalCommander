@@ -43,6 +43,16 @@ Unicode-3.0, or MPL-2.0 at file level). The policy and the allow-list live in `d
 | `bzip2` (with `libbz2-rs-sys`) | MIT OR Apache-2.0 / **bzip2-1.0.6** | bzip2, in pure Rust |
 | `lzma-rust2` | Apache-2.0 | xz, in pure Rust |
 | `ruzstd` | MIT | zstd, in pure Rust |
+| `reqwest` (with `rustls`) | MIT OR Apache-2.0 | HTTPS for the object-storage client |
+| `tokio-util` | MIT | streaming an upload's body off the disk |
+| `portable-pty` | MIT | the pseudo-terminal: `openpty` on Unix, ConPTY on Windows |
+| `vte` | Apache-2.0 OR MIT | recognising the escape sequences a program writes to a terminal |
+| `trash` (with `urlencoding`, `scopeguard`, `once_cell`; `objc2-foundation` on macOS) | MIT | handing a file to the system's own wastebasket: the XDG trash spec, `NSFileManager`, `IFileOperation` |
+| `nix` | MIT | the Unix calls the terminal needs that `std` does not expose |
+| `shell-words` | MIT OR Apache-2.0 | splitting a command line the way a shell would |
+| `rand` | MIT OR Apache-2.0 | the random name a wipe renames to, and test fixtures |
+| `serde_json` | MIT OR Apache-2.0 | the plugin protocol |
+| `clap_mangen` | MIT OR Apache-2.0 | generating the manual page from the command line |
 | `tempfile` (dev only) | MIT OR Apache-2.0 | filesystem tests |
 
 Two dependencies are multi-licensed with a copyleft option we do **not** take: `r-efi`

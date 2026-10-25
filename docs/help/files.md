@@ -37,6 +37,25 @@ question, and says so in its own title.
 `Alt+F6` makes a link. `Ctrl+G` runs one command over everything selected, with the name of
 each file put into the line where you mark it.
 
+# Deleting, and the wastebasket
+
+`F8` hands what you chose to the system's own wastebasket — the same one your desktop's file
+manager shows, so what goes in can be taken back out from there. A directory goes in whole.
+The question it asks says *wastebasket* rather than *delete*, so the two are never confused.
+
+`Shift+Del` deletes outright, past the wastebasket, which is what that key means everywhere
+else. *Use the system recycle bin* in the system settings turns the wastebasket off, and then
+`F8` is the same thing.
+
+Only this machine has a wastebasket. A file on a server, an entry in an archive and an object
+in a bucket are deleted outright, and the dialog says so before you answer. If the wastebasket
+refuses something it ought to have taken — on Linux, a file on a disk with no trash directory
+of its own — the error says which key deletes it instead.
+
+`Alt+Del` is the third one: it overwrites the bytes before unlinking the file. Its dialog is
+honest about what that is worth on an SSD, on a copy-on-write filesystem and with snapshots
+about.
+
 # Finding things
 
 `Alt+F7` searches for files: a mask, text inside them, and where to look. The results are a

@@ -10,6 +10,13 @@ pub enum JobKind {
     /// Delete, but overwrite each file's bytes first. See [`crate::JobFs::wipe_file`] for
     /// what that does and does not promise.
     Wipe,
+    /// Delete by handing each source to the system's own wastebasket, whole.
+    ///
+    /// It is a kind of its own rather than an option on [`JobKind::Delete`] because the shape
+    /// of the work is different: a wastebasket takes a directory with everything in it in one
+    /// operation, so there is no tree to walk and no file to count — one unit per source, and
+    /// each one is a rename as far as the filesystem is concerned.
+    Trash,
     Mkdir,
     /// Replace one string with another inside every file in [`JobSpec::sources`], which the
     /// caller has already chosen: this searches inside files, never for them. What to look for
@@ -47,6 +54,7 @@ impl JobKind {
             JobKind::Move => "move",
             JobKind::Delete => "delete",
             JobKind::Wipe => "wipe",
+            JobKind::Trash => "trash",
             JobKind::Mkdir => "mkdir",
             JobKind::Replace => "replace",
             JobKind::Pack => "pack",

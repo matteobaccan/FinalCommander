@@ -71,9 +71,9 @@ console in it, which is the one thing a terminal program cannot borrow from a te
 none of them is, is the same program on all three systems, in one file, with nothing to
 install — and that is the hole this fills.
 
-> **Status: 0.2.0, open to testers.** Everything described above works today. What is *not*
-> there says so rather than failing quietly: the OS clipboard, a trash can, FTP and a console
-> with a real terminal in it are not here yet. [`CHANGELOG.md`](CHANGELOG.md) is what has landed and
+> **Status: 0.3.0, open to testers.** Everything described above works today. What is *not*
+> there says so rather than failing quietly: the OS clipboard, FTP and WebDAV are not here
+> yet. [`CHANGELOG.md`](CHANGELOG.md) is what has landed and
 > [`docs/BACKLOG.md`](docs/BACKLOG.md) is what has not, item by item, with the open questions
 > marked.
 
@@ -163,7 +163,9 @@ every key on the screen you are looking at does.
   decision points (retry / skip / skip all / cancel), a progress overlay with a per-file and a
   total bar, `Esc` to cancel, and both panels refreshed afterwards. A same-filesystem move is a
   rename, not a copy. A copy is written to `name.scmd-part` and renamed only when complete, so
-  an interrupted operation never leaves a file that looks finished.
+  an interrupted operation never leaves a file that looks finished. `F8` hands what you chose
+  to the system's own wastebasket — the one your desktop's file manager shows — and `Shift+Del`
+  deletes outright.
 - **Panels**: `Tab` / `Ctrl+U`, arrows / `PgUp` / `PgDn` / `Home` / `End` / `Enter` /
   `Ctrl+PgUp` / `Backspace` / `Ctrl+\` with history (`Alt+←/→`), `Ins` and `+` / `-` / `*`
   selection by mask, `Ctrl+F3..F9` sorting (press twice to reverse), `Ctrl+1..5` view modes,

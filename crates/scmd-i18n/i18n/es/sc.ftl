@@ -89,6 +89,7 @@ job-copy = Copia
 job-move = Movimiento
 job-delete = Borrado
 job-wipe = Borrado seguro
+job-trash = Moviendo a la papelera
 job-replace = Sustituyendo
 job-pack = Comprimiendo
 job-rebuild = Escribiendo el archivo comprimido
@@ -166,6 +167,7 @@ btn-skip-all = Omitir todos
 btn-retry = Reintentar
 btn-cancel = Cancelar
 msg-nothing-to-do = nada seleccionado
+msg-trash-refused = { $path }: la papelera no lo acepta — Mayús+Supr lo borra definitivamente
 
 key-wrap = Ajuste
 key-hex = Hex
@@ -241,7 +243,10 @@ net-written-back = { $name }: reescrito, { $bytes } bytes
 net-write-back-failed = la reescritura falló: { $error } — tus cambios están en { $local }
 net-changed-title = Cambiado en el servidor
 net-changed-body = { $name } cambió en el servidor desde que se descargó. ¿Sobrescribirlo?
-confirm-delete-permanent = Borrado definitivo: aún no hay papelera.
+confirm-delete-permanent = Esto borra definitivamente: para estos no hay papelera.
+confirm-trash-title = Mover a la papelera
+confirm-trash-body = ¿Mover { $count } elementos ({ $bytes }) a la papelera?
+confirm-trash-where = Van donde el escritorio guarda los archivos borrados, y de ahí se pueden recuperar.
 
 # ---------------------------------------------------------------- barra de menús (SPEC 10)
 menu-left = Izquierda
@@ -279,6 +284,7 @@ menu-link = Crear enlace
 menu-mkdir = Crear carpeta
 menu-delete = Borrar
 menu-wipe = Borrar de forma segura
+menu-delete-permanent = Borrar definitivamente
 menu-archive-add = Añadir al archivo
 menu-archive-extract = Extraer archivos
 menu-archive-commands = Comandos de archivo

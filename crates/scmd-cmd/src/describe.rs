@@ -133,6 +133,7 @@ impl Command {
             Command::FileCopyCurrent => "copy this one file, under a name you give",
             Command::FileMoveCurrent => "rename this one file",
             Command::FileDeleteCurrent => "delete this one file",
+            Command::FileDeleteForce => "delete outright, past the wastebasket",
             Command::FileApply => "run a command over each selected file",
             Command::FileLink => "make a link",
             Command::FileWipe => "delete, overwriting the bytes first",

@@ -3009,6 +3009,7 @@ impl App {
             JobKind::Delete => "job-delete",
             JobKind::Mkdir => "job-mkdir",
             JobKind::Wipe => "job-wipe",
+            JobKind::Trash => "job-trash",
             JobKind::Replace => "job-replace",
             JobKind::Pack => "job-pack",
             JobKind::Test => "job-test",
@@ -3057,10 +3058,20 @@ impl App {
                 ];
                 (title, lines)
             }
-            Question::Error { path, error } => (
-                self.i18n.t("dialog-error"),
-                vec![path.to_string(), String::new(), error.clone()],
-            ),
+            Question::Error { path, error } => {
+                let mut lines = vec![path.to_string(), String::new(), error.clone()];
+                // A wastebasket that will not take a file is the one error here with an
+                // obvious next move, so the dialog names it: skip, and use the key that
+                // deletes outright.
+                if matches!(&self.mode, Mode::Job(job) if job.kind == JobKind::Trash) {
+                    lines.push(String::new());
+                    lines.push(
+                        self.i18n
+                            .t_args("msg-trash-refused", &[("path", path.display_name().into())]),
+                    );
+                }
+                (self.i18n.t("dialog-error"), lines)
+            }
         }
     }
 
@@ -3111,14 +3122,25 @@ impl App {
     }
 
     /// Ask before deleting, unless the setting says not to, and then do it.
-    fn ask_delete(&mut self, sources: Vec<VPath>) {
+    ///
+    /// `force` is `Shift+Del`: delete outright, whatever the wastebasket setting says.
+    fn ask_delete(&mut self, sources: Vec<VPath>, force: bool) {
         let bytes = self.selected_bytes(&sources);
+        // Only this machine has a wastebasket. A server, an archive and a bucket do not, and
+        // one made up here would be a directory the desktop knows nothing about — so those
+        // go the way they always did, and the dialog says which of the two is happening.
+        let to_trash = !force && self.cfg.general.use_trash && sources.iter().all(|p| p.is_local());
+        let kind = if to_trash {
+            JobKind::Trash
+        } else {
+            JobKind::Delete
+        };
         // Inside an archive there is nothing to unlink: the container is written again
         // without those entries (SPEC 04 §4). The question is the same question, so only
         // what `Enter` does changes.
         let action = match Self::changes_removing(&sources) {
             Some((archive, changes)) => ConfirmAction::ArcRebuild { archive, changes },
-            None => ConfirmAction::Job(JobSpec::new(JobKind::Delete, sources.clone(), None)),
+            None => ConfirmAction::Job(JobSpec::new(kind, sources.clone(), None)),
         };
         if !self.cfg.general.confirm_delete {
             match action {
@@ -3130,9 +3152,17 @@ impl App {
             }
             return;
         }
-        let title = self.i18n.t("confirm-delete-title");
+        let title = self.i18n.t(if to_trash {
+            "confirm-trash-title"
+        } else {
+            "confirm-delete-title"
+        });
         let body = self.i18n.t_args(
-            "confirm-delete-body",
+            if to_trash {
+                "confirm-trash-body"
+            } else {
+                "confirm-delete-body"
+            },
             &[
                 ("count", (sources.len() as i64).into()),
                 ("bytes", scmd_core::format_size(bytes).into()),
@@ -3149,8 +3179,13 @@ impl App {
             lines.push(format!("  … {}", sources.len() - 3));
         }
         lines.push(String::new());
-        // There is no trash yet, so the dialog says what the key really does.
-        lines.push(self.i18n.t("confirm-delete-permanent"));
+        // Which of the two this is, in a sentence: the one word that separates a safety net
+        // from a shredder is worth a line of the dialog.
+        lines.push(self.i18n.t(if to_trash {
+            "confirm-trash-where"
+        } else {
+            "confirm-delete-permanent"
+        }));
         lines.push(self.i18n.t("confirm-yes-no"));
         self.mode = Mode::Confirm(Confirm {
             title,
@@ -4435,7 +4470,7 @@ impl App {
                     sources: Vec::new(),
                 });
             }
-            Command::FileDelete | Command::FileDeleteCurrent => {
+            Command::FileDelete | Command::FileDeleteCurrent | Command::FileDeleteForce => {
                 let sources = if cmd == Command::FileDeleteCurrent {
                     self.cursor_source()
                 } else {
@@ -4446,7 +4481,7 @@ impl App {
                     self.set_error(m);
                     return;
                 }
-                self.ask_delete(sources);
+                self.ask_delete(sources, cmd == Command::FileDeleteForce);
             }
 
             other => self.not_implemented(&other.id()),
@@ -7869,7 +7904,7 @@ impl App {
                         self.unpack_into(path, to);
                     }
                     ("to", _) => self.open_unpack_form(),
-                    ("delete", Some(path)) => self.ask_delete(vec![path]),
+                    ("delete", Some(path)) => self.ask_delete(vec![path], false),
                     ("add", _) => self.open_pack_form(),
                     _ => {}
                 }
@@ -10231,6 +10266,79 @@ mod tests {
         app.restore_tabs(0, &saved, 0);
         assert_eq!(app.tabs[0].len(), 1);
         assert_eq!(app.panels[0].cwd, VPath::local("/home/mb"));
+    }
+
+    // ── the wastebasket (SPEC 03 §4) ────────────────────────────────────────────────────────
+
+    /// What `F8` asked the engine for: the kind of the job that was queued.
+    fn queued_kind(app: &mut App) -> Option<JobKind> {
+        app.take_requests().into_iter().find_map(|r| match r {
+            Request::Job { spec, .. } => Some(spec.kind),
+            _ => None,
+        })
+    }
+
+    #[test]
+    fn f8_goes_to_the_wastebasket_and_says_so() {
+        let mut app = app();
+        app.panel_mut().cursor_to(2); // a.txt
+        press(&mut app, "F8");
+        let Mode::Confirm(confirm) = &app.mode else {
+            panic!("the question is asked first")
+        };
+        assert!(
+            confirm.title.to_lowercase().contains("wastebasket"),
+            "the title says which of the two this is: {}",
+            confirm.title
+        );
+        press(&mut app, "Enter");
+        assert_eq!(queued_kind(&mut app), Some(JobKind::Trash));
+    }
+
+    #[test]
+    fn shift_del_never_uses_the_wastebasket() {
+        let mut app = app();
+        app.panel_mut().cursor_to(2);
+        press(&mut app, "Shift+Del");
+        let Mode::Confirm(confirm) = &app.mode else {
+            panic!("the question is asked first")
+        };
+        assert!(
+            !confirm.title.to_lowercase().contains("wastebasket"),
+            "{}",
+            confirm.title
+        );
+        assert!(
+            confirm
+                .lines
+                .iter()
+                .any(|l| l.to_lowercase().contains("permanent")),
+            "and it says there is nothing to catch them: {:?}",
+            confirm.lines
+        );
+        press(&mut app, "Enter");
+        assert_eq!(queued_kind(&mut app), Some(JobKind::Delete));
+    }
+
+    #[test]
+    fn with_the_setting_off_f8_deletes_outright() {
+        let mut app = app();
+        app.cfg.general.use_trash = false;
+        app.panel_mut().cursor_to(2);
+        press(&mut app, "F8");
+        press(&mut app, "Enter");
+        assert_eq!(queued_kind(&mut app), Some(JobKind::Delete));
+    }
+
+    #[test]
+    fn there_is_no_wastebasket_on_a_server_so_f8_deletes_there() {
+        let mut app = app();
+        // The panel is on a server; the wastebasket is this machine's and nothing else's.
+        app.panels[0].cwd = VPath::remote(scmd_core::Scheme::Sftp, "mb@host", "/srv");
+        app.panel_mut().cursor_to(2);
+        press(&mut app, "F8");
+        press(&mut app, "Enter");
+        assert_eq!(queued_kind(&mut app), Some(JobKind::Delete));
     }
 
     // ── the folders kept to hand (SPEC 02 §11) ──────────────────────────────────────────────
@@ -13845,7 +13953,8 @@ mod tests {
             Mode::Confirm(c) => {
                 assert!(c.lines.iter().any(|l| l.contains("a.txt")), "{:?}", c.lines);
                 match &c.action {
-                    ConfirmAction::Job(spec) => assert_eq!(spec.kind, JobKind::Delete),
+                    // The wastebasket is on by default, so this is what `F8` means now.
+                    ConfirmAction::Job(spec) => assert_eq!(spec.kind, JobKind::Trash),
                     other => panic!("expected a job confirmation, got {other:?}"),
                 }
             }
@@ -13860,6 +13969,8 @@ mod tests {
     #[test]
     fn the_delete_confirmation_says_it_cannot_be_undone() {
         let mut app = app();
+        // With no wastebasket to catch them, the dialog has to say so.
+        app.cfg.general.use_trash = false;
         press(&mut app, "Down");
         press(&mut app, "F8");
         match &app.mode {
@@ -13867,7 +13978,7 @@ mod tests {
                 c.lines
                     .iter()
                     .any(|l| l.to_lowercase().contains("permanent")),
-                "the user must be told there is no trash: {:?}",
+                "the user must be told it cannot be undone: {:?}",
                 c.lines
             ),
             other => panic!("expected a confirmation, got {other:?}"),
@@ -14071,7 +14182,7 @@ mod tests {
         press(&mut app, "Down");
         press(&mut app, "F8");
         let (_, spec) = job_request(&mut app);
-        assert_eq!(spec.kind, JobKind::Delete);
+        assert_eq!(spec.kind, JobKind::Trash);
     }
 
     /// A panel over a real directory, so `F3` can open a real file.

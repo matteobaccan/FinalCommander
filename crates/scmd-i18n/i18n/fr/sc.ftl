@@ -89,6 +89,7 @@ job-copy = Copie
 job-move = Déplacement
 job-delete = Suppression
 job-wipe = Effacement sécurisé
+job-trash = Mise à la corbeille
 job-replace = Remplacement
 job-pack = Compression
 job-rebuild = Écriture de l'archive
@@ -166,6 +167,7 @@ btn-skip-all = Tout ignorer
 btn-retry = Réessayer
 btn-cancel = Annuler
 msg-nothing-to-do = rien de sélectionné
+msg-trash-refused = { $path } : la corbeille le refuse — Maj+Suppr le supprime définitivement
 
 key-wrap = Retour
 key-hex = Hex
@@ -241,7 +243,10 @@ net-written-back = { $name } : réécrit, { $bytes } octets
 net-write-back-failed = réécriture échouée : { $error } — vos modifications sont dans { $local }
 net-changed-title = Modifié sur le serveur
 net-changed-body = { $name } a changé sur le serveur depuis sa récupération. L'écraser ?
-confirm-delete-permanent = Suppression définitive — il n'y a pas encore de corbeille.
+confirm-delete-permanent = Ceci supprime définitivement : il n’y a pas de corbeille pour ceux-là.
+confirm-trash-title = Mettre à la corbeille
+confirm-trash-body = Mettre { $count } éléments ({ $bytes }) à la corbeille ?
+confirm-trash-where = Ils vont là où le bureau garde les fichiers supprimés, et peuvent en être repris.
 
 # ---------------------------------------------------------------- barre de menus (SPEC 10)
 menu-left = Gauche
@@ -279,6 +284,7 @@ menu-link = Créer un lien
 menu-mkdir = Créer un dossier
 menu-delete = Supprimer
 menu-wipe = Effacer définitivement
+menu-delete-permanent = Supprimer définitivement
 menu-archive-add = Ajouter à l'archive
 menu-archive-extract = Extraire les fichiers
 menu-archive-commands = Commandes d'archive

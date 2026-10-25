@@ -2644,8 +2644,14 @@ timeout = 10
 
     /// An app looking at two real directories.
     fn app_on(left: &std::path::Path, right: &std::path::Path) -> App {
+        // These tests run real jobs against real files, and the wastebasket they would use is
+        // the desktop's own — not something a build machine has, and not something a test
+        // should be putting things into. So `F8` here deletes, and what the setting does to
+        // the job is tested where no job runs (`app::tests`).
+        let mut cfg = Config::default();
+        cfg.general.use_trash = false;
         App::new(Startup {
-            cfg: Config::default(),
+            cfg,
             paths: Paths::discover(Some(&left.join("scmd.toml")), None),
             i18n: I18n::new("en"),
             keymap: Keymap::builtin("far").unwrap(),

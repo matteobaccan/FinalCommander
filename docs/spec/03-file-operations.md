@@ -9,7 +9,7 @@ same-filesystem rename fast path), recursive delete, nested mkdir, the conflict 
 `…All` answers, error decision points (retry / skip / skip all / cancel), progress with a
 per-file and a total bar, cancellation, metadata preservation (mtime, Unix mode), symlinks
 copied as links, write-to-`.scmd-part`-then-rename, the guards in §2, and a dry-run mode.
-**Still to come**: trash and wipe (§4), the job queue and journal (§5), verification and
+**Still to come**: the job queue and journal (§5), verification and
 resume (§3), attribute dialogs (§7), multi-rename (§8), checksums and split (§9), compare and
 synchronise (§10).
 
@@ -79,16 +79,33 @@ Move: same-filesystem → `rename`; otherwise copy+verify+delete, and the delete
 after a successful verify. A cross-device Move that fails halfway leaves every file either at
 the source or fully at the target — never both-partial.
 
-## 4. Delete, trash, wipe
+## 4. Delete, trash, wipe (shipped)
 
-- `file.delete.trash` → OS trash (`trash` crate; XDG trash spec, Finder trash, Recycle Bin);
-  unsupported targets (network, VFS) fall back to permanent delete **after an explicit prompt**.
-- `file.delete.permanent` → unlink/rmdir recursively; read-only flags cleared on request.
-- `file.delete.wipe` → overwrite with a configurable pattern (default: one pass of zeros),
-  truncate, rename to a random name, unlink. Documented honestly: on CoW/flash/journaled
+- **`F8`** hands each thing to the system's own wastebasket when `general.use_trash` says so,
+  which it does by default — as it does in FAR and in Total Commander, because the one key
+  everybody presses by accident is the one that should land in a safety net. The platform half
+  is the `trash` crate: the XDG trash spec on Linux (the file moves and a `.trashinfo` beside
+  it records where it came from), `NSFileManager` on macOS, `IFileOperation` on Windows. Each
+  of those is what that desktop's own file manager shows and restores from, which is the whole
+  point — a hidden directory we invented would be a promise nothing else knows about.
+- It is **a job kind of its own** (`JobKind::Trash`) rather than an option on a delete, because
+  the shape of the work is different: a wastebasket takes a directory with everything in it in
+  one operation, so there is no tree to walk and no file to count. One unit per thing the user
+  chose, and each one is a rename as far as the filesystem is concerned.
+- Only this machine has one. A server, an archive and a bucket do not, so those delete outright
+  — and the dialog says which of the two is about to happen rather than leaving it to be
+  guessed. If the wastebasket refuses a path it could have taken (on Linux, a device with no
+  trash directory), the error dialog names the key that deletes it outright.
+- **`Shift+Del`** (`file.delete.permanent`) never uses the wastebasket, whatever the setting
+  says, which is what that key means on every desktop. `F8` with the setting off is the same
+  thing.
+- `file.delete.wipe` (`Alt+Del`) → overwrite with a configurable pattern (default: one pass of
+  zeros), truncate, rename to a random name, unlink. Documented honestly: on CoW/flash/journaled
   filesystems this is *not* a guarantee, and the UI says so.
-- Recursive delete asks once, with counts (`12 directories, 3 480 files, 1.2 GB`), and shows
-  the first three paths.
+- Recursive delete asks once, with counts and the first three paths.
+
+Still to come: browsing the wastebasket as a panel, and putting something back from inside the
+program.
 
 ## 5. Queue and background
 

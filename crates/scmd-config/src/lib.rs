@@ -137,6 +137,11 @@ pub struct General {
     pub confirm_exit: bool,
     pub confirm_delete: bool,
     pub confirm_overwrite: bool,
+    /// `F8` hands a file to the system's own wastebasket rather than unlinking it. On by
+    /// default, as it is in FAR and in Total Commander: a wastebasket is a safety net, and
+    /// the one key everybody presses by accident is the one that should land in it.
+    /// `Shift+Del` deletes outright whatever this says.
+    pub use_trash: bool,
 }
 // There is no `update_check` here, and that is the point: a setting nobody reads is a setting
 // that lies, and this one was a promise wearing a setting's clothes. The promise is kept in
@@ -150,6 +155,7 @@ impl Default for General {
             confirm_exit: false,
             confirm_delete: true,
             confirm_overwrite: true,
+            use_trash: true,
         }
     }
 }
@@ -663,6 +669,7 @@ impl Config {
             "panel.free_space" => self.panel.free_space = parse_bool(value)?,
             "general.confirm_exit" => self.general.confirm_exit = parse_bool(value)?,
             "general.confirm_delete" => self.general.confirm_delete = parse_bool(value)?,
+            "general.use_trash" => self.general.use_trash = parse_bool(value)?,
             "general.confirm_overwrite" => self.general.confirm_overwrite = parse_bool(value)?,
             other => return Err(format!("unknown setting `{other}`")),
         }

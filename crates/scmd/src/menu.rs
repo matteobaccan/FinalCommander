@@ -274,6 +274,11 @@ pub fn menus() -> Vec<Menu> {
                 item("menu-link", "Alt+F6", Action::Run(Command::FileLink)),
                 item("menu-mkdir", "F7", Action::Run(Command::FileMkdir)),
                 item("menu-delete", "F8", Action::Run(Command::FileDelete)),
+                item(
+                    "menu-delete-permanent",
+                    "Shift+Del",
+                    Action::Run(Command::FileDeleteForce),
+                ),
                 item("menu-wipe", "Alt+Del", Action::Run(Command::FileWipe)),
                 Entry::Separator,
                 item(

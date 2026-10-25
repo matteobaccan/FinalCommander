@@ -95,6 +95,7 @@ job-copy = Copying
 job-move = Moving
 job-delete = Deleting
 job-wipe = Wiping
+job-trash = Moving to the wastebasket
 job-replace = Replacing
 job-pack = Packing
 job-rebuild = Writing the archive
@@ -172,6 +173,7 @@ btn-skip-all = Skip all
 btn-retry = Retry
 btn-cancel = Cancel
 msg-nothing-to-do = nothing selected
+msg-trash-refused = { $path }: the wastebasket would not take it — Shift+Del deletes it outright
 
 # Viewer (F3)
 key-wrap = Wrap
@@ -249,7 +251,10 @@ net-written-back = { $name }: written back, { $bytes } bytes
 net-write-back-failed = write-back failed: { $error } — your edits are in { $local }
 net-changed-title = Changed on the server
 net-changed-body = { $name } changed on the server since it was fetched. Write over it?
-confirm-delete-permanent = This deletes permanently — there is no trash yet.
+confirm-delete-permanent = This deletes permanently: there is no wastebasket for these.
+confirm-trash-title = Move to the wastebasket
+confirm-trash-body = Move { $count } items ({ $bytes }) to the wastebasket?
+confirm-trash-where = They go where the desktop keeps deleted files, and can be put back from there.
 
 # ---------------------------------------------------------------- menu bar (SPEC 10)
 menu-left = Left
@@ -287,6 +292,7 @@ menu-link = Create link
 menu-mkdir = Make folder
 menu-delete = Delete
 menu-wipe = Wipe
+menu-delete-permanent = Delete permanently
 menu-archive-add = Add to archive
 menu-archive-extract = Extract files
 menu-archive-commands = Archive commands

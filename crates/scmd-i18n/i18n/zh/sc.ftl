@@ -89,6 +89,7 @@ job-copy = 复制
 job-move = 移动
 job-delete = 删除
 job-wipe = 安全擦除
+job-trash = 正在移到回收站
 job-replace = 替换中
 job-pack = 正在压缩
 job-rebuild = 正在写入压缩包
@@ -166,6 +167,7 @@ btn-skip-all = 全部跳过
 btn-retry = 重试
 btn-cancel = 取消
 msg-nothing-to-do = 未选择任何内容
+msg-trash-refused = { $path }：回收站不接收它 — Shift+Del 可永久删除
 
 key-wrap = 折行
 key-hex = 十六
@@ -241,7 +243,10 @@ net-written-back = { $name }：已写回，{ $bytes } 字节
 net-write-back-failed = 写回失败：{ $error } — 你的修改在 { $local }
 net-changed-title = 服务器上已更改
 net-changed-body = { $name } 自获取后在服务器上已更改。要覆盖吗？
-confirm-delete-permanent = 这是永久删除——还没有回收站。
+confirm-delete-permanent = 这是永久删除：这些没有回收站。
+confirm-trash-title = 移到回收站
+confirm-trash-body = 将 { $count } 个项目（{ $bytes }）移到回收站？
+confirm-trash-where = 它们会进入系统存放已删文件的位置，可以从那里恢复。
 
 # ---------------------------------------------------------------- 菜单栏 (SPEC 10)
 menu-left = 左侧
@@ -279,6 +284,7 @@ menu-link = 创建链接
 menu-mkdir = 新建文件夹
 menu-delete = 删除
 menu-wipe = 安全擦除
+menu-delete-permanent = 永久删除
 menu-archive-add = 添加到压缩包
 menu-archive-extract = 解压文件
 menu-archive-commands = 压缩包命令

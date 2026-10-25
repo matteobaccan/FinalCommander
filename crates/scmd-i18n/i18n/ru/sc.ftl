@@ -89,6 +89,7 @@ job-copy = Копирование
 job-move = Перенос
 job-delete = Удаление
 job-wipe = Затирание
+job-trash = Перенос в корзину
 job-replace = Замена
 job-pack = Упаковка
 job-rebuild = Запись архива
@@ -166,6 +167,7 @@ btn-skip-all = Пропустить все
 btn-retry = Повторить
 btn-cancel = Отмена
 msg-nothing-to-do = ничего не отмечено
+msg-trash-refused = { $path }: корзина его не принимает — Shift+Del удалит насовсем
 
 key-wrap = Перенос
 key-hex = Hex
@@ -241,7 +243,10 @@ net-written-back = { $name }: записан обратно, { $bytes } байт
 net-write-back-failed = запись не удалась: { $error } — ваши правки в { $local }
 net-changed-title = Изменён на сервере
 net-changed-body = { $name } изменился на сервере после загрузки. Перезаписать?
-confirm-delete-permanent = Удаление безвозвратное — корзины пока нет.
+confirm-delete-permanent = Это удаление насовсем: для этого корзины нет.
+confirm-trash-title = В корзину
+confirm-trash-body = Переместить { $count } объектов ({ $bytes }) в корзину?
+confirm-trash-where = Они попадут туда, где система держит удалённые файлы, и оттуда их можно вернуть.
 
 # ---------------------------------------------------------------- строка меню (SPEC 10)
 menu-left = Левая
@@ -279,6 +284,7 @@ menu-link = Создать ссылку
 menu-mkdir = Создать папку
 menu-delete = Удалить
 menu-wipe = Уничтожить
+menu-delete-permanent = Удалить насовсем
 menu-archive-add = Добавить в архив
 menu-archive-extract = Распаковать файлы
 menu-archive-commands = Команды архива

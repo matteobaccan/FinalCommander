@@ -89,6 +89,7 @@ job-copy = Copia
 job-move = Spostamento
 job-delete = Eliminazione
 job-wipe = Cancellazione sicura
+job-trash = Spostamento nel cestino
 job-replace = Sostituzione
 job-pack = Compressione
 job-rebuild = Scrittura dell'archivio
@@ -166,6 +167,7 @@ btn-skip-all = Salta tutti
 btn-retry = Riprova
 btn-cancel = Annulla
 msg-nothing-to-do = niente selezionato
+msg-trash-refused = { $path }: il cestino non lo accetta — Shift+Canc lo elimina definitivamente
 
 key-wrap = Ritorno
 key-hex = Hex
@@ -241,7 +243,10 @@ net-written-back = { $name }: riscritto, { $bytes } byte
 net-write-back-failed = riscrittura fallita: { $error } — le tue modifiche sono in { $local }
 net-changed-title = Cambiato sul server
 net-changed-body = { $name } è cambiato sul server dopo lo scaricamento. Sovrascriverlo?
-confirm-delete-permanent = Cancellazione definitiva: il cestino non c'è ancora.
+confirm-delete-permanent = Cancellazione definitiva: per questi non c’è cestino.
+confirm-trash-title = Sposta nel cestino
+confirm-trash-body = Spostare { $count } elementi ({ $bytes }) nel cestino?
+confirm-trash-where = Vanno dove il sistema tiene i file eliminati, e da lì si possono recuperare.
 
 # ---------------------------------------------------------------- barra dei menu (SPEC 10)
 menu-left = Sinistra
@@ -279,6 +284,7 @@ menu-link = Crea collegamento
 menu-mkdir = Crea cartella
 menu-delete = Elimina
 menu-wipe = Cancella in modo sicuro
+menu-delete-permanent = Elimina definitivamente
 menu-archive-add = Aggiungi all'archivio
 menu-archive-extract = Estrai file
 menu-archive-commands = Comandi archivio
