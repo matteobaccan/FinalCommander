@@ -406,7 +406,8 @@ pub struct SiteCfg {
     /// Short name, shown in the site list and usable from the command line.
     #[serde(default)]
     pub id: String,
-    /// `sftp` today.
+    /// `sftp`, `ftp` or `ftps`. The port it implies — 22 or 21 — is what a site with no
+    /// `port` of its own gets.
     #[serde(default = "default_scheme")]
     pub scheme: String,
     pub host: String,

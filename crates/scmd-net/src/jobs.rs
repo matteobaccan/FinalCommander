@@ -250,7 +250,7 @@ impl JobFs for RoutedFs {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::memory::MemorySftp;
+    use crate::memory::MemoryFs;
     use crate::site::Site;
     use scmd_core::{CancelToken, EntryKind};
     use scmd_jobs::{ConflictPolicy, JobKind, JobOptions, JobSpec, Reporter};
@@ -265,11 +265,11 @@ mod tests {
     }
 
     /// A runtime, a pool with one fake server, and the routed filesystem over both.
-    fn setup() -> (Runtime, Arc<Pool>, Arc<MemorySftp>, RoutedFs, Site) {
+    fn setup() -> (Runtime, Arc<Pool>, Arc<MemoryFs>, RoutedFs, Site) {
         let runtime = Runtime::new().unwrap();
         let pool = Pool::new();
         let site = Site::parse_url("sftp://mb@host:22/srv").unwrap();
-        let fs = MemorySftp::new().with_dir("/srv");
+        let fs = MemoryFs::new().with_dir("/srv");
         pool.insert(Remote::new(site.clone(), fs.clone()));
         let routed = RoutedFs::new(pool.clone(), runtime.handle().clone());
         (runtime, pool, fs, routed, site)

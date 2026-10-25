@@ -882,13 +882,13 @@ fn interactive(mut app: App) -> Result<()> {
                         });
                     });
                 }
-                Request::Disconnect { authority } => {
+                Request::Disconnect { key } => {
                     let tx = tx.clone();
                     let pool = pool.clone();
                     runtime.spawn(async move {
-                        pool.disconnect(&authority).await;
+                        pool.disconnect(&key).await;
                         let _ = tx.send(Event::Disconnected {
-                            authority,
+                            key,
                             connected: pool.connected(),
                         });
                     });

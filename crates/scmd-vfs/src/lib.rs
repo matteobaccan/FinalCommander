@@ -58,6 +58,13 @@ pub trait Vfs: Send + Sync {
 
     fn caps(&self) -> Caps;
 
+    /// What this provider can do *for one path*, which is not always what it can do in
+    /// general: the netbox serves SFTP, FTP and WebDAV, and those three do not have the same
+    /// powers. A provider that is one protocol need not implement it.
+    fn caps_for(&self, _path: &VPath) -> Caps {
+        self.caps()
+    }
+
     /// Read a directory. Must be cancellable and must not block the caller's thread.
     async fn list(&self, path: &VPath, cancel: CancelToken) -> Result<Vec<Entry>>;
 

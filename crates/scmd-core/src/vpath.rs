@@ -14,6 +14,15 @@ pub enum Scheme {
     /// talk to is a matter of configuration, while which bucket a path is in is part of the
     /// path. An empty bucket (`s3://work@/`) is the list of buckets the credentials can see.
     S3,
+    /// FTP, the plain protocol on port 21.
+    Ftp,
+    /// FTP with TLS, negotiated with `AUTH TLS` on the same port 21 — "explicit" FTPS, which
+    /// is the one still in use. Implicit FTPS on port 990 is deprecated and not here.
+    Ftps,
+    /// WebDAV over HTTP.
+    Dav,
+    /// WebDAV over HTTPS, which is what any WebDAV server on the open internet speaks.
+    Davs,
 }
 
 impl Scheme {
@@ -22,6 +31,10 @@ impl Scheme {
             Scheme::Local => "file",
             Scheme::Sftp => "sftp",
             Scheme::S3 => "s3",
+            Scheme::Ftp => "ftp",
+            Scheme::Ftps => "ftps",
+            Scheme::Dav => "dav",
+            Scheme::Davs => "davs",
         }
     }
 
@@ -30,6 +43,13 @@ impl Scheme {
             "file" | "local" => Some(Scheme::Local),
             "sftp" | "ssh" | "scp" => Some(Scheme::Sftp),
             "s3" => Some(Scheme::S3),
+            "ftp" => Some(Scheme::Ftp),
+            // `ftpes` is the spelling several clients use for explicit TLS.
+            "ftps" | "ftpes" => Some(Scheme::Ftps),
+            // `webdav`/`webdavs` are what the site list shows; `dav`/`davs` is what RFC 4918
+            // registered and what fits in a path.
+            "dav" | "webdav" => Some(Scheme::Dav),
+            "davs" | "webdavs" => Some(Scheme::Davs),
             _ => None,
         }
     }
@@ -38,6 +58,42 @@ impl Scheme {
     pub fn is_remote(self) -> bool {
         !matches!(self, Scheme::Local)
     }
+
+    /// The port used when a site does not name one. Object storage has none: which host to
+    /// talk to for an `s3://` bucket is configuration, not part of the path.
+    pub fn default_port(self) -> Option<u16> {
+        match self {
+            Scheme::Local | Scheme::S3 => None,
+            Scheme::Sftp => Some(22),
+            Scheme::Ftp | Scheme::Ftps => Some(21),
+            Scheme::Dav => Some(80),
+            Scheme::Davs => Some(443),
+        }
+    }
+
+    /// Is this one of the two FTP spellings?
+    pub fn is_ftp(self) -> bool {
+        matches!(self, Scheme::Ftp | Scheme::Ftps)
+    }
+
+    /// Is this one of the two WebDAV spellings?
+    pub fn is_dav(self) -> bool {
+        matches!(self, Scheme::Dav | Scheme::Davs)
+    }
+
+    /// Does the connection run over TLS? (For the two schemes where it is a choice.)
+    pub fn is_tls(self) -> bool {
+        matches!(self, Scheme::Ftps | Scheme::Davs)
+    }
+
+    /// Every scheme a site can name, for the places that offer a choice.
+    pub const SITE_SCHEMES: [Scheme; 5] = [
+        Scheme::Sftp,
+        Scheme::Ftp,
+        Scheme::Ftps,
+        Scheme::Dav,
+        Scheme::Davs,
+    ];
 }
 
 /// A VFS-aware path.

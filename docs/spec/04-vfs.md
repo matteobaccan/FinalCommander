@@ -78,7 +78,7 @@ where the code lives, not whether it is linked into the binary.
 | `rar` | `unrar` (read-only, non-free licence, optional feature, off by default in distro builds) | READ SEEK | M3 |
 | `iso`, `cab`, `ar`/`deb`, `rpm`, `cpio`, `lha`, `arj`, `squashfs` | `libarchive` binding as one fallback provider | READ | M3 |
 | `sftp` | `russh` + `russh-sftp` (**implemented**, `scmd-net`) | READ WRITE CREATE DELETE RENAME SEEK TRUNCATE META_TIMES META_MODE META_OWNER LINKS RESUME RANDOM_WRITE CASE_SENSITIVE | M1 |
-| `ftp`/`ftps` | `suppaftp` | READ WRITE CREATE DELETE RENAME RESUME | M3 |
+| `ftp`/`ftps` | `suppaftp` (**implemented**, `scmd-net`; explicit TLS with rustls, `MLSD` where the server has it) | READ WRITE CREATE DELETE RENAME META_TIMES (`MFMT`) META_MODE (`SITE CHMOD`) CASE_SENSITIVE — and deliberately not SEEK, TRUNCATE, RANDOM_WRITE, LINKS or RESUME | M2 |
 | `webdav` | `reqwest-dav` | READ WRITE CREATE DELETE RENAME | M3 |
 | `s3` | hand-written client over `reqwest` + `ring` (**implemented, read and write**, `scmd-s3`; any S3-compatible endpoint) | READ SEEK WRITE CREATE DELETE RENAME SERVER_SIDE_COPY CASE_SENSITIVE — and deliberately not ATOMIC_RENAME, TRUNCATE, META_TIMES, META_MODE or LINKS | M3 |
 | `smb` | `pavao`/system mount | varies | M3 |

@@ -7,7 +7,7 @@ use scmd_jobs::Facts;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::error::{NetError, Result};
-use crate::ops::{RemoteEntry, Sftp};
+use crate::ops::{RemoteEntry, RemoteFs};
 use crate::site::Site;
 
 /// Bytes moved per read/write round trip. SFTP likes large reads; 256 KiB keeps the window
@@ -24,11 +24,11 @@ pub const PART_SUFFIX: &str = scmd_jobs::PART_SUFFIX;
 #[derive(Debug, Clone)]
 pub struct Remote {
     site: Site,
-    sftp: Arc<dyn Sftp>,
+    sftp: Arc<dyn RemoteFs>,
 }
 
 impl Remote {
-    pub fn new(site: Site, sftp: Arc<dyn Sftp>) -> Remote {
+    pub fn new(site: Site, sftp: Arc<dyn RemoteFs>) -> Remote {
         Remote { site, sftp }
     }
 
@@ -40,7 +40,12 @@ impl Remote {
         self.site.authority()
     }
 
-    pub fn sftp(&self) -> &Arc<dyn Sftp> {
+    /// `scheme://user@host:port`: the key this connection is pooled under.
+    pub fn key(&self) -> String {
+        self.site.key()
+    }
+
+    pub fn sftp(&self) -> &Arc<dyn RemoteFs> {
         &self.sftp
     }
 
@@ -387,10 +392,10 @@ pub fn epoch_secs(time: SystemTime) -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::memory::MemorySftp;
+    use crate::memory::MemoryFs;
     use crate::site::Site;
 
-    fn remote(fs: Arc<MemorySftp>) -> Remote {
+    fn remote(fs: Arc<MemoryFs>) -> Remote {
         let site = Site::parse_url("sftp://mb@host:22/").unwrap();
         Remote::new(site, fs)
     }
@@ -401,7 +406,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_listing_has_the_parent_entry_and_real_metadata() {
-        let fs = MemorySftp::new()
+        let fs = MemoryFs::new()
             .with_file("/srv/www/index.html", b"<html>")
             .with_dir("/srv/www/assets")
             .with_file("/srv/www/.hidden", b"x");
@@ -427,7 +432,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_path_from_another_connection_is_refused() {
-        let r = remote(MemorySftp::new());
+        let r = remote(MemoryFs::new());
         let err = r.list(&VPath::local("/srv"), &CancelToken::new()).await;
         assert!(matches!(err, Err(NetError::NotRemote(_))), "{err:?}");
         let other = VPath::remote(scmd_core::Scheme::Sftp, "mb@elsewhere:22", "/srv");
@@ -436,7 +441,7 @@ mod tests {
 
     #[tokio::test]
     async fn mkdir_all_makes_what_is_missing_and_keeps_what_is_there() {
-        let fs = MemorySftp::new().with_dir("/srv");
+        let fs = MemoryFs::new().with_dir("/srv");
         let r = remote(fs.clone());
         r.create_dir_all(&path(&r, "/srv/a/b/c")).await.unwrap();
         assert!(fs.paths().contains(&"/srv/a/b/c".to_string()));
@@ -448,7 +453,7 @@ mod tests {
     async fn download_upload_and_remote_copy_move_every_byte() {
         let dir = tempfile::tempdir().unwrap();
         let payload: Vec<u8> = (0..300_000u32).map(|i| (i % 251) as u8).collect();
-        let fs = MemorySftp::new().with_file("/srv/big.bin", &payload);
+        let fs = MemoryFs::new().with_file("/srv/big.bin", &payload);
         let r = remote(fs.clone());
 
         // Remote → local, with progress.
@@ -489,7 +494,7 @@ mod tests {
     async fn a_cancelled_transfer_leaves_nothing_behind() {
         let dir = tempfile::tempdir().unwrap();
         let payload = vec![7u8; CHUNK * 3];
-        let fs = MemorySftp::new().with_file("/srv/big.bin", &payload);
+        let fs = MemoryFs::new().with_file("/srv/big.bin", &payload);
         let r = remote(fs.clone());
 
         let local = dir.path().join("big.bin");
@@ -512,7 +517,7 @@ mod tests {
 
     #[tokio::test]
     async fn the_servers_own_message_reaches_the_caller() {
-        let fs = MemorySftp::new()
+        let fs = MemoryFs::new()
             .with_dir("/srv")
             .break_path("/srv/locked", "permission denied");
         let r = remote(fs);
@@ -529,7 +534,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let local = dir.path().join("notes.txt");
         std::fs::write(&local, b"second version\n").unwrap();
-        let fs = MemorySftp::new().with_file("/srv/notes.txt", b"first version\n");
+        let fs = MemoryFs::new().with_file("/srv/notes.txt", b"first version\n");
         let r = remote(fs.clone());
         let mut ignore = |_: u64| true;
 
@@ -552,7 +557,7 @@ mod tests {
         assert_eq!(fs.file("/srv/new.txt").unwrap(), b"second version\n");
 
         // When the upload itself fails, the destination is untouched.
-        let fs = MemorySftp::new()
+        let fs = MemoryFs::new()
             .with_file("/srv/notes.txt", b"first version\n")
             .break_path("/srv/notes.txt.scmd-part", "quota exceeded");
         let r = remote(fs.clone());
@@ -567,7 +572,7 @@ mod tests {
     #[tokio::test]
     async fn fetch_to_brings_a_file_down_for_the_viewer() {
         let dir = tempfile::tempdir().unwrap();
-        let fs = MemorySftp::new().with_file("/srv/notes.txt", b"hello\n");
+        let fs = MemoryFs::new().with_file("/srv/notes.txt", b"hello\n");
         let r = remote(fs);
         let local = r
             .fetch_to(&path(&r, "/srv/notes.txt"), dir.path(), &CancelToken::new())
@@ -579,7 +584,7 @@ mod tests {
 
     #[tokio::test]
     async fn rename_moves_a_whole_subtree_and_meta_survives() {
-        let fs = MemorySftp::new()
+        let fs = MemoryFs::new()
             .with_file("/srv/a/x.txt", b"x")
             .with_dir("/srv/b");
         let r = remote(fs.clone());

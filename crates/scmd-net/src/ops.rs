@@ -123,10 +123,10 @@ impl<T: AsyncRead + AsyncWrite + Unpin + Send> Duplex for T {}
 /// The remote filesystem operations the netbox needs, with paths as the wire spells them.
 ///
 /// One real implementation ([`crate::ssh::SftpBackend`]) and one in-memory implementation
-/// ([`crate::memory::MemorySftp`]) so that everything above this line is tested without a
+/// ([`crate::memory::MemoryFs`]) so that everything above this line is tested without a
 /// server.
 #[async_trait]
-pub trait Sftp: Send + Sync + std::fmt::Debug {
+pub trait RemoteFs: Send + Sync + std::fmt::Debug {
     async fn read_dir(&self, path: &str) -> Result<Vec<RemoteEntry>>;
     /// `follow = false` reports a symlink as a symlink (`lstat`).
     async fn stat(&self, path: &str, follow: bool) -> Result<RemoteEntry>;

@@ -170,7 +170,9 @@ pub enum Request {
     },
     /// Close a connection.
     Disconnect {
-        authority: String,
+        /// The connection's key: `scheme://user@host:port`, which is what the pool holds it
+        /// under — the authority alone cannot tell `ftp` from `ftps` on one port.
+        key: String,
     },
     /// Copy a remote file into a temporary directory so the viewer or the editor can open it.
     Fetch {
@@ -395,8 +397,9 @@ pub enum Event {
         outcome: ConnectOutcome,
     },
     Disconnected {
-        authority: String,
-        /// Every host still connected, so the site list stays truthful.
+        /// `scheme://user@host:port`, as the request asked for.
+        key: String,
+        /// Every connection still open, so the site list stays truthful.
         connected: Vec<String>,
     },
     Fetched {
@@ -1545,18 +1548,19 @@ impl App {
                 site,
                 outcome,
             } => self.connection_result(panel, site, outcome),
-            Event::Disconnected {
-                authority,
-                connected,
-            } => {
+            Event::Disconnected { key, connected } => {
                 self.connected = connected;
+                let host = match key.split_once("://") {
+                    Some((_, authority)) => authority.to_string(),
+                    None => key.clone(),
+                };
                 let msg = self
                     .i18n
-                    .t_args("net-disconnected", &[("host", authority.clone().into())]);
+                    .t_args("net-disconnected", &[("host", host.into())]);
                 self.set_status(msg);
                 // A panel left on a closed connection goes home instead of showing a corpse.
                 for panel in 0..2 {
-                    if self.panels[panel].cwd.authority() == Some(authority.as_str()) {
+                    if scmd_net::Site::key_of(&self.panels[panel].cwd).as_deref() == Some(&key) {
                         // A tab locked to a directory on that connection cannot keep its
                         // promise: the lock comes off rather than the panel staying on a
                         // directory that is no longer reachable.
@@ -2138,14 +2142,14 @@ impl App {
             }
             KeyCode::Char('d') | KeyCode::Char('D') | KeyCode::Delete => {
                 if let Some(site) = rows.get(cursor) {
-                    let authority = site.authority();
-                    if self.connected.contains(&authority) {
+                    let key = site.key();
+                    if self.connected.contains(&key) {
                         self.mode = Mode::Normal;
-                        self.requests.push(Request::Disconnect { authority });
+                        self.requests.push(Request::Disconnect { key });
                     } else {
                         let msg = self
                             .i18n
-                            .t_args("net-not-connected", &[("host", authority.into())]);
+                            .t_args("net-not-connected", &[("host", site.authority().into())]);
                         self.set_status(msg);
                     }
                 }
@@ -2166,11 +2170,11 @@ impl App {
     /// The site list: the configured sites, plus any host connected by hand this session.
     pub fn site_rows(&self) -> Vec<Site> {
         let mut rows = self.sites.clone();
-        for authority in &self.connected {
-            if rows.iter().any(|s| &s.authority() == authority) {
+        for key in &self.connected {
+            if rows.iter().any(|s| &s.key() == key) {
                 continue;
             }
-            if let Ok(site) = Site::parse_url(&format!("sftp://{authority}/")) {
+            if let Ok(site) = Site::parse_url(&format!("{key}/")) {
                 rows.push(site);
             }
         }
@@ -4247,12 +4251,12 @@ impl App {
             number += 1;
             row
         };
-        for authority in &self.connected {
+        for key in &self.connected {
             let kind = self.i18n.t(crate::drives::Kind::Connection.label_key());
             rows.push(keyed(
-                format!("sftp://{authority}  {kind}"),
-                format!("sftp://{authority}/"),
-                self.panels[side].cwd.authority() == Some(authority.as_str()),
+                format!("{key}  {kind}"),
+                format!("{key}/"),
+                scmd_net::Site::key_of(&self.panels[side].cwd).as_deref() == Some(key.as_str()),
             ));
         }
         for service in &self.cfg.s3 {
@@ -5520,9 +5524,7 @@ impl App {
 
     /// The path a site's start directory has, if that host is already connected.
     fn connected_site_path(&self, site: &Site) -> Option<VPath> {
-        self.connected
-            .contains(&site.authority())
-            .then(|| site.start())
+        self.connected.contains(&site.key()).then(|| site.start())
     }
 
     /// What came back from a connection attempt.
@@ -5590,10 +5592,9 @@ impl App {
 
     /// `Alt+Shift+N`: close the connection the active panel is on.
     fn disconnect_active(&mut self) {
-        match self.panel().cwd.authority() {
-            Some(authority) => {
-                let authority = authority.to_string();
-                self.requests.push(Request::Disconnect { authority });
+        match scmd_net::Site::key_of(&self.panel().cwd) {
+            Some(key) => {
+                self.requests.push(Request::Disconnect { key });
             }
             None => {
                 let m = self.i18n.t("net-local-panel");
@@ -7421,9 +7422,13 @@ impl App {
             given => given,
         };
         let empty_to_none = |s: String| if s.is_empty() { None } else { Some(s) };
+        let scheme = match form.text_value("site.scheme") {
+            empty if empty.is_empty() => "sftp".to_string(),
+            given => given,
+        };
         let cfg = scmd_config::SiteCfg {
             id,
-            scheme: "sftp".to_string(),
+            scheme,
             host,
             port,
             user: empty_to_none(form.text_value("site.user")),
@@ -11519,6 +11524,7 @@ mod tests {
         assert_eq!(form.site, None, "Ins makes a new one, it does not edit");
 
         type_text(&mut app, "jump");
+        press(&mut app, "Down"); // the protocol, which stays as it is
         press(&mut app, "Down");
         type_text(&mut app, "jump.example.net");
         press(&mut app, "Down");
@@ -11552,6 +11558,7 @@ mod tests {
         assert!(app.cfg.sites.is_empty());
 
         // A port that is not a number is refused too, and nothing is stored.
+        press(&mut app, "Down"); // the protocol
         press(&mut app, "Down");
         type_text(&mut app, "host.example");
         press(&mut app, "Down");
@@ -11583,6 +11590,7 @@ mod tests {
         assert_eq!(form.text_value("site.host"), "old.example.net");
 
         // Clear the host and type another one: Backspace works where the caret is.
+        press(&mut app, "Down"); // the protocol
         press(&mut app, "Down");
         for _ in 0..40 {
             press(&mut app, "Backspace");
@@ -11598,6 +11606,7 @@ mod tests {
     fn a_key_file_is_asked_for_when_the_key_authentication_is_chosen() {
         let mut app = app();
         app.open_site_form(None);
+        press(&mut app, "Down"); // the protocol
         press(&mut app, "Down");
         type_text(&mut app, "host.example");
         // Down to the authentication choice, and pick the key file.
@@ -12800,7 +12809,7 @@ mod tests {
     #[test]
     fn the_drive_dialog_is_a_table_and_its_panels_are_numbered() {
         let mut app = app();
-        app.connected.push("mb@host:22".into());
+        app.connected.push("sftp://mb@host:22".into());
         app.run(Command::PanelDrive(scmd_cmd::Side::Left));
         let Mode::Pick(pick) = &app.mode else {
             panic!("no dialog: {:?}", app.mode)
@@ -16163,7 +16172,7 @@ abcdefghij
             site: Box::new(site()),
             outcome: ConnectOutcome::Open {
                 start: site().start(),
-                connected: vec![site().authority()],
+                connected: vec![site().key()],
             },
         });
         app.requests.clear();
@@ -16221,7 +16230,7 @@ abcdefghij
             site: Box::new(site.clone()),
             outcome: ConnectOutcome::Open {
                 start: site.start(),
-                connected: vec![site.authority()],
+                connected: vec![site.key()],
             },
         });
         assert_eq!(app.panels[0].cwd, site.start());
@@ -16229,7 +16238,7 @@ abcdefghij
             app.panels[0].cwd.to_string(),
             "sftp://mb@host.example:22/srv"
         );
-        assert!(app.connected.contains(&site.authority()));
+        assert!(app.connected.contains(&site.key()));
         assert!(app
             .take_requests()
             .iter()
@@ -16324,13 +16333,13 @@ abcdefghij
         let mut app = connected_app();
         press(&mut app, "Alt+Shift+N");
         match app.take_requests().into_iter().next() {
-            Some(Request::Disconnect { authority }) => {
-                assert_eq!(authority, "mb@host.example:22")
+            Some(Request::Disconnect { key }) => {
+                assert_eq!(key, "sftp://mb@host.example:22")
             }
             other => panic!("expected a disconnect, got {other:?}"),
         }
         app.handle_event(Event::Disconnected {
-            authority: "mb@host.example:22".into(),
+            key: "sftp://mb@host.example:22".into(),
             connected: Vec::new(),
         });
         assert!(app.panels[0].cwd.is_local(), "{}", app.panels[0].cwd);
@@ -16499,7 +16508,7 @@ abcdefghij
     #[test]
     fn the_site_list_shows_hosts_connected_by_hand_too() {
         let mut app = net_app();
-        app.connected = vec!["root@other:2222".into()];
+        app.connected = vec!["sftp://root@other:2222".into()];
         let rows = app.site_rows();
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].authority(), "mb@host.example:22");
@@ -16514,7 +16523,7 @@ abcdefghij
         press(&mut app, "Down");
         press(&mut app, "d");
         match app.take_requests().into_iter().next() {
-            Some(Request::Disconnect { authority }) => assert_eq!(authority, "root@other:2222"),
+            Some(Request::Disconnect { key }) => assert_eq!(key, "sftp://root@other:2222"),
             other => panic!("{other:?}"),
         }
     }

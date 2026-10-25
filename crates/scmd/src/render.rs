@@ -1861,7 +1861,7 @@ fn draw_sites(app: &App, buf: &mut Buffer, screen: Rect, cursor: usize) {
                 lines.push(format!("[{name}]"));
             }
         }
-        let mark = if app.connected.contains(&site.authority()) {
+        let mark = if app.connected.contains(&site.key()) {
             '*'
         } else {
             ' '
@@ -3665,7 +3665,7 @@ See the [docs](https://example.com/docs) for more.
     fn eyeball_drives() {
         let mut app = super::tests::app("far", "en");
         project(&mut app);
-        app.connected.push("mb@host:22".into());
+        app.connected.push("sftp://mb@host:22".into());
         app.run(scmd_cmd::Command::PanelDrive(scmd_cmd::Side::Left));
         println!("{}", frame(&mut app, 100, 28));
     }
@@ -4366,7 +4366,7 @@ third line
         site.id = "jump".into();
         site.group = Some("work".into());
         with_sites.sites = vec![site.clone()];
-        with_sites.connected = vec![site.authority()];
+        with_sites.connected = vec![site.key()];
         with_sites.handle_input(Input::Key("Alt+N".parse().unwrap()));
 
         let out = frame(&mut with_sites, 80, 24);
@@ -4636,7 +4636,7 @@ third line
             site: Box::new(site.clone()),
             outcome: crate::app::ConnectOutcome::Open {
                 start: site.start(),
-                connected: vec![site.authority()],
+                connected: vec![site.key()],
             },
         });
         app.handle_event(Event::Listed {

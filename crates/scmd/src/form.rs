@@ -329,8 +329,25 @@ impl Form {
             Some(("key", path)) => ("key", path.to_string()),
             _ => (auth.as_str(), String::new()),
         };
+        let scheme = match scmd_core::Scheme::parse(&cfg.scheme) {
+            Some(known) if known.is_remote() => known.as_str().to_string(),
+            // A `[[site]]` with a scheme this build does not know is shown as what it is
+            // closest to rather than silently turned into something else; the dialog's own
+            // validation then says so when OK is pressed.
+            _ => "sftp".to_string(),
+        };
         let fields = vec![
             Field::text("site.id", t("site-name"), cfg.id.clone()),
+            choice(
+                "site.scheme",
+                t("site-protocol"),
+                &[
+                    ("sftp", t("site-protocol-sftp")),
+                    ("ftp", t("site-protocol-ftp")),
+                    ("ftps", t("site-protocol-ftps")),
+                ],
+                &scheme,
+            ),
             Field::text("site.host", t("site-host"), cfg.host.clone()),
             Field::text(
                 "site.port",
@@ -346,6 +363,8 @@ impl Form {
             choice(
                 "site.auth",
                 t("site-auth"),
+                // FTP has no agent and no keys: it reads `ask`, and a user called
+                // `anonymous` or `ftp` logs in without being asked at all.
                 &[
                     ("agent", t("site-auth-agent")),
                     ("key", t("site-auth-key")),

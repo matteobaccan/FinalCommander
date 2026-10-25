@@ -28,6 +28,11 @@ impl Vfs for NetVfs {
         "sftp"
     }
 
+    /// What the netbox can do for one path, which depends on the protocol that path speaks.
+    fn caps_for(&self, path: &VPath) -> Caps {
+        caps_of(path.scheme())
+    }
+
     /// What SFTP version 3 actually gives us. No hard links, no extended attributes, and the
     /// UI asks before it offers (`docs/spec/04-vfs.md` §2).
     fn caps(&self) -> Caps {
@@ -55,6 +60,51 @@ impl Vfs for NetVfs {
     async fn stat(&self, path: &VPath) -> CoreResult<Entry> {
         let remote = self.pool.require(path)?;
         Ok(remote.stat(path).await?)
+    }
+}
+
+/// What each protocol the netbox serves can do.
+///
+/// This is the table the UI asks before it offers (`docs/spec/04-vfs.md` §2), and the
+/// differences are the protocols' own:
+///
+/// * **SFTP** is a filesystem protocol and behaves like one.
+/// * **FTP** can read, write, create, delete and rename. It has no links, no truncate and no
+///   random write, and it does not say SEEK: `REST` can start a transfer at an offset, but
+///   that costs a new data connection every time, which is not the cheap seek the viewer's hex
+///   mode asks SEEK about. (Resuming an interrupted transfer with `REST` is worth having and
+///   is in the backlog; until it is written, RESUME would be a promise nothing keeps.) Times
+///   and modes are extensions — `MFMT` and `SITE CHMOD` — that most servers do have, so they
+///   are offered, and a server that refuses says so in its own words.
+/// * **WebDAV** is HTTP: a `PUT` replaces a whole file and there is nothing to seek with, so
+///   no SEEK, no TRUNCATE, no RANDOM_WRITE and no RESUME. `MOVE` is one request and is atomic
+///   as far as the client can tell, which is more than SFTP version 3 offers.
+pub fn caps_of(scheme: scmd_core::Scheme) -> Caps {
+    let common = Caps::READ | Caps::WRITE | Caps::CREATE | Caps::DELETE | Caps::RENAME;
+    match scheme {
+        scmd_core::Scheme::Ftp | scmd_core::Scheme::Ftps => {
+            common | Caps::META_TIMES | Caps::META_MODE | Caps::CASE_SENSITIVE
+        }
+        scmd_core::Scheme::Dav | scmd_core::Scheme::Davs => {
+            common | Caps::META_TIMES | Caps::ATOMIC_RENAME | Caps::CASE_SENSITIVE
+        }
+        // SFTP, and anything else that reaches the netbox.
+        _ => {
+            Caps::READ
+                | Caps::WRITE
+                | Caps::CREATE
+                | Caps::DELETE
+                | Caps::RENAME
+                | Caps::SEEK
+                | Caps::TRUNCATE
+                | Caps::META_TIMES
+                | Caps::META_MODE
+                | Caps::META_OWNER
+                | Caps::LINKS
+                | Caps::RESUME
+                | Caps::RANDOM_WRITE
+                | Caps::CASE_SENSITIVE
+        }
     }
 }
 
@@ -127,7 +177,7 @@ impl Router {
 
     /// What the path's provider can do, for a UI that asks before it offers.
     pub fn caps_for(&self, path: &VPath) -> Caps {
-        self.provider(path).caps()
+        self.provider(path).caps_for(path)
     }
 }
 
@@ -199,7 +249,7 @@ pub fn unsupported(path: &VPath, detail: &str) -> Error {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::memory::MemorySftp;
+    use crate::memory::MemoryFs;
     use crate::remote::Remote;
     use crate::site::Site;
 
@@ -211,7 +261,7 @@ mod tests {
         let site = Site::parse_url("sftp://mb@host:22/srv").unwrap();
         pool.insert(Remote::new(
             site.clone(),
-            MemorySftp::new().with_file("/srv/remote.txt", b"yy"),
+            MemoryFs::new().with_file("/srv/remote.txt", b"yy"),
         ));
         let router = Router::new(pool);
 

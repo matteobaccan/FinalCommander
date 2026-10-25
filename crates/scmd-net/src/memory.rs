@@ -1,4 +1,4 @@
-//! An in-memory [`Sftp`] implementation.
+//! An in-memory [`RemoteFs`] implementation.
 //!
 //! It exists so that the panel, the job engine and the netbox's own path handling are tested
 //! without a server: the layer that talks to `russh` is thin by design, and everything above
@@ -15,7 +15,7 @@ use scmd_core::EntryKind;
 use tokio::io::AsyncWrite;
 
 use crate::error::{NetError, Result};
-use crate::ops::{Reader, RemoteEntry, Sftp, Writer};
+use crate::ops::{Reader, RemoteEntry, RemoteFs, Writer};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Node {
@@ -35,17 +35,17 @@ enum Node {
 
 /// A fake SFTP server holding its whole filesystem in memory.
 #[derive(Debug, Default)]
-pub struct MemorySftp {
+pub struct MemoryFs {
     /// Behind its own `Arc` so that a writer can commit after the call that made it returned.
     shared: Arc<Mutex<BTreeMap<String, Node>>>,
     /// Paths that fail, with the message the "server" returns. For error-path tests.
     pub broken: Mutex<BTreeMap<String, String>>,
 }
 
-impl MemorySftp {
+impl MemoryFs {
     /// A server with `/` and nothing else.
-    pub fn new() -> Arc<MemorySftp> {
-        let fs = MemorySftp::default();
+    pub fn new() -> Arc<MemoryFs> {
+        let fs = MemoryFs::default();
         fs.shared.lock().unwrap().insert(
             "/".to_string(),
             Node::Dir {
@@ -178,7 +178,7 @@ fn entry_from(name: String, node: &Node) -> RemoteEntry {
 }
 
 #[async_trait]
-impl Sftp for MemorySftp {
+impl RemoteFs for MemoryFs {
     async fn read_dir(&self, path: &str) -> Result<Vec<RemoteEntry>> {
         let path = normalise(path);
         self.check(&path)?;

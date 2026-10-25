@@ -3,10 +3,41 @@
 `Alt+F1` and `Alt+F2` list the stored connections beside the drives. `n` types a URL:
 
     sftp://me@host/srv/www
+    ftp://me@host/pub
+    ftps://me@host/pub        the same server with TLS
 
 A connected panel is an ordinary panel: the keys are the same, a copy to or from it is an
 ordinary job with an ordinary progress bar, and `F4` edits a remote file by bringing it here
-and writing it back on save.
+and writing it back on save. The port follows the protocol when the URL does not say — 22 for
+SFTP, 21 for both spellings of FTP — and one server offering `ftp` and `ftps` on port 21 is two
+connections, not one.
+
+## What FTP cannot do, and says so
+
+SFTP is a filesystem; FTP is a file *transfer* protocol, and the difference shows:
+
+* **No links.** Nothing in FTP makes one, and a listing only sometimes says where one points.
+* **Nothing to seek with.** The viewer reads a remote file by fetching it first either way, so
+  this is only visible on a very large file, where the wait is the whole file rather than the
+  first page.
+* **Times and modes are extensions.** `MFMT` sets a time and `SITE CHMOD` sets a mode; most
+  servers have both, and one that has not says so in its own words rather than quietly losing
+  the timestamp of a copy.
+* **A date is only trustworthy from a modern server.** `MLSD`, which this asks for first,
+  gives the time in UTC to the second. A server too old for it answers with the text its own
+  `ls` prints, where the year is missing on recent files and the time zone is never stated —
+  so those rows are shown with **no** date at all. A date wrong by a year is worse than none:
+  sorting by it, and "only files newer than these" in the copy dialog, would both believe it.
+
+A transfer opens a connection of its own and logs in again, which is what graphical FTP clients
+do and what keeps a listing from waiting behind a download. A password is therefore kept in
+memory while the connection is open — it is never written anywhere — and a user called
+`anonymous` or `ftp` is not asked for one at all.
+
+FTPS is explicit TLS: the connection starts in the clear and is secured with `AUTH TLS` before
+the password is sent, and the data connections are protected too. The certificate is checked
+against this machine's own authorities, which is what makes a server behind a company CA work
+without anything being turned off. Implicit FTPS on port 990 is deprecated and is not here.
 
 A host key the program has never seen stops and shows it before anything is sent, and records
 it only if you say so. A password is asked for when it is needed, never echoed and never

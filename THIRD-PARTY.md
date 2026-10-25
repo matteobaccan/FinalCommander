@@ -35,6 +35,8 @@ Unicode-3.0, or MPL-2.0 at file level). The policy and the allow-list live in `d
 | `dirs` (and `option-ext`, MPL-2.0) | MIT OR Apache-2.0 | per-OS configuration directories |
 | `async-trait` | MIT OR Apache-2.0 | the `Vfs` trait |
 | `russh`, `russh-sftp` | Apache-2.0 | SSH and SFTP in the netbox |
+| `suppaftp` | Apache-2.0 OR MIT | FTP and FTPS in the netbox (it carries `chrono`, MIT OR Apache-2.0, for the `MDTM` reply it parses itself) |
+| `rustls-native-certs` | MIT OR Apache-2.0 OR ISC | the machine's own certificate authorities, for FTPS — already in the tree under `reqwest` |
 | `ring` (russh's crypto backend, chosen over `aws-lc-rs`) | Apache-2.0 AND ISC | ciphers, key exchange, signatures |
 | `ssh-key`, `ssh-encoding`, `ssh-cipher` | Apache-2.0 OR MIT | OpenSSH key and `known_hosts` formats |
 | `zip` | MIT | reading and writing zip archives |

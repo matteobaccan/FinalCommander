@@ -31,7 +31,7 @@ seven interface languages, the whole help and the manual page are compiled into 
 | --- | --- |
 | A file manager | Two panels, the selection matrix, five view modes, sorting, filters, quick search, and the command line with the shell behind it (`Ctrl+O`) |
 | An archiver | `Enter` opens a zip, a 7z or a tarball **as a panel**; `Shift+F1` builds one; `Shift+F2` extracts; `Shift+F3` tests every entry against the format's own checks |
-| An SFTP client | `sftp://user@host/dir` is a panel. Copy between two servers with `F5`; edit a remote file with `F4` and `F2` writes it back atomically |
+| An SFTP and FTP client | `sftp://user@host/dir`, `ftp://…` and `ftps://…` are panels. Copy between two servers with `F5`; edit a remote file with `F4` and `F2` writes it back atomically |
 | `ssh -L` | `8080:db.internal:5432` forwards a port over the connection the panel is already on — no second login, no second terminal |
 | An S3 browser | `s3://logs/2024/08/` is a panel, on AWS or on MinIO, Ceph, Garage, R2, Wasabi. A bucket of 1.7 million objects opens as fast as one with ten |
 | A pager for huge files | The viewer (`F3`) never loads a file: a 40 GB log opens at once and `End` is one seek. Text, dump, hex, and encodings it detects |
@@ -191,11 +191,11 @@ every key on the screen you are looking at does.
   Go, shell, SQL, HTML, XML, CSS, Markdown, JSON, TOML, YAML, INI, Make, Dockerfile, Lua and
   Perl. On a binary it is a hex editor instead, with a patch list and an assembler.
 - **Archives**: zip, 7z and the tar family (plain, gzip, bzip2, xz, zstd), all with pure-Rust
-  decoders — nothing shells out, and no `7z.dll`. `Enter` opens one as a panel, `F3` reads an entry, `F5` copies
-  out through the same job engine as any other copy.
-- **Servers and buckets**: SFTP panels and transfers, a session editor, host-key checking
-  against `known_hosts`, port forwarding, and `s3://` panels with the credentials read from the
-  environment or `~/.aws/credentials` — never written into the configuration file.
+  decoders — nothing shells out, and no `7z.dll`. `Enter` opens one as a panel, `F3` reads an
+  entry, `F5` copies out through the same job engine as any other copy.
+- **Servers and buckets**: SFTP, FTP and FTPS panels and transfers, a session editor, host-key
+  checking against `known_hosts`, port forwarding, and `s3://` panels with the credentials read
+  from the environment or `~/.aws/credentials` — never written into the configuration file.
 - **The program itself**: six themes, seven interface languages switchable while it runs, two
   keymap profiles (FAR and mc) and your own on top, macros, the screens list (`F12`), plugin
   commands (`F11`), a help system whose key pages are generated from the keymap in force, and a
@@ -255,7 +255,7 @@ crates/scmd-arc      archives: zip, 7z and the tar family, reading, writing and 
 crates/scmd-view     the viewer: windowed reads, encodings, text/dump/hex, search, disasm
 crates/scmd-edit     the editor: buffer, undo, blocks, search/replace, atomic save
 crates/scmd-syntax   the syntax scanner: one line, and the state the line before it left
-crates/scmd-net      netbox: SFTP, sites, connection pool, tunnels, routed job filesystem
+crates/scmd-net      netbox: SFTP and FTP/FTPS, sites, pool, tunnels, routed job filesystem
 crates/scmd-s3       object storage: SigV4, listings, the S3 provider and a fake service
 crates/scmd-find     find by name and by content, as a walk the interface reads as it runs
 crates/scmd-cmd      command vocabulary, keys, keymap profiles (far, mc)

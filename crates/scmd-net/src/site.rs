@@ -87,9 +87,28 @@ impl Site {
         }
     }
 
-    /// `user@host:port` — the key a connection is pooled under and what a [`VPath`] carries.
+    /// `user@host:port` — what a [`VPath`] carries.
     pub fn authority(&self) -> String {
         format!("{}@{}:{}", self.user, self.host, self.port)
+    }
+
+    /// `sftp://user@host:port` — the key a connection is pooled under.
+    ///
+    /// The scheme is part of it because the authority alone is not enough: a server may offer
+    /// both `ftp` and `ftps` on port 21, and those are two connections, not one. It is also
+    /// what the site list and the drive list show for a host connected by hand, which is why
+    /// it is a URL and not a tuple.
+    pub fn key(&self) -> String {
+        format!("{}://{}", self.scheme.as_str(), self.authority())
+    }
+
+    /// The same, for a path rather than a site.
+    pub fn key_of(path: &VPath) -> Option<String> {
+        Some(format!(
+            "{}://{}",
+            path.scheme().as_str(),
+            path.authority()?
+        ))
     }
 
     /// The path a panel opens when the site is connected.
@@ -143,6 +162,7 @@ impl Site {
         };
         let mut site = Site::new("");
         site.scheme = scheme;
+        site.port = scheme.default_port().unwrap_or(DEFAULT_SSH_PORT);
         site.start_dir = if start_dir.is_empty() {
             "/".to_string()
         } else {
@@ -189,7 +209,10 @@ impl Site {
             .filter(|s| s.is_remote())
             .ok_or_else(|| NetError::Connect {
                 host: cfg.host.clone(),
-                detail: format!("unknown scheme `{}` (sftp)", cfg.scheme),
+                detail: format!(
+                    "unknown scheme `{}` (sftp | ftp | ftps | webdav | webdavs)",
+                    cfg.scheme
+                ),
             })?;
         if cfg.host.trim().is_empty() {
             return Err(NetError::Connect {
@@ -200,6 +223,7 @@ impl Site {
         let mut site = Site::new(cfg.host.trim());
         site.id = cfg.id.clone();
         site.scheme = scheme;
+        site.port = scheme.default_port().unwrap_or(DEFAULT_SSH_PORT);
         if let Some(port) = cfg.port {
             site.port = port;
         }
@@ -321,9 +345,40 @@ mod tests {
 
     #[test]
     fn rubbish_is_refused_with_the_text_that_was_given() {
-        for text in ["", "sftp://", "sftp://@host", "ftp://host", "host:nonsense"] {
+        for text in ["", "sftp://", "sftp://@host", "nfs://host", "host:nonsense"] {
             assert!(Site::parse_url(text).is_err(), "{text} was accepted");
         }
+    }
+
+    #[test]
+    fn every_scheme_a_site_can_name_knows_its_own_port_and_key() {
+        for (url, port) in [
+            ("sftp://mb@host/", 22),
+            ("ftp://mb@host/", 21),
+            ("ftps://mb@host/", 21),
+            ("ftpes://mb@host/", 21),
+            ("webdav://mb@host/", 80),
+            ("webdavs://mb@host/", 443),
+        ] {
+            let site = Site::parse_url(url).unwrap_or_else(|e| panic!("{url}: {e}"));
+            assert_eq!(site.port, port, "{url}");
+            // A port in the URL still wins over the scheme's own.
+            let explicit = Site::parse_url(&url.replace("host/", "host:8021/")).unwrap();
+            assert_eq!(explicit.port, 8021, "{url}");
+        }
+
+        // The key carries the scheme, which the authority does not: one server offering both
+        // spellings of FTP on port 21 is two connections and has to be two keys.
+        let plain = Site::parse_url("ftp://mb@host/").unwrap();
+        let secure = Site::parse_url("ftps://mb@host/").unwrap();
+        assert_eq!(plain.authority(), secure.authority());
+        assert_ne!(plain.key(), secure.key());
+        assert_eq!(secure.key(), "ftps://mb@host:21");
+        assert_eq!(
+            Site::key_of(&secure.start()).as_deref(),
+            Some(secure.key().as_str())
+        );
+        assert_eq!(Site::key_of(&VPath::local("/srv")), None);
     }
 
     #[test]

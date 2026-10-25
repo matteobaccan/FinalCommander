@@ -8,6 +8,49 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **FTP and FTPS panels**, in the netbox beside SFTP. `ftp://me@host/pub` and
+  `ftps://me@host/pub` are panels; the session editor has a protocol row; the port follows the
+  protocol when a URL does not name one, and a server offering both spellings on port 21 is two
+  connections rather than one, because a connection is now keyed by its scheme as well as its
+  host.
+
+  It is the same `RemoteFs` trait the SFTP client implements, so everything above that line —
+  the panel, the viewer, the editor, the job engine, the synchroniser, the finder — works on an
+  `ftp://` path without knowing that it is one. What the protocol *cannot* do is said once, in
+  the capability table, rather than discovered halfway through an operation: no links, no
+  truncate, no random write, and no cheap seek.
+
+  Three things in it are worth knowing about:
+
+  **A transfer gets a connection of its own.** FTP sends a file's bytes over a second socket
+  and a control connection can only have one of those at a time, so holding it for the length
+  of a download would make a listing wait — and would deadlock a copy from one directory of a
+  server to another, which reads and writes at once. So a transfer dials and logs in again,
+  which is what every graphical FTP client does. The password is therefore kept in memory
+  while the connection is open; it is never written anywhere, and `anonymous` and `ftp` are
+  not asked for one at all.
+
+  **An upload is not finished until the server says so.** Closing the writer shuts the data
+  connection *and* reads the reply on the control connection, and a refusal there is reported
+  as the error it is. Skipping that is exactly how an upload comes to look successful and leave
+  nothing on the server.
+
+  **A `LIST` row carries no date.** `MLSD` is asked for first and gives the time in UTC to the
+  second. A server too old for it answers with the text its own `ls` prints, where the year is
+  missing on recent files and the time zone is never stated — so those rows are shown with no
+  date at all. A date wrong by a year is worse than no date, because sorting by it and "only
+  files newer than these" would both believe it.
+
+  Times and modes travel where the server can take them, through `MFMT` and `SITE CHMOD`, and
+  a server that has neither says so in its own words rather than quietly losing a timestamp.
+  FTPS is explicit TLS — `AUTH TLS` before the password, protected data connections, the
+  certificate checked against this machine's own authorities, which is what makes a server
+  behind a company CA work with nothing turned off.
+
+  The tests run against an FTP server inside the test binary: a login, both listing commands,
+  both passive negotiations, a download, an upload, and the awkward parts of the protocol over
+  a real socket.
+
 - **7z, read and written, in pure Rust.** `Enter` opens a `.7z` as a panel, `F3` reads an entry
   out of it, `F5` copies out, `Shift+F1` builds one, `Shift+F2` extracts one, `Shift+F3` tests
   every entry, and `F4`/`F6`/`F8` inside one change it — the same seven things that already

@@ -1,5 +1,5 @@
 //! The thin layer that actually talks SSH: everything above it is tested against
-//! [`crate::memory::MemorySftp`].
+//! [`crate::memory::MemoryFs`].
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -16,7 +16,7 @@ use russh_sftp::protocol::{FileAttributes, FileType, OpenFlags};
 use scmd_core::EntryKind;
 
 use crate::error::{NetError, Result, SecretKind};
-use crate::ops::{Reader, RemoteEntry, Sftp, Writer};
+use crate::ops::{Reader, RemoteEntry, RemoteFs, Writer};
 use crate::remote::Remote;
 use crate::site::{home_dir, Auth, Site};
 
@@ -302,7 +302,7 @@ fn russh_err(site: &Site, e: russh::Error) -> NetError {
     }
 }
 
-/// [`Sftp`] over a live russh-sftp session. `keep` holds the SSH connection open for as long
+/// [`RemoteFs`] over a live russh-sftp session. `keep` holds the SSH connection open for as long
 /// as the subsystem is in use.
 struct SftpBackend {
     session: SftpSession,
@@ -341,7 +341,7 @@ fn name_of(path: &str) -> String {
 }
 
 #[async_trait]
-impl Sftp for SftpBackend {
+impl RemoteFs for SftpBackend {
     /// `direct-tcpip` over the session the panel is already using: `ssh -L` without the ssh.
     ///
     /// The originator the server is told is the loopback address and port zero. It is not a
