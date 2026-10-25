@@ -1322,6 +1322,21 @@ fn draw_quick_view(app: &mut App, index: usize, area: Rect, buf: &mut Buffer) {
     let inner = widgets::draw_pane(buf, &app.theme, area, &title, index == app.active);
     let base = app.theme.panel();
 
+    // A folder has no bytes to preview, and FAR fills the frame with what the device under
+    // it has to say instead — which is the same block the information panel draws.
+    let other = &app.panels[1 - index];
+    if let Some(entry) = other.current().filter(|e| e.opens_as_dir()) {
+        let mut lines: Vec<(String, String)> =
+            vec![(app.i18n.t("info-folder"), entry.name_str().into_owned())];
+        if let Some(mtime) = entry.mtime {
+            lines.push((app.i18n.t("info-modified"), widgets::format_mtime(mtime)));
+        }
+        lines.push((String::new(), String::new()));
+        lines.extend(device_lines(app, &app.panels[1 - index]));
+        draw_pairs(app, buf, inner, &lines);
+        return;
+    }
+
     app.quick_view_for(1 - index);
     // A page in the preview is a page of what is on screen, so the keys need the geometry.
     app.quick_size = (inner.w.saturating_sub(1), inner.h);
@@ -1413,17 +1428,81 @@ fn draw_tree(app: &mut App, index: usize, area: Rect, buf: &mut Buffer) {
 
 /// The info panel (`Ctrl+L`): what the other panel is looking at, and what is under its
 /// cursor. Everything here is already known — nothing is read from the disk to draw it.
+/// What the device under a directory has to say: what it holds, what is left on it, how big
+/// its allocation unit is, how much memory the machine has, and what the clusters cost the
+/// listing on screen. The information panel and a quick view of a folder both show it, which
+/// is what FAR does with the same numbers.
+fn device_lines(app: &App, panel: &crate::panel::Panel) -> Vec<(String, String)> {
+    let mut lines: Vec<(String, String)> = Vec::new();
+    let t = |id: &str| app.i18n.t(id);
+    // The device, as FAR's information panel has it: what it holds, what is left, and how
+    // big its allocation unit is. A server and the inside of an archive have none of this.
+    if let Some(d) = panel.disk {
+        lines.push((
+            t("info-device"),
+            app.i18n.t_args(
+                "info-device-value",
+                &[
+                    ("total", fcmd_core::format_size(d.total).into()),
+                    ("free", fcmd_core::format_size(d.free).into()),
+                    ("cluster", fcmd_core::format_size(d.cluster).into()),
+                ],
+            ),
+        ));
+    }
+    if let Some(m) = fcmd_platform::memory() {
+        lines.push((
+            t("info-memory"),
+            match m.available {
+                Some(free) => app.i18n.t_args(
+                    "info-memory-value",
+                    &[
+                        ("free", fcmd_core::format_size(free).into()),
+                        ("total", fcmd_core::format_size(m.total).into()),
+                    ],
+                ),
+                // macOS will say how much there is and not how much is free without a great
+                // deal more machinery; half an answer beats a wrong one.
+                None => app.i18n.t_args(
+                    "info-memory-total",
+                    &[("total", fcmd_core::format_size(m.total).into())],
+                ),
+            },
+        ));
+    }
+    let totals = &panel.listing.totals;
+    lines.push((
+        t("info-contents"),
+        app.i18n.t_args(
+            "info-contents-value",
+            &[
+                ("files", (totals.files as i64).into()),
+                ("dirs", (totals.dirs as i64).into()),
+                ("bytes", fcmd_core::format_size(totals.bytes).into()),
+            ],
+        ),
+    ));
+    // What the cluster size costs: the tail of the last cluster of every file, which is the
+    // figure FAR calls slack and the reason a directory of small files takes more room than
+    // it holds. Only with a cluster size to count it with, and counted over the listing that
+    // is on screen rather than down the tree.
+    if let Some(cluster) = panel.disk.map(|d| d.cluster).filter(|c| *c > 0) {
+        let slack: u64 = (0..panel.listing.len())
+            .filter_map(|row| panel.listing.row(row))
+            .filter(|e| !e.kind.is_dirlike())
+            .map(|e| fcmd_core::allocated(e.size, cluster) - e.size)
+            .sum();
+        lines.push((t("info-slack"), fcmd_core::format_size(slack)));
+    }
+    lines
+}
+
 fn draw_info(app: &mut App, index: usize, area: Rect, buf: &mut Buffer) {
     if area.w < 8 || area.h < 3 {
         return;
     }
     let title = app.i18n.t("panel-info");
     let inner = widgets::draw_pane(buf, &app.theme, area, &title, index == app.active);
-    let base = app.theme.panel();
-    let label = Style::new(
-        app.theme.color("panel.header.fg"),
-        app.theme.color("panel.bg"),
-    );
 
     let other = &app.panels[1 - index];
     let mut lines: Vec<(String, String)> = Vec::new();
@@ -1459,65 +1538,8 @@ fn draw_info(app: &mut App, index: usize, area: Rect, buf: &mut Buffer) {
             t("info-kind-local")
         },
     ));
-    // The device, as FAR's information panel has it: what it holds, what is left, and how
-    // big its allocation unit is. A server and the inside of an archive have none of this.
-    if let Some(d) = other.disk {
-        lines.push((
-            t("info-device"),
-            app.i18n.t_args(
-                "info-device-value",
-                &[
-                    ("total", fcmd_core::format_size(d.total).into()),
-                    ("free", fcmd_core::format_size(d.free).into()),
-                    ("cluster", fcmd_core::format_size(d.cluster).into()),
-                ],
-            ),
-        ));
-    }
-    if let Some(m) = fcmd_platform::memory() {
-        lines.push((
-            t("info-memory"),
-            match m.available {
-                Some(free) => app.i18n.t_args(
-                    "info-memory-value",
-                    &[
-                        ("free", fcmd_core::format_size(free).into()),
-                        ("total", fcmd_core::format_size(m.total).into()),
-                    ],
-                ),
-                // macOS will say how much there is and not how much is free without a great
-                // deal more machinery; half an answer beats a wrong one.
-                None => app.i18n.t_args(
-                    "info-memory-total",
-                    &[("total", fcmd_core::format_size(m.total).into())],
-                ),
-            },
-        ));
-    }
+    lines.extend(device_lines(app, other));
     let totals = &other.listing.totals;
-    lines.push((
-        t("info-contents"),
-        app.i18n.t_args(
-            "info-contents-value",
-            &[
-                ("files", (totals.files as i64).into()),
-                ("dirs", (totals.dirs as i64).into()),
-                ("bytes", fcmd_core::format_size(totals.bytes).into()),
-            ],
-        ),
-    ));
-    // What the cluster size costs: the tail of the last cluster of every file, which is the
-    // figure FAR calls slack and the reason a directory of small files takes more room than
-    // it holds. Only with a cluster size to count it with, and counted over the listing that
-    // is on screen rather than down the tree.
-    if let Some(cluster) = other.disk.map(|d| d.cluster).filter(|c| *c > 0) {
-        let slack: u64 = (0..other.listing.len())
-            .filter_map(|row| other.listing.row(row))
-            .filter(|e| !e.kind.is_dirlike())
-            .map(|e| fcmd_core::allocated(e.size, cluster) - e.size)
-            .sum();
-        lines.push((t("info-slack"), fcmd_core::format_size(slack)));
-    }
     if !other.selection.is_empty() {
         lines.push((
             t("info-selected"),
@@ -1544,6 +1566,17 @@ fn draw_info(app: &mut App, index: usize, area: Rect, buf: &mut Buffer) {
         }
     }
 
+    draw_pairs(app, buf, inner, &lines);
+}
+
+/// A column of labels and a column of values, as the information panel and the quick view of
+/// a folder both want them: the labels in the header colour, aligned on the widest of them.
+fn draw_pairs(app: &App, buf: &mut Buffer, inner: Rect, lines: &[(String, String)]) {
+    let base = app.theme.panel();
+    let label = Style::new(
+        app.theme.color("panel.header.fg"),
+        app.theme.color("panel.bg"),
+    );
     let width = lines
         .iter()
         .map(|(k, _)| unicode_width::UnicodeWidthStr::width(k.as_str()))
@@ -5011,10 +5044,13 @@ third line
         assert!(out.contains("something else entirely"), "{out}");
         assert!(!out.contains("the first line"), "{out}");
 
-        // A directory says what it is rather than showing an empty frame.
+        // A folder has no bytes to preview, so the frame fills with what the device under it
+        // has to say — the same block the information panel draws, as FAR does.
         app.handle_input(Input::Key("Home".parse().unwrap()));
         let out = frame(&mut app, 100, 14);
-        assert!(out.contains("is a directory"), "{out}");
+        assert!(out.contains("Folder"), "{out}");
+        assert!(out.contains("Device") || out.contains("Memory"), "{out}");
+        assert!(out.contains("Holds"), "the directory's own totals: {out}");
 
         // And the key puts the files back.
         app.handle_input(Input::Key("Ctrl+Q".parse().unwrap()));

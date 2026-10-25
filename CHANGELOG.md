@@ -56,6 +56,13 @@ Notable changes, newest first. The format follows
   the column FAR puts second. A panel whose device said nothing — a server, an archive —
   has no such column rather than a blank one.
 
+- **A quick view of a folder says something.** `Ctrl+Q` on a directory used to print one
+  line — that it is a directory — and leave the rest of the frame empty. It now fills with
+  what FAR puts there: the folder and when it was last written, then what the device under it
+  holds, what is left on it, how big its clusters are, how much memory the machine has, what
+  the directory holds and what the cluster size costs it. The same block the information
+  panel draws, because it is the same question asked from the other side.
+
 - **The detailed view has FAR's columns.** `Ctrl+5` showed the name, the size, one date and
   the attributes; it now shows what the file was written, when it was made and when it was
   last read, in FAR's order, with the attributes after them. The two extra dates are dropped,

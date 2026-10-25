@@ -5,14 +5,19 @@ use std::path::Path;
 
 use super::{Disk, Memory};
 
+// `statvfs` does not agree with itself across the Unixes: the block counts are 64 bits on
+// Linux and 32 on macOS, while the fragment size is 64 on both. The casts are what lets one
+// expression serve either, and they are no-ops where the type is already wide enough — which
+// is why clippy has to be told that here and nowhere else.
+#[allow(clippy::unnecessary_cast)]
 pub fn disk(path: &Path) -> Option<Disk> {
     let stat = nix::sys::statvfs::statvfs(path).ok()?;
-    let unit = stat.fragment_size();
+    let unit = stat.fragment_size() as u64;
     Some(Disk {
-        total: stat.blocks() * unit,
+        total: stat.blocks() as u64 * unit,
         // `blocks_available` is what an unprivileged process may actually use; the free count
         // includes the reserve only root can touch, which is not room to plan a copy against.
-        free: stat.blocks_available() * unit,
+        free: stat.blocks_available() as u64 * unit,
         cluster: unit,
     })
 }

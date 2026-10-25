@@ -653,6 +653,7 @@ info-kind-remote = auf { $host }
 info-kind-archive = in { $name }
 info-kind-list = eine Dateiliste
 info-device = Laufwerk
+info-folder = Ordner
 info-device-value = { $total }, { $free } frei, Cluster { $cluster }
 info-slack = Verschnitt
 info-memory = Speicher

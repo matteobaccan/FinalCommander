@@ -36,7 +36,8 @@ the output; `Ctrl+O` brings the panels back.
 `Ctrl+R` re-reads. `Ctrl+L` turns the other panel into an information panel — what the device
 holds and what is left on it, how big its clusters are and what they cost this directory, how
 much memory the machine has, and the row under the cursor — `Ctrl+Q` into a
-preview of the file under the cursor, `Ctrl+T` into a directory tree.
+preview of the file under the cursor — or, on a folder, into the same block of device and
+directory figures the information panel shows — `Ctrl+T` into a directory tree.
 
 A local panel also re-reads itself: a file that arrives from a build, a download or another
 program appears without being asked for, and the cursor stays on the name it was on. The

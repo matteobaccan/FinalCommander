@@ -653,6 +653,7 @@ info-kind-remote = 在 { $host }
 info-kind-archive = 在 { $name } 里
 info-kind-list = 一份文件清单
 info-device = 磁盘
+info-folder = 文件夹
 info-device-value = 共 { $total }，可用 { $free }，簇 { $cluster }
 info-slack = 浪费
 info-memory = 内存

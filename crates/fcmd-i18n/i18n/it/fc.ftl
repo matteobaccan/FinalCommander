@@ -653,6 +653,7 @@ info-kind-remote = su { $host }
 info-kind-archive = dentro { $name }
 info-kind-list = un elenco di file
 info-device = Disco
+info-folder = Cartella
 info-device-value = { $total }, { $free } liberi, cluster da { $cluster }
 info-slack = Spreco
 info-memory = Memoria

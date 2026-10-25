@@ -661,6 +661,7 @@ info-kind-remote = on { $host }
 info-kind-archive = inside { $name }
 info-kind-list = a list of files
 info-device = Device
+info-folder = Folder
 info-device-value = { $total }, { $free } free, { $cluster } clusters
 info-slack = Slack
 info-memory = Memory

@@ -46,9 +46,22 @@ All three must be clean. `cargo deny check` is the fourth (licences and advisori
 `deny.toml`); it runs in CI and is worth installing locally when touching dependencies.
 
 CI (`.github/workflows/ci.yml`) runs four jobs on every push: `fmt + clippy`, `test` on
-ubuntu/macos/windows, `cargo-deny`, and a release build on all three. Windows is a job of its
-own and can fail alone — a test that writes to a fixed `/tmp` path or assumes `/` separators
-is the usual cause.
+ubuntu/macos/windows, `cargo-deny`, and a release build on all three. Each platform's job can
+fail alone — a test that writes to a fixed `/tmp` path or assumes `/` separators is the usual
+cause on Windows, and a type that is not the same width on every Unix is the usual one on
+macOS (`statvfs` counts blocks in 32 bits there and 64 on Linux).
+
+Anything with a `#[cfg]` in it is worth type-checking against the other platforms before
+pushing, which costs seconds and saves a red build:
+
+```sh
+rustup target add x86_64-pc-windows-msvc aarch64-apple-darwin
+cargo check --target x86_64-pc-windows-msvc -p fcmd-platform --all-targets
+cargo check --target aarch64-apple-darwin  -p fcmd-platform --all-targets
+```
+
+(The whole workspace will not `check` for Windows from here — `ring` wants a C toolchain for
+that target — but the crates that carry the `#[cfg]`s will.)
 
 ## Where things are
 

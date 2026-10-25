@@ -653,6 +653,7 @@ info-kind-remote = на { $host }
 info-kind-archive = внутри { $name }
 info-kind-list = список файлов
 info-device = Устройство
+info-folder = Папка
 info-device-value = { $total }, свободно { $free }, кластер { $cluster }
 info-slack = Потери
 info-memory = Память
