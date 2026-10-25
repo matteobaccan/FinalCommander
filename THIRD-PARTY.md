@@ -59,6 +59,7 @@ Unicode-3.0, or MPL-2.0 at file level). The policy and the allow-list live in `d
 | `rand` | MIT OR Apache-2.0 | the random name a wipe renames to, and test fixtures |
 | `serde_json` | MIT OR Apache-2.0 | the plugin protocol |
 | `clap_mangen` | MIT OR Apache-2.0 | generating the manual page from the command line |
+| `pulldown-cmark` (with `pulldown-cmark-escape`, MIT, and `unicase`, MIT OR Apache-2.0) | MIT | Markdown to HTML in `scmd-site`, the generator for the project's web site — not in the program: `scmd` does not link it |
 | `tempfile` (dev only) | MIT OR Apache-2.0 | filesystem tests |
 
 Two dependencies are multi-licensed with a copyleft option we do **not** take: `r-efi`

@@ -1,0 +1,21 @@
+[package]
+name = "scmd-site"
+description = "SupremeCommander: the generator for the project's web site (GitHub Pages)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+# Not part of the program: nothing here is linked into `scmd`, and a release never builds it.
+publish = false
+
+[dependencies]
+# Markdown to HTML. The repository's own documents are the site's content, and writing a
+# second Markdown reader — tables, nested lists, entities, the lot — to put them on a page
+# would be a worse version of this one. It is only in this crate: the binary a user downloads
+# does not contain it.
+pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }
+
+[dev-dependencies]
+tempfile = "3"

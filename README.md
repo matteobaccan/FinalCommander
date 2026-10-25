@@ -265,7 +265,17 @@ crates/scmd-plug     the plugin tier: manifests, discovery, running a command
 crates/scmd-ui       cell buffer, colours, themes, panel and chrome widgets
 crates/scmd-tui      the terminal backend: input decoding and diffed painting
 crates/scmd          the binary: CLI, state machine, event loop
+crates/scmd-site     the generator for the project's site: the repository's own documents
 ```
+
+The last one is not part of the program — `scmd` does not link it, and a release does not
+build it. It reads this file, the changelog, the commander survey, the help chapters in
+`docs/help/` and the screenshots in `docs/shots/`, and writes the static site published at
+<https://matteobaccan.github.io/SupremeCommander/> — 38 pages, no framework, no fonts or
+scripts fetched from anywhere, in the seven languages the interface speaks. `cargo run -p
+scmd-site -- --out site` writes it locally; a push to the default branch publishes it. The
+point of generating it is that a page cannot say something the document it came from does
+not: there is no second copy of the text to keep in step.
 
 Every push builds and tests on Linux, macOS and Windows, with `clippy -D warnings`, a licence
 check over every crate in the tree on every platform, and a release that cannot be tagged

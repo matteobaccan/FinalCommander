@@ -8,6 +8,27 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **A site for the project**, published on GitHub Pages from the repository's own documents.
+  `crates/scmd-site` is a generator, not a site: it reads `README.md`, `CHANGELOG.md`, the
+  commander survey in `docs/00-landscape.md`, the help chapters in `docs/help/` and the
+  screenshots the renderer itself draws into `docs/shots/`, and writes 38 static pages — the
+  landing page with the argument and the screenshots, what the one file replaces, what works
+  today, the comparison with the other commanders, the download page for the current release on
+  each platform, the navigable help and the changelog.
+
+  Two decisions are worth writing down. The pages carry no framework, no web font and no
+  script: one hand-written stylesheet, inline SVG screenshots, and a page that works out of a
+  `file://` URL and in a text browser. And nothing is written twice — a page is its document
+  rendered, so it cannot drift from it; a section renamed in the README fails the build instead
+  of publishing a page with a hole in it. The landing page, the two README sections and the
+  download page exist in the seven languages the interface speaks, and a page whose source
+  document is English says so in a note rather than pretending.
+
+  `cargo run -p scmd-site -- --out site` writes it; `.github/workflows/pages.yml` builds it on
+  every push and publishes from the default branch. Publishing needs Pages switched on for the
+  repository with "GitHub Actions" as the source, which is a setting and not something the
+  workflow can do for itself.
+
 - **Paths past `MAX_PATH` on Windows.** A Windows API call given a path of 260 characters or
   more fails, however much room the filesystem has — NTFS has allowed 32,767 since 1993, and it
   is the Win32 layer in front of it that does not. A file manager meets the difference every
