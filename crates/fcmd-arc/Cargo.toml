@@ -20,7 +20,7 @@ ruzstd = "0.9"
 # from a zip, `aes256` so an encrypted one is recognised and refused with a reason rather than
 # read as rubble. `util` (whole-archive convenience functions) and the codecs only 7-Zip ZS
 # writes (zstd, lz4, brotli) are left out.
-sevenz-rust2 = { version = "0.20.2", default-features = false, features = [
+sevenz-rust2 = { version = "0.24.0", default-features = false, features = [
   "compress",
   "bzip2",
   "ppmd",
