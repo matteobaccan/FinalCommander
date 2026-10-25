@@ -3008,34 +3008,54 @@ Some **bold** text and a [link](https://example.com).
         press(&mut app, "Down");
         press(&mut app, "Ctrl+A");
 
-        // On a short screen the top rows show and the bottom ones do not, and the frame says
-        // there is more below.
-        let text = frame(&mut app, 76, 20);
-        assert!(text.contains("Owner may read"), "{text}");
-        assert!(
-            !text.contains("Last read"),
-            "the times are off screen: {text}"
-        );
-        assert!(text.contains('▼'), "the frame says there is more: {text}");
+        // The rows the dialog asks something with, rather than the ones that say something:
+        // the name at the top of this dialog is also a row of the panel behind it, and a test
+        // that looked for it would find the panel's.
+        let asked: Vec<String> = {
+            let Mode::Form(form) = &app.mode else {
+                panic!("the dialog is open: {:?}", app.mode)
+            };
+            form.rows()
+                .iter()
+                .filter(|r| !r.separator && !r.dim && !r.text.trim().is_empty())
+                .map(|r| r.text.trim().to_string())
+                .collect()
+        };
+        assert!(asked.len() > 4, "this dialog has rows: {asked:?}");
+        let marked = |text: &str| text.contains('▲') || text.contains('▼');
 
-        // Walk the cursor to the last row: now the bottom shows and the top does not.
-        for _ in 0..30 {
-            press(&mut app, "Down");
+        // How tall a screen this dialog needs depends on the platform — Windows has no mode
+        // to offer and twelve rows fewer — and on how much of the screen the panels leave, so
+        // the test finds the height that fits rather than assuming one.
+        let tall = (8..60u16)
+            .find(|h| !marked(&frame(&mut app, 76, *h)))
+            .expect("some height fits the dialog");
+        let text = frame(&mut app, 76, tall);
+        for row in &asked {
+            assert!(text.contains(row), "`{row}` should be on screen:\n{text}");
         }
-        let text = frame(&mut app, 76, 20);
-        assert!(text.contains("Last read"), "{text}");
-        assert!(
-            text.contains("And everything inside"),
-            "the last row is reachable: {text}"
-        );
-        assert!(!text.contains("Owner may read"), "{text}");
-        assert!(text.contains('▲'), "and that there is more above: {text}");
 
-        // On a tall screen nothing scrolls and no marker is drawn.
-        let text = frame(&mut app, 76, 40);
-        assert!(text.contains("Owner may read"), "{text}");
-        assert!(text.contains("Last read"), "{text}");
-        assert!(!text.contains('▲') && !text.contains('▼'), "{text}");
+        // Half that is not enough for it, and then the one thing that must hold is that the
+        // row the cursor is on is on the screen — otherwise it could not be reached at all.
+        let short = tall / 2;
+        for (n, row) in asked.iter().enumerate() {
+            {
+                let Mode::Form(form) = &mut app.mode else {
+                    unreachable!("the dialog is open")
+                };
+                form.cursor = form
+                    .rows()
+                    .iter()
+                    .position(|r| r.text.trim() == row.as_str())
+                    .expect("the row is there");
+            }
+            let text = frame(&mut app, 76, short);
+            assert!(
+                text.contains(row),
+                "row {n} (`{row}`) is out of reach on a short screen:\n{text}"
+            );
+            assert!(marked(&text), "and the frame says there is more:\n{text}");
+        }
     }
 
     #[test]

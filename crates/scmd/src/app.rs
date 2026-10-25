@@ -12825,12 +12825,26 @@ mod tests {
         set_toggle(&mut app, "copy.follow_links");
         set_toggle(&mut app, "copy.times");
         type_into(&mut app, "copy.filter", "*.txt");
-        type_into(&mut app, "copy.target", "/tmp/out");
+        let out = absolute("scmd-copy-out");
+        {
+            let Mode::Form(form) = &mut app.mode else {
+                panic!("the dialog is open")
+            };
+            form.cursor = form
+                .fields
+                .iter()
+                .position(
+                    |f| matches!(f, crate::form::Field::Text { key, .. } if *key == "copy.target"),
+                )
+                .expect("the target row");
+        }
+        clear_prompt(&mut app);
+        type_path(&mut app, &out.to_string_lossy());
         press(&mut app, "Enter");
 
         let (_, spec) = job_request(&mut app);
         assert_eq!(spec.kind, JobKind::Copy);
-        assert_eq!(spec.target, Some(VPath::local("/tmp/out")));
+        assert_eq!(spec.target, Some(VPath::local(&out)));
         assert_eq!(spec.options.on_conflict, scmd_jobs::ConflictPolicy::Append);
         assert!(spec.options.only_newer);
         assert!(spec.options.follow_symlinks);
@@ -12905,13 +12919,17 @@ mod tests {
                 .expect("the target row");
         }
         clear_prompt(&mut app);
-        type_text(&mut app, "/tmp/one;/tmp/two");
+        let (one, two) = (absolute("scmd-one"), absolute("scmd-two"));
+        type_path(
+            &mut app,
+            &format!("{};{}", one.to_string_lossy(), two.to_string_lossy()),
+        );
         press(&mut app, "Enter");
 
         // The first is on its way, and the second is waiting rather than running too.
         let (id, first) = job_request(&mut app);
         assert_eq!(first.kind, JobKind::Move);
-        assert_eq!(first.target, Some(VPath::local("/tmp/one")));
+        assert_eq!(first.target, Some(VPath::local(&one)));
         assert_eq!(app.queued_jobs.len(), 1);
         assert!(app.status.contains('2'), "{}", app.status);
 
@@ -12923,7 +12941,7 @@ mod tests {
         });
         let (_, second) = job_request(&mut app);
         assert_eq!(second.kind, JobKind::Copy, "the source is already gone");
-        assert_eq!(second.target, Some(VPath::local("/tmp/two")));
+        assert_eq!(second.target, Some(VPath::local(&two)));
         assert!(app.queued_jobs.is_empty());
     }
 
@@ -12958,7 +12976,7 @@ mod tests {
             form.cursor = 1;
         }
         clear_prompt(&mut app);
-        type_text(&mut app, "/tmp/one;/tmp/two;/tmp/three");
+        type_path(&mut app, "a;b;c");
         press(&mut app, "Enter");
         let (id, _) = job_request(&mut app);
         assert_eq!(app.queued_jobs.len(), 2);
@@ -14708,6 +14726,12 @@ abcdefghij
         panic!("the row would not empty");
     }
 
+    /// A path that is absolute on every platform. `/tmp/x` is relative on Windows, where a
+    /// path with no drive letter is, and would be joined to wherever the panel happens to be.
+    fn absolute(name: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(name)
+    }
+
     /// Type a path, upper case included: `type_text` presses the character as a key name, and
     /// a key name of one letter carries no shift.
     fn type_path(app: &mut App, text: &str) {
@@ -14826,7 +14850,11 @@ abcdefghij
         cursor_on(&mut app, "one.txt");
         app.run(Command::FileMoveCurrent);
         clear_prompt(&mut app);
-        type_text(&mut app, "/tmp/elsewhere.txt");
+        // An absolute path on every platform: `/tmp/x` is relative on Windows, where a path
+        // with no drive letter is, and would be joined to the archive we are standing in —
+        // which is the opposite of what this test is about.
+        let elsewhere = std::env::temp_dir().join("elsewhere.txt");
+        type_path(&mut app, &elsewhere.to_string_lossy());
         press(&mut app, "Enter");
         assert!(app.take_requests().is_empty(), "nothing should be started");
         assert!(app.status.contains("F5"), "{}", app.status);

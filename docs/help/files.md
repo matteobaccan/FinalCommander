@@ -100,7 +100,9 @@ directories themselves are changed after what is in them, so taking the write bi
 cannot lock the program out of its own contents halfway through.
 
 It reports like a copy — a progress box, a count, `Esc` — and a file that refuses is listed
-with the reason rather than passed over quietly. A file on a server gets its mode and its
+with the reason rather than passed over quietly. One thing is left alone rather than reported:
+a folder's *own* times on Windows, which cannot be set without opening the folder as a handle.
+The files inside it get the times you asked for. A file on a server gets its mode and its
 modification time, which is what SFTP carries. An entry inside an archive has the archive's
 permissions and an object in a bucket has the policy of its bucket, so neither has anything to
 set, and both say so instead of pretending.

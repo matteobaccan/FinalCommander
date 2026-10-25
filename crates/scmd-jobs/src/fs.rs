@@ -332,7 +332,12 @@ impl JobFs for LocalFs {
     fn set_attrs(&self, path: &VPath, change: &crate::attrs::Change) -> io::Result<()> {
         not_mine(path)?;
         let target = path.as_path();
-        if let Some(when) = change.mtime {
+        // A directory's own times cannot be set on Windows through the standard library: it
+        // has no way to open a directory as a handle (that needs `FILE_FLAG_BACKUP_SEMANTICS`
+        // on `CreateFileW`), so there is nothing to call `set_times` on. The files inside it
+        // are set as asked; the folder itself keeps its own times, and the help page says so.
+        let times_here = !cfg!(windows) || !path_is_dir(target);
+        if let Some(when) = change.mtime.filter(|_| times_here) {
             // The times go through a handle rather than through the path, which is the only
             // way the standard library offers and also the right one: a path that changed
             // underneath us would otherwise have its successor's times set.
@@ -350,7 +355,7 @@ impl JobFs for LocalFs {
                 times = times.set_accessed(atime);
             }
             file.set_times(times)?;
-        } else if let Some(atime) = change.atime {
+        } else if let Some(atime) = change.atime.filter(|_| times_here) {
             let file = File::open(target)?;
             file.set_times(fs::FileTimes::new().set_accessed(atime))?;
         }
