@@ -11,6 +11,7 @@ authors.workspace = true
 [dependencies]
 dirs = "7.0.0"
 scmd-arc = { workspace = true }
+scmd-term = { workspace = true }
 scmd-core = { workspace = true }
 serde = { version = "1.0.229", features = ["derive"] }
 thiserror = "2.0.21"

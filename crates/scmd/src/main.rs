@@ -11,6 +11,7 @@ mod help;
 mod menu;
 mod panel;
 mod render;
+mod termkeys;
 mod tree;
 
 use std::path::PathBuf;
@@ -658,6 +659,15 @@ fn interactive(mut app: App) -> Result<()> {
             }
         }
     });
+
+    // How a terminal's program says it has written something. It is not a key and nobody
+    // asked for it, so the loop — which blocks on this very channel — has to be woken.
+    {
+        let wake_tx = tx.clone();
+        app.wake = Some(std::sync::Arc::new(move || {
+            let _ = wake_tx.send(Event::Redraw);
+        }));
+    }
 
     // One pool of connections, shared by the panels, the viewer and every job.
     let pool = Pool::new();

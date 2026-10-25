@@ -125,6 +125,11 @@ copy-follow-links = Копировать то, на что указывает с
 copy-keep-times = Сохранять время
 copy-keep-mode = Сохранять права
 copy-several = Назначений: { $count }, по очереди
+
+# ── the terminal (SPEC 06 §4) ──────────────────────────────────────────────────────────
+term-started = терминал с { $shell }
+term-hint = Ctrl+Alt+E: назад к панелям
+term-ended = завершился — любая клавиша закроет
 job-mkdir = Создание каталога
 job-planning = подготовка…
 job-counters = { $files } / { $filestotal } файлов · { $bytes } / { $bytestotal }
@@ -578,6 +583,7 @@ plugin-unknown-command = плагин запросил «{ $id }» — это н
 hex-copied = { $size } скопировано из { $from }
 hex-moved = { $size } перенесено из { $from }
 menu-calculator = Ка&лькулятор
+menu-terminal = Терминал
 calc-title = Калькулятор
 calc-decimal = десятичное
 calc-hex = шестн.

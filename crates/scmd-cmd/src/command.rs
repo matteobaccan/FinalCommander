@@ -179,6 +179,8 @@ pub enum Command {
     ToolCompareContents,
     /// A sixty-four bit calculator, in every base at once.
     ToolCalculator,
+    /// A real terminal, with a shell in it (SPEC 06 §4).
+    ToolTerminal,
     ToolFind,
     /// Replace across the selected files, with a dry run first.
     ToolReplace,
@@ -391,6 +393,7 @@ impl Command {
             Command::ToolCompareDirs,
             Command::ToolCompareContents,
             Command::ToolCalculator,
+            Command::ToolTerminal,
             Command::ToolFind,
             Command::ToolReplace,
             Command::ShellOutputShow,
@@ -587,6 +590,7 @@ impl Command {
             Command::ToolCompareDirs => "tool.compare.dirs".into(),
             Command::ToolCompareContents => "tool.compare.contents".into(),
             Command::ToolCalculator => "tool.calculator".into(),
+            Command::ToolTerminal => "tool.terminal".into(),
             Command::ToolFind => "tool.find".into(),
             Command::ToolReplace => "tool.replace".into(),
             Command::ShellOutputShow => "shell.output.show".into(),
@@ -753,6 +757,7 @@ impl Command {
             ("tool.compare.dirs", _) => Command::ToolCompareDirs,
             ("tool.compare.contents", _) => Command::ToolCompareContents,
             ("tool.calculator", _) => Command::ToolCalculator,
+            ("tool.terminal", _) => Command::ToolTerminal,
             ("file.pack", _) => Command::FilePack,
             ("file.unpack", _) => Command::FileUnpack,
             ("arc.commands", _) => Command::ArcCommands,

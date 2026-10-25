@@ -71,6 +71,14 @@ impl Style {
         self
     }
 }
+/// How many columns one character takes on a terminal.
+///
+/// Zero for a combining mark, two for an East Asian wide form, one for everything else. The
+/// panels measure names with it and the terminal emulator places glyphs with it, so a name
+/// and the same name echoed by a shell line up.
+pub fn char_cols(ch: char) -> usize {
+    ch.width().unwrap_or(0)
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Cell {
@@ -152,6 +160,15 @@ impl Buffer {
                 wide_tail: false,
             };
         }
+    }
+
+    /// A cell to change in place.
+    ///
+    /// [`Buffer::set`] writes a whole cell, which is what drawing wants. A terminal emulator
+    /// needs one thing it cannot say that way: that a cell is the second half of a
+    /// double-width glyph and the backend must emit nothing for it.
+    pub fn cell_mut(&mut self, x: u16, y: u16) -> Option<&mut Cell> {
+        self.index(x, y).map(|i| &mut self.cells[i])
     }
 
     /// Darken what is already in this rectangle, keeping the characters: the shadow a dialog

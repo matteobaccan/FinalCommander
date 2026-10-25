@@ -1,0 +1,24 @@
+[package]
+name = "scmd-term"
+description = "SupremeCommander: a real terminal — a pseudo-terminal and the VT parser that reads what comes out of it"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+scmd-ui = { workspace = true }
+# The pseudo-terminal itself: `openpty` on Unix, ConPTY on Windows, one API over both. It
+# binds to the system's own libraries rather than compiling any C, so the binary stays one
+# file that cross-compiles.
+portable-pty = "0.9"
+# The escape-sequence parser, from Alacritty: a state machine that calls back for each
+# action. Parsing VT by hand is a well-known way to get it subtly wrong for years.
+vte = "0.15"
+shell-words = "1"
+thiserror = "2"
+
+[dev-dependencies]
+tempfile = "3"

@@ -338,6 +338,11 @@ keys = ["Ctrl+A"]
 scope = "panel"
 cmd = "file.attributes"
 
+# A terminal of its own, which is where `vim` and `top` run. SPEC 06 §4's key, and ConEmu's.
+[[bind]]
+keys = ["Ctrl+Alt+E"]
+cmd = "tool.terminal"
+
 # The item under the cursor, whatever is selected.
 [[bind]]
 keys = ["Shift+F5"]

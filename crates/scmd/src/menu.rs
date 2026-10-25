@@ -343,6 +343,11 @@ pub fn menus() -> Vec<Menu> {
                     "Alt+=",
                     Action::Run(Command::ToolCalculator),
                 ),
+                item(
+                    "menu-terminal",
+                    "Ctrl+Alt+E",
+                    Action::Run(Command::ToolTerminal),
+                ),
                 Entry::Separator,
                 item("menu-connections", "Alt+N", Action::Run(Command::NetSites)),
                 item(

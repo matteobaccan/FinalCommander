@@ -29,6 +29,7 @@ scmd-net = { path = "crates/scmd-net" }
 scmd-plug = { path = "crates/scmd-plug" }
 scmd-s3 = { path = "crates/scmd-s3" }
 scmd-syntax = { path = "crates/scmd-syntax" }
+scmd-term = { path = "crates/scmd-term" }
 scmd-tui = { path = "crates/scmd-tui" }
 scmd-ui = { path = "crates/scmd-ui" }
 scmd-vfs = { path = "crates/scmd-vfs" }

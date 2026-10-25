@@ -31,6 +31,32 @@ preview of the file under the cursor, `Ctrl+T` into a directory tree.
 off both of them and give them to the output of the last command, which is how you watch a
 build go by without leaving the panels. Both are settings, so `Shift+F9` keeps them.
 
+# A real terminal
+
+The command line under the panels runs a command and keeps what it printed, which is what you
+want nine times in ten. The tenth is `vim`, `top`, `ssh` or anything else that draws a whole
+screen and asks the system how big it is: those need a *terminal*, and `Ctrl+Alt+E` is one.
+
+It is a screen like the viewer and the editor. `Ctrl+Alt+E` again goes back to the panels and
+leaves the program running; `F12` lists it among whatever else is open and brings it back;
+pressing `Ctrl+Alt+E` from the panels brings a parked terminal forward rather than starting a
+second one. A second one is that key again after parking the first, which is deliberate: a key
+that quietly started a process every time you pressed it would leave a dozen shells behind in
+a day.
+
+Inside it, every key belongs to the program — `F3` means what `F3` means to whatever is
+running, `Tab` completes, `Ctrl+C` interrupts. Exactly one key is ours, and it is the one that
+got you in. There is no key bar for the same reason: a bar offering our keys in there would be
+telling you something untrue.
+
+The shell is the one your session already uses (`$SHELL`, or `ComSpec` on Windows), so your
+aliases and your prompt are the ones you know. `[term] shell` in `scmd.toml` names another,
+as a command line: `bash -l`, or a path with spaces in quotes. It starts in the directory the
+active panel is looking at, when that is a real directory — a panel inside an archive or on a
+server has none, and the shell starts where the program did.
+
+When the program ends, its last screen stays up to be read, and the next key closes it.
+
 # Choosing files
 
 `Insert` selects the row and moves on. `Gray +` and `Gray -` select and unselect by a file

@@ -149,6 +149,7 @@ impl Command {
             Command::ToolCompareDirs => "compare the two panels by name, size and time",
             Command::ToolCompareContents => "compare them by what is in the files",
             Command::ToolCalculator => "a calculator, in every base at once",
+            Command::ToolTerminal => "a real terminal, with a shell in it",
             Command::ToolFind => "find files, by name or by what is in them",
             Command::ToolReplace => "replace across the selected files",
             Command::ShellOutputShow => "what the commands printed",

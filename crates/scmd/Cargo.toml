@@ -28,6 +28,7 @@ scmd-tui = { workspace = true }
 scmd-ui = { workspace = true }
 scmd-vfs = { workspace = true }
 scmd-syntax = { workspace = true }
+scmd-term = { workspace = true }
 scmd-view = { workspace = true }
 tokio = { version = "1.53.3", features = ["rt-multi-thread", "fs", "sync", "time", "macros"] }
 unicode-width = "0.2.2"

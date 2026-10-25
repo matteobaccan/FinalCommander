@@ -126,6 +126,10 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         return None;
     }
 
+    if matches!(app.mode, Mode::Term(_)) {
+        return draw_terminal(app, buf);
+    }
+
     let keybar_h = u16::from(app.cfg.ui.key_bar);
     let status_h = u16::from(app.cfg.ui.status_bar);
     let cmd_h = u16::from(app.cfg.ui.command_line);
@@ -407,6 +411,8 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             None
         }
         Mode::UserScreen { .. } => None, // drawn full screen, before the panels
+        // Drawn full screen too, and before this: `draw` returns early for it.
+        Mode::Term(_) => None,
         Mode::Help {
             chapter,
             scroll,
@@ -416,6 +422,69 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             None
         }
     }
+}
+
+/// `Ctrl+Alt+E`: a real terminal, with a program drawing in it.
+///
+/// Drawing it is a copy. The program's output went through the VT parser into a grid of the
+/// same type the panels draw into — a character, a foreground, a background, bold and reverse
+/// — so there is nothing to translate here: the cells are put on the screen as they are, and
+/// the colours a program asked for are the ones the backend already knows how to send.
+///
+/// The chrome is one row at the top, which says what is running and how to get out. The key
+/// bar is deliberately *not* drawn: every function key belongs to the program in here, and a
+/// bar that offered ours would be telling the reader something untrue.
+fn draw_terminal(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
+    let (w, h) = (buf.width(), buf.height());
+    let header = Rect::new(0, 0, w, 1);
+    let body = Rect::new(0, 1, w, h.saturating_sub(1));
+    app.term_area = (body.w, body.h);
+
+    let Mode::Term(term) = &mut app.mode else {
+        return None;
+    };
+    // The grid may be a size behind the window: it is resized when the program is told, and
+    // the program is told from the event loop rather than from here.
+    let (title, finished, cursor) = term.with_screen(|screen| {
+        let title = screen.title.clone();
+        screen.dirty = false;
+        (title, false, screen.cursor())
+    });
+    let finished = finished || term.finished();
+    let name = term.name.clone();
+
+    // The cells, as they are.
+    term.with_screen(|screen| {
+        let grid = screen.grid();
+        for y in 0..body.h.min(grid.height()) {
+            for x in 0..body.w.min(grid.width()) {
+                if let Some(cell) = grid.get(x, y) {
+                    if cell.wide_tail {
+                        continue;
+                    }
+                    buf.set(body.x + x, body.y + y, cell.ch, cell.style);
+                }
+            }
+        }
+    });
+
+    let style = Style::new(
+        app.theme.color("panel.header.fg"),
+        app.theme.color("status.bg"),
+    );
+    buf.fill(header, ' ', style);
+    let what = title.unwrap_or(name);
+    let hint = app
+        .i18n
+        .t(if finished { "term-ended" } else { "term-hint" });
+    let hint_w = hint.chars().count().min(w as usize) as u16;
+    buf.put_str(0, 0, &what, style, w.saturating_sub(hint_w + 2));
+    buf.put_str(w - hint_w, 0, &hint, style, hint_w);
+
+    // The program's own cursor, which is the one a reader is typing at.
+    cursor
+        .filter(|_| !finished)
+        .map(|(x, y)| (body.x + x.min(body.w - 1), body.y + y.min(body.h - 1)))
 }
 
 /// `Ctrl+O`: the output of the commands that have run. Plain text, scrollable, and it keeps
@@ -3056,6 +3125,105 @@ Some **bold** text and a [link](https://example.com).
             );
             assert!(marked(&text), "and the frame says there is more:\n{text}");
         }
+    }
+
+    /// The whole of `Ctrl+Alt+E`, against a real shell: it opens, what the program writes is
+    /// on the screen with its colours, keys reach it, and the key takes you back leaving the
+    /// program running.
+    #[cfg(unix)]
+    #[test]
+    fn ctrl_alt_e_opens_a_real_terminal_and_brings_you_back() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = app_on_disk(dir.path());
+        // The shell to run, rather than the user's: a test must not depend on anybody's
+        // prompt. It echoes in colour, then waits, so the screen has something on it.
+        app.cfg.term.shell =
+            "/bin/sh -c 'printf \"\\033[32mgreen words\\033[0m\\n\"; read x; printf \"got %s\\n\" \"$x\"; sleep 5'"
+                .to_string();
+
+        press(&mut app, "Ctrl+Alt+E");
+        assert!(
+            matches!(app.mode, crate::app::Mode::Term(_)),
+            "the terminal opens: {:?}",
+            app.mode
+        );
+
+        // Wait for the shell to write, then draw: what it wrote is on the screen, in colour.
+        let buf = wait_for_terminal(&mut app, "green words");
+        let text = buf.to_text();
+        assert!(text.contains("green words"), "{text}");
+        let row = text
+            .lines()
+            .position(|l| l.contains("green words"))
+            .expect("the row is there") as u16;
+        let col = text.lines().nth(row as usize).unwrap().find('g').unwrap() as u16;
+        assert_eq!(
+            buf.get(col, row).unwrap().style.fg,
+            scmd_ui::Color::Ansi(2),
+            "the colour the program asked for"
+        );
+        // The chrome says how to get out, and does not pretend the function keys are ours.
+        assert!(
+            text.lines()
+                .next()
+                .is_some_and(|l| l.contains("Ctrl+Alt+E")),
+            "{text}"
+        );
+        assert!(!text.contains("1Help"), "no key bar in here: {text}");
+
+        // Keys reach the program.
+        for c in "hello".chars() {
+            app.handle_input(Input::Key(scmd_cmd::Key::char(c)));
+        }
+        press(&mut app, "Enter");
+        let text = wait_for_terminal(&mut app, "got hello").to_text();
+        assert!(text.contains("got hello"), "{text}");
+
+        // And the key takes you back, leaving it running in the screens list.
+        press(&mut app, "Ctrl+Alt+E");
+        assert!(app.mode.is_normal(), "{:?}", app.mode);
+        assert_eq!(app.background.len(), 1, "it is parked, not closed");
+        press(&mut app, "F12");
+        let text = frame(&mut app, 70, 20);
+        assert!(text.contains("Term"), "the screens list has it: {text}");
+        press(&mut app, "Esc");
+
+        // Pressing it again brings that one back rather than starting a second shell.
+        press(&mut app, "Ctrl+Alt+E");
+        let text = frame(&mut app, 70, 20);
+        assert!(text.contains("got hello"), "the same terminal: {text}");
+        assert!(app.background.iter().all(|m| m.screen_title().is_none()));
+    }
+
+    /// Draw until the terminal's screen says `want`, so a test does not race the shell.
+    #[cfg(unix)]
+    fn wait_for_terminal(app: &mut App, want: &str) -> Buffer {
+        for _ in 0..200 {
+            let buf = frame_buf(app, 70, 20);
+            if buf.to_text().contains(want) {
+                return buf;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        frame_buf(app, 70, 20)
+    }
+
+    #[test]
+    #[ignore = "a look at the screen, not an assertion"]
+    fn eyeball_terminal() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = app_on_disk(dir.path());
+        app.cfg.term.shell = "/bin/sh -c 'printf \"\\033[1;32muser@host\\033[0m:\\033[34m~\\033[0m$ ls\\n\"; printf \"\\033[1;34msrc\\033[0m  README.md\\n\"; printf \"\\033[1;32muser@host\\033[0m:\\033[34m~\\033[0m$ \"; sleep 5'".to_string();
+        press(&mut app, "Ctrl+Alt+E");
+        for _ in 0..40 {
+            let text = frame(&mut app, 76, 16);
+            if text.contains("README") {
+                println!("{text}");
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        println!("{}", frame(&mut app, 76, 16));
     }
 
     #[test]

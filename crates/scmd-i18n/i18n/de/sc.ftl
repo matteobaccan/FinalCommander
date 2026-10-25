@@ -125,6 +125,11 @@ copy-follow-links = Das Ziel des Verweises kopieren, nicht den Verweis
 copy-keep-times = Zeiten behalten
 copy-keep-mode = Rechte behalten
 copy-several = { $count } Ziele, eines nach dem anderen
+
+# ── the terminal (SPEC 06 §4) ──────────────────────────────────────────────────────────
+term-started = ein Terminal mit { $shell }
+term-hint = Ctrl+Alt+E: zurück zu den Panels
+term-ended = beendet — eine Taste schließt
 job-mkdir = Verzeichnis anlegen
 job-planning = planen…
 job-counters = { $files } / { $filestotal } Dateien · { $bytes } / { $bytestotal }
@@ -578,6 +583,7 @@ plugin-unknown-command = ein Plugin verlangte `{ $id }`, das ist kein Befehl
 hex-copied = { $size } von { $from } kopiert
 hex-moved = { $size } von { $from } verschoben
 menu-calculator = Ta&schenrechner
+menu-terminal = Terminal
 calc-title = Rechner
 calc-decimal = dezimal
 calc-hex = hex

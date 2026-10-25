@@ -125,6 +125,11 @@ copy-follow-links = 复制链接指向的内容，而不是链接
 copy-keep-times = 保留时间
 copy-keep-mode = 保留权限
 copy-several = { $count } 个目标，依次进行
+
+# ── the terminal (SPEC 06 §4) ──────────────────────────────────────────────────────────
+term-started = 运行 { $shell } 的终端
+term-hint = Ctrl+Alt+E：回到面板
+term-ended = 已结束 — 按任意键关闭
 job-mkdir = 新建目录
 job-planning = 正在分析…
 job-counters = { $files } / { $filestotal } 个文件 · { $bytes } / { $bytestotal }
@@ -578,6 +583,7 @@ plugin-unknown-command = 插件请求了 `{ $id }`，那不是一个命令
 hex-copied = 已从 { $from } 复制 { $size }
 hex-moved = 已从 { $from } 移动 { $size }
 menu-calculator = 计算器(&L)
+menu-terminal = 终端
 calc-title = 计算器
 calc-decimal = 十进制
 calc-hex = 十六进制

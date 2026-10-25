@@ -125,6 +125,11 @@ copy-follow-links = Copiar a lo que apunta el enlace, no el enlace
 copy-keep-times = Conservar las fechas
 copy-keep-mode = Conservar los permisos
 copy-several = { $count } destinos, uno tras otro
+
+# ── the terminal (SPEC 06 §4) ──────────────────────────────────────────────────────────
+term-started = un terminal con { $shell }
+term-hint = Ctrl+Alt+E: volver a los paneles
+term-ended = ha terminado — una tecla lo cierra
 job-mkdir = Creación de directorio
 job-planning = analizando…
 job-counters = { $files } / { $filestotal } archivos · { $bytes } / { $bytestotal }
@@ -578,6 +583,7 @@ plugin-unknown-command = un complemento pidió «{ $id }», que no es un comando
 hex-copied = { $size } copiados desde { $from }
 hex-moved = { $size } movidos desde { $from }
 menu-calculator = Ca&lculadora
+menu-terminal = Terminal
 calc-title = Calculadora
 calc-decimal = decimal
 calc-hex = hex

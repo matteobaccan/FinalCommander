@@ -4,6 +4,33 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
+## [Unreleased]
+
+### Added
+
+- **A real terminal** (`Ctrl+Alt+E`). The command line under the panels runs a command and
+  keeps what it printed; this runs `vim`, `top` and `ssh`. It is a pseudo-terminal — `openpty`
+  on Unix, ConPTY on Windows — so the program asks the system what it is talking to and gets
+  the answer it needs: it is told the size, told again when the window changes, and draws with
+  the escape sequences it would send to any terminal.
+
+  Those sequences go through a VT parser into a grid of the same type the panels draw into, so
+  putting a terminal on the screen is a copy and the colours a program asks for are the ones
+  the backend already knows how to send. What is implemented is what a shell, a pager, an
+  editor and a full-screen monitor actually emit: cursor movement, erase in display and in
+  line, insert and delete characters and lines, scrolling regions, the SGR attributes with
+  256-colour and 24-bit colour, save and restore, autowrap, the title, and the alternate
+  screen — which is what makes `vim` leave the shell's output alone when it exits.
+
+  It is a screen like the viewer: `Ctrl+Alt+E` again parks it with the program still running,
+  `F12` lists it and brings it back, and pressing the key from the panels reuses a parked one
+  rather than starting a second shell. Inside it every key belongs to the program and there is
+  no key bar, because one offering our keys in there would be a lie. `[term] shell` names what
+  to run; empty means the shell the session already uses.
+
+  Still to come: scrollback one can scroll (the lines are kept, nothing shows them yet),
+  searching the output, and the mouse.
+
 ## [0.3.0] — 2026-10-25
 
 An archive and a bucket stop being read-only windows, a `.md` file opens as a document, and

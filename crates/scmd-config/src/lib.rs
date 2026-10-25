@@ -318,6 +318,30 @@ impl Default for S3Cfg {
 
 /// `[arc]`: the guards every archive read goes through (SPEC 04 §4).
 ///
+/// The terminal (`Ctrl+Alt+E`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct TermCfg {
+    /// What to run. Empty means the shell the session already uses — `$SHELL` on Unix,
+    /// `ComSpec` on Windows — because that is where somebody's aliases and prompt live.
+    ///
+    /// It is a command line, split the way a shell splits one, so `bash -l` works and a path
+    /// with a space in it can be quoted. Nothing expands it: there is no shell in between,
+    /// since the thing being started is the shell.
+    pub shell: String,
+    /// How many lines of what has scrolled off the top to keep.
+    pub scrollback: usize,
+}
+
+impl Default for TermCfg {
+    fn default() -> Self {
+        TermCfg {
+            shell: String::new(),
+            scrollback: scmd_term::SCROLLBACK,
+        }
+    }
+}
+
 /// They are configuration because a zip bomb and a legitimate archive of a disk image look
 /// alike from the outside, and only the person at the keyboard knows which one this is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -509,6 +533,7 @@ pub struct Config {
     pub decompile: Vec<DecompileRule>,
     pub net: NetCfg,
     pub arc: ArcCfg,
+    pub term: TermCfg,
     /// `[[site]]` blocks: the netbox's site list.
     #[serde(rename = "site")]
     pub sites: Vec<SiteCfg>,
@@ -586,6 +611,8 @@ impl Config {
             "ui.status_bar" => self.ui.status_bar = parse_bool(value)?,
             "ui.syntax" => self.ui.syntax = parse_bool(value)?,
             "ui.markdown" => self.ui.markdown = parse_bool(value)?,
+            "term.shell" => self.term.shell = value.to_string(),
+            "term.scrollback" => self.term.scrollback = parse_usize(value)?,
             "panel.view" => self.panel.view = value.to_string(),
             "panel.sort" => self.panel.sort = value.to_string(),
             "panel.reverse" => self.panel.reverse = parse_bool(value)?,
@@ -641,6 +668,12 @@ impl Config {
         }
         Ok(())
     }
+}
+
+fn parse_usize(v: &str) -> Result<usize, String> {
+    v.trim()
+        .parse()
+        .map_err(|_| format!("expected a whole number, got `{}`", v.trim()))
 }
 
 fn parse_bool(v: &str) -> Result<bool, String> {

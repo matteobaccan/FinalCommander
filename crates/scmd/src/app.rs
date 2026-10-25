@@ -198,6 +198,10 @@ pub struct RemoteStamp {
 /// What comes back.
 #[derive(Debug)]
 pub enum Event {
+    /// Something that is not a key has changed what the screen should show: a terminal's
+    /// program writing output nobody asked for. The loop draws after every event, so this
+    /// carries nothing and does nothing but arrive.
+    Redraw,
     Input(Input),
     /// A plugin's command has finished: what it asked for, or why it could not.
     PluginDone {
@@ -789,6 +793,12 @@ pub enum Mode {
     UserScreen {
         scroll: usize,
     },
+    /// `Ctrl+Alt+E`: a real terminal with a shell in it (SPEC 06 §4).
+    ///
+    /// It is a screen like a viewer: stepping away leaves the program running, and `F12`
+    /// brings it back. What it is *not* is a mode with a key map — almost every key belongs to
+    /// the program, and a key bar that offered its own would be lying.
+    Term(Box<scmd_term::Terminal>),
 }
 
 impl Mode {
@@ -813,6 +823,12 @@ impl Mode {
             Mode::Hex(e) => Some(format!(
                 "Hex   {}",
                 e.path.as_ref().map(|p| p.to_string()).unwrap_or(e.name())
+            )),
+            // What the program called itself, if it did: `ssh` sets a title and that is the
+            // one thing that tells two terminals apart in a list.
+            Mode::Term(t) => Some(format!(
+                "Term  {}",
+                t.with_screen(|s| s.title.clone()).unwrap_or(t.name.clone())
             )),
             _ => None,
         }
@@ -957,6 +973,13 @@ pub struct App {
     pub columns: usize,
     /// Size of the viewer's text area, from the last frame.
     pub viewer_size: (u16, u16),
+    /// Size of a terminal's grid, from the last frame — the room a screen has once the key
+    /// bar and the status line have taken theirs.
+    pub term_area: (u16, u16),
+    /// What to call when something that is not a key needs the interface to draw again: a
+    /// terminal's program writing output nobody asked for. `None` in a test, which draws
+    /// when it chooses to.
+    pub wake: Option<std::sync::Arc<dyn Fn() + Send + Sync>>,
     /// Remembered across files, like every commander does.
     pub search_mode: SearchMode,
     /// Only whole words count as a hit. FAR asks it in the dialog; so do we.
@@ -1134,6 +1157,8 @@ impl App {
             rows: 20,
             columns: 1,
             viewer_size: (80, 20),
+            term_area: (80, 20),
+            wake: None,
             search_mode: SearchMode::Plain,
             search_whole_words: false,
             search_case_insensitive: true,
@@ -1267,6 +1292,8 @@ impl App {
                     self.set_error(m);
                 }
             },
+            // Nothing to do: the loop draws after every event, which is the whole request.
+            Event::Redraw => {}
             Event::Input(input) => self.handle_input(input),
             Event::FindHit { id, path, entry } => {
                 if let Some(view) = self.find_mut() {
@@ -1694,7 +1721,14 @@ impl App {
                 }
             }
             Input::Mods(mods) => self.held = mods,
-            Input::Resize(..) => {}
+            // A terminal's program has to be told, or a full-screen one stays the shape of
+            // the window it started in. Everything else works out its own size while drawing.
+            Input::Resize(w, h) => {
+                let chrome = u16::from(self.cfg.ui.key_bar)
+                    + u16::from(self.cfg.ui.status_bar)
+                    + u16::from(self.cfg.ui.command_line);
+                self.term_resized(w, h.saturating_sub(chrome.max(1)));
+            }
             Input::Eof => self.quit = true,
         }
     }
@@ -1768,6 +1802,10 @@ impl App {
             Mode::Job(view) => {
                 self.mode = Mode::Job(view);
                 self.job_key(key);
+            }
+            Mode::Term(term) => {
+                self.mode = Mode::Term(term);
+                self.term_key(key);
             }
             Mode::Viewer(viewer) => {
                 self.mode = Mode::Viewer(viewer);
@@ -4013,6 +4051,7 @@ impl App {
                 let last = self.last_calc.clone();
                 self.mode = Mode::Prompt(Prompt::new(PromptKind::Calculator, title, last));
             }
+            Command::ToolTerminal => self.toggle_terminal(),
             Command::ToolFind => self.open_find_form(),
             Command::ToolReplace => {
                 let files = self.job_sources().len();
@@ -5639,6 +5678,117 @@ impl App {
             lines,
             action: ConfirmAction::Job(real),
         });
+    }
+
+    /// `Ctrl+Alt+E`: a terminal, or back from one.
+    ///
+    /// Pressing it in a terminal parks that terminal and goes back to the panels, leaving the
+    /// program running — which is what every terminal pane does, and the reason this is one
+    /// key rather than one to open and another to close. Pressing it in the panels brings a
+    /// parked terminal forward if there is one, and starts a shell if there is not: a second
+    /// shell is this key again after parking the first, which is deliberate — a key that
+    /// quietly started a process every time it was pressed would leave a dozen behind in a day.
+    fn toggle_terminal(&mut self) {
+        if matches!(self.mode, Mode::Term(_)) {
+            self.show_screen(None);
+            return;
+        }
+        if let Some(at) = self
+            .background
+            .iter()
+            .position(|screen| matches!(screen, Mode::Term(_)))
+        {
+            self.show_screen(Some(at));
+            return;
+        }
+        self.start_terminal();
+    }
+
+    /// Start a shell where the active panel is, which is what somebody looking at a directory
+    /// and reaching for a shell means.
+    fn start_terminal(&mut self) {
+        let shell = if self.cfg.term.shell.trim().is_empty() {
+            scmd_term::default_shell()
+        } else {
+            self.cfg.term.shell.clone()
+        };
+        // A shell has to start somewhere the operating system knows. A panel inside an archive
+        // or on a server has no such directory, so the shell starts where the program was
+        // started rather than failing to start at all.
+        let here = self.panel().cwd.clone();
+        let cwd = (here.is_local() && !here.in_container())
+            .then(|| here.as_path().to_path_buf())
+            .filter(|p| p.is_dir());
+        let (cols, rows) = self.term_area;
+        let wake = self.wake.clone();
+        match scmd_term::Terminal::start(&shell, cwd.as_deref(), cols, rows, move || {
+            if let Some(wake) = &wake {
+                wake();
+            }
+        }) {
+            Ok(term) => {
+                // The panels go to the background, as they do for a viewer.
+                self.restore_front_screen();
+                let front = std::mem::replace(&mut self.mode, Mode::Term(Box::new(term)));
+                if front.screen_title().is_some() {
+                    self.background.push(front);
+                }
+                let msg = self.i18n.t_args("term-started", &[("shell", shell.into())]);
+                self.set_status(msg);
+            }
+            Err(e) => self.set_error(format!("{shell}: {e}")),
+        }
+    }
+
+    /// A key in a terminal. Almost all of them belong to the program.
+    ///
+    /// Exactly one is ours — whatever is bound to `tool.terminal` — because a terminal that
+    /// kept a key map would be stealing keys from the shell: `F3`, `Ctrl+O` and `Tab` all mean
+    /// something in there, and none of them mean what they mean in the panels.
+    fn term_key(&mut self, key: Key) {
+        let ours = self
+            .keymap
+            .resolve(&[scmd_cmd::Scope::Panel, scmd_cmd::Scope::Global], key)
+            == Some(Command::ToolTerminal);
+        if ours {
+            self.show_screen(None);
+            return;
+        }
+        let Mode::Term(term) = &mut self.mode else {
+            return;
+        };
+        // A program that has ended leaves its last screen up to be read; the next key takes
+        // it away, which is what a shell's `exit` should feel like.
+        if term.finished() {
+            self.close_terminal();
+            return;
+        }
+        if let Some(bytes) = crate::termkeys::bytes_for(key) {
+            if let Err(e) = term.send(&bytes) {
+                self.set_error(e.to_string());
+            }
+        }
+    }
+
+    /// Take the terminal away and go back to the panels, stopping the program if it is still
+    /// running: a shell nobody can see and nobody can type into is a shell to end.
+    fn close_terminal(&mut self) {
+        if let Mode::Term(term) = &mut self.mode {
+            term.kill();
+        }
+        self.mode = Mode::Normal;
+        self.read_panel(0);
+        self.read_panel(1);
+    }
+
+    /// The window changed size, so the terminal in front does too — and the program is told,
+    /// which is what makes a full-screen one redraw itself at the new shape.
+    pub fn term_resized(&mut self, cols: u16, rows: u16) {
+        self.term_area = (cols.max(20), rows.max(4));
+        let (cols, rows) = self.term_area;
+        if let Mode::Term(term) = &mut self.mode {
+            let _ = term.resize(cols, rows);
+        }
     }
 
     /// `Alt+F7`: the dialog, filled in with the last search.

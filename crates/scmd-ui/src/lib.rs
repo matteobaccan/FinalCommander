@@ -8,7 +8,7 @@ pub mod svg;
 pub mod theme;
 pub mod widgets;
 
-pub use buffer::{elide_middle, truncate_cols, Border, Buffer, Cell, Rect, Style};
+pub use buffer::{char_cols, elide_middle, truncate_cols, Border, Buffer, Cell, Rect, Style};
 pub use color::{Color, ColorDepth};
 pub use highlight::Highlight;
 pub use svg::to_svg;
