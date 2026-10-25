@@ -1,7 +1,12 @@
 # Contributing
 
-Thanks for looking. The project is in milestone **M1** (see `docs/spec/09-roadmap.md`): the
-specs are written, the skeleton runs, and most features are still ahead.
+Thanks for looking. M1 shipped and the work is in **M2** (see `docs/spec/09-roadmap.md`):
+the program is a daily driver, and what is left is parity with FAR and Midnight Commander
+feature by feature.
+
+`AGENTS.md` is the short version of everything below, plus where the work stands today and
+what is queued next. Read it first if you are picking the project up rather than fixing one
+thing.
 
 ## Ground rules
 
