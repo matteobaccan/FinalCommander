@@ -21,9 +21,8 @@ redirects the old repository URL to the new one.
   them; if the implementation has to deviate, change the spec in the same commit and say why.
   A feature is not finished until the spec, `docs/02-features.md`, the help chapter and
   `CHANGELOG.md` agree with the code.
-- **Work on the current development branch**, never straight on `main`
-  (`git branch --show-current` says which one you are on). Push there; the release machinery
-  watches it.
+- **`main` is the branch**, and the release machinery watches it (`tag.yml` also watches the
+  development branches, for work that is cut elsewhere).
 - **Commits are authored by Matteo Baccan** (`matteo.baccan@gmail.com`) and carry no
   co-author or generated-by trailers. The message says what changed and *why* it changed, in
   prose, the way the ones already in `git log` do. No tooling is named anywhere in the
@@ -121,8 +120,7 @@ keeps it as the run's artifact; publishing happens only through `workflow_dispat
    release assets and pictures. Old configuration file names are still read and written, with
    one line on the startup screen saying so.
 
-`main` does not exist yet; the author creates it. Until then the development branch is the
-only branch, and `tag.yml` watches it.
+`main` was created from that work and is where it goes on.
 
 ## The queue, as the author's review left it
 
