@@ -158,6 +158,28 @@ The `[editor]` section, which this dialog is the front of:
 for, so it is not the default and the status line says how many lines it touched when it
 happens — the next save will write that difference.
 
+### 3.6b Viewer settings (`opt.viewer`, Options → Viewer settings)
+
+The `[viewer]` section, and the same arrangement FAR has: three of these rows are also keys
+inside the viewer, and the key writes nothing back. The setting is what a file *opens* with;
+the key is what this reader wants of the file in front of them, and a row taken away to read
+one long line is not a preference.
+
+| Row | Key | What it does |
+| --- | --- | --- |
+| Show the top line (name and position) | `viewer.status_line` | Also `Ctrl+Shift+B` inside the viewer |
+| Show a scrollbar | `viewer.scrollbar` | Also `Ctrl+S`. Off by default, as in FAR: the top line already says the position as a percentage |
+| Show the key bar | `viewer.key_bar` | Also `Ctrl+B`. The interface setting `ui.key_bar` still wins: somebody who turned the bar off everywhere did not mean "except here" |
+| Long lines | `viewer.wrap` | `off`, `char` or `word` — what `F2` and `Shift+F2` then change for this file |
+| Tab width | `viewer.tab_width` | Eight by default, which is what a terminal and `cat` do: a file that lined something up with tabs was written against that number |
+| Remember the position and the code page of each file | — | Dim: it wants the store the histories want |
+
+What each row gives back is a row of content, which is the point of taking it away. The
+scrollbar costs a column instead, and it says *where* in the file the reader is rather than how
+much of it is on screen: a wrapped line, a hex dump and a rendered Markdown page each answer
+"how many bytes fit" differently, so the thumb is one row and its position is the percentage the
+top line already shows.
+
 ### 3.5 Session editor (`Alt+N` → `Ins`/`F7` new, `F4` edit)
 
 The only dialog with text in it, and FAR's NetBox session editor is the model. Rows: name, host,

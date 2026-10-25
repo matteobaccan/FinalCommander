@@ -117,6 +117,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 5.7 | ~~Syntax highlighting in the viewer; Markdown rendering; tabs expansion~~ | MTN2 | **shipped** |
 | 5.8 | Previews: images (sixel/kitty/iterm protocols), video thumbnails, PDF, archives, media metadata, office/JSON/CSV pretty print — pluggable pipeline with timeouts | YAZI | M3 |
 | 5.9 | Filtered view: pipe the file through a command and view the output | MC | M3 |
+| 5.10 | Chrome toggles (key bar, status line, scrollbar) and the viewer's own settings | FAR | **Shipped: 0.4.0** — `Ctrl+B`, `Ctrl+Shift+B` and `Ctrl+S` on FAR's own keys, each row taken away giving a row of content back, and `[viewer]` plus `F9 → Options → Viewer settings` behind them (the chrome, the wrap a file opens with, the tab width). Remembering a file's position and code page: M3, with the state store |
 | 5.11 | **Disassembly** (`F5`): ELF/PE/Mach-O/raw recognition, sections and symbols, x86/x86-64 decoding with symbol headings, instruction-accurate scrolling, raw sweep for files over the parse limit | NEW | M1 |
 | 5.12 | **Decompilation** (`F6`): WebAssembly to its text format in process; `[[decompile]]` rules call installed tools (javap, ilspycmd, python -m dis, objdump, retdec) and the output is viewed as text | NEW | M1 |
 | 5.13 | **JVM bytecode and .NET IL in process**: class files listed javap-style with the constant pool resolved; managed PEs listed ildasm-style with metadata-resolved tokens and `#US` string literals | NEW | M1 |

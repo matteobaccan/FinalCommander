@@ -62,6 +62,8 @@ pub enum Command {
     OptColors,
     /// How the editor behaves: tabs, indent, whitespace.
     OptEditor,
+    /// How the viewer behaves: the chrome it opens with, the wrap and the tab width.
+    OptViewer,
 
     PanelFocusToggle,
     PanelSwap,
@@ -268,6 +270,14 @@ pub enum Command {
     ViewerBack,
     /// The structure pane: what the file is and where anything inside it is (SPEC 05 §1.8).
     ViewerStructure,
+    /// Take the key bar away, or put it back: FAR's `Ctrl+B`. The three that follow are the
+    /// chrome a reader is allowed to remove one row at a time, to give a long line or a wide
+    /// dump the whole window.
+    ViewerChromeKeyBar,
+    /// The top line — the name and the position: FAR's `Ctrl+Shift+B`.
+    ViewerChromeStatus,
+    /// The scrollbar down the right edge: FAR's `Ctrl+S`.
+    ViewerChromeScrollbar,
     /// Move the keys between the content and the structure pane.
     ViewerPaneNext,
     ViewerDisasm,
@@ -360,6 +370,7 @@ impl Command {
             Command::OptConfirmations,
             Command::OptColors,
             Command::OptEditor,
+            Command::OptViewer,
             Command::PanelFocusToggle,
             Command::PanelSwap,
             Command::PanelReread,
@@ -495,6 +506,9 @@ impl Command {
             Command::ViewerFollowBranch,
             Command::ViewerBack,
             Command::ViewerStructure,
+            Command::ViewerChromeKeyBar,
+            Command::ViewerChromeStatus,
+            Command::ViewerChromeScrollbar,
             Command::ViewerPaneNext,
             Command::ViewerDisasm,
             Command::ViewerDecompile,
@@ -591,6 +605,7 @@ impl Command {
             Command::OptConfirmations => "opt.confirmations".into(),
             Command::OptColors => "opt.colors".into(),
             Command::OptEditor => "opt.editor".into(),
+            Command::OptViewer => "opt.viewer".into(),
             Command::PanelFocusToggle => "panel.focus.toggle".into(),
             Command::PanelSwap => "panel.swap".into(),
             Command::PanelReread => "panel.reread".into(),
@@ -723,6 +738,9 @@ impl Command {
             Command::ViewerFollowBranch => "viewer.follow.branch".into(),
             Command::ViewerBack => "viewer.back".into(),
             Command::ViewerStructure => "viewer.structure".into(),
+            Command::ViewerChromeKeyBar => "viewer.chrome.keybar".into(),
+            Command::ViewerChromeStatus => "viewer.chrome.status".into(),
+            Command::ViewerChromeScrollbar => "viewer.chrome.scrollbar".into(),
             Command::ViewerPaneNext => "viewer.pane.next".into(),
             Command::ViewerDisasm => "viewer.disasm".into(),
             Command::ViewerToEditor => "viewer.to.editor".into(),
@@ -795,6 +813,7 @@ impl Command {
             ("opt.confirmations", _) => Command::OptConfirmations,
             ("opt.colors", _) => Command::OptColors,
             ("opt.editor", _) => Command::OptEditor,
+            ("opt.viewer", _) => Command::OptViewer,
             ("panel.sort.menu", _) => Command::PanelSortMenu,
             ("panel.drive", a) => Command::PanelDrive(Side::parse(a.unwrap_or(""))?),
             ("panel.history", _) => Command::PanelHistory,
@@ -922,6 +941,9 @@ impl Command {
             ("viewer.follow.branch", _) => Command::ViewerFollowBranch,
             ("viewer.back", _) => Command::ViewerBack,
             ("viewer.structure", _) => Command::ViewerStructure,
+            ("viewer.chrome.keybar", _) => Command::ViewerChromeKeyBar,
+            ("viewer.chrome.status", _) => Command::ViewerChromeStatus,
+            ("viewer.chrome.scrollbar", _) => Command::ViewerChromeScrollbar,
             ("viewer.pane.next", _) => Command::ViewerPaneNext,
             ("viewer.disasm", _) => Command::ViewerDisasm,
             ("viewer.to.editor", _) => Command::ViewerToEditor,

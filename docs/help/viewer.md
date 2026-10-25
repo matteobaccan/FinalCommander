@@ -12,6 +12,13 @@ then *Find next* or *Find previous*, because they are the same question asked tw
 `Gray +` and `Gray -` step to the next and previous file of the panel without leaving the
 viewer, and `Ctrl+F10` makes the panel catch up with what you are reading.
 
+Three keys give the window to the file. `Ctrl+B` takes the key bar away, `Ctrl+Shift+B` the top
+line with the name and the position, and `Ctrl+S` puts a scrollbar down the right edge — each
+row you take away is a row of text you get, which is what a long line or a wide hex dump wants.
+They apply to the file you are reading and nothing is written down: `F9 → Options → Viewer
+settings` is where you say what every file should open with, along with the wrapping and the
+tab width.
+
 # Markdown
 
 A `.md` file opens laid out rather than as its source: the marks come off and the space they

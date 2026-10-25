@@ -8,6 +8,29 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **The viewer's chrome, and the settings behind it.** Three rows a reader may take away one
+  at a time, on FAR's own keys: the key bar (`Ctrl+B`), the top line with the name and the
+  position (`Ctrl+Shift+B`), and a scrollbar down the right edge (`Ctrl+S`), which is the one
+  that is off until asked for. Every row taken away is a row of content gained, which is the
+  whole reason for the keys: one long line, or a wide hex dump, wants the window.
+
+  The `Ctrl+B` question the backlog had left open is settled and it cost nothing: it was one of
+  *three* spellings of page-up here — a vi habit — and `PgUp` and `Ctrl+Up` still page up, so
+  FAR's key went to FAR's feature.
+
+  The scrollbar says **where** in the file the reader is rather than how much of it is on
+  screen: how many bytes a screenful holds is not a fixed fraction of a file — a wrapped line,
+  a hex dump and a rendered Markdown page each answer differently — so the thumb is one row at
+  the percentage the top line already shows.
+
+  Behind them, `[viewer]` and `F9 → Options → Viewer settings`, the dialog the Options menu had
+  been offering as a dim row: the three chrome rows, the wrap a file opens with (`off`, `char`
+  or `word`) and the tab width, which is eight because that is what a terminal and `cat` do —
+  a file that lined something up with tabs was written against that number. The division is
+  FAR's: the setting is what a file *opens* with, and the key is what this reader wants of the
+  file in front of them, so a key writes nothing back. Remembering a file's own position and
+  code page is a dim row there, because it wants the store the histories want.
+
 - **The user menu** (`F2`), which is the feature that makes a commander somebody's own: a few
   lines they run ten times a day, each with a label and a letter. It lives in `scmd-menu.toml`
   beside the settings — `scmd --paths` prints where, and `F2` with no file says so rather than

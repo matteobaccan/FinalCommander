@@ -449,6 +449,56 @@ impl Default for EditCfg {
     }
 }
 
+/// `[viewer]`: how the viewer behaves and how much of its chrome is drawn (SPEC 05 §1).
+///
+/// The three chrome rows are settings *and* keys (`Ctrl+B`, `Ctrl+Shift+B`, `Ctrl+S`), which
+/// is FAR's arrangement: the setting is what every file opens with, and the key takes a row
+/// away for the one long line or wide dump that needs the whole window.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ViewCfg {
+    /// Is the key bar drawn under the content? `Ctrl+B` toggles it.
+    pub key_bar: bool,
+    /// Is the top line — the name and the position — drawn? `Ctrl+Shift+B` toggles it.
+    pub status_line: bool,
+    /// Is a scrollbar drawn down the right edge? `Ctrl+S` toggles it. Off by default, as it
+    /// is in FAR, and because the status line already says the position as a percentage.
+    pub scrollbar: bool,
+    /// How a file opens: `off`, `char` or `word`. FAR opens without wrapping and `F2`
+    /// changes it; this is what that starts from.
+    pub wrap: String,
+    /// What a tab expands to. Eight, which is what a terminal and `cat` do — a file that
+    /// lined something up with tabs was written against that number.
+    pub tab_width: usize,
+}
+
+impl Default for ViewCfg {
+    fn default() -> Self {
+        ViewCfg {
+            key_bar: true,
+            status_line: true,
+            scrollbar: false,
+            wrap: "off".into(),
+            // The same eight `scmd_view::TAB_WIDTH` has. This crate does not depend on the
+            // viewer, so the number is written twice and a test compares the two.
+            tab_width: 8,
+        }
+    }
+}
+
+impl ViewCfg {
+    /// The wrap a file opens with. Anything the setting does not name is `off`, because a
+    /// viewer that wrapped when it was told something it did not understand would be worse
+    /// than one that did not wrap.
+    pub fn wrap_kind(&self) -> &str {
+        match self.wrap.trim() {
+            "char" | "on" | "true" => "char",
+            "word" => "word",
+            _ => "off",
+        }
+    }
+}
+
 impl EditCfg {
     /// Should a tab typed now become spaces?
     pub fn expand_typed(&self) -> bool {
@@ -696,6 +746,7 @@ pub struct Config {
     pub arc: ArcCfg,
     pub term: TermCfg,
     pub editor: EditCfg,
+    pub viewer: ViewCfg,
     /// `[[site]]` blocks: the netbox's site list.
     #[serde(rename = "site")]
     pub sites: Vec<SiteCfg>,
@@ -789,6 +840,19 @@ impl Config {
             "editor.auto_indent" => self.editor.auto_indent = parse_bool(value)?,
             "editor.show_whitespace" => self.editor.show_whitespace = parse_bool(value)?,
             "editor.cursor_after_match" => self.editor.cursor_after_match = parse_bool(value)?,
+            "viewer.key_bar" => self.viewer.key_bar = parse_bool(value)?,
+            "viewer.status_line" => self.viewer.status_line = parse_bool(value)?,
+            "viewer.scrollbar" => self.viewer.scrollbar = parse_bool(value)?,
+            "viewer.wrap" => {
+                let value = value.trim();
+                if !matches!(value, "off" | "char" | "word") {
+                    return Err(format!("`{value}` is not off, char or word"));
+                }
+                self.viewer.wrap = value.to_string();
+            }
+            "viewer.tab_width" => {
+                self.viewer.tab_width = parse_usize(value)?.clamp(1, 16);
+            }
             "term.shell" => self.term.shell = value.to_string(),
             "term.scrollback" => self.term.scrollback = parse_usize(value)?,
             "panel.view" => self.panel.view = value.to_string(),
@@ -880,6 +944,39 @@ mod tests {
         // is the one of these three that costs data when it is wrong.
         assert!(c.general.confirm_overwrite);
         assert_eq!(c.panel.quick_search, QuickSearch::Alt);
+        // The viewer opens with the chrome it has always had and no scrollbar, as FAR does.
+        assert!(c.viewer.status_line && c.viewer.key_bar);
+        assert!(!c.viewer.scrollbar);
+        assert_eq!(c.viewer.wrap_kind(), "off");
+    }
+
+    #[test]
+    fn the_viewers_tab_width_default_is_the_one_the_viewer_itself_uses() {
+        // The number is written in both crates — this one does not depend on the viewer — so
+        // the two are compared here rather than left to drift.
+        assert_eq!(ViewCfg::default().tab_width, 8);
+    }
+
+    #[test]
+    fn a_wrap_nobody_recognises_means_no_wrap_rather_than_a_guess() {
+        let mut cfg = ViewCfg {
+            wrap: "sideways".into(),
+            ..ViewCfg::default()
+        };
+        assert_eq!(cfg.wrap_kind(), "off");
+        cfg.wrap = "word".into();
+        assert_eq!(cfg.wrap_kind(), "word");
+        // `on` and `true` are what somebody types for a box that is now three choices.
+        cfg.wrap = "on".into();
+        assert_eq!(cfg.wrap_kind(), "char");
+
+        // And the setter refuses what the dialog would never send.
+        let mut whole = Config::default();
+        assert!(whole.set("viewer.wrap", "sideways").is_err());
+        assert!(whole.set("viewer.wrap", "word").is_ok());
+        assert_eq!(whole.viewer.wrap, "word");
+        assert!(whole.set("viewer.tab_width", "4").is_ok());
+        assert_eq!(whole.viewer.tab_width, 4);
     }
 
     #[test]

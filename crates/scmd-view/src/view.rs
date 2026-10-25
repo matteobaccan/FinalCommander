@@ -113,8 +113,10 @@ pub struct Status {
     pub derived: Option<String>,
 }
 
-/// Tabs expand to the next multiple of this.
-const TAB_WIDTH: usize = 8;
+/// Tabs expand to the next multiple of this unless the configuration says otherwise. Eight is
+/// what a terminal, `cat` and FAR all use, so a file whose author lined something up with tabs
+/// looks here as it looks everywhere else.
+pub const TAB_WIDTH: usize = 8;
 
 /// The largest file the Markdown view will render. Rendering needs the whole document, so
 /// this is the one place the viewer reads more than a screenful — four megabytes is a very
@@ -151,6 +153,8 @@ pub struct Viewer {
     pub show_status_line: bool,
     /// Is the scrollbar drawn? FAR's `Ctrl+S`.
     pub show_scrollbar: bool,
+    /// What a tab expands to, in columns. Eight unless the configuration says otherwise.
+    pub tab_width: usize,
     /// Structure of the compiled file, once we have looked.
     pub binary: Option<Binary>,
     /// Is the structure pane open (SPEC 05 §1.8)?
@@ -239,6 +243,7 @@ impl Viewer {
             show_key_bar: true,
             show_status_line: true,
             show_scrollbar: false,
+            tab_width: TAB_WIDTH,
             binary: None,
             show_structure: false,
             structure: None,
@@ -907,7 +912,7 @@ impl Viewer {
             return 1;
         }
         let (bytes, _) = read_line(&mut *self.source, line_start);
-        let text = expand_tabs(&self.codepage.decode(&bytes));
+        let text = expand_tabs(&self.codepage.decode(&bytes), self.tab_width);
         wrap_segments(&text, width.max(1) as usize, self.wrap)
             .len()
             .max(1)
@@ -1077,7 +1082,7 @@ impl Viewer {
                 break;
             }
             let (bytes, next) = read_line(&mut *self.source, offset);
-            let decoded = expand_tabs(&self.codepage.decode(&bytes));
+            let decoded = expand_tabs(&self.codepage.decode(&bytes), self.tab_width);
             let hits = self.hits_for(&bytes, &decoded);
 
             if self.wrap == Wrap::Off {
@@ -1205,8 +1210,8 @@ impl Viewer {
             let start = self.codepage.decode(&bytes[..start_bytes]).chars().count();
             let end = self.codepage.decode(&bytes[..end_bytes]).chars().count();
             // Tab expansion shifts the columns; recompute against the expanded text.
-            let start = expand_shift(decoded, bytes, start);
-            let end = expand_shift(decoded, bytes, end);
+            let start = expand_shift(decoded, bytes, start, self.tab_width);
+            let end = expand_shift(decoded, bytes, end, self.tab_width);
             if end > start {
                 out.push((start, end - start));
             }
@@ -1491,7 +1496,8 @@ fn truncate_to(text: &str, cols: usize) -> String {
 }
 
 /// Expand tabs to the next tab stop, so columns line up as the file's author intended.
-pub fn expand_tabs(text: &str) -> String {
+pub fn expand_tabs(text: &str, tab_width: usize) -> String {
+    let tab_width = tab_width.max(1);
     if !text.contains('\t') {
         return text.to_string();
     }
@@ -1499,7 +1505,7 @@ pub fn expand_tabs(text: &str) -> String {
     let mut column = 0usize;
     for ch in text.chars() {
         if ch == '\t' {
-            let spaces = TAB_WIDTH - (column % TAB_WIDTH);
+            let spaces = tab_width - (column % tab_width);
             out.extend(std::iter::repeat_n(' ', spaces));
             column += spaces;
         } else {
@@ -1570,7 +1576,7 @@ fn shift_hits(hits: &[(usize, usize)], from: usize, len: usize) -> Vec<(usize, u
 }
 
 /// Map a character index in the raw decode onto the tab-expanded text.
-fn expand_shift(expanded: &str, raw_bytes: &[u8], char_index: usize) -> usize {
+fn expand_shift(expanded: &str, raw_bytes: &[u8], char_index: usize, tab_width: usize) -> usize {
     if !raw_bytes.contains(&b'\t') {
         return char_index;
     }
@@ -1582,7 +1588,7 @@ fn expand_shift(expanded: &str, raw_bytes: &[u8], char_index: usize) -> usize {
             break;
         }
         if ch == '\t' {
-            column += TAB_WIDTH - (column % TAB_WIDTH);
+            column += tab_width - (column % tab_width);
         } else {
             column += ch.width().unwrap_or(0);
         }

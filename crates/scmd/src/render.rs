@@ -1500,8 +1500,13 @@ fn wrap_lines(text: &str, width: usize) -> Vec<String> {
 
 fn draw_viewer(app: &mut App, viewer: &mut scmd_view::Viewer, buf: &mut Buffer) {
     let (w, h) = (buf.width(), buf.height());
-    let keybar_h = u16::from(app.cfg.ui.key_bar);
-    let body = Rect::new(0, 1, w, h.saturating_sub(1 + keybar_h));
+    // The chrome the reader is allowed to take away, a row at a time (`Ctrl+B`,
+    // `Ctrl+Shift+B`, `Ctrl+S`): what it leaves goes to the content, which is the point of
+    // taking it away. The key bar also answers to the interface setting, because a user who
+    // turned it off everywhere did not mean "except in the viewer".
+    let keybar_h = u16::from(app.cfg.ui.key_bar && viewer.show_key_bar);
+    let header_h = u16::from(viewer.show_status_line);
+    let body = Rect::new(0, header_h, w, h.saturating_sub(header_h + keybar_h));
     app.viewer_size = (body.w, body.h);
 
     let base = app.theme.viewer();
@@ -1509,25 +1514,36 @@ fn draw_viewer(app: &mut App, viewer: &mut scmd_view::Viewer, buf: &mut Buffer) 
 
     // Top line: the file on the left, the status on the right. `Viewer.Status` in FAR's own
     // palette, which is a colour of its own and not the panel header's over the status bar's.
-    let header = app.theme.viewer_status();
-    buf.fill(Rect::new(0, 0, w, 1), ' ', header);
     let status = viewer.status();
-    let status_text = app.viewer_status(&status);
-    let status_w = status_text.chars().count().min(w as usize) as u16;
-    let name_w = w.saturating_sub(status_w + 2);
-    buf.put_str(
-        0,
-        0,
-        &scmd_ui::elide_middle(&viewer.path.to_string(), name_w as usize),
-        header,
-        name_w,
-    );
-    buf.put_str(w - status_w, 0, &status_text, header, status_w);
+    if header_h == 1 {
+        let header = app.theme.viewer_status();
+        buf.fill(Rect::new(0, 0, w, 1), ' ', header);
+        let status_text = app.viewer_status(&status);
+        let status_w = status_text.chars().count().min(w as usize) as u16;
+        let name_w = w.saturating_sub(status_w + 2);
+        buf.put_str(
+            0,
+            0,
+            &scmd_ui::elide_middle(&viewer.path.to_string(), name_w as usize),
+            header,
+            name_w,
+        );
+        buf.put_str(w - status_w, 0, &status_text, header, status_w);
+    }
+
+    // The scrollbar takes a column off the content before anything else is laid out: a bar
+    // drawn over the last column of a line would hide what it is there to help find.
+    let mut body = body;
+    let bar = (viewer.show_scrollbar && body.w > 2 && body.h > 0).then(|| {
+        let x = body.right() - 1;
+        body = Rect::new(body.x, body.y, body.w - 1, body.h);
+        app.viewer_size = (body.w, body.h);
+        x
+    });
 
     // The structure pane takes what the content does not need. In hex the row width is
     // decided by the data rather than the window, so the pane gets the remainder — that way
     // the printable gutter stays whole instead of being cut off by the pane's frame.
-    let mut body = body;
     let pane = if viewer.show_structure {
         let third = (body.w / 3).clamp(28, 48);
         let pane_w = match viewer.mode {
@@ -1629,6 +1645,23 @@ fn draw_viewer(app: &mut App, viewer: &mut scmd_view::Viewer, buf: &mut Buffer) 
 
     if let Some(at) = pane {
         draw_structure(app, viewer, buf, at);
+    }
+
+    // Where in the file we are, as a bar. It says *where* and not *how much*: how many bytes
+    // a screenful holds is not a fixed fraction of a file — a wrapped line, a hex dump and a
+    // rendered Markdown page each answer differently — so the thumb is one row and the
+    // position is the percentage the status line already shows.
+    if let Some(x) = bar {
+        let style = Style::new(
+            app.theme.color("panel.scrollbar.fg"),
+            app.theme.color("viewer.bg"),
+        );
+        let track = body.h as usize;
+        let at = (usize::from(status.percent.min(100)) * track.saturating_sub(1) + 50) / 100;
+        for i in 0..track {
+            let ch = if i == at { '█' } else { '░' };
+            buf.set(x, body.y + i as u16, ch, style);
+        }
     }
 
     if keybar_h == 1 {
@@ -4299,6 +4332,83 @@ third line
             })
             .count();
         assert!(highlighted >= 3, "the search hit is not highlighted");
+    }
+
+    #[test]
+    fn the_viewer_gives_a_row_back_to_the_content_for_every_piece_of_chrome_taken_away() {
+        let dir = tempfile::tempdir().unwrap();
+        // Twenty numbered lines, so which line is on which row says what moved.
+        let body: String = (1..=20).map(|i| format!("line {i}\n")).collect();
+        std::fs::write(dir.path().join("readme.txt"), body.as_bytes()).unwrap();
+        let mut app = App::new(Startup {
+            cfg: Config::default(),
+            paths: Paths::discover(Some(&dir.path().join("scmd.toml")), None),
+            i18n: I18n::new("en"),
+            keymap: Keymap::builtin("far").unwrap(),
+            themes: ThemeSet::builtin_only(),
+            theme: Theme::default_theme(),
+            left: VPath::local(dir.path()),
+            right: VPath::local(dir.path()),
+            sites: Vec::new(),
+            plugin_commands: Vec::new(),
+        });
+        app.requests.clear();
+        let entries = scmd_vfs::local::list_blocking(
+            &VPath::local(dir.path()),
+            &scmd_core::CancelToken::new(),
+        )
+        .unwrap();
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation: 1,
+            result: Ok(entries.clone()),
+        });
+        app.handle_event(Event::Listed {
+            panel: 1,
+            generation: 1,
+            result: Ok(entries),
+        });
+        app.handle_input(Input::Key("Down".parse().unwrap()));
+        app.handle_input(Input::Key("F3".parse().unwrap()));
+
+        // As it opens: the name on top, the key bar at the foot, no bar down the side.
+        let out = frame(&mut app, 60, 12);
+        let lines: Vec<&str> = out.lines().collect();
+        assert!(lines[0].contains("readme.txt"), "{out}");
+        assert!(lines[1].contains("line 1"), "{out}");
+        assert!(lines[11].contains("Hex"), "{out}");
+        assert!(
+            !lines[5].contains('░'),
+            "a scrollbar nobody asked for: {out}"
+        );
+
+        // `Ctrl+Shift+B` takes the top line away, and the first line of the file moves up
+        // into the row it was using.
+        app.handle_input(Input::Key("Ctrl+Shift+B".parse().unwrap()));
+        let out = frame(&mut app, 60, 12);
+        let lines: Vec<&str> = out.lines().collect();
+        assert!(!lines[0].contains("readme.txt"), "{out}");
+        assert!(lines[0].contains("line 1"), "{out}");
+
+        // `Ctrl+B` takes the key bar away, so the foot of the screen is the file too.
+        app.handle_input(Input::Key("Ctrl+B".parse().unwrap()));
+        let out = frame(&mut app, 60, 12);
+        let lines: Vec<&str> = out.lines().collect();
+        assert!(!lines[11].contains("Hex"), "{out}");
+        assert!(lines[11].contains("line 12"), "{out}");
+
+        // `Ctrl+S` puts a bar down the right edge: a track, and one block saying where in the
+        // file we are. At the top of a file, that block is the first row of the track.
+        app.handle_input(Input::Key("Ctrl+S".parse().unwrap()));
+        let out = frame(&mut app, 60, 12);
+        let lines: Vec<&str> = out.lines().collect();
+        let column: String = lines.iter().filter_map(|l| l.chars().nth(59)).collect();
+        assert!(column.starts_with('█'), "{out}");
+        assert!(column.contains('░'), "{out}");
+        assert!(
+            lines[0].contains("line 1"),
+            "and the text is still there: {out}"
+        );
     }
 
     #[test]

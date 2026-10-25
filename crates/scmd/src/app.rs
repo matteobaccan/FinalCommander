@@ -5505,6 +5505,7 @@ impl App {
             Command::OptInterface => self.open_form(FormKind::Interface),
             Command::OptConfirmations => self.open_form(FormKind::Confirmations),
             Command::OptEditor => self.open_form(FormKind::EditorSettings),
+            Command::OptViewer => self.open_form(FormKind::ViewerSettings),
             Command::OptColors => {
                 self.mode = Mode::Palette(Box::default());
             }
@@ -5901,6 +5902,7 @@ impl App {
             Ok(source) => {
                 let remote = shown.is_remote();
                 let mut viewer = Viewer::new(Box::new(source), shown.clone());
+                self.tune_viewer(&mut viewer);
                 if viewer.is_empty() {
                     let m = self.i18n.t("viewer-empty");
                     self.set_status(m);
@@ -9482,6 +9484,23 @@ impl App {
     /// It is done here rather than inside `scmd-edit` because the editor crate knows nothing
     /// about the configuration file — and because the `all` tab policy *changes the file*,
     /// which is a decision the application makes and says out loud.
+    /// The `[viewer]` section, applied to a viewer that is about to open. The chrome flags
+    /// are what a file opens with; the keys change them for the file in front of the reader
+    /// and write nothing back, because a row taken away to read one long line is not a
+    /// preference.
+    fn tune_viewer(&mut self, viewer: &mut scmd_view::Viewer) {
+        let cfg = &self.cfg.viewer;
+        viewer.show_key_bar = cfg.key_bar;
+        viewer.show_status_line = cfg.status_line;
+        viewer.show_scrollbar = cfg.scrollbar;
+        viewer.tab_width = cfg.tab_width.clamp(1, 16);
+        viewer.wrap = match cfg.wrap_kind() {
+            "char" => scmd_view::Wrap::Char,
+            "word" => scmd_view::Wrap::Word,
+            _ => scmd_view::Wrap::Off,
+        };
+    }
+
     fn tune_editor(&mut self, editor: &mut Editor) {
         let cfg = &self.cfg.editor;
         editor.tab_width = cfg.tab_width.clamp(1, 16);
@@ -10197,6 +10216,12 @@ impl App {
                         error = Some("viewer-no-structure".into());
                     }
                 }
+                // The chrome, one row at a time. Nothing is remembered in the configuration
+                // by pressing these: the setting is what a file *opens* with, and this is
+                // what this reader wants of this file now.
+                Command::ViewerChromeKeyBar => viewer.show_key_bar = !viewer.show_key_bar,
+                Command::ViewerChromeStatus => viewer.show_status_line = !viewer.show_status_line,
+                Command::ViewerChromeScrollbar => viewer.show_scrollbar = !viewer.show_scrollbar,
                 Command::ViewerPaneNext => viewer.toggle_struct_focus(),
                 Command::ViewerCodepageNext => viewer.next_codepage(),
                 Command::ViewerFollow => viewer.toggle_follow(),
@@ -10763,7 +10788,14 @@ impl App {
         }
         match scmd_view::FileSource::open(&path.os()) {
             Ok(source) => {
-                self.quick = Some(Box::new(Viewer::new(Box::new(source), path.clone())));
+                let mut viewer = Viewer::new(Box::new(source), path.clone());
+                self.tune_viewer(&mut viewer);
+                // A quick view is a panel's width of rows: it has no chrome of its own to
+                // take away, and the scrollbar would sit on the panel's frame.
+                viewer.show_key_bar = false;
+                viewer.show_status_line = false;
+                viewer.show_scrollbar = false;
+                self.quick = Some(Box::new(viewer));
                 self.quick_of = Some(path);
                 self.quick_why = None;
             }
@@ -11436,6 +11468,9 @@ fn is_viewer_movement(cmd: Command) -> bool {
             | Command::ViewerFollowBranch
             | Command::ViewerBack
             | Command::ViewerStructure
+            | Command::ViewerChromeKeyBar
+            | Command::ViewerChromeStatus
+            | Command::ViewerChromeScrollbar
             | Command::ViewerPaneNext
             | Command::ViewerModeNext
             | Command::ViewerCodepageNext
@@ -13298,10 +13333,11 @@ mod tests {
     #[test]
     fn an_entry_with_no_feature_behind_it_says_so_instead_of_pretending() {
         let mut app = app();
-        // The viewer's own settings dialog is still to come. Options is the fourth menu.
-        open(&mut app, 3, "menu-viewer-settings");
+        // The code pages list is still to come — the viewer cycles them with `F8`, but the
+        // list-and-pick version is not built. Options is the fourth menu.
+        open(&mut app, 3, "menu-codepages");
         assert!(
-            app.status.contains("settings.viewer"),
+            app.status.contains("settings.codepages"),
             "a missing feature must say so instead of doing nothing quietly: `{}`",
             app.status
         );
@@ -13874,13 +13910,13 @@ mod tests {
 
     // ── the user menu (`F2`, SPEC 06 §4) ────────────────────────────────────────────────
 
-    /// An app whose `F2` reads the menu written here, in a directory of this test's own.
+    /// An app whose `F2` reads the menu written here, in a directory of this test's own. The
+    /// counter is what keeps two of these apart: the tests run in parallel, and a name made
+    /// from the text itself would collide the moment two menus said the same thing.
     fn app_with_menu(text: &str) -> (App, std::path::PathBuf) {
-        let dir = std::env::temp_dir().join(format!(
-            "scmd-menu-{}-{:p}",
-            std::process::id(),
-            text.as_ptr()
-        ));
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!("scmd-menu-{}-{n}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join(scmd_config::usermenu::MENU_FILE_NAME);
         std::fs::write(&file, text).unwrap();
@@ -14052,9 +14088,13 @@ run = ["echo one", "echo two", "echo three"]
 
     #[test]
     fn an_internal_command_in_a_row_does_not_wait_for_a_shell_that_never_started() {
-        let (mut app, dir) = app_with_menu(
-            "[[menu]]\nlabel = \"There then run\"\nrun = [\"cd /tmp\", \"echo here\"]\n",
-        );
+        // A directory that exists on every platform this runs on, in TOML's literal string
+        // form so a Windows path's backslashes arrive as they were written.
+        let there = std::env::temp_dir();
+        let (mut app, dir) = app_with_menu(&format!(
+            "[[menu]]\nlabel = \"There then run\"\nrun = ['cd {}', 'echo here']\n",
+            there.display()
+        ));
         press(&mut app, "F2");
         press(&mut app, "Enter");
         // `cd` is ours and never reaches a shell, so the next line went at once.
@@ -18415,6 +18455,57 @@ abcdefghij
         press(&mut app, "Ctrl+E");
         let editor = app.mode.editor().expect("the editor");
         assert_eq!(editor.cursor.line, 119, "the last line on the screen");
+    }
+
+    #[test]
+    fn the_viewer_settings_dialog_writes_what_it_was_told() {
+        let mut app = app();
+        app.run(Command::OptViewer);
+        let Mode::Form(form) = &app.mode else {
+            panic!("the viewer settings did not open: {:?}", app.mode)
+        };
+        assert_eq!(form.kind, FormKind::ViewerSettings);
+        assert_eq!(form.text_value("viewer.status_line"), "true");
+        assert_eq!(form.text_value("viewer.scrollbar"), "false");
+        assert_eq!(form.text_value("viewer.wrap"), "off");
+
+        // The first row is the top line; `Space` turns it off and `F10` writes it.
+        press(&mut app, "Space");
+        press(&mut app, "F10");
+        assert!(!app.cfg.viewer.status_line);
+        assert!(app.cfg.viewer.key_bar, "the other rows were left alone");
+    }
+
+    #[test]
+    fn a_viewer_opens_the_way_the_configuration_says_and_the_keys_change_that_file_only() {
+        let mut app = app();
+        app.cfg.viewer.status_line = false;
+        app.cfg.viewer.scrollbar = true;
+        app.cfg.viewer.wrap = "word".into();
+        app.cfg.viewer.tab_width = 4;
+
+        let dir = std::env::temp_dir().join(format!("scmd-viewcfg-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("readme.txt");
+        std::fs::write(&file, b"a\tb\n").unwrap();
+        app.open_viewer_on(&file, VPath::local(&file));
+
+        let viewer = app.mode.viewer().expect("the viewer opened");
+        assert!(!viewer.show_status_line);
+        assert!(viewer.show_scrollbar);
+        assert!(viewer.show_key_bar);
+        assert_eq!(viewer.tab_width, 4);
+        assert_eq!(viewer.wrap, scmd_view::Wrap::Word);
+
+        // The keys are for the file in front of the reader: the configuration is untouched.
+        press(&mut app, "Ctrl+S");
+        press(&mut app, "Ctrl+B");
+        let viewer = app.mode.viewer().expect("the viewer");
+        assert!(!viewer.show_scrollbar);
+        assert!(!viewer.show_key_bar);
+        assert!(app.cfg.viewer.scrollbar, "a key wrote to the configuration");
+        assert!(app.cfg.viewer.key_bar, "a key wrote to the configuration");
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

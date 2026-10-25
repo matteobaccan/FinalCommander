@@ -74,6 +74,24 @@ Go to offset / line / percent (`Alt+F8`, `:`), bookmarks 0..9 (set `Ctrl+Shift+N
 encoding, "jump to this file in the panel" (`Ctrl+F10`), copy selection (`Ctrl+C`) including
 hex-mode byte ranges.
 
+### 1.5b Chrome (`Ctrl+B`, `Ctrl+Shift+B`, `Ctrl+S`)
+
+Three rows of chrome the reader may take away one at a time, FAR's keys for each: the key bar
+(`Ctrl+B`), the top line with the name and the position (`Ctrl+Shift+B`), and a scrollbar down
+the right edge (`Ctrl+S`), which is the one that is off until asked for. Each row taken away is
+a row of content gained, which is the whole reason for the keys — one long line, or a wide hex
+dump, wants the window.
+
+`Ctrl+B` was one of three spellings of page-up here, a vi habit, and `PgUp` and `Ctrl+Up` still
+page up: FAR's key goes to FAR's feature and nothing is lost. What a key does is for the file
+in front of the reader and is never written back; `[viewer]` (SPEC 10 §3.6b) is what a file
+opens with.
+
+The scrollbar says *where* in the file the reader is, not how much of it is on screen: how many
+bytes a screenful holds is not a fixed fraction of a file — a wrapped line, a hex dump and a
+rendered Markdown page each answer differently — so the thumb is one row at the percentage the
+top line already shows.
+
 ### 1.6 Compiled files: disassembly and decompilation
 
 Two different things, and the viewer is honest about which one it is doing.

@@ -175,6 +175,7 @@ indistinguishable in a TTY — see §9.
 | bookmarks set / go | Ctrl+Shift+0..9 / LeftCtrl+0..9 | — | Ctrl+Shift+0..9 / Alt+0..9 |
 | copy selection | Ctrl+Ins, Ctrl+C | — | Ctrl+C |
 | next / previous file in panel | Gray + / Gray − | — | + / − |
+| key bar / top line / scrollbar | Ctrl+B / Ctrl+Shift+B / Ctrl+S | — | **the same three.** `Ctrl+B` was one of three spellings of page-up here (a vi habit); `PgUp` and `Ctrl+Up` still page up, so FAR's key went to FAR's feature. A key changes the file being read; `[viewer]` says what every file opens with |
 | quit | Esc, F3, F10, Numpad5 | Esc, F10, q | Esc, F3, F10, q |
 | follow (tail) | End then auto-append | — | Shift+F | 
 

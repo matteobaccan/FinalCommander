@@ -38,6 +38,7 @@ impl Command {
             Command::OptConfirmations => "which questions are asked",
             Command::OptColors => "edit the colours of the theme in use",
             Command::OptEditor => "how the editor behaves",
+            Command::OptViewer => "how the viewer behaves",
 
             Command::PanelFocusToggle => "move between the two panels",
             Command::PanelSwap => "swap the panels over",
@@ -202,6 +203,9 @@ impl Command {
             Command::ViewerFollowBranch => "follow the jump under the cursor",
             Command::ViewerBack => "back from the jump you followed",
             Command::ViewerStructure => "the file's own structure, beside it",
+            Command::ViewerChromeKeyBar => "take the key bar away, or put it back",
+            Command::ViewerChromeStatus => "take the top line away, or put it back",
+            Command::ViewerChromeScrollbar => "the scrollbar, on or off",
             Command::ViewerPaneNext => "move between the file and its structure",
             Command::ViewerDisasm => "read the bytes as instructions",
             Command::ViewerToEditor => "open the same place in the editor",

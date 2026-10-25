@@ -701,9 +701,28 @@ scope = "viewer"
 cmd = "nav.down"
 
 [[bind]]
-keys = ["PgUp", "Ctrl+B", "Ctrl+Up"]
+# `Ctrl+B` was one of three spellings of page-up here, a vi habit; FAR gives it to the key bar
+# and `PgUp` and `Ctrl+Up` still page up, so FAR's key goes to FAR's feature at no cost.
+keys = ["PgUp", "Ctrl+Up"]
 scope = "viewer"
 cmd = "nav.pageup"
+
+[[bind]]
+keys = ["Ctrl+B"]
+scope = "viewer"
+cmd = "viewer.chrome.keybar"
+
+[[bind]]
+keys = ["Ctrl+Shift+B"]
+scope = "viewer"
+cmd = "viewer.chrome.status"
+
+[[bind]]
+# A terminal with flow control still on eats `Ctrl+S` before a program sees it; raw mode turns
+# it off, which is why this key is FAR's here too.
+keys = ["Ctrl+S"]
+scope = "viewer"
+cmd = "viewer.chrome.scrollbar"
 
 [[bind]]
 keys = ["PgDn", "Space", "Ctrl+Down"]

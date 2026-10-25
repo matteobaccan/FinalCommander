@@ -177,6 +177,49 @@ impl Form {
                 // that pretended it did would be a row that lies.
                 Field::Dim(t("opt-editor-beyond-eol")),
             ],
+            FormKind::ViewerSettings => vec![
+                // The three rows of chrome, in the order they are drawn: the top line, the
+                // bar down the side, the key bar at the foot. Each is also a key inside the
+                // viewer, and that key changes nothing here: the setting is what a file opens
+                // with, the key is what this reader wants of the file in front of them.
+                Field::toggle(
+                    "viewer.status_line",
+                    t("opt-viewer-status-line"),
+                    cfg.viewer.status_line,
+                ),
+                Field::toggle(
+                    "viewer.scrollbar",
+                    t("opt-viewer-scrollbar"),
+                    cfg.viewer.scrollbar,
+                ),
+                Field::toggle(
+                    "viewer.key_bar",
+                    t("opt-viewer-key-bar"),
+                    cfg.viewer.key_bar,
+                ),
+                Field::Separator,
+                choice(
+                    "viewer.wrap",
+                    t("opt-viewer-wrap"),
+                    &[
+                        ("off", t("opt-viewer-wrap-off")),
+                        ("char", t("opt-viewer-wrap-char")),
+                        ("word", t("opt-viewer-wrap-word")),
+                    ],
+                    cfg.viewer.wrap_kind(),
+                ),
+                choice(
+                    "viewer.tab_width",
+                    t("opt-viewer-tab-width"),
+                    &[("2", "2".into()), ("4", "4".into()), ("8", "8".into())],
+                    &cfg.viewer.tab_width.to_string(),
+                ),
+                Field::Separator,
+                // In the dialog because FAR has it and somebody will look for it: remembering
+                // a file's position wants the store the histories want, and a row that
+                // pretended otherwise would be a row that lies.
+                Field::Dim(t("opt-viewer-remember")),
+            ],
             FormKind::System => vec![
                 Field::toggle(
                     "panel.natural_sort",
@@ -339,6 +382,7 @@ impl Form {
             FormKind::Search => "search-title",
             FormKind::Link => "link-title",
             FormKind::EditorSettings => "menu-editor-settings",
+            FormKind::ViewerSettings => "menu-viewer-settings",
             FormKind::System => "menu-system-settings",
             FormKind::Panel => "menu-panel-settings",
             FormKind::Interface => "menu-interface-settings",

@@ -49,6 +49,8 @@ pub enum FormKind {
     Confirmations,
     /// How the editor behaves (SPEC 10 §3.6).
     EditorSettings,
+    /// How the viewer behaves: the chrome, the wrap, the tab width (SPEC 10 §3.6).
+    ViewerSettings,
 }
 
 /// The dialogs where one row is chosen.
@@ -487,7 +489,7 @@ pub fn menus() -> Vec<Menu> {
                     "",
                     Action::Run(Command::OptConfirmations),
                 ),
-                item("menu-viewer-settings", "", Action::Todo("settings.viewer")),
+                item("menu-viewer-settings", "", Action::Run(Command::OptViewer)),
                 item("menu-editor-settings", "", Action::Run(Command::OptEditor)),
                 item("menu-codepages", "", Action::Todo("settings.codepages")),
                 item(
