@@ -80,7 +80,8 @@ viewer modes + regex/hex search · help system · session restore · `tc`/`nc` k
 
 **Headline: the rest of netbox** (SFTP and the connection manager landed in M1) — FTP/FTPS/WebDAV/S3 in one first-party plugin, plus the connection
 manager and keyring; then rclone bridge · nested containers and
-write-back · previews (images via kitty/sixel, markdown, PDF, media) · syntax highlighting
+write-back · previews (images via kitty/sixel, markdown, PDF, media) · **table mode for the
+tabular formats** (CSV/TSV and JSONL first, then DBF — §1.11 of the viewer spec) · syntax highlighting
 (tree-sitter) in viewer and editor · diff viewer · synchroniser · macros · Lua API · WASM
 plugin host + WIT interfaces + capability grants · elevated helper · embedded terminal tabs ·
 fuzzy goto · ACL/xattr/ADS editors · accessibility mode · `vi` profile · config import from

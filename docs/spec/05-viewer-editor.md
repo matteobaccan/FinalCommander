@@ -26,10 +26,11 @@ decoding in process, and the diff viewer (§3).
 | `dump` | raw bytes as characters, fixed width | for binaries where text decoding lies |
 | `hex` | offset + hex + ASCII/decoded pane | bytes-per-row adjustable (`Alt+←/→`), 16-aligned jumps |
 | `markdown` | Markdown laid out to be read: the marks off, headings ruled, lists bulleted, tables drawn | **Implemented** (`Shift+F2`, and in `Shift+F4`'s ring). The one mode that reads the whole file, because a table's columns cannot be laid out from the part of it on screen: limited to 4 MiB, over which the file stays its source and says so. Every rendered line carries the `(offset, sub)` pair of the source line it came from, so scrolling, the bookmarks and the search need no line index. A search here searches what is on screen, not the marks behind it. |
+| `table` | a tabular file as columns: a header row, aligned columns, horizontal scroll | see §1.11 — one mode for CSV, TSV, JSONL and DBF, because what differs between them is the reader and not the screen |
 | `preview` | rendered content (image, markdown, PDF page, media info, archive listing) | pluggable, see §1.7 |
 | `structure` | a side pane that decodes what the file *is*: header fields, section and segment tables, imports and exports | `F11`, see §1.8; it rides alongside `hex` and `disasm` rather than replacing them |
 
-Mode indicator in the status bar (`t`/`d`/`h`/`m`/`p`) plus encoding, position (offset, %, line) and
+Mode indicator in the status bar (`t`/`d`/`h`/`m`/`b`/`p`) plus encoding, position (offset, %, line) and
 file size. `F2` toggles wrap in text mode, `F4` toggles hex, `Shift+F4` picks the base mode
 (FAR's base/hex distinction is kept — it is genuinely useful).
 
@@ -219,6 +220,46 @@ marked block, or `F2` to a name of its own.
 
 Windows needs `\\.\PhysicalDrive0` handling, where neither the seek nor the open works the
 same way: it is a later addition and the backlog carries it.
+
+### 1.11 Table mode: the tabular formats (M3)
+
+A commander opens a `.csv`, a `.jsonl` and a `.dbf` every day, and all three read as what they
+are not: a wall of commas, a wall of braces, a wall of hex. What they want is one mode, not
+three viewers — the screen is the same in every case (a header, columns, a cursor on a row),
+and what differs between the formats is only how a record is read out of the bytes.
+
+So: a `Table` mode beside `text`, `dump`, `hex`, `disasm` and `markdown`, and behind it a
+reader trait that answers three questions and nothing else — what the columns are called, what
+a column holds, and what is in the rows from *n* to *n + k*. The viewer keeps what it already
+has: `F7` searches, `Alt+F8` goes to a row, `+`/`-` step to the next file, the chrome keys take
+a row back, and `F2`/`Shift+F4` leave the mode for the source, because the source is sometimes
+the thing one came to look at.
+
+**The readers, in the order they are worth building.**
+
+| Reader | What it is | The hard part |
+| --- | --- | --- |
+| CSV / TSV | delimiter-separated text, RFC 4180 quoting | guessing the delimiter (`,`, `;`, tab, `|`) from the first kilobytes and *saying* which was guessed; a quoted field may hold the delimiter and a newline, so a row is not a line |
+| JSONL / NDJSON | one JSON object per line | the columns are the union of the keys of the first *N* records, in first-seen order, and a record that has a key the header does not shows it in an overflow column rather than being silently cut |
+| DBF | dBase III/IV and FoxPro: a typed header, then fixed-length records | the field types (`C`, `N`, `F`, `D`, `L`, `M`), the deleted-record flag, and the memo files beside it (`.dbt`, `.fpt`), which are a second file and may be absent |
+
+**Reading a window, not a file**, wherever the format allows it — which is the promise the
+viewer makes everywhere else. DBF is the best case: a fixed record length and a count in the
+header mean row *n* is one seek, so a two-gigabyte table opens as fast as a log does. JSONL is
+nearly as good: a line index is built as one scrolls and kept, so going to the end is a seek
+and a scan rather than a parse of everything before it. CSV is the exception and it is the
+Markdown exception again — columns cannot be laid out from the part of the file on screen — so
+the widths are decided from a sample (the first *N* kilobytes, configurable) and the status
+line says the widths are a sample rather than a measurement. A row wider than the sample
+suggested is not re-laid out: it is marked, because a table whose columns moved while one
+scrolled would be worse than one that admits its guess.
+
+**What this mode is not.** It is not a query tool and not a spreadsheet: no editing, no
+sorting, no filtering in the first version — those are the obvious next asks and each wants an
+answer about writing the file back, which a viewer does not have. Parquet and SQLite stay out
+too, and for a stated reason rather than an oversight: Parquet means a columnar stack (arrow)
+that is larger than this whole program, and SQLite is a different shape of question — several
+tables and a query language — which belongs to a plugin with its own panel.
 
 ### 1.7 Preview pipeline
 
