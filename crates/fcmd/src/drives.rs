@@ -154,19 +154,24 @@ fn platform() -> Vec<Drive> {
 
 #[cfg(windows)]
 fn platform() -> Vec<Drive> {
-    // The letters that exist. Saying more — the kind, the label, the two sizes — means
-    // `GetDriveTypeW` and friends, and a Windows API crate we do not depend on yet; the
-    // dialog shows what it knows and leaves the rest of the row empty.
+    // The letters that exist, with the two sizes filled in below like every other platform's.
+    // What is still missing — the kind of drive and its label — is `GetDriveTypeW` and
+    // `GetVolumeInformationW`, which belong beside the rest in `fcmd-platform`; the dialog
+    // leaves those two columns empty rather than guessing.
     (b'A'..=b'Z')
         .map(|letter| format!("{}:\\", letter as char))
         .filter(|path| std::path::Path::new(path).exists())
-        .map(|path| Drive {
-            path,
-            kind: Kind::Fixed,
-            label: None,
-            fs: None,
-            total: None,
-            free: None,
+        .map(|path| {
+            let mut drive = Drive {
+                path,
+                kind: Kind::Fixed,
+                label: None,
+                fs: None,
+                total: None,
+                free: None,
+            };
+            fill_space(&mut drive);
+            drive
         })
         .collect()
 }
@@ -185,25 +190,15 @@ fn platform() -> Vec<Drive> {
     vec![root]
 }
 
-/// The two sizes, from `statvfs`. Unavailable on Windows, where both columns stay empty.
-///
-/// `statvfs` is an old interface and every system chose its own widths for it: the counts are
-/// 64-bit on Linux and 32-bit on macOS, so the conversion that looks useless on one is what
-/// makes it compile on the other.
-#[cfg(unix)]
-#[allow(clippy::useless_conversion)]
+/// The two sizes, through `fcmd-platform`, which is where the per-platform call lives and
+/// the reason this one has no `#[cfg]` of its own any more. What is free is what an
+/// unprivileged process may really use, as the panel frame already reports.
 fn fill_space(drive: &mut Drive) {
-    let Ok(stat) = nix::sys::statvfs::statvfs(drive.path.as_str()) else {
-        return;
-    };
-    let block = u64::from(stat.fragment_size());
-    drive.total = Some(u64::from(stat.blocks()) * block);
-    // What an unprivileged process may really use, as the panel frame already reports.
-    drive.free = Some(u64::from(stat.blocks_available()) * block);
+    if let Some(d) = fcmd_platform::disk(std::path::Path::new(drive.path.as_str())) {
+        drive.total = Some(d.total);
+        drive.free = Some(d.free);
+    }
 }
-
-#[cfg(not(unix))]
-fn fill_space(_drive: &mut Drive) {}
 
 #[cfg(target_os = "macos")]
 fn filesystem_name(path: &str) -> Option<String> {

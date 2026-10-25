@@ -48,7 +48,9 @@ Notable changes, newest first. The format follows
   `GlobalMemoryStatusEx`. It is the only place in the workspace allowed `unsafe`, and every
   call in it carries a line saying why it is sound.
 
-  What it buys, beyond the frame: the information panel (`Ctrl+L`) now says what the device
+  What it buys, beyond the frame: the drives dialog (`Alt+F1`/`Alt+F2`) fills its two size
+  columns on Windows as it already did on Unix — the letters were there, the sizes were not.
+  The information panel (`Ctrl+L`) now says what the device
   holds, what is left on it and how big its allocation unit is, how much memory the machine
   has and how much of it is free, and what the cluster size costs the directory on screen —
   the figure FAR calls slack. And the detailed view has its **allocated** column: what each
