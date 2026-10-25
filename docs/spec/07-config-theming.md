@@ -2,32 +2,38 @@
 
 ## 1. Files: one, plus one optional directory
 
-SupremeCommander is a **single executable**. Themes, keymap profiles, language catalogues and
+FinalCommander is a **single executable**. Themes, keymap profiles, language catalogues and
 help are compiled in, so the program is fully usable with nothing else on disk.
 
 | Path | What | Required? |
 | --- | --- | --- |
-| `scmd.toml` | **all** user settings: options, `[[theme]]` blocks, `[[keymap]]` blocks, filters, associations, user menu, remote sites (no secrets), terminal key fixes | no |
-| `scmd-state.toml` | remembered state beside it: histories, last session, panel paths, viewer positions | written only if there is something to remember |
+| `fcmd.toml` | **all** user settings: options, `[[theme]]` blocks, `[[keymap]]` blocks, filters, associations, user menu, remote sites (no secrets), terminal key fixes | no |
+| `fcmd-state.toml` | remembered state beside it: histories, last session, panel paths, viewer positions | written only if there is something to remember |
 | `plugins/` | the **only** directory ever read: one file per plugin | no |
 
 Discovery, in order:
 
-1. `--config <file>` / `--plugins <dir>` (and `$SCMD_PLUGINS`);
-2. **portable**: an `scmd.toml` next to the executable — a release zip or a USB stick needs no
+1. `--config <file>` / `--plugins <dir>` (and `$FCMD_PLUGINS`);
+2. **portable**: an `fcmd.toml` next to the executable — a release zip or a USB stick needs no
    setup, and nothing is written outside that folder;
-3. otherwise the per-OS config location, as a single file: `~/.config/scmd.toml`,
-   `~/Library/Application Supportmd.toml`, `%APPDATA%md.toml`. Note the absence of a
+3. otherwise the per-OS config location, as a single file: `~/.config/fcmd.toml`,
+   `~/Library/Application Support/fcmd.toml`, `%APPDATA%\fcmd.toml`. Note the absence of a
    directory of our own — there is one file to back up and one file to delete.
 
-`scmd --paths` prints all three locations and says whether each exists. `scmd --dump-config` prints
+Each of these files is looked for under its own name first and under the name it had before
+the program was renamed after that (`scmd.toml`, `scmd-state.toml`, `scmd-macros.toml`,
+`scmd-menu.toml`, `scmd-plugins/`). A configuration somebody already has is not something to
+lose over a rename: the old file is read, and written back to, and the startup screen says
+once which file that was and what it should be called.
+
+`fcmd --paths` prints all three locations and says whether each exists. `fcmd --dump-config` prints
 the effective configuration (including the themes it carries) with provenance
-(`default` / `scmd.toml` / `--set`), which is what a bug report should include.
-Sections inside `scmd.toml`: `[general]`, `[panel]`, `[operations]`, `[viewer]`, `[editor]`,
+(`default` / `fcmd.toml` / `--set`), which is what a bug report should include.
+Sections inside `fcmd.toml`: `[general]`, `[panel]`, `[operations]`, `[viewer]`, `[editor]`,
 `[ui]`, `[terminal]`, `[[theme]]`, `[[keymap]]`, `[[filter]]`, `[[highlight]]`, `[[assoc]]`,
 `[[menu]]`, `[[site]]`, `[keys.local]`.
 
-## 2. scmd.toml (shape, with defaults)
+## 2. fcmd.toml (shape, with defaults)
 
 ```toml
 [general]
@@ -94,7 +100,7 @@ kitty_keyboard = "auto"
 ```
 
 CLI overrides: `--set panel.show_hidden=true`, `--theme`, `--keymap`, `--config`, `--portable`.
-Environment: `SCMD_CONFIG_DIR`, `SCMD_THEME`, `SCMD_KEYMAP`, `NO_COLOR`, `COLORTERM`.
+Environment: `FCMD_CONFIG_DIR`, `FCMD_THEME`, `FCMD_KEYMAP`, `NO_COLOR`, `COLORTERM`.
 
 ## 2b. `[[decompile]]` rules
 
@@ -111,7 +117,7 @@ cmd = "javap -c -p -constants {file}"   # run directly, never through a shell
 Compiled-in defaults, each active only if present: `javap` (`*.class`), `ilspycmd` (`*.dll`),
 `python3 -m dis` (`*.pyc`), `wasm2wat` (`*.wasm`, though WebAssembly is printed in process
 anyway), `objdump -d -C` (`*.o`, `*.so`, `*.a`), `retdec-decompiler` (`*.exe`). A rule in
-`scmd.toml` wins over a default for the same mask. `{file}` is substituted; a rule that forgets
+`fcmd.toml` wins over a default for the same mask. `{file}` is substituted; a rule that forgets
 it still gets the path appended.
 
 ## 2c. `[net]` and `[[site]]`
@@ -166,7 +172,7 @@ included, and what it writes parses back into the same configuration.
 ## 3. Keymaps
 
 ```toml
-# a [[keymap]] block inside scmd.toml
+# a [[keymap]] block inside fcmd.toml
 [[keymap]]
 name = "mine"
 inherit = "far"
@@ -186,7 +192,7 @@ keys = ["Ctrl+Q"]                scope = "global"
 ```
 
 Rules: a command may have several bindings; a binding may carry arguments; conflicts are
-reported at load time with the file:line of both bindings; `scmd --check-keymap` validates and
+reported at load time with the file:line of both bindings; `fcmd --check-keymap` validates and
 prints the resolved table (also used to generate the help pages).
 
 Modal profile (`vi`) adds `mode = "normal" | "insert" | "visual"` to a binding's scope, with
@@ -198,7 +204,7 @@ ranges, and modal states — nothing else (no scripting in the keymap).
 ```toml
 id = "commander"
 name = "Commander"
-author = "SupremeCommander"
+author = "FinalCommander"
 variant = "dark"
 inherit = ""          # optional: start from another theme and override keys below
 
@@ -266,15 +272,15 @@ hidden = "#808080"
   | `tron` | neon on black: cyan and orange accents, thin bright highlights |
   | `blade` | amber/teal on near-black, warm selection — "blade" |
 
-- **External themes** are `[[theme]]` blocks in `scmd.toml` (or themes a plugin declares). They
+- **External themes** are `[[theme]]` blocks in `fcmd.toml` (or themes a plugin declares). They
   are read at startup and hot-reloaded when the file changes; a block with the id of a built-in
   overrides it, so a user can retune `commander` without renaming it. `ui.theme = "<id>"`
-  selects, `app.theme.next` cycles through everything available, and `scmd --list-themes` prints
+  selects, `app.theme.next` cycles through everything available, and `fcmd --list-themes` prints
   the resolved list with where each came from (`built-in`, the config file, or `plugin:<id>`).
 - A theme file may `inherit = "<id>"` and override single keys; unknown keys are a warning, not
   a failure, so a theme written for a later version still loads.
-- `scmd --export-theme <id>` prints a built-in theme as a ready-to-paste `[[theme]]` block
-  (`scmd --export-theme tron >> ~/.config/scmd.toml`).
+- `fcmd --export-theme <id>` prints a built-in theme as a ready-to-paste `[[theme]]` block
+  (`fcmd --export-theme tron >> ~/.config/fcmd.toml`).
 - Themes are re-derived from published palettes, never copied from another application's theme
   files (`01-licensing.md` §4).
 - `app.theme.next` cycles; a theme change is hot-reloaded, as is any config file change
@@ -289,7 +295,7 @@ hidden = "#808080"
   `ui.language`/`--lang`; `auto` follows the OS locale and falls back to English. Adding a
   language means dropping an `i18n/<lang>/` directory next to the binary — no rebuild.
 - Rules: no string concatenation in code; plurals and gender through fluent; every message has
-  an id; `scmd --i18n-lint` finds missing/unused ids in CI.
+  an id; `fcmd --i18n-lint` finds missing/unused ids in CI.
 - Russian and Chinese drive two requirements that are not optional: full Unicode input/display
   (no codepage assumptions anywhere) and correct double-width layout for CJK. Both are tested
   per language in the snapshot suite, and German/French/Spanish strings are the ones that break
@@ -302,7 +308,7 @@ hidden = "#808080"
 
 ## 6. Migration & compatibility helpers
 
-- `scmd import --from far|tc|mc|dc <path>` reads what is safely readable from another
+- `fcmd import --from far|tc|mc|dc <path>` reads what is safely readable from another
   commander's *user* configuration (its keymap assignments, user menu entries, associations,
   bookmark/hotlist paths, FTP site names) and produces our TOML, reporting everything it could
   not map. This touches the user's own data, not the vendor's: no proprietary file format is

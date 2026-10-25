@@ -1,0 +1,42 @@
+[package]
+name = "fcmd-arc"
+description = "FinalCommander: the archive provider (what is inside a zip or a tar, and how to get it out)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+# Every decoder here is pure Rust: the binary stays one file that cross-compiles without a C
+# toolchain, which is the whole point of the release matrix.
+bzip2 = "0.6"
+flate2 = "1"
+lzma-rust2 = { version = "0.23", default-features = false, features = ["std", "xz", "encoder"] }
+ruzstd = "0.9"
+# 7z, reading and writing. The feature list is the codecs 7-Zip itself writes by default plus
+# the two optional ones a real-world archive turns out to use: `deflate` for an archive made
+# from a zip, `aes256` so an encrypted one is recognised and refused with a reason rather than
+# read as rubble. `util` (whole-archive convenience functions) and the codecs only 7-Zip ZS
+# writes (zstd, lz4, brotli) are left out.
+sevenz-rust2 = { version = "0.20.2", default-features = false, features = [
+  "compress",
+  "bzip2",
+  "ppmd",
+  "deflate",
+  "aes256",
+] }
+fcmd-core = { workspace = true }
+tar = { version = "0.4", default-features = false }
+thiserror = "2"
+zip = { version = "9", default-features = false, features = [
+  "deflate-flate2",
+  "deflate64",
+  "bzip2",
+  "lzma",
+  "xz",
+] }
+
+[dev-dependencies]
+tempfile = "3"

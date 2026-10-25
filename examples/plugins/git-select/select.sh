@@ -3,7 +3,7 @@
 # Shift+F1 packs them. The point of the plugin tier: the selection is the program's, the
 # knowledge of what changed is git's.
 cat >/dev/null
-cd "$SCMD_DIR" 2>/dev/null || { echo '{"error":"not a directory on this machine"}'; exit 0; }
+cd "$FCMD_DIR" 2>/dev/null || { echo '{"error":"not a directory on this machine"}'; exit 0; }
 if ! git rev-parse --git-dir >/dev/null 2>&1; then
   echo '{"status":"not a git repository"}'
   exit 0

@@ -60,7 +60,7 @@ Unicode-3.0, or MPL-2.0 at file level). The policy and the allow-list live in `d
 | `serde_json` | MIT OR Apache-2.0 | the plugin protocol |
 | `notify` (with `notify-types`; `inotify` on Linux, `kqueue` on the BSDs, `objc2-core-services` on macOS) | CC0-1.0 / MIT OR Apache-2.0 | the filesystem watch behind `panel.auto_refresh`: three platform APIs we are not going to write three times |
 | `clap_mangen` | MIT OR Apache-2.0 | generating the manual page from the command line |
-| `pulldown-cmark` (with `pulldown-cmark-escape`, MIT, and `unicase`, MIT OR Apache-2.0) | MIT | Markdown to HTML in `scmd-site`, the generator for the project's web site — not in the program: `scmd` does not link it |
+| `pulldown-cmark` (with `pulldown-cmark-escape`, MIT, and `unicase`, MIT OR Apache-2.0) | MIT | Markdown to HTML in `fcmd-site`, the generator for the project's web site — not in the program: `fcmd` does not link it |
 | `tempfile` (dev only) | MIT OR Apache-2.0 | filesystem tests |
 
 Two dependencies are multi-licensed with a copyleft option we do **not** take: `r-efi`

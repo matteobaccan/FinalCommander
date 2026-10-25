@@ -4,7 +4,7 @@
 [plugin]
 id = "strip-bom"
 name = "Byte order mark"
-scmd = ">=0.1.0"
+fcmd = ">=0.1.0"
 
 [[command]]
 id = "user.bom.find"

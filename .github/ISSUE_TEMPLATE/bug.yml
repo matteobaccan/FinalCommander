@@ -8,16 +8,16 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thank you for trying it. Please paste the output of `scmd --version` and, if the
-        problem is about keys or settings, of `scmd --paths` — they answer half the questions
+        Thank you for trying it. Please paste the output of `fcmd --version` and, if the
+        problem is about keys or settings, of `fcmd --paths` — they answer half the questions
         before they are asked.
 
   - type: input
     id: version
     attributes:
       label: Version
-      description: "`scmd --version`, or the name of the archive you unpacked"
-      placeholder: scmd 0.1.0
+      description: "`fcmd --version`, or the name of the archive you unpacked"
+      placeholder: fcmd 0.1.0
     validations:
       required: true
 
@@ -45,7 +45,7 @@ body:
     id: keymap
     attributes:
       label: Keymap
-      description: "`scmd --dump-config` prints this as `ui.keymap`"
+      description: "`fcmd --dump-config` prints this as `ui.keymap`"
       options:
         - far (the default)
         - mc
@@ -70,7 +70,7 @@ body:
       label: The keys, in order
       description: >
         The quickest thing to act on. If a macro or a plugin was involved, say so —
-        `scmd --paths` names the files they live in.
+        `fcmd --paths` names the files they live in.
       placeholder: |
         Tab, Alt+N, Enter on the first site, Tab, Insert, F5
       render: text

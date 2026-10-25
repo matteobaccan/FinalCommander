@@ -2,11 +2,11 @@
 rem The Windows half of status.sh. Batch rather than PowerShell because this is three lines
 rem of work, and a `.cmd` is something the host can run directly.
 setlocal
-if "%SCMD_DIR%"=="" (
+if "%FCMD_DIR%"=="" (
   echo {"error":"not a directory on this machine"}
   exit /b 0
 )
-cd /d "%SCMD_DIR%" 2>nul || (
+cd /d "%FCMD_DIR%" 2>nul || (
   echo {"error":"cannot enter that directory"}
   exit /b 0
 )

@@ -4,7 +4,7 @@
 [plugin]
 id = "open-with"
 name = "Open with the desktop"
-scmd = ">=0.1.0"
+fcmd = ">=0.1.0"
 
 [[command]]
 id = "user.open.desktop"

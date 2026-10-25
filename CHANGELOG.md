@@ -6,6 +6,21 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **The program is called FinalCommander, and its command is `fcmd`.** It shipped as
+  SupremeCommander up to 0.4.0; the name is now the one it will keep. Everything that carried
+  the old name carries the new one: the command, the crates (`fcmd-core`, `fcmd-vfs`, …), the
+  configuration (`fcmd.toml`, `fcmd-state.toml`, `fcmd-macros.toml`, `fcmd-menu.toml`,
+  `fcmd-plugins/`), the manual page, the plugin environment (`$FCMD_CWD` and the rest) and the
+  release archives (`fcmd-linux-x86_64-<version>.tar.gz`). Nothing about what the program does
+  has changed with it.
+
+  A configuration from 0.4.0 keeps working untouched: every file is looked for under its new
+  name first and its old one after, so `scmd.toml` is still read — and still written — with one
+  line on the startup screen saying which file it was and what to call it instead. The same
+  goes for the state, the macros, the user menu and the plugins folder.
+
 ### Added
 
 - **A panel notices what it did not do itself.** A local panel watches the directory it is
@@ -127,9 +142,9 @@ goes past `MAX_PATH`. And the project has a site, generated from the repository'
   code page is a dim row there, because it wants the store the histories want.
 
 - **The user menu** (`F2`), which is the feature that makes a commander somebody's own: a few
-  lines they run ten times a day, each with a label and a letter. It lives in `scmd-menu.toml`
-  beside the settings — `scmd --paths` prints where, and `F2` with no file says so rather than
-  opening an empty box — and a directory can carry its own `.scmd-menu.toml`, whose rows come
+  lines they run ten times a day, each with a label and a letter. It lives in `fcmd-menu.toml`
+  beside the settings — `fcmd --paths` prints where, and `F2` with no file says so rather than
+  opening an empty box — and a directory can carry its own `.fcmd-menu.toml`, whose rows come
   above the ones that are everywhere, because the menu of the project one is in is the one
   wanted while in it.
 
@@ -156,7 +171,7 @@ goes past `MAX_PATH`. And the project has a site, generated from the repository'
   and `Shift+F10` for the row taken last.
 
 - **A site for the project**, published on GitHub Pages from the repository's own documents.
-  `crates/scmd-site` is a generator, not a site: it reads `README.md`, `CHANGELOG.md`, the
+  `crates/fcmd-site` is a generator, not a site: it reads `README.md`, `CHANGELOG.md`, the
   commander survey in `docs/00-landscape.md`, the help chapters in `docs/help/` and the
   screenshots the renderer itself draws into `docs/shots/`, and writes 38 static pages — the
   landing page with the argument and the screenshots, what the one file replaces, what works
@@ -171,7 +186,7 @@ goes past `MAX_PATH`. And the project has a site, generated from the repository'
   download page exist in the seven languages the interface speaks, and a page whose source
   document is English says so in a note rather than pretending.
 
-  `cargo run -p scmd-site -- --out site` writes it; `.github/workflows/pages.yml` builds it on
+  `cargo run -p fcmd-site -- --out site` writes it; `.github/workflows/pages.yml` builds it on
   every push, checks that the pages that matter are there and not empty, and keeps them as the
   run's artifact, which is downloadable and reads correctly off the disk. Publishing is a
   separate decision and nothing takes it automatically: a site on GitHub Pages is public to
@@ -186,7 +201,7 @@ goes past `MAX_PATH`. And the project has a site, generated from the repository'
   day: `node_modules` nested four deep, a build tree, a path from a server that was fine where
   it came from.
 
-  So every path handed to the operating system now goes through `scmd_core::os_path`, which on
+  So every path handed to the operating system now goes through `fcmd_core::os_path`, which on
   Windows adds the verbatim prefix — `\\?\`, or `\\?\UNC\` for a share — to an absolute path of
   240 characters or more, and on every other platform is the identity. 240 rather than 260
   because a directory is allowed twelve fewer characters than a file: what goes in it has to
@@ -239,7 +254,7 @@ goes past `MAX_PATH`. And the project has a site, generated from the repository'
 
   The change goes onto the **live** theme at once — a colour one cannot see is a colour one
   cannot choose — so it is on the screen before it is in a file. `F2` writes the theme into
-  `scmd.toml` as a `[[theme]]` block under its own id, which the theme loader already treats as
+  `fcmd.toml` as a `[[theme]]` block under its own id, which the theme loader already treats as
   an override of the built-in of that name, so the next run starts with these colours and
   `Shift+F12` still cycles the themes. `Esc` without `F2` says plainly that the colours changed
   on the screen only.
@@ -365,7 +380,7 @@ goes past `MAX_PATH`. And the project has a site, generated from the repository'
   readable — is recognised and reported as wanting a password, rather than as a broken
   archive. There is nowhere to type one yet, and the message says that too.
 
-- **File associations.** A `[[assoc]]` block in `scmd.toml` is a mask, a name and three
+- **File associations.** A `[[assoc]]` block in `fcmd.toml` is a mask, a name and three
   commands — `open` for `Enter`, `view` and `edit` for `Alt+F3` and `Alt+F4` — and the first
   block whose mask matches the file wins. The mask is a whole name (`Makefile`) or `*.` and an
   extension (`*.md`), compared without regard to case, by the same rule the decompile rules
@@ -472,7 +487,7 @@ goes past `MAX_PATH`. And the project has a site, generated from the repository'
   was given one. It is the one list that is edited from inside it — `Ins` keeps the directory
   you are in, `Del` gives a folder up, `F4` names it — because that is where a folder is read.
 
-  They live in the state file rather than in `scmd.toml`, because a *key* sets them: a
+  They live in the state file rather than in `fcmd.toml`, because a *key* sets them: a
   shortcut that waited for *Save setup* and vanished without it would be a bug, not a setting.
   A shortcut on a server or in a bucket works like any other and opens the connection first,
   the same route the drive list takes.
@@ -598,7 +613,7 @@ say what the engine underneath them could already do.
   inside the folders*.
 
   It reports like a copy, with a progress box, a count and `Esc`, and a file that refuses is
-  listed with its reason instead of being passed over — which is why this is `scmd_jobs::attrs`
+  listed with its reason instead of being passed over — which is why this is `fcmd_jobs::attrs`
   and not `JobFs::apply_meta`: that one is a copy's best effort and swallows what it cannot do,
   which is right after a copy and wrong when somebody has just ticked a box. A directory is
   changed after its contents, so taking the write bit off one cannot put its own contents out
@@ -622,7 +637,7 @@ say what the engine underneath them could already do.
   a copy between two keys of the same service is done by the service, so the bytes never come
   through here.
 
-  The engine knows nothing about object storage: `scmd_s3::jobs::ObjectFs` wraps the job
+  The engine knows nothing about object storage: `fcmd_s3::jobs::ObjectFs` wraps the job
   filesystem the way the archive layer does, takes the `s3://` paths and hands everything else
   through. What the protocol cannot do is said rather than faked — there are no directories
   (`F7` writes the empty slash-named object every console uses to show an empty prefix), a
@@ -645,7 +660,7 @@ say what the engine underneath them could already do.
   Searching a laid-out document searches what is on screen rather than the marks behind it, so
   a word in a table is found in its cell.
 
-- `scmd-syntax` gained `of_language`, which turns a language's *name* into a syntax — what a
+- `fcmd-syntax` gained `of_language`, which turns a language's *name* into a syntax — what a
   fenced code block's info string says — where `of_name` turns a file name into one.
 
 - The interface settings now have the two colouring switches that were only in the file:
@@ -744,7 +759,7 @@ the modifier you are holding; the editor and the viewer colour twenty-five langu
 - **Object storage in the panels.** `s3://logs/2024/08/` opens a bucket as a tree of prefixes,
   on AWS or on anything else that speaks the protocol — MinIO, Ceph, Garage, R2, Wasabi, a
   LocalStack in a container — with the endpoint, the region and the addressing style named in
-  an `[[s3]]` block of `scmd.toml`. `s3://work@bucket/` picks a service by name and
+  an `[[s3]]` block of `fcmd.toml`. `s3://work@bucket/` picks a service by name and
   `s3://work@/` lists the buckets it can see.
 
   A bucket has no directories: `2024/08/13/access.log` is one key with slashes in it. What the
@@ -755,7 +770,7 @@ the modifier you are holding; the editor and the viewer colour twenty-five langu
   as long as that listing is on screen, with a line saying why. SPEC 04 §8 has the measured
   numbers for a bucket of 1.7 million objects, since that is the question this started from.
 
-  No access key is stored in `scmd.toml`, ever: a block says *where* its keys come from, and
+  No access key is stored in `fcmd.toml`, ever: a block says *where* its keys come from, and
   they are read from the `AWS_*` variables or from `~/.aws/credentials`, the file every AWS
   tool shares. `credentials = "anonymous"` signs nothing, for a bucket with a public read
   policy. TLS is `rustls` — one implementation on every system, and no OpenSSL to find — but
@@ -897,7 +912,7 @@ real help system, a manual page, and the first thing a plugin can do beyond carr
 
 - **Macros (`Ctrl+.` records, `Ctrl+Shift+.` lists)**. A macro is a list of *commands*, not of
   keystrokes: every action in the program is already a named command, so a recorded macro is a
-  readable list of names in `scmd-macros.toml` that one can read, edit, diff and carry to
+  readable list of names in `fcmd-macros.toml` that one can read, edit, diff and carry to
   another machine. What a key cannot say as a command is kept as a key — the letters typed into
   a prompt, `Enter` on a dialog — and recording tells the two apart by where the key went.
   The corner of the screen says `REC` and counts the steps while one is being recorded; the key
@@ -919,7 +934,7 @@ real help system, a manual page, and the first thing a plugin can do beyond carr
   every command with the keys that reach it, and the settings as this session has them. The
   generated half is built from the keymap actually in force, so it cannot drift; a written list
   of keys is wrong the day after it is written.
-- **A manual page**, `docs/scmd.1`, generated from the command line's own options with the
+- **A manual page**, `docs/fcmd.1`, generated from the command line's own options with the
   sections `clap` cannot know about written underneath, and shipped in the release archives. A
   test fails when the committed page and the binary disagree, so a flag cannot exist without a
   line in the page.
@@ -944,8 +959,8 @@ real help system, a manual page, and the first thing a plugin can do beyond carr
 
 ### Notes for the first testers
 
-Everything is a file you can read: `scmd --paths` says where they are, `scmd --dump-config`
-prints the settings as the program has them, and `scmd --check-keymap` says whether a keymap is
+Everything is a file you can read: `fcmd --paths` says where they are, `fcmd --dump-config`
+prints the settings as the program has them, and `fcmd --check-keymap` says whether a keymap is
 sound. `F1` is the manual, `F9` names every dialog with its key, and the key bar always says
 what the function keys do right now.
 
@@ -1085,7 +1100,7 @@ Archives: a panel can be inside one, and a key puts files into one.
   level, and `..` at the root of an archive leaves it, because an archive root has a parent and
   so is not a root. Two archives are two providers, and so are an archive and the directory it
   sits in: that is what stops a copy out of one being planned as a rename.
-- **`scmd-arc` reads zip and the tar family** — plain, gzip, bzip2, xz and zstd — and builds
+- **`fcmd-arc` reads zip and the tar family** — plain, gzip, bzip2, xz and zstd — and builds
   all six. Every decoder and encoder is pure Rust, so the binary stays one file that
   cross-compiles without a C toolchain. The format comes from the bytes first and the name
   second: a zip called `.epub` is still a zip, while only the name can say that a gzip stream
@@ -1111,7 +1126,7 @@ Archives: a panel can be inside one, and a key puts files into one.
 - **What is inside an archive cannot be changed yet** and says so in all seven languages:
   that is the rebuild of SPEC 04 §4, with an archive inside an archive and an archive on a
   server beside it in [`docs/BACKLOG.md`](docs/BACKLOG.md).
-- The release archives are now `scmd-<platform>-<version>` and hold the files at their root,
+- The release archives are now `fcmd-<platform>-<version>` and hold the files at their root,
   with no directory of their own.
 
 ## [0.0.4] — 2026-10-24
@@ -1129,7 +1144,7 @@ Finding things: a search worth the name, and a panel that can hold what it found
   links, folders in the results. It opens on the last search. Results stream into a list that
   is usable while the walk runs — `Enter` goes to the file, `F3` reads it, `F5` turns the
   results into the panel, `Esc` stops the search and keeps what it found.
-- **The engine is its own crate** (`scmd-find`), so the dialog does not know how a walk works
+- **The engine is its own crate** (`fcmd-find`), so the dialog does not know how a walk works
   and the walk does not know what a panel is: the dialog makes a plain specification, and one
   place turns it into a query. Progress is throttled rather than sent per file, and the
   directories a walk cannot read are collected and capped instead of announced one by one — a
@@ -1254,7 +1269,7 @@ A command line, and the keys a FAR user reaches for without thinking.
 
 ### Plugins
 
-- `scmd-plug`: manifests discovered from disk, with themes, keymaps, associations, decompile
+- `fcmd-plug`: manifests discovered from disk, with themes, keymaps, associations, decompile
   rules and mask groups loaded from them, a version requirement checked against ours, and every
   path inside a plugin verified to stay inside it — relative, no `..`, and the canonical target
   inside the canonical directory, so a symlink cannot walk out either.
@@ -1332,7 +1347,7 @@ makes it learnable.
 - `Left` and `Right` act on their own panel whichever one has the focus, as FAR's do.
 - Every entry is a command from the same vocabulary the keys use, so there is no behaviour
   reachable only from a menu, and the shortcut shown beside an entry is read from the keymap in
-  force — rebind it in `scmd.toml` and the menu says the new key.
+  force — rebind it in `fcmd.toml` and the menu says the new key.
 - An entry whose feature is not here yet stays in the menu, drawn dim, and says
   `not implemented: <command>` when chosen: the menu is a map of the program, and a map with
   the gaps marked beats one that lies. A test stops those entries from advertising a key that
@@ -1345,7 +1360,7 @@ makes it learnable.
   write something the file format does not accept.
 - `OK` (or `F10`) applies to the running panels at once: no restart, nothing to save first.
   `Esc` keeps nothing.
-- `Save setup` (`Shift+F9`) writes `scmd.toml` as the configuration now stands, themes that came
+- `Save setup` (`Shift+F9`) writes `fcmd.toml` as the configuration now stands, themes that came
   from the file included. What it writes parses back into the same configuration.
 
 ### Lists to choose from
@@ -1361,7 +1376,7 @@ makes it learnable.
 
 - `Alt+N` then `Ins`/`F7` stores a connection, `F4` edits the one under the cursor: name, host,
   port, user, authentication (SSH agent, key file or ask), key file, remote folder, group,
-  keep-alive, compression. Connections no longer need `scmd.toml` to be edited by hand.
+  keep-alive, compression. Connections no longer need `fcmd.toml` to be edited by hand.
 - It is validated before it is stored — a host is required, port and keep-alive must be numbers,
   the key authentication needs a file, and the result has to be a site the netbox can use. A
   dialog that cannot be applied stays open with the reason in the status line.
@@ -1444,7 +1459,7 @@ behave, and what is missing says so instead of failing quietly.
 - Six themes (commander, black, white, matrix, tron, blade) and seven interface languages
   (English, Italian, German, French, Spanish, Russian, Simplified Chinese).
 - One executable: themes, keymaps and languages are compiled in. The only files on disk are
-  `scmd.toml` (if you want one) and an optional plugins folder.
+  `fcmd.toml` (if you want one) and an optional plugins folder.
 - Non-interactive modes for scripts and CI: `--list-themes`, `--list-commands`,
   `--list-languages`, `--check-keymap`, `--export-theme`, `--dump-config`, `--paths`.
 

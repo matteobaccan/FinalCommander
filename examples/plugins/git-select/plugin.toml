@@ -2,7 +2,7 @@
 [plugin]
 id = "git-select"
 name = "Git select"
-scmd = ">=0.1.0"
+fcmd = ">=0.1.0"
 
 [[command]]
 id = "user.git.select-changed"

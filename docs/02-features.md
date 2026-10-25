@@ -8,7 +8,7 @@ Milestones: **M1** = usable daily driver (MVP), **M2** = feature parity with mc 
 
 For FAR specifically, [`04-far-inventory.md`](04-far-inventory.md) is the harder check: FAR 3.x
 read from its own repository — 283 help topics, 311 settings keys — with each feature marked
-against what SupremeCommander actually does today.
+against what FinalCommander actually does today.
 Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `YAZI`, `NEW`.
 
 ## 1. Panels
@@ -138,7 +138,7 @@ published list, item for item, against what we have.
 
 | Hiew VIII says | Us |
 | --- | --- |
-| view and edit files of unlimited size in text, hex and disassembler modes | **Viewing: shipped** — the viewer streams and seeks, so a 40 GB file opens at once in text, dump, hex or disassembly. **Editing: shipped in 0.0.8** as the hex mode of the editor, deliberately in `scmd-edit`, because the viewer's read-only contract is exactly what lets it seek through 40 GB |
+| view and edit files of unlimited size in text, hex and disassembler modes | **Viewing: shipped** — the viewer streams and seeks, so a 40 GB file opens at once in text, dump, hex or disassembly. **Editing: shipped in 0.0.8** as the hex mode of the editor, deliberately in `fcmd-edit`, because the viewer's read-only contract is exactly what lets it seek through 40 GB |
 | x86-64 disassembler and assembler, AVX included | **Disassembler: shipped** (`iced-x86`, which decodes AVX through AVX-512). **Assembler: shipped (0.0.8)** for the instructions a patcher types — registers, numbers and branches written as the address to arrive at, one at a time into the patch list (SPEC 05 §2.8). Memory operands and the vector sets are refused by name rather than guessed at |
 | physical and logical drive view and edit | **Done on Linux and macOS (0.0.8), read-only.** A block device is a file; its length is measured with a seek rather than read from `stat`, it opens read-only, and the bytes are written *out* to a file rather than back over the disk. Windows needs its own path and is on the backlog |
 | NE, LE, LX, PE/PE32+, ELF/ELF64, Mach-O, TE/TE64 | **PE/PE32+, ELF/ELF64, Mach-O (thin and universal) and `ar`: shipped** in the structure pane, including imports, exports and the .NET CLI header. **NE, LE, LX, TE/TE64: backlog** — the DOS and EFI families, rainy-day additions to the same pane |
@@ -176,7 +176,7 @@ a binary into something readable rather than only into instructions.
 | 6.8 | Insert file name / path / current date, character by code, macros | FAR | M3 |
 | 6.9 | External editor delegation (`$EDITOR`, per-type associations) | all | **0.4.0**: `Alt+F4` takes what an association names, else `$VISUAL` or `$EDITOR`; `Alt+F3` the same for `$PAGER` |
 | 6.10 | LSP-lite: completion/diagnostics for the open file (optional plugin) | NEW | M4 |
-| 6.11 | **Atomic save** (`name.scmd-tmp` + rename, permissions carried over) and a save-as prompt | NEW | M1 |
+| 6.11 | **Atomic save** (`name.fcmd-tmp` + rename, permissions carried over) and a save-as prompt | NEW | M1 |
 | 6.12 | **External-change detection**: a file changed on disk is never overwritten without a confirmation; reload on demand | FAR | M1 (diff-on-conflict M3) |
 | 6.13 | `Shift+F4` edits a new file, saved into the active panel's directory | FAR | M1 |
 | 6.14 | Line editing: delete, duplicate, move up/down, delete to end of line, delete word left, auto-indent, smart home, tab expansion | FAR | M1 (join, sort, unique, reverse, number M2) |
@@ -188,7 +188,7 @@ a binary into something readable rather than only into instructions.
 | 7.1 | Find files: mask, content (text/regex/hex), size/date/attr filters, archives included, encoding list, results panel, panelize results, "find folder" | FAR/TC | M2 |
 | 7.2 | Grep-like content search with result navigation and jump-to-match in the editor | NEW | M2 |
 | 7.3 | Disk usage / occupied space view (per-dir sizes, sortable, graphical bars) | KRU/TC | M2 |
-| 7.4 | User menu (`F2`) with user-defined entries, submenus, hotkeys, per-directory menus | FAR/MC | **Shipped: 0.4.0** — `scmd-menu.toml` beside the settings and `.scmd-menu.toml` in a directory, merged above it; a row is a label, a key and command lines that run in order and stop at the first failure, with the §5b substitutions and `{ask:…}`; `when` hides a row the directory has no use for. Reading `FarMenu.ini` as it stands, separators, an editor for the entries and `Shift+F10`: M3 |
+| 7.4 | User menu (`F2`) with user-defined entries, submenus, hotkeys, per-directory menus | FAR/MC | **Shipped: 0.4.0** — `fcmd-menu.toml` beside the settings and `.fcmd-menu.toml` in a directory, merged above it; a row is a label, a key and command lines that run in order and stop at the first failure, with the §5b substitutions and `{ask:…}`; `when` hides a row the directory has no use for. Reading `FarMenu.ini` as it stands, separators, an editor for the entries and `Shift+F10`: M3 |
 | 7.5 | File associations by mask: view/edit/execute/alternative commands | FAR/MC | **`[[assoc]]` blocks with `open`, `view` and `edit`: 0.4.0** — `Enter`, `Alt+F3` and `Alt+F4`, with the desktop opener and `$PAGER`/`$VISUAL` behind them and an *Open with* list. Defaults read off the OS, a dialog to edit the blocks and the `execute`/`extract`/`preview` entries: M3 |
 | 7.6 | Command history, view/edit history, folder history — all searchable and persisted | FAR | M1 |
 | 7.7 | Macro recorder/player, keyboard macros with conditions, assignable to any key | FAR/far2m | **Recorder, player and list: 0.1.0** (`Ctrl+.`, `Ctrl+Shift+.`) — a macro is a list of commands in a readable file, assigned to the key one presses after recording, with `once` and `each-selected` play modes. Conditions and the Lua form need a macro step that can ask the application a question, which is the plugin host's job: M3 |
@@ -217,7 +217,7 @@ a binary into something readable rather than only into instructions.
 | --- | --- | --- | --- |
 | 9.1 | Human-editable config files (TOML) + in-app settings dialogs (System, Panel, Interface, Confirmations — every row bound to a config key and applied through the same code as `--set`, SPEC 10 §3); portable mode (config next to the binary) | MTN2 | M1 |
 | 9.2 | Full keymap remapping, multiple **keymap profiles** (`far`, `tc`, `mc`, `nc`, `vi`) switchable at runtime | KRU/MTN2 | M1 (far+mc), M2 rest |
-| 9.3 | Themes: 7 built-in (`commander`, `far` — FAR's own default palette element for element, `black`, `white`, `matrix`, `tron`, `blade`) + `[[theme]]` blocks in `scmd.toml` or from plugins, hot-reloaded, `inherit`-able, exportable with `--export-theme`; 24-bit colour with 256/16/mono degradation | MTN2 | M1 |
+| 9.3 | Themes: 7 built-in (`commander`, `far` — FAR's own default palette element for element, `black`, `white`, `matrix`, `tron`, `blade`) + `[[theme]]` blocks in `fcmd.toml` or from plugins, hot-reloaded, `inherit`-able, exportable with `--export-theme`; 24-bit colour with 256/16/mono degradation | MTN2 | M1 |
 | 9.4 | Localisation (fluent-based): EN, IT, DE, FR, ES, RU, ZH-Hans; UI + help + key names, runtime switchable from the `Languages` list, drop-in language dirs | FAR/MTN2 | M2 |
 | 9.5 | CJK/wide-character correct layout, combining marks, RTL-safe truncation, emoji width | MTN2 | M2 |
 | 9.6 | Accessibility: no-colour mode, screen-reader-friendly output mode, configurable focus indication | NEW | M3 |

@@ -3,8 +3,8 @@
 FAR's menu bar is the discoverable half of the program: everything the keys do, a user can also
 find by reading. This spec says what the menus contain, what the dialogs contain, what each row
 writes into the configuration, and how all of it behaves. It is implemented in
-`crates/scmd/src/menu.rs` (the model), `crates/scmd/src/form.rs` (dialog state) and
-`crates/scmd-ui/src/widgets.rs` (drawing).
+`crates/fcmd/src/menu.rs` (the model), `crates/fcmd/src/form.rs` (dialog state) and
+`crates/fcmd-ui/src/widgets.rs` (drawing).
 
 ## 1. Principles
 
@@ -12,7 +12,7 @@ writes into the configuration, and how all of it behaves. It is implemented in
    (SPEC 01 §4), the same value a key press resolves to. There is no behaviour reachable only
    from a menu, and none reachable only from a key.
 2. **The shortcut shown is the shortcut that works.** The key next to an entry is read from the
-   keymap in force, so a rebinding in `scmd.toml` shows up in the menu. Entries for features
+   keymap in force, so a rebinding in `fcmd.toml` shows up in the menu. Entries for features
    that are not here yet carry FAR's key as a *reserved* hint, and a test
    (`the_menu_never_advertises_a_key_that_does_something_else`) fails if that key has meanwhile
    been given to something else.
@@ -21,7 +21,7 @@ writes into the configuration, and how all of it behaves. It is implemented in
    with gaps marked is more useful than a map that pretends.
 4. **A dialog is a view of the configuration.** Every settable row carries the configuration key
    it edits and applies through `Config::set(key, value)` — the same code path as
-   `scmd --set key=value`. One place decides what a setting means; a dialog cannot drift from
+   `fcmd --set key=value`. One place decides what a setting means; a dialog cannot drift from
    the file format.
 5. **Applying has an effect now, and only where it should.** `OK` writes the configuration *and*
    pushes it into the running panels (sort, view, hidden files) — but only the keys the dialog
@@ -199,7 +199,7 @@ added to, or replaced in, `[[site]]`, the site list is rebuilt, and the list reo
 that was just stored. The site lives in the running configuration; `Shift+F9` makes it permanent,
 and the status line says so.
 
-Defaults left empty mean what they mean in `scmd.toml`: no port is 22, no user is the local
+Defaults left empty mean what they mean in `fcmd.toml`: no port is 22, no user is the local
 account name, no name is the host itself.
 
 ### 3.8 File attributes (`Ctrl+A`)
@@ -223,7 +223,7 @@ A row left alone changes nothing: a blank time means "leave it", and the mode's 
 from what the file under the cursor has. The dialog is the tallest in the program, so a screen
 too short for it scrolls to the cursor and the frame says there is more above or below.
 
-The work is `scmd_jobs::attrs`, and it is deliberately *not* `JobFs::apply_meta`. That one is a
+The work is `fcmd_jobs::attrs`, and it is deliberately *not* `JobFs::apply_meta`. That one is a
 copy's best effort and swallows what it cannot do, which is right after a copy and wrong here:
 somebody ticked a box, so a permission that could not be set is collected with its path and
 shown. It reports and cancels through the same progress box as a copy ([`JobKind::Attrs`]),
@@ -283,7 +283,7 @@ immediately (menus, dialogs, key bar, messages) and sets `ui.language`.
 
 ### 4.2 Themes
 
-The built-in themes plus any declared in `scmd.toml`. `Enter` applies it and sets `ui.theme`.
+The built-in themes plus any declared in `fcmd.toml`. `Enter` applies it and sets `ui.theme`.
 `Alt+T` still cycles through them without opening the list.
 
 ### 4.3 Change drive (`Alt+F1` left, `Alt+F2` right)
@@ -324,7 +324,7 @@ rather than retyped. It takes everything a theme file takes: `red`, `brightcyan`
 
 The change is applied to the **live** theme at once, because a colour one cannot see is a
 colour one cannot choose. It is therefore on the screen before it is in a file: `F2` writes the
-theme into `scmd.toml` as a `[[theme]]` block under its own id — which the loader already
+theme into `fcmd.toml` as a `[[theme]]` block under its own id — which the loader already
 treats as an override of the built-in of that name, so `Shift+F12` still cycles the themes —
 and `Esc` without `F2` says plainly that the colours changed on the screen only.
 
@@ -334,7 +334,7 @@ once).
 
 ## 5. Save setup (`Shift+F9`)
 
-Writes the configuration as it stands now to `paths.config_file` (`scmd.toml`), creating the
+Writes the configuration as it stands now to `paths.config_file` (`fcmd.toml`), creating the
 directory if needed, and appends any theme that came from the configuration file so nothing is
 lost on the way through. The status line names the file it wrote. What is written parses back
 into the same configuration — there is a test for exactly that round trip.

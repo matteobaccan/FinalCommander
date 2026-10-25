@@ -1,0 +1,19 @@
+[package]
+name = "fcmd-find"
+description = "FinalCommander: the find-files engine (which files match, streamed as they are found)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+memchr = "2"
+fcmd-core = { workspace = true }
+fcmd-vfs = { workspace = true }
+fcmd-view = { workspace = true }
+thiserror = "2"
+
+[dev-dependencies]
+tempfile = "3"

@@ -5,10 +5,10 @@
 # A binary file is left alone. Stripping carriage returns out of a PNG is the kind of help
 # nobody wants, so each file is checked for a zero byte first.
 cat >/dev/null
-cd "$SCMD_DIR" 2>/dev/null || { echo '{"error":"not a directory on this machine"}'; exit 0; }
+cd "$FCMD_DIR" 2>/dev/null || { echo '{"error":"not a directory on this machine"}'; exit 0; }
 
-names="$SCMD_SELECTED"
-[ -n "$names" ] || names="$SCMD_CURSOR"
+names="$FCMD_SELECTED"
+[ -n "$names" ] || names="$FCMD_CURSOR"
 [ -n "$names" ] || { echo '{"status":"nothing selected"}'; exit 0; }
 
 looks_binary() {
@@ -39,7 +39,7 @@ report_one() {
   fi
 }
 
-case "$SCMD_COMMAND" in
+case "$FCMD_COMMAND" in
   *.what)
     report=$(printf '%s\n' "$names" | while IFS= read -r name; do
       [ -n "$name" ] || continue

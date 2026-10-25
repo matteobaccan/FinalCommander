@@ -5,7 +5,7 @@
 [plugin]
 id = "clip-path"
 name = "Path to the clipboard"
-scmd = ">=0.1.0"
+fcmd = ">=0.1.0"
 
 [[command]]
 id = "user.clip.path"

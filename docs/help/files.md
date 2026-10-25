@@ -200,7 +200,7 @@ got in the status line, and `Esc` on an empty command line stops it.
 # What opens a file
 
 `Enter` on a file that is not an archive and not a program runs what an association says to
-run. An association is a `[[assoc]]` block in `scmd.toml`, and it is three commands and a
+run. An association is a `[[assoc]]` block in `fcmd.toml`, and it is three commands and a
 mask:
 
     [[assoc]]

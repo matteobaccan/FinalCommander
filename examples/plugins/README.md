@@ -1,12 +1,12 @@
 # Plugins
 
 Twenty-one of them, ready to copy. A plugin is a folder with a `plugin.toml` in it, put in the
-plugins directory — `scmd --paths` says where that is, and `scmd --plugins <dir>` points
-somewhere else for a try. `scmd --list-plugins` says what was found and what each one brings.
+plugins directory — `fcmd --paths` says where that is, and `fcmd --plugins <dir>` points
+somewhere else for a try. `fcmd --list-plugins` says what was found and what each one brings.
 `F11` in the panels lists the commands they provide, in the scope you are in.
 
 ```sh
-dir=$(scmd --paths | awk '/^plugins/ {print $2}')
+dir=$(fcmd --paths | awk '/^plugins/ {print $2}')
 mkdir -p "$dir"
 cp -r examples/plugins/* "$dir"/
 chmod +x "$dir"/*/*.sh        # the host runs them, so they have to be executable
@@ -59,9 +59,9 @@ keystroke could have done.
 - The context arrives as **JSON on standard input** — `cat >/dev/null` at the top of each
   script is there so the program writing it does not get a broken pipe — and the same facts
   arrive in the **environment**, which is what a shell script actually wants:
-  `SCMD_DIR` the panel's directory, `SCMD_CWD` the path as the program spells it,
-  `SCMD_CURSOR` the row under the cursor, `SCMD_SELECTED` the selected names one per line,
-  `SCMD_SELECTED_COUNT` how many, `SCMD_COMMAND` which command was chosen — which is how one
+  `FCMD_DIR` the panel's directory, `FCMD_CWD` the path as the program spells it,
+  `FCMD_CURSOR` the row under the cursor, `FCMD_SELECTED` the selected names one per line,
+  `FCMD_SELECTED_COUNT` how many, `FCMD_COMMAND` which command was chosen — which is how one
   program answers to three ids, as `filecase` does.
 - What it writes back is **one action per line**: `{"status": "…"}` or `{"error": "…"}` for the
   status bar, `{"run": "panel.reread"}` to run a command of the program's own vocabulary,
@@ -70,13 +70,13 @@ keystroke could have done.
 - Anything else it writes is shown rather than dropped, so a half-written plugin is debuggable
   rather than silent.
 
-`needs` is why `SCMD_DIR` is set at all: nothing is passed that is not asked for, so a plugin
+`needs` is why `FCMD_DIR` is set at all: nothing is passed that is not asked for, so a plugin
 that does not need the selection never sees it. A path inside an archive or on a server has no
-directory on this machine, so `SCMD_DIR` is simply absent there rather than holding something
+directory on this machine, so `FCMD_DIR` is simply absent there rather than holding something
 that cannot be opened — which is why every script here checks it before using it.
 
 An action that runs something names a command of **our** vocabulary, the one every key and
-macro uses, so everything a plugin can do a key can do too. `scmd --list-commands` prints all
+macro uses, so everything a plugin can do a key can do too. `fcmd --list-commands` prints all
 of them.
 
 ## Asking first
@@ -132,7 +132,7 @@ At load, not at the first press: a command id outside the `user.` or `plugin.` n
 program that leaves the plugin's own folder (by `..`, by an absolute path, or through a
 symbolic link), a `needs` nobody can give, a missing label, and a second plugin claiming an id
 another already provides. A plugin that would surprise somebody does not load at all, and
-`scmd --list-plugins` says why.
+`fcmd --list-plugins` says why.
 
 `docs/spec/08-plugins.md` §1b is the whole protocol, and §2 and §3 are the tiers above this
 one: a plugin that *adds* a panel column, a preview or a filesystem, and one that is asked a

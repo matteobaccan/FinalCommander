@@ -5,7 +5,7 @@
 # It reports rather than deletes. Deciding which copy to keep is not a decision to hand to a
 # script, and the panel is already good at deleting what one has selected.
 cat >/dev/null
-cd "$SCMD_DIR" 2>/dev/null || { echo '{"error":"not a directory on this machine"}'; exit 0; }
+cd "$FCMD_DIR" 2>/dev/null || { echo '{"error":"not a directory on this machine"}'; exit 0; }
 
 if command -v sha256sum >/dev/null 2>&1; then
   hash() { sha256sum -- "$1" 2>/dev/null | cut -d' ' -f1; }
@@ -17,8 +17,8 @@ else
 fi
 
 # What to look at: the selection, or everything in this directory.
-if [ -n "$SCMD_SELECTED" ]; then
-  list=$(printf '%s\n' "$SCMD_SELECTED")
+if [ -n "$FCMD_SELECTED" ]; then
+  list=$(printf '%s\n' "$FCMD_SELECTED")
 else
   list=$(ls -A 2>/dev/null)
 fi

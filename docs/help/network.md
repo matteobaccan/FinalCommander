@@ -97,7 +97,7 @@ port at once.
 ## Buckets
 
 An object storage service — S3 itself, or MinIO, Ceph, R2, Wasabi, anything that speaks the
-same protocol — is a panel too, once `scmd.toml` has an `[[s3]]` block saying where it is:
+same protocol — is a panel too, once `fcmd.toml` has an `[[s3]]` block saying where it is:
 
     s3://logs/2024/08/
     s3://work@logs/2024/08/     the service named `work`
@@ -113,7 +113,7 @@ listing of the whole bucket, a thousand requests for a million keys, and it stop
 `listing_cap` rows. When it stops, the footer says `(partial)` for as long as that listing is
 on screen, because a count that is not the whole count should not look like one.
 
-The keys are never kept in `scmd.toml`. They come from `AWS_ACCESS_KEY_ID` and
+The keys are never kept in `fcmd.toml`. They come from `AWS_ACCESS_KEY_ID` and
 `AWS_SECRET_ACCESS_KEY`, or from `~/.aws/credentials` — the file the AWS tools share, profiles
 and all. A bucket that anyone may read needs `credentials = "anonymous"` and no keys at all.
 

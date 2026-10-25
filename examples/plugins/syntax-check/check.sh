@@ -1,10 +1,10 @@
 #!/bin/sh
 # Parse the selected files with whichever interpreter owns them, and report what it says.
 cat >/dev/null
-cd "$SCMD_DIR" 2>/dev/null || { echo '{"error":"not a directory on this machine"}'; exit 0; }
+cd "$FCMD_DIR" 2>/dev/null || { echo '{"error":"not a directory on this machine"}'; exit 0; }
 
-names="$SCMD_SELECTED"
-[ -n "$names" ] || names="$SCMD_CURSOR"
+names="$FCMD_SELECTED"
+[ -n "$names" ] || names="$FCMD_CURSOR"
 [ -n "$names" ] || { echo '{"status":"nothing selected"}'; exit 0; }
 
 # One function per language, so the list of what is understood is the list of these.

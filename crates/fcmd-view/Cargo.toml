@@ -1,0 +1,24 @@
+[package]
+name = "fcmd-view"
+description = "FinalCommander: the internal viewer (text, dump, hex) for files of any size"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+fcmd-core = { workspace = true }
+fcmd-syntax = { workspace = true }
+encoding_rs = "0.8"
+memchr = "2"
+regex = "1"
+thiserror = "2"
+unicode-width = "0.2"
+object = { version = "0.40.0", default-features = false, features = ["read_core", "elf", "pe", "macho", "archive", "std"] }
+iced-x86 = { version = "1.21.0", default-features = false, features = ["decoder", "intel", "std"] }
+wasmprinter = "0.262.0"
+
+[dev-dependencies]
+tempfile = "3"

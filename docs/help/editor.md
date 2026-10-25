@@ -17,7 +17,7 @@ A file whose name says what it is — Rust, C, C++, Java, C#, JavaScript, TypeSc
 Python, Ruby, Go, shell, SQL, HTML, XML, CSS, Markdown, JSON, TOML, YAML, INI, Make,
 Dockerfile, Lua, Perl — is coloured as you read it, and the status line names the language so
 you can see at once when a file is being read as something you did not mean. The colours come
-from the theme, so they follow it. `ui.syntax = false` in `scmd.toml` turns them off.
+from the theme, so they follow it. `ui.syntax = false` in `fcmd.toml` turns them off.
 
 # Bytes instead of lines
 

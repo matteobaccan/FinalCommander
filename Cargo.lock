@@ -928,6 +928,270 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
+name = "fcmd"
+version = "0.4.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "clap_mangen",
+ "fcmd-arc",
+ "fcmd-cmd",
+ "fcmd-config",
+ "fcmd-core",
+ "fcmd-edit",
+ "fcmd-find",
+ "fcmd-i18n",
+ "fcmd-jobs",
+ "fcmd-net",
+ "fcmd-plug",
+ "fcmd-s3",
+ "fcmd-syntax",
+ "fcmd-term",
+ "fcmd-tui",
+ "fcmd-ui",
+ "fcmd-vfs",
+ "fcmd-view",
+ "nix 0.31.3",
+ "notify",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "toml",
+ "unicode-width",
+ "zip",
+]
+
+[[package]]
+name = "fcmd-arc"
+version = "0.4.0"
+dependencies = [
+ "bzip2",
+ "fcmd-core",
+ "flate2",
+ "lzma-rust2 0.23.0",
+ "ruzstd",
+ "sevenz-rust2",
+ "tar",
+ "tempfile",
+ "thiserror 2.0.21",
+ "zip",
+]
+
+[[package]]
+name = "fcmd-cmd"
+version = "0.4.0"
+dependencies = [
+ "fcmd-core",
+ "serde",
+ "thiserror 2.0.21",
+ "toml",
+]
+
+[[package]]
+name = "fcmd-config"
+version = "0.4.0"
+dependencies = [
+ "dirs",
+ "fcmd-arc",
+ "fcmd-core",
+ "fcmd-term",
+ "serde",
+ "thiserror 2.0.21",
+ "toml",
+]
+
+[[package]]
+name = "fcmd-core"
+version = "0.4.0"
+dependencies = [
+ "globset",
+ "regex",
+ "serde",
+ "tempfile",
+ "thiserror 2.0.21",
+ "unicode-width",
+]
+
+[[package]]
+name = "fcmd-edit"
+version = "0.4.0"
+dependencies = [
+ "fcmd-core",
+ "fcmd-syntax",
+ "fcmd-view",
+ "regex",
+ "tempfile",
+ "thiserror 2.0.21",
+ "unicode-width",
+]
+
+[[package]]
+name = "fcmd-find"
+version = "0.4.0"
+dependencies = [
+ "fcmd-core",
+ "fcmd-vfs",
+ "fcmd-view",
+ "memchr",
+ "tempfile",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "fcmd-i18n"
+version = "0.4.0"
+dependencies = [
+ "fluent-bundle",
+ "unic-langid",
+]
+
+[[package]]
+name = "fcmd-jobs"
+version = "0.4.0"
+dependencies = [
+ "fcmd-arc",
+ "fcmd-core",
+ "md5",
+ "regex",
+ "sha1",
+ "sha2 0.11.1",
+ "tempfile",
+ "thiserror 2.0.21",
+ "trash",
+ "zip",
+]
+
+[[package]]
+name = "fcmd-net"
+version = "0.4.0"
+dependencies = [
+ "async-trait",
+ "fcmd-arc",
+ "fcmd-config",
+ "fcmd-core",
+ "fcmd-jobs",
+ "fcmd-vfs",
+ "futures-util",
+ "rand",
+ "reqwest",
+ "russh",
+ "russh-sftp",
+ "rustls-native-certs",
+ "suppaftp",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-util",
+ "zip",
+]
+
+[[package]]
+name = "fcmd-plug"
+version = "0.4.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "toml",
+]
+
+[[package]]
+name = "fcmd-s3"
+version = "0.4.0"
+dependencies = [
+ "async-trait",
+ "fcmd-core",
+ "fcmd-jobs",
+ "fcmd-vfs",
+ "reqwest",
+ "ring",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
+name = "fcmd-site"
+version = "0.4.0"
+dependencies = [
+ "pulldown-cmark",
+ "tempfile",
+]
+
+[[package]]
+name = "fcmd-syntax"
+version = "0.4.0"
+
+[[package]]
+name = "fcmd-term"
+version = "0.4.0"
+dependencies = [
+ "fcmd-ui",
+ "portable-pty",
+ "shell-words",
+ "tempfile",
+ "thiserror 2.0.21",
+ "vte",
+]
+
+[[package]]
+name = "fcmd-tui"
+version = "0.4.0"
+dependencies = [
+ "crossterm",
+ "fcmd-cmd",
+ "fcmd-ui",
+ "thiserror 2.0.21",
+ "unicode-width",
+]
+
+[[package]]
+name = "fcmd-ui"
+version = "0.4.0"
+dependencies = [
+ "chrono",
+ "fcmd-core",
+ "fcmd-i18n",
+ "serde",
+ "tempfile",
+ "thiserror 2.0.21",
+ "toml",
+ "unicode-width",
+]
+
+[[package]]
+name = "fcmd-vfs"
+version = "0.4.0"
+dependencies = [
+ "async-trait",
+ "fcmd-arc",
+ "fcmd-core",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "zip",
+]
+
+[[package]]
+name = "fcmd-view"
+version = "0.4.0"
+dependencies = [
+ "encoding_rs",
+ "fcmd-core",
+ "fcmd-syntax",
+ "iced-x86",
+ "memchr",
+ "object",
+ "regex",
+ "tempfile",
+ "thiserror 2.0.21",
+ "unicode-width",
+ "wasmprinter",
+]
+
+[[package]]
 name = "ff"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2776,270 +3040,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9cb23c424d8ee841bb4d813677ca237e2a610067d594fec130f87d6093495ab5"
 dependencies = [
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "scmd"
-version = "0.4.0"
-dependencies = [
- "anyhow",
- "clap",
- "clap_mangen",
- "nix 0.31.3",
- "notify",
- "scmd-arc",
- "scmd-cmd",
- "scmd-config",
- "scmd-core",
- "scmd-edit",
- "scmd-find",
- "scmd-i18n",
- "scmd-jobs",
- "scmd-net",
- "scmd-plug",
- "scmd-s3",
- "scmd-syntax",
- "scmd-term",
- "scmd-tui",
- "scmd-ui",
- "scmd-vfs",
- "scmd-view",
- "tempfile",
- "thiserror 2.0.21",
- "tokio",
- "toml",
- "unicode-width",
- "zip",
-]
-
-[[package]]
-name = "scmd-arc"
-version = "0.4.0"
-dependencies = [
- "bzip2",
- "flate2",
- "lzma-rust2 0.23.0",
- "ruzstd",
- "scmd-core",
- "sevenz-rust2",
- "tar",
- "tempfile",
- "thiserror 2.0.21",
- "zip",
-]
-
-[[package]]
-name = "scmd-cmd"
-version = "0.4.0"
-dependencies = [
- "scmd-core",
- "serde",
- "thiserror 2.0.21",
- "toml",
-]
-
-[[package]]
-name = "scmd-config"
-version = "0.4.0"
-dependencies = [
- "dirs",
- "scmd-arc",
- "scmd-core",
- "scmd-term",
- "serde",
- "thiserror 2.0.21",
- "toml",
-]
-
-[[package]]
-name = "scmd-core"
-version = "0.4.0"
-dependencies = [
- "globset",
- "regex",
- "serde",
- "tempfile",
- "thiserror 2.0.21",
- "unicode-width",
-]
-
-[[package]]
-name = "scmd-edit"
-version = "0.4.0"
-dependencies = [
- "regex",
- "scmd-core",
- "scmd-syntax",
- "scmd-view",
- "tempfile",
- "thiserror 2.0.21",
- "unicode-width",
-]
-
-[[package]]
-name = "scmd-find"
-version = "0.4.0"
-dependencies = [
- "memchr",
- "scmd-core",
- "scmd-vfs",
- "scmd-view",
- "tempfile",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "scmd-i18n"
-version = "0.4.0"
-dependencies = [
- "fluent-bundle",
- "unic-langid",
-]
-
-[[package]]
-name = "scmd-jobs"
-version = "0.4.0"
-dependencies = [
- "md5",
- "regex",
- "scmd-arc",
- "scmd-core",
- "sha1",
- "sha2 0.11.1",
- "tempfile",
- "thiserror 2.0.21",
- "trash",
- "zip",
-]
-
-[[package]]
-name = "scmd-net"
-version = "0.4.0"
-dependencies = [
- "async-trait",
- "futures-util",
- "rand",
- "reqwest",
- "russh",
- "russh-sftp",
- "rustls-native-certs",
- "scmd-arc",
- "scmd-config",
- "scmd-core",
- "scmd-jobs",
- "scmd-vfs",
- "suppaftp",
- "tempfile",
- "thiserror 2.0.21",
- "tokio",
- "tokio-util",
- "zip",
-]
-
-[[package]]
-name = "scmd-plug"
-version = "0.4.0"
-dependencies = [
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.21",
- "toml",
-]
-
-[[package]]
-name = "scmd-s3"
-version = "0.4.0"
-dependencies = [
- "async-trait",
- "reqwest",
- "ring",
- "scmd-core",
- "scmd-jobs",
- "scmd-vfs",
- "tempfile",
- "thiserror 2.0.21",
- "tokio",
- "tokio-util",
-]
-
-[[package]]
-name = "scmd-site"
-version = "0.4.0"
-dependencies = [
- "pulldown-cmark",
- "tempfile",
-]
-
-[[package]]
-name = "scmd-syntax"
-version = "0.4.0"
-
-[[package]]
-name = "scmd-term"
-version = "0.4.0"
-dependencies = [
- "portable-pty",
- "scmd-ui",
- "shell-words",
- "tempfile",
- "thiserror 2.0.21",
- "vte",
-]
-
-[[package]]
-name = "scmd-tui"
-version = "0.4.0"
-dependencies = [
- "crossterm",
- "scmd-cmd",
- "scmd-ui",
- "thiserror 2.0.21",
- "unicode-width",
-]
-
-[[package]]
-name = "scmd-ui"
-version = "0.4.0"
-dependencies = [
- "chrono",
- "scmd-core",
- "scmd-i18n",
- "serde",
- "tempfile",
- "thiserror 2.0.21",
- "toml",
- "unicode-width",
-]
-
-[[package]]
-name = "scmd-vfs"
-version = "0.4.0"
-dependencies = [
- "async-trait",
- "scmd-arc",
- "scmd-core",
- "tempfile",
- "thiserror 2.0.21",
- "tokio",
- "zip",
-]
-
-[[package]]
-name = "scmd-view"
-version = "0.4.0"
-dependencies = [
- "encoding_rs",
- "iced-x86",
- "memchr",
- "object",
- "regex",
- "scmd-core",
- "scmd-syntax",
- "tempfile",
- "thiserror 2.0.21",
- "unicode-width",
- "wasmprinter",
 ]
 
 [[package]]

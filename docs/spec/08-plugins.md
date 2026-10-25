@@ -12,7 +12,7 @@ pub trait CommandHandler { fn run(&self, ctx: &mut Ctx, args: Args) -> Result<Va
 `Ctx` exposes capability-scoped handles: `panels`, `selection`, `jobs`, `vfs`, `ui` (dialogs,
 menus, status), `config` (read), `events`. Every command has an id, a label, a scope, an arity
 and a declaration of the capabilities it needs. Commands are discoverable
-(`app.palette`), scriptable, bindable and introspectable (`scmd --list-commands --json`) — which
+(`app.palette`), scriptable, bindable and introspectable (`fcmd --list-commands --json`) — which
 is also how the docs and the help pages are generated.
 
 ### 1b. What a plugin can do today (0.1.0)
@@ -37,7 +37,7 @@ confirm = "This renames files."   # optional: asked before running, for anything
 
 `F11` lists the commands of the scope one is in. The host runs the program on the worker pool,
 with the context as one JSON object on standard input and the same facts in the environment
-(`SCMD_CWD`, `SCMD_DIR`, `SCMD_CURSOR`, `SCMD_SELECTED` one name per line) — because most of
+(`FCMD_CWD`, `FCMD_DIR`, `FCMD_CURSOR`, `FCMD_SELECTED` one name per line) — because most of
 these will be shell scripts, and a script that has to parse JSON to learn its own directory is
 a script nobody writes.
 
@@ -96,32 +96,32 @@ instance earns its keep.
 
 ```lua
 -- scripts/git_branch.lua
-scmd.register_command("user.git.branch", {
+fcmd.register_command("user.git.branch", {
   label = "Git: checkout branch",
   scope = "panel",
   run = function(ctx)
-    local out = scmd.shell.capture("git branch --format='%(refname:short)'", { cwd = ctx.panel.cwd })
-    local pick = scmd.ui.menu("Branch", scmd.util.lines(out))
-    if pick then scmd.shell.run("git checkout " .. scmd.util.quote(pick), { cwd = ctx.panel.cwd }) end
+    local out = fcmd.shell.capture("git branch --format='%(refname:short)'", { cwd = ctx.panel.cwd })
+    local pick = fcmd.ui.menu("Branch", fcmd.util.lines(out))
+    if pick then fcmd.shell.run("git checkout " .. fcmd.util.quote(pick), { cwd = ctx.panel.cwd }) end
   end,
 })
 
-scmd.on("panel.entered", function(ev)        -- event hooks
-  if scmd.fs.exists(ev.path .. "/Cargo.toml") then scmd.panel.set_view("detail") end
+fcmd.on("panel.entered", function(ev)        -- event hooks
+  if fcmd.fs.exists(ev.path .. "/Cargo.toml") then fcmd.panel.set_view("detail") end
 end)
 
-scmd.keymap.bind("Alt+B", "user.git.branch") -- scripts may add bindings
+fcmd.keymap.bind("Alt+B", "user.git.branch") -- scripts may add bindings
 ```
 
-API surface (stable, versioned `scmd.api_version`): `scmd.panel`, `scmd.selection`, `scmd.fs` (via VFS,
-sandboxed to allowed roots), `scmd.jobs` (enqueue a real job, get progress), `scmd.ui` (menu,
-input, message, progress, custom panel columns), `scmd.shell`, `scmd.util`, `scmd.config` (read),
-`scmd.keymap`, `scmd.on` (events: panel.entered, panel.changed, selection.changed, job.done,
-file.opened, startup, shutdown), `scmd.register_*` (command, column, preview, highlighter,
+API surface (stable, versioned `fcmd.api_version`): `fcmd.panel`, `fcmd.selection`, `fcmd.fs` (via VFS,
+sandboxed to allowed roots), `fcmd.jobs` (enqueue a real job, get progress), `fcmd.ui` (menu,
+input, message, progress, custom panel columns), `fcmd.shell`, `fcmd.util`, `fcmd.config` (read),
+`fcmd.keymap`, `fcmd.on` (events: panel.entered, panel.changed, selection.changed, job.done,
+file.opened, startup, shutdown), `fcmd.register_*` (command, column, preview, highlighter,
 sorter).
 
 Safety: scripts run on the UI thread only for short callbacks; anything long must use
-`scmd.async(fn)` which runs it on the worker pool. A script that blocks the UI for more than
+`fcmd.async(fn)` which runs it on the worker pool. A script that blocks the UI for more than
 500 ms is reported and can be killed; a script error shows a one-line banner plus a log entry,
 never a crash.
 
@@ -138,7 +138,7 @@ commander.
   exports the hooks it implements:
 
 ```wit
-package scmd:plugin@1.0.0;
+package fcmd:plugin@1.0.0;
 
 interface host {
   record entry { name: string, size: u64, mtime: s64, kind: entry-kind, flags: u32 }
@@ -174,14 +174,14 @@ interface highlighter      { highlight: func(path: string, text: string) -> list
 - **One plugin is one file.** The whole program is a single executable and the plugins folder
   is the only directory it reads, so a plugin must not need a directory either:
   `plugins/<id>.wasm` (a WASM component) or `plugins/<id>.lua` (a script). The manifest lives
-  *inside* the file — a `scmd.plugin` custom section in the component, or a leading
-  `--[[ scmd.plugin ... ]]` block in the script — and declares id, name, version, api version,
+  *inside* the file — a `fcmd.plugin` custom section in the component, or a leading
+  `--[[ fcmd.plugin ... ]]` block in the script — and declares id, name, version, api version,
   platforms (`["*"]` for WASM/Lua), capabilities (`vfs:net`, `vfs:fs:<root>`, `shell`,
   `clipboard`, `ui`), author and licence. A subdirectory per plugin is accepted but never
   required, and nothing outside `plugins/` is ever read.
 - Capabilities are shown to the user before the first load and the grant is stored in
-  `scmd-state.toml` (keyed by plugin id and file hash, so a changed plugin asks again).
-- Lifecycle: `plugins/` is scanned at startup (`scmd --list-plugins` prints what was found),
+  `fcmd-state.toml` (keyed by plugin id and file hash, so a changed plugin asks again).
+- Lifecycle: `plugins/` is scanned at startup (`fcmd --list-plugins` prints what was found),
   plugins load lazily on first use, unload on idle, and hot-reload in dev mode. A plugin
   crash/trap disables it for the session with a readable message.
 - Plugin-provided VFS schemes, panels, columns, viewers, previews, highlighters, commands and
@@ -189,7 +189,7 @@ interface highlighter      { highlight: func(path: string, text: string) -> list
 
 ## 4. Native plugins (M4)
 
-A narrow, stable **C ABI** (`scmd_plugin_v1`) for things WASM cannot do: OS integration (shell
+A narrow, stable **C ABI** (`fcmd_plugin_v1`) for things WASM cannot do: OS integration (shell
 extensions, MTP, kernel-ish filesystems), hardware, or performance-critical codecs. Loaded
 only from a user-approved directory, with an explicit warning that native plugins run with full
 process privileges. The same WIT-derived shapes are mirrored in the C header so a port either
@@ -248,7 +248,7 @@ filling the stack. A macro recorded in the panel plays in the panel: the scope i
 in is the scope it answers in, because a run of editor keys would mean something else entirely
 in a panel.
 
-**The file.** `scmd-macros.toml`, beside the configuration — `scmd --paths` names it. It is
+**The file.** `fcmd-macros.toml`, beside the configuration — `fcmd --paths` names it. It is
 configuration one made by pressing keys rather than by typing TOML, and the writer generates
 the same shape a hand-written one has:
 
@@ -262,15 +262,15 @@ steps = ["sel.mask.add", "key:*", "key:.", "key:b", "key:a", "key:k", "key:Enter
 ```
 
 A file that does not parse is an error with the offending line named, not a warning: a macro
-half read is a key that does something unexpected. `scmd --list-commands` prints every name a
+half read is a key that does something unexpected. `fcmd --list-commands` prints every name a
 step can hold.
 
 ## 6. Plugin registry (M4)
 
 A JSON index (git-hosted) listing plugins with their versions, checksums, capabilities and
-source URLs; `scmd plugin search/install/update/remove` verifies the checksum and signature and
+source URLs; `fcmd plugin search/install/update/remove` verifies the checksum and signature and
 drops **one file** into `plugins/` (`<id>.wasm` or `<id>.lua`, version recorded in the
-manifest and in `scmd-state.toml`), never auto-updates, and never installs a native binary blob.
+manifest and in `fcmd-state.toml`), never auto-updates, and never installs a native binary blob.
 Removing a plugin is deleting one file.
 
 ## 7. Porting the existing plugin ecosystems (and why plugins must be portable too)
@@ -287,7 +287,7 @@ So portability is a property of the plugin *model*, not of a compatibility layer
 | **Core** | Rust inside the workspace | builds everywhere we build | us |
 | **First-party plugin** | WASM component (or Lua script) in this repo, MIT | **one artifact, every OS and CPU** | us |
 | **Third-party plugin** | WASM component or Lua script | same single artifact | anyone |
-| **Native plugin** (M4, last resort) | one `cdylib` in the same folder, against the `scmd_plugin_v1` C ABI | per-platform, declared in the manifest | only where WASM cannot reach the OS |
+| **Native plugin** (M4, last resort) | one `cdylib` in the same folder, against the `fcmd_plugin_v1` C ABI | per-platform, declared in the manifest | only where WASM cannot reach the OS |
 
 Rules that keep the promise:
 
@@ -300,7 +300,7 @@ Rules that keep the promise:
    capability-scoped API (`vfs:net`, `vfs:fs:<root>`), so a plugin behaves identically on all
    three OSes — it never sees a drive letter or a `/proc` path unless we hand it one.
 4. Anything genuinely OS-specific that we still want everywhere (trash, clipboard, drives,
-   elevation, FS watch, PTY) lives in `scmd-platform` in the core, not in plugins.
+   elevation, FS watch, PTY) lives in `fcmd-platform` in the core, not in plugins.
 
 ### Where the classic plugins land
 
@@ -322,7 +322,7 @@ Rules that keep the promise:
 
 ### Migration path for plugin authors
 
-`scmd plugin new <id> --kind vfs|viewer|column|command|highlighter` scaffolds a Rust project that
+`fcmd plugin new <id> --kind vfs|viewer|column|command|highlighter` scaffolds a Rust project that
 compiles to a WASM component against the versioned WIT interfaces, plus a `plugin.toml` and a
 test harness that runs the VFS conformance suite against it. A FAR/TC plugin author therefore
 ports *logic*, not glue: the interfaces are deliberately close in shape (list / open / read /
@@ -335,17 +335,17 @@ layer is designed around them — if the ABI can host these, it can host anythin
 
 | Plugin | Interface it implements | What it covers | Milestone |
 | --- | --- | --- | --- |
-| **`scmd-viewer`** | `viewer-provider` + the preview pipeline | text / dump / hex, encodings, search, huge files, follow mode, per-type previews (SPEC 05 §1) | M2 |
-| **`scmd-editor`** | `editor-provider` | full-screen editor, column blocks, undo, search & replace, syntax highlighting (SPEC 05 §2) | M2 |
-| **`scmd-netbox`** | `vfs-provider` (one plugin, several schemes) | SFTP/SSH, FTP/FTPS, WebDAV, S3-compatible, plus the connection manager's site list (SPEC 04 §3, §6) — the FAR NetBox / far2l NetRocks role | M1 for SFTP + the site list, M3 for the other schemes |
+| **`fcmd-viewer`** | `viewer-provider` + the preview pipeline | text / dump / hex, encodings, search, huge files, follow mode, per-type previews (SPEC 05 §1) | M2 |
+| **`fcmd-editor`** | `editor-provider` | full-screen editor, column blocks, undo, search & replace, syntax highlighting (SPEC 05 §2) | M2 |
+| **`fcmd-netbox`** | `vfs-provider` (one plugin, several schemes) | SFTP/SSH, FTP/FTPS, WebDAV, S3-compatible, plus the connection manager's site list (SPEC 04 §3, §6) — the FAR NetBox / far2l NetRocks role | M1 for SFTP + the site list, M3 for the other schemes |
 
 How they are built, in order:
 
-1. **In-tree first, behind the public interface.** `scmd-view`, `scmd-edit` and `scmd-net` are
+1. **In-tree first, behind the public interface.** `fcmd-view`, `fcmd-edit` and `fcmd-net` are
    workspace crates that implement exactly the `viewer-provider` / `editor-provider` /
    `vfs-provider` shapes above, called through a trait object. They ship as part of the binary,
-   so M2 and M3 do not wait for the WASM host. All three are in: `scmd-view` (SPEC 05 §1),
-   `scmd-edit` (SPEC 05 §2) and `scmd-net` (SPEC 04), the last one already behind the `Vfs`
+   so M2 and M3 do not wait for the WASM host. All three are in: `fcmd-view` (SPEC 05 §1),
+   `fcmd-edit` (SPEC 05 §2) and `fcmd-net` (SPEC 04), the last one already behind the `Vfs`
    trait and the job engine's `JobFs`, which is the `vfs-provider` shape.
 2. **Then moved out, unchanged, as the three reference plugins.** The WASM ABI is **not
    considered done** until the viewer, the editor and netbox run as plugins through it, with no

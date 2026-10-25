@@ -1,0 +1,51 @@
+[package]
+name = "fcmd"
+description = "FinalCommander: a cross-platform orthodox file manager for the terminal"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+thiserror = "2"
+toml = "1.0.7"
+anyhow = "1.0.104"
+clap = { version = "4.5.61", features = ["derive"] }
+fcmd-arc = { workspace = true }
+fcmd-cmd = { workspace = true }
+fcmd-config = { workspace = true }
+fcmd-core = { workspace = true }
+fcmd-edit = { workspace = true }
+fcmd-find = { workspace = true }
+fcmd-i18n = { workspace = true }
+fcmd-jobs = { workspace = true }
+fcmd-net = { workspace = true }
+fcmd-plug = { workspace = true }
+fcmd-s3 = { workspace = true }
+fcmd-tui = { workspace = true }
+fcmd-ui = { workspace = true }
+fcmd-vfs = { workspace = true }
+fcmd-syntax = { workspace = true }
+fcmd-term = { workspace = true }
+fcmd-view = { workspace = true }
+tokio = { version = "1.53.3", features = ["rt-multi-thread", "fs", "sync", "time", "macros"] }
+unicode-width = "0.2.2"
+clap_mangen = "0.3"
+# The filesystem watch behind `panel.auto_refresh` (SPEC 02 §1.25): inotify on Linux,
+# FSEvents on macOS, `ReadDirectoryChangesW` on Windows, which is three platform APIs we
+# are not going to write three times. CC0-1.0, no runtime of its own.
+notify = { version = "8.2.1", default-features = false, features = ["macos_fsevent"] }
+
+# Free space in the panel frame needs `statvfs`, which `std` does not expose. Unix only:
+# Windows wants `GetDiskFreeSpaceEx` and gets its own answer when it gets its own crate.
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.31.3", features = ["fs"] }
+
+[dev-dependencies]
+# The same crate again, with the in-process S3 service switched on: an object the viewer
+# fetches has to come from somewhere, and it must not be someone's account.
+fcmd-s3 = { workspace = true, features = ["fake"] }
+tempfile = "3.27.0"
+zip = { version = "9", default-features = false, features = ["deflate-flate2"] }

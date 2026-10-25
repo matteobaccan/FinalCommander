@@ -110,7 +110,7 @@ got you in. There is no key bar for the same reason: a bar offering our keys in 
 telling you something untrue.
 
 The shell is the one your session already uses (`$SHELL`, or `ComSpec` on Windows), so your
-aliases and your prompt are the ones you know. `[term] shell` in `scmd.toml` names another,
+aliases and your prompt are the ones you know. `[term] shell` in `fcmd.toml` names another,
 as a command line: `bash -l`, or a path with spaces in quotes. It starts in the directory the
 active panel is looking at, when that is a real directory — a panel inside an archive or on a
 server has none, and the shell starts where the program did.

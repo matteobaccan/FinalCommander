@@ -11,7 +11,7 @@ JVM bytecode; metadata tables and CIL), and **decompilation** through WebAssembl
 in process or an installed external tool (§1.6).
 Also implemented: the **editor** (`F4`, `Shift+F4` for a new file) — see the note under §2.
 Also implemented: **syntax highlighting** in both (§2.5), for the languages and markups
-`scmd-syntax` knows, off with `ui.syntax = false`.
+`fcmd-syntax` knows, off with `ui.syntax = false`.
 **Still to come**: the "all matches" list (§1.4), the preview pipeline (§1.7), filtered view
 (§1.10), next/previous file in the panel, Python bytecode and non-x86
 decoding in process, and the diff viewer (§3).
@@ -130,7 +130,7 @@ apart by what follows — a class file's major version is at least 45, a fat Mac
 architecture count is small.
 
 **Decompilation — the specialists, called not reimplemented.** Turning machine code back into
-C is a research project (Ghidra, RetDec, ILSpy); SupremeCommander runs the installed one and
+C is a research project (Ghidra, RetDec, ILSpy); FinalCommander runs the installed one and
 views its output:
 - Everything else goes through a `[[decompile]]` rule (SPEC 07): `javap -c -p` for `.class`,
   `ilspycmd` for .NET assemblies, `python -m dis` for `.pyc`, `objdump -d -C` for an
@@ -196,7 +196,7 @@ means the file offset; `va:0x401B50` the loaded address), because a disassembly 
 addresses, not offsets.
 
 Where the structure pane has read a symbol table, the operand carries the name
-(`call 0000001F80 <scmd_main>`); where it has not, the address stands alone. The viewer never
+(`call 0000001F80 <fcmd_main>`); where it has not, the address stands alone. The viewer never
 invents a name.
 
 ### 1.10 Raw devices
@@ -207,7 +207,7 @@ partition with no special case at all. Two things do need care, and they are the
 **The size.** `stat` reports zero for a device, so a viewer that believes it shows an empty
 screen over a terabyte of disk. It is measured instead, by seeking to the end — which the
 kernel answers for a block device without reading anything, and which needs no `ioctl` and no
-C dependency (`scmd_core::device::length`). What cannot be measured that way — a character
+C dependency (`fcmd_core::device::length`). What cannot be measured that way — a character
 device, a pipe — is reported as an unknown length rather than as an empty file. A directory
 listing never measures: opening every entry of `/dev` to list it could block on a tape or a
 modem, so the panel shows the metadata's zero and the size appears when the device is opened.
@@ -285,9 +285,9 @@ geometry). Quick-view panel uses the same pipeline at lower priority.
 
 ## 2. Editor (`F4`)
 
-**Implemented today** (M1, `scmd-edit`): open and save with the encoding, EOL, BOM and
+**Implemented today** (M1, `fcmd-edit`): open and save with the encoding, EOL, BOM and
 final-newline of the original preserved (`Eol::detect`, UTF-8/UTF-16LE/BE/CP1252/CP437);
-`Shift+F4` for a new file; atomic save through `name.scmd-tmp` + rename with the permissions
+`Shift+F4` for a new file; atomic save through `name.fcmd-tmp` + rename with the permissions
 carried over; save-as; reload; refusal to overwrite a file that changed on disk without a
 confirmation; read-only files opened and marked as such. Editing: insert, newline with
 auto-indent, backspace, delete, delete to end of line, delete word left, tab expansion, indent
@@ -311,7 +311,7 @@ macros, the buffer list (§2.3) and the external editor (§2.4).
   file" mode with chunked editing refused and an explanation.
 - Encoding on open = viewer's detection; on save: keep original encoding and EOL by default
   (FAR's `KeepEditorEOL`), with explicit conversion commands. BOM preserved unless changed.
-- Atomic save: write `name.scmd-tmp` in the same directory, copy permissions/owner where
+- Atomic save: write `name.fcmd-tmp` in the same directory, copy permissions/owner where
   possible, fsync, rename. Option for in-place save for special files (`/proc`, sockets,
   hardlink-sensitive paths).
 - External-change detection: if the file changed on disk while open, offer reload / keep /
@@ -324,7 +324,7 @@ macros, the buffer list (§2.3) and the external editor (§2.4).
 | Blocks | stream blocks (`Shift+arrows`) **and column blocks** (`Alt+Shift+arrows`) with the FAR semantics: typing replaces the block optionally, `Alt+I`/`Alt+U` indent/outdent, persistent-block mode copies/moves a block to the cursor (`Ctrl+Shift+P`/`Ctrl+Shift+M`) |
 | Multi-caret | derived from a column block or `Ctrl+D`-style "add next occurrence" (M3) |
 | Undo | grouped by typing burst (300 ms) and by command; configurable depth; redo; undo survives save |
-| Clipboard | OS clipboard via `scmd-platform` (X11/Wayland/macOS/Windows, OSC 52 fallback over SSH); internal ring of the last 10 blocks; append-to-clipboard (`Ctrl+Shift+C`) |
+| Clipboard | OS clipboard via `fcmd-platform` (X11/Wayland/macOS/Windows, OSC 52 fallback over SSH); internal ring of the last 10 blocks; append-to-clipboard (`Ctrl+Shift+C`) |
 | Indentation | detect per file (spaces vs tabs, width), auto-indent, smart home, trailing-space trim on save (opt-in), `.editorconfig` support |
 | Lines | duplicate, delete, move up/down, join, sort selected lines, unique, reverse, number |
 | Search/replace | shared engine with the viewer, plus **replace with capture groups**, replace-in-selection, count, and "preserve style" (match the case/separator convention of the replaced token — FAR's feature, re-implemented from the described behaviour) |
@@ -335,7 +335,7 @@ macros, the buffer list (§2.3) and the external editor (§2.4).
 
 ### 2.5 Syntax highlighting
 
-`scmd-syntax` is a scanner, not a parser, and deliberately: it knows how a language writes a
+`fcmd-syntax` is a scanner, not a parser, and deliberately: it knows how a language writes a
 comment, a string and a number, plus the words anyone would point at and call keywords. That
 colours real files correctly and fits on a page, where a grammar per language would be a
 compiler front end and a build-time dependency per language on top.
@@ -478,4 +478,4 @@ Side-by-side and unified views of two files (or the two panels' cursor items, or
 its on-disk version), with word-level intra-line diff, synchronised scrolling, next/previous
 change, copy-block-to-other-side (producing a normal job), ignore-whitespace/case/EOL options,
 and binary comparison (first differing offset, hex context). Backed by a Myers/patience diff
-implementation in `scmd-core`.
+implementation in `fcmd-core`.

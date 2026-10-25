@@ -1,7 +1,7 @@
 #!/bin/sh
 # Every subdirectory of this one, measured and sorted by size, biggest first.
 cat >/dev/null
-cd "$SCMD_DIR" 2>/dev/null || { echo '{"error":"not a directory on this machine"}'; exit 0; }
+cd "$FCMD_DIR" 2>/dev/null || { echo '{"error":"not a directory on this machine"}'; exit 0; }
 
 # `du -s` on each entry rather than `du -d 1`, because the second prints the parent too and
 # the first is the same number in the same number of passes.

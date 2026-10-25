@@ -6,7 +6,7 @@ README, and third-party cheat sheets for Total Commander (proprietary — **seco
 marked `?` where unverified**). All descriptions below are written from scratch as factual
 key→action pairs; no documentation text is reproduced. See `01-licensing.md` §3.
 
-Column `SC` = SupremeCommander default (profile `far`, our baseline).
+Column `SC` = FinalCommander default (profile `far`, our baseline).
 
 ---
 
@@ -212,7 +212,7 @@ indistinguishable in a TTY — see §9.
 | reload from disk | Ctrl+Shift+R | — | Ctrl+R |
 | new file (from the panel) | Shift+F4 | Shift+F4 | Shift+F4 |
 
-**Shipped today** in the `far` profile's `editor` scope (`scmd --check-keymap` prints the live
+**Shipped today** in the `far` profile's `editor` scope (`fcmd --check-keymap` prints the live
 list): F2 save, Shift+F2 save as, F4 / F10 / Esc quit, Ctrl+R reload, F7 search, Shift+F7 next,
 Alt+F7 previous, Ctrl+F7 replace, Alt+F8 go to line, Ctrl+Z undo, Ctrl+Shift+Z redo, Ctrl+A
 select all, Ctrl+C / Ctrl+Ins copy, Ctrl+X / Shift+Del cut, Ctrl+V / Shift+Ins paste, Ctrl+Y
@@ -387,6 +387,6 @@ command with its current binding — which also makes the whole keymap self-docu
 | `nc` | Norton Commander 5 | minimal set, no Ctrl+F-key sorting beyond name/ext/date/size |
 | `vi` | vifm/yazi-ish | modal: `hjkl`, `gg`/`G`, `dd`/`yy`/`p`, `/` search, `:` command line, `Space` select |
 
-Profiles are compiled into the executable. A `[[keymap]]` block in `scmd.toml` may
+Profiles are compiled into the executable. A `[[keymap]]` block in `fcmd.toml` may
 `inherit = "far"` and override single bindings, and a block whose `name` matches a built-in
 profile replaces it. Switching is runtime (`app.keymap.profile`), no restart.

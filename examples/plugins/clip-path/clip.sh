@@ -24,17 +24,17 @@ else
   exit 0
 fi
 
-names="$SCMD_SELECTED"
-[ -n "$names" ] || names="$SCMD_CURSOR"
+names="$FCMD_SELECTED"
+[ -n "$names" ] || names="$FCMD_CURSOR"
 [ -n "$names" ] || { echo '{"status":"nothing under the cursor"}'; exit 0; }
 
 full=false
-case "$SCMD_COMMAND" in *.path) full=true ;; esac
+case "$FCMD_COMMAND" in *.path) full=true ;; esac
 
 text=$(printf '%s\n' "$names" | while IFS= read -r name; do
   [ -n "$name" ] || continue
-  if [ "$full" = true ] && [ -n "$SCMD_DIR" ]; then
-    printf '%s/%s\n' "${SCMD_DIR%/}" "$name"
+  if [ "$full" = true ] && [ -n "$FCMD_DIR" ]; then
+    printf '%s/%s\n' "${FCMD_DIR%/}" "$name"
   else
     printf '%s\n' "$name"
   fi

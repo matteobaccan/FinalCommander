@@ -17,7 +17,7 @@ specs are written, the skeleton runs, and most features are still ahead.
    - No GPL/LGPL dependency in the default feature set; see `docs/01-licensing.md` §5.
 3. **Strictly TUI.** No GUI toolkit, no GPU backend, no "windowed mode". Terminal features
    (inline images, kitty keyboard protocol, OSC 52) are capability-detected extras.
-4. **No `unsafe`** outside `scmd-platform` (which does not exist yet).
+4. **No `unsafe`** outside `fcmd-platform` (which does not exist yet).
 5. **New dependencies** need one line of justification in the PR description.
 
 ## Working on it
@@ -30,7 +30,7 @@ cargo test --workspace          # everything, including the render snapshots
 cargo clippy --all-targets -- -D warnings
 cargo fmt --all
 cargo run -- /etc /tmp          # two panels, left and right
-cargo test -p scmd-net          # includes an SSH server started in the test process
+cargo test -p fcmd-net          # includes an SSH server started in the test process
 ```
 
 Useful non-interactive modes while developing:
@@ -39,7 +39,7 @@ Useful non-interactive modes while developing:
 cargo run -- --check-keymap     # validate and print the resolved bindings
 cargo run -- --list-commands    # the command vocabulary
 cargo run -- --list-themes      # built-in + external themes, with their source
-cargo run -- --export-theme tron    # a [[theme]] block to paste into scmd.toml
+cargo run -- --export-theme tron    # a [[theme]] block to paste into fcmd.toml
 cargo run -- --paths                # config file, state file, plugins directory
 cargo run -- --dump-config      # the effective configuration
 ```
@@ -50,14 +50,14 @@ cargo run -- --dump-config      # the effective configuration
   draw into it, assert on `to_text()`); key handling gets a table-driven test; anything touching
   the filesystem gets a `tempfile`-based test, including the failure path.
 - Keep the diff to one concern. A chunk from the roadmap table is a good PR size.
-- User-visible strings go through `scmd-i18n` (`crates/scmd-i18n/i18n/<lang>/sc.ftl`) — all seven
+- User-visible strings go through `fcmd-i18n` (`crates/fcmd-i18n/i18n/<lang>/fc.ftl`) — all seven
   languages, or English plus a note in the PR so a translator can finish it.
 - Nothing may block the UI thread: filesystem and network work goes through a request to the
   runner, never a blocking call inside a key handler.
 
 ## Translations
 
-Add or fix a language in `crates/scmd-i18n/i18n/<tag>/sc.ftl`. The test suite fails if any
+Add or fix a language in `crates/fcmd-i18n/i18n/<tag>/fc.ftl`. The test suite fails if any
 catalogue is missing a message id, so a half-finished translation cannot ship silently.
 
 ## Cutting a release
@@ -72,7 +72,7 @@ catalogue is missing a message id, so a half-finished translation cannot ship si
    General → Workflow permissions → *Read and write*.
 4. `.github/workflows/release.yml` builds `linux-x86_64`, `linux-x86_64-static` (musl),
    `macos-universal` (Intel + Apple Silicon in one binary) and `windows-x86_64`, runs
-   `scmd --version` on each, and publishes the archives with `SHA256SUMS`.
+   `fcmd --version` on each, and publishes the archives with `SHA256SUMS`.
 
 Run the workflow by hand from the Actions tab (`Run workflow`) to build the artifacts without
 publishing anything — useful after touching the workflow itself.

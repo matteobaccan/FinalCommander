@@ -4,7 +4,7 @@ $ErrorActionPreference = 'Stop'
 # says the same things.
 [Console]::In.ReadToEnd() | Out-Null
 
-$dir = $env:SCMD_DIR
+$dir = $env:FCMD_DIR
 if (-not $dir -or -not (Test-Path -LiteralPath $dir)) {
   Write-Output '{"error":"not a directory on this machine"}'
   exit 0
@@ -12,14 +12,14 @@ if (-not $dir -or -not (Test-Path -LiteralPath $dir)) {
 Set-Location -LiteralPath $dir
 
 $names = @()
-if ($env:SCMD_SELECTED) { $names = $env:SCMD_SELECTED -split "`n" | Where-Object { $_ } }
-if (-not $names -and $env:SCMD_CURSOR) { $names = @($env:SCMD_CURSOR) }
+if ($env:FCMD_SELECTED) { $names = $env:FCMD_SELECTED -split "`n" | Where-Object { $_ } }
+if (-not $names -and $env:FCMD_CURSOR) { $names = @($env:FCMD_CURSOR) }
 if (-not $names) {
   Write-Output '{"status":"nothing to rename"}'
   exit 0
 }
 
-$how = switch -Wildcard ($env:SCMD_COMMAND) {
+$how = switch -Wildcard ($env:FCMD_COMMAND) {
   '*.lower' { 'lower' }
   '*.upper' { 'upper' }
   '*.title' { 'title' }

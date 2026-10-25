@@ -2,7 +2,7 @@
 [plugin]
 id = "git-here"
 name = "Git here"
-scmd = ">=0.1.0"
+fcmd = ">=0.1.0"
 
 [[command]]
 id = "user.git.status"

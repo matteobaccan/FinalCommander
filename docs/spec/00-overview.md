@@ -2,7 +2,7 @@
 
 ## 1. What we are building
 
-**SupremeCommander** (`scmd`) is a cross-platform orthodox file manager written in Rust:
+**FinalCommander** (`fcmd`) is a cross-platform orthodox file manager written in Rust:
 two panels, a command line, a function-key bar, keyboard-first, with an internal viewer and
 editor, a virtual filesystem layer (archives, SFTP, S3, …), a job engine for file operations,
 and an extension layer (Lua + WebAssembly).
@@ -37,9 +37,9 @@ and preview pipeline. Licensing basis: `docs/01-licensing.md`.
   compiled in: themes, keymap profiles, all seven language catalogues, the help. It runs with
   an empty disk around it — no installer, no asset directory, no data files to deploy, nothing
   to break when a path moves.
-  The only directory SupremeCommander ever looks for is **`plugins/`**, and it is optional.
-  User settings, when there are any, are **one file** (`scmd.toml`) plus **one state file**
-  (`scmd-state.toml`) beside it — themes and keymaps are blocks inside that file, not a tree.
+  The only directory FinalCommander ever looks for is **`plugins/`**, and it is optional.
+  User settings, when there are any, are **one file** (`fcmd.toml`) plus **one state file**
+  (`fcmd-state.toml`) beside it — themes and keymaps are blocks inside that file, not a tree.
   Budget: < 20 MB binary, cold start < 50 ms, no runtime dependencies for the core features.
 
 ## 3. Non-goals
@@ -89,7 +89,7 @@ and preview pipeline. Licensing basis: `docs/01-licensing.md`.
 | Memory for 100 000-entry panel | ≤ 60 MB RSS |
 | `cargo clippy -- -D warnings`, `cargo fmt --check` | clean |
 | `cargo deny` (licences + advisories) | clean |
-| `unsafe` outside `scmd-platform` | forbidden by lint |
+| `unsafe` outside `fcmd-platform` | forbidden by lint |
 | Snapshot tests of the rendered screen | all platforms |
 | Fuzz targets (path parsing, archive readers, keymap parser) | no new crashes |
 
@@ -106,8 +106,8 @@ The prose carries no tables and is wrapped by the renderer rather than by hand: 
 has to read on an eighty-column terminal and on a wide one. A test refuses a table in a help
 page for that reason.
 
-The manual page, `docs/scmd.1`, is generated from the command line's own options by
-`scmd --man`, with the sections `clap` cannot know about — files, keys, exit status — written
+The manual page, `docs/fcmd.1`, is generated from the command line's own options by
+`fcmd --man`, with the sections `clap` cannot know about — files, keys, exit status — written
 once underneath. The file in the repository is that output and a test fails when the two
 differ, so a flag cannot exist without a line in the page, and a release that forgets to
 regenerate it does not build.

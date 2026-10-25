@@ -40,6 +40,6 @@ async function draw(page, svg, png, width, height) {
     execFileSync('convert', [source, '-resize', `${size}x${size}`, path.join(root, `icon-${size}.png`)]);
     console.log(`icon-${size}.png`);
   }
-  execFileSync('convert', [source, '-define', 'icon:auto-resize=256,128,64,48,32,16', path.join(root, 'scmd.ico')]);
-  console.log('scmd.ico');
+  execFileSync('convert', [source, '-define', 'icon:auto-resize=256,128,64,48,32,16', path.join(root, 'fcmd.ico')]);
+  console.log('fcmd.ico');
 })();

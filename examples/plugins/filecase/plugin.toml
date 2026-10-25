@@ -6,7 +6,7 @@
 [plugin]
 id = "filecase"
 name = "File case"
-scmd = ">=0.1.0"
+fcmd = ">=0.1.0"
 
 [[command]]
 id = "user.case.lower"

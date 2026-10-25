@@ -2,7 +2,7 @@
 [plugin]
 id = "dated-folder"
 name = "Dated folder"
-scmd = ">=0.1.0"
+fcmd = ">=0.1.0"
 
 [[command]]
 id = "user.folder.dated"

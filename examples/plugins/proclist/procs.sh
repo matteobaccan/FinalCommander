@@ -17,23 +17,23 @@ json_lines() {
   printf ']}}\n'
 }
 
-case "$SCMD_COMMAND" in
+case "$FCMD_COMMAND" in
   *.who-has-this)
-    [ -n "$SCMD_CURSOR" ] || { echo '{"status":"nothing under the cursor"}'; exit 0; }
-    cd "$SCMD_DIR" 2>/dev/null || { echo '{"error":"not a directory on this machine"}'; exit 0; }
+    [ -n "$FCMD_CURSOR" ] || { echo '{"status":"nothing under the cursor"}'; exit 0; }
+    cd "$FCMD_DIR" 2>/dev/null || { echo '{"error":"not a directory on this machine"}'; exit 0; }
     if command -v lsof >/dev/null 2>&1; then
-      out=$(lsof -- "$SCMD_CURSOR" 2>/dev/null | head -30)
+      out=$(lsof -- "$FCMD_CURSOR" 2>/dev/null | head -30)
     elif command -v fuser >/dev/null 2>&1; then
-      out=$(fuser -v -- "$SCMD_CURSOR" 2>&1 | head -30)
+      out=$(fuser -v -- "$FCMD_CURSOR" 2>&1 | head -30)
     else
       echo '{"error":"neither lsof nor fuser is installed"}'
       exit 0
     fi
     if [ -z "$out" ]; then
-      printf '{"status":"nothing has %s open"}\n' "$SCMD_CURSOR"
+      printf '{"status":"nothing has %s open"}\n' "$FCMD_CURSOR"
       exit 0
     fi
-    printf '%s\n' "$out" | json_lines "What has $SCMD_CURSOR open"
+    printf '%s\n' "$out" | json_lines "What has $FCMD_CURSOR open"
     ;;
   *)
     # The twenty heaviest, which is the useful end of a process list.

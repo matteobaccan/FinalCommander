@@ -1,6 +1,6 @@
 # What this is
 
-SupremeCommander is a two-panel file manager that works the same way on Linux, macOS and
+FinalCommander is a two-panel file manager that works the same way on Linux, macOS and
 Windows. One program, one set of keys, one configuration file — on every machine you sit at.
 
 That sameness is the point. The orthodox file manager is a forty-year-old idea that every

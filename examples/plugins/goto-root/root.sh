@@ -3,7 +3,7 @@
 # mean: a repository boundary beats a package file, because a workspace has package files all
 # the way down.
 cat >/dev/null
-dir="$SCMD_DIR"
+dir="$FCMD_DIR"
 [ -n "$dir" ] || { echo '{"error":"not a directory on this machine"}'; exit 0; }
 cd "$dir" 2>/dev/null || { echo '{"error":"cannot enter that directory"}'; exit 0; }
 

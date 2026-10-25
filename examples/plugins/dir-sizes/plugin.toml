@@ -4,7 +4,7 @@
 [plugin]
 id = "dir-sizes"
 name = "Directory sizes"
-scmd = ">=0.1.0"
+fcmd = ">=0.1.0"
 
 [[command]]
 id = "user.sizes.here"

@@ -76,19 +76,19 @@ jobs:
         env:
           # `ring` compiles C, and the musl target needs its own compiler.
           CC_x86_64_unknown_linux_musl: musl-gcc
-        run: cargo build --release --locked --target ${{ matrix.target }} -p scmd
+        run: cargo build --release --locked --target ${{ matrix.target }} -p fcmd
 
       - name: Build both architectures and join them
         if: matrix.name == 'macos-universal'
         run: |
           rustup target add aarch64-apple-darwin x86_64-apple-darwin
-          cargo build --release --locked --target aarch64-apple-darwin -p scmd
-          cargo build --release --locked --target x86_64-apple-darwin -p scmd
+          cargo build --release --locked --target aarch64-apple-darwin -p fcmd
+          cargo build --release --locked --target x86_64-apple-darwin -p fcmd
           mkdir -p target/universal-apple-darwin/release
-          lipo -create -output target/universal-apple-darwin/release/scmd \
-            target/aarch64-apple-darwin/release/scmd \
-            target/x86_64-apple-darwin/release/scmd
-          lipo -info target/universal-apple-darwin/release/scmd
+          lipo -create -output target/universal-apple-darwin/release/fcmd \
+            target/aarch64-apple-darwin/release/fcmd \
+            target/x86_64-apple-darwin/release/fcmd
+          lipo -info target/universal-apple-darwin/release/fcmd
 
       - name: Package
         id: package
@@ -102,10 +102,10 @@ jobs:
           fi
           # The platform first and the version last, so the archives of one release sort by
           # platform and a download is read left to right: what it runs on, then which build.
-          name="scmd-${{ matrix.name }}-${version}"
+          name="fcmd-${{ matrix.name }}-${version}"
           dir="dist/${name}"
           mkdir -p "$dir"
-          bin="target/${{ matrix.target }}/release/scmd"
+          bin="target/${{ matrix.target }}/release/fcmd"
           # `set -e` and `[ ... ] && ...` do not mix: a false test would end the script.
           if [ -f "$bin.exe" ]; then
             bin="$bin.exe"
@@ -117,12 +117,12 @@ jobs:
           # not a second source of truth.
           case "${{ matrix.name }}" in
             windows-*) ;;
-            *) cp docs/scmd.1 "$dir/" ;;
+            *) cp docs/fcmd.1 "$dir/" ;;
           esac
           # The binary must at least run on the machine that built it.
           case "${{ matrix.name }}" in
-            windows-*) "$dir/scmd.exe" --version ;;
-            *) "$dir/scmd" --version ;;
+            windows-*) "$dir/fcmd.exe" --version ;;
+            *) "$dir/fcmd" --version ;;
           esac
           # The files sit at the root of the archive, with no directory of their own: the
           # program is one executable, and unpacking it should put that executable where the

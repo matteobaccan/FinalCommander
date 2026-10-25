@@ -3,7 +3,7 @@
 `docs/02-features.md` is the union of many commanders, written from documentation and from use.
 This file is narrower and harder: it is what **FAR Manager 3.x actually does**, read from its own
 repository (`FarGroup/FarManager`, BSD-3-Clause, HEAD `60567ba`, fetched 2026-10-24), and compared
-line by line with what SupremeCommander 0.0.2 does.
+line by line with what FinalCommander 0.0.2 does.
 
 Sources used, in order of authority:
 
@@ -16,7 +16,7 @@ Sources used, in order of authority:
 | `far/changelog` | 66 662 lines of history: when and why a behaviour is the way it is |
 | `plugins/*` | what FAR ships as plugins rather than as core |
 
-Status column: ✅ in scmd 0.0.2 · ◐ partly · ✗ missing · ⊘ Windows-specific, needs a different
+Status column: ✅ in fcmd 0.0.2 · ◐ partly · ✗ missing · ⊘ Windows-specific, needs a different
 answer on three platforms (not a straight port).
 
 > Method note: the help text is FAR's expression and stays FAR's. What is taken here are facts —
@@ -37,7 +37,7 @@ FAR 3.x is bigger than it looks from the screen:
 - 20 bundled plugins, including the archive layer and the FTP client — in FAR these are *not*
   core, which is why FAR's core looks smaller than it is.
 
-For comparison, scmd 0.0.2 has ~45 configuration keys, 4 view modes, no macros, 3 confirmations
+For comparison, fcmd 0.0.2 has ~45 configuration keys, 4 view modes, no macros, 3 confirmations
 and 3 built-in providers. That gap is the roadmap.
 
 ## 2. Panels
@@ -104,7 +104,7 @@ Plus `Ins` and `Shift+arrows` (the action follows the state of the item you star
 `Ctrl+M` to restore the previous selection, right-click and right-drag selection, and a
 `Select folders` setting that decides whether the mask keys touch directories at all.
 
-scmd: ✅ `Ins`, mask `+`/`-`/`*`, select all/none/invert, restore. ✗ the extension and name
+fcmd: ✅ `Ins`, mask `+`/`-`/`*`, select all/none/invert, restore. ✗ the extension and name
 variants, the folder rules, mouse selection.
 
 ## 4. File operations
@@ -190,7 +190,7 @@ Both are close to ours; these are the differences worth noting.
 
 ## 8. Command line (the one thing we have nothing of)
 
-This is the largest single hole in scmd, and several other features hang off it.
+This is the largest single hole in fcmd, and several other features hang off it.
 
 - Full line editing: word movement, `Ctrl+K` to end of line, `Ctrl+BS`/`Ctrl+Del` by word,
   history with `Ctrl+E`/`Ctrl+X`, `Ctrl+Y` to clear.

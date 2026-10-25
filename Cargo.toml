@@ -5,7 +5,7 @@ members = ["crates/*"]
 # to mean the program. Without this it refuses, naming both, and every `cargo run -- --…` in
 # CONTRIBUTING.md and in CI would have to say which. The explicit `--workspace` that the test,
 # clippy and licence runs pass is unaffected: this only decides what a bare command defaults to.
-default-members = ["crates/scmd"]
+default-members = ["crates/fcmd"]
 
 [workspace.package]
 version = "0.4.0"
@@ -13,32 +13,32 @@ edition = "2021"
 rust-version = "1.89"
 license = "MIT"
 repository = "https://github.com/matteobaccan/SupremeCommander"
-authors = ["Matteo Baccan and the SupremeCommander contributors"]
+authors = ["Matteo Baccan and the FinalCommander contributors"]
 
 [workspace.dependencies]
 # Every crate of this workspace, declared once. A crate depends on another with
-# `scmd-core = { workspace = true }`, never by spelling out a path and a version of its own:
+# `fcmd-core = { workspace = true }`, never by spelling out a path and a version of its own:
 # cutting a release is then the one `version` above, and not a version in twenty manifests
 # that a build only notices when one of them is left behind. There is deliberately no
 # `version` here — nothing is published to crates.io, and a path is all a workspace needs.
-scmd = { path = "crates/scmd" }
-scmd-arc = { path = "crates/scmd-arc" }
-scmd-cmd = { path = "crates/scmd-cmd" }
-scmd-config = { path = "crates/scmd-config" }
-scmd-core = { path = "crates/scmd-core" }
-scmd-edit = { path = "crates/scmd-edit" }
-scmd-find = { path = "crates/scmd-find" }
-scmd-i18n = { path = "crates/scmd-i18n" }
-scmd-jobs = { path = "crates/scmd-jobs" }
-scmd-net = { path = "crates/scmd-net" }
-scmd-plug = { path = "crates/scmd-plug" }
-scmd-s3 = { path = "crates/scmd-s3" }
-scmd-syntax = { path = "crates/scmd-syntax" }
-scmd-term = { path = "crates/scmd-term" }
-scmd-tui = { path = "crates/scmd-tui" }
-scmd-ui = { path = "crates/scmd-ui" }
-scmd-vfs = { path = "crates/scmd-vfs" }
-scmd-view = { path = "crates/scmd-view" }
+fcmd = { path = "crates/fcmd" }
+fcmd-arc = { path = "crates/fcmd-arc" }
+fcmd-cmd = { path = "crates/fcmd-cmd" }
+fcmd-config = { path = "crates/fcmd-config" }
+fcmd-core = { path = "crates/fcmd-core" }
+fcmd-edit = { path = "crates/fcmd-edit" }
+fcmd-find = { path = "crates/fcmd-find" }
+fcmd-i18n = { path = "crates/fcmd-i18n" }
+fcmd-jobs = { path = "crates/fcmd-jobs" }
+fcmd-net = { path = "crates/fcmd-net" }
+fcmd-plug = { path = "crates/fcmd-plug" }
+fcmd-s3 = { path = "crates/fcmd-s3" }
+fcmd-syntax = { path = "crates/fcmd-syntax" }
+fcmd-term = { path = "crates/fcmd-term" }
+fcmd-tui = { path = "crates/fcmd-tui" }
+fcmd-ui = { path = "crates/fcmd-ui" }
+fcmd-vfs = { path = "crates/fcmd-vfs" }
+fcmd-view = { path = "crates/fcmd-view" }
 
 [profile.release]
 opt-level = 3

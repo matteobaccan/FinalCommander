@@ -1,7 +1,7 @@
 # SPEC 04 — Virtual filesystem
 
 **Implemented today**: the trait and the capability flags; the `file` provider; and the
-**netbox**'s `sftp` provider (`scmd-net`) with the connection pool, the site list from
+**netbox**'s `sftp` provider (`fcmd-net`) with the connection pool, the site list from
 `[[site]]` blocks, host-key verification against `known_hosts` with a trust-on-first-use
 prompt, agent / key-file / password authentication, listing, stat, mkdir (including `mkdir -p`,
 which SFTP has no call for), delete, rename, symlinks, mode and mtime, and transfers in every
@@ -10,7 +10,7 @@ engine with progress and cancellation. A `Router` sends each path to the provide
 so nothing above the VFS knows whether a panel is local or remote.
 Editing a remote file works too: `F4` fetches it, the editor edits the copy, and `F2` writes it
 back with a change check and a rename into place (§5).
-**Archives** (0.0.5): `scmd-arc` reads zip and the tar family — plain, gzip, bzip2, xz and
+**Archives** (0.0.5): `fcmd-arc` reads zip and the tar family — plain, gzip, bzip2, xz and
 zstd — with every decoder pure Rust, so the binary stays one file that cross-compiles without a
 C toolchain. The format comes from the bytes first and the name second. `Enter` on an archive
 opens it as a panel (§4's `!` paths), `F3` reads an entry, `F5` copies out through the job
@@ -71,16 +71,16 @@ where the code lives, not whether it is linked into the binary.
 
 | Scheme | Crate / mechanism | Caps | Milestone |
 | --- | --- | --- | --- |
-| `file` | `std::fs` + `scmd-platform` | all native | M1 |
+| `file` | `std::fs` + `fcmd-platform` | all native | M1 |
 | `zip` | `zip` (**implemented, read + create**, deflate/deflate64/bzip2/lzma/xz, zip64) | READ SEEK, CREATE as a whole archive | M2 |
 | `tar` family | `tar` + `flate2`/`lzma-rust2`/`ruzstd`/`bzip2`, all pure Rust (**implemented, read + create**) | READ SEEK (plain tar and zip only), CREATE as a whole archive | M2 |
 | `7z` | `sevenz-rust2` (**implemented, read + create + rebuild**, LZMA/LZMA2/bzip2/deflate/PPMd, BCJ and delta filters) | READ, CREATE as a whole archive, WRITE as a rebuild — and deliberately not SEEK: a solid block is one stream, so one entry cannot be found without decoding what is in front of it | M2 |
 | `rar` | `unrar` (read-only, non-free licence, optional feature, off by default in distro builds) | READ SEEK | M3 |
 | `iso`, `cab`, `ar`/`deb`, `rpm`, `cpio`, `lha`, `arj`, `squashfs` | `libarchive` binding as one fallback provider | READ | M3 |
-| `sftp` | `russh` + `russh-sftp` (**implemented**, `scmd-net`) | READ WRITE CREATE DELETE RENAME SEEK TRUNCATE META_TIMES META_MODE META_OWNER LINKS RESUME RANDOM_WRITE CASE_SENSITIVE | M1 |
-| `ftp`/`ftps` | `suppaftp` (**implemented**, `scmd-net`; explicit TLS with rustls, `MLSD` where the server has it) | READ WRITE CREATE DELETE RENAME META_TIMES (`MFMT`) META_MODE (`SITE CHMOD`) CASE_SENSITIVE — and deliberately not SEEK, TRUNCATE, RANDOM_WRITE, LINKS or RESUME | M2 |
-| `webdav`/`davs` | hand-written over `reqwest` (**implemented**, `scmd-net`; `PROPFIND`, `GET`, `PUT`, `MKCOL`, `DELETE`, `MOVE`, basic auth) | READ WRITE CREATE DELETE RENAME CASE_SENSITIVE — and deliberately not SEEK, TRUNCATE, RANDOM_WRITE, RESUME, LINKS, META_TIMES or META_MODE: a `PUT` replaces a file whole, and the server owns its time | M2 |
-| `s3` | hand-written client over `reqwest` + `ring` (**implemented, read and write**, `scmd-s3`; any S3-compatible endpoint) | READ SEEK WRITE CREATE DELETE RENAME SERVER_SIDE_COPY CASE_SENSITIVE — and deliberately not ATOMIC_RENAME, TRUNCATE, META_TIMES, META_MODE or LINKS | M3 |
+| `sftp` | `russh` + `russh-sftp` (**implemented**, `fcmd-net`) | READ WRITE CREATE DELETE RENAME SEEK TRUNCATE META_TIMES META_MODE META_OWNER LINKS RESUME RANDOM_WRITE CASE_SENSITIVE | M1 |
+| `ftp`/`ftps` | `suppaftp` (**implemented**, `fcmd-net`; explicit TLS with rustls, `MLSD` where the server has it) | READ WRITE CREATE DELETE RENAME META_TIMES (`MFMT`) META_MODE (`SITE CHMOD`) CASE_SENSITIVE — and deliberately not SEEK, TRUNCATE, RANDOM_WRITE, LINKS or RESUME | M2 |
+| `webdav`/`davs` | hand-written over `reqwest` (**implemented**, `fcmd-net`; `PROPFIND`, `GET`, `PUT`, `MKCOL`, `DELETE`, `MOVE`, basic auth) | READ WRITE CREATE DELETE RENAME CASE_SENSITIVE — and deliberately not SEEK, TRUNCATE, RANDOM_WRITE, RESUME, LINKS, META_TIMES or META_MODE: a `PUT` replaces a file whole, and the server owns its time | M2 |
+| `s3` | hand-written client over `reqwest` + `ring` (**implemented, read and write**, `fcmd-s3`; any S3-compatible endpoint) | READ SEEK WRITE CREATE DELETE RENAME SERVER_SIDE_COPY CASE_SENSITIVE — and deliberately not ATOMIC_RENAME, TRUNCATE, META_TIMES, META_MODE or LINKS | M3 |
 | `smb` | `pavao`/system mount | varies | M3 |
 | `adb`, `mtp` | external `adb` binary / `libmtp` | READ WRITE DELETE | M4 |
 | `rclone` | `rclone rcd` JSON API bridge — one provider, dozens of backends | READ WRITE DELETE RENAME | M3 |
@@ -110,7 +110,7 @@ where the code lives, not whether it is linked into the binary.
   be talked into writing outside where it was told to.
 - Writes to a nested container rebuild the outer container; the UI warns and the job engine
   treats it as one transactional unit (write to temp, verify, atomic replace).
-  **Implemented** for a container on a local disk, as `scmd_arc::rebuild`: a list of changes
+  **Implemented** for a container on a local disk, as `fcmd_arc::rebuild`: a list of changes
   (`Put`, `Remove`, `Rename`) is applied while the old archive is streamed into
   `archive.<ext>.part` beside it, the result is opened and checked against the plan, and only
   then is it renamed over the original. The archive cache is dropped before and after, so no
@@ -123,9 +123,9 @@ where the code lives, not whether it is linked into the binary.
 ## 5. Editing inside a VFS
 
 **Implemented today for `sftp`**: `F4` on a remote file fetches it into
-`<temp>/scmd-<pid>/<name>`, opens the editor on that copy (the header and every message show
+`<temp>/fcmd-<pid>/<name>`, opens the editor on that copy (the header and every message show
 the remote path, not the temp one), and `F2` writes it back. The write-back uploads to
-`name.scmd-part` and renames it over the target, so the file on the server keeps its old bytes
+`name.fcmd-part` and renames it over the target, so the file on the server keeps its old bytes
 until the new ones are completely there. Before writing, the server's size and mtime are
 compared with what they were when the file was fetched: a file someone else has changed brings
 up a confirmation instead of being overwritten. If the write-back fails, the error names both
@@ -134,9 +134,9 @@ the reason and the local copy, so the edits are never lost silently. `Shift+F2` 
 creates a file on the server. SFTP version 3's rename cannot replace an existing file and
 `russh-sftp` has no `posix-rename` extension yet, so the old file is removed between the upload
 and the rename; if the rename then fails the bytes are still on the server under the
-`.scmd-part` name, and the message says so.
+`.fcmd-part` name, and the message says so.
 **Implemented for archives** (0.3.0), the same shape: `F4` on
-`/home/me/a.zip!/b.txt` copies the entry to `<temp>/scmd-<pid>/<name>`, the editor edits that
+`/home/me/a.zip!/b.txt` copies the entry to `<temp>/fcmd-<pid>/<name>`, the editor edits that
 copy, and `F2` sends it back in as §4's rebuild — a `Put` for that one name. There is no
 change check to make, because the container is a local file and the rebuild reads it in full
 anyway; if it fails, the error names the reason and the local copy. `F6` and `F8` inside an
@@ -146,7 +146,7 @@ archive are the same mechanism with `Rename` and `Remove` instead.
 
 ## 6. Connection manager
 
-`[[site]]` blocks in `scmd.toml` (no secrets). The spec first said `sites.toml`; the
+`[[site]]` blocks in `fcmd.toml` (no secrets). The spec first said `sites.toml`; the
 single-file rule (SPEC 07 §1) moved them into the one config file, and the OS keyring is not
 used yet — see the note below.
 
@@ -203,9 +203,9 @@ host-key check, one connection, one more channel.
 Two layers, because a provider that can only be tested against someone's server is not tested:
 
 - everything above the wire (paths, listings, transfers, the job engine's view of a remote
-  filesystem) runs against `scmd_net::memory::MemorySftp`, an in-memory SFTP server;
+  filesystem) runs against `fcmd_net::memory::MemorySftp`, an in-memory SFTP server;
 - the wire itself runs against a **real SSH server started in the test process** on a loopback
-  port (`crates/scmd-net/tests/live_sftp.rs`): key exchange, the host-key decision including
+  port (`crates/fcmd-net/tests/live_sftp.rs`): key exchange, the host-key decision including
   trust-on-first-use writing to a `known_hosts` file, password authentication, the `sftp`
   subsystem, and every call the provider makes.
 
@@ -256,7 +256,7 @@ rest.
 ### 8.1 A bucket with 1.7 million objects in it
 
 The question is worth answering with figures rather than with confidence, so the figures are
-measured — `cargo test --release -p scmd-core --lib a_bucket_sized_listing -- --ignored
+measured — `cargo test --release -p fcmd-core --lib a_bucket_sized_listing -- --ignored
 --nocapture` builds a listing of 1.7 million rows whose names are shaped like the keys such a
 bucket really holds (`2024/08/13/customer-00012345/event-0000000678.json`) and times it.
 
@@ -295,7 +295,7 @@ credentials can see.
 
 ### 8.3 Writing
 
-**Implemented** (0.3.0). `scmd_s3::jobs::ObjectFs` is the job engine's filesystem for `s3://`
+**Implemented** (0.3.0). `fcmd_s3::jobs::ObjectFs` is the job engine's filesystem for `s3://`
 paths: it wraps another `JobFs` exactly as the archive layer does, takes the paths that are
 its own and hands everything else through, so the engine runs unchanged and `F5`, `F6`, `F7`
 and `F8` arrive with their dialog, progress bar, overwrite question and `Esc` already working.
@@ -360,7 +360,7 @@ the system store the endpoint works as soon as everything else on that machine w
 
 ### 8.5 Credentials
 
-**Not in `scmd.toml`.** A secret access key is a password, and this program has never written a
+**Not in `fcmd.toml`.** A secret access key is a password, and this program has never written a
 password into its configuration file. An `[[s3]]` block says *where* its keys come from and the
 provider reads them from the two places the rest of the machine already keeps them: the `AWS_*`
 environment variables, and `~/.aws/credentials` — the file every AWS tool shares, in the INI
@@ -388,7 +388,7 @@ of a large object is a charge on someone's account, so it is not worth shipping 
 ### 8.7 How it is tested
 
 Without an AWS account, and without pretending. There is an S3 service in the test process —
-`scmd_s3::fake` — with a map of buckets behind it, and it is stricter than the real thing in
+`fcmd_s3::fake` — with a map of buckets behind it, and it is stricter than the real thing in
 two ways that matter:
 
 - **It verifies the signature**, recomputed from the request line it received rather than from

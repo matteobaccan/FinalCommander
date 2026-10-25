@@ -4,8 +4,8 @@
 #
 # F11 in the viewer already reads an executable properly — this is for everything else.
 cat >/dev/null
-cd "$SCMD_DIR" 2>/dev/null || { echo '{"error":"not a directory on this machine"}'; exit 0; }
-name="$SCMD_CURSOR"
+cd "$FCMD_DIR" 2>/dev/null || { echo '{"error":"not a directory on this machine"}'; exit 0; }
+name="$FCMD_CURSOR"
 [ -n "$name" ] || { echo '{"status":"nothing under the cursor"}'; exit 0; }
 [ -e "$name" ] || { echo '{"error":"that is not here any more"}'; exit 0; }
 

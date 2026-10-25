@@ -1,7 +1,7 @@
 # The same on Windows: every subdirectory measured, biggest first.
 $ErrorActionPreference = 'SilentlyContinue'
 [Console]::In.ReadToEnd() | Out-Null
-$dir = $env:SCMD_DIR
+$dir = $env:FCMD_DIR
 if (-not (Test-Path -LiteralPath $dir)) {
   Write-Output '{"error":"not a directory on this machine"}'
   exit 0

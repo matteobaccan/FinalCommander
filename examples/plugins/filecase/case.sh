@@ -5,14 +5,14 @@
 # working directory — and then asks the panel to read again. The actions are for driving the
 # program, not for doing the work.
 cat >/dev/null
-cd "$SCMD_DIR" 2>/dev/null || { echo '{"error":"not a directory on this machine"}'; exit 0; }
+cd "$FCMD_DIR" 2>/dev/null || { echo '{"error":"not a directory on this machine"}'; exit 0; }
 
 # Nothing selected means the row under the cursor, which is the rule everywhere else.
-names="$SCMD_SELECTED"
-[ -n "$names" ] || names="$SCMD_CURSOR"
+names="$FCMD_SELECTED"
+[ -n "$names" ] || names="$FCMD_CURSOR"
 [ -n "$names" ] || { echo '{"status":"nothing to rename"}'; exit 0; }
 
-case "$SCMD_COMMAND" in
+case "$FCMD_COMMAND" in
   *.lower) how=lower ;;
   *.upper) how=upper ;;
   *.title) how=title ;;

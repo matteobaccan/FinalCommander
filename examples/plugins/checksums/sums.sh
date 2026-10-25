@@ -3,7 +3,7 @@
 # cursor. The format is the one `sha256sum` and `shasum` both read, which is the one every
 # project publishes beside its downloads — including this one.
 cat >/dev/null
-cd "$SCMD_DIR" 2>/dev/null || { echo '{"error":"not a directory on this machine"}'; exit 0; }
+cd "$FCMD_DIR" 2>/dev/null || { echo '{"error":"not a directory on this machine"}'; exit 0; }
 
 if command -v sha256sum >/dev/null 2>&1; then
   make_sums() { sha256sum -- "$@"; }
@@ -16,9 +16,9 @@ else
   exit 0
 fi
 
-case "$SCMD_COMMAND" in
+case "$FCMD_COMMAND" in
   *.verify)
-    file="$SCMD_CURSOR"
+    file="$FCMD_CURSOR"
     case "$file" in
       *SHA256SUMS*|*.sha256|*.sha256sum|*.sum) ;;
       *)
@@ -43,8 +43,8 @@ case "$SCMD_COMMAND" in
     printf ']}}\n'
     ;;
   *)
-    names="$SCMD_SELECTED"
-    [ -n "$names" ] || names="$SCMD_CURSOR"
+    names="$FCMD_SELECTED"
+    [ -n "$names" ] || names="$FCMD_CURSOR"
     [ -n "$names" ] || { echo '{"status":"nothing selected to sum"}'; exit 0; }
     # One `sha256sum` call with every name, so the file comes out in one piece.
     count=0

@@ -3,7 +3,7 @@
 [plugin]
 id = "env-diff"
 name = "Env files"
-scmd = ">=0.1.0"
+fcmd = ">=0.1.0"
 
 [[command]]
 id = "user.env.diff"

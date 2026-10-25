@@ -1,7 +1,7 @@
 # The pictures
 
 Three of them, in FAR Manager's own palette — the sixteen console colours the themes were
-taken from, element for element (`crates/scmd-ui/themes/far.toml`). Blue `#000080` panels,
+taken from, element for element (`crates/fcmd-ui/themes/far.toml`). Blue `#000080` panels,
 light cyan `#00ffff` frames and text, a cyan `#008080` bar under the cursor and along the key
 bar, yellow `#ffff00` for what is marked. Nothing here invents a colour the program does not
 draw.
@@ -12,7 +12,7 @@ draw.
 | `logo.png` | one frame of it, for anywhere that will not animate | fallbacks, slides |
 | `banner.svg`, `banner.png` | 1280×640 | the repository's social preview (Settings → Social preview takes the PNG) |
 | `icon.svg` | the program's icon, drawn to survive sixteen pixels | desktop entries, package metadata |
-| `icon-16..256.png`, `scmd.ico` | the same, rasterised | Windows, and anything that wants a PNG |
+| `icon-16..256.png`, `fcmd.ico` | the same, rasterised | Windows, and anything that wants a PNG |
 
 ## What they say
 

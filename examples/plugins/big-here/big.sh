@@ -6,7 +6,7 @@
 # plugin that takes a minute says so there rather than being killed at the default twenty
 # seconds.
 cat >/dev/null
-cd "$SCMD_DIR" 2>/dev/null || { echo '{"error":"not a directory on this machine"}'; exit 0; }
+cd "$FCMD_DIR" 2>/dev/null || { echo '{"error":"not a directory on this machine"}'; exit 0; }
 
 lines=$(du -sh -- * .[!.]* 2>/dev/null | sort -rh | head -10 | sed 's/\t/  /')
 if [ -z "$lines" ]; then

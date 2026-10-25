@@ -1,0 +1,30 @@
+[package]
+name = "fcmd-jobs"
+description = "FinalCommander: the file operation engine (plan, execute, settle)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+fcmd-arc = { workspace = true }
+fcmd-core = { workspace = true }
+regex = "1"
+thiserror = "2"
+# The wastebasket. `default-features = false` keeps `chrono` out — it is only needed for
+# *listing* and *restoring* what is in there, which is a panel we do not have yet — but
+# `coinit_apartmentthreaded` has to stay: on Windows the crate initialises COM and refuses to
+# compile, on purpose, unless it is told which threading model to use.
+trash = { version = "5.2.9", default-features = false, features = [
+  "coinit_apartmentthreaded",
+] }
+md5 = "0.8"
+sha1 = "0.11"
+sha2 = "0.11"
+
+[dev-dependencies]
+tempfile = "3"
+# Only to build the archive a test then reads through the engine.
+zip = { version = "9", default-features = false, features = ["deflate-flate2"] }

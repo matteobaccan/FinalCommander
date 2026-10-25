@@ -3,7 +3,7 @@
 [plugin]
 id = "proclist"
 name = "Process list"
-scmd = ">=0.1.0"
+fcmd = ">=0.1.0"
 
 [[command]]
 id = "user.sys.processes"

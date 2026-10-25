@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="assets/logo.svg" alt="SupremeCommander — an orthodox file manager for the terminal. One program, every system." width="880">
+  <img src="assets/logo.svg" alt="FinalCommander — an orthodox file manager for the terminal. One program, every system." width="880">
 </p>
 
-<h1 align="center">SupremeCommander</h1>
+<h1 align="center">FinalCommander</h1>
 
 <p align="center">
   <b>One file. Every system. Everything in it.</b><br>
@@ -19,7 +19,7 @@
 You already use a two-panel file manager. Around it you have also collected an archiver, an
 SFTP client, something for S3, a hex editor, a viewer that survives a four-gigabyte log, a
 grep-across-files tool, an editor that colours code — and a different set of all of those on
-the other operating system you work on. **SupremeCommander is one binary, about five megabytes
+the other operating system you work on. **FinalCommander is one binary, about five megabytes
 to download, that does all of it with the same keys on all three platforms.** No installer. No
 runtime. No DLLs, no asset directory, no plugin tree to assemble: the themes, the keymaps,
 seven interface languages, the whole help and the manual page are compiled into the file.
@@ -27,7 +27,7 @@ seven interface languages, the whole help and the manual page are compiled into 
 
 ## What the one file replaces
 
-| What you open today | In SupremeCommander |
+| What you open today | In FinalCommander |
 | --- | --- |
 | A file manager | Two panels, the selection matrix, five view modes, sorting, filters, quick search, and the command line with the shell behind it (`Ctrl+O`) |
 | An archiver | `Enter` opens a zip, a 7z or a tarball **as a panel**; `Shift+F1` builds one; `Shift+F2` extracts; `Shift+F3` tests every entry against the format's own checks |
@@ -58,7 +58,7 @@ Every orthodox commander is the same good idea, implemented once per operating s
 | **Double Commander** | Linux, macOS, Windows | a GTK/Qt application | GPL-2.0 |
 | **Krusader** | Linux (KDE) | KDE libraries | GPL-2.0 |
 | **MTN2** | Windows, Linux | a folder, or a `.deb` | MPL-2.0 |
-| **SupremeCommander** | **Linux, macOS, Windows** | **one file, copied** | **MIT** |
+| **FinalCommander** | **Linux, macOS, Windows** | **one file, copied** | **MIT** |
 
 Learn the keys once and they are the keys everywhere — including on the server you only ever
 reach over SSH, where a GTK application is not an option and installing a package may not be
@@ -80,7 +80,7 @@ install — and that is the hole this fills.
 ## What it looks like
 
 Not photographs: every picture here is drawn by the renderer itself, from the same cell buffer
-the terminal is given, by `cargo test -p scmd --bin scmd write_the_screenshots -- --ignored`.
+the terminal is given, by `cargo test -p fcmd --bin fcmd write_the_screenshots -- --ignored`.
 They cannot show a version of the program that no longer exists.
 
 | | |
@@ -96,44 +96,49 @@ They cannot show a version of the program that no longer exists.
 
 One file, nothing to install beside it. Download the archive for your machine from the
 [releases page](https://github.com/matteobaccan/SupremeCommander/releases), unpack it, and put
-`scmd` somewhere on your `PATH`.
+`fcmd` somewhere on your `PATH`.
+
+Up to and including 0.4.0 the program was called SupremeCommander and its command was `scmd`,
+which is why the releases and the repository still answer to that name. A configuration from
+that version keeps working: every file is read under its new name first and its old one after,
+and the startup screen says which one it found.
 
 | Platform | Archive |
 | --- | --- |
-| Linux (x86-64) | `scmd-linux-x86_64-<version>.tar.gz`, or `scmd-linux-x86_64-static-<version>.tar.gz` for a statically linked build that runs on any distribution |
-| macOS (Intel and Apple Silicon) | `scmd-macos-universal-<version>.tar.gz` — one binary for both |
-| Windows (x86-64) | `scmd-windows-x86_64-<version>.zip` |
+| Linux (x86-64) | `fcmd-linux-x86_64-<version>.tar.gz`, or `fcmd-linux-x86_64-static-<version>.tar.gz` for a statically linked build that runs on any distribution |
+| macOS (Intel and Apple Silicon) | `fcmd-macos-universal-<version>.tar.gz` — one binary for both |
+| Windows (x86-64) | `fcmd-windows-x86_64-<version>.zip` |
 
-The files sit at the root of the archive, so unpacking leaves `scmd` where you are rather than
+The files sit at the root of the archive, so unpacking leaves `fcmd` where you are rather than
 one directory down.
 
 ```sh
 # Linux, for example
-tar xzf scmd-linux-x86_64-0.2.0.tar.gz
-sudo install -m755 scmd /usr/local/bin/scmd
-scmd --version
+tar xzf fcmd-linux-x86_64-0.2.0.tar.gz
+sudo install -m755 fcmd /usr/local/bin/fcmd
+fcmd --version
 ```
 
 `SHA256SUMS` beside the archives lets you check what you downloaded:
 `sha256sum --check SHA256SUMS`.
 
 macOS will refuse a binary it has not seen before; it is not signed yet, so the first run
-needs `xattr -d com.apple.quarantine scmd` (or Open anyway in System Settings → Privacy).
+needs `xattr -d com.apple.quarantine fcmd` (or Open anyway in System Settings → Privacy).
 
 From source, with Rust 1.89 or newer:
 
 ```sh
-cargo install --git https://github.com/matteobaccan/SupremeCommander scmd
+cargo install --git https://github.com/matteobaccan/SupremeCommander fcmd
 ```
 
 Everything the program keeps on disk is optional and amounts to three things: one settings
-file (`scmd.toml`, which also holds your themes and keymaps), one state file beside it, and
+file (`fcmd.toml`, which also holds your themes and keymaps), one state file beside it, and
 one `plugins/` directory — the only directory it ever reads. Delete them and nothing breaks.
 
 ## Try it
 
 ```sh
-scmd /etc /tmp     # left panel, right panel
+fcmd /etc /tmp     # left panel, right panel
 ```
 
 ```
@@ -162,7 +167,7 @@ every key on the screen you are looking at does.
   panel. Recursive trees, conflict dialogs (overwrite / all / skip / skip all / cancel), error
   decision points (retry / skip / skip all / cancel), a progress overlay with a per-file and a
   total bar, `Esc` to cancel, and both panels refreshed afterwards. A same-filesystem move is a
-  rename, not a copy. A copy is written to `name.scmd-part` and renamed only when complete, so
+  rename, not a copy. A copy is written to `name.fcmd-part` and renamed only when complete, so
   an interrupted operation never leaves a file that looks finished. `F8` hands what you chose
   to the system's own wastebasket — the one your desktop's file manager shows — and `Shift+Del`
   deletes outright. Checksums (MD5, SHA-1, SHA-256) are written in the format `sha256sum`
@@ -204,36 +209,36 @@ every key on the screen you are looking at does.
 Non-interactive modes, for CI and for scripts:
 
 ```sh
-scmd --list-themes      # built-in and external themes, with where each came from
-scmd --list-commands    # the command vocabulary every key, menu and plugin binds to
-scmd --list-languages   # en it de fr es ru zh
-scmd --check-keymap     # validate a keymap and print the resolved bindings
-scmd --dump-config      # the effective configuration
-scmd --export-theme tron >> ~/.config/scmd.toml   # a ready-to-paste [[theme]] block
-scmd --paths            # where the config file, the state file and plugins/ are
-scmd --list-plugins     # what is in the plugins directory
+fcmd --list-themes      # built-in and external themes, with where each came from
+fcmd --list-commands    # the command vocabulary every key, menu and plugin binds to
+fcmd --list-languages   # en it de fr es ru zh
+fcmd --check-keymap     # validate a keymap and print the resolved bindings
+fcmd --dump-config      # the effective configuration
+fcmd --export-theme tron >> ~/.config/fcmd.toml   # a ready-to-paste [[theme]] block
+fcmd --paths            # where the config file, the state file and plugins/ are
+fcmd --list-plugins     # what is in the plugins directory
 ```
 
 ## Coming from another commander
 
 `ui.keymap = "far"` is the default and `"mc"` ships beside it; a keymap of your own is a TOML
-file of `keys = [...]` / `cmd = "..."` lines, and `scmd --check-keymap` tells you whether it
+file of `keys = [...]` / `cmd = "..."` lines, and `fcmd --check-keymap` tells you whether it
 resolves before you rely on it. Every action in the program is a named command —
-`scmd --list-commands` prints all of them — so anything you can reach with a key you can also
+`fcmd --list-commands` prints all of them — so anything you can reach with a key you can also
 put in a menu, a macro or a plugin.
 
-## Why the command is `scmd` and not `sc`
+## Why the command is `fcmd` and not `sc`
 
 `sc` is taken three times over: on Windows `sc.exe` in `System32` is the Service Control
 Manager, on Unix `sc` is the classic spreadsheet calculator, and the crates.io name belongs to
 a syscall crate. A commander that promises the same keys on three platforms cannot fight a
 system command for its own name, so the binary, the config file and the crates are all
-`scmd`. Please do not "fix" it back.
+`fcmd`. Please do not "fix" it back.
 
 ## Themes and languages
 
 Six themes are compiled in — `commander` (the classic blue, default), `black`, `white`,
-`matrix`, `tron`, `blade` — and `[[theme]]` blocks in `scmd.toml` are read at startup,
+`matrix`, `tron`, `blade` — and `[[theme]]` blocks in `fcmd.toml` are read at startup,
 hot-reloaded, may `inherit` a built-in one, and replace a built-in with the same id.
 
 The interface ships in English, Italian, German, French, Spanish, Russian and Simplified
@@ -248,32 +253,32 @@ not be one: the graphical commanders are a crowded field, and the open slot is a
 commander with a modern engine underneath.
 
 ```
-crates/scmd-core     paths, entries, listings, sorting, selection   (no dependencies of ours)
-crates/scmd-vfs      the Vfs trait + the local provider
-crates/scmd-jobs     the operation engine: plan, execute, settle; conflicts and progress
-crates/scmd-arc      archives: zip, 7z and the tar family, reading, writing and testing
-crates/scmd-view     the viewer: windowed reads, encodings, text/dump/hex, search, disasm
-crates/scmd-edit     the editor: buffer, undo, blocks, search/replace, atomic save
-crates/scmd-syntax   the syntax scanner: one line, and the state the line before it left
-crates/scmd-net      netbox: SFTP, FTP/FTPS and WebDAV, sites, pool, tunnels, routed jobs
-crates/scmd-s3       object storage: SigV4, listings, the S3 provider and a fake service
-crates/scmd-find     find by name and by content, as a walk the interface reads as it runs
-crates/scmd-cmd      command vocabulary, keys, keymap profiles (far, mc)
-crates/scmd-config   TOML configuration, discovery, overrides
-crates/scmd-i18n     fluent catalogues for seven languages
-crates/scmd-plug     the plugin tier: manifests, discovery, running a command
-crates/scmd-ui       cell buffer, colours, themes, panel and chrome widgets
-crates/scmd-tui      the terminal backend: input decoding and diffed painting
-crates/scmd          the binary: CLI, state machine, event loop
-crates/scmd-site     the generator for the project's site: the repository's own documents
+crates/fcmd-core     paths, entries, listings, sorting, selection   (no dependencies of ours)
+crates/fcmd-vfs      the Vfs trait + the local provider
+crates/fcmd-jobs     the operation engine: plan, execute, settle; conflicts and progress
+crates/fcmd-arc      archives: zip, 7z and the tar family, reading, writing and testing
+crates/fcmd-view     the viewer: windowed reads, encodings, text/dump/hex, search, disasm
+crates/fcmd-edit     the editor: buffer, undo, blocks, search/replace, atomic save
+crates/fcmd-syntax   the syntax scanner: one line, and the state the line before it left
+crates/fcmd-net      netbox: SFTP, FTP/FTPS and WebDAV, sites, pool, tunnels, routed jobs
+crates/fcmd-s3       object storage: SigV4, listings, the S3 provider and a fake service
+crates/fcmd-find     find by name and by content, as a walk the interface reads as it runs
+crates/fcmd-cmd      command vocabulary, keys, keymap profiles (far, mc)
+crates/fcmd-config   TOML configuration, discovery, overrides
+crates/fcmd-i18n     fluent catalogues for seven languages
+crates/fcmd-plug     the plugin tier: manifests, discovery, running a command
+crates/fcmd-ui       cell buffer, colours, themes, panel and chrome widgets
+crates/fcmd-tui      the terminal backend: input decoding and diffed painting
+crates/fcmd          the binary: CLI, state machine, event loop
+crates/fcmd-site     the generator for the project's site: the repository's own documents
 ```
 
-The last one is not part of the program — `scmd` does not link it, and a release does not
+The last one is not part of the program — `fcmd` does not link it, and a release does not
 build it. It reads this file, the changelog, the commander survey, the help chapters in
 `docs/help/` and the screenshots in `docs/shots/`, and writes the static site published at
 <https://matteobaccan.github.io/SupremeCommander/> — 38 pages, no framework, no fonts or
 scripts fetched from anywhere, in the seven languages the interface speaks. `cargo run -p
-scmd-site -- --out site` writes it locally, and the workflow builds it on every push and keeps
+fcmd-site -- --out site` writes it locally, and the workflow builds it on every push and keeps
 it as the run's artifact. Nothing publishes by itself: a site on GitHub Pages is public to
 everyone, so it goes up only when somebody starts the workflow by hand and says so. The point
 of generating it is that a page cannot say something the document it came from does not: there
@@ -328,7 +333,7 @@ in the core, and no attempt to be an Explorer/Finder replacement.
 
 `docs/shots/` holds the screenshots, and they are not screenshots: `write_the_screenshots`
 renders the real panels into a cell buffer and writes that buffer as SVG, so regenerating them
-is one command and they cannot drift from the program. `crates/scmd-ui/src/svg.rs` is the
+is one command and they cannot drift from the program. `crates/fcmd-ui/src/svg.rs` is the
 twenty lines that turn a buffer into a picture.
 
 `assets/` holds the logo, the banner and the icon, all in FAR's own palette and all drawn as
@@ -337,7 +342,7 @@ them. The banner is sized for the repository's social preview (Settings → Soci
 `assets/banner.png`).
 
 <p align="center">
-  <img src="assets/icon-128.png" alt="The SupremeCommander icon" width="96">
+  <img src="assets/icon-128.png" alt="The FinalCommander icon" width="96">
 </p>
 
 ---

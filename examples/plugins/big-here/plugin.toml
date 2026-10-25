@@ -2,7 +2,7 @@
 [plugin]
 id = "big-here"
 name = "Big here"
-scmd = ">=0.1.0"
+fcmd = ">=0.1.0"
 
 [[command]]
 id = "user.disk.big-here"

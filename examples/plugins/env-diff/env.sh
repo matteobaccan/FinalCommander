@@ -2,7 +2,7 @@
 # Compare the keys of `.env` with those of `.env.example` — names only, never the values:
 # a secret that reaches a dialog is a secret in a screenshot.
 cat >/dev/null
-cd "$SCMD_DIR" 2>/dev/null || { echo '{"error":"not a directory on this machine"}'; exit 0; }
+cd "$FCMD_DIR" 2>/dev/null || { echo '{"error":"not a directory on this machine"}'; exit 0; }
 
 example=""
 for candidate in .env.example .env.sample .env.dist env.example; do
@@ -20,8 +20,8 @@ keys_of() {
 # `comm` wants two files, so two there are, in whatever this system calls its temporary
 # directory, and both are gone before the first line is printed.
 tmp=${TMPDIR:-/tmp}
-wanted=$tmp/scmd-env-wanted.$$
-present=$tmp/scmd-env-present.$$
+wanted=$tmp/fcmd-env-wanted.$$
+present=$tmp/fcmd-env-present.$$
 keys_of "$example" > "$wanted"
 keys_of .env > "$present"
 missing=$(comm -23 "$wanted" "$present")

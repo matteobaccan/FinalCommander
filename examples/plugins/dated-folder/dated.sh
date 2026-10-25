@@ -2,7 +2,7 @@
 # A scan, a download, a day's notes: the folder one makes twenty times a year and names the
 # same way every time. The plugin makes it and takes the panel into it.
 cat >/dev/null
-cd "$SCMD_DIR" 2>/dev/null || { echo '{"error":"not a directory on this machine"}'; exit 0; }
+cd "$FCMD_DIR" 2>/dev/null || { echo '{"error":"not a directory on this machine"}'; exit 0; }
 name=$(date +%Y-%m-%d)
 if [ -d "$name" ]; then
   # Already there: go in rather than complain. Twice in one day is the ordinary case.

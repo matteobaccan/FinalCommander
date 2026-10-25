@@ -220,7 +220,7 @@ A tab **is** a panel. There is no tab object holding a panel beside a name and a
 because everything a tab has to remember — where it is, its view and sort, its filter, what
 is selected, where the cursor is, where it has been, what it is called, whether it is
 locked — is already what a panel remembers. So one side's tabs are a list of panels with one
-of them on screen, and `crates/scmd/src/tabs.rs` is that list.
+of them on screen, and `crates/fcmd/src/tabs.rs` is that list.
 
 The one on screen is **not** in the list: it is `App::panels[side]`, and its slot in the row
 is empty. A parked copy of it beside the live one would be a second answer to where the panel
@@ -251,7 +251,7 @@ one tab. The current tab is drawn as the path is — inverted, and in the header
 colour on the panel without the focus — a locked one is marked, and the row scrolls to keep
 the current tab whole, with guillemets where it goes on.
 
-Tabs are **persisted** in the state file (`scmd-state.toml`), with their names and their
+Tabs are **persisted** in the state file (`fcmd-state.toml`), with their names and their
 locks. Two rules on the way back in, both about what the user asked for most recently: the
 directory this session was started in wins for the tab that is on screen, because that is
 what running a program in a directory means — unless that tab is locked, since staying put is
@@ -286,7 +286,7 @@ place. A row's digit is its own key, so one press takes it.
 A shortcut may be on a server or in a bucket, in which case going to it is connecting first:
 the hotlist takes the same route the drive list does (`04-vfs.md` §6).
 
-They are kept in `scmd-state.toml` rather than in `scmd.toml`, because a *key* sets them: a
+They are kept in `fcmd-state.toml` rather than in `fcmd.toml`, because a *key* sets them: a
 shortcut that waited for *Save setup* and vanished without it would be a bug, not a setting.
 
 Still owed: FAR's habit of inserting the path instead of going there when an edit line has

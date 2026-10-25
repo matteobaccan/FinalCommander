@@ -1,11 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640" role="img" aria-label="SupremeCommander — an orthodox file manager for the terminal. One program, every system.">
-<title>SupremeCommander</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640" role="img" aria-label="FinalCommander — an orthodox file manager for the terminal. One program, every system.">
+<title>FinalCommander</title>
 <style>text { font-family: ui-monospace,'DejaVu Sans Mono','Cascadia Mono','Courier New',monospace; white-space: pre; }</style>
 <rect width="1280" height="640" fill="#000000"/>
 <rect x="0" y="0" width="1280" height="8" fill="#008080"/>
 <rect x="0" y="632" width="1280" height="8" fill="#008080"/>
-<text x="78" y="186" fill="#ffffff" font-size="64" font-weight="bold" textLength="266" lengthAdjust="spacingAndGlyphs">Supreme</text>
-<text x="344" y="186" fill="#00ffff" font-size="64" font-weight="bold" textLength="342" lengthAdjust="spacingAndGlyphs">Commander</text>
+<text x="78" y="186" fill="#ffffff" font-size="64" font-weight="bold" textLength="190" lengthAdjust="spacingAndGlyphs">Final</text>
+<text x="268" y="186" fill="#00ffff" font-size="64" font-weight="bold" textLength="342" lengthAdjust="spacingAndGlyphs">Commander</text>
 <rect x="78" y="208" width="608" height="3" fill="#008080"/>
 <text x="78" y="252" fill="#00ffff" font-size="25" font-weight="normal" textLength="615" lengthAdjust="spacingAndGlyphs">an orthodox file manager for the terminal</text>
 <text x="78" y="338" fill="#ffff00" font-size="38" font-weight="bold" textLength="264" lengthAdjust="spacingAndGlyphs">one program.</text>
@@ -22,7 +22,7 @@
 <polyline points="80,544 86,550 97,536" fill="none" stroke="#00ff00" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 <text x="112" y="550" fill="#00ffff" font-size="24" font-weight="normal" textLength="98" lengthAdjust="spacingAndGlyphs">windows</text>
 <text x="238" y="550" fill="#9aa0a6" font-size="20" font-weight="normal" textLength="72" lengthAdjust="spacingAndGlyphs">x86-64</text>
-<text x="78" y="596" fill="#ffffff" font-size="26" font-weight="normal" textLength="96" lengthAdjust="spacingAndGlyphs">$ scmd</text>
+<text x="78" y="596" fill="#ffffff" font-size="26" font-weight="normal" textLength="96" lengthAdjust="spacingAndGlyphs">$ fcmd</text>
 <rect x="174" y="578" width="14" height="24" fill="#ffff00"/>
 <rect x="716" y="120" width="238" height="400" fill="#000080" stroke="#00ffff" stroke-width="3"/>
 <rect x="786.0" y="106" width="98" height="28" fill="#008080"/>

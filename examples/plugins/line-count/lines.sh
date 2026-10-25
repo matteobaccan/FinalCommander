@@ -1,7 +1,7 @@
 #!/bin/sh
 # Lines by extension under this directory.
 cat >/dev/null
-cd "$SCMD_DIR" 2>/dev/null || { echo '{"error":"not a directory on this machine"}'; exit 0; }
+cd "$FCMD_DIR" 2>/dev/null || { echo '{"error":"not a directory on this machine"}'; exit 0; }
 
 # What to call a file's kind. A function, and not a `case` written inside the command
 # substitution below, because a `case` there does not parse in bash 3.2 — the bash macOS ships.

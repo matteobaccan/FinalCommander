@@ -1,0 +1,11 @@
+[package]
+name = "fcmd-syntax"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Syntax recognition for the viewer and the editor: languages and markup, scanned a line at a time."
+
+[dependencies]

@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 236" width="880" height="236" role="img" aria-label="SupremeCommander: an orthodox file manager for the terminal — one binary, every system">
-<title>SupremeCommander</title><desc>Two panels in FAR Manager's own palette. The cursor walks down the left panel while the right one counts off the systems one binary runs on: linux, macos, windows.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 236" width="880" height="236" role="img" aria-label="FinalCommander: an orthodox file manager for the terminal — one binary, every system">
+<title>FinalCommander</title><desc>Two panels in FAR Manager's own palette. The cursor walks down the left panel while the right one counts off the systems one binary runs on: linux, macos, windows.</desc>
 <style>
   text { font-family: ui-monospace,'DejaVu Sans Mono','Cascadia Mono','Courier New',monospace; white-space: pre; }
   /* The cursor bar walks four rows and starts again. */
@@ -45,7 +45,7 @@
 <rect x="1.5" y="1.5" width="877" height="233" rx="9" fill="none" stroke="#008080" stroke-width="3"/>
 <rect x="8" y="8" width="864" height="24" fill="#008080"/>
 <text x="20" y="25" fill="#000000" font-size="16" font-weight="normal" textLength="451.0" lengthAdjust="spacingAndGlyphs">Left   Files   Commands   Options   Right</text>
-<rect x="14" y="44" width="414" height="148" fill="#000080" stroke="#00ffff" stroke-width="2"/><rect x="89.0" y="33" width="264.0" height="22" fill="#008080"/><text x="89.0" y="49" fill="#000000" font-size="17" font-weight="normal" textLength="264.0" lengthAdjust="spacingAndGlyphs"> ~/src/supremecommander </text>
+<rect x="14" y="44" width="414" height="148" fill="#000080" stroke="#00ffff" stroke-width="2"/><rect x="100.0" y="33" width="242.0" height="22" fill="#008080"/><text x="100.0" y="49" fill="#000000" font-size="17" font-weight="normal" textLength="242.0" lengthAdjust="spacingAndGlyphs"> ~/src/finalcommander </text>
 <rect x="452" y="44" width="414" height="148" fill="#000080" stroke="#00ffff" stroke-width="2"/><rect x="604.0" y="33" width="110.0" height="22" fill="#000080"/><text x="604.0" y="49" fill="#00ffff" font-size="17" font-weight="normal" textLength="110.0" lengthAdjust="spacingAndGlyphs"> portable </text>
 <g id="cursor"><rect x="18" y="62" width="406" height="22" fill="#008080"/></g>
 <text x="26" y="78" fill="#ffffff" font-size="17" font-weight="normal" textLength="22.0" lengthAdjust="spacingAndGlyphs" class="row" id="row1" style="--c:#ffffff">..</text>
@@ -58,7 +58,7 @@
 <g class="sys" id="sys2"><polyline points="466,94 471,99 479,88" fill="none" stroke="#00ff00" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><text x="492" y="100" fill="#00ffff" font-size="17" font-weight="normal" textLength="55.0" lengthAdjust="spacingAndGlyphs">macos</text><text x="602" y="100" fill="#c0c0c0" font-size="15" font-weight="normal" textLength="143.0" lengthAdjust="spacingAndGlyphs">intel · apple</text></g>
 <g class="sys" id="sys3"><polyline points="466,116 471,121 479,110" fill="none" stroke="#00ff00" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><text x="492" y="122" fill="#00ffff" font-size="17" font-weight="normal" textLength="77.0" lengthAdjust="spacingAndGlyphs">windows</text><text x="602" y="122" fill="#c0c0c0" font-size="15" font-weight="normal" textLength="66.0" lengthAdjust="spacingAndGlyphs">x86-64</text></g>
 <g id="one"><rect x="466" y="130" width="386" height="1" fill="#00ffff" opacity="0.45"/><text x="466" y="154" fill="#ffff00" font-size="17" font-weight="bold" textLength="121.0" lengthAdjust="spacingAndGlyphs">one program</text><text x="466" y="176" fill="#ffff00" font-size="17" font-weight="bold" textLength="132.0" lengthAdjust="spacingAndGlyphs">every system</text></g>
-<text x="16" y="220" fill="#00ffff" font-size="17" font-weight="normal" textLength="253.0" lengthAdjust="spacingAndGlyphs">~/src/supremecommander></text>
-<text x="280.0" y="220" fill="#ffffff" font-size="17" font-weight="normal" textLength="44.0" lengthAdjust="spacingAndGlyphs">scmd</text>
+<text x="16" y="220" fill="#00ffff" font-size="17" font-weight="normal" textLength="231.0" lengthAdjust="spacingAndGlyphs">~/src/finalcommander></text>
+<text x="280.0" y="220" fill="#ffffff" font-size="17" font-weight="normal" textLength="44.0" lengthAdjust="spacingAndGlyphs">fcmd</text>
 <rect id="caret" x="324.0" y="205" width="11.0" height="19" fill="#ffff00"/>
 </svg>

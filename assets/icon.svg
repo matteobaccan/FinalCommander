@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="SupremeCommander">
-<title>SupremeCommander</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="FinalCommander">
+<title>FinalCommander</title>
 <desc>Two panels in FAR Manager's blue and cyan, with the cursor bar on the left panel and the key bar along the foot — the shape of an orthodox file manager, at any size.</desc>
 <rect x="0" y="0" width="256" height="256" rx="40" fill="#000080"/>
 <rect x="4" y="4" width="248" height="248" rx="36" fill="none" stroke="#000000" stroke-width="8" opacity="0.35"/>

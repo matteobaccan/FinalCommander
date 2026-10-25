@@ -34,7 +34,7 @@ The three conditions are the standard ones:
 | --- | --- |
 | Source redistribution keeps the copyright notice, conditions and disclaimer | Only relevant if we *copy* FAR source into our tree. Then that file keeps its header and is listed in `THIRD-PARTY.md`. |
 | Binary redistribution reproduces the notice in the documentation / accompanying materials | If any FAR-derived code ships in our binary, the notice goes into our `THIRD-PARTY.md` / `--about` screen. |
-| No endorsement: the copyright holder's and contributors' names may not be used to promote derived products without written permission | We must not market SupremeCommander as "by Far Group", "Eugene Roshal's new commander", or use those names in our branding/taglines. Factual statements ("key layout compatible with FAR Manager") are description, not endorsement — keep them factual and neutral. |
+| No endorsement: the copyright holder's and contributors' names may not be used to promote derived products without written permission | We must not market FinalCommander as "by Far Group", "Eugene Roshal's new commander", or use those names in our branding/taglines. Factual statements ("key layout compatible with FAR Manager") are description, not endorsement — keep them factual and neutral. |
 
 Practical consequence: **a Rust rewrite inspired by FAR is unquestionably allowed**, and we may
 even port individual BSD-licensed pieces (algorithms, tables, format parsers) if we keep the
@@ -47,7 +47,7 @@ the 1.x branch followed in 2010; current development (3.x) is BSD-3-Clause on Gi
 
 Verified licences:
 
-| Project | Licence | May we read its code for ideas? | May we copy code into SupremeCommander? |
+| Project | Licence | May we read its code for ideas? | May we copy code into FinalCommander? |
 | --- | --- | --- | --- |
 | FAR Manager (`FarGroup/FarManager`) | BSD-3-Clause | yes | yes, with notice |
 | far2l (`elfmz/far2l`, Linux fork of FAR 2) | **GPL-2.0** (README: "License: GNU/GPLv2") | yes, but see the bleed-over risk below | **no** — would force the whole project to GPL-2.0 |
@@ -112,10 +112,10 @@ key→action pairs**. No documentation text is copied.
 | `ratatui` / `crossterm` | MIT | fine |
 | Colour themes ported from other apps | often undeclared | re-derive palettes from the published hex values or ship our own; do not copy theme files wholesale |
 
-## 5. Outbound licence for SupremeCommander
+## 5. Outbound licence for FinalCommander
 
 **Decided: MIT** (`LICENSE` in the repository root, copyright "Matteo Baccan and the
-SupremeCommander contributors").
+FinalCommander contributors").
 
 Consequences of that choice, recorded so nobody has to re-derive them:
 

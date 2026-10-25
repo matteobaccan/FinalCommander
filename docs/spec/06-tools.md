@@ -25,7 +25,7 @@ exclusions after `|`, groups like `<arc>`), content as text or as a hex pattern,
 sensitivity, whole words, **files that do *not* contain it**, five scopes (this folder; this
 folder and below; the folders selected in the panel; from the root of the drive; the other
 panel and below), following symbolic links, and directories in the results. The engine is its
-own crate, `scmd-find`, so the dialog does not know how a walk works and the walk does not know
+own crate, `fcmd-find`, so the dialog does not know how a walk works and the walk does not know
 what a panel is: the dialog produces a plain `FindSpec`, and one place turns that into the
 engine's query.
 
@@ -61,8 +61,8 @@ results cached per path+generation.
 
 ## 4. User menu (`F2`)
 
-**Shipped.** `scmd-menu.toml` beside the configuration — `scmd --paths` prints where — and
-`.scmd-menu.toml` in a directory for a menu that travels with a project, merged above the
+**Shipped.** `fcmd-menu.toml` beside the configuration — `fcmd --paths` prints where — and
+`.fcmd-menu.toml` in a directory for a menu that travels with a project, merged above the
 global one. A row is a label, the key that takes it, and the command lines it runs:
 
 ```toml
@@ -83,8 +83,8 @@ submenu = [
 
 Three things settled differently from this spec's first sketch, and the code is right in each.
 
-The file is `scmd-menu.toml` and not `menu.toml`, because the three files beside it are already
-`scmd.toml`, `scmd-state.toml` and `scmd-macros.toml`, and one of four named differently is one
+The file is `fcmd-menu.toml` and not `menu.toml`, because the three files beside it are already
+`fcmd.toml`, `fcmd-state.toml` and `fcmd-macros.toml`, and one of four named differently is one
 too many to remember.
 
 A `run` entry is **a command line**, not a `shell.run('…', wait=true)` call. The command line
@@ -115,9 +115,9 @@ FAR's `Shift+F10` for "the item I took last".
 ## 5. File associations (`[[assoc]]`)
 
 Per mask: `open` (what `Enter` runs), `view` and `edit` (what `Alt+F3` and `Alt+F4` run), and
-an optional `name` for the *Open with* list. They are `[[assoc]]` blocks in `scmd.toml` rather
+an optional `name` for the *Open with* list. They are `[[assoc]]` blocks in `fcmd.toml` rather
 than a file of their own — this spec first said `assoc.toml`, and one file for four blocks is
-one file too many when `scmd.toml` is already open in front of the user.
+one file too many when `fcmd.toml` is already open in front of the user.
 
 ```toml
 [[assoc]]
@@ -129,7 +129,7 @@ edit  = "hx {file}"
 ```
 
 The mask is a whole name (`Makefile`) or `*.` and an extension (`*.md`), compared without
-regard to case; the first matching block wins. The rule is `scmd_config::mask_matches`, shared
+regard to case; the first matching block wins. The rule is `fcmd_config::mask_matches`, shared
 with the decompile rules so the two cannot drift apart.
 
 Macros available in commands: `{file}` (the path, **in quotes**, because a name with a space in
@@ -188,8 +188,8 @@ per-history clearing. Stored as JSONL under `$STATE/history/`.
 | Macros | `!`/`%`-style substitutions documented in one table: current name, full path, other panel, selection list, cwd — expanded *before* the shell sees them, with quoting per platform |
 | User screen | `Ctrl+O` shows the output of the last command full-screen; the output buffer is scrollable and searchable (`Ctrl+Shift+F`), capped in lines |
 | Subshell | a persistent PTY (`portable-pty`) running `$SHELL` (or `cmd`/`pwsh` on Windows) with **bidirectional cwd sync**: we inject a prompt hook (`PROMPT_COMMAND`/`precmd`/`PS1` OSC 7) so a `cd` in the shell moves the panel, and `panel.cd` sends a `cd` to the shell |
-| Terminal pane | **Implemented** (0.4.0) as `scmd-term`, on `Ctrl+Alt+E`: a pseudo-terminal (`openpty` on Unix, ConPTY on Windows) and a VT parser into a grid of the same cells the panels use. The alternate screen, scrolling regions, 256-colour and 24-bit colour, the title, autowrap and save/restore are there, so `vim`, `top` and `ssh` run inside it and leave the shell's output alone when they exit. It is a screen like the viewer: parked with the program running, listed by `F12`, and reused rather than duplicated. Every key belongs to the program except the one that got you in, and there is no key bar for the same reason. Still owed: scrollback one can scroll (the lines are kept), searching the output, the mouse, and more than one terminal at a time. |
-| Elevation | a privileged helper process (`scmd-helper`) started on demand via `pkexec`/`sudo`/UAC, speaking a minimal JSON protocol over a pipe, used only for explicitly elevated jobs; never started implicitly |
+| Terminal pane | **Implemented** (0.4.0) as `fcmd-term`, on `Ctrl+Alt+E`: a pseudo-terminal (`openpty` on Unix, ConPTY on Windows) and a VT parser into a grid of the same cells the panels use. The alternate screen, scrolling regions, 256-colour and 24-bit colour, the title, autowrap and save/restore are there, so `vim`, `top` and `ssh` run inside it and leave the shell's output alone when they exit. It is a screen like the viewer: parked with the program running, listed by `F12`, and reused rather than duplicated. Every key belongs to the program except the one that got you in, and there is no key bar for the same reason. Still owed: scrollback one can scroll (the lines are kept), searching the output, the mouse, and more than one terminal at a time. |
+| Elevation | a privileged helper process (`fcmd-helper`) started on demand via `pkexec`/`sudo`/UAC, speaking a minimal JSON protocol over a pipe, used only for explicitly elevated jobs; never started implicitly |
 | Open with OS | `tool.os.open` (xdg-open/open/ShellExecute), `tool.os.terminal`, `tool.os.filemanager`, `tool.os.properties` |
 
 ### 7.1 Commands we run ourselves
@@ -256,7 +256,7 @@ Decisions, with the reasoning, because each of them is a question the dialog can
 - Long operations inside dialogs (listing a remote dir for a path picker) are cancellable.
 - The **command palette** (`Ctrl+Shift+P`) fuzzy-searches every command, shows its binding and
   scope, and is the discovery mechanism that replaces reading the manual.
-- **Learn keys** dialog: press a key, see what the terminal sent and what `scmd` resolved it to;
+- **Learn keys** dialog: press a key, see what the terminal sent and what `fcmd` resolved it to;
   write a local override.
 
 ## 9. Help system
@@ -270,4 +270,4 @@ and the keymap pages are generated from the live keymap (never hand-written).
 
 `session.toml` holds panels, tabs, paths, view modes, sorts, filters, selection (optional),
 viewer/editor positions, and the job journal pointer. `--no-session` starts clean;
-`scmd path1 path2` opens the two panels at those paths; `scmd --goto file:line` opens the editor.
+`fcmd path1 path2` opens the two panels at those paths; `fcmd --goto file:line` opens the editor.

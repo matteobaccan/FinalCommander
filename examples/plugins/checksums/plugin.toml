@@ -3,7 +3,7 @@
 [plugin]
 id = "checksums"
 name = "Checksums"
-scmd = ">=0.1.0"
+fcmd = ">=0.1.0"
 
 [[command]]
 id = "user.sum.create"

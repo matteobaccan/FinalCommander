@@ -1,10 +1,10 @@
 #!/bin/sh
 # Report, or remove, the UTF-8 byte order mark at the front of the selected files.
 cat >/dev/null
-cd "$SCMD_DIR" 2>/dev/null || { echo '{"error":"not a directory on this machine"}'; exit 0; }
+cd "$FCMD_DIR" 2>/dev/null || { echo '{"error":"not a directory on this machine"}'; exit 0; }
 
-names="$SCMD_SELECTED"
-[ -n "$names" ] || names="$SCMD_CURSOR"
+names="$FCMD_SELECTED"
+[ -n "$names" ] || names="$FCMD_CURSOR"
 [ -n "$names" ] || { echo '{"status":"nothing selected"}'; exit 0; }
 
 # `od` rather than `head -c3 | cmp`, because the three bytes have to be compared as bytes and
@@ -26,7 +26,7 @@ fi
 
 count=$(printf '%s\n' "$found" | wc -l | tr -d ' ')
 
-case "$SCMD_COMMAND" in
+case "$FCMD_COMMAND" in
   *.find)
     printf '{"message":{"title":"Files beginning with a BOM (%s)","lines":[' "$count"
     first=1
@@ -46,11 +46,11 @@ case "$SCMD_COMMAND" in
     # it — and writing into a file that already exists does not change its permissions. A
     # script that loses its executable bit has stopped being a script.
     printf '%s\n' "$found" | while IFS= read -r name; do
-      cp -p -- "$name" "$name.scmd-bom" 2>/dev/null || continue
-      if tail -c +4 -- "$name" > "$name.scmd-bom" 2>/dev/null; then
-        mv -- "$name.scmd-bom" "$name" 2>/dev/null || rm -f "$name.scmd-bom"
+      cp -p -- "$name" "$name.fcmd-bom" 2>/dev/null || continue
+      if tail -c +4 -- "$name" > "$name.fcmd-bom" 2>/dev/null; then
+        mv -- "$name.fcmd-bom" "$name" 2>/dev/null || rm -f "$name.fcmd-bom"
       else
-        rm -f "$name.scmd-bom"
+        rm -f "$name.fcmd-bom"
       fi
     done
 

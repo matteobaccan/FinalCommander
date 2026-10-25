@@ -2,8 +2,8 @@
 # Unpack or test the archive under the cursor with a program this machine happens to have.
 # Shift+F2 already handles zip and the tar family; this is for the rest.
 cat >/dev/null
-cd "$SCMD_DIR" 2>/dev/null || { echo '{"error":"not a directory on this machine"}'; exit 0; }
-file="$SCMD_CURSOR"
+cd "$FCMD_DIR" 2>/dev/null || { echo '{"error":"not a directory on this machine"}'; exit 0; }
+file="$FCMD_CURSOR"
 [ -n "$file" ] || { echo '{"status":"nothing under the cursor"}'; exit 0; }
 [ -f "$file" ] || { echo '{"status":"that is not a file"}'; exit 0; }
 
@@ -29,7 +29,7 @@ if [ -z "$tool" ]; then
 fi
 
 testing=false
-case "$SCMD_COMMAND" in *.test-any) testing=true ;; esac
+case "$FCMD_COMMAND" in *.test-any) testing=true ;; esac
 
 if [ "$testing" = true ]; then
   case "$tool" in

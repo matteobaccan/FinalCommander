@@ -7,25 +7,25 @@ reviewable and testable.
 
 | # | Chunk | Depends on |
 | --- | --- | --- |
-| 1 | workspace skeleton: crates, CI (fmt/clippy/deny/test on 3 OS), release profile, `scmd --version` | — |
-| 2 | `scmd-core`: `VPath`, `Entry`, `Listing`, `Selection`, `Sort`, `Totals`, predicate evaluator | 1 |
-| 3 | `scmd-tui`: backend trait, cell buffer, diff renderer, input decoding + capability detection | 1 |
-| 4 | `scmd-ui`: panel widget, key bar, status line, message/confirm dialog, input dialog | 2,3 |
-| 5 | `scmd-vfs`: trait + local provider (streaming list, stat, read/write, rename, remove) | 2 |
+| 1 | workspace skeleton: crates, CI (fmt/clippy/deny/test on 3 OS), release profile, `fcmd --version` | — |
+| 2 | `fcmd-core`: `VPath`, `Entry`, `Listing`, `Selection`, `Sort`, `Totals`, predicate evaluator | 1 |
+| 3 | `fcmd-tui`: backend trait, cell buffer, diff renderer, input decoding + capability detection | 1 |
+| 4 | `fcmd-ui`: panel widget, key bar, status line, message/confirm dialog, input dialog | 2,3 |
+| 5 | `fcmd-vfs`: trait + local provider (streaming list, stat, read/write, rename, remove) | 2 |
 | 6 | panel behaviour: navigation, cursor, scrolling, enter/parent/root, history, re-read | 4,5 |
 | 7 | view modes brief/full + sorting (all keys, reverse, dirs-first, natural) | 6 |
 | 8 | selection: `Ins`, ranges, masks `+`/`-`/`*`, select all/none/invert, totals | 6 |
 | 9 | fast find / quick search in panel | 6 |
-| 10 | `scmd-cmd`: command registry, keymap loader, scope stack, chords, `--check-keymap` | 2 |
+| 10 | `fcmd-cmd`: command registry, keymap loader, scope stack, chords, `--check-keymap` | 2 |
 | 11 | keymap profiles `far` + `mc`, learn-keys dialog, `keys.local.toml` | 10 |
-| 12 | `scmd-config`: discovery, TOML load/merge/validate, `--dump-config`, hot reload | 2 |
-| 13 | ✅ `scmd-jobs`: job model, planner, executor, progress, conflict dialog; copy/move/delete/mkdir | 5,12 |
+| 12 | `fcmd-config`: discovery, TOML load/merge/validate, `--dump-config`, hot reload | 2 |
+| 13 | ✅ `fcmd-jobs`: job model, planner, executor, progress, conflict dialog; copy/move/delete/mkdir | 5,12 |
 | 14 | command line + `%`-macros + user screen (`Ctrl+O`) + run command | 6,12 |
-| 15 | ✅ `scmd-view`: viewer with wrap, windowed reader, encodings, plain/regex/hex search, hex and dump modes, follow, bookmarks | 5 |
-| 21 | ✅ `scmd-edit`: line buffer with encoding/EOL/BOM preserved, atomic save, undo, stream and column blocks, search/replace, go to line, bookmarks; `F4`/`Shift+F4` in the TUI | 5,12 |
-| 22 | ✅ `scmd-net` (netbox): SFTP provider, site list, connection pool, host-key policy, transfers through the job engine; `Ctrl+Shift+N`, remote panels, `sftp://` in `Ctrl+L` | 5,12,13 |
+| 15 | ✅ `fcmd-view`: viewer with wrap, windowed reader, encodings, plain/regex/hex search, hex and dump modes, follow, bookmarks | 5 |
+| 21 | ✅ `fcmd-edit`: line buffer with encoding/EOL/BOM preserved, atomic save, undo, stream and column blocks, search/replace, go to line, bookmarks; `F4`/`Shift+F4` in the TUI | 5,12 |
+| 22 | ✅ `fcmd-net` (netbox): SFTP provider, site list, connection pool, host-key policy, transfers through the job engine; `Ctrl+Shift+N`, remote panels, `sftp://` in `Ctrl+L` | 5,12,13 |
 | 23 | ✅ menu bar (`F9`) with FAR's five menus, settings dialogs (System/Panel/Interface/Confirmations), languages, themes, drives, folder history and sort-mode lists, `Save setup` (SPEC 10) | 4,10,12 |
-| 16 | `scmd-platform` M1 slice: long paths, trash, clipboard, drives/mounts, FS watch | 1 |
+| 16 | `fcmd-platform` M1 slice: long paths, trash, clipboard, drives/mounts, FS watch | 1 |
 | 17 | theming: theme loader, `far-classic` + `mono`, colour degradation | 3,12 |
 | 18 | ✅ packaging: a tag builds linux-gnu, linux-musl (static), macOS universal and windows-msvc, with checksums and release notes from the changelog | 1 |
 | 19 | snapshot test harness + keymap tests + job property tests + perf budget check | all |
@@ -56,7 +56,7 @@ later items goes first. Sizes are honest estimates of focused work, not of calen
 0.0.8 rather than 0.0.7.
 
 Running alongside, each going out with whichever release it is ready for: **mouse support**, the
-**OS clipboard** (`scmd-platform`), the **trash**, **descriptions** (`descript.ion`), the
+**OS clipboard** (`fcmd-platform`), the **trash**, **descriptions** (`descript.ion`), the
 **settings browser** for the ~50 keys we have, **AArch64 disassembly**, and the packaging work
 (`.deb`, `.rpm`, Homebrew, Scoop, AUR).
 
@@ -90,10 +90,10 @@ far/tc/mc/dc.
 ## M4 — Ambition
 
 Multi-panel / windowed layout **inside the TUI** (the DOS Navigator idea: several panels and
-floating windows drawn in the character grid) · plugin registry and `scmd plugin` CLI ·
+floating windows drawn in the character grid) · plugin registry and `fcmd plugin` CLI ·
 native plugin ABI + optional TC packer-plugin bridge on Windows · special VFS (process list,
-registry, services, git) · headless CLI (`scmd copy --queue`) · Android/iOS and web experiments ·
-remote `scmd` protocol (run the engine on the server, the UI locally — far2l's best trick).
+registry, services, git) · headless CLI (`fcmd copy --queue`) · Android/iOS and web experiments ·
+remote `fcmd` protocol (run the engine on the server, the UI locally — far2l's best trick).
 
 ## Risks and how we de-risk them
 
@@ -115,4 +115,4 @@ remote `scmd` protocol (run the engine on the server, the UI locally — far2l's
    the same commit.
 3. Every user-visible behaviour needs a snapshot or keymap test; every job behaviour needs a
    failure-injection test.
-4. No new dependency without a justification line; no `unsafe` outside `scmd-platform`.
+4. No new dependency without a justification line; no `unsafe` outside `fcmd-platform`.

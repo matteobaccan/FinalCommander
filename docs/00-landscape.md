@@ -1,6 +1,6 @@
 # The commander landscape (survey, Oct 2026)
 
-Why this file: before specifying SupremeCommander we catalogued what already exists, what each
+Why this file: before specifying FinalCommander we catalogued what already exists, what each
 project is written in, how it is licensed, and which of its ideas are worth taking. "Commander"
 here means an **orthodox file manager** (OFM): two equal panels, a command line under them, a
 function-key bar at the bottom, keyboard first.
@@ -61,7 +61,7 @@ Legend for *Take*: ✅ idea we want, 🟡 maybe, ❌ deliberately not.
 
 ## 5. Rust prior art (dual-pane, as of Oct 2026)
 
-Small and mostly young — this is the gap SupremeCommander targets. None of these is a
+Small and mostly young — this is the gap FinalCommander targets. None of these is a
 full FAR/TC-class commander today.
 
 | Project | Toolkit | Note |
