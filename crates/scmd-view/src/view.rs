@@ -604,8 +604,44 @@ impl Viewer {
         self.codepage = codepage;
     }
 
-    pub fn set_bytes_per_row(&mut self, delta: i32) {
-        let next = (self.bytes_per_row as i32 + delta).clamp(4, 64) as usize;
+    /// Widen or narrow the dump by one step, within what the window can draw.
+    ///
+    /// The steps are the widths a dump is actually drawn at — 4, 8, 16, 32, 64 — and not a
+    /// free number, because [`Self::hex_fit`] rounds down to a power of two: a setting of 24
+    /// drew as 16, so one press did nothing, the next did the work of two, and the ones past
+    /// the widest that fits kept counting up invisibly, so coming back took as many presses
+    /// as had been wasted. One press, one step one can see, and the widest step is the widest
+    /// the window can hold rather than a number stored for a window nobody has.
+    pub fn set_bytes_per_row(&mut self, delta: i32, width: u16) {
+        const STEPS: [usize; 5] = [4, 8, 16, 32, 64];
+        let fits = |bpr: usize| width == 0 || hex_row_width(bpr) <= width;
+        // Where we are now: the step this width is, or the one below a value from elsewhere.
+        let at = STEPS
+            .iter()
+            .rposition(|&step| step <= self.bytes_per_row)
+            .unwrap_or(0);
+        let next = match delta.signum() {
+            1 => STEPS
+                .iter()
+                .skip(at + 1)
+                .copied()
+                .find(|&step| fits(step))
+                .unwrap_or(self.bytes_per_row),
+            -1 => STEPS.get(at.saturating_sub(1)).copied().unwrap_or(STEPS[0]),
+            _ => self.bytes_per_row,
+        };
+        // A window too narrow even for where we are still draws what it can (`hex_fit`),
+        // and the setting follows it down rather than hanging above it.
+        let next = if fits(next) {
+            next
+        } else {
+            STEPS
+                .iter()
+                .rev()
+                .copied()
+                .find(|&step| fits(step))
+                .unwrap_or(STEPS[0])
+        };
         self.bytes_per_row = next;
         let top = self.top;
         self.goto(top);
@@ -1846,7 +1882,7 @@ mod tests {
         assert_eq!(v.hex_fit(60), 8);
         assert_eq!(v.hex_fit(30), 4);
         // Never more than the setting, however much room there is.
-        v.set_bytes_per_row(-8);
+        v.set_bytes_per_row(-1, 200);
         assert_eq!(v.bytes_per_row, 8);
         assert_eq!(v.hex_fit(200), 8);
     }
@@ -1859,23 +1895,43 @@ mod tests {
         v.set_mode(Mode::Hex);
         assert_eq!(v.bytes_per_row, 16);
 
-        // Eight at a time, within the limits: never below four, never above sixty-four.
-        v.set_bytes_per_row(8);
-        assert_eq!(v.bytes_per_row, 24);
-        v.set_bytes_per_row(-8);
-        v.set_bytes_per_row(-8);
-        assert_eq!(v.bytes_per_row, 8);
+        // One press, one width one can see: the steps are the widths a dump is drawn at, so
+        // every press changes the screen. A free number stepped by eight did not — 24 drew
+        // as 16 — and the presses past the widest counted up where nobody could see them.
+        let wide = 1000;
+        v.set_bytes_per_row(1, wide);
+        assert_eq!(v.bytes_per_row, 32);
+        assert_eq!(v.hex_fit(wide), 32, "the screen followed the setting");
+        v.set_bytes_per_row(1, wide);
+        assert_eq!(v.bytes_per_row, 64);
+        v.set_bytes_per_row(1, wide);
+        assert_eq!(v.bytes_per_row, 64, "it stops at the widest it draws");
+
         for _ in 0..10 {
-            v.set_bytes_per_row(-8);
+            v.set_bytes_per_row(-1, wide);
         }
         assert_eq!(v.bytes_per_row, 4, "it stops rather than going to nothing");
+
+        // And it never climbs past what the window can hold: a press that would need a
+        // wider screen than there is leaves the width where it was.
+        v.bytes_per_row = 16;
+        let narrow = hex_row_width(16);
+        v.set_bytes_per_row(1, narrow);
+        assert_eq!(
+            v.bytes_per_row, 16,
+            "32 does not fit in this window, so the press changes nothing"
+        );
+        v.set_bytes_per_row(1, hex_row_width(32));
+        assert_eq!(v.bytes_per_row, 32, "and it does when the room is there");
+
         for _ in 0..20 {
-            v.set_bytes_per_row(8);
+            v.set_bytes_per_row(1, wide);
         }
         assert_eq!(v.bytes_per_row, 64);
 
         // A jump snaps to the row width, which is what keeps the offsets round...
-        v.set_bytes_per_row(-48);
+        v.set_bytes_per_row(-1, wide);
+        v.set_bytes_per_row(-1, wide);
         assert_eq!(v.bytes_per_row, 16);
         v.goto(33);
         assert_eq!(v.top, 32);
@@ -1900,10 +1956,12 @@ mod tests {
         let mut v = viewer(&[0u8; 64]);
         v.set_mode(Mode::Hex);
         assert_eq!(v.bytes_per_row, 16);
-        v.set_bytes_per_row(8);
-        assert_eq!(v.bytes_per_row, 24);
-        v.set_bytes_per_row(-100);
-        assert_eq!(v.bytes_per_row, 4, "clamped, not negative");
+        v.set_bytes_per_row(1, 1000);
+        assert_eq!(v.bytes_per_row, 32);
+        for _ in 0..100 {
+            v.set_bytes_per_row(-1, 1000);
+        }
+        assert_eq!(v.bytes_per_row, 4, "it stops at the narrowest it draws");
         v.scroll(1, 80, 4);
         assert_eq!(v.top, 4);
     }

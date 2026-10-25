@@ -435,7 +435,11 @@ pub fn menus() -> Vec<Menu> {
                     Action::Run(Command::ToolTerminal),
                 ),
                 Entry::Separator,
-                item("menu-connections", "Ctrl+Shift+N", Action::Run(Command::NetSites)),
+                item(
+                    "menu-connections",
+                    "Ctrl+Shift+N",
+                    Action::Run(Command::NetSites),
+                ),
                 item(
                     "menu-disconnect",
                     "Alt+Shift+N",

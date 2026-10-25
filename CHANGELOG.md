@@ -28,6 +28,15 @@ Notable changes, newest first. The format follows
   the screen and a second one was needed to open the folder. It now closes the search *and*
   opens what it found, which is FAR's behaviour: one key, one result.
 
+- **The hex dump widened in steps it could not draw.** The row width was a free number moved
+  eight at a time, but a dump is only ever drawn at a power of two: from 16 the first press
+  set 24 and drew 16 — nothing happened — the second set 32 and drew it, and every press past
+  the widest the window could hold kept counting up where nobody could see it, so coming back
+  took as many presses as had been wasted. The steps are now the widths it is drawn at (4, 8,
+  16, 32, 64), one press is one visible step, and the setting stops at what the window can
+  hold rather than storing a width for a window nobody has. The arrows do both directions:
+  widening with a key that cannot narrow again is a key pressed once too often.
+
 - **The drive letter takes the drive.** `Alt+F1` then `C` goes to `C:\` instead of moving a
   cursor one then has to press `Enter` on — thirty years of fingers expect the letter to be
   the key. The connections and buckets keep the numbers FAR gives them.

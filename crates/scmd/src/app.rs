@@ -10184,15 +10184,14 @@ impl App {
                 Command::NavBottom => viewer.to_end(width, height),
                 // In text and dump mode the arrows scroll sideways, because there is a line
                 // wider than the window to scroll. A hex dump has no such line: its width is
-                // the row width, so the arrows set *that* — eight bytes at a time, which is
-                // half a row and keeps the offsets round. FAR puts this on `Alt+arrow`; here
-                // it is the plain arrow, because in hex mode it is the only thing sideways
-                // can mean.
-                Command::ViewerLeft if viewer.mode == scmd_view::Mode::Hex => {
-                    viewer.set_bytes_per_row(-8)
-                }
+                // the row width, so the arrows set *that*, one drawable width at a time.
+                // FAR puts this on `Alt+arrow`; here it is the plain arrow, because in hex
+                // mode it is the only thing sideways can mean.
                 Command::ViewerRight if viewer.mode == scmd_view::Mode::Hex => {
-                    viewer.set_bytes_per_row(8)
+                    viewer.set_bytes_per_row(1, width)
+                }
+                Command::ViewerLeft if viewer.mode == scmd_view::Mode::Hex => {
+                    viewer.set_bytes_per_row(-1, width)
                 }
                 Command::ViewerLeft => viewer.scroll_h(-1),
                 Command::ViewerRight => viewer.scroll_h(1),
@@ -10250,8 +10249,8 @@ impl App {
                 Command::ViewerPaneNext => viewer.toggle_struct_focus(),
                 Command::ViewerCodepageNext => viewer.next_codepage(),
                 Command::ViewerFollow => viewer.toggle_follow(),
-                Command::ViewerBytesLess => viewer.set_bytes_per_row(-8),
-                Command::ViewerBytesMore => viewer.set_bytes_per_row(8),
+                Command::ViewerBytesLess => viewer.set_bytes_per_row(-1, width),
+                Command::ViewerBytesMore => viewer.set_bytes_per_row(1, width),
                 Command::ViewerUndoPosition if !viewer.undo_jump() => {
                     error = Some("viewer-no-undo".into());
                 }
