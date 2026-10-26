@@ -4,40 +4,17 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
-## [Unreleased]
+## [0.5.0] — 2026-10-26
 
-### Fixed
+The first release under the name it keeps. The program is FinalCommander and the command is
+`fcmd`; a configuration written for 0.4.0 is read exactly as it was, under its old file names,
+with one line on the startup screen saying which file that was.
 
-- **The panel's column titles were English in every language.** `Name`, `Size`, `Date
-  Time` and `Attr` were literals in the drawing code, beside `Up` and `Folder`, which have
-  been translated since the panels were written. They go through the catalogues now, with
-  the three new headings of the detailed view, so a panel in Italian says `Nome` and
-  `Dimens.` and one in Russian says `Имя` and `Размер`.
-
-- **The keyboard reference says what the program does.** The rows that named a key nothing was
-  bound to now say what is true: the command line's path insertion is `Ctrl+[` / `Ctrl+]` (one
-  row, not two contradicting each other), `Esc` clears the line and `Ctrl+U` swaps the panels,
-  multi-rename and copying names to the clipboard are named as not built yet, and compare
-  directories, test archive and "other panel follows cursor" are named as what they are —
-  menu entries with no default key, because `Alt+<letter>` belongs to the quick search. The
-  profile table listed five profiles where two are built; the other three are now under a
-  heading that says they are planned.
-
-### Changed
-
-- **The program is called FinalCommander, and its command is `fcmd`.** It shipped as
-  SupremeCommander up to 0.4.0; the name is now the one it will keep. Everything that carried
-  the old name carries the new one: the command, the crates (`fcmd-core`, `fcmd-vfs`, …), the
-  configuration (`fcmd.toml`, `fcmd-state.toml`, `fcmd-macros.toml`, `fcmd-menu.toml`,
-  `fcmd-plugins/`), the manual page, the plugin environment (`$FCMD_CWD` and the rest) and the
-  release archives (`FinalCommander-linux-x86_64-<version>.tar.gz`, with `fcmd` inside).
-  Nothing about what the program does
-  has changed with it.
-
-  A configuration from 0.4.0 keeps working untouched: every file is looked for under its new
-  name first and its old one after, so `scmd.toml` is still read — and still written — with one
-  line on the startup screen saying which file it was and what to call it instead. The same
-  goes for the state, the macros, the user menu and the plugins folder.
+The rest of the release is a panel that notices what it did not do itself, a panel that shows
+what FAR's shows — the extension in its own column, the dates and the allocated size of the
+detailed view, the device and the memory in the information panel — and the first crate in
+this workspace allowed to make the calls the standard library does not, which is what finally
+puts free space on Windows.
 
 ### Added
 
@@ -82,16 +59,6 @@ Notable changes, newest first. The format follows
   caret off the command line, as every readline does. The editor also gained delete-word-right
   (`Ctrl+Del`, `Ctrl+T`), which it had only in one direction.
 
-### Changed
-
-- **`Ctrl+O` takes the panels off rather than opening a screen of its own.** It used to show
-  the output of past commands as a read-only view you could only scroll and leave; FAR's
-  `Ctrl+O` hides the panels and hands the screen back to the console with everything else still
-  live. It does that now: the command line, the menus and every key keep working with the
-  panels off, `PgUp` and `PgDn` turn pages through the output, and the same key brings the
-  panels back. The Commands menu row that says `Panels on/off` finally does.
-
-### Added
 
 - **The full view separates the extension from the name**, as FAR does: the names run down the
   left of the name field and the extensions down its right, against the size column, so a
@@ -111,7 +78,64 @@ Notable changes, newest first. The format follows
   panel and local paths only: a server reports nothing locally, and an archive is a file.
   `panel.auto_refresh` turns it off, and `Options → Panel settings` has the box.
 
+### Changed
+
+- **The program is called FinalCommander, and its command is `fcmd`.** It shipped as
+  SupremeCommander up to 0.4.0; the name is now the one it will keep. Everything that carried
+  the old name carries the new one: the command, the crates (`fcmd-core`, `fcmd-vfs`, …), the
+  configuration (`fcmd.toml`, `fcmd-state.toml`, `fcmd-macros.toml`, `fcmd-menu.toml`,
+  `fcmd-plugins/`), the manual page, the plugin environment (`$FCMD_CWD` and the rest) and the
+  release archives (`FinalCommander-linux-x86_64-<version>.tar.gz`, with `fcmd` inside).
+  Nothing about what the program does
+  has changed with it.
+
+  A configuration from 0.4.0 keeps working untouched: every file is looked for under its new
+  name first and its old one after, so `scmd.toml` is still read — and still written — with one
+  line on the startup screen saying which file it was and what to call it instead. The same
+  goes for the state, the macros, the user menu and the plugins folder.
+
+
+- **`Ctrl+O` takes the panels off rather than opening a screen of its own.** It used to show
+  the output of past commands as a read-only view you could only scroll and leave; FAR's
+  `Ctrl+O` hides the panels and hands the screen back to the console with everything else still
+  live. It does that now: the command line, the menus and every key keep working with the
+  panels off, `PgUp` and `PgDn` turn pages through the output, and the same key brings the
+  panels back. The Commands menu row that says `Panels on/off` finally does.
+
+
+- **The confirmations have buttons, and the buttons name the verb.** `{ Move }` and
+  `[ Cancel ]`, as FAR has it, rather than a line of text explaining that Enter means yes: a
+  reader who glances at the dialog and its button should know what is about to happen without
+  reading the sentence again. The label comes from the action itself — the delete, the
+  wastebasket, the wipe, the overwrite, the discard, the quit — so a button cannot say one
+  thing and do another. The arrows and `Tab` move between the two, `Enter` takes the one that
+  is lit, `Esc` is still the way out, and the dialog opens on the action because that is what
+  the person who opened it meant to do.
+
+
+- **Three bindings moved off `Alt+<letter>`**, which belongs to the quick search. A binding
+  always wins over the search, so each of them cost a letter one could never search a listing
+  for: the site list (`Alt+N` → `Ctrl+Shift+N`), the quick filter (`Alt+I` → `Ctrl+Shift+I`)
+  and the theme (`Alt+T` → `Ctrl+Shift+T`). The editor's `Alt+I` and `Alt+U` stay where FAR
+  has them — there is no quick search in an editor to collide with.
+
 ### Fixed
+
+- **The panel's column titles were English in every language.** `Name`, `Size`, `Date
+  Time` and `Attr` were literals in the drawing code, beside `Up` and `Folder`, which have
+  been translated since the panels were written. They go through the catalogues now, with
+  the three new headings of the detailed view, so a panel in Italian says `Nome` and
+  `Dimens.` and one in Russian says `Имя` and `Размер`.
+
+- **The keyboard reference says what the program does.** The rows that named a key nothing was
+  bound to now say what is true: the command line's path insertion is `Ctrl+[` / `Ctrl+]` (one
+  row, not two contradicting each other), `Esc` clears the line and `Ctrl+U` swaps the panels,
+  multi-rename and copying names to the clipboard are named as not built yet, and compare
+  directories, test archive and "other panel follows cursor" are named as what they are —
+  menu entries with no default key, because `Alt+<letter>` belongs to the quick search. The
+  profile table listed five profiles where two are built; the other three are now under a
+  heading that says they are planned.
+
 
 - **The attributes dialog was taking bits away on Windows.** `Hidden`, `System` and `Archive`
   were seeded with `false` rather than read off the file, and `OK` writes every box — so
@@ -166,24 +190,6 @@ Notable changes, newest first. The format follows
   `&&` for a literal ampersand and the first marker winning. Rows with no marker still answer
   to the letter they start with, which is what FAR does and what a catalogue with no markers
   needs.
-
-### Changed
-
-- **The confirmations have buttons, and the buttons name the verb.** `{ Move }` and
-  `[ Cancel ]`, as FAR has it, rather than a line of text explaining that Enter means yes: a
-  reader who glances at the dialog and its button should know what is about to happen without
-  reading the sentence again. The label comes from the action itself — the delete, the
-  wastebasket, the wipe, the overwrite, the discard, the quit — so a button cannot say one
-  thing and do another. The arrows and `Tab` move between the two, `Enter` takes the one that
-  is lit, `Esc` is still the way out, and the dialog opens on the action because that is what
-  the person who opened it meant to do.
-
-
-- **Three bindings moved off `Alt+<letter>`**, which belongs to the quick search. A binding
-  always wins over the search, so each of them cost a letter one could never search a listing
-  for: the site list (`Alt+N` → `Ctrl+Shift+N`), the quick filter (`Alt+I` → `Ctrl+Shift+I`)
-  and the theme (`Alt+T` → `Ctrl+Shift+T`). The editor's `Alt+I` and `Alt+U` stay where FAR
-  has them — there is no quick search in an editor to collide with.
 
 ## [0.4.0] — 2026-10-25
 

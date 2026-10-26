@@ -128,26 +128,14 @@ keeps it as the run's artifact; publishing happens only through `workflow_dispat
 
 ## Where the work is right now
 
-0.4.0 is released. Unreleased on the development branch, in order:
+**0.5.0 is released**, and it is the first release under this name. What is in it: the rename
+itself (with the old configuration file names still read and written), the filesystem watch,
+the full view's extension column, `Ctrl+O` taking the panels off, the detailed view's dates
+and allocated size, `fcmd-platform` — free space on Windows at last, and the device and memory
+figures the information panel and a folder's quick view both show — the four keys the keyboard
+reference had promised, and the column titles going through the catalogues.
 
-1. **The filesystem watch** — a local panel re-reads itself when its directory changes
-   (`notify`, one thread, 300 ms debounce, `panel.auto_refresh`). SPEC 02 §2.6.
-2. **The rename to FinalCommander** — crates, binary, configuration, plugin environment,
-   release assets and pictures. Old configuration file names are still read and written, with
-   one line on the startup screen saying so.
-3. **The extension in a column of its own** in the full view, as FAR draws it.
-4. **`Ctrl+O` takes the panels off** instead of opening a read-only screen: the command line,
-   the menus and the keys all keep working, and `PgUp`/`PgDn` page through the output.
-5. **The detailed view draws FAR's dates** (written, made, last read) and drops the extras
-   before the name becomes unreadable.
-6. **`fcmd-platform`**, the crate the rules always named: free space (on Windows too now),
-   the device's size and allocation unit, and the machine's memory. It feeds the panel frame,
-   the information panel (device, memory, slack) and the detailed view's allocated column.
-7. **The keymap table swept** against the bindings the program resolves: `Ctrl+P`,
-   `Shift+F10`, `Ctrl+W` and the editor's delete-word-right built, the rest of the rows
-   corrected to what is true.
-
-`main` was created from that work and is where it goes on.
+Nothing is waiting unreleased on `main`.
 
 ## The queue, as the author's review left it
 
