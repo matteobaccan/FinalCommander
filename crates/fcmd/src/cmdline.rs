@@ -18,6 +18,10 @@ pub struct CmdLine {
     pub text: String,
     /// Caret position in characters, never in bytes.
     pub caret: usize,
+    /// Where a selection started, in characters: the other end is the caret, and which of
+    /// the two comes first depends on which way it was dragged. `None` means nothing is
+    /// selected, which is the usual state.
+    pub anchor: Option<usize>,
     /// Newest last. The line being typed is not in here until it runs.
     history: Vec<String>,
     /// Where we are while walking the history; `None` means "on the line being typed".
@@ -49,7 +53,49 @@ impl CmdLine {
             .unwrap_or(self.text.len())
     }
 
+    /// What is selected, as character positions, lowest first. `None` when nothing is.
+    pub fn selection(&self) -> Option<(usize, usize)> {
+        let anchor = self.anchor?;
+        let (from, to) = (anchor.min(self.caret), anchor.max(self.caret));
+        (from < to).then_some((from, to))
+    }
+
+    /// The selected text, for the clipboard.
+    pub fn selected_text(&self) -> Option<String> {
+        let (from, to) = self.selection()?;
+        Some(self.text[self.byte_at(from)..self.byte_at(to)].to_string())
+    }
+
+    /// Before a move: `true` keeps the selection growing from where it started, `false`
+    /// drops it. Every key that moves the caret says which it is, and that is the whole of
+    /// how a selection is made.
+    pub fn mark(&mut self, extend: bool) {
+        match extend {
+            true => {
+                if self.anchor.is_none() {
+                    self.anchor = Some(self.caret);
+                }
+            }
+            false => self.anchor = None,
+        }
+    }
+
+    /// Take out what is selected, if anything. What typing and pasting do first.
+    pub fn delete_selection(&mut self) -> bool {
+        let Some((from, to)) = self.selection() else {
+            self.anchor = None;
+            return false;
+        };
+        let (start, end) = (self.byte_at(from), self.byte_at(to));
+        self.text.replace_range(start..end, "");
+        self.caret = from;
+        self.anchor = None;
+        self.walking = None;
+        true
+    }
+
     pub fn insert(&mut self, c: char) {
+        self.delete_selection();
         let at = self.byte_at(self.caret);
         self.text.insert(at, c);
         self.caret += 1;
@@ -63,6 +109,10 @@ impl CmdLine {
     }
 
     pub fn backspace(&mut self) {
+        // A selection is what the key takes, and the caret is then where it was.
+        if self.delete_selection() {
+            return;
+        }
         if self.caret == 0 {
             return;
         }
@@ -73,6 +123,9 @@ impl CmdLine {
     }
 
     pub fn delete(&mut self) {
+        if self.delete_selection() {
+            return;
+        }
         if self.caret >= self.len() {
             return;
         }
@@ -160,6 +213,7 @@ impl CmdLine {
     pub fn clear(&mut self) {
         self.text.clear();
         self.caret = 0;
+        self.anchor = None;
         self.walking = None;
         self.stash.clear();
     }
@@ -167,6 +221,7 @@ impl CmdLine {
     pub fn set(&mut self, text: impl Into<String>) {
         self.text = text.into();
         self.caret = self.len();
+        self.anchor = None;
         self.walking = None;
     }
 
@@ -487,6 +542,48 @@ mod tests {
         let mut l = CmdLine::new();
         l.set(text);
         l
+    }
+
+    #[test]
+    fn shift_and_an_arrow_marks_text_out_and_what_follows_works_on_it() {
+        let mut l = line("echo ciao");
+        // Nothing is marked until a move says to mark it.
+        assert_eq!(l.selection(), None);
+        l.mark(true);
+        for _ in 0..4 {
+            l.left();
+        }
+        assert_eq!(l.selection(), Some((5, 9)));
+        assert_eq!(l.selected_text().as_deref(), Some("ciao"));
+        // A move without `Shift` drops it, as it does in every editor.
+        l.mark(false);
+        l.right();
+        assert_eq!(l.selection(), None);
+
+        // Typing over a selection replaces it.
+        let mut l = line("echo ciao");
+        l.mark(true);
+        l.word_left();
+        l.insert_str("hello");
+        assert_eq!(l.text, "echo hello");
+        assert_eq!(l.caret, 10);
+        assert_eq!(l.selection(), None);
+
+        // And so does a backspace, which then takes nothing else with it.
+        let mut l = line("echo ciao");
+        l.mark(true);
+        for _ in 0..4 {
+            l.left();
+        }
+        l.backspace();
+        assert_eq!(l.text, "echo ");
+        assert_eq!(l.caret, 5);
+
+        // A selection of nothing — `Shift` pressed and no move — is not a selection.
+        let mut l = line("echo");
+        l.mark(true);
+        assert_eq!(l.selection(), None);
+        assert_eq!(l.selected_text(), None);
     }
 
     #[test]

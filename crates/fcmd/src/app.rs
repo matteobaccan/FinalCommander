@@ -6291,9 +6291,14 @@ impl App {
                     self.set_status(m);
                     return;
                 }
-                let line = self.cmd.text.clone();
+                // What is marked out, when anything is: having marked it is having said
+                // what to copy, and copying the whole line instead would be ignoring it.
+                let (line, id) = match self.cmd.selected_text() {
+                    Some(text) => (text, "clip-selection"),
+                    None => (self.cmd.text.clone(), "clip-line"),
+                };
                 if self.copy_to_clipboard(&line) {
-                    let m = self.i18n.t("clip-line");
+                    let m = self.i18n.t(id);
                     self.set_status(m);
                 }
             }
@@ -6912,6 +6917,10 @@ impl App {
             return false;
         }
         let ctrl = key.mods.contains(Mods::CTRL);
+        // `Shift` with a key that moves the caret marks text out instead of just moving:
+        // the selection grows from where it was when the first one was pressed, as it does
+        // in every editor, and any move without `Shift` drops it.
+        let select = key.mods.contains(Mods::SHIFT);
         let empty = self.cmd.is_empty();
         // A line with something on it takes every printable character, `+`, `-`, `*` and
         // Space included: those keys belong to the panel only while the line is empty, which
@@ -6986,26 +6995,32 @@ impl App {
                 true
             }
             KeyCode::Left if !empty && ctrl => {
+                self.cmd.mark(select);
                 self.cmd.word_left();
                 true
             }
             KeyCode::Right if !empty && ctrl => {
+                self.cmd.mark(select);
                 self.cmd.word_right();
                 true
             }
             KeyCode::Left if !empty => {
+                self.cmd.mark(select);
                 self.cmd.left();
                 true
             }
             KeyCode::Right if !empty => {
+                self.cmd.mark(select);
                 self.cmd.right();
                 true
             }
             KeyCode::Home if !empty => {
+                self.cmd.mark(select);
                 self.cmd.home();
                 true
             }
             KeyCode::End if !empty => {
+                self.cmd.mark(select);
                 self.cmd.end();
                 true
             }
@@ -17542,6 +17557,37 @@ run = ["echo one", "echo two", "echo three"]
         assert_eq!(app.panels[1].listing.len(), 1, "added twice");
         // And the files are where they always were: this is a list of paths.
         assert!(app.panels[0].listing.len() > 1);
+    }
+
+    #[test]
+    fn the_command_line_marks_text_out_with_shift_and_the_copy_takes_it() {
+        let mut app = app();
+        typed(&mut app, "echo ciao");
+        press(&mut app, "Shift+Left");
+        press(&mut app, "Shift+Left");
+        press(&mut app, "Shift+Left");
+        press(&mut app, "Shift+Left");
+        assert_eq!(app.cmd.selected_text().as_deref(), Some("ciao"));
+        // `Ctrl+Ins` takes what was marked out rather than the whole line: having marked it
+        // is having said what to copy.
+        press(&mut app, "Ctrl+Ins");
+        assert!(
+            app.requests.iter().any(|r| matches!(
+                r,
+                Request::Clipboard { text } if text == "ciao"
+            )),
+            "{:?}",
+            app.requests
+        );
+        // A plain arrow drops the mark, and then the copy is the line again.
+        press(&mut app, "Left");
+        assert_eq!(app.cmd.selected_text(), None);
+        app.requests.clear();
+        press(&mut app, "Ctrl+Ins");
+        assert!(app.requests.iter().any(|r| matches!(
+            r,
+            Request::Clipboard { text } if text == "echo ciao"
+        )));
     }
 
     #[test]

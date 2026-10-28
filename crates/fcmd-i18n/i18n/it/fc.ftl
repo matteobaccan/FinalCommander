@@ -544,6 +544,7 @@ clip-paths =
        *[other] { $count } percorsi negli appunti
     }
 clip-line = la riga di comando è negli appunti
+clip-selection = la selezione è negli appunti
 clip-off = gli appunti sono disattivati — `ui.clipboard` nelle impostazioni
 history-gone = { $name } non c’è più
 hl-new = Nuovo gruppo di colore

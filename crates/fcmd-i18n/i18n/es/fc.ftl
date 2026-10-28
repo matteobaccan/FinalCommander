@@ -544,6 +544,7 @@ clip-paths =
        *[other] { $count } rutas en el portapapeles
     }
 clip-line = la línea de órdenes está en el portapapeles
+clip-selection = lo marcado está en el portapapeles
 clip-off = el portapapeles está desactivado — `ui.clipboard` en los ajustes
 history-gone = { $name } ya no está
 hl-new = Nuevo grupo de color

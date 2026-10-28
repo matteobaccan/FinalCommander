@@ -544,6 +544,7 @@ clip-paths =
        *[other] { $count } Pfade in der Ablage
     }
 clip-line = die Befehlszeile liegt in der Ablage
+clip-selection = das Markierte liegt in der Ablage
 clip-off = die Ablage ist abgeschaltet — `ui.clipboard` in den Einstellungen
 history-gone = { $name } ist nicht mehr da
 hl-new = Neue Farbgruppe

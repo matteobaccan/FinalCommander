@@ -532,6 +532,7 @@ paste-one-line = 只粘贴了第一行 · 另有 { $count } 行未粘贴
 clip-names = { $count } 个名称已复制到剪贴板
 clip-paths = { $count } 个完整路径已复制到剪贴板
 clip-line = 命令行已复制到剪贴板
+clip-selection = 选中的内容已复制
 clip-off = 剪贴板已关闭 — 设置中的 `ui.clipboard`
 history-gone = { $name } 已经不在了
 hl-new = 新建颜色分组

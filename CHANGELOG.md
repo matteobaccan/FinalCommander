@@ -8,6 +8,12 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **Text can be marked out on the command line.** `Shift` with an arrow extends a selection
+  from where it started, `Ctrl+Shift` with one takes a word at a time, `Shift+Home` and
+  `Shift+End` reach either end. What is marked is drawn with its colours swapped, `Ctrl+Ins`
+  copies that rather than the whole line — having marked it is having said what to copy —
+  and typing, pasting or a backspace replaces it. Any arrow without `Shift` drops the mark.
+
 - **Three panels that are not drives**, under the drives in `Alt+F1`/`Alt+F2` and numbered as
   FAR numbers its own:
 

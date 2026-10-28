@@ -146,6 +146,11 @@ want nine times in ten. With something typed on it, `↑` and `↓` walk back an
 what was run before, as a shell does; on an empty line the arrows belong to the panel, as
 every shared key does. `Alt+F8` shows the whole history as a list.
 
+`Shift` with an arrow marks text out, `Ctrl+Shift` with one marks a word at a time, and
+`Shift+Home`/`Shift+End` take it to either end. What is marked is drawn with its colours
+swapped; `Ctrl+Ins` then copies *that* rather than the whole line, and typing or pasting
+replaces it. Any arrow without `Shift` drops the mark.
+
 The tenth is `vim`, `top`, `ssh` or anything else that draws a whole
 screen and asks the system how big it is: those need a *terminal*, and `Ctrl+Alt+E` is one.
 

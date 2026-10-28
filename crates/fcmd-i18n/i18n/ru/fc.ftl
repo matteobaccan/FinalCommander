@@ -544,6 +544,7 @@ clip-paths =
        *[other] { $count } путей в буфере обмена
     }
 clip-line = командная строка в буфере обмена
+clip-selection = выделенное — в буфере обмена
 clip-off = буфер обмена выключен — `ui.clipboard` в настройках
 history-gone = { $name } больше нет
 hl-new = Новая цветовая группа

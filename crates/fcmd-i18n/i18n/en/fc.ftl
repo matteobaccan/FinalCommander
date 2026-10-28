@@ -552,6 +552,7 @@ clip-paths =
        *[other] { $count } paths on the clipboard
     }
 clip-line = the command line is on the clipboard
+clip-selection = what was marked out is on the clipboard
 clip-off = the clipboard is turned off — `ui.clipboard` in the settings
 history-gone = { $name } is not there any more
 hl-new = New colour group

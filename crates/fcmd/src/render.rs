@@ -372,6 +372,30 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         let room = w.saturating_sub(prompt_w);
         let text = fcmd_ui::truncate_cols(&app.cmd.text, room as usize);
         buf.put_str(prompt_w, y, &text, style, room);
+        // What is marked out, drawn the way a selected row is: the colours swapped. Marking
+        // text and not seeing it marked is the one thing that would make the keys useless.
+        if let Some((from, to)) = app.cmd.selection() {
+            let width = |upto: usize| {
+                app.cmd
+                    .text
+                    .chars()
+                    .take(upto)
+                    .filter_map(unicode_width::UnicodeWidthChar::width)
+                    .sum::<usize>() as u16
+            };
+            let (x0, x1) = (width(from), width(to));
+            let marked: String = app.cmd.text.chars().take(to).skip(from).collect();
+            let ink = Style::new(app.theme.color("cmdline.bg"), app.theme.color("cmdline.fg"));
+            if x0 < room {
+                buf.put_str(
+                    prompt_w + x0,
+                    y,
+                    &fcmd_ui::truncate_cols(&marked, (room - x0) as usize),
+                    ink,
+                    (x1 - x0).min(room - x0),
+                );
+            }
+        }
         let caret = app
             .cmd
             .text

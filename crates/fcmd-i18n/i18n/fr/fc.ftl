@@ -544,6 +544,7 @@ clip-paths =
        *[other] { $count } chemins dans le presse-papiers
     }
 clip-line = la ligne de commande est dans le presse-papiers
+clip-selection = la sélection est dans le presse-papiers
 clip-off = le presse-papiers est désactivé — `ui.clipboard` dans les réglages
 history-gone = { $name } n’est plus là
 hl-new = Nouveau groupe de couleur
