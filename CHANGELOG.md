@@ -8,6 +8,16 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **The help is read in the language the program is running in.** The chapters' names are
+  message ids in all seven catalogues, so the index is always the reader's own; the prose of a
+  chapter is read from `docs/help/<lang>/<file>.md` when somebody has translated it and from
+  the English otherwise, with one line above it — in that language — saying that is what it
+  is. **Italian is translated**, all seven chapters, about eleven hundred lines; the other
+  five languages are not yet, and now say so instead of quietly opening an English page under
+  an Italian title. The site does the same from the same files: a help index per language, the
+  chapters linked within that language, and the note on the ones that are still English — its
+  navigation used to send an Italian reader to the English index.
+
 - **Sorting by description (`Ctrl+F10`) and by owner (`Ctrl+F11`)**, FAR's own last two sort
   keys and the last two we were missing. Neither field is in the listing, so the key asks a
   worker for it exactly as the view that shows it does: the panel sorts without it in the

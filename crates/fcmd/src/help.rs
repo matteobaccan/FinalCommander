@@ -37,13 +37,15 @@ pub enum Where {
 }
 
 impl Where {
-    pub fn title(self) -> &'static str {
+    /// The message id of this place's name. An id rather than the words, because the help
+    /// is read in the language the program is running in.
+    pub fn title_id(self) -> &'static str {
         match self {
-            Where::Panels => "The panels",
-            Where::Viewer => "The viewer",
-            Where::Editor => "The editor",
-            Where::Hex => "The hex editor",
-            Where::Dialog => "This dialog",
+            Where::Panels => "help-here-panels",
+            Where::Viewer => "help-here-viewer",
+            Where::Editor => "help-here-editor",
+            Where::Hex => "help-here-hex",
+            Where::Dialog => "help-here-dialog",
         }
     }
 
@@ -60,67 +62,123 @@ impl Where {
         }
     }
 
-    /// The written chapter that explains this place at length.
+    /// The written chapter that explains this place at length, by the chapter's own name —
+    /// which is the file's stem and does not move when a title is translated.
     pub fn prose(self) -> Option<usize> {
-        let title = match self {
-            Where::Panels | Where::Dialog => "The panels",
-            Where::Viewer => "The viewer",
-            Where::Editor | Where::Hex => "The editor, the hex pane and the assembler",
+        let id = match self {
+            Where::Panels | Where::Dialog => "panels",
+            Where::Viewer => "viewer",
+            Where::Editor | Where::Hex => "editor",
         };
-        PROSE.iter().position(|p| p.title == title)
+        PROSE.iter().position(|p| p.id == id)
     }
 }
 
-/// One written chapter: the title the index shows, and the text.
+/// One written chapter: its own name, the message id of the title the index shows, and the
+/// text in each language that has one.
+///
+/// The chapters are written in English and translated after the fact, so a language with no
+/// translation of a chapter yet reads the English — with a line in its own language saying
+/// so, rather than an index in Italian that silently opens an English page.
 pub struct Prose {
-    pub title: &'static str,
-    pub text: &'static str,
+    /// The file's stem: `panels`, `files`, `config`. Stable, and what the code matches on.
+    pub id: &'static str,
+    pub title_id: &'static str,
+    /// `(language tag, text)`, English first and always present.
+    pub texts: &'static [(&'static str, &'static str)],
+}
+
+impl Prose {
+    /// The text to show in `lang`, and whether it is the English standing in for a
+    /// translation that does not exist yet.
+    pub fn text(&self, lang: &str) -> (&'static str, bool) {
+        match self.texts.iter().find(|(code, _)| *code == lang) {
+            Some((_, text)) => (text, false),
+            None => (self.english(), lang != "en"),
+        }
+    }
+
+    pub fn english(&self) -> &'static str {
+        self.texts
+            .iter()
+            .find(|(code, _)| *code == "en")
+            .map(|(_, text)| *text)
+            .unwrap_or_default()
+    }
 }
 
 /// The written chapters, in the order the index lists them — which is the order someone meets
 /// the program in, not alphabetical.
 pub const PROSE: &[Prose] = &[
     Prose {
-        title: "What this is",
-        text: include_str!("../../../docs/help/about.md"),
+        id: "about",
+        title_id: "help-chapter-about",
+        texts: &[
+            ("en", include_str!("../../../docs/help/about.md")),
+            ("it", include_str!("../../../docs/help/it/about.md")),
+        ],
     },
     Prose {
-        title: "The panels",
-        text: include_str!("../../../docs/help/panels.md"),
+        id: "panels",
+        title_id: "help-chapter-panels",
+        texts: &[
+            ("en", include_str!("../../../docs/help/panels.md")),
+            ("it", include_str!("../../../docs/help/it/panels.md")),
+        ],
     },
     Prose {
-        title: "Files: copy, move, find, archives",
-        text: include_str!("../../../docs/help/files.md"),
+        id: "files",
+        title_id: "help-chapter-files",
+        texts: &[
+            ("en", include_str!("../../../docs/help/files.md")),
+            ("it", include_str!("../../../docs/help/it/files.md")),
+        ],
     },
     Prose {
-        title: "The viewer",
-        text: include_str!("../../../docs/help/viewer.md"),
+        id: "viewer",
+        title_id: "help-chapter-viewer",
+        texts: &[
+            ("en", include_str!("../../../docs/help/viewer.md")),
+            ("it", include_str!("../../../docs/help/it/viewer.md")),
+        ],
     },
     Prose {
-        title: "The editor, the hex pane and the assembler",
-        text: include_str!("../../../docs/help/editor.md"),
+        id: "editor",
+        title_id: "help-chapter-editor",
+        texts: &[
+            ("en", include_str!("../../../docs/help/editor.md")),
+            ("it", include_str!("../../../docs/help/it/editor.md")),
+        ],
     },
     Prose {
-        title: "Servers",
-        text: include_str!("../../../docs/help/network.md"),
+        id: "network",
+        title_id: "help-chapter-network",
+        texts: &[
+            ("en", include_str!("../../../docs/help/network.md")),
+            ("it", include_str!("../../../docs/help/it/network.md")),
+        ],
     },
     Prose {
-        title: "Configuration, keys and colours",
-        text: include_str!("../../../docs/help/config.md"),
+        id: "config",
+        title_id: "help-chapter-config",
+        texts: &[
+            ("en", include_str!("../../../docs/help/config.md")),
+            ("it", include_str!("../../../docs/help/it/config.md")),
+        ],
     },
 ];
 
 /// Every chapter, in index order. The generated ones come last: they are reference, and
 /// reference is what one comes back for rather than what one starts with.
-pub fn chapters() -> Vec<(Chapter, String)> {
+pub fn chapters(i18n: &fcmd_i18n::I18n) -> Vec<(Chapter, String)> {
     let mut out: Vec<(Chapter, String)> = PROSE
         .iter()
         .enumerate()
-        .map(|(i, p)| (Chapter::Prose(i), p.title.to_string()))
+        .map(|(i, p)| (Chapter::Prose(i), i18n.t(p.title_id)))
         .collect();
-    out.push((Chapter::Keys, "Keys, as they are bound now".to_string()));
-    out.push((Chapter::Commands, "Every command, and its keys".to_string()));
-    out.push((Chapter::Options, "Every setting, and its value".to_string()));
+    out.push((Chapter::Keys, i18n.t("help-chapter-keys")));
+    out.push((Chapter::Commands, i18n.t("help-chapter-commands")));
+    out.push((Chapter::Options, i18n.t("help-chapter-options")));
     out
 }
 
@@ -220,22 +278,42 @@ mod tests {
     fn every_written_chapter_is_there_and_has_a_heading() {
         assert!(!PROSE.is_empty());
         for page in PROSE {
-            assert!(!page.title.is_empty());
-            assert!(
-                page.text.starts_with("# "),
-                "{} does not open with a heading",
-                page.title
-            );
-            // The pages are written to be wrapped, so none of them may carry a table: a
-            // table in a help page is a table that does not fit on somebody's terminal.
-            assert!(
-                !page.text.contains("| --- |"),
-                "{} has a table in it",
-                page.title
-            );
+            assert!(!page.id.is_empty() && !page.title_id.is_empty());
+            // Every language's copy of a chapter, English included, has to be a help page:
+            // opening with a heading and carrying no table. A translation that drifted into
+            // something else is a page that does not render.
+            for (lang, text) in page.texts {
+                assert!(
+                    text.starts_with("# "),
+                    "{}/{lang} does not open with a heading",
+                    page.id
+                );
+                // The pages are written to be wrapped, so none of them may carry a table: a
+                // table in a help page is a table that does not fit on somebody's terminal.
+                assert!(
+                    !text.contains("| --- |"),
+                    "{}/{lang} has a table in it",
+                    page.id
+                );
+            }
+            // English is the one every language falls back to, so it must be there.
+            assert!(!page.english().is_empty(), "{} has no English", page.id);
         }
         // The index names every chapter, written and generated.
-        assert_eq!(chapters().len(), PROSE.len() + 3);
+        let i18n = fcmd_i18n::I18n::new("en");
+        assert_eq!(chapters(&i18n).len(), PROSE.len() + 3);
+    }
+
+    #[test]
+    fn a_chapter_nobody_has_translated_is_the_english_one_and_says_so() {
+        let page = &PROSE[0];
+        // English asks for English and is not told anything.
+        assert_eq!(page.text("en"), (page.english(), false));
+        // A language with no translation of this chapter reads the English, and the caller
+        // is told to say so in the reader's own language.
+        let (text, in_english) = page.text("ru");
+        assert_eq!(text, page.english());
+        assert!(in_english);
     }
 
     #[test]

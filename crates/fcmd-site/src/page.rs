@@ -39,7 +39,7 @@ impl Page<'_> {
             (lang.nav_features, format!("features{suffix}.html")),
             (lang.nav_replaces, format!("replaces{suffix}.html")),
             (lang.nav_download, format!("download{suffix}.html")),
-            (lang.nav_help, "help/index.html".to_string()),
+            (lang.nav_help, format!("help/index{suffix}.html")),
             (lang.nav_commanders, "commanders.html".to_string()),
             (lang.nav_changelog, "changelog.html".to_string()),
         ];

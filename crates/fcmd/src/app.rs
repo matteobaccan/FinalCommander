@@ -3512,7 +3512,7 @@ impl App {
         use crate::help::Chapter;
         let rows = self.rows.max(1);
         let index = chapter == Chapter::Index;
-        let count = crate::help::chapters().len();
+        let count = crate::help::chapters(&self.i18n).len();
         let lines = self.help_lines(chapter, self.help_width()).len();
         let last = lines.saturating_sub(rows);
         let go = |app: &mut App, chapter, scroll, at| {
@@ -3545,7 +3545,7 @@ impl App {
                     return;
                 }
                 if index {
-                    let chapters = crate::help::chapters();
+                    let chapters = crate::help::chapters(&self.i18n);
                     if let Some((chapter, _)) = chapters.get(at) {
                         go(self, *chapter, 0, at);
                     }
@@ -14031,12 +14031,25 @@ impl App {
     pub fn help_lines(&self, chapter: crate::help::Chapter, width: usize) -> Vec<String> {
         use crate::help::Chapter;
         match chapter {
-            Chapter::Index => crate::help::chapters()
+            Chapter::Index => crate::help::chapters(&self.i18n)
                 .into_iter()
                 .map(|(_, title)| title)
                 .collect(),
             Chapter::Prose(i) => match crate::help::PROSE.get(i) {
-                Some(page) => crate::help::render(page.text, width),
+                Some(page) => {
+                    // A chapter nobody has translated yet is shown in English, with one line
+                    // in the reader's own language saying so. An index in Italian that
+                    // silently opened an English page would be the program lying about
+                    // itself, and the note costs two rows.
+                    let (text, in_english) = page.text(self.i18n.tag());
+                    let mut lines = Vec::new();
+                    if in_english {
+                        lines.extend(crate::help::render(&self.i18n.t("help-in-english"), width));
+                        lines.push(String::new());
+                    }
+                    lines.extend(crate::help::render(text, width));
+                    lines
+                }
                 None => Vec::new(),
             },
             Chapter::Here(place) => self.help_here(place, width),
@@ -14061,7 +14074,10 @@ impl App {
     /// describes the program that is running rather than the one that was written about: a
     /// binding of the reader's own appears here with the right words next to it.
     fn help_here(&self, place: crate::help::Where, width: usize) -> Vec<String> {
-        let mut lines = vec![format!("# {}", place.title()), String::new()];
+        let mut lines = vec![
+            format!("# {}", self.i18n.t(place.title_id())),
+            String::new(),
+        ];
 
         // One row per command rather than per binding: a command reached by three keys is
         // one thing you can do, and listing it three times is how a key list becomes
@@ -19638,6 +19654,45 @@ run = ["echo one", "echo two", "echo three"]
         assert!(app.mode.editor().is_some(), "{:?}", app.mode);
     }
 
+    /// The complaint this answers: the index was translated and the chapters were not, so an
+    /// Italian menu opened an English page without saying anything about it.
+    #[test]
+    fn the_help_is_read_in_the_language_the_program_is_running_in() {
+        use crate::help::Chapter;
+        let mut app = app();
+        app.i18n = I18n::new("it");
+
+        // The index names the chapters in Italian.
+        let index = app.help_lines(Chapter::Index, 76);
+        assert!(index[0].contains("Che cos'è"), "{index:?}");
+
+        // And a chapter that has been translated is the translation, with no note in front
+        // of it: the note is for the ones that have not.
+        let about = app.help_lines(Chapter::Prose(0), 76);
+        let note = app.i18n.t("help-in-english");
+        assert!(
+            !about.iter().any(|line| line.contains(&note[..20])),
+            "{about:?}"
+        );
+        assert!(
+            about.iter().any(|line| line.contains("file manager")),
+            "{about:?}"
+        );
+        assert!(
+            about.iter().any(|line| line.contains("ovunque")),
+            "the Italian text is what was rendered: {about:?}"
+        );
+
+        // A language with no translation yet gets the English and is told so in its own.
+        app.i18n = I18n::new("ru");
+        let about = app.help_lines(Chapter::Prose(0), 76);
+        let note = app.i18n.t("help-in-english");
+        assert!(
+            about.iter().any(|line| line.contains(&note[..20])),
+            "{about:?}"
+        );
+    }
+
     #[test]
     fn the_help_is_a_book_whose_reference_chapters_are_generated() {
         use crate::help::Chapter;
@@ -19657,11 +19712,11 @@ run = ["echo one", "echo two", "echo three"]
         };
         assert_eq!(chapter, Chapter::Index);
         let index = app.help_lines(Chapter::Index, 76);
-        assert_eq!(index.len(), crate::help::chapters().len());
+        assert_eq!(index.len(), crate::help::chapters(&app.i18n).len());
         assert!(index[0].contains("What this is"), "{index:?}");
 
         // Down to the keys chapter and into it.
-        let keys_at = crate::help::chapters()
+        let keys_at = crate::help::chapters(&app.i18n)
             .iter()
             .position(|(c, _)| *c == Chapter::Keys)
             .unwrap();

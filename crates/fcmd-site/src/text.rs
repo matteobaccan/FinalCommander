@@ -34,6 +34,10 @@ pub struct Text {
     pub download_source: &'static str,
     pub help_title: &'static str,
     pub help_intro: &'static str,
+    /// The seven chapters' names, in `HELP_PAGES` order. The chapters themselves are written
+    /// in English and translated one at a time; a language that has no translation of a
+    /// chapter yet still gets its own index and its own note saying what it is about to read.
+    pub help_chapters: [&'static str; 7],
     pub shots_title: &'static str,
     pub footer: &'static str,
 }
@@ -70,6 +74,7 @@ pub const LANGUAGES: [Text; 7] = [
         help_title: "Help",
         help_intro: "The same pages `F1` shows inside the program, which are compiled into the \
                      executable and need nothing from this site.",
+        help_chapters: ["Panels", "Files and archives", "Viewer", "Editor", "Servers and buckets", "Configuration", "About"],
         shots_title: "What it looks like",
         footer: "Drawn by the program itself, not photographed.",
     },
@@ -105,6 +110,7 @@ pub const LANGUAGES: [Text; 7] = [
         help_title: "Guida",
         help_intro: "Le stesse pagine che `F1` mostra dentro il programma: sono compilate \
                      nell'eseguibile e non hanno bisogno di questo sito.",
+        help_chapters: ["I pannelli", "File e archivi", "Il visualizzatore", "L'editor", "Server e bucket", "Configurazione", "Che cos'è"],
         shots_title: "Com'è fatto",
         footer: "Disegnato dal programma stesso, non fotografato.",
     },
@@ -140,6 +146,7 @@ pub const LANGUAGES: [Text; 7] = [
         help_title: "Hilfe",
         help_intro: "Dieselben Seiten, die `F1` im Programm zeigt: Sie sind in die ausführbare \
                      Datei einkompiliert und brauchen diese Website nicht.",
+        help_chapters: ["Die Panels", "Dateien und Archive", "Der Betrachter", "Der Editor", "Server und Buckets", "Konfiguration", "Worum es geht"],
         shots_title: "Wie es aussieht",
         footer: "Vom Programm selbst gezeichnet, nicht abfotografiert.",
     },
@@ -175,6 +182,7 @@ pub const LANGUAGES: [Text; 7] = [
         help_title: "Ayuda",
         help_intro: "Las mismas páginas que `F1` muestra dentro del programa: están compiladas \
                      en el ejecutable y no necesitan este sitio.",
+        help_chapters: ["Los paneles", "Archivos y comprimidos", "El visor", "El editor", "Servidores y buckets", "Configuración", "Qué es esto"],
         shots_title: "Qué aspecto tiene",
         footer: "Dibujado por el propio programa, no fotografiado.",
     },
@@ -210,6 +218,7 @@ pub const LANGUAGES: [Text; 7] = [
         help_title: "Aide",
         help_intro: "Les mêmes pages que `F1` affiche dans le programme : elles sont compilées \
                      dans l'exécutable et n'ont pas besoin de ce site.",
+        help_chapters: ["Les panneaux", "Fichiers et archives", "La visionneuse", "L'éditeur", "Serveurs et buckets", "Configuration", "Ce que c'est"],
         shots_title: "À quoi cela ressemble",
         footer: "Dessiné par le programme lui-même, pas photographié.",
     },
@@ -245,6 +254,7 @@ pub const LANGUAGES: [Text; 7] = [
         help_title: "Справка",
         help_intro: "Те же страницы, что `F1` показывает в программе: они вкомпилированы в \
                      исполняемый файл и этот сайт им не нужен.",
+        help_chapters: ["Панели", "Файлы и архивы", "Просмотрщик", "Редактор", "Серверы и бакеты", "Настройки", "Что это такое"],
         shots_title: "Как это выглядит",
         footer: "Нарисовано самой программой, а не снято с экрана.",
     },
@@ -273,6 +283,7 @@ pub const LANGUAGES: [Text; 7] = [
         download_source: "从源码构建，需要 Rust 1.89 或更新：",
         help_title: "帮助",
         help_intro: "与程序里按 `F1` 看到的是同一批页面：它们编译进了可执行文件，并不依赖这个网站。",
+        help_chapters: ["两个面板", "文件与压缩包", "查看器", "编辑器", "服务器与存储桶", "配置", "这是什么"],
         shots_title: "界面是什么样",
         footer: "由程序自己绘制，而非截图。",
     },

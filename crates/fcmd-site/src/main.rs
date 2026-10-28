@@ -213,48 +213,71 @@ fn build(repo: &Path, out: &Path) -> Result<usize, String> {
     )?;
     pages += 1;
 
-    // The help: an index, and the pages the program itself shows.
-    let mut index = format!(
-        "<h1>{}</h1>\n<p>{}</p>\n<ul class=\"pages\">\n",
-        escape(text::english().help_title),
-        escape(text::english().help_intro)
-    );
-    for (file, title) in HELP_PAGES {
-        let name = file.trim_end_matches(".md");
-        index.push_str(&format!(
-            "<li><a href=\"{name}.html\">{}</a></li>\n",
-            escape(title)
-        ));
-    }
-    index.push_str("</ul>\n");
-    write_page(
-        out,
-        Page {
-            path: "help/index.html".to_string(),
-            title: text::english().help_title,
-            lang: text::english(),
-            body: index,
-            translations: Vec::new(),
-            version: &version,
-        },
-    )?;
-    pages += 1;
-
-    for (file, title) in HELP_PAGES {
-        let source = read(repo, &format!("docs/help/{file}"))?;
-        let name = file.trim_end_matches(".md");
+    // The help: an index and the chapters, in every language. The chapters are written in
+    // English and translated one at a time, so a language whose chapter is not translated yet
+    // gets the English with a line in its own language saying so — rather than an index in
+    // Italian that silently opens an English page, which is what this used to do.
+    for lang in LANGUAGES {
+        let suffix = suffix_of(lang.code);
+        let mut index = format!(
+            "<h1>{}</h1>\n<p>{}</p>\n<ul class=\"pages\">\n",
+            escape(lang.help_title),
+            escape(lang.help_intro)
+        );
+        for (n, (file, _)) in HELP_PAGES.iter().enumerate() {
+            let name = file.trim_end_matches(".md");
+            index.push_str(&format!(
+                "<li><a href=\"{name}{suffix}.html\">{}</a></li>\n",
+                escape(lang.help_chapters[n])
+            ));
+        }
+        index.push_str("</ul>\n");
         write_page(
             out,
             Page {
-                path: format!("help/{name}.html"),
-                title,
-                lang: text::english(),
-                body: md::rewrite_links(&md::to_html(&source), &published, 1),
-                translations: Vec::new(),
+                path: format!("help/index{suffix}.html"),
+                title: lang.help_title,
+                lang: &lang,
+                body: index,
+                translations: LANGUAGES
+                    .iter()
+                    .map(|other| {
+                        (
+                            other.code,
+                            format!("help/index{}.html", suffix_of(other.code)),
+                        )
+                    })
+                    .collect(),
                 version: &version,
             },
         )?;
         pages += 1;
+
+        for (n, (file, _)) in HELP_PAGES.iter().enumerate() {
+            let (source, in_english) = help_source(repo, &lang, file)?;
+            let name = file.trim_end_matches(".md");
+            let title = lang.help_chapters[n];
+            write_page(
+                out,
+                Page {
+                    path: format!("help/{name}{suffix}.html"),
+                    title,
+                    lang: &lang,
+                    body: document_in(&lang, title, &source, &published, 1, in_english),
+                    translations: LANGUAGES
+                        .iter()
+                        .map(|other| {
+                            (
+                                other.code,
+                                format!("help/{name}{}.html", suffix_of(other.code)),
+                            )
+                        })
+                        .collect(),
+                    version: &version,
+                },
+            )?;
+            pages += 1;
+        }
     }
 
     Ok(pages)
@@ -314,8 +337,24 @@ fn document(
     published: &[(&str, String)],
     depth: usize,
 ) -> String {
+    document_in(lang, title, markdown, published, depth, lang.code != "en")
+}
+
+/// The same, told whether the text really is the English one.
+///
+/// The repository's long documents are English whatever page they are on, so `document` can
+/// work that out from the language. A help chapter cannot: some are translated and some are
+/// not, and the note has to appear on exactly the ones that are not.
+fn document_in(
+    lang: &Text,
+    title: &str,
+    markdown: &str,
+    published: &[(&str, String)],
+    depth: usize,
+    in_english: bool,
+) -> String {
     let mut body = format!("<h1>{}</h1>\n", escape(title));
-    if lang.code != "en" {
+    if in_english {
         body.push_str(&format!(
             "<p class=\"note\">{}</p>\n",
             escape(lang.in_english)
@@ -323,6 +362,18 @@ fn document(
     }
     body.push_str(&md::rewrite_links(&md::to_html(markdown), published, depth));
     body
+}
+
+/// A help chapter's source for one language: the translation if the repository has one, the
+/// English otherwise — and whether what came back is the English.
+fn help_source(repo: &Path, lang: &Text, file: &str) -> Result<(String, bool), String> {
+    if lang.code != "en" {
+        let translated = format!("docs/help/{}/{file}", lang.code);
+        if repo.join(&translated).is_file() {
+            return Ok((read(repo, &translated)?, false));
+        }
+    }
+    Ok((read(repo, &format!("docs/help/{file}"))?, lang.code != "en"))
 }
 
 /// The download page: the archives of the latest release, named as the release names them.
@@ -485,17 +536,60 @@ mod tests {
         ] {
             assert!(out.join(path).is_file(), "{path} is missing");
         }
-        // Every help page the program shows is a page here.
-        for (file, _) in HELP_PAGES {
-            let name = file.trim_end_matches(".md");
+        // Every help page the program shows is a page here, in every language.
+        for lang in LANGUAGES {
+            let suffix = suffix_of(lang.code);
             assert!(
-                out.join(format!("help/{name}.html")).is_file(),
-                "help/{name}.html is missing"
+                out.join(format!("help/index{suffix}.html")).is_file(),
+                "help/index{suffix}.html is missing"
             );
+            for (file, _) in HELP_PAGES {
+                let name = file.trim_end_matches(".md");
+                assert!(
+                    out.join(format!("help/{name}{suffix}.html")).is_file(),
+                    "help/{name}{suffix}.html is missing"
+                );
+            }
         }
         // And the pictures came with it.
         assert!(out.join("docs/shots/panels.svg").is_file());
         assert!(out.join("assets/logo.svg").is_file());
+    }
+
+    /// The complaint this answers: the Italian menu used to link to the English help index,
+    /// and the chapters said nothing about being in English — so a reader who switched
+    /// language got a program that looked translated and a manual that was not.
+    #[test]
+    fn the_help_has_an_index_per_language_that_says_which_chapters_are_still_english() {
+        let (_dir, out) = built();
+
+        let italian = page_text(&out, "help/index.it.html");
+        // The chapters are named in Italian, and the links are the Italian pages.
+        assert!(italian.contains("I pannelli"), "{italian}");
+        assert!(italian.contains("panels.it.html"), "{italian}");
+        // The navigation of an Italian page goes to the Italian index, not the English one.
+        let landing = page_text(&out, "index.it.html");
+        assert!(landing.contains("help/index.it.html"), "{landing}");
+
+        // A chapter with no translation yet is the English one, and says so in Italian.
+        let chapter = page_text(&out, "help/panels.it.html");
+        assert!(chapter.contains("I pannelli"), "{chapter}");
+        let note = crate::text::LANGUAGES
+            .iter()
+            .find(|t| t.code == "it")
+            .expect("italian")
+            .in_english;
+        let translated = std::path::Path::new("docs/help/it/panels.md");
+        if default_repo().join(translated).is_file() {
+            // Once it is translated the note goes, and nothing has to be changed here.
+            assert!(!chapter.contains(note), "the note outlived the translation");
+        } else {
+            assert!(chapter.contains(note), "{chapter}");
+        }
+
+        // English says nothing of the sort, because there is nothing to say.
+        let english = page_text(&out, "help/panels.html");
+        assert!(!english.contains(note), "{english}");
     }
 
     #[test]

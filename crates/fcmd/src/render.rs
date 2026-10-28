@@ -2376,7 +2376,7 @@ fn draw_help(
     let style = app.theme.dialog();
     buf.fill(area, ' ', style);
     // The frame names the chapter one is in, and the index names the program.
-    let title = match crate::help::chapters()
+    let title = match crate::help::chapters(&app.i18n)
         .into_iter()
         .find(|(c, _)| *c == chapter)
     {
@@ -3033,7 +3033,7 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
         assert!(index.contains("Enter opens a chapter"), "{index}");
 
         // Into the keys chapter: its own title in the frame, and the bindings in the body.
-        let keys_at = crate::help::chapters()
+        let keys_at = crate::help::chapters(&app.i18n)
             .iter()
             .position(|(c, _)| *c == crate::help::Chapter::Keys)
             .unwrap();

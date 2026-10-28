@@ -110,6 +110,17 @@ The prose carries no tables and is wrapped by the renderer rather than by hand: 
 has to read on an eighty-column terminal and on a wide one. A test refuses a table in a help
 page for that reason.
 
+**The chapters are translated one at a time**, and the program is honest about which ones are.
+Each chapter's name is a message id in the seven catalogues, so an index is always in the
+reader's language; the prose of a chapter lives in `docs/help/<file>.md` in English and in
+`docs/help/<lang>/<file>.md` where somebody has translated it. A chapter with no translation
+for the language in force is shown in English, with one line above it — in that language —
+saying so. An index translated over pages that are not, which is what this was before, tells
+the reader the program is translated and then hands them something else; the note costs two
+rows and tells the truth. Italian is translated; the other five are not yet. The site does the
+same thing with the same files: a help index per language, and the note on the chapters that
+are still English.
+
 The manual page, `docs/fcmd.1`, is generated from the command line's own options by
 `fcmd --man`, with the sections `clap` cannot know about — files, keys, exit status — written
 once underneath. The file in the repository is that output and a test fails when the two
