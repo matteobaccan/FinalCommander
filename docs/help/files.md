@@ -184,9 +184,14 @@ What that gives you, from inside an archive:
   at a time, as many as are selected; a whole directory is `Shift+F1`, which walks it in a
   job. `F6` deletes the originals once the archive is written, and only then.
 
-What is not there: an entry's permissions and times cannot be changed from the panel, and
-`F7` does not make a directory inside an archive — nothing stores an empty one worth keeping.
-Nor can an archive that is not a file on this disk be written into, for the reason above.
+* `Ctrl+A` on an entry sets what an archive keeps about it: the permissions and the
+  modification time. Both live in the entry's header, so changing either writes the archive
+  again — the dim line in the dialog says so — and everything else is kept as it was. The
+  boxes open from what the listing knows, so a dialog you do not touch writes nothing.
+
+What is not there: `F7` does not make a directory inside an archive — nothing stores an empty
+one worth keeping. Nor can an archive that is not a file on this disk be written into, for the
+reason above.
 
 # What a file is
 

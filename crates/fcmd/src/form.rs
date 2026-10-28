@@ -164,6 +164,10 @@ pub struct AttrFacts {
     /// Windows' own attribute word for the file under the cursor, read with the same `stat`
     /// as the times. Zero everywhere else, where there is no such word.
     pub win_attributes: u32,
+    /// These are entries inside an archive. Every format here keeps a Unix mode and one
+    /// time, whatever platform the program is running on, and keeps nothing else — so the
+    /// dialog offers those and says what changing them costs.
+    pub in_archive: bool,
 }
 
 /// The four times a file carries, as the attributes dialog shows them. Each is `None` where
@@ -1191,8 +1195,10 @@ impl Form {
             owner,
             directories,
             win_attributes,
+            in_archive,
         } = facts;
         let (count, mode, flags, directories) = (*count, *mode, *flags, *directories);
+        let in_archive = *in_archive;
         let win_attributes = *win_attributes;
         let owner = owner.as_deref();
         let t = |id: &str| i18n.t(id);
@@ -1222,7 +1228,9 @@ impl Form {
 
         // Unix's twelve boxes. On Windows there is no mode to set, so they are not offered:
         // a dialog that showed them would be asking about something nothing would read.
-        if cfg!(unix) {
+        // Inside an archive they are offered everywhere, because that is what the formats
+        // hold: a zip, a tar and a 7z all record a Unix mode and nothing of Windows'.
+        if cfg!(unix) || in_archive {
             for (key, label, on) in [
                 ("attr.ur", "attr-owner-read", bits.owner_read),
                 ("attr.uw", "attr-owner-write", bits.owner_write),
@@ -1248,13 +1256,16 @@ impl Form {
         }
 
         // Read-only is the one row both platforms have, and the only one a server has beyond
-        // the mode.
-        fields.push(Field::toggle(
-            "attr.readonly",
-            t("attr-readonly"),
-            flags.contains(fcmd_core::EntryFlags::READONLY),
-        ));
-        if cfg!(windows) {
+        // the mode. An archive entry has no such bit of its own — its mode is the whole of
+        // what it carries — so inside one the row is not there to be written by mistake.
+        if !in_archive {
+            fields.push(Field::toggle(
+                "attr.readonly",
+                t("attr-readonly"),
+                flags.contains(fcmd_core::EntryFlags::READONLY),
+            ));
+        }
+        if cfg!(windows) && !in_archive {
             // Seeded from what the file carries, not from `false`. A box that opened empty on
             // a hidden file would not merely look wrong: `OK` writes every box, so it would
             // take the bit away from a file nobody meant to change.
@@ -1329,11 +1340,17 @@ impl Form {
         fields.push(Field::toggle("attr.utc", t("attr-utc"), false));
         // The four times FAR shows. Empty means leave that one alone; each starts at what the
         // file carries, so the format is in front of the reader rather than in the manual.
-        for (key, label, when) in [
-            ("attr.mtime", "attr-mtime", times.mtime),
-            ("attr.atime", "attr-atime", times.atime),
-            ("attr.btime", "attr-btime", times.btime),
-        ] {
+        // An archive keeps one time per entry, so inside one there is one row.
+        let rows: &[(&str, &str, Option<std::time::SystemTime>)] = if in_archive {
+            &[("attr.mtime", "attr-mtime", times.mtime)]
+        } else {
+            &[
+                ("attr.mtime", "attr-mtime", times.mtime),
+                ("attr.atime", "attr-atime", times.atime),
+                ("attr.btime", "attr-btime", times.btime),
+            ]
+        };
+        for (key, label, when) in rows.iter().copied() {
             fields.push(Field::text(
                 key,
                 t(label),
@@ -1351,10 +1368,14 @@ impl Form {
         }
         // And on a platform that cannot set the creation time, the row says so rather than
         // taking a time and dropping it.
-        if !cfg!(windows) {
+        if !cfg!(windows) && !in_archive {
             fields.push(Field::Dim(t("attr-btime-readonly")));
         }
-        if directories {
+        // What `OK` costs in there, said before it is pressed.
+        if in_archive {
+            fields.push(Field::Dim(t("attr-in-archive")));
+        }
+        if directories && !in_archive {
             fields.push(Field::Separator);
             fields.push(Field::toggle("attr.recursive", t("attr-recursive"), false));
         }

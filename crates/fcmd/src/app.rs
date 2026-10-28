@@ -1572,6 +1572,10 @@ pub struct App {
     /// What the attributes dialog is about. The dialog is open while the selection could
     /// change under it, so what it will touch is settled when it opens.
     attr_targets: Vec<VPath>,
+    /// What the mode boxes started from for an entry inside an archive. The panel's row does
+    /// not carry a mode, so the boxes are seeded from what it does say; a mode that comes
+    /// back unchanged is therefore not a mode anybody asked to write, and is not written.
+    attr_seed_mode: Option<u32>,
     /// The service list the `:services` panel was built from, so a row can be turned back
     /// into the service it stands for.
     services: Vec<fcmd_platform::Service>,
@@ -1859,6 +1863,7 @@ impl App {
             status_error: false,
             held: Mods::NONE,
             attr_targets: Vec::new(),
+            attr_seed_mode: None,
             services: Vec::new(),
             attr_times: Default::default(),
             copy_sources: Vec::new(),
@@ -8630,10 +8635,14 @@ impl App {
             self.set_error(m);
             return;
         };
-        // A container is the one place with nothing to set: an entry's permissions are the
-        // archive's, and writing them would mean writing the archive again for nothing.
-        if sources.iter().any(|p| p.in_container()) {
-            let m = self.i18n.t("attr-in-archive");
+        // Inside a container the dialog is the short one: what every archive format keeps is
+        // a Unix mode and one time per entry, and writing either means writing the archive
+        // again — which the dim row at the foot says before `OK` is pressed.
+        let in_archive = sources.iter().any(|p| p.in_container());
+        if in_archive && !sources.iter().all(|p| p.in_container()) {
+            // A selection half inside an archive and half outside is two different jobs; the
+            // dialog does one thing at a time.
+            let m = self.i18n.t("msg-nothing-to-do");
             self.set_error(m);
             return;
         }
@@ -8651,12 +8660,37 @@ impl App {
         // keystroke that opens the dialog; a path that is not local has no mode to read, and
         // the dialog then starts from the flags alone.
         let under_cursor = self.panel().path_of(&entry);
-        let mode = mode_of(&under_cursor);
+        // Inside an archive the row the panel drew is the whole of what is known: the index
+        // was read once and carries the mode and the time the format recorded.
+        // Inside an archive the row the panel drew is all there is: the index carries a mode
+        // per entry, but a panel row does not, so the boxes start from what the listing does
+        // say — whether the entry is executable — and whatever is left alone is left alone
+        // when the archive is written again.
+        let mode = if in_archive {
+            Some(if entry.flags.contains(fcmd_core::EntryFlags::EXECUTABLE) {
+                0o755
+            } else {
+                0o644
+            })
+        } else {
+            mode_of(&under_cursor)
+        };
         // The four times and the owner come off the same `stat` the mode does: the panel's
         // rows carry only the one date the view shows, and a dialog about what a file *is*
         // is the one place where all four are the question.
-        let times = times_of(&under_cursor, entry.mtime);
-        let owner = owner_of(&under_cursor);
+        let times = if in_archive {
+            crate::form::Times {
+                mtime: entry.mtime,
+                ..crate::form::Times::default()
+            }
+        } else {
+            times_of(&under_cursor, entry.mtime)
+        };
+        let owner = if in_archive {
+            None
+        } else {
+            owner_of(&under_cursor)
+        };
         let facts = crate::form::AttrFacts {
             what,
             count: sources.len(),
@@ -8665,11 +8699,66 @@ impl App {
             times,
             owner,
             directories,
-            win_attributes: windows_attributes(&under_cursor),
+            win_attributes: if in_archive {
+                0
+            } else {
+                windows_attributes(&under_cursor)
+            },
+            in_archive,
         };
         self.mode = Mode::Form(Box::new(Form::attributes(&facts, &self.i18n)));
         self.attr_targets = sources;
         self.attr_times = times;
+        self.attr_seed_mode = in_archive.then_some(mode).flatten();
+    }
+
+    /// `Ctrl+A` inside an archive: write the mode and the time the dialog asked for into the
+    /// entries, which means writing the archive again (SPEC 04 §4).
+    ///
+    /// Only what was changed is sent. The boxes were seeded from what the panel's row could
+    /// say rather than from the entry's own mode, so a mode that comes back as it was opened
+    /// is not a mode anybody asked for, and the rebuild keeps what the archive holds.
+    fn touch_in_archive(
+        &mut self,
+        form: &Form,
+        sources: Vec<VPath>,
+        bits: fcmd_jobs::Mode,
+        utc: bool,
+    ) {
+        let typed = form.text_value("attr.mtime");
+        let mtime = fcmd_ui::parse_stamp_in(&typed, utc);
+        if !typed.trim().is_empty() && mtime.is_none() {
+            let msg = self.i18n.t_args("attr-bad-time", &[("text", typed.into())]);
+            self.set_error(msg);
+            return;
+        }
+        // A time that is the one the entry already carries is not a change either: the rows
+        // open filled in, and `OK` on an untouched dialog must write nothing.
+        let same_time = match (mtime, self.attr_times.mtime) {
+            (Some(now), Some(before)) => {
+                fcmd_ui::format_stamp(now) == fcmd_ui::format_stamp(before)
+            }
+            _ => false,
+        };
+        let mode = (Some(bits.bits()) != self.attr_seed_mode).then(|| bits.bits());
+        let mtime = if same_time { None } else { mtime };
+        if mode.is_none() && mtime.is_none() {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_status(m);
+            return;
+        }
+        let Some(archive) = sources[0].leave() else {
+            return;
+        };
+        let changes: Vec<fcmd_arc::Change> = sources
+            .iter()
+            .map(|path| fcmd_arc::Change::Touch {
+                inner: path.inner_path().to_string(),
+                mode,
+                mtime,
+            })
+            .collect();
+        self.start_rebuild(archive, changes);
     }
 
     /// OK in the copy dialog: one job per destination, with the rules the rows asked for.
@@ -8816,6 +8905,12 @@ impl App {
             setgid: form.toggle_value("attr.setgid"),
             sticky: form.toggle_value("attr.sticky"),
         };
+        // Inside an archive the whole dialog is these two questions, and the answer is a
+        // rebuild rather than a call per file: what the formats keep is a mode and a time.
+        if sources.iter().all(|p| p.in_container()) {
+            self.touch_in_archive(form, sources, bits, utc);
+            return;
+        }
         let change = fcmd_jobs::Change {
             // The mode is only sent where the dialog offered it: on Windows the twelve boxes
             // are not there, and twelve absent toggles read as `000`, which would be a very
@@ -23795,6 +23890,53 @@ abcdefghij
         let names = apply(&zip, &changes);
         assert!(names.contains(&"first.txt".to_string()), "{names:?}");
         assert!(!names.contains(&"one.txt".to_string()), "{names:?}");
+    }
+
+    /// `Ctrl+A` inside an archive asks the two questions the formats can answer, and `OK`
+    /// writes the archive again with what was changed — and only what was changed.
+    #[test]
+    fn ctrl_a_inside_an_archive_sets_the_mode_and_the_time() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut app, zip) = app_inside_a_zip(dir.path());
+        cursor_on(&mut app, "one.txt");
+        press(&mut app, "Ctrl+A");
+        let Mode::Form(form) = &app.mode else {
+            panic!("no dialog: {:?}", app.mode)
+        };
+        // The short dialog: a mode, one time, and no read-only box to write by mistake.
+        assert!(form.fields.iter().any(|f| matches!(
+            f,
+            crate::form::Field::Toggle { key, .. } if *key == "attr.ur"
+        )));
+        assert!(!form.fields.iter().any(|f| matches!(
+            f,
+            crate::form::Field::Toggle { key, .. } if *key == "attr.readonly"
+        )));
+        assert!(!form.fields.iter().any(|f| matches!(
+            f,
+            crate::form::Field::Text { key, .. } if *key == "attr.atime"
+        )));
+
+        // Nothing touched is nothing written.
+        press(&mut app, "F10");
+        assert!(
+            app.take_requests().is_empty(),
+            "an untouched dialog writes the archive for nothing"
+        );
+
+        press(&mut app, "Ctrl+A");
+        set_toggle(&mut app, "attr.gw", true);
+        press(&mut app, "F10");
+        let (archive, changes) = rebuild_asked(&mut app);
+        assert_eq!(archive, zip);
+        match changes.as_slice() {
+            [fcmd_arc::Change::Touch { inner, mode, mtime }] => {
+                assert_eq!(inner, "/one.txt");
+                assert_eq!(*mode, Some(0o664));
+                assert_eq!(*mtime, None, "the time row was left as it opened");
+            }
+            other => panic!("{other:?}"),
+        }
     }
 
     /// A target that is not inside the same archive is not a rename, and the message says

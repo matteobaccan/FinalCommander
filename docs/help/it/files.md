@@ -193,10 +193,15 @@ Quello che questo ti dà, da dentro un archivio:
   la percorre in un lavoro. `F6` cancella gli originali una volta che l'archivio è scritto, e
   non prima.
 
-Quello che non c'è: i permessi e gli orari di una voce non si possono cambiare dal pannello, e
-`F7` non crea una cartella dentro un archivio — nessuno di questi formati conserva una cartella
-vuota che valga la pena di tenere. E non si può scrivere dentro un archivio che non è un file su
-questo disco, per il motivo appena detto.
+* `Ctrl+A` su una voce imposta quello che un archivio conserva di lei: i permessi e la data di
+  modifica. Tutti e due stanno nella testata della voce, quindi cambiarne uno riscrive
+  l'archivio — la riga in grigio nel dialogo lo dice — e tutto il resto resta com'era. Le
+  caselle si aprono su quello che l'elenco sa, quindi un dialogo che non tocchi non scrive
+  niente.
+
+Quello che non c'è: `F7` non crea una cartella dentro un archivio — nessuno di questi formati
+conserva una cartella vuota che valga la pena di tenere. E non si può scrivere dentro un
+archivio che non è un file su questo disco, per il motivo appena detto.
 
 # Cosa è un file
 

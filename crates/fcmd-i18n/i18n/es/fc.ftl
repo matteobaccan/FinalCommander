@@ -166,7 +166,7 @@ btn-attr-current = Ahora
 btn-attr-blank = Vacío
 attr-recursive = Y todo lo que hay en las carpetas
 attr-bad-time = `{ $text }` no es una fecha y hora (AAAA-MM-DD HH:MM:SS)
-attr-in-archive = los atributos de una entrada son los del archivo comprimido, no hay nada que ajustar
+attr-in-archive = cambiar esto vuelve a escribir el archivo, con las demás entradas como están
 job-attrs = Ajustando atributos
 
 # ── the copy dialog (SPEC 03 §4) ───────────────────────────────────────────────────────

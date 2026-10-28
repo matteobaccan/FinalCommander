@@ -139,7 +139,12 @@ where the code lives, not whether it is linked into the binary.
   panel answers from a stale index. A cancelled or failed rebuild deletes the `.part` file and
   leaves the archive exactly as it was. What a format allows is used: a zip entry nobody named
   moves across as the compressed bytes it already is, so one change to a large archive is a
-  copy rather than a recompression. A container that is not a file on this disk is read
+  copy rather than a recompression. `Change::Touch` is the third change beside `Put`,
+  `Remove` and `Rename`: it keeps an entry's bytes and writes its mode or its modification
+  time, which live in the entry's header and cannot be patched in a compressed stream — in a
+  zip only that entry is decompressed and written again, a tar writes every header anyway,
+  and a 7z records the mode where `p7zip` does, in the top half of the attribute word.
+  A container that is not a file on this disk is read
   from a copy, and the copy is thrown away when the program ends, so a rebuild of one is
   refused with that as the reason rather than reporting a change nobody will see again:
   changing something three archives down means rebuilding all three, which is a plan this

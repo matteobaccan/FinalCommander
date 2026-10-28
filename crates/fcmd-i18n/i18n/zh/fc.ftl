@@ -166,7 +166,7 @@ btn-attr-current = 现在
 btn-attr-blank = 清空
 attr-recursive = 以及文件夹里的全部内容
 attr-bad-time = `{ $text }` 不是日期时间（YYYY-MM-DD HH:MM:SS）
-attr-in-archive = 压缩包里一项的属性属于压缩包，没有什么可设置的
+attr-in-archive = 更改此项会重写压缩包，其他条目保持原样
 job-attrs = 正在设置属性
 
 # ── the copy dialog (SPEC 03 §4) ───────────────────────────────────────────────────────

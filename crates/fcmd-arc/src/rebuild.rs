@@ -19,6 +19,7 @@ use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 use fcmd_core::CancelToken;
 
@@ -35,6 +36,17 @@ pub enum Change {
     Remove { inner: String },
     /// `from` keeps its bytes under the name `to`.
     Rename { from: String, to: String },
+    /// `inner` keeps its bytes and its name, and is written with the permissions or the
+    /// modification time given — whichever is `Some`. The archive is rebuilt for it like any
+    /// other change, because these live in the entry's header and a header cannot be patched
+    /// in a compressed stream.
+    Touch {
+        inner: String,
+        /// The Unix mode, as a file's own is: `0o644`. A format that cannot hold one ignores
+        /// it rather than failing, and the dialog says which.
+        mode: Option<u32>,
+        mtime: Option<SystemTime>,
+    },
 }
 
 impl Change {
@@ -66,6 +78,8 @@ struct Plan {
     renamed: BTreeMap<String, String>,
     /// New bytes by the name they take inside, in the order they were asked for.
     put: BTreeMap<String, PathBuf>,
+    /// What to write in the header of an entry that keeps its bytes.
+    touched: BTreeMap<String, (Option<u32>, Option<SystemTime>)>,
 }
 
 impl Plan {
@@ -80,6 +94,9 @@ impl Plan {
                 Change::Rename { from, to } => {
                     plan.renamed.insert(normalise(from), normalise(to));
                 }
+                Change::Touch { inner, mode, mtime } => {
+                    plan.touched.insert(normalise(inner), (*mode, *mtime));
+                }
             }
         }
         plan
@@ -93,7 +110,10 @@ impl Plan {
     }
 
     fn is_empty(&self) -> bool {
-        self.removed.is_empty() && self.renamed.is_empty() && self.put.is_empty()
+        self.removed.is_empty()
+            && self.renamed.is_empty()
+            && self.put.is_empty()
+            && self.touched.is_empty()
     }
 }
 
@@ -170,13 +190,18 @@ fn rebuild_zip(
         if cancel.is_cancelled() {
             return Err(ArcError::Cancelled);
         }
-        let entry = old.by_index_raw(i).map_err(|e| broken(path, e))?;
-        // A name a zip stores in an encoding we cannot read is left exactly as it is: it is
-        // copied across untouched, and no change can name it.
-        let stored = entry
-            .name()
-            .map(|n| n.into_owned())
-            .map_err(|e| broken(path, e))?;
+        // What this entry is, read and then let go of: a header rewritten below needs the
+        // archive borrowed again, this time for the bytes rather than for them compressed.
+        let (stored, is_dir, bytes) = {
+            let entry = old.by_index_raw(i).map_err(|e| broken(path, e))?;
+            // A name a zip stores in an encoding we cannot read is left exactly as it is: it
+            // is copied across untouched, and no change can name it.
+            let stored = entry
+                .name()
+                .map(|n| n.into_owned())
+                .map_err(|e| broken(path, e))?;
+            (stored, entry.is_dir(), entry.size())
+        };
         let inner = normalise(&stored);
         if plan.is_removed(&inner) {
             continue;
@@ -184,8 +209,50 @@ fn rebuild_zip(
         if plan.put.contains_key(&inner) {
             continue; // replaced from disk; the new bytes go in below
         }
-        let is_dir = entry.is_dir();
-        let bytes = entry.size();
+        if let Some((mode, mtime)) = plan.touched.get(&inner) {
+            // The mode and the time live in the entry's header, and a zip's header cannot be
+            // patched where it lies, so this one entry is decompressed and written again
+            // while every other is still copied across as the bytes it already is.
+            let name = match plan.renamed.get(&inner) {
+                None => stored.clone(),
+                Some(to) => {
+                    let mut name = to.trim_start_matches('/').to_string();
+                    if is_dir && !name.ends_with('/') {
+                        name.push('/');
+                    }
+                    name
+                }
+            };
+            let mut options = zip::write::SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Deflated);
+            if let Some(mode) = mode {
+                options = options.unix_permissions(*mode);
+            }
+            if let Some(when) = mtime {
+                if let Some(stamp) = zip_datetime(*when) {
+                    options = options.last_modified_time(stamp);
+                }
+            }
+            if is_dir {
+                new.add_directory(name.trim_end_matches('/'), options)
+                    .map_err(|e| broken(part, e))?;
+                written.dirs += 1;
+            } else {
+                let mut entry = old.by_index(i).map_err(|e| broken(path, e))?;
+                new.start_file(&name, options)
+                    .map_err(|e| broken(part, e))?;
+                let mut data = Vec::with_capacity(bytes.min(8 * 1024 * 1024) as usize);
+                entry
+                    .read_to_end(&mut data)
+                    .map_err(|e| io_error(path, e))?;
+                new.write_all(&data).map_err(|e| io_error(part, e))?;
+                written.files += 1;
+                written.bytes += bytes;
+            }
+            progress(&name, written.bytes);
+            continue;
+        }
+        let entry = old.by_index_raw(i).map_err(|e| broken(path, e))?;
         // An entry nobody renamed keeps its stored name exactly — not the normalised one.
         // The difference matters: a zip marks a directory by the `/` its name ends with, and
         // normalising takes that away, which would turn every directory into an empty file.
@@ -235,6 +302,40 @@ fn rebuild_zip(
     Ok(written)
 }
 
+/// A moment as a zip stores one: MS-DOS date and time, to a two-second tick, in whatever the
+/// local clock calls now. Out of range — a zip cannot hold a date before 1980 — is `None`, and
+/// the entry then keeps the time the writer gives it rather than a wrong one.
+fn zip_datetime(when: SystemTime) -> Option<zip::DateTime> {
+    let secs = when.duration_since(SystemTime::UNIX_EPOCH).ok()?.as_secs() as i64;
+    let (days, rest) = (secs.div_euclid(86_400), secs.rem_euclid(86_400));
+    let (year, month, day) = civil_from_days(days);
+    zip::DateTime::from_date_and_time(
+        u16::try_from(year).ok()?,
+        u8::try_from(month).ok()?,
+        u8::try_from(day).ok()?,
+        (rest / 3_600) as u8,
+        ((rest % 3_600) / 60) as u8,
+        (rest % 60) as u8,
+    )
+    .ok()
+}
+
+/// Days from the epoch to a civil date, by Howard Hinnant's algorithm — the inverse of the
+/// one the index reader uses, and here for the same reason: one conversion does not want a
+/// calendar crate behind it.
+fn civil_from_days(days: i64) -> (i64, u32, u32) {
+    let z = days + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
+    (if m <= 2 { y + 1 } else { y }, m, d)
+}
+
 fn rebuild_tar(
     path: &Path,
     part: &Path,
@@ -282,6 +383,18 @@ fn rebuild_tar(
             let mut header = entry.header().clone();
             let is_dir = header.entry_type().is_dir();
             let size = header.size().unwrap_or(0);
+            // A tar's header is written afresh for every entry anyway, so what was asked for
+            // simply goes in it.
+            if let Some((mode, mtime)) = plan.touched.get(&inner) {
+                if let Some(mode) = mode {
+                    header.set_mode(*mode);
+                }
+                if let Some(when) = mtime {
+                    if let Ok(since) = when.duration_since(std::time::UNIX_EPOCH) {
+                        header.set_mtime(since.as_secs());
+                    }
+                }
+            }
             // The data has to be read out of the stream whatever happens to it, because a tar
             // is read in order; holding it is bounded by the entry's own size.
             let mut data = Vec::with_capacity(size.min(8 * 1024 * 1024) as usize);
@@ -369,9 +482,26 @@ fn rebuild_sevenz(
             std::io::copy(bytes, &mut std::io::sink())?;
             return Ok(true);
         }
+        let touch = plan.touched.get(&inner).copied();
         let name = plan.renamed.get(&inner).cloned().unwrap_or(inner);
         let mut copy = entry.clone();
         copy.name = name.trim_start_matches('/').to_string();
+        if let Some((mode, mtime)) = touch {
+            // A 7z keeps the Unix mode in the top half of the Windows attribute word with bit
+            // 15 set, which is the convention `p7zip` and `7-Zip` both follow and the only
+            // place the mode of a file in a 7z is ever recorded.
+            if let Some(mode) = mode {
+                copy.windows_attributes =
+                    (mode << 16) | 0x8000 | (copy.windows_attributes & 0xffff);
+                copy.has_windows_attributes = true;
+            }
+            if let Some(when) = mtime {
+                if let Ok(stamp) = sevenz_rust2::NtTime::try_from(when) {
+                    copy.last_modified_date = stamp;
+                    copy.has_last_modified_date = true;
+                }
+            }
+        }
         if entry.is_directory {
             new.push_archive_entry::<&[u8]>(copy, None)?;
             written.dirs += 1;
@@ -534,6 +664,67 @@ mod tests {
             .unwrap()
             .read(inner, &CancelToken::new())
             .unwrap()
+    }
+
+    /// What the panel's `Ctrl+A` asks for inside an archive: the mode and the time of one
+    /// entry, with its bytes and everybody else's untouched.
+    #[test]
+    fn a_touch_writes_the_mode_and_the_time_and_nothing_else() {
+        for format in [Format::Zip, Format::Tar, Format::TarGz, Format::SevenZ] {
+            let dir = tempfile::tempdir().unwrap();
+            let path = archive(dir.path(), format);
+            let when = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_722_505_260);
+            rebuild(
+                &path,
+                &[Change::Touch {
+                    inner: "/tree/readme.md".into(),
+                    mode: Some(0o640),
+                    mtime: Some(when),
+                }],
+                Level::Fast,
+                &CancelToken::new(),
+                &mut |_, _| {},
+            )
+            .unwrap_or_else(|e| panic!("{}: {e}", format.label()));
+
+            let read = Archive::open(&path, &Limits::default(), &CancelToken::new())
+                .unwrap_or_else(|e| panic!("{}: {e}", format.label()));
+            let entry = read
+                .entry("/tree/readme.md")
+                .unwrap_or_else(|| panic!("{}: the entry is gone", format.label()));
+            // The bytes are the ones that went in.
+            assert_eq!(
+                read.read("/tree/readme.md", &CancelToken::new()).unwrap(),
+                b"# the readme\n",
+                "{}",
+                format.label()
+            );
+            // A zip and a tar hold a mode; a 7z holds one only where it was written on a
+            // Unix, which is what we have just done.
+            assert_eq!(
+                entry.mode.map(|m| m & 0o777),
+                Some(0o640),
+                "{}",
+                format.label()
+            );
+            let stamp = entry
+                .mtime
+                .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            // A zip's clock ticks every two seconds, so the answer is near rather than exact.
+            assert!(
+                stamp.abs_diff(1_722_505_260) <= 2,
+                "{}: {stamp}",
+                format.label()
+            );
+            // And the other entry is where it was.
+            assert!(
+                read.entry("/tree/src/main.rs").is_some(),
+                "{}",
+                format.label()
+            );
+        }
     }
 
     #[test]

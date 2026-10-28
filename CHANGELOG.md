@@ -41,6 +41,12 @@ Notable changes, newest first. The format follows
   one that wanted a password behaves the same way; an entry over 64 MB is reported as a
   problem rather than read into memory.
 
+- **`Ctrl+A` works inside an archive.** It asks the two questions the formats can answer —
+  the permissions and the modification time — and `OK` writes the archive again with the
+  entry's bytes and everybody else's untouched, through the same transactional rebuild as
+  every other change. A dialog nobody touched writes nothing: the boxes are seeded from what
+  the listing knows, and only what was changed is sent.
+
 ### Changed
 
 - **The menu letters are FAR's own.** Every row the `F9` menus share with FAR now wears the
