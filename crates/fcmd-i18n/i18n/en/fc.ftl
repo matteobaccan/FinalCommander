@@ -463,6 +463,7 @@ opt-keymap = Keymap
 opt-clock = Clock in the corner
 opt-mouse = Mouse support
 opt-clipboard = Let the terminal carry the clipboard (OSC 52)
+opt-command-screen = Show a command's output while it runs
 opt-menu-always = Always show the menu bar
 opt-confirm-delete = Delete
 opt-confirm-overwrite = Overwrite

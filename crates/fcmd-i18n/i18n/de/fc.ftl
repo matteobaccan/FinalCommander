@@ -455,6 +455,7 @@ opt-keymap = Tastenbelegung
 opt-clock = Uhr in der Ecke
 opt-mouse = Mausunterstützung
 opt-clipboard = Ablage über das Terminal (OSC 52)
+opt-command-screen = Die Ausgabe eines Befehls zeigen, während er läuft
 opt-menu-always = Menüleiste immer anzeigen
 opt-confirm-delete = Löschen
 opt-confirm-overwrite = Überschreiben

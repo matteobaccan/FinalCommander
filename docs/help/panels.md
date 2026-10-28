@@ -40,6 +40,12 @@ takes both off to show what the commands have printed. With the panels off every
 still works — the command line, the menus, the keys — and `PgUp` and `PgDn` turn pages through
 the output; `Ctrl+O` brings the panels back.
 
+The panels go off by themselves while a command runs, so what it prints can be watched
+arriving line by line rather than turning up all at once at the end, and they come back when
+it finishes. `Ctrl+O` gives the screen back early and the command carries on behind them;
+*Options → Interface → Show a command's output while it runs* turns the whole habit off, and
+the output still fills the screen as it is printed, for whenever you press `Ctrl+O`.
+
 `Ctrl+R` re-reads. `Ctrl+L` turns the other panel into an information panel — what the device
 holds and what is left on it, how big its clusters are and what they cost this directory, how
 much memory the machine has, and the row under the cursor — `Ctrl+Q` into a

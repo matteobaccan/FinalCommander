@@ -6,6 +6,21 @@ Notable changes, newest first. The format follows
 
 ## [0.7.1] — 2026-10-28
 
+### Added
+
+- **A command's output arrives while it runs.** It was read to the end of both pipes and
+  handed over in one piece, so a build that takes a minute was a minute of nothing followed
+  by everything: a command one cannot watch. The worker now reads both pipes into one channel
+  — interleaved the way they were printed, rather than all of one and then all of the other —
+  and reports whole lines as they arrive; the application writes the `$ command` heading when
+  the command *starts* and the lines land under it as they come. And the panels go off while
+  it runs, the way the console comes forward in FAR, and come back when it ends. `Ctrl+O`
+  gives the screen back early and the command carries on behind the panels; *Options →
+  Interface → Show a command's output while it runs* (`ui.command_screen`) turns that off and
+  leaves the panels where they are, with the output still filling the screen `Ctrl+O` opens
+  as it is printed. A line rewritten in place with a carriage return — a progress bar — is
+  kept as what it ended up saying.
+
 ### Fixed
 
 - **The table mode's keys.** `←` and `→` did nothing in a table — the sideways scroll was

@@ -865,7 +865,12 @@ fn interactive(mut app: App) -> Result<()> {
                 } => {
                     let tx = tx.clone();
                     runtime.spawn_blocking(move || {
-                        let (output, status) = run_shell(&line, &cwd, into.as_deref());
+                        // The lines go as they are printed, not at the end: a build that
+                        // takes a minute is a minute of nothing to look at otherwise.
+                        let report = tx.clone();
+                        let (output, status) = run_shell(&line, &cwd, into.as_deref(), &|text| {
+                            let _ = report.send(Event::ShellOutput { id, text });
+                        });
                         let _ = tx.send(Event::ShellDone {
                             id,
                             line,
@@ -1357,10 +1362,18 @@ fn run_job(
 ///
 /// The two reader threads are not decoration: a child that fills the 64 KiB pipe buffer while
 /// we wait for it to exit deadlocks, so somebody has to be draining both pipes meanwhile.
+/// Run a line in the user's shell, reporting what it prints as it prints it.
+///
+/// `report` is handed whole lines as they arrive, which is what makes a long command watchable
+/// rather than a minute of nothing followed by everything. What comes back is the *note* the
+/// run has to add — a spawn failure, where the output was written, that it was truncated —
+/// and not the output itself, which has already gone through `report`. The one exception is a
+/// run with a file to write into: nothing of that is printed, so nothing is reported.
 fn run_shell(
     line: &str,
     cwd: &std::path::Path,
     into: Option<&std::path::Path>,
+    report: &dyn Fn(String),
 ) -> (String, Option<i32>) {
     use std::io::Read;
     use std::process::{Command, Stdio};
@@ -1387,42 +1400,89 @@ fn run_shell(
         Err(e) => return (format!("{line}: {e}\n"), Some(-1)),
     };
 
-    let mut out = child.stdout.take();
-    let mut err = child.stderr.take();
-    let reader = |pipe: Option<std::process::ChildStdout>| {
-        std::thread::spawn(move || {
-            let mut buf = Vec::new();
-            if let Some(mut pipe) = pipe {
-                let _ = pipe.read_to_end(&mut buf);
-            }
-            buf
-        })
-    };
-    let out_thread = reader(out.take());
-    let err_thread = std::thread::spawn(move || {
-        let mut buf = Vec::new();
-        if let Some(pipe) = err.as_mut() {
-            let _ = pipe.read_to_end(&mut buf);
-        }
-        buf
-    });
-
-    let status = child.wait().ok().and_then(|s| s.code());
-    let mut bytes = out_thread.join().unwrap_or_default();
-    bytes.extend(err_thread.join().unwrap_or_default());
-
-    let mut text = String::from_utf8_lossy(&bytes).into_owned();
-    if text.len() > MAX_OUTPUT {
-        text.truncate(MAX_OUTPUT);
-        text.push_str("\n… output truncated\n");
+    // Both pipes are pumped into one channel, so the two come out interleaved the way they
+    // were printed rather than all of one and then all of the other. A thread each, because
+    // reading one pipe while the other fills is how a process that writes to both deadlocks.
+    let mut pipes: Vec<Box<dyn Read + Send>> = Vec::new();
+    if let Some(pipe) = child.stdout.take() {
+        pipes.push(Box::new(pipe));
     }
+    if let Some(pipe) = child.stderr.take() {
+        pipes.push(Box::new(pipe));
+    }
+    let (chunks, arriving) = std::sync::mpsc::channel::<Vec<u8>>();
+    let pumps: Vec<_> = pipes
+        .into_iter()
+        .map(|mut pipe| {
+            let chunks = chunks.clone();
+            std::thread::spawn(move || {
+                let mut buf = [0u8; 8 * 1024];
+                loop {
+                    match pipe.read(&mut buf) {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => {
+                            if chunks.send(buf[..n].to_vec()).is_err() {
+                                break;
+                            }
+                        }
+                    }
+                }
+            })
+        })
+        .collect();
+    drop(chunks); // the loop below ends when the last pump has dropped its own
+
+    let mut bytes = Vec::new();
+    // What has been read but is not yet a whole line. A line is reported when its newline
+    // arrives, so a cell of a progress bar does not go out one character at a time.
+    let mut partial: Vec<u8> = Vec::new();
+    let mut truncated = false;
+    let streaming = into.is_none();
+    for chunk in arriving {
+        if bytes.len() + chunk.len() > MAX_OUTPUT {
+            truncated = true;
+            if !streaming {
+                // The file gets what fits and nothing after it.
+                let room = MAX_OUTPUT.saturating_sub(bytes.len());
+                bytes.extend_from_slice(&chunk[..room]);
+            }
+            continue;
+        }
+        if !streaming {
+            bytes.extend_from_slice(&chunk);
+            continue;
+        }
+        bytes.extend_from_slice(&chunk);
+        partial.extend_from_slice(&chunk);
+        if let Some(at) = partial.iter().rposition(|b| *b == b'\n') {
+            let whole: Vec<u8> = partial.drain(..=at).collect();
+            report(String::from_utf8_lossy(&whole).into_owned());
+        }
+    }
+    for pump in pumps {
+        let _ = pump.join();
+    }
+    // A last line with no newline after it is still a line.
+    if streaming && !partial.is_empty() {
+        report(String::from_utf8_lossy(&partial).into_owned());
+    }
+    let status = child.wait().ok().and_then(|s| s.code());
+
     if let Some(path) = into {
+        let text = String::from_utf8_lossy(&bytes).into_owned();
         return match std::fs::write(path, text.as_bytes()) {
             Ok(()) => (format!("output written to {}\n", path.display()), status),
             Err(e) => (format!("{}: {e}\n", path.display()), Some(-1)),
         };
     }
-    (text, status)
+    // The output has gone already, line by line; what is left to say is whether there was
+    // more of it than we were willing to keep.
+    let note = if truncated {
+        "… output truncated\n".to_string()
+    } else {
+        String::new()
+    };
+    (note, status)
 }
 
 fn run_decompiler(rule: &fcmd_config::DecompileRule, path: &VPath) -> Result<String, String> {
@@ -2337,6 +2397,32 @@ fn dirs_home() -> Option<std::path::PathBuf> {
 mod tests {
     use super::*;
     use clap::CommandFactory;
+
+    /// A real command, run the way the application runs one: what it prints has to arrive
+    /// while it runs, and what comes back at the end has to be the note and not the output
+    /// a second time.
+    #[test]
+    #[cfg(unix)]
+    fn a_command_reports_its_lines_as_it_prints_them() {
+        use std::sync::Mutex;
+
+        let seen: Mutex<Vec<String>> = Mutex::new(Vec::new());
+        let cwd = std::env::current_dir().unwrap();
+        let (note, status) =
+            run_shell("echo one; echo two 1>&2; echo three", &cwd, None, &|text| {
+                seen.lock().unwrap().push(text)
+            });
+        assert_eq!(status, Some(0));
+        // Nothing is left to add: the lines have gone already.
+        assert_eq!(note, "");
+        let printed: String = seen.lock().unwrap().concat();
+        // Both pipes, and every line of both.
+        for line in ["one", "two", "three"] {
+            assert!(printed.contains(line), "{printed:?}");
+        }
+        // Whole lines, never half of one.
+        assert!(printed.ends_with('\n'), "{printed:?}");
+    }
 
     /// A plugin on disk, a command it provides, and the whole conversation: the manifest is
     /// loaded the way the binary loads one, the program is a real script, and what it asks for

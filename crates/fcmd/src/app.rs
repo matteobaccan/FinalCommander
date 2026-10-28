@@ -392,6 +392,12 @@ pub enum Event {
         error: Option<String>,
     },
     /// A shell command finished: its merged output, capped, and how it ended.
+    /// What a running command has printed since the last one of these: whole lines, as they
+    /// were printed, so a long command can be watched rather than waited out.
+    ShellOutput {
+        id: u64,
+        text: String,
+    },
     ShellDone {
         id: u64,
         line: String,
@@ -1406,6 +1412,10 @@ pub struct App {
     apply_total: usize,
     /// The shell command we are waiting for, if any, and the line that started it.
     shell: Option<(u64, String)>,
+    /// Whether the screen showing what the command prints was opened by the command itself,
+    /// and so should be closed again when it ends. `Esc` clears it: a user who has gone back
+    /// to the panels has said what they want, and the output keeps arriving behind them.
+    shell_screen: bool,
     /// Where each panel was before the last `cd`, so `cd -` has somewhere to go.
     prev_dir: [Option<VPath>; 2],
     /// The file the editor is editing on behalf of a server: where it came from, the local
@@ -1518,6 +1528,7 @@ impl App {
             compare_pairs: 0,
             cmd: CmdLine::new(),
             user_screen: Vec::new(),
+            shell_screen: false,
             hidden: None,
             panels_off: false,
             user_scroll: 0,
@@ -2035,6 +2046,14 @@ impl App {
                 self.panels[panel].message = Some(note.clone());
                 self.set_status(note);
             }
+            Event::ShellOutput { id, text } => {
+                if self.shell.as_ref().map(|(running, _)| *running) != Some(id) {
+                    return; // a command we already stopped waiting for
+                }
+                // The window counts back from the end, so with the panels off and nothing
+                // scrolled the new lines are simply there: that is the streaming.
+                self.append_user_screen(&text);
+            }
             Event::ShellDone {
                 id,
                 line,
@@ -2045,7 +2064,16 @@ impl App {
                     return; // a command we already stopped waiting for
                 }
                 self.shell = None;
-                self.push_user_screen(&line, &output);
+                // The output itself has already arrived, line by line; what comes with the
+                // end is only what the run has to add — a spawn failure, where the output
+                // was written, that there was more of it than we would keep.
+                self.append_user_screen(&output);
+                if self.shell_screen && self.apply_queue.is_empty() && self.menu_queue.is_empty() {
+                    // The panels come back when the command ends, as they do in FAR, and
+                    // `Ctrl+O` is how what it printed is read again.
+                    self.shell_screen = false;
+                    self.panels_off = false;
+                }
                 match status {
                     Some(0) | None => {
                         let msg = self
@@ -5879,6 +5907,9 @@ impl App {
             Command::ShellOutputShow => {
                 self.panels_off = !self.panels_off;
                 self.user_scroll = 0;
+                // Once the key has been pressed the screen is the user's: a command that is
+                // still running does not take it away again when it ends.
+                self.shell_screen = false;
             }
             Command::AppThemes => self.open_pick(PickKind::Themes, self.active),
             Command::AppLanguages => self.open_pick(PickKind::Languages, self.active),
@@ -7137,12 +7168,24 @@ impl App {
         let id = self.next_job_id;
         self.next_job_id += 1;
         self.shell = Some((id, line.clone()));
+        // The heading goes up now, not when the command ends: what it prints arrives line by
+        // line and has to have somewhere to land.
+        self.start_user_screen(&line);
         self.requests.push(Request::Shell {
             id,
             line: line.clone(),
             cwd: cwd.as_path().to_path_buf(),
             into,
         });
+        // And the panels go off while it runs, the way the console comes forward in FAR: a
+        // command whose output only turns up at the end, under a key, is a command one cannot
+        // watch. Everything else stays live, `Ctrl+O` brings the panels back early, and the
+        // panels come back by themselves when the command ends.
+        if self.cfg.ui.command_screen && !self.panels_off && self.mode.is_normal() {
+            self.shell_screen = true;
+            self.panels_off = true;
+            self.user_scroll = 0;
+        }
         let msg = self.i18n.t_args("cmd-running", &[("command", line.into())]);
         self.set_status(msg);
     }
@@ -8107,12 +8150,29 @@ impl App {
 
     /// Keep what a command printed, capped, with the command itself as its heading.
     fn push_user_screen(&mut self, line: &str, output: &str) {
-        const MAX_LINES: usize = 10_000;
+        self.start_user_screen(line);
+        self.append_user_screen(output);
+    }
+
+    /// The heading a command's output goes under, written when it starts rather than when it
+    /// ends: the output arrives line by line and has to have somewhere to land.
+    fn start_user_screen(&mut self, line: &str) {
         if !self.user_screen.is_empty() {
             self.user_screen.push(String::new());
         }
         self.user_screen.push(format!("$ {line}"));
+    }
+
+    /// More output under the heading that is already there. A `\r` with no newline after it
+    /// is what a progress bar writes to stay on one line; the screen keeps lines, so the
+    /// carriage return is what it means — what follows replaces what came before it.
+    fn append_user_screen(&mut self, output: &str) {
+        const MAX_LINES: usize = 10_000;
         for row in output.lines() {
+            let row = match row.rsplit('\r').next() {
+                Some(last) => last,
+                None => row,
+            };
             self.user_screen.push(row.to_string());
         }
         if self.user_screen.len() > MAX_LINES {
@@ -14233,6 +14293,124 @@ mod tests {
         press(&mut app, "Ctrl+O");
         assert!(!app.panels_off);
         assert!(app.mode.is_normal());
+    }
+
+    /// The id of the shell request the last `Enter` queued.
+    fn shell_id(app: &App) -> u64 {
+        match app.requests.iter().find_map(|r| match r {
+            Request::Shell { id, .. } => Some(*id),
+            _ => None,
+        }) {
+            Some(id) => id,
+            None => panic!("no shell request"),
+        }
+    }
+
+    #[test]
+    fn what_a_command_prints_arrives_while_it_runs_and_the_panels_come_back_after_it() {
+        let mut app = app();
+        typed(&mut app, "make");
+        press(&mut app, "Enter");
+        let id = shell_id(&app);
+        // The heading is up before a single line has been printed: the output has to have
+        // somewhere to land, and the panels are off so it can be watched arriving.
+        assert_eq!(app.user_screen.last().map(String::as_str), Some("$ make"));
+        assert!(app.panels_off, "the screen shows the command while it runs");
+        assert!(app.mode.is_normal(), "everything else stays live");
+
+        app.handle_event(Event::ShellOutput {
+            id,
+            text: "cc -c main.c\ncc -c util.c\n".into(),
+        });
+        assert_eq!(
+            app.user_screen.last().map(String::as_str),
+            Some("cc -c util.c")
+        );
+        app.handle_event(Event::ShellOutput {
+            id,
+            text: "cc -o prog\n".into(),
+        });
+        assert_eq!(
+            app.user_screen.last().map(String::as_str),
+            Some("cc -o prog")
+        );
+        // The window counts back from the end, so nothing had to be scrolled to see them.
+        assert_eq!(app.user_scroll, 0);
+
+        app.handle_event(Event::ShellDone {
+            id,
+            line: "make".into(),
+            output: String::new(),
+            status: Some(0),
+        });
+        // The panels come back by themselves, and what was printed is still there under
+        // `Ctrl+O` — and only once, which is the point of the output not being sent twice.
+        assert!(!app.panels_off);
+        assert_eq!(
+            app.user_screen
+                .iter()
+                .filter(|l| *l == "cc -o prog")
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn the_screen_the_command_took_is_given_back_the_moment_the_key_asks_for_it() {
+        let mut app = app();
+        typed(&mut app, "make");
+        press(&mut app, "Enter");
+        let id = shell_id(&app);
+        assert!(app.panels_off);
+        // `Ctrl+O` while it runs: the panels come back and the command carries on, its
+        // output still landing on the screen behind them.
+        press(&mut app, "Ctrl+O");
+        assert!(!app.panels_off);
+        app.handle_event(Event::ShellOutput {
+            id,
+            text: "still going\n".into(),
+        });
+        assert!(app.user_screen.iter().any(|l| l == "still going"));
+        // And the end of the command does not take the screen away a second time.
+        app.handle_event(Event::ShellDone {
+            id,
+            line: "make".into(),
+            output: String::new(),
+            status: Some(0),
+        });
+        assert!(!app.panels_off);
+    }
+
+    #[test]
+    fn the_panels_stay_when_the_setting_says_so_and_the_output_still_arrives_as_it_is_printed() {
+        let mut app = app();
+        app.cfg.ui.command_screen = false;
+        typed(&mut app, "make");
+        press(&mut app, "Enter");
+        let id = shell_id(&app);
+        assert!(!app.panels_off, "the panels are left alone");
+        app.handle_event(Event::ShellOutput {
+            id,
+            text: "cc -c main.c\n".into(),
+        });
+        // The line is on the screen `Ctrl+O` opens as soon as it is printed, which is the
+        // half of this that is not about which screen is in front.
+        assert!(app.user_screen.iter().any(|l| l == "cc -c main.c"));
+    }
+
+    #[test]
+    fn a_line_rewritten_in_place_is_kept_as_what_it_ended_up_saying() {
+        let mut app = app();
+        typed(&mut app, "copy");
+        press(&mut app, "Enter");
+        let id = shell_id(&app);
+        // A progress bar writes its line over and over with a carriage return between the
+        // tries. The screen keeps lines, so what is kept is the last of them.
+        app.handle_event(Event::ShellOutput {
+            id,
+            text: "10%\r50%\r100%\n".into(),
+        });
+        assert_eq!(app.user_screen.last().map(String::as_str), Some("100%"));
     }
 
     #[test]

@@ -455,6 +455,7 @@ opt-keymap = Раскладка клавиш
 opt-clock = Часы в углу
 opt-mouse = Поддержка мыши
 opt-clipboard = Буфер обмена через терминал (OSC 52)
+opt-command-screen = Показывать вывод команды, пока она выполняется
 opt-menu-always = Всегда показывать строку меню
 opt-confirm-delete = Удаление
 opt-confirm-overwrite = Перезапись

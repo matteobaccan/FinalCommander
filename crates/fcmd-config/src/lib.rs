@@ -322,6 +322,11 @@ pub struct UiCfg {
     pub markdown: bool,
     /// The command line under the panels. Without it, typing goes to quick search.
     pub command_line: bool,
+    /// Show what a command prints while it runs, full screen, the way the console does in
+    /// FAR — and go back to the panels when it ends. `Esc` leaves early and the command keeps
+    /// running. Off means the output only goes to the screen `Ctrl+O` opens, which is still
+    /// filled line by line rather than all at the end.
+    pub command_screen: bool,
     /// Let the mouse move the cursor, press the key bar and open the menus.
     ///
     /// Off by default, and that is a decision rather than an oversight: while a terminal is
@@ -359,6 +364,7 @@ impl Default for UiCfg {
             markdown: true,
             table: true,
             command_line: true,
+            command_screen: true,
             mouse: false,
             command_history: 512,
             file_history: 512,
@@ -983,6 +989,7 @@ impl Config {
             "ui.table" => self.ui.table = parse_bool(value)?,
             "ui.mouse" => self.ui.mouse = parse_bool(value)?,
             "ui.clipboard" => self.ui.clipboard = parse_bool(value)?,
+            "ui.command_screen" => self.ui.command_screen = parse_bool(value)?,
             "editor.tab_width" => {
                 self.editor.tab_width = parse_usize(value)?.clamp(1, 16);
             }

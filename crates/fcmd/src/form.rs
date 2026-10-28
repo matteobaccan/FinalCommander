@@ -360,6 +360,11 @@ impl Form {
                 ),
                 Field::toggle("ui.mouse", t("opt-mouse"), cfg.ui.mouse),
                 Field::toggle("ui.clipboard", t("opt-clipboard"), cfg.ui.clipboard),
+                Field::toggle(
+                    "ui.command_screen",
+                    t("opt-command-screen"),
+                    cfg.ui.command_screen,
+                ),
                 Field::Separator,
                 Field::Dim(t("opt-clock")),
                 Field::Dim(t("opt-menu-always")),
