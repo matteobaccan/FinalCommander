@@ -457,6 +457,7 @@ opt-markdown = Markdown laid out to be read
 opt-keymap = Keymap
 opt-clock = Clock in the corner
 opt-mouse = Mouse support
+opt-clipboard = Let the terminal carry the clipboard (OSC 52)
 opt-menu-always = Always show the menu bar
 opt-confirm-delete = Delete
 opt-confirm-overwrite = Overwrite
@@ -516,6 +517,23 @@ opt-editor-whitespace = Show spaces and tabs
 opt-editor-cursor-after = The cursor lands after the text a search found
 opt-editor-beyond-eol = The cursor may go past the end of a line
 editor-not-a-character = that key has no character to insert
+paste-one-line =
+    { $count ->
+        [one] pasted the first line only · one more line left out
+       *[other] pasted the first line only · { $count } more lines left out
+    }
+clip-names =
+    { $count ->
+        [one] one name on the clipboard
+       *[other] { $count } names on the clipboard
+    }
+clip-paths =
+    { $count ->
+        [one] one path on the clipboard
+       *[other] { $count } paths on the clipboard
+    }
+clip-line = the command line is on the clipboard
+clip-off = the clipboard is turned off — `ui.clipboard` in the settings
 editor-no-block = nothing is selected
 editor-tabs-expanded = tabs were expanded on { $lines } lines — the save will write that
 site-protocol = Protocol
@@ -580,6 +598,7 @@ viewer-no-back = nothing to go back to
 # ------------------------------------------------- find files (SPEC 06 §1)
 find-title = Find file
 find-mask = File mask or masks
+find-size = Size (100M, 1M-1G, -4K)
 find-text = Containing text
 find-case = Case sensitive
 find-words = Whole words only
@@ -602,6 +621,7 @@ find-hint = ↑↓ choose · Enter go to · F3 view · F5 panelise · Esc stop
 find-hint-done = ↑↓ choose · Enter go to · F3 view · F5 panelise · Esc close
 find-panelised = { $count } results in the panel
 find-needs-mask = a mask is needed: `*` means every file
+find-bad-size = `{ $text }` is not a size — { $error }
 
 # ------------------------------------------------- replace across files
 replace-title = Replace in files

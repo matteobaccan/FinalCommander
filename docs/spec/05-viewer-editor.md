@@ -299,8 +299,7 @@ that offers them), go to line or `line:col`, bookmarks 0–9, smart home, and ho
 characters counted in display columns.
 **Still to come**: the rope (today's buffer is a `Vec<String>` of lines — enough for the
 256 MiB open limit and far simpler to keep correct; it will be swapped for a rope when
-streaming edits of larger files land), typing-burst undo grouping, the OS clipboard (the
-clipboard is internal to the editor for now), persistent-block mode, multi-caret, regex and
+streaming edits of larger files land), typing-burst undo grouping, persistent-block mode, multi-caret, regex and
 capture-group replace, `.editorconfig`, sort/unique/reverse on lines,
 macros, the buffer list (§2.3) and the external editor (§2.4).
 
@@ -324,7 +323,7 @@ macros, the buffer list (§2.3) and the external editor (§2.4).
 | Blocks | stream blocks (`Shift+arrows`) **and column blocks** (`Alt+Shift+arrows`) with the FAR semantics: typing replaces the block optionally, `Alt+I`/`Alt+U` indent/outdent, persistent-block mode copies/moves a block to the cursor (`Ctrl+Shift+P`/`Ctrl+Shift+M`) |
 | Multi-caret | derived from a column block or `Ctrl+D`-style "add next occurrence" (M3) |
 | Undo | grouped by typing burst (300 ms) and by command; configurable depth; redo; undo survives save |
-| Clipboard | OS clipboard via `fcmd-platform` (X11/Wayland/macOS/Windows, OSC 52 fallback over SSH); internal ring of the last 10 blocks; append-to-clipboard (`Ctrl+Shift+C`) |
+| Clipboard | the system clipboard through the terminal (`OSC 52`, SPEC 06 §11) — a block copied or cut goes on it as well as on the editor's own, which is what `Ctrl+V` pastes from, because what the terminal holds cannot be read back; still owed: a ring of the last 10 blocks |
 | Indentation | detect per file (spaces vs tabs, width), auto-indent, smart home, trailing-space trim on save (opt-in), `.editorconfig` support |
 | Lines | duplicate, delete, move up/down, join, sort selected lines, unique, reverse, number |
 | Search/replace | shared engine with the viewer, plus **replace with capture groups**, replace-in-selection, count, and "preserve style" (match the case/separator convention of the replaced token — FAR's feature, re-implemented from the described behaviour) |

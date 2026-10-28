@@ -71,9 +71,9 @@ console in it, which is the one thing a terminal program cannot borrow from a te
 none of them is, is the same program on all three systems, in one file, with nothing to
 install — and that is the hole this fills.
 
-> **Status: 0.4.0, open to testers.** Everything described above works today. What is *not*
-> there says so rather than failing quietly: the OS clipboard, image previews and plugins
-> loaded from disk are not here yet. [`CHANGELOG.md`](CHANGELOG.md) is what has landed and
+> **Status: 0.5.0, open to testers.** Everything described above works today. What is *not*
+> there says so rather than failing quietly: image previews and plugins loaded from disk are
+> not here yet. [`CHANGELOG.md`](CHANGELOG.md) is what has landed and
 > [`docs/BACKLOG.md`](docs/BACKLOG.md) is what has not, item by item, with the open questions
 > marked.
 

@@ -449,6 +449,7 @@ opt-markdown = Markdown mis en page pour la lecture
 opt-keymap = Carte des touches
 opt-clock = Horloge dans le coin
 opt-mouse = Prise en charge de la souris
+opt-clipboard = Presse-papiers via le terminal (OSC 52)
 opt-menu-always = Toujours afficher la barre de menus
 opt-confirm-delete = Suppression
 opt-confirm-overwrite = Écrasement
@@ -508,6 +509,23 @@ opt-editor-whitespace = Montrer espaces et tabulations
 opt-editor-cursor-after = Le curseur se place après le texte trouvé
 opt-editor-beyond-eol = Le curseur peut dépasser la fin de la ligne
 editor-not-a-character = cette touche n’a aucun caractère à insérer
+paste-one-line =
+    { $count ->
+        [one] seule la première ligne a été collée · une ligne de plus laissée de côté
+       *[other] seule la première ligne a été collée · { $count } lignes de plus laissées de côté
+    }
+clip-names =
+    { $count ->
+        [one] un nom dans le presse-papiers
+       *[other] { $count } noms dans le presse-papiers
+    }
+clip-paths =
+    { $count ->
+        [one] un chemin dans le presse-papiers
+       *[other] { $count } chemins dans le presse-papiers
+    }
+clip-line = la ligne de commande est dans le presse-papiers
+clip-off = le presse-papiers est désactivé — `ui.clipboard` dans les réglages
 editor-no-block = rien n’est sélectionné
 editor-tabs-expanded = tabulations converties sur { $lines } lignes — l’enregistrement l’écrira
 site-protocol = Protocole
@@ -572,6 +590,7 @@ viewer-no-back = rien où revenir
 # ------------------------------------------------- recherche de fichiers (SPEC 06 §1)
 find-title = Chercher un fichier
 find-mask = Masque ou masques
+find-size = Taille (100M, 1M-1G, -4K)
 find-text = Contenant le texte
 find-case = Respecter la casse
 find-words = Mots entiers uniquement
@@ -594,6 +613,7 @@ find-hint = ↑↓ choisir · Entrée aller · F3 voir · F5 dans le panneau · 
 find-hint-done = ↑↓ choisir · Entrée aller · F3 voir · F5 dans le panneau · Échap fermer
 find-panelised = { $count } résultats dans le panneau
 find-needs-mask = un masque est nécessaire : `*` veut dire tous les fichiers
+find-bad-size = `{ $text }` n’est pas une taille — { $error }
 
 # ------------------------------------------------- replace across files
 replace-title = Remplacer dans les fichiers

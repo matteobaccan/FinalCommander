@@ -45,6 +45,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 1.23 | ~~Colour-by-file-type rules (mask, attrs, size, age) — "highlight groups"~~ | FAR/TC | **shipped**: `[[highlight]]` groups in `fcmd.toml`, the first match deciding, with FAR's built-in six after them. The dialog that edits them is still owed |
 | 1.24 | ~~Panel history (back/forward), directory history, folder shortcuts/bookmarks (0..9 + named), hotlist~~ | FAR/TC/MC | **shipped** |
 | 1.25 | ~~Auto-refresh via filesystem watch (inotify/FSEvents/ReadDirectoryChangesW), manual `Ctrl+R`~~ | TC/MTN2 | **shipped** |
+| 1.26 | ~~Names and full paths to the system clipboard~~ | FAR (`Ctrl+Ins`, `Alt+Shift+Ins`) | **Shipped: 0.6.0** — through the terminal with `OSC 52` (SPEC 06 §11), so it also works over `ssh`; `ui.clipboard` turns it off. The *files themselves* on the clipboard, for another application to paste, is window-system work and stays in the backlog |
 
 ## 2. Navigation & selection
 
@@ -164,7 +165,7 @@ a binary into something readable rather than only into instructions.
 | # | Feature | Origin | M |
 | --- | --- | --- | --- |
 | 6.1 | Full-screen editor, 256 MiB open limit, read-only files opened and marked | FAR | M1 (multiple open files M2) |
-| 6.2 | Block operations: stream blocks and **column/vertical blocks**, copy/cut/paste (a column paste pads short lines), indent/outdent | FAR | M1 (block-to-cursor, append-to-clipboard, OS clipboard M2) |
+| 6.2 | Block operations: stream blocks and **column/vertical blocks**, copy/cut/paste (a column paste pads short lines), indent/outdent | FAR | M1; block-to-cursor and append-to-clipboard shipped; the system clipboard shipped in 0.6.0 — a copied or cut block goes on it as well as on the editor's own |
 | 6.2b | **Hex mode** (`F4` on a binary, `Ins` for insert/overwrite): byte editing with a patch list, the editor's own undo, and the same temp-file-and-rename save; in-place writing only when explicitly chosen | NEW | M2 |
 | 6.2c | **Byte blocks** (`F3` marks, `F12` operates): write out, read in, fill, XOR with a key, copy or move from elsewhere, insert, delete — large ones through the job engine, each showing the resulting length first | NEW | M2 |
 | 6.2d | **Inline assembler** (`F9`): one instruction, showing the bytes it produces, the instruction it replaces and whether the length changed, written into the patch list rather than to disk | NEW | M3 |
@@ -185,7 +186,7 @@ a binary into something readable rather than only into instructions.
 
 | # | Feature | Origin | M |
 | --- | --- | --- | --- |
-| 7.1 | Find files: mask, content (text/regex/hex), size/date/attr filters, archives included, encoding list, results panel, panelize results, "find folder" | FAR/TC | M2 |
+| 7.1 | Find files: mask, content (text/regex/hex), size/date/attr filters, archives included, encoding list, results panel, panelize results, "find folder" | FAR/TC | **Shipped: 0.0.4, size condition 0.6.0** — `Alt+F7`: masks in the §5 grammar, text or a hex pattern, case, whole words, files that do *not* contain it, a size condition (`100M`, `1M-1G`, `-4K`), five scopes, symbolic links, folders in the results; results stream while the walk runs and `F5` panelises them. Dates and attributes in the dialog, archives, encodings, saving a search and "find folder": M3 |
 | 7.2 | Grep-like content search with result navigation and jump-to-match in the editor | NEW | M2 |
 | 7.3 | Disk usage / occupied space view (per-dir sizes, sortable, graphical bars) | KRU/TC | M2 |
 | 7.4 | User menu (`F2`) with user-defined entries, submenus, hotkeys, per-directory menus | FAR/MC | **Shipped: 0.4.0** — `fcmd-menu.toml` beside the settings and `.fcmd-menu.toml` in a directory, merged above it; a row is a label, a key and command lines that run in order and stop at the first failure, with the §5b substitutions and `{ask:…}`; `when` hides a row the directory has no use for. Reading `FarMenu.ini` as it stands, separators, an editor for the entries and `Shift+F10`: M3 |

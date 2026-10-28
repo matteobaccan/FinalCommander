@@ -449,6 +449,7 @@ opt-markdown = Markdown lesefertig gesetzt
 opt-keymap = Tastenbelegung
 opt-clock = Uhr in der Ecke
 opt-mouse = Mausunterstützung
+opt-clipboard = Ablage über das Terminal (OSC 52)
 opt-menu-always = Menüleiste immer anzeigen
 opt-confirm-delete = Löschen
 opt-confirm-overwrite = Überschreiben
@@ -508,6 +509,23 @@ opt-editor-whitespace = Leerzeichen und Tabulatoren zeigen
 opt-editor-cursor-after = Der Cursor landet hinter dem Gefundenen
 opt-editor-beyond-eol = Der Cursor darf über das Zeilenende hinaus
 editor-not-a-character = diese Taste hat kein Zeichen zum Einfügen
+paste-one-line =
+    { $count ->
+        [one] nur die erste Zeile eingefügt · eine weitere Zeile weggelassen
+       *[other] nur die erste Zeile eingefügt · { $count } weitere Zeilen weggelassen
+    }
+clip-names =
+    { $count ->
+        [one] ein Name in der Ablage
+       *[other] { $count } Namen in der Ablage
+    }
+clip-paths =
+    { $count ->
+        [one] ein Pfad in der Ablage
+       *[other] { $count } Pfade in der Ablage
+    }
+clip-line = die Befehlszeile liegt in der Ablage
+clip-off = die Ablage ist abgeschaltet — `ui.clipboard` in den Einstellungen
 editor-no-block = es ist nichts ausgewählt
 editor-tabs-expanded = Tabulatoren in { $lines } Zeilen umgewandelt — das Speichern schreibt es
 site-protocol = Protokoll
@@ -572,6 +590,7 @@ viewer-no-back = es gibt kein Zurück
 # ------------------------------------------------- Dateisuche (SPEC 06 §1)
 find-title = Datei suchen
 find-mask = Dateimaske oder Masken
+find-size = Größe (100M, 1M-1G, -4K)
 find-text = Enthält den Text
 find-case = Groß-/Kleinschreibung
 find-words = Nur ganze Wörter
@@ -594,6 +613,7 @@ find-hint = ↑↓ wählen · Enter hingehen · F3 ansehen · F5 ins Panel · Es
 find-hint-done = ↑↓ wählen · Enter hingehen · F3 ansehen · F5 ins Panel · Esc schließen
 find-panelised = { $count } Ergebnisse im Panel
 find-needs-mask = eine Maske wird gebraucht: `*` heißt jede Datei
+find-bad-size = `{ $text }` ist keine Größe — { $error }
 
 # ------------------------------------------------- replace across files
 replace-title = In Dateien ersetzen

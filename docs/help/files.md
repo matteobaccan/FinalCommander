@@ -99,9 +99,14 @@ Both folders have to be on this machine for now.
 
 # Finding things
 
-`Alt+F7` searches for files: a mask, text inside them, and where to look. The results are a
-list you can view, edit or jump to — and `F5` turns the whole result into a panel, so anything
-that works on a directory works on a search.
+`Alt+F7` searches for files: a mask, a size, text inside them, and where to look. The results
+are a list you can view, edit or jump to — and `F5` turns the whole result into a panel, so
+anything that works on a directory works on a search.
+
+The size row is what finds the files worth deleting when a disk fills up: `100M` means "from a
+hundred megabytes up", `1M-1G` a range, `-4K` everything smaller than four kilobytes. Leave it
+empty for any size. `K`, `M`, `G` and `T` are powers of 1024, as everywhere else in the
+program.
 
 Replacing across files is the same dialog with a replacement, and it counts the files and the
 matches before it writes anything. The count comes from the same engine that then does the

@@ -449,6 +449,7 @@ opt-markdown = Markdown impaginato per la lettura
 opt-keymap = Mappa dei tasti
 opt-clock = Orologio nell'angolo
 opt-mouse = Supporto del mouse
+opt-clipboard = Appunti attraverso il terminale (OSC 52)
 opt-menu-always = Mostra sempre la barra dei menu
 opt-confirm-delete = Eliminazione
 opt-confirm-overwrite = Sovrascrittura
@@ -508,6 +509,23 @@ opt-editor-whitespace = Mostra spazi e tabulazioni
 opt-editor-cursor-after = Il cursore si ferma dopo il testo trovato
 opt-editor-beyond-eol = Il cursore può andare oltre la fine della riga
 editor-not-a-character = quel tasto non ha un carattere da inserire
+paste-one-line =
+    { $count ->
+        [one] incollata solo la prima riga · una riga in più non inserita
+       *[other] incollata solo la prima riga · { $count } righe in più non inserite
+    }
+clip-names =
+    { $count ->
+        [one] un nome negli appunti
+       *[other] { $count } nomi negli appunti
+    }
+clip-paths =
+    { $count ->
+        [one] un percorso negli appunti
+       *[other] { $count } percorsi negli appunti
+    }
+clip-line = la riga di comando è negli appunti
+clip-off = gli appunti sono disattivati — `ui.clipboard` nelle impostazioni
 editor-no-block = non c'è niente di selezionato
 editor-tabs-expanded = tabulazioni espanse su { $lines } righe — il salvataggio le scriverà
 site-protocol = Protocollo
@@ -572,6 +590,7 @@ viewer-no-back = non c'è niente a cui tornare
 # ------------------------------------------------- ricerca file (SPEC 06 §1)
 find-title = Cerca file
 find-mask = Maschera o maschere
+find-size = Dimensione (100M, 1M-1G, -4K)
 find-text = Che contengono il testo
 find-case = Distingui maiuscole
 find-words = Solo parole intere
@@ -594,6 +613,7 @@ find-hint = ↑↓ scegli · Invio vai · F3 visualizza · F5 nel pannello · Es
 find-hint-done = ↑↓ scegli · Invio vai · F3 visualizza · F5 nel pannello · Esc chiudi
 find-panelised = { $count } risultati nel pannello
 find-needs-mask = serve una maschera: `*` vuol dire tutti i file
+find-bad-size = `{ $text }` non è una dimensione — { $error }
 
 # ------------------------------------------------- replace across files
 replace-title = Sostituisci nei file

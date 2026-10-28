@@ -331,6 +331,13 @@ pub struct UiCfg {
     pub mouse: bool,
     /// How many command lines to keep between sessions.
     pub command_history: usize,
+    /// Ask the terminal to put what is copied on the system clipboard (`OSC 52`).
+    ///
+    /// On by default because it is the one way to reach the clipboard that also works over
+    /// `ssh`, and a terminal that does not know the sequence ignores it. It is a setting
+    /// because a terminal that does know it is being asked by a program running on another
+    /// machine, which somebody may not want.
+    pub clipboard: bool,
 }
 
 impl Default for UiCfg {
@@ -346,6 +353,7 @@ impl Default for UiCfg {
             command_line: true,
             mouse: false,
             command_history: 512,
+            clipboard: true,
         }
     }
 }
@@ -957,6 +965,8 @@ impl Config {
             "ui.status_bar" => self.ui.status_bar = parse_bool(value)?,
             "ui.syntax" => self.ui.syntax = parse_bool(value)?,
             "ui.markdown" => self.ui.markdown = parse_bool(value)?,
+            "ui.mouse" => self.ui.mouse = parse_bool(value)?,
+            "ui.clipboard" => self.ui.clipboard = parse_bool(value)?,
             "editor.tab_width" => {
                 self.editor.tab_width = parse_usize(value)?.clamp(1, 16);
             }

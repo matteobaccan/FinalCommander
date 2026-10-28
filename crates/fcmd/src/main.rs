@@ -130,7 +130,7 @@ struct Cli {
 /// This is the one place that turns what the dialog asked for into what the engine takes: the
 /// dialog knows nothing about walks, and the engine knows nothing about panels.
 fn run_find(id: u64, spec: app::FindSpec, cancel: CancelToken, tx: mpsc::Sender<Event>) {
-    use fcmd_core::filter::{Filter, MaskSet};
+    use fcmd_core::filter::{Filter, MaskSet, SizeRange};
     use fcmd_find::{Content, Needle};
 
     let started = std::time::Instant::now();
@@ -152,6 +152,12 @@ fn run_find(id: u64, spec: app::FindSpec, cancel: CancelToken, tx: mpsc::Sender<
     };
     let mut filter = Filter::named("find");
     filter.masks = Some(masks);
+    if !spec.size.trim().is_empty() {
+        match SizeRange::parse(&spec.size) {
+            Ok(range) => filter.size = Some(range),
+            Err(e) => return fail(e.to_string()),
+        }
+    }
 
     let content = if spec.text.is_empty() {
         None
@@ -1038,6 +1044,11 @@ fn interactive(mut app: App) -> Result<()> {
                 // it for a font is one write and no waiting.
                 Request::Font { by } => {
                     let _ = term.font_step(by);
+                }
+                Request::Clipboard { text } => {
+                    // Nothing to report: the terminal does not answer, and a terminal that
+                    // does not understand the request ignores it.
+                    let _ = term.set_clipboard(&text);
                 }
                 Request::Mouse { on } => {
                     // A terminal that was never asked to report the mouse is not asked to
@@ -3078,7 +3089,7 @@ timeout = 10
                     }
                 }
                 // No terminal in a test: what the request carries is checked where it is made.
-                Request::Font { .. } | Request::Mouse { .. } => {}
+                Request::Font { .. } | Request::Mouse { .. } | Request::Clipboard { .. } => {}
                 Request::SyncPlan {
                     id,
                     left,

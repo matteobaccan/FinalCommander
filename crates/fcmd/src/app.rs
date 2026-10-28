@@ -74,6 +74,11 @@ pub enum Request {
     Mouse {
         on: bool,
     },
+    /// Ask the terminal to put text on the system clipboard. The terminal does the copying,
+    /// which is why it travels as a request and not as a call (SPEC 06 §11).
+    Clipboard {
+        text: String,
+    },
     /// Decide about every pair in two trees. Nothing is written: the answer is a table.
     SyncPlan {
         id: u64,
@@ -767,6 +772,10 @@ pub struct FindSpec {
     pub hex: bool,
     /// Files that do *not* contain it, which FAR offers and is surprisingly useful.
     pub not_containing: bool,
+    /// A size condition in the grammar of `fcmd-core`'s filter: `100M` is "from a hundred
+    /// megabytes up", `1M-1G` a range, `-4K` an upper bound. Empty means any size. This is
+    /// what finds the files worth deleting when a disk fills up.
+    pub size: String,
     pub scope: FindScope,
     pub follow_links: bool,
     /// Directories in the results, not only files.
@@ -786,6 +795,7 @@ impl Default for FindSpec {
             whole_words: false,
             hex: false,
             not_containing: false,
+            size: String::new(),
             scope: FindScope::Tree,
             follow_links: false,
             directories: false,
@@ -2144,16 +2154,65 @@ impl App {
         }
     }
 
+    /// Text pasted into the terminal, which arrives whole rather than as keystrokes because
+    /// the terminal is asked for bracketed paste (SPEC 00 §6).
+    ///
+    /// A paste is deliberately *not* treated as typing. A command copied from a page comes
+    /// with its newline still on the end, and letting that newline be `Enter` would run it
+    /// before it could be read; a path copied from a browser's address bar arrives the same
+    /// way. So everything that is one line — the command line, a dialog row, a prompt — takes
+    /// the first line and says how many more there were, and only the places that are really
+    /// many lines, the editor and a real terminal, take the whole of it.
+    fn paste(&mut self, text: &str) {
+        // Windows clipboards carry CRLF and some terminals pass the CR through; a stray
+        // carriage return in a file or on the command line is never what was meant.
+        let text = text.replace("\r\n", "\n").replace('\r', "\n");
+        let dropped = match &mut self.mode {
+            Mode::Prompt(p) => {
+                let (first, dropped) = first_line(&text);
+                p.text.push_str(first);
+                let whole = p.text.clone();
+                self.prompt_changed(&whole);
+                dropped
+            }
+            Mode::Form(form) => form.insert_str(&text),
+            Mode::Editor(editor) => {
+                let outcome = editor.insert_text(&text);
+                if let Err(e) = outcome {
+                    self.set_error(e.to_string());
+                }
+                0
+            }
+            // A terminal is a terminal: the shell in it does with a paste whatever it does
+            // with one, newlines and all, and `Enter` there is a carriage return.
+            Mode::Term(term) => {
+                let bytes = text.replace('\n', "\r").into_bytes();
+                if let Err(e) = term.send(&bytes) {
+                    self.set_error(e.to_string());
+                }
+                0
+            }
+            // On the panels the paste belongs to the command line, which is where text goes
+            // when nothing else is open.
+            Mode::Normal if self.cfg.ui.command_line => {
+                let (first, dropped) = first_line(&text);
+                self.cmd.insert_str(first);
+                dropped
+            }
+            _ => 0,
+        };
+        if dropped > 0 {
+            let msg = self
+                .i18n
+                .t_args("paste-one-line", &[("count", (dropped as i64).into())]);
+            self.set_status(msg);
+        }
+    }
+
     pub fn handle_input(&mut self, input: Input) {
         match input {
             Input::Key(key) => self.handle_key(key),
-            Input::Paste(text) => {
-                if let Mode::Prompt(p) = &mut self.mode {
-                    p.text.push_str(text.trim());
-                    let text = p.text.clone();
-                    self.prompt_changed(&text);
-                }
-            }
+            Input::Paste(text) => self.paste(&text),
             Input::Mouse(mouse) => self.handle_mouse(mouse),
             Input::Mods(mods) => self.held = mods,
             // A terminal's program has to be told, or a full-screen one stays the shape of
@@ -3643,6 +3702,57 @@ impl App {
             Some(e) if e.is_selectable() => vec![panel.path_of(e)],
             _ => Vec::new(),
         }
+    }
+
+    /// The names, or the whole paths, of what is selected onto the system clipboard — one per
+    /// line, which is the shape every other program expects a list of files in.
+    fn clip_sources(&mut self, whole_path: bool) {
+        let sources = self.job_sources();
+        if sources.is_empty() {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        }
+        let text: String = sources
+            .iter()
+            .map(|p| {
+                if whole_path {
+                    p.to_string()
+                } else {
+                    p.display_name()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        if !self.copy_to_clipboard(&text) {
+            return;
+        }
+        let id = if whole_path {
+            "clip-paths"
+        } else {
+            "clip-names"
+        };
+        let msg = self
+            .i18n
+            .t_args(id, &[("count", (sources.len() as i64).into())]);
+        self.set_status(msg);
+    }
+
+    /// Put text on the system clipboard, through the terminal. Returns whether the request
+    /// went out, so that the caller only says what it copied when something was copied.
+    fn copy_to_clipboard(&mut self, text: &str) -> bool {
+        if text.is_empty() {
+            return false;
+        }
+        if !self.cfg.ui.clipboard {
+            let m = self.i18n.t("clip-off");
+            self.set_error(m);
+            return false;
+        }
+        self.requests.push(Request::Clipboard {
+            text: text.to_string(),
+        });
+        true
     }
 
     /// Only the item under the cursor, which is what `Shift+F5`, `Shift+F6` and `Shift+F8`
@@ -5648,6 +5758,20 @@ impl App {
             Command::AppScreenNext => self.cycle_screen(false),
             Command::AppScreenPrev => self.cycle_screen(true),
             Command::CmdHistory => self.open_pick(PickKind::CommandHistory, self.active),
+            Command::FileClipNames => self.clip_sources(false),
+            Command::FileClipPaths => self.clip_sources(true),
+            Command::CmdClip => {
+                if self.cmd.is_empty() {
+                    let m = self.i18n.t("msg-nothing-to-do");
+                    self.set_status(m);
+                    return;
+                }
+                let line = self.cmd.text.clone();
+                if self.copy_to_clipboard(&line) {
+                    let m = self.i18n.t("clip-line");
+                    self.set_status(m);
+                }
+            }
             Command::CmdInsertName => self.insert_into_line(false, false),
             Command::CmdInsertNameOther => self.insert_into_line(false, true),
             Command::CmdInsertPath => self.insert_into_line(true, false),
@@ -6203,6 +6327,13 @@ impl App {
             }
         }
         match key.code {
+            // The line owns `Ctrl+Ins` while it has something on it — the panel's copy of the
+            // names is what the key means on an empty line — because the text in front of
+            // the cursor is what somebody looking at that line wants to keep.
+            KeyCode::Insert if !empty && ctrl && !key.mods.contains(Mods::SHIFT) => {
+                self.run(Command::CmdClip);
+                true
+            }
             KeyCode::Enter if !empty && !ctrl => {
                 self.run_command_line();
                 true
@@ -7516,6 +7647,23 @@ impl App {
             self.mode = Mode::Form(Box::new(form.clone()));
             return;
         }
+        // Checked here rather than in the worker: a mistyped size should come back on the
+        // dialog that typed it, with the field still filled in, not as a failed search.
+        let size = form.text_value("find.size");
+        if !size.trim().is_empty() {
+            if let Err(e) = fcmd_core::filter::SizeRange::parse(&size) {
+                let msg = self.i18n.t_args(
+                    "find-bad-size",
+                    &[
+                        ("text", size.clone().into()),
+                        ("error", e.to_string().into()),
+                    ],
+                );
+                self.set_error(msg);
+                self.mode = Mode::Form(Box::new(form.clone()));
+                return;
+            }
+        }
         let scope = FindScope::parse(&form.choice_value("find.scope"));
         let mut spec = FindSpec {
             mask,
@@ -7524,6 +7672,7 @@ impl App {
             whole_words: form.toggle_value("find.words"),
             hex: form.toggle_value("find.hex"),
             not_containing: form.toggle_value("find.not"),
+            size,
             scope,
             follow_links: form.toggle_value("find.links"),
             directories: form.toggle_value("find.dirs"),
@@ -7605,6 +7754,10 @@ impl App {
     /// What the results frame says: the mask, the text, and where it looked.
     fn find_label(&self, spec: &FindSpec) -> String {
         let mut label = spec.mask.clone();
+        if !spec.size.trim().is_empty() {
+            label.push_str(" · ");
+            label.push_str(spec.size.trim());
+        }
         if !spec.text.is_empty() {
             label.push_str(" · ");
             label.push_str(&spec.text);
@@ -10258,6 +10411,24 @@ impl App {
                 ));
             }
         }
+        // A block copied or cut in the editor goes on the system clipboard as well as on the
+        // editor's own, which is what makes `Ctrl+Ins` there mean the same thing it means in
+        // every other program. The editor's clipboard stays the one `Ctrl+V` pastes from:
+        // what the terminal holds cannot be read back (SPEC 06 §11).
+        if matches!(
+            cmd,
+            Command::EditorCopy | Command::EditorCut | Command::EditorAppend
+        ) && self.cfg.ui.clipboard
+        {
+            let block = self
+                .mode
+                .editor()
+                .and_then(|e| e.clipboard.clone())
+                .map(|(text, _)| text);
+            if let Some(text) = block {
+                self.copy_to_clipboard(&text);
+            }
+        }
         if let Some(text) = message {
             self.set_status(text);
         }
@@ -11807,6 +11978,15 @@ fn help_group(id: &str) -> (usize, &'static str) {
     }
 }
 
+/// The first line of a paste, and how many lines of substance came after it, for the places
+/// that are one line long. Blank trailing lines are not counted: a copy that took the newline
+/// at the end of the line has not lost anything worth mentioning.
+fn first_line(text: &str) -> (&str, usize) {
+    let mut lines = text.lines();
+    let first = lines.next().unwrap_or_default();
+    (first, lines.filter(|l| !l.trim().is_empty()).count())
+}
+
 /// The character a key means when `Ctrl+Q` has armed the literal insert.
 ///
 /// `Ctrl+A` is byte 1 and so on up to `Ctrl+Z`; the five that follow in the ASCII table are
@@ -11892,6 +12072,27 @@ mod tests {
 
     fn press(app: &mut App, key: &str) {
         app.handle_input(Input::Key(key.parse().unwrap()));
+    }
+
+    /// Fill a text row of the open dialog, the way typing into it would, so a test can say
+    /// what it wants in the field without walking the caret there first.
+    fn set_text(app: &mut App, want: &str, text: &str) {
+        let Mode::Form(form) = &mut app.mode else {
+            panic!("no dialog")
+        };
+        for field in &mut form.fields {
+            if let crate::form::Field::Text {
+                key, value, caret, ..
+            } = field
+            {
+                if *key == want {
+                    *value = text.to_string();
+                    *caret = value.chars().count();
+                    return;
+                }
+            }
+        }
+        panic!("no field {want}");
     }
 
     // ── the filesystem watch (SPEC 02 §1.25) ───────────────────────────────────────────────
@@ -12910,6 +13111,42 @@ mod tests {
         assert_eq!(form.text_value("find.text"), "TODO");
         assert!(form.toggle_value("find.case"));
         assert_eq!(form.choice_value("find.scope"), "panel");
+    }
+
+    #[test]
+    fn a_size_condition_reaches_the_search_and_a_bad_one_keeps_the_dialog_open() {
+        let mut app = app();
+        app.run(Command::ToolFind);
+        set_text(&mut app, "find.size", "100M");
+        press(&mut app, "F10");
+
+        // The frame says what was asked for, so the results are read in context.
+        match &app.mode {
+            Mode::Find(view) => assert!(view.label.contains("100M"), "{}", view.label),
+            other => panic!("{other:?}"),
+        }
+        match app.take_requests().into_iter().next() {
+            Some(Request::Find { spec, .. }) => assert_eq!(spec.size, "100M"),
+            other => panic!("{other:?}"),
+        }
+
+        // And it comes back next time, like the rest of the dialog.
+        app.mode = Mode::Normal;
+        app.run(Command::ToolFind);
+        let Mode::Form(form) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(form.text_value("find.size"), "100M");
+
+        // A size that is not a size is refused on the spot, with the dialog still open and
+        // still holding what was typed.
+        set_text(&mut app, "find.size", "lots");
+        press(&mut app, "F10");
+        assert!(app.status_error, "{}", app.status);
+        let Mode::Form(form) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(form.text_value("find.size"), "lots");
     }
 
     #[test]
@@ -17205,6 +17442,108 @@ abcdefghij
         assert_eq!(app.panel().cursor, cursor_before, "the panel moved instead");
         assert_eq!(app.mode.editor().unwrap().buffer.line(0), "alpha!!");
         assert!(app.mode.editor().unwrap().buffer.modified());
+    }
+
+    // ── pasting, and the clipboard (SPEC 06 §11) ────────────────────────────────────────────
+
+    #[test]
+    fn a_paste_on_the_panels_goes_to_the_command_line_one_line_at_most() {
+        let mut app = app();
+        app.handle_input(Input::Paste("ls -la\n".to_string()));
+        assert_eq!(app.cmd.text, "ls -la");
+        // One line and a newline is a whole paste: nothing was left out, so nothing is said.
+        assert!(app.status.is_empty(), "{}", app.status);
+
+        // A second line would be a second command, and running it unread is exactly what
+        // must not happen: the first line goes in and the rest is reported, not run.
+        app.cmd.clear();
+        app.handle_input(Input::Paste("make\nmake install\n".to_string()));
+        assert_eq!(app.cmd.text, "make");
+        assert!(!app.status.is_empty(), "nothing said about the second line");
+
+        // A carriage return from a Windows clipboard is not a character to insert.
+        app.cmd.clear();
+        app.handle_input(Input::Paste("echo hi\r\n".to_string()));
+        assert_eq!(app.cmd.text, "echo hi");
+    }
+
+    #[test]
+    fn a_paste_in_the_editor_keeps_every_line_of_it() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("notes.txt"), b"alpha\n").unwrap();
+        let mut app = editing_app(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F4");
+        press(&mut app, "End");
+        app.handle_input(Input::Paste("\nbeta\ngamma".to_string()));
+        assert_eq!(
+            app.mode.editor().unwrap().buffer.lines(),
+            ["alpha", "beta", "gamma"]
+        );
+    }
+
+    #[test]
+    fn a_paste_fills_the_dialog_row_under_the_cursor() {
+        let mut app = app();
+        app.run(Command::ToolFind);
+        // The first row is the mask, and the dialog opens on it.
+        app.handle_input(Input::Paste("*.rs\n*.toml\n".to_string()));
+        let Mode::Form(form) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        // The row holds one line; the mask it opened on is still in front of it.
+        assert_eq!(form.text_value("find.mask"), "**.rs");
+        assert!(!app.status.is_empty(), "nothing said about the second line");
+    }
+
+    #[test]
+    fn the_names_or_the_paths_of_what_is_selected_go_to_the_clipboard() {
+        let mut app = app();
+        press(&mut app, "Down"); // docs
+        press(&mut app, "Ins"); // selected
+        press(&mut app, "Ins"); // and the next row selected too
+
+        app.run(Command::FileClipNames);
+        let names = match app.take_requests().into_iter().next() {
+            Some(Request::Clipboard { text }) => text,
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(names, "docs\na.txt");
+        assert!(!app.status.is_empty());
+
+        app.run(Command::FileClipPaths);
+        let paths = match app.take_requests().into_iter().next() {
+            Some(Request::Clipboard { text }) => text,
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(paths, "/home/mb/docs\n/home/mb/a.txt");
+
+        // With the setting off nothing goes out, and that is said rather than silent.
+        app.cfg.ui.clipboard = false;
+        app.run(Command::FileClipNames);
+        assert!(app.take_requests().is_empty());
+        assert!(app.status_error, "{}", app.status);
+    }
+
+    #[test]
+    fn ctrl_ins_copies_the_command_line_while_there_is_something_on_it() {
+        let mut app = app();
+        // Empty line: the key belongs to the panel, as every shared key does.
+        press(&mut app, "Down"); // off `..`, onto a row with a name
+        press(&mut app, "Ctrl+Ins");
+        match app.take_requests().into_iter().next() {
+            Some(Request::Clipboard { text }) => assert!(!text.contains('/'), "{text}"),
+            other => panic!("{other:?}"),
+        }
+
+        app.cmd.insert_str("grep -r needle .");
+        press(&mut app, "Ctrl+Ins");
+        match app.take_requests().into_iter().next() {
+            Some(Request::Clipboard { text }) => assert_eq!(text, "grep -r needle ."),
+            other => panic!("{other:?}"),
+        }
+        // And the line is untouched: copying is not typing.
+        assert_eq!(app.cmd.text, "grep -r needle .");
     }
 
     #[test]

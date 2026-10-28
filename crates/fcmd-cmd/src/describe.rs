@@ -151,6 +151,8 @@ impl Command {
             Command::FileApply => "run a command over each selected file",
             Command::FileLink => "make a link",
             Command::FileWipe => "delete, overwriting the bytes first",
+            Command::FileClipNames => "copy the names to the clipboard",
+            Command::FileClipPaths => "copy the full paths to the clipboard",
             Command::FileAttributes => "the permissions and the times of what is selected",
 
             Command::CmdRun => "run what is typed on the command line",
@@ -158,6 +160,7 @@ impl Command {
             Command::CmdHistoryPrev => "the command before this one",
             Command::CmdHistoryNext => "the command after this one",
             Command::CmdHistory => "the commands that have run",
+            Command::CmdClip => "copy the command line to the clipboard",
             Command::CmdInsertName => "put the name under the cursor on the command line",
             Command::CmdInsertNameOther => "the same, from the other panel",
             Command::CmdInsertPath => "put this panel's path on the command line",

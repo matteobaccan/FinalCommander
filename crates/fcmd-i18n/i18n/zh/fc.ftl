@@ -449,6 +449,7 @@ opt-markdown = 排版后的 Markdown
 opt-keymap = 键位表
 opt-clock = 角落显示时钟
 opt-mouse = 鼠标支持
+opt-clipboard = 通过终端使用剪贴板 (OSC 52)
 opt-menu-always = 始终显示菜单栏
 opt-confirm-delete = 删除
 opt-confirm-overwrite = 覆盖
@@ -508,6 +509,11 @@ opt-editor-whitespace = 显示空格与制表符
 opt-editor-cursor-after = 光标停在查找结果之后
 opt-editor-beyond-eol = 光标可以越过行尾
 editor-not-a-character = 该按键没有可插入的字符
+paste-one-line = 只粘贴了第一行 · 另有 { $count } 行未粘贴
+clip-names = { $count } 个名称已复制到剪贴板
+clip-paths = { $count } 个完整路径已复制到剪贴板
+clip-line = 命令行已复制到剪贴板
+clip-off = 剪贴板已关闭 — 设置中的 `ui.clipboard`
 editor-no-block = 没有选中任何内容
 editor-tabs-expanded = 已在 { $lines } 行展开制表符 — 保存时会写入
 site-protocol = 协议
@@ -572,6 +578,7 @@ viewer-no-back = 没有可返回的位置
 # ------------------------------------------------- 查找文件（SPEC 06 §1）
 find-title = 查找文件
 find-mask = 文件掩码
+find-size = 大小 (100M、1M-1G、-4K)
 find-text = 包含文本
 find-case = 区分大小写
 find-words = 仅整个单词
@@ -594,6 +601,7 @@ find-hint = ↑↓ 选择 · Enter 前往 · F3 查看 · F5 放入面板 · Esc
 find-hint-done = ↑↓ 选择 · Enter 前往 · F3 查看 · F5 放入面板 · Esc 关闭
 find-panelised = 面板中有 { $count } 个结果
 find-needs-mask = 需要一个掩码：`*` 表示所有文件
+find-bad-size = `{ $text }` 不是大小 — { $error }
 
 # ------------------------------------------------- replace across files
 replace-title = 在文件中替换

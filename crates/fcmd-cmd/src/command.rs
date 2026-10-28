@@ -192,6 +192,10 @@ pub enum Command {
     FileWipe,
     /// What a file is, rather than what is in it: the permissions and the times.
     FileAttributes,
+    /// `Ctrl+Ins`: the names of what is selected onto the system clipboard, one per line.
+    FileClipNames,
+    /// `Alt+Shift+Ins`: the same, with the whole path on each line.
+    FileClipPaths,
 
     /// Run what is on the command line (SPEC 06 §7).
     CmdRun,
@@ -201,6 +205,8 @@ pub enum Command {
     CmdHistoryNext,
     /// The command history as a list.
     CmdHistory,
+    /// `Ctrl+Ins` with something on the line: the line itself onto the system clipboard.
+    CmdClip,
     /// Insert the name under the cursor, or the panel's path, into the line.
     CmdInsertName,
     CmdInsertNameOther,
@@ -442,6 +448,8 @@ impl Command {
             Command::FileApply,
             Command::FileLink,
             Command::FileWipe,
+            Command::FileClipNames,
+            Command::FileClipPaths,
             Command::FileAttributes,
             Command::PanelToggle(Side::Active),
             Command::PanelToggleOther,
@@ -471,6 +479,7 @@ impl Command {
             Command::CmdHistoryPrev,
             Command::CmdHistoryNext,
             Command::CmdHistory,
+            Command::CmdClip,
             Command::CmdInsertName,
             Command::CmdInsertNameOther,
             Command::CmdInsertPath,
@@ -681,6 +690,8 @@ impl Command {
             Command::FileApply => "file.apply".into(),
             Command::FileLink => "file.link".into(),
             Command::FileWipe => "file.wipe".into(),
+            Command::FileClipNames => "file.clip.names".into(),
+            Command::FileClipPaths => "file.clip.paths".into(),
             Command::FileAttributes => "file.attributes".into(),
             Command::PanelToggle(Side::Active) => "panel.toggle".into(),
             Command::PanelToggleOther => "panel.toggle.other".into(),
@@ -706,6 +717,7 @@ impl Command {
             Command::CmdHistoryPrev => "cmd.history.prev".into(),
             Command::CmdHistoryNext => "cmd.history.next".into(),
             Command::CmdHistory => "cmd.history".into(),
+            Command::CmdClip => "cmd.clip".into(),
             Command::CmdInsertName => "cmd.insert.name".into(),
             Command::CmdInsertNameOther => "cmd.insert.name.other".into(),
             Command::CmdInsertPath => "cmd.insert.path".into(),
@@ -891,6 +903,8 @@ impl Command {
             ("file.apply", _) => Command::FileApply,
             ("file.link", _) => Command::FileLink,
             ("file.wipe", _) => Command::FileWipe,
+            ("file.clip.names", _) => Command::FileClipNames,
+            ("file.clip.paths", _) => Command::FileClipPaths,
             ("file.attributes", _) => Command::FileAttributes,
             ("panel.toggle.other", _) => Command::PanelToggleOther,
             ("panel.toggle", a) => Command::PanelToggle(Side::parse(a.unwrap_or(""))?),
@@ -912,6 +926,7 @@ impl Command {
             ("cmd.history.prev", _) => Command::CmdHistoryPrev,
             ("cmd.history.next", _) => Command::CmdHistoryNext,
             ("cmd.history", _) => Command::CmdHistory,
+            ("cmd.clip", _) => Command::CmdClip,
             ("cmd.insert.name", _) => Command::CmdInsertName,
             ("cmd.insert.name.other", _) => Command::CmdInsertNameOther,
             ("cmd.insert.path", _) => Command::CmdInsertPath,

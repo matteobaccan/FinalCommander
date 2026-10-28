@@ -131,7 +131,7 @@ Column `FC` = FinalCommander default (profile `far`, our baseline).
 | by name, any extension | Alt+Gray + / − | — | — | **Alt++ / Alt+−** |
 | scroll long names sideways | Alt+←/→, Alt+Home/End | — | — | **Ctrl+Shift+←/→** (Alt+←/→ is history here) |
 | restore previous selection | Ctrl+M | — | — | Ctrl+Shift+M |
-| copy names to clipboard | Ctrl+Ins / Ctrl+Shift+Ins names, Alt+Shift+Ins full names, Ctrl+Alt+Ins real/UNC names, Ctrl+Shift+C / Ctrl+Shift+X copy/cut the files themselves | — | — | not built yet: it needs the OS clipboard, which is a backlog line of its own |
+| copy names to clipboard | Ctrl+Ins / Ctrl+Shift+Ins names, Alt+Shift+Ins full names, Ctrl+Alt+Ins real/UNC names, Ctrl+Shift+C / Ctrl+Shift+X copy/cut the files themselves | — | — | **`Ctrl+Ins` names, `Alt+Shift+Ins` full paths**, through the terminal with `OSC 52` (SPEC 06 §11) — so it also works over `ssh`. `Ctrl+Ins` copies the command line instead while there is something on it. Copying the files themselves to a clipboard another program can paste from is not a thing a terminal can be asked to do: that stays a backlog line |
 | attributes / permissions | Ctrl+A | Ctrl+x c (chmod), Ctrl+x o (chown) | Alt+Enter | Ctrl+A |
 | apply command to selection | Ctrl+G | — | — | Ctrl+G |
 | describe files | Ctrl+Z | — | — | Ctrl+Shift+D |

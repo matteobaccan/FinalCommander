@@ -149,3 +149,23 @@ click is `Enter` on it, the right button selects a row, and the wheel scrolls wh
 the pointer — three rows a notch, without taking the focus, so you can read the other panel
 without leaving this one. The key bar is clickable (hold `Shift` and click for `Shift+F5`), so
 is the menu bar and a dialog's list. A click outside an open dialog does nothing at all.
+
+# Copying and pasting text
+
+`Ctrl+Ins` copies the names of what is selected — one per line — and `Alt+Shift+Ins` copies
+them with their whole paths. With something on the command line, `Ctrl+Ins` copies that line
+instead: the same rule as every other shared key, which belongs to the panel only while the
+line is empty.
+
+The copying is done by your terminal, through a request called `OSC 52`, and that is why it
+also works over `ssh`: the clipboard that fills is the one on the machine you are sitting at,
+not the one on the machine the program runs on. A terminal that does not understand the
+request ignores it, and it cannot answer either way, so what you are told is what was copied —
+not that the clipboard took it. `F9 → Options → Interface settings` turns it off.
+
+Pasting is your terminal's key, not ours — `Shift+Ins` or `Ctrl+Shift+V` in most of them —
+and the text arrives here in one piece rather than as a run of keystrokes. The editor takes
+all of it, newlines and all; the command line, a dialog row and a prompt are one line each, so
+they take the first line and say how many more there were. A command copied from a web page
+comes with its newline still attached, and running it before you have read it is exactly what
+that rule avoids.

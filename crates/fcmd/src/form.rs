@@ -350,6 +350,7 @@ impl Form {
                     &cfg.ui.keymap,
                 ),
                 Field::toggle("ui.mouse", t("opt-mouse"), cfg.ui.mouse),
+                Field::toggle("ui.clipboard", t("opt-clipboard"), cfg.ui.clipboard),
                 Field::Separator,
                 Field::Dim(t("opt-clock")),
                 Field::Dim(t("opt-menu-always")),
@@ -510,6 +511,7 @@ impl Form {
         let t = |id: &str| i18n.t(id);
         let fields = vec![
             Field::text("find.mask", t("find-mask"), last.mask.clone()),
+            Field::text("find.size", t("find-size"), last.size.clone()),
             Field::text("find.text", t("find-text"), last.text.clone()),
             Field::toggle("find.case", t("find-case"), last.case_sensitive),
             Field::toggle("find.words", t("find-words"), last.whole_words),
@@ -1035,6 +1037,33 @@ impl Form {
         true
     }
 
+    /// Pasted text into the row under the cursor. A dialog row is one line, so only the first
+    /// line of the paste goes in — a path copied from somewhere with its newline still on it
+    /// is the common case, and it should land as the path, not refuse to.
+    ///
+    /// Returns what was dropped, so the caller can say that there was more.
+    pub fn insert_str(&mut self, text: &str) -> usize {
+        let Some(Field::Text { value, caret, .. }) = self.fields.get_mut(self.cursor) else {
+            return 0;
+        };
+        let first = text.lines().next().unwrap_or_default();
+        let dropped = text
+            .lines()
+            .skip(1)
+            .filter(|l| !l.trim().is_empty())
+            .count();
+        if !first.is_empty() {
+            let at = value
+                .char_indices()
+                .nth(*caret)
+                .map(|(i, _)| i)
+                .unwrap_or(value.len());
+            value.insert_str(at, first);
+            *caret += first.chars().count();
+        }
+        dropped
+    }
+
     /// `Backspace`, `Del`, `←`, `→`, `Home`, `End` inside a text row.
     pub fn edit_text(&mut self, what: TextEdit) -> bool {
         let Some(Field::Text { value, caret, .. }) = self.fields.get_mut(self.cursor) else {
@@ -1309,5 +1338,54 @@ impl Pick {
         self.rows
             .iter()
             .position(|r| r.hotkey.map(|k| k.to_ascii_lowercase()) == Some(typed))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::menu::FormKind;
+
+    /// Every row of a settings dialog has to name a setting the configuration knows about.
+    /// A row that names one it does not looks like it works and then reports "unknown
+    /// setting" when the dialog is accepted — which is what `ui.mouse` did until this test
+    /// was written. The five dialogs built from the configuration are all of them; the rest
+    /// are built by hand from something other than the configuration.
+    #[test]
+    fn every_settings_row_names_a_setting_the_configuration_knows() {
+        let i18n = I18n::new("en");
+        let base = Config::default();
+        for kind in [
+            FormKind::System,
+            FormKind::Panel,
+            FormKind::Interface,
+            FormKind::Confirmations,
+            FormKind::EditorSettings,
+            FormKind::ViewerSettings,
+        ] {
+            let form = Form::build(kind, &base, &i18n);
+            assert!(!form.fields.is_empty(), "{kind:?} has no rows");
+            for field in &form.fields {
+                let (key, value) = match field {
+                    Field::Toggle { key, on, .. } => (*key, if *on { "true" } else { "false" }),
+                    Field::Choice {
+                        key,
+                        options,
+                        chosen,
+                        ..
+                    } => (
+                        *key,
+                        options
+                            .get(*chosen)
+                            .map(|(v, _)| v.as_str())
+                            .unwrap_or_default(),
+                    ),
+                    Field::Text { key, value, .. } => (*key, value.as_str()),
+                    _ => continue,
+                };
+                let mut cfg = base.clone();
+                assert_eq!(cfg.set(key, value), Ok(()), "{kind:?} row `{key}`");
+            }
+        }
     }
 }

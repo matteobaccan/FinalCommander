@@ -8,6 +8,43 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **A fix the dialogs needed**: the mouse box in `F9 → Options → Interface settings` reported
+  *unknown setting `ui.mouse`* when the dialog was accepted, because that one key had never
+  been added to the configuration's own setter. A test now walks every row of every settings
+  dialog and asserts the configuration knows the key, so a row that looks like it works
+  cannot fail only when somebody presses OK.
+
+- **The system clipboard, through the terminal.** `Ctrl+Ins` in the panel copies the names of
+  what is selected, one per line; `Alt+Shift+Ins` copies them with their whole paths;
+  `Ctrl+Ins` copies the command line instead while there is something on it; and a block
+  copied or cut in the editor now goes on the system clipboard as well as on the editor's own.
+
+  It is done with `OSC 52` — the terminal is asked to carry it — rather than with a clipboard
+  library, and that is the whole point: no X11 or Wayland dependency, no `pbcopy`, no
+  `unsafe`, no platform code, and it reaches the clipboard of the machine you are sitting at
+  even when the program is running on another one through `ssh`, which a clipboard library on
+  the far end cannot do. `ui.clipboard = false`, or the box in the interface settings, turns
+  it off for anyone who would rather their terminal were not asked.
+
+  Reading the clipboard stays the terminal's job: its own paste key hands us the text, and
+  that now goes where the text was meant to go.
+
+- **Pasted text lands where it belongs.** A paste used to reach only a prompt; it now reaches
+  the command line, a dialog row, the editor and a terminal. A paste is not typing, and is
+  not treated as typing: the editor and a real terminal take all of it, newlines and all,
+  while everything that is one line takes the first line and says how many more there were.
+  A command copied from a web page arrives with its newline still attached, and running it
+  before it can be read is the accident this avoids. A carriage return from a Windows
+  clipboard is no longer a character to insert.
+
+- **A size condition in the find dialog** (`Alt+F7`). The row takes the same words as every
+  other size condition in the program: `100M` finds everything from a hundred megabytes up,
+  `1M-1G` a window, `-4K` everything smaller. Leave it empty and size is not asked about.
+  It answers the question a full disk raises — *where did the space go* — without a separate
+  tool, and the results frame repeats the condition next to the mask so a list of hits read
+  later still says what was asked for. A size that is not a size comes back on the dialog,
+  with the field still holding what was typed.
+
 - **Colouring files by what they are.** A theme says what an archive or a hidden file looks
   like; a `[[highlight]]` group in `fcmd.toml` now says it for whatever you like — a mask, a
   size window, an age in days on any of the four timestamps, attributes, files or folders —

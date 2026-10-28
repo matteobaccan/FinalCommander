@@ -90,6 +90,7 @@ key_bar = true
 syntax = true                   # colour the languages and markups we recognise
 clock = false
 language = "auto"
+clipboard = true                # ask the terminal to carry the clipboard (OSC 52, SPEC 06 §11)
 
 [terminal]
 shell = "auto"

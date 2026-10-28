@@ -449,6 +449,7 @@ opt-markdown = Markdown, свёрстанный для чтения
 opt-keymap = Раскладка клавиш
 opt-clock = Часы в углу
 opt-mouse = Поддержка мыши
+opt-clipboard = Буфер обмена через терминал (OSC 52)
 opt-menu-always = Всегда показывать строку меню
 opt-confirm-delete = Удаление
 opt-confirm-overwrite = Перезапись
@@ -508,6 +509,23 @@ opt-editor-whitespace = Показывать пробелы и табуляци�
 opt-editor-cursor-after = Курсор встаёт после найденного
 opt-editor-beyond-eol = Курсор может выходить за конец строки
 editor-not-a-character = у этой клавиши нет символа для вставки
+paste-one-line =
+    { $count ->
+        [one] вставлена только первая строка · ещё одна строка не вставлена
+       *[other] вставлена только первая строка · ещё { $count } строк не вставлено
+    }
+clip-names =
+    { $count ->
+        [one] одно имя в буфере обмена
+       *[other] { $count } имён в буфере обмена
+    }
+clip-paths =
+    { $count ->
+        [one] один путь в буфере обмена
+       *[other] { $count } путей в буфере обмена
+    }
+clip-line = командная строка в буфере обмена
+clip-off = буфер обмена выключен — `ui.clipboard` в настройках
 editor-no-block = ничего не выделено
 editor-tabs-expanded = табуляции заменены в { $lines } строках — сохранение это запишет
 site-protocol = Протокол
@@ -572,6 +590,7 @@ viewer-no-back = возвращаться некуда
 # ------------------------------------------------- поиск файлов (SPEC 06 §1)
 find-title = Поиск файла
 find-mask = Маска или маски
+find-size = Размер (100M, 1M-1G, -4K)
 find-text = Содержащие текст
 find-case = Учитывать регистр
 find-words = Только целые слова
@@ -594,6 +613,7 @@ find-hint = ↑↓ выбор · Enter перейти · F3 смотреть · 
 find-hint-done = ↑↓ выбор · Enter перейти · F3 смотреть · F5 в панель · Esc закрыть
 find-panelised = { $count } результатов в панели
 find-needs-mask = нужна маска: `*` значит все файлы
+find-bad-size = `{ $text }` — не размер — { $error }
 
 # ------------------------------------------------- replace across files
 replace-title = Замена в файлах

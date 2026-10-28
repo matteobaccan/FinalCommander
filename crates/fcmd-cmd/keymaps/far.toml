@@ -592,6 +592,17 @@ cmd = "panel.names.left"
 keys = ["Ctrl+Shift+Right"]
 cmd = "panel.names.right"
 
+# The clipboard FAR reaches through Windows, reached through the terminal instead (SPEC 06 §11).
+# On a command line with something on it `Ctrl+Ins` copies the line, which is the same rule as
+# every other shared key.
+[[bind]]
+keys = ["Ctrl+Ins"]
+cmd = "file.clip.names"
+
+[[bind]]
+keys = ["Alt+Shift+Ins"]
+cmd = "file.clip.paths"
+
 # ---------------------------------------------------------------- misc
 [[bind]]
 keys = ["Space"]

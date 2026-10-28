@@ -258,6 +258,27 @@ impl Term {
         Ok(())
     }
 
+    /// Ask the terminal to put text on the system clipboard.
+    ///
+    /// This is `OSC 52`, and it is the only way a program in a terminal can reach the
+    /// clipboard without knowing which window system it is in: no X11 or Wayland library, no
+    /// `pbcopy`, no `unsafe`, and — the reason it is worth preferring even where those exist
+    /// — it works over `ssh`, where the clipboard that matters belongs to the machine in
+    /// front of the user and not to the one the program runs on.
+    ///
+    /// The other half, *reading* the clipboard, is deliberately not here: the terminal would
+    /// have to answer with the contents, most refuse to for the obvious reason, and the
+    /// terminal's own paste key already sends us the text as a bracketed paste. So we write
+    /// and the terminal reads.
+    ///
+    /// A terminal that does not understand the sequence ignores it, and there is no answer to
+    /// wait for, so nothing can be reported: the caller says what it copied, not that the
+    /// clipboard took it.
+    pub fn set_clipboard(&mut self, text: &str) -> io::Result<()> {
+        self.out.write_all(clipboard_request(text).as_bytes())?;
+        self.out.flush()
+    }
+
     /// Turn mouse reporting on or off. Returns whether anything changed.
     ///
     /// It is a setting rather than a fact about the terminal: while it is on, the terminal
@@ -313,6 +334,37 @@ impl Drop for Term {
 }
 
 /// Restore the terminal if we panic, so a crash never leaves an unusable shell.
+/// The `OSC 52` request that puts `text` on the clipboard, as a string so that it can be
+/// tested without a terminal to send it to.
+pub fn clipboard_request(text: &str) -> String {
+    format!("\x1b]52;c;{}\x1b\\", base64(text.as_bytes()))
+}
+
+/// Standard base64, which is what `OSC 52` carries. Twenty lines rather than a dependency:
+/// this is the only thing in the program that encodes any.
+fn base64(bytes: &[u8]) -> String {
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for group in bytes.chunks(3) {
+        let b = [
+            group[0],
+            *group.get(1).unwrap_or(&0),
+            *group.get(2).unwrap_or(&0),
+        ];
+        let n = (u32::from(b[0]) << 16) | (u32::from(b[1]) << 8) | u32::from(b[2]);
+        for i in 0..4 {
+            // The last group is padded with `=` for the bytes it does not have.
+            if i <= group.len() {
+                let six = (n >> (18 - 6 * i)) & 0x3f;
+                out.push(ALPHABET[six as usize] as char);
+            } else {
+                out.push('=');
+            }
+        }
+    }
+    out
+}
+
 pub fn install_panic_hook() {
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
@@ -537,6 +589,27 @@ mod tests {
         assert_eq!(
             key(CKey::PageUp, KeyModifiers::CONTROL),
             Some(Input::Key("Ctrl+PgUp".parse().unwrap()))
+        );
+    }
+
+    /// Base64 against the three cases that matter: a length that is a multiple of three, and
+    /// the two that need padding.
+    #[test]
+    fn the_clipboard_request_is_osc_52_with_standard_base64() {
+        assert_eq!(base64(b""), "");
+        assert_eq!(base64(b"abc"), "YWJj");
+        assert_eq!(base64(b"ab"), "YWI=");
+        assert_eq!(base64(b"a"), "YQ==");
+        // Bytes above ASCII, which a path can easily carry.
+        assert_eq!(base64("è".as_bytes()), "w6g=");
+        assert_eq!(clipboard_request("abc"), "\x1b]52;c;YWJj\x1b\\");
+
+        let (mut term, written) = Term::capturing();
+        term.set_clipboard("/tmp/a b.txt").unwrap();
+        let bytes = written.lock().unwrap().clone();
+        assert_eq!(
+            String::from_utf8(bytes).unwrap(),
+            clipboard_request("/tmp/a b.txt")
         );
     }
 

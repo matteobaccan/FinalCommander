@@ -37,8 +37,16 @@ changes directory and the cursor lands on it), `F3` reads it without leaving the
 program work on them — and `Esc` stops the search while keeping what it found, with a second
 `Esc` closing the list. Nothing is thrown away by a single keystroke.
 
-**What is deliberately not in the first version**: searching inside archives (the archive
-provider comes first), the size, date and attribute conditions (the filter object carries them
+**The size condition** came next, because the question it answers is asked often and by
+itself: where did the space go. The row takes the size grammar of SPEC 02 §5 — `100M` for a
+lower bound, `1M-1G` for a range, `-4K` for an upper one — and is checked when the dialog is
+accepted, so a typo comes back on the dialog with the field still filled in rather than as a
+search that finds nothing. The results frame repeats it next to the mask. The engine needed
+nothing: the query has carried a whole `Filter` since the start, and this fills in one more of
+its fields.
+
+**What is deliberately not in the first versions**: searching inside archives (the archive
+provider comes first), the date and attribute conditions (the filter object carries them
 already — the dialog does not offer them yet), saving and loading a search, running a job over
 the whole result set, and `tool.find.folder`. Each is a line in the backlog.
 
@@ -271,3 +279,35 @@ and the keymap pages are generated from the live keymap (never hand-written).
 `session.toml` holds panels, tabs, paths, view modes, sorts, filters, selection (optional),
 viewer/editor positions, and the job journal pointer. `--no-session` starts clean;
 `fcmd path1 path2` opens the two panels at those paths; `fcmd --goto file:line` opens the editor.
+
+## 11. The clipboard
+
+The clipboard belongs to the window system, and a program in a terminal is not in the window
+system: it is at the far end of a pipe that may well cross a network. So the terminal is asked
+to do it, with `OSC 52` — `ESC ] 52 ; c ; <base64> ESC \`. The terminal that receives it is
+the one in front of the user, which is the clipboard they mean; it needs no X11 or Wayland
+library, no `pbcopy`, no `unsafe` and no platform code at all, and it works unchanged over
+`ssh`, where a clipboard library on the remote machine would reach the wrong clipboard or none.
+
+What this buys, and the keys FAR uses for it:
+
+| Key | What goes on the clipboard |
+| --- | --- |
+| `Ctrl+Ins` in the panel | the names of what is selected, one per line |
+| `Alt+Shift+Ins` | the same, with the whole path on each line |
+| `Ctrl+Ins` with something on the command line | that line |
+| `Ctrl+Ins` / `Ctrl+X` in the editor | the block, which also stays on the editor's own clipboard |
+
+`ui.clipboard = false` turns it off, for somebody who would rather their terminal were not
+asked by a program running on another machine. A terminal that does not understand the request
+ignores it, and there is no answer to wait for, so what the program can honestly say is what
+it copied — not that the clipboard took it.
+
+**Reading the clipboard is the terminal's job, not ours.** `OSC 52` can ask for the contents
+as well, and most terminals refuse for the obvious reason; there is no need to ask, because
+the terminal's own paste key hands the program the text as a *bracketed paste*, which arrives
+as one piece rather than as a run of keystrokes. A paste is not typing and is not treated as
+typing: the editor and a real terminal take the whole of it, newlines and all, while
+everything that is one line — the command line, a dialog row, a prompt — takes the first line
+and says how many more there were, because a command copied from a web page arrives with its
+newline still attached and running it before it can be read is exactly the accident to avoid.
