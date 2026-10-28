@@ -1608,6 +1608,9 @@ pub struct App {
     pub column_sets: Vec<fcmd_core::ColumnSet>,
     /// What the command line could become, while the list is on screen (SPEC 06 §7.4).
     pub complete: Option<Completion>,
+    /// The theme the theme list opened on, so that leaving it without choosing puts the
+    /// colours back (SPEC 10 §4).
+    theme_before: Option<Theme>,
     /// The executables on the `PATH`, gathered the first time that source is asked and kept:
     /// gathering it is a read of every directory on the `PATH`, and the `PATH` does not
     /// change under a running program.
@@ -1791,6 +1794,7 @@ impl App {
             sort_groups,
             column_sets,
             complete: None,
+            theme_before: None,
             path_names: None,
             env_names: {
                 let mut names: Vec<String> = std::env::vars().map(|(k, _)| k).collect();
@@ -11455,7 +11459,31 @@ impl App {
                 )
             }
         };
+        // A theme is a thing one has to see to choose, so the list applies each one as the
+        // cursor reaches it and `Esc` puts back the one it opened on. That means remembering
+        // it here, where the list is opened.
+        if kind == PickKind::Themes {
+            self.theme_before = Some(self.theme.clone());
+        }
         self.mode = Mode::Pick(Box::new(pick));
+    }
+
+    /// The theme under the cursor, applied to the screen but not to the configuration.
+    ///
+    /// Choosing colours from a list of their names is choosing blind; FAR's own colour
+    /// dialogs change the screen as one moves, and so does this. Nothing is written until
+    /// `Enter`, and `Esc` puts back what was there.
+    fn preview_theme(&mut self) {
+        let Mode::Pick(pick) = &self.mode else { return };
+        if pick.kind != PickKind::Themes {
+            return;
+        }
+        let Some(row) = pick.rows.get(pick.cursor) else {
+            return;
+        };
+        if let Some(theme) = self.themes.get(&row.value).cloned() {
+            self.theme = theme;
+        }
     }
 
     fn pick_key(&mut self, key: Key) {
@@ -11485,6 +11513,13 @@ impl App {
                 }
             }
             KeyCode::Esc | KeyCode::F(10) => {
+                // Leaving the theme list without choosing puts back the colours it opened
+                // on: a preview that stayed would be a choice nobody made.
+                if kind == PickKind::Themes {
+                    if let Some(theme) = self.theme_before.take() {
+                        self.theme = theme;
+                    }
+                }
                 self.mode = Mode::Normal;
                 // A list opened over a screen — the block menu over the hex editor, the
                 // screens list over whatever was in front — goes back to it when it closes.
@@ -11671,6 +11706,8 @@ impl App {
             }
             _ => {}
         }
+        // Whatever the key did, the theme list shows the row the cursor is on now.
+        self.preview_theme();
     }
 
     fn apply_pick(&mut self) {
@@ -21564,6 +21601,39 @@ abcdefghij
     }
 
     // ── the command line's completion (SPEC 06 §7.4) ───────────────────────────────────────
+
+    /// Colours are chosen by looking at them: the list applies each theme as the cursor
+    /// reaches it, and `Esc` puts back the one it opened on.
+    #[test]
+    fn the_theme_list_shows_each_theme_and_only_enter_keeps_it() {
+        let mut app = app();
+        let before = app.theme.id.clone();
+        app.run(Command::AppThemes);
+        // Walk down until the row under the cursor is a different theme from the one we
+        // started on; the screen has to be showing it already.
+        let mut moved = 0;
+        while app.theme.id == before && moved < 8 {
+            press(&mut app, "Down");
+            moved += 1;
+        }
+        assert_ne!(app.theme.id, before, "the list did not show what it is on");
+        // And nothing was written down.
+        assert_eq!(app.cfg.ui.theme, before);
+
+        // Leaving without choosing puts the colours back.
+        press(&mut app, "Esc");
+        assert_eq!(app.theme.id, before);
+
+        // Choosing keeps it, and writes it where the next start will read it.
+        app.run(Command::AppThemes);
+        for _ in 0..moved {
+            press(&mut app, "Down");
+        }
+        let chosen = app.theme.id.clone();
+        press(&mut app, "Enter");
+        assert_eq!(app.theme.id, chosen);
+        assert_eq!(app.cfg.ui.theme, chosen);
+    }
 
     #[test]
     fn the_list_takes_a_few_keys_and_hands_the_rest_to_the_line() {
