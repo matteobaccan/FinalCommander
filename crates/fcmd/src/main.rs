@@ -11,6 +11,7 @@ mod expand;
 mod form;
 mod help;
 mod highlight;
+mod history;
 mod hit;
 mod menu;
 mod panel;
@@ -619,6 +620,10 @@ fn run(cli: Cli) -> Result<()> {
     });
     app.cmd.load_history(state.command_history);
     app.file_history = state.file_history;
+    // What the histories say about themselves: which lines are pinned, and when each was
+    // last used. A state file written before any of this has none, and every line in it
+    // simply counts as used now.
+    app.marks = crate::history::Marks::from_state(&state.history_marks);
     app.bookmarks = state.bookmarks;
     // The tree comes up with what the last session walked, so `Ctrl+T` and `Alt+F10` are
     // useful before anything has been read again.
@@ -1450,6 +1455,9 @@ fn interactive(mut app: App) -> Result<()> {
     // What survives the session: the command history, and where the panels ended up. A failure
     // here is reported on the way out rather than swallowed — losing a history silently is how
     // a program teaches people not to trust it.
+    // The lines nobody has pinned and nobody has used for `ui.history_lifetime` days go
+    // here, once, where all three histories are in hand (SPEC 06 §6).
+    app.sweep_histories();
     let state = fcmd_config::State {
         command_history: app.cmd.history().to_vec(),
         file_history: app.file_history.clone(),
@@ -1468,6 +1476,7 @@ fn interactive(mut app: App) -> Result<()> {
         // The tree's own cache, capped: a walk of a whole disk is worth keeping some of, and
         // a state file nobody can open is worth keeping none of.
         tree: app.tree_cache.to_state(crate::app::TREE_CACHE_KEPT),
+        history_marks: app.marks.to_state(),
     };
     if let Err(e) = state.save(&app.paths) {
         eprintln!("fcmd: cannot write {}: {e}", app.paths.state_file.display());

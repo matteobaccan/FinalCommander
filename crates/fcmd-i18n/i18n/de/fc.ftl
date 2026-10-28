@@ -465,6 +465,8 @@ opt-allow-reverse = Umgekehrte Sortierung erlauben
 opt-trash = Systempapierkorb verwenden
 opt-system-copy = Kopierfunktion des Systems verwenden
 opt-save-history = Verlauf zwischen Sitzungen behalten
+opt-history-lifetime = Lebensdauer des Verlaufs, in Tagen
+opt-forever = für immer
 opt-fetch-limit = Größenbegrenzung für entfernte Dateien
 opt-keepalive = SSH-Keep-alive
 opt-off = aus
@@ -515,6 +517,14 @@ sort-set = Sortierung: { $name }
 btn-ok = OK
 pick-hint = ↑↓ wählen · Enter übernehmen · Esc schließen
 pick-empty = (nichts zur Auswahl)
+# ------------------------------------------------- die drei Verläufe (SPEC 06 §6)
+hist-pinned = { $line } ist angeheftet · nichts verdrängt sie mehr
+hist-unpinned = { $line } ist nicht mehr angeheftet
+hist-is-pinned = { $line } ist angeheftet · erst Einfg löst sie
+hist-clear-body = Diesen Verlauf von allem leeren, was nicht angeheftet ist?
+hist-cleared = der Verlauf ist leer bis auf das Angeheftete
+history-hint = ↑↓ wählen · Enter übernehmen · Einfg anheften · Umschalt+Entf eine · Entf alle · Esc schließen
+
 
 # ------------------------------------------------- session editor (SPEC 10 §3.5)
 site-new = Neue Verbindung

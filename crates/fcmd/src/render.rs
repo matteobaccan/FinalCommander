@@ -926,6 +926,11 @@ fn draw_pick(
         crate::menu::PickKind::Drives => "drives-hint",
         crate::menu::PickKind::Bookmarks => "bookmarks-hint",
         crate::menu::PickKind::Highlight => "hl-hint",
+        // A history has three keys of its own, and a footer that does not name them is a
+        // footer that keeps them secret.
+        crate::menu::PickKind::CommandHistory
+        | crate::menu::PickKind::FileHistory
+        | crate::menu::PickKind::FoldersHistory => "history-hint",
         _ => "pick-hint",
     });
 

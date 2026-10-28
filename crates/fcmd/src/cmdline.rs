@@ -266,12 +266,11 @@ impl CmdLine {
         self.history = lines;
     }
 
-    /// Drop the oldest entries so the stored history stays bounded.
-    pub fn trim_history(&mut self, keep: usize) {
-        if self.history.len() > keep {
-            let drop = self.history.len() - keep;
-            self.history.drain(..drop);
-        }
+    /// Drop the oldest entries so the stored history stays bounded, passing over the lines
+    /// the user has pinned (`Ins` in the list): a pin that the next command could undo would
+    /// be no pin at all.
+    pub fn trim_history(&mut self, keep: usize, locked: &[String]) {
+        crate::history::trim(&mut self.history, keep, locked, true);
     }
 
     /// `Ctrl+E`: one step back through the history.
@@ -692,7 +691,7 @@ mod tests {
         for i in 0..10 {
             l.remember(&format!("command {i}"));
         }
-        l.trim_history(3);
+        l.trim_history(3, &[]);
         assert_eq!(l.history(), ["command 7", "command 8", "command 9"]);
     }
 

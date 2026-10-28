@@ -465,6 +465,8 @@ opt-allow-reverse = Consenti ordine inverso
 opt-trash = Usa il cestino di sistema
 opt-system-copy = Usa la copia di sistema
 opt-save-history = Conserva la cronologia tra le sessioni
+opt-history-lifetime = Durata della cronologia, in giorni
+opt-forever = per sempre
 opt-fetch-limit = Limite dimensione file remoti
 opt-keepalive = Keep-alive SSH
 opt-off = spento
@@ -515,6 +517,14 @@ sort-set = ordine: { $name }
 btn-ok = OK
 pick-hint = ↑↓ scegli · Invio applica · Esc chiude
 pick-empty = (niente da scegliere)
+# ------------------------------------------------- le tre cronologie (SPEC 06 §6)
+hist-pinned = { $line } è fissata · ora niente la spinge fuori
+hist-unpinned = { $line } non è più fissata
+hist-is-pinned = { $line } è fissata · prima Ins per liberarla
+hist-clear-body = Svuotare questa cronologia di tutto ciò che non è fissato?
+hist-cleared = la cronologia è vuota, tranne ciò che è fissato
+history-hint = ↑↓ scegli · Invio applica · Ins fissa · Maiusc+Canc una · Canc tutte · Esc chiude
+
 
 # ------------------------------------------------- session editor (SPEC 10 §3.5)
 site-new = Nuova connessione

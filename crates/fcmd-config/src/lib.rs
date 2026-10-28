@@ -349,6 +349,13 @@ pub struct UiCfg {
     pub command_history: usize,
     /// How many read-or-edited files to keep between sessions (`Alt+F11`).
     pub file_history: usize,
+    /// How many days a history line nobody has pinned is kept after it was last used.
+    ///
+    /// FAR's own lifetime, and FAR's own default of ninety days: a history is worth having
+    /// because one recognises what is in it, and a command typed once a year ago is noise
+    /// between the ones typed this week. `0` keeps them for ever, and a pinned line is never
+    /// counted — that is what pinning it says.
+    pub history_lifetime: u32,
     /// Open a tabular file (`.csv`, `.tsv`, `.jsonl`, `.dbf`) as a table rather than as its
     /// source.
     /// `Shift+F3` in the viewer switches either way whatever this says; this is only what the
@@ -379,6 +386,7 @@ impl Default for UiCfg {
             mouse: false,
             command_history: 512,
             file_history: 512,
+            history_lifetime: 90,
             clipboard: true,
         }
     }
@@ -1270,6 +1278,12 @@ impl Config {
                     .parse()
                     .map_err(|_| format!("`{value}` is not a number"))?
             }
+            "ui.history_lifetime" => {
+                self.ui.history_lifetime = value
+                    .trim()
+                    .parse()
+                    .map_err(|_| format!("`{value}` is not a number"))?
+            }
             "ui.status_bar" => self.ui.status_bar = parse_bool(value)?,
             "ui.syntax" => self.ui.syntax = parse_bool(value)?,
             "ui.markdown" => self.ui.markdown = parse_bool(value)?,
@@ -1563,6 +1577,13 @@ mod tests {
                 name: "shared".into(),
                 digit: Some(3),
             }],
+            // What the histories say about themselves travels with their lines.
+            history_marks: vec![HistoryMark {
+                kind: "commands".into(),
+                text: "make".into(),
+                when: 1_700_000_000,
+                locked: true,
+            }],
             // The tree cache travels with the rest: a tree that opens filled is the whole
             // point of writing it down.
             tree: vec![TreeDir {
@@ -1832,12 +1853,31 @@ pub struct State {
     /// it would be a bug, not a setting.
     #[serde(default)]
     pub bookmarks: Vec<Bookmark>,
+    /// What each history line has to say for itself: when it was last used, and whether it
+    /// is pinned. The lines themselves are in the three lists above; this is the table
+    /// beside them, and a line with no row here is simply one nobody has pinned and nobody
+    /// has used since this was written.
+    #[serde(default)]
+    pub history_marks: Vec<HistoryMark>,
     /// What the tree has read: one row per directory, with the subdirectories it held
     /// (SPEC 02 §7). It is a cache and nothing else — a row that is out of date costs a
     /// re-read — so it is written last and read first, and a missing one is simply a tree
     /// that opens empty and fills as it is walked.
     #[serde(default)]
     pub tree: Vec<TreeDir>,
+}
+
+/// One history line's mark, as the state file holds it.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HistoryMark {
+    /// `commands`, `folders` or `files`.
+    pub kind: String,
+    pub text: String,
+    /// Seconds since the epoch, or `0` for a line that has never been stamped.
+    #[serde(default)]
+    pub when: i64,
+    #[serde(default)]
+    pub locked: bool,
 }
 
 /// One directory of the tree cache, as the state file holds it.

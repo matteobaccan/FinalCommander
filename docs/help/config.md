@@ -17,7 +17,10 @@ the program is actually running with, which is the quickest way to see what a ke
 Between sessions the program keeps, in its state file beside the settings: the command lines
 that have run (`Alt+F8`), where each panel had been (`Alt+F12`), **the files you have read or
 edited** (`Alt+F11`), the folders you keep to hand, the tabs of both panels and where they
-were. `ui.command_history` and `ui.file_history` say how many of the first and third to keep.
+were. `ui.command_history` and `ui.file_history` say how many of the first and third to keep,
+and `ui.history_lifetime` how many days a line nobody has pinned is kept after it was last
+used — ninety by default, `0` to keep them for ever. `Ins` in any of the three lists pins the
+row under the cursor, and nothing pushes a pinned row out.
 
 The list of files is written wherever a viewer or an editor opens, so it is the same list
 whichever key opened the file. A file on a server is remembered by its remote path, not by the

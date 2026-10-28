@@ -311,6 +311,19 @@ impl Form {
                 Field::toggle("general.use_trash", t("opt-trash"), cfg.general.use_trash),
                 Field::Dim(t("opt-system-copy")),
                 Field::Dim(t("opt-save-history")),
+                // How long a history line nobody has pinned is kept after its last use, which
+                // is FAR's own setting and the reason its default is ninety days.
+                choice(
+                    "ui.history_lifetime",
+                    t("opt-history-lifetime"),
+                    &[
+                        ("0", t("opt-forever")),
+                        ("30", "30".into()),
+                        ("90", "90".into()),
+                        ("365", "365".into()),
+                    ],
+                    &cfg.ui.history_lifetime.to_string(),
+                ),
                 Field::Separator,
                 choice(
                     "net.fetch_limit_mb",
@@ -1853,6 +1866,9 @@ pub struct Pick {
     /// What has been typed into a list that filters. The title shows it, so a reader can see
     /// why a list has three rows in it.
     pub filter: String,
+    /// The values of the rows that are pinned, for the histories: a pinned line is marked in
+    /// the list, because a pin one cannot see is a pin one does not trust.
+    pub locked: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1917,6 +1933,7 @@ impl Pick {
             side,
             all: Vec::new(),
             filter: String::new(),
+            locked: Vec::new(),
         }
     }
 
@@ -1976,6 +1993,7 @@ impl Pick {
         // The hotkey column exists only if some row has one, so every other list looks
         // exactly as it did.
         let keyed = self.rows.iter().any(|r| r.hotkey.is_some());
+        let pinned = !self.locked.is_empty();
         self.rows
             .iter()
             .map(|r| {
@@ -1986,10 +2004,22 @@ impl Pick {
                     return String::new();
                 }
                 let mark = if r.current { '√' } else { ' ' };
+                // A second marker column, and only when something in this list is pinned:
+                // every other list looks exactly as it did, and the one that has a pin in it
+                // says which row the pin is on.
+                let pin = if pinned {
+                    if self.locked.contains(&r.value) {
+                        "*"
+                    } else {
+                        " "
+                    }
+                } else {
+                    ""
+                };
                 match (keyed, r.hotkey) {
-                    (true, Some(k)) => format!("{mark} {k}  {}", r.label),
-                    (true, None) => format!("{mark}    {}", r.label),
-                    _ => format!("{mark} {}", r.label),
+                    (true, Some(k)) => format!("{mark}{pin} {k}  {}", r.label),
+                    (true, None) => format!("{mark}{pin}    {}", r.label),
+                    _ => format!("{mark}{pin} {}", r.label),
                 }
             })
             .collect()

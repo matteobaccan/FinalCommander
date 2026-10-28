@@ -465,6 +465,8 @@ opt-allow-reverse = Autoriser le tri inverse
 opt-trash = Utiliser la corbeille du système
 opt-system-copy = Utiliser la copie du système
 opt-save-history = Conserver l'historique entre les sessions
+opt-history-lifetime = Durée de vie de l'historique, en jours
+opt-forever = pour toujours
 opt-fetch-limit = Taille maximale des fichiers distants
 opt-keepalive = Keep-alive SSH
 opt-off = désactivé
@@ -515,6 +517,14 @@ sort-set = tri : { $name }
 btn-ok = OK
 pick-hint = ↑↓ choisir · Entrée appliquer · Échap fermer
 pick-empty = (rien à choisir)
+# ------------------------------------------------- les trois historiques (SPEC 06 §6)
+hist-pinned = { $line } est épinglée · plus rien ne la chasse
+hist-unpinned = { $line } n’est plus épinglée
+hist-is-pinned = { $line } est épinglée · Inser la libère d’abord
+hist-clear-body = Vider cet historique de tout ce qui n’est pas épinglé ?
+hist-cleared = l’historique est vide, sauf ce qui est épinglé
+history-hint = ↑↓ choisir · Entrée appliquer · Inser épingler · Maj+Suppr une · Suppr toutes · Échap fermer
+
 
 # ------------------------------------------------- session editor (SPEC 10 §3.5)
 site-new = Nouvelle connexion

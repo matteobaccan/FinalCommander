@@ -465,6 +465,8 @@ opt-allow-reverse = Permitir el orden inverso
 opt-trash = Usar la papelera del sistema
 opt-system-copy = Usar la copia del sistema
 opt-save-history = Mantener el historial entre sesiones
+opt-history-lifetime = Duración del historial, en días
+opt-forever = para siempre
 opt-fetch-limit = Límite de tamaño de archivos remotos
 opt-keepalive = Keep-alive de SSH
 opt-off = apagado
@@ -515,6 +517,14 @@ sort-set = orden: { $name }
 btn-ok = Aceptar
 pick-hint = ↑↓ elegir · Intro aplicar · Esc cerrar
 pick-empty = (nada que elegir)
+# ------------------------------------------------- los tres historiales (SPEC 06 §6)
+hist-pinned = { $line } está fijada · ya nada la desplaza
+hist-unpinned = { $line } ya no está fijada
+hist-is-pinned = { $line } está fijada · Ins la suelta primero
+hist-clear-body = ¿Vaciar este historial de todo lo que no está fijado?
+hist-cleared = el historial está vacío salvo lo fijado
+history-hint = ↑↓ elegir · Intro aplicar · Ins fijar · Mayús+Supr una · Supr todas · Esc cerrar
+
 
 # ------------------------------------------------- session editor (SPEC 10 §3.5)
 site-new = Nueva conexión

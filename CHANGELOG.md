@@ -8,6 +8,14 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **A history line can be pinned, and a history has a lifetime.** `Ins` in any of the three
+  histories pins the line under the cursor — marked with a `*` — and neither the size limit
+  nor the new `ui.history_lifetime` can push a pinned line out. `Shift+Del` takes one line
+  away and refuses a pinned one; `Del` empties the list of everything nobody has pinned,
+  after asking. Those are FAR's own three keys. The lifetime is FAR's own as well: ninety
+  days by default, counted from when a line was last used rather than from when it was first
+  typed, `0` to keep everything for ever, and swept once when the state file is written.
+
 - **Descriptions wherever the panel stands.** A `descript.ion` on a server or in a bucket is
   now read and written like one on this disk: the description columns, the information panel
   and `Ctrl+Z` work in a remote panel, and the file is fetched only when something on screen
@@ -21,8 +29,8 @@ Notable changes, newest first. The format follows
   by their parent, and each side file is read, changed and written on its own.
 
 - **The histories are lists one types into.** The command history, the folder history and the
-  files read or edited all narrow as you type — the frame says what was typed — and `Del` on a
-  row takes that line out of the history without closing the list.
+  files read or edited all narrow as you type, with the frame saying what was typed, and the
+  keys above work on what is left without closing the list.
 
 - **`Alt+F10` finds a folder by name.** A list of every folder the tree knows under the
   panel's root, narrowed by what you type — the frame shows the filter — with `Enter` to go
@@ -32,6 +40,13 @@ Notable changes, newest first. The format follows
   directories near the top. The copy dialog's own `Alt+F10` opens the same list and puts the
   folder chosen into the destination — FAR's *Tree* button, under another key because `F10`
   here is `OK`.
+
+### Fixed
+
+- **`Tab` is the way out of the quick view as well as the way in.** In the viewer `Tab` moves
+  the keys between the content and the structure pane, and the preview was taking the key even
+  with no pane open — so the focus went into the quick view and stayed there. With no pane to
+  move between, `Tab` is the panels' own key again.
 
 ## [0.13.0] — 2026-10-28
 

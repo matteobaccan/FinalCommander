@@ -214,8 +214,11 @@ want nine times in ten. With something typed on it, `↑` and `↓` walk back an
 what was run before, as a shell does; on an empty line the arrows belong to the panel, as
 every shared key does. `Alt+F8` shows the whole history as a list — and so do `Alt+F11` for the files you have read
 or edited and `Alt+F12` for the folders this panel has been in. All three are lists you type
-into: what you type narrows them, the frame says what it was, and `Del` on a row takes that
-line out of the history for good.
+into: what you type narrows them, and the frame says what it was. `Ins` pins the row under the
+cursor — a pinned row is marked with a `*`, and neither the size limit nor the lifetime can
+push it out — `Shift+Del` takes one row out of the history for good, and `Del` empties the
+list of everything you have not pinned, after asking. A line nobody has pinned and nobody has
+used for ninety days goes by itself; *Options → System settings* is where that number lives.
 
 While you type, the line offers what it could become: the names in the directory the panel is
 showing, the lines you have run before, and the environment's variables. `↑` and `↓` walk the

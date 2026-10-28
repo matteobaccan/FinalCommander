@@ -473,6 +473,8 @@ opt-allow-reverse = Allow reverse sort
 opt-trash = Use the system recycle bin
 opt-system-copy = Use the system copy routine
 opt-save-history = Keep history between sessions
+opt-history-lifetime = History lifetime, in days
+opt-forever = for ever
 opt-fetch-limit = Remote file size limit
 opt-keepalive = SSH keep-alive
 opt-off = off
@@ -523,6 +525,14 @@ sort-set = sort: { $name }
 btn-ok = OK
 pick-hint = ↑↓ choose · Enter apply · Esc close
 pick-empty = (nothing to choose)
+# ------------------------------------------------- the three histories (SPEC 06 §6)
+hist-pinned = { $line } is pinned · nothing pushes it out now
+hist-unpinned = { $line } is no longer pinned
+hist-is-pinned = { $line } is pinned · Ins unpins it first
+hist-clear-body = Empty this history of everything that is not pinned?
+hist-cleared = the history is empty but for what is pinned
+history-hint = ↑↓ choose · Enter apply · Ins pin · Shift+Del one · Del all · Esc close
+
 
 # ------------------------------------------------- session editor (SPEC 10 §3.5)
 site-new = New connection

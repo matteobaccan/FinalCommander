@@ -19,7 +19,10 @@ Fra una sessione e l'altra il programma tiene, nel suo file di stato accanto all
 le righe di comando eseguite (`Alt+F8`), dov'era stato ciascun pannello (`Alt+F12`), **i file
 che hai letto o modificato** (`Alt+F11`), le cartelle che tieni a portata di mano, le linguette
 di entrambi i pannelli e dove erano. `ui.command_history` e `ui.file_history` dicono quanti
-tenere del primo e del terzo elenco.
+tenere del primo e del terzo elenco, e `ui.history_lifetime` quanti giorni si tiene una riga
+che nessuno ha fissato dopo l'ultima volta che è stata usata — novanta di default, `0` per
+tenerle per sempre. `Ins` in uno qualunque dei tre elenchi fissa la riga sotto il cursore, e
+niente spinge fuori una riga fissata.
 
 L'elenco dei file viene scritto ogni volta che un visualizzatore o un editor si apre, quindi è
 lo stesso elenco qualunque tasto abbia aperto il file. Un file su un server è ricordato per il

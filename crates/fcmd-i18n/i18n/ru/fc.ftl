@@ -465,6 +465,8 @@ opt-allow-reverse = Разрешить обратную сортировку
 opt-trash = Использовать корзину системы
 opt-system-copy = Использовать копирование системы
 opt-save-history = Хранить историю между запусками
+opt-history-lifetime = Срок хранения истории, в днях
+opt-forever = навсегда
 opt-fetch-limit = Предел размера удалённых файлов
 opt-keepalive = Keep-alive для SSH
 opt-off = выключено
@@ -515,6 +517,14 @@ sort-set = сортировка: { $name }
 btn-ok = ОК
 pick-hint = ↑↓ выбор · Enter применить · Esc закрыть
 pick-empty = (выбирать нечего)
+# ------------------------------------------------- три истории (SPEC 06 §6)
+hist-pinned = { $line } закреплена · теперь её ничто не вытеснит
+hist-unpinned = { $line } больше не закреплена
+hist-is-pinned = { $line } закреплена · сначала Ins, чтобы освободить
+hist-clear-body = Очистить историю от всего, что не закреплено?
+hist-cleared = история пуста, кроме закреплённого
+history-hint = ↑↓ выбор · Enter применить · Ins закрепить · Shift+Del одну · Del все · Esc закрыть
+
 
 # ------------------------------------------------- session editor (SPEC 10 §3.5)
 site-new = Новое соединение

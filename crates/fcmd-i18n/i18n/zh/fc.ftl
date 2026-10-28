@@ -465,6 +465,8 @@ opt-allow-reverse = 允许反向排序
 opt-trash = 使用系统回收站
 opt-system-copy = 使用系统复制
 opt-save-history = 在两次运行之间保留历史
+opt-history-lifetime = 历史保留天数
+opt-forever = 永久
 opt-fetch-limit = 远程文件大小上限
 opt-keepalive = SSH 保活
 opt-off = 关闭
@@ -515,6 +517,14 @@ sort-set = 排序：{ $name }
 btn-ok = 确定
 pick-hint = ↑↓ 选择 · Enter 应用 · Esc 关闭
 pick-empty = （没有可选项）
+# ------------------------------------------------- 三份历史 (SPEC 06 §6)
+hist-pinned = { $line } 已固定 · 不再被挤出
+hist-unpinned = { $line } 不再固定
+hist-is-pinned = { $line } 已固定 · 请先按 Ins 解除
+hist-clear-body = 清空此历史中所有未固定的条目？
+hist-cleared = 历史已清空，固定的条目除外
+history-hint = ↑↓ 选择 · Enter 应用 · Ins 固定 · Shift+Del 单条 · Del 全部 · Esc 关闭
+
 
 # ------------------------------------------------- session editor (SPEC 10 §3.5)
 site-new = 新建连接

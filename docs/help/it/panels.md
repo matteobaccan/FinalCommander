@@ -228,8 +228,12 @@ indietro per quello che è stato eseguito prima, come fa una shell; su una riga 
 appartengono al pannello, come ogni tasto condiviso. `Alt+F8` mostra tutta la cronologia come
 elenco — e così fanno `Alt+F11` per i file che hai letto o modificato e `Alt+F12` per le
 cartelle in cui questo pannello è stato. Tutti e tre sono elenchi in cui si scrive: quello che
-scrivi li restringe, la cornice dice cosa hai scritto, e `Canc` su una riga toglie quella riga
-dalla cronologia per sempre.
+scrivi li restringe, e la cornice dice cosa hai scritto. `Ins` fissa la riga sotto il cursore —
+una riga fissata è marcata con un `*`, e né il limite di dimensione né la durata possono
+spingerla fuori — `Maiusc+Canc` toglie quella riga dalla cronologia per sempre, e `Canc`
+svuota l'elenco di tutto ciò che non hai fissato, dopo averlo chiesto. Una riga che nessuno ha
+fissato e nessuno usa da novanta giorni se ne va da sola; il numero sta in *Opzioni →
+Impostazioni di sistema*.
 
 Mentre scrivi, la riga ti offre quello che potrebbe diventare: i nomi della cartella che il
 pannello sta mostrando, le righe che hai già eseguito, e le variabili d'ambiente. `↑` e `↓`

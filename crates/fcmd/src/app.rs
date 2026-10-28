@@ -922,6 +922,13 @@ pub enum ConfirmAction {
         id: String,
         action: fcmd_platform::ServiceAction,
     },
+    /// Empty a history of everything nobody has pinned (`Del` in the list), and open it
+    /// again where it was — FAR asks before this one too.
+    ClearHistory {
+        kind: PickKind,
+        side: usize,
+        filter: String,
+    },
     /// Record a host key we have never seen and connect.
     AcceptHostKey {
         panel: usize,
@@ -946,6 +953,7 @@ impl ConfirmAction {
                 _ => "btn-ok",
             },
             ConfirmAction::ArcRebuild { .. } => "btn-delete",
+            ConfirmAction::ClearHistory { .. } => "btn-delete",
             ConfirmAction::DiscardEdits | ConfirmAction::DiscardHex => "btn-discard",
             ConfirmAction::OverwriteChanged | ConfirmAction::OverwriteRemote => "btn-overwrite",
             ConfirmAction::QuitWithScreens => "btn-quit",
@@ -1596,6 +1604,9 @@ pub struct App {
     /// kept that way in the field so that pushing is a `insert(0, …)` nobody has to think
     /// about. It survives the session through the state file.
     pub file_history: Vec<String>,
+    /// What the three histories keep besides their lines: which are pinned, and when each
+    /// was last used (see [`crate::history`]).
+    pub marks: crate::history::Marks,
     pub active: usize,
     pub mode: Mode,
     pub status: String,
@@ -1891,6 +1902,7 @@ impl App {
             tabs: [crate::tabs::Row::one(), crate::tabs::Row::one()],
             bookmarks: Vec::new(),
             file_history: Vec::new(),
+            marks: crate::history::Marks::default(),
             highlight_at: None,
             sort_group_at: None,
             folder_scan: None,
@@ -3350,6 +3362,9 @@ impl App {
                     ConfirmAction::Job(spec) => self.start_job(*spec),
                     ConfirmAction::ArcRebuild { archive, changes } => {
                         self.start_rebuild(archive, changes)
+                    }
+                    ConfirmAction::ClearHistory { kind, side, filter } => {
+                        self.clear_history(kind, side, &filter)
                     }
                     ConfirmAction::DiscardEdits => {
                         self.editor_parked = None;
@@ -6260,8 +6275,13 @@ impl App {
         // to the command line while a panel has the focus, and a preview must not swallow
         // what somebody is typing.
         if self.quick_focused() && key.as_typed_char().is_none() {
+            // `Tab` moves the keys between the content and the structure pane — but only
+            // while that pane is open. With no pane to move to it is the panels' own `Tab`
+            // again, which is the way back out of the preview: a key that does nothing is a
+            // key one is stuck behind.
+            let panes = self.quick.as_ref().is_some_and(|v| v.show_structure);
             if let Some(cmd) = self.keymap.resolve(&[Scope::Viewer], key) {
-                if quick_view_takes(cmd) {
+                if quick_view_takes(cmd, panes) {
                     self.run(cmd);
                     return;
                 }
@@ -8062,7 +8082,10 @@ impl App {
             return;
         }
         self.cmd.remember(&line);
-        self.cmd.trim_history(self.cfg.ui.command_history);
+        self.marks
+            .touch(crate::history::Hist::Commands, &line, crate::history::now());
+        let locked = self.marks.locked_lines(crate::history::Hist::Commands);
+        self.cmd.trim_history(self.cfg.ui.command_history, &locked);
         self.cmd.clear();
         self.run_line(&line);
     }
@@ -12124,7 +12147,9 @@ impl App {
                         separator: false,
                     })
                     .collect();
-                Pick::filtered(kind, self.plain("menu-folders-history"), rows, side)
+                let mut pick = Pick::filtered(kind, self.plain("menu-folders-history"), rows, side);
+                pick.locked = self.marks.locked_lines(crate::history::Hist::Folders);
+                pick
             }
             PickKind::CommandHistory => {
                 // Newest first, which is the order someone reaching for a past command wants.
@@ -12141,7 +12166,9 @@ impl App {
                         separator: false,
                     })
                     .collect();
-                Pick::filtered(kind, self.plain("menu-history"), rows, side)
+                let mut pick = Pick::filtered(kind, self.plain("menu-history"), rows, side);
+                pick.locked = self.marks.locked_lines(crate::history::Hist::Commands);
+                pick
             }
             PickKind::FileHistory => {
                 // Already newest first, which is how it is kept.
@@ -12156,7 +12183,9 @@ impl App {
                         separator: false,
                     })
                     .collect();
-                Pick::filtered(kind, self.plain("menu-view-history"), rows, side)
+                let mut pick = Pick::filtered(kind, self.plain("menu-view-history"), rows, side);
+                pick.locked = self.marks.locked_lines(crate::history::Hist::Files);
+                pick
             }
             PickKind::Highlight => {
                 let rows: Vec<PickRow> = self
@@ -12375,23 +12404,63 @@ impl App {
                 pick.filter.pop();
                 pick.refilter();
             }
-            // And a history is a list one clears from inside it: the line under the cursor
-            // goes, the list stays open, and what was typed stays typed.
-            KeyCode::Delete
-                if matches!(
-                    kind,
-                    PickKind::CommandHistory | PickKind::FileHistory | PickKind::FoldersHistory
-                ) =>
-            {
+            // FAR's three keys in a history, and the reason they are three: the lines one
+            // wants to keep for ever are rarer than the ones one wants rid of, and emptying
+            // the list is rarer still than either.
+            //
+            // `Ins` pins the line under the cursor, so that neither the size limit nor the
+            // lifetime can push it out.
+            KeyCode::Insert if history_of(kind).is_some() => {
                 let (side, value, filter) = (
                     pick.side,
                     pick.chosen().map(|r| r.value.clone()),
                     pick.filter.clone(),
                 );
-                if let Some(value) = value {
-                    self.forget_history(kind, side, &value);
-                    self.reopen_history(kind, side, &filter);
+                let (Some(hist), Some(value)) = (history_of(kind), value) else {
+                    return;
+                };
+                let locked = self.marks.flip(hist, &value, crate::history::now());
+                let id = if locked {
+                    "hist-pinned"
+                } else {
+                    "hist-unpinned"
+                };
+                let msg = self.i18n.t_args(id, &[("line", value.into())]);
+                self.reopen_history(kind, side, &filter);
+                self.set_status(msg);
+            }
+            // `Shift+Del` takes one line out, and refuses a pinned one rather than quietly
+            // making the pin mean nothing.
+            KeyCode::Delete if history_of(kind).is_some() && key.mods.contains(Mods::SHIFT) => {
+                let (side, value, filter) = (
+                    pick.side,
+                    pick.chosen().map(|r| r.value.clone()),
+                    pick.filter.clone(),
+                );
+                let (Some(hist), Some(value)) = (history_of(kind), value) else {
+                    return;
+                };
+                if self.marks.is_locked(hist, &value) {
+                    let msg = self
+                        .i18n
+                        .t_args("hist-is-pinned", &[("line", value.into())]);
+                    self.set_error(msg);
+                    return;
                 }
+                self.forget_history(kind, side, &value);
+                self.reopen_history(kind, side, &filter);
+            }
+            // And `Del` empties the whole list of everything nobody has pinned, after asking:
+            // it is one key away from the one above, and one of the two is not undoable.
+            KeyCode::Delete if history_of(kind).is_some() => {
+                let (side, filter, title) = (pick.side, pick.filter.clone(), pick.title.clone());
+                let body = self.i18n.t("hist-clear-body");
+                self.mode = Mode::Confirm(Confirm {
+                    title,
+                    lines: vec![body],
+                    action: ConfirmAction::ClearHistory { kind, side, filter },
+                    button: 0,
+                });
             }
             KeyCode::F(4) if kind == PickKind::SortGroups => {
                 let at = pick.cursor;
@@ -14913,9 +14982,13 @@ impl App {
             return;
         }
         self.file_history.retain(|p| *p != text);
-        self.file_history.insert(0, text);
+        self.file_history.insert(0, text.clone());
+        self.marks
+            .touch(crate::history::Hist::Files, &text, crate::history::now());
+        // A pinned line is never the one pushed out by the limit: the oldest unpinned one is.
         let keep = self.cfg.ui.file_history.max(1);
-        self.file_history.truncate(keep);
+        let locked = self.marks.locked_lines(crate::history::Hist::Files);
+        crate::history::trim(&mut self.file_history, keep, &locked, false);
     }
 
     /// The rows of the hotlist: the ones with a digit first and in order, then the rest as
@@ -15028,6 +15101,92 @@ impl App {
             }
             _ => {}
         }
+        if let Some(hist) = history_of(kind) {
+            self.marks.forget(hist, value);
+        }
+    }
+
+    /// Empty a history of every line nobody has pinned (`Del` in the list, once it has been
+    /// asked about), and open it again where it was.
+    ///
+    /// The pinned lines stay, which is the point of them: somebody who has pinned three
+    /// commands and wants the other four hundred gone presses one key, not four hundred.
+    fn clear_history(&mut self, kind: PickKind, side: usize, filter: &str) {
+        let Some(hist) = history_of(kind) else {
+            return;
+        };
+        let kept = self.marks.locked_lines(hist);
+        let keeps = |line: &str| kept.iter().any(|k| k == line);
+        match kind {
+            PickKind::CommandHistory => {
+                for line in self.cmd.history().to_vec() {
+                    if !keeps(&line) {
+                        self.cmd.forget(&line);
+                    }
+                }
+            }
+            PickKind::FileHistory => self.file_history.retain(|p| keeps(p)),
+            PickKind::FoldersHistory => {
+                // The panel's own walk back and forward reads this list by position, so it
+                // starts again where the panel is standing.
+                let here = self.panels[side].cwd.clone();
+                self.panels[side]
+                    .history
+                    .retain(|p| keeps(&p.to_string()) || *p == here);
+                let at = self.panels[side]
+                    .history
+                    .iter()
+                    .position(|p| *p == here)
+                    .unwrap_or(0);
+                self.panels[side].history_pos = at;
+            }
+            _ => return,
+        }
+        self.marks.keep_only(hist, &kept);
+        let msg = self.i18n.t("hist-cleared");
+        self.reopen_history(kind, side, filter);
+        self.set_status(msg);
+    }
+
+    /// Take out of the three histories every line nobody has pinned and nobody has used for
+    /// `ui.history_lifetime` days, and drop the marks of the lines that go.
+    ///
+    /// Done when the state is written rather than as the clock passes: a life is counted in
+    /// days and a session in hours, so once on the way out is both enough and the one moment
+    /// where all three histories are in hand. A panel keeps the folder it is standing in
+    /// whatever its age, because that list is also how `Alt+←` walks back.
+    pub fn sweep_histories(&mut self) {
+        use crate::history::Hist;
+
+        let days = self.cfg.ui.history_lifetime;
+        let now = crate::history::now();
+        let marks = self.marks.clone();
+
+        let mut commands = self.cmd.history().to_vec();
+        commands.retain(|line| !marks.is_stale(Hist::Commands, line, now, days));
+        self.cmd.load_history(commands.clone());
+        self.file_history
+            .retain(|line| !marks.is_stale(Hist::Files, line, now, days));
+
+        let mut folders: Vec<String> = Vec::new();
+        for side in 0..self.panels.len() {
+            let here = self.panels[side].cwd.clone();
+            self.panels[side].history.retain(|p| {
+                *p == here || !marks.is_stale(Hist::Folders, &p.to_string(), now, days)
+            });
+            let at = self.panels[side]
+                .history
+                .iter()
+                .position(|p| *p == here)
+                .unwrap_or(0);
+            self.panels[side].history_pos = at;
+            folders.extend(self.panels[side].history.iter().map(|p| p.to_string()));
+        }
+
+        let files = self.file_history.clone();
+        self.marks.keep_only(Hist::Commands, &commands);
+        self.marks.keep_only(Hist::Files, &files);
+        self.marks.keep_only(Hist::Folders, &folders);
     }
 
     /// Open a history again where it was, with what was typed into it still typed.
@@ -15275,7 +15434,12 @@ impl App {
     /// is the half with a status line in it. A lock that silently did nothing would read as a
     /// key that had stopped working.
     fn panel_go(&mut self, index: usize, path: VPath, push_history: bool) -> bool {
+        let text = path.to_string();
         if self.panels[index].go(path, push_history) {
+            if push_history {
+                self.marks
+                    .touch(crate::history::Hist::Folders, &text, crate::history::now());
+            }
             return true;
         }
         let msg = self.i18n.t("msg-tab-locked");
@@ -15784,9 +15948,16 @@ impl App {
 /// view has no file of its own to go back to, the panel beside it is what `Tab` is for, and
 /// `F3`, `F4` and the rest of the panel's own keys must still open the real viewer and the
 /// real editor on the file under the cursor.
-fn quick_view_takes(cmd: Command) -> bool {
+fn quick_view_takes(cmd: Command, panes: bool) -> bool {
     let id = cmd.id();
     if !id.starts_with("viewer.") {
+        return false;
+    }
+    // Moving between the content and the structure pane is the viewer's `Tab`; the panels'
+    // `Tab` is how one leaves the preview. With no pane open there is nothing to move
+    // between, so the key belongs to the panels — otherwise the focus goes into the quick
+    // view and never comes out.
+    if cmd == Command::ViewerPaneNext && !panes {
         return false;
     }
     !matches!(
@@ -16063,6 +16234,16 @@ fn filters(kind: PickKind) -> bool {
             | PickKind::FileHistory
             | PickKind::FoldersHistory
     )
+}
+
+/// Which history a list is, for the three keys that only a history has.
+fn history_of(kind: PickKind) -> Option<crate::history::Hist> {
+    match kind {
+        PickKind::CommandHistory => Some(crate::history::Hist::Commands),
+        PickKind::FoldersHistory => Some(crate::history::Hist::Folders),
+        PickKind::FileHistory => Some(crate::history::Hist::Files),
+        _ => None,
+    }
 }
 
 /// What to call a band in a message: its own name, or its place in the list.
@@ -22809,7 +22990,8 @@ abcdefghij
         assert_eq!(app.cfg.highlight[0].name, "logs");
     }
 
-    /// A history is long, so it is a list one types into — and one clears from inside it.
+    /// A history is long, so it is a list one types into — and one clears from inside it,
+    /// on FAR's own three keys.
     #[test]
     fn a_history_is_narrowed_by_typing_and_cleared_with_del() {
         let mut app = app();
@@ -22832,10 +23014,10 @@ abcdefghij
         assert_eq!(pick.rows.len(), 2, "{:?}", pick.rows);
         assert!(pick.heading().contains("car"), "{}", pick.heading());
 
-        // `Del` takes the line under the cursor out of the history and leaves the list — and
-        // the filter — where they were.
+        // `Shift+Del` takes the line under the cursor out of the history and leaves the list
+        // — and the filter — where they were.
         let gone = pick.chosen().map(|r| r.value.clone()).unwrap();
-        press(&mut app, "Del");
+        press(&mut app, "Shift+Del");
         assert!(
             !app.cmd.history().contains(&gone),
             "{:?}",
@@ -22846,6 +23028,55 @@ abcdefghij
         };
         assert_eq!(pick.filter, "car");
         assert_eq!(pick.rows.len(), 1, "{:?}", pick.rows);
+    }
+
+    /// `Ins` pins a line, `Shift+Del` refuses to take a pinned one away, and `Del` empties
+    /// the history of everything that is not pinned — FAR's three keys, after FAR's question.
+    #[test]
+    fn a_pinned_history_line_outlives_del_and_the_size_limit() {
+        let mut app = app();
+        app.cmd
+            .load_history(vec!["make".into(), "cargo test".into(), "cargo fmt".into()]);
+        app.run(Command::CmdHistory);
+
+        // Newest first, so the cursor is on `cargo fmt`. `Ins` pins it, and the list says so.
+        press(&mut app, "Ins");
+        assert!(
+            app.marks
+                .is_locked(crate::history::Hist::Commands, "cargo fmt"),
+            "the line under the cursor is pinned"
+        );
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert!(
+            pick.lines().iter().any(|line| line.contains("* cargo fmt")),
+            "the pinned row is marked: {:?}",
+            pick.lines()
+        );
+
+        // `Shift+Del` will not take a pinned line away.
+        press(&mut app, "Shift+Del");
+        assert!(
+            app.cmd.history().contains(&"cargo fmt".to_string()),
+            "{:?}",
+            app.cmd.history()
+        );
+
+        // `Del` asks, and then empties the history of everything else.
+        press(&mut app, "Del");
+        assert!(matches!(app.mode, Mode::Confirm(_)), "{:?}", app.mode);
+        press(&mut app, "Enter");
+        assert_eq!(app.cmd.history(), ["cargo fmt"]);
+        assert!(matches!(app.mode, Mode::Pick(_)), "the list stays open");
+
+        // And the size limit passes over it as well: one line kept, and the pinned one is it.
+        app.cfg.ui.command_history = 1;
+        app.cmd
+            .load_history(vec!["cargo fmt".into(), "make".into()]);
+        let locked = app.marks.locked_lines(crate::history::Hist::Commands);
+        app.cmd.trim_history(1, &locked);
+        assert_eq!(app.cmd.history(), ["cargo fmt"]);
     }
 
     /// `Alt+F10` is the folders the tree knows, as a list one types into: what was typed
@@ -24918,6 +25149,37 @@ abcdefghij
         press(&mut app, "n");
         assert!(app.mode.is_normal(), "{:?}", app.mode);
         assert!(!app.cmd.text.is_empty(), "the letter went nowhere");
+    }
+
+    /// `Tab` is the way out of the preview as well as the way in: in the viewer it moves
+    /// between the content and the structure pane, and with no pane open it belongs to the
+    /// panels, or the focus goes into the quick view and never comes out.
+    #[test]
+    fn tab_goes_into_the_quick_view_and_out_of_it_again() {
+        let dir = tempfile::tempdir().expect("a directory");
+        std::fs::write(dir.path().join("notes.txt"), b"a line of text\n").expect("written");
+        let mut app = app();
+        app.panels[0].cwd = VPath::local(dir.path());
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation: app.panels[0].generation,
+            result: Ok(vec![
+                Entry::parent_entry(),
+                entry("notes.txt", EntryKind::File, 15),
+            ]),
+        });
+        app.panels[0].cursor_to(1);
+        app.active = 0;
+        app.run(Command::PanelQuickView(Side::Right));
+        assert!(app.quick.is_some(), "nothing to preview");
+
+        press(&mut app, "Tab");
+        assert_eq!(app.active, 1, "the preview has the focus");
+        assert!(app.quick_focused());
+
+        press(&mut app, "Tab");
+        assert_eq!(app.active, 0, "and `Tab` brings it back to the files");
+        assert!(!app.quick_focused());
     }
 
     #[test]

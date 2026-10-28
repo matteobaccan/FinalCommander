@@ -195,9 +195,9 @@ panel. Both are in `docs/BACKLOG.md`.
 
 ## 6. Histories
 
-Command, directory, view/edit, search, rename pattern, and mask histories: persisted, size-capped,
-searchable (type to filter), with pinning (FAR's `Ins` to lock an entry so it is not evicted) and
-per-history clearing.
+Command, directory, view/edit, search, rename pattern, and mask histories: persisted,
+size-capped, searchable (type to filter), with pinning (FAR's `Ins` to lock an entry so it is
+not evicted) and per-history clearing.
 
 **Shipped**: the command history (`Alt+F8`, `Ctrl+E`/`Ctrl+X` on the line, `ui.command_history`
 lines kept), the folder history per panel (`Alt+F12`), and — new in 0.7.0 — **the files that
@@ -211,10 +211,34 @@ opened again moves to the top rather than appearing twice, because the list is *
 been* and a file read five times is one place. `Enter` on a row reads it and `F4` edits it; a
 row whose file has gone says so rather than opening nothing.
 
-Both histories live in the state file rather than under `$STATE/history/`: one file to back up
-and one to delete is the rule the configuration follows (SPEC 07 §1), and a JSONL file per
-history would be five more. Pinning, filtering as one types and clearing a history are backlog
-lines, as is a lifetime in days.
+All three live in the state file rather than under `$STATE/history/`: one file to back up and
+one to delete is the rule the configuration follows (SPEC 07 §1), and a JSONL file per history
+would be five more.
+
+**A list one types into, and FAR's three keys.** Each of the three narrows as one types — the
+frame says what was typed — and then:
+
+| Key | What it does |
+| --- | --- |
+| `Ins` | pins the line under the cursor, and unpins it again. A pinned row is marked with a `*` beside the list's own `√` column, and neither the size limit nor the lifetime can push it out |
+| `Shift+Del` | takes that one line out of the history, and refuses a pinned one rather than quietly making the pin mean nothing |
+| `Del` | empties the history of everything nobody has pinned, after asking: it is one key away from the one above, and only one of the two can be undone by typing the line again |
+
+Those are FAR's own keys in its history window, including FAR's question before the `Del`.
+
+**A lifetime.** `ui.history_lifetime` is how many days a line nobody has pinned is kept after
+it was last *used* — FAR's own setting, and FAR's own default of ninety days. A line used
+again is as young as the use, so a lifetime counts idle days rather than days since the line
+was first typed; `0` keeps everything for ever, and a pinned line is never counted.
+
+The sweep happens once, when the state file is written on the way out: a life is counted in
+days and a session in hours, so there is nothing to gain by checking the clock while the
+program runs, and that is the one moment where all three histories are in hand. What each line
+has to say for itself — when it was last used, whether it is pinned — is a small table beside
+the three lists in the state file, so a line nobody has pinned and nobody has used since the
+file was written simply has no row there.
+
+Still owed: a history for the dialogs' own fields.
 
 ## 7. Shell integration
 
