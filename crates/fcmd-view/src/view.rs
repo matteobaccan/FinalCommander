@@ -875,10 +875,20 @@ impl Viewer {
             return;
         }
         let whole = self.source.len();
+        let name = self.path.display_name();
+        // A dBase table says in its first bytes where its records are and how long they are,
+        // so there is nothing to read here but the header: the rows are fetched a window at
+        // a time, however large the file is.
+        if name.to_ascii_lowercase().ends_with(".dbf") {
+            let head = self.source.read_vec(0, 64 * 1024).unwrap_or_default();
+            if let Some(table) = crate::table::Table::dbase(&head, whole) {
+                self.table = Some(table);
+                return;
+            }
+        }
         let len = whole.min(TABLE_LIMIT) as usize;
         let bytes = self.source.read_vec(0, len).unwrap_or_default();
         let text = self.codepage.decode(&bytes);
-        let name = self.path.display_name();
         let mut table = crate::table::Table::of(&name, &text)
             .unwrap_or_else(|| crate::table::Table::separated(&text, None));
         table.cut = whole > TABLE_LIMIT;
@@ -901,11 +911,7 @@ impl Viewer {
         let Some(table) = &self.table else {
             return 0;
         };
-        table
-            .rows
-            .iter()
-            .rposition(|r| r.offset <= offset)
-            .unwrap_or_default()
+        table.row_at(offset)
     }
 
     /// Scrolling a table is scrolling its rows, and `top` follows so that a search, a
@@ -915,13 +921,13 @@ impl Viewer {
         let Some(table) = &self.table else {
             return;
         };
-        if table.rows.is_empty() {
+        if table.is_empty() {
             return;
         }
-        let last = table.rows.len() as i64 - 1;
+        let last = table.len() as i64 - 1;
         let next = (self.table_row as i64 + delta).clamp(0, last) as usize;
         self.table_row = next;
-        self.top = table.rows[next].offset;
+        self.top = table.offset(next);
     }
 
     /// The rows of a table: the heading and its rule first, and they stay there — a table
@@ -931,12 +937,15 @@ impl Viewer {
         self.parse_table();
         let (col, from) = (self.col, self.table_row);
         let pattern = self.pattern.is_some();
-        let Some(table) = &self.table else {
+        // Two fields, borrowed apart: the table says what to draw and the source is where a
+        // windowed table's records come from.
+        let (table, source) = (&self.table, &mut self.source);
+        let Some(table) = table else {
             return Vec::new();
         };
         let width = width as usize;
         let mut out = Vec::with_capacity(height as usize);
-        let first = table.rows.first().map(|r| r.offset).unwrap_or(0);
+        let first = table.offset(0);
         out.push(Row {
             offset: first,
             text: table.header(col, width),
@@ -953,13 +962,13 @@ impl Viewer {
                 spans: Vec::new(),
             });
         }
-        for at in from..table.rows.len() {
+        for at in from..table.len() {
             if out.len() >= height as usize {
                 break;
             }
             out.push(Row {
-                offset: table.rows[at].offset,
-                text: table.line(at, col, width),
+                offset: table.offset(at),
+                text: table.line(&mut **source, at, col, width),
                 hits: Vec::new(),
                 kind: RowKind::Text,
                 spans: Vec::new(),
@@ -978,9 +987,13 @@ impl Viewer {
     /// Is this a file table mode can read? Its name has to say so and it has to be small
     /// enough to parse whole.
     pub fn reads_table(&mut self) -> bool {
-        crate::table::Table::reads(&self.path.display_name())
-            && self.source.len() <= TABLE_LIMIT
-            && self.derived.is_none()
+        let name = self.path.display_name();
+        if !crate::table::Table::reads(&name) || self.derived.is_some() {
+            return false;
+        }
+        // The size limit is about reading a file whole, which a dBase table is not: it is
+        // read a window at a time however large it is.
+        name.to_ascii_lowercase().ends_with(".dbf") || self.source.len() <= TABLE_LIMIT
     }
 
     /// Show the file as a table, if it is one we can read. `false` when it is not, so the
@@ -1011,11 +1024,7 @@ impl Viewer {
             };
             note.push_str(&format!(" `{shown}`"));
         }
-        note.push_str(&format!(
-            " · {} × {}",
-            table.rows.len(),
-            table.columns.len()
-        ));
+        note.push_str(&format!(" · {} × {}", table.len(), table.columns.len()));
         if table.skipped > 0 {
             note.push_str(&format!(" · {} skipped", table.skipped));
         }
@@ -1930,6 +1939,27 @@ mod tests {
         assert!(!v.reads_table());
         assert!(!v.as_table());
         assert_eq!(v.mode, Mode::Text);
+    }
+
+    #[test]
+    fn a_dbase_table_opens_as_a_table_however_large_it_says_it_is() {
+        // The same hand-built table the reader's own test uses.
+        let bytes = crate::table::tests::dbase_bytes();
+        let mut v = Viewer::new(
+            Box::new(BytesSource::new(bytes)),
+            VPath::local("/tmp/people.dbf"),
+        );
+        assert!(v.reads_table());
+        assert!(v.as_table());
+        let rows = texts(&mut v, 40, 5);
+        assert_eq!(rows[0], "NAME       │ BORN      ");
+        assert_eq!(rows[2], "mb         │ 1975-03-12");
+        assert_eq!(rows[3], "*gone      │           ");
+        let note = v.status().table.expect("a note");
+        assert!(note.contains("dBase III"), "{note}");
+        assert!(note.contains("3 × 2"), "{note}");
+        // No delimiter was guessed, because a dBase table has none to guess.
+        assert!(!note.contains('`'), "{note}");
     }
 
     #[test]

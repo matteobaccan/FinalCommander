@@ -20,11 +20,26 @@ const MAX_COL: usize = 40;
 /// optional keys of a well-formed log, few enough that opening is instant.
 const HEADER_RECORDS: usize = 200;
 
+/// Where a table's records come from.
+///
+/// The text formats are read whole and kept — a column's width cannot be known from the part
+/// of the file on screen, which is the same reason a laid-out Markdown document is rendered
+/// whole. A DBF is the opposite and says so in its first bytes: the header gives the column
+/// widths and the record length, so row *n* is one multiplication and one read, and nothing
+/// but the window on screen is ever touched.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Records {
+    /// Parsed up front: CSV, TSV, JSON Lines.
+    Read(Vec<Row>),
+    /// Read a window at a time out of the file.
+    Dbf(Dbf),
+}
+
 /// A parsed table: what the columns are called, and the rows.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Table {
     pub columns: Vec<String>,
-    pub rows: Vec<Row>,
+    pub records: Records,
     /// Display width of each column, from the header and the rows that were read.
     pub widths: Vec<usize>,
     /// `CSV`, `TSV`, `JSONL` — what the status line says this was read as.
@@ -48,6 +63,31 @@ pub struct Row {
 }
 
 impl Table {
+    /// A `.dbf`, from its header. The records are not read: the header says where they are.
+    pub fn dbase(head: &[u8], file_len: u64) -> Option<Table> {
+        let mut dbf = Dbf::parse(head)?;
+        // A header that claims more records than the file can hold is a truncated table, and
+        // what is there is what can be read.
+        let room = file_len.saturating_sub(dbf.first) / dbf.record_len.max(1) as u64;
+        let claimed = dbf.records;
+        dbf.records = dbf.records.min(room as usize);
+        let cut = dbf.records < claimed;
+        let mut table = Table {
+            columns: dbf.columns(),
+            records: Records::Dbf(dbf.clone()),
+            widths: dbf.widths(),
+            format: dbf.flavour,
+            delimiter: None,
+            cut,
+            skipped: 0,
+        };
+        // The declared widths, with the headings allowed to widen a column.
+        for (i, name) in table.columns.iter().enumerate() {
+            table.widths[i] = table.widths[i].max(name.width().min(MAX_COL)).max(1);
+        }
+        Some(table)
+    }
+
     /// Read a table out of text, by what the name says it is. `None` for a name that says
     /// nothing we can read.
     pub fn of(name: &str, text: &str) -> Option<Table> {
@@ -68,7 +108,7 @@ impl Table {
     /// name alone.
     pub fn reads(name: &str) -> bool {
         let name = name.to_ascii_lowercase();
-        [".csv", ".tsv", ".tab", ".jsonl", ".ndjson"]
+        [".csv", ".tsv", ".tab", ".jsonl", ".ndjson", ".dbf"]
             .iter()
             .any(|ext| name.ends_with(ext))
     }
@@ -85,7 +125,7 @@ impl Table {
         };
         let mut table = Table {
             columns: header,
-            rows: records,
+            records: Records::Read(records),
             widths: Vec::new(),
             format: if delimiter == '\t' { "TSV" } else { "CSV" },
             delimiter: guessed.then_some(delimiter),
@@ -95,7 +135,12 @@ impl Table {
         // A row with more fields than the header has them: a header short of a column is a
         // common export, and dropping the data would be worse than naming the column after
         // the number it is.
-        let widest = table.rows.iter().map(|r| r.cells.len()).max().unwrap_or(0);
+        let widest = table
+            .rows()
+            .iter()
+            .map(|r| r.cells.len())
+            .max()
+            .unwrap_or(0);
         while table.columns.len() < widest {
             table.columns.push(format!("#{}", table.columns.len() + 1));
         }
@@ -160,7 +205,7 @@ impl Table {
         }
         let mut table = Table {
             columns,
-            rows,
+            records: Records::Read(rows),
             widths: Vec::new(),
             format: "JSONL",
             delimiter: None,
@@ -178,12 +223,14 @@ impl Table {
             .iter()
             .map(|c| c.width().min(MAX_COL))
             .collect();
-        for row in &self.rows {
-            for (i, cell) in row.cells.iter().enumerate() {
-                if i >= self.widths.len() {
-                    continue;
+        if let Records::Read(rows) = &self.records {
+            for row in rows {
+                for (i, cell) in row.cells.iter().enumerate() {
+                    if i >= self.widths.len() {
+                        continue;
+                    }
+                    self.widths[i] = self.widths[i].max(cell.width()).min(MAX_COL);
                 }
-                self.widths[i] = self.widths[i].max(cell.width()).min(MAX_COL);
             }
         }
         // A column with nothing in it and no name still needs a cell to sit in.
@@ -211,12 +258,83 @@ impl Table {
         shift(&line, col, width)
     }
 
+    /// The records that were read up front. Empty for a table that is read a window at a
+    /// time, which is why everything that draws goes through `line` instead.
+    pub fn rows(&self) -> &[Row] {
+        match &self.records {
+            Records::Read(rows) => rows,
+            Records::Dbf(_) => &[],
+        }
+    }
+
+    /// How many records the table has.
+    pub fn len(&self) -> usize {
+        match &self.records {
+            Records::Read(rows) => rows.len(),
+            Records::Dbf(dbf) => dbf.records,
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Where record `n` begins in the file — what a search or a bookmark in table mode means.
+    pub fn offset(&self, n: usize) -> u64 {
+        match &self.records {
+            Records::Read(rows) => rows.get(n).map(|r| r.offset).unwrap_or(0),
+            Records::Dbf(dbf) => dbf.offset(n),
+        }
+    }
+
+    /// Which record a byte offset falls in: the last one that starts at or before it.
+    pub fn row_at(&self, offset: u64) -> usize {
+        match &self.records {
+            Records::Read(rows) => rows
+                .iter()
+                .rposition(|r| r.offset <= offset)
+                .unwrap_or_default(),
+            Records::Dbf(dbf) => {
+                let past = offset.saturating_sub(dbf.first) / dbf.record_len.max(1) as u64;
+                (past as usize).min(dbf.records.saturating_sub(1))
+            }
+        }
+    }
+
+    /// The cells of one record. The source is only touched for a table that is read a window
+    /// at a time; for the text formats it is already in memory and is not read again.
+    pub fn cells(&self, source: &mut dyn crate::source::Source, row: usize) -> Vec<String> {
+        match &self.records {
+            Records::Read(rows) => rows.get(row).map(|r| r.cells.clone()).unwrap_or_default(),
+            Records::Dbf(dbf) => {
+                if row >= dbf.records {
+                    return Vec::new();
+                }
+                let bytes = source
+                    .read_vec(dbf.offset(row), dbf.record_len)
+                    .unwrap_or_default();
+                if bytes.len() < dbf.record_len {
+                    // A table shorter than its header claims: the rest is not there to read.
+                    return Vec::new();
+                }
+                dbf.cells(&bytes)
+            }
+        }
+    }
+
     /// One row of cells, laid out in the columns.
-    pub fn line(&self, row: usize, col: usize, width: usize) -> String {
-        let Some(row) = self.rows.get(row) else {
+    pub fn line(
+        &self,
+        source: &mut dyn crate::source::Source,
+        row: usize,
+        col: usize,
+        width: usize,
+    ) -> String {
+        let cells = self.cells(source, row);
+        if cells.is_empty() {
             return String::new();
-        };
-        let cells: Vec<&str> = row.cells.iter().map(String::as_str).collect();
+        }
+        let cells: Vec<&str> = cells.iter().map(String::as_str).collect();
         lay_out(&cells, &self.widths, col, width)
     }
 
@@ -388,29 +506,301 @@ fn parse_separated(text: &str, delimiter: char) -> Vec<Row> {
     rows
 }
 
+// ── dBase ──────────────────────────────────────────────────────────────────────────────────
+
+/// A `.dbf` file's header: what the columns are, and where the records are.
+///
+/// This is the reader the format was waiting for. A DBF says in its first bytes how many
+/// records it holds, how long one is and where they start, so row *n* is one multiplication
+/// and one read — which is why this one is not loaded whole like the text formats. A two
+/// gigabyte table opens as fast as a log does.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Dbf {
+    /// Where the first record begins.
+    pub first: u64,
+    /// How long one record is, the deletion flag included.
+    pub record_len: usize,
+    /// How many records the header claims. Checked against the file's own length, because a
+    /// truncated table is a thing that happens and reading past the end is not.
+    pub records: usize,
+    fields: Vec<Field>,
+    /// What the header's language byte says the text is in.
+    encoding: &'static encoding_rs::Encoding,
+    /// What the version byte says this is, for the status line.
+    pub flavour: &'static str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Field {
+    name: String,
+    kind: u8,
+    /// Where in the record the field starts, the deletion flag included.
+    at: usize,
+    len: usize,
+    decimals: u8,
+}
+
+impl Dbf {
+    /// Read the header. `None` for anything that is not a table we know how to read: the
+    /// first byte says what it is, and a byte that says something else is not a DBF.
+    pub fn parse(head: &[u8]) -> Option<Dbf> {
+        if head.len() < 33 {
+            return None;
+        }
+        let version = head[0];
+        let flavour = match version {
+            0x02 => "dBase II",
+            0x03 => "dBase III",
+            0x04 | 0x7b => "dBase IV",
+            0x05 => "dBase V",
+            0x30..=0x32 => "Visual FoxPro",
+            0x43 | 0x63 | 0xcb => "dBase IV SQL",
+            0x83 => "dBase III + memo",
+            0x8b | 0x8e => "dBase IV + memo",
+            0xf5 => "FoxPro 2 + memo",
+            0xfb => "FoxPro",
+            _ => return None,
+        };
+        let records = u32::from_le_bytes([head[4], head[5], head[6], head[7]]) as usize;
+        let header_len = u16::from_le_bytes([head[8], head[9]]) as usize;
+        let record_len = u16::from_le_bytes([head[10], head[11]]) as usize;
+        if header_len < 33 || record_len == 0 {
+            return None;
+        }
+        let encoding = encoding_for(head[29]);
+
+        let mut fields = Vec::new();
+        let mut at = 1usize; // the deletion flag is the first byte of every record
+        let mut cursor = 32usize;
+        while cursor + 32 <= head.len() && cursor + 32 <= header_len {
+            if head[cursor] == 0x0d {
+                break;
+            }
+            let raw = &head[cursor..cursor + 32];
+            let name: String = raw[..11]
+                .iter()
+                .take_while(|b| **b != 0)
+                .map(|b| *b as char)
+                .collect();
+            let len = raw[16] as usize;
+            // The length of a `C` field over 255 is the two bytes 16 and 17 together, which
+            // is how FoxPro writes a long character field; for every other type byte 17 is
+            // the decimal count.
+            let (len, decimals) = if raw[11] == b'C' && raw[17] != 0 && len < 255 {
+                (len + ((raw[17] as usize) << 8), 0)
+            } else {
+                (len, raw[17])
+            };
+            fields.push(Field {
+                name: name.trim().to_string(),
+                kind: raw[11],
+                at,
+                len,
+                decimals,
+            });
+            at += len;
+            cursor += 32;
+        }
+        if fields.is_empty() {
+            return None;
+        }
+        Some(Dbf {
+            first: header_len as u64,
+            record_len,
+            records,
+            fields,
+            encoding,
+            flavour,
+        })
+    }
+
+    /// Where record `n` begins in the file.
+    pub fn offset(&self, n: usize) -> u64 {
+        self.first + (n as u64) * (self.record_len as u64)
+    }
+
+    /// The columns, as the header names them.
+    fn columns(&self) -> Vec<String> {
+        self.fields.iter().map(|f| f.name.clone()).collect()
+    }
+
+    /// How wide each column is: what the header declares, capped. A DBF is the one format
+    /// that does not have to be read to be laid out.
+    fn widths(&self) -> Vec<usize> {
+        self.fields
+            .iter()
+            .map(|f| {
+                let declared = match f.kind {
+                    b'D' => 10, // `YYYY-MM-DD`, which is wider than the stored 8
+                    b'L' => 5,  // `false`
+                    b'I' => 11,
+                    b'T' => 19,
+                    b'Y' | b'B' | b'O' => 20,
+                    b'M' | b'G' => 10,
+                    _ => f.len,
+                };
+                declared.max(f.name.chars().count()).clamp(1, MAX_COL)
+            })
+            .collect()
+    }
+
+    /// One record's cells, out of the record's own bytes.
+    ///
+    /// A record whose deletion flag is set is still a record: `*` in front of the first cell
+    /// says so, because a table where deleted rows simply vanish is a table whose row count
+    /// does not add up — and finding the deleted ones is half of why anybody opens a DBF.
+    fn cells(&self, record: &[u8]) -> Vec<String> {
+        let deleted = record.first() == Some(&b'*');
+        let mut out = Vec::with_capacity(self.fields.len());
+        for (i, f) in self.fields.iter().enumerate() {
+            let end = (f.at + f.len).min(record.len());
+            let raw = if f.at < end {
+                &record[f.at..end]
+            } else {
+                &[][..]
+            };
+            let mut value = self.cell(f, raw);
+            if i == 0 && deleted {
+                value = format!("*{value}");
+            }
+            out.push(value);
+        }
+        out
+    }
+
+    fn cell(&self, f: &Field, raw: &[u8]) -> String {
+        let text = |bytes: &[u8]| self.encoding.decode(bytes).0.into_owned();
+        match f.kind {
+            // Numbers are written as text, right-aligned in the field with spaces.
+            b'N' | b'F' => text(raw).trim().to_string(),
+            // Eight digits, `YYYYMMDD`, or spaces for a date that was never set.
+            b'D' => {
+                let s = text(raw);
+                let s = s.trim();
+                if s.len() == 8 && s.chars().all(|c| c.is_ascii_digit()) {
+                    format!("{}-{}-{}", &s[0..4], &s[4..6], &s[6..8])
+                } else {
+                    String::new()
+                }
+            }
+            b'L' => match raw.first() {
+                Some(b'T') | Some(b't') | Some(b'Y') | Some(b'y') => "true".to_string(),
+                Some(b'F') | Some(b'f') | Some(b'N') | Some(b'n') => "false".to_string(),
+                _ => String::new(),
+            },
+            // A memo is a block number into the `.dbt`/`.fpt` beside the table, which is a
+            // second file we do not open yet: the number is what there is to say.
+            b'M' | b'G' | b'P' => {
+                let s = text(raw);
+                let s = s.trim().trim_start_matches('0');
+                if s.is_empty() {
+                    String::new()
+                } else {
+                    format!("memo:{s}")
+                }
+            }
+            b'I' if raw.len() >= 4 => {
+                i32::from_le_bytes([raw[0], raw[1], raw[2], raw[3]]).to_string()
+            }
+            b'Y' if raw.len() >= 8 => {
+                let n = i64::from_le_bytes([
+                    raw[0], raw[1], raw[2], raw[3], raw[4], raw[5], raw[6], raw[7],
+                ]);
+                format!("{}.{:04}", n / 10_000, (n % 10_000).abs())
+            }
+            b'B' | b'O' if raw.len() >= 8 => {
+                let n = f64::from_le_bytes([
+                    raw[0], raw[1], raw[2], raw[3], raw[4], raw[5], raw[6], raw[7],
+                ]);
+                format!("{n}")
+            }
+            // A `T` is two 32-bit halves: a Julian day and milliseconds past midnight. The
+            // day is the part worth reading in a panel, and the arithmetic is the one from
+            // the format's own documentation.
+            b'T' if raw.len() >= 8 => {
+                let day = i32::from_le_bytes([raw[0], raw[1], raw[2], raw[3]]);
+                let ms = i32::from_le_bytes([raw[4], raw[5], raw[6], raw[7]]);
+                if day == 0 {
+                    String::new()
+                } else {
+                    let (y, m, d) = from_julian(day);
+                    let (h, min, s) = (ms / 3_600_000, (ms / 60_000) % 60, (ms / 1000) % 60);
+                    format!("{y:04}-{m:02}-{d:02} {h:02}:{min:02}:{s:02}")
+                }
+            }
+            // `C` and anything we do not know: the bytes as text, with the padding off.
+            _ => {
+                let s = text(raw);
+                s.trim_end().trim_start_matches('\0').to_string()
+            }
+        }
+        .replace(['\r', '\n', '\t'], " ")
+    }
+}
+
+/// A Julian day number as a calendar date. The algorithm is the standard one (Fliegel and Van
+/// Flandern), written out because it is four lines and pulling in a date library for the one
+/// field type that needs it would not be a trade.
+fn from_julian(jd: i32) -> (i32, i32, i32) {
+    let l = jd + 68_569;
+    let n = (4 * l) / 146_097;
+    let l = l - (146_097 * n + 3) / 4;
+    let i = (4000 * (l + 1)) / 1_461_001;
+    let l = l - (1461 * i) / 4 + 31;
+    let j = (80 * l) / 2447;
+    let d = l - (2447 * j) / 80;
+    let l = j / 11;
+    let m = j + 2 - (12 * l);
+    let y = 100 * (n - 49) + i + l;
+    (y, m, d)
+}
+
+/// The text encoding a DBF's language byte names. The ones that are actually met; anything
+/// else is read as Windows-1252, which at least never fails and is right for most of Europe.
+fn encoding_for(byte: u8) -> &'static encoding_rs::Encoding {
+    match byte {
+        0x01 | 0x69 => encoding_rs::IBM866, // 437 is not in encoding_rs; 866 is the near one
+        0x02 => encoding_rs::WINDOWS_1252,  // 850, close enough for the accented letters
+        0x64 | 0xc8 => encoding_rs::WINDOWS_1250,
+        0x65 | 0xc9 => encoding_rs::WINDOWS_1251,
+        0x66 | 0x26 => encoding_rs::IBM866,
+        0x6a | 0xcb => encoding_rs::WINDOWS_1253,
+        0x6b | 0xca => encoding_rs::WINDOWS_1254,
+        0x7d | 0xcc => encoding_rs::WINDOWS_1255,
+        0x7e | 0xcd => encoding_rs::WINDOWS_1256,
+        _ => encoding_rs::WINDOWS_1252,
+    }
+}
+
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
+
+    /// A source with nothing in it: the text formats never read from it, and the tests that
+    /// do read — the dBase ones — build their own.
+    fn src() -> crate::source::BytesSource {
+        crate::source::BytesSource::new(Vec::new())
+    }
 
     #[test]
     fn a_comma_separated_file_reads_as_a_table_with_its_first_line_as_the_header() {
         let table = Table::of("people.csv", "name,age\nmb,51\nada,36\n").expect("a table");
         assert_eq!(table.columns, ["name", "age"]);
-        assert_eq!(table.rows.len(), 2);
-        assert_eq!(table.rows[0].cells, ["mb", "51"]);
+        assert_eq!(table.rows().len(), 2);
+        assert_eq!(table.rows()[0].cells, ["mb", "51"]);
         assert_eq!(table.format, "CSV");
         // The delimiter was guessed, so the status line has something to admit.
         assert_eq!(table.delimiter, Some(','));
         // Each row knows where it began, so a search can say where it found something.
-        assert_eq!(table.rows[0].offset, "name,age\n".len() as u64);
+        assert_eq!(table.rows()[0].offset, "name,age\n".len() as u64);
     }
 
     #[test]
     fn a_quoted_field_may_hold_the_delimiter_and_a_newline() {
         let text = "a,b\n\"one,two\",\"line\nbreak\"\n\"say \"\"hi\"\"\",last\n";
         let table = Table::separated(text, Some(','));
-        assert_eq!(table.rows[0].cells, ["one,two", "line\nbreak"]);
-        assert_eq!(table.rows[1].cells, ["say \"hi\"", "last"]);
+        assert_eq!(table.rows()[0].cells, ["one,two", "line\nbreak"]);
+        assert_eq!(table.rows()[1].cells, ["say \"hi\"", "last"]);
     }
 
     #[test]
@@ -419,7 +809,7 @@ mod tests {
         let table = Table::separated("name;price\nbread;1,20\nmilk;0,99\n", None);
         assert_eq!(table.delimiter, Some(';'));
         assert_eq!(table.columns, ["name", "price"]);
-        assert_eq!(table.rows[0].cells, ["bread", "1,20"]);
+        assert_eq!(table.rows()[0].cells, ["bread", "1,20"]);
 
         // Tabs, which a `.tsv` says outright but a `.csv` may still hold.
         let table = Table::separated("a\tb\n1\t2\n", None);
@@ -428,14 +818,14 @@ mod tests {
         // One column and nothing to separate: no guess is better than a wrong one.
         let table = Table::separated("just one line\n", None);
         assert_eq!(table.columns, ["just one line"]);
-        assert!(table.rows.is_empty());
+        assert!(table.rows().is_empty());
     }
 
     #[test]
     fn a_row_with_more_fields_than_the_header_keeps_them() {
         let table = Table::separated("a,b\n1,2,3\n", Some(','));
         assert_eq!(table.columns, ["a", "b", "#3"]);
-        assert_eq!(table.rows[0].cells, ["1", "2", "3"]);
+        assert_eq!(table.rows()[0].cells, ["1", "2", "3"]);
     }
 
     #[test]
@@ -443,18 +833,18 @@ mod tests {
         let text = "{\"when\":\"now\",\"what\":\"start\"}\n{\"what\":\"stop\",\"code\":2}\n";
         let table = Table::json_lines(text);
         assert_eq!(table.columns, ["when", "what", "code"]);
-        assert_eq!(table.rows[0].cells, ["now", "start", ""]);
-        assert_eq!(table.rows[1].cells, ["", "stop", "2"]);
+        assert_eq!(table.rows()[0].cells, ["now", "start", ""]);
+        assert_eq!(table.rows()[1].cells, ["", "stop", "2"]);
         assert_eq!(table.format, "JSONL");
 
         // A line that is not an object is counted, not shown as a row of nonsense.
         let table = Table::json_lines("[\n{\"a\":1}\nnot json\n");
-        assert_eq!(table.rows.len(), 1);
+        assert_eq!(table.rows().len(), 1);
         assert_eq!(table.skipped, 2);
 
         // Nested values are their own compact JSON, and null is an empty cell.
         let table = Table::json_lines("{\"a\":{\"b\":1},\"c\":[1,2],\"d\":null}\n");
-        assert_eq!(table.rows[0].cells, ["{\"b\":1}", "[1,2]", ""]);
+        assert_eq!(table.rows()[0].cells, ["{\"b\":1}", "[1,2]", ""]);
     }
 
     #[test]
@@ -466,7 +856,7 @@ mod tests {
         text.push_str("{\"i\":999,\"late\":\"yes\"}\n");
         let table = Table::json_lines(&text);
         assert_eq!(table.columns, ["i", "…"]);
-        let last = table.rows.last().expect("a row");
+        let last = table.rows().last().expect("a row");
         assert_eq!(last.cells, ["999", "late=yes"]);
     }
 
@@ -476,7 +866,7 @@ mod tests {
         assert_eq!(table.widths, [4, 3]);
         assert_eq!(table.header(0, 40), "name │ age");
         assert_eq!(table.rule(0, 40), "──── │ ───".replace(" │ ", "─┼─"));
-        assert_eq!(table.line(0, 0, 40), "mb   │ 51 ");
+        assert_eq!(table.line(&mut src(), 0, 0, 40), "mb   │ 51 ");
 
         // A window narrower than the table shows what fits, from where it was scrolled to.
         assert_eq!(table.header(0, 4), "name");
@@ -489,16 +879,89 @@ mod tests {
         let long = "x".repeat(MAX_COL + 10);
         let table = Table::separated(&format!("a\n{long}\n"), Some(','));
         assert_eq!(table.widths, [MAX_COL]);
-        let line = table.line(0, 0, 100);
+        let line = table.line(&mut src(), 0, 0, 100);
         assert!(line.ends_with('…'), "{line}");
         assert_eq!(line.width(), MAX_COL);
+    }
+
+    /// A dBase III table, built by hand: two fields, three records, one of them deleted.
+    pub(crate) fn dbase_bytes() -> Vec<u8> {
+        let mut out = Vec::new();
+        let header_len = 32 + 2 * 32 + 1; // header, two field descriptors, the terminator
+        let record_len = 1 + 10 + 8; // the deletion flag, a `C(10)`, a date
+        out.push(0x03); // dBase III, no memo
+        out.extend_from_slice(&[126, 1, 15]); // last written 2026-01-15
+        out.extend_from_slice(&3u32.to_le_bytes());
+        out.extend_from_slice(&(header_len as u16).to_le_bytes());
+        out.extend_from_slice(&(record_len as u16).to_le_bytes());
+        out.extend_from_slice(&[0u8; 20]);
+        let mut field = |name: &str, kind: u8, len: u8| {
+            let mut raw = [0u8; 32];
+            raw[..name.len()].copy_from_slice(name.as_bytes());
+            raw[11] = kind;
+            raw[16] = len;
+            out.extend_from_slice(&raw);
+        };
+        field("NAME", b'C', 10);
+        field("BORN", b'D', 8);
+        out.push(0x0d);
+        for (flag, name, born) in [
+            (b' ', "mb        ", "19750312"),
+            (b'*', "gone      ", "        "),
+            (b' ', "ada       ", "18151210"),
+        ] {
+            out.push(flag);
+            out.extend_from_slice(name.as_bytes());
+            out.extend_from_slice(born.as_bytes());
+        }
+        out.push(0x1a); // the end-of-file byte a dBase writer puts there
+        out
+    }
+
+    #[test]
+    fn a_dbase_table_reads_its_columns_from_the_header_and_its_rows_by_seeking() {
+        let bytes = dbase_bytes();
+        let len = bytes.len() as u64;
+        let table = Table::dbase(&bytes, len).expect("a dBase table");
+        assert_eq!(table.columns, ["NAME", "BORN"]);
+        assert_eq!(table.format, "dBase III");
+        assert_eq!(table.len(), 3);
+        // The widths come from the header, not from the records: that is the whole point.
+        assert_eq!(table.widths, [10, 10]);
+        // Nothing was read to get this far.
+        assert!(table.rows().is_empty());
+
+        let mut source = crate::source::BytesSource::new(bytes.clone());
+        assert_eq!(table.cells(&mut source, 0), ["mb", "1975-03-12"]);
+        // A deleted record is still a record, with a `*` in front of it: a table whose
+        // deleted rows vanish is one whose count does not add up.
+        assert_eq!(table.cells(&mut source, 1), ["*gone", ""]);
+        assert_eq!(table.cells(&mut source, 2), ["ada", "1815-12-10"]);
+        // Row n is one seek, and the offsets say where.
+        assert_eq!(table.offset(1), table.offset(0) + 19);
+        assert_eq!(table.row_at(table.offset(2) + 3), 2);
+        assert_eq!(table.line(&mut source, 2, 0, 40), "ada        │ 1815-12-10");
+
+        // A header that claims more records than the file holds is a truncated table, and
+        // what is there is what can be read.
+        let short = Table::dbase(&bytes, (bytes.len() - 20) as u64).expect("still a table");
+        assert_eq!(short.len(), 2);
+        assert!(short.cut);
+
+        // Anything that is not a table we know is not one.
+        assert!(Table::dbase(b"not a dbf at all, really", 24).is_none());
+        assert!(Table::dbase(&[], 0).is_none());
     }
 
     #[test]
     fn only_the_names_table_mode_can_read_are_offered() {
         assert!(Table::reads("a.csv") && Table::reads("A.TSV") && Table::reads("log.jsonl"));
         assert!(Table::reads("log.ndjson") && Table::reads("x.tab"));
-        assert!(!Table::reads("a.json") && !Table::reads("a.txt") && !Table::reads("a.dbf"));
+        assert!(Table::reads("people.DBF"));
+        assert!(!Table::reads("a.json") && !Table::reads("a.txt"));
         assert!(Table::of("a.txt", "x").is_none());
+        // A `.dbf` is not read out of text at all: it has its own constructor, because its
+        // header says where the records are rather than the bytes being lines.
+        assert!(Table::of("a.dbf", "x").is_none());
     }
 }

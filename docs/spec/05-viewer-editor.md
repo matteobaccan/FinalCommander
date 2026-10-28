@@ -235,7 +235,7 @@ has: `F7` searches, `Alt+F8` goes to a row, `+`/`-` step to the next file, the c
 a row back, and `F2`/`Shift+F4` leave the mode for the source, because the source is sometimes
 the thing one came to look at.
 
-**Shipped in 0.6.0: the mode, CSV/TSV and JSONL.** `Shift+F3` in the viewer, and a file whose
+**Shipped in 0.6.0: the mode, CSV/TSV and JSONL. In 0.7.0: DBF, read a window at a time.** `Shift+F3` in the viewer, and a file whose
 name says it is tabular opens that way (`ui.table`, on by default, with the same key as the way
 back to the source). The heading and its rule are drawn first and *stay* while the rows scroll
 under them, because a table whose heading scrolled away is a wall of numbers again; `←`/`→`
@@ -245,13 +245,29 @@ cut with a `…` — one 4 kB cell must not push every other column off the scre
 horizontal scroll reads the rest. A search finds what is on the screen, so a value is found in
 its cell, as in a laid-out Markdown document.
 
-**Where this deviates from the plan above**, and why: the first tranche reads the file *whole*
-rather than a window at a time, up to a limit (`TABLE_LIMIT`, sixteen megabytes), exactly as
-the Markdown render does and for the same reason — a column's width cannot be known from the
+**The text formats are read whole**, up to a limit (`TABLE_LIMIT`, sixteen megabytes), exactly
+as the Markdown render is and for the same reason — a column's width cannot be known from the
 part of the file on screen. Above the limit the file opens as text, which is the viewer's usual
-promise. The windowed reading the plan describes is the natural shape for DBF, where a fixed
-record length and a count in the header make row *n* one seek, and it lands with that reader
-rather than being built twice.
+promise.
+
+**A DBF is not**, and that is the shape the plan above asks for: its header says how many
+records there are, how long one is and where they start, so the columns and their widths are
+known without reading a single record and row *n* is one multiplication and one read. Nothing
+but the window on screen is ever touched, so a two-gigabyte table opens as fast as a log does
+and the size limit does not apply to it. One `Records` enum carries the difference — `Read`
+for the formats that were parsed up front, `Dbf` for the one that seeks — and everything that
+draws asks the table for the cells of a row rather than reaching into a vector.
+
+What the DBF reader does with the field types: `C` is text with the padding off, `N` and `F`
+are the numbers as written, `D` is `YYYYMMDD` shown as `YYYY-MM-DD` (and empty where the date
+was never set), `L` is `true`/`false`, `I`/`Y`/`B`/`O` are the binary integer, currency and
+double, `T` is a Julian day with milliseconds since midnight. A **deleted** record is shown
+with a `*` in front of its first cell rather than being skipped: a table whose deleted rows
+vanish is one whose row count does not add up, and finding them is half of why anybody opens a
+DBF. The header's language byte picks the text encoding, with Windows-1252 for the ones that
+are not mapped. A **memo** field shows its block number as `memo:42`; reading the `.dbt`/`.fpt`
+beside the table is a second file and a backlog line. A header that claims more records than
+the file can hold is a truncated table: what is there is read and the status line says `cut`.
 
 **The readers, in the order they are worth building.**
 
@@ -259,7 +275,7 @@ rather than being built twice.
 | --- | --- | --- |
 | CSV / TSV | delimiter-separated text, RFC 4180 quoting | guessing the delimiter (`,`, `;`, tab, `|`) from the first kilobytes and *saying* which was guessed; a quoted field may hold the delimiter and a newline, so a row is not a line |
 | JSONL / NDJSON | one JSON object per line | the columns are the union of the keys of the first *N* records, in first-seen order, and a record that has a key the header does not shows it in an overflow column rather than being silently cut |
-| DBF | dBase III/IV and FoxPro: a typed header, then fixed-length records | the field types (`C`, `N`, `F`, `D`, `L`, `M`), the deleted-record flag, and the memo files beside it (`.dbt`, `.fpt`), which are a second file and may be absent. **Not built yet**, and the one that brings windowed reading with it |
+| DBF | dBase III/IV and FoxPro: a typed header, then fixed-length records | **Shipped in 0.7.0**, windowed: the field types, the deleted-record flag (shown, not skipped), the header's code page. The memo files beside it (`.dbt`, `.fpt`) are a second file and still owed |
 
 **Reading a window, not a file**, wherever the format allows it — which is the promise the
 viewer makes everywhere else. DBF is the best case: a fixed record length and a count in the

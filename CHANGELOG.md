@@ -8,6 +8,24 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **A dBase table opens as a table** — `.dbf`, in the mode the last release added, and this is
+  the reader the format was waiting for. A DBF says in its first bytes how many records it
+  holds, how long one is, where they start and what the columns are called with the width of
+  each, so the table is laid out without a single record being read and row *n* is one
+  multiplication and one read. Nothing but the window on screen is ever touched: a
+  two-gigabyte table opens as fast as a log does, and the sixteen-megabyte limit the text
+  formats have does not apply to it at all.
+
+  The field types are read as what they are: text with its padding off, numbers as written,
+  a date as `YYYY-MM-DD` (and empty where it was never set), a logical as `true`/`false`, the
+  binary integer, currency, double and timestamp types, and a memo field as the block number
+  it holds — reading the `.dbt`/`.fpt` beside the table is a second file and still owed. A
+  **deleted** record is shown with a `*` in front of its first cell rather than being skipped:
+  a table whose deleted rows vanish is one whose row count does not add up, and finding them
+  is half of why anybody opens a DBF. The header's language byte picks the text encoding, the
+  status line names the flavour (dBase III, Visual FoxPro…), and a header that claims more
+  records than the file can hold is read as far as it goes and says `cut`.
+
 - **The colour groups have a dialog.** `F9 → Options → Files highlighting` — the entry has
   said *not here yet* since the menu bar was written, and the `[[highlight]]` groups that
   shipped in 0.6.0 had no interface but the configuration file. The list shows them in the

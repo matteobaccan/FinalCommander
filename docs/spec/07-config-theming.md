@@ -91,6 +91,8 @@ syntax = true                   # colour the languages and markups we recognise
 clock = false
 language = "auto"
 clipboard = true                # ask the terminal to carry the clipboard (OSC 52, SPEC 06 §11)
+table = true                    # a .csv, .jsonl or .dbf opens as a table (SPEC 05 §1.11)
+file_history = 512              # how many read-or-edited files Alt+F11 keeps
 
 [terminal]
 shell = "auto"

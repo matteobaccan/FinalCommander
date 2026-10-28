@@ -39,7 +39,8 @@ turns the first screen back into the source for good.
 
 # Tables
 
-A `.csv`, a `.tsv` or a `.jsonl` opens as a table rather than as the commas or the braces: a
+A `.csv`, a `.tsv`, a `.jsonl` or a `.dbf` opens as a table rather than as the commas, the
+braces or the hex: a
 heading that stays where it is while the rows scroll under it, columns lined up, one record to
 a row. `Shift+F3` switches between the table and the source — the source is sometimes the thing
 one came to look at — and `Shift+F4` has the table in the cycle with the text, the dump and the
@@ -54,9 +55,17 @@ written in the file; a record with a key that turned up later shows it in a last
 `…` rather than losing it, and a line that is not an object is counted at the end of the status
 line rather than shown as a row of nonsense.
 
-Like a laid-out Markdown document, a table is read whole — a column's width cannot be known
-from the part of the file on screen — so over sixteen megabytes the file opens as text and says
-so. *Interface → Open a .csv or a .jsonl as a table* turns the first screen back into the
+A `.dbf` is different and better: a dBase table says in its own header how many records it
+has, how long one is and what the columns are called, so nothing is read but the window you are
+looking at — a two-gigabyte table opens as fast as a log, and the size limit below does not
+apply to it. Dates come out as `YYYY-MM-DD`, true and false as words, a memo field as the block
+number it holds (reading the `.dbt`/`.fpt` beside the table is not here yet), and a **deleted**
+record is shown with a `*` in front of it rather than being left out: a table whose deleted
+rows vanish is one whose count does not add up.
+
+Like a laid-out Markdown document, a text table is read whole — a column's width cannot be
+known from the part of the file on screen — so over sixteen megabytes the file opens as text
+and says so. *Interface → Open a .csv or a .jsonl as a table* turns the first screen back into the
 source for good. A cell longer than forty columns is cut with a `…`; the horizontal scroll is
 how the rest of it is read.
 

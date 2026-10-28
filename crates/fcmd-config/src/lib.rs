@@ -333,7 +333,8 @@ pub struct UiCfg {
     pub command_history: usize,
     /// How many read-or-edited files to keep between sessions (`Alt+F11`).
     pub file_history: usize,
-    /// Open a tabular file (`.csv`, `.tsv`, `.jsonl`) as a table rather than as its source.
+    /// Open a tabular file (`.csv`, `.tsv`, `.jsonl`, `.dbf`) as a table rather than as its
+    /// source.
     /// `Shift+F3` in the viewer switches either way whatever this says; this is only what the
     /// first screen is.
     pub table: bool,
