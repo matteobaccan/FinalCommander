@@ -8,6 +8,15 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **`F3` on the process list shows the process.** It used to try to read `/proc/<pid>` as a
+  file, which does nothing on Linux and nothing at all on Windows. Now it opens a card, asked
+  for when the key is pressed rather than read from the listing: name, pid, what started it,
+  whose it is, what it is doing, threads, resident and mapped memory, 32 or 64 bits, when it
+  started, the executable, the working directory and the command line — every row the platform
+  will answer and none that it will not. Windows gets the name, the parent, the threads, both
+  memory figures, the bitness, the path and the start time, which is the whole of what it will
+  give without reading another process's own memory.
+
 - **The change-drive dialog is FAR's.** It opens over the panel it is about — five columns in
   from that panel's frame, which is FAR's own arithmetic — instead of in the middle of the
   screen, so a list that will send the right panel somewhere no longer looks like one about

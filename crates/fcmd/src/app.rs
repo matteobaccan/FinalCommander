@@ -6620,6 +6620,12 @@ impl App {
     /// `F3`: open the viewer on the item under the cursor. On a directory it measures it
     /// instead, as FAR does.
     fn open_viewer(&mut self) {
+        // On the process list `F3` is not a file to read: it is the card for the process
+        // under the cursor, which is what the key does in FAR's own process panel.
+        if self.panel().temp_origin() == Some(":processes") {
+            self.open_process_card();
+            return;
+        }
         let Some(entry) = self.panel().current().cloned() else {
             let m = self.i18n.t("msg-nothing-to-do");
             self.set_error(m);
@@ -8736,6 +8742,93 @@ impl App {
         self.panels[side].set_temp(title, items, generation);
         self.panels[side].set_temp_origin(":processes");
         self.active = side;
+    }
+
+    /// `F3` on a row of the process list: everything this platform will say about it.
+    ///
+    /// The row carries the pid in its path, which is what the panel was built with, so the
+    /// card is asked for afresh rather than read from the listing: a process is a moving
+    /// thing and the memory it had when the panel was built is not the memory it has now.
+    ///
+    /// Platforms answer different amounts — Linux has the command line and the working
+    /// directory in files anyone may read, Windows keeps both inside the process itself —
+    /// and a row nothing would answer is left out rather than shown empty.
+    fn open_process_card(&mut self) {
+        let Some(entry) = self.panel().current().cloned() else {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        };
+        let path = self.panel().path_of(&entry);
+        let pid = path.display_name().parse::<u32>().ok();
+        let Some(details) = pid.and_then(fcmd_platform::details) else {
+            // It ended between the panel being built and the key being pressed, which is
+            // the ordinary way a process list goes out of date.
+            let m = self.i18n.t_args(
+                "proc-gone",
+                &[("name", entry.name_str().to_string().into())],
+            );
+            self.set_error(m);
+            return;
+        };
+
+        let mut rows: Vec<(String, String)> = Vec::new();
+        let mut say = |id: &str, value: String| {
+            if !value.is_empty() {
+                rows.push((self.i18n.t(id), value));
+            }
+        };
+        say("proc-card-name", details.name.clone());
+        say("proc-card-pid", details.pid.to_string());
+        if let Some(parent) = details.parent {
+            say("proc-card-parent", parent.to_string());
+        }
+        if let Some(user) = &details.user {
+            say("proc-card-user", user.clone());
+        }
+        if let Some(state) = &details.state {
+            say("proc-card-state", state.clone());
+        }
+        if details.threads > 0 {
+            say("proc-card-threads", details.threads.to_string());
+        }
+        if details.memory > 0 {
+            say("proc-card-memory", fcmd_core::format_size(details.memory));
+        }
+        if details.mapped > 0 {
+            say("proc-card-mapped", fcmd_core::format_size(details.mapped));
+        }
+        if details.bits > 0 {
+            say("proc-card-bits", format!("{}-bit", details.bits));
+        }
+        if let Some(started) = details.started {
+            say("proc-card-started", fcmd_ui::format_stamp(started));
+        }
+        if let Some(exe) = &details.exe {
+            say("proc-card-exe", exe.clone());
+        }
+        if let Some(cwd) = &details.cwd {
+            say("proc-card-cwd", cwd.clone());
+        }
+        if let Some(command) = &details.command {
+            say("proc-card-command", command.clone());
+        }
+
+        // One column of labels, as wide as the widest, so the values line up and the card
+        // reads as a table rather than as a paragraph.
+        let width = rows
+            .iter()
+            .map(|(label, _)| unicode_width::UnicodeWidthStr::width(label.as_str()))
+            .max()
+            .unwrap_or(0);
+        let lines = rows
+            .iter()
+            .map(|(label, value)| format!("{label:<width$}  {value}"))
+            .collect();
+        self.mode = Mode::Message {
+            title: self.i18n.t("proc-card"),
+            lines,
+        };
     }
 
     /// An empty panel to put files in by hand (FAR's temporary panel).
@@ -15740,6 +15833,40 @@ mod tests {
             "{}",
             app.panels[0].cwd
         );
+    }
+
+    /// `F3` on the process list is the process, not a file: the card says what the system
+    /// will say about it, and it says it on every platform — the pid comes off the row and
+    /// the answers come from the system there and then.
+    #[test]
+    fn f3_on_the_process_list_shows_the_process() {
+        let mut app = app();
+        app.open_process_panel(0);
+        if app.panels[0].listing.is_empty() {
+            return; // nothing readable here, which the panel itself already says
+        }
+        // Onto a row that is a process rather than the parent entry.
+        app.panels[0].cursor = 0;
+        press(&mut app, "F3");
+        let Mode::Message { title, lines } = &app.mode else {
+            panic!("no card: {:?}", app.mode)
+        };
+        assert!(!title.is_empty());
+        assert!(lines.len() >= 3, "the card says almost nothing: {lines:?}");
+        // The pid of the row is in it, which is the one thing every platform knows.
+        let pid = app.panels[0]
+            .current()
+            .map(|e| app.panels[0].path_of(e))
+            .map(|p| p.display_name().to_string())
+            .expect("a row");
+        assert!(
+            lines.iter().any(|l| l.contains(&pid)),
+            "the card is about something else: {lines:?}"
+        );
+        // And it is a card, not the viewer: `Esc` closes it and leaves the panel alone.
+        press(&mut app, "Esc");
+        assert!(app.mode.is_normal());
+        assert_eq!(app.panels[0].temp_origin(), Some(":processes"));
     }
 
     /// The switches the dialog carries, which are FAR's: `Ctrl` and the digit a column is

@@ -17,7 +17,7 @@ mod unix;
 #[cfg(windows)]
 mod windows;
 
-pub use process::{processes, Process};
+pub use process::{details, processes, Details, Process};
 
 use std::path::Path;
 

@@ -212,6 +212,154 @@ fn memory_of(pid: u32) -> u64 {
     }
 }
 
+/// One process in detail: what `F3` on a row of the process panel shows.
+///
+/// Windows keeps the answers in four different places — the snapshot for the name, the parent
+/// and the thread count, `GetProcessMemoryInfo` for the two memory figures,
+/// `QueryFullProcessImageNameW` for the executable, `GetProcessTimes` for when it started —
+/// and a process of somebody else's, or one of the system's, refuses some of them. Each is
+/// asked for on its own and left empty when it is refused, so the card shows what there is
+/// rather than nothing at all.
+///
+/// The command line and the working directory are not here: both live in another process's
+/// own memory and are read through `NtQueryInformationProcess`, which is not a documented
+/// call with a stable structure behind it. The card leaves those two rows out on Windows
+/// rather than carry a page of `unsafe` that a service pack can invalidate.
+#[cfg(windows)]
+pub fn details(pid: u32) -> Option<super::Details> {
+    use windows_sys::Win32::Foundation::{CloseHandle, FILETIME, INVALID_HANDLE_VALUE, MAX_PATH};
+    use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+        TH32CS_SNAPPROCESS,
+    };
+    use windows_sys::Win32::System::ProcessStatus::{
+        GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS,
+    };
+    use windows_sys::Win32::System::SystemInformation::{GetNativeSystemInfo, SYSTEM_INFO};
+    use windows_sys::Win32::System::Threading::{
+        GetProcessTimes, IsWow64Process, OpenProcess, QueryFullProcessImageNameW,
+        PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+
+    // The snapshot first: it is the one place that will say what started this and how many
+    // threads it has, and it answers for every process whether or not we may open it.
+    // SAFETY: the call takes no pointer of ours and returns a handle or the invalid value.
+    let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
+    if snapshot == INVALID_HANDLE_VALUE {
+        return None;
+    }
+    let mut out: Option<super::Details> = None;
+    let mut entry: PROCESSENTRY32W = unsafe { std::mem::zeroed() };
+    entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+    // SAFETY: `entry` is a whole, zeroed structure whose `dwSize` says how big it is, which
+    // is what the call reads before writing into it.
+    let mut ok = unsafe { Process32FirstW(snapshot, &mut entry) };
+    while ok != 0 {
+        if entry.th32ProcessID == pid {
+            let raw = &entry.szExeFile;
+            let end = raw.iter().position(|c| *c == 0).unwrap_or(raw.len());
+            out = Some(super::Details {
+                pid,
+                name: String::from_utf16_lossy(&raw[..end]),
+                parent: Some(entry.th32ParentProcessID).filter(|p| *p != 0),
+                threads: entry.cntThreads,
+                ..super::Details::default()
+            });
+            break;
+        }
+        // SAFETY: as above; the snapshot is still open.
+        ok = unsafe { Process32NextW(snapshot, &mut entry) };
+    }
+    // SAFETY: the handle came from `CreateToolhelp32Snapshot` and is closed exactly once.
+    unsafe { CloseHandle(snapshot) };
+    let mut out = out?;
+
+    // SAFETY: no pointer of ours is passed; the result is a handle or null.
+    let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
+    if handle.is_null() {
+        // Nothing else may be asked about it, which is an answer: the snapshot's three
+        // fields are what the card shows.
+        return Some(out);
+    }
+
+    let mut counters: PROCESS_MEMORY_COUNTERS = unsafe { std::mem::zeroed() };
+    counters.cb = std::mem::size_of::<PROCESS_MEMORY_COUNTERS>() as u32;
+    // SAFETY: the handle is open and `counters` is a whole structure of the size its own `cb`
+    // field declares, which is what the call fills in.
+    if unsafe {
+        GetProcessMemoryInfo(
+            handle,
+            &mut counters,
+            std::mem::size_of::<PROCESS_MEMORY_COUNTERS>() as u32,
+        )
+    } != 0
+    {
+        out.memory = counters.WorkingSetSize as u64;
+        // What it has taken from the paging file, which is the figure beside the resident one
+        // that Windows will give for nothing.
+        out.mapped = counters.PagefileUsage as u64;
+    }
+
+    // The executable, with its path. `MAX_PATH` is not enough for a long path, so the buffer
+    // is four times it and the length comes back in `len`.
+    let mut buffer = vec![0u16; MAX_PATH as usize * 4];
+    let mut len = buffer.len() as u32;
+    // SAFETY: the handle is open, the buffer is `len` wide, and the call writes at most that
+    // many characters into it and sets `len` to how many it wrote.
+    if unsafe { QueryFullProcessImageNameW(handle, 0, buffer.as_mut_ptr(), &mut len) } != 0 {
+        out.exe = Some(String::from_utf16_lossy(&buffer[..len as usize]));
+    }
+
+    // 32 or 64: a process running under the emulator is 32-bit, and any other process is
+    // whatever the machine itself is.
+    let mut wow = 0i32;
+    // SAFETY: the handle is open and `wow` is one whole `BOOL` the call writes into.
+    if unsafe { IsWow64Process(handle, &mut wow) } != 0 {
+        out.bits = if wow != 0 {
+            32
+        } else {
+            let mut info: SYSTEM_INFO = unsafe { std::mem::zeroed() };
+            // SAFETY: `info` is a whole, zeroed structure the call fills in; it cannot fail.
+            unsafe { GetNativeSystemInfo(&mut info) };
+            // `PROCESSOR_ARCHITECTURE_INTEL` is 0 and is the only 32-bit one left.
+            // SAFETY: reading one field of the union the call just wrote, as documented.
+            let arch = unsafe { info.Anonymous.Anonymous.wProcessorArchitecture };
+            if arch == 0 {
+                32
+            } else {
+                64
+            }
+        };
+    }
+
+    let mut started = FILETIME::default();
+    let mut exited = FILETIME::default();
+    let mut kernel = FILETIME::default();
+    let mut user = FILETIME::default();
+    // SAFETY: the handle is open and all four are whole structures the call writes into.
+    if unsafe { GetProcessTimes(handle, &mut started, &mut exited, &mut kernel, &mut user) } != 0 {
+        out.started = file_time(started);
+    }
+
+    // SAFETY: the handle came from `OpenProcess` and is closed exactly once.
+    unsafe { CloseHandle(handle) };
+    Some(out)
+}
+
+/// A Windows `FILETIME` — hundreds of nanoseconds since the first of January 1601 — as a
+/// `SystemTime`. The difference between the two epochs is 11,644,473,600 seconds, and a time
+/// before the Unix one is not a time a process started.
+#[cfg(windows)]
+fn file_time(ft: windows_sys::Win32::Foundation::FILETIME) -> Option<std::time::SystemTime> {
+    use std::time::{Duration, SystemTime};
+
+    let ticks = (u64::from(ft.dwHighDateTime) << 32) | u64::from(ft.dwLowDateTime);
+    let secs = ticks / 10_000_000;
+    let nanos = ((ticks % 10_000_000) * 100) as u32;
+    let unix = secs.checked_sub(11_644_473_600)?;
+    Some(SystemTime::UNIX_EPOCH + Duration::new(unix, nanos))
+}
+
 pub fn owner(path: &Path, cache: &mut super::OwnerCache) -> Option<super::Owner> {
     use windows_sys::Win32::Foundation::LocalFree;
     use windows_sys::Win32::Security::Authorization::{GetNamedSecurityInfoW, SE_FILE_OBJECT};

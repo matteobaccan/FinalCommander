@@ -597,7 +597,22 @@ kernel; Windows takes a `CreateToolhelp32Snapshot` and asks each process for its
 and one that refuses keeps its row with the column empty. macOS and the BSDs keep the list
 behind a `sysctl` whose structure would have to be mirrored by hand, field for field, per
 release — a page of `unsafe` for a panel, where a wrong offset reads somebody else's memory —
-so it waits for a tested way to do it. **Nothing here kills anything**: a file manager that
+so it waits for a tested way to do it.
+
+`F3` on a row is not a file to read: it is the card for that process, asked for afresh when the
+key is pressed, because the memory it had when the panel was built is not the memory it has
+now. The card holds the name, the pid, what started it, whose it is, what it is doing, the
+thread count, the resident and mapped memory, 32 or 64 bits, when it started, the executable,
+the working directory and the whole command line — every row that the platform and this user's
+rights will answer, and no row that they will not. Linux has all of it in files anyone may
+read, and takes the bitness from the first bytes of the executable's own ELF header rather than
+from a call. Windows answers the name, the parent, the threads, both memory figures, the
+bitness, the path and the start time, through the snapshot and `GetProcessTimes`; the command
+line and the working directory it keeps inside the process itself, behind
+`NtQueryInformationProcess`, which is not a documented structure to depend on — those two rows
+are left out there rather than paid for with a page of `unsafe` a service pack can invalidate.
+
+**Nothing here kills anything**: a file manager that
 could end a process from a listing with the key that deletes a file is one that ends a process
 by accident, and ending one wants a confirmation of its own.
 
