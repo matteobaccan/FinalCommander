@@ -44,6 +44,14 @@ pub enum Request {
     TunnelList,
     /// Read both sides of every pair and say which differ. The pairs are already matched by
     /// name: this is the reading, which is the part that takes time.
+    /// Walk a tree and find the files that are copies of each other (SPEC 03 §12). The
+    /// walking and the reading are both the worker's: a directory of forty thousand files is
+    /// a minute of disk, and the panels keep working while it happens.
+    Duplicates {
+        id: u64,
+        root: VPath,
+        cancel: CancelToken,
+    },
     CompareContents {
         id: u64,
         pairs: Vec<ComparePair>,
@@ -374,6 +382,22 @@ pub enum Event {
         cancelled: bool,
         /// The list could not be read, or its digests do not agree on one hash.
         problem: Option<String>,
+    },
+    /// How far the hunt for duplicates has got: files seen, and bytes hashed.
+    DuplicatesProgress {
+        id: u64,
+        seen: u64,
+        hashed: u64,
+    },
+    /// Every group of files that are copies of each other, largest waste first.
+    DuplicatesDone {
+        id: u64,
+        groups: Vec<Vec<(VPath, u64)>>,
+        /// Files looked at, whether or not they turned out to be copies of anything.
+        seen: u64,
+        /// Files that could not be read, which is not the same as "not a duplicate".
+        unreadable: u64,
+        cancelled: bool,
     },
     CompareDone {
         id: u64,
@@ -1411,6 +1435,8 @@ pub struct App {
     /// And how many were not read at all because their size and time agreed, which the
     /// dialog can ask for.
     compare_trusted: usize,
+    /// The hunt for duplicates that is running, and the token that stops it.
+    duplicates: Option<(u64, CancelToken)>,
     /// The command line under the panels (SPEC 06 §7).
     pub cmd: CmdLine,
     /// The directory the branch was last read for, and what it was: `HEAD` is a small file,
@@ -1627,6 +1653,7 @@ impl App {
             compare_alone: Vec::new(),
             compare_pairs: 0,
             compare_trusted: 0,
+            duplicates: None,
             cmd: CmdLine::new(),
             branch_at: None,
             programs: Vec::new(),
@@ -2178,6 +2205,32 @@ impl App {
                 }
                 self.compare = None;
                 self.apply_compare(&differ, &line_endings, unreadable, stopped);
+            }
+            Event::DuplicatesProgress { id, seen, hashed } => {
+                if self.duplicates.as_ref().map(|(running, _)| *running) != Some(id) {
+                    return;
+                }
+                let msg = self.i18n.t_args(
+                    "dup-working",
+                    &[
+                        ("seen", (seen as i64).into()),
+                        ("hashed", fcmd_core::format_size(hashed).into()),
+                    ],
+                );
+                self.set_status(msg);
+            }
+            Event::DuplicatesDone {
+                id,
+                groups,
+                seen,
+                unreadable,
+                cancelled,
+            } => {
+                if self.duplicates.as_ref().map(|(running, _)| *running) != Some(id) {
+                    return;
+                }
+                self.duplicates = None;
+                self.show_duplicates(groups, seen, unreadable, cancelled);
             }
             Event::ListingCut {
                 panel,
@@ -6250,6 +6303,7 @@ impl App {
                 self.open_tunnels();
             }
             Command::ToolCompareDirs => self.compare_dirs(),
+            Command::ToolDuplicates => self.find_duplicates(),
             Command::ToolCompare => {
                 let form = Form::compare(&self.cfg.compare, &self.i18n);
                 self.mode = Mode::Form(Box::new(form));
@@ -12375,6 +12429,119 @@ impl App {
         self.set_status(msg);
     }
 
+    /// Find the files under this panel's directory that are copies of each other (SPEC 03
+    /// §12; the third thing FAR's compare plugin does).
+    ///
+    /// The walk and the hashing are the worker's, because a tree of forty thousand files is a
+    /// minute of disk and the panels have to keep working. Nothing is deleted and nothing is
+    /// even selected: the answer is a panel of the copies, grouped, with the group that wastes
+    /// the most space first — and `F8` on what one picks out of it is an ordinary delete.
+    fn find_duplicates(&mut self) {
+        let root = self.panel().cwd.clone();
+        if !root.is_local() || root.in_container() {
+            let m = self.i18n.t("compare-contents-local");
+            self.set_error(m);
+            return;
+        }
+        if let Some((_, cancel)) = self.duplicates.take() {
+            cancel.cancel();
+        }
+        let id = self.next_job_id;
+        self.next_job_id += 1;
+        let cancel = CancelToken::new();
+        self.duplicates = Some((id, cancel.clone()));
+        let msg = self.i18n.t_args(
+            "dup-working",
+            &[("seen", 0.into()), ("hashed", "0 B".into())],
+        );
+        self.set_status(msg);
+        self.requests.push(Request::Duplicates { id, root, cancel });
+    }
+
+    /// What the hunt found, as a panel: one row per copy, the groups in order, numbered so
+    /// that sorting by name keeps a group together.
+    fn show_duplicates(
+        &mut self,
+        groups: Vec<Vec<(VPath, u64)>>,
+        seen: u64,
+        unreadable: u64,
+        cancelled: bool,
+    ) {
+        use fcmd_core::{Entry, EntryId, EntryKind};
+
+        if groups.is_empty() {
+            let m = self.i18n.t_args(
+                if cancelled { "dup-stopped" } else { "dup-none" },
+                &[("seen", (seen as i64).into())],
+            );
+            self.set_status(m);
+            return;
+        }
+        // What is being thrown away: every copy after the first in each group.
+        let wasted: u64 = groups
+            .iter()
+            .map(|g| g.first().map(|(_, size)| *size).unwrap_or(0) * (g.len() as u64 - 1))
+            .sum();
+        let files: usize = groups.iter().map(Vec::len).sum();
+
+        let side = self.active;
+        let root = self.panels[side].cwd.to_string();
+        let mut items: Vec<(VPath, Entry)> = Vec::new();
+        for (number, group) in groups.iter().enumerate() {
+            for (path, size) in group {
+                // The path as it reads from where the hunt started, which is what makes two
+                // rows of a group tell one from the other.
+                let shown = path
+                    .to_string()
+                    .strip_prefix(&root)
+                    .map(|rest| rest.trim_start_matches(['/', '\\']).to_string())
+                    .unwrap_or_else(|| path.to_string());
+                let entry = Entry {
+                    // Zero-padded, so the panel's own sort by name keeps the groups whole.
+                    name: format!("{:03}  {shown}", number + 1).into(),
+                    kind: EntryKind::File,
+                    size: *size,
+                    mtime: None,
+                    btime: None,
+                    atime: None,
+                    flags: fcmd_core::EntryFlags::empty(),
+                    id: EntryId::Name(items.len() as u64),
+                    link_target: None,
+                };
+                items.push((path.clone(), entry));
+            }
+        }
+        let title = self.i18n.t("dup-title");
+        let generation = self.panels[side].generation + 1;
+        self.panels[side].generation = generation;
+        self.panels[side].set_temp(title, items, generation);
+        self.panels[side].set_temp_origin(":duplicates");
+        self.active = side;
+
+        let mut line = self.i18n.t_args(
+            "dup-done",
+            &[
+                ("groups", (groups.len() as i64).into()),
+                ("files", (files as i64).into()),
+                ("wasted", fcmd_core::format_size(wasted).into()),
+            ],
+        );
+        if unreadable > 0 {
+            let more = self.i18n.t_args(
+                "compare-contents-unread",
+                &[("count", (unreadable as i64).into())],
+            );
+            line.push_str(", ");
+            line.push_str(&more);
+        }
+        if cancelled {
+            let more = self.i18n.t("dup-partial");
+            line.push_str(", ");
+            line.push_str(&more);
+        }
+        self.set_status(line);
+    }
+
     /// The dialog's answer: keep what it says, then do what it says.
     fn apply_compare_form(&mut self, form: &Form) {
         let number = |text: String, what: &str| -> Result<u64, String> {
@@ -16366,6 +16533,74 @@ mod tests {
         press(&mut app, "Esc");
         assert!(app.mode.is_normal());
         assert_eq!(app.panels[0].temp_origin(), Some(":processes"));
+    }
+
+    /// The third thing the compare plugin does: find what is a copy of what, under one
+    /// directory, and show the groups rather than deleting anything.
+    #[test]
+    fn duplicates_are_found_grouped_and_shown_as_a_panel() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        std::fs::write(dir.path().join("one.txt"), b"the very same bytes").expect("one");
+        std::fs::create_dir(dir.path().join("sub")).expect("sub");
+        std::fs::write(
+            dir.path().join("sub").join("two.txt"),
+            b"the very same bytes",
+        )
+        .expect("two");
+        // Not a copy of anything, and must not be in the list.
+        std::fs::write(dir.path().join("other.txt"), b"something else entirely").expect("other");
+        // Two empty files are copies of each other and are left out on purpose: every
+        // machine has hundreds, and a list that starts with them is a list nobody reads.
+        std::fs::write(dir.path().join("empty-a.txt"), b"").expect("empty a");
+        std::fs::write(dir.path().join("empty-b.txt"), b"").expect("empty b");
+
+        let mut app = app();
+        app.panels[0].cwd = VPath::local(dir.path());
+        app.active = 0;
+        app.run(Command::ToolDuplicates);
+        let (id, root, cancel) = app
+            .take_requests()
+            .into_iter()
+            .find_map(|r| match r {
+                Request::Duplicates { id, root, cancel } => Some((id, root, cancel)),
+                _ => None,
+            })
+            .expect("a hunt was asked for");
+
+        // The real worker, on this thread: the walk, the hashing and the grouping are the
+        // ones the binary runs.
+        let (tx, rx) = std::sync::mpsc::channel();
+        crate::run_duplicates(id, root, cancel, tx);
+        let mut finished = false;
+        while let Ok(event) = rx.try_recv() {
+            if matches!(event, Event::DuplicatesDone { .. }) {
+                finished = true;
+            }
+            app.handle_event(event);
+        }
+        assert!(finished, "the hunt said nothing");
+
+        assert_eq!(app.panels[0].temp_origin(), Some(":duplicates"));
+        let rows: Vec<String> = (0..app.panels[0].listing.len())
+            .filter_map(|r| app.panels[0].listing.row(r))
+            .map(|e| e.name_str().to_string())
+            .collect();
+        assert_eq!(rows.len(), 2, "{rows:?}");
+        assert!(rows.iter().all(|r| r.starts_with("001")), "{rows:?}");
+        assert!(rows.iter().any(|r| r.ends_with("one.txt")), "{rows:?}");
+        assert!(rows.iter().any(|r| r.contains("two.txt")), "{rows:?}");
+        assert!(
+            !rows
+                .iter()
+                .any(|r| r.contains("other") || r.contains("empty")),
+            "{rows:?}"
+        );
+        // The sentence says what was found and what it is costing.
+        assert!(app.status.contains('1'), "{}", app.status);
+        // And the rows are the real files: a delete out of this panel deletes them.
+        let first = app.panels[0].current().expect("a row");
+        let path = app.panels[0].path_of(first);
+        assert!(path.as_path().exists(), "{path}");
     }
 
     /// The comparison dialog: what it is told is what it keeps, and what it keeps is what

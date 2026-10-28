@@ -294,4 +294,37 @@ counted), how many were taken as the same without being read, how many files wer
 only, and how many could not be read at all.
 
 Still to come: into the subdirectories, which needs the tree walked in a worker as the search
-is, and the third thing the plugin does — find the duplicate files under a directory.
+is.
+
+## 12. Duplicate files (`tool.duplicates`, shipped)
+
+The third thing the compare plugin does: what under this directory is a copy of what. It is
+the question behind "where has the disk gone", and no listing can answer it.
+
+Three passes, each cheaper than the one that would do the job alone. **Walk** the tree with the
+search engine's own walker — so a link that points back up the tree ends its branch here as it
+does there — collecting every file's path and size. **Group by size**, and throw away every
+group of one: two files of different lengths cannot be copies, and this settles almost
+everything without opening a file. **Hash** what is left, group by digest, and keep the groups
+of two or more.
+
+A hash rather than a side-by-side read, which is the opposite of what §11 does, and for a
+reason: here each file is compared against every other file of its size, so reading each once
+beats reading it once per pair. The digest is SHA-256. Empty files are left out — they are all
+copies of each other, there are hundreds on any machine, and a list that opens with four
+hundred of them is a list nobody reads.
+
+The result is a **panel** of the copies, one row per file, each row numbered with its group
+and zero-padded so that the panel's own sort by name keeps a group together; the size column
+holds the file's size, and the groups come in order of what they waste — the first group is the
+one to look at. The path is shown as it reads from where the hunt started, because two rows of
+a group are told apart by nothing else.
+
+Nothing is deleted and nothing is even selected. The rows are the real files, so `F3` reads
+one, `Enter` goes to where it lives, and `F8` on what one picks out is the ordinary delete,
+with the ordinary confirmation. The sentence at the end says how many groups, how many files,
+how much is wasted, how many files could not be read, and whether `Esc` stopped it early.
+
+Still to come: the plugin's other two definitions of a duplicate — same name whatever the
+contents, and same size whatever the name — and its picture and music comparisons, which need
+an image decoder and a tag reader.

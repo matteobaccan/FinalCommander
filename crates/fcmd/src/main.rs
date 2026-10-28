@@ -1048,6 +1048,10 @@ fn interactive(mut app: App) -> Result<()> {
                     let tx = tx.clone();
                     runtime.spawn_blocking(move || run_compare(id, pairs, work, cancel, tx));
                 }
+                Request::Duplicates { id, root, cancel } => {
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || run_duplicates(id, root, cancel, tx));
+                }
                 Request::Checksums {
                     id,
                     paths,
@@ -2111,6 +2115,117 @@ fn run_compare(
         line_endings,
         unreadable,
         stopped,
+    });
+}
+
+/// Find the files under a directory that are copies of each other (SPEC 03 §12).
+///
+/// Three passes, each cheaper than the one that would do the job on its own:
+///
+/// 1. **walk**, collecting every file's path and size — the search engine's own walker, so a
+///    link that points back up the tree ends its branch here as it does there;
+/// 2. **group by size**, and throw away every group of one: two files of different lengths
+///    cannot be copies, and this settles almost everything without opening a file;
+/// 3. **hash** what is left, group by digest, and keep the groups of two or more.
+///
+/// A hash and not a side-by-side read, because this is the one case where hashing wins: each
+/// file is compared against every other file of its size, and reading each one once beats
+/// reading it once per pair. The digest is SHA-256, which is not a hash anybody has shown two
+/// files for.
+///
+/// Empty files are left out. They are all copies of each other, there are hundreds of them on
+/// any machine, and a list that begins with four hundred empty files is a list nobody reads.
+fn run_duplicates(id: u64, root: VPath, cancel: CancelToken, tx: mpsc::Sender<Event>) {
+    use std::collections::HashMap;
+
+    let find_fs = fcmd_vfs::LocalVfs;
+    let job_fs = fcmd_jobs::LocalFs;
+    let query = fcmd_find::Query::under(root);
+    let mut by_size: HashMap<u64, Vec<VPath>> = HashMap::new();
+    let mut seen = 0u64;
+    let mut unreadable = 0u64;
+    let mut last = std::time::Instant::now();
+
+    // The walk. Every file, by size; the engine reports what it could not read itself.
+    let stats = fcmd_find::find(&find_fs, &query, &cancel, &mut |event| match event {
+        fcmd_find::Event::Hit(hit) => {
+            if hit.entry.kind.is_dirlike() || hit.entry.size == 0 {
+                return;
+            }
+            seen += 1;
+            by_size.entry(hit.entry.size).or_default().push(hit.path);
+            if last.elapsed() >= std::time::Duration::from_millis(120) {
+                last = std::time::Instant::now();
+                let _ = tx.send(Event::DuplicatesProgress {
+                    id,
+                    seen,
+                    hashed: 0,
+                });
+            }
+        }
+        fcmd_find::Event::Problem(_) => unreadable += 1,
+        fcmd_find::Event::Scanning(_) => {}
+    });
+    let cancelled = match stats {
+        Ok(stats) => stats.cancelled,
+        // The only error is a content condition that will not compile, and there is none.
+        Err(_) => false,
+    };
+
+    // The hashing, for the sizes that more than one file has.
+    let mut by_digest: HashMap<(u64, String), Vec<VPath>> = HashMap::new();
+    let mut hashed = 0u64;
+    let mut stopped = cancelled;
+    'sizes: for (size, paths) in by_size {
+        if paths.len() < 2 {
+            continue;
+        }
+        for path in paths {
+            if cancel.is_cancelled() {
+                stopped = true;
+                break 'sizes;
+            }
+            let mut tick = |n: u64| {
+                hashed += n;
+                !cancel.is_cancelled()
+            };
+            match fcmd_jobs::sum::digest(
+                &job_fs,
+                &path,
+                fcmd_jobs::Algorithm::Sha256,
+                256 * 1024,
+                &mut tick,
+            ) {
+                Ok(digest) => by_digest.entry((size, digest)).or_default().push(path),
+                Err(_) => unreadable += 1,
+            }
+            if last.elapsed() >= std::time::Duration::from_millis(120) {
+                last = std::time::Instant::now();
+                let _ = tx.send(Event::DuplicatesProgress { id, seen, hashed });
+            }
+        }
+    }
+
+    // The groups, largest waste first: the whole point of the list is what to delete.
+    let mut groups: Vec<Vec<(VPath, u64)>> = by_digest
+        .into_iter()
+        .filter(|(_, paths)| paths.len() > 1)
+        .map(|((size, _), mut paths)| {
+            paths.sort_by_key(|p| p.to_string());
+            paths.into_iter().map(|p| (p, size)).collect()
+        })
+        .collect();
+    groups.sort_by_key(|group| {
+        let size = group.first().map(|(_, size)| *size).unwrap_or(0);
+        std::cmp::Reverse(size * (group.len() as u64 - 1))
+    });
+
+    let _ = tx.send(Event::DuplicatesDone {
+        id,
+        groups,
+        seen,
+        unreadable,
+        cancelled: stopped,
     });
 }
 
@@ -3549,6 +3664,13 @@ timeout = 10
                     }
                 }
                 Request::TunnelOpen { .. } | Request::TunnelClose { .. } | Request::TunnelList => {}
+                Request::Duplicates { id, root, cancel } => {
+                    let (tx, rx) = mpsc::channel();
+                    run_duplicates(id, root, cancel, tx);
+                    while let Ok(event) = rx.try_recv() {
+                        app.handle_event(event);
+                    }
+                }
                 Request::CompareContents {
                     id,
                     pairs,

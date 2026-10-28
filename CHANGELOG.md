@@ -8,6 +8,14 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **Find the duplicate files under a directory** (Commands → *Find duplicates*), the third
+  thing FAR's compare plugin does. The tree is walked, the files grouped by size, and only
+  what shares a size is hashed — so almost everything is settled without opening a file. What
+  comes back is a panel of the copies, one row per file, numbered by group and ordered so the
+  group that wastes the most space is first; the rows are the real files, so `F3` reads one and
+  `F8` deletes what you pick. Nothing is deleted or even selected by the hunt itself, and empty
+  files are left out.
+
 - **The comparison has a dialog, and the options the plugin everybody uses has.** `tool.compare`
   (Commands → *Compare with options*) asks what *the same file* means before comparing: whether
   the names are matched with their case, whether the size and the time count, how many seconds

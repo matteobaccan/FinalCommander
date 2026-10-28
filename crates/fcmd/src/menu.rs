@@ -458,6 +458,7 @@ pub fn menus() -> Vec<Menu> {
                     Action::Run(Command::ToolCompareContents),
                 ),
                 item("menu-compare-setup", "", Action::Run(Command::ToolCompare)),
+                item("menu-duplicates", "", Action::Run(Command::ToolDuplicates)),
                 item(
                     "menu-calculator",
                     "Alt+=",

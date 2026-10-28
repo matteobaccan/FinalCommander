@@ -186,6 +186,7 @@ impl Command {
             Command::ToolUserMenu => "your own menu of commands",
             Command::ToolCompareDirs => "compare the two panels by name, size and time",
             Command::ToolCompare => "compare the two panels, with the options dialog first",
+            Command::ToolDuplicates => "find the files under this directory that are copies",
             Command::ToolSyncDirs => "make the two directories hold the same thing",
             Command::ToolCompareContents => "compare them by what is in the files",
             Command::ToolCalculator => "a calculator, in every base at once",
