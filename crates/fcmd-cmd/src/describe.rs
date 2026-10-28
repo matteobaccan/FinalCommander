@@ -36,6 +36,7 @@ impl Command {
             Command::OptPanel => "the panel settings",
             Command::OptInterface => "the interface settings",
             Command::OptHighlight => "the colour groups, as a list",
+            Command::OptSortGroups => "the sort groups, as a list",
             Command::OptConfirmations => "which questions are asked",
             Command::OptColors => "edit the colours of the theme in use",
             Command::OptEditor => "how the editor behaves",

@@ -81,6 +81,12 @@ key is: sources first and build output last, in a directory that holds both. Ins
 ordinary sort still applies, folders keep their own place at the top, and `reverse` turns each
 band round rather than swapping the bands over. With no blocks written the key says so.
 
+You do not have to write them by hand: `F9 → Options → Sort groups` is the same list the
+colour groups have — the bands in the order they cut the listing, `Ins` for a new one beside
+the row you are on, `Del` to take one away, `F4` to edit it, `Ctrl+↑` and `Ctrl+↓` to move one
+past its neighbour. Both panels re-sort the moment you accept, and *Save setup* writes the
+blocks into the configuration.
+
 `Space` measures what a folder holds — and with something selected, every selected folder at
 once, which is how you find out which of five trees is the big one. The figure then takes the
 place of the word `Folder` in the size column, the totals bar at the bottom counts it, and

@@ -1555,6 +1555,8 @@ pub struct App {
     /// Which colour group the open dialog is editing, or `None` for a new one
     /// (SPEC 10 §3.11).
     pub highlight_at: Option<usize>,
+    /// The band the sort-group dialog is editing, or where a new one goes.
+    pub sort_group_at: Option<usize>,
     /// The files that have been read or edited, oldest last — FAR's `Alt+F11`.
     ///
     /// Newest first in the list because that is the order somebody reaching back wants, and
@@ -1857,6 +1859,7 @@ impl App {
             bookmarks: Vec::new(),
             file_history: Vec::new(),
             highlight_at: None,
+            sort_group_at: None,
             active: 0,
             mode: Mode::Normal,
             status: String::new(),
@@ -6926,6 +6929,7 @@ impl App {
             Command::OptPanel => self.open_form(FormKind::Panel),
             Command::OptInterface => self.open_form(FormKind::Interface),
             Command::OptHighlight => self.open_pick(PickKind::Highlight, self.active),
+            Command::OptSortGroups => self.open_pick(PickKind::SortGroups, self.active),
             Command::OptConfirmations => self.open_form(FormKind::Confirmations),
             Command::OptEditor => self.open_form(FormKind::EditorSettings),
             Command::OptViewer => self.open_form(FormKind::ViewerSettings),
@@ -9315,6 +9319,60 @@ impl App {
         self.set_status(msg);
     }
 
+    /// OK in the sort-group dialog: the band goes in where the list was, and the panels are
+    /// sorted again at once (SPEC 02 §4).
+    fn apply_sort_group_form(&mut self, form: &Form) {
+        let group = fcmd_config::SortGroupCfg {
+            name: form.text_value("sg.name"),
+            mask: form.text_value("sg.mask"),
+            place: form.choice_value("sg.place"),
+        };
+        let at = self.sort_group_at;
+        let name = sort_group_name(&group, at.unwrap_or(self.cfg.sort_groups.len()));
+        // A band with no mask holds nothing, and a mask that does not parse would be dropped
+        // at startup with a warning nobody reading this dialog would see: both are said here,
+        // with the dialog still on screen.
+        let predefined = fcmd_core::filter::default_groups();
+        let problem = if group.mask.trim().is_empty() {
+            Some(self.i18n.t("sg-needs-mask"))
+        } else {
+            fcmd_core::filter::MaskSet::parse_with(&group.mask, &predefined, false)
+                .err()
+                .map(|e| e.to_string())
+        };
+        if let Some(problem) = problem {
+            let msg = self.i18n.t_args(
+                "sg-bad",
+                &[("name", name.into()), ("problem", problem.into())],
+            );
+            self.set_error(msg);
+            self.mode = Mode::Form(Box::new(form.clone()));
+            return;
+        }
+        let side = self.active;
+        let cursor = match at {
+            Some(i) if i < self.cfg.sort_groups.len() => {
+                self.cfg.sort_groups[i] = group;
+                i
+            }
+            // A new band goes in beside the row the list was on: the order is what cuts the
+            // listing, so where it lands is the whole of what it does.
+            _ => {
+                let at = self
+                    .sort_group_at
+                    .unwrap_or(self.cfg.sort_groups.len())
+                    .min(self.cfg.sort_groups.len());
+                self.cfg.sort_groups.insert(at, group);
+                at
+            }
+        };
+        self.sort_group_at = None;
+        self.apply_sort_groups();
+        let msg = self.i18n.t("sg-saved");
+        self.reopen_sort_groups(side, cursor);
+        self.set_status(msg);
+    }
+
     fn apply_find_form(&mut self, form: &Form) {
         let mask = form.text_value("find.mask");
         if mask.is_empty() {
@@ -10553,6 +10611,10 @@ impl App {
         }
         if form.kind == FormKind::Highlight {
             self.apply_highlight_form(&form);
+            return;
+        }
+        if form.kind == FormKind::SortGroup {
+            self.apply_sort_group_form(&form);
             return;
         }
         if form.kind == FormKind::Find {
@@ -12038,6 +12100,22 @@ impl App {
                     .collect();
                 Pick::new(kind, self.plain("menu-highlighting"), rows, side)
             }
+            PickKind::SortGroups => {
+                let rows: Vec<PickRow> = self
+                    .cfg
+                    .sort_groups
+                    .iter()
+                    .enumerate()
+                    .map(|(i, g)| PickRow {
+                        label: sort_group_row(g, i),
+                        value: i.to_string(),
+                        current: false,
+                        hotkey: None,
+                        separator: false,
+                    })
+                    .collect();
+                Pick::new(kind, self.plain("menu-sort-groups"), rows, side)
+            }
             PickKind::SortModes => {
                 let panel = &self.panels[side];
                 let keys = [
@@ -12151,6 +12229,23 @@ impl App {
                     self.reopen_highlight(side, other);
                 }
             }
+            // The same for the sort bands, and for the same reason: the order the blocks are
+            // written in is the order the listing is cut into.
+            KeyCode::Up | KeyCode::Down
+                if kind == PickKind::SortGroups && key.mods.contains(Mods::CTRL) =>
+            {
+                let (side, at) = (pick.side, pick.cursor);
+                let other = if key.code == KeyCode::Up {
+                    at.checked_sub(1)
+                } else {
+                    (at + 1 < self.cfg.sort_groups.len()).then_some(at + 1)
+                };
+                if let Some(other) = other {
+                    self.cfg.sort_groups.swap(at, other);
+                    self.apply_sort_groups();
+                    self.reopen_sort_groups(side, other);
+                }
+            }
             KeyCode::Up => pick.move_cursor(-1),
             KeyCode::Down => pick.move_cursor(1),
             KeyCode::PageUp => pick.move_cursor(-10),
@@ -12183,6 +12278,26 @@ impl App {
                 let at = pick.cursor;
                 self.open_highlight_form(None);
                 self.highlight_at = Some(at);
+            }
+            KeyCode::F(4) if kind == PickKind::SortGroups => {
+                let at = pick.cursor;
+                self.open_sort_group_form(Some(at));
+            }
+            KeyCode::Insert if kind == PickKind::SortGroups => {
+                let at = pick.cursor;
+                self.open_sort_group_form(None);
+                self.sort_group_at = Some(at);
+            }
+            KeyCode::Delete if kind == PickKind::SortGroups => {
+                let (side, at) = (pick.side, pick.cursor);
+                if at < self.cfg.sort_groups.len() {
+                    let gone = sort_group_name(&self.cfg.sort_groups[at], at);
+                    self.cfg.sort_groups.remove(at);
+                    self.apply_sort_groups();
+                    let msg = self.i18n.t_args("sg-removed", &[("name", gone.into())]);
+                    self.reopen_sort_groups(side, at.min(self.cfg.sort_groups.len()));
+                    self.set_status(msg);
+                }
             }
             KeyCode::Delete if kind == PickKind::Highlight => {
                 let (side, at) = (pick.side, pick.cursor);
@@ -12459,6 +12574,10 @@ impl App {
             PickKind::Highlight => {
                 let at = row.value.parse::<usize>().unwrap_or(0);
                 self.open_highlight_form(Some(at));
+            }
+            PickKind::SortGroups => {
+                let at = row.value.parse::<usize>().unwrap_or(0);
+                self.open_sort_group_form(Some(at));
             }
             PickKind::SortModes => {
                 let key = match row.value.as_str() {
@@ -14769,6 +14888,51 @@ impl App {
         self.mode = Mode::Form(Box::new(Form::highlight(group.as_ref(), &self.i18n)));
     }
 
+    /// The dialog for one band: `F4` on a row, or `Ins` for a new one.
+    pub fn open_sort_group_form(&mut self, index: Option<usize>) {
+        let group = index.and_then(|i| self.cfg.sort_groups.get(i)).cloned();
+        self.sort_group_at = index;
+        self.mode = Mode::Form(Box::new(Form::sort_group(group.as_ref(), &self.i18n)));
+    }
+
+    /// Compile the bands again and sort both panels with them, so the listing behind the
+    /// dialog shows what was just asked for.
+    ///
+    /// Writing the first band is what turns the grouping on, as writing the first block in
+    /// the file is: a band nobody can see is a band nobody asked for. Taking the last one
+    /// away turns it off again rather than leaving a toggle over an empty list.
+    fn apply_sort_groups(&mut self) {
+        let mut problems = Vec::new();
+        self.sort_groups =
+            std::sync::Arc::new(crate::highlight::sort_groups(&self.cfg, &mut problems));
+        let on = !self.sort_groups.is_empty();
+        for panel in &mut self.panels {
+            panel.groups = self.sort_groups.clone();
+            panel.sort.groups = on;
+            panel.rebuild();
+        }
+    }
+
+    fn reopen_sort_groups(&mut self, side: usize, cursor: usize) {
+        let rows: Vec<PickRow> = self
+            .cfg
+            .sort_groups
+            .iter()
+            .enumerate()
+            .map(|(i, g)| PickRow {
+                label: sort_group_row(g, i),
+                value: i.to_string(),
+                current: false,
+                hotkey: None,
+                separator: false,
+            })
+            .collect();
+        let title = self.plain("menu-sort-groups");
+        let mut pick = Pick::new(PickKind::SortGroups, title, rows, side);
+        pick.cursor = cursor.min(pick.rows.len().saturating_sub(1));
+        self.mode = Mode::Pick(Box::new(pick));
+    }
+
     /// Compile the groups again and put them on the panels. Called after every change, so
     /// the screen behind the dialog shows what was just asked for.
     ///
@@ -15674,6 +15838,22 @@ fn highlight_name(h: &fcmd_config::HighlightCfg, index: usize) -> String {
     } else {
         h.name.clone()
     }
+}
+
+/// What to call a band in a message: its own name, or its place in the list.
+fn sort_group_name(g: &fcmd_config::SortGroupCfg, index: usize) -> String {
+    if g.name.is_empty() {
+        format!("#{}", index + 1)
+    } else {
+        g.name.clone()
+    }
+}
+
+/// One row of the sort-group list: the name, the masks it holds, and which side of the
+/// ungrouped files it sits on — which is the whole of a band.
+fn sort_group_row(g: &fcmd_config::SortGroupCfg, index: usize) -> String {
+    let where_ = if g.place == "back" { "back" } else { "front" };
+    format!("{}  {}  [{where_}]", sort_group_name(g, index), g.mask)
 }
 
 /// One row of the colour-group list: what it is called, then what it matches, in the words
@@ -22402,6 +22582,71 @@ abcdefghij
         press(&mut app, "Del");
         assert_eq!(app.cfg.highlight.len(), 1);
         assert_eq!(app.cfg.highlight[0].name, "logs");
+    }
+
+    /// The sort bands are edited where they are read, like the colour groups: a list, a
+    /// dialog per band, and the listing reordered the moment either changes (SPEC 02 §4).
+    #[test]
+    fn the_sort_groups_are_a_list_one_edits_from_inside_it() {
+        let mut app = app();
+        app.cfg.sort_groups = vec![
+            fcmd_config::SortGroupCfg {
+                name: "sources".into(),
+                mask: "*.rs".into(),
+                ..Default::default()
+            },
+            fcmd_config::SortGroupCfg {
+                name: "output".into(),
+                mask: "*.o".into(),
+                place: "back".into(),
+            },
+        ];
+        app.run(Command::OptSortGroups);
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(pick.kind, crate::menu::PickKind::SortGroups);
+        assert_eq!(pick.rows.len(), 2);
+        assert!(pick.rows[0].label.contains("sources"), "{:?}", pick.rows[0]);
+        assert!(pick.rows[0].label.contains("*.rs"), "{:?}", pick.rows[0]);
+        assert!(pick.rows[1].label.contains("back"), "{:?}", pick.rows[1]);
+
+        // `Ctrl+Down` moves a band past the next one: the order is what cuts the listing.
+        press(&mut app, "Ctrl+Down");
+        assert_eq!(app.cfg.sort_groups[0].name, "output");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(pick.cursor, 1, "the cursor follows the row it moved");
+
+        // `F4` opens the band under the cursor, filled in, and `OK` puts it back.
+        press(&mut app, "F4");
+        let Mode::Form(form) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(form.kind, crate::menu::FormKind::SortGroup);
+        assert_eq!(form.text_value("sg.name"), "sources");
+        set_text(&mut app, "sg.mask", "*.rs,*.toml");
+        press(&mut app, "F10");
+        assert_eq!(app.cfg.sort_groups[1].mask, "*.rs,*.toml");
+        // The bands are in force at once: the panels sort by them without a reload.
+        assert!(app.panels[0].sort.groups);
+        assert!(matches!(app.mode, Mode::Pick(_)), "{:?}", app.mode);
+
+        // A band with no mask would hold nothing, and the dialog says so rather than taking
+        // it and dropping it at the next start.
+        press(&mut app, "Ins");
+        set_text(&mut app, "sg.mask", "");
+        press(&mut app, "F10");
+        assert!(app.status_error, "{}", app.status);
+        press(&mut app, "Esc");
+
+        // `Del` takes one away, and the last one taken away turns the grouping off.
+        app.run(Command::OptSortGroups);
+        press(&mut app, "Del");
+        press(&mut app, "Del");
+        assert!(app.cfg.sort_groups.is_empty());
+        assert!(!app.panels[0].sort.groups);
     }
 
     // ── the view-and-edit history (SPEC 06 §6) ─────────────────────────────────────────────

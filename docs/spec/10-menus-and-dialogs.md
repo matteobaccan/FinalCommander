@@ -373,6 +373,23 @@ accepted, and `Options → Save setup` is what writes it to `fcmd.toml` — whic
 says each time. That is deliberate: the configuration file is one people edit by hand, with
 comments in it, and `Save setup` regenerates it. The palette editor already works this way.
 
+### 3.12 Sort groups (Options menu)
+
+The `[[sort_group]]` bands of SPEC 02 §4, in the same shape and for the same reason. One row
+per band, in the order they cut the listing — the name, the masks and whether the band sits in
+front of the ungrouped files or behind them — with `Enter`/`F4` to edit one, `Ins` to make a
+new one beside the row the cursor is on, `Del` to take one away and `Ctrl+↑↓` to move one past
+its neighbour.
+
+**The dialog**, one band: a name, a mask list in the filter's own grammar, and where it sits.
+A band with no mask would hold nothing and a mask that does not parse would be dropped at the
+next start with a warning this reader would never see: both come back on the dialog with the
+fields still filled in.
+
+A change sorts both panels at once. Writing the first band turns the grouping on, as writing
+the first block in the file does, and taking the last one away turns it off rather than
+leaving `Shift+F11` over an empty list. `Save setup` writes the blocks.
+
 ## 4. Choose-one lists
 
 One framed list, one `√` on the row in force, `↑`/`↓`/`PgUp`/`PgDn`/`Home`/`End` to move,

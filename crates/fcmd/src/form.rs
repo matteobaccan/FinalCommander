@@ -213,6 +213,7 @@ impl Form {
             | FormKind::Sync
             | FormKind::Link
             | FormKind::Highlight
+            | FormKind::SortGroup
             | FormKind::Search => Vec::new(),
             FormKind::EditorSettings => vec![
                 choice(
@@ -475,6 +476,7 @@ impl Form {
             FormKind::Search => "search-title",
             FormKind::Link => "link-title",
             FormKind::Highlight => "hl-new",
+            FormKind::SortGroup => "sg-title",
             FormKind::EditorSettings => "menu-editor-settings",
             FormKind::ViewerSettings => "menu-viewer-settings",
             FormKind::System => "menu-system-settings",
@@ -652,6 +654,38 @@ impl Form {
     /// condition set: somebody who learned the dialog can write the file, and the other way
     /// round. The two inks take a colour or the name of a theme colour, which is why they are
     /// text rows rather than a palette.
+    /// One `[[sort_group]]` band: what to call it, what falls into it, and which side of the
+    /// ungrouped files it sits on (SPEC 02 §4).
+    pub fn sort_group(group: Option<&fcmd_config::SortGroupCfg>, i18n: &I18n) -> Form {
+        let t = |id: &str| i18n.t(id);
+        let blank = fcmd_config::SortGroupCfg::default();
+        let g = group.unwrap_or(&blank);
+        let fields = vec![
+            Field::text("sg.name", t("sg-name"), g.name.clone()),
+            Field::Separator,
+            Field::text("sg.mask", t("sg-mask"), g.mask.clone()),
+            choice(
+                "sg.place",
+                t("sg-place"),
+                &[("front", t("sg-place-front")), ("back", t("sg-place-back"))],
+                if g.place == "back" { "back" } else { "front" },
+            ),
+            Field::Separator,
+            Field::Dim(t("sg-hint")),
+        ];
+        Form {
+            pages: Vec::new(),
+            page: 0,
+            kind: FormKind::SortGroup,
+            title: t("sg-title"),
+            fields,
+            cursor: 0,
+            site: None,
+            button: None,
+            buttons: vec![i18n.t("btn-ok"), i18n.t("btn-cancel")],
+        }
+    }
+
     pub fn highlight(group: Option<&fcmd_config::HighlightCfg>, i18n: &I18n) -> Form {
         let t = |id: &str| i18n.t(id);
         let blank = fcmd_config::HighlightCfg::default();

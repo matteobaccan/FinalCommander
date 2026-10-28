@@ -288,7 +288,12 @@ list. Within a group the normal sort applies. This is what makes `*.cpp` files a
 the order they are written: the front ones keep that order among themselves, so do the ones
 behind, and the files that match nothing sit between them. Writing the blocks turns them on;
 `Shift+F11` turns them off and on again per panel, and says how many there are, because a
-toggle over an empty list is otherwise a key that does nothing.
+toggle over an empty list is otherwise a key that does nothing. **The bands are edited from
+the program too**, at `F9 → Options → Sort groups` and in the shape SPEC 10 §3.11 describes
+for the colour groups: the list in the order it cuts the listing, `Ins` beside the row the
+cursor is on, `Del`, `F4`, `Ctrl+↑↓` to move one past its neighbour. A change is in force on
+both panels at once — writing the first band turns the grouping on and taking the last one
+away turns it off — and *Save setup* writes the blocks.
 
 Two things the bands deliberately do *not* touch. **Directories are not grouped**: they have
 their place in the order already, and a folder that happened to match `*.o` landing in the

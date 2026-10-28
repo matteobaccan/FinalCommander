@@ -52,6 +52,14 @@ Notable changes, newest first. The format follows
   panel show what it says in there as they do on the disk. Writing one back is a rebuild and
   `Ctrl+Z` still says so.
 
+- **The sort groups have a dialog.** `F9 → Options → Sort groups` edits the `[[sort_group]]`
+  bands the way the colour groups are edited: the list in the order they cut the listing,
+  `Ins` beside the row the cursor is on, `Del`, `F4`, `Ctrl+↑↓` to move one past its
+  neighbour, and one dialog per band — a name, the masks, and whether it sits in front of the
+  ungrouped files or behind them. Both panels re-sort at once; writing the first band turns
+  the grouping on and taking the last one away turns it off, and *Save setup* writes the
+  blocks.
+
 ### Changed
 
 - **The menu letters are FAR's own.** Every row the `F9` menus share with FAR now wears the

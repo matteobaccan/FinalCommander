@@ -49,6 +49,8 @@ pub enum FormKind {
     Search,
     /// One `[[highlight]]` group: its conditions and its two inks (SPEC 10 §3.11).
     Highlight,
+    /// One `[[sort_group]]` band: its name, its masks and which side it sits on (SPEC 02 §4).
+    SortGroup,
     System,
     Panel,
     Interface,
@@ -78,6 +80,8 @@ pub enum PickKind {
     FileHistory,
     /// The `[[highlight]]` groups, in the order they are tried (SPEC 10 §3.11).
     Highlight,
+    /// The `[[sort_group]]` bands, in the order they cut the listing (SPEC 02 §4).
+    SortGroups,
     /// The sort order for this panel.
     SortModes,
     /// What to do with the block of bytes that is marked (SPEC 05 §2.6).
@@ -534,6 +538,7 @@ pub fn menus() -> Vec<Menu> {
                 item("menu-editor-settings", "", Action::Run(Command::OptEditor)),
                 item("menu-codepages", "", Action::Todo("settings.codepages")),
                 item("menu-highlighting", "", Action::Run(Command::OptHighlight)),
+                item("menu-sort-groups", "", Action::Run(Command::OptSortGroups)),
                 item("menu-plugins-config", "", Action::Todo("settings.plugins")),
                 Entry::Separator,
                 item("menu-help", "F1", Action::Run(Command::AppHelp)),

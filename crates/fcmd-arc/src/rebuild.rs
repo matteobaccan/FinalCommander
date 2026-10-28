@@ -226,7 +226,10 @@ fn rebuild_zip(
             let mut options = zip::write::SimpleFileOptions::default()
                 .compression_method(zip::CompressionMethod::Deflated);
             if let Some(mode) = mode {
-                options = options.unix_permissions(*mode);
+                // And the entry is written as a Unix one: a zip made on Windows is a DOS
+                // entry, whose mode a reader is entitled to invent from the attribute byte,
+                // so the mode we were asked for would be read back as somebody else's.
+                options = options.unix_permissions(*mode).system(zip::System::Unix);
             }
             if let Some(when) = mtime {
                 if let Some(stamp) = zip_datetime(*when) {
