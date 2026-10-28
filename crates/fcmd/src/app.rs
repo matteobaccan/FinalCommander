@@ -16843,8 +16843,14 @@ mod tests {
     fn f3_on_the_process_list_shows_the_process() {
         let mut app = app();
         app.open_process_panel(0);
-        if app.panels[0].listing.is_empty() {
-            return; // nothing readable here, which the panel itself already says
+        // A platform whose process list we cannot read says so and leaves the panel alone —
+        // macOS and the BSDs keep it behind a `sysctl` we do not call (SPEC 02 §7b).
+        if app.panels[0].temp_origin() != Some(":processes") {
+            assert!(
+                !app.status.is_empty(),
+                "nothing opened and nothing was said"
+            );
+            return;
         }
         // Onto a row that is a process rather than the parent entry.
         app.panels[0].cursor = 0;
@@ -16893,6 +16899,10 @@ mod tests {
         app.panels[1].cwd = VPath::local(right.path());
         app.active = 0;
         app.cfg.compare.subdirs = true;
+        // By size alone. The two copies of `same.txt` are written a moment apart, and on a
+        // filesystem that keeps the time to the nanosecond that moment is a difference —
+        // which is true of the comparison and nothing to do with what this test is about.
+        app.cfg.compare.time = false;
         app.run(Command::ToolCompare);
         press(&mut app, "F10");
         let (id, l, r, work, cancel) = app
@@ -17325,7 +17335,9 @@ mod tests {
 
         // Open it, then ask for the dialog again.
         app.open_process_panel(0);
-        assert_eq!(app.panels[0].temp_origin(), Some(":processes"));
+        if app.panels[0].temp_origin() != Some(":processes") {
+            return; // this platform does not read the process list; see the test above
+        }
         app.run(Command::PanelDrive(fcmd_cmd::Side::Left));
         let Mode::Pick(pick) = &app.mode else {
             panic!("no dialog")
