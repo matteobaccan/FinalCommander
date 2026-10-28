@@ -683,6 +683,61 @@ impl DecompileRule {
 /// of the internal viewer, what `F4` does instead of the internal editor. A command goes
 /// through the same substitutions the command line and the user menu use, so `{file}` is the
 /// path and `{file}` is the path in quotes.
+/// `[[highlight]]` blocks: which rows the panel paints differently, and how (SPEC 02 §5).
+///
+/// A group is a condition and a colour. The condition is written in the words a filter uses,
+/// because it *is* a filter — the same masks, the same size and age spellings, the same
+/// attribute letters — and what is left out is not asked about. The first group that matches
+/// a row decides, so the order in the file is the order of precedence; the built-in groups
+/// FAR ships with come after them all.
+///
+/// ```toml
+/// [[highlight]]
+/// name = "Rust"
+/// mask = "*.rs"
+/// fg = "#d7875f"
+///
+/// [[highlight]]
+/// name = "Fresh"
+/// age = "<=1"
+/// fg = "#87d787"
+/// ```
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct HighlightCfg {
+    /// What to call the group — in a message when it does not parse, and in the dialog that
+    /// will one day list them.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub name: String,
+    /// A mask list, with the groups a filter knows: `*.rs`, `<arc>`, `*.log|*.tmp`.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub mask: String,
+    /// `file`, `dir`, or empty for both.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub kind: String,
+    /// A size window, in the spelling the filter dialog takes: `1M-10M`, `-4K` up to four
+    /// kibibytes, `1G-` a gibibyte and over. A lone `1M` is a lower bound.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub size: String,
+    /// How old, in whole days and in the dialog's spelling: `<=1` for today and yesterday,
+    /// `>=30` for a month old and older, `7-30` for a window between the two.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub age: String,
+    /// Which timestamp `age` is about: `write` (the default), `create`, `access`.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub date_field: String,
+    /// The attribute letters: `h` hidden, `r` read-only, `x` executable, `s` system,
+    /// `b` broken link — each one optionally after a `-` for "must not".
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub attrs: String,
+    /// The ink: `#rrggbb`, a colour name, or the name of a theme key such as `file.archive`.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub fg: String,
+    /// The background, written the same way. Left out, the row keeps the panel's.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub bg: String,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AssocCfg {
     /// `*.md`, or an exact file name like `Makefile`.
@@ -818,6 +873,9 @@ pub struct Config {
     /// `[[assoc]]` blocks: what to run for a kind of file (SPEC 06 §5).
     #[serde(rename = "assoc")]
     pub assocs: Vec<AssocCfg>,
+    /// `[[highlight]]` blocks: the panel's own colours by condition (SPEC 02 §5).
+    #[serde(rename = "highlight")]
+    pub highlight: Vec<HighlightCfg>,
     /// Anything we did not recognise, kept so `--dump-config` can show it and warn.
     #[serde(flatten, skip_serializing)]
     pub unknown: BTreeMap<String, toml::Value>,

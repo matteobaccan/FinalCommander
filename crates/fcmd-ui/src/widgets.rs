@@ -386,11 +386,17 @@ fn row_style(
     selected: bool,
     cursor: bool,
     focused: bool,
+    now: SystemTime,
 ) -> Style {
+    // A group from the configuration paints the row; without one the row takes the colour of
+    // the built-in group its key names. A selection is louder than either, as it is in FAR:
+    // what is marked has to be seen as marked whatever it is.
+    let paint = highlight.paint_at(e, now, theme);
+    let own = |theme: &Theme| paint.fg.unwrap_or_else(|| theme.color(paint.key));
     let fg = if selected {
         theme.color("selected.fg")
     } else {
-        theme.color(highlight.key(e))
+        own(theme)
     };
     if cursor {
         let (cfg, cbg) = if focused {
@@ -404,15 +410,17 @@ fn row_style(
             s.fg = theme.color("selected.fg");
         } else if !focused {
             // The passive panel's cursor is not a bar, so the file keeps its own colour.
-            s.fg = theme.color(highlight.key(e));
+            s.fg = own(theme);
         }
         s
     } else {
-        Style::new(fg, theme.color("panel.bg"))
+        Style::new(fg, paint.bg.unwrap_or_else(|| theme.color("panel.bg")))
     }
 }
 
 fn draw_brief(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect, rows: usize) {
+    // One clock for the whole panel, as in the full view below.
+    let now = SystemTime::now();
     let cols = brief_columns(p.area, p.view);
     let col_w = (inner.w as usize / cols).max(4);
     // FAR's wide view puts the size at the right-hand end of each column.
@@ -424,7 +432,15 @@ fn draw_brief(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect,
                 continue;
             };
             let selected = p.selection.contains(e.id);
-            let style = row_style(theme, p.highlight, e, selected, idx == p.cursor, p.focused);
+            let style = row_style(
+                theme,
+                p.highlight,
+                e,
+                selected,
+                idx == p.cursor,
+                p.focused,
+                now,
+            );
             let x = inner.x + (col * col_w) as u16;
             let w = col_w as u16 - 1;
             buf.fill(Rect::new(x, inner.y + row as u16, w, 1), ' ', style);
@@ -572,6 +588,9 @@ fn columns_of(inner_w: u16, view: ViewMode, cluster: u64) -> Cols {
 
 fn draw_full(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect, rows: usize) {
     let c = columns_of(inner.w, p.view, p.cluster);
+    // One clock for the whole panel: a group written in terms of age must not colour the top
+    // of a listing by one instant and the bottom by another.
+    let now = SystemTime::now();
     let (name_w, size_w) = (c.name, c.size);
 
     for row in 0..rows {
@@ -581,7 +600,15 @@ fn draw_full(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect, 
         };
         let y = inner.y + row as u16;
         let selected = p.selection.contains(e.id);
-        let style = row_style(theme, p.highlight, e, selected, idx == p.cursor, p.focused);
+        let style = row_style(
+            theme,
+            p.highlight,
+            e,
+            selected,
+            idx == p.cursor,
+            p.focused,
+            now,
+        );
         buf.fill(Rect::new(inner.x, y, inner.w, 1), ' ', style);
 
         let name = shift_name(&decorate(e), p.name_scroll);

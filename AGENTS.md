@@ -135,7 +135,8 @@ and allocated size, `fcmd-platform` — free space on Windows at last, and the d
 figures the information panel and a folder's quick view both show — the four keys the keyboard
 reference had promised, and the column titles going through the catalogues.
 
-Nothing is waiting unreleased on `main`.
+Unreleased on `main`: `[[highlight]]` groups — colouring rows by mask, size, age, attributes
+or kind, from the configuration (SPEC 02 §5, feature 1.23).
 
 ## The queue, as the author's review left it
 

@@ -170,19 +170,40 @@ applies. This is what makes `*.cpp` files appear before `*.o` ones however the p
   makes a filter survive being saved · attributes as three states (must have, must not have,
   don't care) · "more than one hard link". Each condition switches off on its own, so a saved
   filter can be narrowed without being rewritten.
-- **Highlight groups** use the same predicate language to colour rows:
+- **Highlight groups** colour rows with the same condition set, which is the point of having
+  one: what a filter can say, a group can say.
 
 ```toml
 [[highlight]]
-mask = "*.rs"; fg = "syntax.rust"
+name = "Rust"
+mask = "*.rs"
+fg = "#d7875f"
+
 [[highlight]]
-when = "attrs.contains('x') && kind == 'file'"; fg = "exec"
+name = "Fresh"
+age = "<=1"            # days, as the filter dialog spells it
+date_field = "create"  # write (the default), create, access, change
+fg = "file.archive"    # a theme key, so the group follows the theme
+bg = "idx:235"
+
 [[highlight]]
-when = "age < '1h'"; attrs = ["bold"]
+name = "Big and hidden"
+size = "1G-"           # 1M-2G, -4K, 1G-; a lone 1M is a lower bound
+attrs = "h-s"          # hidden, and not system
+fg = "red"
 ```
 
-The predicate language is a tiny expression evaluator (no Turing completeness, no I/O) shared
-with selection-by-predicate and the find tool.
+**Shipped**: the groups above, asked in the order they are written — the first that matches a
+row decides — with FAR's own six after them, so a file nothing is said about looks as it
+always did. A group with no condition is refused (it would paint every row) and a group that
+does not parse is a warning on the startup screen and is left out, because a colour is not
+worth refusing to start over. The ink is a colour (`#d7875f`, `red`, `idx:235`) or the name of
+a theme key, and a key is resolved every time it is drawn rather than once, so a group follows
+`Ctrl+Shift+T` from one theme to the next.
+
+The dialog that edits these, and a predicate language for the conditions that are not
+conditions on one field (`attrs.contains('x') && kind == 'file'`), are backlog lines: the
+condition set covers what a person writes in a file.
 
 ## 6. Fast find / quick search
 

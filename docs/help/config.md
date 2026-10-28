@@ -34,6 +34,37 @@ register and nothing to rebuild.
 
 The default theme is FAR's own palette, taken from its source rather than from a screenshot.
 
+# Colouring files by what they are
+
+A theme says what an archive or a hidden file looks like. A `[[highlight]]` group in
+`fcmd.toml` says it for whatever you like: a mask, a size, an age, attributes, files or
+folders — written the way the filter dialog writes them.
+
+```toml
+[[highlight]]
+name = "Rust"
+mask = "*.rs"
+fg = "#d7875f"
+
+[[highlight]]
+name = "Written today"
+age = "<=1"
+fg = "brightgreen"
+
+[[highlight]]
+name = "Big and hidden"
+size = "1G-"
+attrs = "h-s"
+fg = "red"
+bg = "idx:52"
+```
+
+The first group that matches a row decides, so the order in the file is the order that counts,
+and the built-in groups come after yours. The ink is a colour — `#d7875f`, `red`, `idx:208` —
+or the name of a theme colour such as `file.archive`, which then follows the theme when you
+change it. A group that does not parse is named on the startup screen and skipped; the program
+starts either way.
+
 # The palette editor
 
 `F9 → Options → Colours…` lists every colour the interface uses, with the value as a theme file

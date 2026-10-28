@@ -497,6 +497,10 @@ fn run(cli: Cli) -> Result<()> {
     let (sites, site_problems) = Site::list_from_config(&cfg);
     warnings.extend(site_problems);
 
+    // The `[[highlight]]` groups, compiled once: a condition and an ink per group, asked in
+    // the order they were written (SPEC 02 §5).
+    let highlight = highlight_groups(&cfg, &mut warnings);
+
     // The histories from the last session. A broken state file is a warning, never a stop.
     let (state, state_problem) = fcmd_config::State::load(&paths);
     if let Some(problem) = state_problem {
@@ -514,6 +518,7 @@ fn run(cli: Cli) -> Result<()> {
         right,
         sites,
         plugin_commands,
+        highlight,
     });
     app.cmd.load_history(state.command_history);
     app.bookmarks = state.bookmarks;
@@ -596,6 +601,67 @@ fn list_plugins(paths: &Paths) {
             "(nothing here: a plugin is a folder with a plugin.toml — docs/spec/08-plugins.md)"
         );
     }
+}
+
+/// The `[[highlight]]` groups of the configuration, compiled into the rules the panel asks.
+///
+/// A group that does not parse is a warning and is left out rather than a reason to refuse to
+/// start: the file still lists, and the colour it would have had is the one it had before.
+/// The message names the group, which is why a group is worth naming.
+fn highlight_groups(cfg: &Config, warnings: &mut Vec<String>) -> fcmd_ui::Highlight {
+    let groups = fcmd_core::filter::default_groups();
+    let mut rules = Vec::new();
+    for (n, h) in cfg.highlight.iter().enumerate() {
+        let name = if h.name.is_empty() {
+            format!("#{}", n + 1)
+        } else {
+            h.name.clone()
+        };
+        match highlight_rule(h, &groups, &name) {
+            Ok(rule) => rules.push(rule),
+            Err(problem) => warnings.push(format!("highlight group `{name}`: {problem}")),
+        }
+    }
+    fcmd_ui::Highlight::with_rules(rules)
+}
+
+/// One `[[highlight]]` block as a rule: every condition it names, parsed the way the filter
+/// dialog parses the same words, and the two inks.
+fn highlight_rule(
+    h: &fcmd_config::HighlightCfg,
+    groups: &fcmd_core::filter::Groups,
+    name: &str,
+) -> Result<fcmd_ui::highlight::Rule, String> {
+    use fcmd_core::filter::{
+        AttrConditions, DateCondition, DateRange, Filter, KindFilter, MaskSet, SizeRange, TimeField,
+    };
+    let mut filter = Filter::named(name);
+    if !h.mask.is_empty() {
+        // Case-insensitive, as the built-in groups are: `.ZIP` is an archive anywhere.
+        filter.masks =
+            Some(MaskSet::parse_with(&h.mask, groups, false).map_err(|e| e.to_string())?);
+    }
+    filter.kind =
+        KindFilter::parse(&h.kind).ok_or_else(|| format!("`{}` is not a kind", h.kind))?;
+    if !h.size.is_empty() {
+        filter.size = Some(SizeRange::parse(&h.size).map_err(|e| e.to_string())?);
+    }
+    if !h.age.is_empty() {
+        let field = TimeField::parse(&h.date_field)
+            .ok_or_else(|| format!("`{}` is not a timestamp", h.date_field))?;
+        let range = DateRange::parse_age(&h.age).map_err(|e| e.to_string())?;
+        filter.date = Some(DateCondition::new(field, range));
+    }
+    filter.attrs = AttrConditions::parse(&h.attrs).map_err(|e| e.to_string())?;
+    if filter.is_empty() {
+        return Err("no condition, so it would paint every row".to_string());
+    }
+    Ok(fcmd_ui::highlight::Rule {
+        name: name.to_string(),
+        filter,
+        fg: (!h.fg.is_empty()).then(|| fcmd_ui::highlight::Ink::parse(&h.fg)),
+        bg: (!h.bg.is_empty()).then(|| fcmd_ui::highlight::Ink::parse(&h.bg)),
+    })
 }
 
 /// Everything the plugins declare, folded into what the program already loads. A plugin that
@@ -2347,6 +2413,7 @@ timeout = 10
             right: VPath::local(&right),
             sites: Vec::new(),
             plugin_commands: commands,
+            highlight: fcmd_ui::Highlight::far_default(),
         });
         serve(&mut app);
 
@@ -2898,6 +2965,7 @@ timeout = 10
             right: VPath::local(right),
             sites: Vec::new(),
             plugin_commands: Vec::new(),
+            highlight: fcmd_ui::Highlight::far_default(),
         })
     }
 
@@ -3961,6 +4029,73 @@ timeout = 10
         .unwrap();
         let km = load_keymap(&with_block, "fcmd.toml", &[]).unwrap();
         assert_eq!(km.name(), "klingon");
+    }
+
+    #[test]
+    fn the_highlight_groups_are_compiled_and_a_bad_one_is_a_warning() {
+        let text = r##"
+[[highlight]]
+name = "Rust"
+mask = "*.rs"
+fg = "#d7875f"
+
+[[highlight]]
+name = "Fresh"
+age = "<=1"
+date_field = "create"
+fg = "file.archive"
+bg = "idx:235"
+
+[[highlight]]
+name = "Big and hidden"
+size = "1G-"
+attrs = "h-s"
+fg = "red"
+
+[[highlight]]
+name = "Nonsense"
+size = "a handful"
+fg = "red"
+
+[[highlight]]
+name = "Empty"
+fg = "red"
+"##;
+        let (cfg, _) = Config::parse("test", text).expect("the file parses");
+        assert_eq!(cfg.highlight.len(), 5);
+        let mut warnings = Vec::new();
+        let highlight = highlight_groups(&cfg, &mut warnings);
+
+        // Three groups are good; the two that are not are named in the warnings and left out.
+        assert_eq!(highlight.rules().len(), 3, "{warnings:?}");
+        assert_eq!(warnings.len(), 2, "{warnings:?}");
+        assert!(
+            warnings[0].contains("Nonsense") && warnings[0].contains("size"),
+            "{warnings:?}"
+        );
+        assert!(
+            warnings[1].contains("Empty") && warnings[1].contains("every row"),
+            "{warnings:?}"
+        );
+
+        // And the conditions are the ones the words said.
+        let theme = Theme::default_theme();
+        let now = std::time::SystemTime::now();
+        let rs = fcmd_core::Entry {
+            name: "main.rs".into(),
+            kind: fcmd_core::EntryKind::File,
+            size: 10,
+            mtime: None,
+            btime: None,
+            atime: None,
+            flags: fcmd_core::EntryFlags::empty(),
+            id: fcmd_core::EntryId::Name(1),
+            link_target: None,
+        };
+        assert_eq!(
+            highlight.paint_at(&rs, now, &theme).fg,
+            Some(fcmd_ui::Color::Rgb(0xd7, 0x87, 0x5f))
+        );
     }
 
     #[test]

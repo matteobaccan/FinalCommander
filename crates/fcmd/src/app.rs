@@ -1180,6 +1180,8 @@ pub struct Startup {
     pub sites: Vec<Site>,
     /// The commands the loaded plugins provide.
     pub plugin_commands: Vec<PluginCommand>,
+    /// The file-colouring groups: the configuration's, then FAR's own (SPEC 02 §5).
+    pub highlight: fcmd_ui::Highlight,
 }
 
 pub struct App {
@@ -1391,6 +1393,7 @@ impl App {
             right,
             sites,
             plugin_commands,
+            highlight,
         } = start;
         let sort = Sort {
             key: parse_sort(&cfg.panel.sort),
@@ -1502,7 +1505,7 @@ impl App {
             last_pack_level: fcmd_arc::Level::Normal,
             last_replace: fcmd_jobs::ReplaceOptions::default(),
             pending_replace: None,
-            highlight: fcmd_ui::Highlight::far_default(),
+            highlight,
             menu_levels: Vec::new(),
             menu_queue: Vec::new(),
             apply_queue: Vec::new(),
@@ -11864,6 +11867,7 @@ mod tests {
             right: VPath::local("/tmp"),
             sites: Vec::new(),
             plugin_commands: Vec::new(),
+            highlight: fcmd_ui::Highlight::far_default(),
         });
         app.requests.clear();
         let entries = vec![
@@ -14627,6 +14631,7 @@ run = ["echo one", "echo two", "echo three"]
             right: VPath::local("/tmp"),
             sites: Vec::new(),
             plugin_commands: Vec::new(),
+            highlight: fcmd_ui::Highlight::far_default(),
         });
         app.requests.clear();
         let entries = vec![
@@ -16629,6 +16634,7 @@ run = ["echo one", "echo two", "echo three"]
             right: VPath::local(dir),
             sites: Vec::new(),
             plugin_commands: Vec::new(),
+            highlight: fcmd_ui::Highlight::far_default(),
         });
         app.requests.clear();
         let entries = fcmd_vfs::local::list_blocking(&VPath::local(dir), &CancelToken::new())

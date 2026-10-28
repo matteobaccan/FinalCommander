@@ -68,6 +68,9 @@ pub enum FilterError {
     #[error("a mask list may not expand to more than {MAX_MASKS} masks")]
     TooManyMasks,
 
+    #[error("attributes `{0}`: expected letters from `{1}`, each one optionally after a `-`")]
+    BadAttrs(String, String),
+
     #[error("size `{0}`: expected a number with an optional B K M G T P E suffix")]
     BadSize(String),
 
@@ -664,6 +667,17 @@ impl KindFilter {
         }
     }
 
+    /// The spellings a person writes: the plural the dialog shows, the singular that reads
+    /// better in a configuration file, and `folder` for the word half the world uses.
+    pub fn parse(text: &str) -> Option<KindFilter> {
+        match text.trim().to_ascii_lowercase().as_str() {
+            "" | "both" | "any" => Some(KindFilter::Both),
+            "file" | "files" => Some(KindFilter::Files),
+            "dir" | "dirs" | "folder" | "folders" => Some(KindFilter::Dirs),
+            _ => None,
+        }
+    }
+
     fn matches(self, kind: EntryKind) -> bool {
         match self {
             KindFilter::Both => true,
@@ -775,6 +789,18 @@ pub enum TimeField {
 }
 
 impl TimeField {
+    /// The spellings a person writes: the column's own name, and the plain English verb a
+    /// configuration file reads better with.
+    pub fn parse(text: &str) -> Option<TimeField> {
+        match text.trim().to_ascii_lowercase().as_str() {
+            "" | "write" | "written" | "modified" | "mtime" => Some(TimeField::Modified),
+            "create" | "created" | "btime" => Some(TimeField::Created),
+            "access" | "accessed" | "atime" => Some(TimeField::Accessed),
+            "change" | "changed" | "ctime" => Some(TimeField::Changed),
+            _ => None,
+        }
+    }
+
     /// The column spelling, so a filter and a view mode call the same thing by one name.
     pub fn as_str(self) -> &'static str {
         match self {
@@ -991,6 +1017,46 @@ impl AttrConditions {
         } else {
             AttrState::DontCare
         }
+    }
+
+    /// The conditions a person writes rather than clicks: the letters the panel's attribute
+    /// column draws, each one meaning "must have it", and a `-` before a letter meaning
+    /// "must not". `x-h` is an executable that is not hidden. Letters may be given in any
+    /// order and the string may be empty, which asks nothing.
+    ///
+    /// The letters are `NAMED_FLAGS`' own, so what can be asked for here is exactly what a
+    /// saved filter can carry, and a flag that is added to `EntryFlags` is askable the day it
+    /// is named there.
+    pub fn parse(text: &str) -> Result<Self, FilterError> {
+        let mut attrs = AttrConditions::default();
+        let mut negated = false;
+        for ch in text.chars() {
+            if ch.is_whitespace() || ch == ',' {
+                continue;
+            }
+            if ch == '-' || ch == '!' {
+                negated = true;
+                continue;
+            }
+            let letter = ch.to_ascii_lowercase();
+            let Some((flag, _)) = NAMED_FLAGS
+                .iter()
+                .find(|(_, name)| name.starts_with(letter))
+            else {
+                let known: String = NAMED_FLAGS.iter().map(|(_, n)| *n).collect();
+                return Err(FilterError::BadAttrs(text.to_string(), known));
+            };
+            attrs.set(
+                *flag,
+                if negated {
+                    AttrState::MustNotHave
+                } else {
+                    AttrState::MustHave
+                },
+            );
+            negated = false;
+        }
+        Ok(attrs)
     }
 
     pub fn set(&mut self, flag: EntryFlags, state: AttrState) {
@@ -1814,6 +1880,44 @@ mod tests {
         let filter = filter_with(|f| f.hard_links = Some(HardLinks::MoreThanOne));
         assert!(!filter.is_empty());
         assert!(filter.matches(&entry("main.rs", EntryKind::File)));
+    }
+
+    #[test]
+    fn the_words_for_a_kind_and_a_timestamp_are_the_ones_people_write() {
+        assert_eq!(KindFilter::parse("file"), Some(KindFilter::Files));
+        assert_eq!(KindFilter::parse("Folders"), Some(KindFilter::Dirs));
+        assert_eq!(KindFilter::parse(""), Some(KindFilter::Both));
+        assert_eq!(KindFilter::parse("sockets"), None);
+        assert_eq!(TimeField::parse("create"), Some(TimeField::Created));
+        assert_eq!(TimeField::parse("atime"), Some(TimeField::Accessed));
+        assert_eq!(TimeField::parse(""), Some(TimeField::Modified));
+        assert_eq!(TimeField::parse("whenever"), None);
+        // Whatever `as_str` writes, `parse` reads back.
+        for f in [
+            TimeField::Modified,
+            TimeField::Created,
+            TimeField::Accessed,
+            TimeField::Changed,
+        ] {
+            assert_eq!(TimeField::parse(f.as_str()), Some(f));
+        }
+    }
+
+    #[test]
+    fn the_attribute_letters_read_as_three_states() {
+        let a = AttrConditions::parse("x-h").expect("letters");
+        assert_eq!(a.state(EntryFlags::EXECUTABLE), AttrState::MustHave);
+        assert_eq!(a.state(EntryFlags::HIDDEN), AttrState::MustNotHave);
+        assert_eq!(a.state(EntryFlags::SYSTEM), AttrState::DontCare);
+        // Order, case, spaces and commas are all allowed; nothing asked for is nothing.
+        assert_eq!(AttrConditions::parse("-H, X").unwrap(), a);
+        assert!(AttrConditions::parse("").unwrap().is_empty());
+        // A letter nothing is named by says which ones are.
+        let Err(FilterError::BadAttrs(text, known)) = AttrConditions::parse("q") else {
+            panic!("a letter that names no flag has to be refused");
+        };
+        assert_eq!(text, "q");
+        assert!(known.contains('h') && known.contains('x'), "{known}");
     }
 
     #[test]

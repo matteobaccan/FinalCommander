@@ -6,13 +6,75 @@
 //! point: the first group that matches decides, which is why hidden and system come before
 //! everything else — a hidden directory is cyan in FAR, not white.
 
-use fcmd_core::filter::MaskSet;
+use std::time::SystemTime;
+
+use fcmd_core::filter::{Filter, MaskSet};
 use fcmd_core::{Entry, EntryFlags, EntryKind};
+
+use crate::color::Color;
+use crate::theme::Theme;
+
+/// What a group paints with: a colour of its own, or the name of a theme key so that the
+/// group follows the theme the way the built-in groups do. Kept as written rather than
+/// resolved once, because the theme can be changed while the program is running.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Ink {
+    Fixed(Color),
+    Key(String),
+}
+
+impl Ink {
+    /// A colour if the text is one — `#d7875f`, `red`, `idx:208` — and the name of a theme
+    /// key otherwise. Nothing here can fail: an unknown key is a colour the theme answers
+    /// for, which is what keeps a typo from costing a startup.
+    pub fn parse(text: &str) -> Ink {
+        match Color::parse(text) {
+            Some(c) => Ink::Fixed(c),
+            None => Ink::Key(text.trim().to_string()),
+        }
+    }
+
+    pub fn color(&self, theme: &Theme) -> Color {
+        match self {
+            Ink::Fixed(c) => *c,
+            Ink::Key(key) => theme.color(key),
+        }
+    }
+}
+
+/// One group from the configuration: a condition, and what a row that meets it is painted
+/// with. The condition is the same `Filter` the find tool and the panel's own filter use —
+/// masks, kind, size, a date range on a chosen timestamp, attributes, hard links — so a
+/// group can say anything a filter can say and the two are learned once.
+#[derive(Debug, Clone)]
+pub struct Rule {
+    /// What the group is called, for the message when it does not parse and for the dialog
+    /// that will one day list them.
+    pub name: String,
+    pub filter: Filter,
+    /// The ink. `None` leaves the row the colour it would have had, which is how a group
+    /// that only sets a background is written.
+    pub fg: Option<Ink>,
+    pub bg: Option<Ink>,
+}
+
+/// What a row is painted with: the colours a group asked for, and the theme key of the
+/// built-in group that would have had it otherwise.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Paint {
+    pub fg: Option<Color>,
+    pub bg: Option<Color>,
+    pub key: &'static str,
+}
 
 /// The default groups, compiled once. Building a `MaskSet` parses and compiles its masks, so
 /// this is done at startup rather than per row.
 #[derive(Debug, Clone)]
 pub struct Highlight {
+    /// The configuration's own groups, in the order they were written. They are asked first
+    /// and the first that matches decides, which is FAR's rule and the reason the order in
+    /// the file is worth keeping.
+    rules: Vec<Rule>,
     exec: Option<MaskSet>,
     arc: Option<MaskSet>,
     temp: Option<MaskSet>,
@@ -33,19 +95,53 @@ impl Highlight {
         // about, and FAR compares masks without case.
         let compile = |name: &str| MaskSet::parse_with(name, &groups, false).ok();
         Highlight {
+            rules: Vec::new(),
             exec: compile("<exec>"),
             arc: compile("<arc>"),
             temp: compile("<temp>"),
         }
     }
 
+    /// The built-in groups with the configuration's in front of them.
+    pub fn with_rules(rules: Vec<Rule>) -> Self {
+        Highlight {
+            rules,
+            ..Highlight::far_default()
+        }
+    }
+
+    pub fn rules(&self) -> &[Rule] {
+        &self.rules
+    }
+
     /// Nothing is highlighted: every file takes the panel's own colour. What a theme that
     /// wants one flat colour asks for.
     pub fn none() -> Self {
         Highlight {
+            rules: Vec::new(),
             exec: None,
             arc: None,
             temp: None,
+        }
+    }
+
+    /// What to paint this row with, at the instant `now` — passed in so that every row of one
+    /// frame is judged against the same clock, which is what keeps a group written in terms
+    /// of age from ordering a listing differently halfway down it.
+    pub fn paint_at(&self, e: &Entry, now: SystemTime, theme: &Theme) -> Paint {
+        for rule in &self.rules {
+            if rule.filter.matches_at(e, now) {
+                return Paint {
+                    fg: rule.fg.as_ref().map(|i| i.color(theme)),
+                    bg: rule.bg.as_ref().map(|i| i.color(theme)),
+                    key: self.key(e),
+                };
+            }
+        }
+        Paint {
+            fg: None,
+            bg: None,
+            key: self.key(e),
         }
     }
 
@@ -102,6 +198,60 @@ mod tests {
             id: EntryId::Name(1),
             link_target: None,
         }
+    }
+
+    #[test]
+    fn a_group_from_the_configuration_is_asked_before_the_built_in_ones() {
+        use fcmd_core::filter::{Filter, MaskSet};
+        let theme = Theme::default_theme();
+        let now = SystemTime::now();
+        let rule = |name: &str, mask: &str, ink: Ink| Rule {
+            name: name.to_string(),
+            filter: Filter {
+                masks: Some(MaskSet::parse(mask).expect("a mask")),
+                ..Filter::named(name)
+            },
+            fg: Some(ink),
+            bg: None,
+        };
+        let h = Highlight::with_rules(vec![
+            rule("Rust", "*.rs", Ink::Fixed(Color::Rgb(0xd7, 0x87, 0x5f))),
+            // A second group that also matches: the first one wins, which is why the order
+            // in the file is the order of precedence.
+            rule("Anything", "*", Ink::Fixed(Color::Rgb(1, 2, 3))),
+        ]);
+
+        let rs = entry("main.rs", EntryKind::File, EntryFlags::empty());
+        let paint = h.paint_at(&rs, now, &theme);
+        assert_eq!(paint.fg, Some(Color::Rgb(0xd7, 0x87, 0x5f)));
+        // The built-in group is still the one underneath, for the cursor row and for
+        // everything that asks what kind of file this is.
+        assert_eq!(paint.key, "panel.fg");
+
+        // An archive matches only the catch-all group here, and takes its ink rather than
+        // the built-in archive colour.
+        let zip = entry("sources.zip", EntryKind::File, EntryFlags::empty());
+        let paint = h.paint_at(&zip, now, &theme);
+        assert_eq!(paint.fg, Some(Color::Rgb(1, 2, 3)));
+        assert_eq!(paint.key, "file.archive");
+
+        // With no groups at all nothing is painted over, and the key is all there is.
+        let plain = Highlight::far_default();
+        let paint = plain.paint_at(&zip, now, &theme);
+        assert_eq!(paint.fg, None);
+        assert_eq!(paint.bg, None);
+        assert_eq!(paint.key, "file.archive");
+    }
+
+    #[test]
+    fn an_ink_is_a_colour_when_it_reads_as_one_and_a_theme_key_otherwise() {
+        let theme = Theme::default_theme();
+        assert_eq!(Ink::parse("#102030"), Ink::Fixed(Color::Rgb(16, 32, 48)));
+        assert_eq!(Ink::parse("red"), Ink::Fixed(Color::Ansi(1)));
+        // A theme key follows the theme, which is the point of not resolving it once.
+        let key = Ink::parse("file.archive");
+        assert_eq!(key, Ink::Key("file.archive".to_string()));
+        assert_eq!(key.color(&theme), theme.color("file.archive"));
     }
 
     #[test]

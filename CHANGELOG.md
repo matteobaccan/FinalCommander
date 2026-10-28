@@ -4,6 +4,25 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
+## [Unreleased]
+
+### Added
+
+- **Colouring files by what they are.** A theme says what an archive or a hidden file looks
+  like; a `[[highlight]]` group in `fcmd.toml` now says it for whatever you like — a mask, a
+  size window, an age in days on any of the four timestamps, attributes, files or folders —
+  written in the same words the filter dialog takes, because it is the same condition set.
+  The first group that matches a row decides, so the order in the file is the order that
+  counts, and FAR's built-in six come after them, which leaves a file nothing is said about
+  looking exactly as it did.
+
+  The ink is a colour (`#d7875f`, `red`, `idx:208`) or the name of a theme colour such as
+  `file.archive` — and a theme colour is looked up every time the row is drawn rather than
+  once at startup, so a group follows `Ctrl+Shift+T` from one theme to the next. A group with
+  no condition is refused, because it would paint every row, and a group that does not parse
+  is a warning on the startup screen with its name in it: a colour is not worth refusing to
+  start over.
+
 ## [0.5.0] — 2026-10-26
 
 The first release under the name it keeps. The program is FinalCommander and the command is

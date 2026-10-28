@@ -120,6 +120,35 @@ anyway), `objdump -d -C` (`*.o`, `*.so`, `*.a`), `retdec-decompiler` (`*.exe`). 
 `fcmd.toml` wins over a default for the same mask. `{file}` is substituted; a rule that forgets
 it still gets the path appended.
 
+## 2b-bis. `[[highlight]]` groups
+
+Which rows the panel paints differently, and how (SPEC 02 §5). A group is a condition and an
+ink; the first group that matches a row decides, and FAR's built-in six come after all of them.
+
+```toml
+[[highlight]]
+name = "Rust"             # named, so a warning about it can say which group
+mask = "*.rs"             # a mask list, with the groups a filter knows: `<arc>`, `a|b`
+fg = "#d7875f"            # #rrggbb, a colour name, idx:N, ansi:N — or a theme key
+bg = "idx:235"            # left out, the row keeps the panel's background
+
+[[highlight]]
+name = "Fresh"
+age = "<=1"               # whole days: <=1, >=30, 7-30
+date_field = "create"     # write (the default), create, access, change
+fg = "file.archive"       # a theme key follows the theme when it is switched
+
+[[highlight]]
+name = "Big and hidden"
+size = "1G-"              # 1M-2G, -4K, 1G-; a lone 1M is a lower bound
+attrs = "h-s"             # h r x s b, each one optionally after a `-` for "must not"
+kind = "file"             # file | dir | both (the default)
+fg = "red"
+```
+
+A group with no condition is refused — it would paint every row — and one that does not parse
+is a warning on the startup screen rather than a reason to refuse to start.
+
 ## 2c. `[net]` and `[[site]]`
 
 The netbox's settings and its site list (SPEC 04 §6). No secret ever appears here: a site says
