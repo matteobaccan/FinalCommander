@@ -103,6 +103,14 @@ Both folders have to be on this machine for now.
 are a list you can view, edit or jump to — and `F5` turns the whole result into a panel, so
 anything that works on a directory works on a search.
 
+**Inside archives** is a box, and it is off until you tick it: ticked, the search steps into
+every `.zip`, `.7z` and `.tar.*` it meets and looks at what is in them — by name, and by text
+where you gave one. A result then reads `src.zip!/doc/readme.md`, which `Enter`, `F3` and `F5`
+treat like any other file. It is slower, which is why it is a box: opening every container of
+a whole drive is a different search. A file inside an archive bigger than 64 MB is not read
+for text — it is counted as a problem instead, because an archive has to be unpacked to be
+read and that one would not fit anywhere sensible.
+
 The size row is what finds the files worth deleting when a disk fills up: `100M` means "from a
 hundred megabytes up", `1M-1G` a range, `-4K` everything smaller than four kilobytes. Leave it
 empty for any size. `K`, `M`, `G` and `T` are powers of 1024, as everywhere else in the

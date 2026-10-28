@@ -108,6 +108,14 @@ risultati sono un elenco che puoi visualizzare, modificare o su cui saltare — 
 tutto il risultato in un pannello, così tutto quello che funziona su una cartella funziona su
 una ricerca.
 
+**Dentro gli archivi** è una casella, e resta spenta finché non la spunti: spuntata, la ricerca
+entra in ogni `.zip`, `.7z` e `.tar.*` che incontra e guarda cosa c'è dentro — per nome, e per
+testo se ne hai dato uno. Un risultato si legge allora `src.zip!/doc/readme.md`, che `Enter`,
+`F3` e `F5` trattano come qualunque altro file. È più lenta, ed è per questo che è una casella:
+aprire ogni contenitore di un disco intero è un'altra ricerca. Un file dentro un archivio più
+grande di 64 MB non viene letto per il testo — viene contato come un problema, perché un
+archivio va spacchettato per essere letto e quello non starebbe da nessuna parte sensata.
+
 La riga della dimensione è quella che trova i file che vale la pena cancellare quando un disco
 si riempie: `100M` significa "da cento megabyte in su", `1M-1G` un intervallo, `-4K` tutto
 quello che è più piccolo di quattro kilobyte. Lasciala vuota per qualunque dimensione. `K`, `M`,

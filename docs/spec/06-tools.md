@@ -45,8 +45,19 @@ search that finds nothing. The results frame repeats it next to the mask. The en
 nothing: the query has carried a whole `Filter` since the start, and this fills in one more of
 its fields.
 
-**What is deliberately not in the first versions**: searching inside archives (the archive
-provider comes first), the date and attribute conditions (the filter object carries them
+**Inside archives** is a box of its own, and off unless it is ticked: a search that opened
+every container of a whole drive is a search of a different size. Ticked, a `.zip` on the way
+is walked as `x.zip!/` — which is a directory to everything above it, so the depth limit, the
+loop guard, the mask, the size condition and the content scanner work in there exactly as they
+do on the disk, and a hit comes back as `/home/mb/src.zip!/doc/readme.md`, which `Enter`, `F3`
+and *panelise* already understand. The engine gained one question for its filesystem — "may I
+step into this file?" — and one `impl` that answers it, so the walk itself did not learn what
+an archive is. A nested archive and one that needed a password open the way they do in a
+panel, because it is the same container cache. What an entry costs is its bytes: a container
+is not a file one can seek about in per entry, so a content search reads one entry at a time
+and refuses one over 64 MB with a problem rather than filling the machine.
+
+**What is deliberately not in the first versions**: the date and attribute conditions (the filter object carries them
 already — the dialog does not offer them yet), saving and loading a search, running a job over
 the whole result set, and `tool.find.folder`. Each is a line in the backlog.
 

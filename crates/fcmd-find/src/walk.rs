@@ -35,6 +35,10 @@ pub struct Query {
     /// What the file has to contain, or not contain. A directory has no bytes, so a content
     /// condition excludes every directory even when `include_dirs` is on.
     pub content: Option<Content>,
+    /// Step into the archives met on the way: `x.zip` is walked as `x.zip!/`, and everything
+    /// in it is matched and read like anything else. Off by default — opening every container
+    /// of a whole drive is a search of a different size, and the user asks for it.
+    pub in_archives: bool,
 }
 
 impl Query {
@@ -211,6 +215,10 @@ pub fn find(
                 && (query.follow_links || scanner.is_some())
                 && fs.is_dir_following(&path);
             let dirlike = entry.kind == EntryKind::Dir || (links_to_dir && query.follow_links);
+            // A file that is a container the search may step into. It is still a file — its
+            // own name can match, and its bytes can be searched — and what is inside it is
+            // walked as if `x.zip!/` were a directory beside it.
+            let container = !dirlike && query.in_archives && fs.opens_as_dir(&path);
             if dirlike {
                 stats.dirs_seen += 1;
             } else {
@@ -221,6 +229,9 @@ pub fn find(
             let deep_enough = query.depth.is_some_and(|limit| depth + 1 >= limit);
             if dirlike && query.subdirectories && !deep_enough {
                 children.push(path.clone());
+            }
+            if container && query.subdirectories && !deep_enough {
+                children.push(path.enter("/"));
             }
 
             if !query.filter.matches_at(&entry, now) {

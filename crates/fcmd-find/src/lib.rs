@@ -43,10 +43,12 @@
 //! to show hits while the search is still running simply does, and a caller that wants a
 //! `Vec` builds one in its own callback.
 
+mod arc;
 mod content;
 mod fs;
 mod walk;
 
+pub use arc::{ArcFind, BIGGEST};
 pub use content::{Content, ContentError, Needle};
 pub use fs::{FindFs, VisitId};
 pub use walk::{find, Event, Hit, Problem, Query, Stats, Trouble};

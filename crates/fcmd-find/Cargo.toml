@@ -10,6 +10,7 @@ authors.workspace = true
 
 [dependencies]
 memchr = "2"
+fcmd-arc = { workspace = true }
 fcmd-core = { workspace = true }
 fcmd-vfs = { workspace = true }
 fcmd-view = { workspace = true }
@@ -17,3 +18,5 @@ thiserror = "2"
 
 [dev-dependencies]
 tempfile = "3"
+# The tests build a zip to search inside; the reader itself is `fcmd-arc`'s business.
+zip = { version = "9", default-features = false, features = ["deflate-flate2"] }

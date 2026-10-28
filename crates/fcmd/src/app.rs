@@ -1084,6 +1084,9 @@ pub struct FindSpec {
     pub follow_links: bool,
     /// Directories in the results, not only files.
     pub directories: bool,
+    /// Step into the archives met on the way, so what is inside them is searched too — by
+    /// name and, where there is a text to find, by what it holds.
+    pub in_archives: bool,
     /// Where the walk starts. Worked out from the scope when the dialog is accepted, so the
     /// worker never has to know what a panel is.
     pub roots: Vec<VPath>,
@@ -1103,6 +1106,7 @@ impl Default for FindSpec {
             scope: FindScope::Tree,
             follow_links: false,
             directories: false,
+            in_archives: false,
             roots: Vec::new(),
         }
     }
@@ -9250,6 +9254,7 @@ impl App {
             scope,
             follow_links: form.toggle_value("find.links"),
             directories: form.toggle_value("find.dirs"),
+            in_archives: form.toggle_value("find.archives"),
             roots: Vec::new(),
         };
         spec.roots = self.find_roots(scope);
@@ -16835,6 +16840,27 @@ mod tests {
         assert_eq!(form.text_value("find.text"), "TODO");
         assert!(form.toggle_value("find.case"));
         assert_eq!(form.choice_value("find.scope"), "panel");
+    }
+
+    /// The archives box is a question for the search engine, not for the dialog: it reaches
+    /// the request and comes back next time like the rest of what was asked for.
+    #[test]
+    fn looking_inside_archives_is_asked_for_in_the_dialog() {
+        let mut app = app();
+        app.run(Command::ToolFind);
+        set_toggle(&mut app, "find.archives", true);
+        press(&mut app, "F10");
+        match app.take_requests().into_iter().next() {
+            Some(Request::Find { spec, .. }) => assert!(spec.in_archives),
+            other => panic!("{other:?}"),
+        }
+
+        app.mode = Mode::Normal;
+        app.run(Command::ToolFind);
+        let Mode::Form(form) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert!(form.toggle_value("find.archives"));
     }
 
     #[test]

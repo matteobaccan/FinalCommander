@@ -134,7 +134,13 @@ struct Cli {
 ///
 /// This is the one place that turns what the dialog asked for into what the engine takes: the
 /// dialog knows nothing about walks, and the engine knows nothing about panels.
-fn run_find(id: u64, spec: app::FindSpec, cancel: CancelToken, tx: mpsc::Sender<Event>) {
+fn run_find(
+    id: u64,
+    spec: app::FindSpec,
+    cancel: CancelToken,
+    tx: mpsc::Sender<Event>,
+    archives: &std::sync::Arc<fcmd_arc::Cache>,
+) {
     use fcmd_core::filter::{Filter, MaskSet, SizeRange};
     use fcmd_find::{Content, Needle};
 
@@ -194,46 +200,49 @@ fn run_find(id: u64, spec: app::FindSpec, cancel: CancelToken, tx: mpsc::Sender<
         follow_links: spec.follow_links,
         include_dirs: spec.directories,
         content,
+        in_archives: spec.in_archives,
     };
 
     let mut problems: Vec<String> = Vec::new();
     let mut last_report = std::time::Instant::now();
-    let result =
-        fcmd_find::find(
-            &fcmd_vfs::local::LocalVfs,
-            &query,
-            &cancel,
-            &mut |event| match event {
-                fcmd_find::Event::Hit(hit) => {
-                    let _ = tx.send(Event::FindHit {
-                        id,
-                        path: hit.path,
-                        entry: Box::new(hit.entry),
-                    });
-                }
-                fcmd_find::Event::Scanning(dir) => {
-                    // Not every directory: a walk over a large tree would spend its time telling
-                    // the screen about itself, and ten a second is already more than a reader can
-                    // follow.
-                    if last_report.elapsed() >= std::time::Duration::from_millis(100) {
-                        last_report = std::time::Instant::now();
-                        let _ = tx.send(Event::FindProgress {
-                            id,
-                            scanning: dir.to_string(),
-                            files: 0,
-                            dirs: 0,
-                        });
-                    }
-                }
-                fcmd_find::Event::Problem(problem) => {
-                    // Capped: a search over a whole drive meets unreadable directories by the
-                    // dozen, and ten thousand of them help nobody.
-                    if problems.len() < 200 {
-                        problems.push(format!("{}: {}", problem.path, problem.message));
-                    }
-                }
-            },
-        );
+    // The archive-aware filesystem only when the box is ticked: without it the walk is the
+    // plain local one, and a `.zip` is a file like any other.
+    let in_archives = fcmd_find::ArcFind::new(archives.clone(), fcmd_vfs::local::LocalVfs);
+    let fs: &dyn fcmd_find::FindFs = if spec.in_archives {
+        &in_archives
+    } else {
+        &fcmd_vfs::local::LocalVfs
+    };
+    let result = fcmd_find::find(fs, &query, &cancel, &mut |event| match event {
+        fcmd_find::Event::Hit(hit) => {
+            let _ = tx.send(Event::FindHit {
+                id,
+                path: hit.path,
+                entry: Box::new(hit.entry),
+            });
+        }
+        fcmd_find::Event::Scanning(dir) => {
+            // Not every directory: a walk over a large tree would spend its time telling
+            // the screen about itself, and ten a second is already more than a reader can
+            // follow.
+            if last_report.elapsed() >= std::time::Duration::from_millis(100) {
+                last_report = std::time::Instant::now();
+                let _ = tx.send(Event::FindProgress {
+                    id,
+                    scanning: dir.to_string(),
+                    files: 0,
+                    dirs: 0,
+                });
+            }
+        }
+        fcmd_find::Event::Problem(problem) => {
+            // Capped: a search over a whole drive meets unreadable directories by the
+            // dozen, and ten thousand of them help nobody.
+            if problems.len() < 200 {
+                problems.push(format!("{}: {}", problem.path, problem.message));
+            }
+        }
+    });
     match result {
         Ok(stats) => {
             let _ = tx.send(Event::FindDone {
@@ -1064,9 +1073,10 @@ fn interactive(mut app: App) -> Result<()> {
                 }
                 Request::Find { id, spec, cancel } => {
                     let tx = tx.clone();
+                    let archives = archives.clone();
                     // A blocking thread: the walk is synchronous, and it must not sit in the
                     // way of the runtime that is also serving the panels.
-                    runtime.spawn_blocking(move || run_find(id, *spec, cancel, tx));
+                    runtime.spawn_blocking(move || run_find(id, *spec, cancel, tx, &archives));
                 }
                 Request::CompareContents {
                     id,
@@ -4079,7 +4089,8 @@ timeout = 10
                 }
                 Request::Find { id, spec, cancel } => {
                     let (tx, rx) = mpsc::channel();
-                    run_find(id, *spec, cancel, tx);
+                    let archives = std::sync::Arc::new(fcmd_arc::Cache::new(Default::default()));
+                    run_find(id, *spec, cancel, tx, &archives);
                     while let Ok(event) = rx.try_recv() {
                         app.handle_event(event);
                     }

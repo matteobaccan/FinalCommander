@@ -953,12 +953,14 @@ dependencies = [
 name = "fcmd-find"
 version = "0.12.0"
 dependencies = [
+ "fcmd-arc",
  "fcmd-core",
  "fcmd-vfs",
  "fcmd-view",
  "memchr",
  "tempfile",
  "thiserror 2.0.21",
+ "zip",
 ]
 
 [[package]]

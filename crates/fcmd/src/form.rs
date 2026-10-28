@@ -727,8 +727,9 @@ impl Form {
             ),
             Field::toggle("find.links", t("find-links"), last.follow_links),
             Field::toggle("find.dirs", t("find-dirs"), last.directories),
-            Field::Separator,
-            Field::Dim(t("find-archives")),
+            // Off unless asked for: opening every container of a whole drive is a search of a
+            // different size, and one nobody should start by accident.
+            Field::toggle("find.archives", t("find-archives"), last.in_archives),
         ];
         Form {
             pages: Vec::new(),

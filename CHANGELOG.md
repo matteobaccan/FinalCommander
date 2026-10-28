@@ -32,6 +32,15 @@ Notable changes, newest first. The format follows
   block stays the default for the same reason. A tar is solid anyway and a zip cannot be, so
   both ignore it; the box is remembered for the next dialog.
 
+- **The search looks inside archives.** `Alt+F7` has FAR's *Inside archives* box, off until
+  it is ticked: with it, the walk steps into every container it can read and matches what is
+  in them by name and by content. `x.zip` is walked as `x.zip!/`, so the mask, the size
+  condition, the depth limit and the text scanner work in there exactly as they do on the
+  disk, and a hit is an ordinary `src.zip!/doc/readme.md` that `Enter`, `F3` and `F5` already
+  understand. It goes through the same container cache as the panels, so a nested archive or
+  one that wanted a password behaves the same way; an entry over 64 MB is reported as a
+  problem rather than read into memory.
+
 ### Changed
 
 - **The menu letters are FAR's own.** Every row the `F9` menus share with FAR now wears the

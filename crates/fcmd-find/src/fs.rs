@@ -44,6 +44,15 @@ pub trait FindFs: Send + Sync {
         let _ = path;
         false
     }
+
+    /// Is this file something the walk may step into as if it were a directory — an archive?
+    ///
+    /// Asked only when the query says to search inside archives, and only about files. A
+    /// provider that says yes must then list and open the paths under `path.enter("/")`.
+    fn opens_as_dir(&self, path: &VPath) -> bool {
+        let _ = path;
+        false
+    }
 }
 
 /// The local filesystem, through the VFS's own lister rather than a second `read_dir` loop.
