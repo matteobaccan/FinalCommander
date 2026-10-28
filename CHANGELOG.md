@@ -4,7 +4,7 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
-## [Unreleased]
+## [0.10.0] — 2026-10-28
 
 ### Added
 
@@ -36,9 +36,6 @@ Notable changes, newest first. The format follows
   them, and this is how one finds out they are there. `OK` keeps them and brings the list back
   for the same panel.
 
-## [0.10.0] — 2026-10-28
-
-### Added
 
 - **Find the duplicate files under a directory** (Commands → *Find duplicates*), the third
   thing FAR's compare plugin does. The tree is walked, the files grouped by size, and only
