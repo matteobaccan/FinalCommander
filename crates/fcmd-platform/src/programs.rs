@@ -134,14 +134,20 @@ fn pacman() -> Vec<Program> {
 
 #[cfg(test)]
 mod tests {
-    /// Whatever this machine has, every row says what it is and the size is a size.
+    /// Whatever this machine has, every row says what it is and what would remove it.
     #[test]
     fn what_is_installed_reads_as_a_list_of_programs() {
         for program in super::programs() {
             assert!(!program.name.is_empty());
-            // A package with no uninstall command is one we could not say how to remove,
-            // which is allowed; a command that is there has to name the program.
+            // A program with no uninstall command is one nothing would say how to remove,
+            // which is allowed; a command that is there has to be a command.
             if let Some(command) = &program.uninstall {
+                assert!(!command.trim().is_empty(), "{program:?}");
+                // Where the command is one we wrote — the package manager's own — it names
+                // the package. Windows reports the command the installer registered, and
+                // that has no reason to mention the name the Control Panel shows:
+                // `7-Zip 26.04 (x64)` is removed by `"C:\Program Files\7-Zip\Uninstall.exe" /S`.
+                #[cfg(target_os = "linux")]
                 assert!(command.contains(&program.name), "{program:?}");
             }
         }

@@ -98,6 +98,9 @@ fn linux() -> Vec<Process> {
 
 #[cfg(test)]
 mod tests {
+    // The only test here is Linux's: `/proc` is the one list this crate reads without a
+    // call, so it is the one that can be checked against the machine running the tests.
+    #[cfg(target_os = "linux")]
     use super::*;
 
     /// On a machine where the list can be read, we are on it.
