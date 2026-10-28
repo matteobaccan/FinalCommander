@@ -75,6 +75,8 @@ what we intend to do about it.
 | ~~Command history~~ | Commands menu (`Alt+F8`) | **Shipped**, and kept between sessions. |
 | ~~View and edit history~~ | Commands menu (`Alt+F11`) | **Shipped (0.7.0)**: every viewer and every editor passes through one place, so that is where it is written — a file on a server is remembered by its remote path and the fetched copy is left out, a file opened again moves to the top rather than appearing twice, `Enter` reads a row and `F4` edits it, and a row whose file has gone says so. It lives in the state file with the other two, not in a file of its own. |
 | ~~Keep history between sessions~~ | System settings | **Shipped** for commands, folders, the files read and edited, and both panels' directories. |
+| ~~Autocomplete~~ | the line, and `Ctrl+Space` | **Shipped** (SPEC 06 §7.4): four sources — the panel's own names, the history (which completes the whole line), the `PATH` and the environment — each on, off, or only when asked. Still owed from FAR's version: appending the first match as one types, and a modal list. |
+| The insertion keys FAR has | `Ctrl+Enter` and its neighbours | Three of eleven are there: the name under the cursor, the other panel's, and the path. The rest — the UNC name, the full name, the left and right panel's rather than the active and passive one's — are the same shape and want a table rather than eight more arms. |
 
 ## Histories and screens
 

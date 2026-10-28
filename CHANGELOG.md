@@ -4,6 +4,22 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
+## [Unreleased]
+
+### Added
+
+- **Autocomplete on the command line** (SPEC 06 §7.4), the largest thing the line was still
+  missing. Four sources, each one a setting with three states — on, off, or only when
+  `Ctrl+Space` asks: the names in the directory the panel is showing (free, because that
+  listing is already on screen), the whole line again out of the history, the executables on
+  the `PATH` (gathered once, and waiting to be asked by default, because gathering them reads
+  every directory on it), and the environment's variables for a word that starts with `$` or
+  `%`. The first word of a line completes as a command — what the program runs itself, the
+  prefixes, the `PATH` — and the rest as files. The list is drawn above the line, over the
+  bottom of the panels, since below it are the status line and the key bar. It owns four keys
+  and no others: `↑`/`↓` walk it, `Tab` takes a row, `Esc` closes it, and `Enter` still runs
+  the line until somebody has walked into the list.
+
 ## [0.11.0] — 2026-10-28
 
 ### Added

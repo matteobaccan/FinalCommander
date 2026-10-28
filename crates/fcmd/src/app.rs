@@ -1394,6 +1394,15 @@ pub struct Startup {
     pub column_sets: Vec<fcmd_core::ColumnSet>,
 }
 
+/// The command line's completion list, while it is open (SPEC 06 §7.4).
+pub struct Completion {
+    pub rows: Vec<crate::complete::Row>,
+    pub cursor: usize,
+    /// Has somebody walked into the list? Until they have, `Enter` still runs the line — a
+    /// list that stole `Enter` the moment it appeared would make typing feel like a trap.
+    pub picked: bool,
+}
+
 pub struct App {
     pub cfg: Config,
     pub paths: Paths,
@@ -1597,6 +1606,14 @@ pub struct App {
     /// The user's own columns, by the digit of the view they replace (SPEC 02 §3a). Empty for
     /// somebody who has written none, which is when every view is the built-in one.
     pub column_sets: Vec<fcmd_core::ColumnSet>,
+    /// What the command line could become, while the list is on screen (SPEC 06 §7.4).
+    pub complete: Option<Completion>,
+    /// The executables on the `PATH`, gathered the first time that source is asked and kept:
+    /// gathering it is a read of every directory on the `PATH`, and the `PATH` does not
+    /// change under a running program.
+    path_names: Option<Vec<String>>,
+    /// The environment's variable names, gathered once at startup for the same reason.
+    env_names: Vec<String>,
     /// The user menu as it is on screen: one level per list, the top one first and the submenu
     /// one is inside last, each with the title it is shown under. Kept as a stack so `Esc` in
     /// a submenu goes back to the menu it was opened from rather than out of the menu.
@@ -1773,6 +1790,13 @@ impl App {
             highlight,
             sort_groups,
             column_sets,
+            complete: None,
+            path_names: None,
+            env_names: {
+                let mut names: Vec<String> = std::env::vars().map(|(k, _)| k).collect();
+                names.sort_unstable();
+                names
+            },
             menu_levels: Vec::new(),
             menu_queue: Vec::new(),
             apply_queue: Vec::new(),
@@ -6574,6 +6598,9 @@ impl App {
             Command::CmdFileHistory => self.open_pick(PickKind::FileHistory, self.active),
             Command::FileClipNames => self.clip_sources(false),
             Command::FileClipPaths => self.clip_sources(true),
+            // `Ctrl+Space`: ask the line what it could become, including the sources that
+            // wait to be asked (SPEC 06 §7.4).
+            Command::CmdComplete => self.refresh_completion(true),
             Command::CmdClip => {
                 if self.cmd.is_empty() {
                     let m = self.i18n.t("msg-nothing-to-do");
@@ -7217,9 +7244,181 @@ impl App {
     // ── the command line (SPEC 06 §7) ──────────────────────────────────────────────────────
 
     /// Keys the command line owns while it has something on it. Returns true when it took one.
+    /// Ask what the line could become, and keep the answer while there is one (SPEC 06 §7.4).
+    ///
+    /// `by_hand` is `Ctrl+Space`: the sources that wait to be asked answer then, and the list
+    /// stays open on an empty answer long enough to say so.
+    fn refresh_completion(&mut self, by_hand: bool) {
+        if !self.cfg.ui.command_line {
+            self.complete = None;
+            return;
+        }
+        let line = self.cmd.text.clone();
+        let caret = self.cmd.caret;
+        if line.is_empty() {
+            self.complete = None;
+            return;
+        }
+        let cfg = self.cfg.cmdline.complete.clone();
+
+        // The names of the directory the panel is showing: free, because that listing is
+        // already on screen. A panel that is a list of files from elsewhere, one on a server
+        // or one inside an archive has nothing to offer a shell command, so it offers
+        // nothing rather than something that would not resolve.
+        let p = self.panel();
+        let local = p.temp.is_none() && p.cwd.is_local() && !p.cwd.in_container();
+        let here: Vec<(String, bool)> = if local {
+            (0..p.listing.len())
+                .filter_map(|row| p.listing.row(row))
+                .filter(|e| e.kind != fcmd_core::EntryKind::Parent)
+                .map(|e| (e.name_str().into_owned(), e.opens_as_dir()))
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let under = if local {
+            self.read_under(&line, caret)
+        } else {
+            Vec::new()
+        };
+
+        // The `PATH` is gathered once, and only once something actually asks for it.
+        let path_when =
+            crate::complete::When::parse(&cfg.path).unwrap_or(crate::complete::When::Asked);
+        let path_answers = match path_when {
+            crate::complete::When::Off => false,
+            crate::complete::When::On => true,
+            crate::complete::When::Asked => by_hand,
+        };
+        if path_answers && self.path_names.is_none() {
+            self.path_names = Some(crate::complete::path_names());
+        }
+        let path: Vec<String> = if path_answers {
+            self.path_names.clone().unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+
+        let history: Vec<String> = self.cmd.history().to_vec();
+        let commands = crate::complete::OUR_OWN;
+        let rows = crate::complete::rows(
+            &line,
+            caret,
+            by_hand,
+            &cfg,
+            &crate::complete::Sources {
+                here: &here,
+                under: &under,
+                history: &history,
+                path: &path,
+                env: &self.env_names,
+                commands,
+            },
+        );
+        self.complete = if rows.is_empty() {
+            if by_hand {
+                let m = self.i18n.t("cmd-complete-nothing");
+                self.set_status(m);
+            }
+            None
+        } else {
+            Some(Completion {
+                rows,
+                cursor: 0,
+                picked: false,
+            })
+        };
+    }
+
+    /// The names under the directory a half-typed path names, for the one case the panel's
+    /// own listing cannot answer: `vim src/ma`.
+    ///
+    /// One `read_dir` of a local directory somebody has just named, with a cap on how much of
+    /// it is read — that is the only filesystem call the completion makes, and it is the
+    /// reason it is made here rather than in a worker: a round trip per keystroke would make
+    /// the list arrive after the next letter.
+    fn read_under(&self, line: &str, caret: usize) -> Vec<(String, bool)> {
+        const CAP: usize = 4096;
+        let (start, end) = crate::complete::word_at(line, caret);
+        let chars: Vec<char> = line.chars().collect();
+        let word: String = chars[start..end.min(chars.len())].iter().collect();
+        let (prefix, _) = crate::complete::split_path(&word);
+        if prefix.is_empty() {
+            return Vec::new();
+        }
+        let dir = std::path::Path::new(prefix);
+        let full = if dir.is_absolute() {
+            dir.to_path_buf()
+        } else {
+            self.panel().cwd.as_path().join(dir)
+        };
+        let Ok(entries) = std::fs::read_dir(&full) else {
+            return Vec::new();
+        };
+        entries
+            .flatten()
+            .take(CAP)
+            .map(|e| {
+                let is_dir = e.file_type().map(|t| t.is_dir()).unwrap_or(false);
+                (e.file_name().to_string_lossy().into_owned(), is_dir)
+            })
+            .collect()
+    }
+
+    /// Take the row under the cursor: the line becomes what it says, and the list closes.
+    fn take_completion(&mut self) {
+        let Some(c) = self.complete.take() else {
+            return;
+        };
+        if let Some(row) = c.rows.get(c.cursor) {
+            self.cmd.set_at(row.line.clone(), row.caret);
+        }
+    }
+
     fn command_line_key(&mut self, key: Key) -> bool {
         if !self.cfg.ui.command_line {
             return false;
+        }
+        // The completion list owns a few keys while it is open, and nothing else (SPEC 06
+        // §7.4). Everything it does not take closes it and goes on to the line, so the list
+        // can never be in the way of typing.
+        if self.complete.is_some() {
+            match key.code {
+                KeyCode::Down | KeyCode::Up if key.mods == Mods::NONE => {
+                    if let Some(c) = self.complete.as_mut() {
+                        let last = c.rows.len().saturating_sub(1);
+                        c.cursor = if key.code == KeyCode::Down {
+                            if c.cursor >= last {
+                                0
+                            } else {
+                                c.cursor + 1
+                            }
+                        } else if c.cursor == 0 {
+                            last
+                        } else {
+                            c.cursor - 1
+                        };
+                        c.picked = true;
+                    }
+                    return true;
+                }
+                // `Tab` takes what is under the cursor whether or not anybody has walked into
+                // the list; `Enter` only once they have, so that typing and pressing `Enter`
+                // still runs what was typed.
+                KeyCode::Tab => {
+                    self.take_completion();
+                    return true;
+                }
+                KeyCode::Enter if self.complete.as_ref().is_some_and(|c| c.picked) => {
+                    self.take_completion();
+                    return true;
+                }
+                KeyCode::Esc => {
+                    self.complete = None;
+                    return true;
+                }
+                _ => self.complete = None,
+            }
         }
         let ctrl = key.mods.contains(Mods::CTRL);
         // `Shift` with a key that moves the caret marks text out instead of just moving:
@@ -7233,6 +7432,7 @@ impl App {
         if !empty {
             if let Some(c) = key.as_typed_char() {
                 self.cmd.insert(c);
+                self.refresh_completion(false);
                 return true;
             }
         }
@@ -7289,6 +7489,7 @@ impl App {
             }
             KeyCode::Backspace if !empty => {
                 self.cmd.backspace();
+                self.refresh_completion(false);
                 true
             }
             KeyCode::Delete if !empty && ctrl => {
@@ -21157,6 +21358,48 @@ abcdefghij
         app.run(Command::CmdFileHistory);
         press(&mut app, "Enter");
         assert!(app.status_error, "{}", app.status);
+    }
+
+    // ── the command line's completion (SPEC 06 §7.4) ───────────────────────────────────────
+
+    #[test]
+    fn the_list_takes_a_few_keys_and_hands_the_rest_to_the_line() {
+        let mut app = app();
+        // Typing opens it: the panel's own names are the free source.
+        for key in ["v", "i", "m", "Space", "a", "."] {
+            press(&mut app, key);
+        }
+        assert!(app.complete.is_some(), "{:?}", app.cmd.text);
+
+        // `Enter` still runs the line while nobody has walked into the list — the rule that
+        // keeps typing from feeling like a trap. `Down` is what says "I mean the list".
+        press(&mut app, "Down");
+        assert!(app.complete.as_ref().is_some_and(|c| c.picked));
+        press(&mut app, "Enter");
+        assert_eq!(app.cmd.text, "vim a.txt");
+        assert!(app.complete.is_none(), "taking one closes the list");
+
+        // `Esc` closes the list and leaves the line alone; a second `Esc` is the line's own.
+        app.cmd.clear();
+        for key in ["v", "i", "m", "Space", "a", "."] {
+            press(&mut app, key);
+        }
+        press(&mut app, "Esc");
+        assert!(app.complete.is_none());
+        assert_eq!(app.cmd.text, "vim a.");
+    }
+
+    #[test]
+    fn asking_by_hand_is_what_wakes_the_sources_that_wait() {
+        let mut app = app();
+        // The `PATH` waits to be asked, and nothing else here starts with `zzz`.
+        app.cmd.set("zzzzz");
+        app.refresh_completion(false);
+        assert!(app.complete.is_none());
+        // Asked by hand with nothing to say, it says so rather than opening an empty box.
+        app.run(Command::CmdComplete);
+        assert!(app.complete.is_none());
+        assert!(!app.status.is_empty(), "it says there is nothing");
     }
 
     // ── the owners view (SPEC 02 §3) ───────────────────────────────────────────────────────

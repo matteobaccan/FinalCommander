@@ -426,6 +426,48 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             .sum::<usize>() as u16;
         cursor = Some((prompt_w + caret.min(room.saturating_sub(1)), y));
         app.layout.command_line = Some(y);
+
+        // The completion list, above the line rather than below it: below is the key bar and
+        // the status line, and a list that covered those would hide the one row that says
+        // what the keys do (SPEC 06 §7.4). It is drawn over the bottom of the panels, which
+        // is where a list belongs while one is typing rather than looking at them.
+        if let Some(c) = &app.complete {
+            let rows = (app.cfg.cmdline.complete.rows.max(1) as usize).min(c.rows.len());
+            let rows = rows.min(y.saturating_sub(1) as usize);
+            if rows > 0 {
+                // The widest row, so the box is as wide as it has to be and no wider; it
+                // starts under the caret's own word, as a completion list does everywhere.
+                let widest = c
+                    .rows
+                    .iter()
+                    .map(|r| unicode_width::UnicodeWidthStr::width(r.text.as_str()))
+                    .max()
+                    .unwrap_or(0)
+                    .clamp(8, (w.saturating_sub(4)) as usize) as u16;
+                let box_w = widest + 2;
+                let x = prompt_w.min(w.saturating_sub(box_w));
+                let top = y - rows as u16;
+                let area = Rect::new(x, top, box_w, rows as u16);
+                let style = Style::new(app.theme.color("dialog.fg"), app.theme.color("dialog.bg"));
+                buf.fill(area, ' ', style);
+                // The window onto the list, so the cursor is always on a row that is drawn.
+                let first = c.cursor.saturating_sub(rows.saturating_sub(1));
+                for (i, row) in c.rows.iter().skip(first).take(rows).enumerate() {
+                    let here = first + i == c.cursor;
+                    let style = if here {
+                        Style::new(
+                            app.theme.color("dialog.button.selected.fg"),
+                            app.theme.color("dialog.button.selected.bg"),
+                        )
+                    } else {
+                        style
+                    };
+                    let text = fcmd_ui::truncate_cols(&row.text, (box_w - 2) as usize);
+                    buf.fill(Rect::new(area.x, area.y + i as u16, area.w, 1), ' ', style);
+                    buf.put_str(area.x + 1, area.y + i as u16, &text, style, box_w - 2);
+                }
+            }
+        }
     }
 
     if status_h == 1 {
@@ -2520,6 +2562,36 @@ mod tests {
         let mut buf = Buffer::new(w, h);
         draw(app, &mut buf);
         buf.to_text()
+    }
+
+    /// The completion list is drawn above the line and over the panels, because below it are
+    /// the status line and the key bar — the one row that says what the keys do.
+    #[test]
+    fn the_completion_list_is_drawn_above_the_command_line() {
+        let mut app = app("far", "en");
+        for key in ["v", "i", "m", "Space", "C", "a", "r"] {
+            press(&mut app, key);
+        }
+        assert!(app.complete.is_some(), "nothing for {:?}", app.cmd.text);
+        let screen = frame(&mut app, 100, 24);
+        // `Cargo.toml` is in the panel's listing, so the list offers it — and it is offered
+        // for `car`, because a completion that minded the case would be one nobody uses.
+        assert!(screen.contains("Cargo.toml"), "{screen}");
+        let lines: Vec<&str> = screen.lines().collect();
+        let line_row = lines
+            .iter()
+            .position(|l| l.contains("vim car"))
+            .unwrap_or_else(|| panic!("{screen}"));
+        let list_row = lines
+            .iter()
+            .enumerate()
+            .filter(|(i, l)| *i != line_row && l.contains("Cargo.toml"))
+            .map(|(i, _)| i)
+            .next_back()
+            .unwrap_or_else(|| panic!("no list in\n{screen}"));
+        assert!(list_row < line_row, "the list is above the line: {screen}");
+        // The key bar is still there, which is the reason it goes above.
+        assert!(screen.contains("Quit"), "{screen}");
     }
 
     /// A `[[column_set]]` on a view's own digit is what that view draws (SPEC 02 §3a): FAR's

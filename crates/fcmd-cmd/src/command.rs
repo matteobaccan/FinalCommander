@@ -220,6 +220,8 @@ pub enum Command {
     CmdFileHistory,
     /// `Ctrl+Ins` with something on the line: the line itself onto the system clipboard.
     CmdClip,
+    /// Ask the command line what it could become (SPEC 06 §7.4).
+    CmdComplete,
     /// Insert the name under the cursor, or the panel's path, into the line.
     CmdInsertName,
     CmdInsertNameOther,
@@ -506,6 +508,7 @@ impl Command {
             Command::CmdHistory,
             Command::CmdFileHistory,
             Command::CmdClip,
+            Command::CmdComplete,
             Command::CmdInsertName,
             Command::CmdInsertNameOther,
             Command::CmdInsertPath,
@@ -748,6 +751,7 @@ impl Command {
             Command::CmdHistory => "cmd.history".into(),
             Command::CmdFileHistory => "cmd.history.files".into(),
             Command::CmdClip => "cmd.clip".into(),
+            Command::CmdComplete => "cmd.complete".into(),
             Command::CmdInsertName => "cmd.insert.name".into(),
             Command::CmdInsertNameOther => "cmd.insert.name.other".into(),
             Command::CmdInsertPath => "cmd.insert.path".into(),
@@ -965,6 +969,7 @@ impl Command {
             ("cmd.history", _) => Command::CmdHistory,
             ("cmd.history.files", _) => Command::CmdFileHistory,
             ("cmd.clip", _) => Command::CmdClip,
+            ("cmd.complete", _) => Command::CmdComplete,
             ("cmd.insert.name", _) => Command::CmdInsertName,
             ("cmd.insert.name.other", _) => Command::CmdInsertNameOther,
             ("cmd.insert.path", _) => Command::CmdInsertPath,

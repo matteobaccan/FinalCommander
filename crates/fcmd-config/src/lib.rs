@@ -535,12 +535,53 @@ pub struct CmdLineCfg {
     /// bare branch name, spelled the way the plugin everybody installs spells it. Empty
     /// means the default.
     pub prompt: String,
+    /// What the line completes from while one types (SPEC 06 §7.4).
+    pub complete: CompleteCfg,
+}
+
+/// Autocomplete on the command line: four sources, each one on, off, or only when asked.
+///
+/// FAR has the same four and the same three states, and the reason each is separate is that
+/// they cost different things: the panel's own names are free, the history is free, the
+/// environment is free, and the `PATH` is a directory read per entry in it — which is why
+/// that one waits to be asked by default.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CompleteCfg {
+    /// The names in the directory the panel is showing, and under a path one has typed.
+    /// `on`, `off`, or `asked` for only when `Ctrl+Space` asks.
+    pub files: String,
+    /// The command lines that have run: this one completes the **whole line**, as FAR's does.
+    pub history: String,
+    /// The executables on the `PATH`. `asked` by default: it is gathered once, and gathering
+    /// it is a read of every directory on the `PATH`.
+    pub path: String,
+    /// The environment's variable names, for a word that starts with `$` or `%`.
+    pub env: String,
+    /// How many answers the list holds at once.
+    pub rows: u16,
+    /// How many answers are kept at all, however many there are.
+    pub limit: u16,
+}
+
+impl Default for CompleteCfg {
+    fn default() -> Self {
+        CompleteCfg {
+            files: "on".into(),
+            history: "on".into(),
+            path: "asked".into(),
+            env: "on".into(),
+            rows: 8,
+            limit: 200,
+        }
+    }
 }
 
 impl Default for CmdLineCfg {
     fn default() -> Self {
         CmdLineCfg {
             prompt: "$p$r$g ".to_string(),
+            complete: CompleteCfg::default(),
         }
     }
 }

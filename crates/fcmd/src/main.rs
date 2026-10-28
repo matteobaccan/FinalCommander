@@ -5,6 +5,7 @@
 mod app;
 mod cmdline;
 mod colset;
+mod complete;
 mod drives;
 mod expand;
 mod form;

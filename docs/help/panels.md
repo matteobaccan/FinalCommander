@@ -181,6 +181,15 @@ want nine times in ten. With something typed on it, `↑` and `↓` walk back an
 what was run before, as a shell does; on an empty line the arrows belong to the panel, as
 every shared key does. `Alt+F8` shows the whole history as a list.
 
+While you type, the line offers what it could become: the names in the directory the panel is
+showing, the lines you have run before, and the environment's variables. `↑` and `↓` walk the
+list, `Tab` takes what is under the cursor, `Esc` closes it — and `Enter` still runs what you
+typed until you have walked into the list, so the list is never in the way. `Ctrl+Space` asks
+for it, and wakes the sources that wait to be asked: the executables on your `PATH` are the
+one that does, because gathering them reads every directory on it.
+*Options → Interface* is where each of the four sources is turned on, off, or set to answer
+only when asked.
+
 `Shift` with an arrow marks text out, `Ctrl+Shift` with one marks a word at a time, and
 `Shift+Home`/`Shift+End` take it to either end. What is marked is drawn with its colours
 swapped; `Ctrl+Ins` then copies *that* rather than the whole line, and typing or pasting

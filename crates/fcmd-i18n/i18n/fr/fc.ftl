@@ -206,6 +206,7 @@ btn-run = Exécuter
 btn-accept = Accepter
 btn-cancel = Annuler
 msg-nothing-to-do = rien de sélectionné
+cmd-complete-nothing = rien pour compléter cela
 msg-trash-refused = { $path } : la corbeille le refuse — Maj+Suppr le supprime définitivement
 
 # Checksums (SPEC 03 §9)

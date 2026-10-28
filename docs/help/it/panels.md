@@ -194,6 +194,16 @@ indietro per quello che è stato eseguito prima, come fa una shell; su una riga 
 appartengono al pannello, come ogni tasto condiviso. `Alt+F8` mostra tutta la cronologia come
 elenco.
 
+Mentre scrivi, la riga ti offre quello che potrebbe diventare: i nomi della cartella che il
+pannello sta mostrando, le righe che hai già eseguito, e le variabili d'ambiente. `↑` e `↓`
+scorrono l'elenco, `Tab` prende quello sotto il cursore, `Esc` lo chiude — e `Enter` continua a
+eseguire quello che hai scritto finché non sei entrato nell'elenco, così l'elenco non è mai
+d'intralcio. `Ctrl+Spazio` lo chiede, e sveglia le sorgenti che aspettano di essere chieste:
+gli eseguibili sul tuo `PATH` sono quella che lo fa, perché raccoglierli vuol dire leggere ogni
+cartella del `PATH`.
+*Opzioni → Interfaccia* è dove ciascuna delle quattro sorgenti si accende, si spegne, o si
+mette a rispondere solo quando le viene chiesto.
+
 `Shift` con una freccia marca il testo, `Ctrl+Shift` con una freccia marca una parola per
 volta, e `Shift+Home`/`Shift+Fine` arrivano a un capo o all'altro. Quello che è marcato è
 disegnato con i colori scambiati; `Ctrl+Ins` copia poi *quello* invece di tutta la riga, e

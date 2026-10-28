@@ -218,6 +218,16 @@ impl CmdLine {
         self.stash.clear();
     }
 
+    /// The line, and where the caret lands in it: what a completion taken from the list
+    /// leaves behind, with the caret after what was put in rather than at the end of the
+    /// line — the rest of the line may still have something on it.
+    pub fn set_at(&mut self, text: impl Into<String>, caret: usize) {
+        self.text = text.into();
+        self.caret = caret.min(self.len());
+        self.anchor = None;
+        self.walking = None;
+    }
+
     pub fn set(&mut self, text: impl Into<String>) {
         self.text = text.into();
         self.caret = self.len();

@@ -212,6 +212,7 @@ btn-run = Run
 btn-accept = Accept
 btn-cancel = Cancel
 msg-nothing-to-do = nothing selected
+cmd-complete-nothing = nothing to finish that with
 msg-trash-refused = { $path }: the wastebasket would not take it — Shift+Del deletes it outright
 
 # Checksums (SPEC 03 §9)

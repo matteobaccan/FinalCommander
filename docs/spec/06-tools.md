@@ -246,6 +246,38 @@ reads one small file (`HEAD`, or the `gitdir:` line of a worktree's `.git` file 
 looked up when the panel's directory changes rather than on every frame, and not at all for a
 directory on a server or inside an archive, which has no `.git` to read.
 
+### 7.4 Autocomplete (`Ctrl+Space`, and while one types)
+
+Four sources, each one a setting with three states — `on`, `off`, or `asked` for only when
+`Ctrl+Space` asks. They are separate because they cost different things:
+
+| Source | What it offers | Default |
+| --- | --- | --- |
+| `files` | the names in the directory the panel is showing, and under a path one has typed | `on` |
+| `history` | the **whole line** again, out of the commands that have run | `on` |
+| `path` | the executables on the `PATH` | `asked` |
+| `env` | the environment's variable names, for a word that starts with `$` or `%` | `on` |
+
+The panel's own names are free: that listing is already on screen, and reading it again per
+keystroke would be a filesystem call inside a key handler. The `PATH` is not free — gathering
+it is a read of every directory on it — so it is gathered once, the first time something asks,
+and that is why it waits to be asked by default. The one filesystem call the completion makes
+is for a word with a separator in it (`vim src/ma`): one `read_dir` of a local directory
+somebody has just named, with a cap on how much of it is read, because a worker round trip per
+keystroke would make the list arrive after the next letter.
+
+The first word of a line is a command and the rest are files, so the first word is completed
+from what the program runs itself, the prefixes (§7.1, §7.2) and the `PATH`, and a later word
+from the names around it. The history completes the whole line rather than a word, which is
+what makes it worth having: a line one has run is a line one may run again.
+
+The list is drawn **above** the command line, over the bottom of the panels — below it are the
+status line and the key bar, and a list that covered those would hide the row that says what
+the keys do. It owns four keys and no others: `↑`/`↓` walk it, `Tab` takes what is under the
+cursor, `Esc` closes it. `Enter` runs the line as it always did **until** somebody has walked
+into the list, and takes the row after that — a list that stole `Enter` the moment it appeared
+would make typing feel like a trap. Every other key closes the list and goes on to the line.
+
 ### 7.1 Commands we run ourselves
 
 A commander that shells out for `cd` cannot keep the panel in step, so some commands are ours.

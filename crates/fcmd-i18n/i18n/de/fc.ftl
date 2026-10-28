@@ -206,6 +206,7 @@ btn-run = Ausführen
 btn-accept = Annehmen
 btn-cancel = Abbrechen
 msg-nothing-to-do = nichts ausgewählt
+cmd-complete-nothing = nichts, womit sich das ergänzen ließe
 msg-trash-refused = { $path }: der Papierkorb nimmt es nicht — Shift+Entf löscht endgültig
 
 # Checksums (SPEC 03 §9)

@@ -173,6 +173,7 @@ impl Command {
             Command::CmdHistory => "the commands that have run",
             Command::CmdFileHistory => "the files that have been read or edited, as a list",
             Command::CmdClip => "copy the command line to the clipboard",
+            Command::CmdComplete => "finish what is typed on the command line",
             Command::CmdInsertName => "put the name under the cursor on the command line",
             Command::CmdInsertNameOther => "the same, from the other panel",
             Command::CmdInsertPath => "put this panel's path on the command line",
