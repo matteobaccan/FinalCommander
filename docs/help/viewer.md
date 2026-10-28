@@ -37,6 +37,33 @@ out from the part of it that happens to be on screen, so the document is rendere
 four megabytes it stays the source, and says so. *Interface → Markdown laid out to be read*
 turns the first screen back into the source for good.
 
+# Tables
+
+A `.csv`, a `.tsv` or a `.jsonl` opens as a table rather than as the commas or the braces: a
+heading that stays where it is while the rows scroll under it, columns lined up, one record to
+a row. `Shift+F3` switches between the table and the source — the source is sometimes the thing
+one came to look at — and `Shift+F4` has the table in the cycle with the text, the dump and the
+hex. `←`/`→` move the window sideways across a table wider than the screen, and `F7` searches
+what is on the screen, so looking for a value finds it in its cell.
+
+The status line says what the file was read as, which delimiter was *guessed* — a comma, a
+semicolon, a tab or a bar, whichever gave a table — and how many rows and columns there are:
+that is how you can tell at a glance that the guess was right. A `.tsv` is not guessed at. For
+JSON Lines the columns are the keys of the first two hundred records, in the order they are
+written in the file; a record with a key that turned up later shows it in a last column called
+`…` rather than losing it, and a line that is not an object is counted at the end of the status
+line rather than shown as a row of nonsense.
+
+Like a laid-out Markdown document, a table is read whole — a column's width cannot be known
+from the part of the file on screen — so over sixteen megabytes the file opens as text and says
+so. *Interface → Open a .csv or a .jsonl as a table* turns the first screen back into the
+source for good. A cell longer than forty columns is cut with a `…`; the horizontal scroll is
+how the rest of it is read.
+
+What this mode is not: a spreadsheet and a query tool. There is no editing, no sorting and no
+filtering, because each of those wants an answer about writing the file back, which a viewer
+does not have.
+
 Text is coloured by the language the file's name implies, as it is in the editor. The viewer
 reads only what it shows, so the colouring starts at the top of the screen: a comment that
 was opened higher up in the file is not carried down to it. That is the price of opening a

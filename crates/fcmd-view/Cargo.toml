@@ -16,6 +16,12 @@ memchr = "2"
 regex = "1"
 thiserror = "2"
 unicode-width = "0.2"
+# One JSON object per line is a format we read in table mode (SPEC 05 §1.11); the parser is
+# already in the tree for the plugin protocol, so this is one dependency rather than two.
+# `preserve_order` is what makes the columns come out in the order the keys are written in the
+# file rather than alphabetically, which is the difference between a readable log and a
+# shuffled one. It uses `indexmap`, which is already in the tree under several other crates.
+serde_json = { version = "1.0.154", features = ["preserve_order"] }
 object = { version = "0.40.0", default-features = false, features = ["read_core", "elf", "pe", "macho", "archive", "std"] }
 iced-x86 = { version = "1.21.0", default-features = false, features = ["decoder", "intel", "std"] }
 wasmprinter = "0.262.0"

@@ -650,6 +650,13 @@ keys = ["Shift+F2"]
 scope = "viewer"
 cmd = "viewer.markdown"
 
+# A `.csv` or a `.jsonl` as a table, and the same key back to the source. The neighbour of
+# Shift+F2 for the same reason: both are "show me this file as what it is".
+[[bind]]
+keys = ["Shift+F3"]
+scope = "viewer"
+cmd = "viewer.table"
+
 [[bind]]
 keys = ["Shift+F4"]
 scope = "viewer"

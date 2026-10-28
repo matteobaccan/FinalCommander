@@ -191,6 +191,7 @@ impl Command {
             Command::ViewerWrap => "wrap the long lines, or leave them long",
             Command::ViewerHex => "between the text and the bytes",
             Command::ViewerMarkdown => "between Markdown laid out to be read and its source",
+            Command::ViewerTable => "between a tabular file as a table and its source",
             Command::ViewerModeNext => "the next way of reading this file",
             Command::ViewerSearch => "search: what, as what, and which way",
             Command::ViewerSearchNext => "the next hit",

@@ -259,6 +259,7 @@ viewer-wrap-mode = { $mode }
 viewer-no-undo = aucune position précédente
 viewer-empty = (fichier vide)
 viewer-not-markdown = ce n'est pas un fichier Markdown, ou il est trop grand à mettre en page
+viewer-not-table = pas un fichier tabulaire, ou trop gros pour être lu en entier
 viewer-status = { $mode } { $codepage }  { $offset } / { $len }  { $percent }%
 
 key-disasm = Désass
@@ -449,6 +450,7 @@ opt-key-bar = Afficher la barre de touches
 opt-status-bar = Afficher la barre d'état
 opt-syntax = Colorer les langages reconnus
 opt-markdown = Markdown mis en page pour la lecture
+opt-table = Ouvrir un .csv ou un .jsonl comme un tableau
 opt-keymap = Carte des touches
 opt-clock = Horloge dans le coin
 opt-mouse = Prise en charge de la souris

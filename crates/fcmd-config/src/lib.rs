@@ -331,6 +331,10 @@ pub struct UiCfg {
     pub mouse: bool,
     /// How many command lines to keep between sessions.
     pub command_history: usize,
+    /// Open a tabular file (`.csv`, `.tsv`, `.jsonl`) as a table rather than as its source.
+    /// `Shift+F3` in the viewer switches either way whatever this says; this is only what the
+    /// first screen is.
+    pub table: bool,
     /// Ask the terminal to put what is copied on the system clipboard (`OSC 52`).
     ///
     /// On by default because it is the one way to reach the clipboard that also works over
@@ -350,6 +354,7 @@ impl Default for UiCfg {
             status_bar: true,
             syntax: true,
             markdown: true,
+            table: true,
             command_line: true,
             mouse: false,
             command_history: 512,
@@ -965,6 +970,7 @@ impl Config {
             "ui.status_bar" => self.ui.status_bar = parse_bool(value)?,
             "ui.syntax" => self.ui.syntax = parse_bool(value)?,
             "ui.markdown" => self.ui.markdown = parse_bool(value)?,
+            "ui.table" => self.ui.table = parse_bool(value)?,
             "ui.mouse" => self.ui.mouse = parse_bool(value)?,
             "ui.clipboard" => self.ui.clipboard = parse_bool(value)?,
             "editor.tab_width" => {

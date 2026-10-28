@@ -8,6 +8,34 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **A `.csv` opens as a table.** `Shift+F3` in the viewer, and a file whose name says it is
+  tabular opens that way: a heading and a rule that stay where they are while the records
+  scroll under them, columns lined up, one row to a record. `.csv`, `.tsv`, `.tab`, `.jsonl`
+  and `.ndjson` for now; the same key goes back to the commas, `Shift+F4` has the table in the
+  cycle with the text, the dump and the hex, and `←`/`→` move the window across a table wider
+  than the screen.
+
+  The delimiter is *guessed* — a comma, a semicolon, a tab or a bar, whichever gives the most
+  lines with the same number of fields, which is what a table is — and the status line admits
+  the guess along with the shape of the table, so a wrong one is obvious at a glance rather
+  than silently shaping the screen. A quoted field may hold the delimiter and a newline, as
+  RFC 4180 says, so a record is not a line. A row with more fields than the header has them,
+  under a column named after its number, because an export with a short header is common and
+  dropping data would be worse.
+
+  For JSON Lines the columns are the keys of the first two hundred records, in the order they
+  are written in the file; a record carrying a key that turned up later shows it in a last
+  column called `…` rather than losing it, and a line that is not an object — a stray `[` from
+  somebody's JSON array — is counted in the status line rather than drawn as a row of
+  nonsense. A nested value is its own compact JSON, and a null is an empty cell.
+
+  Like a laid-out Markdown document a table is read whole, because a column's width cannot be
+  known from the part of the file on screen; over sixteen megabytes the file opens as text and
+  says so. `ui.table = false`, or the box in the interface settings, turns the first screen
+  back into the source for good. What this mode is not, and deliberately: a spreadsheet and a
+  query tool — no editing, no sorting, no filtering, each of which wants an answer about
+  writing the file back that a viewer does not have.
+
 - **Every menu row has its letter.** The mechanism shipped a while ago — `&` in a label marks
   the letter and the dropdown draws it highlighted — but only four labels carried a marker,
   so the rest fell back to "the first row whose label starts with it" and several rows could

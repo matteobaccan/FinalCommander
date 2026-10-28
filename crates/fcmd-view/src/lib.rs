@@ -14,6 +14,7 @@ pub mod nav;
 pub mod search;
 pub mod source;
 pub mod structure;
+pub mod table;
 pub mod view;
 
 pub use asm::{assemble, AsmError, Assembled};
@@ -24,4 +25,5 @@ pub use disasm::{
 };
 pub use search::{compile, Match, Pattern, SearchError, SearchMode};
 pub use source::{BytesSource, FileSource, Source};
+pub use table::Table;
 pub use view::{Mode, Row, RowKind, Started, Status, Viewer, Wrap};

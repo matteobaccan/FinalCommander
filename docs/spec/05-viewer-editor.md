@@ -221,7 +221,7 @@ marked block, or `F2` to a name of its own.
 Windows needs `\\.\PhysicalDrive0` handling, where neither the seek nor the open works the
 same way: it is a later addition and the backlog carries it.
 
-### 1.11 Table mode: the tabular formats (M3)
+### 1.11 Table mode: the tabular formats
 
 A commander opens a `.csv`, a `.jsonl` and a `.dbf` every day, and all three read as what they
 are not: a wall of commas, a wall of braces, a wall of hex. What they want is one mode, not
@@ -235,13 +235,31 @@ has: `F7` searches, `Alt+F8` goes to a row, `+`/`-` step to the next file, the c
 a row back, and `F2`/`Shift+F4` leave the mode for the source, because the source is sometimes
 the thing one came to look at.
 
+**Shipped in 0.6.0: the mode, CSV/TSV and JSONL.** `Shift+F3` in the viewer, and a file whose
+name says it is tabular opens that way (`ui.table`, on by default, with the same key as the way
+back to the source). The heading and its rule are drawn first and *stay* while the rows scroll
+under them, because a table whose heading scrolled away is a wall of numbers again; `←`/`→`
+move the window sideways; the status line says the format, the delimiter that was guessed, the
+shape of the table (`rows × columns`) and what was left out. A cell wider than forty columns is
+cut with a `…` — one 4 kB cell must not push every other column off the screen — and the
+horizontal scroll reads the rest. A search finds what is on the screen, so a value is found in
+its cell, as in a laid-out Markdown document.
+
+**Where this deviates from the plan above**, and why: the first tranche reads the file *whole*
+rather than a window at a time, up to a limit (`TABLE_LIMIT`, sixteen megabytes), exactly as
+the Markdown render does and for the same reason — a column's width cannot be known from the
+part of the file on screen. Above the limit the file opens as text, which is the viewer's usual
+promise. The windowed reading the plan describes is the natural shape for DBF, where a fixed
+record length and a count in the header make row *n* one seek, and it lands with that reader
+rather than being built twice.
+
 **The readers, in the order they are worth building.**
 
 | Reader | What it is | The hard part |
 | --- | --- | --- |
 | CSV / TSV | delimiter-separated text, RFC 4180 quoting | guessing the delimiter (`,`, `;`, tab, `|`) from the first kilobytes and *saying* which was guessed; a quoted field may hold the delimiter and a newline, so a row is not a line |
 | JSONL / NDJSON | one JSON object per line | the columns are the union of the keys of the first *N* records, in first-seen order, and a record that has a key the header does not shows it in an overflow column rather than being silently cut |
-| DBF | dBase III/IV and FoxPro: a typed header, then fixed-length records | the field types (`C`, `N`, `F`, `D`, `L`, `M`), the deleted-record flag, and the memo files beside it (`.dbt`, `.fpt`), which are a second file and may be absent |
+| DBF | dBase III/IV and FoxPro: a typed header, then fixed-length records | the field types (`C`, `N`, `F`, `D`, `L`, `M`), the deleted-record flag, and the memo files beside it (`.dbt`, `.fpt`), which are a second file and may be absent. **Not built yet**, and the one that brings windowed reading with it |
 
 **Reading a window, not a file**, wherever the format allows it — which is the promise the
 viewer makes everywhere else. DBF is the best case: a fixed record length and a count in the

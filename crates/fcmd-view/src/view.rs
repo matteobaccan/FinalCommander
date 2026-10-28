@@ -20,6 +20,9 @@ pub enum Mode {
     /// Markdown with the marks taken off and the space they held put to use: headings
     /// ruled, lists bulleted, tables drawn. `F2` goes back to the source.
     Markdown,
+    /// A tabular file as a table: a heading that stays put, columns, a row at a time
+    /// (SPEC 05 §1.11). `F2` goes back to the source, which is sometimes what one came for.
+    Table,
 }
 
 impl Mode {
@@ -31,6 +34,7 @@ impl Mode {
             Mode::Hex => 'h',
             Mode::Disasm => 'a',
             Mode::Markdown => 'm',
+            Mode::Table => 'b',
         }
     }
 
@@ -41,6 +45,7 @@ impl Mode {
             Mode::Hex => "hex",
             Mode::Disasm => "disasm",
             Mode::Markdown => "markdown",
+            Mode::Table => "table",
         }
     }
 }
@@ -111,6 +116,9 @@ pub struct Status {
     pub binary: Option<String>,
     /// Set when we are looking at generated text (WAT, a decompiler's output).
     pub derived: Option<String>,
+    /// In table mode: what it was read as, the delimiter that was guessed, the shape of the
+    /// table and what was left out (SPEC 05 §1.11).
+    pub table: Option<String>,
 }
 
 /// Tabs expand to the next multiple of this unless the configuration says otherwise. Eight is
@@ -122,6 +130,14 @@ pub const TAB_WIDTH: usize = 8;
 /// this is the one place the viewer reads more than a screenful — four megabytes is a very
 /// long README and a very short log.
 pub const MARKDOWN_LIMIT: u64 = 4 * 1024 * 1024;
+
+/// The largest file table mode will read whole (SPEC 05 §1.11).
+///
+/// Larger than the Markdown limit, because a table is data and a README is prose: a 16 MB CSV
+/// is an ordinary export, while a 16 MB Markdown file is somebody's mistake. Above this the
+/// file opens as text, which is the viewer's usual promise — a window at a time, whatever the
+/// size.
+pub const TABLE_LIMIT: u64 = 16 * 1024 * 1024;
 
 pub struct Viewer {
     source: Box<dyn Source>,
@@ -173,6 +189,14 @@ pub struct Viewer {
     /// [`MARKDOWN_LIMIT`]: a reader of a 40 GB log gets the viewer's usual promise, and a
     /// reader of a README gets its columns lined up.
     markdown: Option<(usize, Vec<crate::markdown::Line>)>,
+    /// The parsed table, in table mode. Like the rendered Markdown above it needs the whole
+    /// file — a column's width cannot be known from the part of it that is on screen — so it
+    /// is parsed once and kept, and the mode is only offered for files under
+    /// [`TABLE_LIMIT`].
+    table: Option<crate::table::Table>,
+    /// Which row of the table is on the first row of the screen. The table's own position:
+    /// `top` carries the byte offset of that record, for the search and the bookmarks.
+    pub table_row: usize,
     /// Cursor and scroll inside the pane, and whether the keys go to it.
     pub struct_cursor: usize,
     struct_top: usize,
@@ -250,6 +274,8 @@ impl Viewer {
             disasm_targets: Vec::new(),
             branch_stack: Vec::new(),
             markdown: None,
+            table: None,
+            table_row: 0,
             struct_cursor: 0,
             struct_top: 0,
             struct_focus: false,
@@ -438,7 +464,7 @@ impl Viewer {
                 }
             }
             // From a rendered document or a dump, `F2` is the way to the source.
-            Mode::Dump | Mode::Markdown => self.set_mode(Mode::Text),
+            Mode::Dump | Mode::Markdown | Mode::Table => self.set_mode(Mode::Text),
             // From hex or disassembly, F2 goes back to whatever text/dump mode we came from.
             Mode::Hex | Mode::Disasm => {
                 let base = self.base_mode;
@@ -680,6 +706,12 @@ impl Viewer {
             Mode::Text => snap_to_line(&mut *self.source, offset),
             Mode::Hex => offset - (offset % self.bytes_per_row as u64),
             Mode::Dump | Mode::Disasm | Mode::Markdown => offset,
+            // The position of a table is which row is at the top, and an offset names the
+            // record that holds it: anything else would put half a row on the first line.
+            Mode::Table => {
+                self.table_row = self.table_at(offset);
+                offset
+            }
         };
         self.top_sub = 0;
     }
@@ -782,6 +814,7 @@ impl Viewer {
                 self.top = clamp_offset(self.top, step, self.source.len());
             }
             Mode::Markdown => self.scroll_markdown(delta, width),
+            Mode::Table => self.scroll_table(delta),
         }
     }
 
@@ -832,6 +865,164 @@ impl Viewer {
         let bytes = self.source.read_vec(0, len).unwrap_or_default();
         let text = self.codepage.decode(&bytes);
         self.markdown = Some((width, crate::markdown::render(&text, width)));
+    }
+
+    /// Parse the table, if it has not been parsed already. Unlike the Markdown render this
+    /// does not depend on the width: the columns are as wide as what is in them, and the
+    /// window moves over the table rather than the table being laid out again for it.
+    fn parse_table(&mut self) {
+        if self.table.is_some() {
+            return;
+        }
+        let whole = self.source.len();
+        let len = whole.min(TABLE_LIMIT) as usize;
+        let bytes = self.source.read_vec(0, len).unwrap_or_default();
+        let text = self.codepage.decode(&bytes);
+        let name = self.path.display_name();
+        let mut table = crate::table::Table::of(&name, &text)
+            .unwrap_or_else(|| crate::table::Table::separated(&text, None));
+        table.cut = whole > TABLE_LIMIT;
+        self.table = Some(table);
+    }
+
+    /// The table on screen, parsing it if this is the first look. `None` outside table mode.
+    pub fn table(&mut self) -> Option<&crate::table::Table> {
+        if self.mode != Mode::Table {
+            return None;
+        }
+        self.parse_table();
+        self.table.as_ref()
+    }
+
+    /// Which row of the table a byte offset falls in: the last record that starts at or
+    /// before it, because an offset in the middle of a record is still that record.
+    fn table_at(&mut self, offset: u64) -> usize {
+        self.parse_table();
+        let Some(table) = &self.table else {
+            return 0;
+        };
+        table
+            .rows
+            .iter()
+            .rposition(|r| r.offset <= offset)
+            .unwrap_or_default()
+    }
+
+    /// Scrolling a table is scrolling its rows, and `top` follows so that a search, a
+    /// bookmark and `Ctrl+Z` keep meaning what they mean everywhere else.
+    fn scroll_table(&mut self, delta: i64) {
+        self.parse_table();
+        let Some(table) = &self.table else {
+            return;
+        };
+        if table.rows.is_empty() {
+            return;
+        }
+        let last = table.rows.len() as i64 - 1;
+        let next = (self.table_row as i64 + delta).clamp(0, last) as usize;
+        self.table_row = next;
+        self.top = table.rows[next].offset;
+    }
+
+    /// The rows of a table: the heading and its rule first, and they stay there — a table
+    /// whose heading scrolled away with the data would be a wall of numbers again — then as
+    /// many records as the window has room for.
+    fn rows_table(&mut self, width: u16, height: u16) -> Vec<Row> {
+        self.parse_table();
+        let (col, from) = (self.col, self.table_row);
+        let pattern = self.pattern.is_some();
+        let Some(table) = &self.table else {
+            return Vec::new();
+        };
+        let width = width as usize;
+        let mut out = Vec::with_capacity(height as usize);
+        let first = table.rows.first().map(|r| r.offset).unwrap_or(0);
+        out.push(Row {
+            offset: first,
+            text: table.header(col, width),
+            hits: Vec::new(),
+            kind: RowKind::Label,
+            spans: Vec::new(),
+        });
+        if height >= 2 {
+            out.push(Row {
+                offset: first,
+                text: table.rule(col, width),
+                hits: Vec::new(),
+                kind: RowKind::Label,
+                spans: Vec::new(),
+            });
+        }
+        for at in from..table.rows.len() {
+            if out.len() >= height as usize {
+                break;
+            }
+            out.push(Row {
+                offset: table.rows[at].offset,
+                text: table.line(at, col, width),
+                hits: Vec::new(),
+                kind: RowKind::Text,
+                spans: Vec::new(),
+            });
+        }
+        // As in a rendered document, a search here finds what is on the screen: somebody
+        // looking for a value means the cell, not the commas behind it.
+        if pattern {
+            for row in &mut out {
+                row.hits = self.hits_in_text(&row.text);
+            }
+        }
+        out
+    }
+
+    /// Is this a file table mode can read? Its name has to say so and it has to be small
+    /// enough to parse whole.
+    pub fn reads_table(&mut self) -> bool {
+        crate::table::Table::reads(&self.path.display_name())
+            && self.source.len() <= TABLE_LIMIT
+            && self.derived.is_none()
+    }
+
+    /// Show the file as a table, if it is one we can read. `false` when it is not, so the
+    /// caller can say why rather than leaving the key looking broken.
+    pub fn as_table(&mut self) -> bool {
+        if !self.reads_table() {
+            return false;
+        }
+        self.set_mode(Mode::Table);
+        self.table_row = 0;
+        self.col = 0;
+        true
+    }
+
+    /// What the status line says about the table: the format, the delimiter that was guessed,
+    /// how many rows there are, and what was left out. `None` outside table mode.
+    pub fn table_note(&mut self) -> Option<String> {
+        if self.mode != Mode::Table {
+            return None;
+        }
+        self.parse_table();
+        let table = self.table.as_ref()?;
+        let mut note = table.format.to_string();
+        if let Some(delimiter) = table.delimiter {
+            let shown = match delimiter {
+                '\t' => "tab".to_string(),
+                c => c.to_string(),
+            };
+            note.push_str(&format!(" `{shown}`"));
+        }
+        note.push_str(&format!(
+            " · {} × {}",
+            table.rows.len(),
+            table.columns.len()
+        ));
+        if table.skipped > 0 {
+            note.push_str(&format!(" · {} skipped", table.skipped));
+        }
+        if table.cut {
+            note.push_str(" · cut");
+        }
+        Some(note)
     }
 
     /// Is this a file the Markdown view can show? Its name has to say Markdown and it has to
@@ -964,6 +1155,7 @@ impl Viewer {
             Mode::Dump => self.rows_dump(width, height),
             Mode::Disasm => self.rows_disasm(width, height),
             Mode::Markdown => self.rows_markdown(width, height),
+            Mode::Table => self.rows_table(width, height),
         }
     }
 
@@ -1462,6 +1654,7 @@ impl Viewer {
     // ── status ─────────────────────────────────────────────────────────────────────────────
 
     pub fn status(&mut self) -> Status {
+        let table = self.table_note();
         let len = self.source.len();
         let offset = self.top;
         let percent = match len {
@@ -1498,6 +1691,7 @@ impl Viewer {
                 _ => None,
             },
             derived: self.derived.clone(),
+            table,
         }
     }
 }
@@ -1679,6 +1873,72 @@ mod tests {
             Box::new(BytesSource::new(text.as_bytes().to_vec())),
             VPath::local("/tmp/read.md"),
         )
+    }
+
+    /// A viewer on a tabular file, which is what `reads_table` asks about.
+    fn table_viewer(name: &str, text: &str) -> Viewer {
+        Viewer::new(
+            Box::new(BytesSource::new(text.as_bytes().to_vec())),
+            VPath::local(format!("/tmp/{name}")),
+        )
+    }
+
+    #[test]
+    fn a_csv_reads_as_a_table_with_a_heading_that_stays_put() {
+        let mut v = table_viewer("people.csv", "name,age\nmb,51\nada,36\nlee,8\n");
+        assert!(v.reads_table());
+        assert!(v.as_table());
+        assert_eq!(v.mode, Mode::Table);
+        assert_eq!(v.status().mode.letter(), 'b');
+
+        let rows = texts(&mut v, 40, 5);
+        assert_eq!(rows[0], "name │ age");
+        assert!(rows[1].starts_with("────"), "{:?}", rows[1]);
+        assert_eq!(rows[2], "mb   │ 51 ");
+        assert_eq!(rows[4], "lee  │ 8  ");
+
+        // Scrolling moves the rows under a heading that stays where it is.
+        v.scroll(1, 40, 5);
+        let rows = texts(&mut v, 40, 5);
+        assert_eq!(rows[0], "name │ age");
+        assert_eq!(rows[2], "ada  │ 36 ");
+        // And `top` follows the record, so a bookmark or a search means the same thing here.
+        assert_eq!(v.top, "name,age\nmb,51\n".len() as u64);
+
+        // The status line says what it was read as, and admits the delimiter was a guess.
+        let note = v.status().table.expect("a note");
+        assert!(note.contains("CSV"), "{note}");
+        assert!(note.contains('`'), "the delimiter should be named: {note}");
+        assert!(note.contains("3 × 2"), "{note}");
+
+        // `F2` goes back to the commas.
+        v.toggle_wrap();
+        assert_eq!(v.mode, Mode::Text);
+    }
+
+    #[test]
+    fn json_lines_read_as_a_table_and_a_plain_text_file_does_not() {
+        let mut v = table_viewer("log.jsonl", "{\"at\":\"now\",\"ok\":true}\n");
+        assert!(v.as_table());
+        let rows = texts(&mut v, 40, 3);
+        assert_eq!(rows[0], "at  │ ok  ");
+        assert_eq!(rows[2], "now │ true");
+
+        // A name that says nothing tabular is not offered the mode, and the key says so
+        // rather than doing nothing.
+        let mut v = table_viewer("notes.txt", "a,b\n1,2\n");
+        assert!(!v.reads_table());
+        assert!(!v.as_table());
+        assert_eq!(v.mode, Mode::Text);
+    }
+
+    #[test]
+    fn a_table_too_large_to_read_whole_is_not_offered_the_mode() {
+        let mut v = table_viewer("small.csv", "a,b\nx,y\n");
+        assert!(v.reads_table());
+        let huge = "a,b\n".to_string() + &"1,2\n".repeat((TABLE_LIMIT as usize / 4) + 1);
+        let mut v = table_viewer("huge.csv", &huge);
+        assert!(!v.reads_table(), "a file over the limit opens as text");
     }
 
     #[test]

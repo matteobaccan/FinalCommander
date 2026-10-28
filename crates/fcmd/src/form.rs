@@ -349,6 +349,7 @@ impl Form {
                 Field::toggle("ui.status_bar", t("opt-status-bar"), cfg.ui.status_bar),
                 Field::toggle("ui.syntax", t("opt-syntax"), cfg.ui.syntax),
                 Field::toggle("ui.markdown", t("opt-markdown"), cfg.ui.markdown),
+                Field::toggle("ui.table", t("opt-table"), cfg.ui.table),
                 Field::Separator,
                 choice(
                     "ui.keymap",

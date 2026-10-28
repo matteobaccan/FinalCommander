@@ -59,7 +59,7 @@ Unicode-3.0, or MPL-2.0 at file level). The policy and the allow-list live in `d
 | `libc` (macOS only) | MIT OR Apache-2.0 | one `sysctl`, for how much memory the machine has |
 | `shell-words` | MIT OR Apache-2.0 | splitting a command line the way a shell would |
 | `rand` | MIT OR Apache-2.0 | the random name a wipe renames to, and test fixtures |
-| `serde_json` | MIT OR Apache-2.0 | the plugin protocol |
+| `serde_json` | MIT OR Apache-2.0 | the plugin protocol, and JSON Lines in the viewer's table mode |
 | `notify` (with `notify-types`; `inotify` on Linux, `kqueue` on the BSDs, `objc2-core-services` on macOS) | CC0-1.0 / MIT OR Apache-2.0 | the filesystem watch behind `panel.auto_refresh`: three platform APIs we are not going to write three times |
 | `clap_mangen` | MIT OR Apache-2.0 | generating the manual page from the command line |
 | `pulldown-cmark` (with `pulldown-cmark-escape`, MIT, and `unicase`, MIT OR Apache-2.0) | MIT | Markdown to HTML in `fcmd-site`, the generator for the project's web site — not in the program: `fcmd` does not link it |

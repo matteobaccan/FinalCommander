@@ -256,6 +256,8 @@ pub enum Command {
     ViewerHex,
     /// Markdown as it is meant to be read, or its source.
     ViewerMarkdown,
+    /// A tabular file as a table, and back to its source (SPEC 05 §1.11).
+    ViewerTable,
     ViewerModeNext,
     ViewerSearch,
     ViewerSearchNext,
@@ -506,6 +508,7 @@ impl Command {
             Command::ViewerWrap,
             Command::ViewerHex,
             Command::ViewerMarkdown,
+            Command::ViewerTable,
             Command::ViewerModeNext,
             Command::ViewerSearch,
             Command::ViewerSearchNext,
@@ -738,6 +741,7 @@ impl Command {
             Command::ViewerWrap => "viewer.wrap".into(),
             Command::ViewerHex => "viewer.hex".into(),
             Command::ViewerMarkdown => "viewer.markdown".into(),
+            Command::ViewerTable => "viewer.table".into(),
             Command::ViewerModeNext => "viewer.mode.next".into(),
             Command::ViewerSearch => "viewer.search".into(),
             Command::ViewerSearchNext => "viewer.search.next".into(),
@@ -947,6 +951,7 @@ impl Command {
             ("viewer.wrap", _) => Command::ViewerWrap,
             ("viewer.hex", _) => Command::ViewerHex,
             ("viewer.markdown", _) => Command::ViewerMarkdown,
+            ("viewer.table", _) => Command::ViewerTable,
             ("viewer.mode.next", _) => Command::ViewerModeNext,
             ("viewer.search", _) => Command::ViewerSearch,
             ("viewer.search.next", _) => Command::ViewerSearchNext,

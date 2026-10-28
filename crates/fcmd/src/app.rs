@@ -6288,6 +6288,11 @@ impl App {
                 if self.cfg.ui.markdown {
                     viewer.as_markdown();
                 }
+                // And a `.csv` opens as a table, for the same reason and with `Shift+F3`
+                // as the way back to the commas.
+                if self.cfg.ui.table {
+                    viewer.as_table();
+                }
                 self.mode = Mode::Viewer(Box::new(viewer));
             }
             Err(e) => self.set_error(format!("{shown}: {e}")),
@@ -10639,12 +10644,16 @@ impl App {
                     // there is one. Disassembly is F5, not part of the cycle, because it only
                     // applies to some files.
                     let renders = viewer.renders_markdown();
+                    let tabular = viewer.reads_table();
                     let next = match viewer.mode {
-                        fcmd_view::Mode::Markdown => fcmd_view::Mode::Text,
+                        fcmd_view::Mode::Markdown | fcmd_view::Mode::Table => fcmd_view::Mode::Text,
                         fcmd_view::Mode::Text => fcmd_view::Mode::Dump,
                         fcmd_view::Mode::Dump => fcmd_view::Mode::Hex,
                         fcmd_view::Mode::Hex | fcmd_view::Mode::Disasm if renders => {
                             fcmd_view::Mode::Markdown
+                        }
+                        fcmd_view::Mode::Hex | fcmd_view::Mode::Disasm if tabular => {
+                            fcmd_view::Mode::Table
                         }
                         fcmd_view::Mode::Hex | fcmd_view::Mode::Disasm => fcmd_view::Mode::Text,
                     };
@@ -10655,6 +10664,13 @@ impl App {
                         viewer.set_mode(fcmd_view::Mode::Text);
                     } else if !viewer.as_markdown() {
                         error = Some("viewer-not-markdown".into());
+                    }
+                }
+                Command::ViewerTable => {
+                    if viewer.mode == fcmd_view::Mode::Table {
+                        viewer.set_mode(fcmd_view::Mode::Text);
+                    } else if !viewer.as_table() {
+                        error = Some("viewer-not-table".into());
                     }
                 }
                 Command::ViewerFollowBranch => {
@@ -11675,6 +11691,11 @@ impl App {
         }
         if let Some(query) = &status.search {
             text.push_str(&format!("  /{query}"));
+        }
+        // A table says what it was read as, because the delimiter was a guess and the shape
+        // is what tells the reader the guess was right.
+        if let Some(note) = &status.table {
+            text.push_str(&format!("  {note}"));
         }
         text
     }
@@ -17679,7 +17700,11 @@ abcdefghij
             Some(Request::Clipboard { text }) => text,
             other => panic!("{other:?}"),
         };
-        assert_eq!(paths, "/home/mb/docs\n/home/mb/a.txt");
+        // Built from the panel's own path rather than written out: the separator is the
+        // platform's, and Windows runs these tests too.
+        let cwd = app.panel().cwd.clone();
+        let want = format!("{}\n{}", cwd.join("docs"), cwd.join("a.txt"));
+        assert_eq!(paths, want);
 
         // With the setting off nothing goes out, and that is said rather than silent.
         app.cfg.ui.clipboard = false;

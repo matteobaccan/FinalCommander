@@ -167,6 +167,7 @@ indistinguishable in a TTY — see §9.
 | horizontal scroll | ←/→, Ctrl+←/→ (20 cols) | ←/→ | ←/→, Ctrl+←/→ |
 | wrap toggle | F2 (wrap), Shift+F2 (word wrap) | F2 | F2 / Shift+F2 |
 | hex mode | F4; Shift+F4 mode menu (text/hex/dump) | F4 | F4 / Shift+F4 |
+| a tabular file as a table | — | — | **Shift+F3** for a `.csv`, `.tsv` or `.jsonl`: a heading that stays put, columns, one record a row (SPEC 05 §1.11). The same key goes back to the source, and `Shift+F4` has it in the cycle |
 | switch to editor | F6 | — | F6 |
 | search / next / previous | F7 / Shift+F7 or Space / Alt+F7 | F7 / Ctrl+S, Ctrl+R | F7 / n / N (and Shift+F7/Alt+F7) |
 | codepage | F8 toggle, Shift+F8 menu | Alt+E | Shift+F8 |

@@ -259,6 +259,7 @@ viewer-wrap-mode = { $mode }
 viewer-no-undo = 没有更早的位置
 viewer-empty = （空文件）
 viewer-not-markdown = 不是 Markdown 文件，或者太大无法排版
+viewer-not-table = 不是表格文件，或过大无法整体读取
 viewer-status = { $mode } { $codepage }  { $offset } / { $len }  { $percent }%
 
 key-disasm = 反汇编
@@ -449,6 +450,7 @@ opt-key-bar = 显示功能键栏
 opt-status-bar = 显示状态栏
 opt-syntax = 为识别到的语言着色
 opt-markdown = 排版后的 Markdown
+opt-table = 将 .csv 或 .jsonl 作为表格打开
 opt-keymap = 键位表
 opt-clock = 角落显示时钟
 opt-mouse = 鼠标支持
