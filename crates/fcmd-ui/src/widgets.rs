@@ -2765,6 +2765,22 @@ pub struct FormView<'a> {
     pub buttons: &'a [String],
     /// Which button has the focus, if the cursor has left the rows.
     pub button: Option<usize>,
+    /// The pages along the top, for a dialog that has them, and which of them is on screen.
+    /// Empty for every dialog that is one page.
+    pub tabs: &'a [FormTab],
+    pub tab: usize,
+    /// Where the dialog is centred. `None` is the middle of the screen, which is where a
+    /// dialog about the program goes; a dialog about one panel is centred on that panel.
+    pub over: Option<Rect>,
+}
+
+/// One page along the top of a dialog.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FormTab {
+    pub label: String,
+    /// A page that does not apply to what is being edited is drawn grey and cannot be
+    /// reached: the settings on it would do nothing.
+    pub enabled: bool,
 }
 
 /// A settings dialog: rows, then a row of buttons. Returns the area it covers.
@@ -2775,22 +2791,39 @@ pub fn draw_form(buf: &mut Buffer, theme: &Theme, screen: Rect, view: &FormView)
         selected,
         buttons,
         button,
+        tabs,
+        tab,
+        over,
     } = *view;
+    // The row of pages is as wide as the labels plus a space either side of each.
+    let tabs_w: usize = tabs.iter().map(|t| t.label.width() + 2).sum();
+    let tabs_h = u16::from(!tabs.is_empty());
     let buttons_w: usize = buttons.iter().map(|b| b.width() + 4).sum();
     let content_w = rows
         .iter()
         .map(|r| r.text.width())
         .chain(std::iter::once(title.width() + 4))
         .chain(std::iter::once(buttons_w))
+        .chain(std::iter::once(tabs_w))
         .max()
         .unwrap_or(20)
         .min(screen.w.saturating_sub(4) as usize);
     let w = content_w as u16 + 4;
-    let h = (rows.len() as u16 + 4).min(screen.h);
+    let h = (rows.len() as u16 + 4 + tabs_h).min(screen.h);
     // `first`, below, needs the row count that fits; the height is capped by the screen.
-    let x = screen.x + (screen.w.saturating_sub(w)) / 2;
-    let y = screen.y + (screen.h.saturating_sub(h)) / 2;
-    let area = Rect::new(x, y, w, h);
+    // Centred on what the dialog is *about*: the screen for a dialog about the program, the
+    // panel for one about a panel — a drive list that opens over the other panel is a drive
+    // list one has to check the title of.
+    let over = over.unwrap_or(screen);
+    let x = over
+        .x
+        .saturating_add(over.w.saturating_sub(w) / 2)
+        .min(screen.right().saturating_sub(w));
+    let y = over
+        .y
+        .saturating_add(over.h.saturating_sub(h) / 2)
+        .min(screen.bottom().saturating_sub(h));
+    let area = Rect::new(x.max(screen.x), y.max(screen.y), w, h);
 
     let style = theme.dialog();
     let frame = Style::new(theme.color("dialog.frame"), theme.color("dialog.bg"));
@@ -2798,11 +2831,36 @@ pub fn draw_form(buf: &mut Buffer, theme: &Theme, screen: Rect, view: &FormView)
     buf.fill(area, ' ', style);
     buf.draw_frame(area, frame, Some(title));
 
+    // The pages along the top, under the title, in the order they were given. The one that is
+    // open is drawn in the cursor's colours and a page that does not apply in the footer's,
+    // which is this theme's word for "there, but not for you".
+    if !tabs.is_empty() {
+        let ty = area.y + 1;
+        buf.fill(Rect::new(area.x + 1, ty, area.w - 2, 1), ' ', style);
+        let mut tx = area.x + 2;
+        for (i, page) in tabs.iter().enumerate() {
+            let ink = if i == tab {
+                picked
+            } else if page.enabled {
+                Style::new(theme.color("dialog.fg"), theme.color("dialog.bg"))
+            } else {
+                Style::new(theme.color("panel.footer.fg"), theme.color("dialog.bg"))
+            };
+            let label = format!(" {} ", page.label);
+            let width = label.width() as u16;
+            if tx + width > area.right() - 1 {
+                break;
+            }
+            buf.put_str(tx, ty, &label, ink, width);
+            tx += width;
+        }
+    }
+
     // A dialog taller than the screen scrolls to the row the cursor is on. The attributes
     // dialog has twenty rows on Unix, and a terminal of twenty-four lines would otherwise put
     // the last of them — the times, and the box that says to go into the folders — below the
     // bottom of the screen, where no key could reach them.
-    let room = area.h.saturating_sub(4) as usize;
+    let room = area.h.saturating_sub(4 + tabs_h) as usize;
     let first = if rows.len() <= room {
         0
     } else {
@@ -2813,13 +2871,13 @@ pub fn draw_form(buf: &mut Buffer, theme: &Theme, screen: Rect, view: &FormView)
     };
     if first > 0 {
         // The frame says there is more above, in the place a scrollbar would be.
-        buf.set(area.right() - 1, area.y + 1, '▲', frame);
+        buf.set(area.right() - 1, area.y + 1 + tabs_h, '▲', frame);
     }
     if first + room < rows.len() {
         buf.set(area.right() - 1, area.bottom() - 3, '▼', frame);
     }
     for (i, row) in rows.iter().enumerate().skip(first).take(room) {
-        let ry = area.y + 1 + (i - first) as u16;
+        let ry = area.y + 1 + tabs_h + (i - first) as u16;
         if ry >= area.bottom() - 2 {
             break;
         }

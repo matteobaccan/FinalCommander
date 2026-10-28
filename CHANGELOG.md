@@ -4,6 +4,17 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
+## [Unreleased]
+
+### Added
+
+- **The session editor has pages**, as the NetBox plugin's own does: Session, Environment,
+  Directories and the protocol's own page along the top of the frame. `Ctrl+PgDn` and
+  `Ctrl+PgUp` turn them and wrap round, stepping over a page that the chosen protocol has
+  nothing to say about — an SSH key file on an FTP session — which is drawn grey. The cursor
+  comes with the page, and `OK` still reads every row whichever page is open. A third button,
+  `Connect`, stores the session and goes there at once instead of returning to the list.
+
 ## [0.8.0] — 2026-10-28
 
 ### Added

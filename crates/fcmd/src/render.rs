@@ -49,6 +49,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
                 }
                 Mode::Form(form) => {
                     let rows = form.rows();
+                    let tabs = form.tabs();
                     let area = widgets::draw_form(
                         buf,
                         &app.theme,
@@ -56,14 +57,21 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
                         &widgets::FormView {
                             title: &form.title,
                             rows: &rows,
-                            selected: form.cursor,
+                            selected: form.cursor_row(),
                             buttons: &form.buttons,
                             button: form.button,
+                            tabs: &tabs,
+                            tab: form.page,
+                            over: None,
                         },
                     );
-                    return form
-                        .caret()
-                        .map(|(row, col)| (area.x + 2 + col as u16, area.y + 1 + row as u16));
+                    return form.caret().map(|(row, col)| {
+                        (
+                            area.x + 2 + col as u16,
+                            // A dialog with pages has its row of pages under the title.
+                            area.y + 1 + u16::from(!form.pages.is_empty()) + row as u16,
+                        )
+                    });
                 }
                 Mode::Confirm(confirm) => {
                     widgets::draw_choice(
@@ -108,6 +116,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
                 }
                 Mode::Form(form) => {
                     let rows = form.rows();
+                    let tabs = form.tabs();
                     let area = widgets::draw_form(
                         buf,
                         &app.theme,
@@ -115,14 +124,21 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
                         &widgets::FormView {
                             title: &form.title,
                             rows: &rows,
-                            selected: form.cursor,
+                            selected: form.cursor_row(),
                             buttons: &form.buttons,
                             button: form.button,
+                            tabs: &tabs,
+                            tab: form.page,
+                            over: None,
                         },
                     );
-                    return form
-                        .caret()
-                        .map(|(row, col)| (area.x + 2 + col as u16, area.y + 1 + row as u16));
+                    return form.caret().map(|(row, col)| {
+                        (
+                            area.x + 2 + col as u16,
+                            // A dialog with pages has its row of pages under the title.
+                            area.y + 1 + u16::from(!form.pages.is_empty()) + row as u16,
+                        )
+                    });
                 }
                 _ => {}
             }
@@ -518,6 +534,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         }
         Mode::Form(form) => {
             let rows = form.rows();
+            let tabs = form.tabs();
             let buttons = form.buttons.clone();
             let area = widgets::draw_form(
                 buf,
@@ -526,14 +543,22 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
                 &widgets::FormView {
                     title: &form.title,
                     rows: &rows,
-                    selected: form.cursor,
+                    selected: form.cursor_row(),
                     buttons: &buttons,
                     button: form.button,
+                    tabs: &tabs,
+                    tab: form.page,
+                    over: None,
                 },
             );
             // A text row shows a real caret; everything else leaves the cursor hidden.
-            form.caret()
-                .map(|(row, col)| (area.x + 2 + col as u16, area.y + 1 + row as u16))
+            form.caret().map(|(row, col)| {
+                (
+                    area.x + 2 + col as u16,
+                    // A dialog with pages has its row of pages under the title.
+                    area.y + 1 + u16::from(!form.pages.is_empty()) + row as u16,
+                )
+            })
         }
         Mode::Pick(pick) => {
             let list = draw_pick(app, buf, screen, pick);

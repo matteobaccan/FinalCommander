@@ -9032,6 +9032,10 @@ impl App {
             KeyCode::Char(' ') => form.toggle(true),
             KeyCode::Left => form.toggle(false),
             KeyCode::Right => form.toggle(true),
+            // The pages of a dialog that has them, as the session editor does: the same two
+            // keys the plugin uses, and like it they step over a page that does not apply.
+            KeyCode::PageDown if key.mods.contains(Mods::CTRL) => form.turn_page(true),
+            KeyCode::PageUp if key.mods.contains(Mods::CTRL) => form.turn_page(false),
             KeyCode::Tab => {
                 let last = form.buttons.len().saturating_sub(1);
                 form.button = Some(match form.button {
@@ -9292,9 +9296,17 @@ impl App {
             self.set_error(first.clone());
             return;
         }
-        self.mode = Mode::Sites {
-            cursor: self.sites.iter().position(|s| s.id == name).unwrap_or(0),
-        };
+        let at = self.sites.iter().position(|s| s.id == name).unwrap_or(0);
+        // The middle button is "store it and go there", which is what one wants nine times
+        // out of ten after typing a host in: the session list is not the destination.
+        if form.button == Some(1) {
+            if let Some(site) = self.sites.get(at).cloned() {
+                self.mode = Mode::Normal;
+                self.connect_to(site, None, false);
+                return;
+            }
+        }
+        self.mode = Mode::Sites { cursor: at };
         let msg = self.i18n.t_args("site-stored", &[("name", name.into())]);
         self.set_status(msg);
     }
@@ -14042,6 +14054,64 @@ mod tests {
     }
 
     #[test]
+    fn the_session_dialog_has_pages_and_the_protocol_one_follows_the_protocol() {
+        let mut app = app();
+        app.open_site_form(None);
+        let Mode::Form(form) = &app.mode else {
+            panic!("no dialog")
+        };
+        let tabs = form.tabs();
+        assert_eq!(tabs.len(), 4, "session, environment, directories, protocol");
+        assert!(tabs.iter().all(|t| t.enabled), "SFTP is the default");
+        // Only the page's own rows are drawn, which is the whole point of having them.
+        assert!(form.rows().len() < form.fields.len());
+        assert_eq!(form.cursor_row(), 0);
+
+        // Three pages along is the protocol's own, and the key file is on it.
+        press(&mut app, "Ctrl+PageDown");
+        press(&mut app, "Ctrl+PageDown");
+        press(&mut app, "Ctrl+PageDown");
+        let Mode::Form(form) = &app.mode else {
+            panic!("no dialog")
+        };
+        assert_eq!(form.page, 3);
+        assert_eq!(form.cursor_row(), 0, "the cursor comes with the page");
+        assert!(matches!(
+            form.fields.get(form.cursor),
+            Some(crate::form::Field::Text { key, .. }) if *key == "site.key"
+        ));
+        // And once more wraps round to the first page rather than falling off the end.
+        press(&mut app, "Ctrl+PageDown");
+        let Mode::Form(form) = &app.mode else {
+            panic!("no dialog")
+        };
+        assert_eq!(form.page, 0);
+
+        // An FTP session has nothing to say about SSH keys, so that page is drawn grey and
+        // the two keys step over it, as the plugin's own dialog does.
+        app.cfg.sites.push(fcmd_config::SiteCfg {
+            id: "ftp".into(),
+            scheme: "ftp".into(),
+            host: "ftp.example".into(),
+            ..Default::default()
+        });
+        app.open_site_form(Some(0));
+        let Mode::Form(form) = &app.mode else {
+            panic!("no dialog")
+        };
+        let tabs = form.tabs();
+        assert!(!tabs[3].enabled, "no SFTP page for an FTP session");
+        press(&mut app, "Ctrl+PageUp");
+        let Mode::Form(form) = &app.mode else {
+            panic!("no dialog")
+        };
+        assert_eq!(
+            form.page, 2,
+            "backwards from the first page skips the grey one"
+        );
+    }
+
+    #[test]
     fn a_key_file_is_asked_for_when_the_key_authentication_is_chosen() {
         let mut app = app();
         app.open_site_form(None);
@@ -14067,7 +14137,11 @@ mod tests {
         assert!(matches!(app.mode, Mode::Form(_)), "{}", app.status);
         assert!(!app.status.is_empty());
 
-        press(&mut app, "Down"); // the key file row
+        // The key file lives on the protocol's own page, as it does in the plugin: three
+        // pages along, where the cursor lands on the first row that takes anything.
+        press(&mut app, "Ctrl+PageDown");
+        press(&mut app, "Ctrl+PageDown");
+        press(&mut app, "Ctrl+PageDown");
         type_text(&mut app, "~/.ssh/id_ed25519");
         press(&mut app, "F10");
         assert_eq!(

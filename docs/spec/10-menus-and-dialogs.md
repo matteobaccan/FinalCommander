@@ -201,9 +201,24 @@ top line already shows.
 
 ### 3.5 Session editor (`Alt+N` → `Ins`/`F7` new, `F4` edit)
 
-The only dialog with text in it, and FAR's NetBox session editor is the model. Rows: name, host,
-port, user · authentication (SSH agent / key file / ask for a password) and the key file ·
-remote folder, group, keep-alive seconds, compression.
+The only dialog with text in it, and the NetBox session editor is the model — down to its
+pages, which it keeps along the top of the frame:
+
+| Page | Rows |
+| --- | --- |
+| Session | name, protocol, host, port, user · authentication (SSH agent / key file / ask for a password) |
+| Environment | keep-alive seconds, compression |
+| Directories | remote folder, group |
+| SFTP | key file |
+
+`Ctrl+PgDn` and `Ctrl+PgUp` turn the page and wrap round, and a page that does not apply to the
+chosen protocol is drawn grey and stepped over: an SSH key file on an FTP session is a setting
+that would do nothing. The cursor comes with the page, onto the first row of it that takes
+anything. The rows of the other pages are still there — turning a page hides nothing and loses
+nothing — and `OK` reads all of them whichever page is open.
+
+Three buttons answer it, as the plugin's own editor has: `OK` stores it, `Connect` stores it and
+goes there at once, `Cancel` leaves it alone.
 
 A text row takes the editing keys — printable characters, `Backspace`, `Del`, `←`, `→`, `Home`,
 `End` — and shows a real caret; `↑`/`↓` leave the row, `Enter` in a text row means `OK` because

@@ -86,12 +86,33 @@ pub enum TextEdit {
     End,
 }
 
+/// One page of a dialog that holds more than one screenful of a subject.
+///
+/// FAR's session editor has six of them along the top and so has this one: a dialog with
+/// twenty rows in it is a dialog nobody reads, and the pages say what a row is *about*
+/// before it is read. A page that does not apply to what is being edited — the SFTP page of
+/// an FTP session — is drawn grey and skipped, rather than offering settings that would do
+/// nothing.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Page {
+    pub label: String,
+    /// The fields it holds, as a half-open range into [`Form::fields`].
+    pub from: usize,
+    pub to: usize,
+    pub enabled: bool,
+}
+
 /// A settings dialog.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Form {
     pub kind: FormKind,
     pub title: String,
     pub fields: Vec<Field>,
+    /// The pages the fields are divided into, or empty for a dialog that is one page — which
+    /// is every dialog but the session editor.
+    pub pages: Vec<Page>,
+    /// Which page is on screen.
+    pub page: usize,
     pub cursor: usize,
     /// For the session editor: which `[[site]]` this edits, or `None` for a new one.
     pub site: Option<usize>,
@@ -414,6 +435,8 @@ impl Form {
         .0;
         let cursor = fields.iter().position(Field::selectable).unwrap_or(0);
         Form {
+            pages: Vec::new(),
+            page: 0,
             kind,
             title,
             fields,
@@ -445,7 +468,14 @@ impl Form {
             // validation then says so when OK is pressed.
             _ => "sftp".to_string(),
         };
+        // Four pages, in FAR's own order and under FAR's own names: the session itself, the
+        // environment it runs in, the directories it starts in, and the page for the
+        // protocol. The protocol page is the one that changes with the protocol, so the one
+        // that does not apply is drawn grey — an SFTP key file on an FTP session is a
+        // setting that would do nothing.
+        let sftp = scheme == "sftp";
         let fields = vec![
+            // Session
             Field::text("site.id", t("site-name"), cfg.id.clone()),
             choice(
                 "site.scheme",
@@ -483,18 +513,11 @@ impl Form {
                 ],
                 auth_kind,
             ),
-            Field::text("site.key", t("site-key-file"), key_path),
-            Field::Separator,
-            Field::text(
-                "site.start_dir",
-                t("site-start-dir"),
-                cfg.start_dir.clone().unwrap_or_default(),
-            ),
-            Field::text(
-                "site.group",
-                t("site-group"),
-                cfg.group.clone().unwrap_or_default(),
-            ),
+            // No password row, and that is deliberate: a password in a configuration file is
+            // a password in everybody's backups. `ask` is answered at the moment of
+            // connecting and kept for as long as the connection is.
+            Field::Note(t("site-password-note")),
+            // Environment
             Field::text(
                 "site.keepalive_secs",
                 t("site-keepalive"),
@@ -507,8 +530,52 @@ impl Form {
                 t("site-compress"),
                 cfg.compress == Some(true),
             ),
+            Field::Dim(t("site-env-eol")),
+            Field::Dim(t("site-env-utf8")),
+            // Directories
+            Field::text(
+                "site.start_dir",
+                t("site-start-dir"),
+                cfg.start_dir.clone().unwrap_or_default(),
+            ),
+            Field::text(
+                "site.group",
+                t("site-group"),
+                cfg.group.clone().unwrap_or_default(),
+            ),
+            // The protocol's own page.
+            Field::text("site.key", t("site-key-file"), key_path),
+            Field::Dim(t("site-sftp-ciphers")),
+        ];
+        let pages = vec![
+            Page {
+                label: t("site-page-session"),
+                from: 0,
+                to: 8,
+                enabled: true,
+            },
+            Page {
+                label: t("site-page-environment"),
+                from: 8,
+                to: 12,
+                enabled: true,
+            },
+            Page {
+                label: t("site-page-directories"),
+                from: 12,
+                to: 14,
+                enabled: true,
+            },
+            Page {
+                label: t("site-page-sftp"),
+                from: 14,
+                to: 16,
+                enabled: sftp,
+            },
         ];
         Form {
+            pages,
+            page: 0,
             kind: FormKind::Site,
             title: i18n.t(if index.is_some() {
                 "site-edit"
@@ -519,7 +586,13 @@ impl Form {
             cursor: 0,
             site: index,
             button: None,
-            buttons: vec![i18n.t("btn-ok"), i18n.t("btn-cancel")],
+            // Three answers, as FAR's own session editor has: keep it, keep it and go there
+            // now, or leave it alone.
+            buttons: vec![
+                i18n.t("btn-ok"),
+                i18n.t("btn-connect"),
+                i18n.t("btn-cancel"),
+            ],
         }
     }
 
@@ -569,6 +642,8 @@ impl Form {
             Field::text("hl.bg", t("hl-bg"), g.bg.clone()),
         ];
         Form {
+            pages: Vec::new(),
+            page: 0,
             kind: FormKind::Highlight,
             title: t(if group.is_some() { "hl-edit" } else { "hl-new" }),
             fields,
@@ -610,6 +685,8 @@ impl Form {
             Field::Dim(t("find-archives")),
         ];
         Form {
+            pages: Vec::new(),
+            page: 0,
             kind: FormKind::Find,
             title: t("find-title"),
             fields,
@@ -664,6 +741,8 @@ impl Form {
             Field::Dim(i18n.t_args("replace-scope", &[("count", (files as i64).into())])),
         ];
         Form {
+            pages: Vec::new(),
+            page: 0,
             kind: FormKind::Replace,
             title: t("replace-title"),
             fields,
@@ -702,6 +781,8 @@ impl Form {
             Field::Dim(i18n.t_args("pack-scope", &[("count", (files as i64).into())])),
         ];
         Form {
+            pages: Vec::new(),
+            page: 0,
             kind: FormKind::Pack,
             title: t("pack-title"),
             fields,
@@ -757,6 +838,8 @@ impl Form {
             Field::toggle("copy.mode", t("copy-keep-mode"), true),
         ];
         Form {
+            pages: Vec::new(),
+            page: 0,
             kind: FormKind::Copy,
             title: t(if moving {
                 "copy-title-move"
@@ -814,6 +897,8 @@ impl Form {
             ),
         ];
         Form {
+            pages: Vec::new(),
+            page: 0,
             kind: FormKind::Sync,
             title: t("sync-title"),
             fields,
@@ -856,6 +941,8 @@ impl Form {
             Field::text("sum.name", t("sum-name"), name),
         ];
         Form {
+            pages: Vec::new(),
+            page: 0,
             kind: FormKind::Checksum,
             title: t("sum-title"),
             fields,
@@ -888,6 +975,8 @@ impl Form {
             choice("link.kind", t("link-kind"), &kinds, kind.as_str()),
         ];
         Form {
+            pages: Vec::new(),
+            page: 0,
             kind: FormKind::Link,
             title: t("link-title"),
             fields,
@@ -1011,6 +1100,8 @@ impl Form {
         }
 
         Form {
+            pages: Vec::new(),
+            page: 0,
             kind: FormKind::Attributes,
             title: t("attr-title"),
             fields,
@@ -1044,6 +1135,8 @@ impl Form {
             Field::toggle("search.words", t("search-words"), whole_words),
         ];
         Form {
+            pages: Vec::new(),
+            page: 0,
             kind: FormKind::Search,
             title: t("search-title"),
             fields,
@@ -1063,6 +1156,8 @@ impl Form {
             Field::Dim(i18n.t_args("unpack-scope", &[("name", archive.into())])),
         ];
         Form {
+            pages: Vec::new(),
+            page: 0,
             kind: FormKind::Unpack,
             title: t("unpack-title"),
             fields,
@@ -1186,7 +1281,9 @@ impl Form {
             }) => {
                 let before: String = value.chars().take(*caret).collect();
                 Some((
-                    self.cursor,
+                    // Among the rows drawn, which on a dialog with pages is not where the
+                    // field sits in the list of all of them.
+                    self.cursor_row(),
                     UnicodeWidthStr::width(label.as_str())
                         + 2
                         + UnicodeWidthStr::width(before.as_str()),
@@ -1202,8 +1299,62 @@ impl Form {
     }
 
     /// The rows as the renderer wants them.
+    /// The pages along the top, for the renderer. Empty for a dialog that is one page.
+    pub fn tabs(&self) -> Vec<fcmd_ui::widgets::FormTab> {
+        self.pages
+            .iter()
+            .map(|p| fcmd_ui::widgets::FormTab {
+                label: p.label.clone(),
+                enabled: p.enabled,
+            })
+            .collect()
+    }
+
+    /// Which fields are on screen: the page's, or all of them for a one-page dialog.
+    pub fn visible(&self) -> std::ops::Range<usize> {
+        match self.pages.get(self.page) {
+            Some(page) => page.from..page.to.min(self.fields.len()),
+            None => 0..self.fields.len(),
+        }
+    }
+
+    /// Where the cursor is among the rows that are drawn, which is not where it is among the
+    /// fields once a dialog has pages.
+    pub fn cursor_row(&self) -> usize {
+        self.cursor.saturating_sub(self.visible().start)
+    }
+
+    /// Turn to the next page that has anything on it, or the one before. The cursor goes to
+    /// the first field of the page it lands on, because a cursor left behind on another page
+    /// is a cursor nobody can see.
+    pub fn turn_page(&mut self, forward: bool) {
+        if self.pages.len() < 2 {
+            return;
+        }
+        let n = self.pages.len();
+        let mut at = self.page;
+        for _ in 0..n {
+            at = if forward {
+                (at + 1) % n
+            } else {
+                (at + n - 1) % n
+            };
+            if self.pages[at].enabled {
+                self.page = at;
+                self.button = None;
+                let range = self.visible();
+                self.cursor = range.start;
+                if !self.fields[self.cursor].selectable() {
+                    self.move_cursor(true);
+                }
+                return;
+            }
+        }
+    }
+
     pub fn rows(&self) -> Vec<FormRow> {
-        self.fields
+        let range = self.visible();
+        self.fields[range]
             .iter()
             .map(|f| match f {
                 Field::Separator => FormRow::separator(),
@@ -1246,20 +1397,24 @@ impl Form {
             .collect()
     }
 
+    /// The cursor walks the page it is on and wraps inside it: a dialog with pages is read
+    /// one page at a time, and an arrow that slid onto the next page would move the cursor
+    /// somewhere nobody can see.
     pub fn move_cursor(&mut self, down: bool) {
-        let len = self.fields.len();
+        let range = self.visible();
+        let len = range.len();
         if len == 0 {
             return;
         }
-        let mut i = self.cursor;
+        let mut i = self.cursor.max(range.start) - range.start;
         for _ in 0..len {
             i = if down {
                 (i + 1) % len
             } else {
                 (i + len - 1) % len
             };
-            if self.fields[i].selectable() {
-                self.cursor = i;
+            if self.fields[range.start + i].selectable() {
+                self.cursor = range.start + i;
                 return;
             }
         }
