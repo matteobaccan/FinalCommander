@@ -36,6 +36,11 @@ pub struct Listing {
     pub widest: usize,
 }
 
+/// How the two fields that live beside the listing are looked up, per entry: the description
+/// and the owner, in that order. A closure rather than the maps themselves, because what
+/// holds them is the panel and what sorts is the listing.
+pub type SideLookup<'a> = dyn Fn(&Entry) -> (String, String) + 'a;
+
 impl Listing {
     pub fn new(entries: Vec<Entry>, generation: u64) -> Self {
         let mut l = Listing {
@@ -94,6 +99,25 @@ impl Listing {
         selection: &Selection,
         groups: &crate::sort::SortGroups,
     ) {
+        self.rebuild_with(sort, show_hidden, filter, selection, groups, None);
+    }
+
+    /// The same, with the two fields that live beside the listing — the description and the
+    /// owner — looked up per entry for the keys that sort by them (SPEC 02 §4).
+    ///
+    /// `side` is asked once per entry, before the sort, rather than inside the comparison:
+    /// a sort of a million rows asks the comparison some thirty-five million times, and a
+    /// map lookup in there would be thirty-five million hashes of a name.
+    #[allow(clippy::too_many_arguments)]
+    pub fn rebuild_with(
+        &mut self,
+        sort: Sort,
+        show_hidden: bool,
+        filter: Option<&crate::filter::MaskSet>,
+        selection: &Selection,
+        groups: &crate::sort::SortGroups,
+        side: Option<&SideLookup<'_>>,
+    ) {
         self.order.clear();
         self.order.reserve(self.entries.len());
         let mut totals = Totals::default();
@@ -138,6 +162,19 @@ impl Listing {
         self.widest = widest;
 
         let entries = &self.entries;
+        // The side fields, per entry, where a key asks for them. One pass over the rows that
+        // are actually on screen, so a directory nobody is sorting by description costs
+        // nothing at all.
+        let sides: Vec<(String, String)> = match side.filter(|_| sort.needs_side()) {
+            Some(lookup) => entries.iter().map(lookup).collect(),
+            None => Vec::new(),
+        };
+        let side_of = |i: usize| -> crate::sort::Side<'_> {
+            match sides.get(i) {
+                Some((descr, owner)) => crate::sort::Side { descr, owner },
+                None => crate::sort::Side::default(),
+            }
+        };
         // Unstable: it is the faster sort and there is nothing for stability to preserve,
         // because the comparison is a total order — two rows only compare equal when they
         // carry the same name, and a directory cannot hold two of those. Except under
@@ -153,13 +190,14 @@ impl Listing {
         if sort.selected_first {
             self.order.sort_by(|a, b| {
                 let (ia, ib) = (*a as usize, *b as usize);
-                selected[ib]
-                    .cmp(&selected[ia])
-                    .then_with(|| sort.compare_in(&entries[ia], &entries[ib], groups))
+                selected[ib].cmp(&selected[ia]).then_with(|| {
+                    sort.compare_side(&entries[ia], &entries[ib], groups, side_of(ia), side_of(ib))
+                })
             });
         } else {
             self.order.sort_by(|a, b| {
-                sort.compare_in(&entries[*a as usize], &entries[*b as usize], groups)
+                let (ia, ib) = (*a as usize, *b as usize);
+                sort.compare_side(&entries[ia], &entries[ib], groups, side_of(ia), side_of(ib))
             });
         }
 

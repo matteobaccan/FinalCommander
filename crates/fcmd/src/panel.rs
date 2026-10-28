@@ -171,6 +171,34 @@ impl Panel {
     }
 
     pub fn rebuild(&mut self) {
+        // Sorting by description or by owner reads what the workers put beside the listing.
+        // The two maps are keyed by name, and they are cloned rather than borrowed because
+        // the listing is being sorted through `&mut self.listing` at the same moment; both
+        // are small — one entry per row of one directory — and this happens only for the two
+        // keys that ask (SPEC 02 §4).
+        if self.sort.needs_side() {
+            let (descriptions, owners) = (self.descriptions.clone(), self.owners.clone());
+            let side = move |e: &fcmd_core::Entry| -> (String, String) {
+                let name = e.name_str();
+                (
+                    descriptions.get(&name).unwrap_or("").to_string(),
+                    owners
+                        .get(name.as_ref())
+                        .map(|(user, _)| user.clone())
+                        .unwrap_or_default(),
+                )
+            };
+            self.listing.rebuild_with(
+                self.sort,
+                self.show_hidden,
+                self.filter_set.as_ref(),
+                &self.selection,
+                &self.groups,
+                Some(&side),
+            );
+            self.clamp();
+            return;
+        }
         self.listing.rebuild(
             self.sort,
             self.show_hidden,
@@ -178,6 +206,20 @@ impl Panel {
             &self.selection,
             &self.groups,
         );
+        self.clamp();
+    }
+
+    /// Sort the listing again, keeping the cursor on the file it is on.
+    ///
+    /// What `rebuild` alone would do is keep the cursor on its *row*, and a row is a
+    /// different file once the order has changed — which is what happens when the
+    /// descriptions or the owners a sort was waiting for arrive.
+    pub fn resort(&mut self) {
+        let keep = self.current().map(|e| e.name_str().into_owned());
+        self.rebuild();
+        if let Some(row) = keep.and_then(|name| self.listing.row_of_name(&name)) {
+            self.cursor = row;
+        }
         self.clamp();
     }
 

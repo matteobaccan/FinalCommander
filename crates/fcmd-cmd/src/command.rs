@@ -621,6 +621,8 @@ impl Command {
             SortKey::MTime,
             SortKey::BTime,
             SortKey::ATime,
+            SortKey::Descr,
+            SortKey::Owner,
             SortKey::Unsorted,
         ] {
             out.push(Command::PanelSortBy(k));
@@ -1091,6 +1093,8 @@ fn parse_sort_key(s: &str) -> Option<SortKey> {
         "mtime" | "time" | "date" => Some(SortKey::MTime),
         "btime" | "created" | "creation" => Some(SortKey::BTime),
         "atime" | "accessed" | "access" => Some(SortKey::ATime),
+        "descr" | "description" | "diz" => Some(SortKey::Descr),
+        "owner" => Some(SortKey::Owner),
         "none" | "unsorted" => Some(SortKey::Unsorted),
         _ => None,
     }

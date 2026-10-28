@@ -4,6 +4,17 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
+## [Unreleased]
+
+### Added
+
+- **Sorting by description (`Ctrl+F10`) and by owner (`Ctrl+F11`)**, FAR's own last two sort
+  keys and the last two we were missing. Neither field is in the listing, so the key asks a
+  worker for it exactly as the view that shows it does: the panel sorts without it in the
+  meantime and sorts again when the answer lands, keeping the cursor on the file it was on
+  rather than on the row. A file nothing has said anything about sorts after every file that
+  has. Both are also sort-list rows and both work as tie-breakers in `panel.sort_chain`.
+
 ## [0.10.0] — 2026-10-28
 
 ### Added

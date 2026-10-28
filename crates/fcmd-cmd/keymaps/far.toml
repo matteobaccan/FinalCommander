@@ -225,6 +225,20 @@ cmd = "panel.sort.by(btime)"
 keys = ["Ctrl+F9"]
 cmd = "panel.sort.by(atime)"
 
+# FAR's last two sort keys, on its own two keys. Neither field is in the listing: the
+# description comes out of the directory's own `descript.ion` and the owner out of a lookup
+# per file, so the panel asks for them when the key is pressed and sorts again when they
+# arrive (SPEC 02 §4).
+[[bind]]
+keys = ["Ctrl+F10"]
+scope = "panel"
+cmd = "panel.sort.by(descr)"
+
+[[bind]]
+keys = ["Ctrl+F11"]
+scope = "panel"
+cmd = "panel.sort.by(owner)"
+
 # FAR opens the sort list on Ctrl+F12; reversing is a choice inside it, so the direct
 # toggle moves one key further out.
 [[bind]]

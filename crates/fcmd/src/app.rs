@@ -2095,6 +2095,10 @@ impl App {
                     return;
                 }
                 self.panels[panel].descriptions = descriptions;
+                // A panel sorted by description was sorted without them until now.
+                if self.panels[panel].sort.asks(SortKey::Descr) {
+                    self.panels[panel].resort();
+                }
                 // A `Ctrl+Z` dialog that opened before the file had been read: what it was
                 // asking about is known now, and an empty box is the one thing that may be
                 // filled in without taking away something the user has typed.
@@ -2122,6 +2126,9 @@ impl App {
                     return;
                 }
                 self.panels[panel].owners = owners;
+                if self.panels[panel].sort.asks(SortKey::Owner) {
+                    self.panels[panel].resort();
+                }
             }
             Event::DirChanged { panel } => {
                 if panel >= self.panels.len() || !self.cfg.panel.auto_refresh {
@@ -4241,6 +4248,8 @@ impl App {
             return;
         }
         let shown = self.panels[panel].view.shows_description()
+            // Sorting by description needs the file read for the same reason the view does.
+            || self.panels[panel].sort.asks(SortKey::Descr)
             || self.panels[1 - panel].content == crate::panel::Content::Info;
         let p = &self.panels[panel];
         if !shown || p.temp.is_some() || !p.cwd.is_local() || p.cwd.in_container() {
@@ -4291,7 +4300,7 @@ impl App {
             return;
         }
         let p = &self.panels[panel];
-        if p.view != ViewMode::Owners
+        if (p.view != ViewMode::Owners && !p.sort.asks(SortKey::Owner))
             || p.temp.is_some()
             || !p.cwd.is_local()
             || p.cwd.in_container()
@@ -6037,10 +6046,15 @@ impl App {
             }
             Command::PanelSortBy(key) => {
                 let allow = self.cfg.panel.allow_reverse_sort;
+                let side = self.active;
                 let panel = self.panel_mut();
                 panel.sort.toggle(key, allow);
                 let reverse = panel.sort.reverse;
                 panel.rebuild();
+                // The two keys whose field is not in the listing: ask for it, as the views
+                // that show it do, and the answer sorts the panel again when it lands.
+                self.ask_for_descriptions(side);
+                self.ask_for_owners(side);
                 let msg = self.i18n.t_args(
                     "msg-sort",
                     &[
@@ -11136,6 +11150,8 @@ impl App {
                     (SortKey::MTime, "sort-mtime"),
                     (SortKey::BTime, "sort-btime"),
                     (SortKey::ATime, "sort-atime"),
+                    (SortKey::Descr, "sort-descr"),
+                    (SortKey::Owner, "sort-owner"),
                     (SortKey::Unsorted, "sort-none"),
                 ];
                 Pick::new(
@@ -11516,6 +11532,8 @@ impl App {
             PickKind::SortModes => {
                 let key = match row.value.as_str() {
                     "ext" => SortKey::Ext,
+                    "descr" => SortKey::Descr,
+                    "owner" => SortKey::Owner,
                     "size" => SortKey::Size,
                     "mtime" => SortKey::MTime,
                     "btime" => SortKey::BTime,
@@ -14256,6 +14274,8 @@ fn sort_key(s: &str) -> Option<SortKey> {
         "mtime" | "time" | "date" => SortKey::MTime,
         "btime" | "created" => SortKey::BTime,
         "atime" | "accessed" => SortKey::ATime,
+        "descr" | "description" | "diz" => SortKey::Descr,
+        "owner" => SortKey::Owner,
         "none" | "unsorted" => SortKey::Unsorted,
         _ => return None,
     })
@@ -14336,6 +14356,8 @@ fn keybar_label(cmd: Command) -> Option<&'static str> {
         Command::PanelSortBy(SortKey::Unsorted) => "key-sort-unsort",
         Command::PanelSortBy(SortKey::BTime) => "key-sort-create",
         Command::PanelSortBy(SortKey::ATime) => "key-sort-access",
+        Command::PanelSortBy(SortKey::Descr) => "key-sort-descr",
+        Command::PanelSortBy(SortKey::Owner) => "key-sort-owner",
         Command::PanelSortMenu => "key-sort",
         // Alt
         Command::FileLink => "key-mklink",
@@ -17018,6 +17040,80 @@ mod tests {
         let first = app.panels[0].current().expect("a row");
         let path = app.panels[0].path_of(first);
         assert!(path.as_path().exists(), "{path}");
+    }
+
+    /// FAR's last two sort keys: neither field is in the listing, so the panel asks for it
+    /// and sorts again when the answer arrives.
+    #[test]
+    fn sorting_by_description_asks_for_the_file_and_sorts_when_it_comes() {
+        let mut app = app();
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation: app.panels[0].listing.generation,
+            result: Ok(vec![
+                entry("alpha.txt", EntryKind::File, 10),
+                entry("beta.txt", EntryKind::File, 20),
+                entry("gamma.txt", EntryKind::File, 30),
+            ]),
+        });
+        app.take_requests();
+
+        // `Ctrl+F10` is FAR's key for it, and it asks for the descriptions the way the view
+        // that shows them does.
+        press(&mut app, "Ctrl+F10");
+        assert_eq!(app.panels[0].sort.key, SortKey::Descr);
+        let asked = app
+            .take_requests()
+            .into_iter()
+            .any(|r| matches!(r, Request::Descriptions { .. }));
+        assert!(asked, "the descriptions were not asked for");
+
+        // Until they arrive the order is what it was; when they do, it is by description,
+        // and the files nobody described are after the ones somebody did.
+        let mut descriptions = fcmd_core::descriptions::Descriptions::default();
+        descriptions.set("gamma.txt", "the first thing to read");
+        descriptions.set("alpha.txt", "zebra, so it sorts last of the two");
+        app.handle_event(Event::Descriptions {
+            panel: 0,
+            generation: app.panels[0].generation,
+            descriptions,
+        });
+        let rows: Vec<String> = (0..app.panels[0].listing.len())
+            .filter_map(|row| app.panels[0].listing.row(row))
+            .map(|e| e.name_str().to_string())
+            .collect();
+        assert_eq!(rows, vec!["gamma.txt", "alpha.txt", "beta.txt"], "{rows:?}");
+
+        // And by owner, on FAR's other key, with the same shape.
+        press(&mut app, "Ctrl+F11");
+        assert_eq!(app.panels[0].sort.key, SortKey::Owner);
+        let asked = app
+            .take_requests()
+            .into_iter()
+            .any(|r| matches!(r, Request::Owners { .. }));
+        assert!(asked, "the owners were not asked for");
+        let owners = [
+            (
+                "beta.txt".to_string(),
+                ("ada".to_string(), "staff".to_string()),
+            ),
+            (
+                "alpha.txt".to_string(),
+                ("zoe".to_string(), "staff".to_string()),
+            ),
+        ]
+        .into_iter()
+        .collect();
+        app.handle_event(Event::Owners {
+            panel: 0,
+            generation: app.panels[0].generation,
+            owners,
+        });
+        let rows: Vec<String> = (0..app.panels[0].listing.len())
+            .filter_map(|row| app.panels[0].listing.row(row))
+            .map(|e| e.name_str().to_string())
+            .collect();
+        assert_eq!(rows, vec!["beta.txt", "alpha.txt", "gamma.txt"], "{rows:?}");
     }
 
     /// The comparison dialog: what it is told is what it keeps, and what it keeps is what

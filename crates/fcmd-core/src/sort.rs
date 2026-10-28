@@ -8,10 +8,28 @@ pub enum SortKey {
     Ext,
     Size,
     MTime,
-    /// Creation time (`Ctrl+F10` in FAR's order) and last access time (`Ctrl+F11`).
+    /// Creation time (`Ctrl+F8`) and last access time (`Ctrl+F9`), as FAR numbers them.
     BTime,
     ATime,
+    /// What this directory's `descript.ion` says about the file (`Ctrl+F10`), and who the
+    /// file belongs to (`Ctrl+F11`). Neither is in the entry: both are read by a worker and
+    /// handed to the comparison as [`Side`], and a row nothing has answered for yet sorts
+    /// with the ones that have nothing to say.
+    Descr,
+    Owner,
     Unsorted,
+}
+
+/// The two fields a sort key may ask for that are not in the entry itself.
+///
+/// They come from the maps the panel keeps beside the listing — the `descript.ion` it read
+/// and the owners a worker looked up — because both cost a lookup per row and neither belongs
+/// in an `Entry` that a million of exist. Empty means "nobody has said", which is a third
+/// answer rather than an empty string: it sorts after everything that has one.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Side<'a> {
+    pub descr: &'a str,
+    pub owner: &'a str,
 }
 
 impl SortKey {
@@ -23,6 +41,8 @@ impl SortKey {
             SortKey::MTime => "mtime",
             SortKey::BTime => "btime",
             SortKey::ATime => "atime",
+            SortKey::Descr => "descr",
+            SortKey::Owner => "owner",
             SortKey::Unsorted => "none",
         }
     }
@@ -173,6 +193,34 @@ impl Sort {
 
     /// Compare two entries, the sort groups cutting the listing into bands first.
     pub fn compare_in(&self, a: &Entry, b: &Entry, groups: &SortGroups) -> Ordering {
+        self.compare_side(a, b, groups, Side::default(), Side::default())
+    }
+
+    /// Does this sort ask for anything that is not in the entry? The panel reads it only when
+    /// the answer is yes: a lookup per row for a field nobody is sorting by is a lookup for
+    /// nothing.
+    pub fn needs_side(&self) -> bool {
+        matches!(self.key, SortKey::Descr | SortKey::Owner)
+            || self.asks(SortKey::Descr)
+            || self.asks(SortKey::Owner)
+    }
+
+    /// Is this key the one being sorted by, or one of the tie-breakers after it?
+    pub fn asks(&self, want: SortKey) -> bool {
+        self.key == want
+            || (self.key != SortKey::Unsorted
+                && self.chain.into_iter().flatten().any(|key| key == want))
+    }
+
+    /// The same comparison, with the two fields that live beside the listing handed in.
+    pub fn compare_side(
+        &self,
+        a: &Entry,
+        b: &Entry,
+        groups: &SortGroups,
+        sa: Side,
+        sb: Side,
+    ) -> Ordering {
         // `..` always first, whatever the sort.
         match (a.kind == EntryKind::Parent, b.kind == EntryKind::Parent) {
             (true, true) => return Ordering::Equal,
@@ -207,7 +255,7 @@ impl Sort {
             return Ordering::Equal;
         }
 
-        let mut ord = self.cmp_key(self.key, a, b);
+        let mut ord = self.cmp_key(self.key, a, b, sa, sb);
         // The chain breaks the ties the key leaves: `["size", "name"]` sorts by size and
         // settles two files of the same size by name rather than by whatever came first.
         // A key already asked is skipped, because asking it twice cannot say anything new.
@@ -216,7 +264,7 @@ impl Sort {
                 if key == self.key || key == SortKey::Unsorted {
                     continue;
                 }
-                ord = self.cmp_key(key, a, b);
+                ord = self.cmp_key(key, a, b, sa, sb);
                 if ord != Ordering::Equal {
                     break;
                 }
@@ -237,7 +285,7 @@ impl Sort {
 
     /// One key's answer, with no tie-break of its own: what breaks the tie is the chain and
     /// then the name, decided once in `compare_in` rather than key by key.
-    fn cmp_key(&self, key: SortKey, a: &Entry, b: &Entry) -> Ordering {
+    fn cmp_key(&self, key: SortKey, a: &Entry, b: &Entry, sa: Side, sb: Side) -> Ordering {
         match key {
             SortKey::Name => self.cmp_name(a, b),
             SortKey::Ext => self.cmp_str(&a.extension(), &b.extension()),
@@ -249,7 +297,23 @@ impl Sort {
             SortKey::MTime => a.mtime.cmp(&b.mtime),
             SortKey::BTime => a.btime.cmp(&b.btime),
             SortKey::ATime => a.atime.cmp(&b.atime),
+            // Nobody has said: after everything that has, rather than in with the empty
+            // strings. A directory of a hundred files where three are described reads as
+            // those three and then the rest, which is what the key is for.
+            SortKey::Descr => self.cmp_side(sa.descr, sb.descr),
+            SortKey::Owner => self.cmp_side(sa.owner, sb.owner),
             SortKey::Unsorted => Ordering::Equal,
+        }
+    }
+
+    /// One of the fields from beside the listing: present before absent, and otherwise the
+    /// same string comparison every other text key uses.
+    fn cmp_side(&self, a: &str, b: &str) -> Ordering {
+        match (a.is_empty(), b.is_empty()) {
+            (true, true) => Ordering::Equal,
+            (true, false) => Ordering::Greater,
+            (false, true) => Ordering::Less,
+            (false, false) => self.cmp_str(a, b),
         }
     }
 

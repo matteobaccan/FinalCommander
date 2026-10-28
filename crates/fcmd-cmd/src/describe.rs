@@ -77,6 +77,8 @@ impl Command {
                 SortKey::MTime => "sort by when it was last changed",
                 SortKey::BTime => "sort by when it was created",
                 SortKey::ATime => "sort by when it was last read",
+                SortKey::Descr => "sort by what descript.ion says about each file",
+                SortKey::Owner => "sort by who the file belongs to",
                 SortKey::Unsorted => "leave the order as the filesystem gives it",
             },
             Command::FileDescribe => "write what this file is, in the directory's descript.ion",

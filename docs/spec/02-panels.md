@@ -206,6 +206,18 @@ is said on the startup screen rather than quietly sorting by name.
 Pressing the same sort key twice toggles direction when `panel.allow_reverse_sort = true`; so
 does choosing the current order again in the sort list (SPEC 10 §4.5).
 
+**The two keys whose field is not in the listing** — the description (`Ctrl+F10`) and the owner
+(`Ctrl+F11`), FAR's own two keys for them — work the way the views that show those fields work.
+Neither is in an `Entry`, because both cost something to find out: the description comes out of
+the directory's own `descript.ion` and the owner out of a lookup per file, and an `Entry` is a
+thing a million of exist. So pressing the key asks a worker for the field, exactly as choosing
+the view does, the panel sorts without it in the meantime, and the answer sorts it again —
+keeping the cursor on the file it was on, because a row is a different file once the order has
+changed. A file nothing has said anything about sorts **after** every file that has: a
+directory of a hundred where three are described reads as those three and then the rest, which
+is what the key is for. The lookup happens once per rebuild rather than inside the comparison,
+which is asked some thirty-five million times on a panel of a million rows.
+
 **Sort groups** (FAR's `Shift+F11`, and `Group` is what FAR writes above that key) sit on top
 of the sort: an ordered list of named mask groups, some pulling their files ahead of everything
 else and some pushing them behind, with the boundary between "front" and "back" explicit in the
