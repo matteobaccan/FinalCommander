@@ -153,9 +153,8 @@ cmd = "panel.other.sync"
 keys = ["Ctrl+Shift+I"]
 cmd = "panel.filter.quick"
 
-# FAR's own numbering: brief, medium, full, wide, detailed, descriptions, long descriptions,
-# owners. `Ctrl+9` and `Ctrl+0` are FAR's links and alternative full, which need data we do
-# not read yet and are backlog lines rather than modes that would show nothing.
+# FAR's own numbering, all ten of them: brief, medium, full, wide, detailed, descriptions,
+# long descriptions, owners, links, and the alternative full view with the sizes written out.
 [[bind]]
 keys = ["Ctrl+1"]
 cmd = "panel.view.set(brief)"
@@ -187,6 +186,14 @@ cmd = "panel.view.set(long-descriptions)"
 [[bind]]
 keys = ["Ctrl+8"]
 cmd = "panel.view.set(owners)"
+
+[[bind]]
+keys = ["Ctrl+9"]
+cmd = "panel.view.set(links)"
+
+[[bind]]
+keys = ["Ctrl+0"]
+cmd = "panel.view.set(alt-full)"
 
 [[bind]]
 keys = ["Ctrl+F3"]
@@ -512,8 +519,11 @@ keys = ["Ctrl+-"]
 scope = "global"
 cmd = "app.font(-1)"
 
+# The font back to what it was. Not on `Ctrl+0`, which is FAR's tenth view mode, and not on
+# `Ctrl+Shift+0`, which sets the first folder shortcut: a number key belongs to the panels
+# twice over, and the font is the newcomer.
 [[bind]]
-keys = ["Ctrl+0"]
+keys = ["Ctrl+Alt+0"]
 scope = "global"
 cmd = "app.font(0)"
 

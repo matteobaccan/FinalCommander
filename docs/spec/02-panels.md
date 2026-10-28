@@ -83,8 +83,29 @@ as a paragraph. Five columns of the field, four of them the extension — a dire
 is a folder, not a `.old` file), a dotfile, and an extension too long for the column keep their
 name whole across both. A mode says how many columns it draws and whether it shows a size,
 so the layout follows from the mode rather than from a width guess, and a column too narrow for
-what it holds falls back to fewer columns. `links`, `descr` and the custom sets want data we
-do not collect yet and are lines in `docs/BACKLOG.md`.
+what it holds falls back to fewer columns. The custom sets are the one thing here still to
+come, and a line in `docs/BACKLOG.md`.
+
+**All ten of FAR's view modes are there**, on FAR's own numbers: `Ctrl+6` names with their
+descriptions and `Ctrl+7` the same with the size and the time (§13), `Ctrl+8` the owners,
+`Ctrl+9` the links, `Ctrl+0` the alternative full view. The last three need something a
+listing does not carry, and each is fetched the same way — by a worker, while that view is
+the one on screen, with a row the answer has not reached yet drawn blank rather than guessed
+at. The font reset moved off `Ctrl+0` to `Ctrl+Alt+0` to make room: a number key in the
+panels is a view, all ten of them.
+
+**The links view** (`Ctrl+9`) puts how many names a file has between the name and the size.
+One is an ordinary file; two or more is a file that is in two directories at once, and a
+column of them is how a hundred copies that are really one file stop looking like a hundred
+files' worth of space. The count costs a lookup per row — on Unix the `nlink` of a `stat`,
+on Windows a file that has to be opened for `GetFileInformationByHandle` — so it is fetched
+like the owners are, and a file nobody may open leaves the column blank rather than claiming
+one name.
+
+**The alternative full view** (`Ctrl+0`) is the full view with the sizes written out, digits
+grouped: `1 234 567` where the full view says `1.18 M`. It is for when the difference between
+1.2M and 1.9M is the thing one came to see. The totals in the bottom frame stay abbreviated,
+because they are a summary and not a figure to compare.
 
 **The owners view** (`Ctrl+8`, FAR's own number for it) draws `name │ size │ owner  group`:
 the two names take the room the date had, because somebody asking who a file belongs to is

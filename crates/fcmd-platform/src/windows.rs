@@ -91,6 +91,48 @@ pub fn memory() -> Option<Memory> {
 /// Everything that fails answers `None` rather than a guess: a file on a filesystem with no
 /// security at all (a FAT stick) has no owner to report, and a SID the domain will not resolve
 /// is left as the SID's own string so that the row says *something* true.
+/// How many names a file has, which on Windows means opening it and asking.
+///
+/// NTFS keeps the count in the file record and `GetFileInformationByHandle` is the way to it;
+/// there is no cheaper call, which is why this is a lookup per row and happens in a worker
+/// while the links view is the one on screen. A file nobody may open — in use, or not ours to
+/// read — says nothing rather than guessing at one.
+pub fn links(path: &Path) -> Option<u64> {
+    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::Storage::FileSystem::{
+        CreateFileW, GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION,
+        FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_DELETE,
+        FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
+    };
+
+    let name = wide(path);
+    // SAFETY: `name` is NUL-terminated and lives across the call. No access is asked for —
+    // zero is enough to read metadata — so this opens a file that is already open for
+    // writing elsewhere. `BACKUP_SEMANTICS` lets a directory be opened at all and
+    // `OPEN_REPARSE_POINT` makes the link itself the thing opened, not its target.
+    let handle = unsafe {
+        CreateFileW(
+            name.as_ptr(),
+            0,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            std::ptr::null(),
+            OPEN_EXISTING,
+            FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
+            std::ptr::null_mut(),
+        )
+    };
+    if handle == INVALID_HANDLE_VALUE {
+        return None;
+    }
+    let mut info: BY_HANDLE_FILE_INFORMATION = unsafe { std::mem::zeroed() };
+    // SAFETY: the handle is open and `info` is a whole, zeroed structure of the type the
+    // call fills in.
+    let ok = unsafe { GetFileInformationByHandle(handle, &mut info) };
+    // SAFETY: the handle came from `CreateFileW` above and is closed exactly once.
+    unsafe { CloseHandle(handle) };
+    (ok != 0).then_some(info.nNumberOfLinks as u64)
+}
+
 pub fn owner(path: &Path, cache: &mut super::OwnerCache) -> Option<super::Owner> {
     use windows_sys::Win32::Foundation::LocalFree;
     use windows_sys::Win32::Security::Authorization::{GetNamedSecurityInfoW, SE_FILE_OBJECT};

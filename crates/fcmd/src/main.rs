@@ -1087,6 +1087,25 @@ fn interactive(mut app: App) -> Result<()> {
                         });
                     });
                 }
+                Request::Links {
+                    panel,
+                    generation,
+                    dir,
+                    names,
+                } => {
+                    // A thread of its own: a lookup per file, and on Windows one that opens
+                    // each file to ask. The panel is already on screen and the column fills
+                    // in when the answer arrives.
+                    let tx = tx.clone();
+                    std::thread::spawn(move || {
+                        let links = links_of(&dir, &names);
+                        let _ = tx.send(Event::Links {
+                            panel,
+                            generation,
+                            links,
+                        });
+                    });
+                }
                 Request::Descriptions {
                     panel,
                     generation,
@@ -1557,6 +1576,18 @@ fn run_shell(
         String::new()
     };
     (note, status)
+}
+
+/// How many names each of these files has, by name (SPEC 02 §3).
+///
+/// A file nobody can ask about is left out rather than given a one: the column is then blank,
+/// which says "not known" where a 1 would say "only this name".
+fn links_of(dir: &VPath, names: &[String]) -> std::collections::HashMap<String, u64> {
+    let here = dir.os();
+    names
+        .iter()
+        .filter_map(|name| fcmd_platform::links(&here.join(name)).map(|n| (name.clone(), n)))
+        .collect()
 }
 
 /// A directory's `descript.ion`, or whatever it is called here.
@@ -3405,6 +3436,19 @@ timeout = 10
                 }
                 // The side file, read and written for real, so a test drives the same two
                 // functions the binary does.
+                Request::Links {
+                    panel,
+                    generation,
+                    dir,
+                    names,
+                } => {
+                    let links = links_of(&dir, &names);
+                    app.handle_event(Event::Links {
+                        panel,
+                        generation,
+                        links,
+                    });
+                }
                 Request::Descriptions {
                     panel,
                     generation,

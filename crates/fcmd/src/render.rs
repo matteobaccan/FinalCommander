@@ -235,6 +235,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         "col-owner",
         "col-group",
         "col-descr",
+        "col-links",
     ]
     .map(|id| app.i18n.t(id));
     let titles = widgets::ColumnTitles {
@@ -249,6 +250,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         owner: &titles[8],
         group: &titles[9],
         descr: &titles[10],
+        links: &titles[11],
     };
     for (i, area) in areas.iter().enumerate() {
         // The special kinds have no rows, so they draw themselves inside the same frame and
@@ -307,6 +309,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             highlight: &app.highlight,
             owners: &panel.owners,
             descriptions: &panel.descriptions,
+            links: &panel.links,
             up_label: &up_label,
             folder_label: &folder_label,
         };

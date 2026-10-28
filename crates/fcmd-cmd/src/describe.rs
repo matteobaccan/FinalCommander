@@ -64,6 +64,8 @@ impl Command {
                 ViewMode::Descriptions => "name and description, from the directory's descript.ion",
                 ViewMode::LongDescriptions => "name, size, time and description",
                 ViewMode::Owners => "name, owner, group and size",
+                ViewMode::Links => "name, how many names the file has, size and time",
+                ViewMode::AltFull => "the full view with the sizes written out in full",
             },
             Command::PanelQuickView(_) => "turn the other panel into a preview of the file",
             Command::PanelInfo(_) => "turn the other panel into an information panel",

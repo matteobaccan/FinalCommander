@@ -88,7 +88,16 @@ pub enum Request {
         dir: VPath,
         names: Vec<String>,
     },
-    /// Read a directory's `descript.ion` (SPEC 02 §9), for the views that show it.
+    /// How many names each file of one directory has, for the links view. A lookup per file
+    /// — on Windows the file has to be opened — so it happens in a worker and only while
+    /// that view is the one on screen (SPEC 02 §3).
+    Links {
+        panel: usize,
+        generation: u64,
+        dir: VPath,
+        names: Vec<String>,
+    },
+    /// Read a directory's `descript.ion` (SPEC 02 §13), for the views that show it.
     Descriptions {
         panel: usize,
         generation: u64,
@@ -286,7 +295,13 @@ pub enum Event {
         generation: u64,
         owners: std::collections::HashMap<String, (String, String)>,
     },
-    /// What a directory's own `descript.ion` says about its files (SPEC 02 §9). Late, as the
+    /// How many names each file of one directory has (SPEC 02 §3). Late, as the owners are.
+    Links {
+        panel: usize,
+        generation: u64,
+        links: std::collections::HashMap<String, u64>,
+    },
+    /// What a directory's own `descript.ion` says about its files (SPEC 02 §13). Late, as the
     /// owners are: the listing is on screen before the file has been read.
     Descriptions {
         panel: usize,
@@ -1918,6 +1933,8 @@ impl App {
                         // screen, and otherwise left empty, which costs nothing.
                         self.panels[panel].owners.clear();
                         self.ask_for_owners(panel);
+                        self.panels[panel].links.clear();
+                        self.ask_for_links(panel);
                         self.panels[panel].descriptions = Default::default();
                         self.ask_for_descriptions(panel);
                     }
@@ -1927,6 +1944,16 @@ impl App {
                         self.set_error(e);
                     }
                 }
+            }
+            Event::Links {
+                panel,
+                generation,
+                links,
+            } => {
+                if panel >= self.panels.len() || self.panels[panel].generation != generation {
+                    return;
+                }
+                self.panels[panel].links = links;
             }
             Event::Descriptions {
                 panel,
@@ -4042,6 +4069,39 @@ impl App {
         });
     }
 
+    /// Ask how many names each file in a directory has, for the links view.
+    ///
+    /// Exactly the owners' shape, and for exactly the owners' reason: it is a lookup per row,
+    /// and on Windows each one opens a file.
+    fn ask_for_links(&mut self, panel: usize) {
+        if panel >= self.panels.len() {
+            return;
+        }
+        let p = &self.panels[panel];
+        if !p.view.shows_links()
+            || p.temp.is_some()
+            || !p.cwd.is_local()
+            || p.cwd.in_container()
+            || p.listing.is_empty()
+        {
+            return;
+        }
+        let names: Vec<String> = (0..p.listing.len())
+            .filter_map(|row| p.listing.row(row))
+            .filter(|e| e.kind != fcmd_core::EntryKind::Parent)
+            .map(|e| e.name_str().into_owned())
+            .collect();
+        if names.is_empty() {
+            return;
+        }
+        self.requests.push(Request::Links {
+            panel,
+            generation: p.generation,
+            dir: p.cwd.clone(),
+            names,
+        });
+    }
+
     fn ask_for_owners(&mut self, panel: usize) {
         if panel >= self.panels.len() {
             return;
@@ -5720,6 +5780,7 @@ impl App {
                 // are not looking at.
                 let active = self.active;
                 self.ask_for_owners(active);
+                self.ask_for_links(active);
                 self.ask_for_descriptions(active);
                 let msg = self
                     .i18n
@@ -13300,7 +13361,10 @@ mod tests {
     #[test]
     fn the_font_keys_ask_the_terminal_and_say_that_is_what_they_did() {
         let mut app = app();
-        for (key, want) in [("Ctrl++", 1i8), ("Ctrl+-", -1), ("Ctrl+0", 0)] {
+        // `Ctrl+Alt+0` and not `Ctrl+0`, which is the tenth view mode, nor `Ctrl+Shift+0`,
+        // which sets the first folder shortcut: a number key belongs to the panels twice
+        // over and the font is the newcomer.
+        for (key, want) in [("Ctrl++", 1i8), ("Ctrl+-", -1), ("Ctrl+Alt+0", 0)] {
             press(&mut app, key);
             let by = app
                 .take_requests()

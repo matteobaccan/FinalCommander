@@ -99,6 +99,32 @@ pub fn owner(path: &Path, cache: &mut OwnerCache) -> Option<Owner> {
     }
 }
 
+/// How many names a file has: its hard-link count (FAR's links view, `Ctrl+9`).
+///
+/// One for an ordinary file, two or more for one that is in two directories at once, and a
+/// number that nobody can read as "wasted space" — a hundred copies of a file that is really
+/// one file take the room of one. `None` for a path that has gone away or a platform that
+/// does not keep the count.
+///
+/// The link of a symbolic link is counted, not what it points at: the row on the screen is
+/// the link, as it is everywhere else in a listing.
+pub fn links(path: &Path) -> Option<u64> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        std::fs::symlink_metadata(path).ok().map(|m| m.nlink())
+    }
+    #[cfg(windows)]
+    {
+        windows::links(path)
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = path;
+        None
+    }
+}
+
 /// What the machine has. `None` where there is no way to ask.
 pub fn memory() -> Option<Memory> {
     #[cfg(unix)]

@@ -202,6 +202,18 @@ fn panel_menu(title: &'static str, side: usize) -> Menu {
                 Action::Run(Command::PanelViewSet(ViewMode::Owners)),
                 Mark::View(ViewMode::Owners),
             ),
+            marked(
+                "menu-links",
+                "Ctrl+9",
+                Action::Run(Command::PanelViewSet(ViewMode::Links)),
+                Mark::View(ViewMode::Links),
+            ),
+            marked(
+                "menu-alt-full",
+                "Ctrl+0",
+                Action::Run(Command::PanelViewSet(ViewMode::AltFull)),
+                Mark::View(ViewMode::AltFull),
+            ),
             Entry::Separator,
             item(
                 "menu-info-panel",

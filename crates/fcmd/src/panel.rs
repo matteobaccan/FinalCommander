@@ -111,6 +111,9 @@ pub struct Panel {
     /// What this directory's own `descript.ion` says about its files (SPEC 02 §9), read by a
     /// worker while a view that shows it is on screen. Empty everywhere else.
     pub descriptions: fcmd_core::descriptions::Descriptions,
+    /// How many names each file has, counted by a worker while the links view is on screen
+    /// (SPEC 02 §3). Empty everywhere else, as the owners are.
+    pub links: std::collections::HashMap<String, u64>,
 }
 
 impl Panel {
@@ -125,6 +128,7 @@ impl Panel {
             sort,
             groups: Arc::new(SortGroups::default()),
             descriptions: Default::default(),
+            links: Default::default(),
             view,
             show_hidden,
             filter: None,

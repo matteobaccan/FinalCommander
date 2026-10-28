@@ -103,7 +103,7 @@ Column `FC` = FinalCommander default (profile `far`, our baseline).
 | short/long names | Ctrl+N | Alt+T (cycle formats) | Alt+Shift+B/D | Ctrl+N |
 | key bar on/off | Ctrl+B | — | — | Ctrl+B |
 | font larger / smaller / as it was | — | — | — | **Ctrl++ / Ctrl+− / Ctrl+0**, as every graphical program does it; §9 says what a terminal program can actually do about its font |
-| view modes 1..0 | LeftCtrl+1..0 | Alt+T cycles | Alt+Shift+B/D | **Ctrl+1..8** in FAR's own order: brief, medium, full, wide, detailed, descriptions, long descriptions, file owners (SPEC 02 §3, §13). `Ctrl+9` and `Ctrl+0` — FAR's file links and alternative full view — want data we do not collect yet; `docs/BACKLOG.md` says so |
+| view modes 1..0 | LeftCtrl+1..0 | Alt+T cycles | Alt+Shift+B/D | **Ctrl+1..0**, all ten, in FAR's own order: brief, medium, full, wide, detailed, descriptions, long descriptions, owners, links, alternative full (SPEC 02 §3, §13). The last three need something a listing does not carry — a side file, a lookup per row — so each is fetched by a worker while it is the view on screen. The font reset moved to `Ctrl+Alt+0` for it |
 | parent directory | Ctrl+PgUp | Ctrl+PgUp | Ctrl+PgUp | Ctrl+PgUp, Backspace |
 | enter dir / archive | Ctrl+PgDn | Ctrl+PgDn | Enter | Ctrl+PgDn |
 | root directory | Ctrl+\ | — | Ctrl+Backspace | Ctrl+\ |

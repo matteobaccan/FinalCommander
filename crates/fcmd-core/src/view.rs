@@ -1,9 +1,9 @@
 /// How a panel renders its rows — FAR's own list, in FAR's own order, which is the order the
 /// `Ctrl+1..8` keys are in (see `docs/spec/02-panels.md` §3).
 ///
-/// The three that need data we do not collect yet — descriptions, links, and the alternative
-/// full view with its thousands separators — are lines in `docs/BACKLOG.md` rather than
-/// variants that would say "not implemented".
+/// All ten of FAR's, on FAR's own numbers: the three that needed data a listing does not
+/// carry — descriptions, links, and the alternative full view — are here too, each fetched
+/// by a worker while it is the one on screen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ViewMode {
     /// Names only, three columns.
@@ -24,11 +24,17 @@ pub enum ViewMode {
     /// file, and on Windows a call into the security API — so it is fetched only while this
     /// mode is the one on screen (SPEC 02 §3).
     Owners,
+    /// Name, how many names the file has, size, time. The count costs a lookup per row — on
+    /// Windows a file has to be opened for it — so it is fetched like the owners are.
+    Links,
+    /// The full view with the sizes written out in full, digits grouped: FAR's alternative
+    /// full view, for when the difference between 1.2M and 1.9M is the thing one is after.
+    AltFull,
 }
 
 impl ViewMode {
     /// Every mode, in the order the keys are in.
-    pub const ALL: [ViewMode; 8] = [
+    pub const ALL: [ViewMode; 10] = [
         ViewMode::Brief,
         ViewMode::Medium,
         ViewMode::Full,
@@ -37,6 +43,8 @@ impl ViewMode {
         ViewMode::Descriptions,
         ViewMode::LongDescriptions,
         ViewMode::Owners,
+        ViewMode::Links,
+        ViewMode::AltFull,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -49,6 +57,8 @@ impl ViewMode {
             ViewMode::Descriptions => "descriptions",
             ViewMode::LongDescriptions => "long-descriptions",
             ViewMode::Owners => "owners",
+            ViewMode::Links => "links",
+            ViewMode::AltFull => "alt-full",
         }
     }
 
@@ -64,6 +74,8 @@ impl ViewMode {
                 Some(ViewMode::LongDescriptions)
             }
             "owners" | "owner" => Some(ViewMode::Owners),
+            "links" | "link" => Some(ViewMode::Links),
+            "alt-full" | "alt_full" | "altfull" => Some(ViewMode::AltFull),
             _ => None,
         }
     }
@@ -78,7 +90,9 @@ impl ViewMode {
             | ViewMode::Detail
             | ViewMode::Owners
             | ViewMode::Descriptions
-            | ViewMode::LongDescriptions => 1,
+            | ViewMode::LongDescriptions
+            | ViewMode::Links
+            | ViewMode::AltFull => 1,
         }
     }
 
@@ -95,6 +109,12 @@ impl ViewMode {
     pub fn shows_description(self) -> bool {
         matches!(self, ViewMode::Descriptions | ViewMode::LongDescriptions)
     }
+
+    /// Does a row say how many names the file has? Counted only while this view is the one
+    /// on screen, for the same reason the owners are.
+    pub fn shows_links(self) -> bool {
+        self == ViewMode::Links
+    }
 }
 
 #[cfg(test)]
@@ -108,7 +128,7 @@ mod tests {
         }
         // The spelling FAR's own dialog uses, and one that is not a mode at all.
         assert_eq!(ViewMode::parse("Detailed"), Some(ViewMode::Detail));
-        assert_eq!(ViewMode::parse("links"), None);
+        assert_eq!(ViewMode::parse("stripes"), None);
     }
 
     #[test]

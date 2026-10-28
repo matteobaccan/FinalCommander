@@ -25,6 +25,7 @@ pub struct ColumnTitles<'a> {
     pub owner: &'a str,
     pub group: &'a str,
     pub descr: &'a str,
+    pub links: &'a str,
 }
 
 /// Everything the panel widget needs to know. The panel owns no state of its own.
@@ -73,8 +74,11 @@ pub struct PanelRender<'a> {
     /// screen. A row that is not in it yet draws blank rather than waiting for it.
     pub owners: &'a std::collections::HashMap<String, (String, String)>,
     /// What the directory's own `descript.ion` says about its files, read by a worker while
-    /// a view that shows it is on screen (SPEC 02 §9). Empty everywhere else.
+    /// a view that shows it is on screen (SPEC 02 §13). Empty everywhere else.
     pub descriptions: &'a fcmd_core::descriptions::Descriptions,
+    /// How many names each file has, counted by a worker while the links view is on screen
+    /// (SPEC 02 §3). Empty everywhere else.
+    pub links: &'a std::collections::HashMap<String, u64>,
 }
 
 /// Rows that fit in a panel of this height. The titles row and the panel's own status line
@@ -384,6 +388,7 @@ fn draw_column_titles(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inne
                     Col::Accessed => p.titles.accessed,
                     Col::Attr => p.titles.attr,
                     Col::Descr => p.titles.descr,
+                    Col::Links => p.titles.links,
                 };
                 centre(buf, x, y, w, title, style);
                 x += w + 1;
@@ -547,6 +552,8 @@ struct Cols {
     /// What the directory's `descript.ion` says about the file. It takes whatever is left
     /// after the name, because a description is prose and there is no width that is right.
     descr: u16,
+    /// How many names the file has: the links view, and nothing else, has this.
+    links: u16,
 }
 
 const SIZE_W: u16 = 9;
@@ -554,6 +561,12 @@ const TIME_W: u16 = 16; // `2026-10-23 17:42`
 const ATTR_W: u16 = 5;
 /// Enough for most account names; a longer one is cut rather than given the whole panel.
 const OWNER_W: u16 = 12;
+/// `1 234 567 890` — twelve digits and their separators, which is more than any file on a
+/// device anybody has, and the one column FAR's alternative full view is about.
+const FULL_SIZE_W: u16 = 15;
+/// How many names a file has. Four digits is a directory with a thousand hard links in it,
+/// which nobody has either.
+const LINKS_W: u16 = 4;
 /// Under this the name is no longer worth reading, so the dates that are extras go instead.
 const NAME_MIN: u16 = 16;
 
@@ -570,12 +583,13 @@ enum Col {
     Accessed,
     Attr,
     Descr,
+    Links,
 }
 
 impl Cols {
     /// The columns after the name, left to right, with the width of each. A width of zero is
     /// a column this view or this panel has no room for, and is skipped everywhere.
-    fn after_name(&self) -> [(Col, u16); 9] {
+    fn after_name(&self) -> [(Col, u16); 10] {
         [
             (Col::Size, self.size),
             (Col::Allocated, self.allocated),
@@ -585,6 +599,7 @@ impl Cols {
             (Col::Created, self.created),
             (Col::Accessed, self.accessed),
             (Col::Attr, self.attr),
+            (Col::Links, self.links),
             (Col::Descr, self.descr),
         ]
     }
@@ -626,7 +641,13 @@ fn columns_of(inner_w: u16, view: ViewMode, cluster: u64) -> Cols {
         owner: if owners { OWNER_W } else { 0 },
         group: 0,
         descr: 0,
+        links: if view == ViewMode::Links { LINKS_W } else { 0 },
     };
+    // The sizes written out in full need a wider column than the abbreviated ones: that is
+    // the whole of what the alternative full view is.
+    if view == ViewMode::AltFull {
+        c.size = FULL_SIZE_W;
+    }
     // The group only if the name stays readable with it: on a narrow panel the owner is the
     // one that was asked for and the group is the extra.
     if owners {
@@ -777,6 +798,16 @@ fn draw_full(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect, 
                 Col::Attr => {
                     buf.put_str(x, y, &attrs(e), style, w);
                 }
+                Col::Links => {
+                    // A row whose count has not come back yet draws blank rather than a
+                    // number nobody asked for; `..` is not a file of this directory.
+                    let text = (e.kind != EntryKind::Parent)
+                        .then(|| p.links.get(e.name_str().as_ref()))
+                        .flatten()
+                        .map(|n| n.to_string())
+                        .unwrap_or_default();
+                    put_right(buf, x, y, w, &text, style);
+                }
                 Col::Descr => {
                     // `..` is the directory one came from, not a file of this one: whatever
                     // the description file says about a name, it does not say it about that.
@@ -830,6 +861,12 @@ fn draw_size(
             let pad = (field - text.width()) / 2;
             let at = x + w.saturating_sub(field as u16) + pad as u16;
             buf.put_str(at, y, &text, style, w);
+        }
+        // The alternative full view is this column and nothing else: the size written out
+        // in full, digits grouped, for when the difference between 1.2M and 1.9M is the
+        // thing one came to see.
+        _ if p.view == ViewMode::AltFull => {
+            put_right(buf, x, y, w, &fcmd_core::format_count(e.size), style)
         }
         _ => put_right(buf, x, y, w, &format_size(e.size), style),
     }
@@ -1409,6 +1446,7 @@ mod tests {
             owner: "Owner",
             group: "Group",
             descr: "Description",
+            links: "Lnk",
         }
     }
 
@@ -1475,6 +1513,7 @@ mod tests {
             titles: english_titles(),
             owners: &std::collections::HashMap::new(),
             descriptions: &Default::default(),
+            links: &std::collections::HashMap::new(),
             up_label: "Up",
             folder_label: "Folder",
         };
@@ -1551,11 +1590,88 @@ mod tests {
             titles: english_titles(),
             owners,
             descriptions: &Default::default(),
+            links: &std::collections::HashMap::new(),
             up_label: "Up",
             folder_label: "Folder",
         };
         draw_panel(&mut buf, &theme, &p);
         buf.to_text()
+    }
+
+    #[test]
+    fn the_links_view_counts_the_names_and_the_alternative_full_writes_the_size_out() {
+        let listing = Listing::new(
+            vec![
+                Entry::parent_entry(),
+                entry("big.iso", EntryKind::File, 1234567),
+            ],
+            1,
+        );
+        let theme = Theme::default_theme();
+        let selection = Selection::default();
+        let links: std::collections::HashMap<String, u64> =
+            [("big.iso".to_string(), 3u64)].into_iter().collect();
+        let render = |view: ViewMode| {
+            let mut buf = Buffer::new(70, 7);
+            let p = PanelRender {
+                area: Rect::new(0, 0, 70, 6),
+                path: "/home/mb",
+                listing: &listing,
+                selection: &selection,
+                cursor: 0,
+                top: 0,
+                focused: true,
+                view,
+                sort_label: "name",
+                sort_reverse: false,
+                column_titles: true,
+                filter: None,
+                message: None,
+                status: None,
+                free: None,
+                scrollbar: false,
+                name_scroll: 0,
+                highlight: &crate::Highlight::far_default(),
+                cluster: 4096,
+                titles: english_titles(),
+                owners: &std::collections::HashMap::new(),
+                descriptions: &Default::default(),
+                links: &links,
+                up_label: "Up",
+                folder_label: "Folder",
+            };
+            draw_panel(&mut buf, &theme, &p);
+            buf.to_text()
+        };
+
+        // How many names the file has, where the column says `Lnk`.
+        let shown = render(ViewMode::Links);
+        assert!(shown.contains("Lnk"), "{shown}");
+        assert!(shown.contains(" 3"), "{shown}");
+
+        // The alternative full view writes the size out, digits grouped rather than rounded.
+        // The row, not the whole frame: the totals in the bottom frame are abbreviated in
+        // every view, which is what the frame is for.
+        // By the date, because the full view splits the name from its extension and there is
+        // then no `big.iso` on the row to find.
+        let row = |text: &str| -> String {
+            text.lines()
+                .find(|l| l.contains("2023-11-14"))
+                .unwrap_or_default()
+                .to_string()
+        };
+        let full = render(ViewMode::AltFull);
+        assert!(
+            row(&full).contains(&fcmd_core::format_count(1234567)),
+            "{full}"
+        );
+        assert!(
+            !row(&full).contains("1.18 M"),
+            "nothing is rounded:\n{full}"
+        );
+        // And the plain full view still rounds it, which is the difference between them.
+        let plain = render(ViewMode::Full);
+        assert!(row(&plain).contains("1.18 M"), "{plain}");
     }
 
     #[test]
@@ -1600,6 +1716,7 @@ mod tests {
                 titles: english_titles(),
                 owners: &std::collections::HashMap::new(),
                 descriptions: &descriptions,
+                links: &std::collections::HashMap::new(),
                 up_label: "Up",
                 folder_label: "Folder",
             };
@@ -1703,6 +1820,7 @@ mod tests {
             titles: english_titles(),
             owners: &std::collections::HashMap::new(),
             descriptions: &Default::default(),
+            links: &std::collections::HashMap::new(),
             up_label: "Up",
             folder_label: "Folder",
         };
@@ -1862,6 +1980,7 @@ mod tests {
             titles: english_titles(),
             owners: &std::collections::HashMap::new(),
             descriptions: &Default::default(),
+            links: &std::collections::HashMap::new(),
             up_label: "Up",
             folder_label: "Folder",
         };
@@ -1901,6 +2020,7 @@ mod tests {
                 titles: english_titles(),
                 owners: &std::collections::HashMap::new(),
                 descriptions: &Default::default(),
+                links: &std::collections::HashMap::new(),
                 up_label: "Up",
                 folder_label: "Folder",
             };
@@ -1947,6 +2067,7 @@ mod tests {
             titles: english_titles(),
             owners: &std::collections::HashMap::new(),
             descriptions: &Default::default(),
+            links: &std::collections::HashMap::new(),
             up_label: "Up",
             folder_label: "Folder",
         };
@@ -2084,6 +2205,7 @@ mod tests {
             titles: english_titles(),
             owners: &std::collections::HashMap::new(),
             descriptions: &Default::default(),
+            links: &std::collections::HashMap::new(),
             up_label: "Up",
             folder_label: "Folder",
         };
@@ -2276,6 +2398,7 @@ mod tests {
             titles: english_titles(),
             owners: &std::collections::HashMap::new(),
             descriptions: &Default::default(),
+            links: &std::collections::HashMap::new(),
             up_label: "Up",
             folder_label: "Folder",
         };

@@ -4,6 +4,30 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
+## [0.7.4] — 2026-10-28
+
+### Added
+
+- **The last two view modes FAR has**, so all ten are now there on FAR's own numbers.
+  `Ctrl+9` is the **links view**: how many names a file has, between the name and the size.
+  One is an ordinary file, two or more is a file in two directories at once, and a column of
+  them is how a hundred copies that are really one file stop looking like a hundred files'
+  worth of space. The count costs a lookup per row — the `nlink` of a `stat` on Unix, a file
+  that has to be opened on Windows — so it is fetched by a worker while that view is the one
+  on screen, exactly as the owners are, and a file nobody may open leaves the column blank
+  rather than claiming one name.
+
+  `Ctrl+0` is the **alternative full view**: the full view with the sizes written out, digits
+  grouped — `1 234 567` where the full view says `1.18 M` — for when the difference between
+  1.2M and 1.9M is the thing one came to see. The totals in the bottom frame stay
+  abbreviated, being a summary rather than a figure to compare.
+
+### Changed
+
+- **The font reset moved from `Ctrl+0` to `Ctrl+Alt+0`.** A number key in the panels is a
+  view mode, all ten of them, and `Ctrl+Shift+0` was already the first folder shortcut: the
+  font is the newcomer and gives way. `Ctrl++` and `Ctrl+-` are unchanged.
+
 ## [0.7.3] — 2026-10-28
 
 ### Added
