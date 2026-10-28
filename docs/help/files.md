@@ -185,7 +185,7 @@ What is not there yet: the owner and the group, and Windows' advanced bits.
 
 ## Comparing two folders
 
-`F9 → Commands` has both of them, and they answer different questions.
+`F9 → Commands` has four of them, and they answer different questions.
 
 **Compare folders** is FAR's own, and it is instant: it matches names, compares the size and
 the time, and leaves selected in each panel what the other side does not have or has an older
@@ -198,9 +198,34 @@ are not the same is usually in the first block. It is the question to ask about 
 were built from the same source, or copied by something that did not keep the timestamps,
 where the date proves nothing.
 
-Both panels have to be on a local filesystem for it, and anything with no counterpart on the
-other side is selected too, because it is a difference. A long comparison says how far it has
-got in the status line, and `Esc` on an empty command line stops it.
+**Compare with options** is the same work with the question written out: a dialog of what
+counts as a difference, which is the only honest way to compare two directories, because no
+two people mean the same thing by *the same*. Whether the names are case-sensitive. Whether
+the size counts, whether the time counts and to what accuracy — two seconds is what FAT
+keeps, and a file copied to a stick and back is two seconds out through no fault of anybody's.
+Whether to read the bytes, and whether to read them only when the time differs, which is the
+fast way to check a backup. How much to read: a first fragment of so many kilobytes settles a
+pair of large files in a fraction of the time, and says that is what it did. Whether two files
+that differ only in their line endings count as different — `CRLF` against `LF` is a
+difference in the bytes and usually not a difference in the file. Whether to look only at
+what is selected, whether to stop at the first difference, and whether to mark only the newer
+side or both.
+
+**Into the subdirectories**, which the same dialog turns on, compares two whole trees: every
+file is paired by its path below the two roots, to whatever depth you allow, and the answer
+comes back as a panel of its own with each row marked for why it is there — it differs, it is
+only on the left, it is only on the right, or it is the same but for the line endings. A
+difference found six directories down cannot be a selection in a panel showing one directory,
+which is why it is a panel and not a selection.
+
+**Find duplicates** asks the other question: not whether two directories match, but which
+files inside one tree are the same file under different names. It compares what is in them —
+a size and then a hash — so two names that have nothing in common still land together, and
+the answer is a panel of the groups it found.
+
+Both panels have to be on a local filesystem for any of it, and anything with no counterpart
+on the other side is a difference. A long comparison says how far it has got in the status
+line, and `Esc` on an empty command line stops it.
 
 # What opens a file
 

@@ -102,7 +102,7 @@ Column `FC` = FinalCommander default (profile `far`, our baseline).
 | toggle hidden files | Ctrl+H | Alt+. (Shift+Alt+H in some builds) | Alt+. | Ctrl+H |
 | short/long names | Ctrl+N | Alt+T (cycle formats) | Alt+Shift+B/D | Ctrl+N |
 | key bar on/off | Ctrl+B | — | — | Ctrl+B |
-| font larger / smaller / as it was | — | — | — | **Ctrl++ / Ctrl+− / Ctrl+0**, as every graphical program does it; §9 says what a terminal program can actually do about its font |
+| font larger / smaller / as it was | — | — | — | **Ctrl++ / Ctrl+− / Ctrl+Alt+0** — the reset moved off `Ctrl+0` when the tenth view mode took it, as it has in FAR; §9 says what a terminal program can actually do about its font |
 | view modes 1..0 | LeftCtrl+1..0 | Alt+T cycles | Alt+Shift+B/D | **Ctrl+1..0**, all ten, in FAR's own order: brief, medium, full, wide, detailed, descriptions, long descriptions, owners, links, alternative full (SPEC 02 §3, §13). The last three need something a listing does not carry — a side file, a lookup per row — so each is fetched by a worker while it is the view on screen. The font reset moved to `Ctrl+Alt+0` for it |
 | parent directory | Ctrl+PgUp | Ctrl+PgUp | Ctrl+PgUp | Ctrl+PgUp, Backspace |
 | enter dir / archive | Ctrl+PgDn | Ctrl+PgDn | Enter | Ctrl+PgDn |
@@ -320,7 +320,7 @@ A TUI cannot receive every combination the Windows console gives FAR. Decisions:
    alternative binding, listed next to it in the help, and a `keys.local.toml` override.
    **The font is not ours to set.** A terminal program does not own its font: the emulator
    does, and there is exactly one control sequence for asking — xterm's `OSC 50`, where a `#`
-   and a signed number step through the font menu. So `Ctrl++`, `Ctrl+−` and `Ctrl+0` send
+   and a signed number step through the font menu. So `Ctrl++`, `Ctrl+−` and `Ctrl+Alt+0` send
    that, and what happens next is the terminal's business: xterm and the terminals that copy
    it change font, the rest ignore it. On most emulators (VTE, Konsole, Windows Terminal,
    alacritty, foot) `Ctrl` with plus or minus is the emulator's *own* zoom and never reaches a

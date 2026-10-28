@@ -6,6 +6,14 @@ the modern TUIs (yazi, MTN2), normalised into one list with a target milestone.
 Milestones: **M1** = usable daily driver (MVP), **M2** = feature parity with mc + basic FAR,
 **M3** = parity with FAR/TC, **M4** = beyond (new ideas).
 
+**How to read the `M` column**, as of 0.10.0: it says which milestone *owns* a feature, not
+whether it is done. M1 shipped long ago, so an `M1` row is a feature the program has. M2 is
+the milestone in progress, which is why its rows are a mixture; a row that landed after this
+table was written says so instead — struck through, with the version it landed in. When a
+row's own text and the version note disagree, the version note is the newer fact.
+`docs/BACKLOG.md` is the list of what is *not* there, each line with the reason, and
+[`CHANGELOG.md`](../CHANGELOG.md) is what has landed.
+
 For FAR specifically, [`04-far-inventory.md`](04-far-inventory.md) is the harder check: FAR 3.x
 read from its own repository — 283 help topics, 311 settings keys — with each feature marked
 against what FinalCommander actually does today.
@@ -28,10 +36,10 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 1.11 | Status line (name, size, date of the current item) and total/selected counters | FAR | M1 |
 | 1.11b | Column titles row (`Name │ Size │ Date Time`), with the sort-mode letter in the corner — lower case ascending, upper case descending — and a `*` beside it while a filter is on | FAR | M1 |
 | 1.12 | Function-key bar (`F1..F12`, follows modifiers: Shift/Alt/Ctrl rows) | NC | M1 |
-| 1.13 | Sort by name/ext/size/mtime/ctime/atime/owner/unsorted, reversible, group dirs first, selected first, natural ("version") sort, locale-aware collation | FAR/TC | M1 core, M2 full |
+| 1.13 | ~~Sort by name/ext/size/mtime/ctime/atime/owner/unsorted, reversible, group dirs first, selected first, natural ("version") sort~~, locale-aware collation | FAR/TC | **shipped** (all nine keys by 0.10.0); locale-aware collation — ordinal / invariant / linguistic as FAR has it — is M3 and a backlog line |
 | 1.14 | Secondary sort criteria chain (tie-breakers, configurable): per sort mode an ordered set, with its own editor (add, remove, replace, direction, inherit, reorder, reset) | FAR | M3 |
 | 1.14b | ~~Sort groups: named mask groups that sort ahead of or behind everything else, ordered, applied on top of the sort mode~~ | FAR (`Shift+F11`) | **shipped** (0.7.2): `[[sort_group]]` blocks, in the order they are written |
-| 1.14c | Sort by creation time, access time, owner and description, besides name/ext/size/write time | FAR (`Ctrl+F8…F11`) | M2 |
+| 1.14c | ~~Sort by creation time, access time, owner and description, besides name/ext/size/write time~~ | FAR (`Ctrl+F8…F11`) | **shipped**: the two times in 0.0.6, the owner and the description in 0.10.0, each fetched by a worker and re-sorted when the answer lands |
 | 1.15 | Filters: per-panel display filter, quick filter bar, filter by mask/size/date/attrs, named filter sets, filter menu | FAR/KRU | M2 |
 | 1.15b | A column grammar for view modes: per column a property letter with modifiers (name with selection marks / no extension / right-aligned, extension, size / allocated size / stream size with grouping, decimal units, fractions, four date-and-time pairs with brief and month-name forms, attributes, description, owner with domain, hard-link count, stream count), widths absolute or automatic or a percentage, repeated groups giving newspaper stripes, and the same grammar for the panel status line and for search results | FAR | M2 |
 | 1.15c | Per view mode: fullscreen, align file and folder extensions, folders uppercase, files lowercase, uppercase names shown lowercase | FAR | M2 |
@@ -54,7 +62,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 2.1 | Enter = run/chdir/enter archive; parent dir via `..`; root jump | all | M1 |
 | 2.2 | Fast find / quick search inside the panel (type to jump, wildcards, cycle matches) | FAR/MC | M1 |
 | 2.3 | Fuzzy "go to anywhere" (zoxide-style frecency + fuzzy path jump) | broot/NEW | M3 |
-| 2.4 | Drive/mount menu (`Alt+F1/F2`), MountMan-style mount/unmount, removable eject | FAR/KRU | M2 |
+| 2.4 | ~~Drive/mount menu (`Alt+F1/F2`)~~, MountMan-style mount/unmount, removable eject | FAR/KRU | **the menu is shipped** (0.9.0, FAR's own dialog with its columns, its switches on `F9`, `Ctrl+1…9` for the panels that are not drives); mounting, unmounting and ejecting are M3 |
 | 2.5 | Select/deselect: `Ins`, `Shift+arrows`, by mask (`+`/`-`/`*`), by extension, by name, same-name/different-size, invert, select all, restore previous selection | FAR/TC | M1 |
 | 2.6 | Selection by regex, by size/date/attribute predicates, from clipboard list | FAR/KRU | M3 |
 | 2.7 | Mark-and-act across directory changes (persistent selection set / "staging area") | NEW | M4 |
@@ -69,8 +77,8 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 3.1 | Copy / move / rename (`F5`/`F6`), same-panel copy (`Shift+F5`), rename in place (`Shift+F6`) | all | M1 |
 | 3.2 | ~~Delete to trash and permanent delete; wipe (overwrite then delete)~~ | FAR | **shipped** |
 | 3.3 | Create directory (`F7`), create file (`Shift+F4`), create nested path `a/b/c` in one go | all | M1 |
-| 3.4 | Hard links, symlinks (absolute/relative), junctions/reparse points, link targets shown and followed | FAR/MC | M2 |
-| 3.5 | Attributes/permissions dialog: chmod (numeric + rwx matrix), chown, Windows attrs (RASH, compressed, encrypted), timestamps (m/a/c/birth), recursive apply | FAR/MC | M2 |
+| 3.4 | ~~Hard links, symlinks (absolute/relative), junctions/reparse points, link targets shown and followed~~ | FAR/MC | **shipped** (`Alt+F6`): hard link, symbolic link and a junction on Windows, with the target shown in the panel and followed on `Enter` |
+| 3.5 | ~~Attributes/permissions dialog: chmod (numeric + rwx matrix), timestamps, recursive apply~~; chown, the Windows compressed and encrypted attributes | FAR/MC | **shipped** (`Ctrl+A`): the mode bit by bit with setuid, setgid and sticky, the read-only, hidden and system flags where the platform has them, the write and read times, and recursion into a folder. Changing the owner, and the NTFS compressed and encrypted bits, are M3 |
 | 3.6 | Extended attributes / ADS (NTFS streams), xattr on Linux/macOS, resource forks | FAR | M3 |
 | 3.7 | Operation engine: queue of jobs, parallel or serial, pause/resume/cancel, background with progress, speed/ETA, per-job log | TC/KRU/MTN2 | M1 basic, M2 queue |
 | 3.8 | Conflict resolution: overwrite / skip / rename / append / newer-only / size-differs, "apply to all", per-conflict dialog | all | M1 |

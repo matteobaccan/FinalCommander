@@ -72,7 +72,8 @@ descr  checksum  git  custom:<plugin-id>
 
 Built-in presets (names kept close to FAR's so veterans recognise them): `brief` (names in
 N columns), `medium`, `full` (name, size, mtime), `wide`, `detail` (name, size, mtime, attrs,
-owner), `links`, `owners`, `descr`, plus `custom:0..9` from config:
+owner), `links`, `owners`, `descr` — each of the ten re-definable from the configuration
+(§3a):
 
 **Shipped (0.0.6)**: the first five, in FAR's order and on FAR's keys — `Ctrl+1` brief (three
 columns of names), `Ctrl+2` medium (two), `Ctrl+3` full, `Ctrl+4` wide (name and size, two
@@ -142,19 +143,42 @@ full view shows, with the attributes after it. A filesystem that does not keep o
 dates leaves that column blank rather than inventing an epoch. The allocated size, FAR's
 seventh column, is a backlog line: it needs a platform call on Windows.
 
+### 3a. The user's own column sets
+
+FAR has no separate keys for custom modes: its ten modes **are** the editable ones, each one a
+list of columns the user may rewrite. Ours work the same way. A `[[column_set]]` block whose
+`id` is a view's own digit is what that view draws, and the built-in list above is the default
+for a slot nobody has written — so `id = 3` is what `Ctrl+3` shows, and `id = 0` is `Ctrl+0`.
+(`Ctrl+Shift+1..0` is *not* where these live: those are the folder shortcuts, in FAR and
+here.)
+
 ```toml
-[[panel.view.custom]]
-id = 0
+[[column_set]]
+id = 3
 columns = [
   { type = "name",  width = "*" },
-  { type = "size",  width = 10, align = "right", fmt = "human" },
+  { type = "size",  width = 10, align = "right", fmt = "bytes" },
   { type = "mtime", width = 16, fmt = "%Y-%m-%d %H:%M" },
-  { type = "git",   width = 2 },
 ]
 ```
 
-Column widths: fixed, percentage, or `*` (fill). Horizontal scrolling for long names
-(`Alt+←/→`), ellipsis in the middle for paths and at the end for names.
+Column types: `name`, `ext`, `size`, `allocated`, `mtime`, `btime`, `atime`, `attrs`, `owner`,
+`group`, `links`, `descr` — the same fields the built-in modes draw, and a set that asks for
+one of the four a listing does not carry (the owner, the group, the link count, the
+description) puts the same worker to work as the view that shows it, with a row the answer has
+not reached yet drawn blank.
+
+Column widths: a number, a percentage of the panel, `*` to take what is left, or `0` for the
+column's own natural width — FAR's `0`, which for a name or a description means "what is left
+over" because neither has a width of its own. One blank column between each pair, as the
+built-in modes have. A column the panel has no room for is dropped from the right, and a set
+whose name column would be left unreadable drops another, which is the rule the detailed view
+already follows with its extra dates. `align` is `left` or `right` where the column's own
+default is not wanted; `fmt` is `human` or `bytes` on a size (`1.18 M` against `1 234 567`)
+and a `strftime` string on a date.
+
+Horizontal scrolling for long names (`Ctrl+Shift+←/→`, because `Alt+←/→` is the folder history
+here), ellipsis in the middle for paths and at the end for names.
 
 ### 3b. Reading FAR's column strings
 

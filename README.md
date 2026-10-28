@@ -11,6 +11,16 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/matteobaccan/FinalCommander/actions/workflows/ci.yml"><img src="https://github.com/matteobaccan/FinalCommander/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/matteobaccan/FinalCommander/releases/latest"><img src="https://img.shields.io/github/v/release/matteobaccan/FinalCommander?label=release&color=blue" alt="Latest release"></a>
+  <a href="https://github.com/matteobaccan/FinalCommander/releases"><img src="https://img.shields.io/github/downloads/matteobaccan/FinalCommander/total?label=downloads" alt="Downloads"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/licence-MIT-green" alt="MIT licence"></a>
+  <img src="https://img.shields.io/badge/rust-1.89%2B-dea584?logo=rust&logoColor=white" alt="Rust 1.89 or newer">
+  <img src="https://img.shields.io/badge/Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-one%20binary-lightgrey" alt="Linux, macOS and Windows: one binary">
+  <a href="https://matteobaccan.github.io/FinalCommander/"><img src="https://img.shields.io/badge/site-matteobaccan.github.io-6f42c1" alt="The project's site"></a>
+</p>
+
+<p align="center">
   <img src="docs/shots/panels.svg" alt="Two panels in FAR's own palette: a source directory on the left with two files marked, a releases directory on the right, the column titles, the status line and the key bar." width="880">
 </p>
 
@@ -29,7 +39,7 @@ seven interface languages, the whole help and the manual page are compiled into 
 
 | What you open today | In FinalCommander |
 | --- | --- |
-| A file manager | Two panels, the selection matrix, five view modes, sorting, filters, quick search, and the command line with the shell behind it (`Ctrl+O`) |
+| A file manager | Two panels, the selection matrix, FAR's ten view modes, nine sort keys with tie-breakers and sort groups, filters, quick search, and the command line with the shell behind it (`Ctrl+O`) |
 | An archiver | `Enter` opens a zip, a 7z or a tarball **as a panel**; `Shift+F1` builds one; `Shift+F2` extracts; `Shift+F3` tests every entry against the format's own checks |
 | A client for servers | `sftp://user@host/dir`, `ftp://…`, `ftps://…`, `webdav://…` and `webdavs://…` are panels. Copy between two servers with `F5`; edit a remote file with `F4` and `F2` writes it back |
 | `ssh -L` | `8080:db.internal:5432` forwards a port over the connection the panel is already on — no second login, no second terminal |
@@ -71,11 +81,14 @@ console in it, which is the one thing a terminal program cannot borrow from a te
 none of them is, is the same program on all three systems, in one file, with nothing to
 install — and that is the hole this fills.
 
-> **Status: 0.5.0, open to testers.** Everything described above works today. What is *not*
-> there says so rather than failing quietly: image previews and plugins loaded from disk are
-> not here yet. [`CHANGELOG.md`](CHANGELOG.md) is what has landed and
-> [`docs/BACKLOG.md`](docs/BACKLOG.md) is what has not, item by item, with the open questions
-> marked.
+> **Status: 0.10.0, and what it wants is ideas.** Everything described above works today, so
+> the useful thing to send is not a bug hunt but a *feature*: what you reach for in FAR,
+> Midnight Commander, Total Commander or Far-NetBox that is not here, or is here and does
+> less. Open an issue and it gets built — that is how most of the last few releases happened.
+> What is *not* there says so rather than failing quietly: image previews and plugins loaded
+> from disk are not here yet. [`CHANGELOG.md`](CHANGELOG.md) is what has landed and
+> [`docs/BACKLOG.md`](docs/BACKLOG.md) is what has not, item by item, with the reason each one
+> is still a line.
 
 ## What it looks like
 
@@ -141,20 +154,12 @@ one `plugins/` directory — the only directory it ever reads. Delete them and n
 fcmd /etc /tmp     # left panel, right panel
 ```
 
-```
-╔═══════════ /home/mb/project ═══════════╗╔═════════════════ /tmp ═════════════════╗
-║n       Name        │  Size  │   Date   ║║n       Name        │  Size  │   Date   ║
-║..                  │    Up  │          ║║..                  │    Up  │          ║
-║src                 │ Folder │2026-10-23║║cargo-installXXXXXX │ Folder │2026-10-24║
-║docs                │ Folder │2026-10-23║║notes.md            │  1.20 K│2026-10-24║
-║Cargo.toml          │   412 B│2026-10-23║║                    │        │          ║
-║    Bytes: 2 412, files: 2, folders: 0  ║║                    │        │          ║
-╟────────────────────────────────────────╢╟────────────────────────────────────────╢
-║Cargo.toml   412 B   2026-10-23 17:42   ║║notes.md    1.20 K   2026-10-24 09:15   ║
-╚══════ 2.40 K (2/2) ═══ 12.0 G ═════════╝╚══════ 1.20 K (1/0) ═══ 12.0 G ═════════╝
-/home/mb/project>
-1Help  2UserMn 3View  4Edit  5Copy  6RenMov 7MkFold 8Delete 9ConfMn 10Quit 12Screens
-```
+<p align="center">
+  <img src="docs/shots/panels.svg" alt="Two panels: a source directory on the left with two files marked and the cursor on lib.rs, a releases directory on the right, the column titles, the totals, the status line, the command line and the key bar." width="880">
+</p>
+
+Two files marked, the cursor on a third, the totals under each panel, and the key bar along
+the bottom — drawn by the renderer itself, as every picture here is.
 
 Hold `Shift` and the key bar becomes the archive keys; hold `Ctrl` and it becomes the sort
 keys; hold `Alt` and it becomes the drives, the search and the histories. `F1` tells you what
@@ -175,15 +180,32 @@ every key on the screen you are looking at does.
   synchronises two directories through a table you can edit before anything is written.
 - **Panels**: `Tab` / `Ctrl+U`, arrows / `PgUp` / `PgDn` / `Home` / `End` / `Enter` /
   `Ctrl+PgUp` / `Backspace` / `Ctrl+\` with history (`Alt+←/→`), `Ins` and `+` / `-` / `*`
-  selection by mask, `Ctrl+F3..F9` sorting (press twice to reverse), `Ctrl+1..5` view modes,
-  `Ctrl+H` hidden files, `Ctrl+Shift+I` live filter, quick search by typing (`Alt+<letter>`), `Space` for a recursive
-  directory size, `Ctrl+=` to sync the other panel, `Ctrl` with the arrows to reshape the two
-  panels, and the panels FAR has: quick view (`Ctrl+Q`), info (`Ctrl+L`), tree (`Ctrl+T`).
+  selection by mask, `Ctrl+F3..F11` sorting — all nine of FAR's keys, down to the description
+  and the owner — with a chain of tie-breakers, `Shift+F11` sort groups, `Ctrl+1..0` view
+  modes, all ten of FAR's, `Ctrl+H` hidden files, `Ctrl+Shift+I` live filter, quick search by
+  typing (`Alt+<letter>`), `Space` for a recursive directory size, `Ctrl+=` to sync the other
+  panel, `Ctrl` with the arrows to reshape the two panels, and the panels FAR has: quick view
+  (`Ctrl+Q`), info (`Ctrl+L`), tree (`Ctrl+T`).
   A panel holds more than one directory at a time: `Ctrl+Alt+T` opens a tab, `Ctrl+Alt+N` and
   `Ctrl+Alt+P` step along the row, `Ctrl+Alt+M` hands one to the other panel, `Ctrl+Alt+K`
   locks one to its directory, and the row comes back with its names between sessions.
   Folders are kept to hand on ten digits — `Ctrl+Shift+0..9` to set one, `Alt+0..9` to go —
-  with `Ctrl+D` for the whole named hotlist.
+  with `Ctrl+D` for the whole named hotlist. A directory's own `descript.ion` is read, shown
+  (`Ctrl+6`, `Ctrl+7`) and written (`Ctrl+Z`), and a description follows its file through a
+  copy, a move, a rename and a delete.
+- **Panels that are not directories**: `Alt+F1` and `Alt+F2` open the change-drive dialog —
+  everything mounted, with what each volume is, what it is called and what is left on it — and
+  under it the things that are not filesystems: the stored connections, the object stores, the
+  **processes** (`F3` on one is its card: command line, memory, threads, parent, the user it
+  runs as), the **sockets** that are listening or connected with the process behind each one,
+  the **programs installed** on the machine (`F3` for the card, and its uninstall command put
+  on the command line for you to read before you run it), and a temporary panel of files
+  gathered by hand from anywhere.
+- **Comparison**: the two panels side by side by name, size and time, or by what is actually in
+  the files — with "the same but for the line endings", a first-N-kilobyte fragment for big
+  files, and the whole thing recursive through the subdirectories, the differences coming back
+  as a panel of marked rows rather than a dialog to dismiss. Duplicates in a tree are found by
+  content, so two names that are one file show up however differently they are named.
 - **Viewer** (`F3`): text, dump and hex on files of any size — position is a byte offset, so
   opening a 40 GB log costs one read and `End` costs one seek. Encoding detected (UTF-8,
   UTF-16 with or without a BOM, CP1252, CP437) and switchable with `F8`; `F2` cycles
@@ -227,13 +249,13 @@ resolves before you rely on it. Every action in the program is a named command �
 `fcmd --list-commands` prints all of them — so anything you can reach with a key you can also
 put in a menu, a macro or a plugin.
 
-## Why the command is `fcmd` and not `sc`
+## Why the command is `fcmd`
 
-`sc` is taken three times over: on Windows `sc.exe` in `System32` is the Service Control
-Manager, on Unix `sc` is the classic spreadsheet calculator, and the crates.io name belongs to
-a syscall crate. A commander that promises the same keys on three platforms cannot fight a
-system command for its own name, so the binary, the config file and the crates are all
-`fcmd`. Please do not "fix" it back.
+`fc`, the obvious short form of the name, is taken twice: `fc.exe` in Windows' `System32` is
+the file-compare tool, and on Unix `fc` is a shell builtin that re-runs the last command — a
+commander that promises the same keys on three platforms cannot fight a system command for its
+own name. `fcmd` is free everywhere, it is what the archives, the configuration file and the
+crates are all called, and it is four letters. Please do not "fix" it to something shorter.
 
 ## Themes and languages
 
@@ -309,6 +331,40 @@ unless all of that is green.
 | [`docs/spec/09-roadmap.md`](docs/spec/09-roadmap.md) | M1→M4 with issue-sized chunks, risks, contribution rules |
 | [`docs/spec/10-menus-and-dialogs.md`](docs/spec/10-menus-and-dialogs.md) | the menu bar, the settings dialogs and the choose-one lists, with every row mapped to a config key |
 | [`docs/BACKLOG.md`](docs/BACKLOG.md) | what is specified but not built yet, and the decisions still open |
+
+## Asking for something: issues, not pull requests
+
+**Please do not open a pull request with new code.** Open an **issue** and say what the
+program does not do yet, or what it does wrong — [*Something is
+missing*](https://github.com/matteobaccan/FinalCommander/issues/new?template=missing.yml) and
+[*A bug*](https://github.com/matteobaccan/FinalCommander/issues/new?template=bug.yml) are the
+two forms, and they ask for exactly what is needed to act on them. **We will build it for
+you**, and the issue is where you will see it land, with the release it landed in.
+
+Why it is that way round, plainly:
+
+- Every feature here arrives as a whole: its section of the spec, its chapter of the help, its
+  entry in the changelog, its tests on three platforms, and its strings in seven languages. A
+  patch that changes the code alone is the smallest part of that work, and finishing it costs
+  more than writing it from a good issue would.
+- The licensing is a minefield and only the maintainer can walk it. far2l, Midnight Commander,
+  Krusader and Double Commander are GPL; this program is MIT; code that arrives in a pull
+  request cannot be unseen afterwards. An issue that *describes* a behaviour — "FAR does this,
+  it is called that, here is what it looks like" — carries no such risk and is just as useful.
+- One voice. The prose in this repository, comments included, is written to be read by someone
+  who was not there, and a feature that reads differently from the rest is a feature that will
+  be rewritten.
+
+What is always welcome, and needs no code: **a bug report** with what you did, what happened
+and what you expected, plus `fcmd --version` and your platform. **A missing feature**, with
+the program you know it from and what it is called there — `docs/BACKLOG.md` is worth a look
+first, because much of it is already a line there with the reason it is still a line. **A
+keymap or a theme**, which are TOML rather than code and can be pasted straight into an issue
+(`fcmd --export-theme <id>` prints one to start from). **A translation**, in the same way: the
+seven catalogues are `crates/fcmd-i18n/i18n/<lang>/fc.ftl`, and a corrected message is a line
+in an issue.
+
+[`CONTRIBUTING.md`](CONTRIBUTING.md) says the same thing at length, with the ground rules.
 
 ## Licence question, short version
 

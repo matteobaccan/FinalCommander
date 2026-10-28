@@ -5,13 +5,29 @@ with the cursor to the other one, which is what makes a two-panel manager faster
 the destination is already on screen.
 
 `Enter` enters a directory or runs a file, `Backspace` or `..` climbs. `Alt+F1` and `Alt+F2`
-open the change-drive dialog for the left and right panel: a table of everything mounted —
-what each one is (disk, removable, optical, network, memory), what it is called, what it is
-formatted as, how big it is and how much is left. Underneath, numbered `0` to `9`, are the
-things that are not filesystems: the open connections and the object stores that are
-configured. The number takes you there without the arrows. What the system runs on —
-anything under `/proc`, `/sys`, `/dev`, `/run` — is left out, because none of it is
-somewhere to put a file.
+open the change-drive dialog for the left and right panel, over the panel it belongs to: a
+table of everything mounted — what each one is (disk, removable, optical, network, memory),
+what it is called, what it is formatted as, how big it is and how much is left. Which of
+those columns are drawn is yours to choose, with `F9` inside the dialog.
+
+Under a rule, on `Ctrl+1` to `Ctrl+9`, are the things that are not filesystems:
+
+* the **stored connections** and the **object stores** written in the configuration, which
+  connect when chosen;
+* the **processes** running on the machine, as a panel: `F3` on one is its card — the command
+  line, the memory, the threads, the parent, the user it runs as — and `F8` asks it to stop;
+* the **sockets**, listening or connected, with the address at each end and the process
+  holding it, where `F3` is that process's card;
+* the **programs installed** on the machine, with their version and publisher: `F3` is the
+  card, and choosing one puts its own uninstall command on the command line, unrun, for you
+  to read before pressing `Enter`;
+* a **temporary panel**, which is a list rather than a directory: `Ctrl+Shift+Ins` adds what
+  is selected to it from anywhere, and the files in it can come from a dozen directories at
+  once.
+
+`Ctrl+R` inside the dialog reads the drives again, for a stick that was plugged in after it
+opened. What the system runs on — anything under `/proc`, `/sys`, `/dev`, `/run` — is left
+out of the table, because none of it is somewhere to put a file.
 
 # Looking at a directory
 
@@ -31,8 +47,21 @@ the background and only while this view is the one on screen: the columns fill i
 after the listing, and a row nothing has come back for yet is blank. A panel on a server or
 inside an archive has no owner to show.
 
-`Ctrl+F3` to `Ctrl+F6` sort by name, extension, time and size; choosing the order already in
-force reverses it. `Ctrl+F12` offers the orders as a list.
+`Ctrl+9` puts how many names each file has beside it, which is how a hundred copies that are
+really one file stop looking like a hundred files' worth of space, and `Ctrl+0` is the full
+view with the sizes written out digit by digit — `1 234 567` where the full view says
+`1.18 M` — for when the difference between 1.2M and 1.9M is the thing you came to see.
+
+`Ctrl+F3` to `Ctrl+F11` sort: by name, extension, write time, size, unsorted, creation time,
+access time, description and owner — all nine of FAR's keys. Choosing the order already in
+force reverses it, and `Ctrl+F12` offers them as a list. The last two sort by something the
+listing does not carry, so they are fetched like the views that show them: the panel sorts
+without them and sorts again when the answer lands, keeping the cursor on the file it was on.
+A file nothing has said anything about sorts after every file that has.
+
+Two files the sort key cannot separate are settled by `panel.sort_chain` in the
+configuration — `["size", "name"]` sorts by size and settles a tie by name — and the name has
+the last word in any case, so the order never depends on the order a directory came back in.
 
 `Shift+F11` — `Group` on the key bar — turns the **sort groups** on and off. They are bands
 written in the configuration as `[[sort_group]]` blocks, each with a mask and a side, and they
@@ -86,9 +115,10 @@ edge up — they get shorter, and the rows they give up show the output of the l
 which is how you watch a build go by without leaving the panels; `Ctrl+↓` gives the rows back.
 Both are settings, so `Shift+F9` keeps them.
 
-`Ctrl++` and `Ctrl+−` ask the terminal for a larger or smaller font, and `Ctrl+0` for the one
-it started with. Whether anything happens is the terminal's business and not ours: a program
-in a terminal does not own its font, it can only ask. xterm and the terminals that copy it
+`Ctrl++` and `Ctrl+−` ask the terminal for a larger or smaller font, and `Ctrl+Alt+0` for the
+one it started with — `Ctrl+0` itself is the tenth view mode, as it is in FAR. Whether
+anything happens is the terminal's business and not ours: a program in a terminal does not
+own its font, it can only ask. xterm and the terminals that copy it
 answer; on most others (GNOME Terminal, Konsole, Windows Terminal, alacritty, foot) those keys
 are the emulator's own zoom and never reach us at all — which gets you the same thing by a
 shorter road.

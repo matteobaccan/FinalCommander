@@ -38,7 +38,7 @@ redirects the old repository URL to the new one.
 
 ```sh
 cargo fmt --all
-cargo test --workspace --all-targets      # ~1 300 tests, 21 binaries
+cargo test --workspace --all-targets      # ~1 400 tests, 22 binaries
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
@@ -83,15 +83,18 @@ that target — but the crates that carry the `#[cfg]`s will.)
 | `fcmd-view` / `fcmd-edit` | the viewer (text, dump, hex) and the editor |
 | `fcmd-arc` / `fcmd-net` / `fcmd-s3` | archives, SFTP/FTP/WebDAV, object storage |
 | `fcmd-find` / `fcmd-syntax` / `fcmd-term` / `fcmd-plug` | find files, syntax, the PTY, plugins |
-| `fcmd-platform` | the only crate allowed `unsafe`: free space, cluster size, memory, per platform |
+| `fcmd-platform` | the only crate allowed `unsafe`: free space, cluster size, memory, owners, hard links, processes, sockets, installed programs, volumes — one module per subject, each dispatching to `windows.rs` on Windows |
 | `fcmd-site` | the static site generator — not part of the program, `fcmd` does not link it |
 | `fcmd` | the binary: the app, the panels, the rendering, the event loop |
 
 Documentation: `docs/spec/` (the contract), `docs/02-features.md` (the feature inventory with
 its sources), `docs/03-keymap.md` (every key, comparing FAR/MC/TC), `docs/BACKLOG.md` (what is
 deliberately not built yet, with reasons), `docs/help/` (the in-program help, which the site
-and `F1` both read), `docs/shots/` (SVG screenshots, hand-edited text — each `<text>` run's
-character count must match its x-position list).
+and `F1` both read), `docs/shots/` (SVG screenshots, which are **generated, never hand-edited** —
+`cargo test -p fcmd --bin fcmd write_the_screenshots -- --ignored` rewrites all of them from
+the renderer's own cell buffer, and everything in them is fixed on purpose so that running it
+twice produces the same bytes). Both the README and the site read those files, so a change to
+the drawing means regenerating them in the same commit.
 
 ## How the program is put together
 
@@ -133,67 +136,95 @@ keeps it as the run's artifact; publishing happens only through `workflow_dispat
 
 ## Where the work is right now
 
-**0.8.0 is released.** What is in it, and in the three before it:
+**0.10.0 is written and waiting for its tag.** 0.8.0 is the last version with a tag and a
+release on GitHub; 0.9.0 and 0.10.0 are both in `main` with their CHANGELOG sections, and the
+tag never happened because the Actions queue on a private repository sat for longer than
+`tag.yml` waits for green CI. The repository is public now, so the runners are free and the
+queue moves; what is left is to touch `CHANGELOG.md` so `tag.yml` fires again. 0.9.0's notes
+were folded into 0.10.0 when its own tag timed out, which is why the changelog goes from
+0.10.0 straight to 0.8.0.
 
-- **0.6.0** — `[[highlight]]` groups (colour by mask, size, age, attributes or kind, from the
-  configuration); the find dialog's size condition; the system clipboard through the terminal
-  with `OSC 52` (`Ctrl+Ins` names, `Alt+Shift+Ins` paths, and the editor's block), which also
-  works over `ssh`; pasted text reaching the command line, a dialog row, the editor and a
-  terminal instead of only a prompt; `Ctrl+8`, the file-owners view; a letter for every menu
-  row in six languages; table mode in the viewer (`Shift+F3`) for CSV, TSV and JSON Lines.
-- **0.7.0** — the dBase reader for table mode, read a window at a time; the dialog that edits
-  the `[[highlight]]` groups (`F9 → Options → Files highlighting`); `Alt+F11`, the files that
-  have been read or edited, persisted in the state file.
-- **0.7.1** — what the author found by using 0.7.0: the key bar always draws all twelve keys
-  (and three editor keys that worked and were never written down); the hex dump widens in
-  blocks of eight; the table mode's arrows, `Ctrl+`arrows, `Home` and `End`; `Shift+F3` makes
-  a table of anything that reads as one rather than going by the name; the DBF's numbers to
-  the right, its deletion flag in a column of its own, its DOS code pages read as DOS code
-  pages; the command line's history on `↑`/`↓`; and a command's output arriving while it
-  runs rather than all at the end.
-- **0.7.2** — the memo file beside a dBase table (`.dbt`, `.fpt`, all three formats); the sort
-  groups on `Shift+F11`, from `[[sort_group]]` blocks; an arrow ends a quick search and leaves
-  the cursor where it found; the name drawn in letters above what the program says on the
-  command line.
-- **0.7.3** — **file descriptions** (`descript.ion`), the one FAR habit the program had none
-  of: read in whatever code page they are in, shown by `Ctrl+6` and `Ctrl+7`, in the
-  information panel and in the status line, written by `Ctrl+Z`, and carried by a copy, a
-  move, a rename and a delete. With them a sort criteria chain (`panel.sort_chain`).
+What is in the last few, newest first:
+
+- **0.10.0** — the comparison the plugin everybody uses has (`AdvCmpEx`): a dialog of what
+  counts as a difference (case, size, time to a tolerance, contents, contents only when the
+  time differs, a first-fragment read, line-endings-only, selected only, stop at the first,
+  newer only), **recursive through the subdirectories** with the answer as a panel of marked
+  rows rather than a selection, and **find duplicates** under a directory by content. The
+  change-drive dialog gained `F9` for its own switches and filled columns on Windows
+  (`GetDriveTypeW`, `GetVolumeInformationW`, `WNetGetConnectionW`), and the prompt gained `$+`.
+- **0.9.0** (folded into 0.10.0's notes) — the change-drive dialog as FAR draws it, over the
+  panel it is about, with `Ctrl+1..9`, `Ctrl+R` and FAR's separators; `F3` on the process
+  list as a real process card, on Windows too; a **socket list** as a panel of its own with
+  the process holding each socket; a panel of **installed programs** with its card and its
+  own uninstall command put on the command line unrun; the **prompt as a format** with the
+  git branch in it (`$p$r$g `, FAR's letters, `%GITBRANCH%`); and the NetBox session editor
+  with the pages the plugin's own dialog has.
 - **0.8.0** — the author's own list, from FAR screenshots: the last two view modes (`Ctrl+9`
   links, `Ctrl+0` alternative full), so all ten of FAR's are there; `F4` in the viewer turns
   a wheel through text, dump, hex, document and table; the `wide` view fits its columns to
   the names it has; three panels that are not drives in `Alt+F1`/`Alt+F2` — NetBox (the
   stored sessions), the process list, the temporary panel — and text that can be marked out
   on the command line with `Shift` and an arrow.
+- **0.7.3** — **file descriptions** (`descript.ion`), the one FAR habit the program had none
+  of: read in whatever code page they are in, shown by `Ctrl+6` and `Ctrl+7`, in the
+  information panel and in the status line, written by `Ctrl+Z`, and carried by a copy, a
+  move, a rename and a delete. With them a sort criteria chain (`panel.sort_chain`).
+- **0.7.2** — the memo file beside a dBase table (`.dbt`, `.fpt`, all three formats); the sort
+  groups on `Shift+F11`, from `[[sort_group]]` blocks; an arrow ends a quick search and leaves
+  the cursor where it found; the name drawn in letters above what the program says on the
+  command line.
+- **0.7.1** — what the author found by using 0.7.0: the key bar always draws all twelve keys;
+  the hex dump widens in blocks of eight; the table mode's arrows, `Ctrl+`arrows, `Home` and
+  `End`; the command line's history on `↑`/`↓`; and a command's output arriving while it runs
+  rather than all at the end.
+- **0.7.0** — the dBase reader for table mode, read a window at a time; the dialog that edits
+  the `[[highlight]]` groups (`F9 → Options → Files highlighting`); `Alt+F11`, the files that
+  have been read or edited, persisted in the state file.
+- **0.6.0** — `[[highlight]]` groups; the find dialog's size condition; the system clipboard
+  through the terminal with `OSC 52`, which also works over `ssh`; pasted text reaching the
+  command line, a dialog row, the editor and a terminal; `Ctrl+8`, the file-owners view;
+  table mode in the viewer (`Shift+F3`) for CSV, TSV and JSON Lines.
 
-## The queue, as the author's review left it
+**All ten of FAR's view modes and all nine of its sort keys are there** (`Ctrl+1..0`,
+`Ctrl+F3..F11`), the last two sort keys — by description and by owner — since 0.10.0's
+`Unreleased` section. What the view modes still owe is the column grammar: FAR's ten modes are
+each re-definable, ours are ten fixed lists.
 
-In the order they were raised, all from a side-by-side comparison with FAR on Windows. The
-view modes, the menu letters and the tabular viewers are done; what is left is waiting on the
-author:
+## What the author's reviews have asked for, and where it went
 
-- ~~**The change-drive dialog**, the **`wide` view's layout**, the **`F4` keybar label**~~ —
-  all three answered in 0.8.0. The author sent FAR's own screenshots: the dialog gained the
-  three panels that are not drives, `wide` now fits its columns to the names it has, and `F4`
-  turns a wheel, so the bar says where the next turn lands.
-- **The menu letters** are chosen by a rule now (first free word initial, then any free
-  letter), in all six languages written in an alphabet, with a test keeping them unique. If
-  the author wants FAR's own letters instead, the rule is one function and the catalogues are
-  where the markers live.
+Every one of these came out of a side-by-side comparison with FAR on Windows, and the plugins
+the author actually uses are the reference for each: `FarGroup/FarManager` for the core,
+`michaellukashov/Far-NetBox` for the connections, `FarPlugins/AdvCmpEx` for the comparison,
+`FarPlugins/UnInstall` for the installed programs. Read the plugin's own sources and language
+files rather than guessing what its dialog says.
+
+- ~~The change-drive dialog, the `wide` view's layout, the `F4` keybar label~~ — 0.8.0.
+- ~~The dialog FAR actually draws for the drives, and the panels that are not drives~~ —
+  0.9.0, from FAR's own `diskmenu.cpp`: over its own panel, `Ctrl+1..9`, `Ctrl+R`, FAR's
+  separators, and `F9` for the switches.
+- ~~The NetBox session dialog's pages, the process card, the sockets, the installed
+  programs, the prompt's git branch~~ — 0.9.0.
+- ~~The comparison, with the options `AdvCmpEx` has, and into the subdirectories~~ — 0.10.0.
+- **The menu letters** are chosen by a rule (first free word initial, then any free letter),
+  in all six languages written in an alphabet, with a test keeping them unique. If the author
+  wants FAR's own letters instead, the rule is one function and the catalogues are where the
+  markers live. Still open, and the one thing here waiting on an answer rather than on work.
 
 ## What is worth doing next, in rough order
 
 Everything here is unblocked and specified; the backlog has the reasons.
 
-1. **The screens list and background screens** (`F12`): several viewers, editors and jobs
+1. **Custom columns** — the column grammar of SPEC 02 §3: a user's own column set per view
+   mode, which is what makes the ten modes a setting rather than a list, and what FAR's own
+   `Column types` / `Column widths` strings describe.
+2. **The screens list and background screens** (`F12`): several viewers, editors and jobs
    open at once. The job engine already runs more than one; the screen stack is what is
    missing, and `Mode` holding one screen is what has to change.
-2. **Custom columns** — the column grammar of SPEC 02 §3, which is also what the `wide` view
-   wants.
 3. **A dialog for the sort groups**, as `F9 → Options → Files highlighting` edits the
    colouring groups: the blocks can only be written by hand today.
-4. **Sorting by description** (`Ctrl+F11`) and **descriptions through a provider** — inside an
-   archive, on a server — which are what SPEC 02 §13 still owes.
+4. **Descriptions through a provider** — inside an archive, on a server — and carried out of a
+   search result, which are what SPEC 02 §13 still owes.
 
 One rule that came out of that review and holds everywhere: **`Alt+<letter>` belongs to the
 quick search**, so nothing else may take it (`Ctrl+Shift+N/I/T` moved for this reason), and

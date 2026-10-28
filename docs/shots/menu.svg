@@ -9,305 +9,311 @@
 <text xml:space="preserve" x="0.0" y="31.6" fill="#00ffff">║</text>
 <text xml:space="preserve" x="8.4 16.8 25.2 33.6 42.0 50.4 58.8 67.2 75.6 84.0 92.4 100.8" y="31.6" fill="#ffff00">n       Name</text>
 <text xml:space="preserve" x="184.8" y="31.6" fill="#00ffff">│</text>
-<text xml:space="preserve" x="210.0 218.4 226.8 235.2" y="31.6" fill="#ffff00">Size</text>
-<text xml:space="preserve" x="268.8" y="31.6" fill="#00ffff">│</text>
-<text xml:space="preserve" x="277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2 369.6 378.0 386.4 394.8" y="31.6" fill="#ffff00">Date       Time</text>
+<text xml:space="preserve" x="210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2 369.6 378.0 386.4 394.8" y="31.6" fill="#ffff00">Size    Date       Time</text>
 <text xml:space="preserve" x="411.6 420.0" y="31.6" fill="#00ffff">║║</text>
 <text xml:space="preserve" x="428.4 436.8 445.2 453.6 462.0 470.4 478.8 487.2 495.6 504.0 512.4 520.8" y="31.6" fill="#ffff00">n       Name</text>
 <text xml:space="preserve" x="604.8" y="31.6" fill="#00ffff">│</text>
-<text xml:space="preserve" x="630.0 638.4 646.8 655.2" y="31.6" fill="#ffff00">Size</text>
-<text xml:space="preserve" x="688.8" y="31.6" fill="#00ffff">│</text>
-<text xml:space="preserve" x="697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8" y="31.6" fill="#ffff00">Date       Time</text>
+<text xml:space="preserve" x="630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8" y="31.6" fill="#ffff00">Size    Date       Time</text>
 <text xml:space="preserve" x="831.6" y="31.6" fill="#00ffff">║</text>
 <rect x="0.0" y="36.0" width="75.6" height="18" fill="#000080"/>
-<rect x="75.6" y="36.0" width="310.8" height="18" fill="#008080"/>
-<rect x="386.4" y="36.0" width="453.6" height="18" fill="#000080"/>
+<rect x="75.6" y="36.0" width="386.4" height="18" fill="#008080"/>
+<rect x="462.0" y="36.0" width="378.0" height="18" fill="#000080"/>
 <text xml:space="preserve" x="0.0" y="49.6" fill="#00ffff">║</text>
-<text xml:space="preserve" x="8.4 16.8 25.2 33.6 42.0 50.4 58.8 67.2 75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2 369.6 378.0" y="49.6" fill="#ffffff">..      ┌───────────────────────────────────┐</text>
-<text xml:space="preserve" x="411.6 420.0" y="49.6" fill="#00ffff">║║</text>
-<text xml:space="preserve" x="428.4 436.8" y="49.6" fill="#ffffff">..</text>
+<text xml:space="preserve" x="8.4 16.8 25.2 33.6 42.0 50.4 58.8 67.2 75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2 369.6 378.0 386.4 394.8 403.2 411.6 420.0 428.4 436.8 445.2 453.6" y="49.6" fill="#ffffff">..      ┌────────────────────────────────────────────┐</text>
 <text xml:space="preserve" x="604.8" y="49.6" fill="#00ffff">│</text>
 <text xml:space="preserve" x="655.2 663.6" y="49.6" fill="#ffffff">Up</text>
-<text xml:space="preserve" x="688.8" y="49.6" fill="#00ffff">│</text>
 <text xml:space="preserve" x="831.6" y="49.6" fill="#00ffff">║</text>
 <rect x="0.0" y="54.0" width="75.6" height="18" fill="#000080"/>
-<rect x="75.6" y="54.0" width="310.8" height="18" fill="#008080"/>
-<rect x="386.4" y="54.0" width="16.8" height="18" fill="#000040"/>
-<rect x="403.2" y="54.0" width="436.8" height="18" fill="#000080"/>
+<rect x="75.6" y="54.0" width="386.4" height="18" fill="#008080"/>
+<rect x="462.0" y="54.0" width="16.8" height="18" fill="#000040"/>
+<rect x="478.8" y="54.0" width="361.2" height="18" fill="#000080"/>
 <text xml:space="preserve" x="0.0" y="67.6" fill="#00ffff">║</text>
-<text xml:space="preserve" x="8.4 16.8 25.2 33.6 42.0 50.4 58.8 67.2 75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4" y="67.6" fill="#ffffff">tests   │   View</text>
-<text xml:space="preserve" x="352.8 361.2" y="67.6" fill="#ffff00">F3</text>
-<text xml:space="preserve" x="378.0" y="67.6" fill="#ffffff">│</text>
-<text xml:space="preserve" x="386.4 394.8" y="67.6" fill="#7f7f7f">:4</text>
-<text xml:space="preserve" x="403.2" y="67.6" fill="#ffffff">1</text>
-<text xml:space="preserve" x="411.6 420.0 428.4 436.8 445.2 453.6 462.0 470.4 478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4 604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="67.6" fill="#00ffff">║║CHANGELOG.md         │   27.8 K│2024-08-01 09:41║</text>
+<text xml:space="preserve" x="8.4 16.8 25.2 33.6 42.0 50.4 58.8 67.2 75.6" y="67.6" fill="#ffffff">tests   │</text>
+<text xml:space="preserve" x="109.2" y="67.6" fill="#ffff00">V</text>
+<text xml:space="preserve" x="117.6 126.0 134.4" y="67.6" fill="#ffffff">iew</text>
+<text xml:space="preserve" x="428.4 436.8" y="67.6" fill="#ffff00">F3</text>
+<text xml:space="preserve" x="453.6" y="67.6" fill="#ffffff">│</text>
+<text xml:space="preserve" x="462.0 470.4" y="67.6" fill="#007f7f">GE</text>
+<text xml:space="preserve" x="478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4 604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="67.6" fill="#00ffff">LOG          md│   27.8 K 2024-08-01 09:41║</text>
 <rect x="0.0" y="72.0" width="75.6" height="18" fill="#000080"/>
 <rect x="75.6" y="72.0" width="8.4" height="18" fill="#008080"/>
-<rect x="378.0" y="72.0" width="8.4" height="18" fill="#008080"/>
-<rect x="386.4" y="72.0" width="16.8" height="18" fill="#000040"/>
-<rect x="403.2" y="72.0" width="436.8" height="18" fill="#000080"/>
-<text xml:space="preserve" x="0.0 8.4 16.8 25.2 33.6 42.0 50.4 58.8 67.2" y="85.6" fill="#00ffff">║cancel.r</text>
-<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2 369.6 378.0" y="85.6" fill="#ffffff">│   Edit                         F4 │</text>
-<text xml:space="preserve" x="386.4 394.8" y="85.6" fill="#007f7f">:4</text>
-<text xml:space="preserve" x="403.2 411.6 420.0 428.4 436.8 445.2 453.6 462.0 470.4 478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4 604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="85.6" fill="#00ffff">1║║SHA256SUMS           │    312 B│2024-08-01 09:41║</text>
+<rect x="453.6" y="72.0" width="8.4" height="18" fill="#008080"/>
+<rect x="462.0" y="72.0" width="16.8" height="18" fill="#000040"/>
+<rect x="478.8" y="72.0" width="361.2" height="18" fill="#000080"/>
+<text xml:space="preserve" x="0.0 8.4 16.8 25.2 33.6 42.0 50.4" y="85.6" fill="#00ffff">║cancel</text>
+<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2 369.6 378.0 386.4 394.8 403.2 411.6 420.0 428.4 436.8 445.2 453.6" y="85.6" fill="#ffffff">│   Edit                                  F4 │</text>
+<text xml:space="preserve" x="462.0 470.4" y="85.6" fill="#007f7f">56</text>
+<text xml:space="preserve" x="478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4 604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="85.6" fill="#00ffff">SUMS           │    312 B 2024-08-01 09:41║</text>
 <rect x="0.0" y="90.0" width="75.6" height="18" fill="#000080"/>
-<rect x="75.6" y="90.0" width="310.8" height="18" fill="#008080"/>
-<rect x="386.4" y="90.0" width="16.8" height="18" fill="#000040"/>
-<rect x="403.2" y="90.0" width="436.8" height="18" fill="#000080"/>
-<text xml:space="preserve" x="0.0 8.4 16.8 25.2 33.6 42.0 50.4 58.8 67.2" y="103.6" fill="#00ffff">║device.r</text>
-<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0" y="103.6" fill="#ffffff">│   Edit new file</text>
-<text xml:space="preserve" x="302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2" y="103.6" fill="#ffff00">Shift+F4</text>
-<text xml:space="preserve" x="378.0" y="103.6" fill="#ffffff">│</text>
-<text xml:space="preserve" x="386.4 394.8" y="103.6" fill="#007f7f">:4</text>
-<text xml:space="preserve" x="403.2 411.6 420.0" y="103.6" fill="#00ffff">1║║</text>
-<text xml:space="preserve" x="428.4 436.8 445.2 453.6 462.0 470.4 478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4" y="103.6" fill="#ff00ff">fcmd-linux-x86_64-0.…</text>
+<rect x="75.6" y="90.0" width="386.4" height="18" fill="#008080"/>
+<rect x="462.0" y="90.0" width="16.8" height="18" fill="#000040"/>
+<rect x="478.8" y="90.0" width="361.2" height="18" fill="#000080"/>
+<text xml:space="preserve" x="0.0 8.4 16.8 25.2 33.6 42.0 50.4" y="103.6" fill="#00ffff">║device</text>
+<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4" y="103.6" fill="#ffffff">│   Edit</text>
+<text xml:space="preserve" x="151.2" y="103.6" fill="#ffff00">n</text>
+<text xml:space="preserve" x="159.6 168.0 176.4 184.8 193.2 201.6 210.0" y="103.6" fill="#ffffff">ew file</text>
+<text xml:space="preserve" x="378.0 386.4 394.8 403.2 411.6 420.0 428.4 436.8" y="103.6" fill="#ffff00">Shift+F4</text>
+<text xml:space="preserve" x="453.6" y="103.6" fill="#ffffff">│</text>
+<text xml:space="preserve" x="462.0 470.4" y="103.6" fill="#7f007f">-l</text>
+<text xml:space="preserve" x="478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4" y="103.6" fill="#ff00ff">inux-x86_…   gz</text>
 <text xml:space="preserve" x="604.8" y="103.6" fill="#00ffff">│</text>
-<text xml:space="preserve" x="638.4 646.8 655.2 663.6 672.0 680.4" y="103.6" fill="#ff00ff">3.31 M</text>
-<text xml:space="preserve" x="688.8" y="103.6" fill="#00ffff">│</text>
-<text xml:space="preserve" x="697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2" y="103.6" fill="#ff00ff">2024-08-01 09:41</text>
+<text xml:space="preserve" x="638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2" y="103.6" fill="#ff00ff">3.31 M 2024-08-01 09:41</text>
 <text xml:space="preserve" x="831.6" y="103.6" fill="#00ffff">║</text>
 <rect x="0.0" y="108.0" width="75.6" height="18" fill="#000080"/>
-<rect x="75.6" y="108.0" width="310.8" height="18" fill="#008080"/>
-<rect x="386.4" y="108.0" width="16.8" height="18" fill="#000040"/>
-<rect x="403.2" y="108.0" width="436.8" height="18" fill="#000080"/>
-<text xml:space="preserve" x="0.0 8.4 16.8 25.2 33.6 42.0 50.4 58.8 67.2" y="121.6" fill="#00ffff">║entry.rs</text>
-<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4" y="121.6" fill="#ffffff">│   Copy</text>
-<text xml:space="preserve" x="352.8 361.2" y="121.6" fill="#ffff00">F5</text>
-<text xml:space="preserve" x="378.0" y="121.6" fill="#ffffff">│</text>
-<text xml:space="preserve" x="386.4 394.8" y="121.6" fill="#007f7f">:4</text>
-<text xml:space="preserve" x="403.2 411.6 420.0" y="121.6" fill="#00ffff">1║║</text>
-<text xml:space="preserve" x="428.4 436.8 445.2 453.6 462.0 470.4 478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4" y="121.6" fill="#ff00ff">fcmd-macos-aarch64-0…</text>
+<rect x="75.6" y="108.0" width="386.4" height="18" fill="#008080"/>
+<rect x="462.0" y="108.0" width="16.8" height="18" fill="#000040"/>
+<rect x="478.8" y="108.0" width="361.2" height="18" fill="#000080"/>
+<text xml:space="preserve" x="0.0 8.4 16.8 25.2 33.6 42.0" y="121.6" fill="#00ffff">║entry</text>
+<text xml:space="preserve" x="75.6" y="121.6" fill="#ffffff">│</text>
+<text xml:space="preserve" x="109.2" y="121.6" fill="#ffff00">C</text>
+<text xml:space="preserve" x="117.6 126.0 134.4" y="121.6" fill="#ffffff">opy</text>
+<text xml:space="preserve" x="428.4 436.8" y="121.6" fill="#ffff00">F5</text>
+<text xml:space="preserve" x="453.6" y="121.6" fill="#ffffff">│</text>
+<text xml:space="preserve" x="462.0 470.4" y="121.6" fill="#7f007f">-m</text>
+<text xml:space="preserve" x="478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4" y="121.6" fill="#ff00ff">acos-aarc…   gz</text>
 <text xml:space="preserve" x="604.8" y="121.6" fill="#00ffff">│</text>
-<text xml:space="preserve" x="638.4 646.8 655.2 663.6 672.0 680.4" y="121.6" fill="#ff00ff">2.97 M</text>
-<text xml:space="preserve" x="688.8" y="121.6" fill="#00ffff">│</text>
-<text xml:space="preserve" x="697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2" y="121.6" fill="#ff00ff">2024-08-01 09:41</text>
+<text xml:space="preserve" x="638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2" y="121.6" fill="#ff00ff">2.97 M 2024-08-01 09:41</text>
 <text xml:space="preserve" x="831.6" y="121.6" fill="#00ffff">║</text>
 <rect x="0.0" y="126.0" width="75.6" height="18" fill="#000080"/>
-<rect x="75.6" y="126.0" width="310.8" height="18" fill="#008080"/>
-<rect x="386.4" y="126.0" width="16.8" height="18" fill="#000040"/>
-<rect x="403.2" y="126.0" width="436.8" height="18" fill="#000080"/>
-<text xml:space="preserve" x="0.0 8.4 16.8 25.2 33.6 42.0 50.4 58.8 67.2" y="139.6" fill="#00ffff">║filter.r</text>
-<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4" y="139.6" fill="#ffffff">│   Rename or move</text>
-<text xml:space="preserve" x="352.8 361.2" y="139.6" fill="#ffff00">F6</text>
-<text xml:space="preserve" x="378.0" y="139.6" fill="#ffffff">│</text>
-<text xml:space="preserve" x="386.4 394.8" y="139.6" fill="#007f7f">:4</text>
-<text xml:space="preserve" x="403.2 411.6 420.0" y="139.6" fill="#00ffff">1║║</text>
-<text xml:space="preserve" x="428.4 436.8 445.2 453.6 462.0 470.4 478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4" y="139.6" fill="#ff00ff">fcmd-windows-x86_64-…</text>
+<rect x="75.6" y="126.0" width="386.4" height="18" fill="#008080"/>
+<rect x="462.0" y="126.0" width="16.8" height="18" fill="#000040"/>
+<rect x="478.8" y="126.0" width="361.2" height="18" fill="#000080"/>
+<text xml:space="preserve" x="0.0 8.4 16.8 25.2 33.6 42.0 50.4" y="139.6" fill="#00ffff">║filter</text>
+<text xml:space="preserve" x="75.6" y="139.6" fill="#ffffff">│</text>
+<text xml:space="preserve" x="109.2" y="139.6" fill="#ffff00">R</text>
+<text xml:space="preserve" x="117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4" y="139.6" fill="#ffffff">ename or move</text>
+<text xml:space="preserve" x="428.4 436.8" y="139.6" fill="#ffff00">F6</text>
+<text xml:space="preserve" x="453.6" y="139.6" fill="#ffffff">│</text>
+<text xml:space="preserve" x="462.0 470.4" y="139.6" fill="#7f007f">-w</text>
+<text xml:space="preserve" x="478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4" y="139.6" fill="#ff00ff">indows-x8…  zip</text>
 <text xml:space="preserve" x="604.8" y="139.6" fill="#00ffff">│</text>
-<text xml:space="preserve" x="638.4 646.8 655.2 663.6 672.0 680.4" y="139.6" fill="#ff00ff">3.72 M</text>
-<text xml:space="preserve" x="688.8" y="139.6" fill="#00ffff">│</text>
-<text xml:space="preserve" x="697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2" y="139.6" fill="#ff00ff">2024-08-01 09:41</text>
+<text xml:space="preserve" x="638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2" y="139.6" fill="#ff00ff">3.72 M 2024-08-01 09:41</text>
 <text xml:space="preserve" x="831.6" y="139.6" fill="#00ffff">║</text>
 <rect x="0.0" y="144.0" width="8.4" height="18" fill="#000080"/>
-<rect x="8.4" y="144.0" width="378.0" height="18" fill="#008080"/>
-<rect x="386.4" y="144.0" width="16.8" height="18" fill="#004040"/>
-<rect x="403.2" y="144.0" width="8.4" height="18" fill="#008080"/>
-<rect x="411.6" y="144.0" width="428.4" height="18" fill="#000080"/>
+<rect x="8.4" y="144.0" width="453.6" height="18" fill="#008080"/>
+<rect x="462.0" y="144.0" width="16.8" height="18" fill="#000040"/>
+<rect x="478.8" y="144.0" width="361.2" height="18" fill="#000080"/>
 <text xml:space="preserve" x="0.0" y="157.6" fill="#00ffff">║</text>
-<text xml:space="preserve" x="8.4 16.8 25.2 33.6 42.0 50.4" y="157.6" fill="#000000">lib.rs</text>
-<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2" y="157.6" fill="#ffffff">│   Create link</text>
-<text xml:space="preserve" x="319.2 327.6 336.0 344.4 352.8 361.2" y="157.6" fill="#ffff00">Alt+F6</text>
-<text xml:space="preserve" x="378.0" y="157.6" fill="#ffffff">│</text>
-<text xml:space="preserve" x="386.4 394.8 403.2" y="157.6" fill="#000000">:41</text>
-<text xml:space="preserve" x="411.6 420.0 428.4 436.8 445.2 453.6 462.0 470.4 478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4 604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="157.6" fill="#00ffff">║║                     │         │                ║</text>
+<text xml:space="preserve" x="8.4 16.8 25.2" y="157.6" fill="#000000">lib</text>
+<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2" y="157.6" fill="#ffffff">│   Create</text>
+<text xml:space="preserve" x="168.0" y="157.6" fill="#ffff00">l</text>
+<text xml:space="preserve" x="176.4 184.8 193.2" y="157.6" fill="#ffffff">ink</text>
+<text xml:space="preserve" x="394.8 403.2 411.6 420.0 428.4 436.8" y="157.6" fill="#ffff00">Alt+F6</text>
+<text xml:space="preserve" x="453.6" y="157.6" fill="#ffffff">│</text>
+<text xml:space="preserve" x="604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="157.6" fill="#00ffff">│                          ║</text>
 <rect x="0.0" y="162.0" width="75.6" height="18" fill="#000080"/>
-<rect x="75.6" y="162.0" width="310.8" height="18" fill="#008080"/>
-<rect x="386.4" y="162.0" width="16.8" height="18" fill="#000040"/>
-<rect x="403.2" y="162.0" width="436.8" height="18" fill="#000080"/>
+<rect x="75.6" y="162.0" width="386.4" height="18" fill="#008080"/>
+<rect x="462.0" y="162.0" width="16.8" height="18" fill="#000040"/>
+<rect x="478.8" y="162.0" width="361.2" height="18" fill="#000080"/>
 <text xml:space="preserve" x="0.0" y="175.6" fill="#00ffff">║</text>
-<text xml:space="preserve" x="8.4 16.8 25.2 33.6 42.0 50.4 58.8 67.2" y="175.6" fill="#ffff00">listing.</text>
-<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2" y="175.6" fill="#ffffff">│   Make folder</text>
-<text xml:space="preserve" x="352.8 361.2" y="175.6" fill="#ffff00">F7</text>
-<text xml:space="preserve" x="378.0" y="175.6" fill="#ffffff">│</text>
-<text xml:space="preserve" x="386.4 394.8" y="175.6" fill="#7f7f00">:4</text>
-<text xml:space="preserve" x="403.2" y="175.6" fill="#ffff00">1</text>
-<text xml:space="preserve" x="411.6 420.0 428.4 436.8 445.2 453.6 462.0 470.4 478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4 604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="175.6" fill="#00ffff">║║                     │         │                ║</text>
+<text xml:space="preserve" x="8.4 16.8 25.2 33.6 42.0 50.4 58.8" y="175.6" fill="#ffff00">listing</text>
+<text xml:space="preserve" x="75.6" y="175.6" fill="#ffffff">│</text>
+<text xml:space="preserve" x="109.2" y="175.6" fill="#ffff00">M</text>
+<text xml:space="preserve" x="117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2" y="175.6" fill="#ffffff">ake folder</text>
+<text xml:space="preserve" x="428.4 436.8" y="175.6" fill="#ffff00">F7</text>
+<text xml:space="preserve" x="453.6" y="175.6" fill="#ffffff">│</text>
+<text xml:space="preserve" x="604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="175.6" fill="#00ffff">│                          ║</text>
 <rect x="0.0" y="180.0" width="75.6" height="18" fill="#000080"/>
-<rect x="75.6" y="180.0" width="310.8" height="18" fill="#008080"/>
-<rect x="386.4" y="180.0" width="16.8" height="18" fill="#000040"/>
-<rect x="403.2" y="180.0" width="436.8" height="18" fill="#000080"/>
+<rect x="75.6" y="180.0" width="386.4" height="18" fill="#008080"/>
+<rect x="462.0" y="180.0" width="16.8" height="18" fill="#000040"/>
+<rect x="478.8" y="180.0" width="361.2" height="18" fill="#000080"/>
 <text xml:space="preserve" x="0.0 8.4 16.8 25.2 33.6 42.0 50.4 58.8 67.2" y="193.6" fill="#00ffff">║selectio</text>
-<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2" y="193.6" fill="#ffffff">│   Delete</text>
-<text xml:space="preserve" x="352.8 361.2" y="193.6" fill="#ffff00">F8</text>
-<text xml:space="preserve" x="378.0" y="193.6" fill="#ffffff">│</text>
-<text xml:space="preserve" x="386.4 394.8" y="193.6" fill="#007f7f">:4</text>
-<text xml:space="preserve" x="403.2 411.6 420.0 428.4 436.8 445.2 453.6 462.0 470.4 478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4 604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="193.6" fill="#00ffff">1║║                     │         │                ║</text>
+<text xml:space="preserve" x="75.6" y="193.6" fill="#ffffff">│</text>
+<text xml:space="preserve" x="109.2" y="193.6" fill="#ffff00">D</text>
+<text xml:space="preserve" x="117.6 126.0 134.4 142.8 151.2" y="193.6" fill="#ffffff">elete</text>
+<text xml:space="preserve" x="428.4 436.8" y="193.6" fill="#ffff00">F8</text>
+<text xml:space="preserve" x="453.6" y="193.6" fill="#ffffff">│</text>
+<text xml:space="preserve" x="604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="193.6" fill="#00ffff">│                          ║</text>
 <rect x="0.0" y="198.0" width="75.6" height="18" fill="#000080"/>
-<rect x="75.6" y="198.0" width="310.8" height="18" fill="#008080"/>
-<rect x="386.4" y="198.0" width="16.8" height="18" fill="#000040"/>
-<rect x="403.2" y="198.0" width="436.8" height="18" fill="#000080"/>
+<rect x="75.6" y="198.0" width="386.4" height="18" fill="#008080"/>
+<rect x="462.0" y="198.0" width="16.8" height="18" fill="#000040"/>
+<rect x="478.8" y="198.0" width="361.2" height="18" fill="#000080"/>
 <text xml:space="preserve" x="0.0" y="211.6" fill="#00ffff">║</text>
-<text xml:space="preserve" x="8.4 16.8 25.2 33.6 42.0 50.4 58.8" y="211.6" fill="#ffff00">sort.rs</text>
-<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4" y="211.6" fill="#ffffff">│   Wipe</text>
-<text xml:space="preserve" x="310.8 319.2 327.6 336.0 344.4 352.8 361.2" y="211.6" fill="#ffff00">Alt+Del</text>
-<text xml:space="preserve" x="378.0" y="211.6" fill="#ffffff">│</text>
-<text xml:space="preserve" x="386.4 394.8" y="211.6" fill="#7f7f00">:4</text>
-<text xml:space="preserve" x="403.2" y="211.6" fill="#ffff00">1</text>
-<text xml:space="preserve" x="411.6 420.0 428.4 436.8 445.2 453.6 462.0 470.4 478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4 604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="211.6" fill="#00ffff">║║                     │         │                ║</text>
+<text xml:space="preserve" x="8.4 16.8 25.2 33.6" y="211.6" fill="#ffff00">sort</text>
+<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2" y="211.6" fill="#ffffff">│   Delete</text>
+<text xml:space="preserve" x="168.0" y="211.6" fill="#ffff00">p</text>
+<text xml:space="preserve" x="176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0" y="211.6" fill="#ffffff">ermanently</text>
+<text xml:space="preserve" x="369.6 378.0 386.4 394.8 403.2 411.6 420.0 428.4 436.8" y="211.6" fill="#ffff00">Shift+Del</text>
+<text xml:space="preserve" x="453.6" y="211.6" fill="#ffffff">│</text>
+<text xml:space="preserve" x="604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="211.6" fill="#00ffff">│                          ║</text>
 <rect x="0.0" y="216.0" width="75.6" height="18" fill="#000080"/>
-<rect x="75.6" y="216.0" width="310.8" height="18" fill="#008080"/>
-<rect x="386.4" y="216.0" width="16.8" height="18" fill="#000040"/>
-<rect x="403.2" y="216.0" width="436.8" height="18" fill="#000080"/>
-<text xml:space="preserve" x="0.0 8.4 16.8 25.2 33.6 42.0 50.4 58.8 67.2" y="229.6" fill="#00ffff">║vpath.rs</text>
-<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2 369.6 378.0" y="229.6" fill="#ffffff">│───────────────────────────────────│</text>
-<text xml:space="preserve" x="386.4 394.8" y="229.6" fill="#007f7f">:4</text>
-<text xml:space="preserve" x="403.2 411.6 420.0 428.4 436.8 445.2 453.6 462.0 470.4 478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4 604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="229.6" fill="#00ffff">1║║                     │         │                ║</text>
+<rect x="75.6" y="216.0" width="386.4" height="18" fill="#008080"/>
+<rect x="462.0" y="216.0" width="16.8" height="18" fill="#000040"/>
+<rect x="478.8" y="216.0" width="361.2" height="18" fill="#000080"/>
+<text xml:space="preserve" x="0.0 8.4 16.8 25.2 33.6 42.0" y="229.6" fill="#00ffff">║vpath</text>
+<text xml:space="preserve" x="75.6" y="229.6" fill="#ffffff">│</text>
+<text xml:space="preserve" x="109.2" y="229.6" fill="#ffff00">W</text>
+<text xml:space="preserve" x="117.6 126.0 134.4" y="229.6" fill="#ffffff">ipe</text>
+<text xml:space="preserve" x="386.4 394.8 403.2 411.6 420.0 428.4 436.8" y="229.6" fill="#ffff00">Alt+Del</text>
+<text xml:space="preserve" x="453.6" y="229.6" fill="#ffffff">│</text>
+<text xml:space="preserve" x="604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="229.6" fill="#00ffff">│                          ║</text>
 <rect x="0.0" y="234.0" width="75.6" height="18" fill="#000080"/>
-<rect x="75.6" y="234.0" width="310.8" height="18" fill="#008080"/>
-<rect x="386.4" y="234.0" width="16.8" height="18" fill="#000040"/>
-<rect x="403.2" y="234.0" width="436.8" height="18" fill="#000080"/>
+<rect x="75.6" y="234.0" width="386.4" height="18" fill="#008080"/>
+<rect x="462.0" y="234.0" width="16.8" height="18" fill="#000040"/>
+<rect x="478.8" y="234.0" width="361.2" height="18" fill="#000080"/>
 <text xml:space="preserve" x="0.0" y="247.6" fill="#00ffff">║</text>
-<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4" y="247.6" fill="#ffffff">│   Add to archive</text>
-<text xml:space="preserve" x="302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2" y="247.6" fill="#ffff00">Shift+F1</text>
-<text xml:space="preserve" x="378.0" y="247.6" fill="#ffffff">│</text>
-<text xml:space="preserve" x="411.6 420.0 428.4 436.8 445.2 453.6 462.0 470.4 478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4 604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="247.6" fill="#00ffff">║║                     │         │                ║</text>
+<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2 369.6 378.0 386.4 394.8 403.2 411.6 420.0 428.4 436.8 445.2 453.6" y="247.6" fill="#ffffff">│────────────────────────────────────────────│</text>
+<text xml:space="preserve" x="604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="247.6" fill="#00ffff">│                          ║</text>
 <rect x="0.0" y="252.0" width="75.6" height="18" fill="#000080"/>
-<rect x="75.6" y="252.0" width="310.8" height="18" fill="#008080"/>
-<rect x="386.4" y="252.0" width="16.8" height="18" fill="#000040"/>
-<rect x="403.2" y="252.0" width="436.8" height="18" fill="#000080"/>
+<rect x="75.6" y="252.0" width="386.4" height="18" fill="#008080"/>
+<rect x="462.0" y="252.0" width="16.8" height="18" fill="#000040"/>
+<rect x="478.8" y="252.0" width="361.2" height="18" fill="#000080"/>
 <text xml:space="preserve" x="0.0" y="265.6" fill="#00ffff">║</text>
-<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0" y="265.6" fill="#ffffff">│   Extract files</text>
-<text xml:space="preserve" x="302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2" y="265.6" fill="#ffff00">Shift+F2</text>
-<text xml:space="preserve" x="378.0" y="265.6" fill="#ffffff">│</text>
-<text xml:space="preserve" x="411.6 420.0 428.4 436.8 445.2 453.6 462.0 470.4 478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4 604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="265.6" fill="#00ffff">║║                     │         │                ║</text>
+<text xml:space="preserve" x="75.6" y="265.6" fill="#ffffff">│</text>
+<text xml:space="preserve" x="109.2" y="265.6" fill="#ffff00">A</text>
+<text xml:space="preserve" x="117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4" y="265.6" fill="#ffffff">dd to archive</text>
+<text xml:space="preserve" x="378.0 386.4 394.8 403.2 411.6 420.0 428.4 436.8" y="265.6" fill="#ffff00">Shift+F1</text>
+<text xml:space="preserve" x="453.6" y="265.6" fill="#ffffff">│</text>
+<text xml:space="preserve" x="604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="265.6" fill="#00ffff">│                          ║</text>
 <rect x="0.0" y="270.0" width="75.6" height="18" fill="#000080"/>
-<rect x="75.6" y="270.0" width="310.8" height="18" fill="#008080"/>
-<rect x="386.4" y="270.0" width="16.8" height="18" fill="#000040"/>
-<rect x="403.2" y="270.0" width="436.8" height="18" fill="#000080"/>
+<rect x="75.6" y="270.0" width="386.4" height="18" fill="#008080"/>
+<rect x="462.0" y="270.0" width="16.8" height="18" fill="#000040"/>
+<rect x="478.8" y="270.0" width="361.2" height="18" fill="#000080"/>
 <text xml:space="preserve" x="0.0" y="283.6" fill="#00ffff">║</text>
-<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2" y="283.6" fill="#ffffff">│   Archive commands</text>
-<text xml:space="preserve" x="302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2" y="283.6" fill="#ffff00">Shift+F3</text>
-<text xml:space="preserve" x="378.0" y="283.6" fill="#ffffff">│</text>
-<text xml:space="preserve" x="411.6 420.0 428.4 436.8 445.2 453.6 462.0 470.4 478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4 604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="283.6" fill="#00ffff">║║                     │         │                ║</text>
+<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6" y="283.6" fill="#ffffff">│   Extract</text>
+<text xml:space="preserve" x="176.4" y="283.6" fill="#ffff00">f</text>
+<text xml:space="preserve" x="184.8 193.2 201.6 210.0" y="283.6" fill="#ffffff">iles</text>
+<text xml:space="preserve" x="378.0 386.4 394.8 403.2 411.6 420.0 428.4 436.8" y="283.6" fill="#ffff00">Shift+F2</text>
+<text xml:space="preserve" x="453.6" y="283.6" fill="#ffffff">│</text>
+<text xml:space="preserve" x="604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="283.6" fill="#00ffff">│                          ║</text>
 <rect x="0.0" y="288.0" width="75.6" height="18" fill="#000080"/>
-<rect x="75.6" y="288.0" width="310.8" height="18" fill="#008080"/>
-<rect x="386.4" y="288.0" width="16.8" height="18" fill="#000040"/>
-<rect x="403.2" y="288.0" width="436.8" height="18" fill="#000080"/>
+<rect x="75.6" y="288.0" width="386.4" height="18" fill="#008080"/>
+<rect x="462.0" y="288.0" width="16.8" height="18" fill="#000040"/>
+<rect x="478.8" y="288.0" width="361.2" height="18" fill="#000080"/>
 <text xml:space="preserve" x="0.0" y="301.6" fill="#00ffff">║</text>
-<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2 369.6 378.0" y="301.6" fill="#ffffff">│   Test archive                    │</text>
-<text xml:space="preserve" x="411.6 420.0 428.4 436.8 445.2 453.6 462.0 470.4 478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4 604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="301.6" fill="#00ffff">║║                     │         │                ║</text>
+<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0" y="301.6" fill="#ffffff">│   Arc</text>
+<text xml:space="preserve" x="134.4" y="301.6" fill="#ffff00">h</text>
+<text xml:space="preserve" x="142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2" y="301.6" fill="#ffffff">ive commands</text>
+<text xml:space="preserve" x="378.0 386.4 394.8 403.2 411.6 420.0 428.4 436.8" y="301.6" fill="#ffff00">Shift+F3</text>
+<text xml:space="preserve" x="453.6" y="301.6" fill="#ffffff">│</text>
+<text xml:space="preserve" x="604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="301.6" fill="#00ffff">│                          ║</text>
 <rect x="0.0" y="306.0" width="75.6" height="18" fill="#000080"/>
-<rect x="75.6" y="306.0" width="310.8" height="18" fill="#008080"/>
-<rect x="386.4" y="306.0" width="16.8" height="18" fill="#000040"/>
-<rect x="403.2" y="306.0" width="436.8" height="18" fill="#000080"/>
+<rect x="75.6" y="306.0" width="386.4" height="18" fill="#008080"/>
+<rect x="462.0" y="306.0" width="16.8" height="18" fill="#000040"/>
+<rect x="478.8" y="306.0" width="361.2" height="18" fill="#000080"/>
 <text xml:space="preserve" x="0.0" y="319.6" fill="#00ffff">║</text>
-<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2 369.6 378.0" y="319.6" fill="#ffffff">│───────────────────────────────────│</text>
-<text xml:space="preserve" x="411.6 420.0 428.4 436.8 445.2 453.6 462.0 470.4 478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4 604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="319.6" fill="#00ffff">║║                     │         │                ║</text>
+<text xml:space="preserve" x="75.6" y="319.6" fill="#ffffff">│</text>
+<text xml:space="preserve" x="109.2" y="319.6" fill="#ffff00">T</text>
+<text xml:space="preserve" x="117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2 369.6 378.0 386.4 394.8 403.2 411.6 420.0 428.4 436.8 445.2 453.6" y="319.6" fill="#ffffff">est archive                             │</text>
+<text xml:space="preserve" x="604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="319.6" fill="#00ffff">│                          ║</text>
 <rect x="0.0" y="324.0" width="75.6" height="18" fill="#000080"/>
-<rect x="75.6" y="324.0" width="310.8" height="18" fill="#008080"/>
-<rect x="386.4" y="324.0" width="16.8" height="18" fill="#000040"/>
-<rect x="403.2" y="324.0" width="436.8" height="18" fill="#000080"/>
+<rect x="75.6" y="324.0" width="386.4" height="18" fill="#008080"/>
+<rect x="462.0" y="324.0" width="16.8" height="18" fill="#000040"/>
+<rect x="478.8" y="324.0" width="361.2" height="18" fill="#000080"/>
 <text xml:space="preserve" x="0.0" y="337.6" fill="#00ffff">║</text>
-<text xml:space="preserve" x="75.6" y="337.6" fill="#ffffff">│</text>
-<text xml:space="preserve" x="109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8" y="337.6" fill="#808080">File attributes</text>
-<text xml:space="preserve" x="378.0" y="337.6" fill="#ffffff">│</text>
-<text xml:space="preserve" x="411.6 420.0 428.4 436.8 445.2 453.6 462.0 470.4 478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4 604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="337.6" fill="#00ffff">║║                     │         │                ║</text>
+<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2 369.6 378.0 386.4 394.8 403.2 411.6 420.0 428.4 436.8 445.2 453.6" y="337.6" fill="#ffffff">│────────────────────────────────────────────│</text>
+<text xml:space="preserve" x="604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="337.6" fill="#00ffff">│                          ║</text>
 <rect x="0.0" y="342.0" width="75.6" height="18" fill="#000080"/>
-<rect x="75.6" y="342.0" width="310.8" height="18" fill="#008080"/>
-<rect x="386.4" y="342.0" width="16.8" height="18" fill="#000040"/>
-<rect x="403.2" y="342.0" width="436.8" height="18" fill="#000080"/>
+<rect x="75.6" y="342.0" width="386.4" height="18" fill="#008080"/>
+<rect x="462.0" y="342.0" width="16.8" height="18" fill="#000040"/>
+<rect x="478.8" y="342.0" width="361.2" height="18" fill="#000080"/>
 <text xml:space="preserve" x="0.0" y="355.6" fill="#00ffff">║</text>
-<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0" y="355.6" fill="#ffffff">│   Apply command</text>
-<text xml:space="preserve" x="319.2 327.6 336.0 344.4 352.8 361.2" y="355.6" fill="#ffff00">Ctrl+G</text>
-<text xml:space="preserve" x="378.0" y="355.6" fill="#ffffff">│</text>
-<text xml:space="preserve" x="411.6 420.0 428.4 436.8 445.2 453.6 462.0 470.4 478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4 604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="355.6" fill="#00ffff">║║                     │         │                ║</text>
+<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4" y="355.6" fill="#ffffff">│   Chec</text>
+<text xml:space="preserve" x="142.8" y="355.6" fill="#ffff00">k</text>
+<text xml:space="preserve" x="151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2 369.6 378.0 386.4 394.8 403.2 411.6 420.0 428.4 436.8 445.2 453.6" y="355.6" fill="#ffffff">sums…                               │</text>
+<text xml:space="preserve" x="604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="355.6" fill="#00ffff">│                          ║</text>
 <rect x="0.0" y="360.0" width="75.6" height="18" fill="#000080"/>
-<rect x="75.6" y="360.0" width="310.8" height="18" fill="#008080"/>
-<rect x="386.4" y="360.0" width="16.8" height="18" fill="#000040"/>
-<rect x="403.2" y="360.0" width="436.8" height="18" fill="#000080"/>
+<rect x="75.6" y="360.0" width="386.4" height="18" fill="#008080"/>
+<rect x="462.0" y="360.0" width="16.8" height="18" fill="#000040"/>
+<rect x="478.8" y="360.0" width="361.2" height="18" fill="#000080"/>
 <text xml:space="preserve" x="0.0" y="373.6" fill="#00ffff">║</text>
-<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6" y="373.6" fill="#ffffff">│   Replace in files…</text>
-<text xml:space="preserve" x="268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2" y="373.6" fill="#ffff00">Ctrl+Shift+R</text>
-<text xml:space="preserve" x="378.0" y="373.6" fill="#ffffff">│</text>
-<text xml:space="preserve" x="411.6 420.0 428.4 436.8 445.2 453.6 462.0 470.4 478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4 604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="373.6" fill="#00ffff">║║                     │         │                ║</text>
+<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6" y="373.6" fill="#ffffff">│   Check a</text>
+<text xml:space="preserve" x="168.0" y="373.6" fill="#ffff00">g</text>
+<text xml:space="preserve" x="176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2 369.6 378.0 386.4 394.8 403.2 411.6 420.0 428.4 436.8 445.2 453.6" y="373.6" fill="#ffffff">ainst a list                     │</text>
+<text xml:space="preserve" x="604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="373.6" fill="#00ffff">│                          ║</text>
 <rect x="0.0" y="378.0" width="75.6" height="18" fill="#000080"/>
-<rect x="75.6" y="378.0" width="310.8" height="18" fill="#008080"/>
-<rect x="386.4" y="378.0" width="16.8" height="18" fill="#000040"/>
-<rect x="403.2" y="378.0" width="436.8" height="18" fill="#000080"/>
+<rect x="75.6" y="378.0" width="386.4" height="18" fill="#008080"/>
+<rect x="462.0" y="378.0" width="16.8" height="18" fill="#000040"/>
+<rect x="478.8" y="378.0" width="361.2" height="18" fill="#000080"/>
 <text xml:space="preserve" x="0.0" y="391.6" fill="#00ffff">║</text>
-<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2 369.6 378.0" y="391.6" fill="#ffffff">│───────────────────────────────────│</text>
-<text xml:space="preserve" x="411.6 420.0 428.4 436.8 445.2 453.6 462.0 470.4 478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4 604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="391.6" fill="#00ffff">║║                     │         │                ║</text>
+<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2 369.6 378.0 386.4 394.8 403.2 411.6 420.0 428.4 436.8 445.2 453.6" y="391.6" fill="#ffffff">│────────────────────────────────────────────│</text>
+<text xml:space="preserve" x="604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="391.6" fill="#00ffff">│                          ║</text>
 <rect x="0.0" y="396.0" width="75.6" height="18" fill="#000080"/>
-<rect x="75.6" y="396.0" width="310.8" height="18" fill="#008080"/>
-<rect x="386.4" y="396.0" width="16.8" height="18" fill="#000040"/>
-<rect x="403.2" y="396.0" width="436.8" height="18" fill="#000080"/>
+<rect x="75.6" y="396.0" width="386.4" height="18" fill="#008080"/>
+<rect x="462.0" y="396.0" width="16.8" height="18" fill="#000040"/>
+<rect x="478.8" y="396.0" width="361.2" height="18" fill="#000080"/>
 <text xml:space="preserve" x="0.0" y="409.6" fill="#00ffff">║</text>
-<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6" y="409.6" fill="#ffffff">│   Select group</text>
-<text xml:space="preserve" x="361.2" y="409.6" fill="#ffff00">+</text>
-<text xml:space="preserve" x="378.0" y="409.6" fill="#ffffff">│</text>
-<text xml:space="preserve" x="411.6 420.0 428.4 436.8 445.2 453.6 462.0 470.4 478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4 604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="409.6" fill="#00ffff">║║                     │         │                ║</text>
+<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8" y="409.6" fill="#ffffff">│   File attributes</text>
+<text xml:space="preserve" x="394.8 403.2 411.6 420.0 428.4 436.8" y="409.6" fill="#ffff00">Ctrl+A</text>
+<text xml:space="preserve" x="453.6" y="409.6" fill="#ffffff">│</text>
+<text xml:space="preserve" x="604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="409.6" fill="#00ffff">│                          ║</text>
 <rect x="0.0" y="414.0" width="75.6" height="18" fill="#000080"/>
-<rect x="75.6" y="414.0" width="310.8" height="18" fill="#008080"/>
-<rect x="386.4" y="414.0" width="16.8" height="18" fill="#000040"/>
-<rect x="403.2" y="414.0" width="436.8" height="18" fill="#000080"/>
+<rect x="75.6" y="414.0" width="386.4" height="18" fill="#008080"/>
+<rect x="462.0" y="414.0" width="16.8" height="18" fill="#000040"/>
+<rect x="478.8" y="414.0" width="361.2" height="18" fill="#000080"/>
 <text xml:space="preserve" x="0.0" y="427.6" fill="#00ffff">║</text>
-<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4" y="427.6" fill="#ffffff">│   Unselect group</text>
-<text xml:space="preserve" x="361.2" y="427.6" fill="#ffff00">-</text>
-<text xml:space="preserve" x="378.0" y="427.6" fill="#ffffff">│</text>
-<text xml:space="preserve" x="411.6 420.0 428.4 436.8 445.2 453.6 462.0 470.4 478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4 604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="427.6" fill="#00ffff">║║                     │         │                ║</text>
+<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4" y="427.6" fill="#ffffff">│   Appl</text>
+<text xml:space="preserve" x="142.8" y="427.6" fill="#ffff00">y</text>
+<text xml:space="preserve" x="159.6 168.0 176.4 184.8 193.2 201.6 210.0" y="427.6" fill="#ffffff">command</text>
+<text xml:space="preserve" x="394.8 403.2 411.6 420.0 428.4 436.8" y="427.6" fill="#ffff00">Ctrl+G</text>
+<text xml:space="preserve" x="453.6" y="427.6" fill="#ffffff">│</text>
+<text xml:space="preserve" x="604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="427.6" fill="#00ffff">│                          ║</text>
 <rect x="0.0" y="432.0" width="50.4" height="18" fill="#000080"/>
-<rect x="50.4" y="432.0" width="336.0" height="18" fill="#008080"/>
-<rect x="386.4" y="432.0" width="16.8" height="18" fill="#000040"/>
-<rect x="403.2" y="432.0" width="436.8" height="18" fill="#000080"/>
+<rect x="50.4" y="432.0" width="411.6" height="18" fill="#008080"/>
+<rect x="462.0" y="432.0" width="16.8" height="18" fill="#000040"/>
+<rect x="478.8" y="432.0" width="361.2" height="18" fill="#000080"/>
 <text xml:space="preserve" x="0.0 8.4 16.8 25.2 33.6 42.0" y="445.6" fill="#00ffff">├─────</text>
 <text xml:space="preserve" x="58.8 67.2" y="445.6" fill="#ffff00">By</text>
-<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2" y="445.6" fill="#ffffff">│   Invert selection</text>
-<text xml:space="preserve" x="361.2" y="445.6" fill="#ffff00">*</text>
-<text xml:space="preserve" x="378.0" y="445.6" fill="#ffffff">│</text>
-<text xml:space="preserve" x="386.4 394.8" y="445.6" fill="#007f7f">──</text>
-<text xml:space="preserve" x="403.2 411.6 420.0 428.4 436.8 445.2 453.6 462.0 470.4 478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4 604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="445.6" fill="#00ffff">─┤├─────────────────────┴─────────┴────────────────┤</text>
+<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6" y="445.6" fill="#ffffff">│   Replace</text>
+<text xml:space="preserve" x="176.4" y="445.6" fill="#ffff00">i</text>
+<text xml:space="preserve" x="184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6" y="445.6" fill="#ffffff">n files…</text>
+<text xml:space="preserve" x="344.4 352.8 361.2 369.6 378.0 386.4 394.8 403.2 411.6 420.0 428.4 436.8" y="445.6" fill="#ffff00">Ctrl+Shift+R</text>
+<text xml:space="preserve" x="453.6" y="445.6" fill="#ffffff">│</text>
+<text xml:space="preserve" x="462.0 470.4" y="445.6" fill="#007f7f">──</text>
+<text xml:space="preserve" x="478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4 604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="445.6" fill="#00ffff">───────────────┴──────────────────────────┤</text>
 <rect x="0.0" y="450.0" width="75.6" height="18" fill="#000080"/>
-<rect x="75.6" y="450.0" width="310.8" height="18" fill="#008080"/>
-<rect x="386.4" y="450.0" width="16.8" height="18" fill="#000040"/>
-<rect x="403.2" y="450.0" width="436.8" height="18" fill="#000080"/>
+<rect x="75.6" y="450.0" width="386.4" height="18" fill="#008080"/>
+<rect x="462.0" y="450.0" width="16.8" height="18" fill="#000040"/>
+<rect x="478.8" y="450.0" width="361.2" height="18" fill="#000080"/>
 <text xml:space="preserve" x="0.0 8.4 16.8 25.2 33.6 42.0 50.4" y="463.6" fill="#00ffff">║lib.rs</text>
-<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8" y="463.6" fill="#ffffff">│   Select all</text>
-<text xml:space="preserve" x="319.2 327.6 336.0 344.4 352.8 361.2" y="463.6" fill="#ffff00">Ctrl+A</text>
-<text xml:space="preserve" x="378.0" y="463.6" fill="#ffffff">│</text>
-<text xml:space="preserve" x="411.6 420.0 428.4 436.8 445.2 453.6 462.0 470.4 478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4 604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="463.6" fill="#00ffff">║║..                                              ║</text>
+<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2 369.6 378.0 386.4 394.8 403.2 411.6 420.0 428.4 436.8 445.2 453.6" y="463.6" fill="#ffffff">│────────────────────────────────────────────│</text>
+<text xml:space="preserve" x="831.6" y="463.6" fill="#00ffff">║</text>
 <rect x="0.0" y="468.0" width="75.6" height="18" fill="#000080"/>
-<rect x="75.6" y="468.0" width="310.8" height="18" fill="#008080"/>
-<rect x="386.4" y="468.0" width="16.8" height="18" fill="#000040"/>
-<rect x="403.2" y="468.0" width="436.8" height="18" fill="#000080"/>
+<rect x="75.6" y="468.0" width="386.4" height="18" fill="#008080"/>
+<rect x="462.0" y="468.0" width="16.8" height="18" fill="#000040"/>
+<rect x="478.8" y="468.0" width="361.2" height="18" fill="#000080"/>
 <text xml:space="preserve" x="0.0 8.4 16.8 25.2 33.6 42.0 50.4 58.8 67.2" y="481.6" fill="#00ffff">╚════════</text>
-<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2 369.6 378.0" y="481.6" fill="#ffffff">└───────────────────────────────────┘</text>
-<text xml:space="preserve" x="386.4 394.8" y="481.6" fill="#007f7f">══</text>
-<text xml:space="preserve" x="403.2 411.6 420.0 428.4 436.8 445.2 453.6 462.0 470.4 478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4 604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="481.6" fill="#00ffff">═╝╚═════════════════ 10.0 M (5/0) ═════════════════╝</text>
-<text xml:space="preserve" x="0.0 8.4 16.8 25.2 33.6 42.0 50.4 58.8 67.2 75.6 84.0" y="499.6" fill="#c0c0c0">/home/mb/sc</text>
+<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2 369.6 378.0 386.4 394.8 403.2 411.6 420.0 428.4 436.8 445.2 453.6" y="481.6" fill="#ffffff">└────────────────────────────────────────────┘</text>
+<text xml:space="preserve" x="462.0 470.4" y="481.6" fill="#007f7f">══</text>
+<text xml:space="preserve" x="478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4 604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="481.6" fill="#00ffff">═══════════ 10.0 M (5/0) ═════════════════╝</text>
+<text xml:space="preserve" x="0.0 8.4 16.8 25.2 33.6 42.0 50.4 58.8 67.2 75.6 84.0" y="499.6" fill="#c0c0c0">/home/mb/fc</text>
 <text xml:space="preserve" x="92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6" y="499.6" fill="#606060">md/crates/fcmd-core/src&gt;</text>
 <rect x="0.0" y="504.0" width="840.0" height="18" fill="#008080"/>
 <text xml:space="preserve" x="8.4 16.8 25.2 33.6 42.0 50.4 58.8 67.2 75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8" y="517.6" fill="#000000">lib.rs  2.19 K  2024-07-26 09:41</text>
-<rect x="8.4" y="522.0" width="67.2" height="18" fill="#008080"/>
-<rect x="84.0" y="522.0" width="67.2" height="18" fill="#008080"/>
-<rect x="159.6" y="522.0" width="67.2" height="18" fill="#008080"/>
-<rect x="235.2" y="522.0" width="67.2" height="18" fill="#008080"/>
-<rect x="310.8" y="522.0" width="67.2" height="18" fill="#008080"/>
-<rect x="386.4" y="522.0" width="67.2" height="18" fill="#008080"/>
-<rect x="462.0" y="522.0" width="67.2" height="18" fill="#008080"/>
-<rect x="537.6" y="522.0" width="67.2" height="18" fill="#008080"/>
-<rect x="613.2" y="522.0" width="67.2" height="18" fill="#008080"/>
-<rect x="697.2" y="522.0" width="58.8" height="18" fill="#008080"/>
-<rect x="772.8" y="522.0" width="58.8" height="18" fill="#008080"/>
+<rect x="8.4" y="522.0" width="58.8" height="18" fill="#008080"/>
+<rect x="75.6" y="522.0" width="58.8" height="18" fill="#008080"/>
+<rect x="142.8" y="522.0" width="58.8" height="18" fill="#008080"/>
+<rect x="210.0" y="522.0" width="58.8" height="18" fill="#008080"/>
+<rect x="277.2" y="522.0" width="58.8" height="18" fill="#008080"/>
+<rect x="344.4" y="522.0" width="58.8" height="18" fill="#008080"/>
+<rect x="411.6" y="522.0" width="58.8" height="18" fill="#008080"/>
+<rect x="478.8" y="522.0" width="58.8" height="18" fill="#008080"/>
+<rect x="546.0" y="522.0" width="58.8" height="18" fill="#008080"/>
+<rect x="621.6" y="522.0" width="50.4" height="18" fill="#008080"/>
+<rect x="688.8" y="522.0" width="50.4" height="18" fill="#008080"/>
+<rect x="756.0" y="522.0" width="50.4" height="18" fill="#008080"/>
 <text xml:space="preserve" x="0.0" y="535.6" fill="#c0c0c0">1</text>
 <text xml:space="preserve" x="8.4 16.8 25.2 33.6" y="535.6" fill="#000000">Help</text>
-<text xml:space="preserve" x="75.6" y="535.6" fill="#c0c0c0">2</text>
-<text xml:space="preserve" x="84.0 92.4 100.8 109.2 117.6 126.0" y="535.6" fill="#000000">UserMn</text>
-<text xml:space="preserve" x="151.2" y="535.6" fill="#c0c0c0">3</text>
-<text xml:space="preserve" x="159.6 168.0 176.4 184.8" y="535.6" fill="#000000">View</text>
-<text xml:space="preserve" x="226.8" y="535.6" fill="#c0c0c0">4</text>
-<text xml:space="preserve" x="235.2 243.6 252.0 260.4" y="535.6" fill="#000000">Edit</text>
-<text xml:space="preserve" x="302.4" y="535.6" fill="#c0c0c0">5</text>
-<text xml:space="preserve" x="310.8 319.2 327.6 336.0" y="535.6" fill="#000000">Copy</text>
-<text xml:space="preserve" x="378.0" y="535.6" fill="#c0c0c0">6</text>
-<text xml:space="preserve" x="386.4 394.8 403.2 411.6 420.0 428.4" y="535.6" fill="#000000">RenMov</text>
-<text xml:space="preserve" x="453.6" y="535.6" fill="#c0c0c0">7</text>
-<text xml:space="preserve" x="462.0 470.4 478.8 487.2 495.6 504.0" y="535.6" fill="#000000">MkFold</text>
-<text xml:space="preserve" x="529.2" y="535.6" fill="#c0c0c0">8</text>
-<text xml:space="preserve" x="537.6 546.0 554.4 562.8 571.2 579.6" y="535.6" fill="#000000">Delete</text>
-<text xml:space="preserve" x="604.8" y="535.6" fill="#c0c0c0">9</text>
-<text xml:space="preserve" x="613.2 621.6 630.0 638.4 646.8 655.2" y="535.6" fill="#000000">ConfMn</text>
-<text xml:space="preserve" x="680.4 688.8" y="535.6" fill="#c0c0c0">10</text>
-<text xml:space="preserve" x="697.2 705.6 714.0 722.4" y="535.6" fill="#000000">Quit</text>
-<text xml:space="preserve" x="756.0 764.4" y="535.6" fill="#c0c0c0">12</text>
-<text xml:space="preserve" x="772.8 781.2 789.6 798.0 806.4 814.8 823.2" y="535.6" fill="#000000">Screens</text>
+<text xml:space="preserve" x="67.2" y="535.6" fill="#c0c0c0">2</text>
+<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6" y="535.6" fill="#000000">UserMn</text>
+<text xml:space="preserve" x="134.4" y="535.6" fill="#c0c0c0">3</text>
+<text xml:space="preserve" x="142.8 151.2 159.6 168.0" y="535.6" fill="#000000">View</text>
+<text xml:space="preserve" x="201.6" y="535.6" fill="#c0c0c0">4</text>
+<text xml:space="preserve" x="210.0 218.4 226.8 235.2" y="535.6" fill="#000000">Edit</text>
+<text xml:space="preserve" x="268.8" y="535.6" fill="#c0c0c0">5</text>
+<text xml:space="preserve" x="277.2 285.6 294.0 302.4" y="535.6" fill="#000000">Copy</text>
+<text xml:space="preserve" x="336.0" y="535.6" fill="#c0c0c0">6</text>
+<text xml:space="preserve" x="344.4 352.8 361.2 369.6 378.0 386.4" y="535.6" fill="#000000">RenMov</text>
+<text xml:space="preserve" x="403.2" y="535.6" fill="#c0c0c0">7</text>
+<text xml:space="preserve" x="411.6 420.0 428.4 436.8 445.2 453.6" y="535.6" fill="#000000">MkFold</text>
+<text xml:space="preserve" x="470.4" y="535.6" fill="#c0c0c0">8</text>
+<text xml:space="preserve" x="478.8 487.2 495.6 504.0 512.4 520.8" y="535.6" fill="#000000">Delete</text>
+<text xml:space="preserve" x="537.6" y="535.6" fill="#c0c0c0">9</text>
+<text xml:space="preserve" x="546.0 554.4 562.8 571.2 579.6 588.0" y="535.6" fill="#000000">ConfMn</text>
+<text xml:space="preserve" x="604.8 613.2" y="535.6" fill="#c0c0c0">10</text>
+<text xml:space="preserve" x="621.6 630.0 638.4 646.8" y="535.6" fill="#000000">Quit</text>
+<text xml:space="preserve" x="672.0 680.4" y="535.6" fill="#c0c0c0">11</text>
+<text xml:space="preserve" x="688.8 697.2 705.6 714.0 722.4 730.8" y="535.6" fill="#000000">Plugin</text>
+<text xml:space="preserve" x="739.2 747.6" y="535.6" fill="#c0c0c0">12</text>
+<text xml:space="preserve" x="756.0 764.4 772.8 781.2 789.6 798.0" y="535.6" fill="#000000">Scree…</text>
 </svg>
