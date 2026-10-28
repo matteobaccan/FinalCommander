@@ -25,6 +25,15 @@ pub struct Listing {
     pub totals: Totals,
     pub generation: u64,
     pub truncated: bool,
+    /// How long the longest visible name is, in bytes of its own encoding.
+    ///
+    /// Bytes and not display columns: this is worked out in the same pass that filters the
+    /// listing, which for a directory of 1.7 million rows is a pass worth keeping cheap, and
+    /// validating every name as UTF-8 to measure it would double what that pass costs. For an
+    /// ASCII name the two are the same number; for a name with accents in it the bytes are
+    /// the larger, and the one place this is used — how many columns the wide view fits —
+    /// errs towards fewer columns, which is the safe direction.
+    pub widest: usize,
 }
 
 impl Listing {
@@ -35,6 +44,7 @@ impl Listing {
             totals: Totals::default(),
             generation,
             truncated: false,
+            widest: 0,
         };
         l.rebuild(
             Sort::default(),
@@ -92,6 +102,7 @@ impl Listing {
         // totals, so this costs one bit-ish per entry and saves some seventy million hashes
         // on a panel with a million rows in it.
         let mut selected = vec![false; self.entries.len()];
+        let mut widest = 0usize;
 
         for (i, e) in self.entries.iter().enumerate() {
             if e.kind == EntryKind::Parent {
@@ -121,8 +132,10 @@ impl Listing {
                     totals.selected_dirs += 1;
                 }
             }
+            widest = widest.max(e.name.as_encoded_bytes().len());
             self.order.push(i as u32);
         }
+        self.widest = widest;
 
         let entries = &self.entries;
         // Unstable: it is the faster sort and there is nothing for stability to preserve,

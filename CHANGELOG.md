@@ -24,6 +24,13 @@ Notable changes, newest first. The format follows
 
 ### Changed
 
+- **The wide view fits its columns to the names it has.** `Ctrl+4` is name and size, and it
+  always drew two columns: a directory of download names was then two columns of cut-off
+  names, which is the one thing that view is supposed to prevent. It now fits as many columns
+  as the longest name allows — two for short names, one for long ones, with the whole name
+  readable — which is FAR's own rule. The longest name is measured once per listing, in the
+  pass that filters it.
+
 - **`F4` in the viewer turns a wheel** instead of toggling hex: text → dump → hex → the
   laid-out document → the table → text again, skipping the turns a given file has no use for.
   A file is often none of the things its name says it is, and trying the next way of reading

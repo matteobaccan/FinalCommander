@@ -86,6 +86,16 @@ so the layout follows from the mode rather than from a width guess, and a column
 what it holds falls back to fewer columns. The custom sets are the one thing here still to
 come, and a line in `docs/BACKLOG.md`.
 
+**The wide view** (`Ctrl+4`) is name and size, in as many columns as the *names* allow:
+a directory of short names gets two, and a directory of download names —
+`wetransfer_…_2026-10-06_1431.zip` — gets one, with the whole name readable. That is FAR's
+own rule and it is the point of the mode; the brief and medium views divide the width as
+they always did, because they are about seeing many names at once and a name too long for
+its column is cut. The longest name is measured once per listing, in the pass that filters
+it, in bytes rather than display columns — a directory of 1.7 million rows is a pass worth
+keeping cheap, and a name with accents in it then errs towards fewer columns, which is the
+safe direction.
+
 **All ten of FAR's view modes are there**, on FAR's own numbers: `Ctrl+6` names with their
 descriptions and `Ctrl+7` the same with the size and the time (§13), `Ctrl+8` the owners,
 `Ctrl+9` the links, `Ctrl+0` the alternative full view. The last three need something a

@@ -213,7 +213,11 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             app.cfg.panel.status_line,
         )
     };
-    app.columns = widgets::brief_columns(areas[app.active], app.panels[app.active].view);
+    app.columns = widgets::brief_columns(
+        areas[app.active],
+        app.panels[app.active].view,
+        app.panels[app.active].listing.widest,
+    );
     for i in 0..2 {
         let (rows, cols) = (app.rows, app.columns);
         app.panels[i].scroll_into_view(rows, cols);
@@ -327,7 +331,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
                 area: Rect::new(inner.x, inner.y, inner.w, rows as u16),
                 top: panel.top,
                 rows,
-                columns: widgets::brief_columns(*area, panel.view),
+                columns: widgets::brief_columns(*area, panel.view, panel.listing.widest),
                 len: panel.listing.len(),
             });
         }

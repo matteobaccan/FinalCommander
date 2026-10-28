@@ -90,8 +90,21 @@ pub fn panel_rows(area: Rect, column_titles: bool, status_line: bool) -> usize {
 
 /// Columns of rows in a multi-column view: the mode's own number, less when the panel is too
 /// narrow to give each column something readable.
-pub fn brief_columns(area: Rect, view: ViewMode) -> usize {
+/// How many columns of rows a names-only view draws.
+///
+/// `widest` is the longest name in the listing, which only the wide view asks about: FAR fits
+/// its name-and-size columns to the names it actually has, so a directory of short names gets
+/// two and a directory of download names — `wetransfer_…_2026-10-06_1431.zip` — gets one, with
+/// the whole name readable. The brief and medium views divide the width as they always did:
+/// they are about seeing many names at once, and a name too long for its column is cut.
+pub fn brief_columns(area: Rect, view: ViewMode, widest: usize) -> usize {
     let inner = area.inner().w as usize;
+    if view == ViewMode::Wide {
+        // The name, the size at the right-hand end of the column, and a space between
+        // columns. A name nobody could fit anyway still leaves one column.
+        let need = widest + SIZE_W as usize + 2;
+        return (inner / need.max(1)).clamp(1, view.columns());
+    }
     let least = if view.shows_size() { 24 } else { 14 };
     (inner / least).clamp(1, view.columns())
 }
@@ -146,7 +159,7 @@ pub fn draw_panel(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>) {
 fn column_rules(p: &PanelRender<'_>, inner: Rect) -> Vec<u16> {
     let mut xs = match p.view {
         ViewMode::Brief | ViewMode::Wide => {
-            let cols = brief_columns(p.area, p.view);
+            let cols = brief_columns(p.area, p.view, p.listing.widest);
             let col_w = (inner.w as usize / cols).max(4);
             (1..cols)
                 .map(|col| inner.x + (col * col_w) as u16 - 1)
@@ -284,7 +297,7 @@ fn draw_scrollbar(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: R
     let total = p.listing.len();
     let per_screen = rows.max(1)
         * if p.view == ViewMode::Brief || p.view == ViewMode::Wide {
-            brief_columns(p.area, p.view)
+            brief_columns(p.area, p.view, p.listing.widest)
         } else {
             1
         };
@@ -355,7 +368,7 @@ fn draw_column_titles(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inne
     }
     match p.view {
         ViewMode::Brief | ViewMode::Wide => {
-            let cols = brief_columns(p.area, p.view);
+            let cols = brief_columns(p.area, p.view, p.listing.widest);
             let col_w = (inner.w as usize / cols).max(4);
             for col in 0..cols {
                 let x = inner.x + (col * col_w) as u16;
@@ -445,7 +458,7 @@ fn row_style(
 fn draw_brief(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect, rows: usize) {
     // One clock for the whole panel, as in the full view below.
     let now = SystemTime::now();
-    let cols = brief_columns(p.area, p.view);
+    let cols = brief_columns(p.area, p.view, p.listing.widest);
     let col_w = (inner.w as usize / cols).max(4);
     // FAR's wide view puts the size at the right-hand end of each column.
     let size_w: u16 = if p.view.shows_size() { 9 } else { 0 };
@@ -1596,6 +1609,37 @@ mod tests {
         };
         draw_panel(&mut buf, &theme, &p);
         buf.to_text()
+    }
+
+    #[test]
+    fn the_wide_view_fits_its_columns_to_the_names_it_has() {
+        let short = Listing::new(
+            vec![
+                Entry::parent_entry(),
+                entry("a.txt", EntryKind::File, 10),
+                entry("b.txt", EntryKind::File, 20),
+            ],
+            1,
+        );
+        let long = Listing::new(
+            vec![
+                Entry::parent_entry(),
+                entry(
+                    "wetransfer_apache-tomcat-9-0-97-7z-001_2026-10-06_1431.zip",
+                    EntryKind::File,
+                    10,
+                ),
+            ],
+            1,
+        );
+        let area = Rect::new(0, 0, 58, 10);
+        // Short names: two columns of name and size, as the wide view has always drawn.
+        assert_eq!(brief_columns(area, ViewMode::Wide, short.widest), 2);
+        // One long name and the whole panel is one column, with the name readable — which
+        // is the point of the mode, and what FAR does.
+        assert_eq!(brief_columns(area, ViewMode::Wide, long.widest), 1);
+        // The brief view divides the width as it always did: it is about seeing many names.
+        assert!(brief_columns(area, ViewMode::Brief, long.widest) > 1);
     }
 
     #[test]
