@@ -77,6 +77,14 @@ or the name of a theme colour such as `file.archive`, which then follows the the
 change it. A group that does not parse is named on the startup screen and skipped; the program
 starts either way.
 
+You do not have to write the file. `F9 → Options → Files highlighting` lists the groups in the
+order they are tried, each row drawn in its own colours: `Enter` or `F4` edits one, `Ins` makes
+a new one beside it, `Del` takes one away, and `Ctrl+↑`/`Ctrl+↓` move one past its neighbour
+when two of them match the same file. Every row of the dialog takes exactly what the file
+takes, and a condition that does not parse comes back with the problem named rather than being
+kept. A change is in force on the panels at once; `Options → Save setup` is what writes it to
+the file.
+
 # The palette editor
 
 `F9 → Options → Colours…` lists every colour the interface uses, with the value as a theme file

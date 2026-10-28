@@ -143,6 +143,7 @@ impl Form {
             | FormKind::Checksum
             | FormKind::Sync
             | FormKind::Link
+            | FormKind::Highlight
             | FormKind::Search => Vec::new(),
             FormKind::EditorSettings => vec![
                 choice(
@@ -397,6 +398,7 @@ impl Form {
             FormKind::Sync => "sync-title",
             FormKind::Search => "search-title",
             FormKind::Link => "link-title",
+            FormKind::Highlight => "hl-new",
             FormKind::EditorSettings => "menu-editor-settings",
             FormKind::ViewerSettings => "menu-viewer-settings",
             FormKind::System => "menu-system-settings",
@@ -511,6 +513,62 @@ impl Form {
             fields,
             cursor: 0,
             site: index,
+            button: None,
+            buttons: vec![i18n.t("btn-ok"), i18n.t("btn-cancel")],
+        }
+    }
+
+    /// One colour group (SPEC 10 §3.11), or a new one when `group` is `None`.
+    ///
+    /// Every row is the same word the configuration file takes, because it is the same
+    /// condition set: somebody who learned the dialog can write the file, and the other way
+    /// round. The two inks take a colour or the name of a theme colour, which is why they are
+    /// text rows rather than a palette.
+    pub fn highlight(group: Option<&fcmd_config::HighlightCfg>, i18n: &I18n) -> Form {
+        let t = |id: &str| i18n.t(id);
+        let blank = fcmd_config::HighlightCfg::default();
+        let g = group.unwrap_or(&blank);
+        let fields = vec![
+            Field::text("hl.name", t("hl-name"), g.name.clone()),
+            Field::Separator,
+            Field::text("hl.mask", t("hl-mask"), g.mask.clone()),
+            choice(
+                "hl.kind",
+                t("hl-kind"),
+                &[
+                    ("", t("hl-kind-both")),
+                    ("file", t("hl-kind-file")),
+                    ("dir", t("hl-kind-dir")),
+                ],
+                &g.kind,
+            ),
+            Field::text("hl.size", t("hl-size"), g.size.clone()),
+            Field::text("hl.age", t("hl-age"), g.age.clone()),
+            choice(
+                "hl.date_field",
+                t("hl-date-field"),
+                &[
+                    ("write", t("col-modified")),
+                    ("create", t("col-created")),
+                    ("access", t("col-accessed")),
+                ],
+                if g.date_field.is_empty() {
+                    "write"
+                } else {
+                    &g.date_field
+                },
+            ),
+            Field::text("hl.attrs", t("hl-attrs"), g.attrs.clone()),
+            Field::Separator,
+            Field::text("hl.fg", t("hl-fg"), g.fg.clone()),
+            Field::text("hl.bg", t("hl-bg"), g.bg.clone()),
+        ];
+        Form {
+            kind: FormKind::Highlight,
+            title: t(if group.is_some() { "hl-edit" } else { "hl-new" }),
+            fields,
+            cursor: 0,
+            site: None,
             button: None,
             buttons: vec![i18n.t("btn-ok"), i18n.t("btn-cancel")],
         }

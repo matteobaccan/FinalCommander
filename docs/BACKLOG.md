@@ -42,7 +42,7 @@ what we intend to do about it.
 | ~~Mask groups `<arc>`, `<temp>`, `<exec>`~~ | Options menu | **Shipped** as values (nestable, used by the filter bar and by file highlighting). The *editor* for them in the Options menu is still to come. |
 | ~~The full mask grammar~~ | everywhere | **Shipped**: `[c-f]` ranges, `/regex/i`, `include|exclude`, lists with either separator. |
 | ~~Filters as a shared object~~ | panel, find, copy | **Shipped** in `fcmd-core::filter`: masks, size, four date fields (absolute or relative in days), attributes as three states, hard links — one value type, used by the panel's filter bar today. |
-| Files highlighting | Options menu | Colour by mask and attribute group, with its own list and editor. Wants the filter object above. |
+| ~~Files highlighting~~ | Options menu | **Shipped**: the `[[highlight]]` groups in 0.6.0 and the list that edits them in 0.7.0 (SPEC 10 §3.11) — in the order they are tried, each row drawn in its own colours, `Enter`/`F4` to edit, `Ins`/`Del`, `Ctrl+↑↓` to move one past its neighbour. A change is in force at once; `Save setup` writes it to the file. |
 
 ## Files
 
@@ -171,7 +171,7 @@ here is the order to build it in: each item needs only the ones above it.
 | Always show the menu bar | Interface settings | Costs one screen row; trivial once there is a setting for it. |
 | ~~Viewer settings~~, ~~Editor settings~~ | Options menu | **Both shipped** (SPEC 10 §3.6 and §3.6b). `[editor]`: the tab policy, the tab width, the indent, whitespace, and where the cursor lands on a match. `[viewer]`: the three rows of chrome (which are also `Ctrl+B`, `Ctrl+Shift+B` and `Ctrl+S` inside the viewer, where they change this file and write nothing back), the wrap a file opens with, and the tab width. Still owed in the viewer's dialog: remembering a file's position and code page, which wants the store the histories want. |
 | Code pages | Options menu | The viewer already cycles encodings with `F8`; this is the list-and-pick version. |
-| Files highlighting | Options menu | Colour by mask/attribute, FAR's `[Colors]` groups. |
+| ~~Files highlighting~~ | Options menu | **Shipped** — the groups and the dialog both; see above. |
 | Plugins configuration | Options menu | SPEC 08: there is nothing to configure until plugins load from disk. |
 
 ## Netbox

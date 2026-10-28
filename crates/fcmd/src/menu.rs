@@ -43,6 +43,8 @@ pub enum FormKind {
     Link,
     /// Find text in what the viewer or the editor has open (SPEC 05 §1.4).
     Search,
+    /// One `[[highlight]]` group: its conditions and its two inks (SPEC 10 §3.11).
+    Highlight,
     System,
     Panel,
     Interface,
@@ -70,6 +72,8 @@ pub enum PickKind {
     CommandHistory,
     /// The files that have been read or edited (SPEC 06 §6).
     FileHistory,
+    /// The `[[highlight]]` groups, in the order they are tried (SPEC 10 §3.11).
+    Highlight,
     /// The sort order for this panel.
     SortModes,
     /// What to do with the block of bytes that is marked (SPEC 05 §2.6).
@@ -499,11 +503,7 @@ pub fn menus() -> Vec<Menu> {
                 item("menu-viewer-settings", "", Action::Run(Command::OptViewer)),
                 item("menu-editor-settings", "", Action::Run(Command::OptEditor)),
                 item("menu-codepages", "", Action::Todo("settings.codepages")),
-                item(
-                    "menu-highlighting",
-                    "",
-                    Action::Todo("settings.highlighting"),
-                ),
+                item("menu-highlighting", "", Action::Run(Command::OptHighlight)),
                 item("menu-plugins-config", "", Action::Todo("settings.plugins")),
                 Entry::Separator,
                 item("menu-help", "F1", Action::Run(Command::AppHelp)),

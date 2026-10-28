@@ -290,6 +290,38 @@ the two that can are off until somebody ticks them.
 It is not the question, though: the *table* is (`03-file-operations.md` §10a), and this only
 says how to work it out.
 
+### 3.11 Files highlighting (Options menu)
+
+The `[[highlight]]` groups of SPEC 02 §5, as a list with a dialog per group — because a
+feature whose only interface is a configuration file is a feature most people never find.
+
+**The list.** One row per group, in the order the program reads them, which is the order that
+decides: the first group matching a row of the panel paints it. The row says what the group is
+called and what it matches, in the same words the file uses (`logs · *.log write 7-30d`), and
+is drawn **in the group's own colours** — a list of colours one cannot see would send the
+reader back to the file to find out what a group does. The row under the cursor keeps the
+cursor's colours, because knowing where one is matters more.
+
+Keys: `Enter` or `F4` edits the group under the cursor, `Ins` makes a new one *beside it*
+(where a new group lands matters, since the order decides), `Del` takes one away, `Ctrl+↑` and
+`Ctrl+↓` move one past its neighbour, `Esc` closes.
+
+**The dialog**, one group: a name, a mask list, what it applies to (files, folders or both), a
+size window, an age in days with which of the timestamps it is about, the attribute letters,
+and the two inks. Every row takes exactly what the file takes, because it is the same
+condition set and the same parser — somebody who learned the dialog can write the file, and
+the other way round.
+
+**What it refuses, and how.** The block is compiled before it is kept, by the same function
+the startup uses: a condition that does not parse comes back on the dialog with every field
+still filled in and the problem named, and a group with no condition at all is refused rather
+than painting every row.
+
+**What it does not do: write the file.** A change is in force on the panels the moment it is
+accepted, and `Options → Save setup` is what writes it to `fcmd.toml` — which the status line
+says each time. That is deliberate: the configuration file is one people edit by hand, with
+comments in it, and `Save setup` regenerates it. The palette editor already works this way.
+
 ## 4. Choose-one lists
 
 One framed list, one `√` on the row in force, `↑`/`↓`/`PgUp`/`PgDn`/`Home`/`End` to move,

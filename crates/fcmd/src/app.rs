@@ -1225,6 +1225,9 @@ pub struct App {
     pub tabs: [crate::tabs::Row; 2],
     /// The folders kept to hand (SPEC 02 §11), as the state file holds them.
     pub bookmarks: Vec<fcmd_config::Bookmark>,
+    /// Which colour group the open dialog is editing, or `None` for a new one
+    /// (SPEC 10 §3.11).
+    pub highlight_at: Option<usize>,
     /// The files that have been read or edited, oldest last — FAR's `Alt+F11`.
     ///
     /// Newest first in the list because that is the order somebody reaching back wants, and
@@ -1466,6 +1469,7 @@ impl App {
             tabs: [crate::tabs::Row::one(), crate::tabs::Row::one()],
             bookmarks: Vec::new(),
             file_history: Vec::new(),
+            highlight_at: None,
             active: 0,
             mode: Mode::Normal,
             status: String::new(),
@@ -5882,6 +5886,7 @@ impl App {
             Command::OptSystem => self.open_form(FormKind::System),
             Command::OptPanel => self.open_form(FormKind::Panel),
             Command::OptInterface => self.open_form(FormKind::Interface),
+            Command::OptHighlight => self.open_pick(PickKind::Highlight, self.active),
             Command::OptConfirmations => self.open_form(FormKind::Confirmations),
             Command::OptEditor => self.open_form(FormKind::EditorSettings),
             Command::OptViewer => self.open_form(FormKind::ViewerSettings),
@@ -7785,6 +7790,58 @@ impl App {
     }
 
     /// OK in the find dialog: work out where to search, and start.
+    /// Take a colour group from its dialog (SPEC 10 §3.11).
+    ///
+    /// The block is compiled before it is kept, by the same function the startup uses, so
+    /// what the dialog accepts is exactly what the file accepts: a condition that does not
+    /// parse comes back on the dialog with the fields still filled in, and a group with no
+    /// condition at all is refused rather than painting every row.
+    fn apply_highlight_form(&mut self, form: &Form) {
+        let group = fcmd_config::HighlightCfg {
+            name: form.text_value("hl.name"),
+            mask: form.text_value("hl.mask"),
+            kind: form.choice_value("hl.kind"),
+            size: form.text_value("hl.size"),
+            age: form.text_value("hl.age"),
+            date_field: form.choice_value("hl.date_field"),
+            attrs: form.text_value("hl.attrs"),
+            fg: form.text_value("hl.fg"),
+            bg: form.text_value("hl.bg"),
+        };
+        let at = self.highlight_at;
+        let name = highlight_name(&group, at.unwrap_or(self.cfg.highlight.len()));
+        let groups = fcmd_core::filter::default_groups();
+        if let Err(problem) = crate::highlight::rule(&group, &groups, &name) {
+            let msg = self.i18n.t_args(
+                "hl-bad",
+                &[("name", name.into()), ("problem", problem.into())],
+            );
+            self.set_error(msg);
+            self.mode = Mode::Form(Box::new(form.clone()));
+            return;
+        }
+        let side = self.active;
+        let cursor = match at {
+            Some(i) if i < self.cfg.highlight.len() => {
+                self.cfg.highlight[i] = group;
+                i
+            }
+            // A new group goes in beside the row the list was on rather than at the end: the
+            // order decides which group wins, so where a new one lands matters.
+            _ => {
+                let at = self.highlight_at.unwrap_or(self.cfg.highlight.len());
+                let at = at.min(self.cfg.highlight.len());
+                self.cfg.highlight.insert(at, group);
+                at
+            }
+        };
+        self.highlight_at = None;
+        self.apply_highlight();
+        let msg = self.i18n.t("hl-saved");
+        self.reopen_highlight(side, cursor);
+        self.set_status(msg);
+    }
+
     fn apply_find_form(&mut self, form: &Form) {
         let mask = form.text_value("find.mask");
         if mask.is_empty() {
@@ -8321,6 +8378,10 @@ impl App {
         let button = form.button.unwrap_or(0);
         if form.kind == FormKind::Site {
             self.apply_site_form(&form);
+            return;
+        }
+        if form.kind == FormKind::Highlight {
+            self.apply_highlight_form(&form);
             return;
         }
         if form.kind == FormKind::Find {
@@ -9693,6 +9754,21 @@ impl App {
                     .collect();
                 Pick::new(kind, self.plain("menu-view-history"), rows, side)
             }
+            PickKind::Highlight => {
+                let rows: Vec<PickRow> = self
+                    .cfg
+                    .highlight
+                    .iter()
+                    .enumerate()
+                    .map(|(i, h)| PickRow {
+                        label: highlight_row(h, i),
+                        value: i.to_string(),
+                        current: false,
+                        hotkey: None,
+                    })
+                    .collect();
+                Pick::new(kind, self.plain("menu-highlighting"), rows, side)
+            }
             PickKind::SortModes => {
                 let panel = &self.panels[side];
                 let keys = [
@@ -9754,6 +9830,24 @@ impl App {
                 // screens list over whatever was in front — goes back to it when it closes.
                 self.restore_front_screen();
             }
+            // The order is what the program reads: the first group that matches a row
+            // decides it, so moving a row up is the one edit that is not inside a group.
+            KeyCode::Up | KeyCode::Down
+                if kind == PickKind::Highlight && key.mods.contains(Mods::CTRL) =>
+            {
+                let (side, at) = (pick.side, pick.cursor);
+                let up = key.code == KeyCode::Up;
+                let other = if up {
+                    at.checked_sub(1)
+                } else {
+                    (at + 1 < self.cfg.highlight.len()).then_some(at + 1)
+                };
+                if let Some(other) = other {
+                    self.cfg.highlight.swap(at, other);
+                    self.apply_highlight();
+                    self.reopen_highlight(side, other);
+                }
+            }
             KeyCode::Up => pick.move_cursor(-1),
             KeyCode::Down => pick.move_cursor(1),
             KeyCode::PageUp => pick.move_cursor(-10),
@@ -9775,6 +9869,28 @@ impl App {
                     })
                     .unwrap_or(cursor);
                 self.reopen_bookmarks(side, cursor);
+            }
+            // The groups are edited where they are read, like the hotlist: a list of
+            // colours one cannot change from inside it would send the reader to the file.
+            KeyCode::F(4) if kind == PickKind::Highlight => {
+                let at = pick.cursor;
+                self.open_highlight_form(Some(at));
+            }
+            KeyCode::Insert if kind == PickKind::Highlight => {
+                let at = pick.cursor;
+                self.open_highlight_form(None);
+                self.highlight_at = Some(at);
+            }
+            KeyCode::Delete if kind == PickKind::Highlight => {
+                let (side, at) = (pick.side, pick.cursor);
+                if at < self.cfg.highlight.len() {
+                    let gone = highlight_name(&self.cfg.highlight[at], at);
+                    self.cfg.highlight.remove(at);
+                    self.apply_highlight();
+                    let msg = self.i18n.t_args("hl-removed", &[("name", gone.into())]);
+                    self.reopen_highlight(side, at.min(self.cfg.highlight.len()));
+                    self.set_status(msg);
+                }
             }
             // The one list where `F4` means something: a file in the history is more often
             // one to go back and change than one to read again.
@@ -9955,6 +10071,10 @@ impl App {
                 // `Enter` reads it, which is what the list is mostly for; `F4` in the list
                 // edits it instead, and that is handled where the keys are.
                 self.view_path(&row.value);
+            }
+            PickKind::Highlight => {
+                let at = row.value.parse::<usize>().unwrap_or(0);
+                self.open_highlight_form(Some(at));
             }
             PickKind::SortModes => {
                 let key = match row.value.as_str() {
@@ -11563,6 +11683,66 @@ impl App {
     }
 
     /// Open the hotlist again after a key that changed it, with the cursor where it was.
+    /// The colours group `index` paints with, for the row that stands for it in the list.
+    ///
+    /// `None` when the group names neither ink — there is nothing to show, and the row keeps
+    /// the dialog's own colours rather than being drawn in a guess.
+    pub fn highlight_ink(&self, index: usize) -> Option<fcmd_ui::Style> {
+        let h = self.cfg.highlight.get(index)?;
+        if h.fg.is_empty() && h.bg.is_empty() {
+            return None;
+        }
+        let ink = |text: &str, fallback: &str| {
+            if text.is_empty() {
+                self.theme.color(fallback)
+            } else {
+                fcmd_ui::highlight::Ink::parse(text).color(&self.theme)
+            }
+        };
+        Some(fcmd_ui::Style::new(
+            ink(&h.fg, "dialog.fg"),
+            ink(&h.bg, "dialog.bg"),
+        ))
+    }
+
+    /// Open the list of colour groups again, with the cursor where the edit left it.
+    fn reopen_highlight(&mut self, side: usize, cursor: usize) {
+        let rows: Vec<PickRow> = self
+            .cfg
+            .highlight
+            .iter()
+            .enumerate()
+            .map(|(i, h)| PickRow {
+                label: highlight_row(h, i),
+                value: i.to_string(),
+                current: false,
+                hotkey: None,
+            })
+            .collect();
+        let title = self.plain("menu-highlighting");
+        let mut pick = Pick::new(PickKind::Highlight, title, rows, side);
+        pick.cursor = cursor.min(pick.rows.len().saturating_sub(1));
+        self.mode = Mode::Pick(Box::new(pick));
+    }
+
+    /// The dialog for one colour group, or for a new one (`index` is `None`).
+    pub fn open_highlight_form(&mut self, index: Option<usize>) {
+        let group = index.and_then(|i| self.cfg.highlight.get(i)).cloned();
+        self.highlight_at = index;
+        self.mode = Mode::Form(Box::new(Form::highlight(group.as_ref(), &self.i18n)));
+    }
+
+    /// Compile the groups again and put them on the panels. Called after every change, so
+    /// the screen behind the dialog shows what was just asked for.
+    ///
+    /// A group that does not parse cannot get this far — the dialog refuses it — but the
+    /// file can still hold one, and the warning it produced at startup has already been
+    /// shown: here it is simply left out, as it was then.
+    fn apply_highlight(&mut self) {
+        let mut problems = Vec::new();
+        self.highlight = crate::highlight::groups(&self.cfg, &mut problems);
+    }
+
     fn reopen_bookmarks(&mut self, side: usize, cursor: usize) {
         let rows = self.bookmark_rows(side);
         let title = self.plain("menu-bookmarks");
@@ -12206,6 +12386,48 @@ fn help_group(id: &str) -> (usize, &'static str) {
         "cmd" | "shell" => (7, "The command line"),
         "tool" | "net" | "plugin" | "macro" => (8, "Tools"),
         _ => (9, "The program"),
+    }
+}
+
+/// What a colour group is called in a message and in the list: its own name, or its number.
+fn highlight_name(h: &fcmd_config::HighlightCfg, index: usize) -> String {
+    if h.name.is_empty() {
+        format!("#{}", index + 1)
+    } else {
+        h.name.clone()
+    }
+}
+
+/// One row of the colour-group list: what it is called, then what it matches, in the words
+/// the configuration file uses. The row is drawn in the group's own colours, which is the
+/// other half of what the list is for.
+fn highlight_row(h: &fcmd_config::HighlightCfg, index: usize) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    if !h.mask.is_empty() {
+        parts.push(h.mask.clone());
+    }
+    if !h.kind.is_empty() {
+        parts.push(h.kind.clone());
+    }
+    if !h.size.is_empty() {
+        parts.push(h.size.clone());
+    }
+    if !h.age.is_empty() {
+        let field = if h.date_field.is_empty() {
+            "write".to_string()
+        } else {
+            h.date_field.clone()
+        };
+        parts.push(format!("{field} {}d", h.age));
+    }
+    if !h.attrs.is_empty() {
+        parts.push(h.attrs.clone());
+    }
+    let name = highlight_name(h, index);
+    if parts.is_empty() {
+        name
+    } else {
+        format!("{name}  ·  {}", parts.join(" "))
     }
 }
 
@@ -17673,6 +17895,93 @@ abcdefghij
         assert_eq!(app.panel().cursor, cursor_before, "the panel moved instead");
         assert_eq!(app.mode.editor().unwrap().buffer.line(0), "alpha!!");
         assert!(app.mode.editor().unwrap().buffer.modified());
+    }
+
+    // ── the colour groups dialog (SPEC 10 §3.11) ───────────────────────────────────────────
+
+    #[test]
+    fn the_colour_groups_are_listed_edited_reordered_and_removed_from_the_list() {
+        let mut app = app();
+        app.cfg.highlight = vec![
+            fcmd_config::HighlightCfg {
+                name: "logs".into(),
+                mask: "*.log".into(),
+                fg: "#d7875f".into(),
+                ..Default::default()
+            },
+            fcmd_config::HighlightCfg {
+                name: "big".into(),
+                size: "1G-".into(),
+                fg: "red".into(),
+                ..Default::default()
+            },
+        ];
+        app.run(Command::OptHighlight);
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(pick.kind, crate::menu::PickKind::Highlight);
+        assert_eq!(pick.rows.len(), 2);
+        // The row says what the group is called and what it matches, in the file's own words.
+        assert!(
+            pick.rows[0].label.contains("logs"),
+            "{:?}",
+            pick.rows[0].label
+        );
+        assert!(
+            pick.rows[0].label.contains("*.log"),
+            "{:?}",
+            pick.rows[0].label
+        );
+        // And it is drawn in the group's own colours.
+        assert!(app.highlight_ink(0).is_some());
+        assert!(app.highlight_ink(9).is_none(), "a row that is not there");
+
+        // `Ctrl+Down` moves a group past the next one: the order is what decides which group
+        // paints a row that both of them match.
+        press(&mut app, "Ctrl+Down");
+        assert_eq!(app.cfg.highlight[0].name, "big");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(pick.cursor, 1, "the cursor follows the row it moved");
+
+        // `F4` opens the group under the cursor, filled in.
+        press(&mut app, "F4");
+        let Mode::Form(form) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(form.kind, crate::menu::FormKind::Highlight);
+        assert_eq!(form.text_value("hl.mask"), "*.log");
+
+        // A condition that does not parse comes back on the dialog, with the fields kept.
+        set_text(&mut app, "hl.size", "not a size");
+        press(&mut app, "F10");
+        assert!(app.status_error, "{}", app.status);
+        let Mode::Form(form) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(form.text_value("hl.size"), "not a size");
+
+        // A sound change is in force at once, and the list comes back.
+        set_text(&mut app, "hl.size", "1M-");
+        press(&mut app, "F10");
+        assert!(!app.status_error, "{}", app.status);
+        assert_eq!(app.cfg.highlight[1].size, "1M-");
+        assert!(matches!(app.mode, Mode::Pick(_)), "{:?}", app.mode);
+
+        // A group with no condition at all would paint every row, so it is refused.
+        press(&mut app, "Ins");
+        set_text(&mut app, "hl.name", "nothing");
+        press(&mut app, "F10");
+        assert!(app.status_error, "{}", app.status);
+        press(&mut app, "Esc");
+
+        // `Del` takes one away.
+        app.run(Command::OptHighlight);
+        press(&mut app, "Del");
+        assert_eq!(app.cfg.highlight.len(), 1);
+        assert_eq!(app.cfg.highlight[0].name, "logs");
     }
 
     // ── the view-and-edit history (SPEC 06 §6) ─────────────────────────────────────────────

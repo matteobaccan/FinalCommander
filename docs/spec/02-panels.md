@@ -219,9 +219,11 @@ worth refusing to start over. The ink is a colour (`#d7875f`, `red`, `idx:235`) 
 a theme key, and a key is resolved every time it is drawn rather than once, so a group follows
 `Ctrl+Shift+T` from one theme to the next.
 
-The dialog that edits these, and a predicate language for the conditions that are not
-conditions on one field (`attrs.contains('x') && kind == 'file'`), are backlog lines: the
-condition set covers what a person writes in a file.
+The dialog that edits these is `F9 → Options → Files highlighting` (SPEC 10 §3.11): the
+groups as a list in the order they are tried, each row drawn in its own colours, with a dialog
+per group that takes exactly the words the file takes. A predicate language for the conditions
+that are not conditions on one field (`attrs.contains('x') && kind == 'file'`) is still a
+backlog line: the condition set covers what a person writes in a file.
 
 ## 6. Fast find / quick search
 

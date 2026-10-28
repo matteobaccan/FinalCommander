@@ -57,6 +57,8 @@ pub enum Command {
     OptSystem,
     OptPanel,
     OptInterface,
+    /// The `[[highlight]]` groups as a list, with a dialog per group (SPEC 10 §3.11).
+    OptHighlight,
     OptConfirmations,
     /// The palette editor: every colour the interface uses, on the live theme.
     OptColors,
@@ -384,6 +386,7 @@ impl Command {
             Command::OptSystem,
             Command::OptPanel,
             Command::OptInterface,
+            Command::OptHighlight,
             Command::OptConfirmations,
             Command::OptColors,
             Command::OptEditor,
@@ -621,6 +624,7 @@ impl Command {
             Command::OptSystem => "opt.system".into(),
             Command::OptPanel => "opt.panel".into(),
             Command::OptInterface => "opt.interface".into(),
+            Command::OptHighlight => "opt.highlight".into(),
             Command::OptConfirmations => "opt.confirmations".into(),
             Command::OptColors => "opt.colors".into(),
             Command::OptEditor => "opt.editor".into(),
@@ -837,6 +841,7 @@ impl Command {
             ("opt.system", _) => Command::OptSystem,
             ("opt.panel", _) => Command::OptPanel,
             ("opt.interface", _) => Command::OptInterface,
+            ("opt.highlight", _) => Command::OptHighlight,
             ("opt.confirmations", _) => Command::OptConfirmations,
             ("opt.colors", _) => Command::OptColors,
             ("opt.editor", _) => Command::OptEditor,

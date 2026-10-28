@@ -42,7 +42,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 1.20 | Long-path support (`\\?\` on Windows, >260 chars), UNC paths | FAR/MTN2 | M1 |
 | 1.21 | Per-panel encoding/codepage for names and previews | MC/FAR | M3 |
 | 1.22 | Icons / nerd-font glyphs per file type, optional | YAZI | M2 |
-| 1.23 | ~~Colour-by-file-type rules (mask, attrs, size, age) — "highlight groups"~~ | FAR/TC | **shipped**: `[[highlight]]` groups in `fcmd.toml`, the first match deciding, with FAR's built-in six after them. The dialog that edits them is still owed |
+| 1.23 | ~~Colour-by-file-type rules (mask, attrs, size, age) — "highlight groups", with the dialog that edits them~~ | FAR/TC | **shipped**: `[[highlight]]` groups in `fcmd.toml`, the first match deciding, with FAR's built-in six after them, and **`F9 → Options → Files highlighting`** (0.7.0) — the groups as a list in the order they are tried, each row in its own colours, `Ins`/`Del`/`Ctrl+↑↓` and a dialog per group |
 | 1.24 | ~~Panel history (back/forward), directory history, folder shortcuts/bookmarks (0..9 + named), hotlist~~ | FAR/TC/MC | **shipped** |
 | 1.25 | ~~Auto-refresh via filesystem watch (inotify/FSEvents/ReadDirectoryChangesW), manual `Ctrl+R`~~ | TC/MTN2 | **shipped** |
 | 1.26 | ~~Names and full paths to the system clipboard~~ | FAR (`Ctrl+Ins`, `Alt+Shift+Ins`) | **Shipped: 0.6.0** — through the terminal with `OSC 52` (SPEC 06 §11), so it also works over `ssh`; `ui.clipboard` turns it off. The *files themselves* on the clipboard, for another application to paste, is window-system work and stays in the backlog |

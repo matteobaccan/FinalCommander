@@ -811,6 +811,7 @@ fn draw_pick(
     let hint = app.i18n.t(match pick.kind {
         crate::menu::PickKind::Drives => "drives-hint",
         crate::menu::PickKind::Bookmarks => "bookmarks-hint",
+        crate::menu::PickKind::Highlight => "hl-hint",
         _ => "pick-hint",
     });
 
@@ -863,6 +864,25 @@ fn draw_pick(
         top: start,
         len: lines.len(),
     };
+    // A list of colours one cannot see would send the reader to the file to find out what a
+    // group does. Each row is drawn in the colours its group paints with, over what the
+    // dialog has already drawn; the row under the cursor keeps the cursor's colours, because
+    // knowing where one is matters more.
+    if pick.kind == crate::menu::PickKind::Highlight {
+        let width = area.w.saturating_sub(2) as usize;
+        for (row, line) in shown.iter().enumerate() {
+            let y = area.y + 1 + row as u16;
+            if y >= area.y + area.h.saturating_sub(1) || row == pick.cursor.saturating_sub(start) {
+                continue;
+            }
+            let Some(ink) = app.highlight_ink(start + row) else {
+                continue;
+            };
+            let text = format!(" {:<w$}", line, w = width.saturating_sub(1));
+            buf.put_str(area.x + 1, y, &text, ink, width as u16);
+        }
+    }
+
     let style = Style::new(app.theme.color("cursor.fg"), app.theme.color("cursor.bg"));
     let row = pick.cursor.saturating_sub(start);
     let y = area.y + 1 + row as u16;

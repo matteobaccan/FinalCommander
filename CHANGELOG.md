@@ -8,6 +8,27 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **The colour groups have a dialog.** `F9 → Options → Files highlighting` — the entry has
+  said *not here yet* since the menu bar was written, and the `[[highlight]]` groups that
+  shipped in 0.6.0 had no interface but the configuration file. The list shows them in the
+  order they are tried, which is the order that decides, and **each row is drawn in its own
+  colours**: a list of colours one cannot see would send you back to the file to find out
+  what a group does.
+
+  `Enter` or `F4` edits the group under the cursor, `Ins` makes a new one beside it — where a
+  new group lands matters, since the first match wins — `Del` takes one away, and `Ctrl+↑` /
+  `Ctrl+↓` move one past its neighbour. The dialog itself takes exactly the words the file
+  takes, because it is the same condition set and the same parser: a mask list, files or
+  folders, a size window, an age in days on any of the four timestamps, the attribute
+  letters, and the two inks. A condition that does not parse comes back on the dialog with
+  every field still filled in and the problem named; a group with no condition at all is
+  refused rather than painting every row.
+
+  A change is in force on the panels the moment it is accepted, and `Options → Save setup`
+  writes it to `fcmd.toml` — which the status line says each time. The dialog deliberately
+  does not write the file by itself: that file is one people edit by hand, with comments in
+  it, and saving regenerates it.
+
 - **`Alt+F11`: the files you have read or edited.** FAR's own key, and the last of the three
   histories the Commands menu promised — the entry used to say *not here yet*. Newest first,
   `Enter` reads a row, `F4` edits it, and it survives the session in the state file like the
