@@ -133,7 +133,7 @@ keeps it as the run's artifact; publishing happens only through `workflow_dispat
 
 ## Where the work is right now
 
-**0.7.3 is released.** What is in it, and in the three before it:
+**0.8.0 is released.** What is in it, and in the three before it:
 
 - **0.6.0** — `[[highlight]]` groups (colour by mask, size, age, attributes or kind, from the
   configuration); the find dialog's size condition; the system clipboard through the terminal
@@ -159,6 +159,12 @@ keeps it as the run's artifact; publishing happens only through `workflow_dispat
   of: read in whatever code page they are in, shown by `Ctrl+6` and `Ctrl+7`, in the
   information panel and in the status line, written by `Ctrl+Z`, and carried by a copy, a
   move, a rename and a delete. With them a sort criteria chain (`panel.sort_chain`).
+- **0.8.0** — the author's own list, from FAR screenshots: the last two view modes (`Ctrl+9`
+  links, `Ctrl+0` alternative full), so all ten of FAR's are there; `F4` in the viewer turns
+  a wheel through text, dump, hex, document and table; the `wide` view fits its columns to
+  the names it has; three panels that are not drives in `Alt+F1`/`Alt+F2` — NetBox (the
+  stored sessions), the process list, the temporary panel — and text that can be marked out
+  on the command line with `Shift` and an arrow.
 
 ## The queue, as the author's review left it
 
@@ -166,11 +172,10 @@ In the order they were raised, all from a side-by-side comparison with FAR on Wi
 view modes, the menu letters and the tabular viewers are done; what is left is waiting on the
 author:
 
-- **The change-drive dialog** (`Alt+F1`/`Alt+F2`) is to look *exactly* like FAR's. The author
-  sent a screenshot of ours; what is missing is one of FAR's own, because the column layout
-  cannot be reconstructed from memory without guessing. **Asked, not answered.**
-- **The `wide` view's layout** — same thing: the author has a FAR screenshot of it.
-- **The `F4` keybar label in the viewer** — a question to the author that is still open.
+- ~~**The change-drive dialog**, the **`wide` view's layout**, the **`F4` keybar label**~~ —
+  all three answered in 0.8.0. The author sent FAR's own screenshots: the dialog gained the
+  three panels that are not drives, `wide` now fits its columns to the names it has, and `F4`
+  turns a wheel, so the bar says where the next turn lands.
 - **The menu letters** are chosen by a rule now (first free word initial, then any free
   letter), in all six languages written in an alphabet, with a test keeping them unique. If
   the author wants FAR's own letters instead, the rule is one function and the catalogues are
