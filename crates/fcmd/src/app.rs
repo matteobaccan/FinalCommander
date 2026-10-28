@@ -44,6 +44,16 @@ pub enum Request {
     TunnelList,
     /// Read both sides of every pair and say which differ. The pairs are already matched by
     /// name: this is the reading, which is the part that takes time.
+    /// Walk both trees and say what differs between them (SPEC 03 §11b). The pairing is by
+    /// the path each file has *under* its own root, so `a/b/c.txt` is compared with
+    /// `a/b/c.txt` and not with whatever happens to be called `c.txt` over there.
+    CompareTrees {
+        id: u64,
+        left: VPath,
+        right: VPath,
+        work: TreeWork,
+        cancel: CancelToken,
+    },
     /// Walk a tree and find the files that are copies of each other (SPEC 03 §12). The
     /// walking and the reading are both the worker's: a directory of forty thousand files is
     /// a minute of disk, and the panels keep working while it happens.
@@ -382,6 +392,24 @@ pub enum Event {
         cancelled: bool,
         /// The list could not be read, or its digests do not agree on one hash.
         problem: Option<String>,
+    },
+    /// How far the comparison of two trees has got.
+    CompareTreesProgress {
+        id: u64,
+        seen: u64,
+        read: u64,
+    },
+    /// What it found: one row per path that is not the same on both sides, with the file to
+    /// act on and the size of it.
+    CompareTreesDone {
+        id: u64,
+        rows: Vec<(String, VPath, u64, TreeDiff)>,
+        /// Paths both trees had.
+        pairs: u64,
+        /// Of those, how many turned out to be the same.
+        same: u64,
+        unreadable: u64,
+        cancelled: bool,
     },
     /// How far the hunt for duplicates has got: files seen, and bytes hashed.
     DuplicatesProgress {
@@ -795,6 +823,52 @@ pub struct TunnelInfo {
     pub served: u64,
     pub live: u64,
     pub failed: u64,
+}
+
+/// Everything the comparison of two whole trees needs to know (SPEC 03 §11b).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TreeWork {
+    /// Match the names with their case.
+    pub case: bool,
+    pub size: bool,
+    pub time: bool,
+    /// How many seconds apart two times are still the same moment.
+    pub seconds: u64,
+    /// Read the bytes of every pair the listings call the same.
+    pub contents: bool,
+    /// Read them only where the times differ.
+    pub when_time_differs: bool,
+    /// Bytes to read from each side, or zero for the whole file.
+    pub fragment: u64,
+    /// How deep to go: `None` is all the way down.
+    pub depth: Option<usize>,
+    /// Stop at the first difference.
+    pub stop_on_first: bool,
+}
+
+/// What a comparison of two trees found about one path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TreeDiff {
+    /// It is on both sides and they are not the same.
+    Differs,
+    /// Only the left tree has it.
+    OnlyLeft,
+    /// Only the right tree has it.
+    OnlyRight,
+    /// It is on both sides and the only difference is how the lines end.
+    LineEndings,
+}
+
+impl TreeDiff {
+    /// The mark the panel puts in front of the path.
+    pub fn mark(self) -> char {
+        match self {
+            TreeDiff::Differs => '≠',
+            TreeDiff::OnlyLeft => '→',
+            TreeDiff::OnlyRight => '←',
+            TreeDiff::LineEndings => '≈',
+        }
+    }
 }
 
 /// How much reading the comparison of two files is allowed to do (SPEC 03 §11).
@@ -2205,6 +2279,33 @@ impl App {
                 }
                 self.compare = None;
                 self.apply_compare(&differ, &line_endings, unreadable, stopped);
+            }
+            Event::CompareTreesProgress { id, seen, read } => {
+                if self.compare.as_ref().map(|(running, _)| *running) != Some(id) {
+                    return;
+                }
+                let msg = self.i18n.t_args(
+                    "cmp-trees-working",
+                    &[
+                        ("seen", (seen as i64).into()),
+                        ("read", fcmd_core::format_size(read).into()),
+                    ],
+                );
+                self.set_status(msg);
+            }
+            Event::CompareTreesDone {
+                id,
+                rows,
+                pairs,
+                same,
+                unreadable,
+                cancelled,
+            } => {
+                if self.compare.as_ref().map(|(running, _)| *running) != Some(id) {
+                    return;
+                }
+                self.compare = None;
+                self.show_tree_differences(rows, pairs, same, unreadable, cancelled);
             }
             Event::DuplicatesProgress { id, seen, hashed } => {
                 if self.duplicates.as_ref().map(|(running, _)| *running) != Some(id) {
@@ -12429,6 +12530,160 @@ impl App {
         self.set_status(msg);
     }
 
+    /// Compare the whole of both trees (SPEC 03 §11b).
+    ///
+    /// The listings cannot answer this — they hold one directory each — so the walking and
+    /// the reading are the worker's, and what comes back is a panel of what differs rather
+    /// than a selection in two panels. Which is the honest answer: a difference three
+    /// directories down cannot be shown as a marked row in a panel that is not showing it.
+    fn compare_trees(&mut self) {
+        let (left, right) = (self.panels[0].cwd.clone(), self.panels[1].cwd.clone());
+        if [&left, &right]
+            .iter()
+            .any(|p| !p.is_local() || p.in_container())
+        {
+            let m = self.i18n.t("compare-contents-local");
+            self.set_error(m);
+            return;
+        }
+        if let Some((_, cancel)) = self.compare.take() {
+            cancel.cancel();
+        }
+        let opts = self.cfg.compare;
+        let id = self.next_job_id;
+        self.next_job_id += 1;
+        let cancel = CancelToken::new();
+        self.compare = Some((id, cancel.clone()));
+        let msg = self.i18n.t_args(
+            "cmp-trees-working",
+            &[("seen", 0.into()), ("read", "0 B".into())],
+        );
+        self.set_status(msg);
+        self.requests.push(Request::CompareTrees {
+            id,
+            left,
+            right,
+            work: TreeWork {
+                case: opts.case,
+                size: opts.size,
+                time: opts.time,
+                seconds: opts.seconds,
+                contents: opts.contents,
+                when_time_differs: opts.when_time_differs,
+                fragment: opts.fragment_kb.saturating_mul(1024),
+                depth: (opts.depth > 0).then_some(opts.depth as usize),
+                stop_on_first: opts.stop_on_first,
+            },
+            cancel,
+        });
+    }
+
+    /// What the comparison of two trees found, as a panel: one row per path that is not the
+    /// same on both sides, marked with which way it goes.
+    fn show_tree_differences(
+        &mut self,
+        rows: Vec<(String, VPath, u64, TreeDiff)>,
+        pairs: u64,
+        same: u64,
+        unreadable: u64,
+        cancelled: bool,
+    ) {
+        use fcmd_core::{Entry, EntryId, EntryKind};
+
+        // A pair that differs only in its line endings is a difference or it is not, as the
+        // dialog says — and it is counted either way, so the sentence can say which.
+        let ignore_eol = self.cfg.compare.ignore_eol;
+        let eol = rows
+            .iter()
+            .filter(|(_, _, _, what)| *what == TreeDiff::LineEndings)
+            .count();
+        let rows: Vec<(String, VPath, u64, TreeDiff)> = rows
+            .into_iter()
+            .filter(|(_, _, _, what)| !(ignore_eol && *what == TreeDiff::LineEndings))
+            .collect();
+
+        if rows.is_empty() {
+            let mut line = self.i18n.t_args(
+                "cmp-trees-same",
+                &[
+                    ("pairs", (pairs as i64).into()),
+                    ("same", (same as i64).into()),
+                ],
+            );
+            if eol > 0 {
+                line.push_str(", ");
+                line.push_str(&self.i18n.t_args(
+                    "compare-contents-eol-ignored",
+                    &[("count", (eol as i64).into())],
+                ));
+            }
+            self.set_status(line);
+            return;
+        }
+
+        let side = self.active;
+        let items: Vec<(VPath, Entry)> = rows
+            .iter()
+            .enumerate()
+            .map(|(at, (shown, path, size, what))| {
+                let entry = Entry {
+                    name: format!("{}  {shown}", what.mark()).into(),
+                    kind: EntryKind::File,
+                    size: *size,
+                    mtime: None,
+                    btime: None,
+                    atime: None,
+                    flags: fcmd_core::EntryFlags::empty(),
+                    id: EntryId::Name(at as u64),
+                    link_target: None,
+                };
+                (path.clone(), entry)
+            })
+            .collect();
+        let title = self.i18n.t("cmp-trees-title");
+        let generation = self.panels[side].generation + 1;
+        self.panels[side].generation = generation;
+        self.panels[side].set_temp(title, items, generation);
+        self.panels[side].set_temp_origin(":compare");
+        self.active = side;
+
+        let count = |what: TreeDiff| -> i64 {
+            rows.iter().filter(|(_, _, _, w)| *w == what).count() as i64
+        };
+        let mut line = self.i18n.t_args(
+            "cmp-trees-done",
+            &[
+                ("differ", count(TreeDiff::Differs).into()),
+                ("left", count(TreeDiff::OnlyLeft).into()),
+                ("right", count(TreeDiff::OnlyRight).into()),
+                ("pairs", (pairs as i64).into()),
+            ],
+        );
+        if eol > 0 {
+            line.push_str(", ");
+            line.push_str(&self.i18n.t_args(
+                if ignore_eol {
+                    "compare-contents-eol-ignored"
+                } else {
+                    "compare-contents-eol"
+                },
+                &[("count", (eol as i64).into())],
+            ));
+        }
+        if unreadable > 0 {
+            line.push_str(", ");
+            line.push_str(&self.i18n.t_args(
+                "compare-contents-unread",
+                &[("count", (unreadable as i64).into())],
+            ));
+        }
+        if cancelled {
+            line.push_str(", ");
+            line.push_str(&self.i18n.t("dup-partial"));
+        }
+        self.set_status(line);
+    }
+
     /// Find the files under this panel's directory that are copies of each other (SPEC 03
     /// §12; the third thing FAR's compare plugin does).
     ///
@@ -12569,6 +12824,14 @@ impl App {
                 return;
             }
         };
+        let depth = match number(form.text_value("compare.depth"), "site-bad-port") {
+            Ok(n) => n,
+            Err(e) => {
+                self.set_error(e);
+                self.mode = Mode::Form(Box::new(form.clone()));
+                return;
+            }
+        };
         let on = |key: &str| form.text_value(key) == "true";
         self.cfg.compare = fcmd_config::CompareCfg {
             case: on("compare.case"),
@@ -12582,10 +12845,14 @@ impl App {
             selected_only: on("compare.selected_only"),
             stop_on_first: on("compare.stop_on_first"),
             newer_only: on("compare.newer_only"),
+            subdirs: on("compare.subdirs"),
+            depth,
         };
-        // Reading the bytes is the slow, certain comparison; without it the listing is
-        // enough and the answer is immediate.
-        if self.cfg.compare.contents {
+        // Three roads out of one dialog: the whole of both trees, the bytes of every pair in
+        // the two directories, or the listings as they stand — which is immediate.
+        if self.cfg.compare.subdirs {
+            self.compare_trees();
+        } else if self.cfg.compare.contents {
             self.compare_contents();
         } else {
             self.compare_dirs();
@@ -16533,6 +16800,110 @@ mod tests {
         press(&mut app, "Esc");
         assert!(app.mode.is_normal());
         assert_eq!(app.panels[0].temp_origin(), Some(":processes"));
+    }
+
+    /// Comparing the whole of two trees: the pairing is by the path under each root, and the
+    /// answer is a panel of what differs rather than a selection nobody can see.
+    #[test]
+    fn two_trees_are_compared_all_the_way_down() {
+        let left = tempfile::tempdir().expect("left");
+        let right = tempfile::tempdir().expect("right");
+        // The same path on both sides, with the same bytes: not a difference.
+        for root in [left.path(), right.path()] {
+            std::fs::create_dir(root.join("sub")).expect("sub");
+            std::fs::write(root.join("sub").join("same.txt"), b"identical").expect("same");
+        }
+        // The same path, different bytes and a different size.
+        std::fs::write(left.path().join("sub").join("differs.txt"), b"one").expect("l");
+        std::fs::write(right.path().join("sub").join("differs.txt"), b"another").expect("r");
+        // One side only, each way, and both deep enough to need the walk.
+        std::fs::write(left.path().join("sub").join("mine.txt"), b"mine").expect("mine");
+        std::fs::write(right.path().join("sub").join("theirs.txt"), b"theirs").expect("theirs");
+
+        let mut app = app();
+        app.panels[0].cwd = VPath::local(left.path());
+        app.panels[1].cwd = VPath::local(right.path());
+        app.active = 0;
+        app.cfg.compare.subdirs = true;
+        app.run(Command::ToolCompare);
+        press(&mut app, "F10");
+        let (id, l, r, work, cancel) = app
+            .take_requests()
+            .into_iter()
+            .find_map(|request| match request {
+                Request::CompareTrees {
+                    id,
+                    left,
+                    right,
+                    work,
+                    cancel,
+                } => Some((id, left, right, work, cancel)),
+                _ => None,
+            })
+            .expect("a comparison of the trees was asked for");
+        assert!(work.depth.is_none(), "0 means all the way down");
+
+        let (tx, rx) = std::sync::mpsc::channel();
+        crate::run_compare_trees(id, l, r, work, cancel, tx);
+        while let Ok(event) = rx.try_recv() {
+            app.handle_event(event);
+        }
+
+        assert_eq!(app.panels[0].temp_origin(), Some(":compare"));
+        let rows: Vec<String> = (0..app.panels[0].listing.len())
+            .filter_map(|row| app.panels[0].listing.row(row))
+            .map(|e| e.name_str().to_string())
+            .collect();
+        assert_eq!(rows.len(), 3, "{rows:?}");
+        assert!(
+            rows.iter()
+                .any(|r| r.starts_with('≠') && r.ends_with("differs.txt")),
+            "{rows:?}"
+        );
+        assert!(
+            rows.iter()
+                .any(|r| r.starts_with('→') && r.ends_with("mine.txt")),
+            "{rows:?}"
+        );
+        assert!(
+            rows.iter()
+                .any(|r| r.starts_with('←') && r.ends_with("theirs.txt")),
+            "{rows:?}"
+        );
+        // The one that is the same on both sides is not a row at all.
+        assert!(!rows.iter().any(|r| r.contains("same.txt")), "{rows:?}");
+        // Each row is a real file, so the keys that act on a file act on it.
+        for row in 0..app.panels[0].listing.len() {
+            let entry = app.panels[0].listing.row(row).expect("a row");
+            let path = app.panels[0].path_of(entry);
+            assert!(path.as_path().exists(), "{path}");
+        }
+
+        // One level deep leaves `sub` unopened, so the trees look the same from up there.
+        app.cfg.compare.depth = 1;
+        app.run(Command::ToolCompare);
+        press(&mut app, "F10");
+        let (id, l, r, work, cancel) = app
+            .take_requests()
+            .into_iter()
+            .find_map(|request| match request {
+                Request::CompareTrees {
+                    id,
+                    left,
+                    right,
+                    work,
+                    cancel,
+                } => Some((id, left, right, work, cancel)),
+                _ => None,
+            })
+            .expect("asked again");
+        assert_eq!(work.depth, Some(1));
+        let (tx, rx) = std::sync::mpsc::channel();
+        crate::run_compare_trees(id, l, r, work, cancel, tx);
+        while let Ok(event) = rx.try_recv() {
+            app.handle_event(event);
+        }
+        assert!(!app.status.is_empty());
     }
 
     /// The third thing the compare plugin does: find what is a copy of what, under one

@@ -985,6 +985,9 @@ impl Form {
             ),
             Field::toggle("compare.ignore_eol", t("cmp-ignore-eol"), cfg.ignore_eol),
             Field::Separator,
+            Field::toggle("compare.subdirs", t("cmp-subdirs"), cfg.subdirs),
+            Field::text("compare.depth", t("cmp-depth"), cfg.depth.to_string()),
+            Field::Separator,
             Field::toggle(
                 "compare.selected_only",
                 t("cmp-selected"),

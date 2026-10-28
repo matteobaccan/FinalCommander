@@ -703,6 +703,12 @@ panel-quick-view = Vista rapida
 panel-info = Informazioni
 panel-tree = Albero
 compare-done = { $left } a sinistra, { $right } a destra sono diversi
+cmp-subdirs = Entra nelle sottocartelle
+cmp-depth = Fin dove scendere (0 = fino in fondo)
+cmp-trees-title = Differenze
+cmp-trees-working = confronto gli alberi: { $seen } file, { $read } letti
+cmp-trees-done = { $differ } differenti, { $left } solo a sinistra, { $right } solo a destra, su { $pairs } coppie
+cmp-trees-same = i due alberi sono uguali ({ $pairs } coppie, { $same } verificate)
 menu-duplicates = Trova duplicati
 dup-title = File duplicati
 dup-working = cerco i duplicati: { $seen } file, { $hashed } letti

@@ -711,6 +711,12 @@ panel-quick-view = Quick view
 panel-info = Info
 panel-tree = Tree
 compare-done = { $left } on the left, { $right } on the right differ
+cmp-subdirs = Go into the subdirectories
+cmp-depth = How deep to go (0 = all the way down)
+cmp-trees-title = What differs
+cmp-trees-working = comparing the trees: { $seen } files, { $read } read
+cmp-trees-done = { $differ } differ, { $left } only on the left, { $right } only on the right, of { $pairs } pairs
+cmp-trees-same = the two trees are the same ({ $pairs } pairs, { $same } checked)
 menu-duplicates = Find duplicates
 dup-title = Duplicate files
 dup-working = looking for duplicates: { $seen } files, { $hashed } read

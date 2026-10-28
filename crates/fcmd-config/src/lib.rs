@@ -489,6 +489,13 @@ pub struct CompareCfg {
     /// wants before pressing `F5`. Off selects both sides of every difference, which is what
     /// one wants when looking for *what* differs rather than copying.
     pub newer_only: bool,
+    /// Compare the whole of both trees rather than the two listings. The answer cannot be
+    /// shown as a selection in two single-directory panels, so it comes back as a panel of
+    /// what differs (SPEC 03 §11b).
+    pub subdirs: bool,
+    /// How deep to go when it does: 1 is the two directories themselves, 0 is all the way
+    /// down.
+    pub depth: u64,
 }
 
 impl Default for CompareCfg {
@@ -507,6 +514,8 @@ impl Default for CompareCfg {
             // On, which is what the comparison has always done and what one wants before
             // pressing `F5`: the copy that is newer is the one to send across.
             newer_only: true,
+            subdirs: false,
+            depth: 0,
         }
     }
 }

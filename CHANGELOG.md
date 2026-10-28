@@ -4,6 +4,22 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
+## [Unreleased]
+
+### Added
+
+- **The comparison goes into the subdirectories.** The dialog's last two rows switch it on and
+  say how deep (1 is the two directories themselves, 0 all the way down). Both trees are
+  walked in a worker and paired by the path each file has *under its own root*, so `a/b/c.txt`
+  is compared with `a/b/c.txt`; every pair is then settled by whichever of the §11 rules are
+  on. The answer is a panel of what differs — `≠` on both sides and not the same, `→` only on
+  the left, `←` only on the right, `≈` the same but for the line endings — whose rows are the
+  real files, so `F3`, `F5` and `F8` work on them. A difference three directories down cannot
+  be shown as a marked row in a panel that is not showing it, which is why it is a panel and
+  not a selection.
+
+- The search engine's walker takes a **depth limit**, which is what makes that possible.
+
 ## [0.10.0] — 2026-10-28
 
 ### Added

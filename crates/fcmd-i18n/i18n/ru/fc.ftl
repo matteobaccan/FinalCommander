@@ -703,6 +703,12 @@ panel-quick-view = Быстрый просмотр
 panel-info = Сведения
 panel-tree = Дерево
 compare-done = различий слева: { $left }, справа: { $right }
+cmp-subdirs = Заходить в подкаталоги
+cmp-depth = Насколько глубоко (0 = до самого низа)
+cmp-trees-title = Что различается
+cmp-trees-working = сравниваю деревья: { $seen } файлов, прочитано { $read }
+cmp-trees-done = { $differ } различаются, { $left } только слева, { $right } только справа, из { $pairs } пар
+cmp-trees-same = оба дерева одинаковы ({ $pairs } пар, проверено { $same })
 menu-duplicates = Найти дубликаты
 dup-title = Повторяющиеся файлы
 dup-working = ищу дубликаты: { $seen } файлов, прочитано { $hashed }

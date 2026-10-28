@@ -186,6 +186,8 @@ fn run_find(id: u64, spec: app::FindSpec, cancel: CancelToken, tx: mpsc::Sender<
         filter,
         // "This folder" is the only scope that does not go down.
         subdirectories: spec.scope != app::FindScope::Panel,
+        // The search dialog has no depth of its own yet; the comparison does.
+        depth: None,
         follow_links: spec.follow_links,
         include_dirs: spec.directories,
         content,
@@ -1051,6 +1053,18 @@ fn interactive(mut app: App) -> Result<()> {
                 Request::Duplicates { id, root, cancel } => {
                     let tx = tx.clone();
                     runtime.spawn_blocking(move || run_duplicates(id, root, cancel, tx));
+                }
+                Request::CompareTrees {
+                    id,
+                    left,
+                    right,
+                    work,
+                    cancel,
+                } => {
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || {
+                        run_compare_trees(id, left, right, work, cancel, tx)
+                    });
                 }
                 Request::Checksums {
                     id,
@@ -2115,6 +2129,202 @@ fn run_compare(
         line_endings,
         unreadable,
         stopped,
+    });
+}
+
+/// Compare the whole of two trees (SPEC 03 §11b).
+///
+/// Both sides are walked first — the search engine's own walker, with the depth the dialog
+/// asked for — into a map from the path a file has *under* its root to what the listing says
+/// about it. Then the two maps are read against each other: a path only one side has is a
+/// difference by itself, and a path both have is settled by the size, the time, or the bytes,
+/// exactly as the two-directory comparison settles it.
+///
+/// Reading the bytes is the expensive half, so it is asked for last and only where the
+/// cheaper answers did not already settle it.
+#[allow(clippy::too_many_arguments)]
+fn run_compare_trees(
+    id: u64,
+    left_root: VPath,
+    right_root: VPath,
+    work: app::TreeWork,
+    cancel: CancelToken,
+    tx: mpsc::Sender<Event>,
+) {
+    use fcmd_find::FindFs;
+    use std::collections::HashMap;
+    use std::io::Read;
+
+    let fs = fcmd_vfs::LocalVfs;
+    /// One side's files: the path under the root → where it really is, how big, when.
+    type Side = HashMap<String, (VPath, u64, Option<std::time::SystemTime>)>;
+
+    let mut seen = 0u64;
+    let mut unreadable = 0u64;
+    let mut cancelled = false;
+    let mut last = std::time::Instant::now();
+    let mut walk = |root: &VPath| -> Side {
+        let mut out: Side = HashMap::new();
+        let root_text = root.to_string();
+        let query = fcmd_find::Query {
+            roots: vec![root.clone()],
+            subdirectories: true,
+            depth: work.depth,
+            ..fcmd_find::Query::default()
+        };
+        let stats = fcmd_find::find(&fs, &query, &cancel, &mut |event| match event {
+            fcmd_find::Event::Hit(hit) => {
+                if hit.entry.kind.is_dirlike() {
+                    return;
+                }
+                let full = hit.path.to_string();
+                let under = full
+                    .strip_prefix(&root_text)
+                    .map(|rest| rest.trim_start_matches(['/', '\\']).to_string())
+                    .unwrap_or_else(|| full.clone());
+                let key = if work.case {
+                    under.clone()
+                } else {
+                    under.to_lowercase()
+                };
+                seen += 1;
+                out.insert(key, (hit.path, hit.entry.size, hit.entry.mtime));
+                if last.elapsed() >= std::time::Duration::from_millis(120) {
+                    last = std::time::Instant::now();
+                    let _ = tx.send(Event::CompareTreesProgress { id, seen, read: 0 });
+                }
+            }
+            fcmd_find::Event::Problem(_) => unreadable += 1,
+            fcmd_find::Event::Scanning(_) => {}
+        });
+        if stats.map(|s| s.cancelled).unwrap_or(false) {
+            cancelled = true;
+        }
+        out
+    };
+    let left = walk(&left_root);
+    let right = walk(&right_root);
+
+    let tolerance = std::time::Duration::from_secs(work.seconds);
+    let apart = |a: std::time::SystemTime, b: std::time::SystemTime| -> std::time::Duration {
+        a.duration_since(b).unwrap_or_else(|e| e.duration())
+    };
+    let mut rows: Vec<(String, VPath, u64, app::TreeDiff)> = Vec::new();
+    let mut pairs = 0u64;
+    let mut same = 0u64;
+    let mut read = 0u64;
+
+    for (key, (path, size, when)) in &left {
+        if cancel.is_cancelled() {
+            cancelled = true;
+            break;
+        }
+        let shown = path
+            .to_string()
+            .strip_prefix(&left_root.to_string())
+            .map(|rest| rest.trim_start_matches(['/', '\\']).to_string())
+            .unwrap_or_else(|| path.to_string());
+        let Some((other, other_size, other_when)) = right.get(key) else {
+            rows.push((shown, path.clone(), *size, app::TreeDiff::OnlyLeft));
+            continue;
+        };
+        pairs += 1;
+        let size_differs = work.size && size != other_size;
+        let time_differs = work.time
+            && match (*when, *other_when) {
+                (Some(a), Some(b)) => apart(a, b) > tolerance,
+                (None, None) => false,
+                _ => true,
+            };
+        // The bytes, where they were asked for and where the cheap answers leave the
+        // question open.
+        let mut verdict = None;
+        if work.contents && !(work.when_time_differs && !time_differs && !size_differs) {
+            let settled = *size != *other_size && work.fragment == 0;
+            if settled {
+                verdict = Some(app::TreeDiff::Differs);
+            } else {
+                match (fs.open(path), fs.open(other)) {
+                    (Ok(a), Ok(b)) => {
+                        let (mut a, mut b): (Box<dyn Read>, Box<dyn Read>) = if work.fragment > 0 {
+                            (
+                                Box::new(a.take(work.fragment)),
+                                Box::new(b.take(work.fragment)),
+                            )
+                        } else {
+                            (Box::new(a), Box::new(b))
+                        };
+                        match fcmd_core::compare::same_contents(&mut a, &mut b, &cancel, &mut |n| {
+                            read += n;
+                            true
+                        }) {
+                            Ok(true) => {}
+                            Ok(false) => {
+                                // The same question the two-directory comparison asks after
+                                // the fact: is the only difference the line endings?
+                                let eol = match (fs.open(path), fs.open(other)) {
+                                    (Ok(mut a), Ok(mut b)) => {
+                                        fcmd_core::compare::same_but_for_line_endings(
+                                            &mut a, &mut b, &cancel,
+                                        )
+                                        .unwrap_or(false)
+                                    }
+                                    _ => false,
+                                };
+                                verdict = Some(if eol {
+                                    app::TreeDiff::LineEndings
+                                } else {
+                                    app::TreeDiff::Differs
+                                });
+                            }
+                            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {
+                                cancelled = true;
+                            }
+                            Err(_) => unreadable += 1,
+                        }
+                    }
+                    _ => unreadable += 1,
+                }
+            }
+        } else if size_differs || time_differs {
+            verdict = Some(app::TreeDiff::Differs);
+        }
+        match verdict {
+            Some(what) => rows.push((shown, path.clone(), *size, what)),
+            None => same += 1,
+        }
+        if last.elapsed() >= std::time::Duration::from_millis(120) {
+            last = std::time::Instant::now();
+            let _ = tx.send(Event::CompareTreesProgress { id, seen, read });
+        }
+        if work.stop_on_first && !rows.is_empty() {
+            break;
+        }
+    }
+    // And what only the other side has.
+    if !(work.stop_on_first && !rows.is_empty()) {
+        for (key, (path, size, _)) in &right {
+            if left.contains_key(key) {
+                continue;
+            }
+            let shown = path
+                .to_string()
+                .strip_prefix(&right_root.to_string())
+                .map(|rest| rest.trim_start_matches(['/', '\\']).to_string())
+                .unwrap_or_else(|| path.to_string());
+            rows.push((shown, path.clone(), *size, app::TreeDiff::OnlyRight));
+        }
+    }
+    // In a settled order: the mark groups them, the path sorts inside a group.
+    rows.sort_by(|a, b| (a.3.mark(), &a.0).cmp(&(b.3.mark(), &b.0)));
+
+    let _ = tx.send(Event::CompareTreesDone {
+        id,
+        rows,
+        pairs,
+        same,
+        unreadable,
+        cancelled,
     });
 }
 
@@ -3667,6 +3877,19 @@ timeout = 10
                 Request::Duplicates { id, root, cancel } => {
                     let (tx, rx) = mpsc::channel();
                     run_duplicates(id, root, cancel, tx);
+                    while let Ok(event) = rx.try_recv() {
+                        app.handle_event(event);
+                    }
+                }
+                Request::CompareTrees {
+                    id,
+                    left,
+                    right,
+                    work,
+                    cancel,
+                } => {
+                    let (tx, rx) = mpsc::channel();
+                    run_compare_trees(id, left, right, work, cancel, tx);
                     while let Ok(event) = rx.try_recv() {
                         app.handle_event(event);
                     }

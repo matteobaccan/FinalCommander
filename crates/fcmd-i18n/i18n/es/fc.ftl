@@ -703,6 +703,12 @@ panel-quick-view = Vista rápida
 panel-info = Información
 panel-tree = Árbol
 compare-done = { $left } a la izquierda, { $right } a la derecha son distintos
+cmp-subdirs = Entrar en las subcarpetas
+cmp-depth = Hasta qué profundidad (0 = hasta el fondo)
+cmp-trees-title = Lo que difiere
+cmp-trees-working = comparando los árboles: { $seen } archivos, { $read } leídos
+cmp-trees-done = { $differ } difieren, { $left } solo a la izquierda, { $right } solo a la derecha, de { $pairs } parejas
+cmp-trees-same = los dos árboles son iguales ({ $pairs } parejas, { $same } comprobadas)
 menu-duplicates = Buscar duplicados
 dup-title = Archivos duplicados
 dup-working = buscando duplicados: { $seen } archivos, { $hashed } leídos

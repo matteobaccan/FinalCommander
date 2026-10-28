@@ -21,6 +21,10 @@ pub struct Query {
     pub roots: Vec<VPath>,
     pub filter: Filter,
     pub subdirectories: bool,
+    /// How deep to go, where that is limited: `Some(1)` is the roots and their own entries
+    /// and no further, `None` is all the way down. FAR's compare plugin asks for this, and a
+    /// search of a home directory is often the same question — what is *near* here.
+    pub depth: Option<usize>,
     /// Follow a symbolic link that points at a directory. The walk remembers where it has
     /// been either way, so a loop ends a branch instead of the search.
     pub follow_links: bool,
@@ -149,14 +153,14 @@ pub fn find(
     // time instead of jumping about. The flag is "count this one": a root has no parent
     // listing to have been counted in, every other directory was counted as an entry of its
     // parent, and counting it again would report every directory twice.
-    let mut pending: Vec<(VPath, bool)> = query
+    let mut pending: Vec<(VPath, bool, usize)> = query
         .roots
         .iter()
         .rev()
-        .map(|r| (r.clone(), true))
+        .map(|r| (r.clone(), true, 0))
         .collect();
 
-    while let Some((dir, count_it)) = pending.pop() {
+    while let Some((dir, count_it, depth)) = pending.pop() {
         if cancel.is_cancelled() {
             stats.cancelled = true;
             return Ok(stats);
@@ -212,7 +216,10 @@ pub fn find(
             } else {
                 stats.files_seen += 1;
             }
-            if dirlike && query.subdirectories {
+            // Deep enough: the directory is still a result where the query wants
+            // directories, but nothing under it is read.
+            let deep_enough = query.depth.is_some_and(|limit| depth + 1 >= limit);
+            if dirlike && query.subdirectories && !deep_enough {
                 children.push(path.clone());
             }
 
@@ -273,7 +280,12 @@ pub fn find(
         }
 
         // Reversed, so popping the stack hands the children back in listing order.
-        pending.extend(children.into_iter().rev().map(|child| (child, false)));
+        pending.extend(
+            children
+                .into_iter()
+                .rev()
+                .map(|child| (child, false, depth + 1)),
+        );
     }
 
     Ok(stats)
@@ -402,6 +414,27 @@ mod tests {
         assert_eq!(stats.files_seen, 3);
         // The root plus the `sub` entry it holds, which was looked at but not entered.
         assert_eq!(stats.dirs_seen, 2);
+    }
+
+    #[test]
+    fn a_depth_limit_stops_the_walk_without_stopping_it_short() {
+        let dir = tree();
+        let mut query = Query::under(VPath::local(dir.path()));
+        // One is the root's own entries, which is what "no subdirectories" means too.
+        query.depth = Some(1);
+        assert_eq!(names(&run(&query).0), [".hidden", "one.rs", "two.txt"]);
+        // Two takes `sub` as well, and leaves what is under `deep` alone.
+        query.depth = Some(2);
+        assert_eq!(
+            names(&run(&query).0),
+            [".hidden", "four.txt", "one.rs", "three.rs", "two.txt"]
+        );
+        // Three reaches the bottom of this tree, and so does no limit at all.
+        query.depth = Some(3);
+        let deep = names(&run(&query).0);
+        query.depth = None;
+        assert_eq!(deep, names(&run(&query).0));
+        assert!(deep.contains(&"five.rs".to_string()), "{deep:?}");
     }
 
     #[test]

@@ -202,6 +202,8 @@ ignore_eol = false        # line endings alone are not a difference
 selected_only = false     # compare only what is selected
 stop_on_first = false     # stop at the first difference
 newer_only = true         # select only the newer copy, not both sides
+subdirs = false           # compare the whole of both trees (SPEC 03 §11b)
+depth = 0                 # how deep when it does; 1 = the two directories, 0 = all the way
 ```
 
 ## 2c-ter. `[cmdline]`

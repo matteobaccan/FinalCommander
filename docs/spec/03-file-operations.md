@@ -287,14 +287,42 @@ that was set up rather than the default again:
 | Only what is selected | the dozen files one cares about out of a directory of ten thousand |
 | Stop at the first difference | the answer to "are these the same at all" does not need the other nine thousand files read |
 | Select only the newer copy | on: what one wants before `F5`. Off selects both sides of every difference, for looking rather than copying |
+| Go into the subdirectories · how deep | the whole of both trees rather than the two listings; §11b says what comes back |
 
 The sentence at the end says everything the comparison decided and nothing it did not: how many
 pairs were read, how many differ, how many differ only in their line endings (and whether that
 counted), how many were taken as the same without being read, how many files were on one side
 only, and how many could not be read at all.
 
-Still to come: into the subdirectories, which needs the tree walked in a worker as the search
-is.
+### 11b. Into the subdirectories (shipped)
+
+With *Go into the subdirectories* on, the question is no longer about two listings — it is
+about two whole trees, and the listings cannot answer it. Both sides are walked in a worker,
+with the search engine's own walker (so a link that points back up a tree ends its branch
+rather than the comparison) and with the depth the dialog asked for: `1` is the two
+directories themselves, `0` is all the way down.
+
+The pairing is by the path each file has **under its own root**, so `a/b/c.txt` is compared
+with `a/b/c.txt` and not with whatever happens to be called `c.txt` over there. Each pair is
+then settled exactly as §11 settles one: by the size, the time and the tolerance, or by the
+bytes where that was asked for, with the fragment limit and the line-endings question.
+
+The answer cannot be a selection: a difference three directories down cannot be shown as a
+marked row in a panel that is not showing that directory. So it is a **panel of what differs**,
+one row per path, marked with which way it goes:
+
+| Mark | What it means |
+| --- | --- |
+| `≠` | on both sides, and not the same |
+| `→` | only the left tree has it |
+| `←` | only the right tree has it |
+| `≈` | on both sides, and the only difference is the line endings |
+
+The rows are the real files — the left-hand copy for a pair or a left-only file, the right-hand
+one for a right-only file — so `F3` reads one, `Enter` goes to where it lives, `F5` copies it
+and `F8` deletes it, all with the ordinary confirmations. The sentence at the end counts each
+mark, the pairs looked at, the pairs taken as the same, what could not be read, and whether
+`Esc` stopped it early.
 
 ## 12. Duplicate files (`tool.duplicates`, shipped)
 
