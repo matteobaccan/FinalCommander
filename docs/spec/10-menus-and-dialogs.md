@@ -49,16 +49,26 @@ close, and a letter runs the entry that claims it. With the bar lit and nothing 
 letter belongs to the titles instead, which is why they wear one: `F` is the files menu.
 
 **The letters.** A label carries its own letter, marked in the catalogue with `&` before it —
-`&Brief`, `File &owners` — and the dropdown draws that letter highlighted, on the row one is
+`&Brief`, `File own&ers` — and the dropdown draws that letter highlighted, on the row one is
 standing on as well. The five titles on the bar are marked the same way, in the bar's own
-`hmenu.hotkey.fg` ink. The letter is
-chosen per language, since the labels are translated, and the rule is: the first letter of the
-first word of the label that no other row of that menu has already claimed. Where every letter
-of a word is taken, any free letter of the label is marked instead, which is why a few read
-`Chan&ge drive` rather than `&Change drive`; where nothing at all is free — a menu can hold
-more rows than the alphabet has letters once the labels are long — the row carries no marker
-and still answers to its first letter, as it always did. A test asserts that no two rows of
-one menu claim the same letter, in every language.
+`hmenu.hotkey.fg` ink. The letter is chosen per language, since the labels are translated.
+
+Where FAR has the row, the letter is **FAR's own**, taken from its `far/farlang.templ.m4` and
+read for each of the five languages this program and FAR both speak — Russian, English,
+German, Spanish, Italian. A hand that knows FAR knows `F9 F a` is *file attributes* and does
+not have to learn it twice. Our wording stays ours; only the marker moves, onto the occurrence
+of FAR's letter nearest where FAR itself marks it, which is why `Re-re&ad` and `Add &to
+archive` read as they do.
+
+The rest — French and Chinese, which FAR does not ship, and every row FAR has not got, the
+tabs and the tunnels and the checksums among them — keeps the rule this program had before:
+the first letter of the first word of the label that no other row of that menu has already
+claimed, and, where every letter of a word is taken, any free letter of the label, which is
+why a few read `Checks&ums…` rather than `&Checksums…`. A row of ours that would collide with
+a FAR row gives way to it. Where nothing at all is free — a menu can hold more rows than the
+alphabet has letters once the labels are long — the row carries no marker and still answers to
+its first letter, as FAR's unmarked rows do. A test asserts that no two rows of one menu claim
+the same letter, in every language.
 
 A label that doubles as a title — *Change drive*, *Sort modes*, the histories, the settings
 dialogs — is shown without the marker: a frame is not a menu row.

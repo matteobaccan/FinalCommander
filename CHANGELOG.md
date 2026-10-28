@@ -6,6 +6,17 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **The menu letters are FAR's own.** Every row the `F9` menus share with FAR now wears the
+  letter FAR marks for it, read out of FAR's own `far/farlang.templ.m4` in each of the five
+  languages both programs speak — Russian, English, German, Spanish, Italian. The wording is
+  still ours; only the marker moved, onto the occurrence of FAR's letter nearest where FAR
+  marks it. `F9 F a` is *file attributes* in both programs again, and a hand that knows FAR
+  does not have to learn a second set. French, Chinese and the rows FAR has not got — the
+  tabs, the tunnels, the checksums — keep the rule this program had, and give way where one
+  of them would claim a letter FAR has already taken.
+
 ## [0.12.0] — 2026-10-28
 
 ### Added

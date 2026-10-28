@@ -219,10 +219,13 @@ files rather than guessing what its dialog says.
 - ~~The NetBox session dialog's pages, the process card, the sockets, the installed
   programs, the prompt's git branch~~ — 0.9.0.
 - ~~The comparison, with the options `AdvCmpEx` has, and into the subdirectories~~ — 0.10.0.
-- **The menu letters** are chosen by a rule (first free word initial, then any free letter),
-  in all six languages written in an alphabet, with a test keeping them unique. If the author
-  wants FAR's own letters instead, the rule is one function and the catalogues are where the
-  markers live. Still open, and the one thing here waiting on an answer rather than on work.
+- ~~The menu letters~~ — answered: FAR's own. Every row FAR has wears the letter FAR marks,
+  in the five languages both programs speak (ru, en, de, es, it), read out of FAR's
+  `far/farlang.templ.m4`; French, Chinese and the rows FAR has not got keep our rule (first
+  free word initial, then any free letter), and a row of ours gives way where it would collide
+  with a FAR row. SPEC 10 §2 has the whole of it, and a test keeps the letters unique.
+- **The folders**, and what *Select folders* should do with them, are the author's to decide;
+  nothing is to be built there until the decisions arrive.
 
 ## What is worth doing next, in rough order
 
