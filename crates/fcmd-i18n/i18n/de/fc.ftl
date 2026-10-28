@@ -35,6 +35,7 @@ key-plugins = Plugin
 list-up = Hoch
 list-folder = Ordner
 col-name = Name
+col-ext = Erw
 col-size = Größe
 col-allocated = Belegt
 col-modified = Geändert

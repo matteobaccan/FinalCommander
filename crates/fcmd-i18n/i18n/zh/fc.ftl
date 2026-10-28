@@ -35,6 +35,7 @@ key-plugins = 插件
 list-up = 上层
 list-folder = 文件夹
 col-name = 名称
+col-ext = 扩展名
 col-size = 大小
 col-allocated = 占用
 col-modified = 修改

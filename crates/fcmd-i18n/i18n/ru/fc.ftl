@@ -35,6 +35,7 @@ key-plugins = Плагин
 list-up = Вверх
 list-folder = Папка
 col-name = Имя
+col-ext = Расш
 col-size = Размер
 col-allocated = Занято
 col-modified = Изменён

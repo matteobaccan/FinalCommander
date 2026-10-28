@@ -1389,6 +1389,9 @@ pub struct Startup {
     /// The `[[sort_group]]` bands, compiled (SPEC 02 §4). One list for the whole program:
     /// each panel holds a handle to it.
     pub sort_groups: std::sync::Arc<fcmd_core::sort::SortGroups>,
+    /// The `[[column_set]]` blocks, compiled (SPEC 02 §3a): the user's own columns for the
+    /// view modes they have written one for.
+    pub column_sets: Vec<fcmd_core::ColumnSet>,
 }
 
 pub struct App {
@@ -1591,6 +1594,9 @@ pub struct App {
     pub highlight: fcmd_ui::Highlight,
     /// The `[[sort_group]]` bands, as every panel and every new tab gets them.
     pub sort_groups: std::sync::Arc<fcmd_core::sort::SortGroups>,
+    /// The user's own columns, by the digit of the view they replace (SPEC 02 §3a). Empty for
+    /// somebody who has written none, which is when every view is the built-in one.
+    pub column_sets: Vec<fcmd_core::ColumnSet>,
     /// The user menu as it is on screen: one level per list, the top one first and the submenu
     /// one is inside last, each with the title it is shown under. Kept as a stack so `Esc` in
     /// a submenu goes back to the menu it was opened from rather than out of the menu.
@@ -1634,6 +1640,7 @@ impl App {
             plugin_commands,
             highlight,
             sort_groups,
+            column_sets,
         } = start;
         // The criteria chain, and what could not be read: said out loud below rather than
         // silently sorted by name, which is what a mistyped key would otherwise look like.
@@ -1765,6 +1772,7 @@ impl App {
             carry: None,
             highlight,
             sort_groups,
+            column_sets,
             menu_levels: Vec::new(),
             menu_queue: Vec::new(),
             apply_queue: Vec::new(),
@@ -4243,11 +4251,32 @@ impl App {
     ///
     /// Local directories only for now: a description inside an archive or on a server is a
     /// read through a provider, and a backlog line.
+    /// Does the view this panel is in ask for a field a listing does not carry?
+    ///
+    /// Either because the built-in mode shows it, or because the user's own columns do — a
+    /// `[[column_set]]` on this view's digit replaces the mode, so it is the set that decides
+    /// and not what the mode would have shown (SPEC 02 §3a).
+    fn view_asks(&self, panel: usize, kind: fcmd_core::ColumnKind) -> bool {
+        use fcmd_core::ColumnKind as K;
+        let Some(p) = self.panels.get(panel) else {
+            return false;
+        };
+        if let Some(set) = crate::colset::for_slot(&self.column_sets, p.view.slot()) {
+            return set.asks(kind);
+        }
+        match kind {
+            K::Descr => p.view.shows_description(),
+            K::Links => p.view.shows_links(),
+            K::Owner | K::Group => p.view == ViewMode::Owners,
+            _ => false,
+        }
+    }
+
     fn ask_for_descriptions(&mut self, panel: usize) {
         if panel >= self.panels.len() || !self.cfg.panel.descriptions {
             return;
         }
-        let shown = self.panels[panel].view.shows_description()
+        let shown = self.view_asks(panel, fcmd_core::ColumnKind::Descr)
             // Sorting by description needs the file read for the same reason the view does.
             || self.panels[panel].sort.asks(SortKey::Descr)
             || self.panels[1 - panel].content == crate::panel::Content::Info;
@@ -4270,8 +4299,9 @@ impl App {
         if panel >= self.panels.len() {
             return;
         }
+        let wanted = self.view_asks(panel, fcmd_core::ColumnKind::Links);
         let p = &self.panels[panel];
-        if !p.view.shows_links()
+        if !wanted
             || p.temp.is_some()
             || !p.cwd.is_local()
             || p.cwd.in_container()
@@ -4299,8 +4329,10 @@ impl App {
         if panel >= self.panels.len() {
             return;
         }
+        let wanted = self.view_asks(panel, fcmd_core::ColumnKind::Owner)
+            || self.view_asks(panel, fcmd_core::ColumnKind::Group);
         let p = &self.panels[panel];
-        if (p.view != ViewMode::Owners && !p.sort.asks(SortKey::Owner))
+        if (!wanted && !p.sort.asks(SortKey::Owner))
             || p.temp.is_some()
             || !p.cwd.is_local()
             || p.cwd.in_container()
@@ -14557,6 +14589,7 @@ mod tests {
             plugin_commands: Vec::new(),
             highlight: fcmd_ui::Highlight::far_default(),
             sort_groups: Default::default(),
+            column_sets: Vec::new(),
         });
         app.requests.clear();
         let entries = vec![
@@ -18111,6 +18144,7 @@ run = ["echo one", "echo two", "echo three"]
             plugin_commands: Vec::new(),
             highlight: fcmd_ui::Highlight::far_default(),
             sort_groups: Default::default(),
+            column_sets: Vec::new(),
         });
         app.requests.clear();
         let entries = vec![
@@ -20397,6 +20431,7 @@ run = ["echo one", "echo two", "echo three"]
             plugin_commands: Vec::new(),
             highlight: fcmd_ui::Highlight::far_default(),
             sort_groups: Default::default(),
+            column_sets: Vec::new(),
         });
         app.requests.clear();
         let entries = fcmd_vfs::local::list_blocking(&VPath::local(dir), &CancelToken::new())
@@ -21125,6 +21160,59 @@ abcdefghij
     }
 
     // ── the owners view (SPEC 02 §3) ───────────────────────────────────────────────────────
+
+    /// A column the listing does not carry costs the same lookup whether a built-in mode or
+    /// the user's own set asked for it — so a set with an `owner` column has to put the same
+    /// worker to work, and a set without one has to stop the view that would have.
+    #[test]
+    fn the_users_own_columns_decide_what_the_workers_are_asked_for() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("notes.txt"), b"x").unwrap();
+        let mut app = app_on_disk(dir.path());
+
+        let set = |app: &mut App, src: &str| {
+            let (cfg, problems) = Config::parse("test.toml", src).expect("it parses");
+            assert!(problems.is_empty(), "{problems:?}");
+            let mut warnings = Vec::new();
+            app.column_sets = crate::colset::sets(&cfg, &mut warnings);
+            assert!(warnings.is_empty(), "{warnings:?}");
+        };
+        let asked = |app: &mut App| -> bool {
+            app.take_requests()
+                .iter()
+                .any(|r| matches!(r, Request::Owners { .. }))
+        };
+
+        // The full view asks nothing of its own. With an owner column on its digit, it does.
+        set(
+            &mut app,
+            r#"
+            [[column_set]]
+            id = 3
+            columns = [{ type = "name" }, { type = "owner", width = 12 }]
+            "#,
+        );
+        app.take_requests();
+        app.run(Command::PanelViewSet(ViewMode::Full));
+        assert!(asked(&mut app), "the set asked for the owner");
+
+        // And the other way round: the owners view with a set of its own that has no owner
+        // column in it pays for nothing, because the set is what is drawn.
+        set(
+            &mut app,
+            r#"
+            [[column_set]]
+            id = 8
+            columns = [{ type = "name" }, { type = "size", width = 9 }]
+            "#,
+        );
+        app.take_requests();
+        app.run(Command::PanelViewSet(ViewMode::Owners));
+        assert!(
+            !asked(&mut app),
+            "the set replaces the mode, so nothing should be asked"
+        );
+    }
 
     #[test]
     fn the_owners_view_asks_who_the_files_belong_to_and_a_re_read_asks_again() {

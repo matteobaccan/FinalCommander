@@ -188,8 +188,9 @@ What is in the last few, newest first:
 
 **All ten of FAR's view modes and all nine of its sort keys are there** (`Ctrl+1..0`,
 `Ctrl+F3..F11`), the last two sort keys — by description and by owner — since 0.10.0's
-`Unreleased` section. What the view modes still owe is the column grammar: FAR's ten modes are
-each re-definable, ours are ten fixed lists.
+`Unreleased` section. The column grammar is there too, since
+0.10.0's `Unreleased`: each of the ten modes is re-definable from a `[[column_set]]` block on
+its own digit, in our spelling or in FAR's own pair of strings.
 
 ## What the author's reviews have asked for, and where it went
 
@@ -215,9 +216,9 @@ files rather than guessing what its dialog says.
 
 Everything here is unblocked and specified; the backlog has the reasons.
 
-1. **Custom columns** — the column grammar of SPEC 02 §3: a user's own column set per view
-   mode, which is what makes the ten modes a setting rather than a list, and what FAR's own
-   `Column types` / `Column widths` strings describe.
+1. **Autocomplete on the command line**: four sources (filesystem, history, `%PATH%`,
+   environment), each three-state, shown as a list as one types. The largest single thing
+   still missing there, and eight of FAR's eleven insertion keys go with it.
 2. **The screens list and background screens** (`F12`): several viewers, editors and jobs
    open at once. The job engine already runs more than one; the screen stack is what is
    missing, and `Mode` holding one screen is what has to change.
@@ -225,6 +226,8 @@ Everything here is unblocked and specified; the backlog has the reasons.
    colouring groups: the blocks can only be written by hand today.
 4. **Descriptions through a provider** — inside an archive, on a server — and carried out of a
    search result, which are what SPEC 02 §13 still owes.
+5. **The tree cache on disk**, which unblocks `Alt+F10` (find a folder) and the copy dialog's
+   own tree in one go.
 
 One rule that came out of that review and holds everywhere: **`Alt+<letter>` belongs to the
 quick search**, so nothing else may take it (`Ctrl+Shift+N/I/T` moved for this reason), and

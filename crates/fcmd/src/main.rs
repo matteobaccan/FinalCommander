@@ -4,6 +4,7 @@
 
 mod app;
 mod cmdline;
+mod colset;
 mod drives;
 mod expand;
 mod form;
@@ -581,6 +582,8 @@ fn run(cli: Cli) -> Result<()> {
     let highlight = highlight::groups(&cfg, &mut warnings);
     // And the `[[sort_group]]` bands, compiled the same way and from the same file.
     let sort_groups = std::sync::Arc::new(highlight::sort_groups(&cfg, &mut warnings));
+    // And the `[[column_set]]` blocks: the user's own columns for a view mode (SPEC 02 §3a).
+    let column_sets = colset::sets(&cfg, &mut warnings);
 
     // The histories from the last session. A broken state file is a warning, never a stop.
     let (state, state_problem) = fcmd_config::State::load(&paths);
@@ -601,6 +604,7 @@ fn run(cli: Cli) -> Result<()> {
         plugin_commands,
         highlight,
         sort_groups,
+        column_sets,
     });
     app.cmd.load_history(state.command_history);
     app.file_history = state.file_history;
@@ -3206,6 +3210,7 @@ timeout = 10
             plugin_commands: commands,
             highlight: fcmd_ui::Highlight::far_default(),
             sort_groups: Default::default(),
+            column_sets: Vec::new(),
         });
         serve(&mut app);
 
@@ -3759,6 +3764,7 @@ timeout = 10
             plugin_commands: Vec::new(),
             highlight: fcmd_ui::Highlight::far_default(),
             sort_groups: Default::default(),
+            column_sets: Vec::new(),
         })
     }
 

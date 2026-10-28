@@ -911,6 +911,50 @@ pub struct SortGroupCfg {
     pub place: String,
 }
 
+/// One column of a `[[column_set]]` block.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ColumnCfg {
+    /// What the column holds: `name`, `ext`, `size`, `allocated`, `mtime`, `btime`, `atime`,
+    /// `attrs`, `owner`, `group`, `links`, `descr`.
+    #[serde(rename = "type", skip_serializing_if = "String::is_empty")]
+    pub kind: String,
+    /// `10`, `"20%"`, `"*"` to take what is left, or `0` for the column's own natural width —
+    /// FAR's own spelling, which is why it is a number *or* a string.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub width: Option<toml::Value>,
+    /// `left` or `right`, where the column's own default is not what is wanted.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub align: String,
+    /// `human` or `bytes` on a size; a `strftime` string on a date.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fmt: Option<String>,
+}
+
+/// A `[[column_set]]` block: the columns one view mode draws.
+///
+/// `id` is the digit the view is on, so `id = 3` replaces what `Ctrl+3` draws. A block with no
+/// column, or whose columns cannot be read, is reported on the startup screen and the built-in
+/// mode is drawn instead — a panel that drew nothing would be a worse answer than a panel that
+/// looks as it always did.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ColumnSetCfg {
+    pub id: u8,
+    /// What to call it, for the message when something in it does not read.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub name: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub columns: Vec<ColumnCfg>,
+    /// FAR's own pair of strings instead of the list above, for a mode somebody already has
+    /// in their FAR configuration: `far_types = "N,SC,DM"` with `far_widths = "0,9,16"`
+    /// (SPEC 02 §3b). What we have no column for is reported rather than dropped in silence.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub far_types: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub far_widths: String,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct HighlightCfg {
@@ -1091,6 +1135,9 @@ pub struct Config {
     /// `[[sort_group]]` blocks: the bands the sort groups cut a listing into (SPEC 02 §4).
     #[serde(rename = "sort_group")]
     pub sort_groups: Vec<SortGroupCfg>,
+    /// `[[column_set]]` blocks: the user's own columns for a view mode (SPEC 02 §3a).
+    #[serde(rename = "column_set")]
+    pub column_sets: Vec<ColumnSetCfg>,
     /// Anything we did not recognise, kept so `--dump-config` can show it and warn.
     #[serde(flatten, skip_serializing)]
     pub unknown: BTreeMap<String, toml::Value>,

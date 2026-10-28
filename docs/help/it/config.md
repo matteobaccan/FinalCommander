@@ -88,6 +88,52 @@ prende esattamente quello che prende il file, e una condizione che non si legge 
 con il problema nominato invece di essere tenuta. Una modifica vale subito sui pannelli;
 `Opzioni → Salva la configurazione` è quello che la scrive nel file.
 
+# Colonne tue
+
+Le dieci viste sono elenchi di colonne che ha deciso qualcun altro. Un blocco `[[column_set]]`
+ne rende tua una: l'`id` è la cifra su cui sta la vista, quindi `id = 3` è quello che disegna
+`Ctrl+3`, e una vista per cui nessuno ha scritto un set resta quella predefinita.
+
+```toml
+[[column_set]]
+id = 3
+columns = [
+  { type = "name",  width = "*" },
+  { type = "size",  width = 10, align = "right", fmt = "bytes" },
+  { type = "mtime", width = 16, fmt = "%Y-%m-%d %H:%M" },
+]
+```
+
+I tipi sono `name`, `ext`, `size`, `allocated`, `mtime`, `btime`, `atime`, `attrs`, `owner`,
+`group`, `links` e `descr` — gli stessi campi che disegnano le viste predefinite. Una larghezza
+è un numero di colonne, una percentuale del pannello, `*` per prendere quello che resta, oppure
+`0` per la larghezza naturale della colonna, che per un nome o una descrizione vuol dire
+"quello che resta" perché nessuno dei due ha una larghezza propria. `align` è `left` o `right`
+dove l'abitudine della colonna non è quella che vuoi; `fmt` è `human` o `bytes` su una
+dimensione — `1.18 M` contro `1 234 567` — e una stringa `strftime` su una data.
+
+Una colonna per cui il pannello non ha spazio viene lasciata cadere da destra, e un set che
+lascerebbe il nome illeggibile ne lascia cadere un'altra, che è la regola che la vista
+dettagliata segue già con le sue date in più. Una colonna che costa una interrogazione per file
+— il proprietario, il gruppo, il numero di nomi, la descrizione — viene recuperata dallo stesso
+worker che usa la vista che la mostra, quindi si riempie un momento dopo l'elenco; una vista il
+cui set non ne chiede nessuna non paga niente.
+
+Venendo da FAR puoi scrivere invece la coppia di stringhe che scrive il suo dialogo delle
+modalità del pannello:
+
+```toml
+[[column_set]]
+id = 4
+far_types  = "N,SC,DM"
+far_widths = "0,9,16"
+```
+
+Quello che FAR ha e questo programma no — la dimensione dello stream, l'ora di modifica dei
+metadati, il numero di stream — viene nominato nella schermata di avvio invece di essere
+lasciato fuori in silenzio, e un set in cui non c'è niente di leggibile lascia in pace la vista
+predefinita di quel tasto.
+
 # Cosa è un file
 
 `panel.descriptions` decide se il `descript.ion` della cartella venga letto o no. Acceso per

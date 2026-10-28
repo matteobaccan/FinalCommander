@@ -35,6 +35,7 @@ key-plugins = Plugin
 list-up = UP-DIR
 list-folder = Directorio
 col-name = Nombre
+col-ext = Ext
 col-size = Tamaño
 col-allocated = Ocupado
 col-modified = Modificado

@@ -1,10 +1,11 @@
-//! Core domain types shared by every other `sc-*` crate.
+//! Core domain types shared by every other `fcmd-*` crate.
 //!
 //! This crate is deliberately dependency-light and knows nothing about terminals, async
 //! runtimes or configuration files. See `docs/spec/01-architecture.md`.
 
 pub mod calc;
 pub mod cancel;
+pub mod columns;
 pub mod compare;
 pub mod descriptions;
 pub mod device;
@@ -20,6 +21,7 @@ pub mod view;
 pub mod vpath;
 
 pub use cancel::CancelToken;
+pub use columns::{Align, Column, ColumnKind, ColumnSet, Width};
 pub use device::{is_device, Length};
 pub use entry::{Entry, EntryFlags, EntryId, EntryKind};
 pub use error::{Error, Result};

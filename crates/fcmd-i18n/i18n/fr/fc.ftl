@@ -35,6 +35,7 @@ key-plugins = Plugin
 list-up = Haut
 list-folder = Dossier
 col-name = Nom
+col-ext = Ext
 col-size = Taille
 col-allocated = Occupé
 col-modified = Modifié

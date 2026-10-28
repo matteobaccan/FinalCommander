@@ -13,6 +13,9 @@ use crate::theme::Theme;
 #[derive(Debug, Clone, Copy)]
 pub struct ColumnTitles<'a> {
     pub name: &'a str,
+    /// What a column of extensions is called — only a set of the user's own has one, since
+    /// the full view draws the extension inside the name field.
+    pub ext: &'a str,
     pub size: &'a str,
     pub allocated: &'a str,
     /// What the full view calls its one date column: a date and a time in one heading.
@@ -79,6 +82,10 @@ pub struct PanelRender<'a> {
     /// How many names each file has, counted by a worker while the links view is on screen
     /// (SPEC 02 §3). Empty everywhere else.
     pub links: &'a std::collections::HashMap<String, u64>,
+    /// The user's own columns for this view, where they wrote a `[[column_set]]` for its
+    /// digit (SPEC 02 §3a). Without one the built-in mode draws, which is what every panel
+    /// did before the setting existed.
+    pub columns: Option<&'a fcmd_core::ColumnSet>,
 }
 
 /// Rows that fit in a panel of this height. The titles row and the panel's own status line
@@ -166,19 +173,15 @@ fn column_rules(p: &PanelRender<'_>, inner: Rect) -> Vec<u16> {
                 .collect()
         }
         _ => {
-            let c = columns_of(inner.w, p.view, p.cluster);
-            // One rule at the start of every column that has something before it. The last
-            // one is dropped: FAR runs the final column up against the frame, which is what
-            // makes `Date` and `Time` read as one field in the full view and the attributes
-            // sit beside the dates in the detailed one.
+            // One rule in the gap after every column but the last: FAR runs the final column
+            // up against the frame, which is what makes `Date` and `Time` read as one field
+            // in the full view and the attributes sit beside the dates in the detailed one.
             let mut xs = Vec::new();
-            let mut x = inner.x + c.name;
-            for (_, w) in c.after_name() {
-                if w == 0 {
-                    continue;
-                }
+            let mut x = inner.x;
+            for cell in cells(p, inner.w) {
+                x += cell.w;
                 xs.push(x);
-                x += w + 1;
+                x += 1;
             }
             xs.pop();
             xs
@@ -376,22 +379,19 @@ fn draw_column_titles(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inne
             }
         }
         _ => {
-            let c = columns_of(inner.w, p.view, p.cluster);
+            let cells = cells(p, inner.w);
             // With one date column it is the panel's date, as the full view has always
             // titled it; with three they have to say which is which.
-            let write = if c.created > 0 {
+            let write = if cells.iter().any(|cell| cell.col == Col::Created) {
                 p.titles.modified
             } else {
                 p.titles.date_time
             };
             let mut x = inner.x;
-            centre(buf, x, y, c.name, p.titles.name, style);
-            x += c.name + 1;
-            for (col, w) in c.after_name() {
-                if w == 0 {
-                    continue;
-                }
-                let title = match col {
+            for cell in cells {
+                let title = match cell.col {
+                    Col::Name => p.titles.name,
+                    Col::Ext => p.titles.ext,
                     Col::Size => p.titles.size,
                     Col::Allocated => p.titles.allocated,
                     Col::Owner => p.titles.owner,
@@ -403,8 +403,8 @@ fn draw_column_titles(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inne
                     Col::Descr => p.titles.descr,
                     Col::Links => p.titles.links,
                 };
-                centre(buf, x, y, w, title, style);
-                x += w + 1;
+                centre(buf, x, y, cell.w, title, style);
+                x += cell.w + 1;
             }
         }
     }
@@ -587,6 +587,8 @@ const NAME_MIN: u16 = 16;
 /// titles and the rows alike, so that the four cannot drift apart.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Col {
+    Name,
+    Ext,
     Size,
     Allocated,
     Owner,
@@ -624,6 +626,81 @@ impl Cols {
             .filter(|(_, w)| *w > 0)
             .map(|(_, w)| w + 1)
             .sum()
+    }
+}
+
+/// One column as it will be drawn: which one, how wide, which way its text reads, and the
+/// format the user asked for where they asked for one.
+#[derive(Debug, Clone, Copy)]
+struct Cell<'a> {
+    col: Col,
+    w: u16,
+    right: bool,
+    /// `human` or `bytes` on a size, a `strftime` string on a date. Only a set of the user's
+    /// own carries one; the built-in modes have their own spelling.
+    fmt: Option<&'a str>,
+}
+
+/// The columns a panel draws, left to right.
+///
+/// One list, read by the widths, the rules, the titles and the rows alike, so the four cannot
+/// drift apart — and the one place that knows whether this panel is drawing the user's own
+/// columns or a built-in mode.
+fn cells<'a>(p: &PanelRender<'a>, inner_w: u16) -> Vec<Cell<'a>> {
+    match p.columns {
+        Some(set) => set
+            .layout(inner_w)
+            .into_iter()
+            .map(|(i, w)| {
+                let column = &set.columns[i];
+                Cell {
+                    col: col_of(column.kind),
+                    w,
+                    right: column.right_aligned(),
+                    fmt: column.fmt.as_deref(),
+                }
+            })
+            .collect(),
+        None => {
+            let c = columns_of(inner_w, p.view, p.cluster);
+            let mut out = vec![Cell {
+                col: Col::Name,
+                w: c.name,
+                right: false,
+                fmt: None,
+            }];
+            out.extend(
+                c.after_name()
+                    .into_iter()
+                    .filter(|(_, w)| *w > 0)
+                    .map(|(col, w)| Cell {
+                        col,
+                        w,
+                        right: matches!(col, Col::Size | Col::Allocated | Col::Links),
+                        fmt: None,
+                    }),
+            );
+            out
+        }
+    }
+}
+
+/// A column of the core's own vocabulary as the one this widget draws.
+fn col_of(kind: fcmd_core::ColumnKind) -> Col {
+    use fcmd_core::ColumnKind as K;
+    match kind {
+        K::Name => Col::Name,
+        K::Ext => Col::Ext,
+        K::Size => Col::Size,
+        K::Allocated => Col::Allocated,
+        K::Mtime => Col::Write,
+        K::Btime => Col::Created,
+        K::Atime => Col::Accessed,
+        K::Attrs => Col::Attr,
+        K::Owner => Col::Owner,
+        K::Group => Col::Group,
+        K::Links => Col::Links,
+        K::Descr => Col::Descr,
     }
 }
 
@@ -710,11 +787,14 @@ fn columns_of(inner_w: u16, view: ViewMode, cluster: u64) -> Cols {
 }
 
 fn draw_full(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect, rows: usize) {
-    let c = columns_of(inner.w, p.view, p.cluster);
+    let cells = cells(p, inner.w);
     // One clock for the whole panel: a group written in terms of age must not colour the top
     // of a listing by one instant and the bottom by another.
     let now = SystemTime::now();
-    let name_w = c.name;
+    // The extension goes in a column of its own inside the name field, as FAR draws the full
+    // view — but never when the set has a column of extensions already, since then it would
+    // be drawn twice.
+    let split_ext_in_name = !cells.iter().any(|cell| cell.col == Col::Ext);
 
     for row in 0..rows {
         let idx = p.top + row;
@@ -735,50 +815,57 @@ fn draw_full(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect, 
         buf.fill(Rect::new(inner.x, y, inner.w, 1), ' ', style);
 
         let name = shift_name(&decorate(e), p.name_scroll);
-        // The extension in a column of its own, as FAR draws the full view: the names line up
-        // down the left and the extensions down the right of the same field. Not while the
-        // names are being scrolled sideways — the field is then a window onto one long name
-        // and there is no room to keep a column in it — and not in the detailed view, which
-        // has columns of its own after the time.
-        let split = if p.view == ViewMode::Full && p.name_scroll == 0 && name_w > EXT_W + 3 {
-            split_ext(&name, e)
-        } else {
-            None
-        };
-        match split {
-            Some((stem, ext)) => {
-                let stem_w = name_w - EXT_W;
-                buf.put_str(
-                    inner.x,
-                    y,
-                    &truncate_cols(stem, stem_w as usize),
-                    style,
-                    stem_w,
-                );
-                put_right(buf, inner.x + stem_w, y, EXT_W, ext, style);
-            }
-            None => {
-                buf.put_str(
-                    inner.x,
-                    y,
-                    &truncate_cols(&name, name_w as usize),
-                    style,
-                    name_w,
-                );
-            }
-        }
 
-        // Everything after the name, in the one order the titles and the rules also read.
-        // A filesystem that does not keep a date, a device that never said how big its
-        // clusters are and a row whose owner has not come back yet all leave their column
-        // blank rather than inventing something to put in it.
-        let mut x = inner.x + name_w + 1;
-        for (col, w) in c.after_name() {
-            if w == 0 {
-                continue;
-            }
+        // The columns, in the one order the titles and the rules also read. A filesystem that
+        // does not keep a date, a device that never said how big its clusters are and a row
+        // whose owner has not come back yet all leave their column blank rather than
+        // inventing something to put in it.
+        let mut x = inner.x;
+        for cell in &cells {
+            let (col, w) = (cell.col, cell.w);
             match col {
-                Col::Size => draw_size(buf, p, x, y, w, e, style),
+                Col::Name => {
+                    // The extension in a column of its own, as FAR draws the full view: the
+                    // names line up down the left and the extensions down the right of the
+                    // same field. Not while the names are being scrolled sideways — the field
+                    // is then a window onto one long name and there is no room to keep a
+                    // column in it — and not in the detailed view, which has columns of its
+                    // own after the time.
+                    let split = if p.view == ViewMode::Full
+                        && split_ext_in_name
+                        && p.name_scroll == 0
+                        && w > EXT_W + 3
+                    {
+                        split_ext(&name, e)
+                    } else {
+                        None
+                    };
+                    match split {
+                        Some((stem, ext)) => {
+                            let stem_w = w - EXT_W;
+                            buf.put_str(x, y, &truncate_cols(stem, stem_w as usize), style, stem_w);
+                            put_right(buf, x + stem_w, y, EXT_W, ext, style);
+                        }
+                        None => {
+                            buf.put_str(x, y, &truncate_cols(&name, w as usize), style, w);
+                        }
+                    }
+                }
+                // A column of extensions, which only a set of the user's own has. `..` and a
+                // directory have none to show: a folder called `docs.old` has no extension,
+                // it has a dot in its name.
+                Col::Ext => {
+                    let text = (!e.opens_as_dir() && e.kind != EntryKind::Parent)
+                        .then(|| split_ext(&name, e).map(|(_, ext)| ext.to_string()))
+                        .flatten()
+                        .unwrap_or_default();
+                    if cell.right {
+                        put_right(buf, x, y, w, &text, style);
+                    } else {
+                        buf.put_str(x, y, &truncate_cols(&text, w as usize), style, w);
+                    }
+                }
+                Col::Size => draw_size(buf, p, x, y, e, style, *cell),
                 Col::Allocated => {
                     // A directory has no size of its own to round up.
                     if !e.opens_as_dir() && e.kind != EntryKind::Parent {
@@ -805,8 +892,19 @@ fn draw_full(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect, 
                         Col::Created => e.btime,
                         _ => e.atime,
                     };
-                    let text = when.map(format_mtime).unwrap_or_default();
-                    buf.put_str(x, y, &truncate_cols(&text, w as usize), style, w);
+                    // A set of the user's own may ask for another spelling of the date; the
+                    // built-in modes have the one the panel has always drawn.
+                    let text = when
+                        .map(|t| match cell.fmt {
+                            Some(fmt) => format_time(t, fmt),
+                            None => format_mtime(t),
+                        })
+                        .unwrap_or_default();
+                    if cell.right {
+                        put_right(buf, x, y, w, &text, style);
+                    } else {
+                        buf.put_str(x, y, &truncate_cols(&text, w as usize), style, w);
+                    }
                 }
                 Col::Attr => {
                     buf.put_str(x, y, &attrs(e), style, w);
@@ -847,10 +945,11 @@ fn draw_size(
     p: &PanelRender<'_>,
     x: u16,
     y: u16,
-    w: u16,
     e: &Entry,
     style: Style,
+    cell: Cell<'_>,
 ) {
+    let (w, fmt) = (cell.w, cell.fmt);
     match if e.opens_as_dir() && e.kind != EntryKind::Parent {
         EntryKind::Dir
     } else {
@@ -877,8 +976,8 @@ fn draw_size(
         }
         // The alternative full view is this column and nothing else: the size written out
         // in full, digits grouped, for when the difference between 1.2M and 1.9M is the
-        // thing one came to see.
-        _ if p.view == ViewMode::AltFull => {
+        // thing one came to see. A set of the user's own asks for the same thing by name.
+        _ if p.view == ViewMode::AltFull || matches!(fmt, Some("bytes") | Some("full")) => {
             put_right(buf, x, y, w, &fcmd_core::format_count(e.size), style)
         }
         _ => put_right(buf, x, y, w, &format_size(e.size), style),
@@ -936,6 +1035,22 @@ fn attrs(e: &Entry) -> String {
 pub fn format_mtime(t: SystemTime) -> String {
     let dt: DateTime<Local> = t.into();
     dt.format("%Y-%m-%d %H:%M").to_string()
+}
+
+/// A time in the spelling a column set asked for — a `strftime` string, which is what FAR's
+/// own column grammar takes too.
+///
+/// A format that produces nothing (one that is all nonsense) falls back to the panel's usual
+/// spelling rather than drawing an empty column, so a typo in the configuration is visible as
+/// an ordinary date and not as a missing one.
+pub fn format_time(t: SystemTime, fmt: &str) -> String {
+    let dt: DateTime<Local> = t.into();
+    let text = dt.format(fmt).to_string();
+    if text.trim().is_empty() {
+        format_mtime(t)
+    } else {
+        text
+    }
 }
 
 /// `2026-10-23 17:42:05`, in local time: what the attributes dialog shows and takes back.
@@ -1476,6 +1591,7 @@ mod tests {
     fn english_titles() -> ColumnTitles<'static> {
         ColumnTitles {
             name: "Name",
+            ext: "Ext",
             size: "Size",
             allocated: "Allocated",
             date_time: "Date       Time",
@@ -1554,6 +1670,7 @@ mod tests {
             owners: &std::collections::HashMap::new(),
             descriptions: &Default::default(),
             links: &std::collections::HashMap::new(),
+            columns: None,
             up_label: "Up",
             folder_label: "Folder",
         };
@@ -1631,6 +1748,7 @@ mod tests {
             owners,
             descriptions: &Default::default(),
             links: &std::collections::HashMap::new(),
+            columns: None,
             up_label: "Up",
             folder_label: "Folder",
         };
@@ -1708,6 +1826,7 @@ mod tests {
                 owners: &std::collections::HashMap::new(),
                 descriptions: &Default::default(),
                 links: &links,
+                columns: None,
                 up_label: "Up",
                 folder_label: "Folder",
             };
@@ -1788,6 +1907,7 @@ mod tests {
                 owners: &std::collections::HashMap::new(),
                 descriptions: &descriptions,
                 links: &std::collections::HashMap::new(),
+                columns: None,
                 up_label: "Up",
                 folder_label: "Folder",
             };
@@ -1892,6 +2012,7 @@ mod tests {
             owners: &std::collections::HashMap::new(),
             descriptions: &Default::default(),
             links: &std::collections::HashMap::new(),
+            columns: None,
             up_label: "Up",
             folder_label: "Folder",
         };
@@ -2052,6 +2173,7 @@ mod tests {
             owners: &std::collections::HashMap::new(),
             descriptions: &Default::default(),
             links: &std::collections::HashMap::new(),
+            columns: None,
             up_label: "Up",
             folder_label: "Folder",
         };
@@ -2092,6 +2214,7 @@ mod tests {
                 owners: &std::collections::HashMap::new(),
                 descriptions: &Default::default(),
                 links: &std::collections::HashMap::new(),
+                columns: None,
                 up_label: "Up",
                 folder_label: "Folder",
             };
@@ -2139,6 +2262,7 @@ mod tests {
             owners: &std::collections::HashMap::new(),
             descriptions: &Default::default(),
             links: &std::collections::HashMap::new(),
+            columns: None,
             up_label: "Up",
             folder_label: "Folder",
         };
@@ -2277,6 +2401,7 @@ mod tests {
             owners: &std::collections::HashMap::new(),
             descriptions: &Default::default(),
             links: &std::collections::HashMap::new(),
+            columns: None,
             up_label: "Up",
             folder_label: "Folder",
         };
@@ -2470,6 +2595,7 @@ mod tests {
             owners: &std::collections::HashMap::new(),
             descriptions: &Default::default(),
             links: &std::collections::HashMap::new(),
+            columns: None,
             up_label: "Up",
             folder_label: "Folder",
         };

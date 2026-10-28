@@ -84,8 +84,8 @@ as a paragraph. Five columns of the field, four of them the extension — a dire
 is a folder, not a `.old` file), a dotfile, and an extension too long for the column keep their
 name whole across both. A mode says how many columns it draws and whether it shows a size,
 so the layout follows from the mode rather than from a width guess, and a column too narrow for
-what it holds falls back to fewer columns. The custom sets are the one thing here still to
-come, and a line in `docs/BACKLOG.md`.
+what it holds falls back to fewer columns. **The custom sets are shipped** (§3a): each of the
+ten modes is re-definable from the configuration, on its own digit.
 
 **The wide view** (`Ctrl+4`) is name and size, in as many columns as the *names* allow:
 a directory of short names gets two, and a directory of download names —
@@ -176,6 +176,28 @@ whose name column would be left unreadable drops another, which is the rule the 
 already follows with its extra dates. `align` is `left` or `right` where the column's own
 default is not wanted; `fmt` is `human` or `bytes` on a size (`1.18 M` against `1 234 567`)
 and a `strftime` string on a date.
+
+A set may also be written in **FAR's own pair of strings** instead of the list, for a mode
+somebody already has in their FAR configuration (§3b):
+
+```toml
+[[column_set]]
+id = 4
+far_types  = "N,SC,DM"
+far_widths = "0,9,16"
+```
+
+The two spellings are the same thing, so a block that writes both is a block whose author has
+not decided: the strings win and the block says so on the startup screen. What we have no
+column for — the stream size, the change time, the stream count — is reported there too rather
+than dropped in silence, and a set left with no column that reads at all leaves the built-in
+mode in place, because a panel that drew nothing would be a worse answer than a panel that
+looks as it always did.
+
+A column that costs a lookup per file is fetched by the same worker the built-in view uses, so
+`owner`, `group`, `links` and `descr` in a set of one's own behave exactly as `Ctrl+8`,
+`Ctrl+9` and `Ctrl+6` do — and a view whose set does *not* ask for them pays nothing, even
+when the mode it replaced would have.
 
 Horizontal scrolling for long names (`Ctrl+Shift+←/→`, because `Alt+←/→` is the folder history
 here), ellipsis in the middle for paths and at the end for names.

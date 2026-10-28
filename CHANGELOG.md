@@ -8,6 +8,21 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **Columns of your own, for any of the ten views** (SPEC 02 §3a). FAR has no separate keys
+  for custom panel modes — its ten modes *are* the editable ones — so neither have we: a
+  `[[column_set]]` block whose `id` is a view's digit is what that view draws, and a digit
+  nobody has written a set for keeps the built-in list. Twelve column types, a width that is a
+  number, a percentage, `*` or automatic, an alignment and a format per column: `bytes` writes
+  a size out digit by digit, and a date takes a `strftime` string. A column the panel has no
+  room for is dropped from the right, and a set that would leave the name unreadable drops
+  another, which is the rule the detailed view already followed with its extra dates.
+  **FAR's own `Column types` and `Column widths` strings are read as well** (`far_types`,
+  `far_widths`), so a mode out of somebody's FAR configuration can be pasted in; what we have
+  no column for — the stream size, the change time, the stream count — is named on the startup
+  screen rather than dropped in silence. A set that asks for the owner, the group, the link
+  count or the description puts the same worker to work as the view that shows it, and a view
+  whose set asks for none of them pays nothing even though the mode it replaced would have.
+
 - **The help is read in the language the program is running in.** The chapters' names are
   message ids in all seven catalogues, so the index is always the reader's own; the prose of a
   chapter is read from `docs/help/<lang>/<file>.md` when somebody has translated it and from

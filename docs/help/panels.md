@@ -52,6 +52,11 @@ really one file stop looking like a hundred files' worth of space, and `Ctrl+0` 
 view with the sizes written out digit by digit — `1 234 567` where the full view says
 `1.18 M` — for when the difference between 1.2M and 1.9M is the thing you came to see.
 
+Each of the ten is a list of columns you can rewrite: a `[[column_set]]` block in
+`fcmd.toml` whose `id` is the view's own digit is what that view draws, with the columns,
+widths, alignments and formats you choose — FAR's own `Column types` strings included. The
+configuration chapter has the shape of it.
+
 `Ctrl+F3` to `Ctrl+F11` sort: by name, extension, write time, size, unsorted, creation time,
 access time, description and owner — all nine of FAR's keys. Choosing the order already in
 force reverses it, and `Ctrl+F12` offers them as a list. The last two sort by something the

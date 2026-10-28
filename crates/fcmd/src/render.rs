@@ -245,6 +245,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
     // frame rather than per panel: both sides use the same words.
     let titles = [
         "col-name",
+        "col-ext",
         "col-size",
         "col-allocated",
         "col-date-time",
@@ -260,17 +261,18 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
     .map(|id| app.i18n.t(id));
     let titles = widgets::ColumnTitles {
         name: &titles[0],
-        size: &titles[1],
-        allocated: &titles[2],
-        date_time: &titles[3],
-        modified: &titles[4],
-        created: &titles[5],
-        accessed: &titles[6],
-        attr: &titles[7],
-        owner: &titles[8],
-        group: &titles[9],
-        descr: &titles[10],
-        links: &titles[11],
+        ext: &titles[1],
+        size: &titles[2],
+        allocated: &titles[3],
+        date_time: &titles[4],
+        modified: &titles[5],
+        created: &titles[6],
+        accessed: &titles[7],
+        attr: &titles[8],
+        owner: &titles[9],
+        group: &titles[10],
+        descr: &titles[11],
+        links: &titles[12],
     };
     for (i, area) in areas.iter().enumerate() {
         // The special kinds have no rows, so they draw themselves inside the same frame and
@@ -330,6 +332,9 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             owners: &panel.owners,
             descriptions: &panel.descriptions,
             links: &panel.links,
+            // The user's own columns for this view, if they wrote a set on its digit
+            // (SPEC 02 §3a); without one the built-in mode draws, as it always has.
+            columns: crate::colset::for_slot(&app.column_sets, panel.view.slot()),
             up_label: &up_label,
             folder_label: &folder_label,
         };
@@ -2494,6 +2499,7 @@ mod tests {
             plugin_commands: Vec::new(),
             highlight: fcmd_ui::Highlight::far_default(),
             sort_groups: Default::default(),
+            column_sets: Vec::new(),
         });
         app.requests.clear();
         for panel in 0..2 {
@@ -2514,6 +2520,50 @@ mod tests {
         let mut buf = Buffer::new(w, h);
         draw(app, &mut buf);
         buf.to_text()
+    }
+
+    /// A `[[column_set]]` on a view's own digit is what that view draws (SPEC 02 §3a): FAR's
+    /// ten modes are the editable ones, and so are ours.
+    #[test]
+    fn the_users_own_columns_are_what_their_view_draws() {
+        let mut app = app("far", "en");
+        // What the full view draws without a set of one's own: a date column.
+        let before = frame(&mut app, 100, 24);
+        assert!(before.contains("Date"), "{before}");
+
+        // Name, attributes and size — on `Ctrl+3`, which is the full view's digit.
+        let (cfg, problems) = Config::parse(
+            "test.toml",
+            r#"
+            [[column_set]]
+            id = 3
+            columns = [
+              { type = "name", width = "*" },
+              { type = "attrs", width = 5 },
+              { type = "size", width = 12, fmt = "bytes" },
+            ]
+            "#,
+        )
+        .expect("it parses");
+        assert!(problems.is_empty(), "{problems:?}");
+        let mut warnings = Vec::new();
+        app.column_sets = crate::colset::sets(&cfg, &mut warnings);
+        assert!(warnings.is_empty(), "{warnings:?}");
+
+        let after = frame(&mut app, 100, 24);
+        // The date is gone, the attributes are there, and the size is written out in full
+        // rather than abbreviated — all three of them because the set said so.
+        assert!(!after.contains("Date"), "{after}");
+        assert!(after.contains("Attr"), "{after}");
+        assert!(after.contains("412"), "{after}");
+        // The other panel is in the same view, so it changed too; and the rules between the
+        // columns moved with them, which is the thing that would break if the four readers of
+        // the layout had drifted apart.
+        assert_eq!(
+            after.matches("Attr").count(),
+            2,
+            "both panels draw the set: {after}"
+        );
     }
 
     /// The drive dialog belongs to its panel. FAR opens it five columns in from that panel's
@@ -3293,6 +3343,7 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
             plugin_commands: Vec::new(),
             highlight: fcmd_ui::Highlight::far_default(),
             sort_groups: Default::default(),
+            column_sets: Vec::new(),
         });
         app.requests.clear();
         let entries = fcmd_vfs::local::list_blocking(
@@ -4627,6 +4678,7 @@ third line
             plugin_commands: Vec::new(),
             highlight: fcmd_ui::Highlight::far_default(),
             sort_groups: Default::default(),
+            column_sets: Vec::new(),
         });
         app.requests.clear();
         let entries = fcmd_vfs::local::list_blocking(
@@ -4703,6 +4755,7 @@ third line
             plugin_commands: Vec::new(),
             highlight: fcmd_ui::Highlight::far_default(),
             sort_groups: Default::default(),
+            column_sets: Vec::new(),
         });
         app.requests.clear();
         let entries = fcmd_vfs::local::list_blocking(
@@ -4784,6 +4837,7 @@ third line
             plugin_commands: Vec::new(),
             highlight: fcmd_ui::Highlight::far_default(),
             sort_groups: Default::default(),
+            column_sets: Vec::new(),
         });
         app.requests.clear();
         let entries = fcmd_vfs::local::list_blocking(
@@ -4839,6 +4893,7 @@ third line
             plugin_commands: Vec::new(),
             highlight: fcmd_ui::Highlight::far_default(),
             sort_groups: Default::default(),
+            column_sets: Vec::new(),
         });
         app.requests.clear();
         let entries =

@@ -47,6 +47,24 @@ impl ViewMode {
         ViewMode::AltFull,
     ];
 
+    /// The digit key this view is on: `Ctrl+1` is brief, `Ctrl+3` the full view, and the
+    /// tenth is `Ctrl+0`, as it is in FAR.
+    ///
+    /// It is also the id of the column set that replaces it: a `[[column_set]]` block with
+    /// `id = 3` is what `Ctrl+3` draws (SPEC 02 §3a). FAR has no separate keys for custom
+    /// modes — its ten modes *are* the editable ones — and neither have we.
+    pub fn slot(self) -> u8 {
+        let n = ViewMode::ALL
+            .iter()
+            .position(|mode| *mode == self)
+            .unwrap_or(0);
+        if n + 1 == ViewMode::ALL.len() {
+            0
+        } else {
+            n as u8 + 1
+        }
+    }
+
     pub fn as_str(self) -> &'static str {
         match self {
             ViewMode::Brief => "brief",
@@ -129,6 +147,21 @@ mod tests {
         // The spelling FAR's own dialog uses, and one that is not a mode at all.
         assert_eq!(ViewMode::parse("Detailed"), Some(ViewMode::Detail));
         assert_eq!(ViewMode::parse("stripes"), None);
+    }
+
+    #[test]
+    fn every_view_is_on_the_digit_far_puts_it_on() {
+        assert_eq!(ViewMode::Brief.slot(), 1);
+        assert_eq!(ViewMode::Full.slot(), 3);
+        assert_eq!(ViewMode::Detail.slot(), 5);
+        assert_eq!(ViewMode::Links.slot(), 9);
+        // The tenth is `Ctrl+0`, which is why the font reset moved to `Ctrl+Alt+0`.
+        assert_eq!(ViewMode::AltFull.slot(), 0);
+        // And no two views share a digit, or a column set would draw two of them.
+        let mut slots: Vec<u8> = ViewMode::ALL.iter().map(|m| m.slot()).collect();
+        slots.sort_unstable();
+        slots.dedup();
+        assert_eq!(slots.len(), ViewMode::ALL.len());
     }
 
     #[test]

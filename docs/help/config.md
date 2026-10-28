@@ -85,6 +85,49 @@ takes, and a condition that does not parse comes back with the problem named rat
 kept. A change is in force on the panels at once; `Options → Save setup` is what writes it to
 the file.
 
+# Columns of your own
+
+The ten view modes are lists of columns somebody else decided on. A `[[column_set]]` block
+makes one of them yours: the `id` is the digit the view is on, so `id = 3` is what `Ctrl+3`
+draws, and a view nobody has written a set for stays the built-in one.
+
+```toml
+[[column_set]]
+id = 3
+columns = [
+  { type = "name",  width = "*" },
+  { type = "size",  width = 10, align = "right", fmt = "bytes" },
+  { type = "mtime", width = 16, fmt = "%Y-%m-%d %H:%M" },
+]
+```
+
+The types are `name`, `ext`, `size`, `allocated`, `mtime`, `btime`, `atime`, `attrs`, `owner`,
+`group`, `links` and `descr` — the same fields the built-in modes draw. A width is a number of
+columns, a percentage of the panel, `*` to take whatever is left, or `0` for the column's own
+natural width, which for a name or a description means "what is left over" because neither has
+a width of its own. `align` is `left` or `right` where the column's own habit is not what you
+want; `fmt` is `human` or `bytes` on a size — `1.18 M` against `1 234 567` — and a `strftime`
+string on a date.
+
+A column the panel has no room for is dropped from the right, and a set that would leave the
+name unreadable drops another, which is the rule the detailed view already follows with its
+extra dates. A column that costs a lookup per file — the owner, the group, the link count, the
+description — is fetched by the same worker the view that shows it uses, so it fills in a
+moment after the listing; a view whose set does not ask for one of them pays nothing at all.
+
+Coming from FAR you can write the pair of strings its own panel-mode dialog writes instead:
+
+```toml
+[[column_set]]
+id = 4
+far_types  = "N,SC,DM"
+far_widths = "0,9,16"
+```
+
+What FAR has and this has not — the stream size, the change time, the stream count — is named
+on the startup screen rather than quietly left out, and a set with nothing in it that could be
+read leaves that key's built-in view alone.
+
 # What a file is
 
 `panel.descriptions` decides whether the directory's own `descript.ion` is read at all. On by

@@ -35,6 +35,7 @@ key-plugins = PlugIN
 list-up = Su
 list-folder = Cartella
 col-name = Nome
+col-ext = Est
 col-size = Dimens.
 col-allocated = Occupato
 col-modified = Modifica

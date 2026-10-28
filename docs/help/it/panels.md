@@ -56,6 +56,11 @@ un solo file smettono di sembrare cento file di spazio occupato; `Ctrl+0` è la 
 con le dimensioni scritte cifra per cifra — `1 234 567` dove la completa dice `1.18 M` — per
 quando la differenza fra 1,2M e 1,9M è proprio la cosa che sei venuto a vedere.
 
+Ognuna delle dieci è un elenco di colonne che puoi riscrivere: un blocco `[[column_set]]` in
+`fcmd.toml` il cui `id` è la cifra della vista è quello che quella vista disegna, con le
+colonne, le larghezze, gli allineamenti e i formati che scegli tu — comprese le stringhe
+`Column types` di FAR. Il capitolo sulla configurazione ne dà la forma.
+
 `Ctrl+F3`…`Ctrl+F11` ordinano: per nome, estensione, data di scrittura, dimensione, non
 ordinato, data di creazione, data di lettura, descrizione e proprietario — tutti e nove i tasti
 di FAR. Scegliere l'ordine già in vigore lo inverte, e `Ctrl+F12` li offre come elenco. Gli
