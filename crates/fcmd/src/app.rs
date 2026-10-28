@@ -1447,7 +1447,12 @@ impl App {
             highlight,
             sort_groups,
         } = start;
+        // The criteria chain, and what could not be read: said out loud below rather than
+        // silently sorted by name, which is what a mistyped key would otherwise look like.
+        let mut problems: Vec<String> = Vec::new();
+        let chain = sort_chain(&cfg.panel.sort_chain, &mut problems);
         let sort = Sort {
+            chain,
             key: parse_sort(&cfg.panel.sort),
             reverse: cfg.panel.reverse,
             dirs_first: cfg.panel.dirs_first,
@@ -1580,6 +1585,9 @@ impl App {
         app.read_panel(1);
         if let Some(e) = macro_error {
             app.set_error(e);
+        }
+        if let Some(problem) = problems.first() {
+            app.set_error(problem.clone());
         }
         app
     }
@@ -12446,15 +12454,44 @@ fn offset_at_line(editor: &Editor, line: usize) -> u64 {
 }
 
 fn parse_sort(s: &str) -> SortKey {
-    match s.trim().to_ascii_lowercase().as_str() {
+    sort_key(s).unwrap_or(SortKey::Name)
+}
+
+/// A sort key by name, or `None` for a word that is not one. The chain needs to tell the two
+/// apart — a tie-breaker nobody can name is a line worth a message, not a quiet sort by name.
+fn sort_key(s: &str) -> Option<SortKey> {
+    Some(match s.trim().to_ascii_lowercase().as_str() {
+        "name" => SortKey::Name,
         "ext" | "extension" => SortKey::Ext,
         "size" => SortKey::Size,
         "mtime" | "time" | "date" => SortKey::MTime,
         "btime" | "created" => SortKey::BTime,
         "atime" | "accessed" => SortKey::ATime,
         "none" | "unsorted" => SortKey::Unsorted,
-        _ => SortKey::Name,
+        _ => return None,
+    })
+}
+
+/// The criteria chain of the configuration, with what could not be read named back.
+///
+/// Three slots: a fourth tie-breaker after three that all came out equal has nothing left to
+/// decide, and the name has the last word in any case.
+fn sort_chain(words: &[String], problems: &mut Vec<String>) -> [Option<SortKey>; 3] {
+    let mut chain = [None; 3];
+    let mut at = 0;
+    for word in words {
+        match sort_key(word) {
+            Some(key) if at < chain.len() => {
+                chain[at] = Some(key);
+                at += 1;
+            }
+            Some(_) => problems.push(format!(
+                "sort chain: `{word}` is past the third and was dropped"
+            )),
+            None => problems.push(format!("sort chain: `{word}` is not a sort key")),
+        }
     }
+    chain
 }
 
 /// Where a panel goes when the connection it was on is closed.

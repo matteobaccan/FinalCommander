@@ -254,6 +254,11 @@ pub enum QuickSearch {
 pub struct PanelCfg {
     pub view: String,
     pub sort: String,
+    /// What breaks the ties the sort key leaves, in order: `["size", "name"]` sorts by size
+    /// and settles two files of the same size by name (SPEC 02 §4). At most three; the name
+    /// has the last word in any case.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub sort_chain: Vec<String>,
     pub reverse: bool,
     pub dirs_first: bool,
     pub selected_first: bool,
@@ -289,6 +294,7 @@ impl Default for PanelCfg {
         PanelCfg {
             view: "full".into(),
             sort: "name".into(),
+            sort_chain: Vec::new(),
             reverse: false,
             dirs_first: true,
             selected_first: false,
@@ -1052,6 +1058,14 @@ impl Config {
             "term.scrollback" => self.term.scrollback = parse_usize(value)?,
             "panel.view" => self.panel.view = value.to_string(),
             "panel.sort" => self.panel.sort = value.to_string(),
+            "panel.sort_chain" => {
+                self.panel.sort_chain = value
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string)
+                    .collect()
+            }
             "panel.reverse" => self.panel.reverse = parse_bool(value)?,
             "panel.show_hidden" => self.panel.show_hidden = parse_bool(value)?,
             "panel.dirs_first" => self.panel.dirs_first = parse_bool(value)?,

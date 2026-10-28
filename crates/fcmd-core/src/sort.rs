@@ -133,6 +133,11 @@ pub struct Sort {
     /// panel rather than in here, because they are one list for the whole program and this
     /// is a copy per panel.
     pub groups: bool,
+    /// The criteria chain: what breaks a tie the key leaves, in order, before the name does
+    /// (SPEC 02 §4). Three slots rather than a list, because this type is `Copy` — a panel,
+    /// a tab and a saved session each hold a copy — and because a fourth tie-breaker after
+    /// three that all came out equal has nothing left to decide.
+    pub chain: [Option<SortKey>; 3],
 }
 
 impl Default for Sort {
@@ -145,6 +150,7 @@ impl Default for Sort {
             natural: true,
             case_sensitive: cfg!(not(any(windows, target_os = "macos"))),
             groups: false,
+            chain: [None; 3],
         }
     }
 }
@@ -195,27 +201,55 @@ impl Sort {
             }
         }
 
-        let primary = match self.key {
+        // `Unsorted` answers `Equal` to everything on purpose: the order the provider gave
+        // is the order, and neither a chain nor a name may disturb it.
+        if self.key == SortKey::Unsorted {
+            return Ordering::Equal;
+        }
+
+        let mut ord = self.cmp_key(self.key, a, b);
+        // The chain breaks the ties the key leaves: `["size", "name"]` sorts by size and
+        // settles two files of the same size by name rather than by whatever came first.
+        // A key already asked is skipped, because asking it twice cannot say anything new.
+        if ord == Ordering::Equal {
+            for key in self.chain.into_iter().flatten() {
+                if key == self.key || key == SortKey::Unsorted {
+                    continue;
+                }
+                ord = self.cmp_key(key, a, b);
+                if ord != Ordering::Equal {
+                    break;
+                }
+            }
+        }
+        // And the name has the last word whatever was asked, so the comparison is total and
+        // the order does not wander between two reads of the same directory.
+        if ord == Ordering::Equal {
+            ord = self.cmp_name(a, b);
+        }
+
+        if self.reverse {
+            ord.reverse()
+        } else {
+            ord
+        }
+    }
+
+    /// One key's answer, with no tie-break of its own: what breaks the tie is the chain and
+    /// then the name, decided once in `compare_in` rather than key by key.
+    fn cmp_key(&self, key: SortKey, a: &Entry, b: &Entry) -> Ordering {
+        match key {
             SortKey::Name => self.cmp_name(a, b),
-            SortKey::Ext => self
-                .cmp_str(&a.extension(), &b.extension())
-                .then_with(|| self.cmp_name(a, b)),
-            SortKey::Size => a.size.cmp(&b.size).then_with(|| self.cmp_name(a, b)),
-            SortKey::MTime => a.mtime.cmp(&b.mtime).then_with(|| self.cmp_name(a, b)),
+            SortKey::Ext => self.cmp_str(&a.extension(), &b.extension()),
+            SortKey::Size => a.size.cmp(&b.size),
             // A timestamp the filesystem does not keep counts as older than any it does, so
             // the entries nobody can date gather at the old end of the order and `reverse`
             // carries them along with everything else. That is `Option`'s own ordering, which
-            // is what the write-time key has always done; the name breaks the remaining ties,
-            // so the comparison is total and the order stable whatever is missing.
-            SortKey::BTime => a.btime.cmp(&b.btime).then_with(|| self.cmp_name(a, b)),
-            SortKey::ATime => a.atime.cmp(&b.atime).then_with(|| self.cmp_name(a, b)),
+            // is what the write-time key has always done.
+            SortKey::MTime => a.mtime.cmp(&b.mtime),
+            SortKey::BTime => a.btime.cmp(&b.btime),
+            SortKey::ATime => a.atime.cmp(&b.atime),
             SortKey::Unsorted => Ordering::Equal,
-        };
-
-        if self.reverse && self.key != SortKey::Unsorted {
-            primary.reverse()
-        } else {
-            primary
         }
     }
 
@@ -573,6 +607,54 @@ mod tests {
                 "zz.rs"
             ]
         );
+    }
+
+    #[test]
+    fn the_chain_breaks_the_ties_the_key_leaves_and_the_name_has_the_last_word() {
+        let by_size = Sort {
+            key: SortKey::Size,
+            ..Sort::default()
+        };
+        let mut rows = [
+            e("b.txt", EntryKind::File, 10),
+            e("a.log", EntryKind::File, 10),
+            e("c.log", EntryKind::File, 5),
+        ];
+        // With no chain, two files of the same size are settled by name, as they always were.
+        rows.sort_by(|a, b| by_size.compare(a, b));
+        let names: Vec<&str> = rows.iter().map(|e| e.name.to_str().unwrap()).collect();
+        assert_eq!(names, ["c.log", "a.log", "b.txt"]);
+
+        // With one, the tie goes to the extension first and only then to the name.
+        let chained = Sort {
+            chain: [Some(SortKey::Ext), None, None],
+            ..by_size
+        };
+        rows.sort_by(|a, b| chained.compare(a, b));
+        let names: Vec<&str> = rows.iter().map(|e| e.name.to_str().unwrap()).collect();
+        assert_eq!(names, ["c.log", "a.log", "b.txt"]);
+        let mut rows = [
+            e("a.txt", EntryKind::File, 10),
+            e("b.log", EntryKind::File, 10),
+        ];
+        rows.sort_by(|a, b| chained.compare(a, b));
+        let names: Vec<&str> = rows.iter().map(|e| e.name.to_str().unwrap()).collect();
+        assert_eq!(
+            names,
+            ["b.log", "a.txt"],
+            "the extension broke the tie, not the name"
+        );
+
+        // The key the chain repeats is skipped, and `reverse` still turns the whole thing
+        // round — the chain breaks ties, it does not escape the direction.
+        let backwards = Sort {
+            reverse: true,
+            chain: [Some(SortKey::Size), Some(SortKey::Ext), None],
+            ..by_size
+        };
+        rows.sort_by(|a, b| backwards.compare(a, b));
+        let names: Vec<&str> = rows.iter().map(|e| e.name.to_str().unwrap()).collect();
+        assert_eq!(names, ["a.txt", "b.log"]);
     }
 
     #[test]

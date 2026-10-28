@@ -85,6 +85,21 @@ takes, and a condition that does not parse comes back with the problem named rat
 kept. A change is in force on the panels at once; `Options → Save setup` is what writes it to
 the file.
 
+# Breaking a tie
+
+`panel.sort_chain` says what settles two rows the sort key leaves equal:
+
+```toml
+[panel]
+sort = "size"
+sort_chain = ["ext", "name"]
+```
+
+Up to three keys — `name`, `ext`, `size`, `mtime`, `btime`, `atime` — asked in the order they
+are written. The name has the last word after them in any case, so the order never wanders
+between two reads of the same directory, and turning the sort round turns the whole thing
+round rather than only its first step.
+
 # Putting kinds of file first
 
 A `[[sort_group]]` block in `fcmd.toml` is a band of the listing: a mask, and which side of

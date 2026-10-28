@@ -8,6 +8,13 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **A sort criteria chain.** `panel.sort_chain = ["ext", "name"]` says what settles two rows
+  the sort key leaves equal — up to three keys, asked in order, with the *name* having the
+  last word after them whatever was asked, so the comparison is total and the order does not
+  wander between two reads of the same directory. A key the chain repeats is skipped, and
+  `reverse` turns the whole comparison round rather than only its first step. A word that is
+  not a sort key is said on the startup screen rather than quietly sorting by name.
+
 - **Sort groups** (`Shift+F11`, FAR's `Group`). Bands written in the configuration as
   `[[sort_group]]` blocks — a name, a mask in the filter's own grammar, and `place = "front"`
   (the default) or `"back"` — that pull some kinds of file in front of the listing and push

@@ -161,7 +161,16 @@ Keys: name, ext, size, mtime, ctime, atime, btime, attrs, owner, descr, packed, 
 (directory order). Modifiers: reverse, directories first (default on), selected first,
 case-insensitive (default on Windows/macOS), **natural/version order** for digits, locale
 collation via ICU-less `unicode-collation`-style folding. A **criteria chain** breaks ties
-(FAR's idea): `sort.chain = ["size", "name"]`.
+(FAR's idea): `panel.sort_chain = ["size", "name"]`.
+
+**Shipped in 0.7.2.** The chain is up to three keys, asked in order when the sort key leaves
+two rows equal, and the *name* has the last word after them whatever was asked — so the
+comparison is total and the order does not wander between two reads of the same directory. A
+key the chain repeats is skipped, since asking it twice cannot say anything new, and `reverse`
+turns the whole comparison round rather than only its first step. Three slots because `Sort`
+is `Copy` — every panel, tab and saved session holds one — and because a fourth tie-breaker
+after three that all came out equal has nothing left to decide. A word that is not a sort key
+is said on the startup screen rather than quietly sorting by name.
 
 Pressing the same sort key twice toggles direction when `panel.allow_reverse_sort = true`; so
 does choosing the current order again in the sort list (SPEC 10 §4.5).
