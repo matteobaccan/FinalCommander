@@ -95,6 +95,10 @@ pub enum Command {
     PanelTree(Side),
     PanelSortBy(SortKey),
     PanelSortReverse,
+    /// Sort groups on or off (FAR's `Shift+F11`): the bands `[[sort_group]]` cuts the
+    /// listing into, which pull some kinds of file ahead of the order and push others
+    /// behind it whatever the sort key is.
+    PanelSortGroups,
     /// Move the line between the two panels: a negative step gives the left one less.
     PanelSplit(i8),
     /// Make the panels a row shorter or a row taller: the user screen gets what they give up.
@@ -403,6 +407,7 @@ impl Command {
             Command::PanelTabLock,
             Command::PanelTabName,
             Command::PanelSortReverse,
+            Command::PanelSortGroups,
             Command::PanelSplit(-1),
             Command::PanelSplit(1),
             Command::PanelHeight(-1),
@@ -643,6 +648,7 @@ impl Command {
             Command::PanelViewSet(v) => format!("panel.view.set({})", v.as_str()),
             Command::PanelSortBy(k) => format!("panel.sort.by({})", k.as_str()),
             Command::PanelSortReverse => "panel.sort.reverse".into(),
+            Command::PanelSortGroups => "panel.sort.groups".into(),
             Command::PanelSplit(by) => format!("panel.split({by})"),
             Command::PanelHeight(by) => format!("panel.height({by})"),
             Command::PanelDirsFirst => "panel.dirs.first".into(),
@@ -863,6 +869,7 @@ impl Command {
             ("panel.view.set", Some(a)) => Command::PanelViewSet(ViewMode::parse(a)?),
             ("panel.sort.by", Some(a)) => Command::PanelSortBy(parse_sort_key(a)?),
             ("panel.sort.reverse", _) => Command::PanelSortReverse,
+            ("panel.sort.groups", _) => Command::PanelSortGroups,
             ("panel.split", Some(a)) => Command::PanelSplit(a.trim().parse().ok()?),
             ("panel.height", Some(a)) => Command::PanelHeight(a.trim().parse().ok()?),
             ("panel.dirs.first", _) => Command::PanelDirsFirst,

@@ -76,6 +76,7 @@ impl Command {
                 SortKey::Unsorted => "leave the order as the filesystem gives it",
             },
             Command::PanelSortReverse => "turn the order round",
+            Command::PanelSortGroups => "use the sort groups, which put some kinds of file first",
             Command::PanelSplit(by) => {
                 if by < 0 {
                     "give the left panel less of the width"

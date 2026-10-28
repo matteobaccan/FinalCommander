@@ -166,10 +166,24 @@ collation via ICU-less `unicode-collation`-style folding. A **criteria chain** b
 Pressing the same sort key twice toggles direction when `panel.allow_reverse_sort = true`; so
 does choosing the current order again in the sort list (SPEC 10 §4.5).
 
-**Sort groups** (FAR's `Shift+F11`) sit on top of the sort: an ordered list of named mask groups,
-some pulling their files ahead of everything else and some pushing them behind, with the
-boundary between "front" and "back" explicit in the list. Within a group the normal sort
-applies. This is what makes `*.cpp` files appear before `*.o` ones however the panel is sorted.
+**Sort groups** (FAR's `Shift+F11`, and `Group` is what FAR writes above that key) sit on top
+of the sort: an ordered list of named mask groups, some pulling their files ahead of everything
+else and some pushing them behind, with the boundary between "front" and "back" explicit in the
+list. Within a group the normal sort applies. This is what makes `*.cpp` files appear before
+`*.o` ones however the panel is sorted.
+
+**Shipped in 0.7.2.** The bands are `[[sort_group]]` blocks in the configuration — a `name`, a
+`mask` in the filter's own grammar, and `place = "front"` (the default) or `"back"` — read in
+the order they are written: the front ones keep that order among themselves, so do the ones
+behind, and the files that match nothing sit between them. Writing the blocks turns them on;
+`Shift+F11` turns them off and on again per panel, and says how many there are, because a
+toggle over an empty list is otherwise a key that does nothing.
+
+Two things the bands deliberately do *not* touch. **Directories are not grouped**: they have
+their place in the order already, and a folder that happened to match `*.o` landing in the
+middle of the object files is not what the mask was written for. And **`reverse` does not move
+a band**: it turns the order round inside each one, because a band that swapped ends with it
+would make the list mean the opposite of what it says.
 
 ## 5. Filters
 

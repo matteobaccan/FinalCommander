@@ -8,6 +8,48 @@
 
 use fcmd_config::Config;
 
+/// The `[[sort_group]]` blocks of the configuration, compiled into the bands the sort cuts a
+/// listing into (SPEC 02 §4).
+///
+/// Here beside the colouring groups because it is the same job on the same file: a list of
+/// masks, in the order they were written, each named so that a block which does not parse can
+/// be named back. Such a block is a warning and is left out — a listing that refuses to sort
+/// over a typo in one mask would be a worse answer than one band missing.
+pub fn sort_groups(cfg: &Config, warnings: &mut Vec<String>) -> fcmd_core::sort::SortGroups {
+    use fcmd_core::sort::{SortGroup, SortGroups};
+
+    let predefined = fcmd_core::filter::default_groups();
+    let mut bands = Vec::new();
+    for (n, g) in cfg.sort_groups.iter().enumerate() {
+        let name = if g.name.is_empty() {
+            format!("sort group {}", n + 1)
+        } else {
+            g.name.clone()
+        };
+        if g.mask.trim().is_empty() {
+            warnings.push(format!("{name}: no mask, so it would hold nothing"));
+            continue;
+        }
+        let masks = match fcmd_core::filter::MaskSet::parse_with(&g.mask, &predefined, false) {
+            Ok(masks) => masks,
+            Err(e) => {
+                warnings.push(format!("{name}: {e}"));
+                continue;
+            }
+        };
+        let back = match g.place.trim().to_ascii_lowercase().as_str() {
+            "" | "front" | "first" | "before" => false,
+            "back" | "last" | "after" => true,
+            other => {
+                warnings.push(format!("{name}: `{other}` is not front or back"));
+                false
+            }
+        };
+        bands.push(SortGroup::new(name, masks, back));
+    }
+    SortGroups::new(bands)
+}
+
 /// The `[[highlight]]` groups of the configuration, compiled into the rules the panel asks.
 ///
 /// A group that does not parse is a warning and is left out rather than a reason to refuse to

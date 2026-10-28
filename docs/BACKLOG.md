@@ -32,7 +32,7 @@ what we intend to do about it.
 | ~~`Shift+F5`, `Shift+F6`, `Shift+F8`~~ | panel | **Shipped**, and the list travels with the dialog so a later selection cannot widen the copy. |
 | Sort by creation time, access time, owner, description | `Ctrl+F8…F11` | **Creation and access time shipped** (`Ctrl+F8`, `Ctrl+F9`), with the missing-field rule in SPEC 02 §4. Owner and description still cost a lookup per entry and a side file. |
 | Sort criteria chains | sort modes list, `F4` | Per sort mode, an ordered set of tie-breakers with its own editor (`Ins`/`Del`/`F4`/`+`/`-`/`*`/`=`/`Ctrl+↑↓`/`Ctrl+R`). SPEC 07 already has `chain` in the config shape, so this is filling in a designed hole. |
-| Sort groups | `Shift+F11` | Named mask groups that sort before or after everything else, ordered, with a separator marking "front" from "back". |
+| ~~Sort groups~~ | `Shift+F11` | **Shipped (0.7.2)**: `[[sort_group]]` blocks — a name, a mask in the filter's grammar, and `place = "front"` or `"back"` — read in the order they are written, the front bands keeping that order among themselves and so the ones behind, with what matches nothing in between. Inside a band the ordinary sort applies; folders are not banded, because they have their place already; `reverse` turns each band round rather than swapping the bands over. Writing the blocks turns them on and `Shift+F11` toggles them per panel, saying how many there are — a toggle over an empty list is otherwise a key that does nothing. Still owed: a dialog to edit the bands, as `F9 → Options → Files highlighting` edits the colouring groups. |
 | ~~Scroll long names sideways~~ | `Ctrl+Shift+←/→` | **Shipped**, per panel, reset on a change of directory. `Alt+←/→` stays history here. |
 
 ## Masks, filters, groups

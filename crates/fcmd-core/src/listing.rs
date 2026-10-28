@@ -1,6 +1,6 @@
 use crate::entry::{Entry, EntryFlags, EntryId, EntryKind};
 use crate::selection::Selection;
-use crate::sort::Sort;
+use crate::sort::{Sort, SortGroups};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Totals {
@@ -36,7 +36,13 @@ impl Listing {
             generation,
             truncated: false,
         };
-        l.rebuild(Sort::default(), false, None, &Selection::default());
+        l.rebuild(
+            Sort::default(),
+            false,
+            None,
+            &Selection::default(),
+            &SortGroups::default(),
+        );
         l
     }
 
@@ -76,6 +82,7 @@ impl Listing {
         show_hidden: bool,
         filter: Option<&crate::filter::MaskSet>,
         selection: &Selection,
+        groups: &crate::sort::SortGroups,
     ) {
         self.order.clear();
         self.order.reserve(self.entries.len());
@@ -135,11 +142,12 @@ impl Listing {
                 let (ia, ib) = (*a as usize, *b as usize);
                 selected[ib]
                     .cmp(&selected[ia])
-                    .then_with(|| sort.compare(&entries[ia], &entries[ib]))
+                    .then_with(|| sort.compare_in(&entries[ia], &entries[ib], groups))
             });
         } else {
-            self.order
-                .sort_by(|a, b| sort.compare(&entries[*a as usize], &entries[*b as usize]));
+            self.order.sort_by(|a, b| {
+                sort.compare_in(&entries[*a as usize], &entries[*b as usize], groups)
+            });
         }
 
         self.totals = totals;
@@ -194,7 +202,13 @@ mod tests {
     #[test]
     fn show_hidden_adds_them_back() {
         let mut l = sample();
-        l.rebuild(Sort::default(), true, None, &Selection::default());
+        l.rebuild(
+            Sort::default(),
+            true,
+            None,
+            &Selection::default(),
+            &SortGroups::default(),
+        );
         assert_eq!(l.len(), 5);
         assert_eq!(l.totals.files, 3);
     }
@@ -203,7 +217,13 @@ mod tests {
     fn quick_filter_keeps_the_parent_entry() {
         let mut l = sample();
         let masks = crate::filter::MaskSet::parse("a.").unwrap();
-        l.rebuild(Sort::default(), false, Some(&masks), &Selection::default());
+        l.rebuild(
+            Sort::default(),
+            false,
+            Some(&masks),
+            &Selection::default(),
+            &SortGroups::default(),
+        );
         let names: Vec<_> = (0..l.len())
             .map(|i| l.row(i).unwrap().name_str().into_owned())
             .collect();
@@ -225,7 +245,7 @@ mod tests {
             selected_first: true,
             ..Sort::default()
         };
-        l.rebuild(sort, false, None, &sel);
+        l.rebuild(sort, false, None, &sel, &SortGroups::default());
         let names: Vec<_> = (0..l.len())
             .map(|i| l.row(i).unwrap().name_str().into_owned())
             .collect();
@@ -248,7 +268,7 @@ mod tests {
 #[cfg(test)]
 mod scale {
     use super::*;
-    use crate::sort::SortKey;
+    use crate::sort::{SortGroups, SortKey};
     use std::ffi::OsString;
     use std::time::Instant;
 
@@ -301,7 +321,13 @@ mod scale {
 
         let t = Instant::now();
         let masks = crate::filter::MaskSet::parse("*.json").unwrap();
-        l.rebuild(Sort::default(), false, Some(&masks), &Selection::default());
+        l.rebuild(
+            Sort::default(),
+            false,
+            Some(&masks),
+            &Selection::default(),
+            &SortGroups::default(),
+        );
         eprintln!(
             "filter *.json and sort  {:?} ({} rows)",
             t.elapsed(),
@@ -317,6 +343,7 @@ mod scale {
             false,
             None,
             &Selection::default(),
+            &SortGroups::default(),
         );
         eprintln!("sort by size            {:?}", t.elapsed());
 
@@ -339,6 +366,7 @@ mod scale {
             false,
             None,
             &sel,
+            &SortGroups::default(),
         );
         eprintln!("sort selected first     {:?}", t.elapsed());
     }

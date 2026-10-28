@@ -1721,7 +1721,13 @@ mod tests {
         let id = listing.row(2).unwrap().id;
         sel.toggle(id);
         let mut l2 = listing.clone();
-        l2.rebuild(Sort::default(), false, None, &sel);
+        l2.rebuild(
+            Sort::default(),
+            false,
+            None,
+            &sel,
+            &fcmd_core::sort::SortGroups::default(),
+        );
         let theme = Theme::default_theme();
         let mut buf = Buffer::new(44, 9);
         let p = PanelRender {

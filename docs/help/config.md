@@ -85,6 +85,30 @@ takes, and a condition that does not parse comes back with the problem named rat
 kept. A change is in force on the panels at once; `Options → Save setup` is what writes it to
 the file.
 
+# Putting kinds of file first
+
+A `[[sort_group]]` block in `fcmd.toml` is a band of the listing: a mask, and which side of
+the ordinary files it sits on. The bands pull some kinds of file in front of the listing and
+push others behind it whatever the panel is sorted by.
+
+```toml
+[[sort_group]]
+name = "sources"
+mask = "*.rs,*.toml"
+
+[[sort_group]]
+name = "build output"
+mask = "*.o,*.rlib,*.d"
+place = "back"
+```
+
+The front bands keep the order they are written in, so do the ones behind, and the files that
+match no band sit between them. Inside a band the ordinary sort still applies, folders keep
+their place at the top, and `reverse` turns each band round rather than swapping the bands
+over. Writing the blocks turns them on; `Shift+F11` — `Group` on the key bar — turns them off
+and on again, one panel at a time. A block that does not parse is named on the startup screen
+and skipped, as a highlighting group is.
+
 # The palette editor
 
 `F9 → Options → Colours…` lists every colour the interface uses, with the value as a theme file

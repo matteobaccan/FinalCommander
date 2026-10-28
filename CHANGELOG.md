@@ -8,6 +8,20 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **Sort groups** (`Shift+F11`, FAR's `Group`). Bands written in the configuration as
+  `[[sort_group]]` blocks — a name, a mask in the filter's own grammar, and `place = "front"`
+  (the default) or `"back"` — that pull some kinds of file in front of the listing and push
+  others behind it whatever the panel is sorted by: sources first and build output last, in a
+  directory that holds both. It is the thing no sort key can say, because it is about kinds of
+  file rather than one field of them. The front bands keep the order they are written in, so do
+  the ones behind, and what matches nothing sits between them; inside a band the ordinary sort
+  still applies. Folders are not banded — they have their place at the top already — and
+  `reverse` turns each band round rather than swapping the bands over. Writing the blocks turns
+  them on, `Shift+F11` toggles them per panel and says how many there are, and a block that
+  does not parse is named on the startup screen and skipped. `Shift+F11` was folders-first,
+  which is a setting in the panel dialog here as it is in FAR; `Group` over that key is what
+  FAR writes and what it has always meant.
+
 - **A memo field says what is in it.** A dBase table keeps its long text in a second file
   beside it — a `.dbt` or an `.fpt` — and a memo field holds only the block number, which is
   what the cell showed: `memo:42`. That file is now opened and read, and the cell says what

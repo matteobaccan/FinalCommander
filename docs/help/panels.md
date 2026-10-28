@@ -34,6 +34,13 @@ inside an archive has no owner to show.
 `Ctrl+F3` to `Ctrl+F6` sort by name, extension, time and size; choosing the order already in
 force reverses it. `Ctrl+F12` offers the orders as a list.
 
+`Shift+F11` — `Group` on the key bar — turns the **sort groups** on and off. They are bands
+written in the configuration as `[[sort_group]]` blocks, each with a mask and a side, and they
+pull some kinds of file in front of the listing and push others behind it whatever the sort
+key is: sources first and build output last, in a directory that holds both. Inside a band the
+ordinary sort still applies, folders keep their own place at the top, and `reverse` turns each
+band round rather than swapping the bands over. With no blocks written the key says so.
+
 `Ctrl+H` shows the hidden files. `Ctrl+P` hides the panel you are not in, `Ctrl+F1` and
 `Ctrl+F2` hide the left or the right one to give the other the whole screen, and `Ctrl+O`
 takes both off to show what the commands have printed. With the panels off everything else

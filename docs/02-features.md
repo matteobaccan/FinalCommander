@@ -30,7 +30,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 1.12 | Function-key bar (`F1..F12`, follows modifiers: Shift/Alt/Ctrl rows) | NC | M1 |
 | 1.13 | Sort by name/ext/size/mtime/ctime/atime/owner/unsorted, reversible, group dirs first, selected first, natural ("version") sort, locale-aware collation | FAR/TC | M1 core, M2 full |
 | 1.14 | Secondary sort criteria chain (tie-breakers, configurable): per sort mode an ordered set, with its own editor (add, remove, replace, direction, inherit, reorder, reset) | FAR | M3 |
-| 1.14b | Sort groups: named mask groups that sort ahead of or behind everything else, ordered, applied on top of the sort mode | FAR (`Shift+F11`) | M2 |
+| 1.14b | ~~Sort groups: named mask groups that sort ahead of or behind everything else, ordered, applied on top of the sort mode~~ | FAR (`Shift+F11`) | **shipped** (0.7.2): `[[sort_group]]` blocks, in the order they are written |
 | 1.14c | Sort by creation time, access time, owner and description, besides name/ext/size/write time | FAR (`Ctrl+F8…F11`) | M2 |
 | 1.15 | Filters: per-panel display filter, quick filter bar, filter by mask/size/date/attrs, named filter sets, filter menu | FAR/KRU | M2 |
 | 1.15b | A column grammar for view modes: per column a property letter with modifiers (name with selection marks / no extension / right-aligned, extension, size / allocated size / stream size with grouping, decimal units, fractions, four date-and-time pairs with brief and month-name forms, attributes, description, owner with domain, hard-link count, stream count), widths absolute or automatic or a percentage, repeated groups giving newspaper stripes, and the same grammar for the panel status line and for search results | FAR | M2 |

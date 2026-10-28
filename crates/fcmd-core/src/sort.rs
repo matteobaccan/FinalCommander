@@ -28,6 +28,98 @@ impl SortKey {
     }
 }
 
+/// FAR's sort groups: masks that pull some files in front of the order and push others
+/// behind it, whatever the sort key is.
+///
+/// It is what makes `*.cpp` come before `*.o` in a build directory however the panel is
+/// sorted — a thing no sort key can say, because it is about *kinds* of file and not about
+/// one field of them. Within a group the ordinary sort applies, so turning the groups on
+/// does not take the sort away; it cuts the listing into bands and sorts inside each.
+///
+/// Directories are not grouped. They have their own place in the order already (`dirs_first`,
+/// and `..` before everything), and a directory that happened to match `*.o` jumping into the
+/// middle of the files is not what anybody wrote the mask for.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct SortGroups {
+    groups: Vec<SortGroup>,
+}
+
+/// One band: a name to show, the masks that fall into it, and which side of the ungrouped
+/// files it sits on.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SortGroup {
+    pub name: String,
+    pub masks: crate::filter::MaskSet,
+    /// Behind the files that match no group, rather than in front of them.
+    pub back: bool,
+    /// Where this band sits: negative in front of the ungrouped files, positive behind them.
+    /// Worked out when the list is built, so a comparison is one match and one `cmp`.
+    rank: i32,
+}
+
+impl SortGroup {
+    /// A band, before it knows where it sits: `SortGroups::new` works that out from the
+    /// order the bands are given in.
+    pub fn new(name: String, masks: crate::filter::MaskSet, back: bool) -> Self {
+        SortGroup {
+            name,
+            masks,
+            back,
+            rank: 0,
+        }
+    }
+}
+
+impl SortGroups {
+    /// The bands, in the order they were written. The ones in front keep that order among
+    /// themselves, and so do the ones behind: the first group written is the first band.
+    pub fn new(groups: Vec<SortGroup>) -> Self {
+        let front = groups.iter().filter(|g| !g.back).count() as i32;
+        let (mut ahead, mut behind) = (0, 0);
+        let groups = groups
+            .into_iter()
+            .map(|mut g| {
+                if g.back {
+                    behind += 1;
+                    g.rank = behind;
+                } else {
+                    ahead += 1;
+                    g.rank = ahead - front - 1;
+                }
+                g
+            })
+            .collect();
+        SortGroups { groups }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.groups.is_empty()
+    }
+
+    pub fn len(&self) -> usize {
+        self.groups.len()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &SortGroup> {
+        self.groups.iter()
+    }
+
+    /// Which band an entry falls in: the first group whose masks match it. Negative is in
+    /// front of the ungrouped files, zero is among them, positive is behind them.
+    pub fn rank(&self, entry: &Entry) -> i32 {
+        self.group_of(entry).map(|g| g.rank).unwrap_or(0)
+    }
+
+    /// The band an entry falls in, for a panel that wants to say which.
+    pub fn group_of(&self, entry: &Entry) -> Option<&SortGroup> {
+        if entry.opens_as_dir() || entry.kind == EntryKind::Parent {
+            return None;
+        }
+        let name = entry.name_str();
+        self.groups.iter().find(|g| g.masks.matches_name(&name))
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Sort {
     pub key: SortKey,
@@ -37,6 +129,10 @@ pub struct Sort {
     /// Treat digit runs as numbers: `file2` before `file10`.
     pub natural: bool,
     pub case_sensitive: bool,
+    /// Apply the sort groups (FAR's `Shift+F11`). The groups themselves live beside the
+    /// panel rather than in here, because they are one list for the whole program and this
+    /// is a copy per panel.
+    pub groups: bool,
 }
 
 impl Default for Sort {
@@ -48,6 +144,7 @@ impl Default for Sort {
             selected_first: false,
             natural: true,
             case_sensitive: cfg!(not(any(windows, target_os = "macos"))),
+            groups: false,
         }
     }
 }
@@ -63,7 +160,13 @@ impl Sort {
         }
     }
 
+    /// Compare two entries with no sort groups in play.
     pub fn compare(&self, a: &Entry, b: &Entry) -> Ordering {
+        self.compare_in(a, b, &SortGroups::default())
+    }
+
+    /// Compare two entries, the sort groups cutting the listing into bands first.
+    pub fn compare_in(&self, a: &Entry, b: &Entry, groups: &SortGroups) -> Ordering {
         // `..` always first, whatever the sort.
         match (a.kind == EntryKind::Parent, b.kind == EntryKind::Parent) {
             (true, true) => return Ordering::Equal,
@@ -78,6 +181,17 @@ impl Sort {
                 (true, false) => return Ordering::Less,
                 (false, true) => return Ordering::Greater,
                 _ => {}
+            }
+        }
+
+        // The bands, before the key: a group pulls its files out of the order altogether,
+        // and the sort then applies inside each band. `reverse` does not touch them — it
+        // turns the order round within a band, and a band that moved to the other end with
+        // it would make the groups mean the opposite of what they were written to mean.
+        if self.groups && !groups.is_empty() {
+            let (ra, rb) = (groups.rank(a), groups.rank(b));
+            if ra != rb {
+                return ra.cmp(&rb);
             }
         }
 
@@ -388,6 +502,97 @@ mod tests {
             id: EntryId::Name(name.len() as u64),
             link_target: None,
         }
+    }
+
+    /// A band of the listing, by mask.
+    fn band(name: &str, mask: &str, back: bool) -> SortGroup {
+        SortGroup::new(
+            name.to_string(),
+            crate::filter::MaskSet::parse(mask).expect("a mask"),
+            back,
+        )
+    }
+
+    #[test]
+    fn sort_groups_cut_the_listing_into_bands_and_the_sort_applies_inside_each() {
+        let groups = SortGroups::new(vec![
+            band("sources", "*.rs", false),
+            band("headers", "*.h", false),
+            band("output", "*.o,*.tmp", true),
+        ]);
+        let sort = Sort {
+            groups: true,
+            dirs_first: true,
+            ..Sort::default()
+        };
+        let mut rows = [
+            e("zeta.o", EntryKind::File, 0),
+            e("beta.txt", EntryKind::File, 0),
+            e("alpha.rs", EntryKind::File, 0),
+            e("src", EntryKind::Dir, 0),
+            e("one.h", EntryKind::File, 0),
+            e("about.tmp", EntryKind::File, 0),
+            e("zz.rs", EntryKind::File, 0),
+        ];
+        rows.sort_by(|a, b| sort.compare_in(a, b, &groups));
+        let names: Vec<&str> = rows.iter().map(|e| e.name.to_str().unwrap()).collect();
+        assert_eq!(
+            names,
+            [
+                // The directory keeps its own place at the top; the bands are about files.
+                "src",
+                // The first band, then the second, in the order they were written — and
+                // sorted by name inside each, which is the sort still doing its work.
+                "alpha.rs",
+                "zz.rs",
+                "one.h",
+                // Then what matched nothing.
+                "beta.txt",
+                // Then the band that was pushed behind.
+                "about.tmp",
+                "zeta.o",
+            ]
+        );
+
+        // Turned off, the order is the plain one: the groups are a flag, not a rewrite.
+        let plain = Sort {
+            groups: false,
+            ..sort
+        };
+        rows.sort_by(|a, b| plain.compare_in(a, b, &groups));
+        let names: Vec<&str> = rows.iter().map(|e| e.name.to_str().unwrap()).collect();
+        assert_eq!(
+            names,
+            [
+                "src",
+                "about.tmp",
+                "alpha.rs",
+                "beta.txt",
+                "one.h",
+                "zeta.o",
+                "zz.rs"
+            ]
+        );
+    }
+
+    #[test]
+    fn reversing_the_sort_turns_each_band_round_and_leaves_the_bands_where_they_are() {
+        let groups = SortGroups::new(vec![band("sources", "*.rs", false)]);
+        let sort = Sort {
+            groups: true,
+            reverse: true,
+            ..Sort::default()
+        };
+        let mut rows = [
+            e("a.rs", EntryKind::File, 0),
+            e("b.rs", EntryKind::File, 0),
+            e("a.txt", EntryKind::File, 0),
+            e("b.txt", EntryKind::File, 0),
+        ];
+        rows.sort_by(|a, b| sort.compare_in(a, b, &groups));
+        let names: Vec<&str> = rows.iter().map(|e| e.name.to_str().unwrap()).collect();
+        // The band is still in front; what `reverse` turned round is the order inside it.
+        assert_eq!(names, ["b.rs", "a.rs", "b.txt", "a.txt"]);
     }
 
     /// A file whose creation and access times are given in seconds since the epoch, with

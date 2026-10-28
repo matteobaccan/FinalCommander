@@ -98,9 +98,12 @@ keys = ["Shift+F3"]
 cmd = "arc.commands"
 
 # FAR's `Group` and `SelUp`: the two parts of the order that are not the sort key itself.
+# `Group` is the sort groups — the bands `[[sort_group]]` cuts the listing into — which is
+# what FAR writes above `Shift+F11` and what it does there. Folders-first is a setting rather
+# than a key, in the panel settings dialog, which is where FAR keeps it too.
 [[bind]]
 keys = ["Shift+F11"]
-cmd = "panel.dirs.first"
+cmd = "panel.sort.groups"
 
 [[bind]]
 keys = ["Shift+F12"]

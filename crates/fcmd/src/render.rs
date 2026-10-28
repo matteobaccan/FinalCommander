@@ -2378,6 +2378,7 @@ mod tests {
             sites: Vec::new(),
             plugin_commands: Vec::new(),
             highlight: fcmd_ui::Highlight::far_default(),
+            sort_groups: Default::default(),
         });
         app.requests.clear();
         for panel in 0..2 {
@@ -3149,6 +3150,7 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
             sites: Vec::new(),
             plugin_commands: Vec::new(),
             highlight: fcmd_ui::Highlight::far_default(),
+            sort_groups: Default::default(),
         });
         app.requests.clear();
         let entries = fcmd_vfs::local::list_blocking(
@@ -4469,6 +4471,7 @@ third line
             sites: Vec::new(),
             plugin_commands: Vec::new(),
             highlight: fcmd_ui::Highlight::far_default(),
+            sort_groups: Default::default(),
         });
         app.requests.clear();
         let entries = fcmd_vfs::local::list_blocking(
@@ -4544,6 +4547,7 @@ third line
             sites: Vec::new(),
             plugin_commands: Vec::new(),
             highlight: fcmd_ui::Highlight::far_default(),
+            sort_groups: Default::default(),
         });
         app.requests.clear();
         let entries = fcmd_vfs::local::list_blocking(
@@ -4622,6 +4626,7 @@ third line
             sites: Vec::new(),
             plugin_commands: Vec::new(),
             highlight: fcmd_ui::Highlight::far_default(),
+            sort_groups: Default::default(),
         });
         app.requests.clear();
         let entries = fcmd_vfs::local::list_blocking(
@@ -4676,6 +4681,7 @@ third line
             sites: Vec::new(),
             plugin_commands: Vec::new(),
             highlight: fcmd_ui::Highlight::far_default(),
+            sort_groups: Default::default(),
         });
         app.requests.clear();
         let entries =

@@ -1215,6 +1215,9 @@ pub struct Startup {
     pub plugin_commands: Vec<PluginCommand>,
     /// The file-colouring groups: the configuration's, then FAR's own (SPEC 02 §5).
     pub highlight: fcmd_ui::Highlight,
+    /// The `[[sort_group]]` bands, compiled (SPEC 02 §4). One list for the whole program:
+    /// each panel holds a handle to it.
+    pub sort_groups: std::sync::Arc<fcmd_core::sort::SortGroups>,
 }
 
 pub struct App {
@@ -1398,6 +1401,8 @@ pub struct App {
     pending_replace: Option<JobSpec>,
     /// Which group gives a file its colour. Compiled once: it parses mask lists.
     pub highlight: fcmd_ui::Highlight,
+    /// The `[[sort_group]]` bands, as every panel and every new tab gets them.
+    pub sort_groups: std::sync::Arc<fcmd_core::sort::SortGroups>,
     /// The user menu as it is on screen: one level per list, the top one first and the submenu
     /// one is inside last, each with the title it is shown under. Kept as a stack so `Esc` in
     /// a submenu goes back to the menu it was opened from rather than out of the menu.
@@ -1440,6 +1445,7 @@ impl App {
             sites,
             plugin_commands,
             highlight,
+            sort_groups,
         } = start;
         let sort = Sort {
             key: parse_sort(&cfg.panel.sort),
@@ -1447,6 +1453,10 @@ impl App {
             dirs_first: cfg.panel.dirs_first,
             selected_first: cfg.panel.selected_first,
             natural: cfg.panel.natural_sort,
+            // Writing the blocks is what turns them on: a list of bands nobody asked to see
+            // would be a listing that reordered itself for no reason anybody could point at.
+            // `Shift+F11` is how they go off again.
+            groups: !sort_groups.is_empty(),
             ..Sort::default()
         };
         let view = ViewMode::parse(&cfg.panel.view).unwrap_or(ViewMode::Full);
@@ -1473,8 +1483,8 @@ impl App {
             themes,
             theme,
             panels: [
-                Panel::new(left, sort, view, hidden),
-                Panel::new(right, sort, view, hidden),
+                Panel::new(left, sort, view, hidden).with_groups(&sort_groups),
+                Panel::new(right, sort, view, hidden).with_groups(&sort_groups),
             ],
             tabs: [crate::tabs::Row::one(), crate::tabs::Row::one()],
             bookmarks: Vec::new(),
@@ -1555,6 +1565,7 @@ impl App {
             last_replace: fcmd_jobs::ReplaceOptions::default(),
             pending_replace: None,
             highlight,
+            sort_groups,
             menu_levels: Vec::new(),
             menu_queue: Vec::new(),
             apply_queue: Vec::new(),
@@ -5454,6 +5465,26 @@ impl App {
                 let panel = self.panel_mut();
                 panel.sort.reverse = !panel.sort.reverse;
                 panel.rebuild();
+            }
+            // FAR's `Group`: the bands `[[sort_group]]` cuts the listing into, on or off.
+            // Saying how many there are is the whole answer to "why did nothing move?",
+            // which is what a toggle over an empty list looks like.
+            Command::PanelSortGroups => {
+                let panel = self.panel_mut();
+                panel.sort.groups = !panel.sort.groups;
+                let (on, count) = (panel.sort.groups, panel.groups.len());
+                panel.rebuild();
+                let msg = if count == 0 {
+                    self.i18n.t("msg-sort-groups-none")
+                } else {
+                    let id = if on {
+                        "msg-sort-groups-on"
+                    } else {
+                        "msg-sort-groups-off"
+                    };
+                    self.i18n.t_args(id, &[("count", (count as i64).into())])
+                };
+                self.set_status(msg);
             }
             // The shape of the two panels. Both are settings, so `Shift+F9` keeps them.
             Command::PanelSplit(by) => {
@@ -11893,7 +11924,7 @@ impl App {
             } else {
                 VPath::parse(&saved.path)
             };
-            let mut panel = Panel::new(at, sort, view, hidden);
+            let mut panel = Panel::new(at, sort, view, hidden).with_groups(&self.sort_groups);
             panel.name = (!saved.name.trim().is_empty()).then(|| saved.name.clone());
             panel.locked = saved.locked;
             if i == 0 {
@@ -11920,7 +11951,8 @@ impl App {
             Some(entry) => panel.path_of(entry),
             None => panel.cwd.clone(),
         };
-        let fresh = Panel::new(where_to, panel.sort, panel.view, panel.show_hidden);
+        let fresh = Panel::new(where_to, panel.sort, panel.view, panel.show_hidden)
+            .with_groups(&self.sort_groups);
         self.tabs[side].open(fresh, &mut self.panels[side], &mut self.trees[side]);
         self.read_panel(side);
     }
@@ -12466,7 +12498,7 @@ fn keybar_label(cmd: Command) -> Option<&'static str> {
         Command::FileMoveCurrent => "key-rename",
         Command::FileDeleteCurrent => "key-delete",
         Command::AppSetupSave => "key-save",
-        Command::PanelDirsFirst => "key-group",
+        Command::PanelSortGroups => "key-group",
         Command::PanelSelectedFirst => "key-selup",
         // Ctrl
         Command::PanelToggle(Side::Left) | Command::PanelDrive(Side::Left) => "key-left",
@@ -12660,6 +12692,7 @@ mod tests {
             sites: Vec::new(),
             plugin_commands: Vec::new(),
             highlight: fcmd_ui::Highlight::far_default(),
+            sort_groups: Default::default(),
         });
         app.requests.clear();
         let entries = vec![
@@ -14738,11 +14771,12 @@ mod tests {
         assert_eq!(app.held, Mods::SHIFT);
         press(&mut app, "Shift+F11");
         assert_eq!(app.held, Mods::NONE);
+        // `Shift+F11` is FAR's `Group`: the sort groups, not the folders-first flag, which
+        // is a setting in the panel dialog here as it is there.
         assert!(
-            !app.cfg.panel.dirs_first,
-            "Shift+F11 did not toggle the grouping"
+            app.panel().sort.groups,
+            "Shift+F11 did not turn the sort groups on"
         );
-        assert!(app.panels.iter().all(|p| !p.sort.dirs_first));
     }
 
     /// The archive dialog can be told to clear up after itself — but only if the archive was
@@ -15599,6 +15633,7 @@ run = ["echo one", "echo two", "echo three"]
             sites: Vec::new(),
             plugin_commands: Vec::new(),
             highlight: fcmd_ui::Highlight::far_default(),
+            sort_groups: Default::default(),
         });
         app.requests.clear();
         let entries = vec![
@@ -17646,6 +17681,7 @@ run = ["echo one", "echo two", "echo three"]
             sites: Vec::new(),
             plugin_commands: Vec::new(),
             highlight: fcmd_ui::Highlight::far_default(),
+            sort_groups: Default::default(),
         });
         app.requests.clear();
         let entries = fcmd_vfs::local::list_blocking(&VPath::local(dir), &CancelToken::new())

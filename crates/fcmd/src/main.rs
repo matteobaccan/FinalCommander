@@ -576,6 +576,8 @@ fn run(cli: Cli) -> Result<()> {
     // The `[[highlight]]` groups, compiled once: a condition and an ink per group, asked in
     // the order they were written (SPEC 02 §5).
     let highlight = highlight::groups(&cfg, &mut warnings);
+    // And the `[[sort_group]]` bands, compiled the same way and from the same file.
+    let sort_groups = std::sync::Arc::new(highlight::sort_groups(&cfg, &mut warnings));
 
     // The histories from the last session. A broken state file is a warning, never a stop.
     let (state, state_problem) = fcmd_config::State::load(&paths);
@@ -595,6 +597,7 @@ fn run(cli: Cli) -> Result<()> {
         sites,
         plugin_commands,
         highlight,
+        sort_groups,
     });
     app.cmd.load_history(state.command_history);
     app.file_history = state.file_history;
@@ -2541,6 +2544,7 @@ timeout = 10
             sites: Vec::new(),
             plugin_commands: commands,
             highlight: fcmd_ui::Highlight::far_default(),
+            sort_groups: Default::default(),
         });
         serve(&mut app);
 
@@ -3093,6 +3097,7 @@ timeout = 10
             sites: Vec::new(),
             plugin_commands: Vec::new(),
             highlight: fcmd_ui::Highlight::far_default(),
+            sort_groups: Default::default(),
         })
     }
 
@@ -4236,6 +4241,68 @@ fg = "red"
         assert_eq!(
             highlight.paint_at(&rs, now, &theme).fg,
             Some(fcmd_ui::Color::Rgb(0xd7, 0x87, 0x5f))
+        );
+    }
+
+    #[test]
+    fn the_sort_group_blocks_become_bands_in_the_order_they_are_written() {
+        let text = r##"
+[[sort_group]]
+name = "sources"
+mask = "*.rs,*.toml"
+
+[[sort_group]]
+name = "output"
+mask = "*.o"
+place = "back"
+
+[[sort_group]]
+name = "Broken"
+mask = "*.rs|*.o|*.h"
+
+[[sort_group]]
+name = "Empty"
+mask = ""
+
+[[sort_group]]
+name = "Sideways"
+mask = "*.md"
+place = "diagonally"
+"##;
+        let (cfg, _) = Config::parse("test", text).expect("the file parses");
+        assert_eq!(cfg.sort_groups.len(), 5);
+        let mut warnings = Vec::new();
+        let bands = highlight::sort_groups(&cfg, &mut warnings);
+
+        // The two bad blocks are named and left out; the one with a bad `place` is kept, in
+        // front, because where it sits is a smaller mistake than the band not existing.
+        assert_eq!(bands.len(), 3, "{warnings:?}");
+        assert_eq!(warnings.len(), 3, "{warnings:?}");
+        assert!(warnings[0].contains("Broken"), "{warnings:?}");
+        assert!(warnings[1].contains("Empty"), "{warnings:?}");
+        assert!(
+            warnings[2].contains("Sideways") && warnings[2].contains("diagonally"),
+            "{warnings:?}"
+        );
+
+        let file = |name: &str| fcmd_core::Entry {
+            name: name.into(),
+            kind: fcmd_core::EntryKind::File,
+            size: 0,
+            mtime: None,
+            btime: None,
+            atime: None,
+            flags: fcmd_core::EntryFlags::empty(),
+            id: fcmd_core::EntryId::Name(1),
+            link_target: None,
+        };
+        // In front, among, behind.
+        assert!(bands.rank(&file("main.rs")) < 0);
+        assert_eq!(bands.rank(&file("notes.txt")), 0);
+        assert!(bands.rank(&file("main.o")) > 0);
+        assert_eq!(
+            bands.group_of(&file("main.rs")).map(|g| g.name.as_str()),
+            Some("sources")
         );
     }
 

@@ -725,6 +725,35 @@ impl DecompileRule {
 /// age = "<=1"
 /// fg = "#87d787"
 /// ```
+/// One `[[sort_group]]` block: a band of the listing, in the order the blocks are written.
+///
+/// ```toml
+/// [[sort_group]]
+/// name = "sources"
+/// mask = "*.rs,*.toml"
+///
+/// [[sort_group]]
+/// name = "build output"
+/// mask = "*.o,*.rlib,*.d"
+/// place = "back"
+/// ```
+///
+/// The bands in front keep the order they are written in, and so do the ones behind; the
+/// files that match nothing sit between them. `Shift+F11` turns the whole thing on and off.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SortGroupCfg {
+    /// What to call the band, for the message that says which one a file is in.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub name: String,
+    /// A mask list, with the groups a filter knows: `*.rs`, `<arc>`, `*.log|*.tmp`.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub mask: String,
+    /// `front` (the default) or `back`: which side of the ungrouped files this band sits on.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub place: String,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct HighlightCfg {
@@ -899,6 +928,9 @@ pub struct Config {
     /// `[[highlight]]` blocks: the panel's own colours by condition (SPEC 02 §5).
     #[serde(rename = "highlight")]
     pub highlight: Vec<HighlightCfg>,
+    /// `[[sort_group]]` blocks: the bands the sort groups cut a listing into (SPEC 02 §4).
+    #[serde(rename = "sort_group")]
+    pub sort_groups: Vec<SortGroupCfg>,
     /// Anything we did not recognise, kept so `--dump-config` can show it and warn.
     #[serde(flatten, skip_serializing)]
     pub unknown: BTreeMap<String, toml::Value>,

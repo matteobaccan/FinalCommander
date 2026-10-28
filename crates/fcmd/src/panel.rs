@@ -1,5 +1,8 @@
 use std::collections::HashMap;
 
+use std::sync::Arc;
+
+use fcmd_core::sort::SortGroups;
 use fcmd_core::{Entry, EntryId, EntryKind, Listing, Selection, Sort, VPath, ViewMode};
 
 /// A panel made of a list somebody handed us rather than of a directory: find results,
@@ -64,6 +67,10 @@ pub struct Panel {
     pub top: usize,
     pub selection: Selection,
     pub sort: Sort,
+    /// The sort groups, which are one list for the whole program: the panel holds a handle
+    /// to it so that a rebuild needs nothing passed in. `sort.groups` says whether they are
+    /// applied; this is what they are.
+    pub groups: Arc<SortGroups>,
     pub view: ViewMode,
     pub show_hidden: bool,
     /// What was typed in the filter bar, for the status line.
@@ -113,6 +120,7 @@ impl Panel {
             top: 0,
             selection: Selection::default(),
             sort,
+            groups: Arc::new(SortGroups::default()),
             view,
             show_hidden,
             filter: None,
@@ -137,12 +145,19 @@ impl Panel {
         self.listing.row(self.cursor)
     }
 
+    /// Hand the panel the sort groups the program was started with.
+    pub fn with_groups(mut self, groups: &Arc<SortGroups>) -> Self {
+        self.groups = groups.clone();
+        self
+    }
+
     pub fn rebuild(&mut self) {
         self.listing.rebuild(
             self.sort,
             self.show_hidden,
             self.filter_set.as_ref(),
             &self.selection,
+            &self.groups,
         );
         self.clamp();
     }
