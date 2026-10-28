@@ -131,7 +131,9 @@ Il file viaggia con la cartella, che è il punto di tutto: una cartella copiata 
 si porta dietro le descrizioni. E una descrizione segue il suo file: `F5` ne scrive una anche
 all'altro capo, `F6` la porta via con il file, una rinomina la porta sul nome nuovo, e `F8` la
 porta via — una descrizione sopravvissuta al suo file finirebbe sul primo file a cui venisse
-dato quel nome.
+dato quel nome, anche quando i file vengono da più cartelle insieme, come capita con il
+risultato di una ricerca. Tutto questo vale anche su un server e in un bucket; dentro un
+archivio la riga si legge ma non si scrive, perché scriverla vorrebbe dire ricostruirlo.
 *Opzioni → Impostazioni del pannello* spegne tutta l'abitudine per chi non tiene descrizioni.
 
 `Ctrl+R` rilegge. `Ctrl+L` trasforma l'altro pannello in un pannello informativo — cosa

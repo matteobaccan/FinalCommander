@@ -123,7 +123,9 @@ The file travels with the directory, which is the point of it: a folder copied t
 stick takes its descriptions along. And a description follows its file: `F5` writes one at the
 other end as well, `F6` takes it with the file, a rename takes it to the new name, and `F8`
 takes it away — a description that outlived its file would land on the next file to be given
-that name.
+that name, even when the files came from several directories at once, as they do out of a
+search result. All of it works on a server and in a bucket as well; inside an archive the line
+is read but not written, because writing one there means building the archive again.
 *Options → Panel settings* turns the whole habit off for somebody who keeps no descriptions.
 
 `Ctrl+R` re-reads. `Ctrl+L` turns the other panel into an information panel — what the device

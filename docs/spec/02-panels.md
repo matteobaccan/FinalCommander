@@ -660,15 +660,19 @@ beside the size and the time wherever the panel has read the file.
 **When it is read.** Only when something on screen shows one: either description view, or an
 information panel beside the panel. A side file nobody is looking at is one round trip per
 directory on a network share, and the two columns are not worth that to somebody who keeps no
-descriptions. `panel.descriptions = false` turns the whole habit off. Local directories only
-for now; a description inside an archive or on a server is a read through a provider and a
-backlog line.
+descriptions. `panel.descriptions = false` turns the whole habit off. Wherever the panel
+stands: on this disk, inside a container — where the index is already in hand and the lookup
+costs nothing — and on a server or in a bucket, where it is one small file fetched whole. A
+list panel reads none, because its rows come from several directories at once.
 
 **Writing one.** `Ctrl+Z` opens the dialog on what the directory already says about the file
 under the cursor, so changing a description is a key and a few characters rather than retyping
 it. An empty answer takes the line away — there is no second key for removing one. The panel
 shows the new text at once and the file is written behind it; a directory left with nothing to
-say loses the file rather than keeping an empty one.
+say loses the file rather than keeping an empty one. The file goes where the panel stands, a
+server and a bucket included. Inside a container it is refused: the side file is an entry like
+any other and writing one is a rebuild of the whole archive, which is a job and not a
+keystroke.
 
 **Carrying one.** A description follows what it describes: a copy leaves the line where it was
 and writes one at the other end, a move takes it with it, a rename takes it to the new name,
@@ -678,11 +682,12 @@ whole carries its own `descript.ion` along with everything inside it; what needs
 the line about the directory itself, which lives in its parent's file. It happens when the job
 ends and only if the job really did something: a cancelled copy must not leave a description
 pointing at a file that never arrived. A job whose sources came from several directories at
-once — a list gathered from a search — carries none of them, which is a backlog line.
+once — a list gathered from a search — carries each line out of the directory it was in: the
+sources are grouped by their parent and each side file is read, changed and written on its
+own. A container at either end carries nothing, for the reason *Writing one* gives.
 
-**What is still owed**: descriptions on a server, writing one inside an archive, carrying one
-out of a search result list, and the settings FAR has for which names to look for and whether
-to write UTF-8.
+**What is still owed**: writing one inside an archive, and the settings FAR has for which
+names to look for and whether to write UTF-8.
 
 ## 14. The panels that are not drives (shipped in 0.8.0)
 

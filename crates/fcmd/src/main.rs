@@ -833,6 +833,16 @@ fn interactive(mut app: App) -> Result<()> {
         objects: objects.clone(),
         handle: runtime.handle().clone(),
     }));
+    // And the way to reach a `descript.ion` wherever the panel stands: the same cache for a
+    // container, and the pool and the bucket for a server (SPEC 02 §13).
+    let sides = Sides {
+        archives: archives.clone(),
+        away: Some(Away {
+            pool: pool.clone(),
+            objects: objects.clone(),
+            handle: runtime.handle().clone(),
+        }),
+    };
     let mut cancels: [Option<CancelToken>; 2] = [None, None];
     let (mut w, mut h) = term.size();
     let mut buf = Buffer::new(w, h);
@@ -1178,9 +1188,9 @@ fn interactive(mut app: App) -> Result<()> {
                     // One small file, off the UI thread because it is still a read from a
                     // disk that may be a network share pretending to be one.
                     let tx = tx.clone();
-                    let archives = archives.clone();
+                    let sides = sides.clone();
                     runtime.spawn_blocking(move || {
-                        let descriptions = read_descriptions(&dir, &archives);
+                        let descriptions = read_descriptions(&dir, &sides);
                         let _ = tx.send(Event::Descriptions {
                             panel,
                             generation,
@@ -1189,11 +1199,12 @@ fn interactive(mut app: App) -> Result<()> {
                     });
                 }
                 Request::WriteDescriptions { dir, descriptions } => {
-                    runtime.spawn_blocking(move || write_descriptions(&dir, &descriptions));
+                    let sides = sides.clone();
+                    runtime.spawn_blocking(move || write_descriptions(&dir, &descriptions, &sides));
                 }
                 Request::CarryDescriptions(carry) => {
-                    let archives = archives.clone();
-                    runtime.spawn_blocking(move || carry_descriptions(&carry, &archives));
+                    let sides = sides.clone();
+                    runtime.spawn_blocking(move || carry_descriptions(&carry, &sides));
                 }
                 Request::Mouse { on } => {
                     // A terminal that was never asked to report the mouse is not asked to
@@ -1679,16 +1690,137 @@ fn links_of(dir: &VPath, names: &[String]) -> std::collections::HashMap<String, 
         .collect()
 }
 
+/// Where a `descript.ion` can be, and the one value that knows how to get at it.
+///
+/// Beside the files on this disk, inside the container they are in, or on the server or in
+/// the bucket they came from: a panel may stand in any of the four, and the side file follows
+/// its directory wherever that is.
+#[derive(Clone)]
+struct Sides {
+    archives: std::sync::Arc<fcmd_arc::Cache>,
+    /// `None` where there is no network to reach: the tests' pump, which never leaves the
+    /// local disk, and a program started with neither a connection nor a bucket.
+    away: Option<Away>,
+}
+
+impl Sides {
+    /// The disk and the containers on it, and nothing further: what the tests' pump has.
+    #[cfg(test)]
+    fn here(archives: std::sync::Arc<fcmd_arc::Cache>) -> Sides {
+        Sides {
+            archives,
+            away: None,
+        }
+    }
+}
+
+/// The three verbs a side file needs when its directory is not on this disk.
+///
+/// Small files only, and blocking: a `descript.ion` is a few kilobytes and these run on a
+/// worker's thread, which is where the rest of the description reading already runs.
+#[derive(Clone)]
+struct Away {
+    pool: std::sync::Arc<Pool>,
+    objects: std::sync::Arc<fcmd_s3::vfs::S3Vfs>,
+    handle: tokio::runtime::Handle,
+}
+
+impl Away {
+    /// The bytes, or nothing: a file that is not there, a connection that is not open and a
+    /// file too big to be a list of descriptions all mean the same thing to the caller.
+    fn read(&self, path: &VPath, limit: u64) -> Option<Vec<u8>> {
+        let cancel = CancelToken::new();
+        if path.scheme() == fcmd_core::Scheme::S3 {
+            let entry = self
+                .handle
+                .block_on(self.objects.stat_object(path, &cancel))
+                .ok()?;
+            if entry.size > limit {
+                return None;
+            }
+            return self
+                .handle
+                .block_on(self.objects.read_object(path, None, &cancel))
+                .ok();
+        }
+        let remote = self.pool.require(path).ok()?;
+        if self.handle.block_on(stamp_of(&remote, path))?.size > limit {
+            return None;
+        }
+        let wire = remote.wire(path).ok()?;
+        self.handle.block_on(async move {
+            use tokio::io::AsyncReadExt;
+            let mut reader = remote.sftp().open_read(&wire).await.ok()?;
+            let mut bytes = Vec::new();
+            reader.read_to_end(&mut bytes).await.ok()?;
+            Some(bytes)
+        })
+    }
+
+    fn write(&self, path: &VPath, text: &str) -> Result<(), String> {
+        let bytes = text.as_bytes().to_vec();
+        if path.scheme() == fcmd_core::Scheme::S3 {
+            return self
+                .handle
+                .block_on(self.objects.write_bytes(path, bytes, &CancelToken::new()))
+                .map(|_| ())
+                .map_err(|e| format!("{path}: {e}"));
+        }
+        let remote = self
+            .pool
+            .require(path)
+            .map_err(|e| format!("{path}: {e}"))?;
+        let wire = remote.wire(path).map_err(|e| format!("{path}: {e}"))?;
+        self.handle
+            .block_on(async move {
+                use tokio::io::AsyncWriteExt;
+                let mut writer = remote
+                    .sftp()
+                    .create(&wire)
+                    .await
+                    .map_err(|e| e.to_string())?;
+                writer.write_all(&bytes).await.map_err(|e| e.to_string())?;
+                writer.shutdown().await.map_err(|e| e.to_string())
+            })
+            .map_err(|e| format!("{path}: {e}"))
+    }
+
+    /// Take the file away. One that is not there is already gone, which is not an error.
+    fn remove(&self, path: &VPath) -> Result<(), String> {
+        let cancel = CancelToken::new();
+        if path.scheme() == fcmd_core::Scheme::S3 {
+            if self
+                .handle
+                .block_on(self.objects.stat_object(path, &cancel))
+                .is_err()
+            {
+                return Ok(());
+            }
+            return self
+                .handle
+                .block_on(self.objects.delete_object(path, &cancel))
+                .map_err(|e| format!("{path}: {e}"));
+        }
+        let remote = self
+            .pool
+            .require(path)
+            .map_err(|e| format!("{path}: {e}"))?;
+        if !self.handle.block_on(remote.exists(path)) {
+            return Ok(());
+        }
+        self.handle
+            .block_on(remote.remove_file(path))
+            .map_err(|e| format!("{path}: {e}"))
+    }
+}
+
 /// A directory's `descript.ion`, or whatever it is called here.
 ///
 /// The names are tried in order and the first file that is there is the one that counts; a
 /// directory with neither has no descriptions, which is not an error and not worth a message.
 /// The text is decoded the way the viewer decodes a text file — a `descript.ion` written under
 /// DOS is in a DOS code page, and one written today is UTF-8.
-fn read_descriptions(
-    dir: &VPath,
-    archives: &std::sync::Arc<fcmd_arc::Cache>,
-) -> fcmd_core::descriptions::Descriptions {
+fn read_descriptions(dir: &VPath, sides: &Sides) -> fcmd_core::descriptions::Descriptions {
     use fcmd_core::descriptions::{Descriptions, DEFAULT_NAMES};
     const LIMIT: u64 = 4 * 1024 * 1024;
 
@@ -1696,7 +1828,7 @@ fn read_descriptions(
     // read: looking for it costs a lookup rather than a round trip, which is why a panel in
     // a container may ask for descriptions at all.
     if dir.in_container() {
-        let Ok((archive, inner)) = archives.open_in(dir, &CancelToken::new()) else {
+        let Ok((archive, inner)) = sides.archives.open_in(dir, &CancelToken::new()) else {
             return Descriptions::default();
         };
         for name in DEFAULT_NAMES {
@@ -1719,7 +1851,20 @@ fn read_descriptions(
         }
         return Descriptions::default();
     }
+    // On a server and in a bucket it is one small file fetched whole, in the same code page
+    // rule as everywhere else. The panel asks for it only when a column or the information
+    // panel shows one, so this is a round trip somebody is waiting to see the result of.
     if !dir.is_local() {
+        let Some(away) = &sides.away else {
+            return Descriptions::default();
+        };
+        for name in DEFAULT_NAMES {
+            let Some(bytes) = away.read(&dir.join(name), LIMIT) else {
+                continue;
+            };
+            let codepage = fcmd_view::decode::detect(&bytes);
+            return Descriptions::parse(&codepage.decode(&bytes));
+        }
         return Descriptions::default();
     }
     let here = dir.os();
@@ -1746,11 +1891,24 @@ fn read_descriptions(
 ///
 /// The file is written beside the directory it describes, which is the whole point of the
 /// format; a directory nobody may write to keeps the descriptions it had, and the message
-/// the caller sees is the one the filesystem gave.
+/// the caller sees is the one the filesystem — or the server — gave. Inside a container it
+/// is a rebuild, which `Ctrl+Z` refuses before it gets this far.
 fn write_descriptions(
     dir: &VPath,
     descriptions: &fcmd_core::descriptions::Descriptions,
+    sides: &Sides,
 ) -> Result<(), String> {
+    if !dir.is_local() || dir.in_container() {
+        let Some(away) = sides.away.as_ref().filter(|_| !dir.in_container()) else {
+            return Err(format!("{dir}: descriptions cannot be written here"));
+        };
+        let path = dir.join(fcmd_core::descriptions::DEFAULT_NAMES[0]);
+        return if descriptions.is_empty() {
+            away.remove(&path)
+        } else {
+            away.write(&path, &descriptions.to_text())
+        };
+    }
     let path = dir.os().join(fcmd_core::descriptions::DEFAULT_NAMES[0]);
     if descriptions.is_empty() {
         // An empty file is a file that says nothing and still has to be carried around.
@@ -1765,37 +1923,38 @@ fn write_descriptions(
 
 /// Carry descriptions after a job: the lines follow what they describe, or go when it goes.
 ///
-/// Read, change, write — both files, and only what changed. A directory whose descriptions
-/// did not change is not written at all, so a copy into a folder nobody has described leaves
-/// no file behind.
-fn carry_descriptions(carry: &app::Carry, archives: &std::sync::Arc<fcmd_arc::Cache>) {
-    let mut source = read_descriptions(&carry.from, archives);
+/// Read, change, write — both ends, and only what changed. A directory whose descriptions did
+/// not change is not written at all, so a copy into a folder nobody has described leaves no
+/// file behind.
+///
+/// The sources are grouped by the directory they were in, because a list gathered from a
+/// search holds files from several at once and each of those has a side file of its own.
+fn carry_descriptions(carry: &app::Carry, sides: &Sides) {
     let mut moved: Vec<(String, String)> = Vec::new();
-    for (there, here) in &carry.names {
-        if let Some(text) = source.get(there) {
-            moved.push((here.clone(), text.to_string()));
+    for group in &carry.from {
+        let mut source = read_descriptions(&group.dir, sides);
+        let mut changed = false;
+        for (there, here) in &group.names {
+            if let Some(text) = source.get(there) {
+                moved.push((here.clone(), text.to_string()));
+            }
+            if !carry.keep {
+                changed |= source.remove(there).is_some();
+            }
+        }
+        if changed {
+            let _ = write_descriptions(&group.dir, &source, sides);
         }
     }
-    if moved.is_empty() && carry.keep {
+    if moved.is_empty() {
         return; // nothing described, nothing to carry
     }
     if let Some(to) = &carry.to {
-        if !moved.is_empty() {
-            let mut target = read_descriptions(to, archives);
-            for (name, text) in &moved {
-                target.set(name, text);
-            }
-            let _ = write_descriptions(to, &target);
+        let mut target = read_descriptions(to, sides);
+        for (name, text) in &moved {
+            target.set(name, text);
         }
-    }
-    if !carry.keep {
-        let mut changed = false;
-        for (there, _) in &carry.names {
-            changed |= source.remove(there).is_some();
-        }
-        if changed {
-            let _ = write_descriptions(&carry.from, &source);
-        }
+        let _ = write_descriptions(to, &target, sides);
     }
 }
 
@@ -3429,6 +3588,119 @@ mod tests {
         assert_eq!(described(&right), "");
     }
 
+    #[test]
+    fn a_search_result_carries_a_description_out_of_each_directory() {
+        use fcmd_core::{Entry, EntryId, EntryKind};
+
+        let root = tempfile::tempdir().unwrap();
+        let one = root.path().join("one");
+        let two = root.path().join("two");
+        let right = root.path().join("right");
+        for dir in [&one, &two, &right] {
+            std::fs::create_dir_all(dir).unwrap();
+        }
+        std::fs::write(one.join("a.txt"), b"a\n").unwrap();
+        std::fs::write(one.join("descript.ion"), "a.txt the first one\n").unwrap();
+        std::fs::write(two.join("b.txt"), b"b\n").unwrap();
+        std::fs::write(two.join("descript.ion"), "b.txt the second one\n").unwrap();
+
+        let mut app = app_on(root.path(), &right);
+        serve(&mut app);
+
+        // A list as a search leaves one: two files that were never in the same directory.
+        let items: Vec<(VPath, Entry)> = [one.join("a.txt"), two.join("b.txt")]
+            .iter()
+            .enumerate()
+            .map(|(at, path)| {
+                let entry = Entry {
+                    name: path
+                        .file_name()
+                        .unwrap()
+                        .to_string_lossy()
+                        .into_owned()
+                        .into(),
+                    kind: EntryKind::File,
+                    size: 2,
+                    mtime: None,
+                    btime: None,
+                    atime: None,
+                    flags: fcmd_core::EntryFlags::empty(),
+                    id: EntryId::Name(at as u64),
+                    link_target: None,
+                };
+                (VPath::local(path), entry)
+            })
+            .collect();
+        let generation = app.panels[0].generation + 1;
+        app.panels[0].generation = generation;
+        app.panels[0].set_temp("Find".to_string(), items, generation);
+        app.panels[0].cursor = 0;
+
+        // Both rows chosen, and `F5` onto the other panel.
+        key(&mut app, "Insert");
+        key(&mut app, "Insert");
+        key(&mut app, "F5");
+        key(&mut app, "Enter");
+        serve(&mut app);
+        serve(&mut app);
+
+        assert!(right.join("a.txt").is_file() && right.join("b.txt").is_file());
+        let landed = std::fs::read_to_string(right.join("descript.ion")).unwrap_or_default();
+        assert!(
+            landed.contains("a.txt the first one"),
+            "the first directory's line came along: {landed}"
+        );
+        assert!(
+            landed.contains("b.txt the second one"),
+            "and the second directory's too: {landed}"
+        );
+        // A copy leaves both where they were.
+        assert_eq!(
+            std::fs::read_to_string(one.join("descript.ion")).unwrap(),
+            "a.txt the first one\n"
+        );
+    }
+
+    #[test]
+    fn descriptions_are_read_and_written_on_a_server() {
+        use fcmd_core::descriptions::Descriptions;
+
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let pool = Pool::new();
+        let site = fcmd_net::Site::parse_url("sftp://mb@host:22/srv").unwrap();
+        let remote = fcmd_net::Remote::new(site, fcmd_net::MemoryFs::new().with_dir("/srv"));
+        pool.insert(remote.clone());
+        let sides = Sides {
+            archives: std::sync::Arc::new(fcmd_arc::Cache::new(Default::default())),
+            away: Some(Away {
+                pool: pool.clone(),
+                objects: std::sync::Arc::new(fcmd_s3::vfs::S3Vfs::empty()),
+                handle: runtime.handle().clone(),
+            }),
+        };
+        let dir = remote.site().start();
+
+        // A directory with no side file describes nothing, which is not an error.
+        assert!(read_descriptions(&dir, &sides).is_empty());
+
+        let mut descriptions = Descriptions::default();
+        descriptions.set("notes.txt", "what it is");
+        write_descriptions(&dir, &descriptions, &sides).expect("written to the server");
+        assert_eq!(
+            read_descriptions(&dir, &sides).get("notes.txt"),
+            Some("what it is"),
+            "and read back off it"
+        );
+
+        // Nothing left to say takes the file away rather than leaving an empty one.
+        write_descriptions(&dir, &Descriptions::default(), &sides).expect("removed");
+        assert!(read_descriptions(&dir, &sides).is_empty());
+        assert!(
+            !runtime.block_on(remote.exists(&dir.join("descript.ion"))),
+            "the file itself is gone"
+        );
+    }
+
     /// A plugin on disk, a command it provides, and the whole conversation: the manifest is
     /// loaded the way the binary loads one, the program is a real script, and what it asks for
     /// is carried out. This is the half of the plugin host API that no unit test reaches.
@@ -4100,8 +4372,10 @@ timeout = 10
                     generation,
                     dir,
                 } => {
-                    let archives = std::sync::Arc::new(fcmd_arc::Cache::new(Default::default()));
-                    let descriptions = read_descriptions(&dir, &archives);
+                    let sides = Sides::here(std::sync::Arc::new(fcmd_arc::Cache::new(
+                        Default::default(),
+                    )));
+                    let descriptions = read_descriptions(&dir, &sides);
                     app.handle_event(Event::Descriptions {
                         panel,
                         generation,
@@ -4109,11 +4383,16 @@ timeout = 10
                     });
                 }
                 Request::WriteDescriptions { dir, descriptions } => {
-                    let _ = write_descriptions(&dir, &descriptions);
+                    let sides = Sides::here(std::sync::Arc::new(fcmd_arc::Cache::new(
+                        Default::default(),
+                    )));
+                    let _ = write_descriptions(&dir, &descriptions, &sides);
                 }
                 Request::CarryDescriptions(carry) => carry_descriptions(
                     &carry,
-                    &std::sync::Arc::new(fcmd_arc::Cache::new(Default::default())),
+                    &Sides::here(std::sync::Arc::new(
+                        fcmd_arc::Cache::new(Default::default()),
+                    )),
                 ),
                 Request::Job { id, spec, cancel } => {
                     let (tx, rx) = mpsc::channel();

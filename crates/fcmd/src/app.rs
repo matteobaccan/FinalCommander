@@ -1515,15 +1515,22 @@ impl PluginCommand {
 /// when it ends, because a description must not follow a file that never arrived.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Carry {
-    /// The directory the sources were in.
-    pub from: VPath,
+    /// The sources, grouped by the directory each was in: a list gathered from a search holds
+    /// files from several at once, and each directory keeps its own side file.
+    pub from: Vec<CarryFrom>,
     /// Where they went. `None` for a delete, which only takes lines away.
     pub to: Option<VPath>,
+    /// A copy leaves the line where it was; a move and a delete do not.
+    pub keep: bool,
+}
+
+/// One source directory and what was taken out of it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CarryFrom {
+    pub dir: VPath,
     /// What each one was called there, and what it is called here — the two differ only for
     /// a rename, which is a move onto a name of its own.
     pub names: Vec<(String, String)>,
-    /// A copy leaves the line where it was; a move and a delete do not.
-    pub keep: bool,
 }
 
 pub struct Startup {
@@ -4001,7 +4008,10 @@ impl App {
                 let text = prompt.text.trim().to_string();
                 let panel = self.active;
                 let dir = self.panels[panel].cwd.clone();
-                if !dir.is_local() || dir.in_container() {
+                // Inside a container the side file is an entry and writing it is a rebuild
+                // of the archive, which is a job and not a keystroke; everywhere else the
+                // file is written where the panel stands.
+                if dir.in_container() {
                     let m = self.i18n.t("descr-not-here");
                     self.set_error(m);
                     return;
@@ -4537,11 +4547,6 @@ impl App {
         fcmd_ui::mnemonic(&self.i18n.t(id)).0
     }
 
-    /// Ask for the owners of a panel's rows, if that is the view it is in.
-    ///
-    /// Nothing happens for any other view, for a panel that is a list rather than a
-    /// directory, or for one on anything but a local filesystem: a remote provider has no
-    /// owner to give, and a file inside an archive belongs to whoever wrote the archive.
     /// `Ctrl+Z`: the line the directory keeps about the file under the cursor, to be edited.
     ///
     /// The dialog opens on what is there, so changing a description is one key and a few
@@ -4549,7 +4554,10 @@ impl App {
     fn open_describe(&mut self) {
         let panel = self.active;
         let p = &self.panels[panel];
-        if !p.cwd.is_local() || p.cwd.in_container() || p.temp.is_some() {
+        // A list has no one directory to describe a file in, and inside a container the side
+        // file is an entry whose writing is a rebuild of the archive. On this disk, on a
+        // server and in a bucket the dialog writes where the panel stands.
+        if p.cwd.in_container() || p.temp.is_some() {
             let m = self.i18n.t("descr-not-here");
             self.set_error(m);
             return;
@@ -4589,16 +4597,6 @@ impl App {
         self.mode = Mode::Prompt(Prompt::new(PromptKind::Describe { name }, title, text));
     }
 
-    /// Ask for a directory's `descript.ion`, when something on screen shows one.
-    ///
-    /// Like the owners, and for the same reason: a panel should not open a side file for a
-    /// column nobody is looking at — on a network share that is a round trip per directory
-    /// one walks through. What shows one is either of the two description views, or an
-    /// information panel beside this one, which spells out the row under the cursor. `Ctrl+Z`
-    /// asks for itself (see [`Self::open_describe`]).
-    ///
-    /// Local directories only for now: a description inside an archive or on a server is a
-    /// read through a provider, and a backlog line.
     /// Does the view this panel is in ask for a field a listing does not carry?
     ///
     /// Either because the built-in mode shows it, or because the user's own columns do — a
@@ -4620,6 +4618,13 @@ impl App {
         }
     }
 
+    /// Ask for a directory's `descript.ion`, when something on screen shows one.
+    ///
+    /// Like the owners, and for the same reason: a panel should not open a side file for a
+    /// column nobody is looking at — on a network share that is a round trip per directory
+    /// one walks through. What shows one is either of the two description views, or an
+    /// information panel beside this one, which spells out the row under the cursor. `Ctrl+Z`
+    /// asks for itself (see [`Self::open_describe`]).
     fn ask_for_descriptions(&mut self, panel: usize) {
         if panel >= self.panels.len() || !self.cfg.panel.descriptions {
             return;
@@ -4629,10 +4634,11 @@ impl App {
             || self.panels[panel].sort.asks(SortKey::Descr)
             || self.panels[1 - panel].content == crate::panel::Content::Info;
         let p = &self.panels[panel];
-        // A list panel has no directory to read one from, and a server would be a round trip
-        // per directory for a file nobody may have. Inside an archive the index is already
-        // here, so the lookup is free and the descriptions show as they do on the disk.
-        if !shown || p.temp.is_some() || (!p.cwd.is_local() && !p.cwd.in_container()) {
+        // A list panel has no directory to read one from: its rows come from several at
+        // once and each would be a read of its own. Everywhere else the file is read where
+        // the panel stands — on this disk, on a server, in a bucket, or inside a container,
+        // where the index is already here and the lookup is free.
+        if !shown || p.temp.is_some() {
             return;
         }
         self.requests.push(Request::Descriptions {
@@ -4676,6 +4682,11 @@ impl App {
         });
     }
 
+    /// Ask for the owners of a panel's rows, if that is the view it is in.
+    ///
+    /// Nothing happens for any other view, for a panel that is a list rather than a
+    /// directory, or for one on anything but a local filesystem: a remote provider has no
+    /// owner to give, and a file inside an archive belongs to whoever wrote the archive.
     fn ask_for_owners(&mut self, panel: usize) {
         if panel >= self.panels.len() {
             return;
@@ -4884,59 +4895,57 @@ impl App {
             // described yet, an archive is a file of its own, a replacement rewrites bytes.
             _ => return None,
         };
-        let from = spec.sources[0].parent()?;
-        if !from.is_local() || from.in_container() {
-            return None;
-        }
-        // Every source has to come from the one directory the panel was showing; a list
-        // gathered from a search can hold several, and carrying those is a backlog line.
-        if spec
-            .sources
-            .iter()
-            .any(|s| s.parent().as_ref() != Some(&from))
-        {
-            return None;
-        }
         let target = match spec.kind {
             JobKind::Copy | JobKind::Move => spec.target.clone(),
             _ => None,
         };
         // A move onto a name of its own is a rename: the target is the new name, not a
         // directory to put the old one in. That is the one case the two names differ.
-        let (to, names) = match target {
+        let (to, pairs): (Option<VPath>, Vec<(&VPath, String)>) = match target {
             Some(t) if spec.sources.len() == 1 && !self.looks_like_dir(&t) => {
                 let parent = t.parent()?;
-                (
-                    Some(parent),
-                    vec![(spec.sources[0].display_name(), t.display_name())],
-                )
+                (Some(parent), vec![(&spec.sources[0], t.display_name())])
             }
             Some(t) => (
                 Some(t),
-                spec.sources
-                    .iter()
-                    .map(|s| (s.display_name(), s.display_name()))
-                    .collect(),
+                spec.sources.iter().map(|s| (s, s.display_name())).collect(),
             ),
             None => (
                 None,
-                spec.sources
-                    .iter()
-                    .map(|s| (s.display_name(), s.display_name()))
-                    .collect(),
+                spec.sources.iter().map(|s| (s, s.display_name())).collect(),
             ),
         };
-        if let Some(to) = &to {
-            if !to.is_local() || to.in_container() {
-                return None;
+        // Inside a container the side file is an entry like any other and writing it is a
+        // rebuild of the whole archive: a copy must not start one behind the user's back,
+        // so a container at either end carries nothing. Everywhere else — this disk, a
+        // server, a bucket — the file is written where it belongs.
+        if to.as_ref().is_some_and(|t| t.in_container()) {
+            return None;
+        }
+        // Grouped by the directory the source was in, in the order they came: a list
+        // gathered from a search holds files from several directories at once, and each of
+        // those has a `descript.ion` of its own to read and write.
+        let mut from: Vec<CarryFrom> = Vec::new();
+        for (source, here) in pairs {
+            let Some(dir) = source.parent() else {
+                continue;
+            };
+            if dir.in_container() {
+                continue;
+            }
+            let there = source.display_name();
+            match from.iter_mut().find(|group| group.dir == dir) {
+                Some(group) => group.names.push((there, here)),
+                None => from.push(CarryFrom {
+                    dir,
+                    names: vec![(there, here)],
+                }),
             }
         }
-        Some(Carry {
-            from,
-            to,
-            names,
-            keep,
-        })
+        if from.is_empty() {
+            return None;
+        }
+        Some(Carry { from, to, keep })
     }
 
     /// Does this path name a directory that is there? A copy into one puts the sources in it;

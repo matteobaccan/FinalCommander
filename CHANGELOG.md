@@ -8,6 +8,18 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **Descriptions wherever the panel stands.** A `descript.ion` on a server or in a bucket is
+  now read and written like one on this disk: the description columns, the information panel
+  and `Ctrl+Z` work in a remote panel, and the file is fetched only when something on screen
+  shows a description, which is what kept the habit off a network share in the first place.
+  Inside a container it is read and not written — that would be a rebuild of the whole
+  archive — and `Ctrl+Z` says so.
+
+- **A search result carries its descriptions.** A copy, a move or a delete whose files came
+  from several directories at once — which is what `Alt+F7` leaves in the panel — now takes
+  each line out of the directory it was in rather than none of them: the sources are grouped
+  by their parent, and each side file is read, changed and written on its own.
+
 - **The histories are lists one types into.** The command history, the folder history and the
   files read or edited all narrow as you type — the frame says what was typed — and `Del` on a
   row takes that line out of the history without closing the list.
