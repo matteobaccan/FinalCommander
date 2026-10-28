@@ -33,6 +33,8 @@ windows-sys = { version = "0.61", features = [
   "Win32_Security_Authorization",
   # What is running: the process snapshot, and the memory of one process.
   "Win32_System_Diagnostics_ToolHelp",
+  # What is listening: the TCP and UDP tables, with the pid that owns each row.
+  "Win32_NetworkManagement_IpHelper",
   "Win32_System_ProcessStatus",
   "Win32_System_Threading",
 ] }

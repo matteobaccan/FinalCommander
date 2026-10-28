@@ -8,6 +8,13 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **A socket list, as a panel of its own**, under the processes in `Alt+F1`/`Alt+F2`: the
+  protocol, this end, the other end, the state and the process holding it, in columns. `F3` on
+  a row opens that process's card — the question a socket list is opened to ask. Linux reads
+  the four tables in `/proc/net` and maps each row back to the process holding it through its
+  open files; Windows asks `GetExtendedTcpTable` and `GetExtendedUdpTable`, which give the
+  owning pid with the row. Nothing here closes a socket.
+
 - **`F3` on the process list shows the process.** It used to try to read `/proc/<pid>` as a
   file, which does nothing on Linux and nothing at all on Windows. Now it opens a card, asked
   for when the key is pressed rather than read from the listing: name, pid, what started it,

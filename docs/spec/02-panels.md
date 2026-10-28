@@ -616,6 +616,22 @@ are left out there rather than paid for with a page of `unsafe` a service pack c
 could end a process from a listing with the key that deletes a file is one that ends a process
 by accident, and ending one wants a confirmation of its own.
 
+**Socket list.** What is listening and what is connected, as a panel: the protocol, this end,
+the other end, the state, and the process holding it — in columns, as the drive dialog is. The
+other end is left empty for a socket that is only listening, because `0.0.0.0:0` says nothing.
+`F3` on a row opens the card for the process that holds it (§7b), which is the question a socket
+list is opened to ask; a socket this user may not be told the owner of says so rather than
+showing a card about nothing.
+
+Linux reads `/proc/net/tcp`, `tcp6`, `udp` and `udp6` and then maps each row's inode back to a
+process by reading every process's open files once — a socket shows up as `socket:[12345]` among
+them — so a process somebody else owns keeps its rows and loses only its name. Windows answers
+this better than it answers anything else about another process: `GetExtendedTcpTable` and
+`GetExtendedUdpTable` give the whole table *with* the owning pid, one call per protocol and
+nothing to be refused. macOS and the BSDs wait for the same tested way to read a `sysctl` as the
+process list does. **Nothing here closes a socket**, for the reason the process panel kills
+nothing.
+
 **Temporary panel.** A panel that holds paths rather than a directory, so what is in it can
 come from anywhere — several directories, two drives, a search — and `F5` out of it copies the
 real files. It opens empty from the dialog; `Ctrl+Shift+Ins` puts what is selected in the

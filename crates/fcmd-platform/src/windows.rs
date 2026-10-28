@@ -346,6 +346,201 @@ pub fn details(pid: u32) -> Option<super::Details> {
     Some(out)
 }
 
+/// Every socket, with the process that holds it (SPEC 02 §7c).
+///
+/// Windows answers this better than it answers anything else about another process: one call
+/// per protocol gives the whole table *and* the owning pid, with no handle to open and
+/// nothing to be refused. The four calls are the same shape — ask how big the table is, make
+/// room, ask again — and the rows are a variable-length array behind a count, which is why
+/// each one is read out by its offset in the buffer rather than through a typed slice.
+#[cfg(windows)]
+pub fn sockets() -> Vec<super::Socket> {
+    use windows_sys::Win32::Foundation::{ERROR_INSUFFICIENT_BUFFER, NO_ERROR};
+    use windows_sys::Win32::NetworkManagement::IpHelper::{
+        GetExtendedTcpTable, GetExtendedUdpTable, MIB_TCP6ROW_OWNER_PID, MIB_TCP6TABLE_OWNER_PID,
+        MIB_TCPROW_OWNER_PID, MIB_TCPTABLE_OWNER_PID, MIB_UDP6ROW_OWNER_PID,
+        MIB_UDP6TABLE_OWNER_PID, MIB_UDPROW_OWNER_PID, MIB_UDPTABLE_OWNER_PID,
+        TCP_TABLE_OWNER_PID_ALL, UDP_TABLE_OWNER_PID,
+    };
+
+    // The two address families, as `ulAf` wants them: `AF_INET` and `AF_INET6`. They are
+    // written out because the constants live behind the whole of the WinSock feature, which
+    // is a lot of bindings for two numbers that have not changed since 1995.
+    const IPV4: u32 = 2;
+    const IPV6: u32 = 23;
+
+    /// The buffer one of the four tables filled, or nothing.
+    ///
+    /// `ask` is the call, which is handed the buffer and its size and reports how much room
+    /// it really needs. Asking twice is the documented way round a table that grows between
+    /// the two calls, and a third refusal is taken as "not now".
+    fn table(mut ask: impl FnMut(*mut std::ffi::c_void, *mut u32) -> u32) -> Option<Vec<u8>> {
+        let mut size = 0u32;
+        for _ in 0..3 {
+            // SAFETY (in the caller's closure): the first call is given a null pointer and a
+            // size of zero, which is how the call is asked for the size it needs.
+            let code = ask(std::ptr::null_mut(), &mut size);
+            if code != ERROR_INSUFFICIENT_BUFFER {
+                return None;
+            }
+            let mut buffer = vec![0u8; size as usize];
+            let code = ask(buffer.as_mut_ptr().cast(), &mut size);
+            if code == NO_ERROR {
+                return Some(buffer);
+            }
+            if code != ERROR_INSUFFICIENT_BUFFER {
+                return None;
+            }
+        }
+        None
+    }
+
+    /// One row out of a table's buffer. The rows follow the count at `offset`, packed, and
+    /// the buffer came from a `Vec<u8>` and so is not aligned for the row type: each one is
+    /// read unaligned, which is what `read_unaligned` is for.
+    fn rows<T: Copy>(buffer: &[u8], offset: usize) -> Vec<T> {
+        if buffer.len() < 4 {
+            return Vec::new();
+        }
+        let count = u32::from_ne_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]) as usize;
+        let size = std::mem::size_of::<T>();
+        let mut out = Vec::with_capacity(count);
+        for i in 0..count {
+            let at = offset + i * size;
+            if at + size > buffer.len() {
+                break; // the table shrank under us, which is not worth a panic
+            }
+            // SAFETY: `at + size` is inside the buffer, the read is unaligned, and `T` is one
+            // of the four plain `repr(C)` row structures — all integers and byte arrays, with
+            // no padding to be uninitialised and nothing to drop.
+            out.push(unsafe { buffer.as_ptr().add(at).cast::<T>().read_unaligned() });
+        }
+        out
+    }
+
+    // A port is kept in the low half of a `DWORD`, in network order.
+    let port = |dw: u32| -> u16 { u16::from_be((dw & 0xFFFF) as u16) };
+    // An address is kept in network order too, which is the order its bytes are already in.
+    let four = |dw: u32| -> String { std::net::Ipv4Addr::from(dw.to_ne_bytes()).to_string() };
+    let six = |raw: [u8; 16]| -> String { format!("[{}]", std::net::Ipv6Addr::from(raw)) };
+
+    // The names, once: the pid is in every row and the snapshot is the only place that puts
+    // a name to it.
+    let names: std::collections::HashMap<u32, String> =
+        processes().into_iter().map(|p| (p.pid, p.name)).collect();
+    let name_of = |pid: u32| -> (Option<u32>, Option<String>) {
+        // Pid zero is the system idle process, which holds nothing worth naming.
+        if pid == 0 {
+            return (None, None);
+        }
+        (Some(pid), names.get(&pid).cloned())
+    };
+
+    let mut out = Vec::new();
+
+    // TCP over IPv4.
+    if let Some(buffer) =
+        table(|p, s| unsafe { GetExtendedTcpTable(p, s, 0, IPV4, TCP_TABLE_OWNER_PID_ALL, 0) })
+    {
+        let offset = std::mem::offset_of!(MIB_TCPTABLE_OWNER_PID, table);
+        for row in rows::<MIB_TCPROW_OWNER_PID>(&buffer, offset) {
+            let (pid, process) = name_of(row.dwOwningPid);
+            let state = win_state(row.dwState);
+            out.push(super::Socket {
+                proto: "tcp".into(),
+                local: format!("{}:{}", four(row.dwLocalAddr), port(row.dwLocalPort)),
+                remote: if state == "LISTEN" {
+                    String::new()
+                } else {
+                    format!("{}:{}", four(row.dwRemoteAddr), port(row.dwRemotePort))
+                },
+                state: state.into(),
+                pid,
+                process,
+            });
+        }
+    }
+
+    // TCP over IPv6.
+    if let Some(buffer) =
+        table(|p, s| unsafe { GetExtendedTcpTable(p, s, 0, IPV6, TCP_TABLE_OWNER_PID_ALL, 0) })
+    {
+        let offset = std::mem::offset_of!(MIB_TCP6TABLE_OWNER_PID, table);
+        for row in rows::<MIB_TCP6ROW_OWNER_PID>(&buffer, offset) {
+            let (pid, process) = name_of(row.dwOwningPid);
+            let state = win_state(row.dwState);
+            out.push(super::Socket {
+                proto: "tcp6".into(),
+                local: format!("{}:{}", six(row.ucLocalAddr), port(row.dwLocalPort)),
+                remote: if state == "LISTEN" {
+                    String::new()
+                } else {
+                    format!("{}:{}", six(row.ucRemoteAddr), port(row.dwRemotePort))
+                },
+                state: state.into(),
+                pid,
+                process,
+            });
+        }
+    }
+
+    // UDP has no state to be in, and no other end.
+    if let Some(buffer) =
+        table(|p, s| unsafe { GetExtendedUdpTable(p, s, 0, IPV4, UDP_TABLE_OWNER_PID, 0) })
+    {
+        let offset = std::mem::offset_of!(MIB_UDPTABLE_OWNER_PID, table);
+        for row in rows::<MIB_UDPROW_OWNER_PID>(&buffer, offset) {
+            let (pid, process) = name_of(row.dwOwningPid);
+            out.push(super::Socket {
+                proto: "udp".into(),
+                local: format!("{}:{}", four(row.dwLocalAddr), port(row.dwLocalPort)),
+                remote: String::new(),
+                state: String::new(),
+                pid,
+                process,
+            });
+        }
+    }
+    if let Some(buffer) =
+        table(|p, s| unsafe { GetExtendedUdpTable(p, s, 0, IPV6, UDP_TABLE_OWNER_PID, 0) })
+    {
+        let offset = std::mem::offset_of!(MIB_UDP6TABLE_OWNER_PID, table);
+        for row in rows::<MIB_UDP6ROW_OWNER_PID>(&buffer, offset) {
+            let (pid, process) = name_of(row.dwOwningPid);
+            out.push(super::Socket {
+                proto: "udp6".into(),
+                local: format!("{}:{}", six(row.ucLocalAddr), port(row.dwLocalPort)),
+                remote: String::new(),
+                state: String::new(),
+                pid,
+                process,
+            });
+        }
+    }
+    out
+}
+
+/// The twelve states `MIB_TCP_STATE` has, which are numbered differently from the ones Linux
+/// writes in its own table — hence a second list rather than a shared one.
+#[cfg(windows)]
+fn win_state(code: u32) -> &'static str {
+    match code {
+        1 => "CLOSED",
+        2 => "LISTEN",
+        3 => "SYN_SENT",
+        4 => "SYN_RECV",
+        5 => "ESTABLISHED",
+        6 => "FIN_WAIT1",
+        7 => "FIN_WAIT2",
+        8 => "CLOSE_WAIT",
+        9 => "CLOSING",
+        10 => "LAST_ACK",
+        11 => "TIME_WAIT",
+        12 => "DELETE_TCB",
+        _ => "",
+    }
+}
+
 /// A Windows `FILETIME` — hundreds of nanoseconds since the first of January 1601 — as a
 /// `SystemTime`. The difference between the two epochs is 11,644,473,600 seconds, and a time
 /// before the Unix one is not a time a process started.

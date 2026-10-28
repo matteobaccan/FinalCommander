@@ -4210,6 +4210,19 @@ See the [docs](https://example.com/docs) for more.
 
     #[test]
     #[ignore = "a look at the screen, not an assertion"]
+    fn eyeball_sockets() {
+        let mut app = super::tests::app("far", "en");
+        project(&mut app);
+        app.run(fcmd_cmd::Command::PanelDrive(fcmd_cmd::Side::Left));
+        app.handle_input(Input::Key("2".parse().unwrap()));
+        println!("{}", frame(&mut app, 110, 24));
+        app.panels[0].cursor = 0;
+        app.handle_input(Input::Key("F3".parse().unwrap()));
+        println!("{}", frame(&mut app, 110, 24));
+    }
+
+    #[test]
+    #[ignore = "a look at the screen, not an assertion"]
     fn eyeball_drives() {
         let mut app = super::tests::app("far", "en");
         project(&mut app);

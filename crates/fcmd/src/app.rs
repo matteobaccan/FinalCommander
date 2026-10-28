@@ -5444,6 +5444,7 @@ impl App {
             for (id, value) in [
                 ("drive-netbox", ":netbox"),
                 ("drive-processes", ":processes"),
+                ("drive-sockets", ":sockets"),
                 ("drive-temp", ":temp"),
             ] {
                 let on_it = origin.as_deref() == Some(value);
@@ -6621,8 +6622,13 @@ impl App {
     /// instead, as FAR does.
     fn open_viewer(&mut self) {
         // On the process list `F3` is not a file to read: it is the card for the process
-        // under the cursor, which is what the key does in FAR's own process panel.
-        if self.panel().temp_origin() == Some(":processes") {
+        // under the cursor, which is what the key does in FAR's own process panel. On the
+        // socket list it is the card for whatever holds the socket, which is the question
+        // one opens a socket list to ask.
+        if matches!(
+            self.panel().temp_origin(),
+            Some(":processes") | Some(":sockets")
+        ) {
             self.open_process_card();
             return;
         }
@@ -8761,6 +8767,12 @@ impl App {
         };
         let path = self.panel().path_of(&entry);
         let pid = path.display_name().parse::<u32>().ok();
+        if pid.is_none() && self.panel().temp_origin() == Some(":sockets") {
+            // A socket of somebody else's: the table has the row, but not who holds it.
+            let m = self.i18n.t("sock-no-process");
+            self.set_error(m);
+            return;
+        }
         let Some(details) = pid.and_then(fcmd_platform::details) else {
             // It ended between the panel being built and the key being pressed, which is
             // the ordinary way a process list goes out of date.
@@ -8829,6 +8841,77 @@ impl App {
             title: self.i18n.t("proc-card"),
             lines,
         };
+    }
+
+    /// What is listening and what is connected, as a panel (SPEC 02 §7c).
+    ///
+    /// The row is the socket, laid out in columns the way the drive dialog is — protocol,
+    /// this end, the other end, the state, and who holds it — and `F3` on it opens the card
+    /// for that process, which is the question a socket list is opened to ask. Nothing here
+    /// closes a socket, for the same reason the process panel kills nothing.
+    fn open_socket_panel(&mut self, side: usize) {
+        use fcmd_core::{Entry, EntryId, EntryKind};
+
+        let open = fcmd_platform::sockets();
+        if open.is_empty() {
+            let m = self.i18n.t("sock-none");
+            self.set_error(m);
+            return;
+        }
+        // Each column as wide as its widest value, so the rows line up under each other.
+        let width = |pick: &dyn Fn(&fcmd_platform::Socket) -> &str| -> usize {
+            open.iter()
+                .map(|s| unicode_width::UnicodeWidthStr::width(pick(s)))
+                .max()
+                .unwrap_or(0)
+        };
+        let (proto_w, local_w, remote_w, state_w) = (
+            width(&|s| s.proto.as_str()),
+            width(&|s| s.local.as_str()),
+            width(&|s| s.remote.as_str()),
+            width(&|s| s.state.as_str()),
+        );
+        let items: Vec<(VPath, Entry)> = open
+            .iter()
+            .enumerate()
+            .map(|(i, s)| {
+                let who = match (&s.process, s.pid) {
+                    (Some(name), Some(pid)) => format!("{name}  [{pid}]"),
+                    (None, Some(pid)) => format!("[{pid}]"),
+                    _ => String::new(),
+                };
+                let label = format!(
+                    "{:<proto_w$}  {:<local_w$}  {:<remote_w$}  {:<state_w$}  {}",
+                    s.proto, s.local, s.remote, s.state, who
+                );
+                let entry = Entry {
+                    name: label.trim_end().into(),
+                    kind: EntryKind::File,
+                    size: 0,
+                    mtime: None,
+                    btime: None,
+                    atime: None,
+                    flags: fcmd_core::EntryFlags::empty(),
+                    // Two sockets can be the same row twice over — two connections from the
+                    // same port — so the row's own place in the table is its identity.
+                    id: EntryId::Name(i as u64),
+                    link_target: None,
+                };
+                // The pid travels in the path, the way it does on the process list, because
+                // that is what `F3` reads. A socket nobody will own up to carries none.
+                let path = match s.pid {
+                    Some(pid) => VPath::local(format!("/proc/{pid}")),
+                    None => VPath::local("/proc"),
+                };
+                (path, entry)
+            })
+            .collect();
+        let title = self.plain("drive-sockets");
+        let generation = self.panels[side].generation + 1;
+        self.panels[side].generation = generation;
+        self.panels[side].set_temp(title, items, generation);
+        self.panels[side].set_temp_origin(":sockets");
+        self.active = side;
     }
 
     /// An empty panel to put files in by hand (FAR's temporary panel).
@@ -11012,6 +11095,7 @@ impl App {
                 match row.value.as_str() {
                     ":netbox" => self.open_sessions_panel(pick.side),
                     ":processes" => self.open_process_panel(pick.side),
+                    ":sockets" => self.open_socket_panel(pick.side),
                     ":temp" => self.open_temp_panel(pick.side),
                     _ => self.go_to_bookmark(&row.value),
                 }
@@ -17982,6 +18066,54 @@ run = ["echo one", "echo two", "echo three"]
         press(&mut app, &key.to_string());
         assert!(app.panels[1].temp.is_some());
         assert_eq!(app.panels[1].listing.len(), 0, "it opens empty");
+    }
+
+    /// The socket list is a panel of its own, reached from the drive dialog like the others,
+    /// and `F3` on a row is the process holding the socket rather than a file.
+    #[test]
+    fn the_socket_list_opens_and_f3_on_it_is_the_process() {
+        let mut app = app();
+        app.run(Command::PanelDrive(fcmd_cmd::Side::Left));
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("no dialog: {:?}", app.mode)
+        };
+        let at = pick
+            .rows
+            .iter()
+            .position(|r| r.value == ":sockets")
+            .expect("the socket list is offered");
+        let key = pick.rows[at].hotkey.expect("it is numbered");
+        press(&mut app, &key.to_string());
+        // A container with no network at all is possible, and then the panel says so rather
+        // than opening empty.
+        if app.panels[0].temp_origin() != Some(":sockets") {
+            assert!(
+                !app.status.is_empty(),
+                "nothing opened and nothing was said"
+            );
+            return;
+        }
+        assert!(!app.panels[0].listing.is_empty(), "the panel opened empty");
+
+        // Every row says what the socket is and where it is.
+        let rows: Vec<String> = (0..app.panels[0].listing.len())
+            .filter_map(|r| app.panels[0].listing.row(r))
+            .map(|e| e.name_str().to_string())
+            .collect();
+        assert!(
+            rows.iter().all(|r| r.contains(':')),
+            "a row with no address in it: {rows:?}"
+        );
+
+        // `F3` on a row we own is the card for the process holding it; on one we do not, it
+        // says that nobody will say. Either way it is not the viewer.
+        app.panels[0].cursor = 0;
+        press(&mut app, "F3");
+        match &app.mode {
+            Mode::Message { lines, .. } => assert!(!lines.is_empty()),
+            Mode::Normal => assert!(!app.status.is_empty(), "F3 did nothing at all"),
+            other => panic!("F3 opened {other:?}"),
+        }
     }
 
     #[test]

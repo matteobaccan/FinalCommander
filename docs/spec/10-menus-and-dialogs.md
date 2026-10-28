@@ -364,8 +364,8 @@ label, the filesystem, the size and the free space. The words read from the left
 sizes from the right. A column nothing filled takes no room at all.
 
 Under a rule across the frame come the rows that are not drives: the open connections, the
-object stores that are configured, and the three panels (§2 of `02-panels.md`) — the stored
-sessions, the processes, and the temporary panel. They are numbered from `0`, and the number is
+object stores that are configured, and the four panels (§7 of `02-panels.md`) — the stored
+sessions, the processes, the sockets, and the temporary panel. They are numbered from `0`, and the number is
 the row's own key. The cursor opens on the drive the panel is on, or, where the panel is showing
 one of those three lists, on the row for *that list*: a panel showing the processes is not on a
 drive, and offering the drive it was on before is answering a question nobody asked.
