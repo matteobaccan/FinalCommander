@@ -120,6 +120,11 @@ fn choice(key: &'static str, label: String, options: &[(&str, String)], current:
     }
 }
 
+/// A message with a menu label's `&` marker taken off.
+fn plain(i18n: &I18n, id: &str) -> String {
+    fcmd_ui::mnemonic(&i18n.t(id)).0
+}
+
 impl Form {
     /// Build a dialog from the configuration as it stands.
     pub fn build(kind: FormKind, cfg: &Config, i18n: &I18n) -> Form {
@@ -303,10 +308,12 @@ impl Form {
                     "panel.view",
                     t("opt-view"),
                     &[
-                        ("brief", t("menu-brief")),
-                        ("full", t("menu-full")),
-                        ("detail", t("menu-detailed")),
-                        ("wide", t("menu-wide")),
+                        // The same words as the menu rows, without the `&` that marks a
+                        // menu row's key: a dialog row is not a menu row.
+                        ("brief", plain(i18n, "menu-brief")),
+                        ("full", plain(i18n, "menu-full")),
+                        ("detail", plain(i18n, "menu-detailed")),
+                        ("wide", plain(i18n, "menu-wide")),
                     ],
                     &cfg.panel.view,
                 ),
@@ -375,7 +382,9 @@ impl Form {
                 Field::Dim(t("opt-confirm-editor")),
             ],
         };
-        let title = i18n.t(match kind {
+        // Five of these titles are menu labels, and a menu label carries the `&` that marks
+        // its key: a dialog's frame is not a menu row, so the marker comes off here.
+        let title = fcmd_ui::mnemonic(&i18n.t(match kind {
             FormKind::Site => "site-new",
             FormKind::Find => "find-title",
             FormKind::Replace => "replace-title",
@@ -393,7 +402,8 @@ impl Form {
             FormKind::Panel => "menu-panel-settings",
             FormKind::Interface => "menu-interface-settings",
             FormKind::Confirmations => "menu-confirmations",
-        });
+        }))
+        .0;
         let cursor = fields.iter().position(Field::selectable).unwrap_or(0);
         Form {
             kind,

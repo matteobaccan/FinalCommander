@@ -334,6 +334,7 @@ menu-brief = 简略
 menu-medium = 中等(&M)
 menu-full = 完整
 menu-detailed = 详细
+menu-owners = 文件所有者
 menu-wide = 宽列
 menu-info-panel = 信息面板
 menu-quick-view = 快速查看

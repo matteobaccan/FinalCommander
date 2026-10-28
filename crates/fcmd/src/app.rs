@@ -3774,6 +3774,15 @@ impl App {
         self.set_status(msg);
     }
 
+    /// A message, with a menu label's `&` marker taken off.
+    ///
+    /// Several titles are the same words as a menu row — *Change drive*, *Sort modes*, the
+    /// histories — and a menu row carries the letter that is its key. A dialog's frame is not
+    /// a menu, so it shows the words and not the marker.
+    fn plain(&self, id: &str) -> String {
+        fcmd_ui::mnemonic(&self.i18n.t(id)).0
+    }
+
     /// Ask for the owners of a panel's rows, if that is the view it is in.
     ///
     /// Nothing happens for any other view, for a panel that is a list rather than a
@@ -4987,7 +4996,7 @@ impl App {
         }
         Pick::new(
             PickKind::Drives,
-            self.i18n.t("menu-change-drive"),
+            self.plain("menu-change-drive"),
             rows,
             side,
         )
@@ -6693,7 +6702,7 @@ impl App {
             );
             self.set_error(msg);
         }
-        let title = self.i18n.t("menu-user-menu");
+        let title = self.plain("menu-user-menu");
         self.menu_levels = vec![(title, rows)];
         self.show_user_menu_level();
     }
@@ -9539,7 +9548,7 @@ impl App {
             PickKind::UserMenu => return,
             PickKind::Languages => Pick::new(
                 kind,
-                self.i18n.t("menu-languages"),
+                self.plain("menu-languages"),
                 fcmd_i18n::LANGUAGES
                     .iter()
                     .map(|(tag, name)| PickRow {
@@ -9553,7 +9562,7 @@ impl App {
             ),
             PickKind::Themes => Pick::new(
                 kind,
-                self.i18n.t("menu-themes"),
+                self.plain("menu-themes"),
                 self.themes
                     .iter()
                     .map(|theme| PickRow {
@@ -9568,7 +9577,7 @@ impl App {
             PickKind::Drives => self.drive_list(side),
             PickKind::Bookmarks => Pick::new(
                 kind,
-                self.i18n.t("menu-bookmarks"),
+                self.plain("menu-bookmarks"),
                 self.bookmark_rows(side),
                 side,
             ),
@@ -9591,7 +9600,7 @@ impl App {
                         hotkey: None,
                     })
                     .collect();
-                Pick::new(kind, self.i18n.t("menu-folders-history"), rows, side)
+                Pick::new(kind, self.plain("menu-folders-history"), rows, side)
             }
             PickKind::CommandHistory => {
                 // Newest first, which is the order someone reaching for a past command wants.
@@ -9607,7 +9616,7 @@ impl App {
                         hotkey: None,
                     })
                     .collect();
-                Pick::new(kind, self.i18n.t("menu-history"), rows, side)
+                Pick::new(kind, self.plain("menu-history"), rows, side)
             }
             PickKind::SortModes => {
                 let panel = &self.panels[side];
@@ -9622,7 +9631,7 @@ impl App {
                 ];
                 Pick::new(
                     kind,
-                    self.i18n.t("menu-sort-modes"),
+                    self.plain("menu-sort-modes"),
                     keys.iter()
                         .map(|(key, id)| PickRow {
                             label: self.i18n.t(id),
@@ -11415,7 +11424,7 @@ impl App {
     /// Open the hotlist again after a key that changed it, with the cursor where it was.
     fn reopen_bookmarks(&mut self, side: usize, cursor: usize) {
         let rows = self.bookmark_rows(side);
-        let title = self.i18n.t("menu-bookmarks");
+        let title = self.plain("menu-bookmarks");
         let mut pick = Pick::new(PickKind::Bookmarks, title, rows, side);
         pick.cursor = cursor.min(pick.rows.len().saturating_sub(1));
         self.mode = Mode::Pick(Box::new(pick));

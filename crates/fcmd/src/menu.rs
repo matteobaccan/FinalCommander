@@ -178,6 +178,12 @@ fn panel_menu(title: &'static str, side: usize) -> Menu {
                 Action::Run(Command::PanelViewSet(ViewMode::Detail)),
                 Mark::View(ViewMode::Detail),
             ),
+            marked(
+                "menu-owners",
+                "Ctrl+8",
+                Action::Run(Command::PanelViewSet(ViewMode::Owners)),
+                Mark::View(ViewMode::Owners),
+            ),
             Entry::Separator,
             item(
                 "menu-info-panel",
@@ -386,11 +392,6 @@ pub fn menus() -> Vec<Menu> {
                     "Alt+F12",
                     Action::Run(Command::PanelHistory),
                 ),
-                item(
-                    "menu-bookmarks",
-                    "Ctrl+D",
-                    Action::Run(Command::NavBookmarks),
-                ),
                 Entry::Separator,
                 item(
                     "menu-swap-panels",
@@ -586,6 +587,35 @@ mod tests {
                     id,
                     "{tag}: `{id}` is missing from the catalogue"
                 );
+            }
+        }
+    }
+
+    /// A letter marked with `&` is a key: two rows of one menu claiming the same letter means
+    /// one of them can never be reached by it. Rows with no marker are allowed — every letter
+    /// their label contains may already be taken — and those still answer to their first
+    /// letter, as FAR's do.
+    #[test]
+    fn no_two_rows_of_a_menu_claim_the_same_letter() {
+        for (tag, _) in fcmd_i18n::LANGUAGES {
+            let i18n = fcmd_i18n::I18n::new(tag);
+            for menu in menus() {
+                let mut seen: Vec<(char, String)> = Vec::new();
+                for entry in &menu.items {
+                    let Entry::Item(item) = entry else { continue };
+                    let label = i18n.t(item.label);
+                    let Some(key) = fcmd_ui::mnemonic(&label).1 else {
+                        continue;
+                    };
+                    let key = key.to_lowercase().next().unwrap_or(key);
+                    if let Some((_, other)) = seen.iter().find(|(c, _)| *c == key) {
+                        panic!(
+                            "{tag}: `{label}` and `{other}` both claim `{key}` in {}",
+                            menu.title
+                        );
+                    }
+                    seen.push((key, label));
+                }
             }
         }
     }

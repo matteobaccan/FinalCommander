@@ -8,6 +8,20 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **Every menu row has its letter.** The mechanism shipped a while ago — `&` in a label marks
+  the letter and the dropdown draws it highlighted — but only four labels carried a marker,
+  so the rest fell back to "the first row whose label starts with it" and several rows could
+  not be reached by a letter at all. Every row of every menu now claims a letter of its own,
+  in all six languages written in an alphabet, by a rule rather than one at a time: the first
+  letter of the first word that no other row of that menu has taken, or any free letter of
+  the label where every word's initial is gone. A test asserts that no two rows of one menu
+  claim the same letter, in every language, so a new entry cannot quietly shadow an old one.
+
+  Two things fell out of the sweep. The *Files owners* view had no menu row at all, and the
+  Commands menu listed *Folder shortcuts* twice — the same words, the same `Ctrl+D`, the same
+  command — so it now appears once, after the associations, where FAR puts it. And a label
+  that doubles as a dialog title is drawn without the marker: a frame is not a menu row.
+
 - **`Ctrl+8`: who the files belong to.** FAR's file-owners view, on FAR's own number: name,
   size, owner, group. The two names take the room the date column had, because somebody
   asking who a file belongs to is not asking when it was written, and on a panel too narrow

@@ -39,8 +39,21 @@ the top line in the key-bar colours; the open menu is pulled down under its titl
 menu of the panel that has the focus.
 
 Keys inside the bar: `←`/`→` move between menus, `↑`/`↓` move over the entries and step over
-separators, `Home`/`End` jump to the first and last entry, a letter picks the first entry whose
-(translated) label starts with it, `Enter` chooses, `Esc`/`F9`/`F10` close.
+separators, `Home`/`End` jump to the first and last entry, `Enter` chooses, `Esc`/`F9`/`F10`
+close, and a letter runs the entry that claims it.
+
+**The letters.** A label carries its own letter, marked in the catalogue with `&` before it —
+`&Brief`, `File &owners` — and the dropdown draws that letter highlighted. The letter is
+chosen per language, since the labels are translated, and the rule is: the first letter of the
+first word of the label that no other row of that menu has already claimed. Where every letter
+of a word is taken, any free letter of the label is marked instead, which is why a few read
+`Chan&ge drive` rather than `&Change drive`; where nothing at all is free — a menu can hold
+more rows than the alphabet has letters once the labels are long — the row carries no marker
+and still answers to its first letter, as it always did. A test asserts that no two rows of
+one menu claim the same letter, in every language.
+
+A label that doubles as a title — *Change drive*, *Sort modes*, the histories, the settings
+dialogs — is shown without the marker: a frame is not a menu row.
 
 A `√` marks the entry that describes the state the panel is in now — the current view mode,
 `Hidden and system files` when they are shown, and `Lock the tab to its directory` when it is.
@@ -49,7 +62,7 @@ A `√` marks the entry that describes the state the panel is in now — the cur
 
 | Entry | Does | State |
 | --- | --- | --- |
-| Brief / Full / Detailed / Wide | `panel.view.set(...)` | `√` on the current view |
+| Brief / Medium / Full / Wide / Detailed / File owners | `panel.view.set(...)` | `√` on the current view |
 | Info panel · Quick view · Tree panel | `panel.info` · `panel.quickview` · `panel.tree` | |
 | New tab · Close tab · Next · Previous · Move to the other panel | `panel.tab.new|close|next|prev|move` | |
 | Lock the tab to its directory | `panel.tab.lock` | `√` when locked |
@@ -61,6 +74,9 @@ A `√` marks the entry that describes the state the panel is in now — the cur
 | Re-read | `panel.reread` | |
 | Change drive | opens the drive list (§4.3) | |
 
+The owners view is in this menu because it is a view mode; what it costs and how it is filled
+in is SPEC 02 §3.
+
 ### 2.2 Files
 
 View, Edit, Edit new file, Copy, Rename or move, Create link, Make folder, Delete, Delete
@@ -70,12 +86,15 @@ Unselect group, Invert selection, Select all, Restore selection · Folder size.
 
 ### 2.3 Commands
 
-Find file, Command history (backlog), View and edit history (backlog), Folders history (§4.4),
-Folder shortcuts (§4.4b) ·
+Find file, Command history (backlog), View and edit history (backlog), Folders history (§4.4) ·
 Swap panels, Sync other panel, Panels on/off, Compare folders, Compare by content · Connections,
-Disconnect · User menu, File associations (backlog) · Plugin
+Disconnect · User menu, File associations (backlog), Folder shortcuts (§4.4b) · Plugin
 commands (backlog), Screens list (backlog: our own viewers, editors and jobs), Task list
 (backlog: the operating system's processes, as FAR's is — see `docs/BACKLOG.md`).
+
+*Folder shortcuts* appears once, after the associations, where FAR puts it. It used to appear
+twice — the same words, the same key and the same command, once up with the histories — which
+is the sort of thing only a reader of the whole menu notices.
 
 ### 2.4 Options
 
