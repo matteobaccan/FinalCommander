@@ -35,6 +35,8 @@ windows-sys = { version = "0.61", features = [
   "Win32_System_Diagnostics_ToolHelp",
   # What is listening: the TCP and UDP tables, with the pid that owns each row.
   "Win32_NetworkManagement_IpHelper",
+  # What is installed: the key the Control Panel's own list of programs reads.
+  "Win32_System_Registry",
   "Win32_System_ProcessStatus",
   "Win32_System_Threading",
 ] }

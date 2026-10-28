@@ -1399,6 +1399,9 @@ pub struct App {
     /// The directory the branch was last read for, and what it was: `HEAD` is a small file,
     /// but reading it on every frame would be reading it on every keystroke.
     branch_at: Option<(String, Option<String>)>,
+    /// What the installed-programs panel was built from, so a row can be looked up again:
+    /// the panel holds rows of text, and the card wants the whole of what was read.
+    programs: Vec<fcmd_platform::Program>,
     /// What the commands that have run printed, for `Ctrl+O`. Capped.
     pub user_screen: Vec<String>,
     /// Which panel is hidden, if either: `Ctrl+F1` and `Ctrl+F2` give the screen to one.
@@ -1608,6 +1611,7 @@ impl App {
             compare_pairs: 0,
             cmd: CmdLine::new(),
             branch_at: None,
+            programs: Vec::new(),
             user_screen: Vec::new(),
             shell_screen: false,
             hidden: None,
@@ -5449,6 +5453,7 @@ impl App {
                 ("drive-netbox", ":netbox"),
                 ("drive-processes", ":processes"),
                 ("drive-sockets", ":sockets"),
+                ("drive-programs", ":programs"),
                 ("drive-temp", ":temp"),
             ] {
                 let on_it = origin.as_deref() == Some(value);
@@ -6634,6 +6639,11 @@ impl App {
             Some(":processes") | Some(":sockets")
         ) {
             self.open_process_card();
+            return;
+        }
+        // And on the list of what is installed it is that program's card.
+        if self.panel().temp_origin() == Some(":programs") {
+            self.open_program_card();
             return;
         }
         let Some(entry) = self.panel().current().cloned() else {
@@ -8918,6 +8928,145 @@ impl App {
         self.active = side;
     }
 
+    /// What is installed, as a panel (SPEC 02 §7d; FAR's `UnInstall` plugin).
+    ///
+    /// The *size* column holds what each program takes on disk, so `Ctrl+F6` sorts the list
+    /// by size — which is the question that makes anybody open such a list. `F3` on a row is
+    /// the program's card, and `F4` puts the command that would remove it on the command
+    /// line, unrun: a list that uninstalls something on a keypress is a list one uninstalls
+    /// something from by accident.
+    fn open_programs_panel(&mut self, side: usize) {
+        use fcmd_core::{Entry, EntryId, EntryKind};
+
+        let installed = fcmd_platform::programs();
+        if installed.is_empty() {
+            let m = self.i18n.t("prog-none");
+            self.set_error(m);
+            return;
+        }
+        let width = |pick: &dyn Fn(&fcmd_platform::Program) -> &str| -> usize {
+            installed
+                .iter()
+                .map(|p| unicode_width::UnicodeWidthStr::width(pick(p)))
+                .max()
+                .unwrap_or(0)
+        };
+        let name_w = width(&|p| p.name.as_str());
+        let version_w = width(&|p| p.version.as_deref().unwrap_or(""));
+        let items: Vec<(VPath, Entry)> = installed
+            .iter()
+            .enumerate()
+            .map(|(i, p)| {
+                let label = format!(
+                    "{:<name_w$}  {:<version_w$}  {}",
+                    p.name,
+                    p.version.as_deref().unwrap_or(""),
+                    p.publisher.as_deref().unwrap_or("")
+                );
+                let entry = Entry {
+                    name: label.trim_end().into(),
+                    kind: EntryKind::File,
+                    // What it takes on disk, in the column that knows how to show bytes.
+                    size: p.size,
+                    mtime: None,
+                    btime: None,
+                    atime: None,
+                    flags: fcmd_core::EntryFlags::empty(),
+                    id: EntryId::Name(i as u64),
+                    link_target: None,
+                };
+                // The row's place in the list travels in the path, because that is what the
+                // card and the uninstall command are looked up by: a program has no path of
+                // its own, and the one it reports is a folder we must not pretend is it.
+                (VPath::local(format!("/{i}")), entry)
+            })
+            .collect();
+        let title = self.plain("drive-programs");
+        let generation = self.panels[side].generation + 1;
+        self.panels[side].generation = generation;
+        self.panels[side].set_temp(title, items, generation);
+        self.panels[side].set_temp_origin(":programs");
+        self.programs = installed;
+        self.active = side;
+    }
+
+    /// Which installed program a row of that panel is about.
+    fn program_at_cursor(&self) -> Option<&fcmd_platform::Program> {
+        if self.panel().temp_origin() != Some(":programs") {
+            return None;
+        }
+        let entry = self.panel().current()?;
+        let at = self
+            .panel()
+            .path_of(entry)
+            .display_name()
+            .parse::<usize>()
+            .ok()?;
+        self.programs.get(at)
+    }
+
+    /// `F3` on a row of the installed-programs panel: everything the system keeps about it,
+    /// including the command that would remove it — which is the one thing in the list that
+    /// cannot be found any other way.
+    fn open_program_card(&mut self) {
+        let Some(program) = self.program_at_cursor().cloned() else {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        };
+        let mut rows: Vec<(String, String)> = Vec::new();
+        let mut say = |id: &str, value: Option<String>| {
+            if let Some(value) = value.filter(|v| !v.trim().is_empty()) {
+                rows.push((self.i18n.t(id), value));
+            }
+        };
+        say("prog-card-name", Some(program.name.clone()));
+        say("prog-card-version", program.version.clone());
+        say("prog-card-publisher", program.publisher.clone());
+        if program.size > 0 {
+            say("prog-card-size", Some(fcmd_core::format_size(program.size)));
+        }
+        say("prog-card-installed", program.installed.clone());
+        say("prog-card-location", program.location.clone());
+        say("prog-card-uninstall", program.uninstall.clone());
+        let width = rows
+            .iter()
+            .map(|(label, _)| unicode_width::UnicodeWidthStr::width(label.as_str()))
+            .max()
+            .unwrap_or(0);
+        let lines = rows
+            .iter()
+            .map(|(label, value)| format!("{label:<width$}  {value}"))
+            .collect();
+        self.mode = Mode::Message {
+            title: self.i18n.t("prog-card"),
+            lines,
+        };
+    }
+
+    /// `F4` on a row of that panel: the command that would remove the program, on the command
+    /// line, not run. Nothing here uninstalls anything by itself.
+    fn put_uninstall_on_the_command_line(&mut self) {
+        let Some(program) = self.program_at_cursor().cloned() else {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        };
+        let Some(command) = program.uninstall.clone() else {
+            let m = self.i18n.t_args(
+                "prog-no-uninstall",
+                &[("name", program.name.clone().into())],
+            );
+            self.set_error(m);
+            return;
+        };
+        self.cmd.set(command);
+        let m = self
+            .i18n
+            .t_args("prog-uninstall-ready", &[("name", program.name.into())]);
+        self.set_status(m);
+    }
+
     /// An empty panel to put files in by hand (FAR's temporary panel).
     ///
     /// It holds paths rather than a directory, so what goes in it can come from anywhere —
@@ -11134,6 +11283,7 @@ impl App {
                     ":netbox" => self.open_sessions_panel(pick.side),
                     ":processes" => self.open_process_panel(pick.side),
                     ":sockets" => self.open_socket_panel(pick.side),
+                    ":programs" => self.open_programs_panel(pick.side),
                     ":temp" => self.open_temp_panel(pick.side),
                     _ => self.go_to_bookmark(&row.value),
                 }
@@ -11240,6 +11390,12 @@ impl App {
     }
 
     fn open_editor(&mut self) {
+        // On the list of what is installed there is no file to edit: `F4` there puts the
+        // command that would remove the program on the command line, unrun.
+        if self.panel().temp_origin() == Some(":programs") {
+            self.put_uninstall_on_the_command_line();
+            return;
+        }
         let Some(entry) = self.panel().current().cloned() else {
             let m = self.i18n.t("msg-nothing-to-do");
             self.set_error(m);
@@ -18200,6 +18356,55 @@ run = ["echo one", "echo two", "echo three"]
             Mode::Normal => assert!(!app.status.is_empty(), "F3 did nothing at all"),
             other => panic!("F3 opened {other:?}"),
         }
+    }
+
+    /// The list of what is installed: a panel of its own, the size column holding what each
+    /// program takes on disk, `F3` the card, and `F4` the removal command on the command
+    /// line — not run, ever.
+    #[test]
+    fn the_installed_programs_panel_shows_cards_and_never_removes_anything() {
+        let mut app = app();
+        app.run(Command::PanelDrive(fcmd_cmd::Side::Left));
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("no dialog: {:?}", app.mode)
+        };
+        let at = pick
+            .rows
+            .iter()
+            .position(|r| r.value == ":programs")
+            .expect("the installed programs are offered");
+        let key = pick.rows[at].hotkey.expect("it is numbered");
+        press(&mut app, &key.to_string());
+        // A machine whose package database we cannot read says so rather than opening empty.
+        if app.panels[0].temp_origin() != Some(":programs") {
+            assert!(
+                !app.status.is_empty(),
+                "nothing opened and nothing was said"
+            );
+            return;
+        }
+        assert!(!app.programs.is_empty());
+        app.panels[0].cursor = 0;
+
+        press(&mut app, "F3");
+        let Mode::Message { lines, .. } = &app.mode else {
+            panic!("no card: {:?}", app.mode)
+        };
+        let card = lines.join("\n");
+        let program = app.program_at_cursor().expect("a row").clone();
+        assert!(card.contains(&program.name), "{card}");
+        press(&mut app, "Esc");
+
+        // `F4` is the removal command, on the command line and not run: the panel is still
+        // there and nothing has happened to the machine.
+        assert!(app.cmd.text.is_empty());
+        press(&mut app, "F4");
+        if let Some(command) = &program.uninstall {
+            assert_eq!(&app.cmd.text, command);
+            assert!(!app.status.is_empty());
+        }
+        assert!(app.mode.is_normal(), "F4 opened {:?}", app.mode);
+        assert_eq!(app.panels[0].temp_origin(), Some(":programs"));
     }
 
     #[test]

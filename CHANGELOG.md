@@ -8,6 +8,13 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **A panel of what is installed**, under the sockets in `Alt+F1`/`Alt+F2`, with the size
+  column holding what each program takes on disk — so `Ctrl+F6` sorts by size, which is why
+  one opens such a list. Windows reads the three registry keys the Control Panel's own list
+  reads and hides what it hides; Linux reads dpkg's `status` file or pacman's descriptions.
+  `F3` is the program's card, including the command that would remove it, and `F4` puts that
+  command on the command line **unrun**. Nothing here uninstalls anything by itself.
+
 - **The prompt says which branch you are on**, and is a format rather than a fixed string.
   `[cmdline] prompt` takes FAR's own letters — `$p` the path, `$w` its last part, `$n` the
   drive or the server, `$d` the date, `$t` the time, `$@` for an elevated session, the

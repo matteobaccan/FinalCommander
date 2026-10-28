@@ -12,6 +12,7 @@
 //! planned against.
 
 pub mod process;
+mod programs;
 mod socket;
 #[cfg(unix)]
 mod unix;
@@ -19,6 +20,7 @@ mod unix;
 mod windows;
 
 pub use process::{details, processes, Details, Process};
+pub use programs::{programs, Program};
 pub use socket::{sockets, Socket};
 
 use std::path::Path;

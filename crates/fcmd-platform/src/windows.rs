@@ -520,6 +520,196 @@ pub fn sockets() -> Vec<super::Socket> {
     out
 }
 
+/// What is installed, out of the registry key the Control Panel's own list reads.
+///
+/// Three keys, not one: the machine's, the machine's 32-bit view, and this user's own. A
+/// program that is in two of them is the same program, so the first name wins.
+///
+/// What the Control Panel hides, this hides: an entry with no `DisplayName` is a leftover, one
+/// marked `SystemComponent` is a part of Windows rather than a program, and one whose
+/// `ReleaseType` says it is an update is an update rather than a program.
+#[cfg(windows)]
+pub fn programs() -> Vec<super::Program> {
+    use windows_sys::Win32::Foundation::ERROR_SUCCESS;
+    use windows_sys::Win32::System::Registry::{
+        RegCloseKey, RegEnumKeyExW, RegOpenKeyExW, HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE,
+        KEY_READ,
+    };
+
+    const UNINSTALL: &str = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall";
+    const UNINSTALL32: &str = r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall";
+
+    let mut out: Vec<super::Program> = Vec::new();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for (root, path) in [
+        (HKEY_LOCAL_MACHINE, UNINSTALL),
+        (HKEY_LOCAL_MACHINE, UNINSTALL32),
+        (HKEY_CURRENT_USER, UNINSTALL),
+    ] {
+        let mut key: HKEY = std::ptr::null_mut();
+        // SAFETY: the path is a NUL-terminated wide string that outlives the call, and `key`
+        // is one whole handle the call writes into.
+        let opened = unsafe { RegOpenKeyExW(root, wide_str(path).as_ptr(), 0, KEY_READ, &mut key) };
+        if opened != ERROR_SUCCESS {
+            continue; // a view this build of Windows does not have
+        }
+        // The subkeys, one program each. A name is at most 255 characters by the registry's
+        // own rules, and the call says how many it wrote.
+        let mut index = 0u32;
+        loop {
+            let mut name = [0u16; 256];
+            let mut len = name.len() as u32;
+            // SAFETY: `name` is `len` wide, the call writes at most that many characters and
+            // sets `len` to how many it wrote; every other pointer is null, which the call
+            // documents as "do not want".
+            let code = unsafe {
+                RegEnumKeyExW(
+                    key,
+                    index,
+                    name.as_mut_ptr(),
+                    &mut len,
+                    std::ptr::null(),
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                )
+            };
+            if code != ERROR_SUCCESS {
+                break; // ERROR_NO_MORE_ITEMS, or a key that went away under us
+            }
+            index += 1;
+            let sub = String::from_utf16_lossy(&name[..len as usize]);
+            let under = format!("{path}\\{sub}");
+            let Some(display) = reg_string(root, &under, "DisplayName") else {
+                continue; // a leftover, as the Control Panel treats it
+            };
+            if display.trim().is_empty() || !seen.insert(display.to_lowercase()) {
+                continue;
+            }
+            if reg_dword(root, &under, "SystemComponent") == Some(1) {
+                continue;
+            }
+            match reg_string(root, &under, "ReleaseType").as_deref() {
+                Some("Security Update") | Some("Update") | Some("Hotfix") => continue,
+                _ => {}
+            }
+            out.push(super::Program {
+                name: display,
+                version: reg_string(root, &under, "DisplayVersion"),
+                publisher: reg_string(root, &under, "Publisher"),
+                // `EstimatedSize` is in kibibytes, and is an estimate by its own name.
+                size: u64::from(reg_dword(root, &under, "EstimatedSize").unwrap_or(0)) * 1024,
+                installed: reg_string(root, &under, "InstallDate").map(|d| install_date(&d)),
+                location: reg_string(root, &under, "InstallLocation"),
+                uninstall: reg_string(root, &under, "QuietUninstallString")
+                    .or_else(|| reg_string(root, &under, "UninstallString")),
+            });
+        }
+        // SAFETY: the handle came from `RegOpenKeyExW` and is closed exactly once.
+        unsafe { RegCloseKey(key) };
+    }
+    out
+}
+
+/// A string value under a key, or nothing where it is absent, empty or of another type.
+#[cfg(windows)]
+fn reg_string(
+    root: windows_sys::Win32::System::Registry::HKEY,
+    path: &str,
+    name: &str,
+) -> Option<String> {
+    use windows_sys::Win32::Foundation::ERROR_SUCCESS;
+    use windows_sys::Win32::System::Registry::{RegGetValueW, RRF_RT_REG_SZ};
+
+    let (path, name) = (wide_str(path), wide_str(name));
+    let mut size = 0u32;
+    // SAFETY: both strings are NUL-terminated and outlive the call; a null buffer with a size
+    // of zero is how the call is asked how much room it needs.
+    let code = unsafe {
+        RegGetValueW(
+            root,
+            path.as_ptr(),
+            name.as_ptr(),
+            RRF_RT_REG_SZ,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            &mut size,
+        )
+    };
+    if code != ERROR_SUCCESS || size == 0 {
+        return None;
+    }
+    // The size is in bytes and the value is wide characters.
+    let mut buffer = vec![0u16; (size as usize).div_ceil(2)];
+    let mut got = size;
+    // SAFETY: the buffer holds `got` bytes, which is what the call was told and what it
+    // writes at most.
+    let code = unsafe {
+        RegGetValueW(
+            root,
+            path.as_ptr(),
+            name.as_ptr(),
+            RRF_RT_REG_SZ,
+            std::ptr::null_mut(),
+            buffer.as_mut_ptr().cast(),
+            &mut got,
+        )
+    };
+    if code != ERROR_SUCCESS {
+        return None;
+    }
+    let chars = (got as usize / 2).min(buffer.len());
+    let text = String::from_utf16_lossy(&buffer[..chars]);
+    let text = text.trim_end_matches('\0').trim().to_string();
+    (!text.is_empty()).then_some(text)
+}
+
+/// A number value under a key.
+#[cfg(windows)]
+fn reg_dword(
+    root: windows_sys::Win32::System::Registry::HKEY,
+    path: &str,
+    name: &str,
+) -> Option<u32> {
+    use windows_sys::Win32::Foundation::ERROR_SUCCESS;
+    use windows_sys::Win32::System::Registry::{RegGetValueW, RRF_RT_REG_DWORD};
+
+    let (path, name) = (wide_str(path), wide_str(name));
+    let mut value = 0u32;
+    let mut size = std::mem::size_of::<u32>() as u32;
+    // SAFETY: both strings are NUL-terminated and outlive the call, and `value` is one whole
+    // `u32` of exactly the size the call is told.
+    let code = unsafe {
+        RegGetValueW(
+            root,
+            path.as_ptr(),
+            name.as_ptr(),
+            RRF_RT_REG_DWORD,
+            std::ptr::null_mut(),
+            std::ptr::from_mut(&mut value).cast(),
+            &mut size,
+        )
+    };
+    (code == ERROR_SUCCESS).then_some(value)
+}
+
+/// `20240317` as `2024-03-17`, and anything else as it was written.
+#[cfg(windows)]
+fn install_date(raw: &str) -> String {
+    if raw.len() == 8 && raw.chars().all(|c| c.is_ascii_digit()) {
+        format!("{}-{}-{}", &raw[..4], &raw[4..6], &raw[6..])
+    } else {
+        raw.to_string()
+    }
+}
+
+/// A Rust string as Windows wants one: UTF-16 with a NUL after it. (`wide`, above, is the
+/// same for a path, which cannot simply be borrowed as a `str` on Windows.)
+#[cfg(windows)]
+fn wide_str(text: &str) -> Vec<u16> {
+    text.encode_utf16().chain(std::iter::once(0)).collect()
+}
+
 /// The twelve states `MIB_TCP_STATE` has, which are numbered differently from the ones Linux
 /// writes in its own table — hence a second list rather than a shared one.
 #[cfg(windows)]

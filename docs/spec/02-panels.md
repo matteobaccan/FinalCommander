@@ -632,6 +632,24 @@ nothing to be refused. macOS and the BSDs wait for the same tested way to read a
 process list does. **Nothing here closes a socket**, for the reason the process panel kills
 nothing.
 
+**Installed programs.** What is installed, as a panel, with the *size* column holding what each
+program takes on disk — so `Ctrl+F6` sorts the list by size, which is the question that makes
+anybody open such a list at all. FAR has this as a plugin (`UnInstall`); the list is somewhere
+the system keeps it and nobody remembers where.
+
+Windows reads the three registry keys the Control Panel's own list reads — the machine's, the
+machine's 32-bit view and this user's — and hides what the Control Panel hides: an entry with no
+display name, one marked as a system component, one whose release type says it is an update.
+Linux reads whichever package database is a plain file: dpkg's `status`, or pacman's directory
+of descriptions. An rpm database lives behind `librpm` and waits.
+
+`F3` on a row is the program's card: name, version, publisher, size, when it was installed,
+where it lives, and the command that would remove it — which is the one thing in the list that
+cannot be found any other way. `F4` puts that command on the **command line, unrun**, for the
+person at the keyboard to read before pressing `Enter`. **Nothing here uninstalls anything by
+itself**: a list that removes a program on a keypress is a list one removes a program from by
+accident.
+
 **Temporary panel.** A panel that holds paths rather than a directory, so what is in it can
 come from anywhere — several directories, two drives, a search — and `F5` out of it copies the
 real files. It opens empty from the dialog; `Ctrl+Shift+Ins` puts what is selected in the
