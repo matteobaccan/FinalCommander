@@ -133,7 +133,7 @@ keeps it as the run's artifact; publishing happens only through `workflow_dispat
 
 ## Where the work is right now
 
-**0.7.0 is released.** The two before it:
+**0.7.1 is released.** What is in it, and in the two before it:
 
 - **0.6.0** — `[[highlight]]` groups (colour by mask, size, age, attributes or kind, from the
   configuration); the find dialog's size condition; the system clipboard through the terminal
@@ -144,6 +144,13 @@ keeps it as the run's artifact; publishing happens only through `workflow_dispat
 - **0.7.0** — the dBase reader for table mode, read a window at a time; the dialog that edits
   the `[[highlight]]` groups (`F9 → Options → Files highlighting`); `Alt+F11`, the files that
   have been read or edited, persisted in the state file.
+- **0.7.1** — what the author found by using 0.7.0: the key bar always draws all twelve keys
+  (and three editor keys that worked and were never written down); the hex dump widens in
+  blocks of eight; the table mode's arrows, `Ctrl+`arrows, `Home` and `End`; `Shift+F3` makes
+  a table of anything that reads as one rather than going by the name; the DBF's numbers to
+  the right, its deletion flag in a column of its own, its DOS code pages read as DOS code
+  pages; the command line's history on `↑`/`↓`; and a command's output arriving while it
+  runs rather than all at the end.
 
 ## The queue, as the author's review left it
 
