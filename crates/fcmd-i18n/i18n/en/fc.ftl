@@ -682,6 +682,11 @@ viewer-no-branch = this row has no address to follow
 viewer-no-back = nothing to go back to
 
 # ------------------------------------------------- find files (SPEC 06 §1)
+folders-title = Find folder
+folders-reading = Reading the folders…
+folders-read = { $count } folders
+folders-capped = { $count } folders, as far as the limit
+folders-local-only = the folder list is of this machine; a server has its history and the hotlist
 find-title = Find file
 find-mask = File mask or masks
 find-size = Size (100M, 1M-1G, -4K)

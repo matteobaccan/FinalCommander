@@ -393,6 +393,23 @@ and opens its way down a level per read until the cursor is on the directory tha
 showing, so it comes up where the user already is. `*` opens everything under the cursor up to
 two thousand rows, so `*` at the root of a disk cannot hang the panel.
 
+**The tree's cache survives the session.** What each directory held is written into the state
+file (capped at twenty thousand directories) and read back at startup, so `Ctrl+T` opens
+filled rather than reading its way down again — and so the folder list below has something to
+show the first time it is opened. It is a cache and says so: a row that is out of date costs a
+re-read and nothing else.
+
+**`Alt+F10` is that cache as a list one types into.** Every folder known under this panel's
+root, narrowed by what is typed — the frame shows it, because three rows out of four thousand
+need a reason — with `Enter` to go there. Opening it also starts one bounded walk that fills
+the cache in behind the dialog, breadth first, so a walk stopped by its limit has read the
+directories near the top, which are the ones people look for; the list refreshes when it ends
+and says how many folders it found. A second `Alt+F10` does not start a second walk. The copy
+dialog's own `Alt+F10` opens the same list and puts the row chosen into the destination —
+FAR's *Tree* button, under another key because `F10` here is `OK`. A root that is not this
+machine is refused with its reason: a tree of a server is a listing per directory over the
+wire, and the folder history and the hotlist are what answer that question there.
+
 `Ctrl+L`'s divergence is settled with this: it is FAR's info panel, and our
 change-directory dialog moved to `Ctrl+Shift+L`, which it can afford now that `cd` works on
 the command line.

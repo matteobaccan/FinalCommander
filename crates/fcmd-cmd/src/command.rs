@@ -261,6 +261,8 @@ pub enum Command {
     /// A real terminal, with a shell in it (SPEC 06 §4).
     ToolTerminal,
     ToolFind,
+    /// `Alt+F10`: the folders the tree knows, as a list one types into (SPEC 02 §7).
+    ToolFindFolder,
     /// Replace across the selected files, with a dry run first.
     ToolReplace,
     ShellOutputShow,
@@ -531,6 +533,7 @@ impl Command {
             Command::ToolCalculator,
             Command::ToolTerminal,
             Command::ToolFind,
+            Command::ToolFindFolder,
             Command::ToolReplace,
             Command::ShellOutputShow,
             Command::NetSites,
@@ -775,6 +778,7 @@ impl Command {
             Command::ToolCalculator => "tool.calculator".into(),
             Command::ToolTerminal => "tool.terminal".into(),
             Command::ToolFind => "tool.find".into(),
+            Command::ToolFindFolder => "tool.find.folder".into(),
             Command::ToolReplace => "tool.replace".into(),
             Command::ShellOutputShow => "shell.output.show".into(),
             Command::NetSites => "net.sites".into(),
@@ -994,6 +998,7 @@ impl Command {
             ("net.tunnels", _) => Command::NetTunnels,
             ("tool.usermenu", _) => Command::ToolUserMenu,
             ("tool.find", _) => Command::ToolFind,
+            ("tool.find.folder", _) => Command::ToolFindFolder,
             ("tool.replace", _) => Command::ToolReplace,
             ("shell.output.show", _) => Command::ShellOutputShow,
             ("net.sites", _) => Command::NetSites,

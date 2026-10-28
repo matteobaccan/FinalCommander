@@ -674,6 +674,11 @@ viewer-no-branch = diese Zeile hat keine Adresse zum Folgen
 viewer-no-back = es gibt kein Zurück
 
 # ------------------------------------------------- Dateisuche (SPEC 06 §1)
+folders-title = Ordner finden
+folders-reading = Die Ordner werden gelesen…
+folders-read = { $count } Ordner
+folders-capped = { $count } Ordner, so weit das Limit reicht
+folders-local-only = die Ordnerliste ist die dieses Rechners; ein Server hat seinen Verlauf und die Favoriten
 find-title = Datei suchen
 find-mask = Dateimaske oder Masken
 find-size = Größe (100M, 1M-1G, -4K)

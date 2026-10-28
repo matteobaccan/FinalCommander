@@ -6,6 +6,17 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **`Alt+F10` finds a folder by name.** A list of every folder the tree knows under the
+  panel's root, narrowed by what you type — the frame shows the filter — with `Enter` to go
+  there. It opens on the tree's cache, which **now survives the session** (written into the
+  state file, capped at twenty thousand directories), and one bounded walk fills the rest in
+  behind the dialog, breadth first so that a walk stopped by its limit has read the
+  directories near the top. The copy dialog's own `Alt+F10` opens the same list and puts the
+  folder chosen into the destination — FAR's *Tree* button, under another key because `F10`
+  here is `OK`.
+
 ## [0.13.0] — 2026-10-28
 
 ### Added

@@ -1847,6 +1847,12 @@ pub struct Pick {
     pub cursor: usize,
     /// Which panel the choice applies to, for the panel-side lists.
     pub side: usize,
+    /// Every row there is, for a list one types into: `rows` is then what the filter leaves.
+    /// Empty for the lists nobody filters, which is all of them but the folders.
+    pub all: Vec<PickRow>,
+    /// What has been typed into a list that filters. The title shows it, so a reader can see
+    /// why a list has three rows in it.
+    pub filter: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1909,6 +1915,42 @@ impl Pick {
             rows,
             cursor,
             side,
+            all: Vec::new(),
+            filter: String::new(),
+        }
+    }
+
+    /// A list one types into: every row is kept, and what is typed decides which are shown.
+    pub fn filtered(kind: PickKind, title: String, rows: Vec<PickRow>, side: usize) -> Pick {
+        let mut pick = Pick::new(kind, title, rows, side);
+        pick.all = pick.rows.clone();
+        pick
+    }
+
+    /// Keep the rows that hold what has been typed, case-insensitively, and put the cursor on
+    /// the first of them. The rows nobody typed about come back the moment the filter does.
+    pub fn refilter(&mut self) {
+        let needle = self.filter.to_lowercase();
+        self.rows = self
+            .all
+            .iter()
+            .filter(|row| needle.is_empty() || row.label.to_lowercase().contains(&needle))
+            .cloned()
+            .collect();
+        self.cursor = self
+            .rows
+            .iter()
+            .position(|r| r.current)
+            .or_else(|| self.rows.iter().position(|r| !r.separator))
+            .unwrap_or(0);
+    }
+
+    /// What the frame says: the list's name, and what has been typed into it.
+    pub fn heading(&self) -> String {
+        if self.filter.is_empty() {
+            self.title.clone()
+        } else {
+            format!("{}: {}", self.title, self.filter)
         }
     }
 

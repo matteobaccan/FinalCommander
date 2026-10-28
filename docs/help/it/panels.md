@@ -99,6 +99,12 @@ grosso. La cifra prende poi il posto della parola `Cartella` nella colonna della
 riga dei totali in fondo la conta, e l'ordinamento per dimensione mette quella cartella dove le
 spetta. Rileggere la cartella se ne dimentica, perché la cifra riguardava la cartella com'era.
 
+`Alt+F10` trova una cartella per nome: un elenco di tutte le cartelle che questo programma
+conosce sotto la radice in cui sei, che si restringe mentre scrivi, e `Enter` ci va. Parte da
+quello che l'albero ha già letto — conservato fra una sessione e l'altra — e legge il resto
+dietro al dialogo mentre scrivi. Nel dialogo di copia lo stesso `Alt+F10` riempie la
+destinazione.
+
 `Ctrl+H` mostra i file nascosti. `Ctrl+P` nasconde il pannello in cui non sei, `Ctrl+F1` e
 `Ctrl+F2` nascondono quello di sinistra o di destra per dare all'altro tutto lo schermo, e
 `Ctrl+O` li toglie entrambi per mostrare quello che hanno stampato i comandi. Con i pannelli

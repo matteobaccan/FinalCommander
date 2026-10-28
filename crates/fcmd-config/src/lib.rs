@@ -1563,6 +1563,12 @@ mod tests {
                 name: "shared".into(),
                 digit: Some(3),
             }],
+            // The tree cache travels with the rest: a tree that opens filled is the whole
+            // point of writing it down.
+            tree: vec![TreeDir {
+                path: "/home".into(),
+                dirs: vec!["/home/mb".into()],
+            }],
         };
         state.save(&paths).unwrap();
         let (back, problem) = State::load(&paths);
@@ -1826,6 +1832,21 @@ pub struct State {
     /// it would be a bug, not a setting.
     #[serde(default)]
     pub bookmarks: Vec<Bookmark>,
+    /// What the tree has read: one row per directory, with the subdirectories it held
+    /// (SPEC 02 §7). It is a cache and nothing else — a row that is out of date costs a
+    /// re-read — so it is written last and read first, and a missing one is simply a tree
+    /// that opens empty and fills as it is walked.
+    #[serde(default)]
+    pub tree: Vec<TreeDir>,
+}
+
+/// One directory of the tree cache, as the state file holds it.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TreeDir {
+    pub path: String,
+    /// Its subdirectories, in the order the listing gave them.
+    #[serde(default)]
+    pub dirs: Vec<String>,
 }
 
 /// One folder kept to hand: where it is, what it is called, and the digit it answers to.

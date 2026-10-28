@@ -620,6 +620,9 @@ fn run(cli: Cli) -> Result<()> {
     app.cmd.load_history(state.command_history);
     app.file_history = state.file_history;
     app.bookmarks = state.bookmarks;
+    // The tree comes up with what the last session walked, so `Ctrl+T` and `Alt+F10` are
+    // useful before anything has been read again.
+    app.tree_cache = crate::tree::Cache::from_state(&state.tree);
     app.restore_tabs(0, &state.left_tabs, state.left_tab);
     app.restore_tabs(1, &state.right_tabs, state.right_tab);
     if !warnings.is_empty() {
@@ -1269,6 +1272,17 @@ fn interactive(mut app: App) -> Result<()> {
                         });
                     });
                 }
+                Request::TreeScan {
+                    root,
+                    limit,
+                    cancel,
+                } => {
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || {
+                        let (dirs, whole) = scan_tree(&root, limit, &cancel);
+                        let _ = tx.send(Event::TreeScanned { root, dirs, whole });
+                    });
+                }
                 Request::TreeRead { panel, path } => {
                     let tx = tx.clone();
                     let vfs = vfs.clone();
@@ -1440,6 +1454,9 @@ fn interactive(mut app: App) -> Result<()> {
         left_tab: app.tabs[0].current(),
         right_tab: app.tabs[1].current(),
         bookmarks: app.bookmarks.clone(),
+        // The tree's own cache, capped: a walk of a whole disk is worth keeping some of, and
+        // a state file nobody can open is worth keeping none of.
+        tree: app.tree_cache.to_state(crate::app::TREE_CACHE_KEPT),
     };
     if let Err(e) = state.save(&app.paths) {
         eprintln!("fcmd: cannot write {}: {e}", app.paths.state_file.display());
@@ -2933,6 +2950,54 @@ impl fcmd_arc::Fetch for BringHere {
     }
 }
 
+/// Walk the directories under `root`, breadth first, up to `limit` of them (SPEC 02 §7).
+///
+/// Breadth first on purpose: a walk that is stopped by its limit should have read the
+/// directories near the top, which are the ones a person is looking for, rather than one deep
+/// branch of a build tree. Files are never looked at — a tree holds directories — and a
+/// directory that cannot be read is skipped rather than reported: this fills a cache.
+///
+/// The second value says whether the whole tree was read: a list that is part of one says so
+/// rather than letting the reader think a folder is not there.
+fn scan_tree(root: &VPath, limit: usize, cancel: &CancelToken) -> (Vec<(VPath, Vec<VPath>)>, bool) {
+    let mut out: Vec<(VPath, Vec<VPath>)> = Vec::new();
+    let mut queue: std::collections::VecDeque<VPath> = std::collections::VecDeque::new();
+    queue.push_back(root.clone());
+    let mut seen = 0usize;
+    while let Some(dir) = queue.pop_front() {
+        if cancel.is_cancelled() {
+            return (out, false);
+        }
+        if seen >= limit {
+            return (out, false);
+        }
+        seen += 1;
+        let Ok(entries) = fcmd_vfs::local::list_blocking(&dir, cancel) else {
+            continue;
+        };
+        let mut kids: Vec<VPath> = Vec::new();
+        for entry in entries {
+            if entry.kind == fcmd_core::EntryKind::Parent {
+                continue;
+            }
+            let child = dir.join(&entry.name);
+            // A link that points at a directory is one, as it is in the tree panel; the
+            // walk remembers where it has been by path, so a loop ends a branch.
+            let is_dir = entry.kind == fcmd_core::EntryKind::Dir
+                || (entry.kind == fcmd_core::EntryKind::Symlink
+                    && std::fs::metadata(child.as_path()).is_ok_and(|m| m.is_dir()));
+            if is_dir {
+                kids.push(child);
+            }
+        }
+        for kid in &kids {
+            queue.push_back(kid.clone());
+        }
+        out.push((dir, kids));
+    }
+    (out, true)
+}
+
 /// What the file looks like on the server right now.
 async fn stamp_of(remote: &fcmd_net::Remote, path: &VPath) -> Option<RemoteStamp> {
     let wire = remote.wire(path).ok()?;
@@ -4216,6 +4281,16 @@ timeout = 10
                         purpose,
                         result,
                     });
+                }
+                Request::TreeScan {
+                    root,
+                    limit,
+                    cancel,
+                } => {
+                    // In the pump it runs where it stands: a test wants the answer, not a
+                    // thread.
+                    let (dirs, whole) = scan_tree(&root, limit, &cancel);
+                    app.handle_event(Event::TreeScanned { root, dirs, whole });
                 }
                 Request::TreeRead { panel, path } => {
                     let dirs = fcmd_vfs::local::list_blocking(&path, &CancelToken::new())

@@ -50,6 +50,58 @@ impl Cache {
     pub fn forget(&mut self, path: &VPath) {
         self.dirs.remove(path);
     }
+
+    /// Every directory the cache knows under `root`, itself included, sorted — what the
+    /// folder list is made of.
+    ///
+    /// A cache row holds a directory's children, so a directory that has been *named* by its
+    /// parent is known even where it has never been read: both halves go in, which is what
+    /// makes a list built from one walk useful before the walk has finished.
+    pub fn under(&self, root: &VPath) -> Vec<VPath> {
+        let mut out: Vec<VPath> = Vec::new();
+        for (dir, kids) in &self.dirs {
+            if dir.starts_with(root) {
+                out.push(dir.clone());
+            }
+            out.extend(kids.iter().filter(|k| k.starts_with(root)).cloned());
+        }
+        out.sort_by_key(|p| p.to_string());
+        out.dedup_by(|a, b| a.to_string() == b.to_string());
+        out
+    }
+
+    /// What survives the session (SPEC 02 §7), newest first is not a thing a map knows, so
+    /// the rows go out sorted and capped: a cache is worth keeping, and a cache of a whole
+    /// disk is worth keeping *some* of.
+    pub fn to_state(&self, cap: usize) -> Vec<fcmd_config::TreeDir> {
+        let mut rows: Vec<fcmd_config::TreeDir> = self
+            .dirs
+            .iter()
+            .map(|(dir, kids)| fcmd_config::TreeDir {
+                path: dir.to_string(),
+                dirs: kids.iter().map(|k| k.to_string()).collect(),
+            })
+            .collect();
+        rows.sort_by(|a, b| a.path.cmp(&b.path));
+        rows.truncate(cap);
+        rows
+    }
+
+    /// And what comes back from it. A row whose path no longer parses, or which names
+    /// nothing, is dropped rather than carried: this is a cache.
+    pub fn from_state(rows: &[fcmd_config::TreeDir]) -> Cache {
+        let mut cache = Cache::default();
+        for row in rows {
+            if row.path.is_empty() {
+                continue;
+            }
+            cache.insert(
+                VPath::parse(&row.path),
+                row.dirs.iter().map(|d| VPath::parse(d)).collect(),
+            );
+        }
+        cache
+    }
 }
 
 /// How many rows one `*` may add, so expanding everything under `/` cannot hang the panel.

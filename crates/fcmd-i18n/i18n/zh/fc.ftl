@@ -662,6 +662,11 @@ viewer-no-branch = 这一行没有可跳转的地址
 viewer-no-back = 没有可返回的位置
 
 # ------------------------------------------------- 查找文件（SPEC 06 §1）
+folders-title = 查找文件夹
+folders-reading = 正在读取文件夹…
+folders-read = { $count } 个文件夹
+folders-capped = { $count } 个文件夹，到达上限为止
+folders-local-only = 文件夹列表来自本机；服务器有它自己的历史和收藏
 find-title = 查找文件
 find-mask = 文件掩码
 find-size = 大小 (100M、1M-1G、-4K)

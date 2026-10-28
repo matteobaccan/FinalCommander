@@ -93,6 +93,11 @@ place of the word `Folder` in the size column, the totals bar at the bottom coun
 sorting by size puts that folder where it belongs. Re-reading the directory forgets it, since
 the figure was about the directory as it was.
 
+`Alt+F10` finds a folder by name: a list of every folder this program knows under the root you
+are on, which narrows as you type, and `Enter` goes there. It starts from what the tree has
+read — kept between sessions — and reads the rest behind the dialog while you type. In the
+copy dialog the same `Alt+F10` fills the destination in.
+
 `Ctrl+H` shows the hidden files. `Ctrl+P` hides the panel you are not in, `Ctrl+F1` and
 `Ctrl+F2` hide the left or the right one to give the other the whole screen, and `Ctrl+O`
 takes both off to show what the commands have printed. With the panels off everything else

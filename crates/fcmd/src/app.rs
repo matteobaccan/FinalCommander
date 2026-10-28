@@ -166,6 +166,14 @@ pub enum Request {
         panel: usize,
         path: VPath,
     },
+    /// Walk everything under `root`, directories only, up to a limit — what fills the tree
+    /// cache for the folder list (`Alt+F10`). One request, one walk, one answer: a request
+    /// per directory would be thousands of them.
+    TreeScan {
+        root: VPath,
+        limit: usize,
+        cancel: CancelToken,
+    },
     /// Build an archive. A job as far as the user is concerned — the same progress box, the
     /// same counters — but the writing is one pass through `fcmd-arc` rather than a plan of
     /// file copies, because a central directory or a compressed stream is not a sequence of
@@ -287,6 +295,11 @@ pub enum ArcRetry {
     /// Fetch this entry again, for the viewer or the editor.
     Entry(VPath, Fetched),
 }
+
+/// How many directories of the tree cache survive the session (SPEC 02 §7). Enough for a
+/// source tree or a home directory, small enough that the state file stays a file one can
+/// open in an editor.
+pub const TREE_CACHE_KEPT: usize = 20_000;
 
 /// Why a remote file is being fetched.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -536,6 +549,13 @@ pub enum Event {
         panel: usize,
         path: VPath,
         dirs: Vec<VPath>,
+    },
+    /// A walk for the folder list finished — or stopped at its limit, which the flag says.
+    /// The rows are every directory it read, with what each one held.
+    TreeScanned {
+        root: VPath,
+        dirs: Vec<(VPath, Vec<VPath>)>,
+        whole: bool,
     },
     /// The engine needs an answer before it can continue; it is blocked on `reply`.
     JobQuestion {
@@ -1557,6 +1577,12 @@ pub struct App {
     pub highlight_at: Option<usize>,
     /// The band the sort-group dialog is editing, or where a new one goes.
     pub sort_group_at: Option<usize>,
+    /// The walk filling the folder list, so a second `Alt+F10` does not start another and
+    /// `Esc` can stop the one that runs.
+    pub folder_scan: Option<CancelToken>,
+    /// The copy dialog the folder list was opened from, to come back to with the answer in
+    /// its destination row (`F10` in the dialog).
+    pub folder_for: Option<Box<Form>>,
     /// The files that have been read or edited, oldest last — FAR's `Alt+F11`.
     ///
     /// Newest first in the list because that is the order somebody reaching back wants, and
@@ -1860,6 +1886,8 @@ impl App {
             file_history: Vec::new(),
             highlight_at: None,
             sort_group_at: None,
+            folder_scan: None,
+            folder_for: None,
             active: 0,
             mode: Mode::Normal,
             status: String::new(),
@@ -2647,6 +2675,33 @@ impl App {
                         self.run_menu_next();
                     }
                 }
+            }
+            Event::TreeScanned { root, dirs, whole } => {
+                let found = dirs.len();
+                for (dir, kids) in dirs {
+                    self.tree_cache.insert(dir, kids);
+                }
+                self.folder_scan = None;
+                // The list is open while the walk runs, so it is filled in behind the
+                // dialog: what was typed into it stays typed.
+                if let Mode::Pick(pick) = &mut self.mode {
+                    if pick.kind == PickKind::Folders {
+                        let rows = self.folder_rows(&root);
+                        let Mode::Pick(pick) = &mut self.mode else {
+                            return;
+                        };
+                        pick.all = rows;
+                        pick.refilter();
+                    }
+                }
+                let msg = if whole {
+                    self.i18n
+                        .t_args("folders-read", &[("count", (found as i64).into())])
+                } else {
+                    self.i18n
+                        .t_args("folders-capped", &[("count", (found as i64).into())])
+                };
+                self.set_status(msg);
             }
             Event::TreeListed { panel, path, dirs } => {
                 self.tree_cache.insert(path.clone(), dirs);
@@ -6930,6 +6985,7 @@ impl App {
             Command::OptInterface => self.open_form(FormKind::Interface),
             Command::OptHighlight => self.open_pick(PickKind::Highlight, self.active),
             Command::OptSortGroups => self.open_pick(PickKind::SortGroups, self.active),
+            Command::ToolFindFolder => self.open_folder_list(None),
             Command::OptConfirmations => self.open_form(FormKind::Confirmations),
             Command::OptEditor => self.open_form(FormKind::EditorSettings),
             Command::OptViewer => self.open_form(FormKind::ViewerSettings),
@@ -10504,6 +10560,15 @@ impl App {
                 self.restore_viewer();
                 self.restore_editor();
             }
+            // FAR's copy dialog has a *Tree* button for the destination; here it is the same
+            // folder list the panel's `Alt+F10` opens, and the row chosen lands in the row
+            // that was asking. `F10` cannot be it: in this program `F10` is `OK`.
+            KeyCode::F(10) if key.mods.contains(Mods::ALT) && form.kind == FormKind::Copy => {
+                let Mode::Form(form) = std::mem::replace(&mut self.mode, Mode::Normal) else {
+                    return;
+                };
+                self.open_folder_list(Some(form));
+            }
             KeyCode::Up => {
                 if form.button.is_some() {
                     form.button = None;
@@ -12100,6 +12165,17 @@ impl App {
                     .collect();
                 Pick::new(kind, self.plain("menu-highlighting"), rows, side)
             }
+            PickKind::Folders => {
+                // Built where it is opened, because it needs a root and a walk: this arm
+                // exists so every kind has one, and it answers with what the cache holds.
+                let root = self.panels[side].cwd.root();
+                Pick::filtered(
+                    kind,
+                    self.plain("folders-title"),
+                    self.folder_rows(&root),
+                    side,
+                )
+            }
             PickKind::SortGroups => {
                 let rows: Vec<PickRow> = self
                     .cfg
@@ -12278,6 +12354,16 @@ impl App {
                 let at = pick.cursor;
                 self.open_highlight_form(None);
                 self.highlight_at = Some(at);
+            }
+            // A list one types into: the letters are the filter rather than hotkeys, and
+            // `Backspace` takes one back. `Esc` closes it, and stops the walk behind it.
+            KeyCode::Char(c) if kind == PickKind::Folders && !key.mods.contains(Mods::CTRL) => {
+                pick.filter.push(c);
+                pick.refilter();
+            }
+            KeyCode::Backspace if kind == PickKind::Folders => {
+                pick.filter.pop();
+                pick.refilter();
             }
             KeyCode::F(4) if kind == PickKind::SortGroups => {
                 let at = pick.cursor;
@@ -12578,6 +12664,20 @@ impl App {
             PickKind::SortGroups => {
                 let at = row.value.parse::<usize>().unwrap_or(0);
                 self.open_sort_group_form(Some(at));
+            }
+            PickKind::Folders => {
+                let chosen = VPath::parse(&row.value);
+                // Opened from the copy dialog, the answer goes into the destination row and
+                // the dialog comes back with it; opened from the panel, the panel goes there.
+                if let Some(mut form) = self.folder_for.take() {
+                    form.set_text("copy.target", chosen.to_string());
+                    self.mode = Mode::Form(form);
+                    return;
+                }
+                let side = pick.side;
+                if self.panel_go(side, chosen, true) {
+                    self.read_panel(side);
+                }
             }
             PickKind::SortModes => {
                 let key = match row.value.as_str() {
@@ -14886,6 +14986,68 @@ impl App {
         let group = index.and_then(|i| self.cfg.highlight.get(i)).cloned();
         self.highlight_at = index;
         self.mode = Mode::Form(Box::new(Form::highlight(group.as_ref(), &self.i18n)));
+    }
+
+    /// Every folder the tree knows under `root`, as rows of the list: the path, shortened to
+    /// what is under the root, because a list of forty identical prefixes says nothing.
+    fn folder_rows(&self, root: &VPath) -> Vec<PickRow> {
+        let here = self.panels[self.active].cwd.to_string();
+        let root_text = root.to_string();
+        self.tree_cache
+            .under(root)
+            .into_iter()
+            .map(|path| {
+                let full = path.to_string();
+                let shown = full
+                    .strip_prefix(&root_text)
+                    .map(|rest| {
+                        if rest.is_empty() {
+                            root_text.clone()
+                        } else {
+                            rest.trim_start_matches(['/', '\\']).to_string()
+                        }
+                    })
+                    .unwrap_or_else(|| full.clone());
+                PickRow::plain(shown, full.clone(), full == here)
+            })
+            .collect()
+    }
+
+    /// `Alt+F10`: the folders under this panel's root, as a list one types into.
+    ///
+    /// It opens on what the tree already knows — the cache outlives the session (SPEC 02 §7),
+    /// so the list is useful at once — and a walk fills in the rest behind it, bounded so
+    /// that `Alt+F10` on `/` is a dialog and not a disk scan without end.
+    fn open_folder_list(&mut self, from_copy: Option<Box<Form>>) {
+        let side = self.active;
+        let root = self.panels[side].cwd.root();
+        if !root.is_local() {
+            // A tree of a server would be a listing per directory over the wire; the folder
+            // history and the hotlist are what answer this question there.
+            let m = self.i18n.t("folders-local-only");
+            self.set_error(m);
+            return;
+        }
+        self.folder_for = from_copy;
+        let rows = self.folder_rows(&root);
+        let mut pick = Pick::filtered(PickKind::Folders, self.plain("folders-title"), rows, side);
+        // The cursor opens on the directory one is in, which is the row most answers are
+        // one keystroke away from.
+        if let Some(at) = pick.rows.iter().position(|r| r.current) {
+            pick.cursor = at;
+        }
+        self.mode = Mode::Pick(Box::new(pick));
+        if self.folder_scan.is_none() {
+            let cancel = CancelToken::new();
+            self.folder_scan = Some(cancel.clone());
+            self.requests.push(Request::TreeScan {
+                root,
+                limit: TREE_CACHE_KEPT,
+                cancel,
+            });
+            let m = self.i18n.t("folders-reading");
+            self.set_status(m);
+        }
     }
 
     /// The dialog for one band: `F4` on a row, or `Ins` for a new one.
@@ -22582,6 +22744,117 @@ abcdefghij
         press(&mut app, "Del");
         assert_eq!(app.cfg.highlight.len(), 1);
         assert_eq!(app.cfg.highlight[0].name, "logs");
+    }
+
+    /// `Alt+F10` is the folders the tree knows, as a list one types into: what was typed
+    /// narrows it, `Enter` goes there (SPEC 02 §7).
+    #[test]
+    fn alt_f10_finds_a_folder_by_name() {
+        let mut app = app();
+        let root = app.panels[0].cwd.root();
+        // What a walk would have left behind, and what the last session would have written.
+        app.tree_cache.insert(
+            root.clone(),
+            vec![root.join("usr"), root.join("home"), root.join("srv")],
+        );
+        app.tree_cache
+            .insert(root.join("usr"), vec![root.join("usr").join("share")]);
+
+        app.run(Command::ToolFindFolder);
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(pick.kind, crate::menu::PickKind::Folders);
+        assert!(pick.rows.len() >= 4, "{:?}", pick.rows);
+        // The walk is asked for once, and only once while it runs.
+        assert!(app
+            .take_requests()
+            .iter()
+            .any(|r| matches!(r, Request::TreeScan { .. })));
+
+        // Typing narrows the list rather than jumping about in it.
+        press(&mut app, "s");
+        press(&mut app, "h");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert!(
+            pick.rows.iter().all(|r| r.label.contains("sh")),
+            "{:?}",
+            pick.rows.iter().map(|r| &r.label).collect::<Vec<_>>()
+        );
+        assert!(pick.heading().contains("sh"), "{}", pick.heading());
+        // And `Backspace` gives the rows back.
+        press(&mut app, "Backspace");
+        press(&mut app, "Backspace");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert!(pick.rows.len() >= 4);
+
+        // `Enter` on a row takes the panel there.
+        let wanted = root.join("home");
+        let at = pick
+            .rows
+            .iter()
+            .position(|r| r.value == wanted.to_string())
+            .expect("the row is in the list");
+        let Mode::Pick(pick) = &mut app.mode else {
+            panic!()
+        };
+        pick.cursor = at;
+        press(&mut app, "Enter");
+        assert_eq!(app.panels[0].cwd, wanted);
+    }
+
+    /// The copy dialog's own chooser: `Alt+F10` opens the same list, and what is chosen lands
+    /// in the destination row with the dialog still open.
+    #[test]
+    fn the_copy_dialog_takes_its_destination_from_the_folder_list() {
+        let mut app = app();
+        let root = app.panels[0].cwd.root();
+        app.tree_cache
+            .insert(root.clone(), vec![root.join("srv"), root.join("usr")]);
+        press(&mut app, "Down"); // a row to copy, or the dialog has nothing to open about
+        press(&mut app, "F5");
+        let Mode::Form(form) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(form.kind, crate::menu::FormKind::Copy);
+
+        press(&mut app, "Alt+F10");
+        let Mode::Pick(pick) = &mut app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        let wanted = root.join("srv");
+        pick.cursor = pick
+            .rows
+            .iter()
+            .position(|r| r.value == wanted.to_string())
+            .expect("the row is in the list");
+        press(&mut app, "Enter");
+        let Mode::Form(form) = &app.mode else {
+            panic!("the dialog comes back: {:?}", app.mode)
+        };
+        assert_eq!(form.text_value("copy.target"), wanted.to_string());
+    }
+
+    /// The cache is written down and read back, so a tree opens filled after a restart.
+    #[test]
+    fn the_tree_cache_survives_the_session() {
+        let mut cache = crate::tree::Cache::default();
+        let root = VPath::local("/srv");
+        cache.insert(root.clone(), vec![root.join("www"), root.join("logs")]);
+        let rows = cache.to_state(TREE_CACHE_KEPT);
+        assert_eq!(rows.len(), 1);
+        let back = crate::tree::Cache::from_state(&rows);
+        assert_eq!(back.get(&root).map(|k| k.len()), Some(2));
+        // And what the list is built from holds the directories a walk only named.
+        let under = back.under(&root);
+        assert!(
+            under.iter().any(|p| p.display_name() == "logs"),
+            "{under:?}"
+        );
     }
 
     /// The sort bands are edited where they are read, like the colour groups: a list, a

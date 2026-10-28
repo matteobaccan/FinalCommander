@@ -82,6 +82,9 @@ pub enum PickKind {
     Highlight,
     /// The `[[sort_group]]` bands, in the order they cut the listing (SPEC 02 §4).
     SortGroups,
+    /// Every folder the tree knows under this panel's root: `Alt+F10`, and the destination
+    /// chooser of the copy dialog (SPEC 02 §7).
+    Folders,
     /// The sort order for this panel.
     SortModes,
     /// What to do with the block of bytes that is marked (SPEC 05 §2.6).

@@ -674,6 +674,11 @@ viewer-no-branch = questa riga non ha un indirizzo da seguire
 viewer-no-back = non c'è niente a cui tornare
 
 # ------------------------------------------------- ricerca file (SPEC 06 §1)
+folders-title = Trova cartella
+folders-reading = Sto leggendo le cartelle…
+folders-read = { $count } cartelle
+folders-capped = { $count } cartelle, fin dove arriva il limite
+folders-local-only = l'elenco delle cartelle è di questa macchina; un server ha la sua cronologia e i preferiti
 find-title = Cerca file
 find-mask = Maschera o maschere
 find-size = Dimensione (100M, 1M-1G, -4K)

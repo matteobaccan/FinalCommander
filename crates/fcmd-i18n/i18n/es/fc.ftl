@@ -674,6 +674,11 @@ viewer-no-branch = esta fila no tiene una dirección que seguir
 viewer-no-back = no hay nada a lo que volver
 
 # ------------------------------------------------- buscar archivos (SPEC 06 §1)
+folders-title = Buscar carpeta
+folders-reading = Leyendo las carpetas…
+folders-read = { $count } carpetas
+folders-capped = { $count } carpetas, hasta donde llega el límite
+folders-local-only = la lista de carpetas es la de esta máquina; un servidor tiene su historial y los favoritos
 find-title = Buscar archivo
 find-mask = Máscara o máscaras
 find-size = Tamaño (100M, 1M-1G, -4K)

@@ -981,7 +981,9 @@ fn draw_pick(
         &app.theme,
         screen,
         over,
-        &pick.title,
+        // A list one types into says what has been typed: three rows out of four thousand
+        // need a reason on the frame.
+        &pick.heading(),
         &shown,
         Some(&hint),
     );
