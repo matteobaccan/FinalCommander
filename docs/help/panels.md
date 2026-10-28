@@ -53,6 +53,19 @@ it finishes. `Ctrl+O` gives the screen back early and the command carries on beh
 *Options → Interface → Show a command's output while it runs* turns the whole habit off, and
 the output still fills the screen as it is printed, for whenever you press `Ctrl+O`.
 
+# What a file is
+
+A directory can keep a line about each of its files, in a plain file called `descript.ion`
+beside them — FAR's habit, and 4DOS's before that. `Ctrl+Z` writes one: the dialog opens on
+what the directory already says about the file under the cursor, and an empty answer takes the
+line away. `Ctrl+6` shows the names with their descriptions, `Ctrl+7` adds the size and the
+time, the information panel (`Ctrl+L`) spells out the one under the cursor, and the panel's
+own status line shows it beside the size and the date.
+
+The file travels with the directory, which is the point of it: a folder copied to a memory
+stick takes its descriptions along, as long as whatever copied it knew to carry the file.
+*Options → Panel settings* turns the whole habit off for somebody who keeps no descriptions.
+
 `Ctrl+R` re-reads. `Ctrl+L` turns the other panel into an information panel — what the device
 holds and what is left on it, how big its clusters are and what they cost this directory, how
 much memory the machine has, and the row under the cursor — `Ctrl+Q` into a

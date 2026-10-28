@@ -108,6 +108,9 @@ pub struct Panel {
     /// on Windows a call into the security API, so a worker fills it in when the mode is
     /// chosen and the read that follows it clears it again (SPEC 02 §3).
     pub owners: std::collections::HashMap<String, (String, String)>,
+    /// What this directory's own `descript.ion` says about its files (SPEC 02 §9), read by a
+    /// worker while a view that shows it is on screen. Empty everywhere else.
+    pub descriptions: fcmd_core::descriptions::Descriptions,
 }
 
 impl Panel {
@@ -121,6 +124,7 @@ impl Panel {
             selection: Selection::default(),
             sort,
             groups: Arc::new(SortGroups::default()),
+            descriptions: Default::default(),
             view,
             show_hidden,
             filter: None,

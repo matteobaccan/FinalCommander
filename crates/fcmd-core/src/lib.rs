@@ -6,6 +6,7 @@
 pub mod calc;
 pub mod cancel;
 pub mod compare;
+pub mod descriptions;
 pub mod device;
 pub mod entry;
 pub mod error;

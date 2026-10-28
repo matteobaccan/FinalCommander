@@ -16,6 +16,10 @@ pub enum ViewMode {
     Wide,
     /// Name, size, time, attributes.
     Detail,
+    /// Name and description, from the directory's own `descript.ion` (SPEC 02 §9).
+    Descriptions,
+    /// Name, size, write time and description: FAR's long descriptions.
+    LongDescriptions,
     /// Name, owner, group, size. The owner is not part of a listing — it costs a lookup per
     /// file, and on Windows a call into the security API — so it is fetched only while this
     /// mode is the one on screen (SPEC 02 §3).
@@ -24,12 +28,14 @@ pub enum ViewMode {
 
 impl ViewMode {
     /// Every mode, in the order the keys are in.
-    pub const ALL: [ViewMode; 6] = [
+    pub const ALL: [ViewMode; 8] = [
         ViewMode::Brief,
         ViewMode::Medium,
         ViewMode::Full,
         ViewMode::Wide,
         ViewMode::Detail,
+        ViewMode::Descriptions,
+        ViewMode::LongDescriptions,
         ViewMode::Owners,
     ];
 
@@ -40,6 +46,8 @@ impl ViewMode {
             ViewMode::Full => "full",
             ViewMode::Wide => "wide",
             ViewMode::Detail => "detail",
+            ViewMode::Descriptions => "descriptions",
+            ViewMode::LongDescriptions => "long-descriptions",
             ViewMode::Owners => "owners",
         }
     }
@@ -51,6 +59,10 @@ impl ViewMode {
             "full" => Some(ViewMode::Full),
             "wide" => Some(ViewMode::Wide),
             "detail" | "detailed" => Some(ViewMode::Detail),
+            "descriptions" | "descr" => Some(ViewMode::Descriptions),
+            "long-descriptions" | "long_descriptions" | "longdescr" => {
+                Some(ViewMode::LongDescriptions)
+            }
             "owners" | "owner" => Some(ViewMode::Owners),
             _ => None,
         }
@@ -62,13 +74,26 @@ impl ViewMode {
         match self {
             ViewMode::Brief => 3,
             ViewMode::Medium | ViewMode::Wide => 2,
-            ViewMode::Full | ViewMode::Detail | ViewMode::Owners => 1,
+            ViewMode::Full
+            | ViewMode::Detail
+            | ViewMode::Owners
+            | ViewMode::Descriptions
+            | ViewMode::LongDescriptions => 1,
         }
     }
 
     /// Does a row show the size beside the name?
     pub fn shows_size(self) -> bool {
-        !matches!(self, ViewMode::Brief | ViewMode::Medium)
+        !matches!(
+            self,
+            ViewMode::Brief | ViewMode::Medium | ViewMode::Descriptions
+        )
+    }
+
+    /// Does this view show what the directory's `descript.ion` says about a row? The file is
+    /// read only while a view that shows it is on screen, as the owners are.
+    pub fn shows_description(self) -> bool {
+        matches!(self, ViewMode::Descriptions | ViewMode::LongDescriptions)
     }
 }
 
@@ -83,7 +108,7 @@ mod tests {
         }
         // The spelling FAR's own dialog uses, and one that is not a mode at all.
         assert_eq!(ViewMode::parse("Detailed"), Some(ViewMode::Detail));
-        assert_eq!(ViewMode::parse("descriptions"), None);
+        assert_eq!(ViewMode::parse("links"), None);
     }
 
     #[test]
@@ -93,6 +118,13 @@ mod tests {
         assert_eq!(ViewMode::Wide.columns(), 2);
         assert_eq!(ViewMode::Full.columns(), 1);
         assert_eq!(ViewMode::Owners.columns(), 1);
+        assert_eq!(ViewMode::Descriptions.columns(), 1);
+        // The two that read the directory's own `descript.ion`, and nothing else does.
+        assert!(
+            ViewMode::Descriptions.shows_description()
+                && ViewMode::LongDescriptions.shows_description()
+        );
+        assert!(!ViewMode::Full.shows_description());
         assert!(ViewMode::Wide.shows_size() && !ViewMode::Brief.shows_size());
     }
 }

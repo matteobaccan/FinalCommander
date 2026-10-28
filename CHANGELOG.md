@@ -4,6 +4,29 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
+## [0.7.3] — 2026-10-28
+
+### Added
+
+- **File descriptions** (`descript.ion`), the one FAR habit this program had none of. A
+  directory can keep a line about each of its files in a plain file beside them, one name and
+  the rest of the line, a name with a space in it quoted — 4DOS's format, which FAR kept and
+  which travels with the directory rather than living in a database somewhere.
+
+  `Ctrl+Z` writes one: the dialog opens on what the directory already says about the file
+  under the cursor, so changing a description is a key and a few characters rather than
+  retyping it, and an empty answer takes the line away. `Ctrl+6` shows names with their
+  descriptions and `Ctrl+7` adds the size and the time — FAR's own numbers, which were empty
+  here until now. The information panel (`Ctrl+L`) spells out the description of the row under
+  the cursor, and the panel's status line shows it beside the size and the date.
+
+  The file is read in whatever code page it is in — one written under DOS is in a DOS code
+  page — and written back in UTF-8; both of FAR's names are looked for, `descript.ion` first
+  and then `files.bbs`. It is read only while something on screen shows a description, because
+  a side file nobody is looking at is a round trip per directory on a network share;
+  `panel.descriptions = false` turns the habit off altogether. Still owed, and a backlog line:
+  the job engine carrying a description through a copy, a move, a rename and a delete.
+
 ## [0.7.2] — 2026-10-28
 
 ### Added

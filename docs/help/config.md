@@ -85,6 +85,14 @@ takes, and a condition that does not parse comes back with the problem named rat
 kept. A change is in force on the panels at once; `Options → Save setup` is what writes it to
 the file.
 
+# What a file is
+
+`panel.descriptions` decides whether the directory's own `descript.ion` is read at all. On by
+default: `Ctrl+Z` writes a line about a file, `Ctrl+6` and `Ctrl+7` show them, and the
+information panel spells one out. Off, and the file is never opened — which is what somebody
+who keeps no descriptions wants on a network share, where a side file per directory is a round
+trip per directory.
+
 # Breaking a tie
 
 `panel.sort_chain` says what settles two rows the sort key leaves equal:

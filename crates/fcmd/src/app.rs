@@ -88,6 +88,18 @@ pub enum Request {
         dir: VPath,
         names: Vec<String>,
     },
+    /// Read a directory's `descript.ion` (SPEC 02 §9), for the views that show it.
+    Descriptions {
+        panel: usize,
+        generation: u64,
+        dir: VPath,
+    },
+    /// Write one back. The whole file at once: it is a line per described file, and a
+    /// directory with a thousand of those has a file of a few kilobytes.
+    WriteDescriptions {
+        dir: VPath,
+        descriptions: fcmd_core::descriptions::Descriptions,
+    },
     /// Decide about every pair in two trees. Nothing is written: the answer is a table.
     SyncPlan {
         id: u64,
@@ -270,6 +282,13 @@ pub enum Event {
         panel: usize,
         generation: u64,
         owners: std::collections::HashMap<String, (String, String)>,
+    },
+    /// What a directory's own `descript.ion` says about its files (SPEC 02 §9). Late, as the
+    /// owners are: the listing is on screen before the file has been read.
+    Descriptions {
+        panel: usize,
+        generation: u64,
+        descriptions: fcmd_core::descriptions::Descriptions,
     },
     /// What a provider said about the listing it just gave: it stopped before the end, and
     /// why. Sent after `Listed` and only when there is something to say, the way `FreeSpace`
@@ -483,6 +502,11 @@ pub enum ConnectOutcome {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PromptKind {
+    /// What the directory's `descript.ion` should say about a file (FAR's `Ctrl+Z`). The
+    /// name is carried along because the cursor may have moved by the time it is answered.
+    Describe {
+        name: String,
+    },
     Goto,
     SelectMask,
     DeselectMask,
@@ -1870,11 +1894,38 @@ impl App {
                         // screen, and otherwise left empty, which costs nothing.
                         self.panels[panel].owners.clear();
                         self.ask_for_owners(panel);
+                        self.panels[panel].descriptions = Default::default();
+                        self.ask_for_descriptions(panel);
                     }
                     Err(e) => {
                         self.panels[panel].loading = false;
                         self.panels[panel].error = Some(e.clone());
                         self.set_error(e);
+                    }
+                }
+            }
+            Event::Descriptions {
+                panel,
+                generation,
+                descriptions,
+            } => {
+                if panel >= self.panels.len() || self.panels[panel].generation != generation {
+                    return;
+                }
+                self.panels[panel].descriptions = descriptions;
+                // A `Ctrl+Z` dialog that opened before the file had been read: what it was
+                // asking about is known now, and an empty box is the one thing that may be
+                // filled in without taking away something the user has typed.
+                if let Mode::Prompt(prompt) = &self.mode {
+                    if let PromptKind::Describe { name } = &prompt.kind {
+                        if prompt.text.is_empty() && panel == self.active {
+                            if let Some(text) = self.panels[panel].descriptions.get(name) {
+                                let text = fcmd_core::descriptions::one_line(text);
+                                if let Mode::Prompt(prompt) = &mut self.mode {
+                                    prompt.text = text;
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -3364,6 +3415,35 @@ impl App {
 
     fn prompt_accept(&mut self, prompt: Prompt) {
         match prompt.kind {
+            // `Ctrl+Z`: what the directory says about this file. An empty answer takes the
+            // line away, which is how a description is removed — there is no other key for
+            // it and `Ctrl+Z` on a described file showing the description is the dialog.
+            PromptKind::Describe { ref name } => {
+                let name = name.clone();
+                let text = prompt.text.trim().to_string();
+                let panel = self.active;
+                let dir = self.panels[panel].cwd.clone();
+                if !dir.is_local() || dir.in_container() {
+                    let m = self.i18n.t("descr-not-here");
+                    self.set_error(m);
+                    return;
+                }
+                let mut descriptions = self.panels[panel].descriptions.clone();
+                descriptions.set(&name, &text);
+                // On screen at once, written behind: the panel shows what was typed without
+                // waiting for a disk, and the file follows.
+                self.panels[panel].descriptions = descriptions.clone();
+                self.requests
+                    .push(Request::WriteDescriptions { dir, descriptions });
+                let msg = if text.is_empty() {
+                    self.i18n
+                        .t_args("descr-cleared", &[("name", name.clone().into())])
+                } else {
+                    self.i18n
+                        .t_args("descr-set", &[("name", name.clone().into())])
+                };
+                self.set_status(msg);
+            }
             PromptKind::Tunnel => {
                 let text = prompt.text.trim().to_string();
                 if text.is_empty() {
@@ -3864,6 +3944,80 @@ impl App {
     /// Nothing happens for any other view, for a panel that is a list rather than a
     /// directory, or for one on anything but a local filesystem: a remote provider has no
     /// owner to give, and a file inside an archive belongs to whoever wrote the archive.
+    /// `Ctrl+Z`: the line the directory keeps about the file under the cursor, to be edited.
+    ///
+    /// The dialog opens on what is there, so changing a description is one key and a few
+    /// characters rather than retyping it, and an empty answer takes the line away.
+    fn open_describe(&mut self) {
+        let panel = self.active;
+        let p = &self.panels[panel];
+        if !p.cwd.is_local() || p.cwd.in_container() || p.temp.is_some() {
+            let m = self.i18n.t("descr-not-here");
+            self.set_error(m);
+            return;
+        }
+        let Some(entry) = p
+            .current()
+            .filter(|e| e.kind != fcmd_core::EntryKind::Parent)
+        else {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        };
+        let name = entry.name_str().into_owned();
+        // The file may not have been read yet: this view does not show descriptions, or the
+        // worker has not answered. Read it here, where there is one directory to read and a
+        // user waiting for a dialog rather than a panel waiting to be drawn.
+        let text = self.panels[panel]
+            .descriptions
+            .get(&name)
+            .map(fcmd_core::descriptions::one_line)
+            .unwrap_or_default();
+        // The file may not have been read: this view shows no descriptions, so nothing has
+        // asked for it. Ask now — the dialog opens on what we have and fills in when the
+        // answer arrives, which for a local file is before a hand reaches the keyboard.
+        if text.is_empty() && self.cfg.panel.descriptions {
+            let dir = self.panels[panel].cwd.clone();
+            let generation = self.panels[panel].generation;
+            self.requests.push(Request::Descriptions {
+                panel,
+                generation,
+                dir,
+            });
+        }
+        let title = self
+            .i18n
+            .t_args("descr-title", &[("name", name.clone().into())]);
+        self.mode = Mode::Prompt(Prompt::new(PromptKind::Describe { name }, title, text));
+    }
+
+    /// Ask for a directory's `descript.ion`, when something on screen shows one.
+    ///
+    /// Like the owners, and for the same reason: a panel should not open a side file for a
+    /// column nobody is looking at — on a network share that is a round trip per directory
+    /// one walks through. What shows one is either of the two description views, or an
+    /// information panel beside this one, which spells out the row under the cursor. `Ctrl+Z`
+    /// asks for itself (see [`Self::open_describe`]).
+    ///
+    /// Local directories only for now: a description inside an archive or on a server is a
+    /// read through a provider, and a backlog line.
+    fn ask_for_descriptions(&mut self, panel: usize) {
+        if panel >= self.panels.len() || !self.cfg.panel.descriptions {
+            return;
+        }
+        let shown = self.panels[panel].view.shows_description()
+            || self.panels[1 - panel].content == crate::panel::Content::Info;
+        let p = &self.panels[panel];
+        if !shown || p.temp.is_some() || !p.cwd.is_local() || p.cwd.in_container() {
+            return;
+        }
+        self.requests.push(Request::Descriptions {
+            panel,
+            generation: p.generation,
+            dir: p.cwd.clone(),
+        });
+    }
+
     fn ask_for_owners(&mut self, panel: usize) {
         if panel >= self.panels.len() {
             return;
@@ -5449,6 +5603,7 @@ impl App {
                 // are not looking at.
                 let active = self.active;
                 self.ask_for_owners(active);
+                self.ask_for_descriptions(active);
                 let msg = self
                     .i18n
                     .t_args("msg-view", &[("mode", view.as_str().into())]);
@@ -6195,6 +6350,7 @@ impl App {
             Command::FileAssoc => self.open_with_list(),
             Command::ToolUserMenu => self.open_user_menu(),
             Command::ToolSyncDirs => self.open_sync_form(),
+            Command::FileDescribe => self.open_describe(),
             Command::FileChecksum => self.open_checksum_form(),
             Command::FileChecksumVerify => self.start_verify(),
             Command::FileDelete | Command::FileDeleteCurrent | Command::FileDeleteForce => {
@@ -11446,6 +11602,12 @@ impl App {
         if next == Content::QuickView {
             // Opened now rather than on the next frame, so the panel is never blank once.
             self.quick_view_for(self.active);
+        }
+        if next == Content::Info {
+            // The information panel spells out the row under the cursor, description and
+            // all, so the file that holds them is worth reading now (SPEC 02 §9).
+            let described = 1 - index;
+            self.ask_for_descriptions(described);
         }
     }
 

@@ -1087,6 +1087,26 @@ fn interactive(mut app: App) -> Result<()> {
                         });
                     });
                 }
+                Request::Descriptions {
+                    panel,
+                    generation,
+                    dir,
+                } => {
+                    // One small file, off the UI thread because it is still a read from a
+                    // disk that may be a network share pretending to be one.
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || {
+                        let descriptions = read_descriptions(&dir);
+                        let _ = tx.send(Event::Descriptions {
+                            panel,
+                            generation,
+                            descriptions,
+                        });
+                    });
+                }
+                Request::WriteDescriptions { dir, descriptions } => {
+                    runtime.spawn_blocking(move || write_descriptions(&dir, &descriptions));
+                }
                 Request::Mouse { on } => {
                     // A terminal that was never asked to report the mouse is not asked to
                     // stop, and one that is already reporting is not asked twice: `set_mouse`
@@ -1534,6 +1554,60 @@ fn run_shell(
         String::new()
     };
     (note, status)
+}
+
+/// A directory's `descript.ion`, or whatever it is called here.
+///
+/// The names are tried in order and the first file that is there is the one that counts; a
+/// directory with neither has no descriptions, which is not an error and not worth a message.
+/// The text is decoded the way the viewer decodes a text file — a `descript.ion` written under
+/// DOS is in a DOS code page, and one written today is UTF-8.
+fn read_descriptions(dir: &VPath) -> fcmd_core::descriptions::Descriptions {
+    use fcmd_core::descriptions::{Descriptions, DEFAULT_NAMES};
+    const LIMIT: u64 = 4 * 1024 * 1024;
+
+    if !dir.is_local() || dir.in_container() {
+        return Descriptions::default();
+    }
+    let here = dir.os();
+    for name in DEFAULT_NAMES {
+        // The name is matched as the filesystem matches it: `DESCRIPT.ION` is the same file
+        // on Windows and a different one on Linux, which is the filesystem's business.
+        let path = here.join(name);
+        let Ok(meta) = std::fs::metadata(&path) else {
+            continue;
+        };
+        if !meta.is_file() || meta.len() > LIMIT {
+            continue;
+        }
+        let Ok(bytes) = std::fs::read(&path) else {
+            continue;
+        };
+        let codepage = fcmd_view::decode::detect(&bytes);
+        return Descriptions::parse(&codepage.decode(&bytes));
+    }
+    Descriptions::default()
+}
+
+/// Write one back, in UTF-8, or take the file away when there is nothing left to say.
+///
+/// The file is written beside the directory it describes, which is the whole point of the
+/// format; a directory nobody may write to keeps the descriptions it had, and the message
+/// the caller sees is the one the filesystem gave.
+fn write_descriptions(
+    dir: &VPath,
+    descriptions: &fcmd_core::descriptions::Descriptions,
+) -> Result<(), String> {
+    let path = dir.os().join(fcmd_core::descriptions::DEFAULT_NAMES[0]);
+    if descriptions.is_empty() {
+        // An empty file is a file that says nothing and still has to be carried around.
+        return match std::fs::remove_file(&path) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(format!("{}: {e}", path.display())),
+        };
+    }
+    std::fs::write(&path, descriptions.to_text()).map_err(|e| format!("{}: {e}", path.display()))
 }
 
 fn run_decompiler(rule: &fcmd_config::DecompileRule, path: &VPath) -> Result<String, String> {
@@ -2475,6 +2549,81 @@ mod tests {
         assert!(printed.ends_with('\n'), "{printed:?}");
     }
 
+    /// A directory's descriptions, end to end: the file on disk is read when a view that
+    /// shows it is chosen, `Ctrl+Z` edits one, and the file comes back with it.
+    #[test]
+    fn descriptions_are_read_from_the_directory_shown_and_written_back_by_ctrl_z() {
+        let root = tempfile::tempdir().unwrap();
+        let left = root.path().join("left");
+        let right = root.path().join("right");
+        std::fs::create_dir_all(&left).unwrap();
+        std::fs::create_dir_all(&right).unwrap();
+        std::fs::write(left.join("readme.md"), b"# readme\n").unwrap();
+        std::fs::write(left.join("build.sh"), b"make\n").unwrap();
+        std::fs::write(
+            left.join("descript.ion"),
+            "readme.md what to read first\nbuild.sh runs the build\n",
+        )
+        .unwrap();
+
+        let mut app = app_on(&left, &right);
+        serve(&mut app);
+        // Nothing has asked yet: the full view shows no description, and a side file nobody
+        // is looking at is a file nobody should open.
+        assert!(app.panels[0].descriptions.is_empty());
+
+        // `Ctrl+6` is the view that shows them, and choosing it is what asks.
+        key(&mut app, "Ctrl+6");
+        serve(&mut app);
+        assert_eq!(app.panels[0].view, fcmd_core::ViewMode::Descriptions);
+        assert_eq!(
+            app.panels[0].descriptions.get("readme.md"),
+            Some("what to read first")
+        );
+
+        // `Ctrl+Z` opens on what the file says about the row under the cursor.
+        let row = (0..app.panels[0].listing.len())
+            .find(|i| {
+                app.panels[0]
+                    .listing
+                    .row(*i)
+                    .map(|e| e.name_str() == "build.sh")
+                    .unwrap_or(false)
+            })
+            .expect("build.sh is listed");
+        app.panels[0].cursor = row;
+        key(&mut app, "Ctrl+Z");
+        match &app.mode {
+            crate::app::Mode::Prompt(p) => assert_eq!(p.text, "runs the build"),
+            other => panic!("{other:?}"),
+        }
+        // Typed over and accepted: the panel says so at once and the file follows.
+        for c in ["Space", "t", "w", "i", "c", "e"] {
+            key(&mut app, c);
+        }
+        key(&mut app, "Enter");
+        assert_eq!(
+            app.panels[0].descriptions.get("build.sh"),
+            Some("runs the build twice")
+        );
+        serve(&mut app);
+        let written = std::fs::read_to_string(left.join("descript.ion")).unwrap();
+        assert_eq!(
+            written,
+            "readme.md what to read first\nbuild.sh runs the build twice\n"
+        );
+
+        // And an empty answer takes the line away, which is how a description is removed.
+        key(&mut app, "Ctrl+Z");
+        for _ in 0.."runs the build twice".len() {
+            key(&mut app, "Backspace");
+        }
+        key(&mut app, "Enter");
+        serve(&mut app);
+        let written = std::fs::read_to_string(left.join("descript.ion")).unwrap();
+        assert_eq!(written, "readme.md what to read first\n");
+    }
+
     /// A plugin on disk, a command it provides, and the whole conversation: the manifest is
     /// loaded the way the binary loads one, the program is a real script, and what it asks for
     /// is carried out. This is the half of the plugin host API that no unit test reaches.
@@ -3123,6 +3272,23 @@ timeout = 10
                         generation,
                         result: result.map_err(|e| e.to_string()),
                     });
+                }
+                // The side file, read and written for real, so a test drives the same two
+                // functions the binary does.
+                Request::Descriptions {
+                    panel,
+                    generation,
+                    dir,
+                } => {
+                    let descriptions = read_descriptions(&dir);
+                    app.handle_event(Event::Descriptions {
+                        panel,
+                        generation,
+                        descriptions,
+                    });
+                }
+                Request::WriteDescriptions { dir, descriptions } => {
+                    let _ = write_descriptions(&dir, &descriptions);
                 }
                 Request::Job { id, spec, cancel } => {
                     let (tx, rx) = mpsc::channel();

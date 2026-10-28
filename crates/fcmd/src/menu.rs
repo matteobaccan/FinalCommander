@@ -185,6 +185,18 @@ fn panel_menu(title: &'static str, side: usize) -> Menu {
                 Mark::View(ViewMode::Detail),
             ),
             marked(
+                "menu-descriptions",
+                "Ctrl+6",
+                Action::Run(Command::PanelViewSet(ViewMode::Descriptions)),
+                Mark::View(ViewMode::Descriptions),
+            ),
+            marked(
+                "menu-long-descriptions",
+                "Ctrl+7",
+                Action::Run(Command::PanelViewSet(ViewMode::LongDescriptions)),
+                Mark::View(ViewMode::LongDescriptions),
+            ),
+            marked(
                 "menu-owners",
                 "Ctrl+8",
                 Action::Run(Command::PanelViewSet(ViewMode::Owners)),

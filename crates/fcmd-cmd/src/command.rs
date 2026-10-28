@@ -187,6 +187,9 @@ pub enum Command {
     /// Write it with what a block names, or with `$VISUAL` / `$EDITOR`.
     FileEditAlt,
     /// Write a list of digests for what is selected (SPEC 03 §9).
+    /// Describe the file under the cursor: the line the directory's `descript.ion` keeps
+    /// about it (FAR's `Ctrl+Z`).
+    FileDescribe,
     FileChecksum,
     /// Check the files beside a list of digests against it.
     FileChecksumVerify,
@@ -455,6 +458,7 @@ impl Command {
             Command::FileAssoc,
             Command::FileViewAlt,
             Command::FileEditAlt,
+            Command::FileDescribe,
             Command::FileChecksum,
             Command::FileChecksumVerify,
             Command::FileApply,
@@ -695,6 +699,7 @@ impl Command {
             Command::FileAssoc => "file.assoc".into(),
             Command::FileViewAlt => "file.view.external".into(),
             Command::FileEditAlt => "file.edit.external".into(),
+            Command::FileDescribe => "file.describe".into(),
             Command::FileChecksum => "file.checksum.create".into(),
             Command::FileChecksumVerify => "file.checksum.verify".into(),
             Command::FileApply => "file.apply".into(),
@@ -912,6 +917,7 @@ impl Command {
             ("file.assoc", _) => Command::FileAssoc,
             ("file.view.external", _) => Command::FileViewAlt,
             ("file.edit.external", _) => Command::FileEditAlt,
+            ("file.describe", _) => Command::FileDescribe,
             ("file.checksum.create", _) => Command::FileChecksum,
             ("file.checksum.verify", _) => Command::FileChecksumVerify,
             ("file.apply", _) => Command::FileApply,

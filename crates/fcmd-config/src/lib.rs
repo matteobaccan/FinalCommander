@@ -287,6 +287,10 @@ pub struct PanelCfg {
     /// without leaving the panels.
     pub height_cut: u16,
     pub quick_search: QuickSearch,
+    /// Read the directory's own `descript.ion` and show what it says (SPEC 02 §9). One small
+    /// file per directory read, which is what FAR does; off for somebody who keeps no
+    /// descriptions and would rather the file were never opened.
+    pub descriptions: bool,
 }
 
 impl Default for PanelCfg {
@@ -309,6 +313,7 @@ impl Default for PanelCfg {
             split: 50,
             height_cut: 0,
             quick_search: QuickSearch::Alt,
+            descriptions: true,
         }
     }
 }
@@ -1108,6 +1113,7 @@ impl Config {
                     .map_err(|_| format!("net.fetch_limit_mb: `{value}` is not a number"))?
             }
             "panel.allow_reverse_sort" => self.panel.allow_reverse_sort = parse_bool(value)?,
+            "panel.descriptions" => self.panel.descriptions = parse_bool(value)?,
             "panel.column_titles" => self.panel.column_titles = parse_bool(value)?,
             "panel.status_line" => self.panel.status_line = parse_bool(value)?,
             "panel.scrollbar" => self.panel.scrollbar = parse_bool(value)?,

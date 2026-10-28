@@ -61,6 +61,8 @@ impl Command {
                 ViewMode::Full => "name, size, date and time",
                 ViewMode::Wide => "name and size, two columns",
                 ViewMode::Detail => "name, size, time and attributes",
+                ViewMode::Descriptions => "name and description, from the directory's descript.ion",
+                ViewMode::LongDescriptions => "name, size, time and description",
                 ViewMode::Owners => "name, owner, group and size",
             },
             Command::PanelQuickView(_) => "turn the other panel into a preview of the file",
@@ -75,6 +77,7 @@ impl Command {
                 SortKey::ATime => "sort by when it was last read",
                 SortKey::Unsorted => "leave the order as the filesystem gives it",
             },
+            Command::FileDescribe => "write what this file is, in the directory's descript.ion",
             Command::PanelSortReverse => "turn the order round",
             Command::PanelSortGroups => "use the sort groups, which put some kinds of file first",
             Command::PanelSplit(by) => {

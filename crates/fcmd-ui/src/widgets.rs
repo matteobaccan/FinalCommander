@@ -24,6 +24,7 @@ pub struct ColumnTitles<'a> {
     pub attr: &'a str,
     pub owner: &'a str,
     pub group: &'a str,
+    pub descr: &'a str,
 }
 
 /// Everything the panel widget needs to know. The panel owns no state of its own.
@@ -71,6 +72,9 @@ pub struct PanelRender<'a> {
     /// into the security API, so a worker fills this in only while that view is the one on
     /// screen. A row that is not in it yet draws blank rather than waiting for it.
     pub owners: &'a std::collections::HashMap<String, (String, String)>,
+    /// What the directory's own `descript.ion` says about its files, read by a worker while
+    /// a view that shows it is on screen (SPEC 02 §9). Empty everywhere else.
+    pub descriptions: &'a fcmd_core::descriptions::Descriptions,
 }
 
 /// Rows that fit in a panel of this height. The titles row and the panel's own status line
@@ -379,6 +383,7 @@ fn draw_column_titles(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inne
                     Col::Created => p.titles.created,
                     Col::Accessed => p.titles.accessed,
                     Col::Attr => p.titles.attr,
+                    Col::Descr => p.titles.descr,
                 };
                 centre(buf, x, y, w, title, style);
                 x += w + 1;
@@ -539,6 +544,9 @@ struct Cols {
     /// Who the file belongs to: the owners view, and nothing else, has these.
     owner: u16,
     group: u16,
+    /// What the directory's `descript.ion` says about the file. It takes whatever is left
+    /// after the name, because a description is prose and there is no width that is right.
+    descr: u16,
 }
 
 const SIZE_W: u16 = 9;
@@ -561,12 +569,13 @@ enum Col {
     Created,
     Accessed,
     Attr,
+    Descr,
 }
 
 impl Cols {
     /// The columns after the name, left to right, with the width of each. A width of zero is
     /// a column this view or this panel has no room for, and is skipped everywhere.
-    fn after_name(&self) -> [(Col, u16); 8] {
+    fn after_name(&self) -> [(Col, u16); 9] {
         [
             (Col::Size, self.size),
             (Col::Allocated, self.allocated),
@@ -576,6 +585,7 @@ impl Cols {
             (Col::Created, self.created),
             (Col::Accessed, self.accessed),
             (Col::Attr, self.attr),
+            (Col::Descr, self.descr),
         ]
     }
 
@@ -592,18 +602,30 @@ impl Cols {
 fn columns_of(inner_w: u16, view: ViewMode, cluster: u64) -> Cols {
     let detail = view == ViewMode::Detail;
     let owners = view == ViewMode::Owners;
+    let descr = view.shows_description();
     let mut c = Cols {
         name: 0,
-        size: SIZE_W,
+        // The short description view is name and description and nothing else: that is the
+        // point of having two of them, one for a glance and one with the figures.
+        size: if view == ViewMode::Descriptions {
+            0
+        } else {
+            SIZE_W
+        },
         allocated: 0,
         // The owners view puts the two names where the date is: a row has only so much room,
         // and somebody asking who a file belongs to is not asking when it was written.
-        write: if owners { 0 } else { TIME_W },
+        write: if owners || view == ViewMode::Descriptions {
+            0
+        } else {
+            TIME_W
+        },
         created: 0,
         accessed: 0,
         attr: if detail { ATTR_W } else { 0 },
         owner: if owners { OWNER_W } else { 0 },
         group: 0,
+        descr: 0,
     };
     // The group only if the name stays readable with it: on a narrow panel the owner is the
     // one that was asked for and the group is the extra.
@@ -641,6 +663,15 @@ fn columns_of(inner_w: u16, view: ViewMode, cluster: u64) -> Cols {
         }
     }
     c.name = inner_w.saturating_sub(c.tail()).max(4);
+    // The description takes what the name does not need. Two fifths to the name, because a
+    // description that has to be read is no use in eight columns, and a name that cannot be
+    // read is no use at all — so the name keeps a floor and the description gets the rest.
+    if descr && c.name > NAME_MIN {
+        let room = c.name;
+        let keep = (room * 2 / 5).max(NAME_MIN);
+        c.name = keep;
+        c.descr = room.saturating_sub(keep + 1);
+    }
     c
 }
 
@@ -745,6 +776,16 @@ fn draw_full(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect, 
                 }
                 Col::Attr => {
                     buf.put_str(x, y, &attrs(e), style, w);
+                }
+                Col::Descr => {
+                    // `..` is the directory one came from, not a file of this one: whatever
+                    // the description file says about a name, it does not say it about that.
+                    let text = (e.kind != EntryKind::Parent)
+                        .then(|| p.descriptions.get(e.name_str().as_ref()))
+                        .flatten()
+                        .map(fcmd_core::descriptions::one_line)
+                        .unwrap_or_default();
+                    buf.put_str(x, y, &truncate_cols(&text, w as usize), style, w);
                 }
             }
             x += w + 1;
@@ -1367,6 +1408,7 @@ mod tests {
             attr: "Attr",
             owner: "Owner",
             group: "Group",
+            descr: "Description",
         }
     }
 
@@ -1432,6 +1474,7 @@ mod tests {
             cluster,
             titles: english_titles(),
             owners: &std::collections::HashMap::new(),
+            descriptions: &Default::default(),
             up_label: "Up",
             folder_label: "Folder",
         };
@@ -1507,11 +1550,76 @@ mod tests {
             cluster: 4096,
             titles: english_titles(),
             owners,
+            descriptions: &Default::default(),
             up_label: "Up",
             folder_label: "Folder",
         };
         draw_panel(&mut buf, &theme, &p);
         buf.to_text()
+    }
+
+    #[test]
+    fn the_description_views_put_the_description_where_the_room_is() {
+        use fcmd_core::descriptions::Descriptions;
+
+        let listing = Listing::new(
+            vec![
+                Entry::parent_entry(),
+                entry("readme.md", EntryKind::File, 120),
+                entry("build.sh", EntryKind::File, 40),
+            ],
+            1,
+        );
+        let descriptions = Descriptions::parse(
+            "readme.md what to read first\nbuild.sh runs the build\n..  not this one\n",
+        );
+        let theme = Theme::default_theme();
+        let selection = Selection::default();
+        let render = |view: ViewMode| {
+            let mut buf = Buffer::new(64, 8);
+            let p = PanelRender {
+                area: Rect::new(0, 0, 64, 7),
+                path: "/home/mb/project",
+                listing: &listing,
+                selection: &selection,
+                cursor: 0,
+                top: 0,
+                focused: true,
+                view,
+                sort_label: "name",
+                sort_reverse: false,
+                column_titles: true,
+                filter: None,
+                message: None,
+                status: None,
+                free: None,
+                scrollbar: false,
+                name_scroll: 0,
+                highlight: &crate::Highlight::far_default(),
+                cluster: 4096,
+                titles: english_titles(),
+                owners: &std::collections::HashMap::new(),
+                descriptions: &descriptions,
+                up_label: "Up",
+                folder_label: "Folder",
+            };
+            draw_panel(&mut buf, &theme, &p);
+            buf.to_text()
+        };
+
+        // The short view is the name and the description and nothing in between.
+        let short = render(ViewMode::Descriptions);
+        assert!(short.contains("Description"), "{short}");
+        assert!(short.contains("what to read first"), "{short}");
+        assert!(short.contains("runs the build"), "{short}");
+        assert!(!short.contains("120"), "no size column here:\n{short}");
+        // `..` is the directory one came from, not a file of this one.
+        assert!(!short.contains("not this one"), "{short}");
+
+        // The long one keeps the figures and puts the description after them.
+        let long = render(ViewMode::LongDescriptions);
+        assert!(long.contains("what to read first"), "{long}");
+        assert!(long.contains("120"), "the size is still there:\n{long}");
     }
 
     #[test]
@@ -1594,6 +1702,7 @@ mod tests {
             cluster: 4096,
             titles: english_titles(),
             owners: &std::collections::HashMap::new(),
+            descriptions: &Default::default(),
             up_label: "Up",
             folder_label: "Folder",
         };
@@ -1752,6 +1861,7 @@ mod tests {
             cluster: 4096,
             titles: english_titles(),
             owners: &std::collections::HashMap::new(),
+            descriptions: &Default::default(),
             up_label: "Up",
             folder_label: "Folder",
         };
@@ -1790,6 +1900,7 @@ mod tests {
                 cluster: 4096,
                 titles: english_titles(),
                 owners: &std::collections::HashMap::new(),
+                descriptions: &Default::default(),
                 up_label: "Up",
                 folder_label: "Folder",
             };
@@ -1835,6 +1946,7 @@ mod tests {
             cluster: 4096,
             titles: english_titles(),
             owners: &std::collections::HashMap::new(),
+            descriptions: &Default::default(),
             up_label: "Up",
             folder_label: "Folder",
         };
@@ -1971,6 +2083,7 @@ mod tests {
             cluster: 4096,
             titles: english_titles(),
             owners: &std::collections::HashMap::new(),
+            descriptions: &Default::default(),
             up_label: "Up",
             folder_label: "Folder",
         };
@@ -2162,6 +2275,7 @@ mod tests {
             cluster: 4096,
             titles: english_titles(),
             owners: &std::collections::HashMap::new(),
+            descriptions: &Default::default(),
             up_label: "Up",
             folder_label: "Folder",
         };

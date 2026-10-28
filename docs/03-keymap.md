@@ -103,7 +103,7 @@ Column `FC` = FinalCommander default (profile `far`, our baseline).
 | short/long names | Ctrl+N | Alt+T (cycle formats) | Alt+Shift+B/D | Ctrl+N |
 | key bar on/off | Ctrl+B | — | — | Ctrl+B |
 | font larger / smaller / as it was | — | — | — | **Ctrl++ / Ctrl+− / Ctrl+0**, as every graphical program does it; §9 says what a terminal program can actually do about its font |
-| view modes 1..0 | LeftCtrl+1..0 | Alt+T cycles | Alt+Shift+B/D | **Ctrl+1..5** in FAR's own order: brief, medium, full, wide, detailed, and **Ctrl+8** for the file owners — name, size, owner, group (SPEC 02 §3). The three FAR has in between — descriptions, long descriptions, file links — and its alternative full view want data we do not collect yet; `docs/BACKLOG.md` says so |
+| view modes 1..0 | LeftCtrl+1..0 | Alt+T cycles | Alt+Shift+B/D | **Ctrl+1..8** in FAR's own order: brief, medium, full, wide, detailed, descriptions, long descriptions, file owners (SPEC 02 §3, §13). `Ctrl+9` and `Ctrl+0` — FAR's file links and alternative full view — want data we do not collect yet; `docs/BACKLOG.md` says so |
 | parent directory | Ctrl+PgUp | Ctrl+PgUp | Ctrl+PgUp | Ctrl+PgUp, Backspace |
 | enter dir / archive | Ctrl+PgDn | Ctrl+PgDn | Enter | Ctrl+PgDn |
 | root directory | Ctrl+\ | — | Ctrl+Backspace | Ctrl+\ |
@@ -134,7 +134,7 @@ Column `FC` = FinalCommander default (profile `far`, our baseline).
 | copy names to clipboard | Ctrl+Ins / Ctrl+Shift+Ins names, Alt+Shift+Ins full names, Ctrl+Alt+Ins real/UNC names, Ctrl+Shift+C / Ctrl+Shift+X copy/cut the files themselves | — | — | **`Ctrl+Ins` names, `Alt+Shift+Ins` full paths**, through the terminal with `OSC 52` (SPEC 06 §11) — so it also works over `ssh`. `Ctrl+Ins` copies the command line instead while there is something on it. Copying the files themselves to a clipboard another program can paste from is not a thing a terminal can be asked to do: that stays a backlog line |
 | attributes / permissions | Ctrl+A | Ctrl+x c (chmod), Ctrl+x o (chown) | Alt+Enter | Ctrl+A |
 | apply command to selection | Ctrl+G | — | — | Ctrl+G |
-| describe files | Ctrl+Z | — | — | Ctrl+Shift+D |
+| describe files | Ctrl+Z | — | — | **Ctrl+Z**, as FAR: the dialog opens on what the directory already says, and an empty answer takes the line away (SPEC 02 §13) |
 | toggle terminal pane | — | Ctrl+O | Ctrl+Alt+E / Ctrl+Shift+↑ | Ctrl+Alt+E |
 | command palette | — | — | — | **Ctrl+Shift+P** (new) |
 

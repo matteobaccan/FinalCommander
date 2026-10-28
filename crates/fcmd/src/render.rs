@@ -234,6 +234,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         "col-attr",
         "col-owner",
         "col-group",
+        "col-descr",
     ]
     .map(|id| app.i18n.t(id));
     let titles = widgets::ColumnTitles {
@@ -247,6 +248,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         attr: &titles[7],
         owner: &titles[8],
         group: &titles[9],
+        descr: &titles[10],
     };
     for (i, area) in areas.iter().enumerate() {
         // The special kinds have no rows, so they draw themselves inside the same frame and
@@ -304,6 +306,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             name_scroll: panel.name_scroll,
             highlight: &app.highlight,
             owners: &panel.owners,
+            descriptions: &panel.descriptions,
             up_label: &up_label,
             folder_label: &folder_label,
         };
@@ -1589,6 +1592,15 @@ fn draw_info(app: &mut App, index: usize, area: Rect, buf: &mut Buffer) {
         if let Some(mtime) = entry.mtime {
             lines.push((t("info-modified"), widgets::format_mtime(mtime)));
         }
+        // What the directory says about it, if it says anything (SPEC 02 §9). The
+        // information panel is where FAR shows a description in full, and it is the one
+        // place with room for one.
+        if let Some(descr) = other.descriptions.get(entry.name_str().as_ref()) {
+            lines.push((
+                t("info-description"),
+                fcmd_core::descriptions::one_line(descr),
+            ));
+        }
     }
 
     draw_pairs(app, buf, inner, &lines);
@@ -1845,7 +1857,16 @@ fn cursor_line(app: &App, panel: &crate::panel::Panel) -> String {
                 .mtime
                 .map(|t| format!("  {}", widgets::format_mtime(t)))
                 .unwrap_or_default();
-            format!("{}{size}{time}", e.name_str())
+            // And what the directory says about it, when the directory says anything: the
+            // status line is where a description is read while the view is not one that
+            // shows it (SPEC 02 §9).
+            let name = e.name_str();
+            let descr = panel
+                .descriptions
+                .get(name.as_ref())
+                .map(|d| format!("  {}", fcmd_core::descriptions::one_line(d)))
+                .unwrap_or_default();
+            format!("{name}{size}{time}{descr}")
         }
         None if panel.loading => app.i18n.t("panel-loading"),
         None => app.i18n.t("panel-empty"),

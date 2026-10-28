@@ -492,3 +492,45 @@ does rather than having powers of its own.
 Still to come: dragging to extend a selection, dragging a column rule to resize it, dragging
 between the panels, and the sideways wheel. Each wants state the click handling does not keep
 yet, and none of them is the difference between having a mouse and not.
+
+## 13. Descriptions (`descript.ion`, shipped in 0.7.3)
+
+A 4DOS habit that FAR kept and nothing else has: a plain file in the directory, one line per
+name, holding what a file *is* where the name has no room to say it.
+
+```text
+readme.md          what to read first
+"two words.txt"    a name with a space in it is quoted
+```
+
+The whole format is a name and the rest of the line. A name with a space is quoted; a line with
+nothing after the name describes nothing and is dropped, because an empty description and no
+description are the same thing. A description with more than one line in it is held on one line
+with FAR's own two-byte break (`04 C2`), and a panel shows it on the single line a row has. The
+file is read in the code page it is in — one written under DOS is in a DOS code page, one
+written today is UTF-8 — and written back in UTF-8. Both of FAR's names are read, `descript.ion`
+first and then `files.bbs`; the first is what is written.
+
+**Where it shows.** Two view modes, on FAR's own numbers: `Ctrl+6` is name and description,
+`Ctrl+7` is name, size, time and description. The name keeps two fifths of the row and the
+description takes the rest, with a floor under the name — a description in eight columns is no
+use, and a name that cannot be read is no use at all. The information panel (`Ctrl+L`) spells
+out the description of the row under the cursor, and the panel's own status line shows it
+beside the size and the time wherever the panel has read the file.
+
+**When it is read.** Only when something on screen shows one: either description view, or an
+information panel beside the panel. A side file nobody is looking at is one round trip per
+directory on a network share, and the two columns are not worth that to somebody who keeps no
+descriptions. `panel.descriptions = false` turns the whole habit off. Local directories only
+for now; a description inside an archive or on a server is a read through a provider and a
+backlog line.
+
+**Writing one.** `Ctrl+Z` opens the dialog on what the directory already says about the file
+under the cursor, so changing a description is a key and a few characters rather than retyping
+it. An empty answer takes the line away — there is no second key for removing one. The panel
+shows the new text at once and the file is written behind it; a directory left with nothing to
+say loses the file rather than keeping an empty one.
+
+**What is still owed**: the job engine carrying a description through a copy, a move, a rename
+and a delete (SPEC 03 §7), sorting by description (`Ctrl+F11`), and the settings FAR has for
+which names to look for and whether to write UTF-8.

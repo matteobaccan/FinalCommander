@@ -153,9 +153,9 @@ cmd = "panel.other.sync"
 keys = ["Ctrl+Shift+I"]
 cmd = "panel.filter.quick"
 
-# FAR's own numbering: brief, medium, full, wide, detailed — and `Ctrl+8` for the owners,
-# which is the number FAR gives that mode too. The three numbers in between are its
-# descriptions and its links, which are backlog lines rather than modes that show nothing.
+# FAR's own numbering: brief, medium, full, wide, detailed, descriptions, long descriptions,
+# owners. `Ctrl+9` and `Ctrl+0` are FAR's links and alternative full, which need data we do
+# not read yet and are backlog lines rather than modes that would show nothing.
 [[bind]]
 keys = ["Ctrl+1"]
 cmd = "panel.view.set(brief)"
@@ -175,6 +175,14 @@ cmd = "panel.view.set(wide)"
 [[bind]]
 keys = ["Ctrl+5"]
 cmd = "panel.view.set(detail)"
+
+[[bind]]
+keys = ["Ctrl+6"]
+cmd = "panel.view.set(descriptions)"
+
+[[bind]]
+keys = ["Ctrl+7"]
+cmd = "panel.view.set(long-descriptions)"
 
 [[bind]]
 keys = ["Ctrl+8"]
@@ -694,6 +702,11 @@ cmd = "viewer.goto"
 keys = ["Shift+F"]
 scope = "viewer"
 cmd = "viewer.follow"
+
+# FAR's `Ctrl+Z`: the line the directory's own `descript.ion` keeps about this file.
+[[bind]]
+keys = ["Ctrl+Z"]
+cmd = "file.describe"
 
 [[bind]]
 keys = ["Ctrl+Z"]
