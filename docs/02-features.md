@@ -18,7 +18,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 1.1 | Two equal panels, active/passive, `Tab` to switch | NC | M1 |
 | 1.2 | Panel layouts: side-by-side and stacked (horizontal split) | KRU | M2 |
 | 1.3 | Resizable split, saved per session; restore defaults | FAR | M2 |
-| 1.4 | ~~View modes: brief (multi-column names), medium, full (size/date), wide, detailed~~, owners, links, custom columns | FAR | **shipped**: the five FAR has on `Ctrl+1..5`, with the extension in its own column in `full` and FAR's dates and allocated size in `detailed`. Owners, links and custom column sets want data we do not collect yet — `docs/BACKLOG.md` |
+| 1.4 | ~~View modes: brief (multi-column names), medium, full (size/date), wide, detailed, owners~~, links, custom columns | FAR | **shipped**: the five FAR has on `Ctrl+1..5`, with the extension in its own column in `full` and FAR's dates and allocated size in `detailed`, plus **the owners view on `Ctrl+8`** (0.6.0) — name, size, owner, group, fetched in a worker only while that view is on screen. Links and custom column sets want data we do not collect yet — `docs/BACKLOG.md` |
 | 1.5 | User-definable column sets (which fields, widths, alignment, formats) | FAR/TC | M3 |
 | 1.6 | ~~Tabs per panel, named, persisted, lockable, duplicate/move-to-other-side~~ | TC/MTN2 | **shipped** (reordering within the row still owed) |
 | 1.7 | ~~Quick view panel (preview of the file under the cursor in the other panel)~~ | FAR/MC | **shipped** (`Ctrl+Q`), and on a folder it shows what the device under it has to say, as FAR does |

@@ -69,3 +69,43 @@ pub fn memory() -> Option<Memory> {
 pub fn memory() -> Option<Memory> {
     None
 }
+
+/// The names of a file's owner and group.
+///
+/// The numbers come from the `lstat` the standard library already makes — the link's own
+/// owner, not the owner of what it points at, because the row on the screen is the link.
+/// Turning a number into a name goes through NSS, which may mean a file, a directory server
+/// or nothing at all, so a number with no name behind it is shown as the number: an NFS mount
+/// with no matching accounts is a normal thing to be looking at, and `4294967294` is a more
+/// useful answer than a blank.
+pub fn owner(path: &Path, cache: &mut super::OwnerCache) -> Option<super::Owner> {
+    use std::os::unix::fs::MetadataExt;
+
+    let meta = std::fs::symlink_metadata(path).ok()?;
+    let (uid, gid) = (meta.uid(), meta.gid());
+    let user = match cache.users.get(&uid) {
+        Some(name) => name.clone(),
+        None => {
+            let name = nix::unistd::User::from_uid(nix::unistd::Uid::from_raw(uid))
+                .ok()
+                .flatten()
+                .map(|u| u.name)
+                .unwrap_or_else(|| uid.to_string());
+            cache.users.insert(uid, name.clone());
+            name
+        }
+    };
+    let group = match cache.groups.get(&gid) {
+        Some(name) => name.clone(),
+        None => {
+            let name = nix::unistd::Group::from_gid(nix::unistd::Gid::from_raw(gid))
+                .ok()
+                .flatten()
+                .map(|g| g.name)
+                .unwrap_or_else(|| gid.to_string());
+            cache.groups.insert(gid, name.clone());
+            name
+        }
+    };
+    Some(super::Owner { user, group })
+}

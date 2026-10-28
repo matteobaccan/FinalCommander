@@ -251,6 +251,27 @@ fn device(path: &fcmd_core::VPath) -> Option<fcmd_platform::Disk> {
     fcmd_platform::disk(&path.os())
 }
 
+/// Who the named files of one directory belong to: the user and the group, by name.
+///
+/// One cache for the whole directory, which is the point of doing it per directory rather
+/// than per file: a listing is nearly always one or two accounts repeated, and turning an id
+/// or a SID into a name can mean a directory server on the other side of a network. A file
+/// that has gone away between the listing and this is left out rather than guessed at.
+fn owners_of(
+    dir: &fcmd_core::VPath,
+    names: &[String],
+) -> std::collections::HashMap<String, (String, String)> {
+    let mut cache = fcmd_platform::OwnerCache::default();
+    let mut out = std::collections::HashMap::with_capacity(names.len());
+    let base = dir.os();
+    for name in names {
+        if let Some(found) = fcmd_platform::owner(&base.join(name), &mut cache) {
+            out.insert(name.clone(), (found.user, found.group));
+        }
+    }
+    out
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match run(cli) {
@@ -1049,6 +1070,25 @@ fn interactive(mut app: App) -> Result<()> {
                     // Nothing to report: the terminal does not answer, and a terminal that
                     // does not understand the request ignores it.
                     let _ = term.set_clipboard(&text);
+                }
+                Request::Owners {
+                    panel,
+                    generation,
+                    dir,
+                    names,
+                } => {
+                    // A thread of its own: a lookup per file, and on Windows one that can
+                    // cross a network to a domain controller. The panel is already on screen
+                    // and the two columns fill in when the answer arrives.
+                    let tx = tx.clone();
+                    std::thread::spawn(move || {
+                        let owners = owners_of(&dir, &names);
+                        let _ = tx.send(Event::Owners {
+                            panel,
+                            generation,
+                            owners,
+                        });
+                    });
                 }
                 Request::Mouse { on } => {
                     // A terminal that was never asked to report the mouse is not asked to
@@ -3089,7 +3129,10 @@ timeout = 10
                     }
                 }
                 // No terminal in a test: what the request carries is checked where it is made.
-                Request::Font { .. } | Request::Mouse { .. } | Request::Clipboard { .. } => {}
+                Request::Font { .. }
+                | Request::Mouse { .. }
+                | Request::Clipboard { .. }
+                | Request::Owners { .. } => {}
                 Request::SyncPlan {
                     id,
                     left,

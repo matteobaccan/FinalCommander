@@ -232,6 +232,8 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         "col-created",
         "col-accessed",
         "col-attr",
+        "col-owner",
+        "col-group",
     ]
     .map(|id| app.i18n.t(id));
     let titles = widgets::ColumnTitles {
@@ -243,6 +245,8 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         created: &titles[5],
         accessed: &titles[6],
         attr: &titles[7],
+        owner: &titles[8],
+        group: &titles[9],
     };
     for (i, area) in areas.iter().enumerate() {
         // The special kinds have no rows, so they draw themselves inside the same frame and
@@ -299,6 +303,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             scrollbar: app.cfg.panel.scrollbar,
             name_scroll: panel.name_scroll,
             highlight: &app.highlight,
+            owners: &panel.owners,
             up_label: &up_label,
             folder_label: &folder_label,
         };

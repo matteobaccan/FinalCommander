@@ -10,9 +10,10 @@ authors.workspace = true
 
 [dependencies]
 
-# `statvfs` for the free space and the cluster size. Already in the tree for the terminal.
+# `statvfs` for the free space and the cluster size, and `getpwuid`/`getgrgid` behind safe
+# wrappers for the owner of a file. Already in the tree for the terminal.
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.31.3", features = ["fs"] }
+nix = { version = "0.31.3", features = ["fs", "user"] }
 
 # How much memory the machine has, which on macOS is a `sysctl` and nothing else.
 [target.'cfg(target_os = "macos")'.dependencies]
@@ -26,4 +27,8 @@ windows-sys = { version = "0.61", features = [
   "Win32_Foundation",
   "Win32_Storage_FileSystem",
   "Win32_System_SystemInformation",
+  # The owner of a file, which Windows keeps as a SID in the security descriptor:
+  # `GetNamedSecurityInfoW` to read it, `LookupAccountSidW` to put a name to it.
+  "Win32_Security",
+  "Win32_Security_Authorization",
 ] }

@@ -95,6 +95,12 @@ pub struct Panel {
     /// A locked tab stays on its directory: it is how a tab becomes a place one keeps rather
     /// than a place one is passing through.
     pub locked: bool,
+    /// Who each row belongs to — by name, to the user and the group — for the owners view.
+    ///
+    /// Empty until that view is the one on screen: finding out costs a lookup per file, and
+    /// on Windows a call into the security API, so a worker fills it in when the mode is
+    /// chosen and the read that follows it clears it again (SPEC 02 §3).
+    pub owners: std::collections::HashMap<String, (String, String)>,
 }
 
 impl Panel {
@@ -118,6 +124,7 @@ impl Panel {
             content: Content::default(),
             name: None,
             locked: false,
+            owners: std::collections::HashMap::new(),
             history_pos: 0,
             generation: 0,
             loading: true,

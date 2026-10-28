@@ -22,6 +22,8 @@ pub struct ColumnTitles<'a> {
     pub created: &'a str,
     pub accessed: &'a str,
     pub attr: &'a str,
+    pub owner: &'a str,
+    pub group: &'a str,
 }
 
 /// Everything the panel widget needs to know. The panel owns no state of its own.
@@ -63,6 +65,12 @@ pub struct PanelRender<'a> {
     pub titles: ColumnTitles<'a>,
     pub up_label: &'a str,
     pub folder_label: &'a str,
+    /// Who each row belongs to, by name, for the owners view — the user and the group.
+    ///
+    /// It is not part of a listing: finding it costs a lookup per file, and on Windows a call
+    /// into the security API, so a worker fills this in only while that view is the one on
+    /// screen. A row that is not in it yet draws blank rather than waiting for it.
+    pub owners: &'a std::collections::HashMap<String, (String, String)>,
 }
 
 /// Rows that fit in a panel of this height. The titles row and the panel's own status line
@@ -138,14 +146,17 @@ fn column_rules(p: &PanelRender<'_>, inner: Rect) -> Vec<u16> {
         }
         _ => {
             let c = columns_of(inner.w, p.view, p.cluster);
-            // One rule at the end of every column that has something after it.
+            // One rule at the start of every column that has something before it. The last
+            // one is dropped: FAR runs the final column up against the frame, which is what
+            // makes `Date` and `Time` read as one field in the full view and the attributes
+            // sit beside the dates in the detailed one.
             let mut xs = Vec::new();
             let mut x = inner.x + c.name;
-            for w in [c.size, c.allocated, c.write, c.created, c.accessed, c.attr] {
-                xs.push(x);
+            for (_, w) in c.after_name() {
                 if w == 0 {
-                    break;
+                    continue;
                 }
+                xs.push(x);
                 x += w + 1;
             }
             xs.pop();
@@ -355,17 +366,20 @@ fn draw_column_titles(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inne
             let mut x = inner.x;
             centre(buf, x, y, c.name, p.titles.name, style);
             x += c.name + 1;
-            for (w, title) in [
-                (c.size, p.titles.size),
-                (c.allocated, p.titles.allocated),
-                (c.write, write),
-                (c.created, p.titles.created),
-                (c.accessed, p.titles.accessed),
-                (c.attr, p.titles.attr),
-            ] {
+            for (col, w) in c.after_name() {
                 if w == 0 {
                     continue;
                 }
+                let title = match col {
+                    Col::Size => p.titles.size,
+                    Col::Allocated => p.titles.allocated,
+                    Col::Owner => p.titles.owner,
+                    Col::Group => p.titles.group,
+                    Col::Write => write,
+                    Col::Created => p.titles.created,
+                    Col::Accessed => p.titles.accessed,
+                    Col::Attr => p.titles.attr,
+                };
                 centre(buf, x, y, w, title, style);
                 x += w + 1;
             }
@@ -522,40 +536,84 @@ struct Cols {
     created: u16,
     accessed: u16,
     attr: u16,
+    /// Who the file belongs to: the owners view, and nothing else, has these.
+    owner: u16,
+    group: u16,
 }
 
 const SIZE_W: u16 = 9;
 const TIME_W: u16 = 16; // `2026-10-23 17:42`
 const ATTR_W: u16 = 5;
+/// Enough for most account names; a longer one is cut rather than given the whole panel.
+const OWNER_W: u16 = 12;
 /// Under this the name is no longer worth reading, so the dates that are extras go instead.
 const NAME_MIN: u16 = 16;
 
+/// What a column after the name holds. One ordered list, read by the widths, the rules, the
+/// titles and the rows alike, so that the four cannot drift apart.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Col {
+    Size,
+    Allocated,
+    Owner,
+    Group,
+    Write,
+    Created,
+    Accessed,
+    Attr,
+}
+
 impl Cols {
+    /// The columns after the name, left to right, with the width of each. A width of zero is
+    /// a column this view or this panel has no room for, and is skipped everywhere.
+    fn after_name(&self) -> [(Col, u16); 8] {
+        [
+            (Col::Size, self.size),
+            (Col::Allocated, self.allocated),
+            (Col::Owner, self.owner),
+            (Col::Group, self.group),
+            (Col::Write, self.write),
+            (Col::Created, self.created),
+            (Col::Accessed, self.accessed),
+            (Col::Attr, self.attr),
+        ]
+    }
+
     /// What everything to the right of the name takes, the one-column gaps included.
     fn tail(&self) -> u16 {
-        let widths = [
-            self.size,
-            self.allocated,
-            self.write,
-            self.created,
-            self.accessed,
-            self.attr,
-        ];
-        widths.iter().sum::<u16>() + widths.iter().filter(|w| **w > 0).count() as u16
+        self.after_name()
+            .iter()
+            .filter(|(_, w)| *w > 0)
+            .map(|(_, w)| w + 1)
+            .sum()
     }
 }
 
 fn columns_of(inner_w: u16, view: ViewMode, cluster: u64) -> Cols {
     let detail = view == ViewMode::Detail;
+    let owners = view == ViewMode::Owners;
     let mut c = Cols {
         name: 0,
         size: SIZE_W,
         allocated: 0,
-        write: TIME_W,
+        // The owners view puts the two names where the date is: a row has only so much room,
+        // and somebody asking who a file belongs to is not asking when it was written.
+        write: if owners { 0 } else { TIME_W },
         created: 0,
         accessed: 0,
         attr: if detail { ATTR_W } else { 0 },
+        owner: if owners { OWNER_W } else { 0 },
+        group: 0,
     };
+    // The group only if the name stays readable with it: on a narrow panel the owner is the
+    // one that was asked for and the group is the extra.
+    if owners {
+        let mut wider = c;
+        wider.group = OWNER_W;
+        if inner_w.saturating_sub(wider.tail()) >= NAME_MIN {
+            c = wider;
+        }
+    }
     // The extras of the detailed view, in the order they are drawn and one at a time: a panel
     // that is not wide enough for the next one keeps the name readable instead. A half-width
     // panel therefore shows what the full view shows with the attributes after it, and a
@@ -591,7 +649,7 @@ fn draw_full(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect, 
     // One clock for the whole panel: a group written in terms of age must not colour the top
     // of a listing by one instant and the bottom by another.
     let now = SystemTime::now();
-    let (name_w, size_w) = (c.name, c.size);
+    let name_w = c.name;
 
     for row in 0..rows {
         let idx = p.top + row;
@@ -645,66 +703,94 @@ fn draw_full(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect, 
             }
         }
 
-        let sx = inner.x + name_w + 1;
-        // A link to a directory says `Folder` too: its own size is the size of the link, a
-        // number that means nothing to anybody, and what the row opens as is a directory.
-        // The `@` on the name is what says it is a link.
-        match if e.opens_as_dir() && e.kind != EntryKind::Parent {
-            EntryKind::Dir
-        } else {
-            e.kind
-        } {
-            // A word, not a number: FAR centres it in a field as wide as the longer of the
-            // two words, so `Up` and `Folder` line up with each other down the column
-            // whatever the language calls them.
-            EntryKind::Parent | EntryKind::Dir => {
-                let label = if e.kind == EntryKind::Parent {
-                    p.up_label
-                } else {
-                    p.folder_label
-                };
-                let field = p
-                    .up_label
-                    .width()
-                    .max(p.folder_label.width())
-                    .min(size_w as usize);
-                let text = truncate_cols(label, field);
-                let pad = (field - text.width()) / 2;
-                let x = sx + size_w.saturating_sub(field as u16) + pad as u16;
-                buf.put_str(x, y, &text, style, size_w);
-            }
-            _ => put_right(buf, sx, y, size_w, &format_size(e.size), style),
-        }
-
-        let mut x = sx + size_w + 1;
-        if c.allocated > 0 {
-            // A directory has no size of its own to round up, so it has nothing here either.
-            if !e.opens_as_dir() && e.kind != EntryKind::Parent {
-                let taken = fcmd_core::allocated(e.size, p.cluster);
-                put_right(buf, x, y, c.allocated, &format_size(taken), style);
-            }
-            x += c.allocated + 1;
-        }
-
-        // The dates, in the order FAR puts them in, and only the ones this panel has room
-        // for. A filesystem that does not keep one of them leaves the column blank rather
-        // than inventing an epoch.
-        for (w, when) in [
-            (c.write, e.mtime),
-            (c.created, e.btime),
-            (c.accessed, e.atime),
-        ] {
+        // Everything after the name, in the one order the titles and the rules also read.
+        // A filesystem that does not keep a date, a device that never said how big its
+        // clusters are and a row whose owner has not come back yet all leave their column
+        // blank rather than inventing something to put in it.
+        let mut x = inner.x + name_w + 1;
+        for (col, w) in c.after_name() {
             if w == 0 {
                 continue;
             }
-            let text = when.map(format_mtime).unwrap_or_default();
-            buf.put_str(x, y, &truncate_cols(&text, w as usize), style, w);
+            match col {
+                Col::Size => draw_size(buf, p, x, y, w, e, style),
+                Col::Allocated => {
+                    // A directory has no size of its own to round up.
+                    if !e.opens_as_dir() && e.kind != EntryKind::Parent {
+                        let taken = fcmd_core::allocated(e.size, p.cluster);
+                        put_right(buf, x, y, w, &format_size(taken), style);
+                    }
+                }
+                Col::Owner | Col::Group => {
+                    let found = p.owners.get(e.name_str().as_ref());
+                    let text = found
+                        .map(|(user, group)| {
+                            if col == Col::Owner {
+                                user.as_str()
+                            } else {
+                                group.as_str()
+                            }
+                        })
+                        .unwrap_or_default();
+                    buf.put_str(x, y, &truncate_cols(text, w as usize), style, w);
+                }
+                Col::Write | Col::Created | Col::Accessed => {
+                    let when = match col {
+                        Col::Write => e.mtime,
+                        Col::Created => e.btime,
+                        _ => e.atime,
+                    };
+                    let text = when.map(format_mtime).unwrap_or_default();
+                    buf.put_str(x, y, &truncate_cols(&text, w as usize), style, w);
+                }
+                Col::Attr => {
+                    buf.put_str(x, y, &attrs(e), style, w);
+                }
+            }
             x += w + 1;
         }
+    }
+}
 
-        if c.attr > 0 {
-            buf.put_str(x, y, &attrs(e), style, c.attr);
+/// The size column of a one-column view.
+///
+/// A link to a directory says `Folder` too: its own size is the size of the link, a number
+/// that means nothing to anybody, and what the row opens as is a directory. The `@` on the
+/// name is what says it is a link.
+fn draw_size(
+    buf: &mut Buffer,
+    p: &PanelRender<'_>,
+    x: u16,
+    y: u16,
+    w: u16,
+    e: &Entry,
+    style: Style,
+) {
+    match if e.opens_as_dir() && e.kind != EntryKind::Parent {
+        EntryKind::Dir
+    } else {
+        e.kind
+    } {
+        // A word, not a number: FAR centres it in a field as wide as the longer of the two
+        // words, so `Up` and `Folder` line up with each other down the column whatever the
+        // language calls them.
+        EntryKind::Parent | EntryKind::Dir => {
+            let label = if e.kind == EntryKind::Parent {
+                p.up_label
+            } else {
+                p.folder_label
+            };
+            let field = p
+                .up_label
+                .width()
+                .max(p.folder_label.width())
+                .min(w as usize);
+            let text = truncate_cols(label, field);
+            let pad = (field - text.width()) / 2;
+            let at = x + w.saturating_sub(field as u16) + pad as u16;
+            buf.put_str(at, y, &text, style, w);
         }
+        _ => put_right(buf, x, y, w, &format_size(e.size), style),
     }
 }
 
@@ -1264,6 +1350,8 @@ mod tests {
             created: "Created",
             accessed: "Accessed",
             attr: "Attr",
+            owner: "Owner",
+            group: "Group",
         }
     }
 
@@ -1328,6 +1416,82 @@ mod tests {
             highlight: &crate::Highlight::far_default(),
             cluster,
             titles: english_titles(),
+            owners: &std::collections::HashMap::new(),
+            up_label: "Up",
+            folder_label: "Folder",
+        };
+        draw_panel(&mut buf, &theme, &p);
+        buf.to_text()
+    }
+
+    #[test]
+    fn the_owners_view_puts_the_two_names_where_the_date_was() {
+        let listing = Listing::new(
+            vec![
+                Entry::parent_entry(),
+                entry("notes.txt", EntryKind::File, 12),
+            ],
+            1,
+        );
+        let mut owners = std::collections::HashMap::new();
+        owners.insert(
+            "notes.txt".to_string(),
+            ("mb".to_string(), "staff".to_string()),
+        );
+
+        let out = render_owners(&listing, 70, &owners);
+        let titles = out.lines().nth(1).unwrap_or_default().to_string();
+        for title in ["Name", "Size", "Owner", "Group"] {
+            assert!(titles.contains(title), "`{title}`: {titles:?}");
+        }
+        // The date is what the two names took the room from.
+        assert!(!titles.contains("Date"), "{titles:?}");
+        assert!(out.contains("mb"), "the owner: {out}");
+        assert!(out.contains("staff"), "the group: {out}");
+
+        // A row whose owner has not come back yet is blank, not a guess.
+        let empty = std::collections::HashMap::new();
+        let out = render_owners(&listing, 70, &empty);
+        assert!(!out.contains("staff"), "{out}");
+
+        // On a narrow panel the group goes and the owner stays: the owner is what was asked
+        // for, and the name has to stay readable.
+        let out = render_owners(&listing, 42, &owners);
+        let titles = out.lines().nth(1).unwrap_or_default().to_string();
+        assert!(titles.contains("Owner"), "{titles:?}");
+        assert!(!titles.contains("Group"), "{titles:?}");
+    }
+
+    fn render_owners(
+        listing: &Listing,
+        width: u16,
+        owners: &std::collections::HashMap<String, (String, String)>,
+    ) -> String {
+        let theme = Theme::default_theme();
+        let mut buf = Buffer::new(width, 10);
+        let selection = Selection::default();
+        let p = PanelRender {
+            area: Rect::new(0, 0, width, 9),
+            path: "/home/mb/project",
+            listing,
+            selection: &selection,
+            cursor: 0,
+            top: 0,
+            focused: true,
+            view: ViewMode::Owners,
+            sort_label: "name",
+            sort_reverse: false,
+            column_titles: true,
+            filter: None,
+            message: None,
+            status: None,
+            free: None,
+            scrollbar: false,
+            name_scroll: 0,
+            highlight: &crate::Highlight::far_default(),
+            cluster: 4096,
+            titles: english_titles(),
+            owners,
             up_label: "Up",
             folder_label: "Folder",
         };
@@ -1414,6 +1578,7 @@ mod tests {
             highlight: &crate::Highlight::far_default(),
             cluster: 4096,
             titles: english_titles(),
+            owners: &std::collections::HashMap::new(),
             up_label: "Up",
             folder_label: "Folder",
         };
@@ -1565,6 +1730,7 @@ mod tests {
             highlight: &crate::Highlight::far_default(),
             cluster: 4096,
             titles: english_titles(),
+            owners: &std::collections::HashMap::new(),
             up_label: "Up",
             folder_label: "Folder",
         };
@@ -1602,6 +1768,7 @@ mod tests {
                 highlight: &crate::Highlight::far_default(),
                 cluster: 4096,
                 titles: english_titles(),
+                owners: &std::collections::HashMap::new(),
                 up_label: "Up",
                 folder_label: "Folder",
             };
@@ -1646,6 +1813,7 @@ mod tests {
             highlight: &crate::Highlight::far_default(),
             cluster: 4096,
             titles: english_titles(),
+            owners: &std::collections::HashMap::new(),
             up_label: "Up",
             folder_label: "Folder",
         };
@@ -1730,6 +1898,7 @@ mod tests {
             highlight: &crate::Highlight::far_default(),
             cluster: 4096,
             titles: english_titles(),
+            owners: &std::collections::HashMap::new(),
             up_label: "Up",
             folder_label: "Folder",
         };
@@ -1920,6 +2089,7 @@ mod tests {
             highlight: &crate::Highlight::far_default(),
             cluster: 4096,
             titles: english_titles(),
+            owners: &std::collections::HashMap::new(),
             up_label: "Up",
             folder_label: "Folder",
         };

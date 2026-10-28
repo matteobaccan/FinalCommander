@@ -79,6 +79,15 @@ pub enum Request {
     Clipboard {
         text: String,
     },
+    /// Who the files of one directory belong to, for the owners view. A lookup per file, and
+    /// on Windows a call into the security API, so it happens in a worker and only while that
+    /// view is the one on screen (SPEC 02 §3).
+    Owners {
+        panel: usize,
+        generation: u64,
+        dir: VPath,
+        names: Vec<String>,
+    },
     /// Decide about every pair in two trees. Nothing is written: the answer is a table.
     SyncPlan {
         id: u64,
@@ -253,6 +262,14 @@ pub enum Event {
         panel: usize,
         generation: u64,
         result: Result<Vec<Entry>, String>,
+    },
+    /// Who the files of a directory belong to, for the owners view. Late, like the free
+    /// space: the listing is on screen long before this arrives, and the two columns fill in
+    /// when it does.
+    Owners {
+        panel: usize,
+        generation: u64,
+        owners: std::collections::HashMap<String, (String, String)>,
     },
     /// What a provider said about the listing it just gave: it stopped before the end, and
     /// why. Sent after `Listed` and only when there is something to say, the way `FreeSpace`
@@ -1805,13 +1822,32 @@ impl App {
                     return;
                 }
                 match result {
-                    Ok(entries) => self.panels[panel].set_listing(entries, generation),
+                    Ok(entries) => {
+                        self.panels[panel].set_listing(entries, generation);
+                        // The names are new, so what was known about the old ones is not
+                        // about these. Asked for again while the owners view is the one on
+                        // screen, and otherwise left empty, which costs nothing.
+                        self.panels[panel].owners.clear();
+                        self.ask_for_owners(panel);
+                    }
                     Err(e) => {
                         self.panels[panel].loading = false;
                         self.panels[panel].error = Some(e.clone());
                         self.set_error(e);
                     }
                 }
+            }
+            Event::Owners {
+                panel,
+                generation,
+                owners,
+            } => {
+                // A directory we have already left, or a listing that has been read again:
+                // the names these belong to are not the names on the screen.
+                if panel >= self.panels.len() || self.panels[panel].generation != generation {
+                    return;
+                }
+                self.panels[panel].owners = owners;
             }
             Event::DirChanged { panel } => {
                 if panel >= self.panels.len() || !self.cfg.panel.auto_refresh {
@@ -3738,6 +3774,40 @@ impl App {
         self.set_status(msg);
     }
 
+    /// Ask for the owners of a panel's rows, if that is the view it is in.
+    ///
+    /// Nothing happens for any other view, for a panel that is a list rather than a
+    /// directory, or for one on anything but a local filesystem: a remote provider has no
+    /// owner to give, and a file inside an archive belongs to whoever wrote the archive.
+    fn ask_for_owners(&mut self, panel: usize) {
+        if panel >= self.panels.len() {
+            return;
+        }
+        let p = &self.panels[panel];
+        if p.view != ViewMode::Owners
+            || p.temp.is_some()
+            || !p.cwd.is_local()
+            || p.cwd.in_container()
+            || p.listing.is_empty()
+        {
+            return;
+        }
+        let names: Vec<String> = (0..p.listing.len())
+            .filter_map(|row| p.listing.row(row))
+            .filter(|e| e.kind != fcmd_core::EntryKind::Parent)
+            .map(|e| e.name_str().into_owned())
+            .collect();
+        if names.is_empty() {
+            return;
+        }
+        self.requests.push(Request::Owners {
+            panel,
+            generation: p.generation,
+            dir: p.cwd.clone(),
+            names,
+        });
+    }
+
     /// Put text on the system clipboard, through the terminal. Returns whether the request
     /// went out, so that the caller only says what it copied when something was copied.
     fn copy_to_clipboard(&mut self, text: &str) -> bool {
@@ -5288,6 +5358,12 @@ impl App {
                 self.panel_mut().view = view;
                 self.panel_mut().top = 0;
                 self.scroll();
+                // The owners view is the only one that needs something the listing does not
+                // carry, and it is asked for when the view is chosen rather than when the
+                // directory is read: nobody should pay a lookup per file for a column they
+                // are not looking at.
+                let active = self.active;
+                self.ask_for_owners(active);
                 let msg = self
                     .i18n
                     .t_args("msg-view", &[("mode", view.as_str().into())]);
@@ -17442,6 +17518,84 @@ abcdefghij
         assert_eq!(app.panel().cursor, cursor_before, "the panel moved instead");
         assert_eq!(app.mode.editor().unwrap().buffer.line(0), "alpha!!");
         assert!(app.mode.editor().unwrap().buffer.modified());
+    }
+
+    // ── the owners view (SPEC 02 §3) ───────────────────────────────────────────────────────
+
+    #[test]
+    fn the_owners_view_asks_who_the_files_belong_to_and_a_re_read_asks_again() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("notes.txt"), b"x").unwrap();
+        let mut app = app_on_disk(dir.path());
+        app.take_requests();
+
+        // No other view pays for the lookup.
+        app.run(Command::PanelViewSet(ViewMode::Full));
+        assert!(
+            !app.take_requests()
+                .iter()
+                .any(|r| matches!(r, Request::Owners { .. })),
+            "the full view should not ask"
+        );
+
+        app.run(Command::PanelViewSet(ViewMode::Owners));
+        let (panel, generation, names) = match app
+            .take_requests()
+            .into_iter()
+            .find(|r| matches!(r, Request::Owners { .. }))
+        {
+            Some(Request::Owners {
+                panel,
+                generation,
+                names,
+                ..
+            }) => (panel, generation, names),
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(panel, 0);
+        assert!(names.contains(&"notes.txt".to_string()), "{names:?}");
+        // `..` is not a file anybody owns for this purpose: it is the directory above.
+        assert!(!names.contains(&"..".to_string()), "{names:?}");
+
+        let mut owners = std::collections::HashMap::new();
+        owners.insert(
+            "notes.txt".to_string(),
+            ("mb".to_string(), "staff".to_string()),
+        );
+        app.handle_event(Event::Owners {
+            panel,
+            generation,
+            owners: owners.clone(),
+        });
+        assert_eq!(
+            app.panels[0].owners.get("notes.txt"),
+            Some(&("mb".to_string(), "staff".to_string()))
+        );
+
+        // An answer for a listing we have already replaced is not about these names.
+        app.handle_event(Event::Owners {
+            panel,
+            generation: generation + 7,
+            owners: std::collections::HashMap::new(),
+        });
+        assert!(!app.panels[0].owners.is_empty(), "a stale answer was taken");
+
+        // A fresh listing has fresh names: what was known is dropped and asked for again.
+        let entries =
+            fcmd_vfs::local::list_blocking(&VPath::local(dir.path()), &CancelToken::new())
+                .expect("the test directory");
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation: app.panels[0].generation,
+            result: Ok(entries),
+        });
+        assert!(app.panels[0].owners.is_empty(), "the old names were kept");
+        assert!(
+            app.take_requests()
+                .iter()
+                .any(|r| matches!(r, Request::Owners { .. })),
+            "the new listing should ask again"
+        );
     }
 
     // ── pasting, and the clipboard (SPEC 06 §11) ────────────────────────────────────────────

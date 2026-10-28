@@ -576,13 +576,7 @@ impl Command {
             Command::EditorDeleteWordRight,
             Command::EditorToggleReadOnly,
         ];
-        for v in [
-            ViewMode::Brief,
-            ViewMode::Medium,
-            ViewMode::Full,
-            ViewMode::Wide,
-            ViewMode::Detail,
-        ] {
+        for v in ViewMode::ALL {
             out.push(Command::PanelViewSet(v));
         }
         // Ten folder shortcuts, which is FAR's own number: a digit is the whole point of

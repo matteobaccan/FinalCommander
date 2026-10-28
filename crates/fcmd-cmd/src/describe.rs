@@ -60,6 +60,7 @@ impl Command {
                 ViewMode::Full => "name, size, date and time",
                 ViewMode::Wide => "name and size, two columns",
                 ViewMode::Detail => "name, size, time and attributes",
+                ViewMode::Owners => "name, owner, group and size",
             },
             Command::PanelQuickView(_) => "turn the other panel into a preview of the file",
             Command::PanelInfo(_) => "turn the other panel into an information panel",

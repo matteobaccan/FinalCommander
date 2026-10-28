@@ -24,6 +24,13 @@ the extension in a column of its own, against the size: names down the left, ext
 the right. A folder with a dot in its name, a dotfile and an extension too long for the column
 keep their name whole.
 
+`Ctrl+8` shows who the files belong to: name, size, owner, group. The two names take the room
+the date had, and on a narrow panel the group goes before the owner does. Finding out costs a
+lookup per file — and on Windows a call that may reach a domain controller — so it is done in
+the background and only while this view is the one on screen: the columns fill in a moment
+after the listing, and a row nothing has come back for yet is blank. A panel on a server or
+inside an archive has no owner to show.
+
 `Ctrl+F3` to `Ctrl+F6` sort by name, extension, time and size; choosing the order already in
 force reverses it. `Ctrl+F12` offers the orders as a list.
 

@@ -83,8 +83,26 @@ as a paragraph. Five columns of the field, four of them the extension — a dire
 is a folder, not a `.old` file), a dotfile, and an extension too long for the column keep their
 name whole across both. A mode says how many columns it draws and whether it shows a size,
 so the layout follows from the mode rather than from a width guess, and a column too narrow for
-what it holds falls back to fewer columns. `links`, `owners`, `descr` and the custom sets want
-data we do not collect yet and are lines in `docs/BACKLOG.md`.
+what it holds falls back to fewer columns. `links`, `descr` and the custom sets want data we
+do not collect yet and are lines in `docs/BACKLOG.md`.
+
+**The owners view** (`Ctrl+8`, FAR's own number for it) draws `name │ size │ owner  group`:
+the two names take the room the date had, because somebody asking who a file belongs to is
+not asking when it was written. On a panel too narrow to keep a readable name as well, the
+group goes and the owner stays — the owner is what was asked for.
+
+Who a file belongs to is **not part of a listing**, and that is the whole design of this mode.
+It costs a lookup per file: a `getpwuid` through NSS on a Unix, which may mean a directory
+server, and on Windows a security descriptor read plus a SID lookup that may mean a domain
+controller. So nothing is paid for it unless this is the view on screen: choosing the mode
+sends a request, a worker answers with a map from name to the two names, and the panel — which
+has been on screen all along — fills the two columns in when it arrives. A row the map does
+not mention yet is blank rather than a guess. One cache serves a whole directory, because a
+listing is nearly always one or two accounts repeated. Reading the directory again drops the
+map and asks afresh, since the names it was about are gone. A panel that is a list, one on a
+remote filesystem and one inside an archive ask nothing at all: there is no owner there to
+report. A number with no account behind it — an NFS mount with no matching users — is shown
+as the number, which is more useful than a blank and is what `ls` does.
 
 The detailed view draws FAR's own row — name, size, when it was written, when it was made,
 when it was last read, attributes — and drops the two extra dates, the last one first, as soon

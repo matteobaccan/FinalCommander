@@ -1,9 +1,9 @@
 /// How a panel renders its rows — FAR's own list, in FAR's own order, which is the order the
-/// `Ctrl+1..5` keys are in (see `docs/spec/02-panels.md` §3).
+/// `Ctrl+1..8` keys are in (see `docs/spec/02-panels.md` §3).
 ///
-/// The four that need data we do not collect yet — descriptions, owners, links, and the
-/// alternative full view with its thousands separators — are lines in `docs/BACKLOG.md`
-/// rather than variants that would say "not implemented".
+/// The three that need data we do not collect yet — descriptions, links, and the alternative
+/// full view with its thousands separators — are lines in `docs/BACKLOG.md` rather than
+/// variants that would say "not implemented".
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ViewMode {
     /// Names only, three columns.
@@ -16,16 +16,21 @@ pub enum ViewMode {
     Wide,
     /// Name, size, time, attributes.
     Detail,
+    /// Name, owner, group, size. The owner is not part of a listing — it costs a lookup per
+    /// file, and on Windows a call into the security API — so it is fetched only while this
+    /// mode is the one on screen (SPEC 02 §3).
+    Owners,
 }
 
 impl ViewMode {
     /// Every mode, in the order the keys are in.
-    pub const ALL: [ViewMode; 5] = [
+    pub const ALL: [ViewMode; 6] = [
         ViewMode::Brief,
         ViewMode::Medium,
         ViewMode::Full,
         ViewMode::Wide,
         ViewMode::Detail,
+        ViewMode::Owners,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -35,6 +40,7 @@ impl ViewMode {
             ViewMode::Full => "full",
             ViewMode::Wide => "wide",
             ViewMode::Detail => "detail",
+            ViewMode::Owners => "owners",
         }
     }
 
@@ -45,6 +51,7 @@ impl ViewMode {
             "full" => Some(ViewMode::Full),
             "wide" => Some(ViewMode::Wide),
             "detail" | "detailed" => Some(ViewMode::Detail),
+            "owners" | "owner" => Some(ViewMode::Owners),
             _ => None,
         }
     }
@@ -55,7 +62,7 @@ impl ViewMode {
         match self {
             ViewMode::Brief => 3,
             ViewMode::Medium | ViewMode::Wide => 2,
-            ViewMode::Full | ViewMode::Detail => 1,
+            ViewMode::Full | ViewMode::Detail | ViewMode::Owners => 1,
         }
     }
 
@@ -85,6 +92,7 @@ mod tests {
         assert_eq!(ViewMode::Medium.columns(), 2);
         assert_eq!(ViewMode::Wide.columns(), 2);
         assert_eq!(ViewMode::Full.columns(), 1);
+        assert_eq!(ViewMode::Owners.columns(), 1);
         assert!(ViewMode::Wide.shows_size() && !ViewMode::Brief.shows_size());
     }
 }

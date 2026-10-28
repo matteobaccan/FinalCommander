@@ -150,7 +150,9 @@ cmd = "panel.other.sync"
 keys = ["Ctrl+Shift+I"]
 cmd = "panel.filter.quick"
 
-# FAR's own numbering: brief, medium, full, wide, detailed.
+# FAR's own numbering: brief, medium, full, wide, detailed — and `Ctrl+8` for the owners,
+# which is the number FAR gives that mode too. The three numbers in between are its
+# descriptions and its links, which are backlog lines rather than modes that show nothing.
 [[bind]]
 keys = ["Ctrl+1"]
 cmd = "panel.view.set(brief)"
@@ -170,6 +172,10 @@ cmd = "panel.view.set(wide)"
 [[bind]]
 keys = ["Ctrl+5"]
 cmd = "panel.view.set(detail)"
+
+[[bind]]
+keys = ["Ctrl+8"]
+cmd = "panel.view.set(owners)"
 
 [[bind]]
 keys = ["Ctrl+F3"]

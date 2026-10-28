@@ -8,6 +8,20 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **`Ctrl+8`: who the files belong to.** FAR's file-owners view, on FAR's own number: name,
+  size, owner, group. The two names take the room the date column had, because somebody
+  asking who a file belongs to is not asking when it was written, and on a panel too narrow
+  for both the group goes and the owner stays.
+
+  Who a file belongs to is deliberately not part of a listing: it costs a lookup per file —
+  `getpwuid` through NSS on a Unix, a security descriptor and a SID lookup on Windows, either
+  of which can reach across a network — so nothing is paid for it unless this is the view on
+  screen. Choosing the mode asks a worker, and the two columns fill in a moment later with
+  the listing already up. One cache serves a whole directory, since a listing is nearly
+  always one or two accounts repeated. A row nothing has come back for is blank rather than a
+  guess, a number with no account behind it is shown as the number, and a panel on a server
+  or inside an archive asks nothing at all.
+
 - **A fix the dialogs needed**: the mouse box in `F9 → Options → Interface settings` reported
   *unknown setting `ui.mouse`* when the dialog was accepted, because that one key had never
   been added to the configuration's own setter. A test now walks every row of every settings
