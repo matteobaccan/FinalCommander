@@ -93,6 +93,8 @@ msg-bookmark-added = { $path } запомнена
 msg-bookmark-removed = { $path } убрана
 msg-bookmark-known = эта папка уже в списке
 msg-dirsize = { $path }: { $bytes } в { $files } файлах
+msg-dirsize-many = измеряю { $count } папок…
+msg-dirsize-no-folder = здесь нечего измерять
 
 prompt-copy-to = Копировать { $what } в:
 prompt-move-to = Перенести/переименовать { $what } в:

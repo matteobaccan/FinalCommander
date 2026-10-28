@@ -93,6 +93,8 @@ msg-bookmark-added = 已记住 { $path }
 msg-bookmark-removed = 已移除 { $path }
 msg-bookmark-known = 该文件夹已在列表中
 msg-dirsize = { $path }：{ $bytes }，共 { $files } 个文件
+msg-dirsize-many = 正在统计 { $count } 个文件夹…
+msg-dirsize-no-folder = 这里没有可统计的文件夹
 
 prompt-copy-to = 复制 { $what } 到：
 prompt-move-to = 移动/重命名 { $what } 到：

@@ -2559,10 +2559,28 @@ impl App {
                 bytes,
                 files,
             } => {
+                // The measured size becomes the directory's own, so everything that reads a
+                // size reads this one: the column says the figure instead of the word, the
+                // selected totals count it, and sorting by size puts the big tree where it
+                // belongs. The flag is what says the figure was measured — a directory has a
+                // size of its own, and drawing *that* would answer a question nobody asked.
+                let name = path.display_name();
+                if let Some(p) = self.panels.get_mut(panel) {
+                    if let Some(entry) = p
+                        .listing
+                        .entries
+                        .iter_mut()
+                        .find(|e| e.name_str() == name && e.opens_as_dir())
+                    {
+                        entry.size = bytes;
+                        entry.flags.insert(fcmd_core::EntryFlags::MEASURED);
+                        p.resort();
+                    }
+                }
                 let msg = self.i18n.t_args(
                     "msg-dirsize",
                     &[
-                        ("path", path.display_name().into()),
+                        ("path", name.into()),
                         ("bytes", fcmd_core::format_size(bytes).into()),
                         ("files", (files as i64).into()),
                     ],
@@ -6773,15 +6791,41 @@ impl App {
             }
 
             Command::FileDirSize => {
-                let (panel, path) = match self.panel().current() {
-                    Some(e) if e.kind.is_dirlike() => (self.active, self.panel().path_of(e)),
-                    _ => {
-                        self.not_implemented("file.dirsize (only directories for now)");
-                        return;
+                // With a selection it is every directory in it, which is what the key is for:
+                // one measures a tree to find out which of several is the big one, and asking
+                // for them one at a time is asking the same question five times.
+                let panel = self.active;
+                let p = self.panel();
+                let mut paths: Vec<VPath> = (0..p.listing.len())
+                    .filter_map(|row| p.listing.row(row))
+                    .filter(|e| {
+                        // `..` is the directory one came from, not a folder in this one.
+                        e.kind != fcmd_core::EntryKind::Parent
+                            && e.kind.is_dirlike()
+                            && p.selection.contains(e.id)
+                    })
+                    .map(|e| p.path_of(e))
+                    .collect();
+                if paths.is_empty() {
+                    match p.current() {
+                        Some(e) if e.kind.is_dirlike() => paths.push(p.path_of(e)),
+                        _ => {
+                            let m = self.i18n.t("msg-dirsize-no-folder");
+                            self.set_status(m);
+                            return;
+                        }
                     }
+                }
+                let count = paths.len();
+                for path in paths {
+                    self.requests.push(Request::DirSize { panel, path });
+                }
+                let m = if count == 1 {
+                    self.i18n.t("panel-loading")
+                } else {
+                    self.i18n
+                        .t_args("msg-dirsize-many", &[("count", (count as i64).into())])
                 };
-                self.requests.push(Request::DirSize { panel, path });
-                let m = self.i18n.t("panel-loading");
                 self.set_status(m);
             }
 
@@ -20051,6 +20095,65 @@ run = ["echo one", "echo two", "echo three"]
         });
         assert!(app.status.contains("4.00 K"), "{}", app.status);
         assert!(app.status.contains("12"), "{}", app.status);
+
+        // The measured size becomes the directory's own: the column shows it instead of the
+        // word, the selected totals can count it, and sorting by size puts it where it goes.
+        let docs = app
+            .panel()
+            .listing
+            .entries
+            .iter()
+            .find(|e| e.name_str() == "docs")
+            .expect("docs is in the listing");
+        assert_eq!(docs.size, 4096);
+        assert!(docs.flags.contains(fcmd_core::EntryFlags::MEASURED));
+    }
+
+    /// One press, every selected folder: finding out which of five trees is the big one is
+    /// the whole reason the key exists, and asking five times is asking the same question.
+    #[test]
+    fn with_a_selection_it_measures_every_folder_in_it() {
+        let mut app = app();
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation: 1,
+            result: Ok(vec![
+                Entry::parent_entry(),
+                entry("one", EntryKind::Dir, 0),
+                entry("two", EntryKind::Dir, 0),
+                entry("a.txt", EntryKind::File, 10),
+            ]),
+        });
+        app.take_requests();
+        // Select both folders and the file; the file is not a folder and is left out. `..`
+        // takes no selection at all, so the cursor starts on the row below it.
+        press(&mut app, "Down");
+        for _ in 0..3 {
+            press(&mut app, "Ins");
+        }
+        press(&mut app, "Space");
+        let asked: Vec<String> = app
+            .take_requests()
+            .into_iter()
+            .filter_map(|r| match r {
+                Request::DirSize { path, .. } => Some(path.display_name()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(asked, vec!["one".to_string(), "two".to_string()]);
+
+        // And the two answers add up in the selected totals, as FAR's bar does.
+        for (name, bytes) in [("one", 1_000_000u64), ("two", 2_000_000)] {
+            app.handle_event(Event::DirSized {
+                panel: 0,
+                path: VPath::local("/home/mb").join(name),
+                bytes,
+                files: 1,
+            });
+        }
+        let totals = &app.panel().listing.totals;
+        assert_eq!(totals.selected_dirs, 2);
+        assert_eq!(totals.selected_bytes, 3_000_010);
     }
 
     #[test]

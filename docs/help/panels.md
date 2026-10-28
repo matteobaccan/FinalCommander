@@ -75,6 +75,12 @@ key is: sources first and build output last, in a directory that holds both. Ins
 ordinary sort still applies, folders keep their own place at the top, and `reverse` turns each
 band round rather than swapping the bands over. With no blocks written the key says so.
 
+`Space` measures what a folder holds — and with something selected, every selected folder at
+once, which is how you find out which of five trees is the big one. The figure then takes the
+place of the word `Folder` in the size column, the totals bar at the bottom counts it, and
+sorting by size puts that folder where it belongs. Re-reading the directory forgets it, since
+the figure was about the directory as it was.
+
 `Ctrl+H` shows the hidden files. `Ctrl+P` hides the panel you are not in, `Ctrl+F1` and
 `Ctrl+F2` hide the left or the right one to give the other the whole screen, and `Ctrl+O`
 takes both off to show what the commands have printed. With the panels off everything else

@@ -232,6 +232,19 @@ a warning on import, never dropped silently.
 Per-mode flags from the same dialog: fullscreen, align file extensions, align folder extensions,
 folders uppercase, files lowercase, uppercase names shown lowercase.
 
+### 3c. The size of a folder
+
+A directory's own size is four kilobytes of bookkeeping on most filesystems, so the panel
+writes the word `Folder` in the size column rather than that figure. `Space` measures what one
+actually holds — and with a selection, **every selected folder**, because the question behind
+the key is which of several is the big one.
+
+What comes back becomes that directory's size, with a flag saying it was measured. Everything
+that reads a size then reads this one: the column shows the figure in place of the word, the
+selected-totals bar adds it up (`Bytes: 69 082 073, files: 0, folders: 2`), and sorting by
+size puts the measured tree where it belongs. A re-read drops it, because the figure was about
+the directory as it was.
+
 ## 4. Sorting
 
 Keys: name, ext, size, mtime, ctime, atime, btime, attrs, owner, descr, packed, type, none

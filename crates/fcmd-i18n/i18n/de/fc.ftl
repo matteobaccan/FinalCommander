@@ -93,6 +93,8 @@ msg-bookmark-added = { $path } gemerkt
 msg-bookmark-removed = { $path } entfernt
 msg-bookmark-known = dieser Ordner ist schon in der Liste
 msg-dirsize = { $path }: { $bytes } in { $files } Dateien
+msg-dirsize-many = { $count } Ordner werden gemessen …
+msg-dirsize-no-folder = hier gibt es keinen Ordner zu messen
 
 prompt-copy-to = { $what } kopieren nach:
 prompt-move-to = { $what } verschieben/umbenennen nach:

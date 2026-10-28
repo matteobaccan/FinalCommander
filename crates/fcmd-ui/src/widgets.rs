@@ -955,6 +955,17 @@ fn draw_size(
     } else {
         e.kind
     } {
+        // A directory somebody has measured says how much it holds, in place of the word:
+        // that is what one pressed the key for, and FAR puts the figure in the same column.
+        EntryKind::Dir if e.flags.contains(EntryFlags::MEASURED) => {
+            let text = if p.view == ViewMode::AltFull || matches!(fmt, Some("bytes") | Some("full"))
+            {
+                fcmd_core::format_count(e.size)
+            } else {
+                format_size(e.size)
+            };
+            put_right(buf, x, y, w, &text, style)
+        }
         // A word, not a number: FAR centres it in a field as wide as the longer of the two
         // words, so `Up` and `Folder` line up with each other down the column whatever the
         // language calls them.

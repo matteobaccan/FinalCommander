@@ -98,6 +98,8 @@ msg-bookmark-added = { $path } kept
 msg-bookmark-removed = { $path } given up
 msg-bookmark-known = that folder is already in the list
 msg-dirsize = { $path }: { $bytes } in { $files } files
+msg-dirsize-many = measuring { $count } folders…
+msg-dirsize-no-folder = there is no folder here to measure
 
 # Jobs: prompts, confirmations, progress, conflicts
 prompt-copy-to = Copy { $what } to:

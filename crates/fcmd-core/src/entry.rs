@@ -47,6 +47,11 @@ impl EntryFlags {
     /// reads as one. The listing already pays for the second `stat` to know whether a link is
     /// broken, so this costs nothing.
     pub const LINK_DIR: EntryFlags = EntryFlags(1 << 6);
+    /// A directory somebody has measured, so `size` is what it holds rather than what the
+    /// directory file itself costs. The flag and not a size of its own, because a directory
+    /// *has* a size — 4 KiB of it on most Unix filesystems — and a panel that showed that
+    /// figure would be answering a question nobody asked.
+    pub const MEASURED: EntryFlags = EntryFlags(1 << 7);
 
     pub const fn empty() -> Self {
         EntryFlags(0)

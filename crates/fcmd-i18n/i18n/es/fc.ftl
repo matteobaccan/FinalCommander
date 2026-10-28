@@ -93,6 +93,8 @@ msg-bookmark-added = { $path } guardada
 msg-bookmark-removed = { $path } quitada
 msg-bookmark-known = esa carpeta ya está en la lista
 msg-dirsize = { $path }: { $bytes } en { $files } archivos
+msg-dirsize-many = midiendo { $count } carpetas…
+msg-dirsize-no-folder = aquí no hay ninguna carpeta que medir
 
 prompt-copy-to = Copiar { $what } a:
 prompt-move-to = Mover/renombrar { $what } a:

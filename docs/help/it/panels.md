@@ -82,6 +82,12 @@ per ultimi, in una cartella che contiene entrambi. Dentro una fascia vale ancora
 normale, le cartelle tengono il loro posto in cima, e `reverse` inverte ogni fascia invece di
 scambiare le fasce fra loro. Se non c'è nessun blocco scritto il tasto lo dice.
 
+`Spazio` misura quello che una cartella contiene — e con qualcosa di selezionato, tutte le
+cartelle selezionate in una volta, che è come si scopre quale di cinque alberi è quello
+grosso. La cifra prende poi il posto della parola `Cartella` nella colonna della dimensione, la
+riga dei totali in fondo la conta, e l'ordinamento per dimensione mette quella cartella dove le
+spetta. Rileggere la cartella se ne dimentica, perché la cifra riguardava la cartella com'era.
+
 `Ctrl+H` mostra i file nascosti. `Ctrl+P` nasconde il pannello in cui non sei, `Ctrl+F1` e
 `Ctrl+F2` nascondono quello di sinistra o di destra per dare all'altro tutto lo schermo, e
 `Ctrl+O` li toglie entrambi per mostrare quello che hanno stampato i comandi. Con i pannelli

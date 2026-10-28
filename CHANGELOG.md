@@ -8,6 +8,15 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **The size of a folder, measured and kept.** `Space` (and `F3` on a directory) measured one
+  folder and said the figure in the status line, where it was gone a moment later. It now
+  measures **every selected folder** — finding out which of five trees is the big one is the
+  whole reason the key exists — and the answer becomes that directory's own size: the panel
+  draws the figure in the size column **in place of the word `Folder`**, as FAR does, the
+  selected-totals bar counts it, and sorting by size puts the big tree where it belongs. A
+  flag says the figure was measured, because a directory has a size of its own — four
+  kilobytes of it on most filesystems — and drawing that would answer a question nobody asked.
+
 - **Autocomplete on the command line** (SPEC 06 §7.4), the largest thing the line was still
   missing. Four sources, each one a setting with three states — on, off, or only when
   `Ctrl+Space` asks: the names in the directory the panel is showing (free, because that
