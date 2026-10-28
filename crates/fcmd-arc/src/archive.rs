@@ -108,11 +108,29 @@ pub struct Archive {
     /// Entry index by path, and the children of each directory, both built once.
     by_path: HashMap<String, usize>,
     children: HashMap<String, Vec<usize>>,
+    /// The password this was opened with, where it wanted one. Kept because reading an entry
+    /// opens the archive again: a 7z holds its files in blocks and every one of them is
+    /// encrypted with the key the header was. Never written anywhere.
+    key: Option<String>,
 }
 
 impl Archive {
     /// Read the index of the archive at `path`.
     pub fn open(path: &Path, limits: &Limits, cancel: &CancelToken) -> Result<Archive> {
+        Archive::open_with(path, limits, cancel, None)
+    }
+
+    /// The same, with the password an encrypted archive wants.
+    ///
+    /// A 7z can encrypt its own header, so the password is needed to read the list of names
+    /// and not only the bytes: without one such an archive answers [`ArcError::NeedsPassword`]
+    /// rather than looking broken.
+    pub fn open_with(
+        path: &Path,
+        limits: &Limits,
+        cancel: &CancelToken,
+        key: Option<&str>,
+    ) -> Result<Archive> {
         let name = path.display().to_string();
         let meta = std::fs::metadata(path).map_err(|e| ArcError::Io {
             path: name.clone(),
@@ -138,7 +156,7 @@ impl Archive {
 
         let entries = match format {
             Format::Zip => index_zip(path, &name, limits, cancel)?,
-            Format::SevenZ => index_sevenz(path, &name, limits, cancel)?,
+            Format::SevenZ => index_sevenz(path, &name, limits, cancel, key)?,
             _ => index_tar(path, &name, format, limits, cancel)?,
         };
 
@@ -173,6 +191,7 @@ impl Archive {
             entries,
             by_path: HashMap::new(),
             children: HashMap::new(),
+            key: key.map(str::to_string),
         };
         archive.build_tree();
         Ok(archive)
@@ -362,7 +381,7 @@ impl Archive {
             // several files together, so asking for them one at a time would decode the block
             // once per file in it. The decoder checks each entry's CRC as it goes, which is
             // what makes reading it to nowhere a test.
-            let mut reader = sevenz_reader(&self.source)?;
+            let mut reader = sevenz_reader(&self.source, self.key.as_deref())?;
             let mut stopped = None;
             let outcome = reader.for_each_entries(|entry, bytes| {
                 if cancel.is_cancelled() {
@@ -479,7 +498,7 @@ impl Archive {
             // each entry's bytes to a closure. For a solid archive that is the only way there
             // is: the files in a block are one compressed stream between them.
             Format::SevenZ => {
-                let mut reader = sevenz_reader(&self.source)?;
+                let mut reader = sevenz_reader(&self.source, self.key.as_deref())?;
                 let mut result: Option<Result<u64>> = None;
                 let outcome = reader.for_each_entries(|entry, bytes| {
                     if cancel.is_cancelled() {
@@ -561,16 +580,20 @@ impl Archive {
 ///
 /// Opening is the header read, so this is also where an encrypted archive is found out: a 7z
 /// can encrypt its own header, in which case even the list of names needs the password.
-pub(crate) fn sevenz_reader(path: &Path) -> Result<sevenz_rust2::ArchiveReader<BufReader<File>>> {
+pub(crate) fn sevenz_reader(
+    path: &Path,
+    key: Option<&str>,
+) -> Result<sevenz_rust2::ArchiveReader<BufReader<File>>> {
     let file = File::open(path).map_err(|e| ArcError::Io {
         path: path.display().to_string(),
         source: e,
     })?;
-    sevenz_rust2::ArchiveReader::new(
-        BufReader::with_capacity(64 * 1024, file),
-        sevenz_rust2::Password::empty(),
-    )
-    .map_err(|e| sevenz_error(path, e))
+    let password = match key {
+        Some(key) => sevenz_rust2::Password::from(key),
+        None => sevenz_rust2::Password::empty(),
+    };
+    sevenz_rust2::ArchiveReader::new(BufReader::with_capacity(64 * 1024, file), password)
+        .map_err(|e| sevenz_error(path, e))
 }
 
 /// A 7z error in our words. The two that have an answer the user can act on — a password, and
@@ -767,8 +790,9 @@ fn index_sevenz(
     name: &str,
     limits: &Limits,
     cancel: &CancelToken,
+    key: Option<&str>,
 ) -> Result<Vec<ArcEntry>> {
-    let reader = sevenz_reader(path)?;
+    let reader = sevenz_reader(path, key)?;
     let files = &reader.archive().files;
     if files.len() > limits.entries {
         return Err(ArcError::Refused {
@@ -925,6 +949,9 @@ pub struct Cache {
     capacity: usize,
     /// The copies of the containers that are not files on this disk (SPEC 04 §4).
     nest: Nest,
+    /// The passwords given for the archives that wanted one, by the path they were given for.
+    /// They live as long as the program does and are never written anywhere.
+    keys: Mutex<HashMap<String, String>>,
 }
 
 impl Cache {
@@ -934,7 +961,27 @@ impl Cache {
             open: Mutex::new(Vec::new()),
             capacity: 4,
             nest: Nest::new(),
+            keys: Mutex::new(HashMap::new()),
         }
+    }
+
+    /// Keep the password somebody typed for this archive, so the next read of it — the
+    /// listing, then every entry opened out of it — does not ask again.
+    pub fn remember_password(&self, host: &VPath, password: &str) {
+        if let Ok(mut keys) = self.keys.lock() {
+            keys.insert(host.to_string(), password.to_string());
+        }
+    }
+
+    /// Forget it, for an archive that turned out to want a different one.
+    pub fn forget_password(&self, host: &VPath) {
+        if let Ok(mut keys) = self.keys.lock() {
+            keys.remove(&host.to_string());
+        }
+    }
+
+    fn key_for(&self, host: &VPath) -> Option<String> {
+        self.keys.lock().ok()?.get(&host.to_string()).cloned()
     }
 
     /// Hand the cache the way to reach a container that is not on this disk — a server, a
@@ -958,7 +1005,7 @@ impl Cache {
     /// The archive `host` names, wherever it is.
     pub fn open_host(&self, host: &VPath, cancel: &CancelToken) -> Result<Arc<Archive>> {
         let file = self.host_file(host, cancel)?;
-        self.open(&file, cancel)
+        self.open_with(&file, cancel, self.key_for(host).as_deref())
     }
 
     /// The file whose bytes are `host`'s: itself when it is one, a copy of it when it is not.
@@ -1010,6 +1057,17 @@ impl Cache {
 
     /// The archive at `path`, from the cache when the file has not changed under us.
     pub fn open(&self, path: &Path, cancel: &CancelToken) -> Result<Arc<Archive>> {
+        let key = self.key_for(&VPath::local(path));
+        self.open_with(path, cancel, key.as_deref())
+    }
+
+    /// The same, with the password for an encrypted archive.
+    pub fn open_with(
+        &self,
+        path: &Path,
+        cancel: &CancelToken,
+        key: Option<&str>,
+    ) -> Result<Arc<Archive>> {
         if let Ok(mut open) = self.open.lock() {
             if let Some(i) = open.iter().position(|(p, _)| p == path) {
                 let (_, archive) = open[i].clone();
@@ -1021,7 +1079,7 @@ impl Cache {
                 open.remove(i);
             }
         }
-        let archive = Arc::new(Archive::open(path, &self.limits, cancel)?);
+        let archive = Arc::new(Archive::open_with(path, &self.limits, cancel, key)?);
         if let Ok(mut open) = self.open.lock() {
             open.push((path.to_path_buf(), archive.clone()));
             while open.len() > self.capacity {
@@ -1517,6 +1575,7 @@ mod tests {
             Format::SevenZ,
             &[source],
             crate::Level::Fast,
+            false,
             &CancelToken::new(),
             &mut |_, _| {},
         )

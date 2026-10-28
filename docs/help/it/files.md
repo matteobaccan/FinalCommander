@@ -157,12 +157,21 @@ già compressi, quindi tirare fuori un file da uno zip da cento megabyte è una 
 ricompressione. Il 7z è l'eccezione: i suoi file condividono un blocco compresso, quindi
 cambiarne uno decodifica e reimpacchetta anche gli altri, e questo è il formato, non noi.
 
-Un 7z che questo programma *scrive* mette ogni file in un blocco suo. È più grande di quello che
-scrive 7-Zip per default, e qui è il compromesso giusto: in un file manager l'atto comune è
+Un 7z che questo programma *scrive* mette ogni file in un blocco suo, a meno che non spunti
+**Blocchi solidi** nel dialogo di `Shift+F1`. Un blocco per file è più grande di quello che
+scrive 7-Zip per default, e qui è il default giusto: in un file manager l'atto comune è
 leggere un file fuori da un archivio, e un archivio solido fa sì che questo significhi
-decodificare tutto quello che gli sta davanti. Un 7z cifrato — anche uno con la testata cifrata,
-dove non si vedono nemmeno i nomi — dice che vuole una password, che non c'è ancora dove
-scrivere.
+decodificare tutto quello che gli sta davanti. Spuntato, i file condividono un flusso e
+l'archivio è più piccolo; un blocco si chiude a 64 file o 128 MB, così leggerne uno non
+decodifica mai un albero intero. La casella viene ricordata per il dialogo dopo, e solo un 7z
+ci fa qualcosa — un tar è solido comunque e uno zip non può esserlo.
+
+Un 7z cifrato — anche uno con la testata cifrata, dove non si vedono nemmeno i nomi — chiede la
+sua password. La scrivi e l'archivio si apre: la password resta per tutto il tempo in cui il
+programma gira, quindi l'elenco e ogni file che poi apri da quell'archivio la chiedono una
+volta sola, e non viene scritta da nessuna parte. Una sbagliata la richiede. Uno zip cifrato con
+AES lo dice invece di chiedere: leggerli vuole una parte della libreria zip che questa
+compilazione lascia fuori.
 
 Quello che questo ti dà, da dentro un archivio:
 

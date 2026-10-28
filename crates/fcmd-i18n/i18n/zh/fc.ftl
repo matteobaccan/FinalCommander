@@ -701,6 +701,7 @@ pack-title = 添加到压缩包
 pack-name = 压缩包
 pack-format = 格式
 pack-level = 压缩级别
+pack-solid = 固实块（7z：更小，单个文件读取更慢）
 pack-delete-after = 压缩后删除原文件
 pack-level-normal = 普通
 pack-level-fast = 快速
@@ -859,6 +860,7 @@ calc-characters = 字符
 
 # The archive commands (Shift+F3) and the two parts of the order that are not the key.
 arc-commands-title = 压缩包命令
+arc-password = { $name } 的密码
 arc-op-test = 测试 { $name }
 arc-op-extract-here = 解压 { $name } 到此处
 arc-op-extract-to = 解压 { $name } 到…

@@ -36,17 +36,22 @@ pub struct Written {
 ///
 /// The archive is written to a sibling temporary file and renamed into place at the end, so a
 /// cancelled or failed pack leaves no half-built archive where the user will later trust one.
+///
+/// `solid` means what 7-Zip means by it, and only a 7z can honour it: the files share one
+/// compressed stream, which is smaller and makes reading one of them decode everything in
+/// front of it. A tar is solid whatever anybody asks, a zip cannot be, and both ignore it.
 pub fn create(
     path: &Path,
     format: Format,
     sources: &[PathBuf],
     level: Level,
+    solid: bool,
     cancel: &CancelToken,
     progress: &mut dyn FnMut(&Path, u64),
 ) -> Result<Written> {
     let name = path.display().to_string();
     let part = path.with_extension(format!("{}.part", format.extension()));
-    let result = write_all(&part, format, sources, level, cancel, progress);
+    let result = write_all(&part, format, sources, level, solid, cancel, progress);
     match result {
         Ok(mut written) => {
             written.packed = std::fs::metadata(&part).map(|m| m.len()).unwrap_or(0);
@@ -68,6 +73,7 @@ fn write_all(
     format: Format,
     sources: &[PathBuf],
     level: Level,
+    solid: bool,
     cancel: &CancelToken,
     progress: &mut dyn FnMut(&Path, u64),
 ) -> Result<Written> {
@@ -76,7 +82,7 @@ fn write_all(
         return write_zip(part, &items, level, cancel, progress);
     }
     if format == Format::SevenZ {
-        return write_sevenz(part, &items, level, cancel, progress);
+        return write_sevenz(part, &items, level, solid, cancel, progress);
     }
     write_tar(part, format, &items, level, cancel, progress)
 }
@@ -399,10 +405,17 @@ pub(crate) fn sevenz_entry(source: &Path, inner: &str, is_dir: bool) -> sevenz_r
     entry
 }
 
+/// How much goes into one solid block: enough for the saving to show, little enough that one
+/// pack does not hold ten thousand file handles open or make reading one entry decode a
+/// gigabyte. 7-Zip has the same two dials under *Solid Block size*.
+const SOLID_FILES: usize = 64;
+const SOLID_BYTES: u64 = 128 << 20;
+
 fn write_sevenz(
     part: &Path,
     items: &[Item],
     level: Level,
+    solid: bool,
     cancel: &CancelToken,
     progress: &mut dyn FnMut(&Path, u64),
 ) -> Result<Written> {
@@ -410,6 +423,11 @@ fn write_sevenz(
     let mut writer =
         sevenz_rust2::ArchiveWriter::new(BufWriter::new(file)).map_err(|e| sevenz(part, e))?;
     writer.set_content_methods(vec![sevenz_method(level)]);
+    if solid {
+        let written = write_sevenz_solid(part, items, &mut writer, cancel, progress)?;
+        writer.finish().map_err(|e| io_error(part, e))?;
+        return Ok(written);
+    }
     let mut written = Written::default();
     for item in items {
         if cancel.is_cancelled() {
@@ -435,6 +453,79 @@ fn write_sevenz(
     Ok(written)
 }
 
+/// The same archive, with the files packed together rather than one by one.
+///
+/// Together in blocks, not all in one: a block is the unit that has to be decoded to read any
+/// file in it, so one block for a whole tree would make opening the first file read the lot.
+/// The directories go in on their own, because a directory has no bytes and the writer wants
+/// one reader per entry.
+fn write_sevenz_solid<W: Write + std::io::Seek>(
+    part: &Path,
+    items: &[Item],
+    writer: &mut sevenz_rust2::ArchiveWriter<W>,
+    cancel: &CancelToken,
+    progress: &mut dyn FnMut(&Path, u64),
+) -> Result<Written> {
+    let mut written = Written::default();
+    let mut block: Vec<&Item> = Vec::new();
+    let mut block_bytes = 0u64;
+
+    let flush = |block: &mut Vec<&Item>,
+                 block_bytes: &mut u64,
+                 written: &mut Written,
+                 writer: &mut sevenz_rust2::ArchiveWriter<W>,
+                 progress: &mut dyn FnMut(&Path, u64)|
+     -> Result<()> {
+        if block.is_empty() {
+            return Ok(());
+        }
+        let mut entries = Vec::with_capacity(block.len());
+        let mut readers = Vec::with_capacity(block.len());
+        for item in block.iter() {
+            let mut entry = sevenz_entry(&item.source, &item.inner, false);
+            // The writer fills in the size and the CRC after it has read each one, but the
+            // flag that says there are bytes at all is the caller's to set: without it the
+            // entry lands in the archive as a name with nothing behind it.
+            entry.has_stream = true;
+            entries.push(entry);
+            let file = File::open(&item.source).map_err(|e| io_error(&item.source, e))?;
+            readers.push(sevenz_rust2::SourceReader::new(BufReader::new(file)));
+        }
+        writer
+            .push_archive_entries(entries, readers)
+            .map_err(|e| sevenz(part, e))?;
+        for item in block.iter() {
+            written.files += 1;
+            written.bytes += item.size;
+            progress(&item.source, written.bytes);
+        }
+        block.clear();
+        *block_bytes = 0;
+        Ok(())
+    };
+
+    for item in items {
+        if cancel.is_cancelled() {
+            return Err(ArcError::Cancelled);
+        }
+        if item.is_dir {
+            let entry = sevenz_entry(&item.source, &item.inner, true);
+            writer
+                .push_archive_entry::<File>(entry, None)
+                .map_err(|e| sevenz(part, e))?;
+            written.dirs += 1;
+            continue;
+        }
+        block.push(item);
+        block_bytes += item.size;
+        if block.len() >= SOLID_FILES || block_bytes >= SOLID_BYTES {
+            flush(&mut block, &mut block_bytes, &mut written, writer, progress)?;
+        }
+    }
+    flush(&mut block, &mut block_bytes, &mut written, writer, progress)?;
+    Ok(written)
+}
+
 fn sevenz(path: &Path, e: sevenz_rust2::Error) -> ArcError {
     crate::archive::sevenz_error(path, e)
 }
@@ -453,6 +544,47 @@ mod tests {
         dir
     }
 
+    /// Solid means the files share a compressed stream, which is smaller; what matters here
+    /// is that everything still comes out, because a block read wrongly gives rubble rather
+    /// than an error.
+
+    #[test]
+    fn a_solid_7z_holds_what_a_plain_one_does() {
+        let dir = tree();
+        let sources = vec![dir.path().join("src"), dir.path().join("readme.md")];
+        let mut sizes = Vec::new();
+        for (name, solid) in [("plain.7z", false), ("solid.7z", true)] {
+            let archive = dir.path().join(name);
+            let written = create(
+                &archive,
+                Format::SevenZ,
+                &sources,
+                Level::Best,
+                solid,
+                &CancelToken::new(),
+                &mut |_, _| {},
+            )
+            .expect("the archive was written");
+            assert_eq!((written.files, written.dirs), (3, 2), "{name}");
+
+            let read = Archive::open(&archive, &Limits::default(), &CancelToken::new())
+                .expect("it reads back");
+            assert_eq!(
+                read.read("/src/deep/notes.txt", &CancelToken::new())
+                    .expect("the entry comes out"),
+                b"two down\n",
+                "{name}"
+            );
+            assert_eq!(
+                read.read("/readme.md", &CancelToken::new()).unwrap(),
+                b"# readme\n",
+                "{name}"
+            );
+            sizes.push(written.packed);
+        }
+        assert!(sizes.iter().all(|&n| n > 0), "{sizes:?}");
+    }
+
     #[test]
     fn what_goes_in_comes_out_again_in_every_format() {
         let dir = tree();
@@ -465,6 +597,7 @@ mod tests {
                 format,
                 &sources,
                 Level::Fast,
+                false,
                 &CancelToken::new(),
                 &mut |path, _| seen.push(path.to_path_buf()),
             )
@@ -514,6 +647,7 @@ mod tests {
             Format::Zip,
             &[dir.path().join("src")],
             Level::Normal,
+            false,
             &cancel,
             &mut |_, _| {},
         )
@@ -532,6 +666,7 @@ mod tests {
             Format::TarGz,
             &[dir.path().join("nothing")],
             Level::Normal,
+            false,
             &CancelToken::new(),
             &mut |_, _| {},
         )

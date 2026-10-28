@@ -1296,14 +1296,23 @@ fn interactive(mut app: App) -> Result<()> {
                     archive,
                     format,
                     level,
+                    solid,
                     sources,
                     cancel,
                 } => {
                     let tx = tx.clone();
                     let archives = archives.clone();
                     runtime.spawn_blocking(move || {
-                        run_pack(id, archive, format, level, sources, cancel, tx, &archives)
+                        run_pack(
+                            id, archive, format, level, solid, sources, cancel, tx, &archives,
+                        )
                     });
+                }
+                Request::ArcPassword { archive, password } => {
+                    // Straight into the cache, and not on a thread: the read that follows is
+                    // the next request in this queue and has to find the password already
+                    // there.
+                    archives.remember_password(&archive, &password);
                 }
                 Request::ArcTest {
                     id,
@@ -2522,6 +2531,7 @@ fn run_pack(
     archive: VPath,
     format: fcmd_arc::Format,
     level: fcmd_arc::Level,
+    solid: bool,
     sources: Vec<VPath>,
     cancel: CancelToken,
     tx: mpsc::Sender<Event>,
@@ -2576,6 +2586,7 @@ fn run_pack(
         format,
         &paths,
         level,
+        solid,
         &cancel,
         &mut progress,
     );
@@ -4127,12 +4138,15 @@ timeout = 10
                     archive,
                     format,
                     level,
+                    solid,
                     sources,
                     cancel,
                 } => {
                     let (tx, rx) = mpsc::channel();
                     let archives = std::sync::Arc::new(fcmd_arc::Cache::new(Default::default()));
-                    run_pack(id, archive, format, level, sources, cancel, tx, &archives);
+                    run_pack(
+                        id, archive, format, level, solid, sources, cancel, tx, &archives,
+                    );
                     while let Ok(event) = rx.try_recv() {
                         app.handle_event(event);
                     }
@@ -4179,6 +4193,7 @@ timeout = 10
                 | Request::Decompile { .. }
                 | Request::Connect { .. }
                 | Request::Disconnect { .. }
+                | Request::ArcPassword { .. }
                 | Request::Upload { .. } => {}
             }
         }

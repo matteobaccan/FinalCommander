@@ -713,6 +713,7 @@ pack-title = Добавить в архив
 pack-name = Архив
 pack-format = Формат
 pack-level = Сжатие
+pack-solid = Непрерывные блоки (7z: меньше, медленнее для одного файла)
 pack-delete-after = Удалить файлы после архивации
 pack-level-normal = обычное
 pack-level-fast = быстрое
@@ -871,6 +872,7 @@ calc-characters = символы
 
 # The archive commands (Shift+F3) and the two parts of the order that are not the key.
 arc-commands-title = Команды архива
+arc-password = Пароль для { $name }
 arc-op-test = Проверить { $name }
 arc-op-extract-here = Извлечь { $name } сюда
 arc-op-extract-to = Извлечь { $name } в…

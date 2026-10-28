@@ -56,11 +56,31 @@ pub enum ArcError {
     /// The archive, or its header, is encrypted. Said as its own error because the answer is
     /// a password and not a different archive — and because asking for one is a dialog this
     /// does not have yet, so the message has to say why nothing opened.
-    #[error("{path}: encrypted; a password is needed and cannot be asked for yet")]
+    #[error("{path}: it is encrypted and wants a password")]
     NeedsPassword { path: String },
 
     #[error("cancelled")]
     Cancelled,
 }
+
+impl ArcError {
+    /// Is this the refusal whose answer is a password?
+    ///
+    /// The application asks the error rather than reading its words, because what it does
+    /// about this one is a dialog and not a message.
+    pub fn wants_password(&self) -> bool {
+        matches!(self, ArcError::NeedsPassword { .. })
+    }
+}
+
+/// The same question of a message that has already lost its type — a listing comes back to
+/// the panel as a string, and this is the one refusal the panel answers with a prompt. The
+/// sentence is the one [`ArcError::NeedsPassword`] writes, which is why both live here.
+pub fn wants_password(message: &str) -> bool {
+    message.contains(NEEDS_PASSWORD)
+}
+
+/// The words that say a password is what is missing. Kept beside the error that writes them.
+pub(crate) const NEEDS_PASSWORD: &str = "it is encrypted and wants a password";
 
 pub type Result<T> = std::result::Result<T, ArcError>;

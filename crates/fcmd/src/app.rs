@@ -175,8 +175,16 @@ pub enum Request {
         archive: VPath,
         format: fcmd_arc::Format,
         level: fcmd_arc::Level,
+        /// 7-Zip's *solid*: the files share one compressed stream. Only a 7z can honour it.
+        solid: bool,
         sources: Vec<VPath>,
         cancel: CancelToken,
+    },
+    /// Keep the password for an encrypted archive, so the read that follows this request can
+    /// open it. It goes no further than the container cache, which holds it for the session.
+    ArcPassword {
+        archive: VPath,
+        password: String,
     },
     /// Read every entry of an archive and report what does not come out whole. A job as far
     /// as the user is concerned, for the same reason `Pack` is one.
@@ -269,6 +277,15 @@ pub enum Request {
         expect: Option<RemoteStamp>,
         force: bool,
     },
+}
+
+/// What to do again once an archive's password has been given.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ArcRetry {
+    /// Read this panel again: the listing is what asked.
+    Panel(usize),
+    /// Fetch this entry again, for the viewer or the editor.
+    Entry(VPath, Fetched),
 }
 
 /// Why a remote file is being fetched.
@@ -648,6 +665,12 @@ pub enum PromptKind {
     NetConnect,
     /// A password or a key passphrase. Never echoed, never stored.
     NetSecret(SecretKind),
+    /// The password an encrypted archive wants. Never echoed, and kept for the session in the
+    /// container cache rather than in anything that is written down.
+    ArcPassword {
+        archive: VPath,
+        retry: ArcRetry,
+    },
     /// Quick search; remembers where the cursor was so Esc can put it back.
     QuickSearch {
         origin: usize,
@@ -1705,6 +1728,8 @@ pub struct App {
     /// How hard the compressor works when an archive is rebuilt. The format's own level is
     /// not readable from an archive, so the one the last dialog chose is the best guess.
     pub last_pack_level: fcmd_arc::Level,
+    /// Whether the last pack asked for solid blocks, so the dialog opens the way it was left.
+    pub last_pack_solid: bool,
     /// The same for the replace dialog.
     pub last_replace: fcmd_jobs::ReplaceOptions,
     /// A replacement runs twice: once to count, and then, if the user says so, for real. This
@@ -1903,6 +1928,7 @@ impl App {
             last_asm: None,
             last_pack: fcmd_arc::Format::Zip,
             last_pack_level: fcmd_arc::Level::Normal,
+            last_pack_solid: false,
             last_replace: fcmd_jobs::ReplaceOptions::default(),
             pending_replace: None,
             carry: None,
@@ -2139,7 +2165,18 @@ impl App {
                     (Ok((local, stamp)), Fetched::Edit) => {
                         self.open_remote_editor(remote, local, Some(stamp))
                     }
-                    (Err(e), _) => self.set_error(e),
+                    (Err(e), purpose) => {
+                        if fcmd_arc::wants_password(&e) {
+                            if let Some(archive) = remote.leave() {
+                                self.ask_archive_password(
+                                    archive,
+                                    ArcRetry::Entry(remote, purpose),
+                                );
+                                return;
+                            }
+                        }
+                        self.set_error(e)
+                    }
                 }
             }
             Event::Uploaded { id, remote, result } => {
@@ -2223,6 +2260,14 @@ impl App {
                     }
                     Err(e) => {
                         self.panels[panel].loading = false;
+                        // An archive that wants a password is not an error to read, it is a
+                        // question to answer: ask for it and read again with it.
+                        if fcmd_arc::wants_password(&e) {
+                            if let Some(archive) = self.panels[panel].cwd.leave() {
+                                self.ask_archive_password(archive, ArcRetry::Panel(panel));
+                                return;
+                            }
+                        }
                         self.panels[panel].error = Some(e.clone());
                         self.set_error(e);
                     }
@@ -4031,6 +4076,26 @@ impl App {
                 match Site::parse_url(&raw) {
                     Ok(site) => self.connect_to(site, None, false),
                     Err(e) => self.set_error(e.to_string()),
+                }
+            }
+            PromptKind::ArcPassword {
+                ref archive,
+                ref retry,
+            } => {
+                let password = prompt.text.clone();
+                let archive = archive.clone();
+                let retry = retry.clone();
+                self.mode = Mode::Normal;
+                if password.is_empty() {
+                    // No password typed is a decision to stop, not one to try the empty one:
+                    // an empty password is what we already tried.
+                    return;
+                }
+                self.requests
+                    .push(Request::ArcPassword { archive, password });
+                match retry {
+                    ArcRetry::Panel(panel) => self.read_panel(panel),
+                    ArcRetry::Entry(path, purpose) => self.fetch_remote(path, 0, purpose),
                 }
             }
             PromptKind::NetSecret(_) => {
@@ -5941,6 +6006,7 @@ impl App {
         archive: VPath,
         format: fcmd_arc::Format,
         level: fcmd_arc::Level,
+        solid: bool,
         sources: Vec<VPath>,
     ) {
         let id = self.next_job_id;
@@ -5959,6 +6025,7 @@ impl App {
             archive,
             format,
             level,
+            solid,
             sources,
             cancel,
         });
@@ -7295,6 +7362,24 @@ impl App {
         }
     }
 
+    /// Ask for the password an encrypted archive wants, and do the thing that asked again.
+    ///
+    /// The answer is never echoed and never written down: it goes to the container cache,
+    /// which keeps it for as long as the program runs so the listing, then every entry opened
+    /// out of that archive, do not ask again.
+    fn ask_archive_password(&mut self, archive: VPath, retry: ArcRetry) {
+        let title = self
+            .i18n
+            .t_args("arc-password", &[("name", archive.display_name().into())]);
+        self.mode = Mode::Prompt(Prompt {
+            kind: PromptKind::ArcPassword { archive, retry },
+            title,
+            text: String::new(),
+            secret: true,
+            sources: Vec::new(),
+        });
+    }
+
     /// Ask for a remote file to be copied down. The size limit keeps `F3` on a 4 GB image
     /// from quietly filling the temporary directory.
     fn fetch_remote(&mut self, path: VPath, size: u64, purpose: Fetched) {
@@ -8448,6 +8533,7 @@ impl App {
         self.mode = Mode::Form(Box::new(Form::pack(
             name,
             self.last_pack,
+            self.last_pack_solid,
             sources.len(),
             &self.i18n,
         )));
@@ -8811,10 +8897,12 @@ impl App {
             "best" => fcmd_arc::Level::Best,
             _ => fcmd_arc::Level::Normal,
         };
+        let solid = form.toggle_value("pack.solid");
         self.last_pack = format;
         self.last_pack_level = level;
+        self.last_pack_solid = solid;
         self.pack_delete = form.toggle_value("pack.delete").then(|| sources.clone());
-        self.start_pack(archive, format, level, sources);
+        self.start_pack(archive, format, level, solid, sources);
     }
 
     /// `Shift+F2`: the dialog for taking an archive apart.
@@ -22952,6 +23040,81 @@ abcdefghij
         let (_, site, secret, _) = connect_request(&mut app);
         assert_eq!(secret.as_deref(), Some("hunter"));
         assert_eq!(site.authority(), "mb@host.example:22");
+    }
+
+    /// An archive that wants a password asks for one and reads again with it, rather than
+    /// showing a refusal the user can do nothing about.
+    #[test]
+    fn an_encrypted_archive_asks_for_its_password_and_reads_again() {
+        let mut app = app();
+        let archive = app.panels[0].cwd.join("secret.7z");
+        app.panels[0].cwd = archive.enter("/");
+        app.panels[0].generation = 1;
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation: 1,
+            result: Err(format!("{}: it is encrypted and wants a password", archive)),
+        });
+        match &app.mode {
+            Mode::Prompt(p) => {
+                assert!(p.secret, "a password prompt must be masked");
+                assert!(p.title.contains("secret.7z"), "{}", p.title);
+                assert!(
+                    matches!(p.kind, PromptKind::ArcPassword { ref retry, .. }
+                        if *retry == ArcRetry::Panel(0)),
+                    "{:?}",
+                    p.kind
+                );
+            }
+            other => panic!("expected the password prompt, got {other:?}"),
+        }
+        // The panel keeps no error of its own: the question is on screen instead.
+        assert!(app.panels[0].error.is_none());
+
+        for c in ["s", "3", "c", "r", "e", "t"] {
+            press(&mut app, c);
+        }
+        press(&mut app, "Enter");
+        let requests = app.take_requests();
+        assert!(
+            requests.iter().any(|r| matches!(
+                r,
+                Request::ArcPassword { archive: a, password } if *a == archive && password == "s3cret"
+            )),
+            "the password is kept: {requests:?}"
+        );
+        // And the read comes after it, so the cache has the password when it runs.
+        let kept = requests
+            .iter()
+            .position(|r| matches!(r, Request::ArcPassword { .. }));
+        let read = requests
+            .iter()
+            .position(|r| matches!(r, Request::Read { panel: 0, .. }));
+        assert!(kept < read, "{requests:?}");
+    }
+
+    /// An empty answer is a decision to stop: the empty password is the one that already
+    /// failed, so nothing is kept and nothing is read again.
+    #[test]
+    fn no_password_typed_leaves_the_archive_alone() {
+        let mut app = app();
+        let archive = app.panels[0].cwd.join("secret.7z");
+        app.panels[0].cwd = archive.enter("/");
+        app.panels[0].generation = 1;
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation: 1,
+            result: Err(format!("{}: it is encrypted and wants a password", archive)),
+        });
+        press(&mut app, "Enter");
+        assert!(matches!(app.mode, Mode::Normal), "{:?}", app.mode);
+        let requests = app.take_requests();
+        assert!(
+            !requests
+                .iter()
+                .any(|r| matches!(r, Request::ArcPassword { .. })),
+            "{requests:?}"
+        );
     }
 
     #[test]

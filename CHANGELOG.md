@@ -20,6 +20,18 @@ Notable changes, newest first. The format follows
   — a rebuild of the copy would report a change to a file that is about to be deleted — and
   says so rather than half-writing anything.
 
+- **An encrypted archive asks for its password.** A 7z whose contents — or whose header, so
+  that not even the names show — are encrypted now opens: the panel and the viewer answer the
+  refusal with a masked prompt, and what is typed goes into the container cache, which keeps
+  it for as long as the program runs and writes it nowhere. The listing and every entry opened
+  out of that archive then ask nothing; a wrong password asks again.
+
+- **Solid blocks in the archive dialog.** `Shift+F1` has 7-Zip's own *solid* box: ticked, the
+  files of a 7z share one compressed stream, which is smaller. A block closes at 64 files or
+  128 MB, so reading one file out of the archive never decodes a whole tree, and one file per
+  block stays the default for the same reason. A tar is solid anyway and a zip cannot be, so
+  both ignore it; the box is remembered for the next dialog.
+
 ### Changed
 
 - **The menu letters are FAR's own.** Every row the `F9` menus share with FAR now wears the

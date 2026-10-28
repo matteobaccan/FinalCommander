@@ -150,11 +150,20 @@ taking one file out of a hundred-megabyte zip is a copy and not a recompression.
 exception: its files share a compressed block, so changing one of them decodes and packs the
 rest again, which is the format and not us.
 
-A 7z this program *writes* puts each file in a block of its own. That is bigger than what
-7-Zip writes by default, and it is the right trade here: in a file manager the common act is
-reading one file out of an archive, and a solid archive makes that mean decoding everything in
-front of it. An encrypted 7z — even one whose header is encrypted, so not even the names show
-— says it wants a password, which there is nowhere to type yet.
+A 7z this program *writes* puts each file in a block of its own, unless you tick **Solid
+blocks** in the `Shift+F1` dialog. One block per file is bigger than what 7-Zip writes by
+default, and it is the right default here: in a file manager the common act is reading one
+file out of an archive, and a solid archive makes that mean decoding everything in front of
+it. Ticked, the files share a stream and the archive is smaller; a block is closed at 64 files
+or 128 MB, so reading one file never decodes a whole tree. The box is remembered for the next
+dialog, and only a 7z does anything with it — a tar is solid whatever anybody asks and a zip
+cannot be.
+
+An encrypted 7z — even one whose header is encrypted, so not even the names show — asks for
+its password. Type it and the archive opens: the password is kept for as long as the program
+runs, so the listing and every file you then open out of that archive ask once, and it is
+never written anywhere. A wrong one asks again. A zip encrypted with AES says so instead of
+asking: reading those wants a part of the zip library this build leaves out.
 
 What that gives you, from inside an archive:
 

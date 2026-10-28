@@ -109,6 +109,20 @@ where the code lives, not whether it is linked into the binary.
   path stays what it is — `sftp://srv/outer.zip!/inner.zip!/readme.md` — because that is where
   the file really is; nothing above this layer learns that a copy happened. A container read
   from a copy is **read-only**: see the rebuild below.
+- An encrypted container asks for its password rather than refusing. **Implemented** for 7z,
+  whose header may itself be encrypted: the refusal the reader answers with is the one the
+  panel and the viewer turn into a masked prompt, and the answer goes into the container
+  cache, which keeps it for the session and never writes it anywhere. Every later read of that
+  archive — the listing, then each entry opened out of it — uses it, so the question is asked
+  once; a wrong password asks again. Writing an encrypted archive is not here, and neither is
+  reading a zip encrypted with AES, which wants a part of the `zip` crate this build leaves
+  out and says so.
+- A 7z this program writes puts each file in a block of its own unless the pack dialog's
+  **solid** box is ticked, in 7-Zip's own sense of the word. One file per block is the default
+  because the common act in a file manager is reading one file out of an archive, and a solid
+  block has to be decoded from its start to reach anything in it; ticked, a block closes at 64
+  files or 128 MB, so even then reading one file never decodes a whole tree. A tar is solid
+  whatever anybody asks and a zip cannot be, so both ignore the box.
 - Nesting depth limit (default 4) to stop zip-bomb recursion; entry-count and expansion-ratio
   guards on every archive read, with the limits in config and the refusal explained.
   **Implemented** as `[arc]` in the config file (`max_entries`, `max_total_mb`, `max_ratio`,

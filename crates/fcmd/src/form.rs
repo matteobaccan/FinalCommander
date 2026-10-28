@@ -809,7 +809,13 @@ impl Form {
     }
 
     /// `Shift+F1`: the archive to build, out of what is selected.
-    pub fn pack(name: String, format: fcmd_arc::Format, files: usize, i18n: &I18n) -> Form {
+    pub fn pack(
+        name: String,
+        format: fcmd_arc::Format,
+        solid: bool,
+        files: usize,
+        i18n: &I18n,
+    ) -> Form {
         let t = |id: &str| i18n.t(id);
         let formats: Vec<(&str, String)> = fcmd_arc::Format::ALL
             .iter()
@@ -829,6 +835,10 @@ impl Form {
                 format.extension(),
             ),
             choice("pack.level", t("pack-level"), &levels, "normal"),
+            // 7-Zip's *solid*, and only a 7z does anything with it: the files share one
+            // compressed stream, which is smaller and makes reading one of them decode
+            // everything in front of it. A tar is solid anyway and a zip cannot be.
+            Field::toggle("pack.solid", t("pack-solid"), solid),
             // FAR's `Delete files after archiving`. Off, and it stays off between dialogs:
             // an archiver that quietly removes the originals is a bad surprise once.
             Field::toggle("pack.delete", t("pack-delete-after"), false),

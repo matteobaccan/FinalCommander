@@ -713,6 +713,7 @@ pack-title = Zum Archiv hinzufügen
 pack-name = Archiv
 pack-format = Format
 pack-level = Kompression
+pack-solid = Solide Blöcke (7z: kleiner, langsamer für eine Datei)
 pack-delete-after = Dateien nach dem Archivieren löschen
 pack-level-normal = normal
 pack-level-fast = schnell
@@ -871,6 +872,7 @@ calc-characters = Zeichen
 
 # The archive commands (Shift+F3) and the two parts of the order that are not the key.
 arc-commands-title = Archivbefehle
+arc-password = Passwort für { $name }
 arc-op-test = { $name } testen
 arc-op-extract-here = { $name } hierher entpacken
 arc-op-extract-to = { $name } entpacken nach…

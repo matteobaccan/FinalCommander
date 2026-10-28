@@ -346,7 +346,9 @@ fn rebuild_sevenz(
     // holds several files in one compressed stream, so even the entries nobody asked about
     // have to be decoded and packed again. That is the format, and it is why changing one
     // file in a large 7z costs what it costs.
-    let mut old = crate::archive::sevenz_reader(path)?;
+    // A rebuild is of an archive on this disk that nobody has locked: an encrypted one is
+    // refused when it is opened, long before a change is planned for it.
+    let mut old = crate::archive::sevenz_reader(path, None)?;
     let target = File::create(part).map_err(|e| io_error(part, e))?;
     let mut new =
         sevenz_rust2::ArchiveWriter::new(BufWriter::new(target)).map_err(|e| sevenz(part, e))?;
@@ -507,6 +509,7 @@ mod tests {
             format,
             std::slice::from_ref(&tree),
             Level::Fast,
+            false,
             &CancelToken::new(),
             &mut |_, _| {},
         )
@@ -753,6 +756,7 @@ mod tests {
             Format::Zip,
             &[],
             Level::Fast,
+            false,
             &CancelToken::new(),
             &mut |_, _| {},
         )
