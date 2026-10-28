@@ -4,7 +4,7 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
-## [Unreleased]
+## [0.10.0] — 2026-10-28
 
 ### Added
 
@@ -28,9 +28,6 @@ Notable changes, newest first. The format follows
   many pairs were taken as the same without being read, and whether the line-ending-only
   differences were counted.
 
-## [0.9.0] — 2026-10-28
-
-### Added
 
 - **A panel of what is installed**, under the sockets in `Alt+F1`/`Alt+F2`, with the size
   column holding what each program takes on disk — so `Ctrl+F6` sorts by size, which is why

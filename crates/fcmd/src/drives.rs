@@ -119,6 +119,7 @@ fn platform() -> Vec<Drive> {
         kind: Kind::Fixed,
         label: None,
         fs: None,
+        device: None,
         total: None,
         free: None,
     }];
@@ -172,6 +173,10 @@ fn platform() -> Vec<Drive> {
                 kind: Kind::Fixed,
                 label: None,
                 fs: None,
+                // What a mapped letter is a mapping *of* wants `WNetGetConnectionW`, which
+                // belongs beside the rest in `fcmd-platform`; until it is there the column
+                // is empty rather than wrong.
+                device: None,
                 total: None,
                 free: None,
             };
@@ -188,6 +193,7 @@ fn platform() -> Vec<Drive> {
         kind: Kind::Fixed,
         label: None,
         fs: None,
+        device: None,
         total: None,
         free: None,
     };
