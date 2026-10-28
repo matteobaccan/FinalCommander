@@ -136,16 +136,28 @@ keeps it as the run's artifact; publishing happens only through `workflow_dispat
 
 ## Where the work is right now
 
-**0.10.0 is written and waiting for its tag.** 0.8.0 is the last version with a tag and a
-release on GitHub; 0.9.0 and 0.10.0 are both in `main` with their CHANGELOG sections, and the
-tag never happened because the Actions queue on a private repository sat for longer than
-`tag.yml` waits for green CI. The repository is public now, so the runners are free and the
-queue moves; what is left is to touch `CHANGELOG.md` so `tag.yml` fires again. 0.9.0's notes
-were folded into 0.10.0 when its own tag timed out, which is why the changelog goes from
-0.10.0 straight to 0.8.0.
+**0.12.0 is the version in `main`.** 0.10.0 and 0.11.0 are both tagged and released, with
+four archives and `SHA256SUMS` each; the queue moves now that the repository is public, so a
+push that touches `CHANGELOG.md` or `Cargo.toml` is what makes `tag.yml` fire. The site is
+published, by hand, through `pages.yml`'s `workflow_dispatch`.
 
 What is in the last few, newest first:
 
+- **0.12.0** — the author's own side-by-side list again: the **menu bar wears its letters**
+  and `F9` lights it without pulling a menu down, as FAR's does; the **help is drawn by the
+  viewer's Markdown view** instead of a little renderer of its own, with the generated
+  chapters written as Markdown too; the **process card is a page** in the viewer, as full as
+  FAR's proclist (owner, SID, session, priority, the memory figures, processor time, handles,
+  I/O, the whole environment, every loaded module); the **quick view is that viewer**, with
+  the reader's keys once it has the focus and a row's card beside a process, socket or
+  programs list; **`Ctrl+A`** gained the four times, the UTC box, the Original/Current/Blank
+  buttons, the owner and Windows' remaining bits; and a **services panel** in the change-drive
+  dialog that starts, restarts and stops — systemd, the Service Control Manager, `launchctl` —
+  and never escalates.
+- **0.11.0** — the help per language with the whole Italian translation, column sets
+  (`[[column_set]]` per view digit, in our spelling or FAR's strings), autocomplete on the
+  command line, folder sizes measured for a whole selection and kept in the panel, the empty
+  NetBox panel, and the pick lists in FAR's menu colours.
 - **0.10.0** — the comparison the plugin everybody uses has (`AdvCmpEx`): a dialog of what
   counts as a difference (case, size, time to a tolerance, contents, contents only when the
   time differs, a first-fragment read, line-endings-only, selected only, stop at the first,
@@ -216,17 +228,14 @@ files rather than guessing what its dialog says.
 
 Everything here is unblocked and specified; the backlog has the reasons.
 
-1. **Autocomplete on the command line**: four sources (filesystem, history, `%PATH%`,
-   environment), each three-state, shown as a list as one types. The largest single thing
-   still missing there, and eight of FAR's eleven insertion keys go with it.
-2. **The screens list and background screens** (`F12`): several viewers, editors and jobs
+1. **The screens list and background screens** (`F12`): several viewers, editors and jobs
    open at once. The job engine already runs more than one; the screen stack is what is
    missing, and `Mode` holding one screen is what has to change.
-3. **A dialog for the sort groups**, as `F9 → Options → Files highlighting` edits the
+2. **A dialog for the sort groups**, as `F9 → Options → Files highlighting` edits the
    colouring groups: the blocks can only be written by hand today.
-4. **Descriptions through a provider** — inside an archive, on a server — and carried out of a
+3. **Descriptions through a provider** — inside an archive, on a server — and carried out of a
    search result, which are what SPEC 02 §13 still owes.
-5. **The tree cache on disk**, which unblocks `Alt+F10` (find a folder) and the copy dialog's
+4. **The tree cache on disk**, which unblocks `Alt+F10` (find a folder) and the copy dialog's
    own tree in one go.
 
 One rule that came out of that review and holds everywhere: **`Alt+<letter>` belongs to the

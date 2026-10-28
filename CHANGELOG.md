@@ -6,6 +6,8 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-10-28
+
 ### Added
 
 - **`Ctrl+A` says everything a file is.** The attributes dialog gained the two times FAR
