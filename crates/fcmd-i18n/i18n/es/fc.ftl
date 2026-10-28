@@ -839,7 +839,19 @@ drive-processes = Lista de procesos
 drive-temp = Panel temporal
 temp-added = { $count } en el panel temporal
 proc-none = aquí no se puede leer la lista de procesos
-drives-hint = ↑↓ elegir · 0-9 los paneles de abajo · Enter aplicar · Esc cerrar
+drives-hint = ↑↓ elegir · 0-9 paneles · Ctrl+1..9 columnas · Ctrl+R releer
+drives-col-type = el tipo
+drives-col-device = el dispositivo
+drives-col-label = la etiqueta
+drives-col-fs = el sistema de archivos
+drives-col-size = los tamaños
+drives-col-removable = las unidades extraíbles
+drives-col-panels = los paneles que no son discos
+drives-col-optical = las unidades ópticas
+drives-col-network = los recursos de red
+drives-shown = mostrando { $what }
+drives-hidden = ocultando { $what }
+drives-reread = unidades leídas de nuevo
 bookmarks-hint = Intro ir · Ins guardar · Supr quitar · F4 nombrar · Esc cerrar
 
 # The search dialog (F7), which asks the whole question in one place.

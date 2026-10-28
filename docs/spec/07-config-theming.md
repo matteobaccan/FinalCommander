@@ -184,6 +184,25 @@ credentials = "env"       # env | aws | aws:<profile> | anonymous
 listing_cap = 100000      # rows a listing with no delimiter may gather; 0 = no limit
 ```
 
+## 2c-bis. `[drives]`
+
+Which columns the change-drive dialog shows and which drives it lists (SPEC 10 §4.3). FAR keeps
+the same settings in one `DriveMenuMode` word; this is that word written out, and the dialog's
+own `Ctrl`-and-a-digit keys write straight into it.
+
+```toml
+[drives]
+show_type = true          # Ctrl+1  the kind of thing it is
+show_device = false       # Ctrl+2  what it is a mount of
+show_label = true         # Ctrl+3  the volume's own name
+show_fs = true            # Ctrl+4  the filesystem
+show_size = true          # Ctrl+5  the total and the free space
+show_removable = true     # Ctrl+6  list removable drives at all
+show_panels = true        # Ctrl+7  list the panels that are not drives
+show_optical = true       # Ctrl+8  list optical drives at all
+show_network = true       # Ctrl+9  list network shares at all
+```
+
 ## 2d. The keys the settings dialogs write (implemented today)
 
 §2 above is the shape the configuration is heading for; what the binary reads today is flat and

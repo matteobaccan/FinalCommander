@@ -839,7 +839,19 @@ drive-processes = Prozessliste
 drive-temp = Temporäres Panel
 temp-added = { $count } ins temporäre Panel gelegt
 proc-none = die Prozessliste ist hier nicht lesbar
-drives-hint = ↑↓ wählen · 0-9 die Panels unten · Enter anwenden · Esc schließen
+drives-hint = ↑↓ wählen · 0-9 Panels · Ctrl+1..9 Spalten · Ctrl+R neu lesen
+drives-col-type = den Typ
+drives-col-device = das Gerät
+drives-col-label = die Bezeichnung
+drives-col-fs = das Dateisystem
+drives-col-size = die Größen
+drives-col-removable = die Wechseldatenträger
+drives-col-panels = die Panels, die keine Laufwerke sind
+drives-col-optical = die optischen Laufwerke
+drives-col-network = die Netzlaufwerke
+drives-shown = { $what } wird gezeigt
+drives-hidden = { $what } wird ausgeblendet
+drives-reread = Laufwerke neu gelesen
 bookmarks-hint = Eingabe gehe · Einfg merken · Entf entfernen · F4 benennen · Esc schließen
 
 # The search dialog (F7), which asks the whole question in one place.

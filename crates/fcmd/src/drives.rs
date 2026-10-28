@@ -21,6 +21,9 @@ pub struct Drive {
     pub label: Option<String>,
     /// `ext4`, `apfs`, `ntfs`, `nfs`…
     pub fs: Option<String>,
+    /// What it is a mount *of*: the device on Unix, the share behind a mapped letter on
+    /// Windows. FAR calls it the associated path and shows it in a column of its own.
+    pub device: Option<String>,
     pub total: Option<u64>,
     pub free: Option<u64>,
 }
@@ -66,6 +69,7 @@ pub fn list() -> Vec<Drive> {
                 kind: Kind::Home,
                 label: None,
                 fs: None,
+                device: None,
                 total: None,
                 free: None,
             };
@@ -136,6 +140,7 @@ fn platform() -> Vec<Drive> {
                 kind: Kind::Fixed,
                 label: Some(label),
                 fs: None,
+                device: None,
                 total: None,
                 free: None,
             });
@@ -239,6 +244,7 @@ fn parse_mounts(
             kind: kind_of(fs, &device, removable),
             label: labels.get(&device).cloned(),
             fs: Some(fs.to_string()),
+            device: Some(device.clone()),
             path: point,
             total: None,
             free: None,

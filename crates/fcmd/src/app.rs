@@ -5298,24 +5298,54 @@ impl App {
             (letter.is_ascii_alphabetic() && chars.next() == Some(':')).then_some(letter)
         }
 
-        let mounted = crate::drives::list();
-        let cells: Vec<[String; 5]> = mounted
+        let shown = self.cfg.drives;
+        // The kinds the settings say to list at all. FAR has the same three switches, and on
+        // Windows they earn their keep: an empty CD drive asked for its label spins up.
+        let mounted: Vec<crate::drives::Drive> = crate::drives::list()
+            .into_iter()
+            .filter(|drive| match drive.kind {
+                crate::drives::Kind::Removable => shown.show_removable,
+                crate::drives::Kind::Optical => shown.show_optical,
+                crate::drives::Kind::Network => shown.show_network,
+                _ => true,
+            })
+            .collect();
+        // The columns the settings ask for, in FAR's own order, each saying which way it
+        // reads: the words from the left, the sizes from the right.
+        let cells: Vec<Vec<(String, bool)>> = mounted
             .iter()
             .map(|drive| {
-                [
-                    self.i18n.t(drive.kind.label_key()),
-                    drive.label.clone().unwrap_or_default(),
-                    drive.fs.clone().unwrap_or_default(),
-                    drive.total.map(fcmd_core::format_size).unwrap_or_default(),
-                    drive.free.map(fcmd_core::format_size).unwrap_or_default(),
-                ]
+                let mut row: Vec<(String, bool)> = Vec::new();
+                if shown.show_type {
+                    row.push((self.i18n.t(drive.kind.label_key()), false));
+                }
+                if shown.show_device {
+                    row.push((drive.device.clone().unwrap_or_default(), false));
+                }
+                if shown.show_label {
+                    row.push((drive.label.clone().unwrap_or_default(), false));
+                }
+                if shown.show_fs {
+                    row.push((drive.fs.clone().unwrap_or_default(), false));
+                }
+                if shown.show_size {
+                    row.push((
+                        drive.total.map(fcmd_core::format_size).unwrap_or_default(),
+                        true,
+                    ));
+                    row.push((
+                        drive.free.map(fcmd_core::format_size).unwrap_or_default(),
+                        true,
+                    ));
+                }
+                row
             })
             .collect();
         // Each column as wide as its widest value, so the table lines up without a layout
         // engine and a column nothing filled takes no room at all.
-        let mut widths = [0usize; 5];
+        let mut widths = vec![0usize; cells.first().map(Vec::len).unwrap_or(0)];
         for row in &cells {
-            for (i, text) in row.iter().enumerate() {
+            for (i, (text, _)) in row.iter().enumerate() {
                 widths[i] = widths[i].max(unicode_width::UnicodeWidthStr::width(text.as_str()));
             }
         }
@@ -5327,16 +5357,27 @@ impl App {
             .min(40);
 
         let here = self.panels[side].cwd.to_string();
+        // A panel that is showing one of the lists rather than a directory is not on any
+        // drive, and the row the cursor wants is that list's own.
+        let origin = self.panels[side].temp_origin().map(str::to_string);
         let mut rows: Vec<PickRow> = Vec::new();
         for (drive, cell) in mounted.iter().zip(cells.iter()) {
             let mut label = format!("{:<path_w$}", fcmd_ui::truncate_cols(&drive.path, path_w));
-            for (i, text) in cell.iter().enumerate() {
+            // FAR's own rule for the gaps: a space after the drive itself, and a line
+            // between every pair of columns after that, which is what makes the dialog read
+            // as a table rather than as a sentence.
+            let mut first = true;
+            for (i, (text, right)) in cell.iter().enumerate() {
                 if widths[i] == 0 {
                     continue;
                 }
-                label.push_str("  ");
-                // The two sizes read right-aligned; the words read left.
-                if i >= 3 {
+                if first {
+                    label.push(' ');
+                    first = false;
+                } else {
+                    label.push_str(" │ ");
+                }
+                if *right {
                     label.push_str(&format!("{text:>w$}", w = widths[i]));
                 } else {
                     label.push_str(&format!("{text:<w$}", w = widths[i]));
@@ -5347,7 +5388,7 @@ impl App {
                 drive.path.clone(),
                 // The one the panel is already on. `/` matches everything, so it only counts
                 // when nothing longer does.
-                drive.path != "/" && here.starts_with(&drive.path),
+                origin.is_none() && drive.path != "/" && here.starts_with(&drive.path),
             );
             // On Windows the drive's own letter takes it, which is what thirty years of
             // `Alt+F1` then `C` have taught everybody's fingers: the letter is the key, not a
@@ -5357,7 +5398,7 @@ impl App {
                 None => row,
             });
         }
-        if !rows.iter().any(|r| r.current) {
+        if origin.is_none() && !rows.iter().any(|r| r.current) {
             if let Some(root) = rows.iter_mut().find(|r| r.value == "/") {
                 root.current = true;
             }
@@ -5392,14 +5433,23 @@ impl App {
         }
         // And the panels that are not drives at all, which is where FAR keeps its own:
         // the stored sessions, the running processes, and a panel of files gathered by
-        // hand. Each is a `:`-prefixed value, which no path can be.
-        rows.push(keyed(self.plain("drive-netbox"), ":netbox".into(), false));
-        rows.push(keyed(
-            self.plain("drive-processes"),
-            ":processes".into(),
-            false,
-        ));
-        rows.push(keyed(self.plain("drive-temp"), ":temp".into(), false));
+        // hand. Each is a `:`-prefixed value, which no path can be. `Ctrl+7` takes them
+        // away, as it does in FAR.
+        if shown.show_panels {
+            // FAR draws a rule between the drives and the panels, and it earns its place:
+            // what is above it is somewhere on this machine, what is below it is not.
+            if !rows.is_empty() {
+                rows.push(PickRow::rule());
+            }
+            for (id, value) in [
+                ("drive-netbox", ":netbox"),
+                ("drive-processes", ":processes"),
+                ("drive-temp", ":temp"),
+            ] {
+                let on_it = origin.as_deref() == Some(value);
+                rows.push(keyed(self.plain(id), value.to_string(), on_it));
+            }
+        }
         Pick::new(
             PickKind::Drives,
             self.plain("menu-change-drive"),
@@ -5426,6 +5476,7 @@ impl App {
                     value: value.to_string(),
                     current: false,
                     hotkey: None,
+                    separator: false,
                 });
             }
         }
@@ -5434,6 +5485,7 @@ impl App {
             value: "add".to_string(),
             current: false,
             hotkey: None,
+            separator: false,
         });
         let title = self.i18n.t("arc-commands-title");
         self.mode = Mode::Pick(Box::new(Pick::new(PickKind::ArcCommands, title, rows, 0)));
@@ -8633,6 +8685,7 @@ impl App {
         let generation = self.panels[side].generation + 1;
         self.panels[side].generation = generation;
         self.panels[side].set_temp(title, items, generation);
+        self.panels[side].set_temp_origin(":netbox");
         self.active = side;
     }
 
@@ -8681,6 +8734,7 @@ impl App {
         let generation = self.panels[side].generation + 1;
         self.panels[side].generation = generation;
         self.panels[side].set_temp(title, items, generation);
+        self.panels[side].set_temp_origin(":processes");
         self.active = side;
     }
 
@@ -8694,6 +8748,7 @@ impl App {
         let generation = self.panels[side].generation + 1;
         self.panels[side].generation = generation;
         self.panels[side].set_temp(title, Vec::new(), generation);
+        self.panels[side].set_temp_origin(":temp");
         self.active = side;
     }
 
@@ -9333,6 +9388,7 @@ impl App {
                 value: "read".to_string(),
                 current: false,
                 hotkey: None,
+                separator: false,
             },
             PickRow {
                 label: self
@@ -9341,6 +9397,7 @@ impl App {
                 value: "insert".to_string(),
                 current: false,
                 hotkey: None,
+                separator: false,
             },
             PickRow {
                 label: self
@@ -9349,6 +9406,7 @@ impl App {
                 value: "copy".to_string(),
                 current: false,
                 hotkey: None,
+                separator: false,
             },
             PickRow {
                 label: self
@@ -9357,6 +9415,7 @@ impl App {
                 value: "move".to_string(),
                 current: false,
                 hotkey: None,
+                separator: false,
             },
         ];
         if span > 0 {
@@ -9371,6 +9430,7 @@ impl App {
                     value: "write".to_string(),
                     current: true,
                     hotkey: None,
+                    separator: false,
                 },
             );
             rows.push(PickRow {
@@ -9380,6 +9440,7 @@ impl App {
                 value: "fill".to_string(),
                 current: false,
                 hotkey: None,
+                separator: false,
             });
             rows.push(PickRow {
                 label: self
@@ -9388,6 +9449,7 @@ impl App {
                 value: "xor".to_string(),
                 current: false,
                 hotkey: None,
+                separator: false,
             });
             rows.push(PickRow {
                 label: self.i18n.t_args(
@@ -9401,6 +9463,7 @@ impl App {
                 value: "delete".to_string(),
                 current: false,
                 hotkey: None,
+                separator: false,
             });
         }
         let title = t(self, "hex-block-title");
@@ -9462,6 +9525,7 @@ impl App {
                 value: i.to_string(),
                 current: false,
                 hotkey: None,
+                separator: false,
             })
             .collect();
         if rows.is_empty() {
@@ -9513,6 +9577,7 @@ impl App {
                 value: t.id.to_string(),
                 current: false,
                 hotkey: None,
+                separator: false,
             })
             .collect();
         let title = self.i18n.t("tunnel-list-title");
@@ -9759,12 +9824,14 @@ impl App {
                 value: fcmd_cmd::Play::Once.as_str().to_string(),
                 current: true,
                 hotkey: None,
+                separator: false,
             },
             PickRow {
                 label: self.i18n.t("macro-play-each"),
                 value: fcmd_cmd::Play::EachSelected.as_str().to_string(),
                 current: false,
                 hotkey: None,
+                separator: false,
             },
         ];
         let title = self.i18n.t("macro-play-title");
@@ -9815,6 +9882,7 @@ impl App {
                 value: i.to_string(),
                 current: false,
                 hotkey: None,
+                separator: false,
             })
             .collect();
         let title = self.i18n.t("macro-list-title");
@@ -9919,6 +9987,7 @@ impl App {
             value: "panels".to_string(),
             current: self.mode.screen_title().is_none(),
             hotkey: None,
+            separator: false,
         }];
         // The one in front first, then the ones behind it, newest first: the order one
         // stepped away from them, which is the order one comes back through.
@@ -9928,6 +9997,7 @@ impl App {
                 value: "front".to_string(),
                 current: true,
                 hotkey: None,
+                separator: false,
             });
         }
         for (i, screen) in self.background.iter().enumerate().rev() {
@@ -9939,6 +10009,7 @@ impl App {
                 value: i.to_string(),
                 current: false,
                 hotkey: None,
+                separator: false,
             });
         }
         let at = rows.iter().position(|r| r.current).unwrap_or(0);
@@ -10351,6 +10422,17 @@ impl App {
             .collect()
     }
 
+    /// Build the drive dialog again after one of its switches, keeping the cursor on the row
+    /// it was on — the row is what one is looking at, and a column going away is no reason to
+    /// lose it. A row that is no longer there leaves the cursor where it was sitting.
+    fn reopen_drives(&mut self, side: usize, was: Option<String>, cursor: usize) {
+        let mut pick = self.drive_list(side);
+        pick.cursor = was
+            .and_then(|value| pick.rows.iter().position(|r| r.value == value))
+            .unwrap_or_else(|| cursor.min(pick.rows.len().saturating_sub(1)));
+        self.mode = Mode::Pick(Box::new(pick));
+    }
+
     pub fn open_pick(&mut self, kind: PickKind, side: usize) {
         let pick = match kind {
             // Built by `open_block_menu`, which knows what is marked; nothing opens it here.
@@ -10381,6 +10463,7 @@ impl App {
                         value: (*tag).to_string(),
                         current: *tag == self.i18n.tag(),
                         hotkey: None,
+                        separator: false,
                     })
                     .collect(),
                 side,
@@ -10395,6 +10478,7 @@ impl App {
                         value: theme.id.clone(),
                         current: theme.id == self.theme.id,
                         hotkey: None,
+                        separator: false,
                     })
                     .collect(),
                 side,
@@ -10423,6 +10507,7 @@ impl App {
                         label: path.clone(),
                         value: path,
                         hotkey: None,
+                        separator: false,
                     })
                     .collect();
                 Pick::new(kind, self.plain("menu-folders-history"), rows, side)
@@ -10439,6 +10524,7 @@ impl App {
                         value: line.clone(),
                         current: false,
                         hotkey: None,
+                        separator: false,
                     })
                     .collect();
                 Pick::new(kind, self.plain("menu-history"), rows, side)
@@ -10453,6 +10539,7 @@ impl App {
                         value: path.clone(),
                         current: false,
                         hotkey: None,
+                        separator: false,
                     })
                     .collect();
                 Pick::new(kind, self.plain("menu-view-history"), rows, side)
@@ -10468,6 +10555,7 @@ impl App {
                         value: i.to_string(),
                         current: false,
                         hotkey: None,
+                        separator: false,
                     })
                     .collect();
                 Pick::new(kind, self.plain("menu-highlighting"), rows, side)
@@ -10492,6 +10580,7 @@ impl App {
                             value: format!("{key:?}").to_lowercase(),
                             current: panel.sort.key == *key,
                             hotkey: None,
+                            separator: false,
                         })
                         .collect(),
                     side,
@@ -10634,6 +10723,69 @@ impl App {
                     secret: false,
                     sources: Vec::new(),
                 });
+            }
+            // The columns of the drive dialog, switched from inside it the way FAR switches
+            // them: `Ctrl` and the digit a column is numbered by, and `Ctrl+R` to go and
+            // look at the drives again. The choice is written to the configuration, because
+            // somebody who turned the device column on meant to keep it on.
+            KeyCode::Char(c) if kind == PickKind::Drives && key.mods.contains(Mods::CTRL) => {
+                let (side, cursor) = (pick.side, pick.cursor);
+                let was = pick.chosen().map(|r| r.value.clone());
+                let shown = &mut self.cfg.drives;
+                let (what, on) = match c {
+                    '1' => {
+                        shown.show_type = !shown.show_type;
+                        ("drives-col-type", shown.show_type)
+                    }
+                    '2' => {
+                        shown.show_device = !shown.show_device;
+                        ("drives-col-device", shown.show_device)
+                    }
+                    '3' => {
+                        shown.show_label = !shown.show_label;
+                        ("drives-col-label", shown.show_label)
+                    }
+                    '4' => {
+                        shown.show_fs = !shown.show_fs;
+                        ("drives-col-fs", shown.show_fs)
+                    }
+                    '5' => {
+                        shown.show_size = !shown.show_size;
+                        ("drives-col-size", shown.show_size)
+                    }
+                    '6' => {
+                        shown.show_removable = !shown.show_removable;
+                        ("drives-col-removable", shown.show_removable)
+                    }
+                    '7' => {
+                        shown.show_panels = !shown.show_panels;
+                        ("drives-col-panels", shown.show_panels)
+                    }
+                    '8' => {
+                        shown.show_optical = !shown.show_optical;
+                        ("drives-col-optical", shown.show_optical)
+                    }
+                    '9' => {
+                        shown.show_network = !shown.show_network;
+                        ("drives-col-network", shown.show_network)
+                    }
+                    // Not a switch: the list is read again, which is how a stick that was
+                    // plugged in after the dialog opened turns up in it.
+                    'r' | 'R' => {
+                        self.reopen_drives(side, was, cursor);
+                        let msg = self.i18n.t("drives-reread");
+                        self.set_status(msg);
+                        return;
+                    }
+                    _ => return,
+                };
+                let name = self.i18n.t(what);
+                self.reopen_drives(side, was, cursor);
+                let msg = self.i18n.t_args(
+                    if on { "drives-shown" } else { "drives-hidden" },
+                    &[("what", name.into())],
+                );
+                self.set_status(msg);
             }
             // A row with a key of its own: the key takes it, without the arrows.
             KeyCode::Char(c) => {
@@ -12444,6 +12596,7 @@ impl App {
                 value: i.to_string(),
                 current: false,
                 hotkey: None,
+                separator: false,
             })
             .collect();
         let title = self.plain("menu-highlighting");
@@ -15586,6 +15739,99 @@ mod tests {
                 .starts_with("sftp://mb@host:22"),
             "{}",
             app.panels[0].cwd
+        );
+    }
+
+    /// The switches the dialog carries, which are FAR's: `Ctrl` and the digit a column is
+    /// numbered by takes the column away and brings it back, `Ctrl+7` the rows that are not
+    /// drives at all, and the choice is kept in the configuration rather than for this one
+    /// opening of the dialog.
+    #[test]
+    fn the_drive_dialog_switches_its_own_columns() {
+        let mut app = app();
+        app.run(Command::PanelDrive(fcmd_cmd::Side::Left));
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("no dialog: {:?}", app.mode)
+        };
+        let was = pick.rows.first().expect("a drive").label.clone();
+        assert!(app.cfg.drives.show_type);
+
+        // `Ctrl+1` takes the type column away: the row is shorter, and the dialog is still
+        // open on the same row.
+        press(&mut app, "Ctrl+1");
+        assert!(!app.cfg.drives.show_type, "the setting did not change");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("the dialog closed: {:?}", app.mode)
+        };
+        let now = pick.rows.first().expect("a drive").label.clone();
+        assert!(
+            now.chars().count() < was.chars().count(),
+            "nothing went away: {was:?} -> {now:?}"
+        );
+        assert!(!app.status.is_empty(), "nothing was said about it");
+
+        // And again brings it back, which is what a switch means.
+        press(&mut app, "Ctrl+1");
+        assert!(app.cfg.drives.show_type);
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("the dialog closed")
+        };
+        assert_eq!(pick.rows.first().map(|r| r.label.clone()), Some(was));
+
+        // `Ctrl+7` is the three panels that are not drives.
+        press(&mut app, "Ctrl+7");
+        assert!(!app.cfg.drives.show_panels);
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("the dialog closed")
+        };
+        assert!(
+            !pick.rows.iter().any(|r| r.value.starts_with(':')),
+            "the panels are still there: {:?}",
+            pick.rows
+        );
+        press(&mut app, "Ctrl+7");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("the dialog closed")
+        };
+        assert!(pick.rows.iter().any(|r| r.value == ":processes"));
+    }
+
+    /// A panel showing the process list is not on a drive, and the dialog opens on the row
+    /// that says so rather than on the drive the panel was on before.
+    #[test]
+    fn the_drive_dialog_opens_on_the_panel_one_is_actually_looking_at() {
+        let mut app = app();
+        app.run(Command::PanelDrive(fcmd_cmd::Side::Left));
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("no dialog")
+        };
+        let processes = pick
+            .rows
+            .iter()
+            .position(|r| r.value == ":processes")
+            .expect("the process list is a row");
+        assert_ne!(pick.cursor, processes, "nothing is showing it yet");
+        press(&mut app, "Esc");
+
+        // Open it, then ask for the dialog again.
+        app.open_process_panel(0);
+        assert_eq!(app.panels[0].temp_origin(), Some(":processes"));
+        app.run(Command::PanelDrive(fcmd_cmd::Side::Left));
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("no dialog")
+        };
+        assert_eq!(
+            pick.chosen().map(|r| r.value.as_str()),
+            Some(":processes"),
+            "the cursor is on {:?}",
+            pick.chosen()
+        );
+        // And no drive claims to be the current one while a list is in the panel.
+        assert_eq!(
+            pick.rows.iter().filter(|r| r.current).count(),
+            1,
+            "{:?}",
+            pick.rows
         );
     }
 

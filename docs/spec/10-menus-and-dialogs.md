@@ -358,6 +358,45 @@ The roots this platform has — `/` and the home directory on Unix, the drive le
 on Windows — followed by every open SFTP connection as `sftp://user@host`. `Enter` takes *that*
 panel there; for a connection that is configured but not open, it connects first.
 
+It is a table rather than a list, laid out the way FAR lays it out: the path, then a space, then
+the columns with a rule between each pair of them — the kind of thing it is, the device, the
+label, the filesystem, the size and the free space. The words read from the left and the two
+sizes from the right. A column nothing filled takes no room at all.
+
+Under a rule across the frame come the rows that are not drives: the open connections, the
+object stores that are configured, and the three panels (§2 of `02-panels.md`) — the stored
+sessions, the processes, and the temporary panel. They are numbered from `0`, and the number is
+the row's own key. The cursor opens on the drive the panel is on, or, where the panel is showing
+one of those three lists, on the row for *that list*: a panel showing the processes is not on a
+drive, and offering the drive it was on before is answering a question nobody asked.
+
+The dialog belongs to its panel and opens over it, five columns in from that panel's frame and
+centred up and down — FAR's own arithmetic. A list that will send the *right* panel somewhere
+and opens in the middle of the screen is a list whose title one has to read.
+
+The columns are switched from inside the dialog, with the keys FAR uses, and what one chooses is
+written to `[drives]` in the configuration rather than lasting only until the dialog closes:
+
+| Key | What it switches |
+| --- | --- |
+| `Ctrl+1` | the type column |
+| `Ctrl+2` | the device column (off by default) |
+| `Ctrl+3` | the label column |
+| `Ctrl+4` | the filesystem column |
+| `Ctrl+5` | the two size columns |
+| `Ctrl+6` | whether removable drives are listed at all |
+| `Ctrl+7` | whether the panels that are not drives are listed |
+| `Ctrl+8` | whether optical drives are listed |
+| `Ctrl+9` | whether network shares are listed |
+| `Ctrl+R` | read the drives again, for a stick plugged in since it opened |
+
+The cursor stays on the row it was on across a switch — the row is what one is looking at, and a
+column going away is no reason to lose it. FAR's third state for the sizes (its *float* sizes) is
+the only one we have: sizes are always printed the short way, `1.84 G`.
+
+Still to come: `F9` for the same switches as a dialog of boxes, and FAR's `Ctrl+H` for unmounted
+volumes, which is a Windows idea with nothing behind it here yet.
+
 ### 4.4 Folders history (`Alt+F12`)
 
 Where this panel has been, newest first, without repeats. `Enter` goes back to it.

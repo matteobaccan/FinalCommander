@@ -14,6 +14,10 @@ pub struct TempList {
     /// What the panel says it is showing, in its frame.
     pub title: String,
     pub paths: HashMap<EntryId, VPath>,
+    /// Which row of the change-drive dialog made this panel, where one did: `:netbox`,
+    /// `:processes`, `:temp`. The dialog reads it back to put its cursor on the panel one is
+    /// actually looking at, rather than on the drive one happened to be on before.
+    pub origin: Option<String>,
 }
 
 impl TempList {
@@ -27,7 +31,14 @@ impl TempList {
             paths.insert(entry.id, path);
             entries.push(entry);
         }
-        (TempList { title, paths }, entries)
+        (
+            TempList {
+                title,
+                paths,
+                origin: None,
+            },
+            entries,
+        )
     }
 }
 
@@ -314,6 +325,19 @@ impl Panel {
         self.filter_set = None;
         self.name_scroll = 0;
         self.set_listing(entries, generation);
+    }
+
+    /// Say which row of the change-drive dialog this panel came from, so the dialog can find
+    /// its way back to it.
+    pub fn set_temp_origin(&mut self, origin: impl Into<String>) {
+        if let Some(list) = &mut self.temp {
+            list.origin = Some(origin.into());
+        }
+    }
+
+    /// That row's value, where this panel came from one.
+    pub fn temp_origin(&self) -> Option<&str> {
+        self.temp.as_ref()?.origin.as_deref()
     }
 
     /// Every path the list holds, in listing order: what a re-read starts from.

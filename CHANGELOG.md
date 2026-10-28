@@ -8,6 +8,20 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **The change-drive dialog is FAR's.** It opens over the panel it is about — five columns in
+  from that panel's frame, which is FAR's own arithmetic — instead of in the middle of the
+  screen, so a list that will send the right panel somewhere no longer looks like one about
+  the left. The table is laid out the way FAR lays it out, with a rule between each pair of
+  columns and a rule across the frame above the rows that are not drives. The cursor opens on
+  the row for the panel one is actually looking at: a panel showing the process list is not on
+  a drive, and was being offered the drive it was on before.
+
+  Its columns are switched from inside it with the keys FAR uses — `Ctrl+1` the type, `Ctrl+2`
+  the device, `Ctrl+3` the label, `Ctrl+4` the filesystem, `Ctrl+5` the sizes, `Ctrl+6`,
+  `Ctrl+8` and `Ctrl+9` whether removable, optical and network drives are listed at all,
+  `Ctrl+7` the panels that are not drives, and `Ctrl+R` to read the drives again. What one
+  chooses goes into `[drives]` in the configuration, so it is still chosen tomorrow.
+
 - **The session editor has pages**, as the NetBox plugin's own does: Session, Environment,
   Directories and the protocol's own page along the top of the frame. `Ctrl+PgDn` and
   `Ctrl+PgUp` turn them and wrap round, stepping over a page that the chosen protocol has

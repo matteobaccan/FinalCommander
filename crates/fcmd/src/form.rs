@@ -1501,6 +1501,10 @@ pub struct PickRow {
     /// FAR numbers the plugin panels in the drive dialog this way, and the number is how
     /// anyone who uses it twice a day actually picks one.
     pub hotkey: Option<char>,
+    /// A rule across the list rather than a row to choose: what FAR draws in the drive
+    /// dialog between the drives and the panels that are not drives. The cursor steps over
+    /// it and nothing happens if a click lands on it.
+    pub separator: bool,
 }
 
 impl PickRow {
@@ -1511,6 +1515,18 @@ impl PickRow {
             value: value.into(),
             current,
             hotkey: None,
+            separator: false,
+        }
+    }
+
+    /// The rule between two groups of rows.
+    pub fn rule() -> PickRow {
+        PickRow {
+            label: String::new(),
+            value: String::new(),
+            current: false,
+            hotkey: None,
+            separator: true,
         }
     }
 
@@ -1522,7 +1538,11 @@ impl PickRow {
 
 impl Pick {
     pub fn new(kind: PickKind, title: String, rows: Vec<PickRow>, side: usize) -> Pick {
-        let cursor = rows.iter().position(|r| r.current).unwrap_or(0);
+        let cursor = rows
+            .iter()
+            .position(|r| r.current)
+            .or_else(|| rows.iter().position(|r| !r.separator))
+            .unwrap_or(0);
         Pick {
             kind,
             title,
@@ -1538,10 +1558,16 @@ impl Pick {
         }
         let len = self.rows.len() as isize;
         self.cursor = (self.cursor as isize + delta).rem_euclid(len) as usize;
+        // A rule is not a row: the cursor carries on the way it was going. One step is
+        // enough — two rules never sit together.
+        if self.rows[self.cursor].separator {
+            let step = if delta < 0 { -1 } else { 1 };
+            self.cursor = (self.cursor as isize + step).rem_euclid(len) as usize;
+        }
     }
 
     pub fn chosen(&self) -> Option<&PickRow> {
-        self.rows.get(self.cursor)
+        self.rows.get(self.cursor).filter(|r| !r.separator)
     }
 
     pub fn lines(&self) -> Vec<String> {
@@ -1551,6 +1577,12 @@ impl Pick {
         self.rows
             .iter()
             .map(|r| {
+                if r.separator {
+                    // Left blank here and drawn by the renderer, which is the only one that
+                    // knows where the frame is: a rule that stops two columns short of it
+                    // is a rule that looks like a mistake.
+                    return String::new();
+                }
                 let mark = if r.current { '√' } else { ' ' };
                 match (keyed, r.hotkey) {
                     (true, Some(k)) => format!("{mark} {k}  {}", r.label),

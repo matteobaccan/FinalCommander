@@ -909,7 +909,23 @@ fn draw_pick(
         }
     }
 
-    let area = widgets::draw_dialog(buf, &app.theme, screen, &pick.title, &shown, Some(&hint));
+    // The drive dialog belongs to its panel and opens over it, five columns in from its
+    // frame, which is where FAR puts it: a list that will send the *left* panel somewhere
+    // and opens in the middle of the screen is a list one has to read the title of. The
+    // other lists are about the program and stay centred.
+    let over = (pick.kind == crate::menu::PickKind::Drives)
+        .then(|| app.layout.panels[pick.side].map(|p| p.area))
+        .flatten()
+        .map(|area| Rect::new(area.x.saturating_sub(1), area.y, area.w, area.h));
+    let area = widgets::draw_dialog_over(
+        buf,
+        &app.theme,
+        screen,
+        over,
+        &pick.title,
+        &shown,
+        Some(&hint),
+    );
     if pick.rows.is_empty() {
         return None;
     }
@@ -940,6 +956,28 @@ fn draw_pick(
             let text = format!(" {:<w$}", line, w = width.saturating_sub(1));
             buf.put_str(area.x + 1, y, &text, ink, width as u16);
         }
+    }
+
+    // The rules between groups of rows, drawn across the frame and joined to it the way the
+    // panel's own separators are: `lines()` leaves them blank because only this knows where
+    // the frame is.
+    let frame = Style::new(
+        app.theme.color("dialog.frame"),
+        app.theme.color("dialog.bg"),
+    );
+    for i in 0..shown.len() {
+        if !pick.rows.get(start + i).is_some_and(|r| r.separator) {
+            continue;
+        }
+        let y = area.y + 1 + i as u16;
+        if y >= area.bottom() - 1 {
+            break;
+        }
+        for x in area.x + 1..area.right() - 1 {
+            buf.set(x, y, '─', frame);
+        }
+        buf.set(area.x, y, '├', frame);
+        buf.set(area.right() - 1, y, '┤', frame);
     }
 
     let style = Style::new(app.theme.color("cursor.fg"), app.theme.color("cursor.bg"));
@@ -2476,6 +2514,33 @@ mod tests {
         let mut buf = Buffer::new(w, h);
         draw(app, &mut buf);
         buf.to_text()
+    }
+
+    /// The drive dialog belongs to its panel. FAR opens it five columns in from that panel's
+    /// own frame, and so does this: a list that will send the *right* panel somewhere and
+    /// opens in the middle of the screen is a list one has to read the title of.
+    #[test]
+    fn the_drive_dialog_opens_over_the_panel_it_is_about() {
+        let edge = |side: fcmd_cmd::Side| -> usize {
+            let mut app = app("far", "en");
+            app.run(fcmd_cmd::Command::PanelDrive(side));
+            let text = frame(&mut app, 100, 24);
+            text.lines()
+                .find(|line| line.contains("Change drive"))
+                // By character, not by byte: the panel's own frame is three bytes a column.
+                .and_then(|line| line.chars().position(|c| c == '┌' || c == '╔'))
+                .unwrap_or_else(|| panic!("no dialog in\n{text}"))
+        };
+        let left = edge(fcmd_cmd::Side::Left);
+        let right = edge(fcmd_cmd::Side::Right);
+        // Five columns in from the left panel's frame, which is FAR's own arithmetic.
+        assert_eq!(left, 5, "the left panel's dialog opened at {left}");
+        // And further right for the right panel — how much further depends on how wide the
+        // table came out, because a dialog is never drawn off the edge of the screen.
+        assert!(
+            right > left,
+            "both dialogs opened at {left}: the right one is not over its own panel"
+        );
     }
 
     /// The screenshots in `docs/shots`, drawn by the renderer itself from the same buffer the

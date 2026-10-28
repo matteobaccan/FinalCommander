@@ -839,7 +839,19 @@ drive-processes = Список процессов
 drive-temp = Временная панель
 temp-added = { $count } во временной панели
 proc-none = список процессов здесь не читается
-drives-hint = ↑↓ выбрать · 0-9 панели ниже · Enter применить · Esc закрыть
+drives-hint = ↑↓ выбор · 0-9 панели · Ctrl+1..9 столбцы · Ctrl+R перечитать
+drives-col-type = тип
+drives-col-device = устройство
+drives-col-label = метку
+drives-col-fs = файловую систему
+drives-col-size = размеры
+drives-col-removable = сменные диски
+drives-col-panels = панели, которые не диски
+drives-col-optical = оптические приводы
+drives-col-network = сетевые ресурсы
+drives-shown = показываю { $what }
+drives-hidden = скрываю { $what }
+drives-reread = диски прочитаны заново
 bookmarks-hint = Enter перейти · Ins запомнить · Del убрать · F4 назвать · Esc закрыть
 
 # The search dialog (F7), which asks the whole question in one place.

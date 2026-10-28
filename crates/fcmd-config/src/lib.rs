@@ -448,6 +448,55 @@ impl Default for S3Cfg {
     }
 }
 
+/// `[drives]`: which columns the change-drive dialog shows, and which drives (SPEC 10 §3.4).
+///
+/// FAR keeps the same settings in one `DriveMenuMode` word and turns them on and off with
+/// `Ctrl` and a digit from inside the dialog; this is that word, written out. Every field is
+/// a column or a kind of drive, in the order of the digit that toggles it, and the dialog
+/// writes the change straight back here, so what one chose is still chosen tomorrow.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct DrivesCfg {
+    /// `Ctrl+1`: the kind of thing it is — disk, stick, share, memory.
+    pub show_type: bool,
+    /// `Ctrl+2`: what it is a mount of — the device on Unix, the share behind a mapped
+    /// letter on Windows. FAR calls it the associated path and leaves it off.
+    pub show_device: bool,
+    /// `Ctrl+3`: the volume's own name.
+    pub show_label: bool,
+    /// `Ctrl+4`: the filesystem.
+    pub show_fs: bool,
+    /// `Ctrl+5`: the two sizes, total and free.
+    pub show_size: bool,
+    /// `Ctrl+6`: list the removable drives at all.
+    pub show_removable: bool,
+    /// `Ctrl+7`: list the panels that are not drives — the sessions, the processes, the
+    /// temporary panel.
+    pub show_panels: bool,
+    /// `Ctrl+8`: list the optical drives at all.
+    pub show_optical: bool,
+    /// `Ctrl+9`: list the network shares at all.
+    pub show_network: bool,
+}
+
+impl Default for DrivesCfg {
+    fn default() -> Self {
+        DrivesCfg {
+            show_type: true,
+            // Off, as it is in FAR: on a laptop with one disk the device column says
+            // `/dev/nvme0n1p2` and nothing else.
+            show_device: false,
+            show_label: true,
+            show_fs: true,
+            show_size: true,
+            show_removable: true,
+            show_panels: true,
+            show_optical: true,
+            show_network: true,
+        }
+    }
+}
+
 /// `[arc]`: the guards every archive read goes through (SPEC 04 §4).
 ///
 /// The terminal (`Ctrl+Alt+E`).
@@ -923,6 +972,7 @@ pub struct Config {
     #[serde(rename = "decompile")]
     pub decompile: Vec<DecompileRule>,
     pub net: NetCfg,
+    pub drives: DrivesCfg,
     pub arc: ArcCfg,
     pub term: TermCfg,
     pub editor: EditCfg,

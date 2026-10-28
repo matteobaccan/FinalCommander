@@ -848,7 +848,19 @@ drive-processes = Process list
 drive-temp = Temporary panel
 temp-added = { $count } added to the temporary panel
 proc-none = the list of running processes is not readable here
-drives-hint = ↑↓ choose · 0-9 the panels below · Enter apply · Esc close
+drives-hint = ↑↓ choose · 0-9 panels · Ctrl+1..9 columns · Ctrl+R re-read
+drives-col-type = the type
+drives-col-device = the device
+drives-col-label = the label
+drives-col-fs = the filesystem
+drives-col-size = the sizes
+drives-col-removable = the removable drives
+drives-col-panels = the panels that are not drives
+drives-col-optical = the optical drives
+drives-col-network = the network shares
+drives-shown = showing { $what }
+drives-hidden = hiding { $what }
+drives-reread = the drives were read again
 bookmarks-hint = Enter go · Ins keep · Del remove · F4 name · Esc close
 
 # The search dialog (F7), which asks the whole question in one place.

@@ -839,7 +839,19 @@ drive-processes = Liste des processus
 drive-temp = Panneau temporaire
 temp-added = { $count } dans le panneau temporaire
 proc-none = la liste des processus ne se lit pas ici
-drives-hint = ↑↓ choisir · 0-9 les panneaux ci-dessous · Entrée appliquer · Échap fermer
+drives-hint = ↑↓ choisir · 0-9 panneaux · Ctrl+1..9 colonnes · Ctrl+R relire
+drives-col-type = le type
+drives-col-device = le périphérique
+drives-col-label = l'étiquette
+drives-col-fs = le système de fichiers
+drives-col-size = les tailles
+drives-col-removable = les lecteurs amovibles
+drives-col-panels = les panneaux qui ne sont pas des disques
+drives-col-optical = les lecteurs optiques
+drives-col-network = les partages réseau
+drives-shown = { $what } affiché
+drives-hidden = { $what } masqué
+drives-reread = disques relus
 bookmarks-hint = Entrée aller · Inser garder · Suppr retirer · F4 nommer · Échap fermer
 
 # The search dialog (F7), which asks the whole question in one place.

@@ -1139,6 +1139,24 @@ pub fn draw_dialog(
     lines: &[String],
     hint: Option<&str>,
 ) -> Rect {
+    draw_dialog_over(buf, theme, screen, None, title, lines, hint)
+}
+
+/// The same, but anchored to a panel rather than to the screen.
+///
+/// `over` is the panel the dialog is *about*, and the rule is FAR's own: five columns in from
+/// that panel's left edge, and centred up and down. A dialog about one panel that opens over
+/// the other is a dialog whose title one has to read to know which side it will act on.
+#[allow(clippy::too_many_arguments)]
+pub fn draw_dialog_over(
+    buf: &mut Buffer,
+    theme: &Theme,
+    screen: Rect,
+    over: Option<Rect>,
+    title: &str,
+    lines: &[String],
+    hint: Option<&str>,
+) -> Rect {
     let content_w = lines
         .iter()
         .map(|l| l.width())
@@ -1149,7 +1167,16 @@ pub fn draw_dialog(
         .min(screen.w.saturating_sub(4) as usize);
     let h = (lines.len() + usize::from(hint.is_some()) + 2).min(screen.h as usize) as u16;
     let w = content_w as u16 + 4;
-    let x = screen.x + (screen.w.saturating_sub(w)) / 2;
+    let x = match over {
+        // FAR's `PanelRect.left + 5`, kept on the screen: the dialog belongs to the panel,
+        // and five columns in is where thirty years of `Alt+F1` have put it.
+        Some(panel) => panel
+            .x
+            .saturating_add(5)
+            .min(screen.right().saturating_sub(w))
+            .max(screen.x),
+        None => screen.x + (screen.w.saturating_sub(w)) / 2,
+    };
     let y = screen.y + (screen.h.saturating_sub(h)) / 2;
     let area = Rect::new(x, y, w, h);
 

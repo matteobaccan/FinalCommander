@@ -827,7 +827,19 @@ drive-processes = 进程列表
 drive-temp = 临时面板
 temp-added = 已放入临时面板 { $count } 个
 proc-none = 这里读不到进程列表
-drives-hint = ↑↓ 选择 · 0-9 下方面板 · Enter 应用 · Esc 关闭
+drives-hint = ↑↓ 选择 · 0-9 面板 · Ctrl+1..9 列 · Ctrl+R 重新读取
+drives-col-type = 类型
+drives-col-device = 设备
+drives-col-label = 卷标
+drives-col-fs = 文件系统
+drives-col-size = 大小
+drives-col-removable = 可移动驱动器
+drives-col-panels = 非磁盘的面板
+drives-col-optical = 光驱
+drives-col-network = 网络共享
+drives-shown = 显示{ $what }
+drives-hidden = 隐藏{ $what }
+drives-reread = 已重新读取驱动器
 bookmarks-hint = Enter 转到 · Ins 记住 · Del 移除 · F4 命名 · Esc 关闭
 
 # The search dialog (F7), which asks the whole question in one place.
