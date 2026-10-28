@@ -31,4 +31,8 @@ windows-sys = { version = "0.61", features = [
   # `GetNamedSecurityInfoW` to read it, `LookupAccountSidW` to put a name to it.
   "Win32_Security",
   "Win32_Security_Authorization",
+  # What is running: the process snapshot, and the memory of one process.
+  "Win32_System_Diagnostics_ToolHelp",
+  "Win32_System_ProcessStatus",
+  "Win32_System_Threading",
 ] }

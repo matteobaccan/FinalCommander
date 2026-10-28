@@ -717,6 +717,13 @@ keys = ["Shift+F"]
 scope = "viewer"
 cmd = "viewer.follow"
 
+# The temporary panel: what is selected goes into the other side, which becomes a list of
+# paths one can then copy, move or delete from in one go — files gathered from several
+# directories at once, which is the whole of what that panel is for.
+[[bind]]
+keys = ["Ctrl+Shift+Ins"]
+cmd = "panel.temp.add"
+
 # FAR's `Ctrl+Z`: the line the directory's own `descript.ion` keeps about this file.
 [[bind]]
 keys = ["Ctrl+Z"]

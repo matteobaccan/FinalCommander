@@ -833,6 +833,11 @@ drive-memory = Memory
 drive-home = Home
 drive-connection = Connection
 drive-objects = Object store
+drive-netbox = NetBox: stored sessions
+drive-processes = Process list
+drive-temp = Temporary panel
+temp-added = { $count } added to the temporary panel
+proc-none = the list of running processes is not readable here
 drives-hint = ↑↓ choose · 0-9 the panels below · Enter apply · Esc close
 bookmarks-hint = Enter go · Ins keep · Del remove · F4 name · Esc close
 

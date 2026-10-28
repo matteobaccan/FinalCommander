@@ -824,6 +824,11 @@ drive-memory = Mémoire
 drive-home = Perso
 drive-connection = Connexion
 drive-objects = Stockage objet
+drive-netbox = NetBox : sessions enregistrées
+drive-processes = Liste des processus
+drive-temp = Panneau temporaire
+temp-added = { $count } dans le panneau temporaire
+proc-none = la liste des processus ne se lit pas ici
 drives-hint = ↑↓ choisir · 0-9 les panneaux ci-dessous · Entrée appliquer · Échap fermer
 bookmarks-hint = Entrée aller · Inser garder · Suppr retirer · F4 nommer · Échap fermer
 

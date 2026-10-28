@@ -812,6 +812,11 @@ drive-memory = 内存
 drive-home = 主目录
 drive-connection = 连接
 drive-objects = 对象存储
+drive-netbox = NetBox：已保存的会话
+drive-processes = 进程列表
+drive-temp = 临时面板
+temp-added = 已放入临时面板 { $count } 个
+proc-none = 这里读不到进程列表
 drives-hint = ↑↓ 选择 · 0-9 下方面板 · Enter 应用 · Esc 关闭
 bookmarks-hint = Enter 转到 · Ins 记住 · Del 移除 · F4 命名 · Esc 关闭
 

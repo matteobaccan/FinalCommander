@@ -190,6 +190,8 @@ pub enum Command {
     /// Describe the file under the cursor: the line the directory's `descript.ion` keeps
     /// about it (FAR's `Ctrl+Z`).
     FileDescribe,
+    /// Put what is selected into the temporary panel on the other side (SPEC 02 §7b).
+    PanelTempAdd,
     FileChecksum,
     /// Check the files beside a list of digests against it.
     FileChecksumVerify,
@@ -459,6 +461,7 @@ impl Command {
             Command::FileViewAlt,
             Command::FileEditAlt,
             Command::FileDescribe,
+            Command::PanelTempAdd,
             Command::FileChecksum,
             Command::FileChecksumVerify,
             Command::FileApply,
@@ -700,6 +703,7 @@ impl Command {
             Command::FileViewAlt => "file.view.external".into(),
             Command::FileEditAlt => "file.edit.external".into(),
             Command::FileDescribe => "file.describe".into(),
+            Command::PanelTempAdd => "panel.temp.add".into(),
             Command::FileChecksum => "file.checksum.create".into(),
             Command::FileChecksumVerify => "file.checksum.verify".into(),
             Command::FileApply => "file.apply".into(),
@@ -918,6 +922,7 @@ impl Command {
             ("file.view.external", _) => Command::FileViewAlt,
             ("file.edit.external", _) => Command::FileEditAlt,
             ("file.describe", _) => Command::FileDescribe,
+            ("panel.temp.add", _) => Command::PanelTempAdd,
             ("file.checksum.create", _) => Command::FileChecksum,
             ("file.checksum.verify", _) => Command::FileChecksumVerify,
             ("file.apply", _) => Command::FileApply,

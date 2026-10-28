@@ -575,3 +575,38 @@ once — a list gathered from a search — carries none of them, which is a back
 **What is still owed**: sorting by description (`Ctrl+F11`), descriptions inside an archive or
 on a server, carrying one out of a search result list, and the settings FAR has for which names
 to look for and whether to write UTF-8.
+
+## 14. The panels that are not drives (shipped in 0.8.0)
+
+`Alt+F1` and `Alt+F2` offer more than drives, as FAR's change-drive dialog does: under the
+mounted filesystems and the open connections come three panels that are not filesystems at
+all, each numbered so a key reaches it.
+
+**NetBox — the stored sessions.** Every `[[site]]` and `[[s3]]` block, plus whatever is open
+now, as a panel of rows named `sftp://user@host`. A panel and not a dialog, because that is
+what makes it useful: `Enter` on a row connects and the panel becomes that server's directory,
+and the quick search, the keys and the other panel beside it work the way they work on files.
+A session that is already open is the row worth having, so it hides the stored one it came
+from.
+
+**Process list.** What is running, as a panel: the name with its pid beside it, and the *size*
+column holding the memory it has resident — which means `Ctrl+F6` sorts the list by memory,
+which is what anybody opening it came to see. Linux reads `/proc/<pid>/status`, which answers
+the name, the thread count and the resident memory in one file and needs no call into the
+kernel; Windows takes a `CreateToolhelp32Snapshot` and asks each process for its working set,
+and one that refuses keeps its row with the column empty. macOS and the BSDs keep the list
+behind a `sysctl` whose structure would have to be mirrored by hand, field for field, per
+release — a page of `unsafe` for a panel, where a wrong offset reads somebody else's memory —
+so it waits for a tested way to do it. **Nothing here kills anything**: a file manager that
+could end a process from a listing with the key that deletes a file is one that ends a process
+by accident, and ending one wants a confirmation of its own.
+
+**Temporary panel.** A panel that holds paths rather than a directory, so what is in it can
+come from anywhere — several directories, two drives, a search — and `F5` out of it copies the
+real files. It opens empty from the dialog; `Ctrl+Shift+Ins` puts what is selected in the
+other panel into it, adding to what is there and never adding the same path twice. The rows
+are whole paths, because that is the only thing that tells two files of one name apart.
+
+**Network** is the one of FAR's four this does not have: browsing a Windows network needs SMB
+discovery, which is a protocol and not a panel, and a line in `docs/BACKLOG.md`. The sessions
+panel is where a server one has already named lives.

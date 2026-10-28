@@ -133,6 +133,85 @@ pub fn links(path: &Path) -> Option<u64> {
     (ok != 0).then_some(info.nNumberOfLinks as u64)
 }
 
+/// Everything running, from a snapshot of the process table.
+///
+/// `CreateToolhelp32Snapshot` is the call that needs no privilege: it gives the name, the pid
+/// and the thread count of every process the user may see. The memory needs a second call per
+/// process and a handle we may not get — a system process refuses — so a process that will
+/// not answer keeps its row with an empty memory column rather than being left out.
+pub fn processes() -> Vec<super::Process> {
+    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+        TH32CS_SNAPPROCESS,
+    };
+
+    // SAFETY: the call takes no pointer of ours and returns a handle or the invalid value.
+    let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
+    if snapshot == INVALID_HANDLE_VALUE {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    let mut entry: PROCESSENTRY32W = unsafe { std::mem::zeroed() };
+    entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+    // SAFETY: `entry` is a whole, zeroed structure whose `dwSize` says how big it is, which
+    // is what the call reads before writing into it.
+    let mut ok = unsafe { Process32FirstW(snapshot, &mut entry) };
+    while ok != 0 {
+        let name = {
+            let raw = &entry.szExeFile;
+            let end = raw.iter().position(|c| *c == 0).unwrap_or(raw.len());
+            String::from_utf16_lossy(&raw[..end])
+        };
+        out.push(super::Process {
+            pid: entry.th32ProcessID,
+            name,
+            memory: memory_of(entry.th32ProcessID),
+            threads: entry.cntThreads,
+            bits: 0,
+        });
+        // SAFETY: as above; the snapshot is still open.
+        ok = unsafe { Process32NextW(snapshot, &mut entry) };
+    }
+    // SAFETY: the handle came from `CreateToolhelp32Snapshot` and is closed exactly once.
+    unsafe { CloseHandle(snapshot) };
+    out
+}
+
+/// What one process has resident, or zero when it will not say.
+#[cfg(windows)]
+fn memory_of(pid: u32) -> u64 {
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::ProcessStatus::{
+        GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS,
+    };
+    use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
+
+    // SAFETY: no pointer of ours is passed; the result is a handle or null.
+    let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
+    if handle.is_null() {
+        return 0;
+    }
+    let mut counters: PROCESS_MEMORY_COUNTERS = unsafe { std::mem::zeroed() };
+    counters.cb = std::mem::size_of::<PROCESS_MEMORY_COUNTERS>() as u32;
+    // SAFETY: the handle is open and `counters` is a whole structure of the size its own
+    // `cb` field declares, which is what the call fills in.
+    let ok = unsafe {
+        GetProcessMemoryInfo(
+            handle,
+            &mut counters,
+            std::mem::size_of::<PROCESS_MEMORY_COUNTERS>() as u32,
+        )
+    };
+    // SAFETY: the handle came from `OpenProcess` and is closed exactly once.
+    unsafe { CloseHandle(handle) };
+    if ok == 0 {
+        0
+    } else {
+        counters.WorkingSetSize as u64
+    }
+}
+
 pub fn owner(path: &Path, cache: &mut super::OwnerCache) -> Option<super::Owner> {
     use windows_sys::Win32::Foundation::LocalFree;
     use windows_sys::Win32::Security::Authorization::{GetNamedSecurityInfoW, SE_FILE_OBJECT};

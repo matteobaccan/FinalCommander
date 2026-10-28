@@ -825,6 +825,11 @@ drive-memory = Memoria
 drive-home = Home
 drive-connection = Connessione
 drive-objects = Object store
+drive-netbox = NetBox: sessioni salvate
+drive-processes = Elenco processi
+drive-temp = Pannello temporaneo
+temp-added = { $count } nel pannello temporaneo
+proc-none = qui l'elenco dei processi non si legge
 drives-hint = ↑↓ scegli · 0-9 i pannelli in fondo · Invio applica · Esc chiudi
 bookmarks-hint = Invio vai · Ins aggiungi · Canc togli · F4 rinomina · Esc chiudi
 

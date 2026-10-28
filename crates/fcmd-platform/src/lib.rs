@@ -11,10 +11,13 @@
 //! one that leaves the line blank, because a wrong free-space figure is the one a copy is
 //! planned against.
 
+pub mod process;
 #[cfg(unix)]
 mod unix;
 #[cfg(windows)]
 mod windows;
+
+pub use process::{processes, Process};
 
 use std::path::Path;
 

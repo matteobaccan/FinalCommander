@@ -80,6 +80,7 @@ impl Command {
                 SortKey::Unsorted => "leave the order as the filesystem gives it",
             },
             Command::FileDescribe => "write what this file is, in the directory's descript.ion",
+            Command::PanelTempAdd => "put what is selected into the temporary panel",
             Command::PanelSortReverse => "turn the order round",
             Command::PanelSortGroups => "use the sort groups, which put some kinds of file first",
             Command::PanelSplit(by) => {

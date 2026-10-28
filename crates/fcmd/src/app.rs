@@ -5390,6 +5390,16 @@ impl App {
                 false,
             ));
         }
+        // And the panels that are not drives at all, which is where FAR keeps its own:
+        // the stored sessions, the running processes, and a panel of files gathered by
+        // hand. Each is a `:`-prefixed value, which no path can be.
+        rows.push(keyed(self.plain("drive-netbox"), ":netbox".into(), false));
+        rows.push(keyed(
+            self.plain("drive-processes"),
+            ":processes".into(),
+            false,
+        ));
+        rows.push(keyed(self.plain("drive-temp"), ":temp".into(), false));
         Pick::new(
             PickKind::Drives,
             self.plain("menu-change-drive"),
@@ -6529,6 +6539,7 @@ impl App {
             Command::ToolUserMenu => self.open_user_menu(),
             Command::ToolSyncDirs => self.open_sync_form(),
             Command::FileDescribe => self.open_describe(),
+            Command::PanelTempAdd => self.add_to_temp_panel(),
             Command::FileChecksum => self.open_checksum_form(),
             Command::FileChecksumVerify => self.start_verify(),
             Command::FileDelete | Command::FileDeleteCurrent | Command::FileDeleteForce => {
@@ -8527,6 +8538,196 @@ impl App {
 
     /// `F5`: put the results in the panel, which is what makes them worth something — every
     /// key that works on a panel then works on them.
+    /// One row of a panel that holds paths rather than a directory: the name is the whole
+    /// path, because that is the only thing that tells two files of the same name apart when
+    /// they came from different directories, and the size is the file's own.
+    fn temp_entry(path: &VPath, at: usize) -> fcmd_core::Entry {
+        use fcmd_core::{Entry, EntryId, EntryKind};
+
+        let meta = path
+            .is_local()
+            .then(|| std::fs::metadata(path.os()).ok())
+            .flatten();
+        Entry {
+            name: path.to_string().into(),
+            kind: match &meta {
+                Some(m) if m.is_dir() => EntryKind::Dir,
+                _ => EntryKind::File,
+            },
+            size: meta.as_ref().map(|m| m.len()).unwrap_or(0),
+            mtime: meta.as_ref().and_then(|m| m.modified().ok()),
+            btime: None,
+            atime: None,
+            flags: fcmd_core::EntryFlags::empty(),
+            id: EntryId::Name(at as u64),
+            link_target: None,
+        }
+    }
+
+    /// The stored sessions, as a panel (FAR's NetBox: `Alt+F1` → NetBox).
+    ///
+    /// A panel and not a dialog, because that is what makes it useful: `Enter` on a row
+    /// connects and the panel becomes that server's directory, and everything a panel does —
+    /// quick search, the keys, the other panel beside it — works on the list of sessions the
+    /// way it works on a list of files.
+    fn open_sessions_panel(&mut self, side: usize) {
+        use fcmd_core::{Entry, EntryId, EntryKind};
+
+        let mut items: Vec<(VPath, Entry)> = Vec::new();
+        let row = |label: String, path: VPath, items: &mut Vec<(VPath, Entry)>| {
+            let entry = Entry {
+                name: label.into(),
+                kind: EntryKind::Dir,
+                size: 0,
+                mtime: None,
+                btime: None,
+                atime: None,
+                flags: fcmd_core::EntryFlags::empty(),
+                // Its place in the list is its identity: two sessions never share a name,
+                // and the row is what the selection and the cursor are kept on.
+                id: EntryId::Name(items.len() as u64),
+                link_target: None,
+            };
+            items.push((path, entry));
+        };
+        // What is open now, first: a connection one can step into without a password.
+        for key in self.connected.clone() {
+            row(key.clone(), VPath::parse(&format!("{key}/")), &mut items);
+        }
+        for site in self.sites.clone() {
+            let label = site.key();
+            if items.iter().any(|(_, e)| e.name_str() == label) {
+                continue; // already open, and the open one is the row worth having
+            }
+            row(label, VPath::parse(&site.url()), &mut items);
+        }
+        for service in self.cfg.s3.clone() {
+            let label = format!("s3://{}@", service.name);
+            row(
+                label.clone(),
+                VPath::parse(&format!("{label}/")),
+                &mut items,
+            );
+        }
+        if items.is_empty() {
+            let m = self.i18n.t("net-no-sites");
+            self.set_error(m);
+            return;
+        }
+        let title = self.plain("drive-netbox");
+        let generation = self.panels[side].generation + 1;
+        self.panels[side].generation = generation;
+        self.panels[side].set_temp(title, items, generation);
+        self.active = side;
+    }
+
+    /// What is running, as a panel (FAR's process list: `Alt+F1` → Process list).
+    ///
+    /// A panel of processes rather than of files, so the sort keys, the quick search and the
+    /// column the panel already has do the work: the name is the executable's with its pid
+    /// beside it, and the *size* column is the memory it has resident — which means `Ctrl+F6`
+    /// sorts the list by memory, which is what anybody opening it came to see.
+    ///
+    /// Nothing here kills anything. A file manager that could end a process from a listing
+    /// by the same key that deletes a file is a file manager one presses `F8` in by accident
+    /// once; ending one is a backlog line with a confirmation of its own.
+    fn open_process_panel(&mut self, side: usize) {
+        use fcmd_core::{Entry, EntryId, EntryKind};
+
+        let running = fcmd_platform::processes();
+        if running.is_empty() {
+            let m = self.i18n.t("proc-none");
+            self.set_error(m);
+            return;
+        }
+        let items: Vec<(VPath, Entry)> = running
+            .into_iter()
+            .map(|p| {
+                let label = format!("{}  [{}]", p.name, p.pid);
+                let entry = Entry {
+                    name: label.into(),
+                    kind: EntryKind::File,
+                    // The memory, in the column that already knows how to show a number of
+                    // bytes and already has a key that sorts by it.
+                    size: p.memory,
+                    mtime: None,
+                    btime: None,
+                    atime: None,
+                    flags: fcmd_core::EntryFlags::empty(),
+                    id: EntryId::Name(p.pid as u64),
+                    link_target: None,
+                };
+                // Where the process lives, as far as anything can be said: on Linux its own
+                // directory under `/proc`, which `Enter` opens and which is worth looking at.
+                (VPath::local(format!("/proc/{}", p.pid)), entry)
+            })
+            .collect();
+        let title = self.plain("drive-processes");
+        let generation = self.panels[side].generation + 1;
+        self.panels[side].generation = generation;
+        self.panels[side].set_temp(title, items, generation);
+        self.active = side;
+    }
+
+    /// An empty panel to put files in by hand (FAR's temporary panel).
+    ///
+    /// It holds paths rather than a directory, so what goes in it can come from anywhere —
+    /// several directories, a search, two different drives — and `F5` out of it copies the
+    /// real files. `Ctrl+Shift+Ins` is what puts a selection into it.
+    fn open_temp_panel(&mut self, side: usize) {
+        let title = self.plain("drive-temp");
+        let generation = self.panels[side].generation + 1;
+        self.panels[side].generation = generation;
+        self.panels[side].set_temp(title, Vec::new(), generation);
+        self.active = side;
+    }
+
+    /// Put what is selected into the temporary panel on the other side, making one if the
+    /// other side is not one yet. The files stay where they are: this is a list of paths.
+    fn add_to_temp_panel(&mut self) {
+        use fcmd_core::Entry;
+
+        let sources = self.job_sources();
+        if sources.is_empty() {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        }
+        let other = 1 - self.active;
+        let mut items: Vec<(VPath, Entry)> = Vec::new();
+        // What is in it already, so adding twice adds once.
+        let mut seen: Vec<String> = Vec::new();
+        if self.panels[other].temp.is_some() {
+            for path in self.panels[other].temp_paths() {
+                let text = path.to_string();
+                if seen.contains(&text) {
+                    continue;
+                }
+                seen.push(text.clone());
+                items.push((path.clone(), Self::temp_entry(&path, items.len())));
+            }
+        }
+        let mut added = 0usize;
+        for path in sources {
+            let text = path.to_string();
+            if seen.contains(&text) {
+                continue;
+            }
+            seen.push(text);
+            items.push((path.clone(), Self::temp_entry(&path, items.len())));
+            added += 1;
+        }
+        let title = self.plain("drive-temp");
+        let generation = self.panels[other].generation + 1;
+        self.panels[other].generation = generation;
+        self.panels[other].set_temp(title, items, generation);
+        self.panels[self.active].selection.clear();
+        let msg = self
+            .i18n
+            .t_args("temp-added", &[("count", (added as i64).into())]);
+        self.set_status(msg);
+    }
+
     fn find_panelise(&mut self) {
         let (rows, label) = match &mut self.mode {
             Mode::Find(view) => (std::mem::take(&mut view.rows), view.label.clone()),
@@ -10535,7 +10736,13 @@ impl App {
             }
             PickKind::Drives | PickKind::FoldersHistory | PickKind::Bookmarks => {
                 self.active = pick.side;
-                self.go_to_bookmark(&row.value);
+                // The rows that are not drives: a panel of something other than a directory.
+                match row.value.as_str() {
+                    ":netbox" => self.open_sessions_panel(pick.side),
+                    ":processes" => self.open_process_panel(pick.side),
+                    ":temp" => self.open_temp_panel(pick.side),
+                    _ => self.go_to_bookmark(&row.value),
+                }
             }
             PickKind::CommandHistory => {
                 // Chosen from the list, the line goes back on the command line rather than
@@ -15261,14 +15468,25 @@ mod tests {
             pick.rows
         );
 
-        // The connection is at the bottom, numbered, and the number reaches it.
-        let last = pick.rows.last().expect("a row");
-        assert_eq!(last.value, "sftp://mb@host:22/");
-        assert_eq!(last.hotkey, Some('0'));
-        assert_eq!(pick.by_hotkey('0'), Some(pick.rows.len() - 1));
+        // The connection is below the drives, numbered, and the number reaches it. After it
+        // come the panels that are not filesystems at all, numbered on from there.
+        let connection = pick
+            .rows
+            .iter()
+            .position(|r| r.value == "sftp://mb@host:22/")
+            .expect("the open connection is a row");
+        assert_eq!(pick.rows[connection].hotkey, Some('0'));
+        assert_eq!(pick.by_hotkey('0'), Some(connection));
+        for value in [":netbox", ":processes", ":temp"] {
+            assert!(
+                pick.rows.iter().any(|r| r.value == value),
+                "{value} is not offered: {:?}",
+                pick.rows
+            );
+        }
         // And the number column is drawn for everyone once anybody has one.
         let lines = pick.lines();
-        assert!(lines.last().unwrap().contains('0'), "{:?}", lines.last());
+        assert!(lines[connection].contains('0'), "{:?}", lines[connection]);
 
         press(&mut app, "0");
         assert!(app.mode.is_normal(), "the number did not take the row");
@@ -17258,6 +17476,72 @@ run = ["echo one", "echo two", "echo three"]
         assert_eq!(memo_file(&loud), Some(loud_memo));
         // And a file that is not a table has no memo file to look for.
         assert_eq!(memo_file(&dir.path().join("notes.txt")), None);
+    }
+
+    #[test]
+    fn the_three_panels_that_are_not_drives_open_from_the_drive_dialog() {
+        let mut app = app();
+        app.cfg.s3.push(fcmd_config::S3Cfg {
+            name: "backups".into(),
+            ..Default::default()
+        });
+        // NetBox: the stored sessions and the services, as a panel of their own.
+        app.run(Command::PanelDrive(fcmd_cmd::Side::Left));
+        press(&mut app, "Down"); // off the first row, so the choice is deliberate
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("no dialog: {:?}", app.mode)
+        };
+        let at = pick
+            .rows
+            .iter()
+            .position(|r| r.value == ":netbox")
+            .expect("NetBox is offered");
+        let key = pick.rows[at].hotkey.expect("it is numbered");
+        press(&mut app, &key.to_string());
+        assert!(app.panels[0].temp.is_some(), "it is a panel of its own");
+        assert!(
+            (0..app.panels[0].listing.len())
+                .filter_map(|r| app.panels[0].listing.row(r))
+                .any(|e| e.name_str().contains("backups")),
+            "the service is not among the sessions"
+        );
+
+        // The temporary panel opens empty, and what is selected goes into it.
+        app.run(Command::PanelDrive(fcmd_cmd::Side::Right));
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("no dialog")
+        };
+        let at = pick
+            .rows
+            .iter()
+            .position(|r| r.value == ":temp")
+            .expect("the temporary panel is offered");
+        let key = pick.rows[at].hotkey.expect("it is numbered");
+        press(&mut app, &key.to_string());
+        assert!(app.panels[1].temp.is_some());
+        assert_eq!(app.panels[1].listing.len(), 0, "it opens empty");
+    }
+
+    #[test]
+    fn what_is_selected_goes_into_the_temporary_panel_and_stays_where_it_is() {
+        let mut app = app();
+        // Two files of this directory, chosen by hand.
+        app.panels[0].cursor = 2;
+        app.run(Command::SelToggle);
+        app.run(Command::PanelTempAdd);
+        assert!(app.panels[1].temp.is_some(), "the other side holds them");
+        assert_eq!(app.panels[1].listing.len(), 1);
+        // The row is the whole path, which is what tells two files of one name apart.
+        let row = app.panels[1].listing.row(0).expect("a row");
+        assert!(row.name_str().contains('/') || row.name_str().contains('\\'));
+        // Adding the same file again adds nothing, and adding another adds one.
+        app.active = 0;
+        app.panels[0].cursor = 2;
+        app.run(Command::SelToggle);
+        app.run(Command::PanelTempAdd);
+        assert_eq!(app.panels[1].listing.len(), 1, "added twice");
+        // And the files are where they always were: this is a list of paths.
+        assert!(app.panels[0].listing.len() > 1);
     }
 
     #[test]

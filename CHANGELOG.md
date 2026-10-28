@@ -8,6 +8,25 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **Three panels that are not drives**, under the drives in `Alt+F1`/`Alt+F2` and numbered as
+  FAR numbers its own:
+
+  **NetBox — the stored sessions.** Every `[[site]]` and `[[s3]]` block, plus whatever is open
+  now, as a panel of rows named `sftp://user@host`. A panel rather than a dialog, so `Enter`
+  connects and the panel becomes that server's directory, and the quick search and the keys
+  work on it the way they work on files.
+
+  **Process list.** What is running: the name with its pid beside it, and the memory it has
+  resident in the size column — so `Ctrl+F6` sorts by memory, which is what anybody opening it
+  came to see. Linux reads `/proc/<pid>/status`; Windows takes a process snapshot and asks each
+  one for its working set, and a process that refuses keeps its row with the column empty.
+  macOS waits for a tested way to read its own list. Nothing here kills anything.
+
+  **Temporary panel.** A panel of paths rather than a directory: what is in it can come from
+  several directories at once, and `F5` out of it copies the real files. It opens empty, and
+  `Ctrl+Shift+Ins` puts what is selected in the other panel into it — adding to what is there,
+  never the same path twice, and leaving every file exactly where it was.
+
 - **The last two view modes FAR has**, so all ten are now there on FAR's own numbers.
   `Ctrl+9` is the **links view**: how many names a file has, between the name and the size.
   One is an ordinary file, two or more is a file in two directories at once, and a column of

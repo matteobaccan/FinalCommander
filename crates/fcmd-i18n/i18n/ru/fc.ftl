@@ -824,6 +824,11 @@ drive-memory = Память
 drive-home = Домашний
 drive-connection = Соединение
 drive-objects = Объектное хранилище
+drive-netbox = NetBox: сохранённые сеансы
+drive-processes = Список процессов
+drive-temp = Временная панель
+temp-added = { $count } во временной панели
+proc-none = список процессов здесь не читается
 drives-hint = ↑↓ выбрать · 0-9 панели ниже · Enter применить · Esc закрыть
 bookmarks-hint = Enter перейти · Ins запомнить · Del убрать · F4 назвать · Esc закрыть
 

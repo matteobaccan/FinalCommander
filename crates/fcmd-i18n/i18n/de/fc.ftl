@@ -824,6 +824,11 @@ drive-memory = Speicher
 drive-home = Persönlich
 drive-connection = Verbindung
 drive-objects = Objektspeicher
+drive-netbox = NetBox: gespeicherte Sitzungen
+drive-processes = Prozessliste
+drive-temp = Temporäres Panel
+temp-added = { $count } ins temporäre Panel gelegt
+proc-none = die Prozessliste ist hier nicht lesbar
 drives-hint = ↑↓ wählen · 0-9 die Panels unten · Enter anwenden · Esc schließen
 bookmarks-hint = Eingabe gehe · Einfg merken · Entf entfernen · F4 benennen · Esc schließen
 
