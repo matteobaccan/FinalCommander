@@ -51,6 +51,11 @@ fail alone — a test that writes to a fixed `/tmp` path or assumes `/` separato
 cause on Windows, and a type that is not the same width on every Unix is the usual one on
 macOS (`statvfs` counts blocks in 32 bits there and 64 on Linux).
 
+**A test must never write out a path.** `assert_eq!(copied, "/home/mb/docs")` passes here and
+fails on Windows, where the same `VPath` renders with a backslash; build the path the test
+expects from the panel's own (`cwd.join("docs")`). This has cost a red Windows job and a
+refused tag once already.
+
 Anything with a `#[cfg]` in it is worth type-checking against the other platforms before
 pushing, which costs seconds and saves a red build:
 
@@ -111,7 +116,7 @@ bug. The loop is input-driven and keeps no timer: anything that must happen on i
 
 ## Releases
 
-1. Write the section in `CHANGELOG.md` under a dated heading: `## [0.5.0] — 2026-11-02`.
+1. Write the section in `CHANGELOG.md` under a dated heading: `## [0.7.0] — 2026-10-28`.
    The release notes are read from that section.
 2. Bump `version` in the workspace `Cargo.toml` (one place — every crate inherits it) and run
    a build so `Cargo.lock` follows.
@@ -128,28 +133,48 @@ keeps it as the run's artifact; publishing happens only through `workflow_dispat
 
 ## Where the work is right now
 
-**0.5.0 is released**, and it is the first release under this name. What is in it: the rename
-itself (with the old configuration file names still read and written), the filesystem watch,
-the full view's extension column, `Ctrl+O` taking the panels off, the detailed view's dates
-and allocated size, `fcmd-platform` — free space on Windows at last, and the device and memory
-figures the information panel and a folder's quick view both show — the four keys the keyboard
-reference had promised, and the column titles going through the catalogues.
+**0.7.0 is released.** The two before it:
 
-Unreleased on `main`: `[[highlight]]` groups — colouring rows by mask, size, age, attributes
-or kind, from the configuration (SPEC 02 §5, feature 1.23).
+- **0.6.0** — `[[highlight]]` groups (colour by mask, size, age, attributes or kind, from the
+  configuration); the find dialog's size condition; the system clipboard through the terminal
+  with `OSC 52` (`Ctrl+Ins` names, `Alt+Shift+Ins` paths, and the editor's block), which also
+  works over `ssh`; pasted text reaching the command line, a dialog row, the editor and a
+  terminal instead of only a prompt; `Ctrl+8`, the file-owners view; a letter for every menu
+  row in six languages; table mode in the viewer (`Shift+F3`) for CSV, TSV and JSON Lines.
+- **0.7.0** — the dBase reader for table mode, read a window at a time; the dialog that edits
+  the `[[highlight]]` groups (`F9 → Options → Files highlighting`); `Alt+F11`, the files that
+  have been read or edited, persisted in the state file.
 
 ## The queue, as the author's review left it
 
-In the order they were raised, all from a side-by-side comparison with FAR on Windows:
+In the order they were raised, all from a side-by-side comparison with FAR on Windows. The
+view modes, the menu letters and the tabular viewers are done; what is left is waiting on the
+author:
 
-- **View modes.** The extension column in `full` and the `detailed` view's dates and
-  allocated column are done. What is left: the `wide` layout (the author has a screenshot of
-  FAR's) and the file-owners mode.
-- **Menu mnemonics.** The mechanism ships (`&` in a label marks the letter, the dropdown
-  draws it highlighted), but only four labels carry a marker. The letters for the rest are
-  the author's call.
+- **The change-drive dialog** (`Alt+F1`/`Alt+F2`) is to look *exactly* like FAR's. The author
+  sent a screenshot of ours; what is missing is one of FAR's own, because the column layout
+  cannot be reconstructed from memory without guessing. **Asked, not answered.**
+- **The `wide` view's layout** — same thing: the author has a FAR screenshot of it.
 - **The `F4` keybar label in the viewer** — a question to the author that is still open.
-- **Tabular viewers** (dbf, csv, tsv, jsonl) are on the roadmap, not started.
+- **The menu letters** are chosen by a rule now (first free word initial, then any free
+  letter), in all six languages written in an alphabet, with a test keeping them unique. If
+  the author wants FAR's own letters instead, the rule is one function and the catalogues are
+  where the markers live.
+
+## What is worth doing next, in rough order
+
+Everything here is unblocked and specified; the backlog has the reasons.
+
+1. **The memo file beside a DBF** (`.dbt`, `.fpt`) — the one thing the dBase reader owes.
+2. **`descript.ion`** (`Ctrl+Z`, description columns, the information panel) — a whole small
+   feature, and the one FAR habit this program has none of. It touches the job engine,
+   because a description has to follow a copy, a move, a rename and a delete.
+3. **The screens list and background screens** (`F12`): several viewers, editors and jobs
+   open at once. The job engine already runs more than one; the screen stack is what is
+   missing, and `Mode` holding one screen is what has to change.
+4. **Custom columns** — the column grammar of SPEC 02 §3, which is also what the `wide` view
+   wants.
+5. **Sort criteria chains and sort groups**, both small and both FAR's.
 
 One rule that came out of that review and holds everywhere: **`Alt+<letter>` belongs to the
 quick search**, so nothing else may take it (`Ctrl+Shift+N/I/T` moved for this reason), and
