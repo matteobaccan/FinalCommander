@@ -1283,6 +1283,38 @@ pub fn draw_dialog_over(
     lines: &[String],
     hint: Option<&str>,
 ) -> Rect {
+    over_in(buf, theme, screen, over, title, lines, hint, false)
+}
+
+/// The same box in the **menu's** colours rather than the dialog's.
+///
+/// FAR draws a list one picks from — the drives, the history, the sort modes — with its menu
+/// palette and not its dialog palette, which is why the drive dialog is cyan where a settings
+/// dialog is grey. It is not decoration: the two look different because one is a list to
+/// choose from and the other is a form to fill in.
+pub fn draw_menu_over(
+    buf: &mut Buffer,
+    theme: &Theme,
+    screen: Rect,
+    over: Option<Rect>,
+    title: &str,
+    lines: &[String],
+    hint: Option<&str>,
+) -> Rect {
+    over_in(buf, theme, screen, over, title, lines, hint, true)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn over_in(
+    buf: &mut Buffer,
+    theme: &Theme,
+    screen: Rect,
+    over: Option<Rect>,
+    title: &str,
+    lines: &[String],
+    hint: Option<&str>,
+    menu: bool,
+) -> Rect {
     let content_w = lines
         .iter()
         .map(|l| l.width())
@@ -1306,13 +1338,21 @@ pub fn draw_dialog_over(
     let y = screen.y + (screen.h.saturating_sub(h)) / 2;
     let area = Rect::new(x, y, w, h);
 
-    let style = theme.dialog();
+    let (style, frame, hint_ink) = if menu {
+        (
+            Style::new(theme.color("menu.fg"), theme.color("menu.bg")),
+            Style::new(theme.color("menu.frame"), theme.color("menu.bg")),
+            Style::new(theme.color("menu.title.fg"), theme.color("menu.bg")),
+        )
+    } else {
+        (
+            theme.dialog(),
+            Style::new(theme.color("dialog.frame"), theme.color("dialog.bg")),
+            Style::new(theme.color("dialog.title"), theme.color("dialog.bg")),
+        )
+    };
     buf.fill(area, ' ', style);
-    buf.draw_frame(
-        area,
-        Style::new(theme.color("dialog.frame"), theme.color("dialog.bg")),
-        Some(title),
-    );
+    buf.draw_frame(area, frame, Some(title));
     for (i, line) in lines.iter().enumerate() {
         if (i as u16) + 1 >= area.h.saturating_sub(1) {
             break;
@@ -1324,7 +1364,7 @@ pub fn draw_dialog_over(
             area.x + 2,
             area.bottom() - 1,
             &truncate_cols(h, (w - 4) as usize),
-            Style::new(theme.color("dialog.title"), theme.color("dialog.bg")),
+            hint_ink,
             w - 4,
         );
     }

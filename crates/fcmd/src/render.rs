@@ -964,7 +964,11 @@ fn draw_pick(
         .then(|| app.layout.panels[pick.side].map(|p| p.area))
         .flatten()
         .map(|area| Rect::new(area.x.saturating_sub(1), area.y, area.w, area.h));
-    let area = widgets::draw_dialog_over(
+    // A list one picks from is a menu, and FAR draws it in the menu's colours — cyan, with
+    // the key in yellow and the row under the cursor on black. That is why its drive dialog
+    // does not look like its settings dialogs: one is a list to choose from, the other a
+    // form to fill in.
+    let area = widgets::draw_menu_over(
         buf,
         &app.theme,
         screen,
@@ -1008,10 +1012,7 @@ fn draw_pick(
     // The rules between groups of rows, drawn across the frame and joined to it the way the
     // panel's own separators are: `lines()` leaves them blank because only this knows where
     // the frame is.
-    let frame = Style::new(
-        app.theme.color("dialog.frame"),
-        app.theme.color("dialog.bg"),
-    );
+    let frame = Style::new(app.theme.color("menu.frame"), app.theme.color("menu.bg"));
     for i in 0..shown.len() {
         if !pick.rows.get(start + i).is_some_and(|r| r.separator) {
             continue;
@@ -1027,13 +1028,47 @@ fn draw_pick(
         buf.set(area.right() - 1, y, '┤', frame);
     }
 
-    let style = Style::new(app.theme.color("cursor.fg"), app.theme.color("cursor.bg"));
+    // The key each row answers to, in the colour a menu gives a hotkey: in the drive dialog
+    // that is the drive's own letter and the number of a panel that is not a drive, and it
+    // is the half of the row anybody who uses it twice a day actually reads.
+    let keyed = pick.rows.iter().any(|r| r.hotkey.is_some());
+    if keyed {
+        let ink = Style::new(
+            app.theme.color("menu.hotkey.fg"),
+            app.theme.color("menu.bg"),
+        );
+        for (i, row) in pick.rows.iter().skip(start).take(shown.len()).enumerate() {
+            let Some(key) = row.hotkey else { continue };
+            if start + i == pick.cursor {
+                continue; // the cursor row is painted whole, below
+            }
+            let y = area.y + 1 + i as u16;
+            if y >= area.y + area.h.saturating_sub(1) {
+                break;
+            }
+            // `lines()` writes the mark, a space, then the key: two columns in from the text.
+            buf.put_str(area.x + 4, y, &key.to_string(), ink, 1);
+        }
+    }
+
+    let style = Style::new(
+        app.theme.color("menu.selected.fg"),
+        app.theme.color("menu.selected.bg"),
+    );
     let row = pick.cursor.saturating_sub(start);
     let y = area.y + 1 + row as u16;
     if row < shown.len() && y < area.y + area.h.saturating_sub(1) {
         let width = area.w.saturating_sub(2) as usize;
         let text = format!(" {:<w$}", shown[row], w = width.saturating_sub(1));
         buf.put_str(area.x + 1, y, &text, style, width as u16);
+        // The key stays yellow on the row one is standing on, as it does in FAR's menus.
+        if let Some(key) = pick.rows.get(pick.cursor).and_then(|r| r.hotkey) {
+            let ink = Style::new(
+                app.theme.color("menu.hotkey.fg"),
+                app.theme.color("menu.selected.bg"),
+            );
+            buf.put_str(area.x + 4, y, &key.to_string(), ink, 1);
+        }
     }
     Some(list)
 }

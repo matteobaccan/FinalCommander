@@ -8,6 +8,21 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **An empty list of connections is still a list.** `Alt+F1` → NetBox with nothing stored
+  used to refuse to open and say so in the status line, which told nobody where they were or
+  how to make the first session. It opens as a panel now, empty, and its key bar says what
+  the keys do there: `F4` edits the session under the cursor, `Shift+F4` makes a new one,
+  `F8` forgets one — and the bar no longer offers `Copy` and `MkFold` on a list that has no
+  files in it.
+
+### Changed
+
+- **The lists one picks from are drawn in the menu's colours**, as FAR draws them: the drive
+  dialog, the histories, the sort modes and the bookmarks are cyan with the key in yellow and
+  the row under the cursor on black, instead of looking like a settings dialog. The two are
+  different things — one is a list to choose from, the other a form to fill in — and in FAR
+  they have looked different for thirty years.
+
 - **The size of a folder, measured and kept.** `Space` (and `F3` on a directory) measured one
   folder and said the figure in the status line, where it was gone a moment later. It now
   measures **every selected folder** — finding out which of five trees is the big one is the

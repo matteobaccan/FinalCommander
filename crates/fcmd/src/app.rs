@@ -6908,6 +6908,12 @@ impl App {
             Command::FileChecksum => self.open_checksum_form(),
             Command::FileChecksumVerify => self.start_verify(),
             Command::FileDelete | Command::FileDeleteCurrent | Command::FileDeleteForce => {
+                // On the stored connections there is no file to delete: `F8` forgets the
+                // session under the cursor, which is what the row is.
+                if self.panel().temp_origin() == Some(":netbox") {
+                    self.forget_site_at_cursor();
+                    return;
+                }
                 let sources = if cmd == Command::FileDeleteCurrent {
                     self.cursor_source()
                 } else {
@@ -9174,10 +9180,12 @@ impl App {
                 &mut items,
             );
         }
+        // An empty list is still a list. A panel that refused to open said nothing about
+        // where one was or how to make a session; this one shows the keys that do, which is
+        // what the key bar is for.
         if items.is_empty() {
             let m = self.i18n.t("net-no-sites");
-            self.set_error(m);
-            return;
+            self.set_status(m);
         }
         let title = self.plain("drive-netbox");
         let generation = self.panels[side].generation + 1;
@@ -11902,6 +11910,13 @@ impl App {
             self.put_uninstall_on_the_command_line();
             return;
         }
+        // And on the stored connections it is the session under the cursor, which is what
+        // `F4` means in the list this panel is a panel of.
+        if self.panel().temp_origin() == Some(":netbox") {
+            let stored = self.site_at_cursor();
+            self.open_site_form(stored);
+            return;
+        }
         let Some(entry) = self.panel().current().cloned() else {
             let m = self.i18n.t("msg-nothing-to-do");
             self.set_error(m);
@@ -12011,7 +12026,53 @@ impl App {
     }
 
     /// `Shift+F4`: a new file in the active panel's directory.
+    /// `F8` in the stored connections: forget the session under the cursor.
+    ///
+    /// A row that is a live connection rather than a stored session has nothing to forget —
+    /// closing one is `Alt+Shift+N` — and the message says so instead of doing nothing.
+    fn forget_site_at_cursor(&mut self) {
+        let Some(index) = self.site_at_cursor() else {
+            let m = self.i18n.t("net-not-a-stored-session");
+            self.set_error(m);
+            return;
+        };
+        let site = &self.cfg.sites[index];
+        let name = if site.id.trim().is_empty() {
+            site.host.clone()
+        } else {
+            site.id.clone()
+        };
+        self.cfg.sites.remove(index);
+        self.sites = Site::list_from_config(&self.cfg).0;
+        let side = self.active;
+        self.open_sessions_panel(side);
+        let m = self
+            .i18n
+            .t_args("net-site-forgotten", &[("name", name.into())]);
+        self.set_status(m);
+    }
+
+    /// Which stored session the cursor is on in the netbox panel, by its place in the
+    /// configuration — a row that is a live connection rather than a stored site has none.
+    fn site_at_cursor(&self) -> Option<usize> {
+        let name = self.panel().current()?.name_str().into_owned();
+        // The row is named by the session's key (`user@host`), and the form is opened by the
+        // block's place in the configuration — the same hop the connection list makes.
+        let id = self
+            .sites
+            .iter()
+            .find(|site| site.key() == name)
+            .map(|site| site.id.clone())?;
+        self.cfg.sites.iter().position(|cfg| cfg.id == id)
+    }
+
     pub(crate) fn open_new_editor(&mut self) {
+        // `Shift+F4` on the stored connections is a new session rather than a new file:
+        // there are no files in that panel, and a new session is what one is there for.
+        if self.panel().temp_origin() == Some(":netbox") {
+            self.open_site_form(None);
+            return;
+        }
         let mut editor = Editor::empty(None);
         self.tune_editor(&mut editor);
         self.mode = Mode::Editor(Box::new(editor));
@@ -14247,6 +14308,38 @@ impl App {
 
     /// The `F1..F10` labels for the key bar, localised.
     pub fn keybar(&self) -> Vec<(u8, String)> {
+        // The stored connections are a panel of sessions and not of files, so the bar says
+        // what the keys do *there*: edit one, make one, forget one. Without this the bar
+        // offers `Copy` and `MkFold` on a list where neither means anything — and an empty
+        // list of sessions would say nothing at all about how to make the first.
+        if self.panel().temp_origin() == Some(":netbox") {
+            return [
+                (1u8, "key-help"),
+                (2, "key-menu"),
+                (3, ""),
+                (4, "key-site-edit"),
+                (5, ""),
+                (6, ""),
+                (7, ""),
+                (8, "key-site-forget"),
+                (9, "key-pulldown"),
+                (10, "key-quit"),
+                (11, "key-plugins"),
+                (12, "key-screens"),
+            ]
+            .iter()
+            .map(|(n, id)| {
+                (
+                    *n,
+                    if id.is_empty() {
+                        String::new()
+                    } else {
+                        self.i18n.t(id)
+                    },
+                )
+            })
+            .collect();
+        }
         [
             (1u8, "key-help"),
             (2, "key-menu"),
@@ -14278,6 +14371,7 @@ impl App {
         if mods == Mods::NONE {
             return self.keybar();
         }
+        let sessions = self.panel().temp_origin() == Some(":netbox");
         (1..=12u8)
             .filter_map(|n| {
                 let key = Key {
@@ -14285,6 +14379,12 @@ impl App {
                     mods,
                 };
                 let cmd = self.keymap.resolve(&[Scope::Panel], key)?;
+                // In the stored connections `Shift+F4` is a new session rather than a new
+                // file, so the bar says that — it is where one finds out how to make the
+                // first session in an empty list.
+                if sessions && cmd == Command::FileEditNew {
+                    return Some((n, self.i18n.t("key-site-new")));
+                }
                 Some((n, self.i18n.t(keybar_label(cmd)?)))
             })
             .collect()
@@ -21983,6 +22083,33 @@ abcdefghij
     }
 
     // ── netbox ─────────────────────────────────────────────────────────────────────────────
+
+    /// An empty list of sessions is still a list: it opens, it says where one is, and its
+    /// key bar says how to make the first one — which a message and a closed panel did not.
+    #[test]
+    fn the_stored_connections_open_as_a_panel_even_with_nothing_in_them() {
+        let mut app = app();
+        app.cfg.sites.clear();
+        app.sites.clear();
+        app.open_sessions_panel(0);
+        assert_eq!(app.panels[0].temp_origin(), Some(":netbox"));
+        assert!(app.panels[0].listing.is_empty(), "the list is empty");
+
+        // The bar offers the keys of a session list rather than those of a file panel, and
+        // `Shift+F4` — where a new session is made — says so.
+        let bar: Vec<String> = app.keybar().into_iter().map(|(_, s)| s).collect();
+        assert!(bar.iter().any(|l| l.contains("Ses")), "{bar:?}");
+        assert!(
+            !bar.iter().any(|l| l == "Copy" || l == "MkFold"),
+            "a session list has no files to copy: {bar:?}"
+        );
+        let shift: Vec<String> = app
+            .keybar_for(Mods::SHIFT)
+            .into_iter()
+            .map(|(_, s)| s)
+            .collect();
+        assert!(shift.iter().any(|l| l.contains("Ses")), "{shift:?}");
+    }
 
     fn site() -> Site {
         let mut site = Site::parse_url("sftp://mb@host.example:22/srv").unwrap();
