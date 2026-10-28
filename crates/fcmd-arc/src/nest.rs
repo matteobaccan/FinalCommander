@@ -47,6 +47,11 @@ struct Made {
     file: PathBuf,
 }
 
+/// Where the next copy's name comes from. Process-wide on purpose: two caches in one program
+/// — a panel's and a test's — would otherwise both start at zero and name their first copy the
+/// same thing, which on Windows is a file in use and everywhere else a file quietly shared.
+static NEXT: AtomicU64 = AtomicU64::new(0);
+
 /// The copies made for this session, and the fetcher that makes the remote ones.
 ///
 /// Small on purpose: a handful of containers at a time is what a person opens, and each copy
@@ -55,7 +60,6 @@ struct Made {
 pub struct Nest {
     made: Mutex<Vec<Made>>,
     fetch: Mutex<Option<Arc<dyn Fetch>>>,
-    seq: AtomicU64,
     capacity: usize,
 }
 
@@ -71,7 +75,6 @@ impl Nest {
         Nest {
             made: Mutex::new(Vec::new()),
             fetch: Mutex::new(None),
-            seq: AtomicU64::new(0),
             capacity: 4,
         }
     }
@@ -113,7 +116,7 @@ impl Nest {
             path: dir.display().to_string(),
             source: e,
         })?;
-        let n = self.seq.fetch_add(1, Ordering::Relaxed);
+        let n = NEXT.fetch_add(1, Ordering::Relaxed);
         let name = if name.is_empty() { "archive" } else { name };
         Ok(dir.join(format!("{n}-{name}")))
     }
