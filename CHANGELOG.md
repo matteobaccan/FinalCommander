@@ -6,6 +6,8 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+## [0.13.0] — 2026-10-28
+
 ### Added
 
 - **An archive inside an archive, and an archive on a server.** `Enter` on a `.zip` that is

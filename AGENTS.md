@@ -136,7 +136,7 @@ keeps it as the run's artifact; publishing happens only through `workflow_dispat
 
 ## Where the work is right now
 
-**0.12.0 is the version in `main`.** 0.10.0 and 0.11.0 are both tagged and released, with
+**0.13.0 is the version in `main`.** 0.11.0 and 0.12.0 are both tagged and released, with
 four archives and `SHA256SUMS` each; the queue moves now that the repository is public, so a
 push that touches `CHANGELOG.md` or `Cargo.toml` is what makes `tag.yml` fire. The site is
 published, by hand, through `pages.yml`'s `workflow_dispatch`.
