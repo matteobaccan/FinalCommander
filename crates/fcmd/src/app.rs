@@ -3272,6 +3272,24 @@ impl App {
                 self.mode = Mode::Normal;
                 self.prompt_accept(prompt);
             }
+            // An arrow ends a quick search and leaves the cursor where the search put it.
+            // The search has done its work by then — the row is found and under the cursor —
+            // and what the arrow means next is what it means everywhere else, so the first
+            // press closes the search and the one after it moves. Nothing is restored: the
+            // row the search found is where the user wanted to be, which is the difference
+            // between this and `Esc`.
+            KeyCode::Up
+            | KeyCode::Down
+            | KeyCode::Left
+            | KeyCode::Right
+            | KeyCode::PageUp
+            | KeyCode::PageDown
+            | KeyCode::Home
+            | KeyCode::End
+                if matches!(prompt.kind, PromptKind::QuickSearch { .. }) =>
+            {
+                self.mode = Mode::Normal;
+            }
             KeyCode::Backspace => {
                 prompt.text.pop();
                 let text = prompt.text.clone();
@@ -6366,6 +6384,16 @@ impl App {
                 let remote = shown.is_remote();
                 let mut viewer = Viewer::new(Box::new(source), shown.clone());
                 self.tune_viewer(&mut viewer);
+                // A dBase table keeps its memo fields in a second file beside it. Opening
+                // that file is the caller's job, because what a path means — on disk, inside
+                // an archive, on a server — is not the viewer's to decide, and here it is a
+                // path on disk: the bytes of a remote table have already been fetched to
+                // one, and its memo file has not, so there is nothing to open then.
+                if let Some(memo) = memo_file(local) {
+                    if let Ok(memo) = FileSource::open(&memo) {
+                        viewer.attach_memo(Box::new(memo));
+                    }
+                }
                 if viewer.is_empty() {
                     let m = self.i18n.t("viewer-empty");
                     self.set_status(m);
@@ -12464,6 +12492,46 @@ fn keybar_label(cmd: Command) -> Option<&'static str> {
 /// Which part of the help a command belongs under, and in what order the parts come. The
 /// identifier's own prefix says it, which is the point of the identifiers being shaped that
 /// way: `file.copy` is a file operation whether or not anyone remembered to say so.
+/// The memo file beside a dBase table, if the table has one and it is there.
+///
+/// dBase writes `.dbt`, FoxPro writes `.fpt`, and either may be spelled in capitals beside a
+/// table spelled in capitals — a DOS habit that outlived DOS. Nothing else is guessed at: a
+/// file that is not a `.dbf` has no memo file, and a name that is there is used as it is.
+fn memo_file(table: &std::path::Path) -> Option<std::path::PathBuf> {
+    let name = table.file_name()?.to_string_lossy().into_owned();
+    let (stem, ext) = name.rsplit_once('.')?;
+    if !ext.eq_ignore_ascii_case("dbf") {
+        return None;
+    }
+    let upper = ext.chars().all(|c| c.is_ascii_uppercase());
+    for memo in ["dbt", "fpt"] {
+        let memo = if upper {
+            memo.to_uppercase()
+        } else {
+            memo.into()
+        };
+        let beside = table.with_file_name(format!("{stem}.{memo}"));
+        if beside.is_file() {
+            return Some(beside);
+        }
+        // And the other spelling, for a table whose two files disagree about it.
+        let beside = table.with_file_name(format!("{stem}.{}", flip_case(&memo)));
+        if beside.is_file() {
+            return Some(beside);
+        }
+    }
+    None
+}
+
+/// `dbt` ↔ `DBT`: the other spelling of an extension, for the case above.
+fn flip_case(ext: &str) -> String {
+    if ext.chars().all(|c| c.is_ascii_uppercase()) {
+        ext.to_lowercase()
+    } else {
+        ext.to_uppercase()
+    }
+}
+
 fn help_group(id: &str) -> (usize, &'static str) {
     let prefix = id.split('.').next().unwrap_or("");
     match prefix {
@@ -16725,6 +16793,50 @@ run = ["echo one", "echo two", "echo three"]
         app.panels[0].view = ViewMode::Full;
         press(&mut app, "Right");
         assert_eq!(app.panels[0].cursor, 0);
+    }
+
+    #[test]
+    fn an_arrow_ends_a_quick_search_and_leaves_the_cursor_where_it_found() {
+        let mut app = app();
+        app.cfg.panel.quick_search = QuickSearch::Plain;
+        press(&mut app, "d"); // docs
+        let found = app.panel().cursor;
+        assert_eq!(found, 1);
+        // `Down` is the user leaving the search, not searching further: the row the search
+        // found is where they stay, and the arrow does not move them off it.
+        press(&mut app, "Down");
+        assert!(matches!(app.mode, Mode::Normal), "{:?}", app.mode);
+        assert_eq!(app.panel().cursor, found);
+        // And the next one moves, because the search is over.
+        press(&mut app, "Down");
+        assert_eq!(app.panel().cursor, found + 1);
+    }
+
+    #[test]
+    fn the_memo_file_beside_a_table_is_found_by_either_spelling() {
+        let dir = tempfile::tempdir().unwrap();
+        let table = dir.path().join("people.dbf");
+        std::fs::write(&table, b"not really a table").unwrap();
+        // Nothing beside it yet.
+        assert_eq!(memo_file(&table), None);
+        // dBase writes `.dbt`.
+        let dbt = dir.path().join("people.dbt");
+        std::fs::write(&dbt, b"memo").unwrap();
+        assert_eq!(memo_file(&table), Some(dbt.clone()));
+        std::fs::remove_file(&dbt).unwrap();
+        // FoxPro writes `.fpt`.
+        let fpt = dir.path().join("people.fpt");
+        std::fs::write(&fpt, b"memo").unwrap();
+        assert_eq!(memo_file(&table), Some(fpt));
+        // A table shouting in capitals, with its memo file shouting back — a DOS habit that
+        // outlived DOS, and the one reason the spellings are tried both ways.
+        let loud = dir.path().join("PEOPLE.DBF");
+        std::fs::write(&loud, b"not really a table").unwrap();
+        let loud_memo = dir.path().join("PEOPLE.DBT");
+        std::fs::write(&loud_memo, b"memo").unwrap();
+        assert_eq!(memo_file(&loud), Some(loud_memo));
+        // And a file that is not a table has no memo file to look for.
+        assert_eq!(memo_file(&dir.path().join("notes.txt")), None);
     }
 
     #[test]

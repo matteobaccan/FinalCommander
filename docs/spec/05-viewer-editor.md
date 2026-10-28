@@ -281,8 +281,18 @@ code pages are read as DOS code pages: a table written in Germany under DOS carr
 and is in code page 437, where reading it as Windows-1252 turns `temporäre` into `tempor„re`.
 437 is the viewer's own table, the one it has had since it learned to show a DOS text file;
 850, 852 and the other DOS tables `encoding_rs` does not carry fall back to the Windows table
-that agrees with them on the accented letters, which is what a field holds. A **memo** field shows its block number as `memo:42`; reading the `.dbt`/`.fpt`
-beside the table is a second file and a backlog line. A header that claims more records than
+that agrees with them on the accented letters, which is what a field holds. A **memo** field shows what the `.dbt` or `.fpt`
+beside the table holds, on one line — a memo is written with newlines in it and a cell has one
+line to give. Opening that second file is the *caller's* job, because what a path means — on
+disk, inside an archive, on a server — is not the viewer's to decide: the application looks
+for `.dbt` then `.fpt`, in either spelling, beside a table on disk. Three formats, each
+recognised by what it holds rather than by its name: FoxPro's `.fpt` (block size big-endian
+at offset 6, a block opening with its type and length), dBase IV's `.dbt` (block size at 20,
+a block opening `FF FF 08 00` and its length), and dBase III's `.dbt` (blocks of 512, the
+text running to the first `1A`). Where there is no memo file — a remote table whose bytes
+were fetched without it, a `.dbt` that was lost — the cell says `memo:42`, the block number,
+which is what there is to say. A picture or an object field says the same: a cell is no place
+for either. A header that claims more records than
 the file can hold is a truncated table: what is there is read and the status line says `cut`.
 
 **The readers, in the order they are worth building.**
@@ -291,7 +301,7 @@ the file can hold is a truncated table: what is there is read and the status lin
 | --- | --- | --- |
 | CSV / TSV | delimiter-separated text, RFC 4180 quoting | guessing the delimiter (`,`, `;`, tab, `|`) from the first kilobytes and *saying* which was guessed; a quoted field may hold the delimiter and a newline, so a row is not a line |
 | JSONL / NDJSON | one JSON object per line | the columns are the union of the keys of the first *N* records, in first-seen order, and a record that has a key the header does not shows it in an overflow column rather than being silently cut |
-| DBF | dBase III/IV and FoxPro: a typed header, then fixed-length records | **Shipped in 0.7.0**, windowed: the field types, the deleted-record flag (shown, not skipped), the header's code page. The memo files beside it (`.dbt`, `.fpt`) are a second file and still owed |
+| DBF | dBase III/IV and FoxPro: a typed header, then fixed-length records | **Shipped in 0.7.0**, windowed: the field types, the deleted-record flag (shown, not skipped), the header's code page. The memo files beside it (`.dbt`, `.fpt`) followed in 0.7.2 — all three formats, each recognised by what it holds |
 
 **Reading a window, not a file**, wherever the format allows it — which is the promise the
 viewer makes everywhere else. DBF is the best case: a fixed record length and a count in the

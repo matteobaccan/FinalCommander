@@ -273,7 +273,40 @@ fn owners_of(
     out
 }
 
+/// The program's name, drawn, for the top of what it says on the command line.
+///
+/// Plain ASCII on purpose: this goes to whatever terminal the program was started from,
+/// before anything is known about what that terminal can draw, and a name that comes out as
+/// question marks is worse than no name at all.
+const BANNER: &str = r"  __                    _
+ / _| ___ _ __ ___   __| |
+| |_ / __| '_ ` _ \ / _` |
+|  _| (__| | | | | | (_| |
+|_|  \___|_| |_| |_|\__,_|";
+
+/// Write the banner, when there is somebody to read it.
+///
+/// Not into a pipe or a file: `--dump-config > config.toml` and `--list-commands | grep` are
+/// how these outputs are used, and a banner in front of them is something to strip. A
+/// terminal is the one place a name drawn in letters is worth the three lines it costs.
+fn print_banner() {
+    use std::io::IsTerminal;
+    if !std::io::stdout().is_terminal() {
+        return;
+    }
+    println!("{BANNER}");
+    println!("FinalCommander {}", env!("CARGO_PKG_VERSION"));
+    println!();
+}
+
 fn main() -> Result<()> {
+    // `--help` and `--version` never reach `run`: clap answers them itself and exits while
+    // parsing, so the banner above them goes here.
+    let asked =
+        std::env::args().any(|a| matches!(a.as_str(), "-h" | "--help" | "-V" | "--version"));
+    if asked {
+        print_banner();
+    }
     let cli = Cli::parse();
     match run(cli) {
         Ok(()) => Ok(()),
@@ -456,6 +489,21 @@ fn run(cli: Cli) -> Result<()> {
     warnings.extend(theme.warnings().iter().cloned());
 
     // ── informational modes: print and exit, no terminal takeover
+    //
+    // Each of these says something on the command line rather than taking the screen, so each
+    // gets the name above it — except `--man`, whose bytes are a file a packager installs and
+    // which a test compares against `docs/fcmd.1` byte for byte.
+    if cli.show_paths
+        || cli.list_plugins
+        || cli.list_themes
+        || cli.list_commands
+        || cli.list_languages
+        || cli.check_keymap
+        || cli.export_theme.is_some()
+        || cli.dump_config
+    {
+        print_banner();
+    }
     if cli.show_paths {
         print!("{}", paths.describe());
         return Ok(());
@@ -3284,6 +3332,17 @@ timeout = 10
     /// A key, by its name in the keymap.
     fn key(app: &mut App, k: &str) {
         app.handle_input(Input::Key(k.parse().unwrap()));
+    }
+
+    #[test]
+    fn the_banner_is_the_name_in_plain_letters() {
+        // Five lines, and nothing in them a terminal might not have: this is written before
+        // anything is known about what the terminal can draw.
+        assert_eq!(BANNER.lines().count(), 5);
+        assert!(BANNER.is_ascii(), "{BANNER}");
+        assert!(!BANNER.contains('\t'));
+        // The widest line still fits the narrowest terminal anybody uses.
+        assert!(BANNER.lines().all(|l| l.len() <= 40), "{BANNER}");
     }
 
     #[test]

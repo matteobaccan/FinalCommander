@@ -198,6 +198,11 @@ pub struct Viewer {
     /// is parsed once and kept, and the mode is only offered for files under
     /// [`TABLE_LIMIT`].
     table: Option<crate::table::Table>,
+    /// The memo file beside a dBase table, when there is one and it could be opened: a
+    /// `.dbt` or an `.fpt`, which is where the text of a memo field actually lives. The
+    /// caller opens it and hands it over, because what a path means — on disk, inside an
+    /// archive, on a server — is not something the viewer decides.
+    memo: Option<Box<dyn Source>>,
     /// Which row of the table is on the first row of the screen. The table's own position:
     /// `top` carries the byte offset of that record, for the search and the bookmarks.
     pub table_row: usize,
@@ -279,6 +284,7 @@ impl Viewer {
             branch_stack: Vec::new(),
             markdown: None,
             table: None,
+            memo: None,
             table_row: 0,
             struct_cursor: 0,
             struct_top: 0,
@@ -291,6 +297,13 @@ impl Viewer {
             last_match: None,
             history: Vec::new(),
         }
+    }
+
+    /// Hand the viewer the memo file beside a dBase table — the `.dbt` or `.fpt` whose
+    /// blocks its memo fields point at. Without it a memo cell says `memo:42`, which is the
+    /// block number and all there is to say; with it the cell says what is in the block.
+    pub fn attach_memo(&mut self, memo: Box<dyn Source>) {
+        self.memo = Some(memo);
     }
 
     pub fn len(&mut self) -> u64 {
@@ -1012,7 +1025,7 @@ impl Viewer {
         let pattern = self.pattern.is_some();
         // Two fields, borrowed apart: the table says what to draw and the source is where a
         // windowed table's records come from.
-        let (table, source) = (&self.table, &mut self.source);
+        let (table, source, memo) = (&self.table, &mut self.source, &mut self.memo);
         let Some(table) = table else {
             return Vec::new();
         };
@@ -1041,7 +1054,7 @@ impl Viewer {
             }
             out.push(Row {
                 offset: table.offset(at),
-                text: table.line(&mut **source, at, col, width),
+                text: table.line(&mut **source, memo.as_deref_mut(), at, col, width),
                 hits: Vec::new(),
                 kind: RowKind::Text,
                 spans: Vec::new(),

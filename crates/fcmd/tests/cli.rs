@@ -29,6 +29,26 @@ fn runs_with_no_configuration_at_all() {
     assert!(stdout.contains("built-in"), "{stdout}");
 }
 
+/// The name is drawn above what the program says on the command line — but into a terminal,
+/// never into a pipe, which is what these tests read through. An output with a banner in it
+/// is one somebody has to strip before using it.
+#[test]
+fn nothing_the_program_prints_into_a_pipe_has_a_banner_in_front_of_it() {
+    for args in [
+        vec!["--list-languages"],
+        vec!["--list-commands"],
+        vec!["--version"],
+        vec!["--man"],
+    ] {
+        let (stdout, stderr, ok) = run(&args);
+        assert!(ok, "{args:?}: {stderr}");
+        assert!(
+            !stdout.contains("|_|  \\___|"),
+            "{args:?} printed the banner into a pipe:\n{stdout}"
+        );
+    }
+}
+
 #[test]
 fn paths_reports_every_file_it_reads_and_the_one_directory() {
     let dir = tempfile::tempdir().unwrap();

@@ -77,8 +77,8 @@ line rather than shown as a row of nonsense.
 A `.dbf` is different and better: a dBase table says in its own header how many records it
 has, how long one is and what the columns are called, so nothing is read but the window you are
 looking at — a two-gigabyte table opens as fast as a log, and the size limit below does not
-apply to it. Dates come out as `YYYY-MM-DD`, true and false as words, a memo field as the block
-number it holds (reading the `.dbt`/`.fpt` beside the table is not here yet), and the numeric
+apply to it. Dates come out as `YYYY-MM-DD`, true and false as words, a
+memo field as what the `.dbt` or `.fpt` beside the table holds, on one line, and the numeric
 fields sit on the right of their column, because a column of numbers is read down its last
 digit. A **deleted** record is shown rather than left out — a table whose deleted rows vanish
 is one whose count does not add up — and the `*` that says so has a narrow column of its own

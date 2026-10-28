@@ -4,6 +4,36 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
+## [0.7.2] — 2026-10-28
+
+### Added
+
+- **A memo field says what is in it.** A dBase table keeps its long text in a second file
+  beside it — a `.dbt` or an `.fpt` — and a memo field holds only the block number, which is
+  what the cell showed: `memo:42`. That file is now opened and read, and the cell says what
+  the block holds, flattened onto the one line a cell has. All three formats, each recognised
+  by what it actually holds rather than by its name, because the name does not say which:
+  FoxPro's `.fpt` (the block size big-endian at offset 6, a block opening with its type and
+  its length), dBase IV's `.dbt` (the block size at 20, a block opening `FF FF 08 00` and its
+  length), and dBase III's `.dbt` (blocks of 512, the text running to the first `1A`). The
+  application looks for `.dbt` then `.fpt` beside the table, in either spelling — a table
+  shouting in capitals usually has a memo file shouting back. Where there is no memo file to
+  open, the cell says the block number, as before.
+
+- **The name, drawn, above what the program says on the command line.** `fcmd --help`,
+  `--version`, `--paths`, `--list-themes` and the rest now open with the name in letters.
+  Into a terminal only: `--dump-config > config.toml` and `--list-commands | grep` are how
+  these outputs are used, and a banner in front of them is something to strip. `--man` never
+  gets one — its bytes are a file a packager installs.
+
+### Fixed
+
+- **An arrow ends a quick search.** `Alt+`letters finds the row, and then `↓` did nothing at
+  all: the search swallowed the key and there was no way out but `Esc`, which put the cursor
+  back where it started — undoing the search one had just made. An arrow now closes the
+  search and leaves the cursor on the row it found, so the first press ends the search and
+  the next one moves. `Esc` still goes back to where you were, which is what it is for.
+
 ## [0.7.1] — 2026-10-28
 
 ### Added

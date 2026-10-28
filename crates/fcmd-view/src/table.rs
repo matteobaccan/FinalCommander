@@ -331,7 +331,15 @@ impl Table {
 
     /// The cells of one record. The source is only touched for a table that is read a window
     /// at a time; for the text formats it is already in memory and is not read again.
-    pub fn cells(&self, source: &mut dyn crate::source::Source, row: usize) -> Vec<String> {
+    ///
+    /// `memo` is the file beside the table that holds what its memo fields point at — a
+    /// `.dbt` or an `.fpt` — when there is one and it could be opened.
+    pub fn cells(
+        &self,
+        source: &mut dyn crate::source::Source,
+        memo: Option<&mut (dyn crate::source::Source + '_)>,
+        row: usize,
+    ) -> Vec<String> {
         match &self.records {
             Records::Read(rows) => rows.get(row).map(|r| r.cells.clone()).unwrap_or_default(),
             Records::Dbf(dbf) => {
@@ -345,7 +353,7 @@ impl Table {
                     // A table shorter than its header claims: the rest is not there to read.
                     return Vec::new();
                 }
-                dbf.cells(&bytes)
+                dbf.cells(&bytes, memo)
             }
         }
     }
@@ -354,11 +362,12 @@ impl Table {
     pub fn line(
         &self,
         source: &mut dyn crate::source::Source,
+        memo: Option<&mut (dyn crate::source::Source + '_)>,
         row: usize,
         col: usize,
         width: usize,
     ) -> String {
-        let cells = self.cells(source, row);
+        let cells = self.cells(source, memo, row);
         if cells.is_empty() {
             return String::new();
         }
@@ -715,7 +724,11 @@ impl Dbf {
     /// does not add up — and finding the deleted ones is half of why anybody opens a DBF.
     /// The flag has a column of its own rather than a mark on the first cell, which in a
     /// column of numbers would read as part of the number.
-    fn cells(&self, record: &[u8]) -> Vec<String> {
+    fn cells(
+        &self,
+        record: &[u8],
+        mut memo: Option<&mut (dyn crate::source::Source + '_)>,
+    ) -> Vec<String> {
         let deleted = record.first() == Some(&b'*');
         let mut out = Vec::with_capacity(self.fields.len() + 1);
         out.push(if deleted {
@@ -730,12 +743,17 @@ impl Dbf {
             } else {
                 &[][..]
             };
-            out.push(self.cell(f, raw));
+            out.push(self.cell(f, raw, memo.as_deref_mut()));
         }
         out
     }
 
-    fn cell(&self, f: &Field, raw: &[u8]) -> String {
+    fn cell(
+        &self,
+        f: &Field,
+        raw: &[u8],
+        memo: Option<&mut (dyn crate::source::Source + '_)>,
+    ) -> String {
         let text = |bytes: &[u8]| self.encoding.decode(bytes);
         match f.kind {
             // Numbers are written as text, right-aligned in the field with spaces.
@@ -755,15 +773,24 @@ impl Dbf {
                 Some(b'F') | Some(b'f') | Some(b'N') | Some(b'n') => "false".to_string(),
                 _ => String::new(),
             },
-            // A memo is a block number into the `.dbt`/`.fpt` beside the table, which is a
-            // second file we do not open yet: the number is what there is to say.
+            // A memo is a block number into the `.dbt` or `.fpt` beside the table. The
+            // number is written as text in the dBase tables and as four binary bytes in the
+            // FoxPro ones, where the field is four long.
             b'M' | b'G' | b'P' => {
-                let s = text(raw);
-                let s = s.trim().trim_start_matches('0');
-                if s.is_empty() {
-                    String::new()
+                let block = if f.len == 4 && raw.len() >= 4 {
+                    u32::from_le_bytes([raw[0], raw[1], raw[2], raw[3]]) as usize
                 } else {
-                    format!("memo:{s}")
+                    text(raw).trim().parse::<usize>().unwrap_or(0)
+                };
+                if block == 0 {
+                    return String::new(); // where an empty memo points
+                }
+                // What it points at, when the file beside the table was there to open; the
+                // block number otherwise, which is all there was to say before.
+                match memo.and_then(|file| memo_text(file, block, self.encoding)) {
+                    // A picture or an object is not text, and a cell is no place for it.
+                    Some(text) if f.kind == b'M' => one_line(&text),
+                    _ => format!("memo:{block}"),
                 }
             }
             b'I' if raw.len() >= 4 => {
@@ -852,6 +879,104 @@ fn encoding_for(byte: u8) -> Charset {
         0x7e | 0xcd => Charset::Table(encoding_rs::WINDOWS_1256),
         _ => Charset::Table(encoding_rs::WINDOWS_1252),
     }
+}
+
+/// The text of one memo block, out of the `.dbt` or `.fpt` beside the table.
+///
+/// Three formats and no extension to tell them apart by, so each is recognised by what it
+/// actually holds — and each says enough about itself to be sure:
+///
+/// * **FoxPro `.fpt`**: the block size is two big-endian bytes at offset 6, and a block opens
+///   with its type and its length, both big-endian. A type of 0, 1 or 2 and a length that
+///   fits in the file is a signature that nothing else matches by accident.
+/// * **dBase IV `.dbt`**: the block size is two little-endian bytes at offset 20, and a block
+///   opens with `FF FF 08 00` and then its length, the eight-byte opening included.
+/// * **dBase III `.dbt`**: blocks of 512 with nothing in front of them; the text runs to the
+///   first `1A`, which is the end-of-file byte the format puts after every memo.
+///
+/// `None` for a block that is not there — a number past the end of the file, a memo file that
+/// belongs to another table — and the cell then says what it said before: the block number.
+fn memo_text(
+    source: &mut dyn crate::source::Source,
+    block: usize,
+    encoding: Charset,
+) -> Option<String> {
+    /// No cell is forty characters wide, let alone this; it is a bound on the read, so that
+    /// a length field with nonsense in it cannot ask for the whole machine.
+    const MAX_MEMO: usize = 64 * 1024;
+
+    let len = source.len();
+    let head = source.read_vec(0, 32).ok()?;
+    if head.len() < 32 {
+        return None;
+    }
+    let read = |source: &mut dyn crate::source::Source, at: u64, n: usize| -> Option<Vec<u8>> {
+        if at >= len {
+            return None;
+        }
+        let n = n.min(MAX_MEMO).min((len - at) as usize);
+        source.read_vec(at, n).ok()
+    };
+
+    // FoxPro, by the two signatures its block carries.
+    let fox_block = u16::from_be_bytes([head[6], head[7]]) as usize;
+    if fox_block >= 32 {
+        let at = (block as u64).saturating_mul(fox_block as u64);
+        if let Some(opening) = read(source, at, 8) {
+            if opening.len() == 8 {
+                let kind = u32::from_be_bytes([opening[0], opening[1], opening[2], opening[3]]);
+                let size =
+                    u32::from_be_bytes([opening[4], opening[5], opening[6], opening[7]]) as usize;
+                if kind <= 2 && size > 0 && at + 8 + size as u64 <= len {
+                    let body = read(source, at + 8, size)?;
+                    return Some(encoding.decode(&body));
+                }
+            }
+        }
+    }
+
+    // dBase IV, by the `FF FF 08 00` its block opens with.
+    let dbase_block = match u16::from_le_bytes([head[20], head[21]]) as usize {
+        0 => 512,
+        n => n,
+    };
+    let at = (block as u64).saturating_mul(dbase_block as u64);
+    let opening = read(source, at, 8).unwrap_or_default();
+    if opening.len() == 8 && opening[..4] == [0xff, 0xff, 0x08, 0x00] {
+        let size = u32::from_le_bytes([opening[4], opening[5], opening[6], opening[7]]) as usize;
+        let size = size.saturating_sub(8);
+        if size > 0 {
+            let body = read(source, at + 8, size)?;
+            return Some(encoding.decode(&body));
+        }
+    }
+
+    // dBase III: blocks of 512, and the text runs to the end-of-file byte after it.
+    let at = (block as u64).saturating_mul(512);
+    let body = read(source, at, MAX_MEMO)?;
+    if body.is_empty() {
+        return None;
+    }
+    let end = body.iter().position(|b| *b == 0x1a).unwrap_or(body.len());
+    Some(encoding.decode(&body[..end]))
+}
+
+/// A memo on one line: it is written with newlines in it, and a cell has one line to give.
+fn one_line(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut space = false;
+    for ch in text.chars() {
+        if ch.is_whitespace() {
+            space = !out.is_empty();
+            continue;
+        }
+        if space {
+            out.push(' ');
+            space = false;
+        }
+        out.push(ch);
+    }
+    out
 }
 
 /// Which table a DBF's character fields are in.
@@ -969,7 +1094,7 @@ pub(crate) mod tests {
         assert_eq!(table.widths, [4, 3]);
         assert_eq!(table.header(0, 40), "name │ age");
         assert_eq!(table.rule(0, 40), "──── │ ───".replace(" │ ", "─┼─"));
-        assert_eq!(table.line(&mut src(), 0, 0, 40), "mb   │ 51 ");
+        assert_eq!(table.line(&mut src(), None, 0, 0, 40), "mb   │ 51 ");
 
         // A window narrower than the table shows what fits, from where it was scrolled to.
         assert_eq!(table.header(0, 4), "name");
@@ -982,7 +1107,7 @@ pub(crate) mod tests {
         let long = "x".repeat(MAX_COL + 10);
         let table = Table::separated(&format!("a\n{long}\n"), Some(','));
         assert_eq!(table.widths, [MAX_COL]);
-        let line = table.line(&mut src(), 0, 0, 100);
+        let line = table.line(&mut src(), None, 0, 0, 100);
         assert!(line.ends_with('…'), "{line}");
         assert_eq!(line.width(), MAX_COL);
     }
@@ -1039,16 +1164,16 @@ pub(crate) mod tests {
         assert!(table.rows().is_empty());
 
         let mut source = crate::source::BytesSource::new(bytes.clone());
-        assert_eq!(table.cells(&mut source, 0), ["", "mb", "1975-03-12"]);
+        assert_eq!(table.cells(&mut source, None, 0), ["", "mb", "1975-03-12"]);
         // A deleted record is still a record, with a `*` in the first column: a table whose
         // deleted rows vanish is one whose count does not add up.
-        assert_eq!(table.cells(&mut source, 1), ["*", "gone", ""]);
-        assert_eq!(table.cells(&mut source, 2), ["", "ada", "1815-12-10"]);
+        assert_eq!(table.cells(&mut source, None, 1), ["*", "gone", ""]);
+        assert_eq!(table.cells(&mut source, None, 2), ["", "ada", "1815-12-10"]);
         // Row n is one seek, and the offsets say where.
         assert_eq!(table.offset(1), table.offset(0) + 19);
         assert_eq!(table.row_at(table.offset(2) + 3), 2);
         assert_eq!(
-            table.line(&mut source, 2, 0, 40),
+            table.line(&mut source, None, 2, 0, 40),
             "  │ ada        │ 1815-12-10"
         );
 
@@ -1109,14 +1234,128 @@ pub(crate) mod tests {
 
         let mut source = crate::source::BytesSource::new(bytes.clone());
         // Read as Windows-1252 this would be `tempor„re`, which is what the bug looked like.
-        assert_eq!(table.cells(&mut source, 0), ["", "temporäre", "44.00"]);
+        assert_eq!(
+            table.cells(&mut source, None, 0),
+            ["", "temporäre", "44.00"]
+        );
         // `PREIS` is eight wide, and `44.00` ends where the column does.
         assert_eq!(
-            table.line(&mut source, 0, 0, 40),
+            table.line(&mut source, None, 0, 0, 40),
             "  │ temporäre    │    44.00"
         );
         // The heading sits over its own column, on the same side as the cells under it.
         assert_eq!(table.header(0, 40), "* │ LEISTUNG     │    PREIS");
+    }
+
+    /// A dBase III table with a memo field, and the `.dbt` that goes with it.
+    fn dbase_with_memo() -> (Vec<u8>, Vec<u8>) {
+        let mut out = Vec::new();
+        let header_len = 32 + 2 * 32 + 1;
+        let record_len = 1 + 10 + 10;
+        out.push(0x83); // dBase III with a memo file
+        out.extend_from_slice(&[126, 1, 15]);
+        out.extend_from_slice(&2u32.to_le_bytes());
+        out.extend_from_slice(&(header_len as u16).to_le_bytes());
+        out.extend_from_slice(&(record_len as u16).to_le_bytes());
+        out.extend_from_slice(&[0u8; 20]);
+        let mut field = |name: &str, kind: u8, len: u8| {
+            let mut raw = [0u8; 32];
+            raw[..name.len()].copy_from_slice(name.as_bytes());
+            raw[11] = kind;
+            raw[16] = len;
+            out.extend_from_slice(&raw);
+        };
+        field("NAME", b'C', 10);
+        field("NOTE", b'M', 10);
+        out.push(0x0d);
+        // The deletion flag, the name, and the block number written as text and
+        // right-aligned in its field; a memo that was never written points at block 0.
+        out.push(b' ');
+        out.extend_from_slice(b"mb        ");
+        out.extend_from_slice(b"         1");
+        out.push(b' ');
+        out.extend_from_slice(b"ada       ");
+        out.extend_from_slice(b"         0");
+        out.push(0x1a);
+
+        // The memo file: blocks of 512, the text ending at the end-of-file byte.
+        let mut dbt = vec![0u8; 512];
+        let mut block = vec![0u8; 512];
+        let text = b"a note\nover two lines";
+        block[..text.len()].copy_from_slice(text);
+        block[text.len()] = 0x1a;
+        dbt.extend_from_slice(&block);
+        (out, dbt)
+    }
+
+    #[test]
+    fn a_memo_field_says_what_the_file_beside_the_table_holds() {
+        let (bytes, dbt) = dbase_with_memo();
+        let table = Table::dbase(&bytes, bytes.len() as u64).expect("a dBase table");
+        let mut source = crate::source::BytesSource::new(bytes);
+        let mut memo = crate::source::BytesSource::new(dbt);
+
+        // Without the file there is only the block number, which is what there was before.
+        assert_eq!(table.cells(&mut source, None, 0), ["", "mb", "memo:1"]);
+        // With it, what the block holds — on one line, because a cell has one line to give.
+        assert_eq!(
+            table.cells(&mut source, Some(&mut memo), 0),
+            ["", "mb", "a note over two lines"]
+        );
+        // Block 0 is where an empty memo points, and an empty cell is what it says.
+        assert_eq!(
+            table.cells(&mut source, Some(&mut memo), 1),
+            ["", "ada", ""]
+        );
+    }
+
+    #[test]
+    fn the_three_memo_formats_are_each_recognised_by_what_they_hold() {
+        let text = |s: &str| s.as_bytes().to_vec();
+
+        // dBase III: blocks of 512, the text ending at the end-of-file byte.
+        let mut three = vec![0u8; 512];
+        three.extend_from_slice(&[0u8; 512]);
+        three[512..512 + 5].copy_from_slice(&text("three"));
+        three[512 + 5] = 0x1a;
+        let mut source = crate::source::BytesSource::new(three);
+        assert_eq!(
+            memo_text(&mut source, 1, Charset::Cp437).as_deref(),
+            Some("three")
+        );
+
+        // dBase IV: the block size in the header, `FF FF 08 00` and the length in the block.
+        let mut four = vec![0u8; 1024];
+        four[20] = 0x00;
+        four[21] = 0x04; // 1024, little-endian
+        let mut block = vec![0xff, 0xff, 0x08, 0x00];
+        block.extend_from_slice(&(8u32 + 4).to_le_bytes());
+        block.extend_from_slice(&text("four"));
+        block.resize(1024, 0);
+        four.extend_from_slice(&block);
+        let mut source = crate::source::BytesSource::new(four);
+        assert_eq!(
+            memo_text(&mut source, 1, Charset::Cp437).as_deref(),
+            Some("four")
+        );
+
+        // FoxPro: the block size big-endian at 6, and the type and length in the block.
+        let mut fox = vec![0u8; 64];
+        fox[6] = 0x00;
+        fox[7] = 0x40; // 64, big-endian
+        let mut block = 1u32.to_be_bytes().to_vec(); // a text memo
+        block.extend_from_slice(&3u32.to_be_bytes());
+        block.extend_from_slice(&text("fox"));
+        block.resize(64, 0);
+        fox.extend_from_slice(&block);
+        let mut source = crate::source::BytesSource::new(fox);
+        assert_eq!(
+            memo_text(&mut source, 1, Charset::Cp437).as_deref(),
+            Some("fox")
+        );
+
+        // A block past the end of the file is not a block: the cell says the number again.
+        assert_eq!(memo_text(&mut source, 99, Charset::Cp437), None);
     }
 
     #[test]
