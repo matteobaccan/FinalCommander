@@ -8,6 +8,10 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **The histories are lists one types into.** The command history, the folder history and the
+  files read or edited all narrow as you type — the frame says what was typed — and `Del` on a
+  row takes that line out of the history without closing the list.
+
 - **`Alt+F10` finds a folder by name.** A list of every folder the tree knows under the
   panel's root, narrowed by what you type — the frame shows the filter — with `Enter` to go
   there. It opens on the tree's cache, which **now survives the session** (written into the

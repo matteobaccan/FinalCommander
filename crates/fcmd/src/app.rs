@@ -12115,7 +12115,7 @@ impl App {
                         separator: false,
                     })
                     .collect();
-                Pick::new(kind, self.plain("menu-folders-history"), rows, side)
+                Pick::filtered(kind, self.plain("menu-folders-history"), rows, side)
             }
             PickKind::CommandHistory => {
                 // Newest first, which is the order someone reaching for a past command wants.
@@ -12132,7 +12132,7 @@ impl App {
                         separator: false,
                     })
                     .collect();
-                Pick::new(kind, self.plain("menu-history"), rows, side)
+                Pick::filtered(kind, self.plain("menu-history"), rows, side)
             }
             PickKind::FileHistory => {
                 // Already newest first, which is how it is kept.
@@ -12147,7 +12147,7 @@ impl App {
                         separator: false,
                     })
                     .collect();
-                Pick::new(kind, self.plain("menu-view-history"), rows, side)
+                Pick::filtered(kind, self.plain("menu-view-history"), rows, side)
             }
             PickKind::Highlight => {
                 let rows: Vec<PickRow> = self
@@ -12356,14 +12356,33 @@ impl App {
                 self.highlight_at = Some(at);
             }
             // A list one types into: the letters are the filter rather than hotkeys, and
-            // `Backspace` takes one back. `Esc` closes it, and stops the walk behind it.
-            KeyCode::Char(c) if kind == PickKind::Folders && !key.mods.contains(Mods::CTRL) => {
+            // `Backspace` takes one back. A history of four hundred commands is a list one
+            // finds a line in by typing part of it, which is what FAR does there too.
+            KeyCode::Char(c) if filters(kind) && !key.mods.contains(Mods::CTRL) => {
                 pick.filter.push(c);
                 pick.refilter();
             }
-            KeyCode::Backspace if kind == PickKind::Folders => {
+            KeyCode::Backspace if filters(kind) => {
                 pick.filter.pop();
                 pick.refilter();
+            }
+            // And a history is a list one clears from inside it: the line under the cursor
+            // goes, the list stays open, and what was typed stays typed.
+            KeyCode::Delete
+                if matches!(
+                    kind,
+                    PickKind::CommandHistory | PickKind::FileHistory | PickKind::FoldersHistory
+                ) =>
+            {
+                let (side, value, filter) = (
+                    pick.side,
+                    pick.chosen().map(|r| r.value.clone()),
+                    pick.filter.clone(),
+                );
+                if let Some(value) = value {
+                    self.forget_history(kind, side, &value);
+                    self.reopen_history(kind, side, &filter);
+                }
             }
             KeyCode::F(4) if kind == PickKind::SortGroups => {
                 let at = pick.cursor;
@@ -14988,6 +15007,29 @@ impl App {
         self.mode = Mode::Form(Box::new(Form::highlight(group.as_ref(), &self.i18n)));
     }
 
+    /// Take one line out of a history (`Del` in the list). The three live in three places —
+    /// the command line keeps its own, a panel keeps where it has been, the program keeps the
+    /// files it has opened — so each is asked in its own words.
+    fn forget_history(&mut self, kind: PickKind, side: usize, value: &str) {
+        match kind {
+            PickKind::CommandHistory => self.cmd.forget(value),
+            PickKind::FileHistory => self.file_history.retain(|p| p != value),
+            PickKind::FoldersHistory => {
+                self.panels[side].history.retain(|p| p.to_string() != value)
+            }
+            _ => {}
+        }
+    }
+
+    /// Open a history again where it was, with what was typed into it still typed.
+    fn reopen_history(&mut self, kind: PickKind, side: usize, filter: &str) {
+        self.open_pick(kind, side);
+        if let Mode::Pick(pick) = &mut self.mode {
+            pick.filter = filter.to_string();
+            pick.refilter();
+        }
+    }
+
     /// Every folder the tree knows under `root`, as rows of the list: the path, shortened to
     /// what is under the root, because a list of forty identical prefixes says nothing.
     fn folder_rows(&self, root: &VPath) -> Vec<PickRow> {
@@ -16000,6 +16042,18 @@ fn highlight_name(h: &fcmd_config::HighlightCfg, index: usize) -> String {
     } else {
         h.name.clone()
     }
+}
+
+/// The lists one types into rather than picks a letter from: the folders, and the three
+/// histories — every one of them long enough that reading it is slower than typing into it.
+fn filters(kind: PickKind) -> bool {
+    matches!(
+        kind,
+        PickKind::Folders
+            | PickKind::CommandHistory
+            | PickKind::FileHistory
+            | PickKind::FoldersHistory
+    )
 }
 
 /// What to call a band in a message: its own name, or its place in the list.
@@ -22744,6 +22798,45 @@ abcdefghij
         press(&mut app, "Del");
         assert_eq!(app.cfg.highlight.len(), 1);
         assert_eq!(app.cfg.highlight[0].name, "logs");
+    }
+
+    /// A history is long, so it is a list one types into — and one clears from inside it.
+    #[test]
+    fn a_history_is_narrowed_by_typing_and_cleared_with_del() {
+        let mut app = app();
+        app.cmd
+            .load_history(vec!["make".into(), "cargo test".into(), "cargo fmt".into()]);
+        app.run(Command::CmdHistory);
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(pick.kind, crate::menu::PickKind::CommandHistory);
+        assert_eq!(pick.rows.len(), 3);
+
+        // Typing narrows it; the frame says what was typed.
+        for c in ["c", "a", "r"] {
+            press(&mut app, c);
+        }
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(pick.rows.len(), 2, "{:?}", pick.rows);
+        assert!(pick.heading().contains("car"), "{}", pick.heading());
+
+        // `Del` takes the line under the cursor out of the history and leaves the list — and
+        // the filter — where they were.
+        let gone = pick.chosen().map(|r| r.value.clone()).unwrap();
+        press(&mut app, "Del");
+        assert!(
+            !app.cmd.history().contains(&gone),
+            "{:?}",
+            app.cmd.history()
+        );
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("the list stays open: {:?}", app.mode)
+        };
+        assert_eq!(pick.filter, "car");
+        assert_eq!(pick.rows.len(), 1, "{:?}", pick.rows);
     }
 
     /// `Alt+F10` is the folders the tree knows, as a list one types into: what was typed

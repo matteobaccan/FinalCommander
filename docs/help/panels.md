@@ -210,7 +210,10 @@ bucket is not restored, because the connection it needs is not open yet.
 The command line under the panels runs a command and keeps what it printed, which is what you
 want nine times in ten. With something typed on it, `↑` and `↓` walk back and forth through
 what was run before, as a shell does; on an empty line the arrows belong to the panel, as
-every shared key does. `Alt+F8` shows the whole history as a list.
+every shared key does. `Alt+F8` shows the whole history as a list — and so do `Alt+F11` for the files you have read
+or edited and `Alt+F12` for the folders this panel has been in. All three are lists you type
+into: what you type narrows them, the frame says what it was, and `Del` on a row takes that
+line out of the history for good.
 
 While you type, the line offers what it could become: the names in the directory the panel is
 showing, the lines you have run before, and the environment's variables. `↑` and `↓` walk the

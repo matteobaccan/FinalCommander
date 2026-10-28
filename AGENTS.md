@@ -231,15 +231,15 @@ files rather than guessing what its dialog says.
 
 Everything here is unblocked and specified; the backlog has the reasons.
 
-1. **The screens list and background screens** (`F12`): several viewers, editors and jobs
-   open at once. The job engine already runs more than one; the screen stack is what is
-   missing, and `Mode` holding one screen is what has to change.
-2. **A dialog for the sort groups**, as `F9 → Options → Files highlighting` edits the
-   colouring groups: the blocks can only be written by hand today.
-3. **Descriptions through a provider** — inside an archive, on a server — and carried out of a
-   search result, which are what SPEC 02 §13 still owes.
-4. **The tree cache on disk**, which unblocks `Alt+F10` (find a folder) and the copy dialog's
-   own tree in one go.
+1. **Descriptions on a server**, and carried out of a search result — what SPEC 02 §13 still
+   owes now that the archives read theirs.
+2. **The histories' lifetime and locked rows**, and a history for the dialogs' own fields:
+   the three that exist are filtered and cleared from inside them now, which was the half
+   that mattered.
+3. **The code pages menu** (`Shift+F8`): favourites, a configurable `F8` cycle, custom names.
+   Ours cycles a fixed list.
+4. **The mask-group editor** in the Options menu: the groups are values and the filter bar
+   reads them, but `<arc>` and its friends can only be written by hand.
 
 One rule that came out of that review and holds everywhere: **`Alt+<letter>` belongs to the
 quick search**, so nothing else may take it (`Ctrl+Shift+N/I/T` moved for this reason), and

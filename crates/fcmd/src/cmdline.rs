@@ -254,6 +254,13 @@ impl CmdLine {
         self.stash.clear();
     }
 
+    /// Take one line out of the history (`Del` in the list). The walk is stopped with it:
+    /// a cursor pointing into a list that has changed under it would be a surprise.
+    pub fn forget(&mut self, line: &str) {
+        self.history.retain(|h| h != line);
+        self.walking = None;
+    }
+
     /// Load a history read from the state file, oldest first.
     pub fn load_history(&mut self, lines: Vec<String>) {
         self.history = lines;
