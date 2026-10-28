@@ -23862,14 +23862,18 @@ abcdefghij
         assert_eq!(says(6), Some(app.i18n.t("key-service-restart")));
         assert_eq!(says(8), Some(app.i18n.t("key-service-stop")));
 
-        // `F3` is the card for the service under the cursor.
+        // `F3` is the card for the service under the cursor — which is the row the panel
+        // sorted to the top, not the first one the system listed.
         app.panels[0].cursor = 0;
+        let id = app.panels[0]
+            .current()
+            .map(|e| app.panels[0].path_of(e).display_name())
+            .expect("a row");
         press(&mut app, "F3");
         let Mode::Message { title, lines } = &app.mode else {
             panic!("no card: {:?}", app.mode)
         };
         assert_eq!(*title, app.i18n.t("svc-card"));
-        let id = app.services[0].id.clone();
         assert!(lines.iter().any(|l| l.contains(&id)), "{lines:?}");
         press(&mut app, "Esc");
 
