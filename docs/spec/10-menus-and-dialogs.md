@@ -254,16 +254,34 @@ The rows are what the platform has:
 
 | Row | Where |
 | --- | --- |
-| the name, or `N selected items`, and what the file under the cursor is now (`rw-r--r-- (0644)`) | everywhere, as text and not as a box |
+| the name, or `N selected items`, who it belongs to (`owner mb:mb`), and what the file under the cursor is now (`rw-r--r-- (0644)`) | everywhere, as text and not as a box |
 | twelve boxes: owner, group and world × read, write, run, then setuid, setgid and sticky | Unix |
 | read-only | everywhere — the write bits on Unix, the attribute on Windows, the write bits again over SFTP |
-| hidden, system, archive | Windows |
-| *Changed* and *Last read*, as `YYYY-MM-DD HH:MM:SS` in local time | everywhere a time can be set |
+| hidden, system, archive, temporary, offline, *the indexer may look at it* | Windows |
+| a dim line naming what it also is — compressed, encrypted, sparse, a reparse point | Windows, and only where it is one of them |
+| *Times in UTC* | everywhere |
+| *Changed*, *Last read* and *Created*, as `YYYY-MM-DD HH:MM:SS` | everywhere a time can be set |
+| *Record changed*, dim: the moment the file's own record last changed | Unix, where the system keeps it |
+| *Original* · *Current* · *Blank* | everywhere: three buttons that fill the time rows in and leave the dialog open |
 | *and everything inside the folders* | when a directory is among what was selected |
 
 A row left alone changes nothing: a blank time means "leave it", and the mode's boxes start
 from what the file under the cursor has. The dialog is the tallest in the program, so a screen
 too short for it scrolls to the cursor and the frame says there is more above or below.
+
+**The times.** All four are read with the same `stat` that reads the mode, the owner and
+Windows' attribute word — one call on the keystroke that opens the dialog. Three of them are
+rows one can type into; the fourth is not offered anywhere, because no system has a call that
+sets the moment a file's own record changed. The creation time is a row everywhere and is
+written only on Windows, which is the one platform with a call for it (`FileTimes::set_created`
+through a handle); elsewhere a dim line under it says so, rather than taking a time and
+dropping it. *Times in UTC* decides which clock the three rows are read and written in — the
+file keeps them in UTC either way — and ticking it re-reads them in that clock, because a box
+that changed nothing on screen would be a box that lies.
+
+The three buttons are FAR's own and answer nothing: `Original` puts back what the file carries,
+`Current` writes this moment into all three, `Blank` empties them, and the dialog stays where
+it is. They sit before `OK` and `Cancel` so those two keep their places at the end.
 
 The work is `fcmd_jobs::attrs`, and it is deliberately *not* `JobFs::apply_meta`. That one is a
 copy's best effort and swallows what it cannot do, which is right after a copy and wrong here:
@@ -277,8 +295,8 @@ archive has the archive's permissions, and an object in a bucket has the time th
 it and an access policy that is not a mode.
 
 **Still to come:** the owner and the group (`chown`), which needs a user and group picker and
-the privilege to use it; and Windows' advanced bits (compressed, encrypted, not indexed,
-sparse, temporary, offline), which FAR offers behind a second page.
+the privilege to use it — the dialog names the owner, it does not offer to change it; and
+Windows' *System properties* button, which hands the file to the shell's own property sheet.
 
 ### 3.9 Checksums (Files menu)
 

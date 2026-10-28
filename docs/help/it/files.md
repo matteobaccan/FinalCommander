@@ -173,12 +173,21 @@ vuota che valga la pena di tenere.
 
 Su Linux e macOS sono i permessi, come dodici caselle — proprietario, gruppo e tutti, ognuno con
 lettura, scrittura ed esecuzione, più setuid, setgid e sticky — e la riga sopra di esse dice cosa
-è il file ora, sia come `rw-r--r--` sia come `0644`. Su Windows sono invece sola lettura,
-nascosto, sistema e archivio. La sola lettura è su entrambi, perché su Unix sono i bit di
-scrittura.
+è il file ora, sia come `rw-r--r--` sia come `0644`, e sopra ancora di chi è. Su Windows sono
+invece sola lettura, nascosto, sistema, archivio, temporaneo, non in linea e se l'indicizzatore
+può leggerlo — e una riga in grigio dice cos'altro è il file, quando è compresso, cifrato,
+sparso o un punto di reparse: quelli si impostano facendo la cosa, non spuntando una casella.
+La sola lettura è su entrambi, perché su Unix sono i bit di scrittura.
 
-Sotto le caselle stanno i due orari, come `2026-10-24 17:42:05` in ora locale. Un orario lasciato
-in bianco viene lasciato stare; un orario scritto viene impostato. Con una cartella fra quello
+Sotto le caselle stanno gli orari — *Cambiato*, *Ultima lettura* e *Creato* — come
+`2026-10-24 17:42:05`. Un orario lasciato in bianco viene lasciato stare; un orario scritto
+viene impostato. *Orari in UTC* li legge e li scrive in quell'orologio invece che in quello di
+questa macchina, che è come si confronta un file qui con la sua copia su un server di
+compilazione. I tre pulsanti sotto riempiono le righe senza rispondere al dialogo: *Originale*
+rimette quello che il file ha, *Adesso* scrive questo momento, *Vuoto* le svuota. Su Unix c'è
+un quarto orario mostrato e mai offerto — il momento in cui è cambiato il record del file
+stesso, che nessun sistema ha una chiamata per impostare — e la data di creazione è mostrata
+ovunque e scritta solo su Windows, l'unica piattaforma che ha una chiamata per farlo. Con una cartella fra quello
 che è selezionato c'è una casella in più: *e tutto quello che sta dentro le cartelle*, che porta
 la modifica giù per l'albero. Le cartelle stesse vengono cambiate dopo quello che contengono,
 così togliere il bit di scrittura a una cartella non può chiudere il programma fuori dal proprio

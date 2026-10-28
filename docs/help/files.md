@@ -164,11 +164,20 @@ What is not there: an entry's permissions and times cannot be changed from the p
 
 On Linux and macOS that is the mode, as twelve boxes — owner, group and world, each with read,
 write and run, plus setuid, setgid and sticky — and the line above them says what the file is
-now, both as `rw-r--r--` and as `0644`. On Windows it is read-only, hidden, system and archive
-instead. Read-only is on both, because on Unix it is the write bits.
+now, both as `rw-r--r--` and as `0644`, with who it belongs to above that. On Windows it is
+read-only, hidden, system, archive, temporary, offline and whether the indexer may look at it
+— and a dim line says what else the file is, where it is compressed, encrypted, sparse or a
+reparse point: those are set by doing the thing, not by ticking a box. Read-only is on both,
+because on Unix it is the write bits.
 
-Below the boxes are the two times, as `2026-10-24 17:42:05` in local time. A time left blank
-is left alone; a time typed in is set. With a folder among what is selected there is one more
+Below the boxes are the times — *Changed*, *Last read* and *Created* — as
+`2026-10-24 17:42:05`. A time left blank is left alone; a time typed in is set. *Times in UTC*
+reads and writes them in that clock instead of this machine's, which is how a file here and
+its copy on a build server are compared. The three buttons under them fill the rows in without
+answering the dialog: *Original* puts back what the file carries, *Current* writes this moment,
+*Blank* empties them. On Unix a fourth time is shown and never offered — the moment the file's
+own record changed, which no system has a call to set — and the creation time is shown
+everywhere and written only on Windows, the one platform with a call for it. With a folder among what is selected there is one more
 box: *and everything inside the folders*, which takes the whole change down the tree. The
 directories themselves are changed after what is in them, so taking the write bit off a folder
 cannot lock the program out of its own contents halfway through.

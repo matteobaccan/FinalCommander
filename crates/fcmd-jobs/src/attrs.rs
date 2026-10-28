@@ -33,8 +33,19 @@ pub struct Change {
     pub hidden: Option<bool>,
     pub system: Option<bool>,
     pub archive: Option<bool>,
+    /// The three more that `SetFileAttributes` will take: whether the content indexer looks
+    /// at it, whether it is meant to be short-lived, and whether its contents live elsewhere.
+    /// The rest of Windows' bits — compressed, encrypted, sparse, a reparse point — are set
+    /// by doing the thing rather than by writing a bit, so the dialog shows them and does not
+    /// offer them.
+    pub indexed: Option<bool>,
+    pub temporary: Option<bool>,
+    pub offline: Option<bool>,
     pub mtime: Option<SystemTime>,
     pub atime: Option<SystemTime>,
+    /// When it was made. Only Windows keeps one that can be set; everywhere else the row is
+    /// shown and not offered, because there is no call to write it with.
+    pub btime: Option<SystemTime>,
 }
 
 impl Change {

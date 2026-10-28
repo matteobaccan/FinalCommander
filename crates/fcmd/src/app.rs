@@ -727,6 +727,76 @@ impl Default for CopyChoices {
 ///
 /// On Windows there is no mode and the dialog does not offer one, so this answers `None`
 /// there and the twelve boxes are not built.
+/// The four times a local file carries. `mtime` falls back to the listing's own, which is
+/// the one the panel already has; the rest are `None` where the platform does not keep them.
+fn times_of(path: &VPath, listed: Option<std::time::SystemTime>) -> crate::form::Times {
+    let mut times = crate::form::Times {
+        mtime: listed,
+        ..Default::default()
+    };
+    if !path.is_local() || path.in_container() {
+        return times;
+    }
+    let Ok(meta) = std::fs::metadata(path.os()) else {
+        return times;
+    };
+    times.mtime = meta.modified().ok().or(listed);
+    times.atime = meta.accessed().ok();
+    // `created` is `Some` only where the filesystem keeps it: ext4 does, and the standard
+    // library reads it; older filesystems do not, and the row then stays empty.
+    times.btime = meta.created().ok();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        // The moment the file's own record last changed, which no call can set: it is set by
+        // changing something. Shown, never offered.
+        let secs = meta.ctime();
+        if secs > 0 {
+            times.ctime = std::time::UNIX_EPOCH.checked_add(std::time::Duration::new(
+                secs as u64,
+                meta.ctime_nsec() as u32,
+            ));
+        }
+    }
+    times
+}
+
+/// Windows' attribute word for a local file, or zero where there is no such thing. It is the
+/// bits the listing does not carry — temporary, offline, not indexed, compressed and the
+/// rest — and it costs the same `stat` the times already do.
+fn windows_attributes(path: &VPath) -> u32 {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        if !path.is_local() || path.in_container() {
+            return 0;
+        }
+        return std::fs::metadata(path.os())
+            .map(|m| m.file_attributes())
+            .unwrap_or(0);
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = path;
+        0
+    }
+}
+
+/// Who a local file belongs to, as `user:group` — the same lookup the owners view uses.
+fn owner_of(path: &VPath) -> Option<String> {
+    if !path.is_local() || path.in_container() {
+        return None;
+    }
+    let mut cache = fcmd_platform::OwnerCache::default();
+    let owner = fcmd_platform::owner(&path.os(), &mut cache)?;
+    match (owner.user.is_empty(), owner.group.is_empty()) {
+        (true, true) => None,
+        (false, true) => Some(owner.user),
+        (true, false) => Some(owner.group),
+        (false, false) => Some(format!("{}:{}", owner.user, owner.group)),
+    }
+}
+
 fn mode_of(path: &VPath) -> Option<u32> {
     #[cfg(unix)]
     {
@@ -1441,6 +1511,9 @@ pub struct App {
     /// What the attributes dialog is about. The dialog is open while the selection could
     /// change under it, so what it will touch is settled when it opens.
     attr_targets: Vec<VPath>,
+    /// The times the file under the cursor carried when the dialog opened, so the dialog's
+    /// `Original` button has something to put back.
+    attr_times: crate::form::Times,
     /// The same, for the copy dialog.
     copy_sources: Vec<VPath>,
     /// What the copy dialog was last answered with, so the next one opens on it. FAR does
@@ -1720,6 +1793,7 @@ impl App {
             status_error: false,
             held: Mods::NONE,
             attr_targets: Vec::new(),
+            attr_times: Default::default(),
             copy_sources: Vec::new(),
             last_copy: CopyChoices::default(),
             queued_jobs: std::collections::VecDeque::new(),
@@ -8369,16 +8443,24 @@ impl App {
         // the dialog then starts from the flags alone.
         let under_cursor = self.panel().path_of(&entry);
         let mode = mode_of(&under_cursor);
-        self.mode = Mode::Form(Box::new(Form::attributes(
-            &what,
-            sources.len(),
+        // The four times and the owner come off the same `stat` the mode does: the panel's
+        // rows carry only the one date the view shows, and a dialog about what a file *is*
+        // is the one place where all four are the question.
+        let times = times_of(&under_cursor, entry.mtime);
+        let owner = owner_of(&under_cursor);
+        let facts = crate::form::AttrFacts {
+            what,
+            count: sources.len(),
             mode,
-            entry.flags,
-            entry.mtime,
+            flags: entry.flags,
+            times,
+            owner,
             directories,
-            &self.i18n,
-        )));
+            win_attributes: windows_attributes(&under_cursor),
+        };
+        self.mode = Mode::Form(Box::new(Form::attributes(&facts, &self.i18n)));
         self.attr_targets = sources;
+        self.attr_times = times;
     }
 
     /// OK in the copy dialog: one job per destination, with the rules the rows asked for.
@@ -8508,6 +8590,9 @@ impl App {
         if sources.is_empty() {
             return;
         }
+        // Which clock the three time rows were written in. The file's times are kept in UTC
+        // either way; this only says how to read what is on screen.
+        let utc = form.toggle_value("attr.utc");
         let bits = fcmd_jobs::Mode {
             owner_read: form.toggle_value("attr.ur"),
             owner_write: form.toggle_value("attr.uw"),
@@ -8531,12 +8616,20 @@ impl App {
             hidden: cfg!(windows).then(|| form.toggle_value("attr.hidden")),
             system: cfg!(windows).then(|| form.toggle_value("attr.system")),
             archive: cfg!(windows).then(|| form.toggle_value("attr.archive")),
-            mtime: fcmd_ui::parse_stamp(&form.text_value("attr.mtime")),
-            atime: fcmd_ui::parse_stamp(&form.text_value("attr.atime")),
+            temporary: cfg!(windows).then(|| form.toggle_value("attr.temporary")),
+            offline: cfg!(windows).then(|| form.toggle_value("attr.offline")),
+            indexed: cfg!(windows).then(|| form.toggle_value("attr.indexed")),
+            mtime: fcmd_ui::parse_stamp_in(&form.text_value("attr.mtime"), utc),
+            atime: fcmd_ui::parse_stamp_in(&form.text_value("attr.atime"), utc),
+            btime: fcmd_ui::parse_stamp_in(&form.text_value("attr.btime"), utc),
         };
         // A time that was typed and makes no sense is worth saying so about: leaving it alone
         // silently would look like the dialog had done what it was asked.
-        for (key, parsed) in [("attr.mtime", change.mtime), ("attr.atime", change.atime)] {
+        for (key, parsed) in [
+            ("attr.mtime", change.mtime),
+            ("attr.atime", change.atime),
+            ("attr.btime", change.btime),
+        ] {
             let typed = form.text_value(key);
             if !typed.trim().is_empty() && parsed.is_none() {
                 let msg = self.i18n.t_args("attr-bad-time", &[("text", typed.into())]);
@@ -9922,6 +10015,17 @@ impl App {
             KeyCode::Right if text => {
                 form.edit_text(TextEdit::Right);
             }
+            // Ticking the `UTC` box re-reads the times in that clock, which is the whole
+            // point of it: a box that changed nothing on screen would be a box that lies.
+            KeyCode::Char(' ') if form.kind == FormKind::Attributes && form.on_key("attr.utc") => {
+                form.toggle(true);
+                let utc = form.toggle_value("attr.utc");
+                let times = self.attr_times;
+                let Mode::Form(form) = &mut self.mode else {
+                    return;
+                };
+                form.fill_times(crate::form::TimeFill::Original, &times, utc);
+            }
             KeyCode::Char(' ') => form.toggle(true),
             KeyCode::Left => form.toggle(false),
             KeyCode::Right => form.toggle(true),
@@ -9938,6 +10042,25 @@ impl App {
                 })
             }
             KeyCode::Enter => {
+                // Three of the attributes dialog's buttons do not answer it: they fill the
+                // time rows in and leave it on screen, as FAR's own do.
+                if form.kind == FormKind::Attributes {
+                    let fill = match form.button {
+                        Some(0) => Some(crate::form::TimeFill::Original),
+                        Some(1) => Some(crate::form::TimeFill::Current),
+                        Some(2) => Some(crate::form::TimeFill::Blank),
+                        _ => None,
+                    };
+                    if let Some(fill) = fill {
+                        let utc = form.toggle_value("attr.utc");
+                        let times = self.attr_times;
+                        let Mode::Form(form) = &mut self.mode else {
+                            return;
+                        };
+                        form.fill_times(fill, &times, utc);
+                        return;
+                    }
+                }
                 // Enter answers the dialog wherever the cursor is, which is what a dialog
                 // does everywhere else and what FAR does here: `Space` is what turns a box
                 // on and off. On the last button it answers "nothing, thank you".
@@ -15127,6 +15250,15 @@ mod tests {
             flags: EntryFlags::empty(),
             id: EntryId::Name(name.bytes().map(u64::from).sum()),
             link_target: None,
+        }
+    }
+
+    /// Put the dialog's focus on one of its buttons, the way `Tab` would.
+    impl App {
+        fn form_mut_button(&mut self, at: usize) {
+            if let Mode::Form(form) = &mut self.mode {
+                form.button = Some(at);
+            }
         }
     }
 
@@ -23821,6 +23953,90 @@ abcdefghij
             panic!("the attributes dialog did not open: {:?}", app.mode)
         };
         assert_eq!(form.text_value("attr.readonly"), "true");
+    }
+
+    /// The four times FAR's own dialog shows, the three buttons that fill them in, and the
+    /// box that says which clock they are in.
+    #[test]
+    fn the_attributes_dialog_has_the_four_times_and_the_buttons_that_fill_them() {
+        let dir = tempfile::tempdir().expect("a directory");
+        let file = dir.path().join("a.txt");
+        std::fs::write(&file, b"hello").expect("written");
+        let mut app = app();
+        app.panels[0].cwd = VPath::local(dir.path());
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation: app.panels[0].generation,
+            result: Ok(vec![
+                Entry::parent_entry(),
+                entry("a.txt", EntryKind::File, 5),
+            ]),
+        });
+        app.panel_mut().cursor_to(1);
+        app.run(Command::FileAttributes);
+        let Mode::Form(form) = &app.mode else {
+            panic!("the attributes dialog did not open: {:?}", app.mode)
+        };
+        // The write time is seeded from the file itself; the record's own time is shown and
+        // never offered, so it is not a row anything can write.
+        assert!(!form.text_value("attr.mtime").is_empty());
+        assert!(!form.text_value("attr.atime").is_empty());
+        assert_eq!(form.text_value("attr.utc"), "false");
+
+        // `Blank` empties them, which is how a row says "leave this one alone".
+        app.form_mut_button(2);
+        press(&mut app, "Enter");
+        let Mode::Form(form) = &app.mode else {
+            panic!("the dialog closed: {:?}", app.mode)
+        };
+        assert!(
+            form.text_value("attr.mtime").is_empty(),
+            "Blank did nothing"
+        );
+
+        // `Current` fills them with this moment, and the dialog is still open.
+        app.form_mut_button(1);
+        press(&mut app, "Enter");
+        let Mode::Form(form) = &app.mode else {
+            panic!("the dialog closed: {:?}", app.mode)
+        };
+        let now = form.text_value("attr.mtime");
+        assert!(!now.is_empty(), "Current did nothing");
+
+        // `Original` puts the file's own times back.
+        app.form_mut_button(0);
+        press(&mut app, "Enter");
+        let Mode::Form(form) = &app.mode else {
+            panic!("the dialog closed: {:?}", app.mode)
+        };
+        let original = form.text_value("attr.mtime");
+        assert!(!original.is_empty(), "Original did nothing");
+        assert_eq!(
+            original,
+            fcmd_ui::format_stamp(std::fs::metadata(&file).unwrap().modified().unwrap())
+        );
+
+        // And the `UTC` box re-reads them in that clock: the same instant, written the way
+        // the file keeps it.
+        let utc_row = form
+            .fields
+            .iter()
+            .position(|f| matches!(f, crate::form::Field::Toggle { key, .. } if *key == "attr.utc"))
+            .expect("the UTC box");
+        let Mode::Form(form) = &mut app.mode else {
+            unreachable!()
+        };
+        form.button = None;
+        form.cursor = utc_row;
+        press(&mut app, "Space");
+        let Mode::Form(form) = &app.mode else {
+            panic!("the dialog closed: {:?}", app.mode)
+        };
+        assert_eq!(form.text_value("attr.utc"), "true");
+        assert_eq!(
+            form.text_value("attr.mtime"),
+            fcmd_ui::format_stamp_utc(std::fs::metadata(&file).unwrap().modified().unwrap())
+        );
     }
 
     #[test]

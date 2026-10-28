@@ -1073,6 +1073,16 @@ pub fn format_stamp(t: SystemTime) -> String {
     dt.format("%Y-%m-%d %H:%M:%S").to_string()
 }
 
+/// The same, in UTC: what the attributes dialog shows while its `UTC` box is ticked.
+///
+/// A file's times are kept in UTC, and the clock one wants to read them in is not always the
+/// one this machine is set to — a build server's log and a laptop's copy of it are an hour
+/// apart in local time and the same instant in UTC.
+pub fn format_stamp_utc(t: SystemTime) -> String {
+    let dt: DateTime<chrono::Utc> = t.into();
+    dt.format("%Y-%m-%d %H:%M:%S").to_string()
+}
+
 /// A time typed into a dialog, in local time. The seconds may be left off.
 ///
 /// `None` for anything else, including an empty string — which is how a row the user did not
@@ -1097,6 +1107,43 @@ pub fn parse_stamp(text: &str) -> Option<SystemTime> {
         .from_local_datetime(&naive)
         .earliest()
         .map(SystemTime::from)
+}
+
+/// A time typed into a dialog whose `UTC` box is ticked. Every hour of UTC exists exactly
+/// once, so there is no pair to choose between here.
+pub fn parse_stamp_utc(text: &str) -> Option<SystemTime> {
+    use chrono::TimeZone;
+
+    let text = text.trim();
+    if text.is_empty() {
+        return None;
+    }
+    let naive = chrono::NaiveDateTime::parse_from_str(text, "%Y-%m-%d %H:%M:%S")
+        .or_else(|_| chrono::NaiveDateTime::parse_from_str(text, "%Y-%m-%d %H:%M"))
+        .or_else(|_| {
+            chrono::NaiveDate::parse_from_str(text, "%Y-%m-%d")
+                .map(|d| d.and_hms_opt(0, 0, 0).expect("midnight exists"))
+        })
+        .ok()?;
+    Some(chrono::Utc.from_utc_datetime(&naive).into())
+}
+
+/// A time shown in the clock the dialog is set to.
+pub fn format_stamp_in(t: SystemTime, utc: bool) -> String {
+    if utc {
+        format_stamp_utc(t)
+    } else {
+        format_stamp(t)
+    }
+}
+
+/// A time read back in the clock the dialog is set to.
+pub fn parse_stamp_in(text: &str, utc: bool) -> Option<SystemTime> {
+    if utc {
+        parse_stamp_utc(text)
+    } else {
+        parse_stamp(text)
+    }
 }
 
 /// The bottom frame: how much is in the panel and how much room is left on the device,

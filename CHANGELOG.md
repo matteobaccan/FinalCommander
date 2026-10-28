@@ -8,6 +8,15 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **`Ctrl+A` says everything a file is.** The attributes dialog gained the two times FAR
+  shows and we did not — *Created* and, on Unix, the dim *Record changed* that no system can
+  set — a *Times in UTC* box that re-reads all of them in that clock, and FAR's three buttons
+  under them: *Original*, *Current* and *Blank* fill the rows in and leave the dialog open. It
+  now names who the file belongs to, and on Windows offers *temporary*, *offline* and whether
+  the indexer may look at it, with a dim line for what the file also is — compressed,
+  encrypted, sparse, a reparse point — which are done rather than ticked. The creation time is
+  written where there is a call for it, which is Windows.
+
 - **The quick view is the viewer, not a preview of it.** Give the preview panel the focus and
   its keys are the reader's: `F2` wraps, `F4` walks the ways of reading a file, `Shift+F4` is
   hex, `F5` disassembles, `F6` decompiles, `F7` searches, `F8` changes the code page, `F11`

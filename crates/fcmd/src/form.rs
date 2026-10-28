@@ -146,6 +146,48 @@ fn plain(i18n: &I18n, id: &str) -> String {
     fcmd_ui::mnemonic(&i18n.t(id)).0
 }
 
+/// What the attributes dialog is opened about: one file, or a selection of them.
+#[derive(Debug, Clone, Default)]
+pub struct AttrFacts {
+    /// The name shown at the top, which is the file under the cursor.
+    pub what: String,
+    /// How many were selected; one is a name, more is a count.
+    pub count: usize,
+    /// The Unix mode of the file under the cursor, where there is one.
+    pub mode: Option<u32>,
+    pub flags: fcmd_core::EntryFlags,
+    pub times: Times,
+    /// Who it belongs to, as `user:group`.
+    pub owner: Option<String>,
+    /// Is a directory among them? Then the dialog offers to go down into them.
+    pub directories: bool,
+    /// Windows' own attribute word for the file under the cursor, read with the same `stat`
+    /// as the times. Zero everywhere else, where there is no such word.
+    pub win_attributes: u32,
+}
+
+/// The four times a file carries, as the attributes dialog shows them. Each is `None` where
+/// the platform does not keep it: Linux has no creation time before ext4, and nothing but
+/// Windows lets one be written.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Times {
+    pub mtime: Option<std::time::SystemTime>,
+    pub atime: Option<std::time::SystemTime>,
+    pub btime: Option<std::time::SystemTime>,
+    pub ctime: Option<std::time::SystemTime>,
+}
+
+/// Which of the three buttons under the times was pressed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TimeFill {
+    /// What the file carries now.
+    Original,
+    /// This moment.
+    Current,
+    /// Nothing, which is how a row says "leave this one alone".
+    Blank,
+}
+
 impl Form {
     /// Build a dialog from the configuration as it stands.
     pub fn build(kind: FormKind, cfg: &Config, i18n: &I18n) -> Form {
@@ -703,6 +745,15 @@ impl Form {
 
     /// Whether a toggle row is on, by key. `false` when there is no such row, which is what a
     /// dialog that does not offer the option should mean.
+    /// Is the cursor on the row with this key?
+    pub fn on_key(&self, want: &str) -> bool {
+        matches!(
+            self.fields.get(self.cursor),
+            Some(Field::Toggle { key, .. } | Field::Text { key, .. } | Field::Choice { key, .. })
+                if *key == want
+        )
+    }
+
     pub fn toggle_value(&self, want: &str) -> bool {
         self.fields
             .iter()
@@ -1119,15 +1170,20 @@ impl Form {
     /// A row left alone changes nothing. That is why the mode's boxes start from what the
     /// file has and the times start empty: a blank time field means "leave it", and a time
     /// typed in means that time, for every path the dialog was opened on.
-    pub fn attributes(
-        what: &str,
-        count: usize,
-        mode: Option<u32>,
-        flags: fcmd_core::EntryFlags,
-        mtime: Option<std::time::SystemTime>,
-        directories: bool,
-        i18n: &I18n,
-    ) -> Form {
+    pub fn attributes(facts: &AttrFacts, i18n: &I18n) -> Form {
+        let AttrFacts {
+            what,
+            count,
+            mode,
+            flags,
+            times,
+            owner,
+            directories,
+            win_attributes,
+        } = facts;
+        let (count, mode, flags, directories) = (*count, *mode, *flags, *directories);
+        let win_attributes = *win_attributes;
+        let owner = owner.as_deref();
         let t = |id: &str| i18n.t(id);
         let bits = fcmd_jobs::Mode::of(mode.unwrap_or(0o644));
         let mut fields = vec![Field::Note(if count == 1 {
@@ -1135,6 +1191,13 @@ impl Form {
         } else {
             i18n.t_args("attr-count", &[("count", (count as i64).into())])
         })];
+        // Whose it is. A row rather than a box: a dialog that offered to change the owner
+        // would have to ask for a password it has no business taking.
+        if let Some(owner) = owner {
+            fields.push(Field::Note(
+                i18n.t_args("attr-owner-is", &[("who", owner.to_string().into())]),
+            ));
+        }
         if let Some(mode) = mode {
             fields.push(Field::Note(i18n.t_args(
                 "attr-now",
@@ -1203,17 +1266,83 @@ impl Form {
             ] {
                 fields.push(Field::toggle(key, t(label), on));
             }
+            // The three more that can be written. They are not in the listing's own flags —
+            // no column shows them — so they come off the attribute word read beside the
+            // times, and a box starts where the file is rather than at `false`.
+            const TEMPORARY: u32 = 0x100;
+            const OFFLINE: u32 = 0x1000;
+            const NOT_INDEXED: u32 = 0x2000;
+            fields.push(Field::toggle(
+                "attr.temporary",
+                t("attr-temporary"),
+                win_attributes & TEMPORARY != 0,
+            ));
+            fields.push(Field::toggle(
+                "attr.offline",
+                t("attr-offline"),
+                win_attributes & OFFLINE != 0,
+            ));
+            // Asked the way round a reader thinks of it, which is the opposite of the bit.
+            fields.push(Field::toggle(
+                "attr.indexed",
+                t("attr-indexed"),
+                win_attributes & NOT_INDEXED == 0,
+            ));
+            // And the ones that are set by doing the thing rather than by writing a bit:
+            // shown, because they answer "why is this file green", and never offered.
+            const COMPRESSED: u32 = 0x800;
+            const ENCRYPTED: u32 = 0x4000;
+            const SPARSE: u32 = 0x200;
+            const REPARSE: u32 = 0x400;
+            let also: Vec<String> = [
+                (COMPRESSED, "attr-compressed"),
+                (ENCRYPTED, "attr-encrypted"),
+                (SPARSE, "attr-sparse"),
+                (REPARSE, "attr-reparse"),
+            ]
+            .iter()
+            .filter(|(bit, _)| win_attributes & bit != 0)
+            .map(|(_, id)| t(id))
+            .collect();
+            if !also.is_empty() {
+                fields.push(Field::Dim(
+                    i18n.t_args("attr-also", &[("what", also.join(", ").into())]),
+                ));
+            }
         }
         fields.push(Field::Separator);
 
-        // The times. Empty means leave them; `now` is what the keyboard reaches for most, so
-        // the current value is offered rather than a format to copy from the manual.
-        fields.push(Field::text(
-            "attr.mtime",
-            t("attr-mtime"),
-            mtime.map(fcmd_ui::format_stamp).unwrap_or_default(),
-        ));
-        fields.push(Field::text("attr.atime", t("attr-atime"), String::new()));
+        // The clock the four rows below are read and written in. The file's times are kept in
+        // UTC whatever this says; the box only decides which clock they are shown in, which
+        // is the question anybody comparing a file with a build server's copy of it has.
+        fields.push(Field::toggle("attr.utc", t("attr-utc"), false));
+        // The four times FAR shows. Empty means leave that one alone; each starts at what the
+        // file carries, so the format is in front of the reader rather than in the manual.
+        for (key, label, when) in [
+            ("attr.mtime", "attr-mtime", times.mtime),
+            ("attr.atime", "attr-atime", times.atime),
+            ("attr.btime", "attr-btime", times.btime),
+        ] {
+            fields.push(Field::text(
+                key,
+                t(label),
+                when.map(fcmd_ui::format_stamp).unwrap_or_default(),
+            ));
+        }
+        // The fourth is read-only everywhere: no system has a call that sets the moment a
+        // file's own record last changed — it is set *by* changing it.
+        if let Some(ctime) = times.ctime {
+            fields.push(Field::Dim(format!(
+                "{}  {}",
+                t("attr-ctime"),
+                fcmd_ui::format_stamp(ctime)
+            )));
+        }
+        // And on a platform that cannot set the creation time, the row says so rather than
+        // taking a time and dropping it.
+        if !cfg!(windows) {
+            fields.push(Field::Dim(t("attr-btime-readonly")));
+        }
         if directories {
             fields.push(Field::Separator);
             fields.push(Field::toggle("attr.recursive", t("attr-recursive"), false));
@@ -1228,7 +1357,36 @@ impl Form {
             cursor: 0,
             site: None,
             button: None,
-            buttons: vec![i18n.t("btn-ok"), i18n.t("btn-cancel")],
+            // Three buttons that do not answer the dialog: they fill the time rows in, the
+            // way FAR's own do, and the dialog stays on screen for the next one. They come
+            // first so that `OK` and `Cancel` keep their places at the end.
+            buttons: vec![
+                i18n.t("btn-attr-original"),
+                i18n.t("btn-attr-current"),
+                i18n.t("btn-attr-blank"),
+                i18n.t("btn-ok"),
+                i18n.t("btn-cancel"),
+            ],
+        }
+    }
+
+    /// Fill the three time rows from one of the buttons: what the file carries, now, or
+    /// nothing at all. `utc` is the clock the rows are written in.
+    pub fn fill_times(&mut self, which: TimeFill, times: &Times, utc: bool) {
+        let now = std::time::SystemTime::now();
+        for (key, when) in [
+            ("attr.mtime", times.mtime),
+            ("attr.atime", times.atime),
+            ("attr.btime", times.btime),
+        ] {
+            let text = match which {
+                TimeFill::Original => when
+                    .map(|t| fcmd_ui::format_stamp_in(t, utc))
+                    .unwrap_or_default(),
+                TimeFill::Current => fcmd_ui::format_stamp_in(now, utc),
+                TimeFill::Blank => String::new(),
+            };
+            self.set_text(key, text);
         }
     }
 
@@ -1289,6 +1447,22 @@ impl Form {
     }
 
     /// What a text row holds now, by key.
+    /// Write a text row's value, leaving the caret at the end of it.
+    pub fn set_text(&mut self, want: &str, text: String) {
+        for field in &mut self.fields {
+            if let Field::Text {
+                key, value, caret, ..
+            } = field
+            {
+                if *key == want {
+                    *caret = text.chars().count();
+                    *value = text;
+                    return;
+                }
+            }
+        }
+    }
+
     pub fn text_value(&self, want: &str) -> String {
         for field in &self.fields {
             match field {

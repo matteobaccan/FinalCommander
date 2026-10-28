@@ -409,10 +409,15 @@ impl JobFs for LocalFs {
             if let Some(atime) = change.atime {
                 times = times.set_accessed(atime);
             }
+            times = with_created(times, change.btime);
             file.set_times(times)?;
         } else if let Some(atime) = change.atime.filter(|_| times_here) {
             let file = File::open(&target)?;
-            file.set_times(fs::FileTimes::new().set_accessed(atime))?;
+            let times = with_created(fs::FileTimes::new().set_accessed(atime), change.btime);
+            file.set_times(times)?;
+        } else if change.btime.is_some() && times_here {
+            let file = File::options().write(true).open(&target)?;
+            file.set_times(with_created(fs::FileTimes::new(), change.btime))?;
         }
 
         #[cfg(unix)]
@@ -456,12 +461,20 @@ impl JobFs for LocalFs {
             const HIDDEN: u32 = 0x2;
             const SYSTEM: u32 = 0x4;
             const ARCHIVE: u32 = 0x20;
+            const TEMPORARY: u32 = 0x100;
+            const OFFLINE: u32 = 0x1000;
+            const NOT_INDEXED: u32 = 0x2000;
             let mut attributes = fs::metadata(&target)?.file_attributes();
             for (wanted, bit) in [
                 (change.readonly, READONLY),
                 (change.hidden, HIDDEN),
                 (change.system, SYSTEM),
                 (change.archive, ARCHIVE),
+                (change.temporary, TEMPORARY),
+                (change.offline, OFFLINE),
+                // The box is asked the other way round — "the indexer may look at it" — so
+                // the bit it sets is the opposite of the answer.
+                (change.indexed.map(|on| !on), NOT_INDEXED),
             ] {
                 match wanted {
                     Some(true) => attributes |= bit,
@@ -794,6 +807,20 @@ pub fn free_name(fs: &dyn JobFs, dst: &VPath) -> VPath {
         }
     }
     dst.clone()
+}
+
+/// The creation time, where the platform has a call for it. Windows does; nothing else does,
+/// so there the row is shown in the dialog and never written.
+fn with_created(times: fs::FileTimes, btime: Option<SystemTime>) -> fs::FileTimes {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::FileTimesExt;
+        if let Some(btime) = btime {
+            return times.set_created(btime);
+        }
+    }
+    let _ = btime;
+    times
 }
 
 #[cfg(test)]
