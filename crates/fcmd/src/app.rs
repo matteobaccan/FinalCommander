@@ -11336,25 +11336,29 @@ impl App {
                 Command::ViewerShiftForward => viewer.shift(1),
                 Command::ViewerWrap => viewer.toggle_wrap(),
                 Command::ViewerHex => viewer.toggle_hex(),
+                // `F4`: the wheel of ways to read this file — text, dump, hex, the laid-out
+                // document, the table — and round again. A file is often none of the things
+                // its name says it is, and trying the next way should be one key rather than
+                // a choice from a list. Disassembly stays on `F5`: it applies to a program
+                // and to nothing else, and a wheel that stops on it for every text file
+                // would be a wheel with a hole in it.
                 Command::ViewerModeNext => {
-                    // text → dump → hex → text, with the rendered document in the ring where
-                    // there is one. Disassembly is F5, not part of the cycle, because it only
-                    // applies to some files.
+                    use fcmd_view::Mode as M;
                     let renders = viewer.renders_markdown();
-                    let tabular = viewer.reads_table();
                     let next = match viewer.mode {
-                        fcmd_view::Mode::Markdown | fcmd_view::Mode::Table => fcmd_view::Mode::Text,
-                        fcmd_view::Mode::Text => fcmd_view::Mode::Dump,
-                        fcmd_view::Mode::Dump => fcmd_view::Mode::Hex,
-                        fcmd_view::Mode::Hex | fcmd_view::Mode::Disasm if renders => {
-                            fcmd_view::Mode::Markdown
-                        }
-                        fcmd_view::Mode::Hex | fcmd_view::Mode::Disasm if tabular => {
-                            fcmd_view::Mode::Table
-                        }
-                        fcmd_view::Mode::Hex | fcmd_view::Mode::Disasm => fcmd_view::Mode::Text,
+                        M::Text => Some(M::Dump),
+                        M::Dump => Some(M::Hex),
+                        M::Hex | M::Disasm if renders => Some(M::Markdown),
+                        // The table comes after the hex, and only if the file really reads
+                        // as one: `as_table` says so by returning whether it managed, which
+                        // is the same test the key that opens it uses.
+                        M::Hex | M::Disasm => (!viewer.as_table()).then_some(M::Text),
+                        M::Markdown => (!viewer.as_table()).then_some(M::Text),
+                        M::Table => Some(M::Text),
                     };
-                    viewer.set_mode(next);
+                    if let Some(next) = next {
+                        viewer.set_mode(next);
+                    }
                 }
                 Command::ViewerMarkdown => {
                     if viewer.mode == fcmd_view::Mode::Markdown {
@@ -12460,15 +12464,17 @@ impl App {
         ]
     }
 
-    /// What F4 switches the viewer to from where it is now.
+    /// What `F4` offers next. It is a wheel rather than a toggle, so the bar says where the
+    /// next turn lands rather than naming one destination for ever.
     fn viewer_toggle_key(&self) -> &'static str {
-        match self.mode.viewer() {
-            Some(v) if v.mode == fcmd_view::Mode::Hex => match v.base_mode {
-                fcmd_view::Mode::Dump => "key-dump",
-                fcmd_view::Mode::Markdown => "key-doc",
-                _ => "key-text",
-            },
-            _ => "key-hex",
+        let Some(v) = self.mode.viewer() else {
+            return "key-dump";
+        };
+        match v.mode {
+            fcmd_view::Mode::Text => "key-dump",
+            fcmd_view::Mode::Dump => "key-hex",
+            fcmd_view::Mode::Hex | fcmd_view::Mode::Disasm => "key-doc",
+            fcmd_view::Mode::Markdown | fcmd_view::Mode::Table => "key-text",
         }
     }
 
@@ -18172,9 +18178,18 @@ five
         press(&mut app, "Down");
         press(&mut app, "F3");
 
+        // `F4` turns the wheel: text, dump, hex, and round to text again — a plain text file
+        // reads as no document and no table, so those two turns are not offered.
+        press(&mut app, "F4");
+        assert_eq!(app.mode.viewer().unwrap().mode, fcmd_view::Mode::Dump);
         press(&mut app, "F4");
         assert_eq!(app.mode.viewer().unwrap().mode, fcmd_view::Mode::Hex);
         press(&mut app, "F4");
+        assert_eq!(app.mode.viewer().unwrap().mode, fcmd_view::Mode::Text);
+        // `Shift+F4` is hex and straight back, for when hex is the one that was wanted.
+        press(&mut app, "Shift+F4");
+        assert_eq!(app.mode.viewer().unwrap().mode, fcmd_view::Mode::Hex);
+        press(&mut app, "Shift+F4");
         assert_eq!(app.mode.viewer().unwrap().mode, fcmd_view::Mode::Text);
 
         press(&mut app, "F2");

@@ -3,7 +3,9 @@
 The viewer never loads a file. It reads the window it is showing, so a forty-gigabyte log
 opens at once and `End` is one seek rather than a count of lines.
 
-`F2` cycles the wrapping, `F4` switches between text and a hex dump, `F8` changes the code page
+`F2` cycles the wrapping, `F4` turns the wheel of ways to read the file — text, a byte dump,
+hex, a laid-out document, a table — stopping only on the ones this file has a use for, with
+the key bar saying where the next turn lands; `Shift+F4` is hex and straight back. `F8` changes the code page
 and `F7` opens the search dialog: what to look for, whether it is plain text, a run of hex
 bytes or a regular expression, whether case matters, whether only whole words count — and
 then *Find next* or *Find previous*, because they are the same question asked twice.

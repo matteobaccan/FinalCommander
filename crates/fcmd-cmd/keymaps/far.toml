@@ -661,10 +661,14 @@ keys = ["F2"]
 scope = "viewer"
 cmd = "viewer.wrap"
 
+# `F4` turns the wheel of ways to read a file — text, dump, hex, the laid-out document, the
+# table — because a file is often none of the things its name says it is, and trying the next
+# one should be one key rather than a choice from a list. `Shift+F4` is hex and straight back,
+# for when hex is the one that was wanted.
 [[bind]]
 keys = ["F4"]
 scope = "viewer"
-cmd = "viewer.hex"
+cmd = "viewer.mode.next"
 
 [[bind]]
 keys = ["Shift+F2"]
@@ -681,7 +685,7 @@ cmd = "viewer.table"
 [[bind]]
 keys = ["Shift+F4"]
 scope = "viewer"
-cmd = "viewer.mode.next"
+cmd = "viewer.hex"
 
 [[bind]]
 keys = ["F7", "/"]

@@ -30,9 +30,17 @@ decoding in process, and the diff viewer (§3).
 | `preview` | rendered content (image, markdown, PDF page, media info, archive listing) | pluggable, see §1.7 |
 | `structure` | a side pane that decodes what the file *is*: header fields, section and segment tables, imports and exports | `F11`, see §1.8; it rides alongside `hex` and `disasm` rather than replacing them |
 
-Mode indicator in the status bar (`t`/`d`/`h`/`m`/`b`/`p`) plus encoding, position (offset, %, line) and
-file size. `F2` toggles wrap in text mode, `F4` toggles hex, `Shift+F4` picks the base mode
-(FAR's base/hex distinction is kept — it is genuinely useful).
+Mode indicator in the status bar (`t`/`d`/`h`/`m`/`b`/`p`) plus encoding, position (offset, %,
+line) and file size. `F2` toggles wrap in text mode.
+
+**`F4` turns the wheel**: text → dump → hex → the laid-out document → the table → text again,
+skipping the turns this file has no use for (a plain text file reads as no document and no
+table). A file is often none of the things its name says it is, and trying the next way of
+reading it should be one key rather than a choice from a list; the key bar says where the next
+turn lands rather than naming one destination for ever. `Shift+F4` is hex and straight back,
+for when hex is the one that was wanted. Disassembly stays on `F5`: it applies to a program and
+to nothing else, and a wheel that stopped on it for every text file would be a wheel with a
+hole in it.
 
 ### 1.2 Large files
 

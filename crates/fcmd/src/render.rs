@@ -4527,7 +4527,7 @@ third line
         assert!(lines[1].contains("first line"), "{out}");
         assert!(lines[3].contains("third line"), "{out}");
         assert!(
-            lines[11].contains("Wrap") && lines[11].contains("Hex"),
+            lines[11].contains("Wrap") && lines[11].contains("Dump"),
             "{out}"
         );
         assert!(lines[11].contains("Search"), "{out}");
@@ -4597,7 +4597,9 @@ third line
         let lines: Vec<&str> = out.lines().collect();
         assert!(lines[0].contains("readme.txt"), "{out}");
         assert!(lines[1].contains("line 1"), "{out}");
-        assert!(lines[11].contains("Hex"), "{out}");
+        // `F4` is a wheel now, and the bar says where the next turn lands: a text file's
+        // next way of being read is the dump.
+        assert!(lines[11].contains("Dump"), "{out}");
         assert!(
             !lines[5].contains('░'),
             "a scrollbar nobody asked for: {out}"

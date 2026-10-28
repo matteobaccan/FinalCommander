@@ -24,6 +24,14 @@ Notable changes, newest first. The format follows
 
 ### Changed
 
+- **`F4` in the viewer turns a wheel** instead of toggling hex: text → dump → hex → the
+  laid-out document → the table → text again, skipping the turns a given file has no use for.
+  A file is often none of the things its name says it is, and trying the next way of reading
+  it should be one key rather than a choice from a list. The key bar says where the next turn
+  lands rather than naming one destination for ever, which is also the answer to what `F4`
+  should be called there. `Shift+F4` is hex and straight back, for when hex is the one that
+  was wanted, and disassembly stays on `F5`.
+
 - **The font reset moved from `Ctrl+0` to `Ctrl+Alt+0`.** A number key in the panels is a
   view mode, all ten of them, and `Ctrl+Shift+0` was already the first folder shortcut: the
   font is the newcomer and gives way. `Ctrl++` and `Ctrl+-` are unchanged.
