@@ -233,13 +233,18 @@ pub fn details(pid: u32) -> Option<super::Details> {
         TH32CS_SNAPPROCESS,
     };
     use windows_sys::Win32::System::ProcessStatus::{
-        GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS,
+        EnumProcessModules, GetModuleFileNameExW, GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS,
+        PROCESS_MEMORY_COUNTERS_EX,
     };
     use windows_sys::Win32::System::SystemInformation::{GetNativeSystemInfo, SYSTEM_INFO};
     use windows_sys::Win32::System::Threading::{
-        GetProcessTimes, IsWow64Process, OpenProcess, QueryFullProcessImageNameW,
-        PROCESS_QUERY_LIMITED_INFORMATION,
+        GetPriorityClass, GetProcessHandleCount, GetProcessIoCounters, GetProcessTimes,
+        IsWow64Process, OpenProcess, QueryFullProcessImageNameW, IO_COUNTERS,
+        PROCESS_QUERY_INFORMATION, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_VM_READ,
     };
+    // The one answer on the card that is not in the process API: a session is a Terminal
+    // Services idea, and that is where Windows keeps it.
+    use windows_sys::Win32::System::RemoteDesktop::ProcessIdToSessionId;
 
     // The snapshot first: it is the one place that will say what started this and how many
     // threads it has, and it answers for every process whether or not we may open it.
@@ -282,15 +287,19 @@ pub fn details(pid: u32) -> Option<super::Details> {
         return Some(out);
     }
 
-    let mut counters: PROCESS_MEMORY_COUNTERS = unsafe { std::mem::zeroed() };
-    counters.cb = std::mem::size_of::<PROCESS_MEMORY_COUNTERS>() as u32;
+    // The extended counters: the same structure with the private bytes on the end, which is
+    // the figure Task Manager shows and the one worth having beside the resident size. The
+    // call is told how big the structure is, so an older system fills in the part it knows.
+    let mut counters: PROCESS_MEMORY_COUNTERS_EX = unsafe { std::mem::zeroed() };
+    counters.cb = std::mem::size_of::<PROCESS_MEMORY_COUNTERS_EX>() as u32;
     // SAFETY: the handle is open and `counters` is a whole structure of the size its own `cb`
-    // field declares, which is what the call fills in.
+    // field declares, which is what the call fills in. The extended structure begins with the
+    // plain one, which is why the pointer may be handed over as that.
     if unsafe {
         GetProcessMemoryInfo(
             handle,
-            &mut counters,
-            std::mem::size_of::<PROCESS_MEMORY_COUNTERS>() as u32,
+            (&mut counters as *mut PROCESS_MEMORY_COUNTERS_EX).cast::<PROCESS_MEMORY_COUNTERS>(),
+            std::mem::size_of::<PROCESS_MEMORY_COUNTERS_EX>() as u32,
         )
     } != 0
     {
@@ -298,6 +307,9 @@ pub fn details(pid: u32) -> Option<super::Details> {
         // What it has taken from the paging file, which is the figure beside the resident one
         // that Windows will give for nothing.
         out.mapped = counters.PagefileUsage as u64;
+        out.private = counters.PrivateUsage as u64;
+        out.swap = counters.PagefileUsage as u64;
+        out.faults = counters.PageFaultCount as u64;
     }
 
     // The executable, with its path. `MAX_PATH` is not enough for a long path, so the buffer
@@ -339,11 +351,187 @@ pub fn details(pid: u32) -> Option<super::Details> {
     // SAFETY: the handle is open and all four are whole structures the call writes into.
     if unsafe { GetProcessTimes(handle, &mut started, &mut exited, &mut kernel, &mut user) } != 0 {
         out.started = file_time(started);
+        // The two spans are counted in the same hundred-nanosecond units the timestamps are,
+        // but from zero rather than from 1601: they are durations, not dates.
+        out.cpu_kernel = Some(span(kernel));
+        out.cpu_user = Some(span(user));
+    }
+
+    // How many handles of every kind it holds, which is the figure that answers "why will
+    // this file not close".
+    let mut handles = 0u32;
+    // SAFETY: the handle is open and `handles` is one whole `u32` the call writes into.
+    if unsafe { GetProcessHandleCount(handle, &mut handles) } != 0 {
+        out.handles = handles;
+    }
+
+    // What it has read and written, as Windows has counted it.
+    let mut io: IO_COUNTERS = unsafe { std::mem::zeroed() };
+    // SAFETY: the handle is open and `io` is a whole, zeroed structure the call fills in.
+    if unsafe { GetProcessIoCounters(handle, &mut io) } != 0 {
+        out.io_read = io.ReadTransferCount;
+        out.io_write = io.WriteTransferCount;
+    }
+
+    // How it is scheduled. The call answers with the class, and zero means it refused.
+    // SAFETY: the handle is open; the call takes nothing else.
+    let class = unsafe { GetPriorityClass(handle) };
+    if class != 0 {
+        out.priority = Some(priority_name(class).to_string());
+    }
+
+    // Which login session it belongs to: service or desktop, and whose desktop.
+    let mut session = 0u32;
+    // SAFETY: `session` is one whole `u32` the call writes into; the pid is a number.
+    if unsafe { ProcessIdToSessionId(pid, &mut session) } != 0 {
+        out.session = Some(session);
+    }
+
+    // Every library it has loaded. Reading another process's module list wants more rights
+    // than the rest of this card does — it reads that process's memory — so it is a second
+    // handle, and a process that refuses it simply has no module list on its card.
+    // SAFETY: no pointer of ours is passed; the result is a handle or null.
+    let vm = unsafe { OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, 0, pid) };
+    if !vm.is_null() {
+        const SLOT: usize = std::mem::size_of::<windows_sys::Win32::Foundation::HMODULE>();
+        let mut modules: Vec<windows_sys::Win32::Foundation::HMODULE> =
+            vec![std::ptr::null_mut(); 512];
+        let mut needed = 0u32;
+        for _ in 0..2 {
+            let room = (modules.len() * SLOT) as u32;
+            // SAFETY: the handle is open and the array is `room` bytes long, which is what
+            // the call is told; it writes at most that and sets `needed` to what it wanted.
+            if unsafe { EnumProcessModules(vm, modules.as_mut_ptr(), room, &mut needed) } == 0 {
+                needed = 0;
+                break;
+            }
+            if needed <= room {
+                break;
+            }
+            modules.resize(needed as usize / SLOT + 1, std::ptr::null_mut());
+        }
+        let count = (needed as usize / SLOT).min(modules.len());
+        for module in modules.iter().take(count) {
+            let mut buffer = vec![0u16; MAX_PATH as usize * 4];
+            // SAFETY: the handle is open, the module came from `EnumProcessModules` on it,
+            // and the buffer is as long as the call is told it is.
+            let len = unsafe {
+                GetModuleFileNameExW(vm, *module, buffer.as_mut_ptr(), buffer.len() as u32)
+            };
+            if len > 0 {
+                out.modules
+                    .push(String::from_utf16_lossy(&buffer[..len as usize]));
+            }
+        }
+        // SAFETY: the handle came from `OpenProcess` and is closed exactly once.
+        unsafe { CloseHandle(vm) };
+    }
+
+    // Whose it is, and the SID behind the name: the pair FAR's own card shows.
+    if let Some((user, sid)) = token_owner(handle) {
+        out.user = Some(user);
+        out.sid = Some(sid);
     }
 
     // SAFETY: the handle came from `OpenProcess` and is closed exactly once.
     unsafe { CloseHandle(handle) };
     Some(out)
+}
+
+/// A `FILETIME` used as a span rather than as a date: hundred-nanosecond units from zero.
+#[cfg(windows)]
+fn span(time: windows_sys::Win32::Foundation::FILETIME) -> std::time::Duration {
+    let units = ((time.dwHighDateTime as u64) << 32) | time.dwLowDateTime as u64;
+    std::time::Duration::from_nanos(units * 100)
+}
+
+/// What a priority class is called, in the words the system's own tools use.
+#[cfg(windows)]
+fn priority_name(class: u32) -> &'static str {
+    use windows_sys::Win32::System::Threading::{
+        ABOVE_NORMAL_PRIORITY_CLASS, BELOW_NORMAL_PRIORITY_CLASS, HIGH_PRIORITY_CLASS,
+        IDLE_PRIORITY_CLASS, NORMAL_PRIORITY_CLASS, REALTIME_PRIORITY_CLASS,
+    };
+    match class {
+        IDLE_PRIORITY_CLASS => "Idle",
+        BELOW_NORMAL_PRIORITY_CLASS => "Below normal",
+        NORMAL_PRIORITY_CLASS => "Normal",
+        ABOVE_NORMAL_PRIORITY_CLASS => "Above normal",
+        HIGH_PRIORITY_CLASS => "High",
+        REALTIME_PRIORITY_CLASS => "Realtime",
+        _ => "Unknown",
+    }
+}
+
+/// Whose a process is: the account name, and the SID it stands for.
+///
+/// Windows keeps the owner in the process's own token rather than beside the process, so it
+/// is three calls: open the token, ask it how big its user record is, ask again with room —
+/// and then the SID is turned into a name and into the `S-1-5-…` string FAR's card shows.
+#[cfg(windows)]
+fn token_owner(process: windows_sys::Win32::Foundation::HANDLE) -> Option<(String, String)> {
+    use windows_sys::Win32::Foundation::{CloseHandle, LocalFree};
+    use windows_sys::Win32::Security::Authorization::ConvertSidToStringSidW;
+    use windows_sys::Win32::Security::{GetTokenInformation, TokenUser, TOKEN_QUERY, TOKEN_USER};
+    use windows_sys::Win32::System::Threading::OpenProcessToken;
+
+    let mut token = std::ptr::null_mut();
+    // SAFETY: the process handle is open and `token` is one whole handle the call writes.
+    if unsafe { OpenProcessToken(process, TOKEN_QUERY, &mut token) } == 0 {
+        return None;
+    }
+    let mut needed = 0u32;
+    // SAFETY: asking with no buffer is how the call is asked how much room it wants; it
+    // fails with "insufficient buffer" and sets `needed`, which is the documented shape.
+    unsafe { GetTokenInformation(token, TokenUser, std::ptr::null_mut(), 0, &mut needed) };
+    let mut buffer = vec![0u8; needed.max(1) as usize];
+    // SAFETY: the token is open and the buffer is `needed` bytes long, which is what the
+    // call is told and what it asked for a moment ago.
+    let ok = unsafe {
+        GetTokenInformation(
+            token,
+            TokenUser,
+            buffer.as_mut_ptr().cast(),
+            needed,
+            &mut needed,
+        )
+    };
+    // SAFETY: the token came from `OpenProcessToken` and is closed exactly once.
+    unsafe { CloseHandle(token) };
+    if ok == 0 || buffer.len() < std::mem::size_of::<TOKEN_USER>() {
+        return None;
+    }
+    // SAFETY: the call filled the buffer with a `TOKEN_USER` whose `Sid` points inside it,
+    // and the buffer outlives both of the uses below. It is read unaligned because it came
+    // from a `Vec<u8>`.
+    let sid = unsafe { std::ptr::read_unaligned(buffer.as_ptr().cast::<TOKEN_USER>()) }
+        .User
+        .Sid;
+    if sid.is_null() {
+        return None;
+    }
+
+    // The SID as the `S-1-5-...` text FAR's own card shows beside the name.
+    let mut text: *mut u16 = std::ptr::null_mut();
+    // SAFETY: the SID is the one the token gave us and `text` is one whole pointer the call
+    // writes; what it allocates is freed below with `LocalFree`, as documented.
+    let as_string = if unsafe { ConvertSidToStringSidW(sid, &mut text) } != 0 && !text.is_null() {
+        // SAFETY: the call wrote a NUL-terminated UTF-16 string at `text`.
+        let out = unsafe { from_wide(text) };
+        // SAFETY: `text` came from the call's own allocator, and is freed exactly once.
+        unsafe { LocalFree(text.cast()) };
+        out
+    } else {
+        String::new()
+    };
+    // The name behind it, through the same lookup a directory listing uses. A cache is of no
+    // use for one process, but that function is the one place that knows how to ask.
+    let mut cache = super::OwnerCache::default();
+    let name = account_name(sid, &mut cache).unwrap_or_else(|| as_string.clone());
+    if name.is_empty() && as_string.is_empty() {
+        return None;
+    }
+    Some((name, as_string))
 }
 
 /// Every socket, with the process that holds it (SPEC 02 §7c).

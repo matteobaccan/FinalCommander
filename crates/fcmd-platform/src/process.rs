@@ -116,6 +116,30 @@ mod tests {
         assert!(mine.memory > 0, "{mine:?}");
         assert!(mine.threads > 0, "{mine:?}");
     }
+
+    /// The card's own fields, asked about the one process we are certain of: this one. Every
+    /// row here is readable for a process of one's own, which is what the test can promise —
+    /// somebody else's answers fewer of them, and the card is written for that.
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn our_own_card_is_filled_in() {
+        let me = details(std::process::id()).expect("we are running");
+        assert!(me.user.is_some() && me.group.is_some(), "{me:?}");
+        assert!(me.priority.is_some(), "{me:?}");
+        assert!(me.session.is_some(), "{me:?}");
+        assert!(me.cpu_user.is_some() && me.cpu_kernel.is_some(), "{me:?}");
+        // A test harness has read something, has opened something, and has an environment.
+        assert!(me.handles > 0, "{me:?}");
+        assert!(me.faults > 0, "{me:?}");
+        assert!(me.private > 0, "{me:?}");
+        assert!(!me.env.is_empty(), "{me:?}");
+        // Its own executable is the first thing mapped from a file.
+        assert!(
+            me.modules.iter().any(|m| m.contains("fcmd")),
+            "{:?}",
+            me.modules
+        );
+    }
 }
 
 /// Everything worth saying about one process: what `F3` on a row of the process panel shows.
@@ -148,6 +172,38 @@ pub struct Details {
     /// The whole command line, arguments and all.
     pub command: Option<String>,
     pub started: Option<std::time::SystemTime>,
+    /// Which group it runs as, where the system has such a thing.
+    pub group: Option<String>,
+    /// Who it runs as, as the system writes it down: a SID on Windows, and nothing on Unix,
+    /// where the name and the numeric id are the whole of it.
+    pub sid: Option<String>,
+    /// How it is scheduled, in the system's own words: `20 (nice 0)`, `Normal`.
+    pub priority: Option<String>,
+    /// The login session it belongs to.
+    pub session: Option<u32>,
+    /// What it has spent in its own code, and what it has spent inside the kernel.
+    pub cpu_user: Option<std::time::Duration>,
+    pub cpu_kernel: Option<std::time::Duration>,
+    /// How many handles it holds — open files on Unix, handles of every kind on Windows.
+    pub handles: u32,
+    /// How many times a page had to be found for it.
+    pub faults: u64,
+    /// Memory that is its own rather than shared with anything.
+    pub private: u64,
+    /// What it has pushed out to swap, or to the paging file.
+    pub swap: u64,
+    /// Bytes read and written, as the system has counted them.
+    pub io_read: u64,
+    pub io_write: u64,
+    /// The version and the description the executable carries, where it carries them: a
+    /// Windows binary has both in its resources, and an ELF has neither.
+    pub version: Option<String>,
+    pub description: Option<String>,
+    /// Its environment, in the order the system keeps it. Empty where it may not be read —
+    /// a process of somebody else's never answers this one.
+    pub env: Vec<(String, String)>,
+    /// Every library it has loaded, by path.
+    pub modules: Vec<String>,
 }
 
 /// One process, in as much detail as this platform and this user's rights allow.
@@ -209,7 +265,94 @@ fn linux_details(pid: u32) -> Option<Details> {
                     .and_then(|n| n.parse::<u32>().ok())
                     .map(user_name)
             }
+            // The same shape as `Uid`, and the same first field: the real group.
+            "Gid" => {
+                out.group = value
+                    .split_whitespace()
+                    .next()
+                    .and_then(|n| n.parse::<u32>().ok())
+                    .map(group_name)
+            }
+            // What is its own rather than mapped from a file, which is the figure Windows
+            // calls private bytes.
+            "RssAnon" => out.private = kb(),
+            "VmSwap" => out.swap = kb(),
             _ => {}
+        }
+    }
+    // `stat` is one line of numbers whose names are in `proc(5)`. The command is in it too,
+    // in brackets, and it may itself contain a bracket — so everything is counted from the
+    // last one rather than from the start of the line.
+    if let Ok(stat) = std::fs::read_to_string(dir.join("stat")) {
+        if let Some(rest) = stat.rsplit_once(')').map(|(_, rest)| rest) {
+            // `rest` starts at field 3 (the state), so field N of `proc(5)` is `fields[N-3]`.
+            let fields: Vec<&str> = rest.split_whitespace().collect();
+            let num = |n: usize| -> Option<u64> { fields.get(n - 3)?.parse::<u64>().ok() };
+            out.session = num(6).map(|n| n as u32);
+            // Minor and major faults, which is what a page-fault count means here.
+            out.faults = num(10).unwrap_or(0) + num(12).unwrap_or(0);
+            // The two times are in clock ticks, and how many there are in a second is the
+            // one thing about them that is not in the file.
+            let ticks = clock_ticks();
+            out.cpu_user = num(14).map(|t| ticks_to_time(t, ticks));
+            out.cpu_kernel = num(15).map(|t| ticks_to_time(t, ticks));
+            // The scheduling priority, and the nice value beside it: one is the other seen
+            // from the kernel's end, and a reader of this card wants the one they set.
+            if let (Some(priority), Some(nice)) = (
+                fields.get(18 - 3).and_then(|n| n.parse::<i64>().ok()),
+                fields.get(19 - 3).and_then(|n| n.parse::<i64>().ok()),
+            ) {
+                out.priority = Some(format!("{priority} (nice {nice})"));
+            }
+        }
+    }
+    // What it has read and written. The file is only readable by its owner, so a process of
+    // somebody else's leaves these at zero rather than refusing the whole card.
+    if let Ok(io) = std::fs::read_to_string(dir.join("io")) {
+        for line in io.lines() {
+            let Some((field, value)) = line.split_once(':') else {
+                continue;
+            };
+            let bytes = value.trim().parse::<u64>().unwrap_or(0);
+            match field {
+                // The two that count what actually reached a disk, which is the pair
+                // Windows' own IO counters report.
+                "read_bytes" => out.io_read = bytes,
+                "write_bytes" => out.io_write = bytes,
+                _ => {}
+            }
+        }
+    }
+    // One entry per open file, which is the nearest thing Linux has to a handle count.
+    if let Ok(fds) = std::fs::read_dir(dir.join("fd")) {
+        out.handles = fds.flatten().count() as u32;
+    }
+    // The environment it was given, zero-separated like the command line. Only its owner may
+    // read it; anybody else gets an empty list, which is the truth about what we can see.
+    if let Ok(raw) = std::fs::read(dir.join("environ")) {
+        out.env = raw
+            .split(|b| *b == 0)
+            .filter(|part| !part.is_empty())
+            .filter_map(|part| {
+                let text = String::from_utf8_lossy(part);
+                text.split_once('=')
+                    .map(|(name, value)| (name.to_string(), value.to_string()))
+            })
+            .collect();
+    }
+    // Every file-backed mapping, once each and in the order they were mapped: that is the
+    // list of libraries it has loaded, with the executable itself at the head of it.
+    if let Ok(maps) = std::fs::read_to_string(dir.join("maps")) {
+        for line in maps.lines() {
+            // `address perms offset dev inode pathname` — a mapping with no file behind it
+            // has no last field, and one of those is not a module.
+            let Some(path) = line.split_whitespace().nth(5) else {
+                continue;
+            };
+            if !path.starts_with('/') || out.modules.iter().any(|m| m == path) {
+                continue;
+            }
+            out.modules.push(path.to_string());
         }
     }
     // The command line is the arguments with a zero byte between them, and an empty one means
@@ -238,6 +381,41 @@ fn linux_details(pid: u32) -> Option<Details> {
     // kernel, and a process whose executable we may not read simply does not say.
     out.bits = elf_bits(dir.join("exe")).unwrap_or(0);
     Some(out)
+}
+
+/// How many clock ticks the kernel counts in a second, which is what the two times in `stat`
+/// are measured in. It is a constant of the running kernel, so it is asked for once.
+#[cfg(target_os = "linux")]
+fn clock_ticks() -> u64 {
+    use std::sync::OnceLock;
+    static TICKS: OnceLock<u64> = OnceLock::new();
+    *TICKS.get_or_init(|| {
+        nix::unistd::sysconf(nix::unistd::SysconfVar::CLK_TCK)
+            .ok()
+            .flatten()
+            .filter(|n| *n > 0)
+            .map(|n| n as u64)
+            // 100 is what every Linux anybody runs counts in, and a wrong divisor here is a
+            // wrong figure on a card rather than a broken program.
+            .unwrap_or(100)
+    })
+}
+
+#[cfg(target_os = "linux")]
+fn ticks_to_time(ticks: u64, per_second: u64) -> std::time::Duration {
+    let per_second = per_second.max(1);
+    std::time::Duration::new(ticks / per_second, 0)
+        + std::time::Duration::from_nanos((ticks % per_second) * 1_000_000_000 / per_second)
+}
+
+/// The name behind a numeric group id, or the number itself where there is no name for it.
+#[cfg(target_os = "linux")]
+fn group_name(gid: u32) -> String {
+    nix::unistd::Group::from_gid(nix::unistd::Gid::from_raw(gid))
+        .ok()
+        .flatten()
+        .map(|g| g.name)
+        .unwrap_or_else(|| gid.to_string())
 }
 
 /// The name behind a numeric user id, or the number itself where there is no name for it.

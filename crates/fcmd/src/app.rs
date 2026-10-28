@@ -9296,63 +9296,27 @@ impl App {
             return;
         };
 
-        let mut rows: Vec<(String, String)> = Vec::new();
-        let mut say = |id: &str, value: String| {
-            if !value.is_empty() {
-                rows.push((self.i18n.t(id), value));
-            }
-        };
-        say("proc-card-name", details.name.clone());
-        say("proc-card-pid", details.pid.to_string());
-        if let Some(parent) = details.parent {
-            say("proc-card-parent", parent.to_string());
-        }
-        if let Some(user) = &details.user {
-            say("proc-card-user", user.clone());
-        }
-        if let Some(state) = &details.state {
-            say("proc-card-state", state.clone());
-        }
-        if details.threads > 0 {
-            say("proc-card-threads", details.threads.to_string());
-        }
-        if details.memory > 0 {
-            say("proc-card-memory", fcmd_core::format_size(details.memory));
-        }
-        if details.mapped > 0 {
-            say("proc-card-mapped", fcmd_core::format_size(details.mapped));
-        }
-        if details.bits > 0 {
-            say("proc-card-bits", format!("{}-bit", details.bits));
-        }
-        if let Some(started) = details.started {
-            say("proc-card-started", fcmd_ui::format_stamp(started));
-        }
-        if let Some(exe) = &details.exe {
-            say("proc-card-exe", exe.clone());
-        }
-        if let Some(cwd) = &details.cwd {
-            say("proc-card-cwd", cwd.clone());
-        }
-        if let Some(command) = &details.command {
-            say("proc-card-command", command.clone());
-        }
+        // The card is a page, not a line — environment and loaded modules alone are longer
+        // than any screen — so it is shown in the viewer, where it scrolls, searches and
+        // answers the keys a reader already knows.
+        let text = crate::proccard::card(&details, &self.i18n, std::time::SystemTime::now());
+        // What the viewer's frame says it is showing: the word for a process card in the
+        // reader's own language, and which process it is about. It is a label, not a file.
+        let shown = VPath::local(format!(
+            "{}: {} [{}]",
+            self.i18n.t("proc-card"),
+            details.name,
+            details.pid
+        ));
+        self.open_viewer_on_text(text, shown);
+    }
 
-        // One column of labels, as wide as the widest, so the values line up and the card
-        // reads as a table rather than as a paragraph.
-        let width = rows
-            .iter()
-            .map(|(label, _)| unicode_width::UnicodeWidthStr::width(label.as_str()))
-            .max()
-            .unwrap_or(0);
-        let lines = rows
-            .iter()
-            .map(|(label, value)| format!("{label:<width$}  {value}"))
-            .collect();
-        self.mode = Mode::Message {
-            title: self.i18n.t("proc-card"),
-            lines,
-        };
+    /// The viewer, over text this program made rather than a file it read.
+    fn open_viewer_on_text(&mut self, text: String, shown: VPath) {
+        let source = fcmd_view::BytesSource::new(text.into_bytes());
+        let mut viewer = Viewer::new(Box::new(source), shown);
+        self.tune_viewer(&mut viewer);
+        self.mode = Mode::Viewer(Box::new(viewer));
     }
 
     /// What is listening and what is connected, as a panel (SPEC 02 §7c).
@@ -17365,23 +17329,32 @@ mod tests {
         }
         // Onto a row that is a process rather than the parent entry.
         app.panels[0].cursor = 0;
-        press(&mut app, "F3");
-        let Mode::Message { title, lines } = &app.mode else {
-            panic!("no card: {:?}", app.mode)
-        };
-        assert!(!title.is_empty());
-        assert!(lines.len() >= 3, "the card says almost nothing: {lines:?}");
-        // The pid of the row is in it, which is the one thing every platform knows.
+        // The pid of the row, which is the one thing every platform knows about it.
         let pid = app.panels[0]
             .current()
             .map(|e| app.panels[0].path_of(e))
             .map(|p| p.display_name().to_string())
             .expect("a row");
+        press(&mut app, "F3");
+        // The card is a page and is read in the viewer: environment and loaded modules are
+        // longer than any screen, and a dialog cannot scroll.
+        let Mode::Viewer(viewer) = &mut app.mode else {
+            panic!("no card: {:?}", app.mode)
+        };
+        let rows = viewer.rows(80, 40);
+        assert!(rows.len() >= 3, "the card says almost nothing: {rows:?}");
+        let text = rows
+            .iter()
+            .map(|r| r.text.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
         assert!(
-            lines.iter().any(|l| l.contains(&pid)),
-            "the card is about something else: {lines:?}"
+            text.contains(&pid),
+            "the card is about something else: {text}"
         );
-        // And it is a card, not the viewer: `Esc` closes it and leaves the panel alone.
+        // Its own name is the frame's, so the viewer does not claim to have opened a file.
+        assert!(viewer.path.display_name().contains(&pid), "{}", viewer.path);
+        // And `Esc` closes it and leaves the panel alone.
         press(&mut app, "Esc");
         assert!(app.mode.is_normal());
         assert_eq!(app.panels[0].temp_origin(), Some(":processes"));

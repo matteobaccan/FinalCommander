@@ -8,6 +8,17 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **The process card is a page now, as full as FAR's own.** `F3` on a row of the process list
+  used to answer with a dozen rows in a dialog. It answers with a page in the viewer: what it
+  is (owner and group, the SID on Windows, session, priority, threads, bitness, when it
+  started and how long it has been up), what it has taken and spent (resident, private,
+  mapped and swapped-out memory, page faults, processor time in its own code and in the
+  kernel, handles held, bytes read and written), where it came from (executable, directory,
+  the whole command line), its environment, and every library it has loaded. It is in the
+  viewer because the last two lists are longer than any screen — so it scrolls, searches and
+  wraps like any other page. Every row only where the system answers it: somebody else's
+  process keeps its secrets, and the card says nothing rather than guessing.
+
 - **An empty list of connections is still a list.** `Alt+F1` → NetBox with nothing stored
   used to refuse to open and say so in the status line, which told nobody where they were or
   how to make the first session. It opens as a panel now, empty, and its key bar says what

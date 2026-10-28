@@ -14,6 +14,7 @@ mod highlight;
 mod hit;
 mod menu;
 mod panel;
+mod proccard;
 mod prompt;
 mod render;
 mod tabs;

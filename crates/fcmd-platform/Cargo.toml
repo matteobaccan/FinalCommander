@@ -41,4 +41,7 @@ windows-sys = { version = "0.61", features = [
   "Win32_NetworkManagement_WNet",
   "Win32_System_ProcessStatus",
   "Win32_System_Threading",
+  # Which login session a process belongs to, which Windows counts as a Terminal Services
+  # question even on a machine nobody logs into twice.
+  "Win32_System_RemoteDesktop",
 ] }

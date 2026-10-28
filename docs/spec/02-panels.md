@@ -672,16 +672,41 @@ so it waits for a tested way to do it.
 
 `F3` on a row is not a file to read: it is the card for that process, asked for afresh when the
 key is pressed, because the memory it had when the panel was built is not the memory it has
-now. The card holds the name, the pid, what started it, whose it is, what it is doing, the
-thread count, the resident and mapped memory, 32 or 64 bits, when it started, the executable,
-the working directory and the whole command line — every row that the platform and this user's
-rights will answer, and no row that they will not. Linux has all of it in files anyone may
-read, and takes the bitness from the first bytes of the executable's own ELF header rather than
-from a call. Windows answers the name, the parent, the threads, both memory figures, the
-bitness, the path and the start time, through the snapshot and `GetProcessTimes`; the command
-line and the working directory it keeps inside the process itself, behind
-`NtQueryInformationProcess`, which is not a documented structure to depend on — those two rows
-are left out there rather than paid for with a page of `unsafe` a service pack can invalidate.
+now. **The card is a page and is shown in the viewer**, over text the program made rather than
+a file it opened: the environment and the list of loaded libraries are each longer than any
+screen, and the viewer already scrolls, searches and wraps. Its frame says *Process: name
+[pid]* rather than a path, so nothing claims a file was opened.
+
+It is laid out in three blocks and two lists, in the order FAR's own process plugin writes
+them. What it is: the name, the pid, what started it, whose it is and which group, the SID
+where the system keeps one, the session, what it is doing, its priority, the thread count,
+32 or 64 bits, the version and description the executable carries where it carries them, when
+it started and how long it has been up. What it has taken and spent: resident, private,
+mapped and swapped-out memory, page faults, processor time in its own code and in the kernel,
+how many handles it holds, and how much it has read and written. Where it is: the executable,
+the working directory and the whole command line. Then its environment, in the order the
+system keeps it, and every library it has loaded. Every row only where the platform and this
+user's rights answer it, and no row that they will not — a card with blanks on it would say
+the program failed where the system simply refused.
+
+Linux has all of it in files anyone may read: `status` for the names and the memory, `stat`
+for the session, the priority, the faults and the two processor times (in clock ticks, so
+`sysconf(_SC_CLK_TCK)` is the one number that is not in the file), `io` for the counters,
+`fd/` counted for the handles, `environ` and `maps` for the two lists, and the first bytes of
+the executable's own ELF header for the bitness rather than a call. `io` and `environ` are
+readable only by the process's owner, so somebody else's process has those rows missing
+rather than wrong.
+
+Windows asks for it a call at a time, each left out when it is refused: the snapshot for the
+name, the parent and the threads, `GetProcessMemoryInfo` with the extended counters for the
+memory and the faults, `GetProcessTimes` for the start and the two processor times,
+`GetProcessHandleCount`, `GetProcessIoCounters`, `GetPriorityClass`, `ProcessIdToSessionId`,
+the process token with `LookupAccountSidW` for the owner and the SID, and
+`EnumProcessModules` — through a second handle, because reading another process's module list
+wants rights the rest of the card does not — for the libraries. The command line, the working
+directory and the environment it keeps inside the process itself, behind
+`NtQueryInformationProcess`, which is not a documented structure to depend on: those rows are
+left out there rather than paid for with a page of `unsafe` a service pack can invalidate.
 
 **Nothing here kills anything**: a file manager that
 could end a process from a listing with the key that deletes a file is one that ends a process
