@@ -548,6 +548,7 @@ fn run(cli: Cli) -> Result<()> {
         highlight,
     });
     app.cmd.load_history(state.command_history);
+    app.file_history = state.file_history;
     app.bookmarks = state.bookmarks;
     app.restore_tabs(0, &state.left_tabs, state.left_tab);
     app.restore_tabs(1, &state.right_tabs, state.right_tab);
@@ -1316,6 +1317,7 @@ fn interactive(mut app: App) -> Result<()> {
     // a program teaches people not to trust it.
     let state = fcmd_config::State {
         command_history: app.cmd.history().to_vec(),
+        file_history: app.file_history.clone(),
         folder_history: app.panels[app.active]
             .history
             .iter()
@@ -1563,7 +1565,7 @@ fn dir_size(
 /// two running copies never collide, and it is removed when the process exits.
 async fn fetch_remote(pool: &Pool, path: &VPath) -> Result<(PathBuf, RemoteStamp), String> {
     let remote = pool.require(path).map_err(|e| e.to_string())?;
-    let dir = std::env::temp_dir().join(format!("fcmd-{}", std::process::id()));
+    let dir = app::App::fetch_dir();
     tokio::fs::create_dir_all(&dir)
         .await
         .map_err(|e| format!("{}: {e}", dir.display()))?;

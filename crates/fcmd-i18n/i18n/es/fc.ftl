@@ -531,6 +531,7 @@ clip-paths =
     }
 clip-line = la línea de órdenes está en el portapapeles
 clip-off = el portapapeles está desactivado — `ui.clipboard` en los ajustes
+history-gone = { $name } ya no está
 editor-no-block = no hay nada seleccionado
 editor-tabs-expanded = tabulaciones expandidas en { $lines } líneas — al guardar se escribirá
 site-protocol = Protocolo

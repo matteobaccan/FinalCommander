@@ -12,6 +12,18 @@ They live where the platform keeps such things — `~/.config/fcmd` on Linux, `L
 Application Support` on macOS, `%APPDATA%` on Windows. `fcmd --dump-config` prints the settings
 the program is actually running with, which is the quickest way to see what a key is called.
 
+# What is remembered
+
+Between sessions the program keeps, in its state file beside the settings: the command lines
+that have run (`Alt+F8`), where each panel had been (`Alt+F12`), **the files you have read or
+edited** (`Alt+F11`), the folders you keep to hand, the tabs of both panels and where they
+were. `ui.command_history` and `ui.file_history` say how many of the first and third to keep.
+
+The list of files is written wherever a viewer or an editor opens, so it is the same list
+whichever key opened the file. A file on a server is remembered by its remote path, not by the
+copy that was fetched to read it; a file opened again moves to the top rather than appearing
+twice. `Enter` on a row reads it, `F4` edits it, and a row whose file has gone says so.
+
 # Keys
 
 The keymap is a profile plus your changes. Two profiles ship: `far`, which is the default, and

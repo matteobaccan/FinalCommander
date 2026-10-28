@@ -1015,6 +1015,12 @@ keys = ["Alt+F8"]
 scope = "panel"
 cmd = "cmd.history"
 
+# FAR's own key for the files one has read and edited.
+[[bind]]
+keys = ["Alt+F11"]
+scope = "panel"
+cmd = "cmd.history.files"
+
 # ------------------------------------------------- command line (SPEC 06 §7)
 # Enter, Esc and Backspace are shared with the panel: the command line takes them only when it
 # has something on it, which is FAR's rule and the reason it needs no focus of its own.

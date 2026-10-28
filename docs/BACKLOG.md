@@ -73,14 +73,14 @@ what we intend to do about it.
 | --- | --- | --- |
 | ~~The command line itself~~ | SPEC 06 §7 | **Shipped**: internal commands, prefixes, metasymbols, conditions, history, and `Ctrl+O` for the user screen. |
 | ~~Command history~~ | Commands menu (`Alt+F8`) | **Shipped**, and kept between sessions. |
-| View and edit history | Commands menu (`Alt+F11`) | Needs the "keep history between sessions" store below. |
-| ~~Keep history between sessions~~ | System settings | **Shipped** for commands, folders and both panels' directories. View/edit history still needs the list. |
+| ~~View and edit history~~ | Commands menu (`Alt+F11`) | **Shipped (0.7.0)**: every viewer and every editor passes through one place, so that is where it is written — a file on a server is remembered by its remote path and the fetched copy is left out, a file opened again moves to the top rather than appearing twice, `Enter` reads a row and `F4` edits it, and a row whose file has gone says so. It lives in the state file with the other two, not in a file of its own. |
+| ~~Keep history between sessions~~ | System settings | **Shipped** for commands, folders, the files read and edited, and both panels' directories. |
 
 ## Histories and screens
 
 | Item | Where | Notes |
 | --- | --- | --- |
-| Four histories with a size and a lifetime | commands, folders, view/edit, dialogs | FAR keeps each with its own count and a lifetime in days, saves them between sessions, and lets an item be **locked** so new entries never push it out. Ours is one folder list, in memory. |
+| Four histories with a size and a lifetime | commands, folders, view/edit, dialogs | Three of the four are here and persisted — commands (`ui.command_history`), the folder history per panel, and the files read or edited (`ui.file_history`). What FAR has and we do not: a **lifetime in days**, an item that can be **locked** so new entries never push it out, filtering a history as one types, clearing one from inside it, and a history for the dialogs' own fields. |
 | Screens list and background screens | `F12` | Several viewers, editors and jobs open at once, a list to switch between them, and the count in the panel corner. The job engine already runs more than one job; the screen stack is what is missing. |
 | Task list | `Ctrl+W` | Worth being precise, because the name misleads: FAR's task list is the *operating system's* processes (PID, window title, `Del` kills one), not FAR's own windows — those are the screens list above. On Linux and macOS this is a process panel, closer to FAR's `proclist` plugin than to the core, so it belongs in a plugin once there are plugins. |
 | ~~User screen~~ | `Ctrl+O` | **Shipped**, scrollable and capped, with each command as its heading. Peeking while a command runs is still to come. |

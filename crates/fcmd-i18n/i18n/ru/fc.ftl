@@ -531,6 +531,7 @@ clip-paths =
     }
 clip-line = командная строка в буфере обмена
 clip-off = буфер обмена выключен — `ui.clipboard` в настройках
+history-gone = { $name } больше нет
 editor-no-block = ничего не выделено
 editor-tabs-expanded = табуляции заменены в { $lines } строках — сохранение это запишет
 site-protocol = Протокол

@@ -205,6 +205,8 @@ pub enum Command {
     CmdHistoryNext,
     /// The command history as a list.
     CmdHistory,
+    /// The files that have been read or edited, as a list (`Alt+F11`).
+    CmdFileHistory,
     /// `Ctrl+Ins` with something on the line: the line itself onto the system clipboard.
     CmdClip,
     /// Insert the name under the cursor, or the panel's path, into the line.
@@ -481,6 +483,7 @@ impl Command {
             Command::CmdHistoryPrev,
             Command::CmdHistoryNext,
             Command::CmdHistory,
+            Command::CmdFileHistory,
             Command::CmdClip,
             Command::CmdInsertName,
             Command::CmdInsertNameOther,
@@ -714,6 +717,7 @@ impl Command {
             Command::CmdHistoryPrev => "cmd.history.prev".into(),
             Command::CmdHistoryNext => "cmd.history.next".into(),
             Command::CmdHistory => "cmd.history".into(),
+            Command::CmdFileHistory => "cmd.history.files".into(),
             Command::CmdClip => "cmd.clip".into(),
             Command::CmdInsertName => "cmd.insert.name".into(),
             Command::CmdInsertNameOther => "cmd.insert.name.other".into(),
@@ -924,6 +928,7 @@ impl Command {
             ("cmd.history.prev", _) => Command::CmdHistoryPrev,
             ("cmd.history.next", _) => Command::CmdHistoryNext,
             ("cmd.history", _) => Command::CmdHistory,
+            ("cmd.history.files", _) => Command::CmdFileHistory,
             ("cmd.clip", _) => Command::CmdClip,
             ("cmd.insert.name", _) => Command::CmdInsertName,
             ("cmd.insert.name.other", _) => Command::CmdInsertNameOther,

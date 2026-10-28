@@ -331,6 +331,8 @@ pub struct UiCfg {
     pub mouse: bool,
     /// How many command lines to keep between sessions.
     pub command_history: usize,
+    /// How many read-or-edited files to keep between sessions (`Alt+F11`).
+    pub file_history: usize,
     /// Open a tabular file (`.csv`, `.tsv`, `.jsonl`) as a table rather than as its source.
     /// `Shift+F3` in the viewer switches either way whatever this says; this is only what the
     /// first screen is.
@@ -358,6 +360,7 @@ impl Default for UiCfg {
             command_line: true,
             mouse: false,
             command_history: 512,
+            file_history: 512,
             clipboard: true,
         }
     }
@@ -967,6 +970,12 @@ impl Config {
                     .parse()
                     .map_err(|_| format!("`{value}` is not a number"))?
             }
+            "ui.file_history" => {
+                self.ui.file_history = value
+                    .trim()
+                    .parse()
+                    .map_err(|_| format!("`{value}` is not a number"))?
+            }
             "ui.status_bar" => self.ui.status_bar = parse_bool(value)?,
             "ui.syntax" => self.ui.syntax = parse_bool(value)?,
             "ui.markdown" => self.ui.markdown = parse_bool(value)?,
@@ -1227,6 +1236,7 @@ mod tests {
         let state = State {
             command_history: vec!["make".into(), "cargo test".into()],
             folder_history: vec!["/tmp".into()],
+            file_history: vec!["/home/mb/notes.txt".into()],
             left: "/home".into(),
             right: "/tmp".into(),
             left_tabs: vec![
@@ -1488,6 +1498,9 @@ pub struct State {
     /// Where each panel had been, oldest first.
     #[serde(default)]
     pub folder_history: Vec<String>,
+    /// The files that were read or edited, newest first (`Alt+F11`).
+    #[serde(default)]
+    pub file_history: Vec<String>,
     #[serde(default)]
     pub left: String,
     #[serde(default)]

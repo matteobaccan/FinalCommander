@@ -68,6 +68,8 @@ pub enum PickKind {
     OpenWith,
     /// The command lines that have run.
     CommandHistory,
+    /// The files that have been read or edited (SPEC 06 §6).
+    FileHistory,
     /// The sort order for this panel.
     SortModes,
     /// What to do with the block of bytes that is marked (SPEC 05 §2.6).
@@ -385,7 +387,7 @@ pub fn menus() -> Vec<Menu> {
                 item(
                     "menu-view-history",
                     "Alt+F11",
-                    Action::Todo("history.files"),
+                    Action::Run(Command::CmdFileHistory),
                 ),
                 item(
                     "menu-folders-history",

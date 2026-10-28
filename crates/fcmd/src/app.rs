@@ -1225,6 +1225,12 @@ pub struct App {
     pub tabs: [crate::tabs::Row; 2],
     /// The folders kept to hand (SPEC 02 §11), as the state file holds them.
     pub bookmarks: Vec<fcmd_config::Bookmark>,
+    /// The files that have been read or edited, oldest last — FAR's `Alt+F11`.
+    ///
+    /// Newest first in the list because that is the order somebody reaching back wants, and
+    /// kept that way in the field so that pushing is a `insert(0, …)` nobody has to think
+    /// about. It survives the session through the state file.
+    pub file_history: Vec<String>,
     pub active: usize,
     pub mode: Mode,
     pub status: String,
@@ -1459,6 +1465,7 @@ impl App {
             ],
             tabs: [crate::tabs::Row::one(), crate::tabs::Row::one()],
             bookmarks: Vec::new(),
+            file_history: Vec::new(),
             active: 0,
             mode: Mode::Normal,
             status: String::new(),
@@ -5843,6 +5850,7 @@ impl App {
             Command::AppScreenNext => self.cycle_screen(false),
             Command::AppScreenPrev => self.cycle_screen(true),
             Command::CmdHistory => self.open_pick(PickKind::CommandHistory, self.active),
+            Command::CmdFileHistory => self.open_pick(PickKind::FileHistory, self.active),
             Command::FileClipNames => self.clip_sources(false),
             Command::FileClipPaths => self.clip_sources(true),
             Command::CmdClip => {
@@ -6264,6 +6272,54 @@ impl App {
             .t_args("net-fetching", &[("name", path.display_name().into())]);
         self.set_status(msg);
         self.requests.push(Request::Fetch { id, path, purpose });
+    }
+
+    /// Read a file by name — the history list's `Enter`.
+    ///
+    /// A path out of the history may be on a server, or may no longer be there at all: both
+    /// are said rather than ignored, because a list that does nothing when a row is chosen
+    /// looks broken.
+    fn view_path(&mut self, path: &str) {
+        let target = VPath::parse(path);
+        if target.is_remote() || target.in_container() {
+            // Through the same fetch every other remote read goes through, which needs the
+            // size: asking for it is the connection's business, so zero means "whatever it
+            // turns out to be".
+            self.fetch_remote(target, 0, Fetched::View);
+            return;
+        }
+        let local = target.os().to_path_buf();
+        if !local.is_file() {
+            let msg = self
+                .i18n
+                .t_args("history-gone", &[("name", path.to_string().into())]);
+            self.set_error(msg);
+            return;
+        }
+        self.open_viewer_on(&local, target);
+    }
+
+    /// Edit a file by name — the history list's `F4`.
+    fn edit_path(&mut self, path: &str) {
+        let target = VPath::parse(path);
+        if target.is_remote() || target.in_container() {
+            self.fetch_remote(target, 0, Fetched::Edit);
+            return;
+        }
+        if !target.os().is_file() {
+            let msg = self
+                .i18n
+                .t_args("history-gone", &[("name", path.to_string().into())]);
+            self.set_error(msg);
+            return;
+        }
+        match Editor::open(&target.os()) {
+            Ok(mut editor) => {
+                self.tune_editor(&mut editor);
+                self.mode = Mode::Editor(Box::new(editor));
+            }
+            Err(e) => self.set_error(format!("{target}: {e}")),
+        }
     }
 
     /// Open the viewer on a local file, showing `shown` as its name — which is the remote
@@ -9623,6 +9679,20 @@ impl App {
                     .collect();
                 Pick::new(kind, self.plain("menu-history"), rows, side)
             }
+            PickKind::FileHistory => {
+                // Already newest first, which is how it is kept.
+                let rows: Vec<PickRow> = self
+                    .file_history
+                    .iter()
+                    .map(|path| PickRow {
+                        label: path.clone(),
+                        value: path.clone(),
+                        current: false,
+                        hotkey: None,
+                    })
+                    .collect();
+                Pick::new(kind, self.plain("menu-view-history"), rows, side)
+            }
             PickKind::SortModes => {
                 let panel = &self.panels[side];
                 let keys = [
@@ -9705,6 +9775,15 @@ impl App {
                     })
                     .unwrap_or(cursor);
                 self.reopen_bookmarks(side, cursor);
+            }
+            // The one list where `F4` means something: a file in the history is more often
+            // one to go back and change than one to read again.
+            KeyCode::F(4) if kind == PickKind::FileHistory => {
+                let chosen = pick.chosen().map(|r| r.value.clone());
+                if let Some(path) = chosen {
+                    self.mode = Mode::Normal;
+                    self.edit_path(&path);
+                }
             }
             KeyCode::Delete if pick.kind == PickKind::Bookmarks => {
                 let (side, cursor) = (pick.side, pick.cursor);
@@ -9872,6 +9951,11 @@ impl App {
                 // running at once: a command from history is usually a command to edit.
                 self.cmd.set(row.value.clone());
             }
+            PickKind::FileHistory => {
+                // `Enter` reads it, which is what the list is mostly for; `F4` in the list
+                // edits it instead, and that is handled where the keys are.
+                self.view_path(&row.value);
+            }
             PickKind::SortModes => {
                 let key = match row.value.as_str() {
                     "ext" => SortKey::Ext,
@@ -9913,6 +9997,11 @@ impl App {
     /// and write nothing back, because a row taken away to read one long line is not a
     /// preference.
     fn tune_viewer(&mut self, viewer: &mut fcmd_view::Viewer) {
+        // Every viewer this program opens comes through here, which is why the history is
+        // written here: the path is the one the viewer shows, so a file read off a server is
+        // remembered as the remote path and not as the copy that was fetched.
+        let shown = viewer.path.clone();
+        self.remember_file(&shown);
         let cfg = &self.cfg.viewer;
         viewer.show_key_bar = cfg.key_bar;
         viewer.show_status_line = cfg.status_line;
@@ -9926,6 +10015,11 @@ impl App {
     }
 
     fn tune_editor(&mut self, editor: &mut Editor) {
+        // As with the viewer: one place every editor passes through. A new file that has no
+        // name yet is not a file anybody can come back to, so it is not remembered.
+        if let Some(path) = editor.path.clone() {
+            self.remember_file(&path);
+        }
         let cfg = &self.cfg.editor;
         editor.tab_width = cfg.tab_width.clamp(1, 16);
         editor.expand_tabs = cfg.expand_typed();
@@ -11388,6 +11482,37 @@ impl App {
         } else {
             self.goto(target.normalised());
         }
+    }
+
+    /// Where the copies fetched off a server and out of archives are put. The same
+    /// expression `fetch_entry` builds, in one place so that the two cannot disagree.
+    pub fn fetch_dir() -> std::path::PathBuf {
+        std::env::temp_dir().join(format!("fcmd-{}", std::process::id()))
+    }
+
+    /// Put a file at the top of the view-and-edit history (SPEC 06 §6).
+    ///
+    /// A file that is already in it moves rather than appearing twice: the list is "where I
+    /// have been", and a file read five times is one place. Anything inside the temporary
+    /// directory is left out — the copies fetched off a server and out of archives live
+    /// there, and a history of paths that will not exist tomorrow is worse than no history.
+    fn remember_file(&mut self, path: &VPath) {
+        let text = path.to_string();
+        if text.is_empty() {
+            return;
+        }
+        // The copies fetched off a server and out of archives live in a directory of our own
+        // under the temporary one, and they will not exist tomorrow: a remote file is
+        // remembered by its remote path (which is what the viewer is given) and its copy is
+        // left out. Everything else under the temporary directory is a real file somebody
+        // chose to open.
+        if path.is_local() && path.os().starts_with(Self::fetch_dir()) {
+            return;
+        }
+        self.file_history.retain(|p| *p != text);
+        self.file_history.insert(0, text);
+        let keep = self.cfg.ui.file_history.max(1);
+        self.file_history.truncate(keep);
     }
 
     /// The rows of the hotlist: the ones with a digit first and in order, then the rest as
@@ -17548,6 +17673,65 @@ abcdefghij
         assert_eq!(app.panel().cursor, cursor_before, "the panel moved instead");
         assert_eq!(app.mode.editor().unwrap().buffer.line(0), "alpha!!");
         assert!(app.mode.editor().unwrap().buffer.modified());
+    }
+
+    // ── the view-and-edit history (SPEC 06 §6) ─────────────────────────────────────────────
+
+    #[test]
+    fn reading_and_editing_a_file_puts_it_at_the_top_of_the_history() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("one.txt"), b"one\n").unwrap();
+        std::fs::write(dir.path().join("two.txt"), b"two\n").unwrap();
+        let mut app = editing_app(dir.path());
+        assert!(app.file_history.is_empty());
+
+        press(&mut app, "Down"); // one.txt
+        press(&mut app, "F3");
+        press(&mut app, "Esc");
+        press(&mut app, "Down"); // two.txt
+        press(&mut app, "F4");
+        press(&mut app, "Esc");
+        // Newest first, which is the order somebody reaching back wants.
+        let names: Vec<String> = app
+            .file_history
+            .iter()
+            .map(|p| p.rsplit(['/', '\\']).next().unwrap_or(p).to_string())
+            .collect();
+        assert_eq!(names, ["two.txt", "one.txt"]);
+
+        // Reading one of them again moves it rather than adding a second row: the list is
+        // where I have been, and a file read twice is one place.
+        press(&mut app, "Up");
+        press(&mut app, "F3");
+        press(&mut app, "Esc");
+        assert_eq!(app.file_history.len(), 2);
+        assert!(
+            app.file_history[0].ends_with("one.txt"),
+            "{:?}",
+            app.file_history
+        );
+
+        // The list opens on it, `Enter` reads it and `F4` edits it.
+        app.run(Command::CmdFileHistory);
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(pick.kind, crate::menu::PickKind::FileHistory);
+        assert_eq!(pick.rows.len(), 2);
+        press(&mut app, "Enter");
+        assert!(app.mode.viewer().is_some(), "{:?}", app.mode);
+        press(&mut app, "Esc");
+
+        app.run(Command::CmdFileHistory);
+        press(&mut app, "F4");
+        assert!(app.mode.editor().is_some(), "{:?}", app.mode);
+        press(&mut app, "Esc");
+
+        // A row whose file has gone says so rather than opening nothing.
+        std::fs::remove_file(dir.path().join("one.txt")).unwrap();
+        app.run(Command::CmdFileHistory);
+        press(&mut app, "Enter");
+        assert!(app.status_error, "{}", app.status);
     }
 
     // ── the owners view (SPEC 02 §3) ───────────────────────────────────────────────────────

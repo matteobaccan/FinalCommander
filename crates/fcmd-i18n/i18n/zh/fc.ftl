@@ -519,6 +519,7 @@ clip-names = { $count } 个名称已复制到剪贴板
 clip-paths = { $count } 个完整路径已复制到剪贴板
 clip-line = 命令行已复制到剪贴板
 clip-off = 剪贴板已关闭 — 设置中的 `ui.clipboard`
+history-gone = { $name } 已经不在了
 editor-no-block = 没有选中任何内容
 editor-tabs-expanded = 已在 { $lines } 行展开制表符 — 保存时会写入
 site-protocol = 协议

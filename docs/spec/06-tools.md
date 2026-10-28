@@ -186,7 +186,24 @@ panel. Both are in `docs/BACKLOG.md`.
 
 Command, directory, view/edit, search, rename pattern, and mask histories: persisted, size-capped,
 searchable (type to filter), with pinning (FAR's `Ins` to lock an entry so it is not evicted) and
-per-history clearing. Stored as JSONL under `$STATE/history/`.
+per-history clearing.
+
+**Shipped**: the command history (`Alt+F8`, `Ctrl+E`/`Ctrl+X` on the line, `ui.command_history`
+lines kept), the folder history per panel (`Alt+F12`), and — new in 0.7.0 — **the files that
+have been read or edited** (`Alt+F11`, `ui.file_history` entries kept).
+
+That last one is written in the one place every viewer and every editor passes through, which
+is also what makes it right for a file on a server: the viewer is given the remote path, so
+that is what is remembered, while the copy fetched into the program's own temporary directory
+is left out — a history of paths that will not exist tomorrow is worse than no history. A file
+opened again moves to the top rather than appearing twice, because the list is *where I have
+been* and a file read five times is one place. `Enter` on a row reads it and `F4` edits it; a
+row whose file has gone says so rather than opening nothing.
+
+Both histories live in the state file rather than under `$STATE/history/`: one file to back up
+and one to delete is the rule the configuration follows (SPEC 07 §1), and a JSONL file per
+history would be five more. Pinning, filtering as one types and clearing a history are backlog
+lines, as is a lifetime in days.
 
 ## 7. Shell integration
 

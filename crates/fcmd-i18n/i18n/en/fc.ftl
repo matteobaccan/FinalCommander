@@ -539,6 +539,7 @@ clip-paths =
     }
 clip-line = the command line is on the clipboard
 clip-off = the clipboard is turned off — `ui.clipboard` in the settings
+history-gone = { $name } is not there any more
 editor-no-block = nothing is selected
 editor-tabs-expanded = tabs were expanded on { $lines } lines — the save will write that
 site-protocol = Protocol

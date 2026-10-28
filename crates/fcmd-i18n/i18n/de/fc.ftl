@@ -531,6 +531,7 @@ clip-paths =
     }
 clip-line = die Befehlszeile liegt in der Ablage
 clip-off = die Ablage ist abgeschaltet — `ui.clipboard` in den Einstellungen
+history-gone = { $name } ist nicht mehr da
 editor-no-block = es ist nichts ausgewählt
 editor-tabs-expanded = Tabulatoren in { $lines } Zeilen umgewandelt — das Speichern schreibt es
 site-protocol = Protokoll

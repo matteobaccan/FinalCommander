@@ -4,6 +4,23 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
+## [Unreleased]
+
+### Added
+
+- **`Alt+F11`: the files you have read or edited.** FAR's own key, and the last of the three
+  histories the Commands menu promised — the entry used to say *not here yet*. Newest first,
+  `Enter` reads a row, `F4` edits it, and it survives the session in the state file like the
+  command and folder histories (`ui.file_history` says how many to keep).
+
+  It is written in the one place every viewer and every editor passes through, which is also
+  what makes it right for a file on a server: the viewer is given the remote path, so that is
+  what is remembered, while the copy fetched into the program's own temporary directory is
+  left out — a history of paths that will not exist tomorrow is worse than no history. A file
+  opened again moves to the top rather than appearing twice, because the list is *where I have
+  been* and a file read five times is one place. A row whose file has gone says so rather than
+  opening nothing.
+
 ## [0.6.0] — 2026-10-28
 
 ### Added

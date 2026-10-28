@@ -161,6 +161,7 @@ impl Command {
             Command::CmdHistoryPrev => "the command before this one",
             Command::CmdHistoryNext => "the command after this one",
             Command::CmdHistory => "the commands that have run",
+            Command::CmdFileHistory => "the files that have been read or edited, as a list",
             Command::CmdClip => "copy the command line to the clipboard",
             Command::CmdInsertName => "put the name under the cursor on the command line",
             Command::CmdInsertNameOther => "the same, from the other panel",

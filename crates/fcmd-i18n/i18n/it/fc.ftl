@@ -531,6 +531,7 @@ clip-paths =
     }
 clip-line = la riga di comando è negli appunti
 clip-off = gli appunti sono disattivati — `ui.clipboard` nelle impostazioni
+history-gone = { $name } non c’è più
 editor-no-block = non c'è niente di selezionato
 editor-tabs-expanded = tabulazioni espanse su { $lines } righe — il salvataggio le scriverà
 site-protocol = Protocollo

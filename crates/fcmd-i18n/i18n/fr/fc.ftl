@@ -531,6 +531,7 @@ clip-paths =
     }
 clip-line = la ligne de commande est dans le presse-papiers
 clip-off = le presse-papiers est désactivé — `ui.clipboard` dans les réglages
+history-gone = { $name } n’est plus là
 editor-no-block = rien n’est sélectionné
 editor-tabs-expanded = tabulations converties sur { $lines } lignes — l’enregistrement l’écrira
 site-protocol = Protocole
