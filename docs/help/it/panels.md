@@ -15,9 +15,14 @@ Sotto una riga di separazione, su `Ctrl+1`…`Ctrl+9`, stanno le cose che non so
 
 * le **connessioni salvate** e gli **object store** scritti nella configurazione, che si
   collegano quando li scegli;
-* i **processi** in esecuzione sulla macchina, come pannello: `F3` su uno è la sua scheda — la
-  riga di comando, la memoria, i thread, il padre, l'utente con cui gira — e `F8` gli chiede di
-  fermarsi;
+* i **processi** in esecuzione sulla macchina, come pannello: `F3` su uno è la sua scheda, che
+  è una pagina — cos'è, di chi è, cosa ha preso e speso, la riga di comando, tutto il suo
+  ambiente e ogni libreria che ha caricato. Qui niente termina un processo: il tasto che
+  cancella un file lo dice invece di farlo;
+* i **servizi** che la macchina esegue in sottofondo, con lo stato di ciascuno: `F3` è la sua
+  scheda, `F5` lo avvia, `F6` lo riavvia e `F8` lo ferma — gli ultimi due chiedono prima.
+  Un'azione che il sistema rifiuta viene riferita come «serve root»; questo programma non
+  chiederà root al posto tuo;
 * i **socket**, in ascolto o connessi, con l'indirizzo a ciascun capo e il processo che li
   tiene, dove `F3` è la scheda di quel processo;
 * i **programmi installati** sulla macchina, con versione ed editore: `F3` è la scheda, e

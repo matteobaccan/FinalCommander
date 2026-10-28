@@ -24,6 +24,14 @@ Notable changes, newest first. The format follows
   line, and the keys that would leave the file stay with the panel. Beside a process, socket
   or programs list the preview holds that row's card, which is the page `F3` opens there.
 
+- **A services panel, in the change-drive dialog.** `Alt+F1`/`Alt+F2` → *Services* lists what
+  the machine runs in the background with the state of each, `F3` opens its card, and `F5`,
+  `F6` and `F8` start, restart and stop it — the last two having asked first. systemd on
+  Linux through `systemctl`, the Service Control Manager on Windows through its own API,
+  `launchctl` on macOS. Nothing escalates: an action the system refuses is reported as needing
+  root, which the program will not ask for on anybody's behalf, and the list is read again
+  when an action comes back so the panel shows the state the service is in now.
+
 - **The process card is a page now, as full as FAR's own.** `F3` on a row of the process list
   used to answer with a dozen rows in a dialog. It answers with a page in the viewer: what it
   is (owner and group, the SID on Windows, session, priority, threads, bitness, when it

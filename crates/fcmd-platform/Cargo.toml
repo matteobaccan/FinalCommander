@@ -41,6 +41,9 @@ windows-sys = { version = "0.61", features = [
   "Win32_NetworkManagement_WNet",
   "Win32_System_ProcessStatus",
   "Win32_System_Threading",
+  # What the machine runs in the background: the Service Control Manager, which is the one
+  # place Windows keeps the list and the only way to start or stop one.
+  "Win32_System_Services",
   # Which login session a process belongs to, which Windows counts as a Terminal Services
   # question even on a machine nobody logs into twice.
   "Win32_System_RemoteDesktop",

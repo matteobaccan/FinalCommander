@@ -727,6 +727,34 @@ left out there rather than paid for with a page of `unsafe` a service pack can i
 could end a process from a listing with the key that deletes a file is one that ends a process
 by accident, and ending one wants a confirmation of its own.
 
+**Service list (§7d).** What the machine runs in the background, as a panel: the name, the
+state in one word, and what the service says about itself. `F3` is its card, and the three
+keys that matter are on the bar — `F5` starts, `F6` restarts, `F8` stops — because a file
+manager is where one already is when a service has to be looked at, with its log in one panel
+and its configuration file in the other. Stopping and restarting ask first; starting does not,
+because nothing is taken away by it.
+
+Each platform is asked the way its own tools ask. Linux has systemd, and systemd answers
+`systemctl`: the list is `systemctl list-units --type=service --all` in its machine-readable
+form, and the three actions are `systemctl start|stop|restart`. There is no D-Bus dependency
+here, for the reason there is no GUI toolkit. Windows has the Service Control Manager, which
+is an API and is called as one — `EnumServicesStatusExW` for the list, `StartServiceW` and
+`ControlService` for the actions, and a restart is a stop, a wait for it to be down and a
+start, because the manager has no single call for it. macOS has `launchctl`, whose `list` is
+three columns and whose `kickstart -k` is a restart.
+
+**Nothing here runs as anybody else.** Stopping a system service wants root, and this program
+does not reach for `sudo`, `pkexec` or any other way of asking: it runs as the user running it
+and, when the system refuses, says *this needs root — the program will not ask for it on your
+behalf* rather than appearing to have worked. A file manager that silently escalated would be
+one nobody could audit. The action goes through a worker, because a manager takes seconds over
+a restart and the panels must keep answering; when it comes back the list is read again, so
+the panel shows the state the service is in now rather than the one it was in.
+
+A service name is checked before it goes anywhere near a command line — letters, digits and a
+handful of punctuation — so that a name with a semicolon in it is refused here rather than
+interpreted there.
+
 **Socket list.** What is listening and what is connected, as a panel: the protocol, this end,
 the other end, the state, and the process holding it — in columns, as the drive dialog is. The
 other end is left empty for a socket that is only listening, because `0.0.0.0:0` says nothing.

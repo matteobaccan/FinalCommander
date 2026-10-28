@@ -42,6 +42,14 @@ pub enum Request {
     },
     /// What is open, with the counters as they are now.
     TunnelList,
+    /// Start, stop or restart a service (SPEC 02 §7d). A worker's job: a service manager
+    /// takes seconds over it, and a panel that stopped answering for those seconds would be
+    /// a panel somebody pressed the key in twice.
+    ServiceControl {
+        side: usize,
+        id: String,
+        action: fcmd_platform::ServiceAction,
+    },
     /// Read both sides of every pair and say which differ. The pairs are already matched by
     /// name: this is the reading, which is the part that takes time.
     /// Walk both trees and say what differs between them (SPEC 03 §11b). The pairing is by
@@ -296,6 +304,13 @@ pub enum Event {
     /// carries nothing and does nothing but arrive.
     Redraw,
     Input(Input),
+    /// A service was started, stopped or restarted — or the system refused.
+    ServiceControlled {
+        side: usize,
+        id: String,
+        action: fcmd_platform::ServiceAction,
+        result: Result<(), fcmd_platform::ServiceError>,
+    },
     /// A plugin's command has finished: what it asked for, or why it could not.
     PluginDone {
         id: String,
@@ -761,6 +776,16 @@ fn times_of(path: &VPath, listed: Option<std::time::SystemTime>) -> crate::form:
     times
 }
 
+/// The message id for a service's state, so the panel and the card say the same word.
+fn state_id(state: fcmd_platform::ServiceState) -> &'static str {
+    match state {
+        fcmd_platform::ServiceState::Running => "svc-state-running",
+        fcmd_platform::ServiceState::Stopped => "svc-state-stopped",
+        fcmd_platform::ServiceState::Failed => "svc-state-failed",
+        fcmd_platform::ServiceState::Other => "svc-state-other",
+    }
+}
+
 /// Windows' attribute word for a local file, or zero where there is no such thing. It is the
 /// bits the listing does not carry — temporary, offline, not indexed, compressed and the
 /// rest — and it costs the same `stat` the times already do.
@@ -849,6 +874,11 @@ pub enum ConfirmAction {
         archive: VPath,
         changes: Vec<fcmd_arc::Change>,
     },
+    /// Stop or restart a service, which takes it away from whatever was using it.
+    Service {
+        id: String,
+        action: fcmd_platform::ServiceAction,
+    },
     /// Record a host key we have never seen and connect.
     AcceptHostKey {
         panel: usize,
@@ -878,6 +908,10 @@ impl ConfirmAction {
             ConfirmAction::QuitWithScreens => "btn-quit",
             ConfirmAction::PlayMacro(_) => "btn-play",
             ConfirmAction::RunPlugin(_) => "btn-run",
+            ConfirmAction::Service { action, .. } => match action {
+                fcmd_platform::ServiceAction::Stop => "btn-service-stop",
+                _ => "btn-service-restart",
+            },
             ConfirmAction::AcceptHostKey { .. } => "btn-accept",
         }
     }
@@ -1511,6 +1545,9 @@ pub struct App {
     /// What the attributes dialog is about. The dialog is open while the selection could
     /// change under it, so what it will touch is settled when it opens.
     attr_targets: Vec<VPath>,
+    /// The service list the `:services` panel was built from, so a row can be turned back
+    /// into the service it stands for.
+    services: Vec<fcmd_platform::Service>,
     /// The times the file under the cursor carried when the dialog opened, so the dialog's
     /// `Original` button has something to put back.
     attr_times: crate::form::Times,
@@ -1793,6 +1830,7 @@ impl App {
             status_error: false,
             held: Mods::NONE,
             attr_targets: Vec::new(),
+            services: Vec::new(),
             attr_times: Default::default(),
             copy_sources: Vec::new(),
             last_copy: CopyChoices::default(),
@@ -2669,6 +2707,50 @@ impl App {
                 self.panels[panel].message = Some(msg.clone());
                 self.set_status(msg);
             }
+            Event::ServiceControlled {
+                side,
+                id,
+                action,
+                result,
+            } => {
+                match result {
+                    Ok(()) => {
+                        let done = match action {
+                            fcmd_platform::ServiceAction::Start => "svc-started",
+                            fcmd_platform::ServiceAction::Stop => "svc-stopped",
+                            fcmd_platform::ServiceAction::Restart => "svc-restarted",
+                        };
+                        let msg = self.i18n.t_args(done, &[("name", id.into())]);
+                        self.set_status(msg);
+                        // The list is a snapshot and this is exactly what changed it, so the
+                        // panel is built again rather than left saying the old state.
+                        if self.panels[side].temp_origin() == Some(":services") {
+                            let was = self.panels[side].cursor;
+                            let active = self.active;
+                            self.open_services_panel(side);
+                            self.panels[side].cursor_to(was);
+                            self.active = active;
+                        }
+                    }
+                    // The one refusal worth its own sentence: it is not a failure, it is a
+                    // thing this user may not do, and the answer to it is `sudo` in a
+                    // terminal rather than anything this program should do on its own.
+                    Err(fcmd_platform::ServiceError::NeedsRoot) => {
+                        let msg = self.i18n.t_args("svc-needs-root", &[("name", id.into())]);
+                        self.set_error(msg);
+                    }
+                    Err(fcmd_platform::ServiceError::Unsupported) => {
+                        let m = self.i18n.t("svc-none");
+                        self.set_error(m);
+                    }
+                    Err(fcmd_platform::ServiceError::Failed(why)) => {
+                        let msg = self
+                            .i18n
+                            .t_args("svc-failed", &[("name", id.into()), ("error", why.into())]);
+                        self.set_error(msg);
+                    }
+                }
+            }
         }
     }
 
@@ -3157,6 +3239,7 @@ impl App {
                     ConfirmAction::QuitWithScreens => self.quit = true,
                     ConfirmAction::PlayMacro(which) => self.run_macro(&which),
                     ConfirmAction::RunPlugin(which) => self.start_plugin_command(which),
+                    ConfirmAction::Service { id, action } => self.start_service_action(id, action),
                     ConfirmAction::DiscardHex => {
                         // The mode is already Normal: the bytes go with it.
                         self.read_panel(0);
@@ -5804,6 +5887,7 @@ impl App {
                 ("drive-processes", ":processes"),
                 ("drive-sockets", ":sockets"),
                 ("drive-programs", ":programs"),
+                ("drive-services", ":services"),
                 ("drive-temp", ":temp"),
             ] {
                 let on_it = origin.as_deref() == Some(value);
@@ -6938,6 +7022,18 @@ impl App {
             | Command::FileMove
             | Command::FileCopyCurrent
             | Command::FileMoveCurrent => {
+                // On the service list there is nothing to copy or move: `F5` starts the
+                // service under the cursor and `F6` restarts it, which is what the key bar
+                // says there (SPEC 02 §7d).
+                if self.panel().temp_origin() == Some(":services") {
+                    self.service_action(match cmd {
+                        Command::FileCopy | Command::FileCopyCurrent => {
+                            fcmd_platform::ServiceAction::Start
+                        }
+                        _ => fcmd_platform::ServiceAction::Restart,
+                    });
+                    return;
+                }
                 // `Shift+F5` and `Shift+F6` ignore the selection on purpose: they exist for
                 // the moment when something is selected and the file under the cursor is not
                 // part of what you meant to touch.
@@ -7019,6 +7115,24 @@ impl App {
                     self.forget_site_at_cursor();
                     return;
                 }
+                // And on the service list `F8` stops the service under the cursor, having
+                // asked: it takes the thing away from whatever was using it.
+                if self.panel().temp_origin() == Some(":services") {
+                    self.service_action(fcmd_platform::ServiceAction::Stop);
+                    return;
+                }
+                // The other lists of things that are not files have nothing to delete, and
+                // the paths their rows carry are real — `/proc/1234` is a directory. A file
+                // manager that offered to delete one with the key that deletes a file is one
+                // that would do it by accident, so the key says what it cannot do instead.
+                if matches!(
+                    self.panel().temp_origin(),
+                    Some(":processes") | Some(":sockets") | Some(":programs")
+                ) {
+                    let m = self.i18n.t("temp-not-a-file");
+                    self.set_error(m);
+                    return;
+                }
                 let sources = if cmd == Command::FileDeleteCurrent {
                     self.cursor_source()
                 } else {
@@ -7053,6 +7167,11 @@ impl App {
         // And on the list of what is installed it is that program's card.
         if self.panel().temp_origin() == Some(":programs") {
             self.open_program_card();
+            return;
+        }
+        // On the service list it is that service's card, for the same reason.
+        if self.panel().temp_origin() == Some(":services") {
+            self.open_service_card();
             return;
         }
         let Some(entry) = self.panel().current().cloned() else {
@@ -9366,6 +9485,156 @@ impl App {
         self.panels[side].set_temp(title, items, generation);
         self.panels[side].set_temp_origin(":processes");
         self.active = side;
+    }
+
+    /// What the machine runs in the background, as a panel (SPEC 02 §7d).
+    ///
+    /// The row is the service: its name, what state it is in, and what it says about itself.
+    /// `F3` is its card, and `F5`, `F6` and `F8` start, restart and stop it — the three
+    /// things one opens such a panel to do. Nothing here runs as anybody else: an action the
+    /// system refuses is reported as needing root rather than quietly escalated.
+    fn open_services_panel(&mut self, side: usize) {
+        use fcmd_core::{Entry, EntryId, EntryKind};
+
+        let services = fcmd_platform::services();
+        if services.is_empty() {
+            let m = self.i18n.t("svc-none");
+            self.set_error(m);
+            return;
+        }
+        // Each column as wide as its widest value, so the rows line up under each other —
+        // the same shape the socket list uses.
+        let id_w = services
+            .iter()
+            .map(|s| unicode_width::UnicodeWidthStr::width(s.id.as_str()))
+            .max()
+            .unwrap_or(0)
+            .min(48);
+        let items: Vec<(VPath, Entry)> = services
+            .iter()
+            .enumerate()
+            .map(|(i, service)| {
+                let state = self.i18n.t(state_id(service.state));
+                let said = if service.description.is_empty() {
+                    service.display.clone()
+                } else {
+                    service.description.clone()
+                };
+                let label = format!("{:<id_w$}  {:<9}  {said}", service.id, state);
+                let entry = Entry {
+                    name: label.trim_end().into(),
+                    kind: EntryKind::File,
+                    size: 0,
+                    mtime: None,
+                    btime: None,
+                    atime: None,
+                    flags: fcmd_core::EntryFlags::empty(),
+                    id: EntryId::Name(i as u64),
+                    link_target: None,
+                };
+                // The row's path is the service's own name, which is what the three actions
+                // and the card are asked for by.
+                (VPath::local(service.id.clone()), entry)
+            })
+            .collect();
+        let title = self.plain("drive-services");
+        let generation = self.panels[side].generation + 1;
+        self.panels[side].generation = generation;
+        self.panels[side].set_temp(title, items, generation);
+        self.panels[side].set_temp_origin(":services");
+        self.services = services;
+        self.active = side;
+    }
+
+    /// The service under the cursor, where the panel is a service list.
+    fn service_at_cursor(&self) -> Option<&fcmd_platform::Service> {
+        if self.panel().temp_origin() != Some(":services") {
+            return None;
+        }
+        let wanted = self.panel().path_of(self.panel().current()?).display_name();
+        self.services.iter().find(|s| s.id == wanted)
+    }
+
+    /// `F3` on a service: what the system says about it, as a card.
+    fn open_service_card(&mut self) {
+        let Some(service) = self.service_at_cursor().cloned() else {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        };
+        let mut rows: Vec<(String, String)> = vec![
+            (self.i18n.t("svc-card-id"), service.id.clone()),
+            (
+                self.i18n.t("svc-card-state"),
+                self.i18n.t(state_id(service.state)),
+            ),
+        ];
+        if !service.display.is_empty() {
+            rows.insert(1, (self.i18n.t("svc-card-name"), service.display.clone()));
+        }
+        if !service.description.is_empty() {
+            rows.push((
+                self.i18n.t("svc-card-description"),
+                service.description.clone(),
+            ));
+        }
+        if let Some(pid) = service.pid {
+            rows.push((self.i18n.t("svc-card-pid"), pid.to_string()));
+        }
+        let width = rows
+            .iter()
+            .map(|(label, _)| unicode_width::UnicodeWidthStr::width(label.as_str()))
+            .max()
+            .unwrap_or(0);
+        let lines = rows
+            .iter()
+            .map(|(label, value)| format!("{label:<width$}  {value}"))
+            .collect();
+        self.mode = Mode::Message {
+            title: self.i18n.t("svc-card"),
+            lines,
+        };
+    }
+
+    /// `F5`, `F6`, `F8` on a service list. Starting is immediate; stopping and restarting
+    /// are asked about first, because both take something away from whatever was using it.
+    fn service_action(&mut self, action: fcmd_platform::ServiceAction) {
+        let Some(service) = self.service_at_cursor().cloned() else {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        };
+        if action == fcmd_platform::ServiceAction::Start {
+            self.start_service_action(service.id, action);
+            return;
+        }
+        let ask = match action {
+            fcmd_platform::ServiceAction::Stop => "svc-ask-stop",
+            _ => "svc-ask-restart",
+        };
+        self.mode = Mode::Confirm(Confirm {
+            title: self.i18n.t("svc-card"),
+            lines: vec![self
+                .i18n
+                .t_args(ask, &[("name", service.id.clone().into())])],
+            action: ConfirmAction::Service {
+                id: service.id,
+                action,
+            },
+            button: 0,
+        });
+    }
+
+    /// Hand the action to a worker: a service manager takes its time, and the panels must
+    /// keep answering while it does.
+    fn start_service_action(&mut self, id: String, action: fcmd_platform::ServiceAction) {
+        let side = self.active;
+        let msg = self
+            .i18n
+            .t_args("svc-working", &[("name", id.clone().into())]);
+        self.set_status(msg);
+        self.requests
+            .push(Request::ServiceControl { side, id, action });
     }
 
     /// `F3` on a row of the process list: everything this platform will say about it.
@@ -11981,6 +12250,7 @@ impl App {
                     ":processes" => self.open_process_panel(pick.side),
                     ":sockets" => self.open_socket_panel(pick.side),
                     ":programs" => self.open_programs_panel(pick.side),
+                    ":services" => self.open_services_panel(pick.side),
                     ":temp" => self.open_temp_panel(pick.side),
                     _ => self.go_to_bookmark(&row.value),
                 }
@@ -13973,6 +14243,28 @@ impl App {
                 let program = self.programs.get(at.parse::<usize>().ok()?)?;
                 Some(self.program_card(program).join("\n"))
             }
+            ":services" => {
+                let service = self.services.iter().find(|s| s.id == at)?;
+                let mut lines = vec![
+                    format!("{}  {}", self.i18n.t("svc-card-id"), service.id),
+                    format!(
+                        "{}  {}",
+                        self.i18n.t("svc-card-state"),
+                        self.i18n.t(state_id(service.state))
+                    ),
+                ];
+                if !service.description.is_empty() {
+                    lines.push(format!(
+                        "{}  {}",
+                        self.i18n.t("svc-card-description"),
+                        service.description
+                    ));
+                }
+                if let Some(pid) = service.pid {
+                    lines.push(format!("{}  {pid}", self.i18n.t("svc-card-pid")));
+                }
+                Some(lines.join("\n"))
+            }
             _ => None,
         }
     }
@@ -14574,6 +14866,36 @@ impl App {
         // what the keys do *there*: edit one, make one, forget one. Without this the bar
         // offers `Copy` and `MkFold` on a list where neither means anything — and an empty
         // list of sessions would say nothing at all about how to make the first.
+        // The service list is not a list of files either: `F5`, `F6` and `F8` are the three
+        // things one does to a service, and the bar says so rather than offering `Copy`.
+        if self.panel().temp_origin() == Some(":services") {
+            return [
+                (1u8, "key-help"),
+                (2, "key-menu"),
+                (3, "key-view"),
+                (4, ""),
+                (5, "key-service-start"),
+                (6, "key-service-restart"),
+                (7, ""),
+                (8, "key-service-stop"),
+                (9, "key-pulldown"),
+                (10, "key-quit"),
+                (11, "key-plugins"),
+                (12, "key-screens"),
+            ]
+            .iter()
+            .map(|(n, id)| {
+                (
+                    *n,
+                    if id.is_empty() {
+                        String::new()
+                    } else {
+                        self.i18n.t(id)
+                    },
+                )
+            })
+            .collect();
+        }
         if self.panel().temp_origin() == Some(":netbox") {
             return [
                 (1u8, "key-help"),
@@ -23507,6 +23829,51 @@ abcdefghij
             "F1 did not open the help: {:?}",
             app.mode
         );
+    }
+
+    /// The services panel: what is there, its card, and the three keys. A machine with no
+    /// service manager — a container, most build runners — says so and changes nothing,
+    /// which is the other half of the behaviour worth testing.
+    #[test]
+    fn the_services_panel_lists_what_runs_and_says_when_it_cannot() {
+        let mut app = app();
+        app.open_services_panel(0);
+        if app.panels[0].temp_origin() != Some(":services") {
+            assert!(
+                !app.status.is_empty() && app.status_error,
+                "nothing opened and nothing was said"
+            );
+            return;
+        }
+        assert!(!app.services.is_empty());
+        // The key bar says what the keys do here, rather than offering `Copy` on a list with
+        // no files in it.
+        let bar = app.keybar();
+        let says = |n: u8| bar.iter().find(|(k, _)| *k == n).map(|(_, l)| l.clone());
+        assert_eq!(says(5), Some(app.i18n.t("key-service-start")));
+        assert_eq!(says(6), Some(app.i18n.t("key-service-restart")));
+        assert_eq!(says(8), Some(app.i18n.t("key-service-stop")));
+
+        // `F3` is the card for the service under the cursor.
+        app.panels[0].cursor = 0;
+        press(&mut app, "F3");
+        let Mode::Message { title, lines } = &app.mode else {
+            panic!("no card: {:?}", app.mode)
+        };
+        assert_eq!(*title, app.i18n.t("svc-card"));
+        let id = app.services[0].id.clone();
+        assert!(lines.iter().any(|l| l.contains(&id)), "{lines:?}");
+        press(&mut app, "Esc");
+
+        // Stopping asks first, and `Esc` leaves the service alone.
+        press(&mut app, "F8");
+        let Mode::Confirm(confirm) = &app.mode else {
+            panic!("stopping did not ask: {:?}", app.mode)
+        };
+        assert!(confirm.lines[0].contains(&id), "{:?}", confirm.lines);
+        press(&mut app, "Esc");
+        assert!(app.mode.is_normal());
+        assert!(app.take_requests().is_empty(), "it stopped it anyway");
     }
 
     /// A row of the process list is not a file, so the preview beside it is its card — the

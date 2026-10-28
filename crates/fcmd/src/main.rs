@@ -939,6 +939,20 @@ fn interactive(mut app: App) -> Result<()> {
                         });
                     });
                 }
+                Request::ServiceControl { side, id, action } => {
+                    let tx = tx.clone();
+                    // Off the loop: a service manager takes seconds over a restart, and the
+                    // panels have to keep answering while it does.
+                    runtime.spawn_blocking(move || {
+                        let result = fcmd_platform::control(&id, action);
+                        let _ = tx.send(Event::ServiceControlled {
+                            side,
+                            id,
+                            action,
+                            result,
+                        });
+                    });
+                }
                 Request::Decompile { id, rule, path } => {
                     let tx = tx.clone();
                     runtime.spawn_blocking(move || {
@@ -4048,6 +4062,17 @@ timeout = 10
                     while let Ok(event) = rx.try_recv() {
                         app.handle_event(event);
                     }
+                }
+                // The one request a test serves for real: it runs no program unless there
+                // is a service manager, and on a machine without one it answers at once.
+                Request::ServiceControl { side, id, action } => {
+                    let result = fcmd_platform::control(&id, action);
+                    app.handle_event(Event::ServiceControlled {
+                        side,
+                        id,
+                        action,
+                        result,
+                    });
                 }
                 Request::DirSize { .. }
                 | Request::Shell { .. }

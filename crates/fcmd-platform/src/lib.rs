@@ -13,6 +13,7 @@
 
 pub mod process;
 mod programs;
+pub mod service;
 mod socket;
 #[cfg(unix)]
 mod unix;
@@ -22,6 +23,7 @@ mod windows;
 
 pub use process::{details, processes, Details, Process};
 pub use programs::{programs, Program};
+pub use service::{control, services, Service, ServiceAction, ServiceError, ServiceState};
 pub use socket::{sockets, Socket};
 pub use volume::{volume, Volume, VolumeKind};
 

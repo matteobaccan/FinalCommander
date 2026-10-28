@@ -109,7 +109,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 4.6 | **Connection manager** (`Alt+N`): saved `[[site]]` list with groups, agent / key file / asked password, host-key verification with a trust-on-first-use prompt, one pooled connection per host, explicit disconnect | TC/KRU | M1 (OS keyring, `ProxyJump`, charset M3) |
 | 4.7 | **Transfers through the local operation engine**: copy and move up, down, between two servers and inside one, with progress, conflicts and cancellation; a `sftp://` URL in `Ctrl+L` connects | TC | M1 (background queue, resume and bandwidth limit M3) |
 | 4.8 | Temporary panel (collect unrelated files into a virtual panel and act on them) | FAR `tmppanel` | M2 |
-| 4.9 | Special VFS: process list, registry (Windows), services, `/proc`-style views, package contents, git status/worktree view | FAR/far2l | M4 |
+| 4.9 | Special VFS: process list, services, registry (Windows), `/proc`-style views, package contents, git status/worktree view | FAR/far2l | **process list, socket list, installed programs and services implemented** (the services panel starts, restarts and stops, and never escalates); registry, package contents and the git view M4 |
 | 4.10 | Trash as a browsable VFS | NEW | M3 |
 | 4.11 | VFS API available to plugins (so a plugin can add a scheme) | FAR/TC(WFX) | M3 |
 

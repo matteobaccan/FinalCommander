@@ -534,6 +534,206 @@ fn token_owner(process: windows_sys::Win32::Foundation::HANDLE) -> Option<(Strin
     Some((name, as_string))
 }
 
+/// Everything the machine runs in the background, from the Service Control Manager.
+///
+/// One call gives the whole list with each service's state and its process: the manager is
+/// asked how much room the list needs, given that much, and asked again. Every user may read
+/// it; only an administrator may change anything, which is what `control_service` finds out.
+#[cfg(windows)]
+pub fn services() -> Vec<super::Service> {
+    use windows_sys::Win32::System::Services::{
+        CloseServiceHandle, EnumServicesStatusExW, OpenSCManagerW, ENUM_SERVICE_STATUS_PROCESSW,
+        SC_ENUM_PROCESS_INFO, SC_MANAGER_CONNECT, SC_MANAGER_ENUMERATE_SERVICE, SERVICE_RUNNING,
+        SERVICE_STATE_ALL, SERVICE_STOPPED, SERVICE_WIN32,
+    };
+
+    // SAFETY: both names are null, which asks for this machine and the active database, as
+    // documented; the result is a handle or null.
+    let scm = unsafe {
+        OpenSCManagerW(
+            std::ptr::null(),
+            std::ptr::null(),
+            SC_MANAGER_CONNECT | SC_MANAGER_ENUMERATE_SERVICE,
+        )
+    };
+    if scm.is_null() {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    let mut buffer: Vec<u8> = Vec::new();
+    let mut needed = 0u32;
+    let mut count = 0u32;
+    let mut resume = 0u32;
+    for _ in 0..2 {
+        // SAFETY: the buffer is as long as the call is told it is — zero on the first pass,
+        // which is how it is asked how much room it wants — and the four out parameters are
+        // whole values of ours.
+        let ok = unsafe {
+            EnumServicesStatusExW(
+                scm,
+                SC_ENUM_PROCESS_INFO,
+                SERVICE_WIN32,
+                SERVICE_STATE_ALL,
+                buffer.as_mut_ptr(),
+                buffer.len() as u32,
+                &mut needed,
+                &mut count,
+                &mut resume,
+                std::ptr::null(),
+            )
+        };
+        if ok != 0 {
+            break;
+        }
+        if needed == 0 {
+            // SAFETY: the handle came from `OpenSCManagerW` and is closed exactly once.
+            unsafe { CloseServiceHandle(scm) };
+            return Vec::new();
+        }
+        buffer = vec![0u8; needed as usize];
+        count = 0;
+        resume = 0;
+    }
+    let stride = std::mem::size_of::<ENUM_SERVICE_STATUS_PROCESSW>();
+    for i in 0..count as usize {
+        let at = i * stride;
+        if at + stride > buffer.len() {
+            break;
+        }
+        // SAFETY: the manager filled the buffer with `count` of these, packed; the buffer is
+        // a `Vec<u8>` and so is not aligned for the type, which is what `read_unaligned` is
+        // for. The two strings point into the same buffer and are read before it is dropped.
+        let row = unsafe {
+            std::ptr::read_unaligned(
+                buffer
+                    .as_ptr()
+                    .add(at)
+                    .cast::<ENUM_SERVICE_STATUS_PROCESSW>(),
+            )
+        };
+        let name = if row.lpServiceName.is_null() {
+            String::new()
+        } else {
+            // SAFETY: the manager wrote a NUL-terminated string there.
+            unsafe { from_wide(row.lpServiceName) }
+        };
+        if name.is_empty() {
+            continue;
+        }
+        let display = if row.lpDisplayName.is_null() {
+            String::new()
+        } else {
+            // SAFETY: as above.
+            unsafe { from_wide(row.lpDisplayName) }
+        };
+        let status = row.ServiceStatusProcess;
+        out.push(super::Service {
+            id: name,
+            display,
+            state: match status.dwCurrentState {
+                SERVICE_RUNNING => super::ServiceState::Running,
+                SERVICE_STOPPED => super::ServiceState::Stopped,
+                _ => super::ServiceState::Other,
+            },
+            description: String::new(),
+            pid: Some(status.dwProcessId).filter(|p| *p != 0),
+        });
+    }
+    // SAFETY: the handle came from `OpenSCManagerW` and is closed exactly once.
+    unsafe { CloseServiceHandle(scm) };
+    out
+}
+
+/// Start, stop or restart one service. A restart is a stop, a wait for it to be down, and a
+/// start: the manager has no single call for it.
+#[cfg(windows)]
+pub fn control_service(id: &str, action: super::ServiceAction) -> Result<(), super::ServiceError> {
+    use windows_sys::Win32::System::Services::{
+        CloseServiceHandle, ControlService, OpenSCManagerW, OpenServiceW, QueryServiceStatus,
+        StartServiceW, SC_MANAGER_CONNECT, SERVICE_CONTROL_STOP, SERVICE_QUERY_STATUS,
+        SERVICE_START, SERVICE_STATUS, SERVICE_STOP, SERVICE_STOPPED,
+    };
+
+    let wide: Vec<u16> = id.encode_utf16().chain(std::iter::once(0)).collect();
+    // SAFETY: both names are null, as above; the result is a handle or null.
+    let scm = unsafe { OpenSCManagerW(std::ptr::null(), std::ptr::null(), SC_MANAGER_CONNECT) };
+    if scm.is_null() {
+        return Err(last_error_as_service_error());
+    }
+    // SAFETY: the handle is open and the name is a NUL-terminated string of ours.
+    let service = unsafe {
+        OpenServiceW(
+            scm,
+            wide.as_ptr(),
+            SERVICE_START | SERVICE_STOP | SERVICE_QUERY_STATUS,
+        )
+    };
+    if service.is_null() {
+        let problem = last_error_as_service_error();
+        // SAFETY: the manager handle came from `OpenSCManagerW` and is closed exactly once.
+        unsafe { CloseServiceHandle(scm) };
+        return Err(problem);
+    }
+
+    let stop = |status: &mut SERVICE_STATUS| -> bool {
+        // SAFETY: the service handle is open and `status` is a whole structure the call fills.
+        unsafe { ControlService(service, SERVICE_CONTROL_STOP, status) != 0 }
+    };
+    let mut status: SERVICE_STATUS = unsafe { std::mem::zeroed() };
+    let outcome = match action {
+        // SAFETY: the handle is open; no argument vector is passed, which is the documented
+        // way of starting a service with the arguments it was configured with.
+        super::ServiceAction::Start => unsafe { StartServiceW(service, 0, std::ptr::null()) != 0 },
+        super::ServiceAction::Stop => stop(&mut status),
+        super::ServiceAction::Restart => {
+            // SAFETY: the handle is open and `status` is a whole structure of ours.
+            let asked = unsafe { QueryServiceStatus(service, &mut status) } != 0;
+            let down = stop(&mut status) || (asked && status.dwCurrentState == SERVICE_STOPPED);
+            if down {
+                // The manager stops a service in its own time, so it is asked how it is
+                // getting on rather than started again at once: a `StartService` on a service
+                // that is still stopping is refused.
+                for _ in 0..50 {
+                    // SAFETY: as above.
+                    if unsafe { QueryServiceStatus(service, &mut status) } == 0 {
+                        break;
+                    }
+                    if status.dwCurrentState == SERVICE_STOPPED {
+                        break;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                }
+            }
+            // SAFETY: the handle is open; see `Start` above.
+            unsafe { StartServiceW(service, 0, std::ptr::null()) != 0 }
+        }
+    };
+    let problem = (!outcome).then(last_error_as_service_error);
+    // SAFETY: both handles came from the calls above and are closed exactly once each.
+    unsafe {
+        CloseServiceHandle(service);
+        CloseServiceHandle(scm);
+    }
+    match problem {
+        Some(problem) => Err(problem),
+        None => Ok(()),
+    }
+}
+
+/// What the last call went wrong with, in the two kinds the caller cares about.
+#[cfg(windows)]
+fn last_error_as_service_error() -> super::ServiceError {
+    use windows_sys::Win32::Foundation::{GetLastError, ERROR_ACCESS_DENIED};
+
+    // SAFETY: the call takes nothing and reads this thread's own last error.
+    let code = unsafe { GetLastError() };
+    if code == ERROR_ACCESS_DENIED {
+        super::ServiceError::NeedsRoot
+    } else {
+        super::ServiceError::Failed(format!("error {code}"))
+    }
+}
+
 /// Every socket, with the process that holds it (SPEC 02 §7c).
 ///
 /// Windows answers this better than it answers anything else about another process: one call

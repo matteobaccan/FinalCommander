@@ -14,8 +14,14 @@ Under a rule, on `Ctrl+1` to `Ctrl+9`, are the things that are not filesystems:
 
 * the **stored connections** and the **object stores** written in the configuration, which
   connect when chosen;
-* the **processes** running on the machine, as a panel: `F3` on one is its card — the command
-  line, the memory, the threads, the parent, the user it runs as — and `F8` asks it to stop;
+* the **processes** running on the machine, as a panel: `F3` on one is its card, which is a
+  page — what it is, whose it is, what it has taken and spent, its command line, its whole
+  environment and every library it has loaded. Nothing here ends a process: the key that
+  deletes a file says so rather than doing it;
+* the **services** the machine runs in the background, with the state of each: `F3` is its
+  card, `F5` starts it, `F6` restarts it and `F8` stops it — the last two ask first. An
+  action the system refuses is reported as needing root; this program will not ask for root
+  on your behalf;
 * the **sockets**, listening or connected, with the address at each end and the process
   holding it, where `F3` is that process's card;
 * the **programs installed** on the machine, with their version and publisher: `F3` is the
