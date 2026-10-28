@@ -133,7 +133,7 @@ keeps it as the run's artifact; publishing happens only through `workflow_dispat
 
 ## Where the work is right now
 
-**0.7.2 is released.** What is in it, and in the three before it:
+**0.7.3 is released.** What is in it, and in the three before it:
 
 - **0.6.0** — `[[highlight]]` groups (colour by mask, size, age, attributes or kind, from the
   configuration); the find dialog's size condition; the system clipboard through the terminal
@@ -155,6 +155,10 @@ keeps it as the run's artifact; publishing happens only through `workflow_dispat
   groups on `Shift+F11`, from `[[sort_group]]` blocks; an arrow ends a quick search and leaves
   the cursor where it found; the name drawn in letters above what the program says on the
   command line.
+- **0.7.3** — **file descriptions** (`descript.ion`), the one FAR habit the program had none
+  of: read in whatever code page they are in, shown by `Ctrl+6` and `Ctrl+7`, in the
+  information panel and in the status line, written by `Ctrl+Z`, and carried by a copy, a
+  move, a rename and a delete. With them a sort criteria chain (`panel.sort_chain`).
 
 ## The queue, as the author's review left it
 
@@ -176,19 +180,15 @@ author:
 
 Everything here is unblocked and specified; the backlog has the reasons.
 
-1. **`descript.ion`** (`Ctrl+Z`, description columns, the information panel) — a whole small
-   feature, and the one FAR habit this program has none of. It touches the job engine,
-   because a description has to follow a copy, a move, a rename and a delete.
-2. **The screens list and background screens** (`F12`): several viewers, editors and jobs
+1. **The screens list and background screens** (`F12`): several viewers, editors and jobs
    open at once. The job engine already runs more than one; the screen stack is what is
    missing, and `Mode` holding one screen is what has to change.
-3. **Custom columns** — the column grammar of SPEC 02 §3, which is also what the `wide` view
+2. **Custom columns** — the column grammar of SPEC 02 §3, which is also what the `wide` view
    wants.
-4. **Sort criteria chains** (`sort.chain = ["size", "name"]`, SPEC 02 §4): the sort groups
-   shipped in 0.7.2 and the chain is the half that is left. `Sort` is `Copy` and a `Vec` of
-   keys would take that away, so the shape to pick is a small fixed array of tie-breakers.
-5. **A dialog for the sort groups**, as `F9 → Options → Files highlighting` edits the
+3. **A dialog for the sort groups**, as `F9 → Options → Files highlighting` edits the
    colouring groups: the blocks can only be written by hand today.
+4. **Sorting by description** (`Ctrl+F11`) and **descriptions through a provider** — inside an
+   archive, on a server — which are what SPEC 02 §13 still owes.
 
 One rule that came out of that review and holds everywhere: **`Alt+<letter>` belongs to the
 quick search**, so nothing else may take it (`Ctrl+Shift+N/I/T` moved for this reason), and
