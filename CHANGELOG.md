@@ -42,7 +42,8 @@ Notable changes, newest first. The format follows
   kernel, handles held, bytes read and written), where it came from (executable, directory,
   the whole command line), its environment, and every library it has loaded. It is in the
   viewer because the last two lists are longer than any screen — so it scrolls, searches and
-  wraps like any other page. Every row only where the system answers it: somebody else's
+  wraps like any other page. `F3` on a row of the socket list opens the same page for whoever
+  holds the socket. Every row only where the system answers it: somebody else's
   process keeps its secrets, and the card says nothing rather than guessing.
 
 - **An empty list of connections is still a list.** `Alt+F1` → NetBox with nothing stored

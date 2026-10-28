@@ -20495,12 +20495,20 @@ run = ["echo one", "echo two", "echo three"]
             "a row with no address in it: {rows:?}"
         );
 
-        // `F3` on a row we own is the card for the process holding it; on one we do not, it
-        // says that nobody will say. Either way it is not the viewer.
+        // `F3` on a row we own is the card for the process holding it, as a page in the
+        // viewer; on one we do not, it says that nobody will say. Either way it is never the
+        // socket row read as a file.
         app.panels[0].cursor = 0;
         press(&mut app, "F3");
-        match &app.mode {
-            Mode::Message { lines, .. } => assert!(!lines.is_empty()),
+        match &mut app.mode {
+            Mode::Viewer(viewer) => {
+                assert!(!viewer.rows(80, 40).is_empty(), "the card is empty");
+                assert!(
+                    viewer.path.display_name().contains('['),
+                    "not a process card: {}",
+                    viewer.path
+                );
+            }
             Mode::Normal => assert!(!app.status.is_empty(), "F3 did nothing at all"),
             other => panic!("F3 opened {other:?}"),
         }
