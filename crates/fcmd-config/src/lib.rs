@@ -1577,7 +1577,12 @@ mod tests {
                 name: "shared".into(),
                 digit: Some(3),
             }],
-            // What the histories say about themselves travels with their lines.
+            // A dialog field's own history, and what the histories say about themselves,
+            // travel with their lines.
+            field_history: vec![FieldHistory {
+                key: "find.mask".into(),
+                lines: vec!["*.rs".into()],
+            }],
             history_marks: vec![HistoryMark {
                 kind: "commands".into(),
                 text: "make".into(),
@@ -1853,6 +1858,9 @@ pub struct State {
     /// it would be a bug, not a setting.
     #[serde(default)]
     pub bookmarks: Vec<Bookmark>,
+    /// What has been typed into the dialogs' own fields, newest first, one row per field.
+    #[serde(default)]
+    pub field_history: Vec<FieldHistory>,
     /// What each history line has to say for itself: when it was last used, and whether it
     /// is pinned. The lines themselves are in the three lists above; this is the table
     /// beside them, and a line with no row here is simply one nobody has pinned and nobody
@@ -1865,6 +1873,16 @@ pub struct State {
     /// that opens empty and fills as it is walked.
     #[serde(default)]
     pub tree: Vec<TreeDir>,
+}
+
+/// One dialog field's history, as the state file holds it.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FieldHistory {
+    /// The field's own key: `find.mask`, `copy.target`.
+    pub key: String,
+    /// Newest first, which is the order the list shows.
+    #[serde(default)]
+    pub lines: Vec<String>,
 }
 
 /// One history line's mark, as the state file holds it.

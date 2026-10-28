@@ -103,6 +103,10 @@ pub enum PickKind {
     ArcCommands,
     /// The menu the user wrote (`F2`, SPEC 06 §4), one level of it at a time.
     UserMenu,
+    /// What has been typed into one dialog field before (`Ctrl+↓`, SPEC 06 §6). Which field
+    /// it is, is in `App::field_key`: a kind cannot hold it, and the list is open one at a
+    /// time.
+    FieldHistory,
 }
 
 /// A mark (`√`) next to the entry that is currently in force.

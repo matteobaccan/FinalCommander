@@ -1671,6 +1671,27 @@ impl Form {
         matches!(self.fields.get(self.cursor), Some(Field::Text { .. }))
     }
 
+    /// The key and the label of the text row the cursor is on, for the field's own history.
+    pub fn text_at_cursor(&self) -> Option<(&'static str, String)> {
+        match self.fields.get(self.cursor) {
+            Some(Field::Text { key, label, .. }) => Some((key, label.clone())),
+            _ => None,
+        }
+    }
+
+    /// Every text row that has something in it, for the histories to be fed on `OK`.
+    pub fn typed_fields(&self) -> Vec<(&'static str, String)> {
+        self.fields
+            .iter()
+            .filter_map(|field| match field {
+                Field::Text { key, value, .. } if !value.trim().is_empty() => {
+                    Some((*key, value.trim().to_string()))
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
     /// The rows as the renderer wants them.
     /// The pages along the top, for the renderer. Empty for a dialog that is one page.
     pub fn tabs(&self) -> Vec<fcmd_ui::widgets::FormTab> {

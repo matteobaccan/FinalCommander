@@ -624,6 +624,11 @@ fn run(cli: Cli) -> Result<()> {
     // last used. A state file written before any of this has none, and every line in it
     // simply counts as used now.
     app.marks = crate::history::Marks::from_state(&state.history_marks);
+    app.field_history = state
+        .field_history
+        .into_iter()
+        .map(|row| (row.key, row.lines))
+        .collect();
     app.bookmarks = state.bookmarks;
     // The tree comes up with what the last session walked, so `Ctrl+T` and `Alt+F10` are
     // useful before anything has been read again.
@@ -1477,6 +1482,15 @@ fn interactive(mut app: App) -> Result<()> {
         // a state file nobody can open is worth keeping none of.
         tree: app.tree_cache.to_state(crate::app::TREE_CACHE_KEPT),
         history_marks: app.marks.to_state(),
+        field_history: app
+            .field_history
+            .iter()
+            .filter(|(_, lines)| !lines.is_empty())
+            .map(|(key, lines)| fcmd_config::FieldHistory {
+                key: key.clone(),
+                lines: lines.clone(),
+            })
+            .collect(),
     };
     if let Err(e) = state.save(&app.paths) {
         eprintln!("fcmd: cannot write {}: {e}", app.paths.state_file.display());

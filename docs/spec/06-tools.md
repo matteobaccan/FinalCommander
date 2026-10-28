@@ -238,7 +238,18 @@ has to say for itself — when it was last used, whether it is pinned — is a s
 the three lists in the state file, so a line nobody has pinned and nobody has used since the
 file was written simply has no row there.
 
-Still owed: a history for the dialogs' own fields.
+**The dialogs' own fields.** A field one types the same thing into again keeps its own
+history: the mask and the text of `Alt+F7`, what `Ctrl+F7` replaces and with what, what the
+viewer and the editor search for, where `F5` copies to and through which filter, where an
+archive is unpacked, and the masks of the colour and sort groups. `Ctrl+↓` on the row opens
+what has been typed there before — FAR's own key — as the same list one types into, with the
+same three keys; `Enter` puts the row in the field, `Esc` leaves the field as it was, and the
+dialog waits behind the list either way. A field keeps sixty-four lines, which is not a
+setting: this is a handful of answers one reaches for, not a log.
+
+Nothing feeds these lists by hand. Every dialog's `OK` goes through one door, and that is
+where every text row with something in it goes into its field's history — a history that
+depended on each dialog remembering to feed it would be a history with holes in it.
 
 ## 7. Shell integration
 

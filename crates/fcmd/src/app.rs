@@ -1598,6 +1598,12 @@ pub struct App {
     /// The copy dialog the folder list was opened from, to come back to with the answer in
     /// its destination row (`F10` in the dialog).
     pub folder_for: Option<Box<Form>>,
+    /// The dialog a field's own history was opened from, and the key of the field that asked
+    /// (`Ctrl+↓`): the list replaces the dialog on the screen, and the answer goes back into
+    /// the row that wanted it.
+    pub field_for: Option<(Box<Form>, &'static str)>,
+    /// What has been typed into each dialog field that keeps a history, newest first.
+    pub field_history: std::collections::BTreeMap<String, Vec<String>>,
     /// The files that have been read or edited, oldest last — FAR's `Alt+F11`.
     ///
     /// Newest first in the list because that is the order somebody reaching back wants, and
@@ -1907,6 +1913,8 @@ impl App {
             sort_group_at: None,
             folder_scan: None,
             folder_for: None,
+            field_for: None,
+            field_history: std::collections::BTreeMap::new(),
             active: 0,
             mode: Mode::Normal,
             status: String::new(),
@@ -8083,8 +8091,8 @@ impl App {
         }
         self.cmd.remember(&line);
         self.marks
-            .touch(crate::history::Hist::Commands, &line, crate::history::now());
-        let locked = self.marks.locked_lines(crate::history::Hist::Commands);
+            .touch(crate::history::COMMANDS, &line, crate::history::now());
+        let locked = self.marks.locked_lines(crate::history::COMMANDS);
         self.cmd.trim_history(self.cfg.ui.command_history, &locked);
         self.cmd.clear();
         self.run_line(&line);
@@ -10601,6 +10609,19 @@ impl App {
                 };
                 self.open_folder_list(Some(form));
             }
+            // `Ctrl+↓` on a field that keeps one: what has been typed into *this* row before,
+            // as a list. FAR's own key, and FAR's own idea — a mask or a destination is
+            // typed again far more often than it is typed anew.
+            KeyCode::Down if key.mods.contains(Mods::CTRL) => {
+                let asked = form.text_at_cursor();
+                let Some((key, label)) = asked.filter(|(k, _)| field_keeps_history(k)) else {
+                    return;
+                };
+                let Mode::Form(form) = std::mem::replace(&mut self.mode, Mode::Normal) else {
+                    return;
+                };
+                self.open_field_history(form, key, label);
+            }
             KeyCode::Up => {
                 if form.button.is_some() {
                     form.button = None;
@@ -10702,6 +10723,7 @@ impl App {
         // Which button answered: most dialogs have one that does anything, the search has
         // two — the same question in both directions.
         let button = form.button.unwrap_or(0);
+        self.remember_fields(&form);
         if form.kind == FormKind::Site {
             self.apply_site_form(&form);
             return;
@@ -12074,6 +12096,9 @@ impl App {
         let pick = match kind {
             // Built by `open_block_menu`, which knows what is marked; nothing opens it here.
             PickKind::HexBlock => return,
+            // Built by `open_field_history`, which knows which field asked and holds the
+            // dialog while the list is on the screen.
+            PickKind::FieldHistory => return,
             // The same: `open_screens` knows what is open, and this does not.
             PickKind::Screens => return,
             // And `open_macros`, which knows what has been recorded.
@@ -12148,7 +12173,7 @@ impl App {
                     })
                     .collect();
                 let mut pick = Pick::filtered(kind, self.plain("menu-folders-history"), rows, side);
-                pick.locked = self.marks.locked_lines(crate::history::Hist::Folders);
+                pick.locked = self.marks.locked_lines(crate::history::FOLDERS);
                 pick
             }
             PickKind::CommandHistory => {
@@ -12167,7 +12192,7 @@ impl App {
                     })
                     .collect();
                 let mut pick = Pick::filtered(kind, self.plain("menu-history"), rows, side);
-                pick.locked = self.marks.locked_lines(crate::history::Hist::Commands);
+                pick.locked = self.marks.locked_lines(crate::history::COMMANDS);
                 pick
             }
             PickKind::FileHistory => {
@@ -12184,7 +12209,7 @@ impl App {
                     })
                     .collect();
                 let mut pick = Pick::filtered(kind, self.plain("menu-view-history"), rows, side);
-                pick.locked = self.marks.locked_lines(crate::history::Hist::Files);
+                pick.locked = self.marks.locked_lines(crate::history::FILES);
                 pick
             }
             PickKind::Highlight => {
@@ -12291,6 +12316,12 @@ impl App {
             return;
         };
         let kind = pick.kind;
+        // Which history this list is showing, if it is one: one of the three the program
+        // keeps, or the dialog field that asked for its own.
+        let hist: Option<&'static str> = match kind {
+            PickKind::FieldHistory => self.field_for.as_ref().map(|(_, key)| *key),
+            other => history_of(other),
+        };
         match key.code {
             // Inside a submenu, going back means the menu it was opened from — not out of the
             // menu altogether, which is what one press of `Esc` would otherwise do.
@@ -12310,6 +12341,14 @@ impl App {
                 self.mode = Mode::Normal;
                 if let Some(pending) = self.macro_pending.take() {
                     self.store_macro(*pending);
+                }
+            }
+            // A field's history was opened from a dialog and over it: closing it puts the
+            // dialog back, with what was typed in the field untouched.
+            KeyCode::Esc | KeyCode::F(10) if kind == PickKind::FieldHistory => {
+                match self.field_for.take() {
+                    Some((form, _)) => self.mode = Mode::Form(form),
+                    None => self.mode = Mode::Normal,
                 }
             }
             KeyCode::Esc | KeyCode::F(10) => {
@@ -12410,13 +12449,13 @@ impl App {
             //
             // `Ins` pins the line under the cursor, so that neither the size limit nor the
             // lifetime can push it out.
-            KeyCode::Insert if history_of(kind).is_some() => {
+            KeyCode::Insert if hist.is_some() => {
                 let (side, value, filter) = (
                     pick.side,
                     pick.chosen().map(|r| r.value.clone()),
                     pick.filter.clone(),
                 );
-                let (Some(hist), Some(value)) = (history_of(kind), value) else {
+                let (Some(hist), Some(value)) = (hist, value) else {
                     return;
                 };
                 let locked = self.marks.flip(hist, &value, crate::history::now());
@@ -12431,13 +12470,13 @@ impl App {
             }
             // `Shift+Del` takes one line out, and refuses a pinned one rather than quietly
             // making the pin mean nothing.
-            KeyCode::Delete if history_of(kind).is_some() && key.mods.contains(Mods::SHIFT) => {
+            KeyCode::Delete if hist.is_some() && key.mods.contains(Mods::SHIFT) => {
                 let (side, value, filter) = (
                     pick.side,
                     pick.chosen().map(|r| r.value.clone()),
                     pick.filter.clone(),
                 );
-                let (Some(hist), Some(value)) = (history_of(kind), value) else {
+                let (Some(hist), Some(value)) = (hist, value) else {
                     return;
                 };
                 if self.marks.is_locked(hist, &value) {
@@ -12452,7 +12491,7 @@ impl App {
             }
             // And `Del` empties the whole list of everything nobody has pinned, after asking:
             // it is one key away from the one above, and one of the two is not undoable.
-            KeyCode::Delete if history_of(kind).is_some() => {
+            KeyCode::Delete if hist.is_some() => {
                 let (side, filter, title) = (pick.side, pick.filter.clone(), pick.title.clone());
                 let body = self.i18n.t("hist-clear-body");
                 self.mode = Mode::Confirm(Confirm {
@@ -12761,6 +12800,12 @@ impl App {
             PickKind::SortGroups => {
                 let at = row.value.parse::<usize>().unwrap_or(0);
                 self.open_sort_group_form(Some(at));
+            }
+            PickKind::FieldHistory => {
+                if let Some((mut form, key)) = self.field_for.take() {
+                    form.set_text(key, row.value.clone());
+                    self.mode = Mode::Form(form);
+                }
             }
             PickKind::Folders => {
                 let chosen = VPath::parse(&row.value);
@@ -14984,10 +15029,10 @@ impl App {
         self.file_history.retain(|p| *p != text);
         self.file_history.insert(0, text.clone());
         self.marks
-            .touch(crate::history::Hist::Files, &text, crate::history::now());
+            .touch(crate::history::FILES, &text, crate::history::now());
         // A pinned line is never the one pushed out by the limit: the oldest unpinned one is.
         let keep = self.cfg.ui.file_history.max(1);
-        let locked = self.marks.locked_lines(crate::history::Hist::Files);
+        let locked = self.marks.locked_lines(crate::history::FILES);
         crate::history::trim(&mut self.file_history, keep, &locked, false);
     }
 
@@ -15101,6 +15146,15 @@ impl App {
             }
             _ => {}
         }
+        if kind == PickKind::FieldHistory {
+            if let Some((_, key)) = self.field_for.as_ref().map(|(f, k)| (f, *k)) {
+                if let Some(lines) = self.field_history.get_mut(key) {
+                    lines.retain(|line| line != value);
+                }
+                self.marks.forget(key, value);
+                return;
+            }
+        }
         if let Some(hist) = history_of(kind) {
             self.marks.forget(hist, value);
         }
@@ -15112,6 +15166,20 @@ impl App {
     /// The pinned lines stay, which is the point of them: somebody who has pinned three
     /// commands and wants the other four hundred gone presses one key, not four hundred.
     fn clear_history(&mut self, kind: PickKind, side: usize, filter: &str) {
+        if kind == PickKind::FieldHistory {
+            let Some(key) = self.field_for.as_ref().map(|(_, key)| *key) else {
+                return;
+            };
+            let kept = self.marks.locked_lines(key);
+            if let Some(lines) = self.field_history.get_mut(key) {
+                lines.retain(|line| kept.contains(line));
+            }
+            self.marks.keep_only(key, &kept);
+            let msg = self.i18n.t("hist-cleared");
+            self.reopen_field_history(filter);
+            self.set_status(msg);
+            return;
+        }
         let Some(hist) = history_of(kind) else {
             return;
         };
@@ -15156,24 +15224,24 @@ impl App {
     /// where all three histories are in hand. A panel keeps the folder it is standing in
     /// whatever its age, because that list is also how `Alt+←` walks back.
     pub fn sweep_histories(&mut self) {
-        use crate::history::Hist;
+        use crate::history::{COMMANDS, FILES, FOLDERS};
 
         let days = self.cfg.ui.history_lifetime;
         let now = crate::history::now();
         let marks = self.marks.clone();
 
         let mut commands = self.cmd.history().to_vec();
-        commands.retain(|line| !marks.is_stale(Hist::Commands, line, now, days));
+        commands.retain(|line| !marks.is_stale(COMMANDS, line, now, days));
         self.cmd.load_history(commands.clone());
         self.file_history
-            .retain(|line| !marks.is_stale(Hist::Files, line, now, days));
+            .retain(|line| !marks.is_stale(FILES, line, now, days));
 
         let mut folders: Vec<String> = Vec::new();
         for side in 0..self.panels.len() {
             let here = self.panels[side].cwd.clone();
-            self.panels[side].history.retain(|p| {
-                *p == here || !marks.is_stale(Hist::Folders, &p.to_string(), now, days)
-            });
+            self.panels[side]
+                .history
+                .retain(|p| *p == here || !marks.is_stale(FOLDERS, &p.to_string(), now, days));
             let at = self.panels[side]
                 .history
                 .iter()
@@ -15183,14 +15251,96 @@ impl App {
             folders.extend(self.panels[side].history.iter().map(|p| p.to_string()));
         }
 
+        // The dialogs' own fields are histories too, with the same life and the same pins.
+        let keys: Vec<String> = self.field_history.keys().cloned().collect();
+        for key in &keys {
+            if let Some(lines) = self.field_history.get_mut(key) {
+                lines.retain(|line| !marks.is_stale(key, line, now, days));
+            }
+        }
+        self.field_history.retain(|_, lines| !lines.is_empty());
+        for key in &keys {
+            let left = self.field_history.get(key).cloned().unwrap_or_default();
+            self.marks.keep_only(key, &left);
+        }
+
         let files = self.file_history.clone();
-        self.marks.keep_only(Hist::Commands, &commands);
-        self.marks.keep_only(Hist::Files, &files);
-        self.marks.keep_only(Hist::Folders, &folders);
+        self.marks.keep_only(COMMANDS, &commands);
+        self.marks.keep_only(FILES, &files);
+        self.marks.keep_only(FOLDERS, &folders);
+    }
+
+    /// How many lines one dialog field keeps. Not a setting: a field's history is a handful
+    /// of answers one reaches for, and a dialog that shows four hundred is a dialog nobody
+    /// reads to the end.
+    const FIELD_LINES_KEPT: usize = 64;
+
+    /// `Ctrl+↓`: what has been typed into this field before, as a list one types into.
+    fn open_field_history(&mut self, form: Box<Form>, key: &'static str, label: String) {
+        let side = self.active;
+        let rows: Vec<PickRow> = self
+            .field_history
+            .get(key)
+            .map(|lines| {
+                lines
+                    .iter()
+                    .map(|line| PickRow::plain(line.clone(), line.clone(), false))
+                    .collect()
+            })
+            .unwrap_or_default();
+        self.field_for = Some((form, key));
+        let mut pick = Pick::filtered(
+            PickKind::FieldHistory,
+            fcmd_ui::mnemonic(&label).0,
+            rows,
+            side,
+        );
+        pick.locked = self.marks.locked_lines(key);
+        self.mode = Mode::Pick(Box::new(pick));
+    }
+
+    /// Put the dialog back on the screen, with the field's history open again or not.
+    fn reopen_field_history(&mut self, filter: &str) {
+        let Some((form, key)) = self.field_for.take() else {
+            return;
+        };
+        let label = form
+            .text_at_cursor()
+            .map(|(_, label)| label)
+            .unwrap_or_default();
+        self.open_field_history(form, key, label);
+        if let Mode::Pick(pick) = &mut self.mode {
+            pick.filter = filter.to_string();
+            pick.refilter();
+        }
+    }
+
+    /// Everything typed into a dialog goes into the fields' histories when it is accepted.
+    ///
+    /// Here rather than in each dialog's own `apply_`: this is the one door every `OK` goes
+    /// through, and a history that depended on somebody remembering to feed it would be a
+    /// history with holes in it.
+    fn remember_fields(&mut self, form: &Form) {
+        let now = crate::history::now();
+        for (key, value) in form.typed_fields() {
+            if !field_keeps_history(key) {
+                continue;
+            }
+            let lines = self.field_history.entry(key.to_string()).or_default();
+            lines.retain(|line| line != &value);
+            lines.insert(0, value.clone());
+            self.marks.touch(key, &value, now);
+            let locked = self.marks.locked_lines(key);
+            crate::history::trim(lines, Self::FIELD_LINES_KEPT, &locked, false);
+        }
     }
 
     /// Open a history again where it was, with what was typed into it still typed.
     fn reopen_history(&mut self, kind: PickKind, side: usize, filter: &str) {
+        if kind == PickKind::FieldHistory {
+            self.reopen_field_history(filter);
+            return;
+        }
         self.open_pick(kind, side);
         if let Mode::Pick(pick) = &mut self.mode {
             pick.filter = filter.to_string();
@@ -15438,7 +15588,7 @@ impl App {
         if self.panels[index].go(path, push_history) {
             if push_history {
                 self.marks
-                    .touch(crate::history::Hist::Folders, &text, crate::history::now());
+                    .touch(crate::history::FOLDERS, &text, crate::history::now());
             }
             return true;
         }
@@ -16233,15 +16383,38 @@ fn filters(kind: PickKind) -> bool {
             | PickKind::CommandHistory
             | PickKind::FileHistory
             | PickKind::FoldersHistory
+            | PickKind::FieldHistory
+    )
+}
+
+/// The dialog fields worth a history of their own.
+///
+/// The ones a person types the same thing into again: a mask, the text to find, where to copy
+/// to. A file's new name is not one of them — it is about this file — and neither is anything
+/// the dialog fills in from what is under the cursor.
+fn field_keeps_history(key: &str) -> bool {
+    matches!(
+        key,
+        "find.mask"
+            | "find.text"
+            | "find.size"
+            | "replace.needle"
+            | "replace.with"
+            | "search.what"
+            | "copy.target"
+            | "copy.filter"
+            | "unpack.to"
+            | "hl.mask"
+            | "sg.mask"
     )
 }
 
 /// Which history a list is, for the three keys that only a history has.
-fn history_of(kind: PickKind) -> Option<crate::history::Hist> {
+fn history_of(kind: PickKind) -> Option<&'static str> {
     match kind {
-        PickKind::CommandHistory => Some(crate::history::Hist::Commands),
-        PickKind::FoldersHistory => Some(crate::history::Hist::Folders),
-        PickKind::FileHistory => Some(crate::history::Hist::Files),
+        PickKind::CommandHistory => Some(crate::history::COMMANDS),
+        PickKind::FoldersHistory => Some(crate::history::FOLDERS),
+        PickKind::FileHistory => Some(crate::history::FILES),
         _ => None,
     }
 }
@@ -17524,6 +17697,68 @@ mod tests {
         assert_eq!(form.text_value("find.text"), "TODO");
         assert!(form.toggle_value("find.case"));
         assert_eq!(form.choice_value("find.scope"), "panel");
+    }
+
+    /// A dialog field keeps what has been typed into it, and `Ctrl+↓` opens that list.
+    #[test]
+    fn a_dialog_field_remembers_what_was_typed_into_it() {
+        let mut app = app();
+
+        // Two searches, so the mask field has something to remember.
+        for mask in ["*.rs", "*.toml"] {
+            app.run(Command::ToolFind);
+            if let Mode::Form(form) = &mut app.mode {
+                form.set_text("find.mask", mask.to_string());
+            }
+            app.apply_form();
+        }
+        assert_eq!(
+            app.field_history.get("find.mask").map(Vec::as_slice),
+            Some(["*.toml".to_string(), "*.rs".to_string()].as_slice()),
+            "newest first, and no line twice"
+        );
+
+        // `Ctrl+↓` on the mask row opens them, and the dialog waits behind the list.
+        app.run(Command::ToolFind);
+        if let Mode::Form(form) = &mut app.mode {
+            form.cursor = form
+                .fields
+                .iter()
+                .position(|f| {
+                    matches!(
+                        f,
+                        crate::form::Field::Text {
+                            key: "find.mask",
+                            ..
+                        }
+                    )
+                })
+                .expect("the mask row");
+        }
+        press(&mut app, "Ctrl+Down");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(pick.kind, crate::menu::PickKind::FieldHistory);
+        assert_eq!(pick.rows.len(), 2);
+        assert!(app.field_for.is_some(), "the dialog is waiting behind it");
+
+        // Choosing a row puts it in the field and brings the dialog back.
+        press(&mut app, "Down");
+        press(&mut app, "Enter");
+        let Mode::Form(form) = &app.mode else {
+            panic!("the dialog is back: {:?}", app.mode)
+        };
+        assert_eq!(form.text_value("find.mask"), "*.rs");
+
+        // And `Esc` in the list leaves the dialog as it was.
+        press(&mut app, "Ctrl+Down");
+        assert!(matches!(app.mode, Mode::Pick(_)));
+        press(&mut app, "Esc");
+        let Mode::Form(form) = &app.mode else {
+            panic!("the dialog is back: {:?}", app.mode)
+        };
+        assert_eq!(form.text_value("find.mask"), "*.rs");
     }
 
     /// The archives box is a question for the search engine, not for the dialog: it reaches
@@ -23042,8 +23277,7 @@ abcdefghij
         // Newest first, so the cursor is on `cargo fmt`. `Ins` pins it, and the list says so.
         press(&mut app, "Ins");
         assert!(
-            app.marks
-                .is_locked(crate::history::Hist::Commands, "cargo fmt"),
+            app.marks.is_locked(crate::history::COMMANDS, "cargo fmt"),
             "the line under the cursor is pinned"
         );
         let Mode::Pick(pick) = &app.mode else {
@@ -23074,7 +23308,7 @@ abcdefghij
         app.cfg.ui.command_history = 1;
         app.cmd
             .load_history(vec!["cargo fmt".into(), "make".into()]);
-        let locked = app.marks.locked_lines(crate::history::Hist::Commands);
+        let locked = app.marks.locked_lines(crate::history::COMMANDS);
         app.cmd.trim_history(1, &locked);
         assert_eq!(app.cmd.history(), ["cargo fmt"]);
     }

@@ -8,6 +8,13 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **The dialogs' own fields keep a history.** `Ctrl+↓` on a field one types the same thing
+  into again — the search mask and text, the replacement, where to copy to, where to unpack,
+  a group's masks — opens what has been typed there before, as the same list one types into,
+  with the same `Ins`, `Shift+Del` and `Del`. `Enter` puts the row in the field and `Esc`
+  leaves it alone; the dialog waits behind the list either way. Every dialog's `OK` feeds
+  them, so nothing has to remember to.
+
 - **A history line can be pinned, and a history has a lifetime.** `Ins` in any of the three
   histories pins the line under the cursor — marked with a `*` — and neither the size limit
   nor the new `ui.history_lifetime` can push a pinned line out. `Shift+Del` takes one line
