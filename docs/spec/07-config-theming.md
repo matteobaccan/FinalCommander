@@ -184,6 +184,26 @@ credentials = "env"       # env | aws | aws:<profile> | anonymous
 listing_cap = 100000      # rows a listing with no delimiter may gather; 0 = no limit
 ```
 
+## 2c-quater. `[compare]`
+
+What counts as the same file when the two panels are compared (SPEC 03 §11). The comparison
+dialog writes exactly these keys.
+
+```toml
+[compare]
+case = false              # match the names with their case
+size = true               # a different size is a difference
+time = true               # a different time is a difference
+seconds = 0               # times this many seconds apart are the same moment
+contents = false          # read the bytes
+when_time_differs = false # read them only where the times differ
+fragment_kb = 0           # read only the first so many KiB; 0 = all of it
+ignore_eol = false        # line endings alone are not a difference
+selected_only = false     # compare only what is selected
+stop_on_first = false     # stop at the first difference
+newer_only = true         # select only the newer copy, not both sides
+```
+
 ## 2c-ter. `[cmdline]`
 
 ```toml

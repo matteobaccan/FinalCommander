@@ -37,6 +37,8 @@ pub enum FormKind {
     Copy,
     /// Which hash, and where the list of digests goes (SPEC 03 §9).
     Checksum,
+    /// What counts as the same file when the two panels are compared (SPEC 03 §11).
+    Compare,
     /// Which way to synchronise, and what counts as the same (SPEC 03 §10).
     Sync,
     /// A link to the file under the cursor: its name, and which kind of link it is.
@@ -455,6 +457,7 @@ pub fn menus() -> Vec<Menu> {
                     "",
                     Action::Run(Command::ToolCompareContents),
                 ),
+                item("menu-compare-setup", "", Action::Run(Command::ToolCompare)),
                 item(
                     "menu-calculator",
                     "Alt+=",

@@ -199,9 +199,11 @@ self-recombining script; combine detects `.001`/`.part1`/`.zNN` series automatic
 
 ## 10. Compare and synchronise
 
-- `tool.compare.dirs`: side-by-side compare by name/size/mtime(±tolerance)/content hash, with
-  "ignore case / ignore date / subdirectories" options; result colours rows in both panels and
-  can select the differing/newer/orphan sets.
+Three ways in, one engine: `tool.compare.dirs` compares the two listings by name, size and
+time; `tool.compare.contents` reads the bytes of every pair; `tool.compare` (Commands menu)
+opens the dialog of options in front of either, and §11 says what the options are. All three
+end the same way — what differs is selected in both panels, and one line says what was found.
+
 ### 10a. Synchronise (shipped)
 
 `tool.sync.dirs` (`Ctrl+Shift+Y`, and the Commands menu) is three things in a row, and the
@@ -258,3 +260,38 @@ rather than as the table (the table is already the dry run, but it does not writ
 
 - A named **job** that remembers a pair of directories and its rules, so a backup is one key
   rather than a dialog each time, and the queue of §5 to run it in.
+
+## 11. What counts as the same file (`tool.compare`, shipped)
+
+FAR has this as a plugin — `AdvCmpEx` — with a dialog of its own, and the dialog is the point:
+"are these two folders the same" has no answer until somebody says what *the same* means, and
+that changes with the job. A tree copied by something that dropped the timestamps has to be
+compared by its bytes. Two checkouts of one repository differ in every line ending and in
+nothing else. A memory stick keeps the time to the nearest two seconds. A directory of disk
+images cannot be read end to end to answer a question that the first megabyte settles.
+
+So the dialog is the front end of both comparisons, and every row of it is one of those cases.
+It writes its answers into `[compare]` (SPEC 07 §2c-quater), so the next comparison is the one
+that was set up rather than the default again:
+
+| Row | What it changes |
+| --- | --- |
+| Match the names with their case | `Readme.md` and `README.MD` are two files rather than a pair |
+| A different size is a difference | off, and only the time decides |
+| A different time is a difference | off, and only the size decides |
+| Times this many seconds apart are the same moment | two is the useful one: FAT, and a zip's own directory, keep the time to the nearest two seconds |
+| Read the bytes | the slow, certain comparison rather than the listing's word |
+| Read them only where the times differ | what makes a large tree finish: same size at the same moment is taken as the same |
+| Read only the first so many KiB | do these two *start* the same way — for recordings, images, anything where reading all of it would take a day |
+| Line endings alone are not a difference | off by default, because the comparison counts such a pair separately and says so either way |
+| Only what is selected | the dozen files one cares about out of a directory of ten thousand |
+| Stop at the first difference | the answer to "are these the same at all" does not need the other nine thousand files read |
+| Select only the newer copy | on: what one wants before `F5`. Off selects both sides of every difference, for looking rather than copying |
+
+The sentence at the end says everything the comparison decided and nothing it did not: how many
+pairs were read, how many differ, how many differ only in their line endings (and whether that
+counted), how many were taken as the same without being read, how many files were on one side
+only, and how many could not be read at all.
+
+Still to come: into the subdirectories, which needs the tree walked in a worker as the search
+is, and the third thing the plugin does — find the duplicate files under a directory.

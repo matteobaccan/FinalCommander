@@ -162,6 +162,7 @@ impl Form {
             | FormKind::Attributes
             | FormKind::Copy
             | FormKind::Checksum
+            | FormKind::Compare
             | FormKind::Sync
             | FormKind::Link
             | FormKind::Highlight
@@ -421,6 +422,7 @@ impl Form {
             FormKind::Attributes => "attr-title",
             FormKind::Copy => "copy-title",
             FormKind::Checksum => "sum-title",
+            FormKind::Compare => "cmp-title",
             FormKind::Sync => "sync-title",
             FormKind::Search => "search-title",
             FormKind::Link => "link-title",
@@ -947,6 +949,57 @@ impl Form {
             title: t("sum-title"),
             fields,
             cursor: 1,
+            site: None,
+            button: None,
+            buttons: vec![i18n.t("btn-ok"), i18n.t("btn-cancel")],
+        }
+    }
+
+    /// What counts as the same file, before the two panels are compared (SPEC 03 §11).
+    ///
+    /// FAR has this as a plugin with a dialog of its own, and the dialog is the point: the
+    /// answer to "are these two folders the same" depends entirely on what one means by the
+    /// same, and that changes with the job. A tree copied by something that dropped the
+    /// timestamps has to be compared by its bytes; two checkouts of one repository differ in
+    /// every line ending and in nothing else; a memory stick keeps the time to the nearest
+    /// two seconds. Every row here is one of those.
+    pub fn compare(cfg: &fcmd_config::CompareCfg, i18n: &I18n) -> Form {
+        let t = |id: &str| i18n.t(id);
+        let fields = vec![
+            Field::toggle("compare.case", t("cmp-case"), cfg.case),
+            Field::Separator,
+            Field::toggle("compare.size", t("cmp-size"), cfg.size),
+            Field::toggle("compare.time", t("cmp-time"), cfg.time),
+            Field::text("compare.seconds", t("cmp-seconds"), cfg.seconds.to_string()),
+            Field::Separator,
+            Field::toggle("compare.contents", t("cmp-contents"), cfg.contents),
+            Field::toggle(
+                "compare.when_time_differs",
+                t("cmp-when-time"),
+                cfg.when_time_differs,
+            ),
+            Field::text(
+                "compare.fragment_kb",
+                t("cmp-fragment"),
+                cfg.fragment_kb.to_string(),
+            ),
+            Field::toggle("compare.ignore_eol", t("cmp-ignore-eol"), cfg.ignore_eol),
+            Field::Separator,
+            Field::toggle(
+                "compare.selected_only",
+                t("cmp-selected"),
+                cfg.selected_only,
+            ),
+            Field::toggle("compare.stop_on_first", t("cmp-stop"), cfg.stop_on_first),
+            Field::toggle("compare.newer_only", t("cmp-newer"), cfg.newer_only),
+        ];
+        Form {
+            pages: Vec::new(),
+            page: 0,
+            kind: FormKind::Compare,
+            title: t("cmp-title"),
+            fields,
+            cursor: 0,
             site: None,
             button: None,
             buttons: vec![i18n.t("btn-ok"), i18n.t("btn-cancel")],

@@ -448,6 +448,69 @@ impl Default for S3Cfg {
     }
 }
 
+/// `[compare]`: what counts as the same file when the two panels are compared (SPEC 03 §11).
+///
+/// FAR has this as a plugin (`AdvCmpEx`) with a dialog of its own, and the options are the
+/// reason: whether the time matters, how close is close enough, whether the bytes are read at
+/// all and how many of them. The dialog writes its answers here, so the next comparison is the
+/// one that was set up rather than the default again.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct CompareCfg {
+    /// Match the names with their case, rather than `Readme.md` pairing with `README.MD`.
+    pub case: bool,
+    /// A different size is a difference.
+    pub size: bool,
+    /// A different time is a difference.
+    pub time: bool,
+    /// How many seconds apart two times may be and still count as the same moment. Two is
+    /// the useful one: a FAT filesystem keeps the time to the nearest two seconds, so a file
+    /// copied onto a memory stick comes back one second different and is not changed.
+    pub seconds: u64,
+    /// Read the bytes, rather than trusting the size and the time.
+    pub contents: bool,
+    /// Read them only for a pair whose times differ, which is what makes a comparison of a
+    /// large tree finish: files of the same size at the same moment are taken as the same.
+    pub when_time_differs: bool,
+    /// Read only the first so many kibibytes of each file. Zero means the whole of it.
+    pub fragment_kb: u64,
+    /// Two files that differ only in how they end their lines are the same file — the same
+    /// checkout on Windows and on Linux differs in every line and in nothing that matters.
+    ///
+    /// Off by default, because the comparison counts such a pair separately and *says* so in
+    /// its sentence: the reader finds out that the only difference is the line endings
+    /// without having had to decide in advance that it would not matter.
+    pub ignore_eol: bool,
+    /// Compare only what is selected, rather than the whole of both listings.
+    pub selected_only: bool,
+    /// Stop at the first difference, for the question "are these two trees the same at all".
+    pub stop_on_first: bool,
+    /// Select only the copy that is newer, rather than every copy that differs: what one
+    /// wants before pressing `F5`. Off selects both sides of every difference, which is what
+    /// one wants when looking for *what* differs rather than copying.
+    pub newer_only: bool,
+}
+
+impl Default for CompareCfg {
+    fn default() -> Self {
+        CompareCfg {
+            case: false,
+            size: true,
+            time: true,
+            seconds: 0,
+            contents: false,
+            when_time_differs: false,
+            fragment_kb: 0,
+            ignore_eol: false,
+            selected_only: false,
+            stop_on_first: false,
+            // On, which is what the comparison has always done and what one wants before
+            // pressing `F5`: the copy that is newer is the one to send across.
+            newer_only: true,
+        }
+    }
+}
+
 /// `[cmdline]`: the command line itself (SPEC 06 §2b).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -997,6 +1060,7 @@ pub struct Config {
     pub decompile: Vec<DecompileRule>,
     pub net: NetCfg,
     pub cmdline: CmdLineCfg,
+    pub compare: CompareCfg,
     pub drives: DrivesCfg,
     pub arc: ArcCfg,
     pub term: TermCfg,

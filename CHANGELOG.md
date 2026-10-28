@@ -4,6 +4,22 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
+## [Unreleased]
+
+### Added
+
+- **The comparison has a dialog, and the options the plugin everybody uses has.** `tool.compare`
+  (Commands → *Compare with options*) asks what *the same file* means before comparing: whether
+  the names are matched with their case, whether the size and the time count, how many seconds
+  apart two times may be and still be the same moment (two, for anything that has been to a
+  memory stick), whether the bytes are read at all, read only where the times differ, or read
+  only for the first so many KiB, whether a difference in line endings alone counts, whether
+  only the selected rows are compared, whether to stop at the first difference, and whether to
+  select only the newer copy or both sides of every difference. The answers go into `[compare]`,
+  so the next comparison is the one that was set up. The sentence at the end now also says how
+  many pairs were taken as the same without being read, and whether the line-ending-only
+  differences were counted.
+
 ## [0.9.0] — 2026-10-28
 
 ### Added

@@ -185,6 +185,7 @@ impl Command {
             Command::NetTunnels => "the tunnels that are open",
             Command::ToolUserMenu => "your own menu of commands",
             Command::ToolCompareDirs => "compare the two panels by name, size and time",
+            Command::ToolCompare => "compare the two panels, with the options dialog first",
             Command::ToolSyncDirs => "make the two directories hold the same thing",
             Command::ToolCompareContents => "compare them by what is in the files",
             Command::ToolCalculator => "a calculator, in every base at once",

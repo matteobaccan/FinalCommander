@@ -47,6 +47,8 @@ pub enum Request {
     CompareContents {
         id: u64,
         pairs: Vec<ComparePair>,
+        /// How much of each file to read, and whether to stop at the first difference.
+        work: CompareWork,
         cancel: CancelToken,
     },
     /// Hash each path and write the list (SPEC 03 §9). `target` is the one file they all go
@@ -771,12 +773,24 @@ pub struct TunnelInfo {
     pub failed: u64,
 }
 
+/// How much reading the comparison of two files is allowed to do (SPEC 03 §11).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CompareWork {
+    /// Bytes to read from each side, or zero for the whole file. A fragment answers a
+    /// different question — do these two *start* the same way — which is what one asks of a
+    /// directory of recordings or of disk images, where reading all of it would take a day.
+    pub fragment: u64,
+    /// Stop at the first pair that differs: the answer to "are these two trees the same at
+    /// all", which does not need the other nine thousand files read.
+    pub stop_on_first: bool,
+}
+
 /// Two files with the same name, one in each panel, waiting to be read.
 ///
 /// The sizes come from the listings that are already on screen, so a pair whose sizes differ
 /// is settled without opening anything — which is most of them, and the reason a comparison
 /// of two build trees finishes in the time it takes to read the few files that match.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ComparePair {
     pub name: String,
     pub left: VPath,
@@ -1394,6 +1408,9 @@ pub struct App {
     compare_alone: Vec<String>,
     /// How many pairs the running comparison was given, for the sentence at the end.
     compare_pairs: usize,
+    /// And how many were not read at all because their size and time agreed, which the
+    /// dialog can ask for.
+    compare_trusted: usize,
     /// The command line under the panels (SPEC 06 §7).
     pub cmd: CmdLine,
     /// The directory the branch was last read for, and what it was: `HEAD` is a small file,
@@ -1609,6 +1626,7 @@ impl App {
             },
             compare_alone: Vec::new(),
             compare_pairs: 0,
+            compare_trusted: 0,
             cmd: CmdLine::new(),
             branch_at: None,
             programs: Vec::new(),
@@ -6232,6 +6250,10 @@ impl App {
                 self.open_tunnels();
             }
             Command::ToolCompareDirs => self.compare_dirs(),
+            Command::ToolCompare => {
+                let form = Form::compare(&self.cfg.compare, &self.i18n);
+                self.mode = Mode::Form(Box::new(form));
+            }
             Command::ToolCompareContents => self.compare_contents(),
             Command::ToolCalculator => {
                 // It opens on the last sum: a calculator is used in runs.
@@ -9491,6 +9513,10 @@ impl App {
             self.apply_copy_form(&form);
             return;
         }
+        if form.kind == FormKind::Compare {
+            self.apply_compare_form(&form);
+            return;
+        }
         if form.kind == FormKind::Checksum {
             self.apply_checksum_form(&form);
             return;
@@ -12242,13 +12268,22 @@ impl App {
     /// file that is the same on both sides is selected in neither, which is the whole point:
     /// what stays selected is what a copy would have to carry.
     fn compare_dirs(&mut self) {
-        /// A file's name, with the comparison's own notion of "the same name": case is
-        /// ignored, because the two panels may be on filesystems that disagree about it, and
-        /// a pair that differs only in case is a difference the user wants to see rather than
-        /// a pair we quietly match up.
-        fn key(entry: &Entry) -> String {
-            entry.name_str().to_lowercase()
-        }
+        let opts = self.cfg.compare;
+        // What counts as the same name. Case is ignored by default, because the two panels
+        // may be on filesystems that disagree about it and a pair differing only in case is
+        // a difference somebody wants to see; the dialog can ask for the other rule.
+        let key = |entry: &Entry| -> String {
+            if opts.case {
+                entry.name_str().into_owned()
+            } else {
+                entry.name_str().to_lowercase()
+            }
+        };
+        // How far apart two times may be and still be the same moment.
+        let tolerance = std::time::Duration::from_secs(opts.seconds);
+        let apart = |a: std::time::SystemTime, b: std::time::SystemTime| -> std::time::Duration {
+            a.duration_since(b).unwrap_or_else(|e| e.duration())
+        };
 
         let mut facts: [std::collections::HashMap<String, (u64, Option<std::time::SystemTime>)>;
             2] = [Default::default(), Default::default()];
@@ -12269,26 +12304,55 @@ impl App {
         for (side, count) in marked.iter_mut().enumerate() {
             let other = 1 - side;
             let listing = self.panels[side].listing.clone();
+            // Only what is selected, where the dialog asked for that: a comparison of two
+            // directories of ten thousand files, narrowed to the dozen one cares about.
+            let chosen: Option<std::collections::HashSet<fcmd_core::EntryId>> = opts
+                .selected_only
+                .then(|| {
+                    (0..listing.len())
+                        .filter_map(|row| listing.row(row))
+                        .filter(|e| self.panels[side].selection.contains(e.id))
+                        .map(|e| e.id)
+                        .collect()
+                })
+                .filter(|set: &std::collections::HashSet<fcmd_core::EntryId>| !set.is_empty());
             let mut wanted: Vec<fcmd_core::EntryId> = Vec::new();
             for row in 0..listing.len() {
                 let entry = listing.row(row).expect("row in range");
                 if entry.kind.is_dirlike() {
                     continue;
                 }
+                if let Some(chosen) = &chosen {
+                    if !chosen.contains(&entry.id) {
+                        continue;
+                    }
+                }
                 let mine = (entry.size, entry.mtime);
                 let theirs = facts[other].get(&key(entry));
                 let differs = match theirs {
                     // Not over there at all: this copy is the only one.
                     None => true,
-                    // There, and the same size at the same time: nothing to do.
-                    Some(other) if *other == mine => false,
-                    // There and older, or there with no time to compare and a different
-                    // size. A file with no timestamp on either side falls back to the size,
-                    // because that is all there is to go on.
-                    Some((other_size, other_time)) => match (mine.1, other_time) {
-                        (Some(a), Some(b)) => a > *b,
-                        _ => mine.0 != *other_size,
-                    },
+                    Some((other_size, other_time)) => {
+                        let size_differs = opts.size && mine.0 != *other_size;
+                        let time_differs = opts.time
+                            && match (mine.1, *other_time) {
+                                (Some(a), Some(b)) => apart(a, b) > tolerance,
+                                (None, None) => false,
+                                // One side has a time and the other has not, which is as
+                                // much of a difference as two different times.
+                                _ => true,
+                            };
+                        if opts.newer_only {
+                            // The copy to send across: newer by more than the tolerance, or
+                            // — with no times to compare — simply not the same size.
+                            match (mine.1, *other_time) {
+                                (Some(a), Some(b)) if opts.time => a > b && apart(a, b) > tolerance,
+                                _ => size_differs,
+                            }
+                        } else {
+                            size_differs || time_differs
+                        }
+                    }
                 };
                 if differs {
                     wanted.push(entry.id);
@@ -12309,6 +12373,56 @@ impl App {
             ],
         );
         self.set_status(msg);
+    }
+
+    /// The dialog's answer: keep what it says, then do what it says.
+    fn apply_compare_form(&mut self, form: &Form) {
+        let number = |text: String, what: &str| -> Result<u64, String> {
+            match text.trim() {
+                "" => Ok(0),
+                other => other.parse::<u64>().map_err(|_| {
+                    self.i18n
+                        .t_args(what, &[("port", other.to_string().into())])
+                }),
+            }
+        };
+        let seconds = match number(form.text_value("compare.seconds"), "site-bad-port") {
+            Ok(n) => n,
+            Err(e) => {
+                self.set_error(e);
+                self.mode = Mode::Form(Box::new(form.clone()));
+                return;
+            }
+        };
+        let fragment = match number(form.text_value("compare.fragment_kb"), "site-bad-port") {
+            Ok(n) => n,
+            Err(e) => {
+                self.set_error(e);
+                self.mode = Mode::Form(Box::new(form.clone()));
+                return;
+            }
+        };
+        let on = |key: &str| form.text_value(key) == "true";
+        self.cfg.compare = fcmd_config::CompareCfg {
+            case: on("compare.case"),
+            size: on("compare.size"),
+            time: on("compare.time"),
+            seconds,
+            contents: on("compare.contents"),
+            when_time_differs: on("compare.when_time_differs"),
+            fragment_kb: fragment,
+            ignore_eol: on("compare.ignore_eol"),
+            selected_only: on("compare.selected_only"),
+            stop_on_first: on("compare.stop_on_first"),
+            newer_only: on("compare.newer_only"),
+        };
+        // Reading the bytes is the slow, certain comparison; without it the listing is
+        // enough and the answer is immediate.
+        if self.cfg.compare.contents {
+            self.compare_contents();
+        } else {
+            self.compare_dirs();
+        }
     }
 
     /// Compare the two panels by what is *in* the files.
@@ -12341,45 +12455,124 @@ impl App {
             cancel.cancel();
         }
 
-        let key = |entry: &Entry| entry.name_str().to_lowercase();
-        let mut right: std::collections::HashMap<String, (VPath, u64)> =
-            std::collections::HashMap::new();
+        let opts = self.cfg.compare;
+        let key = |entry: &Entry| -> String {
+            if opts.case {
+                entry.name_str().into_owned()
+            } else {
+                entry.name_str().to_lowercase()
+            }
+        };
+        // Only what is selected, where the dialog asked for that.
+        let chosen =
+            |app: &App, side: usize| -> Option<std::collections::HashSet<fcmd_core::EntryId>> {
+                if !opts.selected_only {
+                    return None;
+                }
+                let listing = &app.panels[side].listing;
+                let set: std::collections::HashSet<fcmd_core::EntryId> = (0..listing.len())
+                    .filter_map(|row| listing.row(row))
+                    .filter(|e| app.panels[side].selection.contains(e.id))
+                    .map(|e| e.id)
+                    .collect();
+                (!set.is_empty()).then_some(set)
+            };
+        let (left_chosen, right_chosen) = (chosen(self, 0), chosen(self, 1));
+
+        let mut right: std::collections::HashMap<
+            String,
+            (VPath, u64, Option<std::time::SystemTime>),
+        > = std::collections::HashMap::new();
         let listing = &self.panels[1].listing;
         for row in 0..listing.len() {
             let entry = listing.row(row).expect("row in range");
             if entry.kind.is_dirlike() {
                 continue;
             }
-            right.insert(key(entry), (self.panels[1].path_of(entry), entry.size));
+            if let Some(chosen) = &right_chosen {
+                if !chosen.contains(&entry.id) {
+                    continue;
+                }
+            }
+            right.insert(
+                key(entry),
+                (self.panels[1].path_of(entry), entry.size, entry.mtime),
+            );
         }
 
+        let tolerance = std::time::Duration::from_secs(opts.seconds);
         let mut pairs = Vec::new();
         let mut alone: Vec<String> = Vec::new();
+        // Pairs the dialog said not to read, because their times agree: counted, so the
+        // sentence at the end can say how many were taken on trust.
+        let mut trusted = 0usize;
         let listing = self.panels[0].listing.clone();
         for row in 0..listing.len() {
             let entry = listing.row(row).expect("row in range");
             if entry.kind.is_dirlike() {
                 continue;
             }
+            if let Some(chosen) = &left_chosen {
+                if !chosen.contains(&entry.id) {
+                    continue;
+                }
+            }
             match right.get(&key(entry)) {
-                Some((path, size)) => pairs.push(ComparePair {
-                    name: entry.name_str().into_owned(),
-                    left: self.panels[0].path_of(entry),
-                    right: path.clone(),
-                    left_size: entry.size,
-                    right_size: *size,
-                }),
+                Some((path, size, when)) => {
+                    // "Only if the time is different": two files of the same size at the same
+                    // moment are taken as the same, which is what makes a comparison of a
+                    // large tree finish.
+                    if opts.when_time_differs && entry.size == *size {
+                        let same_moment = match (entry.mtime, *when) {
+                            (Some(a), Some(b)) => {
+                                a.duration_since(b).unwrap_or_else(|e| e.duration()) <= tolerance
+                            }
+                            (None, None) => true,
+                            _ => false,
+                        };
+                        if same_moment {
+                            trusted += 1;
+                            continue;
+                        }
+                    }
+                    pairs.push(ComparePair {
+                        name: entry.name_str().into_owned(),
+                        left: self.panels[0].path_of(entry),
+                        right: path.clone(),
+                        left_size: entry.size,
+                        right_size: *size,
+                    })
+                }
                 None => alone.push(entry.name_str().into_owned()),
             }
         }
         // And the other way round: a file only on the right is also a difference.
-        let matched: std::collections::HashSet<String> =
-            pairs.iter().map(|p| p.name.to_lowercase()).collect();
+        // Which names the left side had at all — not which were queued: a pair taken on
+        // trust was not queued and is not a file standing alone.
+        let listing = self.panels[0].listing.clone();
+        let mut on_the_left: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for row in 0..listing.len() {
+            let entry = listing.row(row).expect("row in range");
+            if entry.kind.is_dirlike() {
+                continue;
+            }
+            if let Some(chosen) = &left_chosen {
+                if !chosen.contains(&entry.id) {
+                    continue;
+                }
+            }
+            on_the_left.insert(key(entry));
+        }
         let listing = self.panels[1].listing.clone();
         for row in 0..listing.len() {
             let entry = listing.row(row).expect("row in range");
-            if entry.kind.is_dirlike() || matched.contains(&key(entry)) {
+            if entry.kind.is_dirlike() || on_the_left.contains(&key(entry)) {
                 continue;
+            }
+            if let Some(chosen) = &right_chosen {
+                if !chosen.contains(&entry.id) {
+                    continue;
+                }
             }
             alone.push(entry.name_str().into_owned());
         }
@@ -12399,13 +12592,21 @@ impl App {
         self.compare = Some((id, cancel.clone()));
         let total = pairs.len() as i64;
         self.compare_pairs = pairs.len();
+        self.compare_trusted = trusted;
         let msg = self.i18n.t_args(
             "compare-contents-working",
             &[("done", 0.into()), ("total", total.into())],
         );
         self.set_status(msg);
-        self.requests
-            .push(Request::CompareContents { id, pairs, cancel });
+        self.requests.push(Request::CompareContents {
+            id,
+            pairs,
+            work: CompareWork {
+                fragment: opts.fragment_kb.saturating_mul(1024),
+                stop_on_first: opts.stop_on_first,
+            },
+            cancel,
+        });
     }
 
     /// What a finished comparison does to the panels: select what differs on both sides, and
@@ -12418,10 +12619,17 @@ impl App {
         stopped: bool,
     ) {
         let alone = std::mem::take(&mut self.compare_alone);
+        let ignore_eol = self.cfg.compare.ignore_eol;
         let mut names: Vec<String> = differ.to_vec();
-        names.extend(line_endings.iter().cloned());
+        // A pair that differs only in how its lines end: a difference, or not one, as the
+        // dialog says. Either way it is counted and named in the sentence, so the reader is
+        // never left wondering which of the two the program decided.
+        if !ignore_eol {
+            names.extend(line_endings.iter().cloned());
+        }
         names.extend(alone.iter().cloned());
         let pairs = self.compare_pairs;
+        let trusted = std::mem::take(&mut self.compare_trusted);
         self.select_in_both(&names);
 
         if stopped {
@@ -12429,7 +12637,7 @@ impl App {
             self.set_status(m);
             return;
         }
-        let mut line = if differ.is_empty() && alone.is_empty() && line_endings.is_empty() {
+        let mut line = if differ.is_empty() && alone.is_empty() {
             self.i18n
                 .t_args("compare-contents-same", &[("pairs", (pairs as i64).into())])
         } else {
@@ -12443,8 +12651,21 @@ impl App {
         };
         if !line_endings.is_empty() {
             let more = self.i18n.t_args(
-                "compare-contents-eol",
+                if ignore_eol {
+                    "compare-contents-eol-ignored"
+                } else {
+                    "compare-contents-eol"
+                },
                 &[("count", (line_endings.len() as i64).into())],
+            );
+            line.push_str(", ");
+            line.push_str(&more);
+        }
+        // The pairs the dialog said not to read, because their size and time agreed.
+        if trusted > 0 {
+            let more = self.i18n.t_args(
+                "compare-contents-trusted",
+                &[("count", (trusted as i64).into())],
             );
             line.push_str(", ");
             line.push_str(&more);
@@ -16147,6 +16368,63 @@ mod tests {
         assert_eq!(app.panels[0].temp_origin(), Some(":processes"));
     }
 
+    /// The comparison dialog: what it is told is what it keeps, and what it keeps is what
+    /// the comparison then means by "the same file".
+    #[test]
+    fn the_comparison_dialog_keeps_what_it_is_told() {
+        use std::time::{Duration, SystemTime};
+
+        let mut app = app();
+        // Two listings holding one name each, a second apart and the same size.
+        let when = SystemTime::UNIX_EPOCH + Duration::from_secs(1_700_000_000);
+        let mut left = entry("a.txt", EntryKind::File, 10);
+        left.mtime = Some(when);
+        let mut right = entry("a.txt", EntryKind::File, 10);
+        right.mtime = Some(when + Duration::from_secs(1));
+        for (panel, e) in [(0usize, left), (1usize, right)] {
+            app.handle_event(Event::Listed {
+                panel,
+                generation: app.panels[panel].listing.generation,
+                result: Ok(vec![e]),
+            });
+        }
+
+        // With no tolerance the right-hand copy is the newer one, and the only one marked.
+        app.run(Command::ToolCompareDirs);
+        assert_eq!(app.panels[0].selection.len(), 0);
+        assert_eq!(app.panels[1].selection.len(), 1);
+
+        // The dialog: two seconds of tolerance, which is what a FAT filesystem forces on
+        // anybody who copies to a memory stick.
+        app.run(Command::ToolCompare);
+        let Mode::Form(form) = &app.mode else {
+            panic!("no dialog: {:?}", app.mode)
+        };
+        assert_eq!(form.kind, crate::menu::FormKind::Compare);
+        set_text(&mut app, "compare.seconds", "2");
+        press(&mut app, "F10");
+        assert!(app.mode.is_normal(), "{}", app.status);
+        // Kept, so the next comparison is the one that was set up.
+        assert_eq!(app.cfg.compare.seconds, 2);
+        // And one second apart is now the same moment: nothing is marked at all.
+        assert_eq!(app.panels[1].selection.len(), 0, "{}", app.status);
+        assert_eq!(app.panels[0].selection.len(), 0);
+
+        // Everything that differs, rather than only the newer copy: both sides of the pair.
+        app.cfg.compare.seconds = 0;
+        app.cfg.compare.newer_only = false;
+        app.run(Command::ToolCompareDirs);
+        assert_eq!(app.panels[0].selection.len(), 1);
+        assert_eq!(app.panels[1].selection.len(), 1);
+
+        // And a number the dialog cannot make sense of keeps the dialog open and says so.
+        app.run(Command::ToolCompare);
+        set_text(&mut app, "compare.seconds", "soon");
+        press(&mut app, "F10");
+        assert!(matches!(app.mode, Mode::Form(_)), "the dialog closed");
+        assert!(!app.status.is_empty());
+    }
+
     /// The prompt is the configuration's, and `%GITBRANCH%` in it is the branch — which is
     /// the one thing a prompt in a repository is asked for and could not say.
     #[test]
@@ -17974,11 +18252,16 @@ run = ["echo one", "echo two", "echo three"]
             .take_requests()
             .into_iter()
             .find_map(|r| match r {
-                Request::CompareContents { id, pairs, cancel } => Some((id, pairs, cancel)),
+                Request::CompareContents {
+                    id,
+                    pairs,
+                    work,
+                    cancel,
+                } => Some((id, pairs, work, cancel)),
                 _ => None,
             })
             .expect("a comparison was asked for");
-        let (id, pairs, cancel) = request;
+        let (id, pairs, work, cancel) = request;
         // Three names are on both sides; the two that are not are not pairs.
         let mut names: Vec<&str> = pairs.iter().map(|p| p.name.as_str()).collect();
         names.sort_unstable();
@@ -17990,7 +18273,7 @@ run = ["echo one", "echo two", "echo three"]
         // The real worker, on this thread: the reading, the progress and the verdict are the
         // ones the binary runs, not a second implementation written for the test.
         let (tx, rx) = std::sync::mpsc::channel();
-        crate::run_compare(id, pairs, cancel, tx);
+        crate::run_compare(id, pairs, work, cancel, tx);
         let mut done = None;
         let mut progress = 0;
         while let Ok(event) = rx.try_recv() {

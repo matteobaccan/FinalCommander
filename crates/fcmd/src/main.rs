@@ -1039,9 +1039,14 @@ fn interactive(mut app: App) -> Result<()> {
                     // way of the runtime that is also serving the panels.
                     runtime.spawn_blocking(move || run_find(id, *spec, cancel, tx));
                 }
-                Request::CompareContents { id, pairs, cancel } => {
+                Request::CompareContents {
+                    id,
+                    pairs,
+                    work,
+                    cancel,
+                } => {
                     let tx = tx.clone();
-                    runtime.spawn_blocking(move || run_compare(id, pairs, cancel, tx));
+                    runtime.spawn_blocking(move || run_compare(id, pairs, work, cancel, tx));
                 }
                 Request::Checksums {
                     id,
@@ -2004,10 +2009,12 @@ fn run_verify(id: u64, list: &VPath, cancel: CancelToken, tx: mpsc::Sender<Event
 fn run_compare(
     id: u64,
     pairs: Vec<app::ComparePair>,
+    work: app::CompareWork,
     cancel: CancelToken,
     tx: mpsc::Sender<Event>,
 ) {
     use fcmd_find::FindFs;
+    use std::io::Read;
     let fs = fcmd_vfs::LocalVfs;
     let total = pairs.len() as u64;
     let mut differ = Vec::new();
@@ -2020,12 +2027,25 @@ fn run_compare(
             stopped = true;
             break;
         }
-        // Two different sizes are two different files, and the listing already said so.
-        let same = if pair.left_size != pair.right_size {
+        // Two different sizes are two different files, and the listing already said so —
+        // unless only a fragment is being read, where the question is whether the two
+        // *start* the same way and the rest of the file is beside the point.
+        let same = if pair.left_size != pair.right_size && work.fragment == 0 {
             Some(false)
         } else {
             match (fs.open(&pair.left), fs.open(&pair.right)) {
-                (Ok(mut left), Ok(mut right)) => {
+                (Ok(left), Ok(right)) => {
+                    // A fragment is a `take` on each side, so the comparison itself does not
+                    // have to know there is a limit.
+                    let (mut left, mut right): (Box<dyn Read>, Box<dyn Read>) = if work.fragment > 0
+                    {
+                        (
+                            Box::new(left.take(work.fragment)),
+                            Box::new(right.take(work.fragment)),
+                        )
+                    } else {
+                        (Box::new(left), Box::new(right))
+                    };
                     match fcmd_core::compare::same_contents(
                         &mut left,
                         &mut right,
@@ -2077,6 +2097,11 @@ fn run_compare(
         let done = index as u64 + 1;
         if done.is_multiple_of(8) || done == total {
             let _ = tx.send(Event::CompareProgress { id, done, total });
+        }
+        // "Stop on difference": the answer to "are these two the same at all" is already in,
+        // and the other nine thousand files need not be read for it.
+        if work.stop_on_first && (!differ.is_empty() || !line_endings.is_empty()) {
+            break;
         }
     }
 
@@ -3524,9 +3549,14 @@ timeout = 10
                     }
                 }
                 Request::TunnelOpen { .. } | Request::TunnelClose { .. } | Request::TunnelList => {}
-                Request::CompareContents { id, pairs, cancel } => {
+                Request::CompareContents {
+                    id,
+                    pairs,
+                    work,
+                    cancel,
+                } => {
                     let (tx, rx) = mpsc::channel();
-                    run_compare(id, pairs, cancel, tx);
+                    run_compare(id, pairs, work, cancel, tx);
                     while let Ok(event) = rx.try_recv() {
                         app.handle_event(event);
                     }
