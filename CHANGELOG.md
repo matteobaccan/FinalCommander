@@ -47,6 +47,11 @@ Notable changes, newest first. The format follows
   every other change. A dialog nobody touched writes nothing: the boxes are seeded from what
   the listing knows, and only what was changed is sent.
 
+- **Descriptions are read inside an archive.** A `descript.ion` in a container is an entry
+  like any other and the index is already in hand, so `Ctrl+6`, `Ctrl+7` and the information
+  panel show what it says in there as they do on the disk. Writing one back is a rebuild and
+  `Ctrl+Z` still says so.
+
 ### Changed
 
 - **The menu letters are FAR's own.** Every row the `F9` menus share with FAR now wears the

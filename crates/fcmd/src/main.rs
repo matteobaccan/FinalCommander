@@ -1175,8 +1175,9 @@ fn interactive(mut app: App) -> Result<()> {
                     // One small file, off the UI thread because it is still a read from a
                     // disk that may be a network share pretending to be one.
                     let tx = tx.clone();
+                    let archives = archives.clone();
                     runtime.spawn_blocking(move || {
-                        let descriptions = read_descriptions(&dir);
+                        let descriptions = read_descriptions(&dir, &archives);
                         let _ = tx.send(Event::Descriptions {
                             panel,
                             generation,
@@ -1188,7 +1189,8 @@ fn interactive(mut app: App) -> Result<()> {
                     runtime.spawn_blocking(move || write_descriptions(&dir, &descriptions));
                 }
                 Request::CarryDescriptions(carry) => {
-                    runtime.spawn_blocking(move || carry_descriptions(&carry));
+                    let archives = archives.clone();
+                    runtime.spawn_blocking(move || carry_descriptions(&carry, &archives));
                 }
                 Request::Mouse { on } => {
                     // A terminal that was never asked to report the mouse is not asked to
@@ -1666,11 +1668,41 @@ fn links_of(dir: &VPath, names: &[String]) -> std::collections::HashMap<String, 
 /// directory with neither has no descriptions, which is not an error and not worth a message.
 /// The text is decoded the way the viewer decodes a text file — a `descript.ion` written under
 /// DOS is in a DOS code page, and one written today is UTF-8.
-fn read_descriptions(dir: &VPath) -> fcmd_core::descriptions::Descriptions {
+fn read_descriptions(
+    dir: &VPath,
+    archives: &std::sync::Arc<fcmd_arc::Cache>,
+) -> fcmd_core::descriptions::Descriptions {
     use fcmd_core::descriptions::{Descriptions, DEFAULT_NAMES};
     const LIMIT: u64 = 4 * 1024 * 1024;
 
-    if !dir.is_local() || dir.in_container() {
+    // Inside an archive the file is an entry like any other, and the index has already been
+    // read: looking for it costs a lookup rather than a round trip, which is why a panel in
+    // a container may ask for descriptions at all.
+    if dir.in_container() {
+        let Ok((archive, inner)) = archives.open_in(dir, &CancelToken::new()) else {
+            return Descriptions::default();
+        };
+        for name in DEFAULT_NAMES {
+            let at = if inner == "/" {
+                format!("/{name}")
+            } else {
+                format!("{inner}/{name}")
+            };
+            let Some(entry) = archive.entry(&at) else {
+                continue;
+            };
+            if entry.kind == fcmd_core::EntryKind::Dir || entry.size > LIMIT {
+                continue;
+            }
+            let Ok(bytes) = archive.read(&at, &CancelToken::new()) else {
+                continue;
+            };
+            let codepage = fcmd_view::decode::detect(&bytes);
+            return Descriptions::parse(&codepage.decode(&bytes));
+        }
+        return Descriptions::default();
+    }
+    if !dir.is_local() {
         return Descriptions::default();
     }
     let here = dir.os();
@@ -1719,8 +1751,8 @@ fn write_descriptions(
 /// Read, change, write — both files, and only what changed. A directory whose descriptions
 /// did not change is not written at all, so a copy into a folder nobody has described leaves
 /// no file behind.
-fn carry_descriptions(carry: &app::Carry) {
-    let mut source = read_descriptions(&carry.from);
+fn carry_descriptions(carry: &app::Carry, archives: &std::sync::Arc<fcmd_arc::Cache>) {
+    let mut source = read_descriptions(&carry.from, archives);
     let mut moved: Vec<(String, String)> = Vec::new();
     for (there, here) in &carry.names {
         if let Some(text) = source.get(there) {
@@ -1732,7 +1764,7 @@ fn carry_descriptions(carry: &app::Carry) {
     }
     if let Some(to) = &carry.to {
         if !moved.is_empty() {
-            let mut target = read_descriptions(to);
+            let mut target = read_descriptions(to, archives);
             for (name, text) in &moved {
                 target.set(name, text);
             }
@@ -3111,6 +3143,61 @@ mod tests {
         assert!(printed.ends_with('\n'), "{printed:?}");
     }
 
+    /// A `descript.ion` inside an archive is an entry like any other, and the panel shows
+    /// what it says.
+    #[test]
+    fn descriptions_are_read_inside_an_archive_too() {
+        use std::io::Write;
+
+        let root = tempfile::tempdir().unwrap();
+        let left = root.path().join("left");
+        let right = root.path().join("right");
+        std::fs::create_dir_all(&left).unwrap();
+        std::fs::create_dir_all(&right).unwrap();
+        let zip = left.join("tree.zip");
+        {
+            let file = std::fs::File::create(&zip).unwrap();
+            let mut writer = zip::ZipWriter::new(file);
+            for (name, body) in [
+                ("readme.md", &b"# readme\n"[..]),
+                (
+                    "descript.ion",
+                    &b"readme.md what to read first inside the archive\n"[..],
+                ),
+            ] {
+                writer
+                    .start_file(name, zip::write::SimpleFileOptions::default())
+                    .unwrap();
+                writer.write_all(body).unwrap();
+            }
+            writer.finish().unwrap();
+        }
+
+        let mut app = app_on(&left, &right);
+        serve(&mut app);
+        // `Enter` on the archive is how a user gets in there, and it is what asks for the
+        // listing the descriptions then follow.
+        let row = (0..app.panels[0].listing.len())
+            .find(|i| {
+                app.panels[0]
+                    .listing
+                    .row(*i)
+                    .map(|e| e.name_str() == "tree.zip")
+                    .unwrap_or(false)
+            })
+            .expect("the archive is listed");
+        app.panels[0].cursor = row;
+        key(&mut app, "Enter");
+        serve(&mut app);
+        assert!(app.panels[0].cwd.in_container(), "{}", app.panels[0].cwd);
+        key(&mut app, "Ctrl+6");
+        serve(&mut app);
+        assert_eq!(
+            app.panels[0].descriptions.get("readme.md"),
+            Some("what to read first inside the archive")
+        );
+    }
+
     /// A directory's descriptions, end to end: the file on disk is read when a view that
     /// shows it is chosen, `Ctrl+Z` edits one, and the file comes back with it.
     #[test]
@@ -3948,7 +4035,8 @@ timeout = 10
                     generation,
                     dir,
                 } => {
-                    let descriptions = read_descriptions(&dir);
+                    let archives = std::sync::Arc::new(fcmd_arc::Cache::new(Default::default()));
+                    let descriptions = read_descriptions(&dir, &archives);
                     app.handle_event(Event::Descriptions {
                         panel,
                         generation,
@@ -3958,7 +4046,10 @@ timeout = 10
                 Request::WriteDescriptions { dir, descriptions } => {
                     let _ = write_descriptions(&dir, &descriptions);
                 }
-                Request::CarryDescriptions(carry) => carry_descriptions(&carry),
+                Request::CarryDescriptions(carry) => carry_descriptions(
+                    &carry,
+                    &std::sync::Arc::new(fcmd_arc::Cache::new(Default::default())),
+                ),
                 Request::Job { id, spec, cancel } => {
                     let (tx, rx) = mpsc::channel();
                     // The archive layer, as the program has it: a job whose source is inside

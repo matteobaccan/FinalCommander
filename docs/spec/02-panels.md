@@ -658,9 +658,9 @@ ends and only if the job really did something: a cancelled copy must not leave a
 pointing at a file that never arrived. A job whose sources came from several directories at
 once — a list gathered from a search — carries none of them, which is a backlog line.
 
-**What is still owed**: sorting by description (`Ctrl+F11`), descriptions inside an archive or
-on a server, carrying one out of a search result list, and the settings FAR has for which names
-to look for and whether to write UTF-8.
+**What is still owed**: descriptions on a server, writing one inside an archive, carrying one
+out of a search result list, and the settings FAR has for which names to look for and whether
+to write UTF-8.
 
 ## 14. The panels that are not drives (shipped in 0.8.0)
 

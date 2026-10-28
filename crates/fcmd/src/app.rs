@@ -4571,7 +4571,10 @@ impl App {
             || self.panels[panel].sort.asks(SortKey::Descr)
             || self.panels[1 - panel].content == crate::panel::Content::Info;
         let p = &self.panels[panel];
-        if !shown || p.temp.is_some() || !p.cwd.is_local() || p.cwd.in_container() {
+        // A list panel has no directory to read one from, and a server would be a round trip
+        // per directory for a file nobody may have. Inside an archive the index is already
+        // here, so the lookup is free and the descriptions show as they do on the disk.
+        if !shown || p.temp.is_some() || (!p.cwd.is_local() && !p.cwd.in_container()) {
             return;
         }
         self.requests.push(Request::Descriptions {
