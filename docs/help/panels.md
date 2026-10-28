@@ -63,7 +63,10 @@ time, the information panel (`Ctrl+L`) spells out the one under the cursor, and 
 own status line shows it beside the size and the date.
 
 The file travels with the directory, which is the point of it: a folder copied to a memory
-stick takes its descriptions along, as long as whatever copied it knew to carry the file.
+stick takes its descriptions along. And a description follows its file: `F5` writes one at the
+other end as well, `F6` takes it with the file, a rename takes it to the new name, and `F8`
+takes it away — a description that outlived its file would land on the next file to be given
+that name.
 *Options → Panel settings* turns the whole habit off for somebody who keeps no descriptions.
 
 `Ctrl+R` re-reads. `Ctrl+L` turns the other panel into an information panel — what the device

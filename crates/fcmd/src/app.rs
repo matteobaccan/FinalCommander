@@ -100,6 +100,9 @@ pub enum Request {
         dir: VPath,
         descriptions: fcmd_core::descriptions::Descriptions,
     },
+    /// Carry descriptions after a job that moved, copied or deleted files (SPEC 02 §13): the
+    /// lines follow what they describe, or go when it goes.
+    CarryDescriptions(Box<Carry>),
     /// Decide about every pair in two trees. Nothing is written: the answer is a table.
     SyncPlan {
         id: u64,
@@ -1224,6 +1227,23 @@ impl PluginCommand {
     }
 }
 
+/// What a job has to do to the descriptions once it has succeeded.
+///
+/// Recorded when the job starts, because that is when what it is about is known, and acted on
+/// when it ends, because a description must not follow a file that never arrived.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Carry {
+    /// The directory the sources were in.
+    pub from: VPath,
+    /// Where they went. `None` for a delete, which only takes lines away.
+    pub to: Option<VPath>,
+    /// What each one was called there, and what it is called here — the two differ only for
+    /// a rename, which is a move onto a name of its own.
+    pub names: Vec<(String, String)>,
+    /// A copy leaves the line where it was; a move and a delete do not.
+    pub keep: bool,
+}
+
 pub struct Startup {
     pub cfg: Config,
     pub paths: Paths,
@@ -1423,6 +1443,9 @@ pub struct App {
     /// A replacement runs twice: once to count, and then, if the user says so, for real. This
     /// is the real one, waiting for the count to come back.
     pending_replace: Option<JobSpec>,
+    /// What the running job will do to the descriptions once it has succeeded (SPEC 02 §13).
+    /// One job runs at a time from the panels' point of view, so one is enough.
+    carry: Option<(u64, Carry)>,
     /// Which group gives a file its colour. Compiled once: it parses mask lists.
     pub highlight: fcmd_ui::Highlight,
     /// The `[[sort_group]]` bands, as every panel and every new tab gets them.
@@ -1593,6 +1616,7 @@ impl App {
             last_pack_level: fcmd_arc::Level::Normal,
             last_replace: fcmd_jobs::ReplaceOptions::default(),
             pending_replace: None,
+            carry: None,
             highlight,
             sort_groups,
             menu_levels: Vec::new(),
@@ -4192,6 +4216,9 @@ impl App {
         self.next_job_id += 1;
         let cancel = CancelToken::new();
         let kind = spec.kind;
+        // What this will do to the descriptions, worked out now: the sources and the target
+        // are here, and by the time it ends the panels may be somewhere else.
+        self.carry = self.carry_for(&spec).map(|c| (id, c));
         self.mode = Mode::Job(Box::new(JobView {
             id,
             kind,
@@ -4201,6 +4228,85 @@ impl App {
             choice: 0,
         }));
         self.requests.push(Request::Job { id, spec, cancel });
+    }
+
+    /// What a job will do to the descriptions, or `None` when it does nothing to them.
+    ///
+    /// Only the sources the user chose: a directory taken whole carries its own
+    /// `descript.ion` along with everything else in it, so what needs carrying is the line
+    /// about the directory itself, which lives in its parent's file.
+    fn carry_for(&self, spec: &JobSpec) -> Option<Carry> {
+        use fcmd_jobs::JobKind;
+
+        if !self.cfg.panel.descriptions || spec.sources.is_empty() {
+            return None;
+        }
+        let keep = match spec.kind {
+            JobKind::Copy => true,
+            JobKind::Move | JobKind::Delete | JobKind::Wipe | JobKind::Trash => false,
+            // Everything else leaves the names where they are: a new directory has nothing
+            // described yet, an archive is a file of its own, a replacement rewrites bytes.
+            _ => return None,
+        };
+        let from = spec.sources[0].parent()?;
+        if !from.is_local() || from.in_container() {
+            return None;
+        }
+        // Every source has to come from the one directory the panel was showing; a list
+        // gathered from a search can hold several, and carrying those is a backlog line.
+        if spec
+            .sources
+            .iter()
+            .any(|s| s.parent().as_ref() != Some(&from))
+        {
+            return None;
+        }
+        let target = match spec.kind {
+            JobKind::Copy | JobKind::Move => spec.target.clone(),
+            _ => None,
+        };
+        // A move onto a name of its own is a rename: the target is the new name, not a
+        // directory to put the old one in. That is the one case the two names differ.
+        let (to, names) = match target {
+            Some(t) if spec.sources.len() == 1 && !self.looks_like_dir(&t) => {
+                let parent = t.parent()?;
+                (
+                    Some(parent),
+                    vec![(spec.sources[0].display_name(), t.display_name())],
+                )
+            }
+            Some(t) => (
+                Some(t),
+                spec.sources
+                    .iter()
+                    .map(|s| (s.display_name(), s.display_name()))
+                    .collect(),
+            ),
+            None => (
+                None,
+                spec.sources
+                    .iter()
+                    .map(|s| (s.display_name(), s.display_name()))
+                    .collect(),
+            ),
+        };
+        if let Some(to) = &to {
+            if !to.is_local() || to.in_container() {
+                return None;
+            }
+        }
+        Some(Carry {
+            from,
+            to,
+            names,
+            keep,
+        })
+    }
+
+    /// Does this path name a directory that is there? A copy into one puts the sources in it;
+    /// anything else is a name to write, which is what a rename is.
+    fn looks_like_dir(&self, path: &VPath) -> bool {
+        path.is_local() && !path.in_container() && path.os().is_dir()
     }
 
     // ── what to run for a kind of file (SPEC 06 §5) ─────────────────────────────────────
@@ -5318,6 +5424,17 @@ impl App {
             self.read_panel(0);
             self.read_panel(1);
             return;
+        }
+
+        // The descriptions follow what the job moved, copied or deleted — but only what it
+        // really did: a job that was cancelled or that failed outright must not leave a line
+        // pointing at a file that never arrived, or take one away from a file still there.
+        if let Some((job, carry)) = self.carry.take() {
+            let did_something = outcome.files > 0 || outcome.dirs > 0 || outcome.renamed > 0;
+            if job == id && !outcome.cancelled && did_something {
+                self.requests
+                    .push(Request::CarryDescriptions(Box::new(carry)));
+            }
         }
 
         let kind_label = self.kind_label(kind);

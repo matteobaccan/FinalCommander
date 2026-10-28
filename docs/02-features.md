@@ -82,7 +82,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 3.14 | ~~Compare directories (by name/size/date/content), synchronise directories with preview and one-way/two-way modes~~ | TC/KRU | **shipped**; comparing subfolders in the *compare* command, and a saved sync job, still to come |
 | 3.15 | Compare files by content (internal diff viewer, side-by-side, word-level) | MC/KRU | M3 |
 | 3.16 | Change encoding / line endings in bulk (CRLF↔LF, codepage recode) | MC | M3 |
-| 3.17 | ~~File descriptions/comments (`descript.ion`, `files.bbs`)~~ | FAR | **shipped** (0.7.3): read, shown in two views, `Ctrl+Z` writes one. The job engine carrying them is still owed |
+| 3.17 | ~~File descriptions/comments (`descript.ion`, `files.bbs`)~~ | FAR | **shipped** (0.7.3): read, shown in two views, `Ctrl+Z` writes one, and the jobs carry them |
 | 3.18 | Undo for destructive operations where the FS allows (trash-based) | NEW | M3 |
 | 3.19 | Elevated operations (UAC / `sudo` / `pkexec` helper) for privileged paths | FAR/KRU | M3 |
 
@@ -244,7 +244,7 @@ Found by reading FAR's own help and configuration tables; the detail is in
 | 9b.3 | Filters as one shared object used by the panel display, by find and by copy: mask, size range (binary and decimal suffixes), date range on any of four timestamps, absolute or relative in days, attributes as three-state include/exclude/ignore, more-than-one-hard-link | FAR/KRU | M2 |
 | 9b.4 | Mask groups (`<arc>`, `<temp>`, `<exec>`, nestable) and the full mask grammar: character ranges, `/regex/i`, `include|exclude` | FAR | M2 |
 | 9b.5 | Four histories (commands, folders, view/edit, dialogs), each with a size and a lifetime in days, persisted, with items that can be locked so new entries do not evict them | FAR | **Three of the four shipped: commands and folders earlier, the files read or edited in 0.7.0** (`Alt+F11`, `ui.file_history`), all persisted in the state file. A lifetime in days, locked items, filtering as one types and a history for dialog fields: M3 |
-| 9b.6 | ~~File descriptions (`descript.ion`, `files.bbs`): edit, display as a column~~, carry through copy/move/rename/delete, show the folder's own description file in the info panel | FAR/NC | **mostly shipped** (0.7.3): `Ctrl+Z` edits, `Ctrl+6`/`Ctrl+7` show, the information panel and the status line spell one out. Carrying them through a copy, a move, a rename and a delete is the half still owed |
+| 9b.6 | ~~File descriptions (`descript.ion`, `files.bbs`): edit, display as a column, carry through copy/move/rename/delete, show the folder's own description file in the info panel~~ | FAR/NC | **shipped** (0.7.3): `Ctrl+Z` edits, `Ctrl+6`/`Ctrl+7` show, the information panel and the status line spell one out, and a description follows a copy, a move, a rename and a delete |
 | 9b.7 | Copy dialog depth: several destinations, append to existing, only-newer as a policy, copy symlink contents, a filter on the operation, destination from the folder tree, speed and ETA | FAR | M2 |
 | 9b.8 | Metasymbol language for the user menu, file associations and apply-command: name forms, the selected-file list as a file or inline, path forms, resolved paths, the description, a prompt with history, panel-switching prefixes, and quoting/case/encoding modifiers | FAR | M2 |
 | 9b.9 | Command prefixes on the command line (`view:`, `edit:`, `goto:`, `clip:`, `whereis:`, `link:`, `run:`), as FAR's `farcmds` does | FAR | M2 |

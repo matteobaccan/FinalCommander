@@ -24,8 +24,13 @@ Notable changes, newest first. The format follows
   page — and written back in UTF-8; both of FAR's names are looked for, `descript.ion` first
   and then `files.bbs`. It is read only while something on screen shows a description, because
   a side file nobody is looking at is a round trip per directory on a network share;
-  `panel.descriptions = false` turns the habit off altogether. Still owed, and a backlog line:
-  the job engine carrying a description through a copy, a move, a rename and a delete.
+  `panel.descriptions = false` turns the habit off altogether.
+
+  **And the descriptions follow what they describe**: a copy leaves the line where it was and
+  writes one at the other end, a move takes it with it, a rename takes it to the new name, and
+  a delete takes it away — a description that outlived its file would land on the next file to
+  be given that name. Only if the job really did something, so a cancelled copy leaves no
+  description pointing at a file that never arrived.
 
 ## [0.7.2] — 2026-10-28
 

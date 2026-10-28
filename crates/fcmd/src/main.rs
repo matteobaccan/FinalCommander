@@ -1107,6 +1107,9 @@ fn interactive(mut app: App) -> Result<()> {
                 Request::WriteDescriptions { dir, descriptions } => {
                     runtime.spawn_blocking(move || write_descriptions(&dir, &descriptions));
                 }
+                Request::CarryDescriptions(carry) => {
+                    runtime.spawn_blocking(move || carry_descriptions(&carry));
+                }
                 Request::Mouse { on } => {
                     // A terminal that was never asked to report the mouse is not asked to
                     // stop, and one that is already reporting is not asked twice: `set_mouse`
@@ -1608,6 +1611,42 @@ fn write_descriptions(
         };
     }
     std::fs::write(&path, descriptions.to_text()).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+/// Carry descriptions after a job: the lines follow what they describe, or go when it goes.
+///
+/// Read, change, write — both files, and only what changed. A directory whose descriptions
+/// did not change is not written at all, so a copy into a folder nobody has described leaves
+/// no file behind.
+fn carry_descriptions(carry: &app::Carry) {
+    let mut source = read_descriptions(&carry.from);
+    let mut moved: Vec<(String, String)> = Vec::new();
+    for (there, here) in &carry.names {
+        if let Some(text) = source.get(there) {
+            moved.push((here.clone(), text.to_string()));
+        }
+    }
+    if moved.is_empty() && carry.keep {
+        return; // nothing described, nothing to carry
+    }
+    if let Some(to) = &carry.to {
+        if !moved.is_empty() {
+            let mut target = read_descriptions(to);
+            for (name, text) in &moved {
+                target.set(name, text);
+            }
+            let _ = write_descriptions(to, &target);
+        }
+    }
+    if !carry.keep {
+        let mut changed = false;
+        for (there, _) in &carry.names {
+            changed |= source.remove(there).is_some();
+        }
+        if changed {
+            let _ = write_descriptions(&carry.from, &source);
+        }
+    }
 }
 
 fn run_decompiler(rule: &fcmd_config::DecompileRule, path: &VPath) -> Result<String, String> {
@@ -2624,6 +2663,97 @@ mod tests {
         assert_eq!(written, "readme.md what to read first\n");
     }
 
+    /// A description follows what it describes: a copy leaves one behind and puts one at the
+    /// other end, a move takes it with it, a delete takes it away.
+    #[test]
+    fn a_description_follows_a_copy_a_move_and_a_delete() {
+        let root = tempfile::tempdir().unwrap();
+        let left = root.path().join("left");
+        let right = root.path().join("right");
+        std::fs::create_dir_all(&left).unwrap();
+        std::fs::create_dir_all(&right).unwrap();
+        std::fs::write(left.join("notes.txt"), b"hello\n").unwrap();
+        std::fs::write(left.join("descript.ion"), "notes.txt what it is\n").unwrap();
+
+        let described = |dir: &std::path::Path| -> String {
+            std::fs::read_to_string(dir.join("descript.ion")).unwrap_or_default()
+        };
+
+        let mut app = app_on(&left, &right);
+        serve(&mut app);
+        let row = (0..app.panels[0].listing.len())
+            .find(|i| {
+                app.panels[0]
+                    .listing
+                    .row(*i)
+                    .map(|e| e.name_str() == "notes.txt")
+                    .unwrap_or(false)
+            })
+            .expect("notes.txt is listed");
+        app.panels[0].cursor = row;
+
+        // `F5`, and the description is at both ends: the file is in two places now. Twice,
+        // because the job's own end is what asks for the descriptions to be carried, and
+        // `serve` drains the queue once.
+        key(&mut app, "F5");
+        key(&mut app, "Enter");
+        serve(&mut app);
+        serve(&mut app);
+        assert!(right.join("notes.txt").is_file(), "the copy was made");
+        assert_eq!(described(&right), "notes.txt what it is\n");
+        assert_eq!(described(&left), "notes.txt what it is\n");
+
+        // `F6` out of the way and back: the line goes with the file rather than staying.
+        std::fs::remove_file(right.join("notes.txt")).unwrap();
+        std::fs::remove_file(right.join("descript.ion")).unwrap();
+        serve(&mut app);
+        key(&mut app, "Ctrl+R");
+        serve(&mut app);
+        let row = (0..app.panels[0].listing.len())
+            .find(|i| {
+                app.panels[0]
+                    .listing
+                    .row(*i)
+                    .map(|e| e.name_str() == "notes.txt")
+                    .unwrap_or(false)
+            })
+            .expect("notes.txt is still listed");
+        app.panels[0].cursor = row;
+        key(&mut app, "F6");
+        key(&mut app, "Enter");
+        serve(&mut app);
+        serve(&mut app);
+        assert!(right.join("notes.txt").is_file(), "the move was made");
+        assert_eq!(described(&right), "notes.txt what it is\n");
+        assert_eq!(
+            described(&left),
+            "",
+            "a moved file leaves no description behind"
+        );
+
+        // And a delete takes the line with the file: a description that outlived its file
+        // would land on the next file to be given that name.
+        app.active = 1;
+        key(&mut app, "Ctrl+R");
+        serve(&mut app);
+        let row = (0..app.panels[1].listing.len())
+            .find(|i| {
+                app.panels[1]
+                    .listing
+                    .row(*i)
+                    .map(|e| e.name_str() == "notes.txt")
+                    .unwrap_or(false)
+            })
+            .expect("notes.txt arrived");
+        app.panels[1].cursor = row;
+        key(&mut app, "F8");
+        key(&mut app, "Enter");
+        serve(&mut app);
+        serve(&mut app);
+        assert!(!right.join("notes.txt").exists(), "the delete happened");
+        assert_eq!(described(&right), "");
+    }
+
     /// A plugin on disk, a command it provides, and the whole conversation: the manifest is
     /// loaded the way the binary loads one, the program is a real script, and what it asks for
     /// is carried out. This is the half of the plugin host API that no unit test reaches.
@@ -3290,6 +3420,7 @@ timeout = 10
                 Request::WriteDescriptions { dir, descriptions } => {
                     let _ = write_descriptions(&dir, &descriptions);
                 }
+                Request::CarryDescriptions(carry) => carry_descriptions(&carry),
                 Request::Job { id, spec, cancel } => {
                     let (tx, rx) = mpsc::channel();
                     // The archive layer, as the program has it: a job whose source is inside

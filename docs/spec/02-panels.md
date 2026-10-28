@@ -531,6 +531,16 @@ it. An empty answer takes the line away — there is no second key for removing 
 shows the new text at once and the file is written behind it; a directory left with nothing to
 say loses the file rather than keeping an empty one.
 
-**What is still owed**: the job engine carrying a description through a copy, a move, a rename
-and a delete (SPEC 03 §7), sorting by description (`Ctrl+F11`), and the settings FAR has for
-which names to look for and whether to write UTF-8.
+**Carrying one.** A description follows what it describes: a copy leaves the line where it was
+and writes one at the other end, a move takes it with it, a rename takes it to the new name,
+and a delete takes it away — a description that outlived its file would land on the next file
+to be given that name. Only the sources the user chose are carried, because a directory taken
+whole carries its own `descript.ion` along with everything inside it; what needs carrying is
+the line about the directory itself, which lives in its parent's file. It happens when the job
+ends and only if the job really did something: a cancelled copy must not leave a description
+pointing at a file that never arrived. A job whose sources came from several directories at
+once — a list gathered from a search — carries none of them, which is a backlog line.
+
+**What is still owed**: sorting by description (`Ctrl+F11`), descriptions inside an archive or
+on a server, carrying one out of a search result list, and the settings FAR has for which names
+to look for and whether to write UTF-8.
