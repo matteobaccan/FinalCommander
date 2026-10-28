@@ -16,12 +16,14 @@ mod programs;
 mod socket;
 #[cfg(unix)]
 mod unix;
+mod volume;
 #[cfg(windows)]
 mod windows;
 
 pub use process::{details, processes, Details, Process};
 pub use programs::{programs, Program};
 pub use socket::{sockets, Socket};
+pub use volume::{volume, Volume, VolumeKind};
 
 use std::path::Path;
 

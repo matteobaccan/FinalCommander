@@ -21,7 +21,7 @@ pub const DEFAULT: &str = "$p$r$g ";
 ///
 /// `branch` is the repository's current branch where the directory is in one; nothing in the
 /// format asks the disk, so this function is pure and the lookup is somebody else's job.
-pub fn expand(format: &str, cwd: &VPath, branch: Option<&str>) -> String {
+pub fn expand(format: &str, cwd: &VPath, branch: Option<&str>, pushed: usize) -> String {
     /// The plugin's own spelling of the branch, which is what somebody who used it will try
     /// first. Matched without regard to case, like everything else in a format.
     const BRANCH: &str = "%gitbranch%";
@@ -97,9 +97,9 @@ pub fn expand(format: &str, cwd: &VPath, branch: Option<&str>) -> String {
             'h' => {
                 out.pop();
             }
-            // FAR counts the `pushd` stack here. There is no directory stack in this program,
-            // so it counts nothing rather than pretending.
-            '+' => {}
+            // One plus per directory on `pushd`'s stack, which is what `cmd.exe` writes and
+            // what FAR copies: the prompt says how far in one has gone.
+            '+' => out.push_str(&"+".repeat(pushed)),
             '$' => out.push('$'),
             // An unknown letter is left as it was written, so a typo in the configuration is
             // visible rather than silently swallowed.
@@ -231,54 +231,57 @@ mod tests {
     #[test]
     fn the_default_is_the_path_the_branch_and_a_sign() {
         let cwd = VPath::local("/home/mb/project");
-        let text = expand(DEFAULT, &cwd, None);
+        let text = expand(DEFAULT, &cwd, None, 0);
         assert!(text.starts_with(&cwd.to_string()), "{text:?}");
         assert!(text.ends_with("> "), "{text:?}");
         // In a repository the branch is in it, in brackets, and outside one the brackets are
         // not there either — which is the whole point of the letter.
-        let text = expand(DEFAULT, &cwd, Some("work"));
+        let text = expand(DEFAULT, &cwd, Some("work"), 0);
         assert!(text.ends_with(" (work)> "), "{text:?}");
-        assert_eq!(expand("$r", &cwd, Some("")), "");
+        assert_eq!(expand("$r", &cwd, Some(""), 0), "");
     }
 
     #[test]
     fn the_letters_far_takes_are_the_letters_we_take() {
         let cwd = VPath::local("/home/mb/project");
-        assert_eq!(expand("$w$g", &cwd, None), "project>");
-        assert_eq!(expand("$n", &cwd, None), "/");
-        assert_eq!(expand("$c$w$f", &cwd, None), "(project)");
-        assert_eq!(expand("$a$b$q$l", &cwd, None), "&|=<");
-        assert_eq!(expand("a$sb", &cwd, None), "a b");
-        assert_eq!(expand("$$", &cwd, None), "$");
+        assert_eq!(expand("$w$g", &cwd, None, 0), "project>");
+        assert_eq!(expand("$n", &cwd, None, 0), "/");
+        assert_eq!(expand("$c$w$f", &cwd, None, 0), "(project)");
+        assert_eq!(expand("$a$b$q$l", &cwd, None, 0), "&|=<");
+        assert_eq!(expand("a$sb", &cwd, None, 0), "a b");
+        assert_eq!(expand("$$", &cwd, None, 0), "$");
         // The case of the letter is not the letter.
-        assert_eq!(expand("$W$G", &cwd, None), "project>");
+        assert_eq!(expand("$W$G", &cwd, None, 0), "project>");
         // A letter nobody knows is left as it was typed, so a mistake can be seen.
-        assert_eq!(expand("$z", &cwd, None), "$z");
+        assert_eq!(expand("$z", &cwd, None, 0), "$z");
+        // One plus per directory `pushd` has put away, as `cmd.exe` writes it.
+        assert_eq!(expand("$+$g", &cwd, None, 3), "+++>");
+        assert_eq!(expand("$+$g", &cwd, None, 0), ">");
         // The date and the time are there, in the shape they are asked for.
-        assert_eq!(expand("$d", &cwd, None).len(), 10);
-        assert_eq!(expand("$t", &cwd, None).len(), 5);
+        assert_eq!(expand("$d", &cwd, None, 0).len(), 10);
+        assert_eq!(expand("$t", &cwd, None, 0).len(), 5);
     }
 
     #[test]
     fn the_branch_goes_in_the_prompt_the_way_the_plugin_spells_it() {
         let cwd = VPath::local("/home/mb/project");
         assert_eq!(
-            expand("$w $c%GITBRANCH%$f$g", &cwd, Some("main")),
+            expand("$w $c%GITBRANCH%$f$g", &cwd, Some("main"), 0),
             "project (main)>"
         );
         // Outside a repository it says nothing, and `$h` takes the decoration back out: the
         // bracket, the space, and then the sign is written again.
-        assert_eq!(expand("$w$s%GITBRANCH%$g", &cwd, None), "project >");
-        assert_eq!(expand("%gitbranch%", &cwd, Some("work")), "work");
+        assert_eq!(expand("$w$s%GITBRANCH%$g", &cwd, None, 0), "project >");
+        assert_eq!(expand("%gitbranch%", &cwd, Some("work"), 0), "work");
         // A lone percent is a percent.
-        assert_eq!(expand("100%", &cwd, None), "100%");
+        assert_eq!(expand("100%", &cwd, None, 0), "100%");
     }
 
     #[test]
     fn a_remote_path_keeps_its_authority_as_the_root() {
         let cwd = VPath::parse("sftp://mb@host:22/srv/www");
-        assert_eq!(expand("$n", &cwd, None), "sftp://mb@host:22");
-        assert_eq!(expand("$w", &cwd, None), "www");
+        assert_eq!(expand("$n", &cwd, None, 0), "sftp://mb@host:22");
+        assert_eq!(expand("$w", &cwd, None, 0), "www");
     }
 
     /// This repository is one, so the branch is readable from inside the tests.

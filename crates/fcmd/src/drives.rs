@@ -160,28 +160,41 @@ fn platform() -> Vec<Drive> {
 
 #[cfg(windows)]
 fn platform() -> Vec<Drive> {
-    // The letters that exist, with the two sizes filled in below like every other platform's.
-    // What is still missing — the kind of drive and its label — is `GetDriveTypeW` and
-    // `GetVolumeInformationW`, which belong beside the rest in `fcmd-platform`; the dialog
-    // leaves those two columns empty rather than guessing.
+    // Every letter the system will describe, which is not the same as every letter that can
+    // be opened: a CD drive with nothing in it answers `GetDriveTypeW` and refuses
+    // everything else, and FAR lists it — that is what its "show CD-ROM" switch is about.
     (b'A'..=b'Z')
         .map(|letter| format!("{}:\\", letter as char))
-        .filter(|path| std::path::Path::new(path).exists())
-        .map(|path| {
+        .filter_map(|path| {
+            let volume = fcmd_platform::volume(std::path::Path::new(&path))?;
+            let kind = match volume.kind? {
+                fcmd_platform::VolumeKind::Removable => Kind::Removable,
+                fcmd_platform::VolumeKind::Fixed => Kind::Fixed,
+                fcmd_platform::VolumeKind::Network => Kind::Network,
+                fcmd_platform::VolumeKind::Optical => Kind::Optical,
+                fcmd_platform::VolumeKind::Memory => Kind::Memory,
+                // "Cannot say" and "there is no such root" are both "there is no drive
+                // here", and a row for it would be a row that goes nowhere.
+                fcmd_platform::VolumeKind::Unknown => return None,
+            };
             let mut drive = Drive {
                 path,
-                kind: Kind::Fixed,
-                label: None,
-                fs: None,
-                // What a mapped letter is a mapping *of* wants `WNetGetConnectionW`, which
-                // belongs beside the rest in `fcmd-platform`; until it is there the column
-                // is empty rather than wrong.
-                device: None,
+                kind,
+                label: volume.label,
+                fs: volume.fs,
+                // The share behind a mapped letter, which is the one thing a letter does not
+                // say about itself.
+                device: volume.share,
                 total: None,
                 free: None,
             };
-            fill_space(&mut drive);
-            drive
+            // Only a drive with something in it is asked how big it is. Asking an empty one
+            // is what puts "There is no disk in the drive" on the screen, in a dialog box,
+            // in front of whatever the user was doing.
+            if volume.ready {
+                fill_space(&mut drive);
+            }
+            Some(drive)
         })
         .collect()
 }

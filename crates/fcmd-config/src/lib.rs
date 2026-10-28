@@ -529,7 +529,8 @@ pub struct CmdLineCfg {
     /// The letters are FAR's — `$p` the path, `$w` its last part, `$n` the drive or the
     /// server, `$g` `>`, `$l` `<`, `$a` `&`, `$b` `|`, `$c` `(`, `$f` `)`, `$q` `=`, `$s` a
     /// space, `$d` the date, `$t` the time, `$@` a marker for an elevated session, `$h` a
-    /// backspace, `$$` a `$` — with two of our own for the repository one is in: `$r` is
+    /// backspace, `$+` one plus per directory `pushd` has put away, `$$` a `$` — with two of
+    /// our own for the repository one is in: `$r` is
     /// ` (branch)` inside a repository and nothing outside one, and `%GITBRANCH%` is the
     /// bare branch name, spelled the way the plugin everybody installs spells it. Empty
     /// means the default.

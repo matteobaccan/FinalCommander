@@ -10986,7 +10986,7 @@ impl App {
         } else {
             None
         };
-        crate::prompt::expand(&format, &cwd, branch.as_deref())
+        crate::prompt::expand(&format, &cwd, branch.as_deref(), self.cmd.dirs.len())
     }
 
     /// Build the drive dialog again after one of its switches, keeping the cursor on the row

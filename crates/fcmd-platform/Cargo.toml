@@ -37,6 +37,8 @@ windows-sys = { version = "0.61", features = [
   "Win32_NetworkManagement_IpHelper",
   # What is installed: the key the Control Panel's own list of programs reads.
   "Win32_System_Registry",
+  # What a drive letter *is*: `WNetGetConnectionW` for the share behind a mapped one.
+  "Win32_NetworkManagement_WNet",
   "Win32_System_ProcessStatus",
   "Win32_System_Threading",
 ] }

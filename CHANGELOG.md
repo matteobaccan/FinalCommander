@@ -20,6 +20,17 @@ Notable changes, newest first. The format follows
 
 - The search engine's walker takes a **depth limit**, which is what makes that possible.
 
+- **The drive dialog's columns are filled on Windows too.** The type, the label and the
+  filesystem were empty there — which made three of the dialog's own switches switch nothing —
+  because the standard library makes none of those calls. It asks for them now
+  (`GetDriveTypeW`, `GetVolumeInformationW`), and for the share behind a mapped letter
+  (`WNetGetConnectionW`), which is what the device column shows there. A letter is listed when
+  the system will describe it at all, so an empty CD drive keeps its row; a drive that is not
+  ready is not asked how big it is, because that is what puts *There is no disk in the drive*
+  on the screen.
+
+- **`$+` in the prompt** counts the directories `pushd` has put away, as `cmd.exe` writes it.
+
 - **`F9` in the change-drive dialog** opens its switches as a dialog of boxes, as it does in
   FAR, with each row naming the `Ctrl` key it is — the keys are faster for anybody who knows
   them, and this is how one finds out they are there. `OK` keeps them and brings the list back

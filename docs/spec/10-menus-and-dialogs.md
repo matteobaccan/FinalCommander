@@ -360,7 +360,16 @@ panel there; for a connection that is configured but not open, it connects first
 
 It is a table rather than a list, laid out the way FAR lays it out: the path, then a space, then
 the columns with a rule between each pair of them — the kind of thing it is, the device, the
-label, the filesystem, the size and the free space. The words read from the left and the two
+label, the filesystem, the size and the free space.
+
+Where those answers come from is per platform. Unix has them all in the mount table, which is a
+file. Windows has them in three calls: `GetDriveTypeW` says what the letter is (fixed,
+removable, optical, network, a RAM disk), `GetVolumeInformationW` gives the label and the
+filesystem, and `WNetGetConnectionW` gives the share behind a mapped letter, which is what the
+device column shows there. A letter is listed when the first of those answers at all, so a CD
+drive with nothing in it keeps its row — that is what `Ctrl+8` is for — and a drive that is not
+ready is **not** asked how big it is, because on Windows asking an empty drive puts *There is
+no disk in the drive* on the screen, in a dialog, in front of whatever one was doing. The words read from the left and the two
 sizes from the right. A column nothing filled takes no room at all.
 
 Under a rule across the frame come the rows that are not drives: the open connections, the

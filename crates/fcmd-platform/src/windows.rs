@@ -520,6 +520,80 @@ pub fn sockets() -> Vec<super::Socket> {
     out
 }
 
+/// What a drive letter is: the kind of device, its label, its filesystem, and the share behind
+/// it where it is a mapped one.
+///
+/// Three calls, each allowed to fail on its own. An empty CD drive answers the first and
+/// refuses the second, which is not an error — it is why the columns are optional.
+#[cfg(windows)]
+pub fn volume(path: &Path) -> Option<super::Volume> {
+    use windows_sys::Win32::Foundation::{ERROR_SUCCESS, MAX_PATH};
+    use windows_sys::Win32::NetworkManagement::WNet::WNetGetConnectionW;
+    use windows_sys::Win32::Storage::FileSystem::{GetDriveTypeW, GetVolumeInformationW};
+
+    let root = wide(path);
+    // SAFETY: `root` is a NUL-terminated wide string that outlives the call, which returns
+    // one of the documented `DRIVE_*` numbers and cannot fail otherwise.
+    let kind = match unsafe { GetDriveTypeW(root.as_ptr()) } {
+        // The numbers `GetDriveTypeW` documents. They are written out because the constants
+        // live behind a feature of their own, and they have not moved since Windows 95.
+        2 => Some(super::VolumeKind::Removable),
+        3 => Some(super::VolumeKind::Fixed),
+        4 => Some(super::VolumeKind::Network),
+        5 => Some(super::VolumeKind::Optical),
+        6 => Some(super::VolumeKind::Memory),
+        // 0 is "cannot say" and 1 is "there is no such root": both mean no answer.
+        _ => None,
+    };
+
+    let mut label = vec![0u16; MAX_PATH as usize + 1];
+    let mut fs = vec![0u16; MAX_PATH as usize + 1];
+    // SAFETY: both buffers are as long as the counts passed with them, the three outputs we
+    // do not want are null, and the call writes at most that many characters into each.
+    let described = unsafe {
+        GetVolumeInformationW(
+            root.as_ptr(),
+            label.as_mut_ptr(),
+            label.len() as u32,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            fs.as_mut_ptr(),
+            fs.len() as u32,
+        )
+    } != 0;
+    let text = |buffer: &[u16]| -> Option<String> {
+        let end = buffer.iter().position(|c| *c == 0).unwrap_or(buffer.len());
+        let text = String::from_utf16_lossy(&buffer[..end]).trim().to_string();
+        (!text.is_empty()).then_some(text)
+    };
+
+    // The share behind a mapped letter, which is what the dialog's device column shows. The
+    // call wants the letter and the colon and no backslash.
+    let mut share = None;
+    if kind == Some(super::VolumeKind::Network) {
+        let letter: String = path.to_string_lossy().chars().take(2).collect();
+        let local = wide_str(&letter);
+        let mut buffer = vec![0u16; MAX_PATH as usize * 4];
+        let mut len = buffer.len() as u32;
+        // SAFETY: `local` is NUL-terminated and outlives the call; the buffer is `len` wide
+        // and the call writes at most that many characters into it.
+        if unsafe { WNetGetConnectionW(local.as_ptr(), buffer.as_mut_ptr(), &mut len) }
+            == ERROR_SUCCESS
+        {
+            share = text(&buffer);
+        }
+    }
+
+    Some(super::Volume {
+        kind,
+        label: described.then(|| text(&label)).flatten(),
+        fs: described.then(|| text(&fs)).flatten(),
+        share,
+        ready: described,
+    })
+}
+
 /// What is installed, out of the registry key the Control Panel's own list reads.
 ///
 /// Three keys, not one: the machine's, the machine's 32-bit view, and this user's own. A
