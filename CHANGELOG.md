@@ -20,6 +20,11 @@ Notable changes, newest first. The format follows
 
 - The search engine's walker takes a **depth limit**, which is what makes that possible.
 
+- **`F9` in the change-drive dialog** opens its switches as a dialog of boxes, as it does in
+  FAR, with each row naming the `Ctrl` key it is — the keys are faster for anybody who knows
+  them, and this is how one finds out they are there. `OK` keeps them and brings the list back
+  for the same panel.
+
 ## [0.10.0] — 2026-10-28
 
 ### Added

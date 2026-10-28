@@ -163,6 +163,7 @@ impl Form {
             | FormKind::Copy
             | FormKind::Checksum
             | FormKind::Compare
+            | FormKind::Drives
             | FormKind::Sync
             | FormKind::Link
             | FormKind::Highlight
@@ -423,6 +424,7 @@ impl Form {
             FormKind::Copy => "copy-title",
             FormKind::Checksum => "sum-title",
             FormKind::Compare => "cmp-title",
+            FormKind::Drives => "drives-title",
             FormKind::Sync => "sync-title",
             FormKind::Search => "search-title",
             FormKind::Link => "link-title",
@@ -1001,6 +1003,68 @@ impl Form {
             page: 0,
             kind: FormKind::Compare,
             title: t("cmp-title"),
+            fields,
+            cursor: 0,
+            site: None,
+            button: None,
+            buttons: vec![i18n.t("btn-ok"), i18n.t("btn-cancel")],
+        }
+    }
+
+    /// `F9` inside the change-drive dialog: the same switches its `Ctrl`-and-a-digit keys
+    /// work, as a dialog of boxes — which is what FAR's own `F9` there opens.
+    ///
+    /// The keys are faster for somebody who knows them and this is how anybody finds out
+    /// they exist, so each row says which key it is.
+    pub fn drives(cfg: &fcmd_config::DrivesCfg, i18n: &I18n) -> Form {
+        let t = |id: &str| i18n.t(id);
+        // The digit each row answers to, in front of its label: the dialog is also the list
+        // of the keys.
+        let row = |key: &'static str, digit: char, id: &str, on: bool| -> Field {
+            Field::toggle(key, format!("Ctrl+{digit}  {}", t(id)), on)
+        };
+        let fields = vec![
+            row("drives.show_type", '1', "drives-col-type", cfg.show_type),
+            row(
+                "drives.show_device",
+                '2',
+                "drives-col-device",
+                cfg.show_device,
+            ),
+            row("drives.show_label", '3', "drives-col-label", cfg.show_label),
+            row("drives.show_fs", '4', "drives-col-fs", cfg.show_fs),
+            row("drives.show_size", '5', "drives-col-size", cfg.show_size),
+            Field::Separator,
+            row(
+                "drives.show_removable",
+                '6',
+                "drives-col-removable",
+                cfg.show_removable,
+            ),
+            row(
+                "drives.show_panels",
+                '7',
+                "drives-col-panels",
+                cfg.show_panels,
+            ),
+            row(
+                "drives.show_optical",
+                '8',
+                "drives-col-optical",
+                cfg.show_optical,
+            ),
+            row(
+                "drives.show_network",
+                '9',
+                "drives-col-network",
+                cfg.show_network,
+            ),
+        ];
+        Form {
+            pages: Vec::new(),
+            page: 0,
+            kind: FormKind::Drives,
+            title: t("drives-title"),
             fields,
             cursor: 0,
             site: None,

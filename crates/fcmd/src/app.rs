@@ -1511,6 +1511,9 @@ pub struct App {
     compare_trusted: usize,
     /// The hunt for duplicates that is running, and the token that stops it.
     duplicates: Option<(u64, CancelToken)>,
+    /// Which panel the drive dialog was open for when `F9` opened its settings, so the list
+    /// comes back for the same side.
+    drive_side: Option<usize>,
     /// The command line under the panels (SPEC 06 §7).
     pub cmd: CmdLine,
     /// The directory the branch was last read for, and what it was: `HEAD` is a small file,
@@ -1728,6 +1731,7 @@ impl App {
             compare_pairs: 0,
             compare_trusted: 0,
             duplicates: None,
+            drive_side: None,
             cmd: CmdLine::new(),
             branch_at: None,
             programs: Vec::new(),
@@ -9672,6 +9676,25 @@ impl App {
             self.apply_compare_form(&form);
             return;
         }
+        if form.kind == FormKind::Drives {
+            let on = |key: &str| form.text_value(key) == "true";
+            self.cfg.drives = fcmd_config::DrivesCfg {
+                show_type: on("drives.show_type"),
+                show_device: on("drives.show_device"),
+                show_label: on("drives.show_label"),
+                show_fs: on("drives.show_fs"),
+                show_size: on("drives.show_size"),
+                show_removable: on("drives.show_removable"),
+                show_panels: on("drives.show_panels"),
+                show_optical: on("drives.show_optical"),
+                show_network: on("drives.show_network"),
+            };
+            // Back to the list it was opened from, which is where one was going anyway.
+            if let Some(side) = self.drive_side.take() {
+                self.reopen_drives(side, None, 0);
+            }
+            return;
+        }
         if form.kind == FormKind::Checksum {
             self.apply_checksum_form(&form);
             return;
@@ -11330,6 +11353,13 @@ impl App {
                     &[("what", name.into())],
                 );
                 self.set_status(msg);
+            }
+            // `F9` there opens the same switches as a dialog of boxes, which is how anybody
+            // finds out the `Ctrl`-and-a-digit keys exist at all.
+            KeyCode::F(9) if kind == PickKind::Drives => {
+                self.drive_side = Some(pick.side);
+                let form = Form::drives(&self.cfg.drives, &self.i18n);
+                self.mode = Mode::Form(Box::new(form));
             }
             // A row with a key of its own: the key takes it, without the arrows.
             KeyCode::Char(c) => {
@@ -14515,6 +14545,22 @@ mod tests {
         app.handle_input(Input::Key(key.parse().unwrap()));
     }
 
+    /// Turn a box of the open dialog on or off by its key, the way `Space` on it would.
+    fn set_toggle(app: &mut App, want: &str, on: bool) {
+        let Mode::Form(form) = &mut app.mode else {
+            panic!("no dialog")
+        };
+        for field in &mut form.fields {
+            if let crate::form::Field::Toggle { key, on: value, .. } = field {
+                if *key == want {
+                    *value = on;
+                    return;
+                }
+            }
+        }
+        panic!("no box {want}");
+    }
+
     /// Fill a text row of the open dialog, the way typing into it would, so a test can say
     /// what it wants in the field without walking the caret there first.
     fn set_text(app: &mut App, want: &str, text: &str) {
@@ -17131,6 +17177,37 @@ mod tests {
             panic!("the dialog closed")
         };
         assert!(pick.rows.iter().any(|r| r.value == ":processes"));
+    }
+
+    /// `F9` in the drive dialog opens the same switches as a dialog, and what it is told is
+    /// kept and shown when the list comes back.
+    #[test]
+    fn f9_in_the_drive_dialog_opens_the_switches_as_a_dialog() {
+        let mut app = app();
+        app.run(Command::PanelDrive(fcmd_cmd::Side::Right));
+        press(&mut app, "F9");
+        let Mode::Form(form) = &app.mode else {
+            panic!("no dialog: {:?}", app.mode)
+        };
+        assert_eq!(form.kind, crate::menu::FormKind::Drives);
+        // Every row says which key it is, so the dialog is also the list of the keys.
+        let rows = form.rows();
+        assert!(
+            rows.iter().filter(|r| r.text.contains("Ctrl+")).count() >= 9,
+            "{:?}",
+            rows.iter().map(|r| r.text.clone()).collect::<Vec<_>>()
+        );
+
+        // Turn the type column off here rather than with its key.
+        set_toggle(&mut app, "drives.show_type", false);
+        press(&mut app, "F10");
+        assert!(!app.cfg.drives.show_type);
+        // And the list is back, for the panel it was opened for.
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("the list did not come back: {:?}", app.mode)
+        };
+        assert_eq!(pick.kind, PickKind::Drives);
+        assert_eq!(pick.side, 1);
     }
 
     /// A panel showing the process list is not on a drive, and the dialog opens on the row

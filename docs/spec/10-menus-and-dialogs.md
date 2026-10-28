@@ -394,8 +394,14 @@ The cursor stays on the row it was on across a switch — the row is what one is
 column going away is no reason to lose it. FAR's third state for the sizes (its *float* sizes) is
 the only one we have: sizes are always printed the short way, `1.84 G`.
 
-Still to come: `F9` for the same switches as a dialog of boxes, and FAR's `Ctrl+H` for unmounted
-volumes, which is a Windows idea with nothing behind it here yet.
+`F9` opens the same switches as a dialog of boxes, as it does in FAR, and each row of it says
+which `Ctrl` key it is — the keys are faster for anybody who knows them, and the dialog is how
+one finds out they exist. `OK` writes them to `[drives]` and brings the list straight back for
+the same panel.
+
+Still to come: FAR's `Ctrl+H` for volumes with no mount point. It is a Windows idea
+(`FindFirstVolumeW`) and, on Unix, mounting one needs rights this program does not ask for, so
+a list of them would be a list one can only look at.
 
 ### 4.4 Folders history (`Alt+F12`)
 

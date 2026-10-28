@@ -39,6 +39,8 @@ pub enum FormKind {
     Checksum,
     /// What counts as the same file when the two panels are compared (SPEC 03 §11).
     Compare,
+    /// Which columns the change-drive dialog shows, and which drives (SPEC 10 §4.3).
+    Drives,
     /// Which way to synchronise, and what counts as the same (SPEC 03 §10).
     Sync,
     /// A link to the file under the cursor: its name, and which kind of link it is.
