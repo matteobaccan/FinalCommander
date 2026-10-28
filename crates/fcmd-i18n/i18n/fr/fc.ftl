@@ -341,11 +341,11 @@ confirm-trash-body =
 confirm-trash-where = Ils vont là où le bureau garde les fichiers supprimés, et peuvent en être repris.
 
 # ---------------------------------------------------------------- barre de menus (SPEC 10)
-menu-left = Gauche
-menu-right = Droite
-menu-files = Fichiers
-menu-commands = Commandes
-menu-options = Options
+menu-left = &Gauche
+menu-right = &Droite
+menu-files = &Fichiers
+menu-commands = &Commandes
+menu-options = &Options
 menu-brief = &Bref
 menu-medium = &Moyen
 menu-full = &Complet

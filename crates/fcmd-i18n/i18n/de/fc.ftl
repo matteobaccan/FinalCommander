@@ -341,11 +341,11 @@ confirm-trash-body =
 confirm-trash-where = Sie landen dort, wo der Desktop gelöschte Dateien aufbewahrt, und lassen sich von dort zurückholen.
 
 # ---------------------------------------------------------------- Menüleiste (SPEC 10)
-menu-left = Links
-menu-right = Rechts
-menu-files = Dateien
-menu-commands = Befehle
-menu-options = Optionen
+menu-left = &Links
+menu-right = &Rechts
+menu-files = &Dateien
+menu-commands = &Befehle
+menu-options = &Optionen
 menu-brief = &Kurz
 menu-medium = &Mittel
 menu-full = &Voll

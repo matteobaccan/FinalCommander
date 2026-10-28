@@ -35,15 +35,23 @@ Five menus, in FAR's order: **Left · Files · Commands · Options · Right**. T
 the top line in the key-bar colours; the open menu is pulled down under its title.
 
 `Left` and `Right` are the same menu aimed at different panels: choosing an entry there acts on
-*that* panel and moves the focus to it, whichever panel had the focus before. `F9` opens the
-menu of the panel that has the focus.
+*that* panel and moves the focus to it, whichever panel had the focus before. `F9` lights the
+bar on the menu of the panel that has the focus.
+
+**Two states, as FAR has.** `F9` lights the bar and leaves the panels alone: nothing is pulled
+down until `Enter`, `↑`/`↓` or the letter a title wears asks for it. `Esc` from an open menu
+rolls it back up and leaves the bar lit; `Esc` on the bar gives the panels back. `F9` and `F10`
+leave from either state, and a click on a title pulls its menu straight down.
 
 Keys inside the bar: `←`/`→` move between menus, `↑`/`↓` move over the entries and step over
 separators, `Home`/`End` jump to the first and last entry, `Enter` chooses, `Esc`/`F9`/`F10`
-close, and a letter runs the entry that claims it.
+close, and a letter runs the entry that claims it. With the bar lit and nothing pulled down a
+letter belongs to the titles instead, which is why they wear one: `F` is the files menu.
 
 **The letters.** A label carries its own letter, marked in the catalogue with `&` before it —
-`&Brief`, `File &owners` — and the dropdown draws that letter highlighted. The letter is
+`&Brief`, `File &owners` — and the dropdown draws that letter highlighted, on the row one is
+standing on as well. The five titles on the bar are marked the same way, in the bar's own
+`hmenu.hotkey.fg` ink. The letter is
 chosen per language, since the labels are translated, and the rule is: the first letter of the
 first word of the label that no other row of that menu has already claimed. Where every letter
 of a word is taken, any free letter of the label is marked instead, which is why a few read

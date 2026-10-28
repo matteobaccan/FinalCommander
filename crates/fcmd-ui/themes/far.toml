@@ -77,6 +77,7 @@ white = "#ffffff"
 "hmenu.bg" = "cyan"
 "hmenu.selected.fg" = "white"
 "hmenu.selected.bg" = "black"
+"hmenu.hotkey.fg" = "yellow"
 # Menu.Text / Menu.Box / Menu.Highlight: a pulled-down menu or a list
 "menu.fg" = "white"
 "menu.bg" = "cyan"

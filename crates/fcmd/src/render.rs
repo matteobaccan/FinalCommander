@@ -573,8 +573,9 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             draw_sites(app, buf, screen, *cursor);
             None
         }
-        Mode::Menu { menu, item } => {
-            let (bar, list) = draw_menus(app, buf, Rect::new(0, 0, w, panels_h), *menu, *item);
+        Mode::Menu { menu, item, open } => {
+            let (bar, list) =
+                draw_menus(app, buf, Rect::new(0, 0, w, panels_h), *menu, *item, *open);
             app.layout.menu_bar = Some((0, bar));
             app.layout.list = list;
             None
@@ -845,19 +846,26 @@ fn draw_structure(app: &App, viewer: &mut fcmd_view::Viewer, buf: &mut Buffer, a
     buf.put_str(area.x + 2, area.bottom() - 1, &hint, dim, area.w - 3);
 }
 
-/// The menu bar across the top with one menu pulled down (SPEC 10 §2).
-/// Returns where each title starts on the bar, and where the open menu's rows landed.
+/// The menu bar across the top, with the menu under the picked title pulled down once it has
+/// been opened (SPEC 10 §2). Returns where each title starts on the bar, and where the open
+/// menu's rows landed.
 fn draw_menus(
     app: &App,
     buf: &mut Buffer,
     screen: Rect,
     menu: usize,
     item: usize,
+    dropped: bool,
 ) -> (Vec<u16>, Option<ListArea>) {
     let menus = crate::menu::menus();
     let titles: Vec<String> = menus.iter().map(|m| app.i18n.t(m.title)).collect();
     let starts =
         widgets::draw_menu_bar(buf, &app.theme, Rect::new(0, 0, screen.w, 1), &titles, menu);
+    // The bar on its own is a state of its own: `F9` lights it and nothing covers the panels
+    // until a menu is actually opened.
+    if !dropped {
+        return (starts, None);
+    }
     let Some(open) = menus.get(menu) else {
         return (starts, None);
     };
@@ -3327,6 +3335,9 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
     fn the_menu_bar_shows_five_menus_and_pulls_one_down() {
         let mut app = app("commander", "en");
         app.handle_input(Input::Key("F9".parse().unwrap()));
+        // The bar alone first: nothing covers the panels until a menu is opened.
+        assert!(!frame(&mut app, 80, 24).contains("Ctrl+1"));
+        app.handle_input(Input::Key("Enter".parse().unwrap()));
         let out = frame(&mut app, 80, 24);
         let bar = out.lines().next().unwrap();
         for title in ["Left", "Files", "Commands", "Options", "Right"] {
@@ -3339,6 +3350,41 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
         assert!(
             out.contains('√'),
             "nothing is marked as being in force: {out}"
+        );
+    }
+
+    /// Every title on the bar wears the letter it answers to, in the bar's own hotkey ink —
+    /// which is how one can see, without opening anything, that `F` is the files menu.
+    #[test]
+    fn the_bar_wears_the_letter_each_title_answers_to() {
+        let mut app = app("far", "en");
+        app.handle_input(Input::Key("F9".parse().unwrap()));
+        let mut buf = Buffer::new(80, 24);
+        draw(&mut app, &mut buf);
+        let ink = app.theme.color("hmenu.hotkey.fg");
+        let bar: String = (0..80)
+            .filter_map(|x| buf.get(x, 0))
+            .map(|cell| cell.ch)
+            .collect();
+        for letter in ['L', 'F', 'C', 'O', 'R'] {
+            let marked = (0..80)
+                .filter_map(|x| buf.get(x, 0))
+                .any(|cell| cell.ch == letter && cell.style.fg == ink);
+            assert!(marked, "`{letter}` is not marked on the bar: {bar}");
+        }
+        // And the letter is a key: `C` on the bar pulls the commands menu down.
+        press(&mut app, "C");
+        assert!(
+            matches!(
+                app.mode,
+                crate::app::Mode::Menu {
+                    menu: 2,
+                    open: true,
+                    ..
+                }
+            ),
+            "{:?}",
+            app.mode
         );
     }
 
@@ -3392,7 +3438,11 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
             app.handle_input(Input::Key("F9".parse().unwrap()));
             for menu in 0..5 {
                 for size in [(80u16, 24u16), (60, 15), (40, 10)] {
-                    app.mode = crate::app::Mode::Menu { menu, item: 0 };
+                    app.mode = crate::app::Mode::Menu {
+                        menu,
+                        item: 0,
+                        open: true,
+                    };
                     let out = frame(&mut app, size.0, size.1);
                     assert_eq!(out.lines().count(), size.1 as usize, "{tag} menu {menu}");
                 }
@@ -3584,7 +3634,11 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
             let mut app = app("commander", "en");
             app.run(cmd);
             if let crate::app::Mode::Menu { .. } = app.mode {
-                app.mode = crate::app::Mode::Menu { menu: 1, item: 0 };
+                app.mode = crate::app::Mode::Menu {
+                    menu: 1,
+                    item: 0,
+                    open: true,
+                };
             }
             println!("=== {cmd} ===\n{}", frame(&mut app, 80, 24));
         }

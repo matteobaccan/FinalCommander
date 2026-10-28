@@ -2,9 +2,16 @@
 <rect width="840" height="540" fill="#000000"/>
 <rect x="0.0" y="0.0" width="75.6" height="18" fill="#008080"/>
 <rect x="134.4" y="0.0" width="705.6" height="18" fill="#008080"/>
-<text xml:space="preserve" x="25.2 33.6 42.0 50.4" y="13.6" fill="#000000">Left</text>
-<text xml:space="preserve" x="84.0 92.4 100.8 109.2 117.6" y="13.6" fill="#ffffff">Files</text>
-<text xml:space="preserve" x="151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2" y="13.6" fill="#000000">Commands   Options   Right</text>
+<text xml:space="preserve" x="25.2" y="13.6" fill="#ffff00">L</text>
+<text xml:space="preserve" x="33.6 42.0 50.4" y="13.6" fill="#000000">eft</text>
+<text xml:space="preserve" x="84.0" y="13.6" fill="#ffff00">F</text>
+<text xml:space="preserve" x="92.4 100.8 109.2 117.6" y="13.6" fill="#ffffff">iles</text>
+<text xml:space="preserve" x="151.2" y="13.6" fill="#ffff00">C</text>
+<text xml:space="preserve" x="159.6 168.0 176.4 184.8 193.2 201.6 210.0" y="13.6" fill="#000000">ommands</text>
+<text xml:space="preserve" x="243.6" y="13.6" fill="#ffff00">O</text>
+<text xml:space="preserve" x="252.0 260.4 268.8 277.2 285.6 294.0" y="13.6" fill="#000000">ptions</text>
+<text xml:space="preserve" x="327.6" y="13.6" fill="#ffff00">R</text>
+<text xml:space="preserve" x="336.0 344.4 352.8 361.2" y="13.6" fill="#000000">ight</text>
 <rect x="0.0" y="18.0" width="840.0" height="18" fill="#000080"/>
 <text xml:space="preserve" x="0.0" y="31.6" fill="#00ffff">║</text>
 <text xml:space="preserve" x="8.4 16.8 25.2 33.6 42.0 50.4 58.8 67.2 75.6 84.0 92.4 100.8" y="31.6" fill="#ffff00">n       Name</text>
@@ -29,24 +36,26 @@
 <text xml:space="preserve" x="688.8" y="49.6" fill="#00ffff">│</text>
 <text xml:space="preserve" x="831.6" y="49.6" fill="#00ffff">║</text>
 <rect x="0.0" y="54.0" width="75.6" height="18" fill="#000080"/>
-<rect x="75.6" y="54.0" width="386.4" height="18" fill="#008080"/>
+<rect x="75.6" y="54.0" width="8.4" height="18" fill="#008080"/>
+<rect x="453.6" y="54.0" width="8.4" height="18" fill="#008080"/>
 <rect x="462.0" y="54.0" width="16.8" height="18" fill="#000040"/>
 <rect x="478.8" y="54.0" width="361.2" height="18" fill="#000080"/>
 <text xml:space="preserve" x="0.0" y="67.6" fill="#00ffff">║</text>
 <text xml:space="preserve" x="8.4 16.8 25.2 33.6 42.0 50.4 58.8 67.2 75.6" y="67.6" fill="#ffffff">tests   │</text>
 <text xml:space="preserve" x="109.2" y="67.6" fill="#ffff00">V</text>
-<text xml:space="preserve" x="117.6 126.0 134.4" y="67.6" fill="#ffffff">iew</text>
-<text xml:space="preserve" x="428.4 436.8" y="67.6" fill="#ffff00">F3</text>
-<text xml:space="preserve" x="453.6" y="67.6" fill="#ffffff">│</text>
+<text xml:space="preserve" x="117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2 369.6 378.0 386.4 394.8 403.2 411.6 420.0 428.4 436.8 445.2 453.6" y="67.6" fill="#ffffff">iew                                  F3 │</text>
 <text xml:space="preserve" x="462.0 470.4" y="67.6" fill="#007f7f">GE</text>
 <text xml:space="preserve" x="478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4 604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="67.6" fill="#00ffff">LOG          md│   27.8 K│2024-08-01 09:41║</text>
 <rect x="0.0" y="72.0" width="75.6" height="18" fill="#000080"/>
-<rect x="75.6" y="72.0" width="8.4" height="18" fill="#008080"/>
-<rect x="453.6" y="72.0" width="8.4" height="18" fill="#008080"/>
+<rect x="75.6" y="72.0" width="386.4" height="18" fill="#008080"/>
 <rect x="462.0" y="72.0" width="16.8" height="18" fill="#000040"/>
 <rect x="478.8" y="72.0" width="361.2" height="18" fill="#000080"/>
 <text xml:space="preserve" x="0.0 8.4 16.8 25.2 33.6 42.0 50.4" y="85.6" fill="#00ffff">║cancel</text>
-<text xml:space="preserve" x="75.6 84.0 92.4 100.8 109.2 117.6 126.0 134.4 142.8 151.2 159.6 168.0 176.4 184.8 193.2 201.6 210.0 218.4 226.8 235.2 243.6 252.0 260.4 268.8 277.2 285.6 294.0 302.4 310.8 319.2 327.6 336.0 344.4 352.8 361.2 369.6 378.0 386.4 394.8 403.2 411.6 420.0 428.4 436.8 445.2 453.6" y="85.6" fill="#ffffff">│   Edit                                  F4 │</text>
+<text xml:space="preserve" x="75.6" y="85.6" fill="#ffffff">│</text>
+<text xml:space="preserve" x="109.2" y="85.6" fill="#ffff00">E</text>
+<text xml:space="preserve" x="117.6 126.0 134.4" y="85.6" fill="#ffffff">dit</text>
+<text xml:space="preserve" x="428.4 436.8" y="85.6" fill="#ffff00">F4</text>
+<text xml:space="preserve" x="453.6" y="85.6" fill="#ffffff">│</text>
 <text xml:space="preserve" x="462.0 470.4" y="85.6" fill="#007f7f">56</text>
 <text xml:space="preserve" x="478.8 487.2 495.6 504.0 512.4 520.8 529.2 537.6 546.0 554.4 562.8 571.2 579.6 588.0 596.4 604.8 613.2 621.6 630.0 638.4 646.8 655.2 663.6 672.0 680.4 688.8 697.2 705.6 714.0 722.4 730.8 739.2 747.6 756.0 764.4 772.8 781.2 789.6 798.0 806.4 814.8 823.2 831.6" y="85.6" fill="#00ffff">SUMS           │    312 B│2024-08-01 09:41║</text>
 <rect x="0.0" y="90.0" width="75.6" height="18" fill="#000080"/>

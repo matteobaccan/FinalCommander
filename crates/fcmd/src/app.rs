@@ -1204,10 +1204,14 @@ pub enum Mode {
     Sites {
         cursor: usize,
     },
-    /// The menu bar (`F9`): which menu is open and which entry is under the cursor.
+    /// The menu bar (`F9`): which title is picked, which entry is under the cursor, and
+    /// whether the menu under that title is pulled down. `F9` lights the bar without pulling
+    /// anything down, as FAR does: there the letters drawn on the bar are the keys that open
+    /// a menu, and `Esc` from an open menu comes back to the bar rather than leaving it.
     Menu {
         menu: usize,
         item: usize,
+        open: bool,
     },
     /// A settings dialog.
     Form(Box<Form>),
@@ -2735,7 +2739,13 @@ impl App {
             }
             crate::hit::Hit::Menu(which) => {
                 let item = self.first_item(which);
-                self.mode = Mode::Menu { menu: which, item };
+                // A click on a title is an answer, not a step towards one: it pulls the menu
+                // down, which is what the pointer came for.
+                self.mode = Mode::Menu {
+                    menu: which,
+                    item,
+                    open: true,
+                };
             }
             crate::hit::Hit::CommandLine => {}
             crate::hit::Hit::ListRow(index) => match &mut self.mode {
@@ -2749,7 +2759,11 @@ impl App {
                     let menu = *menu;
                     // One click is enough in a menu: the row under the pointer is the one
                     // being asked for, and a dropdown that needed two would feel broken.
-                    self.mode = Mode::Menu { menu, item: index };
+                    self.mode = Mode::Menu {
+                        menu,
+                        item: index,
+                        open: true,
+                    };
                     self.run_menu_item(menu, index);
                 }
                 _ => {}
@@ -2802,10 +2816,10 @@ impl App {
                 for _ in 0..STEP {
                     match &mut self.mode {
                         Mode::Pick(pick) => pick.move_cursor(by),
-                        Mode::Menu { menu, item } => {
-                            let (menu, item) = (*menu, *item);
+                        Mode::Menu { menu, item, open } => {
+                            let (menu, item, open) = (*menu, *item, *open);
                             let item = self.menu_step(menu, item, by > 0);
-                            self.mode = Mode::Menu { menu, item };
+                            self.mode = Mode::Menu { menu, item, open };
                         }
                         _ => break,
                     }
@@ -2946,9 +2960,9 @@ impl App {
                 self.mode = Mode::Sites { cursor };
                 self.sites_key(key, cursor);
             }
-            Mode::Menu { menu, item } => {
-                self.mode = Mode::Menu { menu, item };
-                self.menu_key(key, menu, item);
+            Mode::Menu { menu, item, open } => {
+                self.mode = Mode::Menu { menu, item, open };
+                self.menu_key(key, menu, item, open);
             }
             Mode::Form(form) => {
                 self.mode = Mode::Form(form);
@@ -9690,12 +9704,15 @@ impl App {
 
     // ── the menu bar and its dialogs (SPEC 10) ─────────────────────────────────────────────
 
-    /// `F9`: open the menu bar.
+    /// `F9`: light up the menu bar. Nothing is pulled down yet — `Enter`, `↓` or the letter
+    /// a title wears opens one, which is FAR's own behaviour and what makes those letters
+    /// worth drawing.
     fn open_menu(&mut self) {
         let menu = if self.active == 1 { 4 } else { 0 };
         self.mode = Mode::Menu {
             menu,
             item: self.first_item(menu),
+            open: false,
         };
     }
 
@@ -9734,56 +9751,83 @@ impl App {
         item
     }
 
-    fn menu_key(&mut self, key: Key, menu: usize, item: usize) {
+    fn menu_key(&mut self, key: Key, menu: usize, item: usize, open: bool) {
         let menus = menu::menus();
         let count = menus.len();
+        let at = |app: &Self, menu: usize, open: bool| Mode::Menu {
+            menu,
+            item: app.first_item(menu),
+            open,
+        };
         match key.code {
+            // `Esc` on an open menu rolls it back up and leaves the bar lit, which is where
+            // FAR leaves one; from the bar itself it gives the panels back.
+            KeyCode::Esc | KeyCode::F(10) if open => {
+                self.mode = Mode::Menu {
+                    menu,
+                    item,
+                    open: false,
+                }
+            }
             KeyCode::Esc | KeyCode::F(9) | KeyCode::F(10) => self.mode = Mode::Normal,
             KeyCode::Left => {
                 let menu = (menu + count - 1) % count;
-                self.mode = Mode::Menu {
-                    menu,
-                    item: self.first_item(menu),
-                };
+                self.mode = at(self, menu, open);
             }
             KeyCode::Right => {
                 let menu = (menu + 1) % count;
-                self.mode = Mode::Menu {
-                    menu,
-                    item: self.first_item(menu),
-                };
+                self.mode = at(self, menu, open);
             }
+            // `↓` and `↑` pull the menu under the title down; once it is down they walk it.
+            KeyCode::Up | KeyCode::Down if !open => self.mode = at(self, menu, true),
             KeyCode::Up => {
                 self.mode = Mode::Menu {
                     menu,
                     item: self.menu_step(menu, item, false),
+                    open,
                 }
             }
             KeyCode::Down => {
                 self.mode = Mode::Menu {
                     menu,
                     item: self.menu_step(menu, item, true),
+                    open,
                 }
             }
             KeyCode::Home => {
                 self.mode = Mode::Menu {
                     menu,
                     item: self.first_item(menu),
+                    open,
                 }
             }
             KeyCode::End => {
                 self.mode = Mode::Menu {
                     menu,
                     item: self.menu_step(menu, 0, false),
+                    open,
                 }
             }
+            KeyCode::Enter if !open => self.mode = at(self, menu, true),
             KeyCode::Enter => self.run_menu_item(menu, item),
-            // A letter takes a row: the one whose label marks that letter with `&`, and
-            // failing that the first row the letter starts — which is what FAR does, and
-            // what a menu with no markers in its catalogue still needs.
             KeyCode::Char(c) if c.is_alphanumeric() => {
                 let wanted = c.to_lowercase().next().unwrap_or(c);
                 let same = |a: char| a.to_lowercase().next().unwrap_or(a) == wanted;
+                // On the bar a letter is a title's own: it pulls that menu down. With a menu
+                // already down the rows have the letters, as they do in FAR, where only the
+                // arrows walk back out to the bar.
+                if !open {
+                    if let Some(other) = menus
+                        .iter()
+                        .position(|m| fcmd_ui::mnemonic(&self.i18n.t(m.title)).1.is_some_and(same))
+                    {
+                        self.mode = at(self, other, true);
+                    }
+                    return;
+                }
+                // A letter takes a row: the one whose label marks that letter with `&`, and
+                // failing that the first row the letter starts — which is what FAR does, and
+                // what a menu with no markers in its catalogue still needs.
                 let rows: Vec<Option<String>> = menus
                     .get(menu)
                     .map(|m| {
@@ -15626,7 +15670,11 @@ mod tests {
     fn open(app: &mut App, menu: usize, label: &str) {
         press(app, "F9");
         let item = menu_row(menu, label);
-        app.mode = Mode::Menu { menu, item };
+        app.mode = Mode::Menu {
+            menu,
+            item,
+            open: true,
+        };
         press(app, "Enter");
     }
 
@@ -16934,7 +16982,7 @@ mod tests {
         let mut app = app();
         press(&mut app, "F9");
         press(&mut app, "Right");
-        let Mode::Menu { menu, item } = app.mode else {
+        let Mode::Menu { menu, item, .. } = app.mode else {
             panic!("the menu closed")
         };
         assert_eq!(menu, 1);
@@ -16948,7 +16996,7 @@ mod tests {
         press(&mut app, "F9");
         for _ in 0..40 {
             press(&mut app, "Down");
-            let Mode::Menu { menu, item } = app.mode else {
+            let Mode::Menu { menu, item, .. } = app.mode else {
                 panic!("the menu closed")
             };
             assert!(
@@ -17912,7 +17960,8 @@ mod tests {
         assert_eq!(app.i18n.tag(), "it");
         assert_eq!(app.cfg.ui.language, "it");
         assert_eq!(menu::menus()[1].title, "menu-files");
-        assert_eq!(app.i18n.t("menu-files"), "File");
+        // The title carries its hotkey mark, as every title on the bar does.
+        assert_eq!(app.i18n.t("menu-files"), "&File");
     }
 
     #[test]
@@ -18014,6 +18063,7 @@ mod tests {
                 app.mode = Mode::Menu {
                     menu: index,
                     item: row,
+                    open: true,
                 };
                 press(&mut app, "Enter");
                 if let Action::Todo(what) = item.action {
@@ -23563,11 +23613,46 @@ abcdefghij
         open(&mut app, 0, "menu-medium");
         assert_eq!(app.panels[0].view, ViewMode::Medium);
 
+        // And by the keys a user presses: `F9` lights the bar, `L` pulls the left menu down
+        // — the letter the title wears — and `m` takes the row.
         let mut by_key = super::tests::app();
         by_key.run(Command::AppMenu);
+        assert!(
+            matches!(by_key.mode, Mode::Menu { open: false, .. }),
+            "the bar pulled a menu down by itself: {:?}",
+            by_key.mode
+        );
+        press(&mut by_key, "l");
+        assert!(
+            matches!(
+                by_key.mode,
+                Mode::Menu {
+                    menu: 0,
+                    open: true,
+                    ..
+                }
+            ),
+            "{:?}",
+            by_key.mode
+        );
         press(&mut by_key, "m");
         assert_eq!(by_key.panels[0].view, ViewMode::Medium);
         assert!(by_key.mode.is_normal(), "the menu stayed open");
+
+        // `Esc` rolls the menu back up and leaves the bar lit; a second one gives the panels
+        // back, which is the way out FAR has.
+        let mut back = super::tests::app();
+        back.run(Command::AppMenu);
+        press(&mut back, "Enter");
+        assert!(matches!(back.mode, Mode::Menu { open: true, .. }));
+        press(&mut back, "Esc");
+        assert!(
+            matches!(back.mode, Mode::Menu { open: false, .. }),
+            "{:?}",
+            back.mode
+        );
+        press(&mut back, "Esc");
+        assert!(back.mode.is_normal(), "{:?}", back.mode);
     }
 
     #[test]

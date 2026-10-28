@@ -341,11 +341,11 @@ confirm-trash-body =
 confirm-trash-where = Van donde el escritorio guarda los archivos borrados, y de ahí se pueden recuperar.
 
 # ---------------------------------------------------------------- barra de menús (SPEC 10)
-menu-left = Izquierda
-menu-right = Derecha
-menu-files = Archivos
-menu-commands = Comandos
-menu-options = Opciones
+menu-left = &Izquierda
+menu-right = &Derecha
+menu-files = &Archivos
+menu-commands = &Comandos
+menu-options = &Opciones
 menu-brief = &Breve
 menu-medium = &Medio
 menu-full = &Completa

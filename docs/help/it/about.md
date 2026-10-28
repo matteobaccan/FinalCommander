@@ -21,8 +21,10 @@ disassemblatore del visualizzatore, l'editor esadecimale — qui ci sono su tutt
 `F1` apre l'aiuto per il posto in cui sei: i tasti di quella schermata, ognuno con una riga
 che dice cosa fa, raggruppati per argomento. `Destra` da lì porta al capitolo che spiega la
 schermata per esteso, `Esc` all'indice, e uscire dall'aiuto ti rimette dove eri. `F9` è la
-barra dei menu, che nomina ogni dialogo e il tasto che lo apre. `F10` esce da qualunque cosa
-tu sia dentro.
+barra dei menu, che nomina ogni dialogo e il tasto che lo apre: si accende senza coprire
+niente, e `Invio`, `↓` o la lettera disegnata su un titolo tira giù quel menu — `Esc` lo
+richiude e un secondo `Esc` restituisce i pannelli. `F10` esce da qualunque cosa tu sia
+dentro.
 
 La barra dei tasti in fondo dice sempre cosa fanno `F1`…`F12` *in questo momento* — nel
 pannello, nel visualizzatore, nell'editor — e segue il modificatore che tieni premuto, quindi

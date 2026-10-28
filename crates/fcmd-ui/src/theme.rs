@@ -175,6 +175,7 @@ const DEFAULTS: &[(&str, Color)] = &[
     ("hmenu.bg", Color::Ansi(6)),
     ("hmenu.selected.fg", Color::Ansi(15)),
     ("hmenu.selected.bg", Color::Ansi(0)),
+    ("hmenu.hotkey.fg", Color::Ansi(11)),
     ("menu.fg", Color::Ansi(15)),
     ("menu.bg", Color::Ansi(6)),
     ("menu.frame", Color::Ansi(15)),

@@ -349,11 +349,11 @@ confirm-trash-body =
 confirm-trash-where = They go where the desktop keeps deleted files, and can be put back from there.
 
 # ---------------------------------------------------------------- menu bar (SPEC 10)
-menu-left = Left
-menu-right = Right
-menu-files = Files
-menu-commands = Commands
-menu-options = Options
+menu-left = &Left
+menu-right = &Right
+menu-files = &Files
+menu-commands = &Commands
+menu-options = &Options
 menu-brief = &Brief
 menu-medium = &Medium
 menu-full = &Full

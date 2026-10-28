@@ -652,6 +652,40 @@ mod tests {
         }
     }
 
+    /// The five titles on the bar are marked the way the rows are, and their letters have to
+    /// differ from one another: `&Files` and `&Folders` on one bar would be a key that only
+    /// ever reaches the first of them.
+    #[test]
+    fn the_bar_titles_claim_a_letter_each() {
+        for (tag, _) in fcmd_i18n::LANGUAGES {
+            let i18n = fcmd_i18n::I18n::new(tag);
+            let mut seen: Vec<(char, String)> = Vec::new();
+            for menu in menus() {
+                let title = i18n.t(menu.title);
+                // A language written without an alphabet we could mark — Chinese — leaves
+                // its titles unmarked, and those rows answer to their first letter instead.
+                let Some(key) = fcmd_ui::mnemonic(&title).1 else {
+                    continue;
+                };
+                let key = key.to_lowercase().next().unwrap_or(key);
+                if let Some((_, other)) = seen.iter().find(|(c, _)| *c == key) {
+                    panic!("{tag}: `{title}` and `{other}` both claim `{key}` on the bar");
+                }
+                seen.push((key, title));
+            }
+        }
+        // English is the catalogue every other one is written against, and every title there
+        // carries its mark.
+        let i18n = fcmd_i18n::I18n::new("en");
+        for menu in menus() {
+            let title = i18n.t(menu.title);
+            assert!(
+                fcmd_ui::mnemonic(&title).1.is_some(),
+                "`{title}` has no letter marked"
+            );
+        }
+    }
+
     #[test]
     fn no_menu_is_empty_and_none_starts_or_ends_with_a_separator() {
         for menu in menus() {

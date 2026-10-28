@@ -341,11 +341,11 @@ confirm-trash-body =
 confirm-trash-where = Vanno dove il sistema tiene i file eliminati, e da lì si possono recuperare.
 
 # ---------------------------------------------------------------- barra dei menu (SPEC 10)
-menu-left = Sinistra
-menu-right = Destra
-menu-files = File
-menu-commands = Comandi
-menu-options = Opzioni
+menu-left = &Sinistra
+menu-right = &Destra
+menu-files = &File
+menu-commands = &Comandi
+menu-options = &Opzioni
 menu-brief = &Breve
 menu-medium = &Medio
 menu-full = &Completa

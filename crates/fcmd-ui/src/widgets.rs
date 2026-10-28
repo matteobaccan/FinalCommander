@@ -2725,20 +2725,28 @@ pub fn draw_menu_bar(
     buf.fill(area, ' ', bar);
     let mut x = area.x + 2;
     let mut starts = Vec::with_capacity(titles.len());
+    let hotkey_ink = theme.color("hmenu.hotkey.fg");
     for (i, title) in titles.iter().enumerate() {
         starts.push(x);
+        let (title, hotkey) = mnemonic(title);
         let text = format!(" {title} ");
         let width = text.width() as u16;
         if x + width > area.right() {
             break;
         }
-        buf.put_str(
-            x,
-            area.y,
-            &text,
-            if i == active { picked } else { bar },
-            width,
-        );
+        let style = if i == active { picked } else { bar };
+        buf.put_str(x, area.y, &text, style, width);
+        // FAR marks one letter of every title and takes that key for it. The mark keeps its
+        // colour on the menu that is open, as it does on a drop-down's own rows.
+        if let Some(hotkey) = hotkey {
+            if let Some(at) = title.chars().position(|c| c == hotkey) {
+                let before: String = title.chars().take(at).collect();
+                let hx = x + 1 + before.width() as u16;
+                if hx < area.right() {
+                    buf.set(hx, area.y, hotkey, style.with_fg(hotkey_ink));
+                }
+            }
+        }
         x += width + 1;
     }
     starts
@@ -2904,11 +2912,11 @@ pub fn draw_menu(
         buf.set(area.x + 2, y, mark, line);
         let (label, hotkey) = mnemonic(&row.label);
         buf.put_str(area.x + 4, y, &label, line, width.saturating_sub(3));
-        // The letter the row answers to, in the colour the theme has always had for it. On
-        // the selected row it stays the selection's own ink: a second colour there would
-        // fight with the bar rather than help anybody find the key.
+        // The letter the row answers to, in the colour the theme has always had for it — on
+        // the row one is standing on as well, which is what FAR does and what the lists one
+        // picks from already do.
         if let Some(hotkey) = hotkey {
-            if !on && !row.dim {
+            if !row.dim {
                 if let Some(at) = label.chars().position(|c| c == hotkey) {
                     let before: String = label.chars().take(at).collect();
                     let x = area.x + 4 + before.width() as u16;

@@ -341,11 +341,11 @@ confirm-trash-body =
 confirm-trash-where = Они попадут туда, где система держит удалённые файлы, и оттуда их можно вернуть.
 
 # ---------------------------------------------------------------- строка меню (SPEC 10)
-menu-left = Левая
-menu-right = Правая
-menu-files = Файлы
-menu-commands = Команды
-menu-options = Параметры
+menu-left = &Левая
+menu-right = П&равая
+menu-files = &Файлы
+menu-commands = &Команды
+menu-options = &Параметры
 menu-brief = &Краткий
 menu-medium = &Средний
 menu-full = &Полный

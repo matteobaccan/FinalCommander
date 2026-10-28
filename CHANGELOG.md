@@ -17,6 +17,14 @@ Notable changes, newest first. The format follows
 
 ### Changed
 
+- **The menu bar wears its letters, and `F9` lights it without covering anything.** Each of
+  the five titles is drawn with the letter it answers to in the bar's own ink, as FAR draws
+  them, and that letter is now a key: `F9` then `F` is the files menu. `F9` on its own lights
+  the bar and leaves the panels where they are — `Enter`, `↑`/`↓`, a title's letter or a click
+  pulls a menu down, `Esc` rolls it back up, and a second `Esc` gives the panels back. Inside
+  an open menu the rows keep the letters, as they do in FAR. The letter of the row one is
+  standing on keeps its colour too, instead of disappearing into the cursor.
+
 - **The lists one picks from are drawn in the menu's colours**, as FAR draws them: the drive
   dialog, the histories, the sort modes and the bookmarks are cyan with the key in yellow and
   the row under the cursor on black, instead of looking like a settings dialog. The two are
