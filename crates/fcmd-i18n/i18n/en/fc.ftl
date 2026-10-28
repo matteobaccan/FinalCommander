@@ -463,6 +463,7 @@ menu-viewer-settings = &Viewer settings
 menu-editor-settings = &Editor settings
 menu-codepages = Co&de pages
 menu-sort-groups = S&ort groups
+menu-mask-groups = &File masks
 menu-highlighting = Files &highlighting
 menu-plugins-config = Pl&ugins configuration
 menu-help = Help
@@ -594,6 +595,18 @@ clip-off = the clipboard is turned off — `ui.clipboard` in the settings
 history-gone = { $name } is not there any more
 hl-new = New colour group
 hl-edit = Colour group
+# ------------------------------------------------- the named mask groups (SPEC 02 §5b)
+mg-title = Mask group
+mg-name = Name
+mg-mask = Masks
+mg-hint = Ins adds a group, Del takes one away, F4 edits · a `·` marks the three that are built in
+mg-saved = <{ $name }> is in force; Save setup writes it
+mg-removed = <{ $name }> is gone
+mg-bad = <{ $name }>: { $problem }
+mg-needs-name = a name without spaces, commas or angle brackets
+mg-needs-mask = a group that stands for nothing matches nothing
+mg-built-in = <{ $name }> is one of the built-in three · F4 gives it other masks instead
+
 sg-title = Sort group
 sg-name = Name
 sg-mask = Masks

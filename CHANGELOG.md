@@ -8,6 +8,14 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **The mask groups have an editor, and can be written down.** `<arc>`, `<temp>` and `<exec>`
+  were three fixed lists; now a `[[mask_group]]` block adds a group of your own — `<images>`,
+  `<sources>` — or replaces one of the three, which is how `<arc>` learns about `.cbz`.
+  `F9 → Options → File masks` is the list: what each group stands for, `Ins` for a new one,
+  `F4` to edit any row (a built-in one included), `Del` to take a block away. Everything
+  compiled from a mask is compiled again at once — the colour groups, the sort bands, each
+  panel's filter — and *Save setup* writes the blocks.
+
 - **The dialogs' own fields keep a history.** `Ctrl+↓` on a field one types the same thing
   into again — the search mask and text, the replacement, where to copy to, where to unpack,
   a group's masks — opens what has been typed there before, as the same list one types into,

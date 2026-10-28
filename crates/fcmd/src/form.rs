@@ -214,6 +214,7 @@ impl Form {
             | FormKind::Link
             | FormKind::Highlight
             | FormKind::SortGroup
+            | FormKind::MaskGroup
             | FormKind::Search => Vec::new(),
             FormKind::EditorSettings => vec![
                 choice(
@@ -490,6 +491,7 @@ impl Form {
             FormKind::Link => "link-title",
             FormKind::Highlight => "hl-new",
             FormKind::SortGroup => "sg-title",
+            FormKind::MaskGroup => "mg-title",
             FormKind::EditorSettings => "menu-editor-settings",
             FormKind::ViewerSettings => "menu-viewer-settings",
             FormKind::System => "menu-system-settings",
@@ -667,6 +669,32 @@ impl Form {
     /// condition set: somebody who learned the dialog can write the file, and the other way
     /// round. The two inks take a colour or the name of a theme colour, which is why they are
     /// text rows rather than a palette.
+    /// One `[[mask_group]]`: the name a mask field writes between angle brackets, and the
+    /// masks it stands for (SPEC 02 §5b).
+    pub fn mask_group(group: Option<&fcmd_config::MaskGroupCfg>, i18n: &I18n) -> Form {
+        let t = |id: &str| i18n.t(id);
+        let blank = fcmd_config::MaskGroupCfg::default();
+        let g = group.unwrap_or(&blank);
+        let fields = vec![
+            Field::text("mg.name", t("mg-name"), g.name.clone()),
+            Field::Separator,
+            Field::text("mg.mask", t("mg-mask"), g.mask.clone()),
+            Field::Separator,
+            Field::Dim(t("mg-hint")),
+        ];
+        Form {
+            pages: Vec::new(),
+            page: 0,
+            kind: FormKind::MaskGroup,
+            title: t("mg-title"),
+            fields,
+            cursor: 0,
+            site: None,
+            button: None,
+            buttons: vec![i18n.t("btn-ok"), i18n.t("btn-cancel")],
+        }
+    }
+
     /// One `[[sort_group]]` band: what to call it, what falls into it, and which side of the
     /// ungrouped files it sits on (SPEC 02 §4).
     pub fn sort_group(group: Option<&fcmd_config::SortGroupCfg>, i18n: &I18n) -> Form {

@@ -355,6 +355,34 @@ per group that takes exactly the words the file takes. A predicate language for 
 that are not conditions on one field (`attrs.contains('x') && kind == 'file'`) is still a
 backlog line: the condition set covers what a person writes in a file.
 
+### 5b. The named mask groups (`[[mask_group]]`)
+
+Every field in this program that takes a mask takes the same mask list, and a mask list may
+name a group: `<arc>` is every archive, `<temp>` every file somebody meant to throw away,
+`<exec>` everything that runs. Three come with the program and are not written down anywhere;
+a `[[mask_group]]` block adds one, and a block with the name of a built-in one replaces it —
+which is how somebody who keeps `.cbz` files teaches `<arc>` about them.
+
+```toml
+[[mask_group]]
+name = "images"
+mask = "*.png,*.jpg,*.jpeg,*.gif,*.webp,*.svg"
+```
+
+Groups nest: a group may name another. A group that would name itself, directly or round a
+circle, is refused where it is written rather than where it is used.
+
+**The editor** is `F9 → Options → File masks`: the groups as a list, each row showing what it
+stands for, with a `·` on the three that are built in. `Ins` writes a new one, `F4` and
+`Enter` edit the row — including a built-in one, which then becomes a block that replaces it —
+and `Del` takes a block away, saying so rather than pretending when the row is one of the
+three nobody has rewritten. A name with a space, a comma or an angle bracket in it is refused,
+because it could never be written back between brackets; so is a group that stands for
+nothing.
+
+Everything that was compiled from a mask is compiled again the moment a group changes: the
+colour groups, the sort bands and each panel's own filter. *Save setup* writes the blocks.
+
 ## 6. Fast find / quick search
 
 Typing while the command line is empty starts fast find (configurable: FAR uses `Alt`+letters,

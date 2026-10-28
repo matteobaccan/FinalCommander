@@ -455,6 +455,7 @@ menu-viewer-settings = Ajustes del &visor
 menu-editor-settings = Ajust&es del editor
 menu-codepages = Páginas &de códigos
 menu-sort-groups = Grupos de &orden
+menu-mask-groups = &Máscaras de archivo
 menu-highlighting = &Resaltado de archivos
 menu-plugins-config = Configuración de &los complementos
 menu-help = A&yuda
@@ -586,6 +587,18 @@ clip-off = el portapapeles está desactivado — `ui.clipboard` en los ajustes
 history-gone = { $name } ya no está
 hl-new = Nuevo grupo de color
 hl-edit = Grupo de color
+# ------------------------------------------------- los grupos de máscaras (SPEC 02 §5b)
+mg-title = Grupo de máscaras
+mg-name = Nombre
+mg-mask = Máscaras
+mg-hint = Ins añade un grupo, Supr lo quita, F4 edita · un `·` marca los tres incorporados
+mg-saved = <{ $name }> está en vigor; Guardar ajustes lo escribe
+mg-removed = <{ $name }> ya no está
+mg-bad = <{ $name }>: { $problem }
+mg-needs-name = un nombre sin espacios, comas ni ángulos
+mg-needs-mask = un grupo que no representa nada no coincide con nada
+mg-built-in = <{ $name }> es uno de los tres incorporados · F4 le da otras máscaras
+
 sg-title = Grupo de orden
 sg-name = Nombre
 sg-mask = Máscaras

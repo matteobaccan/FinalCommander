@@ -455,6 +455,7 @@ menu-viewer-settings = 查看器设置
 menu-editor-settings = 编辑器设置
 menu-codepages = 代码页
 menu-sort-groups = 排序分组
+menu-mask-groups = 文件掩码组
 menu-highlighting = 文件着色
 menu-plugins-config = 插件配置
 menu-help = 帮助
@@ -574,6 +575,18 @@ clip-off = 剪贴板已关闭 — 设置中的 `ui.clipboard`
 history-gone = { $name } 已经不在了
 hl-new = 新建颜色分组
 hl-edit = 颜色分组
+# ------------------------------------------------- 命名掩码组 (SPEC 02 §5b)
+mg-title = 掩码组
+mg-name = 名称
+mg-mask = 掩码
+mg-hint = Ins 新增，Del 删除，F4 编辑 · `·` 标记三个内置组
+mg-saved = <{ $name }> 已生效；保存设置可写入文件
+mg-removed = <{ $name }> 已删除
+mg-bad = <{ $name }>：{ $problem }
+mg-needs-name = 名称中不能有空格、逗号或尖括号
+mg-needs-mask = 不代表任何内容的组匹配不到任何文件
+mg-built-in = <{ $name }> 是三个内置组之一 · 用 F4 给它别的掩码
+
 sg-title = 排序分组
 sg-name = 名称
 sg-mask = 掩码

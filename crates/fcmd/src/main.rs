@@ -141,6 +141,7 @@ fn run_find(
     cancel: CancelToken,
     tx: mpsc::Sender<Event>,
     archives: &std::sync::Arc<fcmd_arc::Cache>,
+    groups: &fcmd_core::filter::Groups,
 ) {
     use fcmd_core::filter::{Filter, MaskSet, SizeRange};
     use fcmd_find::{Content, Needle};
@@ -157,8 +158,7 @@ fn run_find(
         });
     };
 
-    let groups = fcmd_core::filter::default_groups();
-    let masks = match MaskSet::parse_with(&spec.mask, &groups, spec.case_sensitive) {
+    let masks = match MaskSet::parse_with(&spec.mask, groups, spec.case_sensitive) {
         Ok(masks) => masks,
         Err(e) => return fail(e.to_string()),
     };
@@ -1097,9 +1097,14 @@ fn interactive(mut app: App) -> Result<()> {
                 Request::Find { id, spec, cancel } => {
                     let tx = tx.clone();
                     let archives = archives.clone();
+                    // The named mask lists as they are now: the editor in the Options menu
+                    // can have changed them since the program started.
+                    let groups = app.cfg.mask_groups();
                     // A blocking thread: the walk is synchronous, and it must not sit in the
                     // way of the runtime that is also serving the panels.
-                    runtime.spawn_blocking(move || run_find(id, *spec, cancel, tx, &archives));
+                    runtime.spawn_blocking(move || {
+                        run_find(id, *spec, cancel, tx, &archives, &groups)
+                    });
                 }
                 Request::CompareContents {
                     id,
@@ -4548,7 +4553,8 @@ timeout = 10
                 Request::Find { id, spec, cancel } => {
                     let (tx, rx) = mpsc::channel();
                     let archives = std::sync::Arc::new(fcmd_arc::Cache::new(Default::default()));
-                    run_find(id, *spec, cancel, tx, &archives);
+                    let groups = app.cfg.mask_groups();
+                    run_find(id, *spec, cancel, tx, &archives, &groups);
                     while let Ok(event) = rx.try_recv() {
                         app.handle_event(event);
                     }

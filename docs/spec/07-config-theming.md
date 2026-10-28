@@ -123,6 +123,20 @@ anyway), `objdump -d -C` (`*.o`, `*.so`, `*.a`), `retdec-decompiler` (`*.exe`). 
 `fcmd.toml` wins over a default for the same mask. `{file}` is substituted; a rule that forgets
 it still gets the path appended.
 
+## 2b-ter. `[[mask_group]]` blocks
+
+A named mask list that every mask field can use as `<name>` (SPEC 02 §5b). `<arc>`, `<temp>`
+and `<exec>` are there without being written down; a block of the same name replaces one of
+them, and any other name adds a group.
+
+```toml
+[[mask_group]]
+name = "images"           # what goes between the angle brackets; case does not matter
+mask = "*.png,*.jpg,*.svg" # a mask list, which may name other groups: they nest
+```
+
+`F9 → Options → File masks` edits these, and *Save setup* writes them.
+
 ## 2b-bis. `[[highlight]]` groups
 
 Which rows the panel paints differently, and how (SPEC 02 §5). A group is a condition and an

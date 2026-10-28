@@ -455,6 +455,7 @@ menu-viewer-settings = П&араметры просмотра
 menu-editor-settings = Параметры &редактора
 menu-codepages = Кодов&ые страницы
 menu-sort-groups = &Группы сортировки
+menu-mask-groups = Фа&йловые маски
 menu-highlighting = Раскраска &файлов
 menu-plugins-config = Настройка плагино&в
 menu-help = П&омощь
@@ -586,6 +587,18 @@ clip-off = буфер обмена выключен — `ui.clipboard` в нас
 history-gone = { $name } больше нет
 hl-new = Новая цветовая группа
 hl-edit = Цветовая группа
+# ------------------------------------------------- именованные группы масок (SPEC 02 §5b)
+mg-title = Группа масок
+mg-name = Имя
+mg-mask = Маски
+mg-hint = Ins добавляет группу, Del убирает, F4 правит · `·` отмечает три встроенные
+mg-saved = <{ $name }> действует; Сохранить настройки запишет это
+mg-removed = <{ $name }> больше нет
+mg-bad = <{ $name }>: { $problem }
+mg-needs-name = имя без пробелов, запятых и угловых скобок
+mg-needs-mask = группа, которая ни за что не стоит, ничему не соответствует
+mg-built-in = <{ $name }> — одна из трёх встроенных · F4 даст ей другие маски
+
 sg-title = Группа сортировки
 sg-name = Имя
 sg-mask = Маски

@@ -455,6 +455,7 @@ menu-viewer-settings = Eins&tellungen der Ansicht
 menu-editor-settings = &Einstellungen des Editors
 menu-codepages = &Zeichensätze
 menu-sort-groups = S&ortiergruppen
+menu-mask-groups = Datei&masken
 menu-highlighting = &Dateihervorhebung
 menu-plugins-config = Plugin-Konfig&uration
 menu-help = Hi&lfe
@@ -586,6 +587,18 @@ clip-off = die Ablage ist abgeschaltet — `ui.clipboard` in den Einstellungen
 history-gone = { $name } ist nicht mehr da
 hl-new = Neue Farbgruppe
 hl-edit = Farbgruppe
+# ------------------------------------------------- die benannten Maskengruppen (SPEC 02 §5b)
+mg-title = Maskengruppe
+mg-name = Name
+mg-mask = Masken
+mg-hint = Einfg fügt eine Gruppe hinzu, Entf entfernt sie, F4 bearbeitet · ein `·` markiert die drei eingebauten
+mg-saved = <{ $name }> gilt; Einstellungen speichern schreibt es in die Datei
+mg-removed = <{ $name }> ist weg
+mg-bad = <{ $name }>: { $problem }
+mg-needs-name = ein Name ohne Leerzeichen, Kommas und spitze Klammern
+mg-needs-mask = eine Gruppe, die für nichts steht, trifft nichts
+mg-built-in = <{ $name }> ist eine der drei eingebauten · F4 gibt ihr andere Masken
+
 sg-title = Sortiergruppe
 sg-name = Name
 sg-mask = Masken

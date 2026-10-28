@@ -455,6 +455,7 @@ menu-viewer-settings = Imposta&zioni del visualizzatore
 menu-editor-settings = Impostazioni dell'edi&tor
 menu-codepages = Ta&belle codici
 menu-sort-groups = &Gruppi di ordinamento
+menu-mask-groups = Masc&here di file
 menu-highlighting = &Evidenziazione dei file
 menu-plugins-config = Config&urazione dei plugin
 menu-help = Aiuto
@@ -586,6 +587,18 @@ clip-off = gli appunti sono disattivati — `ui.clipboard` nelle impostazioni
 history-gone = { $name } non c’è più
 hl-new = Nuovo gruppo di colore
 hl-edit = Gruppo di colore
+# ------------------------------------------------- i gruppi di maschere (SPEC 02 §5b)
+mg-title = Gruppo di maschere
+mg-name = Nome
+mg-mask = Maschere
+mg-hint = Ins aggiunge un gruppo, Canc lo toglie, F4 modifica · un `·` segna i tre predefiniti
+mg-saved = <{ $name }> è in vigore; Salva impostazioni lo scrive
+mg-removed = <{ $name }> non c'è più
+mg-bad = <{ $name }>: { $problem }
+mg-needs-name = un nome senza spazi, virgole o parentesi angolari
+mg-needs-mask = un gruppo che non sta per niente non corrisponde a niente
+mg-built-in = <{ $name }> è uno dei tre predefiniti · con F4 gli dai altre maschere
+
 sg-title = Gruppo di ordinamento
 sg-name = Nome
 sg-mask = Maschere

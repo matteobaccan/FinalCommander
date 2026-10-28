@@ -90,10 +90,15 @@ impl Highlight {
     /// FAR's six default groups. A group whose masks do not compile is simply absent: a theme
     /// is not worth failing a startup over.
     pub fn far_default() -> Self {
-        let groups = fcmd_core::filter::default_groups();
+        Highlight::far_default_with(&fcmd_core::filter::default_groups())
+    }
+
+    /// The same six, with the named mask lists in force rather than the built-in three:
+    /// somebody who has taught `<arc>` about `.cbz` expects the panel to colour one.
+    pub fn far_default_with(groups: &fcmd_core::filter::Groups) -> Self {
         // Case-insensitive, because `.ZIP` is an archive on every platform a user cares
         // about, and FAR compares masks without case.
-        let compile = |name: &str| MaskSet::parse_with(name, &groups, false).ok();
+        let compile = |name: &str| MaskSet::parse_with(name, groups, false).ok();
         Highlight {
             rules: Vec::new(),
             exec: compile("<exec>"),
@@ -107,6 +112,14 @@ impl Highlight {
         Highlight {
             rules,
             ..Highlight::far_default()
+        }
+    }
+
+    /// The same, with the named mask lists the configuration defines.
+    pub fn with_rules_in(rules: Vec<Rule>, groups: &fcmd_core::filter::Groups) -> Self {
+        Highlight {
+            rules,
+            ..Highlight::far_default_with(groups)
         }
     }
 

@@ -455,6 +455,7 @@ menu-viewer-settings = Réglages de la &visionneuse
 menu-editor-settings = R&églages de l'éditeur
 menu-codepages = &Pages de codes
 menu-sort-groups = &Groupes de tri
+menu-mask-groups = Masq&ues de fichiers
 menu-highlighting = &Mise en évidence des fichiers
 menu-plugins-config = Con&figuration des plugins
 menu-help = &Aide
@@ -586,6 +587,18 @@ clip-off = le presse-papiers est désactivé — `ui.clipboard` dans les réglag
 history-gone = { $name } n’est plus là
 hl-new = Nouveau groupe de couleur
 hl-edit = Groupe de couleur
+# ------------------------------------------------- les groupes de masques (SPEC 02 §5b)
+mg-title = Groupe de masques
+mg-name = Nom
+mg-mask = Masques
+mg-hint = Inser ajoute un groupe, Suppr le retire, F4 modifie · un `·` marque les trois intégrés
+mg-saved = <{ $name }> est en vigueur ; Enregistrer les réglages l’écrit
+mg-removed = <{ $name }> n'est plus là
+mg-bad = <{ $name }> : { $problem }
+mg-needs-name = un nom sans espace, virgule ni chevron
+mg-needs-mask = un groupe qui ne représente rien ne correspond à rien
+mg-built-in = <{ $name }> est l'un des trois intégrés · F4 lui donne d'autres masques
+
 sg-title = Groupe de tri
 sg-name = Nom
 sg-mask = Masques

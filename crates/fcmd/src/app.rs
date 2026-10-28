@@ -1595,6 +1595,8 @@ pub struct App {
     /// The walk filling the folder list, so a second `Alt+F10` does not start another and
     /// `Esc` can stop the one that runs.
     pub folder_scan: Option<CancelToken>,
+    /// Which `[[mask_group]]` the dialog is editing, or `None` for a new one.
+    pub mask_group_at: Option<usize>,
     /// The copy dialog the folder list was opened from, to come back to with the answer in
     /// its destination row (`F10` in the dialog).
     pub folder_for: Option<Box<Form>>,
@@ -1912,6 +1914,7 @@ impl App {
             highlight_at: None,
             sort_group_at: None,
             folder_scan: None,
+            mask_group_at: None,
             folder_for: None,
             field_for: None,
             field_history: std::collections::BTreeMap::new(),
@@ -4010,7 +4013,9 @@ impl App {
                     panel.rebuild();
                     return;
                 }
-                if let Ok(masks) = fcmd_core::filter::MaskSet::parse(&text) {
+                if let Ok(masks) =
+                    fcmd_core::filter::MaskSet::parse_with(&text, &self.cfg.mask_groups(), false)
+                {
                     let panel = self.panel_mut();
                     panel.filter = Some(text);
                     panel.filter_set = Some(masks);
@@ -5165,7 +5170,7 @@ impl App {
     fn apply_sync_form(&mut self, form: &Form) {
         let filter = match form.text_value("sync.filter") {
             empty if empty.trim().is_empty() => None,
-            mask => match fcmd_core::MaskSet::parse(&mask) {
+            mask => match fcmd_core::MaskSet::parse_with(&mask, &self.cfg.mask_groups(), false) {
                 Ok(set) => Some(set),
                 Err(e) => {
                     let msg = self
@@ -7022,6 +7027,7 @@ impl App {
             Command::OptInterface => self.open_form(FormKind::Interface),
             Command::OptHighlight => self.open_pick(PickKind::Highlight, self.active),
             Command::OptSortGroups => self.open_pick(PickKind::SortGroups, self.active),
+            Command::OptMaskGroups => self.open_pick(PickKind::MaskGroups, self.active),
             Command::ToolFindFolder => self.open_folder_list(None),
             Command::OptConfirmations => self.open_form(FormKind::Confirmations),
             Command::OptEditor => self.open_form(FormKind::EditorSettings),
@@ -8884,7 +8890,7 @@ impl App {
         let filter = if typed.is_empty() {
             None
         } else {
-            match fcmd_core::MaskSet::parse(&typed) {
+            match fcmd_core::MaskSet::parse_with(&typed, &self.cfg.mask_groups(), false) {
                 Ok(masks) => Some(masks),
                 Err(e) => {
                     let msg = self
@@ -9383,7 +9389,7 @@ impl App {
         };
         let at = self.highlight_at;
         let name = highlight_name(&group, at.unwrap_or(self.cfg.highlight.len()));
-        let groups = fcmd_core::filter::default_groups();
+        let groups = self.cfg.mask_groups();
         if let Err(problem) = crate::highlight::rule(&group, &groups, &name) {
             let msg = self.i18n.t_args(
                 "hl-bad",
@@ -9428,7 +9434,7 @@ impl App {
         // A band with no mask holds nothing, and a mask that does not parse would be dropped
         // at startup with a warning nobody reading this dialog would see: both are said here,
         // with the dialog still on screen.
-        let predefined = fcmd_core::filter::default_groups();
+        let predefined = self.cfg.mask_groups();
         let problem = if group.mask.trim().is_empty() {
             Some(self.i18n.t("sg-needs-mask"))
         } else {
@@ -10734,6 +10740,10 @@ impl App {
         }
         if form.kind == FormKind::SortGroup {
             self.apply_sort_group_form(&form);
+            return;
+        }
+        if form.kind == FormKind::MaskGroup {
+            self.apply_mask_group_form(&form);
             return;
         }
         if form.kind == FormKind::Find {
@@ -12255,6 +12265,13 @@ impl App {
                     .collect();
                 Pick::new(kind, self.plain("menu-sort-groups"), rows, side)
             }
+            PickKind::MaskGroups => {
+                // The three FAR ships with are in the list as well, as the rows one can
+                // replace: a dialog that hid them would be a dialog that cannot explain why
+                // `<arc>` matches a `.7z`.
+                let rows = self.mask_group_rows();
+                Pick::new(kind, self.plain("menu-mask-groups"), rows, side)
+            }
             PickKind::SortModes => {
                 let panel = &self.panels[side];
                 let keys = [
@@ -12500,6 +12517,39 @@ impl App {
                     action: ConfirmAction::ClearHistory { kind, side, filter },
                     button: 0,
                 });
+            }
+            KeyCode::F(4) if kind == PickKind::MaskGroups => {
+                let name = pick.chosen().map(|r| r.value.clone());
+                if let Some(name) = name {
+                    self.open_mask_group_form(Some(name));
+                }
+            }
+            KeyCode::Insert if kind == PickKind::MaskGroups => {
+                self.open_mask_group_form(None);
+            }
+            KeyCode::Delete if kind == PickKind::MaskGroups => {
+                let (side, at) = (pick.side, pick.cursor);
+                let name = pick.chosen().map(|r| r.value.clone());
+                let Some(name) = name else {
+                    return;
+                };
+                let had = self.cfg.mask_groups.len();
+                self.cfg
+                    .mask_groups
+                    .retain(|g| !g.name.eq_ignore_ascii_case(&name));
+                if self.cfg.mask_groups.len() == had {
+                    // One of the three that are there without being written down: taking it
+                    // away would mean writing an empty block, which is not what `Del` means.
+                    let msg = self
+                        .i18n
+                        .t_args("mg-built-in", &[("name", name.clone().into())]);
+                    self.set_error(msg);
+                    return;
+                }
+                self.apply_mask_groups();
+                let msg = self.i18n.t_args("mg-removed", &[("name", name.into())]);
+                self.reopen_mask_groups(side, at);
+                self.set_status(msg);
             }
             KeyCode::F(4) if kind == PickKind::SortGroups => {
                 let at = pick.cursor;
@@ -12801,6 +12851,7 @@ impl App {
                 let at = row.value.parse::<usize>().unwrap_or(0);
                 self.open_sort_group_form(Some(at));
             }
+            PickKind::MaskGroups => self.open_mask_group_form(Some(row.value.clone())),
             PickKind::FieldHistory => {
                 if let Some((mut form, key)) = self.field_for.take() {
                     form.set_text(key, row.value.clone());
@@ -15433,6 +15484,150 @@ impl App {
             panel.sort.groups = on;
             panel.rebuild();
         }
+    }
+
+    /// The named mask lists as rows: the three that are there without being written down,
+    /// and the `[[mask_group]]` blocks over them, each with what it stands for.
+    fn mask_group_rows(&self) -> Vec<PickRow> {
+        let groups = self.cfg.mask_groups();
+        let mine = |name: &str| {
+            self.cfg
+                .mask_groups
+                .iter()
+                .any(|g| g.name.eq_ignore_ascii_case(name))
+        };
+        groups
+            .names()
+            .map(|name| {
+                let masks = groups.get(name).unwrap_or_default();
+                // The built-in three are marked, because `Del` cannot take one away and a
+                // row that looked like the others would be a row that lies about that.
+                let label = if mine(name) {
+                    format!("<{name}>  {masks}")
+                } else {
+                    format!("<{name}>  {masks}   ·")
+                };
+                PickRow::plain(label, name.to_string(), false)
+            })
+            .collect()
+    }
+
+    /// `Enter`, `F4` or `Ins` in the list: one group, or a new one when `name` is `None`.
+    ///
+    /// Opening one of the built-in three fills the dialog with what it stands for now, so
+    /// `OK` writes a block that replaces it — which is how `<arc>` is taught about a format
+    /// it has never heard of.
+    fn open_mask_group_form(&mut self, name: Option<String>) {
+        let existing = name.as_ref().and_then(|name| {
+            self.cfg
+                .mask_groups
+                .iter()
+                .position(|g| g.name.eq_ignore_ascii_case(name))
+        });
+        self.mask_group_at = existing;
+        let seed = match (&name, existing) {
+            (_, Some(at)) => Some(self.cfg.mask_groups[at].clone()),
+            (Some(name), None) => Some(fcmd_config::MaskGroupCfg {
+                name: name.clone(),
+                mask: self
+                    .cfg
+                    .mask_groups()
+                    .get(name)
+                    .unwrap_or_default()
+                    .to_string(),
+            }),
+            (None, None) => None,
+        };
+        self.mode = Mode::Form(Box::new(Form::mask_group(seed.as_ref(), &self.i18n)));
+    }
+
+    /// `OK` in the mask-group dialog: the group goes in, and everything that reads a mask
+    /// reads it from the next keystroke on.
+    fn apply_mask_group_form(&mut self, form: &Form) {
+        let group = fcmd_config::MaskGroupCfg {
+            name: form.text_value("mg.name").trim().to_string(),
+            mask: form.text_value("mg.mask").trim().to_string(),
+        };
+        // A name with brackets or a comma in it could never be written back as `<name>`, and
+        // a group that stands for nothing is a name that matches nothing: both are said with
+        // the dialog still on the screen rather than swallowed.
+        let bad_name = group.name.is_empty()
+            || group
+                .name
+                .contains(|c: char| c.is_whitespace() || "<>,|".contains(c));
+        let problem = if bad_name {
+            Some(self.i18n.t("mg-needs-name"))
+        } else if group.mask.is_empty() {
+            Some(self.i18n.t("mg-needs-mask"))
+        } else {
+            // Parsed against the others, so a group that names itself — or a pair that name
+            // each other — is refused here rather than at the next keystroke.
+            let mut others = self.cfg.mask_groups();
+            others.remove(&group.name);
+            others.insert(&group.name, &group.mask);
+            fcmd_core::filter::MaskSet::parse_with(&format!("<{}>", group.name), &others, false)
+                .err()
+                .map(|e| e.to_string())
+        };
+        if let Some(problem) = problem {
+            let msg = self.i18n.t_args(
+                "mg-bad",
+                &[
+                    ("name", group.name.clone().into()),
+                    ("problem", problem.into()),
+                ],
+            );
+            self.set_error(msg);
+            self.mode = Mode::Form(Box::new(form.clone()));
+            return;
+        }
+        let side = self.active;
+        let name = group.name.clone();
+        match self.mask_group_at {
+            Some(at) if at < self.cfg.mask_groups.len() => self.cfg.mask_groups[at] = group,
+            _ => match self
+                .cfg
+                .mask_groups
+                .iter()
+                .position(|g| g.name.eq_ignore_ascii_case(&name))
+            {
+                Some(at) => self.cfg.mask_groups[at] = group,
+                None => self.cfg.mask_groups.push(group),
+            },
+        }
+        self.mask_group_at = None;
+        self.apply_mask_groups();
+        let at = self
+            .mask_group_rows()
+            .iter()
+            .position(|row| row.value.eq_ignore_ascii_case(&name))
+            .unwrap_or(0);
+        let msg = self.i18n.t_args("mg-saved", &[("name", name.into())]);
+        self.reopen_mask_groups(side, at);
+        self.set_status(msg);
+    }
+
+    /// A group changed, so everything compiled from a mask is compiled again: the colours,
+    /// the sort bands, and each panel's own filter.
+    fn apply_mask_groups(&mut self) {
+        self.apply_highlight();
+        self.apply_sort_groups();
+        let groups = self.cfg.mask_groups();
+        for panel in &mut self.panels {
+            let Some(source) = panel.filter.clone() else {
+                continue;
+            };
+            panel.filter_set = fcmd_core::filter::MaskSet::parse_with(&source, &groups, false).ok();
+            panel.rebuild();
+        }
+    }
+
+    fn reopen_mask_groups(&mut self, side: usize, cursor: usize) {
+        let rows = self.mask_group_rows();
+        let title = self.plain("menu-mask-groups");
+        let mut pick = Pick::new(PickKind::MaskGroups, title, rows, side);
+        pick.cursor = cursor.min(pick.rows.len().saturating_sub(1));
+        self.mode = Mode::Pick(Box::new(pick));
     }
 
     fn reopen_sort_groups(&mut self, side: usize, cursor: usize) {
@@ -23421,6 +23616,79 @@ abcdefghij
         assert!(
             under.iter().any(|p| p.display_name() == "logs"),
             "{under:?}"
+        );
+    }
+
+    /// The named mask lists are edited where everything that reads a mask reads them: a
+    /// list of what each one stands for, a dialog per group, and `<name>` meaning the new
+    /// thing from the next keystroke on (SPEC 02 §5b).
+    #[test]
+    fn the_mask_groups_are_a_list_one_edits_from_inside_it() {
+        let mut app = app();
+        app.run(Command::OptMaskGroups);
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(pick.kind, crate::menu::PickKind::MaskGroups);
+        // The three that are there without being written down.
+        assert_eq!(pick.rows.len(), 3, "{:?}", pick.rows);
+        assert!(pick.rows.iter().any(|r| r.value == "arc"));
+
+        // `Ins` writes a new one, and it is in force at once.
+        press(&mut app, "Ins");
+        let Mode::Form(form) = &mut app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(form.kind, crate::menu::FormKind::MaskGroup);
+        form.set_text("mg.name", "images".into());
+        form.set_text("mg.mask", "*.png,*.jpg".into());
+        app.apply_form();
+        assert_eq!(app.cfg.mask_groups.len(), 1);
+        let groups = app.cfg.mask_groups();
+        assert!(
+            fcmd_core::filter::MaskSet::parse_with("<images>", &groups, false)
+                .expect("it parses")
+                .matches_name("a.png"),
+            "the new group is in force"
+        );
+
+        // A group that stands for nothing, or whose name could never be written back
+        // between brackets, is refused with the dialog still on the screen.
+        press(&mut app, "Ins");
+        if let Mode::Form(form) = &mut app.mode {
+            form.set_text("mg.name", "two words".into());
+            form.set_text("mg.mask", "*.x".into());
+        }
+        app.apply_form();
+        assert!(matches!(app.mode, Mode::Form(_)), "{:?}", app.mode);
+        assert_eq!(app.cfg.mask_groups.len(), 1, "nothing was written");
+        press(&mut app, "Esc");
+
+        // One of the built-in three can be given other masks, and then `Del` takes that
+        // block away again — but `Del` on one nobody has rewritten says so.
+        app.run(Command::OptMaskGroups);
+        let Mode::Pick(pick) = &mut app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        pick.cursor = pick
+            .rows
+            .iter()
+            .position(|r| r.value == "arc")
+            .expect("the row");
+        press(&mut app, "Del");
+        assert!(app.status_error, "{}", app.status);
+        press(&mut app, "F4");
+        if let Mode::Form(form) = &mut app.mode {
+            assert_eq!(form.text_value("mg.name"), "arc");
+            form.set_text("mg.mask", "*.zip,*.cbz".into());
+        }
+        app.apply_form();
+        let groups = app.cfg.mask_groups();
+        assert!(
+            fcmd_core::filter::MaskSet::parse_with("<arc>", &groups, false)
+                .expect("it parses")
+                .matches_name("book.cbz"),
+            "the built-in group was taught something"
         );
     }
 

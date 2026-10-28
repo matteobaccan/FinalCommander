@@ -51,6 +51,8 @@ pub enum FormKind {
     Highlight,
     /// One `[[sort_group]]` band: its name, its masks and which side it sits on (SPEC 02 §4).
     SortGroup,
+    /// One `[[mask_group]]`: the name it answers to between angle brackets, and its masks.
+    MaskGroup,
     System,
     Panel,
     Interface,
@@ -82,6 +84,8 @@ pub enum PickKind {
     Highlight,
     /// The `[[sort_group]]` bands, in the order they cut the listing (SPEC 02 §4).
     SortGroups,
+    /// The named mask lists every mask field can use as `<name>` (SPEC 02 §5b).
+    MaskGroups,
     /// Every folder the tree knows under this panel's root: `Alt+F10`, and the destination
     /// chooser of the copy dialog (SPEC 02 §7).
     Folders,
@@ -535,6 +539,7 @@ pub fn menus() -> Vec<Menu> {
                 item("menu-languages", "", Action::Run(Command::AppLanguages)),
                 item("menu-themes", "", Action::Run(Command::AppThemes)),
                 item("menu-colors", "", Action::Run(Command::OptColors)),
+                item("menu-mask-groups", "", Action::Run(Command::OptMaskGroups)),
                 Entry::Separator,
                 item(
                     "menu-confirmations",

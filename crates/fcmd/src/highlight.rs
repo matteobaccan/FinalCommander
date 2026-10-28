@@ -18,7 +18,7 @@ use fcmd_config::Config;
 pub fn sort_groups(cfg: &Config, warnings: &mut Vec<String>) -> fcmd_core::sort::SortGroups {
     use fcmd_core::sort::{SortGroup, SortGroups};
 
-    let predefined = fcmd_core::filter::default_groups();
+    let predefined = cfg.mask_groups();
     let mut bands = Vec::new();
     for (n, g) in cfg.sort_groups.iter().enumerate() {
         let name = if g.name.is_empty() {
@@ -56,7 +56,7 @@ pub fn sort_groups(cfg: &Config, warnings: &mut Vec<String>) -> fcmd_core::sort:
 /// start: the file still lists, and the colour it would have had is the one it had before.
 /// The message names the group, which is why a group is worth naming.
 pub fn groups(cfg: &Config, warnings: &mut Vec<String>) -> fcmd_ui::Highlight {
-    let groups = fcmd_core::filter::default_groups();
+    let groups = cfg.mask_groups();
     let mut rules = Vec::new();
     for (n, h) in cfg.highlight.iter().enumerate() {
         let name = if h.name.is_empty() {
@@ -69,7 +69,7 @@ pub fn groups(cfg: &Config, warnings: &mut Vec<String>) -> fcmd_ui::Highlight {
             Err(problem) => warnings.push(format!("highlight group `{name}`: {problem}")),
         }
     }
-    fcmd_ui::Highlight::with_rules(rules)
+    fcmd_ui::Highlight::with_rules_in(rules, &groups)
 }
 
 /// One `[[highlight]]` block as a rule: every condition it names, parsed the way the filter

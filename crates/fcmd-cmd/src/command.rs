@@ -61,6 +61,7 @@ pub enum Command {
     OptHighlight,
     /// The `[[sort_group]]` bands as a list, with a dialog per band (SPEC 02 §4).
     OptSortGroups,
+    OptMaskGroups,
     OptConfirmations,
     /// The palette editor: every colour the interface uses, on the live theme.
     OptColors,
@@ -409,6 +410,7 @@ impl Command {
             Command::OptInterface,
             Command::OptHighlight,
             Command::OptSortGroups,
+            Command::OptMaskGroups,
             Command::OptConfirmations,
             Command::OptColors,
             Command::OptEditor,
@@ -657,6 +659,7 @@ impl Command {
             Command::OptInterface => "opt.interface".into(),
             Command::OptHighlight => "opt.highlight".into(),
             Command::OptSortGroups => "opt.sort.groups".into(),
+            Command::OptMaskGroups => "opt.mask.groups".into(),
             Command::OptConfirmations => "opt.confirmations".into(),
             Command::OptColors => "opt.colors".into(),
             Command::OptEditor => "opt.editor".into(),
@@ -882,6 +885,7 @@ impl Command {
             ("opt.interface", _) => Command::OptInterface,
             ("opt.highlight", _) => Command::OptHighlight,
             ("opt.sort.groups", _) => Command::OptSortGroups,
+            ("opt.mask.groups", _) => Command::OptMaskGroups,
             ("opt.confirmations", _) => Command::OptConfirmations,
             ("opt.colors", _) => Command::OptColors,
             ("opt.editor", _) => Command::OptEditor,

@@ -39,7 +39,7 @@ what we intend to do about it.
 
 | Item | Where | Notes |
 | --- | --- | --- |
-| ~~Mask groups `<arc>`, `<temp>`, `<exec>`~~ | Options menu | **Shipped** as values (nestable, used by the filter bar and by file highlighting). The *editor* for them in the Options menu is still to come. |
+| ~~Mask groups `<arc>`, `<temp>`, `<exec>`~~ | Options menu | **Shipped**, values and editor (SPEC 02 §5b): nestable, used by every mask field there is, written as `[[mask_group]]` blocks, and edited at `F9 → Options → File masks` — a list of what each one stands for, `Ins`/`F4`/`Del`, and a block that replaces one of the three built-in groups rather than adding beside it. Everything compiled from a mask is compiled again when one changes. |
 | ~~The full mask grammar~~ | everywhere | **Shipped**: `[c-f]` ranges, `/regex/i`, `include|exclude`, lists with either separator. |
 | ~~Filters as a shared object~~ | panel, find, copy | **Shipped** in `fcmd-core::filter`: masks, size, four date fields (absolute or relative in days), attributes as three states, hard links — one value type, used by the panel's filter bar today. |
 | ~~Files highlighting~~ | Options menu | **Shipped**: the `[[highlight]]` groups in 0.6.0 and the list that edits them in 0.7.0 (SPEC 10 §3.11) — in the order they are tried, each row drawn in its own colours, `Enter`/`F4` to edit, `Ins`/`Del`, `Ctrl+↑↓` to move one past its neighbour. A change is in force at once; `Save setup` writes it to the file. |

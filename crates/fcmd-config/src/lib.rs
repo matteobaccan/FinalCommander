@@ -967,6 +967,28 @@ pub struct SortGroupCfg {
     pub place: String,
 }
 
+/// One `[[mask_group]]` block: a named mask list that every mask field can use as `<name>`.
+///
+/// ```toml
+/// [[mask_group]]
+/// name = "images"
+/// mask = "*.png,*.jpg,*.jpeg,*.gif,*.webp,*.svg"
+/// ```
+///
+/// The three FAR ships with — `<arc>`, `<temp>`, `<exec>` — are there without being written
+/// down, and a block of the same name replaces one of them rather than adding to it: that is
+/// how somebody who keeps `.cbz` files teaches `<arc>` about them.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct MaskGroupCfg {
+    /// What it is called between the angle brackets. Case does not matter.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub name: String,
+    /// A mask list, which may name other groups: groups nest.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub mask: String,
+}
+
 /// One column of a `[[column_set]]` block.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -1194,12 +1216,34 @@ pub struct Config {
     /// `[[column_set]]` blocks: the user's own columns for a view mode (SPEC 02 §3a).
     #[serde(rename = "column_set")]
     pub column_sets: Vec<ColumnSetCfg>,
+    /// `[[mask_group]]` blocks: the named mask lists every mask field can use (SPEC 02 §5b).
+    #[serde(rename = "mask_group")]
+    pub mask_groups: Vec<MaskGroupCfg>,
     /// Anything we did not recognise, kept so `--dump-config` can show it and warn.
     #[serde(flatten, skip_serializing)]
     pub unknown: BTreeMap<String, toml::Value>,
 }
 
 impl Config {
+    /// The named mask lists in force: the three FAR ships with, and the `[[mask_group]]`
+    /// blocks over them.
+    ///
+    /// A block with the name of a built-in one replaces it, because that is what somebody
+    /// writing `<arc>` again means; a block with no name or no masks is nothing and is
+    /// passed over rather than refused — a mask field that found an empty group would say
+    /// something unhelpful about a line nobody is looking at.
+    pub fn mask_groups(&self) -> fcmd_core::filter::Groups {
+        let mut groups = fcmd_core::filter::default_groups();
+        for block in &self.mask_groups {
+            let (name, mask) = (block.name.trim(), block.mask.trim());
+            if name.is_empty() || mask.is_empty() {
+                continue;
+            }
+            groups.insert(name, mask);
+        }
+        groups
+    }
+
     /// Load the config file if it exists. A missing file is not an error; a broken one is.
     pub fn load(paths: &Paths) -> Result<(Config, Vec<String>), ConfigError> {
         // Said before anything is parsed, so that it is said even when the file is empty.
