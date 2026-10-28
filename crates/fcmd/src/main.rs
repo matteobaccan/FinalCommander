@@ -12,6 +12,7 @@ mod highlight;
 mod hit;
 mod menu;
 mod panel;
+mod prompt;
 mod render;
 mod tabs;
 mod termkeys;

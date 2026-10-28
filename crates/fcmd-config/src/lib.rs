@@ -448,6 +448,30 @@ impl Default for S3Cfg {
     }
 }
 
+/// `[cmdline]`: the command line itself (SPEC 06 §2b).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct CmdLineCfg {
+    /// What is written to the left of what one types.
+    ///
+    /// The letters are FAR's — `$p` the path, `$w` its last part, `$n` the drive or the
+    /// server, `$g` `>`, `$l` `<`, `$a` `&`, `$b` `|`, `$c` `(`, `$f` `)`, `$q` `=`, `$s` a
+    /// space, `$d` the date, `$t` the time, `$@` a marker for an elevated session, `$h` a
+    /// backspace, `$$` a `$` — with two of our own for the repository one is in: `$r` is
+    /// ` (branch)` inside a repository and nothing outside one, and `%GITBRANCH%` is the
+    /// bare branch name, spelled the way the plugin everybody installs spells it. Empty
+    /// means the default.
+    pub prompt: String,
+}
+
+impl Default for CmdLineCfg {
+    fn default() -> Self {
+        CmdLineCfg {
+            prompt: "$p$r$g ".to_string(),
+        }
+    }
+}
+
 /// `[drives]`: which columns the change-drive dialog shows, and which drives (SPEC 10 §3.4).
 ///
 /// FAR keeps the same settings in one `DriveMenuMode` word and turns them on and off with
@@ -972,6 +996,7 @@ pub struct Config {
     #[serde(rename = "decompile")]
     pub decompile: Vec<DecompileRule>,
     pub net: NetCfg,
+    pub cmdline: CmdLineCfg,
     pub drives: DrivesCfg,
     pub arc: ArcCfg,
     pub term: TermCfg,

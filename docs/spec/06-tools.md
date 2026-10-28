@@ -218,6 +218,34 @@ lines, as is a lifetime in days.
 | Elevation | a privileged helper process (`fcmd-helper`) started on demand via `pkexec`/`sudo`/UAC, speaking a minimal JSON protocol over a pipe, used only for explicitly elevated jobs; never started implicitly |
 | Open with OS | `tool.os.open` (xdg-open/open/ShellExecute), `tool.os.terminal`, `tool.os.filemanager`, `tool.os.properties` |
 
+### 7.0b The prompt (`[cmdline] prompt`)
+
+What is written to the left of what one types. It was the panel's path and a `>`; it is now a
+format, with FAR's own letters and two of our own:
+
+| In the format | What it writes |
+| --- | --- |
+| `$p` | the whole path |
+| `$w` | its last part, which is what fits on a narrow terminal |
+| `$n` | where the path starts: `C:` on Windows, `/` on Unix, `sftp://user@host` on a connection |
+| `$r` | ` (branch)` in a git repository, nothing outside one |
+| `%GITBRANCH%` | the bare branch name, spelled the way the plugin everybody installs spells it |
+| `$g` `$l` `$a` `$b` `$c` `$f` `$q` `$s` | `>` `<` `&` `|` `(` `)` `=` and a space |
+| `$d` `$t` | the date and the time |
+| `$@` | `[admin]` when the session has more rights than usual |
+| `$h` | a backspace, which takes a decoration back out when what it decorated was empty |
+| `$$` | a `$` |
+
+The case of the letter does not matter, and a letter nobody knows is left as it was written so a
+mistake in the configuration can be seen. The default is `$p$r$g `, which is FAR's default plus
+the branch: the one thing a prompt in a repository is asked for.
+
+The branch is read, not run: `git` need not be installed, and the walk up to the first `.git`
+reads one small file (`HEAD`, or the `gitdir:` line of a worktree's `.git` file and then its
+`HEAD`). A head that is not on a branch shows the commit, shortened to seven characters. It is
+looked up when the panel's directory changes rather than on every frame, and not at all for a
+directory on a server or inside an archive, which has no `.git` to read.
+
 ### 7.1 Commands we run ourselves
 
 A commander that shells out for `cd` cannot keep the panel in step, so some commands are ours.

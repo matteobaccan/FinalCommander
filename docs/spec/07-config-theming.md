@@ -184,6 +184,15 @@ credentials = "env"       # env | aws | aws:<profile> | anonymous
 listing_cap = 100000      # rows a listing with no delimiter may gather; 0 = no limit
 ```
 
+## 2c-ter. `[cmdline]`
+
+```toml
+[cmdline]
+# The prompt (SPEC 06 §7.0b). FAR's letters, plus `$r` for ` (branch)` in a git repository and
+# `%GITBRANCH%` for the bare branch name.
+prompt = "$p$r$g "
+```
+
 ## 2c-bis. `[drives]`
 
 Which columns the change-drive dialog shows and which drives it lists (SPEC 10 §4.3). FAR keeps

@@ -381,7 +381,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         let y = full_h;
         let style = Style::new(app.theme.color("cmdline.fg"), app.theme.color("cmdline.bg"));
         buf.fill(Rect::new(0, y, w, 1), ' ', style);
-        let prompt = format!("{}> ", app.panels[app.active].cwd);
+        let prompt = app.prompt();
         let prompt = fcmd_ui::elide_middle(&prompt, (w / 2) as usize);
         let prompt_w = unicode_width::UnicodeWidthStr::width(prompt.as_str()) as u16;
         buf.put_str(0, y, &prompt, style, prompt_w);

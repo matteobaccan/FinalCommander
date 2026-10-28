@@ -8,6 +8,16 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **The prompt says which branch you are on**, and is a format rather than a fixed string.
+  `[cmdline] prompt` takes FAR's own letters — `$p` the path, `$w` its last part, `$n` the
+  drive or the server, `$d` the date, `$t` the time, `$@` for an elevated session, the
+  bracket-and-sign letters, `$h` to take a decoration back out — plus `$r`, which writes
+  ` (branch)` inside a git repository and nothing outside one, and `%GITBRANCH%` for the bare
+  name, spelled the way the plugin everybody installs spells it. The default is `$p$r$g `.
+  Nothing is run to find the branch: the walk up to the first `.git` reads `HEAD`, follows the
+  `gitdir:` of a worktree, and shows a detached head as the short commit — once per directory,
+  not once per keystroke.
+
 - **A socket list, as a panel of its own**, under the processes in `Alt+F1`/`Alt+F2`: the
   protocol, this end, the other end, the state and the process holding it, in columns. `F3` on
   a row opens that process's card — the question a socket list is opened to ask. Linux reads

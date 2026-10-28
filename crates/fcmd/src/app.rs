@@ -1396,6 +1396,9 @@ pub struct App {
     compare_pairs: usize,
     /// The command line under the panels (SPEC 06 §7).
     pub cmd: CmdLine,
+    /// The directory the branch was last read for, and what it was: `HEAD` is a small file,
+    /// but reading it on every frame would be reading it on every keystroke.
+    branch_at: Option<(String, Option<String>)>,
     /// What the commands that have run printed, for `Ctrl+O`. Capped.
     pub user_screen: Vec<String>,
     /// Which panel is hidden, if either: `Ctrl+F1` and `Ctrl+F2` give the screen to one.
@@ -1604,6 +1607,7 @@ impl App {
             compare_alone: Vec::new(),
             compare_pairs: 0,
             cmd: CmdLine::new(),
+            branch_at: None,
             user_screen: Vec::new(),
             shell_screen: false,
             hidden: None,
@@ -10598,6 +10602,40 @@ impl App {
             .collect()
     }
 
+    /// What the command line writes to the left of what one types (SPEC 06 §2b).
+    ///
+    /// The format is the configuration's, the letters are FAR's, and `%GITBRANCH%` is the
+    /// branch of the repository the panel's directory is in. The branch is looked up when the
+    /// directory changes rather than on every frame: `HEAD` is one small file, but a prompt
+    /// that reads a file on every keystroke is a prompt that makes a slow terminal slower.
+    pub fn prompt(&mut self) -> String {
+        let cwd = self.panels[self.active].cwd.clone();
+        let format = if self.cfg.cmdline.prompt.is_empty() {
+            crate::prompt::DEFAULT.to_string()
+        } else {
+            self.cfg.cmdline.prompt.clone()
+        };
+        // Nothing is looked up for a format that does not ask, which is the usual case.
+        let wants_branch = format.to_lowercase().contains("%gitbranch%");
+        let branch = if wants_branch {
+            let key = cwd.to_string();
+            match &self.branch_at {
+                Some((at, branch)) if *at == key => branch.clone(),
+                _ => {
+                    // A directory on a server or inside an archive has no `.git` to read.
+                    let found = (!cwd.is_remote() && !cwd.in_container())
+                        .then(|| crate::prompt::branch_of(cwd.as_path()))
+                        .flatten();
+                    self.branch_at = Some((key, found.clone()));
+                    found
+                }
+            }
+        } else {
+            None
+        };
+        crate::prompt::expand(&format, &cwd, branch.as_deref())
+    }
+
     /// Build the drive dialog again after one of its switches, keeping the cursor on the row
     /// it was on — the row is what one is looking at, and a column going away is no reason to
     /// lose it. A row that is no longer there leaves the cursor where it was sitting.
@@ -15951,6 +15989,54 @@ mod tests {
         press(&mut app, "Esc");
         assert!(app.mode.is_normal());
         assert_eq!(app.panels[0].temp_origin(), Some(":processes"));
+    }
+
+    /// The prompt is the configuration's, and `%GITBRANCH%` in it is the branch — which is
+    /// the one thing a prompt in a repository is asked for and could not say.
+    #[test]
+    fn the_prompt_says_which_branch_one_is_on() {
+        let mut app = app();
+        // The default is what it always was: the path and a sign.
+        assert!(app.prompt().ends_with("> "), "{}", app.prompt());
+
+        let dir = tempfile::tempdir().expect("temp dir");
+        std::fs::create_dir(dir.path().join(".git")).expect("the git directory");
+        std::fs::write(
+            dir.path().join(".git").join("HEAD"),
+            "ref: refs/heads/work\n",
+        )
+        .expect("HEAD");
+        app.panels[0].cwd = VPath::local(dir.path());
+        app.active = 0;
+        app.cfg.cmdline.prompt = "$w $c%GITBRANCH%$f$g ".to_string();
+        let prompt = app.prompt();
+        assert!(prompt.ends_with("(work)> "), "{prompt:?}");
+        assert!(prompt.starts_with(
+            &dir.path()
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .to_string()
+        ));
+
+        // A detached head is the commit, shortened, as everything else that shows one does.
+        std::fs::write(
+            dir.path().join(".git").join("HEAD"),
+            "9f1c0de4a5b6c7d8e9f0a1b2c3d4e5f607182930\n",
+        )
+        .expect("HEAD");
+        // The directory has not changed, so the answer is the one already read: the lookup is
+        // once per directory and not once per frame.
+        assert!(app.prompt().ends_with("(work)> "));
+        app.branch_at = None;
+        assert!(app.prompt().ends_with("(9f1c0de)> "), "{}", app.prompt());
+
+        // Somewhere that is not a repository says nothing, and `$h` takes the bracket back
+        // out — which is the format's own business, not the prompt's.
+        let empty = tempfile::tempdir().expect("temp dir");
+        app.panels[0].cwd = VPath::local(empty.path());
+        app.branch_at = None;
+        assert!(app.prompt().ends_with("()> "), "{}", app.prompt());
     }
 
     /// The switches the dialog carries, which are FAR's: `Ctrl` and the digit a column is
