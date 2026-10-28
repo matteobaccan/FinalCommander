@@ -952,7 +952,16 @@ fn draw_footer(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>) {
     }
 }
 
+/// How many slots a key bar is divided into. Always twelve: `F1` to `F12`.
+pub const KEYBAR_SLOTS: usize = 12;
+
 /// The `F1..F12` bar. `labels` is `(number, label)`, already localised by the caller.
+///
+/// **All twelve keys are always drawn**, and a key with nothing on it is an empty slot rather
+/// than no slot at all. The bar is read sideways — `F5` is the fifth box along, wherever one
+/// is in the program — and a bar that left out the keys it has no use for would put `F7`
+/// where `F5` had been on the screen before, which is how a reader learns to distrust it. The
+/// editor's bar used to show seven boxes for the seven keys it uses.
 ///
 /// Three colours, as FAR has them: the number in `Keybar.Num`, the label in `Keybar.Text`,
 /// and whatever is left of the row in `Keybar.Background` — which is *not* the label colour,
@@ -968,8 +977,14 @@ pub fn draw_keybar(buf: &mut Buffer, theme: &Theme, area: Rect, labels: &[(u8, &
     if labels.is_empty() {
         return;
     }
-    let slot = (area.w as usize / labels.len()).max(4);
-    for (i, (n, label)) in labels.iter().enumerate() {
+    let slot = (area.w as usize / KEYBAR_SLOTS).max(4);
+    for i in 0..KEYBAR_SLOTS {
+        let n = i as u8 + 1;
+        let label = labels
+            .iter()
+            .find(|(key, _)| *key == n)
+            .map(|(_, label)| *label)
+            .unwrap_or("");
         let x = area.x + (i * slot) as u16;
         if x >= area.right() {
             break;
@@ -1843,6 +1858,57 @@ mod tests {
         let out = buf.to_text();
         assert!(out.starts_with("1Help"), "{out}");
         assert!(out.contains("5Copy") && out.contains("10Quit"), "{out}");
+        // Twelve boxes whatever is in them: the two this bar has nothing for are drawn
+        // empty, in their own places, so every key is where it always is.
+        assert!(out.contains("11") && out.contains("12"), "{out}");
+    }
+
+    /// The editor uses seven of the twelve keys, and the bar still has twelve boxes: a bar
+    /// that left out the keys it has no use for would put `F7` where `F5` had been.
+    #[test]
+    fn a_keybar_draws_all_twelve_keys_and_leaves_the_unused_ones_empty() {
+        let theme = Theme::default_theme();
+        let mut buf = Buffer::new(80, 1);
+        let labels = [
+            (1u8, "Help"),
+            (2, "Save"),
+            (4, "Quit"),
+            (7, "Search"),
+            (8, "Replace"),
+            (10, "Quit"),
+            (12, "Screens"),
+        ];
+        draw_keybar(&mut buf, &theme, Rect::new(0, 0, 80, 1), &labels);
+        let out = buf.to_text();
+        // Six columns a box: `F4` is the fourth one along, where it is in every other bar.
+        // Read in characters rather than bytes, because a cut label ends in an ellipsis.
+        let slot = 80 / KEYBAR_SLOTS;
+        let box_at = |n: u8| -> String {
+            out.chars()
+                .skip((n as usize - 1) * slot)
+                .take(slot)
+                .collect()
+        };
+        for (n, label) in labels {
+            let drawn = box_at(n);
+            // A two-digit number leaves one column less for the label, and a label longer
+            // than the box is cut with an ellipsis: three characters of it are enough to
+            // say it is the right one in the right box.
+            let head: String = label.chars().take(3).collect();
+            assert!(
+                drawn.starts_with(&format!("{n}{head}")),
+                "box {n} should say `{label}`: `{drawn}` in {out}"
+            );
+        }
+        // And the boxes with nothing on them show their number and no label.
+        for n in [3u8, 5, 6, 9, 11] {
+            let drawn = box_at(n);
+            assert_eq!(
+                drawn.trim(),
+                n.to_string(),
+                "box {n} should be empty: {out}"
+            );
+        }
     }
 
     #[test]

@@ -162,14 +162,18 @@ impl PanelArea {
 
 /// Which function key is at column `col` of a key bar showing `keys` across `width` columns.
 ///
-/// The bar is drawn in equal slots, at least four columns wide each — the same arithmetic as
-/// `widgets::draw_keybar`, and the one place where the two have to agree.
+/// The bar is twelve equal slots, at least four columns wide each — the same arithmetic as
+/// `widgets::draw_keybar`, and the one place where the two have to agree. A slot whose key
+/// has no label is an empty box: it is drawn, so that `F5` is always the fifth one along, and
+/// clicking it does nothing, because there is nothing there to do.
 pub fn key_cell(col: u16, keys: &[u8], width: u16) -> Option<u8> {
     if keys.is_empty() {
         return None;
     }
-    let slot = (width as usize / keys.len()).max(4);
-    keys.get(col as usize / slot).copied()
+    let slot = (width as usize / fcmd_ui::KEYBAR_SLOTS).max(4);
+    let n = (col as usize / slot) + 1;
+    let n = u8::try_from(n).ok()?;
+    (n as usize <= fcmd_ui::KEYBAR_SLOTS && keys.contains(&n)).then_some(n)
 }
 
 /// Which menu title is at column `col`, given where each one starts.
@@ -245,20 +249,30 @@ mod tests {
         assert_eq!(key_cell(5, &all, 80), Some(1));
         assert_eq!(key_cell(6, &all, 80), Some(2));
         assert_eq!(key_cell(66, &all, 80), Some(12));
-        // Past the last slot, and a bar with nothing on it.
+        // Past the last slot, and a bar with nothing on it at all.
         assert_eq!(key_cell(79, &all, 80), None);
         assert_eq!(key_cell(0, &[], 80), None);
+        // A bar that uses seven of the twelve keys still has twelve boxes, and the five it
+        // does not use are empty: this is the editor's bar, and the reason for the rule.
+        let editor = [1u8, 2, 4, 7, 8, 10, 12];
+        assert_eq!(key_cell(0, &editor, 80), Some(1));
+        assert_eq!(key_cell(12, &editor, 80), None, "F3 is empty in the editor");
+        assert_eq!(key_cell(18, &editor, 80), Some(4));
+        assert_eq!(key_cell(66, &editor, 80), Some(12));
         // A narrow terminal: the slot never goes below four columns, as the drawing does not.
         assert_eq!(key_cell(4, &all, 20), Some(2));
 
-        // Holding a modifier shows only the keys that modifier has, so the cell says which
-        // key is written in it rather than counting from one.
-        // Four keys across eighty columns is twenty each.
+        // Holding a modifier leaves the slots where they are and empties the ones that
+        // modifier has nothing on: `F5` is the fifth box along whatever is held down, so a
+        // column lands on the key written above it and nowhere else.
         let shifted = [2u8, 5, 6, 8];
-        assert_eq!(key_cell(0, &shifted, 80), Some(2));
-        assert_eq!(key_cell(19, &shifted, 80), Some(2));
-        assert_eq!(key_cell(20, &shifted, 80), Some(5));
-        assert_eq!(key_cell(79, &shifted, 80), Some(8));
+        assert_eq!(key_cell(6, &shifted, 80), Some(2), "the second box");
+        assert_eq!(key_cell(24, &shifted, 80), Some(5));
+        assert_eq!(key_cell(30, &shifted, 80), Some(6));
+        assert_eq!(key_cell(42, &shifted, 80), Some(8));
+        // The boxes this modifier has nothing on are drawn and do nothing.
+        assert_eq!(key_cell(0, &shifted, 80), None, "F1 is empty with Shift");
+        assert_eq!(key_cell(18, &shifted, 80), None, "and so is F4");
         assert_eq!(key_cell(80, &shifted, 80), None, "past the end of the bar");
     }
 

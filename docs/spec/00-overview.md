@@ -67,7 +67,11 @@ and preview pipeline. Licensing basis: `docs/01-licensing.md`.
 
 ## 5. Interaction contract (non-negotiable)
 
-1. The function-key bar always shows what `F1..F12` do *right now*, including modifier rows.
+1. The function-key bar always shows what `F1..F12` do *right now*, including modifier rows —
+   **all twelve of them, in twelve equal boxes**, with the ones this screen or this modifier
+   has no use for drawn empty. The bar is read sideways: `F5` is the fifth box along wherever
+   one is in the program, and a bar that left out its unused keys would put `F7` where `F5`
+   had been, which is how a reader learns to distrust it.
 2. Every destructive action asks once, with the exact count and target shown, and has a
    `--yes`-equivalent setting for people who hate it.
 3. Any operation longer than 300 ms gets a progress UI; any operation longer than 2 s is

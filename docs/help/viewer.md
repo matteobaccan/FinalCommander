@@ -9,6 +9,14 @@ bytes or a regular expression, whether case matters, whether only whole words co
 then *Find next* or *Find previous*, because they are the same question asked twice.
 `Shift+F7` and `Alt+F7` repeat it forwards and backwards without asking again. `F6` hands the file to the editor at the same place.
 
+In the hex dump the arrows set how many bytes a row holds, since sideways means nothing else
+in a dump: `→` widens it and `←` narrows it, **eight bytes at a time** — 8, 16, 24, 32 and so
+on up to 64 — because eight is the group the dump already draws a gap between, so every press
+adds one whole group and the columns stay where your eye expects them. A press that would need
+a wider window than you have leaves the width alone. `Ctrl+→` and `Ctrl+←` are something else:
+they nudge the whole dump along by a single byte, so a structure that does not begin on a
+multiple of the row width can be read in line instead of diagonally.
+
 `Gray +` and `Gray -` step to the next and previous file of the panel without leaving the
 viewer, and `Ctrl+F10` makes the panel catch up with what you are reading.
 

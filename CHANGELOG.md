@@ -4,6 +4,26 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
+## [Unreleased]
+
+### Changed
+
+- **The key bar always shows all twelve keys.** The editor's bar had seven boxes, because the
+  editor uses seven of the function keys; the viewer's had eleven; the panels' had eleven. So
+  the same key sat in a different place on each screen, and `F4` in the editor was the third
+  box along. All twelve are drawn now, in twelve equal boxes, with the ones a screen has no
+  use for left empty — the bar is read sideways, and `F5` is the fifth box along wherever one
+  is. Clicking an empty box does nothing, as before. The same rule covers the modifier rows:
+  holding `Shift` empties the boxes `Shift` has nothing on rather than closing up the gaps.
+
+- **The hex dump widens in blocks of eight.** `→` and `←` in a dump set how many bytes a row
+  holds, and the steps were the powers of two — 4, 8, 16, 32, 64 — so on a wide screen there
+  were three widths where there is room for eight, and a press doubled the row instead of
+  adding to it. They are now 8, 16, 24, 32, 40, 48, 56, 64: eight bytes is the group the dump
+  already draws a gap between, so every press adds one whole group and the columns stay where
+  the eye expects them. A window too narrow for even eight bytes still draws four, which is
+  the one width that is not a block of eight and the reason it is there.
+
 ## [0.7.0] — 2026-10-28
 
 ### Added
