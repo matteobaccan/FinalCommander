@@ -814,6 +814,13 @@ fn interactive(mut app: App) -> Result<()> {
     // One container cache for the whole program: the index a panel read to draw itself is the
     // one an unpack then reads from.
     let archives = vfs.archives().cache();
+    // And the way to reach a container that is not a file on this disk: an archive on a server
+    // or in a bucket is copied here, once, and read from the copy (SPEC 04 §4).
+    archives.set_fetch(std::sync::Arc::new(BringHere {
+        pool: pool.clone(),
+        objects: objects.clone(),
+        handle: runtime.handle().clone(),
+    }));
     let mut cancels: [Option<CancelToken>; 2] = [None, None];
     let (mut w, mut h) = term.size();
     let mut buf = Buffer::new(w, h);
@@ -2613,7 +2620,9 @@ fn run_test(
     use fcmd_jobs::{Outcome, Phase, Progress};
 
     let started = std::time::Instant::now();
-    let outcome = match archives.open(&archive.os(), &cancel) {
+    // Through `open_host`, so testing an archive that is itself inside an archive tests that
+    // one rather than the container it came out of.
+    let outcome = match archives.open_host(&archive, &cancel) {
         Ok(handle) => {
             let total = handle
                 .entries()
@@ -2691,6 +2700,23 @@ fn run_rebuild(
     use fcmd_jobs::{Outcome, Phase, Progress};
 
     let started = std::time::Instant::now();
+    // Only an archive that is a file on this disk can be changed: one read out of another
+    // archive, or off a server, is read from a copy, and rebuilding the copy would report a
+    // change to a file that is thrown away when the program ends (SPEC 04 §4).
+    if !fcmd_arc::Cache::is_writable_host(&archive) {
+        let _ = tx.send(Event::JobDone {
+            id,
+            kind: fcmd_jobs::JobKind::Rebuild,
+            outcome: Outcome {
+                errors: vec![(
+                    archive.clone(),
+                    "an archive that is not a file on this disk can only be read".to_string(),
+                )],
+                ..Outcome::default()
+            },
+        });
+        return;
+    }
     archives.forget(&archive.os());
     let total = changes.len() as u64;
     let mut done = 0u64;
@@ -2750,21 +2776,20 @@ fn fetch_entry(
     archives: &std::sync::Arc<fcmd_arc::Cache>,
     path: &VPath,
 ) -> Result<(PathBuf, RemoteStamp), String> {
-    let host = path
-        .leave()
-        .ok_or_else(|| format!("{path}: not a path inside an archive"))?;
-    let archive = archives
-        .open(&host.os(), &CancelToken::new())
+    if path.leave().is_none() {
+        return Err(format!("{path}: not a path inside an archive"));
+    }
+    let (archive, inner) = archives
+        .open_in(path, &CancelToken::new())
         .map_err(|e| e.to_string())?;
-    let inner = path.inner_path();
     let entry = archive
-        .entry(inner)
+        .entry(&inner)
         .ok_or_else(|| format!("{path}: no such entry"))?;
     let dir = std::env::temp_dir().join(format!("fcmd-{}", std::process::id()));
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     let local = dir.join(path.display_name());
     archive
-        .extract(inner, &local, &CancelToken::new(), &mut |_| {})
+        .extract(&inner, &local, &CancelToken::new(), &mut |_| {})
         .map_err(|e| e.to_string())?;
     Ok((
         local,
@@ -2778,6 +2803,81 @@ fn fetch_entry(
                 .map(|d| d.as_secs() as u32),
         },
     ))
+}
+
+/// How a container that is not on this disk gets here (SPEC 04 §4).
+///
+/// The archive crate reads files and seeks in them, so an archive on a server or in a bucket
+/// has to be a file here before its index can be read. This is the one thing that knows how to
+/// make it one: it is handed to the container cache at startup, and from there an archive on a
+/// server opens with `Enter` like any other.
+struct BringHere {
+    pool: std::sync::Arc<Pool>,
+    objects: std::sync::Arc<fcmd_s3::vfs::S3Vfs>,
+    handle: tokio::runtime::Handle,
+}
+
+impl BringHere {
+    fn refused(path: &VPath, reason: String) -> fcmd_arc::ArcError {
+        fcmd_arc::ArcError::Refused {
+            path: path.to_string(),
+            reason,
+        }
+    }
+}
+
+impl fcmd_arc::Fetch for BringHere {
+    fn fetch(
+        &self,
+        path: &VPath,
+        to: &std::path::Path,
+        cancel: &CancelToken,
+    ) -> fcmd_arc::Result<()> {
+        if path.scheme() == fcmd_core::Scheme::S3 {
+            let bytes = self
+                .handle
+                .block_on(self.objects.read_object(path, None, cancel))
+                .map_err(|e| BringHere::refused(path, e.to_string()))?;
+            return std::fs::write(to, &bytes).map_err(|e| fcmd_arc::ArcError::Io {
+                path: to.display().to_string(),
+                source: e,
+            });
+        }
+        let remote = self
+            .pool
+            .require(path)
+            .map_err(|e| BringHere::refused(path, e.to_string()))?;
+        let mut on_bytes = |_: u64| !cancel.is_cancelled();
+        self.handle
+            .block_on(remote.download(path, to, &mut on_bytes))
+            .map(|_| ())
+            .map_err(|e| BringHere::refused(path, e.to_string()))
+    }
+
+    fn size(&self, path: &VPath) -> Option<u64> {
+        if path.scheme() == fcmd_core::Scheme::S3 {
+            return self
+                .handle
+                .block_on(Vfs::stat(&*self.objects, path))
+                .ok()
+                .map(|entry| entry.size);
+        }
+        let remote = self.pool.require(path).ok()?;
+        self.handle
+            .block_on(stamp_of(&remote, path))
+            .map(|s| s.size)
+    }
+
+    fn stamp(&self, path: &VPath) -> Option<String> {
+        let entry = if path.scheme() == fcmd_core::Scheme::S3 {
+            self.handle.block_on(Vfs::stat(&*self.objects, path)).ok()?
+        } else {
+            let remote = self.pool.require(path).ok()?;
+            let stamp = self.handle.block_on(stamp_of(&remote, path))?;
+            return Some(format!("{}:{:?}", stamp.size, stamp.mtime));
+        };
+        Some(format!("{}:{:?}", entry.size, entry.mtime))
+    }
 }
 
 /// What the file looks like on the server right now.

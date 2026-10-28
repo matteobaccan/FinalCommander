@@ -6,6 +6,20 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **An archive inside an archive, and an archive on a server.** `Enter` on a `.zip` that is
+  itself inside a `.tar.gz`, or on one in a remote panel or a bucket, now opens it. Every
+  decoder here reads a file and seeks in it, so a container that is not a file on this disk is
+  copied into `<temp>/fcmd-<pid>/nested/` first — once, kept for as long as what it came out
+  of has not changed, and thrown away when the program ends. The path stays what it is,
+  `sftp://srv/site.zip!/inner.tar.gz!/etc/nginx.conf`, because that is where the file really
+  is: the copy happens below the VFS, so the panel, the viewer, the finder and the job engine
+  all got this at once. `[arc] max_depth` stops the recursion, the new `[arc] max_spill_mb`
+  (default 1024) stops the disk filling, and both refuse by name. Such an archive is read-only
+  — a rebuild of the copy would report a change to a file that is about to be deleted — and
+  says so rather than half-writing anything.
+
 ### Changed
 
 - **The menu letters are FAR's own.** Every row the `F9` menus share with FAR now wears the

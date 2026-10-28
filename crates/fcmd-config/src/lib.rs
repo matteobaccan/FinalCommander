@@ -675,6 +675,11 @@ pub struct ArcCfg {
     pub max_ratio: u64,
     /// How many containers deep a path may go.
     pub max_depth: usize,
+    /// How large an archive that is not a file on this disk may be, in megabytes, before it is
+    /// refused rather than copied here to be read — one inside another archive, one on a
+    /// server. Every decoder reads a file and seeks in it, so such a container is copied to
+    /// the temporary directory first, and that copy is paid for in disk (SPEC 04 §4).
+    pub max_spill_mb: u64,
 }
 
 impl Default for ArcCfg {
@@ -685,6 +690,7 @@ impl Default for ArcCfg {
             max_total_mb: limits.total_bytes >> 20,
             max_ratio: limits.ratio,
             max_depth: limits.depth,
+            max_spill_mb: limits.spill_bytes >> 20,
         }
     }
 }
@@ -696,6 +702,7 @@ impl ArcCfg {
             total_bytes: self.max_total_mb.saturating_mul(1 << 20),
             ratio: self.max_ratio,
             depth: self.max_depth,
+            spill_bytes: self.max_spill_mb.saturating_mul(1 << 20),
         }
     }
 }

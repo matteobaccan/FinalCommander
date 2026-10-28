@@ -9,16 +9,22 @@
 //!
 //! Reading and writing a whole archive ([`create`]); changing one that exists is the rebuild
 //! of SPEC 04 §4 and is not here yet, so an archive opened for reading is never modified.
+//!
+//! A container that is not a file on this disk — one inside another archive, one on a server —
+//! is copied here first and read from the copy; `nest` is where that happens and what it
+//! costs.
 
 mod archive;
 mod format;
 mod limits;
+mod nest;
 mod rebuild;
 mod write;
 
 pub use archive::{ArcEntry, Archive, Cache, Report};
 pub use format::Format;
 pub use limits::Limits;
+pub use nest::Fetch;
 pub use rebuild::{rebuild, Change};
 pub use write::{create, Level, Written};
 

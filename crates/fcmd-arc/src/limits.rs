@@ -15,6 +15,10 @@ pub struct Limits {
     pub ratio: u64,
     /// How many containers deep a path may go.
     pub depth: usize,
+    /// How large a container that is not a file on this disk may be before we refuse to copy
+    /// it here (SPEC 04 §4). An archive inside an archive, or one on a server, has to be a
+    /// real file before anything can read its index, and that copy is paid for in disk.
+    pub spill_bytes: u64,
 }
 
 impl Default for Limits {
@@ -24,6 +28,7 @@ impl Default for Limits {
             total_bytes: 64 << 30,
             ratio: 1_000,
             depth: 4,
+            spill_bytes: 1 << 30,
         }
     }
 }
@@ -36,6 +41,7 @@ impl Limits {
             total_bytes: u64::MAX,
             ratio: u64::MAX,
             depth: 64,
+            spill_bytes: u64::MAX,
         }
     }
 }

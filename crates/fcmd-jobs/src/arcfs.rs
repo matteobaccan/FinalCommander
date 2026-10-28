@@ -34,27 +34,17 @@ impl<F: JobFs> ArcFs<F> {
     }
 
     /// The archive a container path lives in, and the path inside it.
+    ///
+    /// A container that is not a file on this disk — one inside another archive, one on a
+    /// server — is copied here by the cache and read from the copy (SPEC 04 §4), so a copy job
+    /// whose source is three archives down is still one source and one destination here.
     fn archive(&self, path: &VPath) -> io::Result<(Arc<Archive>, String)> {
-        let host = path.leave().ok_or_else(|| not_in_archive(path))?;
-        if host.in_container() {
-            // Nesting is SPEC 04 §4's and is not here yet: an archive inside an archive has
-            // to be unpacked to a temporary file first, and nothing does that today.
-            return Err(io::Error::new(
-                io::ErrorKind::Unsupported,
-                format!("{host}: an archive inside an archive cannot be read yet"),
-            ));
+        if path.leave().is_none() {
+            return Err(not_in_archive(path));
         }
-        if !host.is_local() {
-            return Err(io::Error::new(
-                io::ErrorKind::Unsupported,
-                format!("{host}: an archive can only be read from a local disk"),
-            ));
-        }
-        let archive = self
-            .cache
-            .open(host.as_path(), &CancelToken::new())
-            .map_err(into_io)?;
-        Ok((archive, path.inner_path().to_string()))
+        self.cache
+            .open_in(path, &CancelToken::new())
+            .map_err(into_io)
     }
 
     fn facts_of(&self, path: &VPath) -> io::Result<Facts> {
@@ -451,15 +441,53 @@ mod tests {
         }
     }
 
+    /// An archive inside an archive is read through the copy the cache makes of it, so the
+    /// engine copies out of one without knowing there was a container in the way.
     #[test]
-    fn an_archive_inside_an_archive_says_it_cannot_yet() {
+    fn an_archive_inside_an_archive_is_read_like_any_other() {
+        let dir = tempfile::tempdir().unwrap();
+        let inner = dir.path().join("inner.zip");
+        zip_of(&inner);
+        let outer = dir.path().join("outer.zip");
+        let file = std::fs::File::create(&outer).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        zip.start_file(
+            "inner.zip",
+            zip::write::SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Stored),
+        )
+        .unwrap();
+        zip.write_all(&std::fs::read(&inner).unwrap()).unwrap();
+        zip.finish().unwrap();
+
+        let fs = fs();
+        let deep = VPath::local(&outer).enter("/inner.zip").enter("/src/a.txt");
+        let facts = fs.facts(&deep).unwrap();
+        assert_eq!((facts.kind, facts.size), (EntryKind::File, 4));
+        assert!(facts.readonly, "a copy is never written to");
+
+        let out = dir.path().join("a.txt");
+        fs.copy_file(&deep, &VPath::local(&out), 4096, &mut |_| true)
+            .unwrap();
+        assert_eq!(std::fs::read(&out).unwrap(), b"aaaa");
+    }
+
+    /// Deeper than the limit allows is refused by the limit rather than read.
+    #[test]
+    fn a_container_deeper_than_the_limit_allows_says_which_limit() {
         let dir = tempfile::tempdir().unwrap();
         let zip = dir.path().join("tree.zip");
         zip_of(&zip);
+        let shallow = ArcFs::new(
+            Arc::new(Cache::new(Limits {
+                depth: 0,
+                ..Limits::default()
+            })),
+            LocalFs,
+        );
         let nested = VPath::local(&zip).enter("/inner.zip").enter("/a.txt");
-        let error = fs().facts(&nested).unwrap_err();
-        assert_eq!(error.kind(), io::ErrorKind::Unsupported);
-        assert!(error.to_string().contains("inside an archive"), "{error}");
+        let error = shallow.facts(&nested).unwrap_err();
+        assert!(error.to_string().contains("max_depth"), "{error}");
     }
 
     #[test]

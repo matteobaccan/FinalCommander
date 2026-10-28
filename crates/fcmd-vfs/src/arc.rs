@@ -35,38 +35,29 @@ impl ArcVfs {
         Format::of_path(path).is_some()
     }
 
-    /// The file that holds the archive `path` is inside, if we can read it at all.
+    /// The archive `path` is inside, and where `path` sits in it.
     ///
-    /// Two cases we have to refuse rather than guess at, because guessing would mean opening
-    /// the wrong file: an archive inside another archive, and an archive on a remote
-    /// filesystem. Both need the container copied to a temporary file first (SPEC 04 §4) and
-    /// nothing makes that copy today.
-    fn host(&self, path: &VPath) -> Result<VPath> {
-        let host = path
-            .leave()
-            .ok_or_else(|| Error::NotADirectory { path: path.clone() })?;
-        if host.in_container() {
-            return Err(Error::Other(format!(
-                "{host}: an archive inside an archive cannot be read yet"
-            )));
+    /// A container that is not a file on this disk — one inside another archive, one on a
+    /// server — is copied here first by the cache and read from the copy (SPEC 04 §4). That is
+    /// below us: from here an archive is an archive, wherever its bytes were.
+    fn open_in(
+        &self,
+        path: &VPath,
+        cancel: &CancelToken,
+    ) -> Result<(std::sync::Arc<fcmd_arc::Archive>, String)> {
+        if path.leave().is_none() {
+            return Err(Error::NotADirectory { path: path.clone() });
         }
-        if !host.is_local() {
-            return Err(Error::Other(format!(
-                "{host}: an archive can only be read from a local disk"
-            )));
-        }
-        Ok(host)
+        self.cache
+            .open_in(path, cancel)
+            .map_err(|e| convert(path, e))
     }
 
     /// The synchronous core of [`ArcVfs::list`], kept public for the same reasons the local
     /// provider's is: tests, and the callers that are already on a blocking thread.
     pub fn list_blocking(&self, path: &VPath, cancel: &CancelToken) -> Result<Vec<Entry>> {
-        let host = self.host(path)?;
-        let archive = self
-            .cache
-            .open(host.as_path(), cancel)
-            .map_err(|e| convert(path, e))?;
-        let inner = path.inner_path();
+        let (archive, inner) = self.open_in(path, cancel)?;
+        let inner = inner.as_str();
         if !archive.is_dir(inner) {
             return Err(Error::NotADirectory { path: path.clone() });
         }
@@ -79,34 +70,27 @@ impl ArcVfs {
     }
 
     fn blocking_stat(&self, path: &VPath) -> Result<Entry> {
-        let host = self.host(path)?;
-        let archive = self
-            .cache
-            .open(host.as_path(), &CancelToken::new())
-            .map_err(|e| convert(path, e))?;
-        let inner = path.inner_path();
+        let (archive, inner) = self.open_in(path, &CancelToken::new())?;
         if inner == "/" {
             // The root of the archive stands for the archive itself, under its own name.
             let mut entry = Entry::parent_entry();
-            entry.name = host.display_name().into();
+            entry.name = path
+                .leave()
+                .map(|host| host.display_name())
+                .unwrap_or_default()
+                .into();
             entry.kind = fcmd_core::EntryKind::Dir;
             return Ok(entry);
         }
         archive
-            .row(inner)
+            .row(&inner)
             .ok_or_else(|| Error::Other(format!("{path}: no such entry")))
     }
 
     /// The bytes of one entry, for the viewer and the editor.
     pub fn read_blocking(&self, path: &VPath, cancel: &CancelToken) -> Result<Vec<u8>> {
-        let host = self.host(path)?;
-        let archive = self
-            .cache
-            .open(host.as_path(), cancel)
-            .map_err(|e| convert(path, e))?;
-        archive
-            .read(path.inner_path(), cancel)
-            .map_err(|e| convert(path, e))
+        let (archive, inner) = self.open_in(path, cancel)?;
+        archive.read(&inner, cancel).map_err(|e| convert(path, e))
     }
 }
 
@@ -231,19 +215,56 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn the_two_archives_we_cannot_open_yet_say_which_they_are() {
+    async fn an_archive_inside_an_archive_opens_through_a_copy() {
         let dir = tempfile::tempdir().unwrap();
-        let zip = dir.path().join("tree.zip");
-        zip_of(&zip);
+        let inner = dir.path().join("inner.zip");
+        zip_of(&inner);
+        // The outer one holds the inner archive, stored rather than deflated — which is what a
+        // real one looks like, since a zip inside a zip does not compress.
+        let outer = dir.path().join("outer.zip");
+        let file = std::fs::File::create(&outer).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        zip.start_file(
+            "nested/inner.zip",
+            zip::write::SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Stored),
+        )
+        .unwrap();
+        zip.write_all(&std::fs::read(&inner).unwrap()).unwrap();
+        zip.finish().unwrap();
+
         let vfs = ArcVfs::new(Limits::default());
+        let deep = VPath::local(&outer).enter("/nested/inner.zip").enter("/");
+        let rows = vfs
+            .list(&deep, CancelToken::new())
+            .await
+            .expect("a listing");
+        let names: Vec<String> = rows.iter().map(|e| e.name_str().into_owned()).collect();
+        assert_eq!(names, ["..", "readme.md", "src"]);
+        // And the bytes of a file two containers down come out.
+        assert_eq!(
+            vfs.read_blocking(&deep.join("src/a.txt"), &CancelToken::new())
+                .unwrap(),
+            b"aaaa"
+        );
+        // The copy is made once: a second listing answers from the same file.
+        assert!(vfs.list(&deep, CancelToken::new()).await.is_ok());
 
-        let nested = VPath::local(&zip).enter("/inner.zip").enter("/");
-        let error = vfs.list(&nested, CancelToken::new()).await.unwrap_err();
-        assert!(error.to_string().contains("inside an archive"), "{error}");
+        // Deeper than the limit allows is refused by the limit, not by a failure to read.
+        let shallow = ArcVfs::new(Limits {
+            depth: 0,
+            ..Limits::default()
+        });
+        let error = shallow.list(&deep, CancelToken::new()).await.unwrap_err();
+        assert!(error.to_string().contains("max_depth"), "{error}");
+    }
 
+    #[tokio::test]
+    async fn an_archive_nothing_can_bring_here_says_so() {
+        let vfs = ArcVfs::new(Limits::default());
         let remote = VPath::remote(fcmd_core::Scheme::Sftp, "host", "/srv/x.zip").enter("/");
         let error = vfs.list(&remote, CancelToken::new()).await.unwrap_err();
-        assert!(error.to_string().contains("local disk"), "{error}");
+        assert!(error.to_string().contains("copied here first"), "{error}");
     }
 
     #[test]

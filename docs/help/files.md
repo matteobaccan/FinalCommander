@@ -127,6 +127,18 @@ tar, and tar with gzip, bzip2, xz or zstd — and the path says where you are:
 
 Everything that reads a file works in there: the viewer, the hex editor, the search.
 
+An archive inside an archive opens too, and so does one on a server or in a bucket. Neither is
+a file this program can seek in, so it is copied into the temporary directory first, once, and
+read from there — a pause the first time and nothing afterwards, with the path still saying
+where the file really is:
+
+    sftp://srv/backups/site.zip!/inner.tar.gz!/etc/nginx.conf
+
+`[arc] max_depth` says how many containers deep that may go and `[arc] max_spill_mb` how large
+a container may be before the copy is refused instead of made; both say which limit stopped
+them. One thing such an archive cannot do is be written to: the copy goes when the program
+does, so a change to it would be a change nobody would ever see again.
+
 Writing works too, and it works the only way these formats allow. None of them can be edited
 in place — a `.tar.gz` is one compressed stream from end to end, and a 7z usually packs
 several files into one block — so a change means writing
@@ -157,6 +169,7 @@ What that gives you, from inside an archive:
 
 What is not there: an entry's permissions and times cannot be changed from the panel, and
 `F7` does not make a directory inside an archive — nothing stores an empty one worth keeping.
+Nor can an archive that is not a file on this disk be written into, for the reason above.
 
 # What a file is
 

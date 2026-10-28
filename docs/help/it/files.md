@@ -133,6 +133,19 @@ bzip2, xz o zstd — e il percorso dice dove sei:
 Tutto quello che legge un file funziona là dentro: il visualizzatore, l'editor esadecimale, la
 ricerca.
 
+Si apre anche un archivio dentro un archivio, e uno su un server o in un bucket. Nessuno dei due
+è un file in cui questo programma possa spostarsi, quindi viene prima copiato nella cartella
+temporanea, una volta sola, e letto da lì — una pausa la prima volta e niente dopo, con il
+percorso che continua a dire dov'è davvero il file:
+
+    sftp://srv/backup/sito.zip!/interno.tar.gz!/etc/nginx.conf
+
+`[arc] max_depth` dice quanti contenitori in profondità si può andare e `[arc] max_spill_mb`
+quanto può essere grande un contenitore prima che la copia venga rifiutata invece che fatta;
+tutti e due dicono quale limite li ha fermati. Una cosa che un archivio così non può fare è
+essere scritto: la copia se ne va quando se ne va il programma, quindi una modifica sarebbe una
+modifica che nessuno rivedrebbe mai più.
+
 Anche scrivere funziona, e funziona nell'unico modo che questi formati permettono. Nessuno di
 essi si può modificare sul posto — un `.tar.gz` è un unico flusso compresso da un capo
 all'altro, e un 7z di solito impacchetta più file in un blocco solo — quindi un cambiamento
@@ -165,7 +178,8 @@ Quello che questo ti dà, da dentro un archivio:
 
 Quello che non c'è: i permessi e gli orari di una voce non si possono cambiare dal pannello, e
 `F7` non crea una cartella dentro un archivio — nessuno di questi formati conserva una cartella
-vuota che valga la pena di tenere.
+vuota che valga la pena di tenere. E non si può scrivere dentro un archivio che non è un file su
+questo disco, per il motivo appena detto.
 
 # Cosa è un file
 

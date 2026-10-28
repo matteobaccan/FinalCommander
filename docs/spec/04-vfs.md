@@ -98,14 +98,22 @@ where the code lives, not whether it is linked into the binary.
   stepping in and out of one reads its index once and an archive rewritten under us is read
   afresh rather than answered from a stale index. One cache serves the panels and the job
   engine, so the index a panel read to draw itself is the one an unpack then reads from.
-- Non-seekable containers (`.tar.gz` over SFTP) are materialised to a temp file under a size
-  limit (configurable, default 512 MiB) with a visible progress bar; above the limit the panel
-  shows a streaming listing and random access is refused with a clear message.
+- Containers that are not files on this disk — one inside another archive, one on a server or
+  in a bucket — are materialised to a temp file under a size limit and read from there.
+  **Implemented** (`fcmd_arc::nest`): every decoder here reads a file and seeks in it, so the
+  bytes are put on the disk once, under `<temp>/fcmd-<pid>/nested/`, and the copy is reused
+  for as long as what it came out of has not changed — the stamp of the file at the bottom of
+  the chain for a nested one, whatever the provider will say for a remote one. The copies go
+  when the program does. The limit is `[arc] max_spill_mb` (default 1024), and a container
+  over it is refused with its size and the limit rather than quietly filling the disk. The
+  path stays what it is — `sftp://srv/outer.zip!/inner.zip!/readme.md` — because that is where
+  the file really is; nothing above this layer learns that a copy happened. A container read
+  from a copy is **read-only**: see the rebuild below.
 - Nesting depth limit (default 4) to stop zip-bomb recursion; entry-count and expansion-ratio
   guards on every archive read, with the limits in config and the refusal explained.
   **Implemented** as `[arc]` in the config file (`max_entries`, `max_total_mb`, `max_ratio`,
-  `max_depth`): the refusal names the limit that fired and what the archive asked for, because
-  a user who meets one has to decide whether to raise it. An entry whose name climbs out of the
+  `max_depth`, `max_spill_mb`): the refusal names the limit that fired and what the archive
+  asked for, because a user who meets one has to decide whether to raise it. An entry whose name climbs out of the
   archive (`../../etc/passwd`) is pinned at the root rather than trusted, so no extraction can
   be talked into writing outside where it was told to.
 - Writes to a nested container rebuild the outer container; the UI warns and the job engine
@@ -117,8 +125,11 @@ where the code lives, not whether it is linked into the binary.
   panel answers from a stale index. A cancelled or failed rebuild deletes the `.part` file and
   leaves the archive exactly as it was. What a format allows is used: a zip entry nobody named
   moves across as the compressed bytes it already is, so one change to a large archive is a
-  copy rather than a recompression. The nested case still wants the inner container
-  materialised first.
+  copy rather than a recompression. A container that is not a file on this disk is read
+  from a copy, and the copy is thrown away when the program ends, so a rebuild of one is
+  refused with that as the reason rather than reporting a change nobody will see again:
+  changing something three archives down means rebuilding all three, which is a plan this
+  does not make yet.
 
 ## 5. Editing inside a VFS
 

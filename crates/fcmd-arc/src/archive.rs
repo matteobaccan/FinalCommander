@@ -6,8 +6,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
-use fcmd_core::{CancelToken, Entry, EntryFlags, EntryId, EntryKind};
+use fcmd_core::{CancelToken, Entry, EntryFlags, EntryId, EntryKind, VPath};
 
+use crate::nest::{self, Fetch, Nest};
 use crate::{ArcError, Format, Limits, Result};
 
 /// One entry of an archive, as the index holds it.
@@ -922,6 +923,8 @@ pub struct Cache {
     /// Most recently used last; small by design, because an index can be large.
     open: Mutex<Vec<(PathBuf, Arc<Archive>)>>,
     capacity: usize,
+    /// The copies of the containers that are not files on this disk (SPEC 04 §4).
+    nest: Nest,
 }
 
 impl Cache {
@@ -930,7 +933,75 @@ impl Cache {
             limits,
             open: Mutex::new(Vec::new()),
             capacity: 4,
+            nest: Nest::new(),
         }
+    }
+
+    /// Hand the cache the way to reach a container that is not on this disk — a server, a
+    /// bucket. Without one, such an archive is refused with that as the reason.
+    pub fn set_fetch(&self, fetch: Arc<dyn Fetch>) {
+        self.nest.set_fetch(fetch);
+    }
+
+    /// The archive that holds `path`, and where `path` sits inside it.
+    ///
+    /// This is the call everything above should make: it is the one that knows an archive may
+    /// be inside another archive, or on a server, and what to do about it.
+    pub fn open_in(&self, path: &VPath, cancel: &CancelToken) -> Result<(Arc<Archive>, String)> {
+        let host = path
+            .leave()
+            .ok_or_else(|| ArcError::Unknown(path.to_string()))?;
+        let archive = self.open_host(&host, cancel)?;
+        Ok((archive, path.inner_path().to_string()))
+    }
+
+    /// The archive `host` names, wherever it is.
+    pub fn open_host(&self, host: &VPath, cancel: &CancelToken) -> Result<Arc<Archive>> {
+        let file = self.host_file(host, cancel)?;
+        self.open(&file, cancel)
+    }
+
+    /// The file whose bytes are `host`'s: itself when it is one, a copy of it when it is not.
+    ///
+    /// The copy is made once and kept for as long as the archive it came out of has not
+    /// changed, because the common act — stepping in and out of a nested archive — would
+    /// otherwise unpack it again on every listing.
+    pub fn host_file(&self, host: &VPath, cancel: &CancelToken) -> Result<PathBuf> {
+        if host.is_local() && !host.in_container() {
+            return Ok(host.as_path().to_path_buf());
+        }
+        if host.depth() > self.limits.depth {
+            return Err(nest::too_deep(host, self.limits.depth));
+        }
+        if let Some(outer_path) = host.leave() {
+            let outer = self.open_host(&outer_path, cancel)?;
+            let inner = host.inner_path().to_string();
+            let entry = outer.entry(&inner).ok_or_else(|| ArcError::NoEntry {
+                path: outer_path.to_string(),
+                entry: inner.clone(),
+            })?;
+            if entry.size > self.limits.spill_bytes {
+                return Err(nest::too_big(host, entry.size, self.limits.spill_bytes));
+            }
+            return self.nest.spill(host, |to| {
+                outer.extract(&inner, to, cancel, &mut |_| {}).map(|_| ())
+            });
+        }
+        let fetch = self.nest.fetcher().ok_or_else(|| nest::no_fetcher(host))?;
+        if let Some(size) = fetch.size(host) {
+            if size > self.limits.spill_bytes {
+                return Err(nest::too_big(host, size, self.limits.spill_bytes));
+            }
+        }
+        self.nest.spill(host, |to| fetch.fetch(host, to, cancel))
+    }
+
+    /// Is this container a file on this disk — the only kind that can be written to?
+    ///
+    /// A rebuild of a copy would change a file that is about to be thrown away and report that
+    /// it had changed the archive, so everything that writes asks this first.
+    pub fn is_writable_host(host: &VPath) -> bool {
+        host.is_local() && !host.in_container()
     }
 
     pub fn limits(&self) -> &Limits {
