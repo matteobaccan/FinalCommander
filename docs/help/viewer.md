@@ -52,8 +52,19 @@ braces or the hex: a
 heading that stays where it is while the rows scroll under it, columns lined up, one record to
 a row. `Shift+F3` switches between the table and the source — the source is sometimes the thing
 one came to look at — and `Shift+F4` has the table in the cycle with the text, the dump and the
-hex. `←`/`→` move the window sideways across a table wider than the screen, and `F7` searches
-what is on the screen, so looking for a value finds it in its cell.
+hex. `F7` searches what is on the screen, so looking for a value finds it in its cell.
+
+`Shift+F3` is not limited to those names: it makes a table of **any** file that reads as one,
+so a `.txt` of tab-separated columns or a log laid out in columns opens as a table too. It
+refuses only a file with no table in it — one that is not text at all, or one that does not
+come apart into two columns or more — and since the same key goes back, a wrong guess costs
+one keystroke. What opens *by itself* is the shorter list, because what a file opens as has to
+be predictable.
+
+`←` and `→` move the window sideways across a table wider than the screen, and stop where the
+last column ends rather than scrolling on into nothing. `Ctrl+←` and `Ctrl+→` jump a whole
+column at a time — a table has a unit for sideways that a wall of text has not. `Home` and
+`End` go to the first and the last screenful of rows.
 
 The status line says what the file was read as, which delimiter was *guessed* — a comma, a
 semicolon, a tab or a bar, whichever gave a table — and how many rows and columns there are:
@@ -67,9 +78,15 @@ A `.dbf` is different and better: a dBase table says in its own header how many 
 has, how long one is and what the columns are called, so nothing is read but the window you are
 looking at — a two-gigabyte table opens as fast as a log, and the size limit below does not
 apply to it. Dates come out as `YYYY-MM-DD`, true and false as words, a memo field as the block
-number it holds (reading the `.dbt`/`.fpt` beside the table is not here yet), and a **deleted**
-record is shown with a `*` in front of it rather than being left out: a table whose deleted
-rows vanish is one whose count does not add up.
+number it holds (reading the `.dbt`/`.fpt` beside the table is not here yet), and the numeric
+fields sit on the right of their column, because a column of numbers is read down its last
+digit. A **deleted** record is shown rather than left out — a table whose deleted rows vanish
+is one whose count does not add up — and the `*` that says so has a narrow column of its own
+in front of the fields, where it cannot be mistaken for part of a number.
+
+The text comes out in the code page the header names, DOS ones included: a table written under
+DOS in Germany is in code page 437, and `temporäre` reads as `temporäre` rather than as
+`tempor„re`.
 
 Like a laid-out Markdown document, a text table is read whole — a column's width cannot be
 known from the part of the file on screen — so over sixteen megabytes the file opens as text

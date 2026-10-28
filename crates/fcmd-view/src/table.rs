@@ -35,6 +35,14 @@ pub enum Records {
     Dbf(Dbf),
 }
 
+/// Which side of its column a cell sits on. A number reads down its last digit, which is why
+/// every table tool right-aligns one and why the panel's size column is right-aligned too.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Align {
+    Left,
+    Right,
+}
+
 /// A parsed table: what the columns are called, and the rows.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Table {
@@ -42,6 +50,9 @@ pub struct Table {
     pub records: Records,
     /// Display width of each column, from the header and the rows that were read.
     pub widths: Vec<usize>,
+    /// Which side of its column each cell sits on. A text format has no types to go by, so
+    /// everything is left; a dBase table knows which of its fields are numbers.
+    pub aligns: Vec<Align>,
     /// `CSV`, `TSV`, `JSONL` — what the status line says this was read as.
     pub format: &'static str,
     /// The delimiter that was *guessed*, for the status line to admit. `None` for a format
@@ -76,6 +87,7 @@ impl Table {
             columns: dbf.columns(),
             records: Records::Dbf(dbf.clone()),
             widths: dbf.widths(),
+            aligns: dbf.aligns(),
             format: dbf.flavour,
             delimiter: None,
             cut,
@@ -127,6 +139,7 @@ impl Table {
             columns: header,
             records: Records::Read(records),
             widths: Vec::new(),
+            aligns: Vec::new(),
             format: if delimiter == '\t' { "TSV" } else { "CSV" },
             delimiter: guessed.then_some(delimiter),
             cut: false,
@@ -207,6 +220,7 @@ impl Table {
             columns,
             records: Records::Read(rows),
             widths: Vec::new(),
+            aligns: Vec::new(),
             format: "JSONL",
             delimiter: None,
             cut: false,
@@ -237,12 +251,17 @@ impl Table {
         for w in &mut self.widths {
             *w = (*w).max(1);
         }
+        // A text format carries no types, so nothing is claimed about what a column holds.
+        if self.aligns.len() != self.columns.len() {
+            self.aligns = vec![Align::Left; self.columns.len()];
+        }
     }
 
-    /// The heading, as one line, scrolled right by `col` display columns.
+    /// The heading, as one line, scrolled right by `col` display columns. A heading sits on
+    /// the same side as what is under it, so a number column reads as one block.
     pub fn header(&self, col: usize, width: usize) -> String {
         let cells: Vec<&str> = self.columns.iter().map(String::as_str).collect();
-        lay_out(&cells, &self.widths, col, width)
+        lay_out(&cells, &self.widths, &self.aligns, col, width)
     }
 
     /// The rule under the heading: the same layout, in box-drawing characters, so the eye
@@ -264,6 +283,15 @@ impl Table {
         match &self.records {
             Records::Read(rows) => rows,
             Records::Dbf(_) => &[],
+        }
+    }
+
+    /// How many columns the file itself has: for a DBF, the fields, without the deletion
+    /// flag this view puts in front of them — a four-field table says four.
+    pub fn fields(&self) -> usize {
+        match self.records {
+            Records::Dbf(_) => self.columns.len().saturating_sub(1),
+            Records::Read(_) => self.columns.len(),
         }
     }
 
@@ -335,7 +363,22 @@ impl Table {
             return String::new();
         }
         let cells: Vec<&str> = cells.iter().map(String::as_str).collect();
-        lay_out(&cells, &self.widths, col, width)
+        lay_out(&cells, &self.widths, &self.aligns, col, width)
+    }
+
+    /// Where each column begins, in display columns: what a jump sideways lands on, so that
+    /// `Ctrl` and an arrow in a table moves by a whole column rather than by a guess.
+    pub fn column_starts(&self) -> Vec<usize> {
+        let mut out = Vec::with_capacity(self.widths.len());
+        let mut at = 0usize;
+        for (i, w) in self.widths.iter().enumerate() {
+            if i > 0 {
+                at += 3; // ` │ `
+            }
+            out.push(at);
+            at += w;
+        }
+        out
     }
 
     /// How wide the whole table is, in display columns: what the horizontal scroll may reach.
@@ -357,7 +400,7 @@ fn flatten(value: &serde_json::Value) -> String {
 }
 
 /// Lay cells out in columns of the given widths, then take the window the screen shows.
-fn lay_out(cells: &[&str], widths: &[usize], col: usize, width: usize) -> String {
+fn lay_out(cells: &[&str], widths: &[usize], aligns: &[Align], col: usize, width: usize) -> String {
     let mut line = String::new();
     for (i, w) in widths.iter().enumerate() {
         if i > 0 {
@@ -365,9 +408,18 @@ fn lay_out(cells: &[&str], widths: &[usize], col: usize, width: usize) -> String
         }
         let cell = cells.get(i).copied().unwrap_or("");
         let cell = truncate(cell, *w);
+        let pad = w.saturating_sub(cell.width());
+        let right = aligns.get(i).copied().unwrap_or(Align::Left) == Align::Right;
+        if right {
+            for _ in 0..pad {
+                line.push(' ');
+            }
+        }
         line.push_str(&cell);
-        for _ in cell.width()..*w {
-            line.push(' ');
+        if !right {
+            for _ in 0..pad {
+                line.push(' ');
+            }
         }
     }
     shift(&line, col, width)
@@ -525,7 +577,7 @@ pub struct Dbf {
     pub records: usize,
     fields: Vec<Field>,
     /// What the header's language byte says the text is in.
-    encoding: &'static encoding_rs::Encoding,
+    encoding: Charset,
     /// What the version byte says this is, for the status line.
     pub flavour: &'static str,
 }
@@ -619,57 +671,72 @@ impl Dbf {
         self.first + (n as u64) * (self.record_len as u64)
     }
 
-    /// The columns, as the header names them.
+    /// The columns: the deletion flag first, then the fields as the header names them.
     fn columns(&self) -> Vec<String> {
-        self.fields.iter().map(|f| f.name.clone()).collect()
+        let mut out = vec!["*".to_string()];
+        out.extend(self.fields.iter().map(|f| f.name.clone()));
+        out
+    }
+
+    /// Which side of its column a cell sits on. A number is read down its last digit, so the
+    /// numeric types go to the right and everything else stays where it was written.
+    fn aligns(&self) -> Vec<Align> {
+        let mut out = vec![Align::Left];
+        out.extend(self.fields.iter().map(|f| match f.kind {
+            b'N' | b'F' | b'I' | b'Y' | b'B' | b'O' => Align::Right,
+            _ => Align::Left,
+        }));
+        out
     }
 
     /// How wide each column is: what the header declares, capped. A DBF is the one format
     /// that does not have to be read to be laid out.
     fn widths(&self) -> Vec<usize> {
-        self.fields
-            .iter()
-            .map(|f| {
-                let declared = match f.kind {
-                    b'D' => 10, // `YYYY-MM-DD`, which is wider than the stored 8
-                    b'L' => 5,  // `false`
-                    b'I' => 11,
-                    b'T' => 19,
-                    b'Y' | b'B' | b'O' => 20,
-                    b'M' | b'G' => 10,
-                    _ => f.len,
-                };
-                declared.max(f.name.chars().count()).clamp(1, MAX_COL)
-            })
-            .collect()
+        let mut out = vec![1usize]; // the deletion flag's own column
+        out.extend(self.fields.iter().map(|f| {
+            let declared = match f.kind {
+                b'D' => 10, // `YYYY-MM-DD`, which is wider than the stored 8
+                b'L' => 5,  // `false`
+                b'I' => 11,
+                b'T' => 19,
+                b'Y' | b'B' | b'O' => 20,
+                b'M' | b'G' => 10,
+                _ => f.len,
+            };
+            declared.max(f.name.chars().count()).clamp(1, MAX_COL)
+        }));
+        out
     }
 
     /// One record's cells, out of the record's own bytes.
     ///
-    /// A record whose deletion flag is set is still a record: `*` in front of the first cell
-    /// says so, because a table where deleted rows simply vanish is a table whose row count
+    /// A record whose deletion flag is set is still a record: the first column says so with
+    /// a `*`, because a table where deleted rows simply vanish is a table whose row count
     /// does not add up — and finding the deleted ones is half of why anybody opens a DBF.
+    /// The flag has a column of its own rather than a mark on the first cell, which in a
+    /// column of numbers would read as part of the number.
     fn cells(&self, record: &[u8]) -> Vec<String> {
         let deleted = record.first() == Some(&b'*');
-        let mut out = Vec::with_capacity(self.fields.len());
-        for (i, f) in self.fields.iter().enumerate() {
+        let mut out = Vec::with_capacity(self.fields.len() + 1);
+        out.push(if deleted {
+            "*".to_string()
+        } else {
+            String::new()
+        });
+        for f in &self.fields {
             let end = (f.at + f.len).min(record.len());
             let raw = if f.at < end {
                 &record[f.at..end]
             } else {
                 &[][..]
             };
-            let mut value = self.cell(f, raw);
-            if i == 0 && deleted {
-                value = format!("*{value}");
-            }
-            out.push(value);
+            out.push(self.cell(f, raw));
         }
         out
     }
 
     fn cell(&self, f: &Field, raw: &[u8]) -> String {
-        let text = |bytes: &[u8]| self.encoding.decode(bytes).0.into_owned();
+        let text = |bytes: &[u8]| self.encoding.decode(bytes);
         match f.kind {
             // Numbers are written as text, right-aligned in the field with spaces.
             b'N' | b'F' => text(raw).trim().to_string(),
@@ -757,18 +824,54 @@ fn from_julian(jd: i32) -> (i32, i32, i32) {
 
 /// The text encoding a DBF's language byte names. The ones that are actually met; anything
 /// else is read as Windows-1252, which at least never fails and is right for most of Europe.
-fn encoding_for(byte: u8) -> &'static encoding_rs::Encoding {
+fn encoding_for(byte: u8) -> Charset {
     match byte {
-        0x01 | 0x69 => encoding_rs::IBM866, // 437 is not in encoding_rs; 866 is the near one
-        0x02 => encoding_rs::WINDOWS_1252,  // 850, close enough for the accented letters
-        0x64 | 0xc8 => encoding_rs::WINDOWS_1250,
-        0x65 | 0xc9 => encoding_rs::WINDOWS_1251,
-        0x66 | 0x26 => encoding_rs::IBM866,
-        0x6a | 0xcb => encoding_rs::WINDOWS_1253,
-        0x6b | 0xca => encoding_rs::WINDOWS_1254,
-        0x7d | 0xcc => encoding_rs::WINDOWS_1255,
-        0x7e | 0xcd => encoding_rs::WINDOWS_1256,
-        _ => encoding_rs::WINDOWS_1252,
+        // The 437 family: the US driver, and the western-European OEM drivers that all
+        // wrote plain 437 — the German one among them, which is the byte a table written
+        // under DOS in Germany carries.
+        0x01 | 0x09 | 0x0b | 0x0d | 0x0f | 0x11 | 0x15 | 0x18 | 0x19 | 0x1b => Charset::Cp437,
+        // 850, 860, 861, 863, 865 and the other western DOS tables: `encoding_rs` has none
+        // of them, and 1252 agrees with all of them on the accented letters, which is what
+        // a field holds. They differ in the box-drawing half, which a field does not.
+        0x02 | 0x0a | 0x0e | 0x10 | 0x12 | 0x14 | 0x16 | 0x17 | 0x1a | 0x1d | 0x24 | 0x25
+        | 0x37 | 0x66 | 0x67 | 0x6c => Charset::Table(encoding_rs::WINDOWS_1252),
+        // 852 and the eastern DOS tables, likewise against 1250.
+        0x1f | 0x22 | 0x23 | 0x40 | 0x64 | 0x68 | 0x69 | 0xc8 => {
+            Charset::Table(encoding_rs::WINDOWS_1250)
+        }
+        0x26 | 0x65 => Charset::Table(encoding_rs::IBM866),
+        0xc9 => Charset::Table(encoding_rs::WINDOWS_1251),
+        0x13 => Charset::Table(encoding_rs::SHIFT_JIS),
+        0x4d | 0x7a | 0x7b => Charset::Table(encoding_rs::GBK),
+        0x4e | 0x79 => Charset::Table(encoding_rs::EUC_KR),
+        0x4f | 0x78 => Charset::Table(encoding_rs::BIG5),
+        0x50 | 0x7c => Charset::Table(encoding_rs::WINDOWS_874),
+        0x6a | 0xcb => Charset::Table(encoding_rs::WINDOWS_1253),
+        0x6b | 0xca => Charset::Table(encoding_rs::WINDOWS_1254),
+        0x7d | 0xcc => Charset::Table(encoding_rs::WINDOWS_1255),
+        0x7e | 0xcd => Charset::Table(encoding_rs::WINDOWS_1256),
+        _ => Charset::Table(encoding_rs::WINDOWS_1252),
+    }
+}
+
+/// Which table a DBF's character fields are in.
+///
+/// Two kinds, because the one that matters most is the one `encoding_rs` does not carry: a
+/// DBF written under DOS is in code page 437, and reading it as Windows-1252 turns every
+/// accented letter into a different one — `temporäre` into `tempor„re`. The viewer has had
+/// a 437 table since the day it learned to show a DOS text file; this is that table.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Charset {
+    Cp437,
+    Table(&'static encoding_rs::Encoding),
+}
+
+impl Charset {
+    fn decode(self, bytes: &[u8]) -> String {
+        match self {
+            Charset::Cp437 => crate::decode::Codepage::Cp437.decode(bytes),
+            Charset::Table(table) => table.decode(bytes).0.into_owned(),
+        }
     }
 }
 
@@ -923,24 +1026,31 @@ pub(crate) mod tests {
         let bytes = dbase_bytes();
         let len = bytes.len() as u64;
         let table = Table::dbase(&bytes, len).expect("a dBase table");
-        assert_eq!(table.columns, ["NAME", "BORN"]);
+        // The deletion flag is a column of its own, in front of the fields.
+        assert_eq!(table.columns, ["*", "NAME", "BORN"]);
+        assert_eq!(table.fields(), 2);
         assert_eq!(table.format, "dBase III");
         assert_eq!(table.len(), 3);
         // The widths come from the header, not from the records: that is the whole point.
-        assert_eq!(table.widths, [10, 10]);
+        assert_eq!(table.widths, [1, 10, 10]);
+        // Text is read, numbers are read down their last digit.
+        assert_eq!(table.aligns, [Align::Left, Align::Left, Align::Left]);
         // Nothing was read to get this far.
         assert!(table.rows().is_empty());
 
         let mut source = crate::source::BytesSource::new(bytes.clone());
-        assert_eq!(table.cells(&mut source, 0), ["mb", "1975-03-12"]);
-        // A deleted record is still a record, with a `*` in front of it: a table whose
+        assert_eq!(table.cells(&mut source, 0), ["", "mb", "1975-03-12"]);
+        // A deleted record is still a record, with a `*` in the first column: a table whose
         // deleted rows vanish is one whose count does not add up.
-        assert_eq!(table.cells(&mut source, 1), ["*gone", ""]);
-        assert_eq!(table.cells(&mut source, 2), ["ada", "1815-12-10"]);
+        assert_eq!(table.cells(&mut source, 1), ["*", "gone", ""]);
+        assert_eq!(table.cells(&mut source, 2), ["", "ada", "1815-12-10"]);
         // Row n is one seek, and the offsets say where.
         assert_eq!(table.offset(1), table.offset(0) + 19);
         assert_eq!(table.row_at(table.offset(2) + 3), 2);
-        assert_eq!(table.line(&mut source, 2, 0, 40), "ada        │ 1815-12-10");
+        assert_eq!(
+            table.line(&mut source, 2, 0, 40),
+            "  │ ada        │ 1815-12-10"
+        );
 
         // A header that claims more records than the file holds is a truncated table, and
         // what is there is what can be read.
@@ -951,6 +1061,62 @@ pub(crate) mod tests {
         // Anything that is not a table we know is not one.
         assert!(Table::dbase(b"not a dbf at all, really", 24).is_none());
         assert!(Table::dbase(&[], 0).is_none());
+    }
+
+    /// A table as a DOS program in Germany would have written it: language byte `0x0F`, text
+    /// in code page 437, and a numeric field.
+    fn german_dos_dbf() -> Vec<u8> {
+        let mut out = Vec::new();
+        let header_len = 32 + 2 * 32 + 1;
+        let record_len = 1 + 12 + 8;
+        out.push(0x03);
+        out.extend_from_slice(&[126, 1, 15]);
+        out.extend_from_slice(&1u32.to_le_bytes());
+        out.extend_from_slice(&(header_len as u16).to_le_bytes());
+        out.extend_from_slice(&(record_len as u16).to_le_bytes());
+        let mut rest = [0u8; 20];
+        rest[29 - 12] = 0x0f; // the language byte: German OEM, which means 437
+        out.extend_from_slice(&rest);
+        let mut field = |name: &str, kind: u8, len: u8, decimals: u8| {
+            let mut raw = [0u8; 32];
+            raw[..name.len()].copy_from_slice(name.as_bytes());
+            raw[11] = kind;
+            raw[16] = len;
+            raw[17] = decimals;
+            out.extend_from_slice(&raw);
+        };
+        field("LEISTUNG", b'C', 12, 0);
+        field("PREIS", b'N', 8, 2);
+        out.push(0x0d);
+        out.push(b' ');
+        // `temporäre` with the 437 byte for the umlaut, which is not the 1252 one.
+        out.extend_from_slice(&[
+            b't', b'e', b'm', b'p', b'o', b'r', 0x84, b'r', b'e', b' ', b' ', b' ',
+        ]);
+        out.extend_from_slice(b"   44.00");
+        out.push(0x1a);
+        out
+    }
+
+    #[test]
+    fn a_dos_table_is_read_in_its_own_code_page_and_its_numbers_sit_to_the_right() {
+        let bytes = german_dos_dbf();
+        let len = bytes.len() as u64;
+        let table = Table::dbase(&bytes, len).expect("a dBase table");
+        assert_eq!(table.columns, ["*", "LEISTUNG", "PREIS"]);
+        // The numeric field is read down its last digit; the flag and the text are not.
+        assert_eq!(table.aligns, [Align::Left, Align::Left, Align::Right]);
+
+        let mut source = crate::source::BytesSource::new(bytes.clone());
+        // Read as Windows-1252 this would be `tempor„re`, which is what the bug looked like.
+        assert_eq!(table.cells(&mut source, 0), ["", "temporäre", "44.00"]);
+        // `PREIS` is eight wide, and `44.00` ends where the column does.
+        assert_eq!(
+            table.line(&mut source, 0, 0, 40),
+            "  │ temporäre    │    44.00"
+        );
+        // The heading sits over its own column, on the same side as the cells under it.
+        assert_eq!(table.header(0, 40), "* │ LEISTUNG     │    PREIS");
     }
 
     #[test]

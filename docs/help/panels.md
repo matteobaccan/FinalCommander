@@ -113,7 +113,11 @@ bucket is not restored, because the connection it needs is not open yet.
 # A real terminal
 
 The command line under the panels runs a command and keeps what it printed, which is what you
-want nine times in ten. The tenth is `vim`, `top`, `ssh` or anything else that draws a whole
+want nine times in ten. With something typed on it, `↑` and `↓` walk back and forth through
+what was run before, as a shell does; on an empty line the arrows belong to the panel, as
+every shared key does. `Alt+F8` shows the whole history as a list.
+
+The tenth is `vim`, `top`, `ssh` or anything else that draws a whole
 screen and asks the system how big it is: those need a *terminal*, and `Ctrl+Alt+E` is one.
 
 It is a screen like the viewer and the editor. `Ctrl+Alt+E` again goes back to the panels and

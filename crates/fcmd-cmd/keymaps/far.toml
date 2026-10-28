@@ -872,8 +872,10 @@ keys = ["Alt+F7"]
 scope = "editor"
 cmd = "editor.search.prev"
 
+# `F8` as well as `Ctrl+F7`, because the editor's key bar has said `8 Replac` since it was
+# written and a bar that promises a key has to be telling the truth.
 [[bind]]
-keys = ["Ctrl+F7"]
+keys = ["Ctrl+F7", "F8"]
 scope = "editor"
 cmd = "editor.replace"
 

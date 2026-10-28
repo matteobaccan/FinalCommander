@@ -748,6 +748,30 @@ impl Viewer {
         self.disasm_trail.clear();
     }
 
+    /// `Ctrl` and an arrow in a table: the next column boundary, in the direction asked for.
+    ///
+    /// A table has a unit for sideways that text has not — the column — so the big step is
+    /// one of those rather than a number of characters nobody chose. At the ends it stops.
+    pub fn scroll_h_column(&mut self, forward: bool) {
+        if self.mode != Mode::Table {
+            // Everywhere else the big step is what it always was: a screenful of characters.
+            self.scroll_h(if forward { 20 } else { -20 });
+            return;
+        }
+        self.parse_table();
+        let Some(table) = &self.table else {
+            return;
+        };
+        let starts = table.column_starts();
+        let at = self.col;
+        let next = if forward {
+            starts.iter().copied().find(|start| *start > at)
+        } else {
+            starts.iter().rev().copied().find(|start| *start < at)
+        };
+        self.col = next.unwrap_or(if forward { at } else { 0 });
+    }
+
     /// Remember where we are, then jump: `Ctrl+Z` in the viewer comes back here.
     pub fn jump(&mut self, offset: u64) {
         self.history.push((self.top, self.top_sub));
@@ -770,11 +794,29 @@ impl Viewer {
         self.top = 0;
         self.top_sub = 0;
         self.col = 0;
+        // A table's position is which row is at the top, and nothing else moves it: leaving
+        // that where it was is what made `Home` look as if it had done nothing.
+        self.table_row = 0;
     }
 
     /// The last screenful, so `End` shows the end of the file rather than an empty screen.
     pub fn to_end(&mut self, width: u16, height: u16) {
         self.history.push((self.top, self.top_sub));
+        // A table counts in rows, so the last screenful is the last rows — worked out from
+        // the record count rather than from an offset, which in a table means nothing.
+        if self.mode == Mode::Table {
+            self.parse_table();
+            let rows = self.table.as_ref().map(|t| t.len()).unwrap_or(0);
+            // Two of the window's rows are the heading and its rule.
+            let body = (height as usize).saturating_sub(2).max(1);
+            self.table_row = rows.saturating_sub(body);
+            self.top = self
+                .table
+                .as_ref()
+                .map(|t| t.offset(self.table_row))
+                .unwrap_or(0);
+            return;
+        }
         let len = self.source.len();
         self.goto(len);
         self.scroll(-(height as i64), width, height);
@@ -786,9 +828,24 @@ impl Viewer {
         self.jump(offset);
     }
 
+    /// Move the window sideways, in display columns.
+    ///
+    /// Text without wrapping and a table both have something wider than the window to scroll
+    /// — a long line in the one, a row of columns in the other — and a table stops where its
+    /// last column ends rather than scrolling into empty space, because there is nothing out
+    /// there and a reader who has lost the table has to scroll all the way back.
     pub fn scroll_h(&mut self, delta: i64) {
-        if self.mode == Mode::Text && self.wrap == Wrap::Off {
-            self.col = (self.col as i64 + delta).max(0) as usize;
+        match self.mode {
+            Mode::Text if self.wrap == Wrap::Off => {
+                self.col = (self.col as i64 + delta).max(0) as usize;
+            }
+            Mode::Table => {
+                self.parse_table();
+                let widest = self.table.as_ref().map(|t| t.total_width()).unwrap_or(0);
+                let at = (self.col as i64 + delta).max(0) as usize;
+                self.col = at.min(widest.saturating_sub(1));
+            }
+            _ => {}
         }
     }
 
@@ -1000,8 +1057,12 @@ impl Viewer {
         out
     }
 
-    /// Is this a file table mode can read? Its name has to say so and it has to be small
-    /// enough to parse whole.
+    /// Is this a file table mode *opens* by itself? Its name has to say so and it has to be
+    /// small enough to parse whole.
+    ///
+    /// This is about the first screen, and about the mode cycle: `Shift+F3` is less fussy
+    /// (see [`Self::as_table`]), because a file whose name says nothing can still be a table
+    /// and the reader can see that it is.
     pub fn reads_table(&mut self) -> bool {
         let name = self.path.display_name();
         if !crate::table::Table::reads(&name) || self.derived.is_some() {
@@ -1012,10 +1073,32 @@ impl Viewer {
         name.to_ascii_lowercase().ends_with(".dbf") || self.source.len() <= TABLE_LIMIT
     }
 
-    /// Show the file as a table, if it is one we can read. `false` when it is not, so the
-    /// caller can say why rather than leaving the key looking broken.
+    /// Show the file as a table. `false` when there is no table in it, so the caller can say
+    /// why rather than leaving the key looking broken.
+    ///
+    /// The name is not the test. Tab-separated data in a `.txt` is as common as in a `.tsv`,
+    /// and a log with a column layout has no extension that says so: what decides is whether
+    /// the file *reads* as a table — two columns or more, with the delimiter guessed the
+    /// usual way. The same key goes back to the source, so a wrong guess costs one keystroke.
     pub fn as_table(&mut self) -> bool {
+        if self.derived.is_some() || self.source.len() > TABLE_LIMIT && !self.reads_table() {
+            return false;
+        }
+        // Columns need text to be in. A file whose first bytes are not text at all is not a
+        // table however many times a delimiter happens to turn up in it — unless its name
+        // says what it is, which is how a `.dbf` gets past here.
         if !self.reads_table() {
+            let head = self.source.read_vec(0, 8 * 1024).unwrap_or_default();
+            if crate::decode::looks_binary(&head) {
+                return false;
+            }
+        }
+        self.parse_table();
+        let columns = self.table.as_ref().map(|t| t.columns.len()).unwrap_or(0);
+        if columns < 2 && !self.reads_table() {
+            // Nothing in it comes apart into columns: a file of prose is not a table, and
+            // drawing it as one would be a worse answer than saying so.
+            self.table = None;
             return false;
         }
         self.set_mode(Mode::Table);
@@ -1040,7 +1123,7 @@ impl Viewer {
             };
             note.push_str(&format!(" `{shown}`"));
         }
-        note.push_str(&format!(" · {} × {}", table.len(), table.columns.len()));
+        note.push_str(&format!(" · {} × {}", table.len(), table.fields()));
         if table.skipped > 0 {
             note.push_str(&format!(" · {} skipped", table.skipped));
         }
@@ -1949,10 +2032,17 @@ mod tests {
         assert_eq!(rows[0], "at  │ ok  ");
         assert_eq!(rows[2], "now │ true");
 
-        // A name that says nothing tabular is not offered the mode, and the key says so
-        // rather than doing nothing.
-        let mut v = table_viewer("notes.txt", "a,b\n1,2\n");
-        assert!(!v.reads_table());
+        // A name that says nothing tabular does not *open* as a table, but the key still
+        // offers it: tab-separated columns in a `.txt` are as common as in a `.tsv`, and the
+        // reader can see that the file is a table even where its name cannot.
+        let mut v = table_viewer("notes.txt", "name\tage\nmb\t51\n");
+        assert!(!v.reads_table(), "it does not open as one");
+        assert!(v.as_table(), "but the key puts it in table mode");
+        assert_eq!(v.mode, Mode::Table);
+        assert_eq!(texts(&mut v, 40, 3)[2], "mb   │ 51 ");
+
+        // A file of prose is not a table, and saying so is better than drawing one.
+        let mut v = table_viewer("readme.txt", "This is a sentence.\nAnd another one.\n");
         assert!(!v.as_table());
         assert_eq!(v.mode, Mode::Text);
     }
@@ -1968,9 +2058,9 @@ mod tests {
         assert!(v.reads_table());
         assert!(v.as_table());
         let rows = texts(&mut v, 40, 5);
-        assert_eq!(rows[0], "NAME       │ BORN      ");
-        assert_eq!(rows[2], "mb         │ 1975-03-12");
-        assert_eq!(rows[3], "*gone      │           ");
+        assert_eq!(rows[0], "* │ NAME       │ BORN      ");
+        assert_eq!(rows[2], "  │ mb         │ 1975-03-12");
+        assert_eq!(rows[3], "* │ gone       │           ");
         let note = v.status().table.expect("a note");
         assert!(note.contains("dBase III"), "{note}");
         assert!(note.contains("3 × 2"), "{note}");

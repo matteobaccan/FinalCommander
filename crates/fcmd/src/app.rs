@@ -6350,8 +6350,10 @@ impl App {
                     viewer.as_markdown();
                 }
                 // And a `.csv` opens as a table, for the same reason and with `Shift+F3`
-                // as the way back to the commas.
-                if self.cfg.ui.table {
+                // as the way back to the commas. Only a name that says it is tabular opens
+                // that way: the key itself is less fussy (a `.txt` of tab-separated columns
+                // is a table), but what a file opens as has to be predictable.
+                if self.cfg.ui.table && viewer.reads_table() {
                     viewer.as_table();
                 }
                 self.mode = Mode::Viewer(Box::new(viewer));
@@ -6483,6 +6485,18 @@ impl App {
             // the cursor is what somebody looking at that line wants to keep.
             KeyCode::Insert if !empty && ctrl && !key.mods.contains(Mods::SHIFT) => {
                 self.run(Command::CmdClip);
+                true
+            }
+            // And the arrows walk the history while there is something on the line, which is
+            // what every shell does and what anybody typing there reaches for. FAR's own
+            // `Ctrl+E` and `Ctrl+X` still work, and on an empty line the arrows belong to the
+            // panel, as every shared key does.
+            KeyCode::Up if !empty && key.mods == Mods::NONE => {
+                self.run(Command::CmdHistoryPrev);
+                true
+            }
+            KeyCode::Down if !empty && key.mods == Mods::NONE => {
+                self.run(Command::CmdHistoryNext);
                 true
             }
             KeyCode::Enter if !empty && !ctrl => {
@@ -10849,6 +10863,14 @@ impl App {
                 // And `Ctrl+arrow` moves the whole dump by a single byte, so a structure that
                 // does not start on a multiple of the row width can be read in line rather
                 // than diagonally. The same keys FAR uses for it.
+                // In a table `Ctrl` and an arrow jumps a whole column, which is the unit a
+                // table has and a wall of text has not.
+                Command::ViewerShiftBack if viewer.mode == fcmd_view::Mode::Table => {
+                    viewer.scroll_h_column(false)
+                }
+                Command::ViewerShiftForward if viewer.mode == fcmd_view::Mode::Table => {
+                    viewer.scroll_h_column(true)
+                }
                 Command::ViewerShiftBack => viewer.shift(-1),
                 Command::ViewerShiftForward => viewer.shift(1),
                 Command::ViewerWrap => viewer.toggle_wrap(),
@@ -11924,9 +11946,15 @@ impl App {
         vec![
             (1, self.i18n.t("key-help")),
             (2, self.i18n.t("key-save")),
+            // Three keys the editor has always answered and the bar never said: mark a
+            // block, hand the file to the viewer, assemble what is in it. A key that works
+            // and is not written down is a key nobody presses.
+            (3, self.i18n.t("key-mark")),
             (4, self.i18n.t("key-quit")),
+            (6, self.i18n.t("key-view")),
             (7, self.i18n.t("key-search")),
             (8, self.i18n.t("key-replace")),
+            (9, self.i18n.t("key-asm")),
             (10, self.i18n.t("key-quit")),
             (12, self.i18n.t("key-screens")),
         ]
@@ -12018,6 +12046,9 @@ impl App {
             (8, "key-delete"),
             (9, "key-pulldown"),
             (10, "key-quit"),
+            // `F11` has opened the plugin commands since the plugins did, and the bar did
+            // not say so: FAR writes `Plugin` there too.
+            (11, "key-plugins"),
             (12, "key-screens"),
         ]
         .iter()

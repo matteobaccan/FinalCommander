@@ -237,9 +237,17 @@ the thing one came to look at.
 
 **Shipped in 0.6.0: the mode, CSV/TSV and JSONL. In 0.7.0: DBF, read a window at a time.** `Shift+F3` in the viewer, and a file whose
 name says it is tabular opens that way (`ui.table`, on by default, with the same key as the way
-back to the source). The heading and its rule are drawn first and *stay* while the rows scroll
+back to the source). **What opens by itself and what the key opens are not the same test**: a
+name that says `csv`, `tsv`, `tab`, `jsonl`, `ndjson` or `dbf` opens as a table, because what a
+file opens as has to be predictable, while `Shift+F3` will make a table of anything that reads
+as one — tab-separated columns in a `.txt` are as common as in a `.tsv`, and a log laid out in
+columns has no extension that says so. The key refuses only what has no table in it: a file
+whose first bytes are not text, or one that does not come apart into two columns or more. The
+same key goes back to the source, so a wrong guess costs one keystroke. The heading and its rule are drawn first and *stay* while the rows scroll
 under them, because a table whose heading scrolled away is a wall of numbers again; `←`/`→`
-move the window sideways; the status line says the format, the delimiter that was guessed, the
+move the window sideways and stop where the last column ends rather than scrolling into empty
+space, `Ctrl+←`/`Ctrl+→` jump a whole column (the unit a table has and a wall of text has
+not), `Home` and `End` go to the first and last screenful of *rows*; the status line says the format, the delimiter that was guessed, the
 shape of the table (`rows × columns`) and what was left out. A cell wider than forty columns is
 cut with a `…` — one 4 kB cell must not push every other column off the screen — and the
 horizontal scroll reads the rest. A search finds what is on the screen, so a value is found in
@@ -261,11 +269,19 @@ draws asks the table for the cells of a row rather than reaching into a vector.
 What the DBF reader does with the field types: `C` is text with the padding off, `N` and `F`
 are the numbers as written, `D` is `YYYYMMDD` shown as `YYYY-MM-DD` (and empty where the date
 was never set), `L` is `true`/`false`, `I`/`Y`/`B`/`O` are the binary integer, currency and
-double, `T` is a Julian day with milliseconds since midnight. A **deleted** record is shown
-with a `*` in front of its first cell rather than being skipped: a table whose deleted rows
-vanish is one whose row count does not add up, and finding them is half of why anybody opens a
-DBF. The header's language byte picks the text encoding, with Windows-1252 for the ones that
-are not mapped. A **memo** field shows its block number as `memo:42`; reading the `.dbt`/`.fpt`
+double, `T` is a Julian day with milliseconds since midnight. The numeric
+types sit on the right of their column and everything else on the left, because a column of
+numbers is read down its last digit. A **deleted** record is shown rather than skipped — a
+table whose deleted rows vanish is one whose row count does not add up, and finding them is
+half of why anybody opens a DBF — and the `*` that says so has a **column of its own**, in
+front of the fields, rather than being stuck on the first cell: in a column of numbers `*1`
+reads as a number nobody can tell from `1`. The status line's `rows × columns` counts the
+fields and not that column. The header's language byte picks the text encoding, and the DOS
+code pages are read as DOS code pages: a table written in Germany under DOS carries `0x0F`
+and is in code page 437, where reading it as Windows-1252 turns `temporäre` into `tempor„re`.
+437 is the viewer's own table, the one it has had since it learned to show a DOS text file;
+850, 852 and the other DOS tables `encoding_rs` does not carry fall back to the Windows table
+that agrees with them on the accented letters, which is what a field holds. A **memo** field shows its block number as `memo:42`; reading the `.dbt`/`.fpt`
 beside the table is a second file and a backlog line. A header that claims more records than
 the file can hold is a truncated table: what is there is read and the status line says `cut`.
 

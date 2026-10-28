@@ -4,9 +4,57 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
-## [Unreleased]
+## [0.7.1] — 2026-10-28
+
+### Fixed
+
+- **The table mode's keys.** `←` and `→` did nothing in a table — the sideways scroll was
+  written for unwrapped text and the mode was not in its match — `Ctrl+←`/`Ctrl+→` shifted the
+  hex dump by a byte, which in a table means nothing, and `Home` and `End` moved the byte
+  offset while the table went on showing the row it was showing, so both looked broken. Now:
+  the arrows move the window sideways and stop where the last column ends rather than
+  scrolling into empty space; `Ctrl` and an arrow jump a whole column, which is the unit a
+  table has and a wall of text has not; `Home` and `End` go to the first and last screenful
+  of rows.
+
+- **`Shift+F3` makes a table of any file that reads as one.** It took the name's word for it,
+  so tab-separated columns in a `.txt` — as common as in a `.tsv` — had no way into the mode,
+  and neither had a log laid out in columns. The key now refuses only a file with no table in
+  it: one whose first bytes are not text, or one that does not come apart into two columns or
+  more. What opens as a table *by itself* is unchanged and still goes by the name, because
+  what a file opens as has to be predictable; the key is the less fussy of the two, and since
+  the same key goes back to the source a wrong guess costs one keystroke.
+
+- **A DBF's numbers are read down their last digit.** Every cell was laid out to the left, so
+  a column of prices was a staircase. The numeric field types (`N`, `F`, `I`, `Y`, `B`, `O`)
+  now sit on the right of their column and everything else stays where it was.
+
+- **A deleted DBF record has its own column.** The `*` that marks one was stuck on the front
+  of the first cell, and in a column of numbers `*1` reads as a number nobody can tell from
+  `1`. It is now a column one character wide in front of the fields. The status line's
+  `rows × columns` still counts the fields, not that column.
+
+- **A DBF written under DOS is read as DOS.** The header's language byte was mapped to
+  whatever Windows code page was nearest, and code page 437 — the one a table written under
+  DOS actually carries — was mapped to 866, which is Cyrillic: a German table came out with
+  `temporäre` as `tempor„re`. The 437 family now goes through the viewer's own 437 table, the
+  one it has had since it learned to show a DOS text file, and the Shift-JIS, GBK, Big5,
+  EUC-KR and Thai drivers are mapped as well. 850, 852 and the other DOS tables `encoding_rs`
+  does not carry still fall back to the Windows table that agrees with them on the accented
+  letters, which is what a field holds.
+
+- **The command line walks its history with the arrows.** `↑` and `↓` with something on the
+  line now step back and forth through what was run before, which is what every shell does
+  and what anybody typing there reaches for; FAR's own `Ctrl+E` and `Ctrl+X` still work, and
+  on an empty line the arrows belong to the panel, as every shared key does.
 
 ### Changed
+
+- **Three keys the editor answered and never admitted to**, found by reading its bar against
+  its keymap: `F3` marks a block, `F6` hands the file to the viewer, `F9` assembles what is in
+  it. The bar says so now. It also promised `8 Replac` while replace was on `Ctrl+F7` alone,
+  so `F8` does it too — a bar that promises a key has to be telling the truth. And the panels'
+  bar now says `11 Plugin`, which `F11` has done since there were plugins.
 
 - **The key bar always shows all twelve keys.** The editor's bar had seven boxes, because the
   editor uses seven of the function keys; the viewer's had eleven; the panels' had eleven. So
