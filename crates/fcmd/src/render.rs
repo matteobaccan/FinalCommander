@@ -2439,6 +2439,24 @@ fn draw_sites(app: &App, buf: &mut Buffer, screen: Rect, cursor: usize) {
     }
 }
 
+/// The theme key a Markdown run is drawn with inside the help dialog.
+///
+/// The viewer paints these runs with the syntax theme, which is written for a panel's dark
+/// background; the help is a dialog, and on a dialog those colours are the one thing nobody
+/// can read. So the dialog has inks of its own, and a fenced block in a language we highlight
+/// is drawn as plain code here rather than in three colours that were not chosen for grey.
+fn help_ink(class: fcmd_view::markdown::Class) -> &'static str {
+    use fcmd_view::markdown::Class;
+    match class {
+        Class::Heading | Class::Emphasis => "help.heading.fg",
+        Class::Strong | Class::Text => "dialog.fg",
+        Class::Code | Class::Syntax(_) => "help.code.fg",
+        Class::Link => "help.link.fg",
+        Class::Marker => "help.marker.fg",
+        Class::Strike | Class::Url | Class::Frame => "help.frame.fg",
+    }
+}
+
 fn draw_help(
     app: &App,
     buf: &mut Buffer,
@@ -2457,7 +2475,7 @@ fn draw_help(
         screen.w.saturating_sub(4).clamp(24, 86)
     };
     // The text is laid out for the box it will be drawn in, not for the panel's width.
-    let lines = app.help_lines(chapter, box_w.saturating_sub(4) as usize);
+    let lines = app.help_rows(chapter, box_w.saturating_sub(4) as usize);
     let box_h = screen.h.saturating_sub(2).max(6);
     let x = screen.x + (screen.w - box_w) / 2;
     let y = screen.y + (screen.h - box_h) / 2;
@@ -2492,6 +2510,7 @@ fn draw_help(
     let max_scroll = lines.len().saturating_sub(visible);
     let scroll = scroll.min(max_scroll);
     for (row, line) in lines.iter().skip(scroll).take(visible).enumerate() {
+        let y = inner.y + row as u16;
         // In the index the row under the cursor is drawn as chosen, because the index is a
         // list one picks from rather than a page one reads.
         if index && scroll + row == at {
@@ -2499,20 +2518,37 @@ fn draw_help(
                 app.theme.color("menu.selected.fg"),
                 app.theme.color("menu.selected.bg"),
             );
-            let text = format!(" {line:<w$}", w = inner.w.saturating_sub(1) as usize);
-            buf.put_str(inner.x, inner.y + row as u16, &text, style, inner.w);
+            let text = format!(
+                " {text:<w$}",
+                text = line.text,
+                w = inner.w.saturating_sub(1) as usize
+            );
+            buf.put_str(inner.x, y, &text, style, inner.w);
             continue;
         }
-        let line_style = if line.starts_with('[') {
-            Style::new(
-                app.theme.color("dialog.title"),
-                app.theme.color("dialog.bg"),
-            )
-            .bold()
-        } else {
-            style
-        };
-        buf.put_str(inner.x, inner.y + row as u16, line, line_style, inner.w);
+        buf.put_str(inner.x, y, &line.text, style, inner.w);
+        // The row says what its own runs are — a heading, a bullet, a table's frame, a code
+        // span — the way the viewer's Markdown view does, and the dialog paints them in its
+        // own inks rather than the viewer's: a help page is read on a dialog background.
+        for span in &line.spans {
+            let Some(text) = line.text.get(span.start..span.end) else {
+                continue;
+            };
+            if text.is_empty() {
+                continue;
+            }
+            let x = inner.x
+                + line.text[..span.start]
+                    .chars()
+                    .filter_map(unicode_width::UnicodeWidthChar::width)
+                    .sum::<usize>() as u16;
+            if x >= inner.right() {
+                continue;
+            }
+            let mut painted = style.with_fg(app.theme.color(help_ink(span.class)));
+            painted.bold = span.bold;
+            buf.put_str(x, y, text, painted, inner.right() - x);
+        }
     }
     // The last body line names the configuration directory: the first thing anyone asks.
     if index && lines.len().saturating_sub(scroll) < visible {
@@ -3208,10 +3244,8 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
         app.handle_input(Input::Key("Enter".parse().unwrap()));
         let keys = frame(&mut app, 80, 24);
         assert!(keys.contains("Keys, as they are bound now"), "{keys}");
-        assert!(
-            keys.contains("[global]") && keys.contains("app.quit"),
-            "{keys}"
-        );
+        // The scope is a heading with a rule under it, and the bindings are a block.
+        assert!(keys.contains("global") && keys.contains("──────"), "{keys}");
         // Bindings further down are reachable by scrolling.
         app.handle_input(Input::Key("PgDn".parse().unwrap()));
         let scrolled = frame(&mut app, 80, 24);

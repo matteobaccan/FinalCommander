@@ -17,6 +17,15 @@ Notable changes, newest first. The format follows
 
 ### Changed
 
+- **The help is drawn by the viewer's Markdown view.** `F1` used to render its pages with a
+  little wrapper of its own that knew a heading, a bullet and an indented block, and showed a
+  heading in capitals. The pages are Markdown and the viewer already renders Markdown, so it
+  renders them now: headings with a rule under them, real bullets, tables drawn with box
+  characters, the inline marks taken off and the words under them coloured instead. The
+  generated chapters — the keys, the commands, the settings — are written as Markdown too, so
+  one renderer draws the whole book, and the dialog has inks of its own for it
+  (`help.heading.fg`, `help.code.fg`, `help.marker.fg`, `help.link.fg`, `help.frame.fg`).
+
 - **The menu bar wears its letters, and `F9` lights it without covering anything.** Each of
   the five titles is drawn with the letter it answers to in the bar's own ink, as FAR draws
   them, and that letter is now a key: `F9` then `F` is the files menu. `F9` on its own lights

@@ -194,6 +194,13 @@ const DEFAULTS: &[(&str, Color)] = &[
     ("dialog.button.bg", Color::Ansi(7)),
     ("dialog.button.selected.fg", Color::Ansi(0)),
     ("dialog.button.selected.bg", Color::Ansi(6)),
+    // The help is Markdown drawn on a dialog: its runs need inks chosen for that background
+    // rather than the syntax theme's, which is written for a panel.
+    ("help.heading.fg", Color::Ansi(4)),
+    ("help.code.fg", Color::Ansi(1)),
+    ("help.marker.fg", Color::Ansi(4)),
+    ("help.link.fg", Color::Ansi(5)),
+    ("help.frame.fg", Color::Ansi(8)),
     ("warn.fg", Color::Ansi(15)),
     ("warn.bg", Color::Ansi(1)),
     ("warn.frame", Color::Ansi(15)),

@@ -14484,15 +14484,46 @@ impl App {
     }
 
     /// The help page, generated from the live keymap so it can never drift.
-    /// The lines of one chapter, ready to draw. The written ones are rendered from the text
-    /// compiled into the binary; the rest are built here, from what the program is running.
+    /// One chapter's rows, laid out and ready to draw, each carrying the runs that say how to
+    /// colour it. The written chapters are the Markdown files compiled into the binary; the
+    /// generated ones are built here, as Markdown too, so one renderer draws them all.
+    pub fn help_rows(
+        &self,
+        chapter: crate::help::Chapter,
+        width: usize,
+    ) -> Vec<fcmd_view::markdown::Line> {
+        use crate::help::Chapter;
+        // The index is a list one picks from, not a page one reads: its rows have to stay one
+        // per chapter, because the cursor counts them.
+        if chapter == Chapter::Index {
+            return crate::help::chapters(&self.i18n)
+                .into_iter()
+                .map(|(_, title)| fcmd_view::markdown::Line {
+                    text: title,
+                    spans: Vec::new(),
+                    source: 0,
+                    sub: 0,
+                })
+                .collect();
+        }
+        crate::help::rows(&self.help_source(chapter, width), width)
+    }
+
+    /// The lines of one chapter as plain text — the rows without their colours, which is what
+    /// the scroll limit and the tests ask for.
     pub fn help_lines(&self, chapter: crate::help::Chapter, width: usize) -> Vec<String> {
+        self.help_rows(chapter, width)
+            .into_iter()
+            .map(|line| line.text)
+            .collect()
+    }
+
+    /// A chapter as the Markdown the renderer is given.
+    fn help_source(&self, chapter: crate::help::Chapter, width: usize) -> String {
         use crate::help::Chapter;
         match chapter {
-            Chapter::Index => crate::help::chapters(&self.i18n)
-                .into_iter()
-                .map(|(_, title)| title)
-                .collect(),
+            // Handled by `help_rows`: an index is not prose.
+            Chapter::Index => String::new(),
             Chapter::Prose(i) => match crate::help::PROSE.get(i) {
                 Some(page) => {
                     // A chapter nobody has translated yet is shown in English, with one line
@@ -14500,20 +14531,18 @@ impl App {
                     // silently opened an English page would be the program lying about
                     // itself, and the note costs two rows.
                     let (text, in_english) = page.text(self.i18n.tag());
-                    let mut lines = Vec::new();
                     if in_english {
-                        lines.extend(crate::help::render(&self.i18n.t("help-in-english"), width));
-                        lines.push(String::new());
+                        format!("{}\n\n{text}", self.i18n.t("help-in-english"))
+                    } else {
+                        text.to_string()
                     }
-                    lines.extend(crate::help::render(text, width));
-                    lines
                 }
-                None => Vec::new(),
+                None => String::new(),
             },
-            Chapter::Here(place) => self.help_here(place, width),
-            Chapter::Keys => self.help_keys(),
-            Chapter::Commands => self.help_commands(),
-            Chapter::Options => self.help_options(),
+            Chapter::Here(place) => self.help_here(place, width).join("\n"),
+            Chapter::Keys => self.help_keys().join("\n"),
+            Chapter::Commands => self.help_commands().join("\n"),
+            Chapter::Options => self.help_options().join("\n"),
         }
     }
 
@@ -14572,10 +14601,12 @@ impl App {
                     lines.push(String::new());
                 }
                 lines.push(format!("## {title}"));
+                lines.push(String::new());
             }
             let keys = keys.join(", ");
-            let text = format!("  {keys:<width_of_keys$}  {}", cmd.describe());
-            // The renderer wraps prose; this is a table, so it is cut rather than folded.
+            let text = format!("    {keys:<width_of_keys$}  {}", cmd.describe());
+            // Four spaces: to the renderer that is a block to leave alone, which is what a
+            // table of keys needs. It is cut rather than folded, for the same reason.
             lines.push(fcmd_ui::truncate_cols(&text, width.max(20)));
         }
 
@@ -14606,10 +14637,11 @@ impl App {
                 if last_scope.is_some() {
                     lines.push(String::new());
                 }
-                lines.push(format!("[{}]", scope.as_str()));
+                lines.push(format!("## {}", scope.as_str()));
+                lines.push(String::new());
                 last_scope = Some(scope);
             }
-            lines.push(format!("  {:<16} {}", key.to_string(), cmd.id()));
+            lines.push(format!("    {:<16} {}", key.to_string(), cmd.id()));
         }
         lines
     }
@@ -14633,7 +14665,7 @@ impl App {
             if keys.is_empty() {
                 unbound += 1;
             }
-            lines.push(format!("  {:<28} {}", cmd.id(), keys.join(", ")));
+            lines.push(format!("    {:<28} {}", cmd.id(), keys.join(", ")));
         }
         lines.push(String::new());
         lines.push(format!(
@@ -14651,7 +14683,7 @@ impl App {
             "`fcmd --dump-config` prints the same thing to a terminal.".into(),
             String::new(),
         ];
-        lines.extend(self.cfg.dump().lines().map(|l| l.to_string()));
+        lines.extend(self.cfg.dump().lines().map(|l| format!("    {l}")));
         lines
     }
 }
@@ -20198,7 +20230,8 @@ run = ["echo one", "echo two", "echo three"]
         assert!(lines
             .iter()
             .any(|l| l.contains("F5") && l.contains("file.copy")));
-        assert!(lines.iter().any(|l| l.contains("[global]")));
+        // The scopes are headings now, drawn with a rule under them rather than in brackets.
+        assert!(lines.iter().any(|l| l.trim() == "global"), "{lines:?}");
 
         // Esc out of a chapter is back to the index, on the chapter one was reading; Esc
         // again leaves the help.

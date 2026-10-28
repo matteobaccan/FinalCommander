@@ -106,9 +106,15 @@ its value — is **generated at the moment it is opened**, from the keymap as lo
 configuration as it stands. A written list of keys is wrong the day after it is written, and a
 help page that lies is worse than no help page.
 
-The prose carries no tables and is wrapped by the renderer rather than by hand: the same page
-has to read on an eighty-column terminal and on a wide one. A test refuses a table in a help
-page for that reason.
+The prose is wrapped by the renderer rather than by hand: the same page has to read on an
+eighty-column terminal and on a wide one. **The renderer is the viewer's own Markdown view** —
+the one `F4` turns on over a `.md` file — so a page looks the same whether one reads it with
+`F1` or opens the file with `F3`: headings with a rule under them, bullets, tables drawn with
+box characters, the inline marks taken off and the text under them coloured instead. The
+generated chapters are written as Markdown too, their key tables as indented blocks, so one
+renderer draws the whole book. The help dialog paints those runs with inks of its own
+(`help.heading.fg`, `help.code.fg`, `help.marker.fg`, `help.link.fg`, `help.frame.fg`): the
+syntax theme is written for a panel's dark background and a dialog is not one.
 
 **The chapters are translated one at a time**, and the program is honest about which ones are.
 Each chapter's name is a message id in the seven catalogues, so an index is always in the
