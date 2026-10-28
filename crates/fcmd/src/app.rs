@@ -2536,13 +2536,12 @@ impl App {
                 }
                 self.decompile_id = None;
                 match result {
-                    Ok(text) if self.mode.viewer().is_some() => {
+                    Ok(text) if self.live_viewer().is_some() => {
                         let name = self
-                            .mode
-                            .viewer()
+                            .live_viewer()
                             .map(|v| v.path.display_name())
                             .unwrap_or_default();
-                        if let Some(viewer) = self.mode.viewer_mut() {
+                        if let Some(viewer) = self.live_viewer_mut() {
                             viewer.show_derived(&tool, text);
                         }
                         let msg = self.i18n.t_args(
@@ -3503,7 +3502,7 @@ impl App {
     fn structure_pane_key(&mut self, key: Key) -> bool {
         let height = self.viewer_size.1;
         let mut target = None;
-        let handled = match self.mode.viewer_mut() {
+        let handled = match self.live_viewer_mut() {
             Some(viewer) if viewer.show_structure && viewer.struct_focus => match key.code {
                 KeyCode::Up => {
                     viewer.structure_move(-1, height);
@@ -3541,8 +3540,8 @@ impl App {
         if let Some(target) = target {
             match target {
                 Some(offset) => {
-                    let (width, height) = self.viewer_size;
-                    if let Some(viewer) = self.mode.viewer_mut() {
+                    let (width, height) = self.live_viewer_size();
+                    if let Some(viewer) = self.live_viewer_mut() {
                         viewer.jump(offset);
                         if viewer.mode == fcmd_view::Mode::Text {
                             viewer.set_mode(fcmd_view::Mode::Hex);
@@ -4014,7 +4013,7 @@ impl App {
                 let (mode, ci) = (self.search_mode, self.search_case_insensitive);
                 // In disassembly mode the query is an instruction pattern, not bytes: looking
                 // for the four letters of `call` in the file would find nothing that matters.
-                let result = self.mode.viewer_mut().map(|v| {
+                let result = self.live_viewer_mut().map(|v| {
                     if v.mode == ViewerMode::Disasm {
                         Ok(v.search_instructions(&query, false, &CancelToken::new()))
                     } else {
@@ -4041,7 +4040,7 @@ impl App {
                 }
                 let (width, height) = self.viewer_size;
                 let _ = (width, height);
-                if let Some(viewer) = self.mode.viewer_mut() {
+                if let Some(viewer) = self.live_viewer_mut() {
                     if let Some(pct) = raw.strip_suffix('%') {
                         if let Ok(p) = pct.trim().parse::<u16>() {
                             viewer.goto_percent(p);
@@ -5950,6 +5949,20 @@ impl App {
         if self.command_line_key(key) {
             return;
         }
+        // The quick view with the focus is a reader, so the reader's keys come first: `F4`
+        // walks the modes, `F5` disassembles, `F8` changes the code page, `F7` searches —
+        // the same keys as the viewer, because it is the viewer (SPEC 02 §8).
+        // A letter is never one of them, whatever the viewer binds it to: `n` and `/` belong
+        // to the command line while a panel has the focus, and a preview must not swallow
+        // what somebody is typing.
+        if self.quick_focused() && key.as_typed_char().is_none() {
+            if let Some(cmd) = self.keymap.resolve(&[Scope::Viewer], key) {
+                if quick_view_takes(cmd) {
+                    self.run(cmd);
+                    return;
+                }
+            }
+        }
         if let Some(cmd) = self.keymap.resolve(&[Scope::Panel, Scope::Global], key) {
             self.run(cmd);
             return;
@@ -6003,8 +6016,9 @@ impl App {
                 }
             }
         }
-        // While the viewer is open, movement and its own toggles belong to it, not the panel.
-        if self.mode.viewer().is_some() && is_viewer_movement(cmd) {
+        // While the viewer is open, movement and its own toggles belong to it, not the panel
+        // — and the quick view with the focus is a viewer, so they belong to it as well.
+        if self.live_viewer().is_some() && is_viewer_movement(cmd) {
             self.viewer_command(cmd);
             return;
         }
@@ -6702,13 +6716,12 @@ impl App {
             }
             Command::NetDisconnect => self.disconnect_active(),
 
-            Command::ViewerDisasm if self.mode.viewer().is_some() => {
+            Command::ViewerDisasm if self.live_viewer().is_some() => {
                 let name = self
-                    .mode
-                    .viewer()
+                    .live_viewer()
                     .map(|v| v.path.display_name())
                     .unwrap_or_default();
-                match self.mode.viewer_mut().map(|v| v.start_disasm()) {
+                match self.live_viewer_mut().map(|v| v.start_disasm()) {
                     Some(Err(e)) => {
                         let msg = self.i18n.t_args(
                             "viewer-disasm-failed",
@@ -8266,12 +8279,12 @@ impl App {
             return;
         }
 
-        if self.mode.viewer().is_some() {
+        if self.live_viewer().is_some() {
             self.search_mode = mode;
             self.search_case_insensitive = !case_sensitive;
             self.search_whole_words = whole_words;
             self.last_search = Some(query.clone());
-            let found = self.mode.viewer_mut().map(|v| {
+            let found = self.live_viewer_mut().map(|v| {
                 v.search_with(
                     &query,
                     mode,
@@ -9476,6 +9489,15 @@ impl App {
             self.set_error(m);
             return;
         };
+        let lines = self.program_card(&program);
+        self.mode = Mode::Message {
+            title: self.i18n.t("prog-card"),
+            lines,
+        };
+    }
+
+    /// What an installed program's card says: the rows, laid out in one column.
+    fn program_card(&self, program: &fcmd_platform::Program) -> Vec<String> {
         let mut rows: Vec<(String, String)> = Vec::new();
         let mut say = |id: &str, value: Option<String>| {
             if let Some(value) = value.filter(|v| !v.trim().is_empty()) {
@@ -9496,14 +9518,9 @@ impl App {
             .map(|(label, _)| unicode_width::UnicodeWidthStr::width(label.as_str()))
             .max()
             .unwrap_or(0);
-        let lines = rows
-            .iter()
+        rows.iter()
             .map(|(label, value)| format!("{label:<width$}  {value}"))
-            .collect();
-        self.mode = Mode::Message {
-            title: self.i18n.t("prog-card"),
-            lines,
-        };
+            .collect()
     }
 
     /// `F4` on a row of that panel: the command that would remove the program, on the command
@@ -12591,7 +12608,7 @@ impl App {
     /// decompiler is a research project and we would rather call a good one than ship a bad
     /// one. See `[[decompile]]` in the config.
     fn decompile(&mut self) {
-        let Some(viewer) = self.mode.viewer_mut() else {
+        let Some(viewer) = self.live_viewer_mut() else {
             return;
         };
         let name = viewer.path.display_name();
@@ -12666,10 +12683,10 @@ impl App {
     }
 
     fn viewer_command(&mut self, cmd: Command) {
-        let (width, height) = self.viewer_size;
+        let (width, height) = self.live_viewer_size();
         let mut message: Option<String> = None;
         let mut error: Option<String> = None;
-        if let Some(viewer) = self.mode.viewer_mut() {
+        if let Some(viewer) = self.live_viewer_mut() {
             match cmd {
                 Command::NavUp => viewer.scroll(-1, width, height),
                 Command::NavDown => viewer.scroll(1, width, height),
@@ -13776,6 +13793,67 @@ impl App {
         true
     }
 
+    /// Is the quick view the panel with the focus? It is a viewer with a panel's frame round
+    /// it, so while it has the focus the viewer's own keys are the keys (SPEC 02 §8).
+    pub fn quick_focused(&self) -> bool {
+        self.mode.is_normal()
+            && self.quick.is_some()
+            && self.panels[self.active].content == crate::panel::Content::QuickView
+    }
+
+    /// The reader the viewer's commands act on: the one open over the panels, or the quick
+    /// view when that is the panel with the focus.
+    pub fn live_viewer(&self) -> Option<&Viewer> {
+        if let Some(viewer) = self.mode.viewer() {
+            return Some(viewer);
+        }
+        if self.quick_focused() {
+            return self.quick.as_deref();
+        }
+        None
+    }
+
+    pub fn live_viewer_mut(&mut self) -> Option<&mut Viewer> {
+        if matches!(self.mode, Mode::Viewer(_)) {
+            return self.mode.viewer_mut();
+        }
+        if self.quick_focused() {
+            return self.quick.as_deref_mut();
+        }
+        None
+    }
+
+    /// How much room that reader has: the whole screen for the viewer, the panel's own box
+    /// for the quick view, so a page is a page of what is actually on screen.
+    fn live_viewer_size(&self) -> (u16, u16) {
+        if self.mode.viewer().is_some() {
+            self.viewer_size
+        } else {
+            self.quick_size
+        }
+    }
+
+    /// The card for a row that is not a file — a process, a socket's holder, an installed
+    /// program — or `None` when the panel is an ordinary listing.
+    fn quick_card(&self, panel: usize, entry: &fcmd_core::Entry) -> Option<String> {
+        let at = self.panels[panel].path_of(entry).display_name();
+        match self.panels[panel].temp_origin()? {
+            ":processes" | ":sockets" => {
+                let details = fcmd_platform::details(at.parse::<u32>().ok()?)?;
+                Some(crate::proccard::card(
+                    &details,
+                    &self.i18n,
+                    std::time::SystemTime::now(),
+                ))
+            }
+            ":programs" => {
+                let program = self.programs.get(at.parse::<usize>().ok()?)?;
+                Some(self.program_card(program).join("\n"))
+            }
+            _ => None,
+        }
+    }
+
     /// Point the quick view at whatever `panel` has under its cursor, opening a reader when
     /// that has changed and leaving it alone when it has not.
     pub fn quick_view_for(&mut self, panel: usize) {
@@ -13785,6 +13863,26 @@ impl App {
             self.quick_why = Some(self.i18n.t("msg-nothing-to-do"));
             return;
         };
+        let path = self.panels[panel].path_of(&entry);
+        if self.quick_of.as_ref() == Some(&path) {
+            return;
+        }
+        // A row of a process, socket or programs list is not a file and has no bytes: what
+        // belongs beside it is its card, which is the page `F3` opens over there (SPEC 02
+        // §7b). It is built here and read like any other page.
+        if let Some(text) = self.quick_card(panel, &entry) {
+            let shown = VPath::local(entry.name_str().into_owned());
+            let source = fcmd_view::BytesSource::new(text.into_bytes());
+            let mut viewer = Viewer::new(Box::new(source), shown);
+            self.tune_viewer(&mut viewer);
+            viewer.show_key_bar = false;
+            viewer.show_status_line = false;
+            viewer.show_scrollbar = false;
+            self.quick = Some(Box::new(viewer));
+            self.quick_of = Some(path);
+            self.quick_why = None;
+            return;
+        }
         if entry.kind.is_dirlike() {
             // A directory has no bytes to show. FAR puts its size here; measuring it is
             // `F3`'s job and takes a walk, so this says what it is and leaves it at that.
@@ -13794,10 +13892,6 @@ impl App {
                 "quick-view-directory",
                 &[("name", entry.name_str().into_owned().into())],
             ));
-            return;
-        }
-        let path = self.panels[panel].path_of(&entry);
-        if self.quick_of.as_ref() == Some(&path) {
             return;
         }
         if !path.is_local() || path.in_container() {
@@ -14311,7 +14405,7 @@ impl App {
     /// What `F4` offers next. It is a wheel rather than a toggle, so the bar says where the
     /// next turn lands rather than naming one destination for ever.
     fn viewer_toggle_key(&self) -> &'static str {
-        let Some(v) = self.mode.viewer() else {
+        let Some(v) = self.live_viewer() else {
             return "key-dump";
         };
         match v.mode {
@@ -14384,6 +14478,24 @@ impl App {
                 )
             })
             .collect();
+        }
+        // The quick view with the focus is a reader, and the bar says a reader's keys: the
+        // ones it actually answers (SPEC 02 §8). The two it has no use for — closing a file
+        // it did not open, editing one it is only previewing — are left blank rather than
+        // promising something that would do nothing.
+        if self.quick_focused() {
+            return vec![
+                (1, self.i18n.t("key-help")),
+                (2, self.i18n.t("key-wrap")),
+                (4, self.i18n.t(self.viewer_toggle_key())),
+                (5, self.i18n.t("key-disasm")),
+                (7, self.i18n.t("key-search")),
+                (8, self.i18n.t("key-code")),
+                (9, self.i18n.t("key-pulldown")),
+                (10, self.i18n.t("key-quit")),
+                (11, self.i18n.t("key-struct")),
+                (12, self.i18n.t("key-screens")),
+            ];
         }
         [
             (1u8, "key-help"),
@@ -14653,6 +14765,27 @@ impl App {
 }
 
 /// Commands that only make sense inside the editor.
+/// Which of the viewer's commands a quick view takes for itself.
+///
+/// Everything that changes how the bytes are shown, and nothing that would leave: the quick
+/// view has no file of its own to go back to, the panel beside it is what `Tab` is for, and
+/// `F3`, `F4` and the rest of the panel's own keys must still open the real viewer and the
+/// real editor on the file under the cursor.
+fn quick_view_takes(cmd: Command) -> bool {
+    let id = cmd.id();
+    if !id.starts_with("viewer.") {
+        return false;
+    }
+    !matches!(
+        id.as_str(),
+        "viewer.quit"
+            | "viewer.to.panel"
+            | "viewer.to.editor"
+            | "viewer.file.next"
+            | "viewer.file.prev"
+    )
+}
+
 /// Would a text view mangle this file? The viewer's own test, on the first few kilobytes.
 fn looks_binary_file(path: &std::path::Path) -> bool {
     use std::io::Read;
@@ -23242,6 +23375,84 @@ abcdefghij
             "F1 did not open the help: {:?}",
             app.mode
         );
+    }
+
+    /// A row of the process list is not a file, so the preview beside it is its card — the
+    /// same page `F3` opens, in the panel.
+    #[test]
+    fn the_quick_view_of_a_process_is_its_card() {
+        let mut app = app();
+        app.open_process_panel(0);
+        if app.panels[0].temp_origin() != Some(":processes") {
+            return; // a platform whose process list we cannot read (SPEC 02 §7b)
+        }
+        app.panels[0].cursor = 0;
+        app.active = 0;
+        app.run(Command::PanelQuickView(Side::Right));
+        let viewer = app.quick.as_mut().expect("no card beside the list");
+        let text = viewer
+            .rows(80, 40)
+            .iter()
+            .map(|r| r.text.clone())
+            .collect::<Vec<_>>()
+            .join("\n");
+        let pid = app.panels[0]
+            .current()
+            .map(|e| app.panels[0].path_of(e))
+            .map(|p| p.display_name().to_string())
+            .expect("a row");
+        assert!(text.contains(&pid), "{text}");
+    }
+
+    /// The quick view is the viewer with a panel's frame round it: once it has the focus,
+    /// the viewer's own keys are its keys (SPEC 02 §8).
+    #[test]
+    fn the_quick_view_with_the_focus_answers_the_viewers_keys() {
+        let dir = tempfile::tempdir().expect("a directory");
+        std::fs::write(dir.path().join("notes.txt"), b"a line of text\n").expect("written");
+        let mut app = app();
+        app.panels[0].cwd = VPath::local(dir.path());
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation: app.panels[0].generation,
+            result: Ok(vec![
+                Entry::parent_entry(),
+                entry("notes.txt", EntryKind::File, 15),
+            ]),
+        });
+        app.panels[0].cursor_to(1);
+        app.active = 0;
+        app.run(Command::PanelQuickView(Side::Right));
+        assert!(app.quick.is_some(), "nothing to preview");
+
+        // While the files have the focus the keys are the panel's: `F4` edits the file.
+        press(&mut app, "F4");
+        assert!(
+            !matches!(app.mode, Mode::Normal),
+            "F4 did nothing in the file panel"
+        );
+        app.mode = Mode::Normal;
+
+        // With the focus on the preview, `F4` is the viewer's: it walks the ways of reading
+        // the file. `Shift+F4` is hex, as it is in the viewer.
+        app.active = 1;
+        assert!(app.quick_focused());
+        press(&mut app, "Shift+F4");
+        assert_eq!(
+            app.quick.as_ref().map(|v| v.mode),
+            Some(fcmd_view::Mode::Hex),
+            "the preview is not in hex"
+        );
+        press(&mut app, "F4");
+        assert_ne!(
+            app.quick.as_ref().map(|v| v.mode),
+            Some(fcmd_view::Mode::Hex),
+            "F4 did not walk on"
+        );
+        // A letter is still the command line's, whatever the viewer binds it to.
+        press(&mut app, "n");
+        assert!(app.mode.is_normal(), "{:?}", app.mode);
+        assert!(!app.cmd.text.is_empty(), "the letter went nowhere");
     }
 
     #[test]

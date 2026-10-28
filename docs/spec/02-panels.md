@@ -392,6 +392,21 @@ two thousand rows, so `*` at the root of a disk cannot hang the panel.
 change-directory dialog moved to `Ctrl+Shift+L`, which it can afford now that `cd` works on
 the command line.
 
+**The quick view is the viewer, in a panel's frame.** It is not a preview of its own: it is a
+real reader with its chrome turned off, so everything the viewer does it does. While the files
+have the focus it only follows the cursor, as FAR's does. Give it the focus with `Tab` and its
+own keys are the viewer's: `F2` wraps, `F4` walks text → dump → hex → document → table,
+`Shift+F4` is hex and back, `F5` disassembles, `F6` decompiles, `F7` searches, `F8` changes
+the code page, `F11` opens the structure pane, and the key bar says so. The ones that would
+leave — closing a file it did not open, going to the next file, crossing to the editor — stay
+with the panel, and so does every letter: `n` and `/` belong to the command line, whatever the
+viewer binds them to.
+
+**A row that is not a file previews its card.** Beside a process list, a socket list or the
+list of installed programs, the quick view holds the same page `F3` opens over there (§7b),
+built when the cursor lands on the row. The card is longer than the panel, which is exactly
+why it is a reader: it scrolls.
+
 ## 8. Tabs (shipped)
 
 A tab **is** a panel. There is no tab object holding a panel beside a name and a lock,

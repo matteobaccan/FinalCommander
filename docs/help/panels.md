@@ -115,6 +115,14 @@ much memory the machine has, and the row under the cursor — `Ctrl+Q` into a
 preview of the file under the cursor — or, on a folder, into the same block of device and
 directory figures the information panel shows — `Ctrl+T` into a directory tree.
 
+The preview is the viewer itself, with its frame taken off. While the files have the focus it
+only follows the cursor; give it the focus with `Tab` and its keys are the reader's: `F2`
+wraps, `F4` walks text, dump, hex, document and table, `Shift+F4` is hex and back, `F5`
+disassembles, `F6` decompiles, `F7` searches, `F8` changes the code page, `F11` opens the
+structure pane. The key bar says so while it has the focus. What you type still goes to the
+command line. And beside a process, socket or programs list the preview holds that row's
+card — the same page `F3` opens there, which is longer than the panel and scrolls.
+
 A local panel also re-reads itself: a file that arrives from a build, a download or another
 program appears without being asked for, and the cursor stays on the name it was on. The
 setting is `Refresh the panel automatically` in `Options → Panel settings`

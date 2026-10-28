@@ -8,6 +8,13 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **The quick view is the viewer, not a preview of it.** Give the preview panel the focus and
+  its keys are the reader's: `F2` wraps, `F4` walks the ways of reading a file, `Shift+F4` is
+  hex, `F5` disassembles, `F6` decompiles, `F7` searches, `F8` changes the code page, `F11`
+  opens the structure pane — and the key bar says so. Letters still belong to the command
+  line, and the keys that would leave the file stay with the panel. Beside a process, socket
+  or programs list the preview holds that row's card, which is the page `F3` opens there.
+
 - **The process card is a page now, as full as FAR's own.** `F3` on a row of the process list
   used to answer with a dozen rows in a dialog. It answers with a page in the viewer: what it
   is (owner and group, the SID on Windows, session, priority, threads, bitness, when it
