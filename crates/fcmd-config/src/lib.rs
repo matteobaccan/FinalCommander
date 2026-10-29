@@ -1135,6 +1135,21 @@ pub struct ColumnSetCfg {
     pub far_types: String,
     #[serde(skip_serializing_if = "String::is_empty")]
     pub far_widths: String,
+    /// The switches of FAR's own column dialog, which are per mode rather than per program
+    /// (SPEC 02 §3b). Left out, each is what this program drew before they existed: the
+    /// extensions of files lined up down the right of the name field, and nothing else.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fullscreen: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub align_extensions: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub align_folder_extensions: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub folders_upper: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub files_lower: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub upper_to_lower: Option<bool>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

@@ -231,12 +231,51 @@ impl Column {
     }
 }
 
+/// The switches FAR's column dialog carries beside the columns themselves (SPEC 02 §3b).
+///
+/// They are per mode, not per program, which is the point of them: one view of one's own
+/// draws the names in a column with the extensions lined up, another draws them as they are.
+/// [`Default`] is what this program drew before the flags existed — the extensions of files
+/// lined up, nothing else — so a `[[column_set]]` that says nothing looks as it always did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ColumnFlags {
+    /// The panel takes the whole screen while this mode is on, as `Ctrl+F1` does by hand.
+    pub fullscreen: bool,
+    /// A file's extension goes down the right of the name field, the stem down the left.
+    pub align_extensions: bool,
+    /// The same for a directory. Off by default: a directory's dot is usually part of its
+    /// name (`.config`, `node_modules.bak`) rather than a type.
+    pub align_folder_extensions: bool,
+    /// Directory names drawn in capitals, file names drawn in small letters: FAR's pair of
+    /// switches for telling the two apart without colour.
+    pub folders_upper: bool,
+    pub files_lower: bool,
+    /// A name that is *entirely* capitals is drawn in small letters. FAR has it for the 8.3
+    /// names a FAT volume hands back, which are all capitals and were never meant to be read
+    /// that way.
+    pub upper_to_lower: bool,
+}
+
+impl Default for ColumnFlags {
+    fn default() -> ColumnFlags {
+        ColumnFlags {
+            fullscreen: false,
+            align_extensions: true,
+            align_folder_extensions: false,
+            folders_upper: false,
+            files_lower: false,
+            upper_to_lower: false,
+        }
+    }
+}
+
 /// A view of the user's own: a list of columns and the number the keys know it by.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ColumnSet {
     /// `0..=9`: `custom:3` is the set with id 3, on `Ctrl+Shift+4`.
     pub id: u8,
     pub columns: Vec<Column>,
+    pub flags: ColumnFlags,
 }
 
 /// Under this a name is not worth reading, so a column that would leave less than this is
@@ -425,7 +464,14 @@ impl ColumnSet {
                 "there are {extra} more widths than there are columns, and they are ignored"
             ));
         }
-        (ColumnSet { id, columns }, warnings)
+        (
+            ColumnSet {
+                id,
+                columns,
+                flags: ColumnFlags::default(),
+            },
+            warnings,
+        )
     }
 }
 
@@ -434,7 +480,11 @@ mod tests {
     use super::*;
 
     fn set(columns: Vec<Column>) -> ColumnSet {
-        ColumnSet { id: 0, columns }
+        ColumnSet {
+            id: 0,
+            columns,
+            flags: ColumnFlags::default(),
+        }
     }
 
     #[test]

@@ -22,7 +22,7 @@ pub mod view;
 pub mod vpath;
 
 pub use cancel::CancelToken;
-pub use columns::{Align, Column, ColumnKind, ColumnSet, Width};
+pub use columns::{Align, Column, ColumnFlags, ColumnKind, ColumnSet, Width};
 pub use device::{is_device, Length};
 pub use entry::{Entry, EntryFlags, EntryId, EntryKind};
 pub use error::{Error, Result};

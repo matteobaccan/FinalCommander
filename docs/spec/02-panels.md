@@ -229,8 +229,28 @@ four-digit year. A repeated group of columns means newspaper stripes. Our equiva
 what we do not support (allocated size, streams, descriptions before they exist) is reported as
 a warning on import, never dropped silently.
 
-Per-mode flags from the same dialog: fullscreen, align file extensions, align folder extensions,
-folders uppercase, files lowercase, uppercase names shown lowercase.
+Per-mode flags from the same dialog, written beside the columns in the block they belong to:
+
+```toml
+[[column_set]]
+id = 4
+columns = [{ type = "name", width = "*" }, { type = "size", width = 10 }]
+fullscreen             = true   # the panel takes the screen while this mode is on
+align_extensions       = true   # a file's extension down the right of the name field
+align_folder_extensions = false # and a directory's, which is off: its dot is part of its name
+folders_upper          = false  # directory names in capitals
+files_lower            = false  # file names in small letters
+upper_to_lower         = false  # a name that is *all* capitals drawn in small letters
+```
+
+Each is what the panel drew before the flags existed when the block does not say: the
+extensions of files lined up, and nothing else. `fullscreen` is `Ctrl+F1` applied by the mode
+rather than by a key, so choosing the mode hides the other panel and leaving it gives the
+screen back — but a panel hidden by the key itself is left alone, because a mode undoing
+somebody's own keypress would be the mode reaching outside itself. `upper_to_lower` is FAR's
+switch for the 8.3 names a FAT volume hands back, which are all capitals and were never meant
+to be read that way; a name with no letters in it at all is not "all capitals", so `README`
+changes and `2026` does not.
 
 ### 3c. The size of a folder
 

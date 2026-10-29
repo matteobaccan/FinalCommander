@@ -6,6 +6,24 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **The switches beside the columns, per view mode** (SPEC 02 §3b). A `[[column_set]]` block
+  now carries what the rest of FAR's panel-mode dialog carries: `fullscreen`,
+  `align_extensions`, `align_folder_extensions`, `folders_upper`, `files_lower` and
+  `upper_to_lower`. They belong to the mode rather than to the program, which is the point of
+  them — one view of one's own draws the names with the extensions lined up in a column,
+  another draws directories in capitals to tell them apart without colour, and the digit
+  chooses between them.
+
+  Each left out is what the panel drew before they existed — the extensions of *files* lined
+  up, and nothing else — so a block that says nothing looks as it always did. `fullscreen` is
+  `Ctrl+F1` applied by the mode: choosing it hides the other panel, leaving it gives the
+  screen back, and a panel hidden by the key itself is left alone, because a mode undoing
+  somebody's own keypress would be the mode reaching outside itself. `upper_to_lower` is
+  FAR's switch for the 8.3 names a FAT volume hands back; a name with no letters in it is not
+  "all capitals", so `README` changes and `2026` does not.
+
 ## [0.21.0] — 2026-10-29
 
 ### Added

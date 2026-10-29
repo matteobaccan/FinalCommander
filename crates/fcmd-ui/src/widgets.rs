@@ -529,8 +529,26 @@ const EXT_W: u16 = 5;
 /// `docs.old` is not a `.old` file), a dotfile, whose leading dot starts a name rather than
 /// an extension, a trailing dot, and an extension too long for the column. In each of those
 /// the name is drawn whole, across both fields.
-fn split_ext<'a>(name: &'a str, e: &Entry) -> Option<(&'a str, &'a str)> {
-    if e.opens_as_dir() || matches!(e.kind, EntryKind::Dir | EntryKind::Parent) {
+fn split_ext<'a>(
+    name: &'a str,
+    e: &Entry,
+    flags: fcmd_core::ColumnFlags,
+) -> Option<(&'a str, &'a str)> {
+    let wanted = if is_folder(e) {
+        flags.align_folder_extensions
+    } else {
+        flags.align_extensions
+    };
+    wanted.then(|| ext_of(name, e)).flatten()
+}
+
+/// The stem and the extension of a name, for whoever has decided they want them.
+///
+/// `..` has none: it is two dots and nothing else, and a column made of one of them would be
+/// a column of rubbish. A directory's dot is usually part of its name rather than a type, so
+/// this says so only where a caller asks for a directory as well.
+fn ext_of<'a>(name: &'a str, e: &Entry) -> Option<(&'a str, &'a str)> {
+    if e.kind == EntryKind::Parent {
         return None;
     }
     let cut = name.rfind('.')?;
@@ -795,6 +813,15 @@ fn draw_full(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect, 
     // view — but never when the set has a column of extensions already, since then it would
     // be drawn twice.
     let split_ext_in_name = !cells.iter().any(|cell| cell.col == Col::Ext);
+    // A set of the user's own carries its own switches (SPEC 02 §3b); a built-in mode lines
+    // the extensions up in the full view and nowhere else, which is what it always did.
+    let flags = match p.columns {
+        Some(set) => set.flags,
+        None => fcmd_core::ColumnFlags {
+            align_extensions: p.view == ViewMode::Full,
+            ..fcmd_core::ColumnFlags::default()
+        },
+    };
 
     for row in 0..rows {
         let idx = p.top + row;
@@ -814,7 +841,7 @@ fn draw_full(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect, 
         );
         buf.fill(Rect::new(inner.x, y, inner.w, 1), ' ', style);
 
-        let name = shift_name(&decorate(e), p.name_scroll);
+        let name = shift_name(&cased(decorate(e), e, flags), p.name_scroll);
 
         // The columns, in the one order the titles and the rules also read. A filesystem that
         // does not keep a date, a device that never said how big its clusters are and a row
@@ -831,12 +858,8 @@ fn draw_full(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect, 
                     // is then a window onto one long name and there is no room to keep a
                     // column in it — and not in the detailed view, which has columns of its
                     // own after the time.
-                    let split = if p.view == ViewMode::Full
-                        && split_ext_in_name
-                        && p.name_scroll == 0
-                        && w > EXT_W + 3
-                    {
-                        split_ext(&name, e)
+                    let split = if split_ext_in_name && p.name_scroll == 0 && w > EXT_W + 3 {
+                        split_ext(&name, e, flags)
                     } else {
                         None
                     };
@@ -855,8 +878,8 @@ fn draw_full(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect, 
                 // directory have none to show: a folder called `docs.old` has no extension,
                 // it has a dot in its name.
                 Col::Ext => {
-                    let text = (!e.opens_as_dir() && e.kind != EntryKind::Parent)
-                        .then(|| split_ext(&name, e).map(|(_, ext)| ext.to_string()))
+                    let text = (!is_folder(e))
+                        .then(|| ext_of(&name, e).map(|(_, ext)| ext.to_string()))
                         .flatten()
                         .unwrap_or_default();
                     if cell.right {
@@ -999,6 +1022,37 @@ fn put_right(buf: &mut Buffer, x: u16, y: u16, w: u16, text: &str, style: Style)
     let text = truncate_cols(text, w as usize);
     let pad = w.saturating_sub(text.width() as u16);
     buf.put_str(x + pad, y, &text, style, w);
+}
+
+fn is_folder(e: &Entry) -> bool {
+    e.opens_as_dir() || e.kind == EntryKind::Dir
+}
+
+/// A name in the letters this mode asks for (SPEC 02 §3b).
+///
+/// `..` is left alone — it has no letters — and so is everything else when the mode says
+/// nothing, which is every built-in view and every set that does not ask.
+fn cased(name: String, e: &Entry, flags: fcmd_core::ColumnFlags) -> String {
+    if e.kind == EntryKind::Parent {
+        return name;
+    }
+    let folder = is_folder(e);
+    if folder && flags.folders_upper {
+        return name.to_uppercase();
+    }
+    if !folder && flags.files_lower {
+        return name.to_lowercase();
+    }
+    // A name that is entirely capitals, drawn in small letters: FAR's switch for the 8.3
+    // names a FAT volume hands back. A name with no letters at all is not "all capitals",
+    // so `README` changes and `2026` does not.
+    if flags.upper_to_lower
+        && name.chars().any(char::is_alphabetic)
+        && !name.chars().any(char::is_lowercase)
+    {
+        return name.to_lowercase();
+    }
+    name
 }
 
 fn decorate(e: &Entry) -> String {

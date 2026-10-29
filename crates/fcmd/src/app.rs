@@ -1796,6 +1796,11 @@ pub struct App {
     pub user_screen: Vec<String>,
     /// Which panel is hidden, if either: `Ctrl+F1` and `Ctrl+F2` give the screen to one.
     pub hidden: Option<usize>,
+    /// Set when it was a view mode that hid it, not a key — a `[[column_set]]` with
+    /// `fullscreen` (SPEC 02 §3b). Leaving that mode gives the other panel back, and a
+    /// `Ctrl+F1` of one's own is left alone, because undoing somebody's own key would be
+    /// the mode reaching outside itself.
+    pub hidden_by_view: bool,
     /// `Ctrl+O`: both panels off, the screen given to what the commands printed. Everything
     /// else keeps working — the command line, the menus, the keys — which is the whole point
     /// of hiding the panels rather than opening a screen of their own.
@@ -2046,6 +2051,7 @@ impl App {
             user_screen: Vec::new(),
             shell_screen: false,
             hidden: None,
+            hidden_by_view: false,
             panels_off: false,
             user_scroll: 0,
             last_find: FindSpec::default(),
@@ -5161,6 +5167,26 @@ impl App {
     /// Either because the built-in mode shows it, or because the user's own columns do — a
     /// `[[column_set]]` on this view's digit replaces the mode, so it is the set that decides
     /// and not what the mode would have shown (SPEC 02 §3a).
+    /// A view mode of one's own may ask for the whole screen (SPEC 02 §3b).
+    ///
+    /// FAR's column dialog has the switch per mode, so choosing the mode is what applies it
+    /// and leaving the mode is what undoes it. A panel hidden by `Ctrl+F1` is not touched:
+    /// undoing somebody's own key would be the mode reaching outside itself.
+    fn apply_view_fullscreen(&mut self) {
+        let wants = crate::colset::for_slot(&self.column_sets, self.panel().view.slot())
+            .is_some_and(|set| set.flags.fullscreen);
+        let other = 1 - self.active;
+        if wants {
+            if self.hidden.is_none() {
+                self.hidden = Some(other);
+                self.hidden_by_view = true;
+            }
+        } else if self.hidden_by_view {
+            self.hidden = None;
+            self.hidden_by_view = false;
+        }
+    }
+
     fn view_asks(&self, panel: usize, kind: fcmd_core::ColumnKind) -> bool {
         use fcmd_core::ColumnKind as K;
         let Some(p) = self.panels.get(panel) else {
@@ -7014,6 +7040,7 @@ impl App {
                 self.panel_mut().view = view;
                 self.panel_mut().top = 0;
                 self.scroll();
+                self.apply_view_fullscreen();
                 // The owners view is the only one that needs something the listing does not
                 // carry, and it is asked for when the view is chosen rather than when the
                 // directory is read: nobody should pay a lookup per file for a column they
@@ -7464,6 +7491,9 @@ impl App {
                 } else {
                     Some(other)
                 };
+                // From here on it is the reader's own doing, so leaving a fullscreen view
+                // mode must not undo it.
+                self.hidden_by_view = false;
             }
             Command::PanelToggle(side) => {
                 let which = match side {
@@ -7476,6 +7506,7 @@ impl App {
                 } else {
                     Some(which)
                 };
+                self.hidden_by_view = false;
                 // Keeping the focus on a panel nobody can see would send every key into the
                 // dark, so it moves across with the screen.
                 if self.hidden == Some(self.active) {

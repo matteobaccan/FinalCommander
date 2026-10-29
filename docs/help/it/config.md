@@ -161,6 +161,28 @@ metadati, il numero di stream — viene nominato nella schermata di avvio invece
 lasciato fuori in silenzio, e un set in cui non c'è niente di leggibile lascia in pace la vista
 predefinita di quel tasto.
 
+Accanto alle colonne ci sono gli interruttori dello stesso dialogo di FAR, che appartengono
+alla modalità e non al programma:
+
+```toml
+[[column_set]]
+id = 4
+columns = [{ type = "name", width = "*" }, { type = "size", width = 10 }]
+fullscreen              = true   # questa vista dà al pannello tutto lo schermo
+align_extensions        = true   # l'estensione di un file a destra del campo del nome
+align_folder_extensions = false  # e quella di una cartella: spento, il punto fa parte del nome
+folders_upper           = false  # nomi delle cartelle in maiuscolo
+files_lower             = false  # nomi dei file in minuscolo
+upper_to_lower          = false  # un nome *tutto* maiuscolo disegnato in minuscolo
+```
+
+Ognuno lasciato fuori è quello che il pannello disegnava prima che esistessero: le estensioni
+dei file allineate, e nient'altro. `fullscreen` è il `Ctrl+F1` fatto dalla modalità — scegliere
+la vista nasconde l'altro pannello e uscirne restituisce lo schermo — ma un pannello che hai
+nascosto tu con il tasto resta com'è. `upper_to_lower` è per i nomi 8.3 che restituisce un
+volume FAT, tutti maiuscoli e mai pensati per essere letti così; un nome senza lettere non è
+tutto maiuscolo, quindi `README` cambia e `2026` no.
+
 # Cosa è un file
 
 `panel.descriptions` decide se il `descript.ion` della cartella venga letto o no. Acceso per

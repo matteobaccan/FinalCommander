@@ -6,7 +6,7 @@
 //! out leaves the built-in view mode in place, which is the answer that still draws something.
 
 use fcmd_config::{ColumnCfg, Config};
-use fcmd_core::columns::{Align, Column, ColumnKind, ColumnSet, Width};
+use fcmd_core::columns::{Align, Column, ColumnFlags, ColumnKind, ColumnSet, Width};
 
 /// Every set that reads, in the order the file wrote them.
 pub fn sets(cfg: &Config, warnings: &mut Vec<String>) -> Vec<ColumnSet> {
@@ -42,8 +42,9 @@ pub fn sets(cfg: &Config, warnings: &mut Vec<String>) -> Vec<ColumnSet> {
                      the strings are the ones used here"
                 ));
             }
-            let (set, problems) =
+            let (mut set, problems) =
                 ColumnSet::from_far(block.id, &block.far_types, &block.far_widths);
+            set.flags = flags(block);
             warnings.extend(problems.into_iter().map(|p| format!("{name}: {p}")));
             if set.columns.is_empty() {
                 warnings.push(format!(
@@ -72,9 +73,26 @@ pub fn sets(cfg: &Config, warnings: &mut Vec<String>) -> Vec<ColumnSet> {
         out.push(ColumnSet {
             id: block.id,
             columns,
+            flags: flags(block),
         });
     }
     out
+}
+
+/// The per-mode switches of the block, each left as it was before they existed when the
+/// block does not say (SPEC 02 §3b).
+fn flags(block: &fcmd_config::ColumnSetCfg) -> ColumnFlags {
+    let d = ColumnFlags::default();
+    ColumnFlags {
+        fullscreen: block.fullscreen.unwrap_or(d.fullscreen),
+        align_extensions: block.align_extensions.unwrap_or(d.align_extensions),
+        align_folder_extensions: block
+            .align_folder_extensions
+            .unwrap_or(d.align_folder_extensions),
+        folders_upper: block.folders_upper.unwrap_or(d.folders_upper),
+        files_lower: block.files_lower.unwrap_or(d.files_lower),
+        upper_to_lower: block.upper_to_lower.unwrap_or(d.upper_to_lower),
+    }
 }
 
 /// The set a view's digit carries, if the user wrote one for it.
@@ -232,6 +250,53 @@ mod tests {
         );
         assert_eq!(sets[0].columns.len(), 1);
         assert!(warnings.iter().any(|w| w.contains("`G`")), "{warnings:?}");
+    }
+
+    #[test]
+    fn the_per_mode_switches_default_to_what_the_panel_always_drew() {
+        let (sets, warnings) = parse(
+            r#"
+            [[column_set]]
+            id = 3
+            columns = [{ type = "name" }]
+            "#,
+        );
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(sets[0].flags, ColumnFlags::default());
+        assert!(
+            sets[0].flags.align_extensions && !sets[0].flags.align_folder_extensions,
+            "a file's extension lines up, a directory's does not"
+        );
+
+        let (sets, warnings) = parse(
+            r#"
+            [[column_set]]
+            id = 4
+            columns = [{ type = "name" }]
+            fullscreen = true
+            align_extensions = false
+            folders_upper = true
+            files_lower = true
+            upper_to_lower = true
+            "#,
+        );
+        assert!(warnings.is_empty(), "{warnings:?}");
+        let flags = sets[0].flags;
+        assert!(flags.fullscreen && flags.folders_upper && flags.files_lower);
+        assert!(flags.upper_to_lower && !flags.align_extensions);
+
+        // They ride on FAR's own pair of strings too: the switches are a different part of
+        // that dialog, so one spelling of the columns must not cost the other.
+        let (sets, _) = parse(
+            r#"
+            [[column_set]]
+            id = 5
+            far_types = "N,S"
+            far_widths = "0,9"
+            fullscreen = true
+            "#,
+        );
+        assert!(sets[0].flags.fullscreen);
     }
 
     #[test]

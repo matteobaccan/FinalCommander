@@ -2996,6 +2996,57 @@ mod tests {
         );
     }
 
+    /// The switches beside the columns in FAR's own dialog, which are per mode (SPEC 02 §3b).
+    #[test]
+    fn a_view_mode_can_ask_for_capitals_and_for_the_whole_screen() {
+        let set = |src: &str| {
+            let (cfg, problems) = Config::parse("test.toml", src).expect("it parses");
+            assert!(problems.is_empty(), "{problems:?}");
+            let mut warnings = Vec::new();
+            let sets = crate::colset::sets(&cfg, &mut warnings);
+            assert!(warnings.is_empty(), "{warnings:?}");
+            sets
+        };
+
+        let mut app = app("far", "en");
+        let plain = frame(&mut app, 100, 24);
+        assert!(plain.contains("src"), "the fixture's directory: {plain}");
+        assert!(plain.contains("Cargo"), "and its file: {plain}");
+
+        // Directories in capitals, files in small letters, on the full view's own digit.
+        app.column_sets = set(r#"
+            [[column_set]]
+            id = 3
+            columns = [{ type = "name", width = "*" }, { type = "size", width = 10 }]
+            folders_upper = true
+            files_lower = true
+            "#);
+        let shouted = frame(&mut app, 100, 24);
+        assert!(
+            shouted.contains("SRC"),
+            "a directory in capitals: {shouted}"
+        );
+        assert!(
+            shouted.contains("cargo"),
+            "a file in small letters: {shouted}"
+        );
+        assert!(!shouted.contains("Cargo"), "{shouted}");
+
+        // And the whole screen, which is `Ctrl+F1` done by the mode rather than by a key.
+        assert_eq!(app.hidden, None);
+        app.column_sets = set(r#"
+            [[column_set]]
+            id = 3
+            columns = [{ type = "name", width = "*" }]
+            fullscreen = true
+            "#);
+        app.run(fcmd_cmd::Command::PanelViewSet(fcmd_core::ViewMode::Full));
+        assert_eq!(app.hidden, Some(1), "the other panel gave up the screen");
+        // Leaving the mode gives it back, because the switch belongs to the mode.
+        app.run(fcmd_cmd::Command::PanelViewSet(fcmd_core::ViewMode::Brief));
+        assert_eq!(app.hidden, None);
+    }
+
     /// The drive dialog belongs to its panel. FAR opens it five columns in from that panel's
     /// own frame, and so does this: a list that will send the *right* panel somewhere and
     /// opens in the middle of the screen is a list one has to read the title of.

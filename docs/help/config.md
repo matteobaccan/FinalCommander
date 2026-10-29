@@ -153,6 +153,28 @@ What FAR has and this has not — the stream size, the change time, the stream c
 on the startup screen rather than quietly left out, and a set with nothing in it that could be
 read leaves that key's built-in view alone.
 
+Beside the columns there are the switches of the same FAR dialog, which belong to the mode
+rather than to the program:
+
+```toml
+[[column_set]]
+id = 4
+columns = [{ type = "name", width = "*" }, { type = "size", width = 10 }]
+fullscreen              = true   # this mode gives the panel the whole screen
+align_extensions        = true   # a file's extension down the right of the name field
+align_folder_extensions = false  # and a directory's: off, its dot is part of its name
+folders_upper           = false  # directory names in capitals
+files_lower             = false  # file names in small letters
+upper_to_lower          = false  # a name that is *all* capitals drawn in small letters
+```
+
+Each one left out is what the panel drew before they existed: the extensions of files lined
+up, and nothing else. `fullscreen` is `Ctrl+F1` done by the mode — choosing the mode hides the
+other panel and leaving it gives the screen back — but a panel you hid with the key yourself
+is left alone. `upper_to_lower` is for the 8.3 names a FAT volume hands back, all capitals and
+never meant to be read that way; a name with no letters in it is not all capitals, so `README`
+changes and `2026` does not.
+
 # What a file is
 
 `panel.descriptions` decides whether the directory's own `descript.ion` is read at all. On by

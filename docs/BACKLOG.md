@@ -19,7 +19,7 @@ says what the decision stands on.
 | --- | --- | --- |
 | Info panel | `Ctrl+L` | Mount options and a git summary. |
 | Tabs per panel | `Ctrl+Alt+T`/`W`/`N`/`P`/`M`/`K` | Reordering a tab within its row, and a list of them to pick from. |
-| Custom columns | the view keys `Ctrl+1..0` | From SPEC 02 §3b: the per-mode flags (fullscreen, align extensions, upper and lower case names) and the `+1`/`+2` precision suffixes, which our format strings say another way. |
+| Custom columns | the view keys `Ctrl+1..0` | The `+1`/`+2` precision suffixes of FAR's width strings, which our format strings say another way. |
 
 ## Selection and sorting
 
