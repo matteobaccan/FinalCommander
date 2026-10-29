@@ -225,6 +225,7 @@ btn-accept = Accetta
 btn-cancel = Annulla
 msg-nothing-to-do = niente selezionato
 cmd-complete-nothing = non c'è niente con cui completarlo
+complete-several = { $count } nomi iniziano così
 msg-trash-refused = { $path }: il cestino non lo accetta — Shift+Canc lo elimina definitivamente
 
 # Checksums (SPEC 03 §9)

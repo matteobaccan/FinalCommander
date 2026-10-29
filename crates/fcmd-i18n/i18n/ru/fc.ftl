@@ -225,6 +225,7 @@ btn-accept = Принять
 btn-cancel = Отмена
 msg-nothing-to-do = ничего не отмечено
 cmd-complete-nothing = дополнить нечем
+complete-several = { $count } имён начинаются так
 msg-trash-refused = { $path }: корзина его не принимает — Shift+Del удалит насовсем
 
 # Checksums (SPEC 03 §9)

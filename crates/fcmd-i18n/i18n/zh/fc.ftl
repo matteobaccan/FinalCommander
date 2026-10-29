@@ -225,6 +225,7 @@ btn-accept = 接受
 btn-cancel = 取消
 msg-nothing-to-do = 未选择任何内容
 cmd-complete-nothing = 没有可补全的内容
+complete-several = { $count } 个名字以此开头
 msg-trash-refused = { $path }：回收站不接收它 — Shift+Del 可永久删除
 
 # Checksums (SPEC 03 §9)

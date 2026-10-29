@@ -27,6 +27,13 @@ percorso, premi `Enter`, e niente sotto la prima riga si applica.
 
 Qualunque cosa rispondi è quello su cui si apre il dialogo successivo.
 
+`Tab` sulla riga della destinazione completa il percorso, come fa una shell: una sola
+corrispondenza viene scritta per intero — con il separatore quando è una cartella, così il
+`Tab` successivo ci entra — e più corrispondenze vengono prese fin dove sono d'accordo, con il
+conto nella riga di stato. Quando non c'è niente da aggiungere, `Tab` va ai pulsanti come ha
+sempre fatto. Lo stesso vale per la cartella di un'estrazione, il nome di un archivio e un file
+di chiave.
+
 La riga della destinazione prende più di una destinazione, separate da `;` — metti fra apici un
 percorso che ha un `;` nel proprio nome. Vengono eseguite una dopo l'altra e non insieme, e solo
 la prima di uno *spostamento* è uno spostamento: dopo di essa l'origine non c'è più, quindi le

@@ -1804,6 +1804,29 @@ impl Form {
         }
     }
 
+    /// What is in the text row the cursor is on, and where its caret is: what a completion
+    /// needs to know, and what it writes back through [`Form::put_text_at_cursor`].
+    pub fn text_under_cursor(&self) -> Option<(&'static str, String, usize)> {
+        match self.fields.get(self.cursor) {
+            Some(Field::Text {
+                key, value, caret, ..
+            }) => Some((key, value.clone(), *caret)),
+            _ => None,
+        }
+    }
+
+    /// Put a completed value into the row the cursor is on, with the caret where the
+    /// completion left it.
+    pub fn put_text_at_cursor(&mut self, text: String, caret: usize) {
+        if let Some(Field::Text {
+            value, caret: at, ..
+        }) = self.fields.get_mut(self.cursor)
+        {
+            *at = caret.min(text.chars().count());
+            *value = text;
+        }
+    }
+
     /// Every text row that has something in it, for the histories to be fed on `OK`.
     pub fn typed_fields(&self) -> Vec<(&'static str, String)> {
         self.fields

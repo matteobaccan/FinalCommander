@@ -25,6 +25,12 @@ press `Enter`, and nothing below the first line applies:
 
 Whatever you answer is what the next dialog opens on.
 
+`Tab` on the destination line finishes the path, the way a shell does: one match is written
+out whole — with its separator when it is a folder, so the next `Tab` goes inside it — and
+several are taken as far as they agree, with the count in the status line. Where there is
+nothing to add, `Tab` goes to the buttons as it always did. The same works on the folder of an
+extraction, the name of an archive and a key file.
+
 The destination line takes more than one destination, separated by `;` — quote a path that has
 a `;` in its own name. They run one after the other rather than at once, and only the first of
 a *move* is a move: after it the source is gone, so the rest are copies of what landed first.

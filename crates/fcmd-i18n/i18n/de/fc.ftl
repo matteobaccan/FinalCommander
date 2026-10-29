@@ -225,6 +225,7 @@ btn-accept = Annehmen
 btn-cancel = Abbrechen
 msg-nothing-to-do = nichts ausgewählt
 cmd-complete-nothing = nichts, womit sich das ergänzen ließe
+complete-several = { $count } Namen beginnen so
 msg-trash-refused = { $path }: der Papierkorb nimmt es nicht — Shift+Entf löscht endgültig
 
 # Checksums (SPEC 03 §9)

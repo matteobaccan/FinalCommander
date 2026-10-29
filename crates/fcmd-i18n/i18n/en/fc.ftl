@@ -231,6 +231,7 @@ btn-accept = Accept
 btn-cancel = Cancel
 msg-nothing-to-do = nothing selected
 cmd-complete-nothing = nothing to finish that with
+complete-several = { $count } names start that way
 msg-trash-refused = { $path }: the wastebasket would not take it — Shift+Del deletes it outright
 
 # Checksums (SPEC 03 §9)

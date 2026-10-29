@@ -172,6 +172,14 @@ A dialog is a framed list of rows above a row of buttons. Row kinds:
   exist in the configuration either).
 * a separator line.
 
+A text row that names a path completes on `Tab`, as a shell does: the destination of a copy,
+the folder of an extraction, the name of an archive, a key file. One match is written out
+whole — with its separator when it is a directory, so the next `Tab` goes inside it — several
+are taken as far as they agree and the status line says how many there were, and where there
+is nothing to add `Tab` goes to the buttons as it always did. One directory is read, the one
+the half-typed path names, which is the same rule the command line's own completion follows
+(SPEC 06 §7.4): a dialog's `Tab` should not start a walk.
+
 Keys: `↑`/`↓` move over the settable rows, `Tab` moves to the buttons and between them, `Enter`
 on the buttons answers the dialog, `F10` is `OK` from anywhere, `Esc` cancels and keeps nothing.
 

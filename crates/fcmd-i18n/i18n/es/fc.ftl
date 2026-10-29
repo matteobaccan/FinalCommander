@@ -225,6 +225,7 @@ btn-accept = Aceptar
 btn-cancel = Cancelar
 msg-nothing-to-do = nada seleccionado
 cmd-complete-nothing = no hay nada con que completarlo
+complete-several = { $count } nombres empiezan así
 msg-trash-refused = { $path }: la papelera no lo acepta — Mayús+Supr lo borra definitivamente
 
 # Checksums (SPEC 03 §9)

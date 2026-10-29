@@ -8191,6 +8191,101 @@ impl App {
         };
     }
 
+    /// Complete the path in the dialog row the cursor is on, as a shell completes a word.
+    ///
+    /// `true` when the row grew: one match is written out whole, several are taken as far as
+    /// they agree and the status line says how many there were. Nothing to add is `false`,
+    /// and `Tab` then means what it always meant.
+    ///
+    /// It reads one directory, the one the half-typed path names, and no more: a dialog's
+    /// `Tab` should not start a walk. That is the same rule — and the same function — the
+    /// command line's own completion follows.
+    fn complete_field(&mut self) -> bool {
+        let Mode::Form(form) = &self.mode else {
+            return false;
+        };
+        let Some((_, value, caret)) = form.text_under_cursor() else {
+            return false;
+        };
+        let (start, end) = crate::complete::word_at(&value, caret);
+        let chars: Vec<char> = value.chars().collect();
+        let word: String = chars[start..end.min(chars.len())].iter().collect();
+        let (dir, typed) = crate::complete::split_path(&word);
+        let (dir, typed) = (dir.to_string(), typed.to_string());
+        let names = self.read_under(&value, caret);
+        // A relative path with nothing typed yet is completed against the panel one is
+        // copying from, which is what `read_under` cannot answer: it reads the directory a
+        // path *names*, and `doc` names none.
+        let names = if dir.is_empty() {
+            let listing = &self.panel().listing;
+            (0..listing.len())
+                .filter_map(|row| listing.row(row))
+                .map(|e| (e.name_str().to_string(), e.kind.is_dirlike()))
+                .collect()
+        } else {
+            names
+        };
+        let matching: Vec<(String, bool)> = names
+            .into_iter()
+            .filter(|(name, _)| {
+                name.len() >= typed.len() && name[..typed.len()].eq_ignore_ascii_case(&typed)
+            })
+            .collect();
+        if matching.is_empty() {
+            return false;
+        }
+        // As far as the candidates agree, which for one of them is the whole name.
+        let mut shared = matching[0].0.clone();
+        for (name, _) in &matching[1..] {
+            let keep = shared
+                .chars()
+                .zip(name.chars())
+                .take_while(|(a, b)| a.eq_ignore_ascii_case(b))
+                .count();
+            shared.truncate(
+                shared
+                    .char_indices()
+                    .nth(keep)
+                    .map_or(shared.len(), |(i, _)| i),
+            );
+        }
+        if shared.chars().count() <= typed.chars().count() && matching.len() > 1 {
+            // Nothing to add, but there is something to say: how many are waiting, which is
+            // what a shell's second `Tab` answers with a list.
+            let msg = self.i18n.t_args(
+                "complete-several",
+                &[("count", (matching.len() as i64).into())],
+            );
+            self.set_status(msg);
+            return false;
+        }
+        // One match that is a directory gets its separator, so the next `Tab` goes inside it.
+        let only_dir = matching.len() == 1 && matching[0].1;
+        let mut completed = format!("{dir}{shared}");
+        if only_dir && !completed.ends_with(std::path::MAIN_SEPARATOR) {
+            completed.push(std::path::MAIN_SEPARATOR);
+        }
+        let before: String = chars[..start].iter().collect();
+        let after: String = chars[end.min(chars.len())..].iter().collect();
+        let caret = before.chars().count() + completed.chars().count();
+        let text = format!("{before}{completed}{after}");
+        if text == value {
+            return false;
+        }
+        let Mode::Form(form) = &mut self.mode else {
+            return false;
+        };
+        form.put_text_at_cursor(text, caret);
+        if matching.len() > 1 {
+            let msg = self.i18n.t_args(
+                "complete-several",
+                &[("count", (matching.len() as i64).into())],
+            );
+            self.set_status(msg);
+        }
+        true
+    }
+
     /// The names under the directory a half-typed path names, for the one case the panel's
     /// own listing cannot answer: `vim src/ma`.
     ///
@@ -11167,6 +11262,28 @@ impl App {
             // keys the plugin uses, and like it they step over a page that does not apply.
             KeyCode::PageDown if key.mods.contains(Mods::CTRL) => form.turn_page(true),
             KeyCode::PageUp if key.mods.contains(Mods::CTRL) => form.turn_page(false),
+            // `Tab` on a row that names a path completes it, the way a shell does: a
+            // destination is typed far more often than it is chosen, and `/usr/lo` is most
+            // of `/usr/local/`. Where there is nothing to add — another row, a name already
+            // whole, a directory nothing matches — it does what it always did and goes to
+            // the buttons, so the key never stops working.
+            KeyCode::Tab if text => {
+                let completes = form
+                    .text_under_cursor()
+                    .is_some_and(|(key, _, _)| field_completes(key));
+                if completes && self.complete_field() {
+                    return;
+                }
+                let Mode::Form(form) = &mut self.mode else {
+                    return;
+                };
+                let last = form.buttons.len().saturating_sub(1);
+                form.button = Some(match form.button {
+                    None => 0,
+                    Some(at) if at < last => at + 1,
+                    Some(_) => 0,
+                })
+            }
             KeyCode::Tab => {
                 let last = form.buttons.len().saturating_sub(1);
                 form.button = Some(match form.button {
@@ -17514,6 +17631,18 @@ fn highlight_name(h: &fcmd_config::HighlightCfg, index: usize) -> String {
     }
 }
 
+/// The dialog fields that name a path, and so complete on `Tab`.
+///
+/// Not every text row: a mask, a name for a group, a colour are not paths, and a `Tab` that
+/// tried to complete one of those against the filesystem would be a `Tab` that does nothing
+/// where it used to go to the buttons.
+fn field_completes(key: &str) -> bool {
+    matches!(
+        key,
+        "copy.target" | "unpack.to" | "pack.name" | "site.key" | "hex.file"
+    )
+}
+
 /// The dialog fields worth a history of their own.
 ///
 /// The ones a person types the same thing into again: a mask, the text to find, where to copy
@@ -20221,6 +20350,72 @@ mod tests {
             panic!("the list closed")
         };
         assert_eq!(pick.left, 0);
+    }
+
+    /// `Tab` on a dialog row that names a path completes it, as a shell does — and still
+    /// goes to the buttons where there is nothing to complete, so the key never stops
+    /// working.
+    #[test]
+    fn tab_completes_a_path_in_a_dialog_and_otherwise_goes_to_the_buttons() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("target-one")).unwrap();
+        std::fs::create_dir_all(dir.path().join("target-two")).unwrap();
+        std::fs::create_dir_all(dir.path().join("elsewhere")).unwrap();
+
+        let mut app = app();
+        // The copy dialog, which has the destination row in it.
+        press(&mut app, "Down"); // off the `..` row, onto a file
+        app.run(Command::FileCopyCurrent);
+        let Mode::Form(form) = &mut app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(form.kind, FormKind::Copy);
+        let at = form
+            .fields
+            .iter()
+            .position(
+                |f| matches!(f, crate::form::Field::Text { key, .. } if *key == "copy.target"),
+            )
+            .expect("the destination row is there");
+        form.cursor = at;
+        form.button = None;
+        let typed = format!("{}/tar", dir.path().display());
+        form.put_text_at_cursor(typed.clone(), typed.chars().count());
+
+        // Two names start that way, so it goes as far as they agree and says how many.
+        press(&mut app, "Tab");
+        let Mode::Form(form) = &app.mode else {
+            panic!("the dialog closed")
+        };
+        assert_eq!(
+            form.text_value("copy.target"),
+            format!("{}/target-", dir.path().display()),
+            "it did not stop where the names stop agreeing"
+        );
+        assert!(app.status.contains('2'), "{}", app.status);
+        assert!(form.button.is_none(), "Tab completed rather than leaving");
+
+        // One more letter and one `Tab`: the whole name, with the separator a directory gets
+        // so the next `Tab` goes inside it.
+        let Mode::Form(form) = &mut app.mode else {
+            panic!("the dialog closed")
+        };
+        form.type_char('o');
+        press(&mut app, "Tab");
+        let Mode::Form(form) = &app.mode else {
+            panic!("the dialog closed")
+        };
+        assert_eq!(
+            form.text_value("copy.target"),
+            format!("{}/target-one/", dir.path().display())
+        );
+
+        // And with nothing left to complete, `Tab` is what it always was.
+        press(&mut app, "Tab");
+        let Mode::Form(form) = &app.mode else {
+            panic!("the dialog closed")
+        };
+        assert_eq!(form.button, Some(0), "Tab did not go to the buttons");
     }
 
     /// The key bar follows the modifier, and what it shows is what the keymap really does.

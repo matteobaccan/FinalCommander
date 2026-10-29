@@ -4,6 +4,23 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
+## [Unreleased]
+
+### Added
+
+- **`Tab` completes a path in a dialog** (SPEC 10 §3). The destination of a copy is typed far
+  more often than it is chosen from a tree, and `/usr/lo` is most of `/usr/local/`: `Tab` on a
+  row that names a path now finishes it the way a shell does. One match is written out whole —
+  with its separator when it is a directory, so the next `Tab` goes inside it — several are
+  taken as far as they agree and the status line says how many there were.
+
+  Where there is nothing to add, `Tab` goes to the buttons as it always did, so the key never
+  stops working; and it reads one directory, the one the half-typed path names, because a
+  dialog's `Tab` should not start a walk. The rows that complete are the ones that name a
+  path: a copy's destination, an extraction's folder, an archive's name, a key file. A mask or
+  a colour is not a path, and a `Tab` that tried to complete one against the filesystem would
+  be a `Tab` that does nothing where it used to do something.
+
 ## [0.19.0] — 2026-10-29
 
 ### Added
