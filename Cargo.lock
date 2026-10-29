@@ -988,6 +988,7 @@ dependencies = [
 name = "fcmd-jobs"
 version = "0.21.0"
 dependencies = [
+ "crc32fast",
  "fcmd-arc",
  "fcmd-core",
  "fcmd-platform",

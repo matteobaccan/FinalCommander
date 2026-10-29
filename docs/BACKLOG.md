@@ -63,7 +63,7 @@ says what the decision stands on.
 | Item | Where | What is left |
 | --- | --- | --- |
 | Find file | `Alt+F7` | From FAR's dialog: a sixth scope, one code page or a chosen set, fuzzy matching, alternate streams, the advanced page (a first-N-bytes limit, result columns in the column grammar), saving and loading a search, and a new search from the results. |
-| Checksums | Files menu | CRC32 and `.sfv`, which is a different file format; splitting and combining; and checksums of something that is not on this machine, which waits on `JobFs::read_chunks` beyond the local filesystem. |
+| Checksums | Files menu | Splitting and combining, and checksums of something that is not on this machine, which waits on `JobFs::read_chunks` beyond the local filesystem. |
 | Synchronise folders | `Ctrl+Shift+Y` | A saved pair of directories as a named job, and a written report. |
 | User menu | `F2` | Reading FAR's `FarMenu.ini` as it stands, separators between groups, a dialog to edit the entries, and `Shift+F10` for the row taken last. |
 | File associations | Commands menu | Defaults read off the OS (xdg-mime, `LSCopyDefaultRoleHandler`, the registry), a dialog to edit the blocks, and `execute`/`extract`/`preview` entries. |

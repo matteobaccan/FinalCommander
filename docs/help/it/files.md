@@ -60,7 +60,7 @@ né l'una né l'altra cosa.
 # Le somme di controllo
 
 *Somme di controllo…* nel menu File scrive un elenco di impronte per quello che è selezionato:
-SHA-256, SHA-1 o MD5. Un elenco per tutto il gruppo — chiamato come la cartella, o come
+SHA-256, SHA-1, MD5 o CRC32. Un elenco per tutto il gruppo — chiamato come la cartella, o come
 qualunque altra cosa scrivi — oppure uno accanto a ciascun file. Il formato è quello che
 scrivono `sha256sum` e compagni, così l'elenco può essere verificato da chiunque tu lo mandi con
 lo strumento che ha già, e quello che ti mandano può essere verificato qui.
@@ -70,6 +70,12 @@ ricavato dalle impronte che contiene e non dal suo nome, quindi un file chiamato
 `sums.txt` o `release.md5` funzionano tutti. Quello che non corrisponde viene nominato nel
 rapporto **e lasciato selezionato nel pannello**, perché la cosa che fai dopo uno scaricamento
 sbagliato è riscaricarlo o cancellarlo, e entrambe lavorano sulla selezione.
+
+**Il CRC32 viene scritto come `.sfv`**, perché è l'unica forma in cui qualcosa lo legge: prima
+il nome e dopo le otto cifre esadecimali, `;` per un commento, e `file.sfv` accanto a un file
+singolo. È un controllo d'errore e non un hash — due file con lo stesso CRC32 si fanno apposta
+senza fatica — quindi risponde a *è arrivato intero* e a nient'altro. Un `.sfv` che ti mandano
+si verifica come qualunque altro elenco.
 
 `Esc` ferma una verifica lunga.
 

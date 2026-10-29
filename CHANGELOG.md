@@ -8,6 +8,18 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **CRC32, written as a `.sfv`** (SPEC 03 §9). The fourth entry in the checksum dialog, and
+  the one that is not a hash: two files with the same CRC32 are easy to make on purpose, so
+  it answers *did this arrive intact* and nothing else, which is the question a `.sfv` asks.
+
+  A list of them is written in the `.sfv` shape and never in the other one — `name hex8`,
+  the digest at the end of the line, `;` for a comment, eight hex characters zero-padded, and
+  `file.sfv` beside a single file — because nothing reads a `.sfv` written as `<hex>  <name>`.
+  Reading is the same either way: a digest of eight characters says CRC32 as one of 64 says
+  SHA-256, so a `.sfv` somebody sends is checked like any other list, and a name with a space
+  in it still works because the digest is taken off the end rather than the name off the
+  front.
+
 - **Where a `descript.ion` lives, and in what code page** (SPEC 02 §13). Two settings of
   FAR's: `panel.description_names` is the list of names looked for, in order, with the first
   the one a new file is written under — a tree full of `files.bbs` no longer grows a second

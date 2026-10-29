@@ -207,17 +207,26 @@ and re-imported. Undo restores the previous names from the journal.
 
 ## 9. Checksums (shipped), split, combine
 
-**Checksums.** MD5, SHA-1 and SHA-256 over what is selected, written as a list of digests, and
-a list checked against the files beside it. The dialog asks three things: which hash, whether
-one list holds them all or each file gets its own, and what the list is called.
+**Checksums.** MD5, SHA-1, SHA-256 and CRC32 over what is selected, written as a list of
+digests, and a list checked against the files beside it. The dialog asks three things: which
+hash, whether one list holds them all or each file gets its own, and what the list is called.
 
 - The format written is the one `md5sum`, `sha1sum` and `sha256sum` write and read —
   `<hex>  <name>`, two spaces — because the point of a checksum file is that somebody else can
   check it with the tool they already have. The formats *read* are wider: the same line with
   ` *name` (what those tools call binary mode), and BSD's `SHA256 (name) = <hex>`, which is
   what macOS and FreeBSD produce. Blank lines and `#` comments are skipped.
+- **A CRC32 list is a `.sfv`**, which reads the other way round: `name hex8`, the digest at
+  the end of the line, `;` for a comment, and eight hex characters zero-padded because a
+  checker that read `1a2b3c4` as a CRC would be checking a different number. It is what the
+  Usenet and bulletin-board habit left behind, it is still how a set of parts is posted, and
+  nothing reads a `.sfv` written in the `<hex>  <name>` shape — so a CRC32 list is written in
+  this one and never in that one. The file beside a single file is `file.sfv`, not
+  `file.crc32`. CRC32 is an error check and not a hash: two files with the same CRC32 are
+  easy to make on purpose, so it answers *did this arrive intact* and nothing else, and the
+  dialog lists it last.
 - **Which hash made a list is read off the digests in it**, not off the file's name: 32 hex
-  characters is MD5, 40 is SHA-1, 64 is SHA-256. A list is called `SHA256SUMS` or `sums.txt`
+  characters is MD5, 40 is SHA-1, 64 is SHA-256, 8 is CRC32. A list is called `SHA256SUMS` or `sums.txt`
   or nothing in particular, and a name can lie where a length cannot. A list whose digests do
   not agree on one length is not guessed at — it is reported as a list this cannot check.
 - The name offered is `<directory>.<hash>`, which is what a commander writes, and it is a text
@@ -230,9 +239,9 @@ one list holds them all or each file gets its own, and what the list is called.
   left out — so when a provider implements it, checksums work there with nothing else changed.
   Today only the local filesystem does, and anything else is refused before the dialog opens
   rather than halfway through a run. `Esc` stops a run, as it stops a comparison.
-- The three hashes come from `md5`, `sha1` and `sha2`, all three of which were already in the
-  tree under the SSH client, so this costs nothing to build. CRC32 and `.sfv` are not here:
-  that is a different file format, and `docs/BACKLOG.md` says so.
+- The hashes come from `md5`, `sha1`, `sha2` and `crc32fast`, all of which were already in
+  the tree — the first three under the SSH client, the fourth under `zip` and `tar` — so this
+  costs nothing to build.
 
 **Split and combine** are still to come: into volumes by size or count, with an optional
 self-recombining script; combine detects `.001`/`.part1`/`.zNN` series automatically.

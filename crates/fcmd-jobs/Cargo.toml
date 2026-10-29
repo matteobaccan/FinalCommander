@@ -23,6 +23,9 @@ thiserror = "2"
 trash = { version = "5.2.9", default-features = false, features = [
   "coinit_apartmentthreaded",
 ] }
+# CRC32 for the `.sfv` lists, which is the one check those still use. Already in the tree
+# under `zip` and `tar`, so it costs nothing to build; named here because this crate calls it.
+crc32fast = "1"
 md5 = "0.8"
 sha1 = "0.11"
 sha2 = "0.11"

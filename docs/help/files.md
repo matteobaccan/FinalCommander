@@ -55,8 +55,8 @@ made a piece at a time, so neither applies.
 
 # Checksums
 
-*Checksums…* in the Files menu writes a list of digests for what is selected: SHA-256, SHA-1
-or MD5. One list for the lot — named after the directory, or anything else you type — or one
+*Checksums…* in the Files menu writes a list of digests for what is selected: SHA-256, SHA-1,
+MD5 or CRC32. One list for the lot — named after the directory, or anything else you type — or one
 beside each file. The format is the one `sha256sum` and friends write, so the list can be
 checked by whoever you send it to with the tool they already have, and the one they send you
 can be checked here.
@@ -66,6 +66,12 @@ digests inside it rather than off its name, so a file called `SHA256SUMS`, `sums
 `release.md5` all work. What does not match is named in the report **and left selected in the
 panel**, because the next thing you do with a bad download is fetch it again or delete it, and
 both of those work on the selection.
+
+**CRC32 is written as a `.sfv`**, because that is the only shape anything reads it in: the
+name first and the eight hex digits after it, `;` for a comment, and `file.sfv` beside a
+single file. It is an error check rather than a hash — two files with the same CRC32 are easy
+to make on purpose — so it answers *did this arrive intact* and nothing more. A `.sfv` someone
+sends you is checked the same way as any other list.
 
 `Esc` stops a long run.
 

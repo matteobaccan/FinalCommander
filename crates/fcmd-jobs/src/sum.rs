@@ -6,10 +6,16 @@
 //! same line with ` *name` (what those tools call binary mode), and BSD's
 //! `SHA256 (name) = <hex>`, which is what macOS and FreeBSD produce.
 //!
+//! `.sfv` is the fourth shape, and the one that reads the other way round: `name hex8`, the
+//! CRC32 at the end of the line and `;` for a comment. It comes from the Usenet and
+//! bulletin-board habit of posting a file in parts with a `.sfv` beside them, and it is still
+//! what a CRC32 list is written as — so a CRC32 list is written in it and never in the
+//! `<hex>  <name>` shape, which no SFV checker would read.
+//!
 //! Which hash a list was made with is worked out from the digests in it rather than from the
 //! file's name. A list is called `SHA256SUMS` or `sums.txt` or nothing in particular, and the
-//! length of a hex digest says what made it: 32 characters is MD5, 40 is SHA-1, 64 is SHA-256.
-//! A name can lie; a length cannot.
+//! length of a hex digest says what made it: 8 characters is CRC32, 32 is MD5, 40 is SHA-1,
+//! 64 is SHA-256. A name can lie; a length cannot.
 
 use std::collections::BTreeSet;
 
@@ -18,10 +24,16 @@ use fcmd_core::{CancelToken, VPath};
 use crate::fs::JobFs;
 use crate::run::Outcome;
 
-/// The hashes offered. Three, and all three on purpose: SHA-256 is what to choose, SHA-1 and
-/// MD5 are what the lists one is handed were made with.
+/// The hashes offered. Four, and all four on purpose: SHA-256 is what to choose, SHA-1 and
+/// MD5 are what the lists one is handed were made with, and CRC32 is not a hash at all — it
+/// is an error check, it is what a `.sfv` holds, and it is what the archives in this program
+/// already carry per entry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Algorithm {
+    /// Not cryptographic, and never a claim that a file is the one it should be: two files
+    /// with the same CRC32 are easy to make on purpose. It answers the question a `.sfv`
+    /// asks — did this file arrive intact — and no other.
+    Crc32,
     Md5,
     Sha1,
     #[default]
@@ -31,15 +43,25 @@ pub enum Algorithm {
 impl Algorithm {
     pub fn as_str(self) -> &'static str {
         match self {
+            Algorithm::Crc32 => "crc32",
             Algorithm::Md5 => "md5",
             Algorithm::Sha1 => "sha1",
             Algorithm::Sha256 => "sha256",
         }
     }
 
-    /// What a list made with it is called, by the convention those tools use.
+    /// What a list made with it is called, by the convention those tools use: `file.sha256`
+    /// beside the file, and `file.sfv` for a CRC32, which is the name every checker expects.
     pub fn extension(self) -> &'static str {
-        self.as_str()
+        match self {
+            Algorithm::Crc32 => "sfv",
+            other => other.as_str(),
+        }
+    }
+
+    /// Is a list of these written the `.sfv` way — the name first and the digest after it?
+    pub fn is_sfv(self) -> bool {
+        self == Algorithm::Crc32
     }
 
     pub fn parse(text: &str) -> Option<Algorithm> {
@@ -49,6 +71,7 @@ impl Algorithm {
             .replace(['-', '_'], "")
             .as_str()
         {
+            "crc" | "crc32" | "sfv" => Some(Algorithm::Crc32),
             "md5" => Some(Algorithm::Md5),
             "sha1" => Some(Algorithm::Sha1),
             "sha256" => Some(Algorithm::Sha256),
@@ -59,6 +82,7 @@ impl Algorithm {
     /// The hash whose digest is this many hex characters, if exactly one is.
     pub fn of_digest_len(len: usize) -> Option<Algorithm> {
         match len {
+            8 => Some(Algorithm::Crc32),
             32 => Some(Algorithm::Md5),
             40 => Some(Algorithm::Sha1),
             64 => Some(Algorithm::Sha256),
@@ -106,11 +130,13 @@ pub fn digest(
 ) -> std::io::Result<String> {
     // Three hashes, three crates, one `update` each — and all three were already in the tree
     // under the SSH client, so this costs nothing to build.
+    let mut crc32 = crc32fast::Hasher::new();
     let mut md5 = md5::Context::new();
     let mut sha1 = <sha1::Sha1 as sha1::Digest>::new();
     let mut sha256 = <sha2::Sha256 as sha2::Digest>::new();
     fs.read_chunks(path, buffer, &mut |chunk| {
         match algorithm {
+            Algorithm::Crc32 => crc32.update(chunk),
             Algorithm::Md5 => md5.consume(chunk),
             Algorithm::Sha1 => sha1::Digest::update(&mut sha1, chunk),
             Algorithm::Sha256 => sha2::Digest::update(&mut sha256, chunk),
@@ -118,6 +144,9 @@ pub fn digest(
         on_bytes(chunk.len() as u64)
     })?;
     Ok(match algorithm {
+        // Eight hex characters, zero-padded: a `.sfv` line is a fixed width and a checker
+        // that read `1a2b3c4` as a CRC would be checking a different number.
+        Algorithm::Crc32 => format!("{:08x}", crc32.finalize()),
         Algorithm::Md5 => hex(md5.finalize().as_ref()),
         Algorithm::Sha1 => hex(sha1::Digest::finalize(sha1).as_ref()),
         Algorithm::Sha256 => hex(sha2::Digest::finalize(sha256).as_ref()),
@@ -239,13 +268,21 @@ pub fn verify(
     (verdicts, outcome)
 }
 
-/// A list as those tools write it: `<hex>  <name>`, one per line, in the order given.
-pub fn write_list(lines: &[Line]) -> String {
+/// A list as those tools write it: `<hex>  <name>`, one per line, in the order given — or
+/// `<name> <hex>` for a CRC32, because that is a `.sfv` and nothing reads a `.sfv` the other
+/// way round.
+pub fn write_list(lines: &[Line], algorithm: Algorithm) -> String {
     let mut out = String::new();
     for line in lines {
-        out.push_str(&line.digest);
-        out.push_str("  ");
-        out.push_str(&line.name);
+        if algorithm.is_sfv() {
+            out.push_str(&line.name);
+            out.push(' ');
+            out.push_str(&line.digest);
+        } else {
+            out.push_str(&line.digest);
+            out.push_str("  ");
+            out.push_str(&line.name);
+        }
         out.push('\n');
     }
     out
@@ -264,7 +301,12 @@ pub fn parse_list(text: &str) -> (Vec<Line>, Option<Algorithm>) {
         if raw.is_empty() || raw.starts_with('#') || raw.starts_with(';') {
             continue;
         }
-        let parsed = parse_bsd(raw).or_else(|| parse_coreutils(raw));
+        // The `.sfv` shape is tried last: it is the one whose *first* field is the name, so
+        // a coreutils line would otherwise have to be ruled out by guessing at a file called
+        // `deadbeef`.
+        let parsed = parse_bsd(raw)
+            .or_else(|| parse_coreutils(raw))
+            .or_else(|| parse_sfv(raw));
         if let Some(line) = parsed {
             lengths.insert(line.digest.len());
             lines.push(line);
@@ -306,6 +348,20 @@ fn parse_bsd(raw: &str) -> Option<Line> {
     Some(Line {
         digest: digest.to_ascii_lowercase(),
         name: head[open + 1..close].to_string(),
+    })
+}
+
+/// `name hex8`, which is what a `.sfv` holds. The name may have spaces in it, so the digest
+/// is taken off the end rather than the name off the front.
+fn parse_sfv(raw: &str) -> Option<Line> {
+    let (name, digest) = raw.rsplit_once(char::is_whitespace)?;
+    let name = name.trim();
+    if name.is_empty() || digest.len() != 8 || !is_hex(digest) {
+        return None;
+    }
+    Some(Line {
+        digest: digest.to_ascii_lowercase(),
+        name: name.to_string(),
     })
 }
 
@@ -387,7 +443,7 @@ mod tests {
         assert_eq!(outcome.files, 2);
         assert!(outcome.errors.is_empty());
         assert_eq!(
-            write_list(&lines),
+            write_list(&lines, Algorithm::Md5),
             "900150983cd24fb0d6963f7d28e17f72  a.txt\n\
              d41d8cd98f00b204e9800998ecf8427e  b.txt\n"
         );
@@ -486,9 +542,71 @@ mod tests {
             ("md5", Algorithm::Md5),
             ("SHA-1", Algorithm::Sha1),
             ("sha_256", Algorithm::Sha256),
+            ("crc32", Algorithm::Crc32),
+            ("sfv", Algorithm::Crc32),
         ] {
             assert_eq!(Algorithm::parse(text), Some(want), "{text}");
         }
-        assert_eq!(Algorithm::parse("crc32"), None);
+        assert_eq!(Algorithm::parse("adler32"), None);
+    }
+
+    /// CRC32 and the `.sfv` it is written as: the name first and the digest after it, which
+    /// is the one shape of the four that reads the other way round.
+    #[test]
+    fn a_crc32_list_is_a_sfv_and_reads_back_as_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = file(dir.path(), "part01.rar", b"abc");
+        // The CRC32 of "abc", as every table in the world has it.
+        assert_eq!(sum(&path, Algorithm::Crc32), "352441c2");
+        assert_eq!(Algorithm::Crc32.extension(), "sfv");
+
+        let lines = vec![Line {
+            digest: "352441c2".into(),
+            name: "part01.rar".into(),
+        }];
+        let body = write_list(&lines, Algorithm::Crc32);
+        assert_eq!(body, "part01.rar 352441c2\n");
+        // And the other three keep the shape their tools read.
+        assert_eq!(
+            write_list(&lines, Algorithm::Sha256),
+            "352441c2  part01.rar\n"
+        );
+
+        // Read back: the length of the digest says what made it, as it does for the others.
+        let (read, algorithm) = parse_list("; made by something else\npart01.rar 352441C2\n");
+        assert_eq!(algorithm, Some(Algorithm::Crc32));
+        assert_eq!(read, lines, "the digest is folded to lower case");
+
+        // A name with a space in it still works, because the digest is taken off the end.
+        let (read, _) = parse_list("two words.bin deadbeef\n");
+        assert_eq!(read[0].name, "two words.bin");
+
+        // And a checker reads what we wrote.
+        let (round, _) = parse_list(&write_list(&lines, Algorithm::Crc32));
+        assert_eq!(round, lines);
+    }
+
+    #[test]
+    fn a_sfv_can_be_checked_against_the_files_beside_it() {
+        let dir = tempfile::tempdir().unwrap();
+        file(dir.path(), "same.bin", b"abc");
+        file(dir.path(), "changed.bin", b"not abc");
+        let (lines, algorithm) =
+            parse_list("same.bin 352441c2\nchanged.bin 352441c2\ngone.bin 352441c2\n");
+        assert_eq!(algorithm, Some(Algorithm::Crc32));
+
+        let mut nothing = |_: &str, _: u64| {};
+        let (verdicts, _) = verify(
+            &LocalFs,
+            &VPath::local(dir.path()),
+            &lines,
+            Algorithm::Crc32,
+            64 * 1024,
+            &CancelToken::new(),
+            &mut nothing,
+        );
+        assert_eq!(verdicts[0].state, State::Matches);
+        assert_eq!(verdicts[1].state, State::Differs);
+        assert_eq!(verdicts[2].state, State::Missing);
     }
 }

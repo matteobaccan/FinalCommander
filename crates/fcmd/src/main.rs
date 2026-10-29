@@ -2311,7 +2311,7 @@ fn run_checksums(
     if !outcome.cancelled {
         match &target {
             Some(file) => {
-                let body = fcmd_jobs::sum::write_list(&lines);
+                let body = fcmd_jobs::sum::write_list(&lines, algorithm);
                 match std::fs::write(file.as_path(), body) {
                     Ok(()) => written.push(file.clone()),
                     Err(e) => errors.push((file.clone(), e.to_string())),
@@ -2326,7 +2326,7 @@ fn run_checksums(
                         path.as_path().display(),
                         algorithm.extension()
                     ));
-                    let body = fcmd_jobs::sum::write_list(std::slice::from_ref(line));
+                    let body = fcmd_jobs::sum::write_list(std::slice::from_ref(line), algorithm);
                     match std::fs::write(beside.as_path(), body) {
                         Ok(()) => written.push(beside),
                         Err(e) => errors.push((beside, e.to_string())),

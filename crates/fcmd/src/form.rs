@@ -1181,6 +1181,9 @@ impl Form {
             ("sha256", "SHA-256".to_string()),
             ("sha1", "SHA-1".to_string()),
             ("md5", "MD5".to_string()),
+            // Last, and on purpose: it is an error check and not a hash, and a list of these
+            // is written as a `.sfv` rather than in the shape the other three share.
+            ("crc32", "CRC32 (.sfv)".to_string()),
         ];
         let fields = vec![
             Field::Note(what),
