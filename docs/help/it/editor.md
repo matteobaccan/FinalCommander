@@ -39,8 +39,15 @@ di farlo.
 `F9` assembla un'istruzione dove sta il cursore — `ret`, `xor eax, eax`, `mov rax, 1`,
 `jmp 0x401010`, `call rax`. Un salto si scrive come l'indirizzo a cui vuoi arrivare, non come
 uno scostamento. Qualunque cosa venga codificata viene decodificata di nuovo prima di essere
-mostrata, così quello che vedi è l'istruzione che vedrà il processore. Gli operandi di memoria
-vengono rifiutati per nome, non indovinati.
+mostrata, così quello che vedi è l'istruzione che vedrà il processore.
+
+Gli indirizzi si scrivono come li stampa un disassemblato: `mov eax, [rbx]`, `[rbx+8]`,
+`[rbx+rcx*4+8]`, `[0x401000]`, e `[rip+0x2e35]` con lo scostamento contato dalla fine
+dell'istruzione, così una riga letta sullo schermo si può riscrivere tale e quale. Quando
+nessun registro dice quanto è larga la cosa all'indirizzo, lo dice una parola di dimensione:
+`mov dword [rbx], 1`, oppure `byte ptr` per chi scrive in masm. Senza, chiede invece di
+indovinare, perché un byte e otto non sono la stessa patch. Quello che non fa — i prefissi di
+segmento, i puntatori far, i registri in virgola mobile e vettoriali — lo rifiuta per nome.
 
 `Alt+=` è la calcolatrice: una riga di aritmetica con la risposta in decimale, esadecimale,
 ottale, binario e come caratteri tutto insieme. Legge i letterali che stampano gli strumenti

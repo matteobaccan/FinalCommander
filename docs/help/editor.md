@@ -36,7 +36,15 @@ file, insert zeros, delete. Each one says what the file's length will become bef
 `F9` assembles one instruction where the cursor is — `ret`, `xor eax, eax`, `mov rax, 1`,
 `jmp 0x401010`, `call rax`. A branch is written as the address you want to arrive at, not as a
 displacement. Whatever it encodes is decoded again before it is shown, so what you see is the
-instruction the processor will see. Memory operands are refused by name rather than guessed at.
+instruction the processor will see.
+
+Addresses are written the way a disassembly prints them: `mov eax, [rbx]`, `[rbx+8]`,
+`[rbx+rcx*4+8]`, `[0x401000]`, and `[rip+0x2e35]` with the displacement counted from the end of
+the instruction, so a line read off the screen can be typed straight back. When no register
+says how wide the thing at the address is, a size word does: `mov dword [rbx], 1`, or
+`byte ptr` if you write masm. Without one it asks rather than guess, because one byte and eight
+are not the same patch. What it will not do — segment prefixes, far pointers, the
+floating-point and vector registers — it refuses by name.
 
 `Alt+=` is the calculator: one line of arithmetic answered in decimal, hex, octal, binary and
 as characters at once. It reads the literals binary tools print — `0x1f`, `1Fh`, `0b1010`,

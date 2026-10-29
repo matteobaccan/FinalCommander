@@ -552,16 +552,39 @@ The subset is the one a patcher types, and it is deliberately a subset:
 | one register | `inc rcx`, `dec rsi`, `not ebx`, `neg rdx`, `push rbp`, `pop r15`, `mul rbx` |
 | a branch to an address | `jmp 0x401010`, `je 0x401040`, `call 0x402000`, `jmp short 0x401010`, `jne near 0x402000` |
 | a branch through a register | `call rax`, `jmp r11` |
+| an address | `mov eax, [rbx]`, `mov [rbx+8], rax`, `add eax, [rbx+rcx*4+8]`, `mov eax, [0x401000]`, `lea rdi, [rip+0x100]` |
+| an address and a number | `mov dword [rbx], 1`, `cmp byte ptr [rsi], 0x2e`, `and qword [rsp+8], 0x0f` |
+| an address through the stack or a branch | `push qword [rbx]`, `pop qword [rbx]`, `jmp qword [rbx]`, `call qword [rip+0x20]` |
 
 A number is whatever the calculator of §2.9 reads: `0x2a`, `2Ah`, `0b101010`, `42`, `0x10+6`.
 A branch is written as the address to arrive at, not as a displacement, and the shortest form
 that reaches it is chosen unless `short` or `near` says otherwise.
 
-**Memory operands are not assembled.** `mov [rbx+rcx*4+8], eax` needs a full ModRM and SIB
-parser, and brings with it exactly the addressing-mode mistakes a patcher cannot afford; it is
-refused by name rather than guessed at, and the hex pane is still there for bytes nobody can
-spell. The same goes for the floating-point and vector instruction sets: this is not a compiler
-and does not pretend to be one.
+**Addresses** are written the way a disassembly prints them, because retyping a line one has
+just read is the whole job: `[base]`, `[base+disp]`, `[base+index*scale+disp]`, a bare `[disp]`,
+and `[rip+disp]` with the displacement counted from the end of the instruction. The pieces may
+be written in any order (`[8+rbx]` is `[rbx+8]`), a scale belongs to a register and only there,
+and every number inside the brackets goes through the calculator of §2.9.
+
+How wide the thing at an address is has to be known before anything is written, and there are
+only two ways to know: the register on the other side of the instruction says so, or a size word
+in front of the brackets does — `byte`, `word`, `dword`, `qword`, with masm's optional `ptr`.
+When neither says, the instruction is refused with that sentence rather than guessed at: `mov
+[rbx], 1` could write one byte or eight, and the difference is somebody's binary. A size word
+that contradicts the register is refused too.
+
+What is still **not** assembled: segment prefixes (`fs:[0x30]`), a 32-bit address inside 64-bit
+code (the `0x67` prefix), far pointers, and the floating-point and vector instruction sets. Each
+is refused by name rather than guessed at, and the hex pane is still there for bytes nobody can
+spell. This is not a compiler and does not pretend to be one.
+
+The encoding rules that are easy to get wrong are the ones the tests pin down by their bytes:
+`rsp` and `r12` as a base need a SIB byte, `rbp` and `r13` as a base need a displacement even
+when it is zero, an index with no base carries a 32-bit displacement whether one wrote it or
+not, `rsp` cannot be an index at all, and `push`, `pop` and an indirect branch move a machine
+word without a `REX.W` to say so. `[rip+disp]` is the one form that does not round-trip as
+text, because the disassembler resolves it to the address it lands on — which is what one wants
+to read; the bytes are checked directly instead.
 
 Every encoding is decoded again by the disassembler before the dialog shows it, so what appears
 is the instruction the processor will see rather than the one that was meant — and a bug in the

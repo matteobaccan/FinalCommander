@@ -4,6 +4,34 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
+## [Unreleased]
+
+### Added
+
+- **The assembler writes addresses** (SPEC 05 §2.8). `F9` in the hex pane assembled registers,
+  numbers and branches, and refused anything in brackets by name — which left out half of what
+  a patcher reads. `mov eax, [rbx+8]` is the line one has just looked at on the screen, and
+  retyping it is the job. So the brackets are now assembled: `[base]`, `[base+disp]`,
+  `[base+index*scale+disp]`, a bare `[0x401000]`, and `[rip+0x2e35]` with the displacement
+  counted from the end of the instruction, the way the disassembler prints it. The pieces may
+  be written in any order, because that is how one retypes a line, and the numbers inside go
+  through the same calculator as everywhere else. `lea` arrived with them, as the one
+  instruction whose operand is the address itself, and so did the memory forms of `mov`, the
+  arithmetic group, `test`, `xchg`, `inc` and its neighbours, `push`, `pop` and an indirect
+  branch.
+
+  How wide the thing at an address is, is the part that has to be right: the register on the
+  other side says so, or a size word in front of the brackets does — `byte`, `word`, `dword`,
+  `qword`, with masm's `ptr` for whoever writes it that way. When neither says, the
+  instruction is refused with that sentence instead of guessed at, because `mov [rbx], 1`
+  could write one byte or eight and the difference is somebody's binary; a size word that
+  contradicts the register is refused too. The encoding rules that are easy to get wrong —
+  `rsp` and `r12` needing a SIB byte, `rbp` and `r13` needing a displacement that is there
+  even when it is zero, an index with no base, `rsp` which cannot be an index at all, and the
+  machine-word moves that must *not* carry a `REX.W` — are pinned down by their bytes, and
+  everything still goes back through the disassembler before the dialog shows it, so a bug in
+  the encoder is a refusal rather than a corrupted file.
+
 ## [0.17.0] — 2026-10-29
 
 ### Added

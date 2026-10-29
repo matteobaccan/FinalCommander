@@ -22000,11 +22000,19 @@ run = ["echo one", "echo two", "echo three"]
         let editor = app.mode.hex_mut().unwrap();
         assert_eq!(editor.read(4, 2), [0xEB, 0x00]);
 
-        // Something out of the subset leaves the file alone and says why.
+        // An address is written the way the disassembler prints it.
+        let editor = app.mode.hex_mut().unwrap();
+        editor.cursor = 8;
+        app.assemble_at_cursor("mov eax, [rbx+8]");
+        let editor = app.mode.hex_mut().unwrap();
+        assert_eq!(editor.read(8, 3), [0x8B, 0x43, 0x08]);
+
+        // Something out of the subset leaves the file alone and says why — here an address
+        // with nothing to say how wide the thing at it is.
         let before = app.mode.hex_mut().unwrap().read(0, 8);
-        app.assemble_at_cursor("mov eax, [rbx]");
+        app.assemble_at_cursor("mov [rbx], 1");
         assert!(
-            app.status.to_lowercase().contains("memory"),
+            app.status.to_lowercase().contains("qword"),
             "{}",
             app.status
         );
@@ -22015,7 +22023,7 @@ run = ["echo one", "echo two", "echo three"]
         let Mode::Prompt(prompt) = &app.mode else {
             panic!("{:?}", app.mode)
         };
-        assert_eq!(prompt.text, "mov eax, [rbx]");
+        assert_eq!(prompt.text, "mov [rbx], 1");
     }
 
     #[test]
