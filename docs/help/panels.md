@@ -340,7 +340,11 @@ out of the first row is the way out. `Enter` answers the dialog wherever the cur
 is `OK` from anywhere, and `Esc` throws it away.
 
 A row that names a path completes on `Tab`, as a shell does, and `Ctrl+↓` opens what has been
-typed into that row before. `Ctrl+F5` hands the arrows to the dialog itself, for when it
+typed into that row before. `Alt+F10` on such a row opens something to pick it from: the folder
+tree for a row that wants a folder — a copy's destination, an extraction's folder — and the
+directory itself for a row that wants a file, such as a connection's key file. In that list
+`Enter` on a directory goes into it and `Enter` on a file is the answer; `Esc` leaves the row
+as it was. `Ctrl+F5` hands the arrows to the dialog itself, for when it
 covers the one thing you need to read; `Enter` and `Esc` only stop moving it.
 
 The bottom row of the screen becomes the dialog's own while it is open: the panels' keys are

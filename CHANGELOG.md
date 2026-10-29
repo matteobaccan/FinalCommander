@@ -25,6 +25,22 @@ Notable changes, newest first. The format follows
   being read, a file being edited — stays parked under it. The help's own pages have a section
   on dialogs to follow it into, in both languages.
 
+- **`Alt+F10` picks a path for the row that asks for one** (SPEC 10 §3). The copy dialog's
+  destination could be chosen from the folder tree; a row that names a *file* — the key file of
+  a stored connection — was typed by hand, and the backlog had wanted a `...` button opening a
+  panel inside the dialog for it. It is one key and two lists instead: the tree of folders for
+  a row that wants a folder, which the extraction dialog's destination now gets as well, and
+  one directory at a time for a row that wants a file.
+
+  The file list is a list like every other choice in this program, so it filters as you type
+  like the rest of them: `..` above, the directories next, the files after them, `Enter` on a
+  directory walking *into* it rather than answering — so a list of one directory reaches the
+  whole filesystem — and `Esc` leaving the row exactly as it was. Everything in the directory
+  is listed, hidden names included, because `~/.ssh` is exactly where the key file this was
+  written for lives. Local only, for the reason the folder list is local only: a listing per
+  keystroke over the wire is not a dialog, and a path on a server is typed with `Tab` to
+  complete it. The key bar under `Alt` says which of the two the row would open.
+
 - **Round boxes, where one answer excludes the others** (SPEC 10 §3). A row that cycles its
   values in place is right for a long list — thirty code pages do not belong on the screen at
   once — and wrong for a short one: *overwrite / skip / rename* are three answers to one

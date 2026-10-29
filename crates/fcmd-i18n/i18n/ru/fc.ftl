@@ -1104,3 +1104,5 @@ key-cancel = Отмена
 key-dialog-move = Двинуть
 key-tree = Дерево
 key-config = Настр
+browse-local-only = файл выбирается на этой машине; путь на сервере набирается, и Tab его дополняет
+key-browse = Обзор

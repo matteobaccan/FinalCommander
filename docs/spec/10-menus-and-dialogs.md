@@ -201,6 +201,19 @@ that opens the folder list — so the row is short, and that is the honest lengt
 dialog is answered with `Enter` and `Esc`. A list says `F4` where its rows can be edited,
 `F9` in the drive dialog, and `F10` as the way out rather than as an answer.
 
+`Alt+F10` on a row that names a path opens something to pick it from: the tree of folders —
+the same list the panel's `Alt+F10` opens — for a row that wants a folder (a copy's
+destination, an extraction's folder), and one directory at a time for a row that wants a file
+(a session's key file). In the two dialogs that exist to ask for a destination the key means
+that row wherever the cursor is sitting; elsewhere the cursor says which row is meant, and the
+key bar under `Alt` says which of the two it would open. The file list is one directory with
+`..` above it, the directories next and the files after them: `Enter` on a directory walks into
+it, so one list reaches the whole filesystem, `Enter` on anything else is the answer and lands
+in the row that asked, and `Esc` leaves the row as it was. Everything in the directory is
+listed, hidden names included, because `~/.ssh` is exactly where the key file this was written
+for lives. Local only, for the reason the folder list is: a listing per keystroke over the wire
+is not a dialog, and a path on a server is typed with `Tab` to complete it.
+
 `F1` in a dialog opens the page about dialogs, with the dialog itself parked behind it: coming
 out of the help comes back to it with everything that was typed into it still there. What the
 dialog was itself opened over — a file being read, a file being edited — is parked under it,

@@ -1645,9 +1645,12 @@ pub struct App {
     pub folder_scan: Option<CancelToken>,
     /// Which `[[mask_group]]` the dialog is editing, or `None` for a new one.
     pub mask_group_at: Option<usize>,
-    /// The copy dialog the folder list was opened from, to come back to with the answer in
-    /// its destination row (`F10` in the dialog).
-    pub folder_for: Option<Box<Form>>,
+    /// The dialog the folder list was opened from and the row that asked for it, to come
+    /// back to with the answer in that row (`Alt+F10` in the dialog).
+    pub folder_for: Option<(Box<Form>, &'static str)>,
+    /// The same for a row that names a *file* rather than a folder: the dialog, the row that
+    /// asked, and the directory being shown — which changes as one walks into it.
+    pub browse_for: Option<(Box<Form>, &'static str)>,
     /// The dialog a field's own history was opened from, and the key of the field that asked
     /// (`Ctrl+↓`): the list replaces the dialog on the screen, and the answer goes back into
     /// the row that wanted it.
@@ -1976,6 +1979,7 @@ impl App {
             folder_scan: None,
             mask_group_at: None,
             folder_for: None,
+            browse_for: None,
             field_for: None,
             field_history: std::collections::BTreeMap::new(),
             seen: Vec::new(),
@@ -11263,11 +11267,21 @@ impl App {
             // FAR's copy dialog has a *Tree* button for the destination; here it is the same
             // folder list the panel's `Alt+F10` opens, and the row chosen lands in the row
             // that was asking. `F10` cannot be it: in this program `F10` is `OK`.
-            KeyCode::F(10) if key.mods.contains(Mods::ALT) && form.kind == FormKind::Copy => {
+            //
+            // The same key serves a row that names a *file* — a session's key file, the file
+            // the hex editor is to open — with one directory at a time instead of a tree of
+            // folders: one key, and what it opens is whatever the row is asking for.
+            KeyCode::F(10) if key.mods.contains(Mods::ALT) => {
+                let Some((field, what)) = browsing(form) else {
+                    return;
+                };
                 let Mode::Form(form) = std::mem::replace(&mut self.mode, Mode::Normal) else {
                     return;
                 };
-                self.open_folder_list(Some(form));
+                match what {
+                    Browses::Folder => self.open_folder_list(Some((form, field))),
+                    Browses::File => self.open_file_browser(form, field, None),
+                }
             }
             // `Ctrl+↓` on a field that keeps one: what has been typed into *this* row before,
             // as a list. FAR's own key, and FAR's own idea — a mask or a destination is
@@ -12818,6 +12832,8 @@ impl App {
             // Built by `open_field_history`, which knows which field asked and holds the
             // dialog while the list is on the screen.
             PickKind::FieldHistory => return,
+            // And by `open_file_browser`, which knows the directory and holds the dialog.
+            PickKind::Browse => return,
             // Built by `open_codepages`, which knows which page the reader is on.
             PickKind::Codepages => return,
             // The same: `open_screens` knows what is open, and this does not.
@@ -13090,6 +13106,14 @@ impl App {
             // dialog back, with what was typed in the field untouched.
             KeyCode::Esc | KeyCode::F(10) if kind == PickKind::FieldHistory => {
                 match self.field_for.take() {
+                    Some((form, _)) => self.mode = Mode::Form(form),
+                    None => self.mode = Mode::Normal,
+                }
+            }
+            // And the same for the directory a row that names a file is being chosen from:
+            // the row keeps whatever was typed into it.
+            KeyCode::Esc | KeyCode::F(10) if kind == PickKind::Browse => {
+                match self.browse_for.take() {
                     Some((form, _)) => self.mode = Mode::Form(form),
                     None => self.mode = Mode::Normal,
                 }
@@ -13658,12 +13682,28 @@ impl App {
                     self.mode = Mode::Form(form);
                 }
             }
+            PickKind::Browse => {
+                let Some((form, field)) = self.browse_for.take() else {
+                    return;
+                };
+                let chosen = VPath::parse(&row.value);
+                // A directory is walked into rather than answered with, so one list reaches
+                // the whole filesystem; anything else is the answer and the dialog comes
+                // back with it in the row that asked.
+                if chosen.is_local() && chosen.os().is_dir() {
+                    self.open_file_browser(form, field, Some(chosen));
+                    return;
+                }
+                let mut form = form;
+                form.set_text(field, chosen.to_string());
+                self.mode = Mode::Form(form);
+            }
             PickKind::Folders => {
                 let chosen = VPath::parse(&row.value);
-                // Opened from the copy dialog, the answer goes into the destination row and
-                // the dialog comes back with it; opened from the panel, the panel goes there.
-                if let Some(mut form) = self.folder_for.take() {
-                    form.set_text("copy.target", chosen.to_string());
+                // Opened from a dialog, the answer goes into the row that asked and the
+                // dialog comes back with it; opened from the panel, the panel goes there.
+                if let Some((mut form, field)) = self.folder_for.take() {
+                    form.set_text(field, chosen.to_string());
                     self.mode = Mode::Form(form);
                     return;
                 }
@@ -16315,7 +16355,7 @@ impl App {
     /// It opens on what the tree already knows — the cache outlives the session (SPEC 02 §7),
     /// so the list is useful at once — and a walk fills in the rest behind it, bounded so
     /// that `Alt+F10` on `/` is a dialog and not a disk scan without end.
-    fn open_folder_list(&mut self, from_copy: Option<Box<Form>>) {
+    fn open_folder_list(&mut self, from_dialog: Option<(Box<Form>, &'static str)>) {
         let side = self.active;
         let root = self.panels[side].cwd.root();
         if !root.is_local() {
@@ -16325,7 +16365,7 @@ impl App {
             self.set_error(m);
             return;
         }
-        self.folder_for = from_copy;
+        self.folder_for = from_dialog;
         let rows = self.folder_rows(&root);
         let mut pick = Pick::filtered(PickKind::Folders, self.plain("folders-title"), rows, side);
         // The cursor opens on the directory one is in, which is the row most answers are
@@ -16345,6 +16385,79 @@ impl App {
             let m = self.i18n.t("folders-reading");
             self.set_status(m);
         }
+    }
+
+    /// `Alt+F10` on a dialog row that names a file: one directory, as a list one types into.
+    ///
+    /// Not a panel drawn inside the dialog, which is what FAR's own `...` button opens: a
+    /// list is what every other choice in this program is made from, it filters as you type
+    /// like the rest of them, and `Enter` on a directory walks into it rather than answering
+    /// — so the whole filesystem is reachable from a list of one directory. `Esc` puts the
+    /// dialog back with the row as it was.
+    ///
+    /// Everything in the directory is listed, hidden names included, because `~/.ssh` is
+    /// exactly where the key file this was written for lives.
+    ///
+    /// Local only, for the reason the folder list is local only: a listing per keystroke
+    /// over the wire is not a dialog. A path on a server is typed, and `Tab` completes it.
+    fn open_file_browser(&mut self, form: Box<Form>, field: &'static str, at: Option<VPath>) {
+        let side = self.active;
+        // Where it opens: the directory the row already names, or the one its file is in, or
+        // where the panel is.
+        let at = at.unwrap_or_else(|| {
+            let typed = form.text_value(field);
+            match (!typed.is_empty()).then(|| VPath::parse(&typed)) {
+                Some(path) if path.is_local() && path.os().is_dir() => path,
+                Some(path) if path.is_local() => path
+                    .parent()
+                    .unwrap_or_else(|| self.panels[side].cwd.clone()),
+                _ => self.panels[side].cwd.clone(),
+            }
+        });
+        if !at.is_local() {
+            let m = self.i18n.t("browse-local-only");
+            self.set_error(m);
+            self.mode = Mode::Form(form);
+            return;
+        }
+        let mut dirs = Vec::new();
+        let mut files = Vec::new();
+        match std::fs::read_dir(at.os().as_ref()) {
+            Ok(entries) => {
+                for entry in entries.flatten() {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    let full = at.join(&name).to_string();
+                    // A directory is marked as the panels mark one, with a separator, and it
+                    // is what tells a reader which rows `Enter` goes *into*.
+                    match entry.file_type().map(|kind| kind.is_dir()) {
+                        Ok(true) => dirs.push(PickRow::plain(format!("{name}/"), full, false)),
+                        _ => files.push(PickRow::plain(name, full, false)),
+                    }
+                }
+            }
+            Err(e) => {
+                let m = format!("{}: {e}", at);
+                self.set_error(m);
+                self.mode = Mode::Form(form);
+                return;
+            }
+        }
+        let by_name = |row: &PickRow| (row.label.to_lowercase(), row.label.clone());
+        dirs.sort_by_key(by_name);
+        files.sort_by_key(by_name);
+        // Up first, then the directories, then the files: the panels' own order, which is
+        // the order anybody reading this list already knows.
+        let mut rows = Vec::with_capacity(dirs.len() + files.len() + 1);
+        if let Some(up) = at.parent() {
+            rows.push(PickRow::plain("..", up.to_string(), false));
+        }
+        rows.extend(dirs);
+        rows.extend(files);
+        self.browse_for = Some((form, field));
+        // The heading is the directory itself: a list of bare names wants to say which
+        // directory they are the names of.
+        let pick = Pick::filtered(PickKind::Browse, at.to_string(), rows, side);
+        self.mode = Mode::Pick(Box::new(pick));
     }
 
     /// The dialog for one band: `F4` on a row, or `Ins` for a new one.
@@ -17203,9 +17316,14 @@ impl App {
                     vec![(1u8, t("key-help")), (10, t("key-ok"))]
                 } else if mods == Mods::CTRL {
                     vec![(5, t("key-dialog-move"))]
-                } else if mods == Mods::ALT && form.kind == FormKind::Copy {
-                    // The folder list the copy dialog's destination can be chosen from.
-                    vec![(10, t("key-tree"))]
+                } else if mods == Mods::ALT {
+                    // What this row can be picked from, where it can: the tree of folders
+                    // for a row that wants a folder, one directory for one that wants a file.
+                    match browsing(form).map(|(_, what)| what) {
+                        Some(Browses::Folder) => vec![(10, t("key-tree"))],
+                        Some(Browses::File) => vec![(10, t("key-browse"))],
+                        None => Vec::new(),
+                    }
                 } else {
                     Vec::new()
                 }
@@ -17777,6 +17895,47 @@ fn field_completes(key: &str) -> bool {
         key,
         "copy.target" | "unpack.to" | "pack.name" | "site.key" | "hex.file"
     )
+}
+
+/// What `Alt+F10` opens for a row: the tree of folders, or one directory at a time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Browses {
+    Folder,
+    File,
+}
+
+/// Which of the two a dialog row wants, or `None` for a row that names no path at all.
+///
+/// A new archive's name is not here on purpose: what one picks for it is a folder and then
+/// types a name nothing is at yet, which is a different dialog from either of these.
+fn field_browses(key: &str) -> Option<Browses> {
+    match key {
+        "copy.target" | "unpack.to" => Some(Browses::Folder),
+        "site.key" | "hex.file" => Some(Browses::File),
+        _ => None,
+    }
+}
+
+/// What `Alt+F10` would open in this dialog as it stands, if anything: the row under the
+/// cursor when it names a path, and otherwise the dialog's own. The key and the key bar ask
+/// this same question, so the bar cannot offer a key that would do nothing.
+fn browsing(form: &Form) -> Option<(&'static str, Browses)> {
+    let under = form
+        .text_at_cursor()
+        .map(|(key, _)| key)
+        .filter(|key| field_browses(key).is_some());
+    let field = under.or_else(|| dialog_path_row(form.kind))?;
+    Some((field, field_browses(field)?))
+}
+
+/// The row `Alt+F10` is about when the cursor is not on one — the destination of the dialogs
+/// that exist to ask for one. Elsewhere the cursor says which row is meant.
+fn dialog_path_row(kind: FormKind) -> Option<&'static str> {
+    match kind {
+        FormKind::Copy => Some("copy.target"),
+        FormKind::Unpack => Some("unpack.to"),
+        _ => None,
+    }
 }
 
 /// The dialog fields worth a history of their own.
@@ -20766,6 +20925,96 @@ mod tests {
             1,
             "{drawn:?}"
         );
+    }
+
+    /// `Alt+F10` on a dialog row that names a file opens the directory it is in, as a list:
+    /// `Enter` on a directory walks into it, `Enter` on a file is the answer and lands in the
+    /// row that asked, and `Esc` leaves the row as it was.
+    #[test]
+    fn alt_f10_on_a_row_that_names_a_file_browses_for_one() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("keys")).unwrap();
+        std::fs::write(dir.path().join("keys/id_ed25519"), b"-").unwrap();
+        std::fs::write(dir.path().join("notes.txt"), b"-").unwrap();
+        let here = dir.path().display().to_string();
+
+        let mut app = app();
+        app.mode = Mode::Form(Box::new(crate::form::Form::site(None, &app.i18n)));
+        let Mode::Form(form) = &mut app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        form.cursor = form
+            .fields
+            .iter()
+            .position(|f| matches!(f, crate::form::Field::Text { key, .. } if *key == "site.key"))
+            .expect("the key-file row");
+        form.set_text("site.key", here.clone());
+
+        // The row names a directory, so that is where the list opens: `..` above it, the
+        // directories next with a separator after the name, then the files.
+        press(&mut app, "Alt+F10");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(pick.kind, PickKind::Browse);
+        assert_eq!(pick.title, here, "the heading says which directory it is");
+        let labels: Vec<String> = pick.rows.iter().map(|r| r.label.clone()).collect();
+        assert_eq!(labels.first().map(String::as_str), Some(".."));
+        assert!(labels.contains(&"keys/".to_string()), "{labels:?}");
+        assert!(labels.contains(&"notes.txt".to_string()), "{labels:?}");
+        assert!(app.browse_for.is_some(), "the dialog waits behind it");
+
+        // `Enter` on a directory goes into it rather than answering anything.
+        let at = labels
+            .iter()
+            .position(|l| l == "keys/")
+            .expect("the folder");
+        let Mode::Pick(pick) = &mut app.mode else {
+            panic!("the list closed")
+        };
+        pick.cursor = at;
+        press(&mut app, "Enter");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("it is still a list: {:?}", app.mode)
+        };
+        assert_eq!(pick.title, dir.path().join("keys").display().to_string());
+
+        // `Esc` puts the dialog back with the row exactly as it was.
+        press(&mut app, "Esc");
+        let Mode::Form(form) = &app.mode else {
+            panic!("the dialog came back: {:?}", app.mode)
+        };
+        assert_eq!(form.text_value("site.key"), here);
+        assert!(app.browse_for.is_none());
+
+        // And again, as far as the file: that is the answer.
+        press(&mut app, "Alt+F10");
+        let Mode::Pick(pick) = &mut app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        pick.cursor = pick
+            .rows
+            .iter()
+            .position(|r| r.label == "keys/")
+            .expect("the folder");
+        press(&mut app, "Enter");
+        let Mode::Pick(pick) = &mut app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        pick.cursor = pick
+            .rows
+            .iter()
+            .position(|r| r.label == "id_ed25519")
+            .expect("the key file");
+        press(&mut app, "Enter");
+        let Mode::Form(form) = &app.mode else {
+            panic!("the dialog came back with the answer: {:?}", app.mode)
+        };
+        assert_eq!(
+            form.text_value("site.key"),
+            dir.path().join("keys/id_ed25519").display().to_string()
+        );
+        assert!(app.browse_for.is_none());
     }
 
     /// `Ctrl+F5` hands the arrows to the dialog, so it can be pushed off whatever it is

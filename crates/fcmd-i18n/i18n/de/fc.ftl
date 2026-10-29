@@ -1104,3 +1104,5 @@ key-cancel = Abbruch
 key-dialog-move = Verschb
 key-tree = Baum
 key-config = Konfig
+browse-local-only = eine Datei wird auf diesem Rechner ausgewählt; ein Pfad auf einem Server wird eingegeben, und Tab vervollständigt ihn
+key-browse = Durchs

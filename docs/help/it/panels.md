@@ -368,7 +368,11 @@ che esce dalla prima riga è la via d'uscita. `Invio` risponde al dialogo da dov
 cursore, `F10` è `OK` da qualunque punto, `Esc` butta via tutto.
 
 Una riga che nomina un percorso si completa con `Tab`, come in una shell, e `Ctrl+↓` apre quel
-che è già stato scritto in quella riga. `Ctrl+F5` passa le frecce al dialogo stesso, per quando
+che è già stato scritto in quella riga. `Alt+F10` su una riga così apre da dove scegliere:
+l'albero delle cartelle per una riga che vuole una cartella — la destinazione di una copia, la
+cartella di un'estrazione — e la cartella stessa per una riga che vuole un file, come il file
+di chiave di una connessione. In quell'elenco `Invio` su una cartella ci entra e `Invio` su un
+file è la risposta; `Esc` lascia la riga com'era. `Ctrl+F5` passa le frecce al dialogo stesso, per quando
 copre l'unica cosa che serve leggere; `Invio` ed `Esc` lo fermano soltanto.
 
 La riga in basso dello schermo diventa quella del dialogo finché è aperto: i tasti dei pannelli

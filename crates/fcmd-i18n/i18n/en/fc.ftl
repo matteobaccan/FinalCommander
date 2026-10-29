@@ -1114,3 +1114,5 @@ key-cancel = Cancel
 key-dialog-move = Move
 key-tree = Tree
 key-config = Config
+browse-local-only = a file is chosen from this machine; a path on a server is typed, and Tab completes it
+key-browse = Browse

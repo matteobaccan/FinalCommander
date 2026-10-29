@@ -1092,3 +1092,5 @@ key-cancel = 取消
 key-dialog-move = 移动
 key-tree = 目录树
 key-config = 设置
+browse-local-only = 文件在本机选择；服务器上的路径需要输入，Tab 可以补全
+key-browse = 浏览

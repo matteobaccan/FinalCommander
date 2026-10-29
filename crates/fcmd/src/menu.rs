@@ -115,6 +115,9 @@ pub enum PickKind {
     /// it is, is in `App::field_key`: a kind cannot hold it, and the list is open one at a
     /// time.
     FieldHistory,
+    /// One directory, for a dialog row that names a file: `Alt+F10` on it (SPEC 10 §3).
+    /// Which row is asking is in `App::browse_for`, as the field history's is.
+    Browse,
 }
 
 /// A mark (`√`) next to the entry that is currently in force.
