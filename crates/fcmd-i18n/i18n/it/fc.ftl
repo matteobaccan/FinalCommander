@@ -608,6 +608,9 @@ diff-ignore-case-off = Le maiuscole contano di nuovo
 diff-ignore-eol-on = Fine riga ignorata
 diff-ignore-eol-off = La fine riga conta di nuovo
 
+grab-hint = ↑↓←→ muovi · Maiusc+↑↓←→ segna · Ctrl+A tutto · Invio copia · Esc chiudi
+grab-copied = copiate { $rows } righe dello schermo
+
 # ------------------------------------------------- le code page (SPEC 05 §1.12)
 cp-title = Code page
 cp-name-title = Come chiamare questa code page

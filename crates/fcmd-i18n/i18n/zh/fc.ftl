@@ -596,6 +596,9 @@ diff-ignore-case-off = 大小写重新计入
 diff-ignore-eol-on = 已忽略行尾
 diff-ignore-eol-off = 行尾重新计入
 
+grab-hint = ↑↓←→ 移动 · Shift+↑↓←→ 标记 · Ctrl+A 全选 · Enter 复制 · Esc 关闭
+grab-copied = 已复制 { $rows } 行屏幕内容
+
 # ------------------------------------------------- 代码页 (SPEC 05 §1.12)
 cp-title = 代码页
 cp-name-title = 为这个代码页起个名字

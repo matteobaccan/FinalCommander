@@ -302,6 +302,28 @@ impl Buffer {
         self.to_lines().join("\n")
     }
 
+    /// The text inside a rectangle, one line per row, as the screen grabber copies it
+    /// (SPEC 06 §11b).
+    ///
+    /// Trailing blanks go, because a rectangle drawn round a short line is mostly blanks and
+    /// nobody wants them on the clipboard; a blank row in the middle stays, because it is
+    /// part of what was on the screen. The tail of a double-width character is skipped, as it
+    /// is in `to_lines`: the character itself is in the cell before it.
+    pub fn region_text(&self, area: Rect) -> String {
+        let mut lines = Vec::new();
+        for y in area.y..area.bottom().min(self.h) {
+            let mut line = String::new();
+            for x in area.x..area.right().min(self.w) {
+                let Some(cell) = self.get(x, y) else { continue };
+                if !cell.wide_tail {
+                    line.push(cell.ch);
+                }
+            }
+            lines.push(line.trim_end().to_string());
+        }
+        lines.join("\n")
+    }
+
     /// Cells that differ from `prev`, in writing order. The backend emits only these.
     pub fn diff<'a>(&'a self, prev: &Buffer) -> Vec<(u16, u16, &'a Cell)> {
         let mut out = Vec::new();
@@ -418,6 +440,26 @@ mod tests {
         let written = b.put_str(0, 0, "hello world", style(), 8);
         assert_eq!(written, 8);
         assert_eq!(b.to_lines()[0], "hello wo");
+    }
+
+    #[test]
+    fn a_region_of_the_screen_comes_back_as_its_text() {
+        let mut b = Buffer::new(12, 3);
+        b.put_str(0, 0, "hello world", style(), 12);
+        b.put_str(0, 1, "", style(), 12);
+        b.put_str(0, 2, "日本語 here", style(), 12);
+        // A rectangle inside one line.
+        assert_eq!(b.region_text(Rect::new(6, 0, 5, 1)), "world");
+        // Several rows: the blank one in the middle stays, the trailing blanks go.
+        assert_eq!(
+            b.region_text(Rect::new(0, 0, 12, 3)),
+            "hello world\n\n日本語 here"
+        );
+        // A wide character is one character, not its two cells.
+        assert_eq!(b.region_text(Rect::new(0, 2, 6, 1)), "日本語");
+        // A rectangle that runs off the screen is clipped rather than refused, and what is
+        // *inside* it is kept as it stands — the blank before `here` is the sixth column.
+        assert_eq!(b.region_text(Rect::new(6, 2, 40, 9)), " here");
     }
 
     #[test]

@@ -616,6 +616,9 @@ diff-ignore-case-off = Case counts again
 diff-ignore-eol-on = Line endings ignored
 diff-ignore-eol-off = Line endings count again
 
+grab-hint = ↑↓←→ move · Shift+↑↓←→ mark · Ctrl+A all · Enter copy · Esc close
+grab-copied = { $rows } rows of the screen copied
+
 # ------------------------------------------------- the code pages (SPEC 05 §1.12)
 cp-title = Code pages
 cp-name-title = What to call this code page

@@ -551,6 +551,11 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         draw_diff(app, view, buf, screen);
         return None;
     }
+    // The grabber draws the screen it was opened on, not the program: the whole point is
+    // that what gets copied is what was there (SPEC 06 §11b).
+    if let Mode::Grab(grab) = &app.mode {
+        return draw_grab(app, grab, buf);
+    }
     match &app.mode {
         Mode::Normal => None,
         Mode::Find(view) => {
@@ -596,6 +601,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         }
         Mode::Job(_) => None,    // handled above, through `Mode::job()`
         Mode::Diff(_) => None,   // handled above, through `Mode::diff()`
+        Mode::Grab(_) => None,   // handled above, on the frame it was opened with
         Mode::Viewer(_) => None, // handled above, before the panels are drawn
         Mode::Editor(_) | Mode::Hex(_) => None, // handled above, before the panels are drawn
         Mode::Message { title, lines } => {
@@ -2201,6 +2207,55 @@ fn draw_palette(app: &App, view: &crate::app::PaletteView, buf: &mut Buffer, scr
 /// The two columns are the same width, because the eye compares by position: a left column
 /// sized to its longest line and a right one sized to its own would put the same line in two
 /// places. Both scroll sideways together for the same reason.
+/// The screen grabber: the frame it was opened on, the marked rectangle inverted, and a line
+/// of keys where the status line is (SPEC 06 §11b).
+///
+/// The cursor is left where the terminal's own goes, so the one the reader is moving is the
+/// terminal's: a block over a letter is what every editor shows, and drawing a second one
+/// would be a second thing to follow.
+fn draw_grab(app: &App, grab: &crate::grab::Grab, buf: &mut Buffer) -> Option<(u16, u16)> {
+    let (w, h) = (buf.width(), buf.height());
+    // The frame as it was. A terminal resized since the key was pressed leaves a margin,
+    // which is filled rather than left as whatever was under it.
+    buf.clear(Style::new(
+        app.theme.color("panel.fg"),
+        app.theme.color("panel.bg"),
+    ));
+    for y in 0..h.min(grab.height()) {
+        for x in 0..w.min(grab.width()) {
+            if let Some(cell) = grab.screen.get(x, y) {
+                buf.set(x, y, cell.ch, cell.style);
+            }
+        }
+    }
+    // What is marked, in the colours a selection has everywhere else.
+    let area = grab.area();
+    let marked = Style::new(
+        app.theme.color("selected.fg"),
+        app.theme.color("selected.bg"),
+    );
+    for y in area.y..area.bottom().min(h) {
+        for x in area.x..area.right().min(w) {
+            if let Some(cell) = buf.cell_mut(x, y) {
+                cell.style = marked;
+            }
+        }
+    }
+    // The keys, on the last row: the grabber has keys of its own, and a reader who cannot see
+    // them has to guess.
+    if h > 0 {
+        let hint = app.i18n.t("grab-hint");
+        let hint = fcmd_ui::truncate_cols(&hint, w as usize);
+        let style = Style::new(app.theme.color("status.fg"), app.theme.color("status.bg"));
+        buf.fill(Rect::new(0, h - 1, w, 1), ' ', style);
+        buf.put_str(0, h - 1, &hint, style, w);
+    }
+    Some((
+        grab.x.min(w.saturating_sub(1)),
+        grab.y.min(h.saturating_sub(1)),
+    ))
+}
+
 fn draw_diff(app: &App, view: &fcmd_view::Diff, buf: &mut Buffer, screen: Rect) {
     use fcmd_view::Side;
 

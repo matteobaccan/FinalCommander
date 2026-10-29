@@ -9,6 +9,7 @@ mod complete;
 mod drives;
 mod expand;
 mod form;
+mod grab;
 mod help;
 mod highlight;
 mod history;
@@ -1458,6 +1459,14 @@ fn interactive(mut app: App) -> Result<()> {
         // Coalesce whatever else is already queued, then draw once.
         while let Ok(event) = rx.try_recv() {
             app.handle_event(event);
+        }
+        // `Alt+Ins` asked for the screen grabber, and the screen it wants is the frame that
+        // is on the terminal — which is this buffer, still holding what was last drawn
+        // (SPEC 06 §11b). It is handed over here rather than in the key handler because the
+        // key handler cannot see it, and now rather than next time round because the grabber
+        // has to be on the screen before the loop waits for another key.
+        if app.grab_wanted {
+            app.open_grab(&buf);
         }
     }
 

@@ -608,6 +608,9 @@ diff-ignore-case-off = Las mayúsculas vuelven a contar
 diff-ignore-eol-on = Fin de línea ignorado
 diff-ignore-eol-off = El fin de línea vuelve a contar
 
+grab-hint = ↑↓←→ mover · Mayús+↑↓←→ marcar · Ctrl+A todo · Enter copiar · Esc cerrar
+grab-copied = { $rows } líneas de la pantalla copiadas
+
 # ------------------------------------------------- las páginas de códigos (SPEC 05 §1.12)
 cp-title = Páginas de códigos
 cp-name-title = Cómo llamar a esta página de códigos

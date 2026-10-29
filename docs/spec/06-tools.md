@@ -457,6 +457,39 @@ asked by a program running on another machine. A terminal that does not understa
 ignores it, and there is no answer to wait for, so what the program can honestly say is what
 it copied — not that the clipboard took it.
 
+### 11b. The screen grabber (`Alt+Ins`)
+
+The keys above copy what the program *knows* — names, paths, a block of a file. The grabber
+copies what the program *drew*, which is a different set and the one with no other answer: a
+process card, a help page, a hex dump, the foot of a diff, the sentence a comparison ended
+with. None of it is a file, so none of it can be copied as one.
+
+The terminal's own selection is the obvious alternative and it is worse at this: it takes the
+frame, the column rule and the padding with it, it cannot see the part of a line that is
+scrolled sideways, and over `ssh` what it selects is whatever the far end last painted. FAR
+has had a grabber since its first version for exactly this reason.
+
+`Alt+Ins`, from any screen, holds the screen as it is — a snapshot, so moving about cannot
+change what is being copied, and the program underneath is not running while one reads it:
+
+* the arrows move the cursor, `PgUp`/`PgDn` by a screen, `Home`/`End` to the ends of the row,
+  `Ctrl+Home`/`Ctrl+End` to the corners of the screen;
+* `Shift` with any of them marks a rectangle, dropping the mark **where the cursor already
+  was** rather than where one noticed it, so the rectangle grows from where one started;
+* `Ctrl+A` marks the whole screen, for the one case where the rectangle is all of it;
+* `Enter` or `Ctrl+Ins` copies and closes; with nothing marked it takes the row the cursor is
+  on, because "copy this line" is what one wants from a grabber more often than a rectangle;
+* `Esc` closes and copies nothing.
+
+Trailing blanks come off each line — a rectangle round a short line is mostly blanks — and a
+blank row inside the rectangle stays, because it was on the screen. A double-width character
+is one character and not its two cells.
+
+The frame comes from the loop that draws rather than from the key handler, because that is the
+only place it exists: the key asks, and the screen is handed over on the way round. The screen
+the grabber was opened on is parked rather than dropped, so closing it comes back to the file
+one was reading.
+
 **Reading the clipboard is the terminal's job, not ours.** `OSC 52` can ask for the contents
 as well, and most terminals refuse for the obvious reason; there is no need to ask, because
 the terminal's own paste key hands the program the text as a *bracketed paste*, which arrives

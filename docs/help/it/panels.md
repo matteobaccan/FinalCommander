@@ -328,6 +328,15 @@ richiesta la ignora, e non può rispondere né sì né no, quindi quello che ti 
 stato copiato — non che gli appunti l'abbiano preso.
 `F9 → Opzioni → Impostazioni dell'interfaccia` la spegne.
 
+`Alt+Ins` copia invece un pezzo di **schermo**, che è la risposta per tutto quello che il
+programma ha disegnato e che non ha un file dietro: la scheda di un processo, una pagina
+dell'aiuto, un dump esadecimale, la frase con cui è finito un confronto. Tiene lo schermo come
+è e ci mette un cursore: le frecce muovono, `Maiusc` insieme a loro segna un rettangolo da
+dove il cursore era già, `Ctrl+A` segna tutto lo schermo, `Invio` o `Ctrl+Ins` copia e chiude,
+ed `Esc` chiude senza copiare niente. Senza niente di segnato prende la riga su cui sta il
+cursore. Gli spazi in coda a ogni riga se ne vanno, perché un rettangolo intorno a una riga
+corta è fatto quasi solo di spazi.
+
 Incollare è un tasto del tuo terminale, non nostro — `Shift+Ins` o `Ctrl+Shift+V` nella maggior
 parte di essi — e il testo arriva qui in un pezzo unico invece che come una sequenza di tasti.
 L'editor lo prende tutto, ritorni a capo compresi; la riga di comando, una riga di dialogo e una

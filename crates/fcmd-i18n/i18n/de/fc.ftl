@@ -608,6 +608,9 @@ diff-ignore-case-off = Groß- und Kleinschreibung zählt wieder
 diff-ignore-eol-on = Zeilenenden ignoriert
 diff-ignore-eol-off = Zeilenenden zählen wieder
 
+grab-hint = ↑↓←→ bewegen · Umschalt+↑↓←→ markieren · Ctrl+A alles · Enter kopieren · Esc schließen
+grab-copied = { $rows } Bildschirmzeilen kopiert
+
 # ------------------------------------------------- die Codepages (SPEC 05 §1.12)
 cp-title = Codepages
 cp-name-title = Wie diese Codepage heißen soll

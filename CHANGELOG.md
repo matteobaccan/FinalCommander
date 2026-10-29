@@ -8,6 +8,20 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **The screen grabber** (`Alt+Ins`, from any screen). The copy keys take what the program
+  *knows* — names, paths, a block of a file; this takes what it *drew*, which is the set with
+  no other answer: a process card, a help page, a hex dump, the sentence a comparison ended
+  with. The terminal's own selection is worse at it — it takes the frame, the column rule and
+  the padding, and over `ssh` it takes whatever the far end last painted. It holds the screen
+  as it is, so moving about cannot change what is being copied: the arrows move the cursor,
+  `Shift` with them marks a rectangle **from where the cursor already was**, `PgUp`/`PgDn`,
+  `Home`/`End` and `Ctrl+Home`/`Ctrl+End` cover the rest, `Ctrl+A` marks the whole screen,
+  `Enter` or `Ctrl+Ins` copies and closes, `Esc` closes and copies nothing. With nothing
+  marked it takes the row the cursor is on. Trailing blanks come off each line, a blank row
+  inside the rectangle stays, and a double-width character is one character rather than its
+  two cells. It also answers, in the one way that works in the hex dump and the table too,
+  the backlog's *select and copy text in the viewer*.
+
 - **Two settings that were dim rows.** *Always show the menu bar* (`ui.menu_bar`) keeps the
   menu titles on the top row and starts the panels under it, so it costs a file the way the
   column titles do, and `F9` lights a title and opens its menu on that same row. *Save the

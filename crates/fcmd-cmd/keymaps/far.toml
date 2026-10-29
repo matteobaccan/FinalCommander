@@ -1124,6 +1124,13 @@ keys = ["Ctrl+Shift+D"]
 scope = "panel"
 cmd = "tool.diff"
 
+# The screen grabber, on FAR's own key and in the global scope: the screens worth copying
+# from are the ones that are not files — a process card, a help page, the foot of a diff.
+[[bind]]
+keys = ["Alt+Ins"]
+scope = "global"
+cmd = "tool.grab"
+
 # FAR's *Task list*: the running processes. On a line with something typed on it `Ctrl+W` is
 # the word-delete every readline has, as `Ctrl+K` is kill-to-end; on an empty line it is this.
 [[bind]]

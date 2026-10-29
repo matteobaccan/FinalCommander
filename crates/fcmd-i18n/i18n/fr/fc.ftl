@@ -608,6 +608,9 @@ diff-ignore-case-off = La casse compte à nouveau
 diff-ignore-eol-on = Fins de ligne ignorées
 diff-ignore-eol-off = Les fins de ligne comptent à nouveau
 
+grab-hint = ↑↓←→ déplacer · Maj+↑↓←→ marquer · Ctrl+A tout · Entrée copier · Échap fermer
+grab-copied = { $rows } lignes de l'écran copiées
+
 # ------------------------------------------------- les pages de codes (SPEC 05 §1.12)
 cp-title = Pages de codes
 cp-name-title = Comment appeler cette page de codes

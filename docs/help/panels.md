@@ -303,6 +303,14 @@ not the one on the machine the program runs on. A terminal that does not underst
 request ignores it, and it cannot answer either way, so what you are told is what was copied —
 not that the clipboard took it. `F9 → Options → Interface settings` turns it off.
 
+`Alt+Ins` copies a piece of the **screen** instead, which is the answer for everything the
+program drew and has no file behind it: a process card, a help page, a hex dump, the sentence
+a comparison ended with. It holds the screen as it is and puts a cursor on it: the arrows
+move, `Shift` with them marks a rectangle from where the cursor already was, `Ctrl+A` marks
+the whole screen, `Enter` or `Ctrl+Ins` copies and closes, and `Esc` closes and copies
+nothing. With nothing marked it takes the row the cursor is on. Trailing blanks come off each
+line, because a rectangle round a short line is mostly blanks.
+
 Pasting is your terminal's key, not ours — `Shift+Ins` or `Ctrl+Shift+V` in most of them —
 and the text arrives here in one piece rather than as a run of keystrokes. The editor takes
 all of it, newlines and all; the command line, a dialog row and a prompt are one line each, so

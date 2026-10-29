@@ -1398,6 +1398,8 @@ pub enum Mode {
     },
     /// Two files side by side, with what differs marked (SPEC 05 §3).
     Diff(Box<fcmd_view::Diff>),
+    /// `Alt+Ins`: the screen as it was, with a rectangle of it to copy (SPEC 06 §11b).
+    Grab(Box<crate::grab::Grab>),
     /// `Ctrl+Alt+E`: a real terminal with a shell in it (SPEC 06 §4).
     ///
     /// It is a screen like a viewer: stepping away leaves the program running, and `F12`
@@ -1667,6 +1669,10 @@ pub struct App {
     /// rather than in the job because the delete only happens if the archive was written.
     pack_delete: Option<Vec<VPath>>,
     pub quit: bool,
+    /// `Alt+Ins` was pressed and the screen grabber is waiting for the screen: the loop that
+    /// draws is the only place the frame exists, so it hands it over on the way round
+    /// (SPEC 06 §11b).
+    pub grab_wanted: bool,
     pub requests: Vec<Request>,
     /// Panel geometry from the last frame, so key handling knows how far a page is.
     pub rows: usize,
@@ -1974,6 +1980,7 @@ impl App {
             fetch_id: None,
             tunnels: Vec::new(),
             compare: None,
+            grab_wanted: false,
             sum: None,
             last_sum: fcmd_jobs::Algorithm::default(),
             last_link: fcmd_jobs::LinkKind::SymlinkRelative,
@@ -3279,6 +3286,10 @@ impl App {
                 self.mode = Mode::Diff(view);
                 self.diff_key(key);
             }
+            Mode::Grab(grab) => {
+                self.mode = Mode::Grab(grab);
+                self.grab_key(key);
+            }
             Mode::Editor(editor) => {
                 self.mode = Mode::Editor(editor);
                 self.editor_key(key);
@@ -4003,6 +4014,51 @@ impl App {
         if let Some(id) = error {
             let m = self.i18n.t(id);
             self.set_error(m);
+        }
+    }
+
+    /// The keys of the screen grabber (SPEC 06 §11b).
+    ///
+    /// Arrows move the cursor, `Shift+arrows` mark a rectangle from where one started,
+    /// `Ctrl+A` marks the whole screen, and `Enter` or `Ctrl+Ins` copies — the keys of a
+    /// selection anywhere else in the program.
+    fn grab_key(&mut self, key: Key) {
+        let shift = key.mods.contains(Mods::SHIFT);
+        let ctrl = key.mods.contains(Mods::CTRL);
+        let Mode::Grab(grab) = &mut self.mode else {
+            return;
+        };
+        let (width, height) = (grab.width(), grab.height());
+        let page = height.saturating_sub(1).max(1) as i32;
+        match key.code {
+            KeyCode::Esc | KeyCode::F(10) => {
+                self.mode = Mode::Normal;
+                self.restore_front_screen();
+            }
+            KeyCode::Up => grab.move_by(0, -1, shift),
+            KeyCode::Down => grab.move_by(0, 1, shift),
+            KeyCode::Left => grab.move_by(-1, 0, shift),
+            KeyCode::Right => grab.move_by(1, 0, shift),
+            KeyCode::PageUp => grab.move_by(0, -page, shift),
+            KeyCode::PageDown => grab.move_by(0, page, shift),
+            KeyCode::Home if ctrl => grab.go(Some(0), Some(0), shift),
+            KeyCode::End if ctrl => grab.go(Some(width), Some(height), shift),
+            KeyCode::Home => grab.go(Some(0), None, shift),
+            KeyCode::End => grab.go(Some(width), None, shift),
+            KeyCode::Char('a') | KeyCode::Char('A') if ctrl => grab.all(),
+            KeyCode::Enter | KeyCode::Insert if !shift => {
+                let text = grab.text();
+                let rows = grab.area().h;
+                self.mode = Mode::Normal;
+                self.restore_front_screen();
+                if self.copy_to_clipboard(&text) {
+                    let m = self
+                        .i18n
+                        .t_args("grab-copied", &[("rows", rows.to_string().into())]);
+                    self.set_status(m);
+                }
+            }
+            _ => {}
         }
     }
 
@@ -7079,6 +7135,9 @@ impl App {
             // a panel — the change-drive dialog opens the same one. The screens of this
             // program are `F12`, which is a different list and a different question.
             Command::ToolTaskList => self.open_process_panel(self.active),
+            // The grabber copies what is on the screen, and only the loop that draws has
+            // that, so the key asks and the loop hands the frame over (SPEC 06 §11b).
+            Command::ToolGrab => self.grab_wanted = true,
             Command::ToolCompare => {
                 let form = Form::compare(&self.cfg.compare, &self.i18n);
                 self.mode = Mode::Form(Box::new(form));
@@ -11922,6 +11981,23 @@ impl App {
             Mode::Hex(_) => self.park_hex(),
             _ => {}
         }
+    }
+
+    /// Open the screen grabber on the frame that is on the screen (SPEC 06 §11b).
+    ///
+    /// The frame comes from the loop, because that is where it exists: a snapshot, so what is
+    /// being copied cannot change under the cursor, and the screen it was taken from is
+    /// parked rather than dropped — closing the grabber comes back to the file one was
+    /// reading.
+    pub fn open_grab(&mut self, screen: &fcmd_ui::Buffer) {
+        self.grab_wanted = false;
+        if screen.width() == 0 || screen.height() == 0 {
+            return;
+        }
+        self.park_front_screen();
+        self.mode = Mode::Grab(Box::new(crate::grab::Grab::new(screen.clone())));
+        let m = self.i18n.t("grab-hint");
+        self.set_status(m);
     }
 
     /// And take it out again. The three are exclusive — one screen is in front — so asking
@@ -20164,6 +20240,73 @@ mod tests {
         };
         assert_eq!(pick.kind, PickKind::Drives);
         assert_eq!(pick.side, 1);
+    }
+
+    /// `Alt+Ins`: the screen grabber. The key asks the loop for the frame, because that is
+    /// where the frame is; then the rectangle one marks is what goes on the clipboard.
+    #[test]
+    fn the_screen_grabber_copies_the_rectangle_it_is_shown() {
+        let mut app = app();
+        press(&mut app, "Alt+Ins");
+        assert!(app.grab_wanted, "the key asks the loop for the screen");
+        assert!(app.mode.is_normal(), "and nothing happens until it answers");
+
+        // What the loop hands over: the frame that is on the terminal.
+        let mut screen = fcmd_ui::Buffer::new(20, 3);
+        let style = fcmd_ui::Style::default();
+        screen.put_str(0, 0, "one two three", style, 20);
+        screen.put_str(0, 1, "four five six", style, 20);
+        app.open_grab(&screen);
+        assert!(!app.grab_wanted);
+        assert!(matches!(app.mode, Mode::Grab(_)), "{:?}", app.mode);
+        let _ = app.take_requests();
+
+        // With nothing marked, the key copies the row the cursor is on.
+        press(&mut app, "Down");
+        press(&mut app, "Enter");
+        assert!(app.mode.is_normal(), "and it closes");
+        let copied = app
+            .take_requests()
+            .into_iter()
+            .find_map(|r| match r {
+                Request::Clipboard { text } => Some(text),
+                _ => None,
+            })
+            .expect("nothing was copied");
+        assert_eq!(copied, "four five six");
+
+        // And with a rectangle marked, the rectangle. `Shift` drops the mark where the
+        // cursor stands, so this is the three columns of `two` and of what is under it.
+        app.open_grab(&screen);
+        for _ in 0..4 {
+            press(&mut app, "Right");
+        }
+        press(&mut app, "Shift+Right");
+        press(&mut app, "Shift+Right");
+        press(&mut app, "Shift+Down");
+        let _ = app.take_requests();
+        press(&mut app, "Ctrl+Ins");
+        let copied = app
+            .take_requests()
+            .into_iter()
+            .find_map(|r| match r {
+                Request::Clipboard { text } => Some(text),
+                _ => None,
+            })
+            .expect("nothing was copied");
+        assert_eq!(copied, "two\n fi");
+
+        // `Esc` copies nothing.
+        app.open_grab(&screen);
+        let _ = app.take_requests();
+        press(&mut app, "Esc");
+        assert!(app.mode.is_normal());
+        assert!(
+            !app.take_requests()
+                .iter()
+                .any(|r| matches!(r, Request::Clipboard { .. })),
+            "Esc put something on the clipboard"
+        );
     }
 
     /// The two rows of *Interface settings* that used to be dim: the menu bar always on, and
