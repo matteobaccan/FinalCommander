@@ -2124,8 +2124,42 @@ fn draw_viewer(app: &mut App, viewer: &mut fcmd_view::Viewer, buf: &mut Buffer) 
             }
         }
     }
-    if rows.is_empty() {
+    if rows.is_empty() && viewer.mode != fcmd_view::Mode::Image {
         buf.put_str(0, body.y, &app.i18n.t("viewer-empty"), base, body.w);
+    }
+    if viewer.mode == fcmd_view::Mode::Image {
+        // A picture is painted rather than written: two pixels to a cell, the top half in
+        // the foreground colour and the bottom in the background, which is the one way of
+        // drawing one that works in every terminal there is (SPEC 05 §1.14).
+        let under = match app.theme.color("viewer.bg") {
+            fcmd_ui::Color::Rgb(r, g, b) => [r, g, b],
+            // A theme written in palette colours has no bytes to mix a transparent pixel
+            // with, so the picture is composited onto black.
+            _ => [0, 0, 0],
+        };
+        let cells = viewer.picture_cells(body.w, body.h, under);
+        // Centred, as every picture viewer draws one: the window is almost never the shape
+        // of the picture, and a picture in the corner looks like a mistake.
+        let shown_h = cells.len() as u16;
+        let shown_w = cells.first().map(|row| row.len() as u16).unwrap_or(0);
+        let x0 = body.x + body.w.saturating_sub(shown_w) / 2;
+        let y0 = body.y + body.h.saturating_sub(shown_h) / 2;
+        for (row, line) in cells.iter().enumerate() {
+            for (col, (top, bottom)) in line.iter().enumerate() {
+                let style = Style::new(
+                    fcmd_ui::Color::Rgb(top[0], top[1], top[2]),
+                    fcmd_ui::Color::Rgb(bottom[0], bottom[1], bottom[2]),
+                );
+                buf.set(x0 + col as u16, y0 + row as u16, '▀', style);
+            }
+        }
+        // Nothing could be decoded: the window says why rather than staying blank.
+        if cells.is_empty() {
+            if let Err(why) = viewer.picture_note() {
+                let text = fcmd_ui::truncate_cols(&why, body.w as usize);
+                buf.put_str(body.x, body.y, &text, base, body.w);
+            }
+        }
     }
 
     if let Some(at) = pane {

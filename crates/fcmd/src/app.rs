@@ -14934,13 +14934,25 @@ impl App {
                     let next = match viewer.mode {
                         M::Text => Some(M::Dump),
                         M::Dump => Some(M::Hex),
-                        M::Hex | M::Disasm if renders => Some(M::Markdown),
-                        // The table comes after the hex, and only if the file really reads
-                        // as one: `as_table` says so by returning whether it managed, which
-                        // is the same test the key that opens it uses.
-                        M::Hex | M::Disasm => (!viewer.as_table()).then_some(M::Text),
+                        // A picture is where the wheel starts for a `.png`; the dump is the
+                        // next thing that file can be, which is its bytes.
+                        M::Image => Some(M::Dump),
                         M::Markdown => (!viewer.as_table()).then_some(M::Text),
                         M::Table => Some(M::Text),
+                        // After the hex the wheel asks what else this file is. The three
+                        // answers say so by returning whether they managed, which is the
+                        // same test the keys that open them use; `as_picture` and
+                        // `as_table` set the mode themselves, so there is nothing left to
+                        // set when one of them says yes.
+                        M::Hex | M::Disasm => {
+                            if renders {
+                                Some(M::Markdown)
+                            } else if viewer.as_picture() || viewer.as_table() {
+                                None
+                            } else {
+                                Some(M::Text)
+                            }
+                        }
                     };
                     if let Some(next) = next {
                         viewer.set_mode(next);
@@ -17470,6 +17482,8 @@ impl App {
             fcmd_view::Mode::Dump => "key-hex",
             fcmd_view::Mode::Hex | fcmd_view::Mode::Disasm => "key-doc",
             fcmd_view::Mode::Markdown | fcmd_view::Mode::Table => "key-text",
+            // From a picture the wheel goes to the bytes, which is what else a `.png` is.
+            fcmd_view::Mode::Image => "key-dump",
         }
     }
 

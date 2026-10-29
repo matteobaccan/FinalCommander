@@ -23,6 +23,9 @@ pub enum Mode {
     /// A tabular file as a table: a heading that stays put, columns, a row at a time
     /// (SPEC 05 §1.11). `F2` goes back to the source, which is sometimes what one came for.
     Table,
+    /// A picture, drawn in half blocks (SPEC 05 §1.14). A `.png` opens this way by itself,
+    /// and `F4` walks on to the dump and the hex for the times one came for the bytes.
+    Image,
 }
 
 impl Mode {
@@ -35,6 +38,7 @@ impl Mode {
             Mode::Disasm => 'a',
             Mode::Markdown => 'm',
             Mode::Table => 'b',
+            Mode::Image => 'i',
         }
     }
 
@@ -49,6 +53,7 @@ impl Mode {
             'h' => Some(Mode::Hex),
             'a' => Some(Mode::Disasm),
             'm' => Some(Mode::Markdown),
+            'i' => Some(Mode::Image),
             'b' => Some(Mode::Table),
             _ => None,
         }
@@ -61,6 +66,7 @@ impl Mode {
             Mode::Hex => "hex",
             Mode::Disasm => "disasm",
             Mode::Markdown => "markdown",
+            Mode::Image => "image",
             Mode::Table => "table",
         }
     }
@@ -181,6 +187,11 @@ pub const MARKDOWN_LIMIT: u64 = 4 * 1024 * 1024;
 /// size.
 pub const TABLE_LIMIT: u64 = 16 * 1024 * 1024;
 
+/// How large a picture file is read (SPEC 05 §1.14). A picture is decoded whole — there is
+/// no first screenful of a PNG — so the limit is on the file rather than on what is drawn.
+/// A quarter of a gigabyte is a photograph with room to spare and a RAW scan without.
+pub const PICTURE_LIMIT: u64 = 256 * 1024 * 1024;
+
 /// How much base64 is decoded in one go (SPEC 05 §1.13).
 ///
 /// The whole file at once, because base64 is only meaningful whole: a window into the middle
@@ -230,6 +241,9 @@ pub struct Viewer {
     pub show_scrollbar: bool,
     /// What a tab expands to, in columns. Eight unless the configuration says otherwise.
     pub tab_width: usize,
+    /// The decoded picture, once it has been asked for: `None` = not looked yet,
+    /// `Some(Err(…))` = looked and it is not one, or is one this cannot read (SPEC 05 §1.14).
+    picture: Option<Result<crate::picture::Picture, String>>,
     /// Structure of the compiled file, once we have looked.
     pub binary: Option<Binary>,
     /// Is the structure pane open (SPEC 05 §1.8)?
@@ -314,11 +328,17 @@ impl Viewer {
         let head = source.read_vec(0, 4096).unwrap_or_default();
         let codepage = detect(&head);
         let binary = looks_binary(&head);
+        // A picture opens as the picture (SPEC 05 §1.14): that is what somebody pressing
+        // `F3` on a `.png` came for. `F4` walks on to the dump and the hex for the times
+        // they came for the bytes instead, and `base_mode` is the dump because that is what
+        // this file is underneath.
+        let picture = crate::picture::is_picture(&head);
         let base_mode = if binary { Mode::Dump } else { Mode::Text };
+        let mode = if picture { Mode::Image } else { base_mode };
         Viewer {
             source,
             path,
-            mode: base_mode,
+            mode,
             base_mode,
             wrap: Wrap::Off,
             codepage,
@@ -333,6 +353,7 @@ impl Viewer {
             show_status_line: true,
             show_scrollbar: false,
             tab_width: TAB_WIDTH,
+            picture: None,
             binary: None,
             show_structure: false,
             structure: None,
@@ -536,8 +557,8 @@ impl Viewer {
                     self.col = 0;
                 }
             }
-            // From a rendered document or a dump, `F2` is the way to the source.
-            Mode::Dump | Mode::Markdown | Mode::Table => self.set_mode(Mode::Text),
+            // From a rendered document, a picture or a dump, `F2` is the way to the source.
+            Mode::Dump | Mode::Markdown | Mode::Table | Mode::Image => self.set_mode(Mode::Text),
             // From hex or disassembly, F2 goes back to whatever text/dump mode we came from.
             Mode::Hex | Mode::Disasm => {
                 let base = self.base_mode;
@@ -810,6 +831,8 @@ impl Viewer {
             Mode::Text => snap_to_line(&mut *self.source, offset),
             Mode::Hex => offset - (offset % self.bytes_per_row as u64),
             Mode::Dump | Mode::Disasm | Mode::Markdown => offset,
+            // A picture has no inside to go to: it is one screenful whatever the offset.
+            Mode::Image => 0,
             // The position of a table is which row is at the top, and an offset names the
             // record that holds it: anything else would put half a row on the first line.
             Mode::Table => {
@@ -1064,6 +1087,9 @@ impl Viewer {
             }
             Mode::Markdown => self.scroll_markdown(delta, width),
             Mode::Table => self.scroll_table(delta),
+            // A picture is scaled to the window, so there is nothing below the window to
+            // scroll to. The keys are not broken, there is simply nowhere to go.
+            Mode::Image => {}
         }
     }
 
@@ -1334,6 +1360,80 @@ impl Viewer {
         markdown && self.source.len() <= MARKDOWN_LIMIT && self.derived.is_none()
     }
 
+    // ── pictures (SPEC 05 §1.14) ───────────────────────────────────────────────────────────
+
+    /// Decode the picture, once, and keep the answer — the good one and the bad one alike.
+    ///
+    /// A file is read whole here, which is the one place the viewer does that for something
+    /// it did not generate: a picture has no "first screenful", and the limit on how large
+    /// one may be is [`crate::picture::MAX_PIXELS`] rather than a count of rows.
+    fn decode_picture(&mut self) -> &Result<crate::picture::Picture, String> {
+        if self.picture.is_none() {
+            let decoded = self.decode_picture_now();
+            self.picture = Some(decoded);
+        }
+        self.picture.as_ref().expect("just filled in")
+    }
+
+    fn decode_picture_now(&mut self) -> Result<crate::picture::Picture, String> {
+        // The first bytes before the whole file: this is asked on every turn of the `F4`
+        // wheel, and reading a two-gigabyte log into memory to find out it is not a PNG
+        // would be the end of the viewer's one promise.
+        let head = self.source.read_vec(0, 64).unwrap_or_default();
+        if !crate::picture::is_picture(&head) {
+            return Err("not a picture".into());
+        }
+        let len = self.source.len();
+        if len > PICTURE_LIMIT {
+            return Err(format!(
+                "{} is more picture file than this reads",
+                fcmd_core::format_size(len)
+            ));
+        }
+        match self.source.read_vec(0, len as usize) {
+            Ok(bytes) => crate::picture::read(&bytes),
+            Err(e) => Err(e.to_string()),
+        }
+    }
+
+    /// What the picture is, for the status line: `PNG 1920×1080`, or why it cannot be drawn.
+    pub fn picture_note(&mut self) -> Result<String, String> {
+        match self.decode_picture() {
+            Ok(picture) => Ok(format!(
+                "{} {}×{}",
+                picture.format, picture.width, picture.height
+            )),
+            Err(why) => Err(why.clone()),
+        }
+    }
+
+    /// The picture as cells to paint, scaled into a window of `cols × rows` and composited
+    /// over the colour the window is drawn in.
+    ///
+    /// Empty when the file is not a picture, which is the drawing the caller then does:
+    /// nothing, with the reason on the status line.
+    pub fn picture_cells(
+        &mut self,
+        cols: u16,
+        rows: u16,
+        bg: [u8; 3],
+    ) -> Vec<Vec<crate::picture::Cell>> {
+        match self.decode_picture() {
+            Ok(picture) => picture.cells(cols, rows, bg),
+            Err(_) => Vec::new(),
+        }
+    }
+
+    /// Show the file as a picture. `false` when it is not one, so the key says why rather
+    /// than leaving the window blank.
+    pub fn as_picture(&mut self) -> bool {
+        if self.decode_picture().is_err() {
+            return false;
+        }
+        self.set_mode(Mode::Image);
+        true
+    }
+
     /// Is this a file the base64 decoder can read whole (SPEC 05 §1.13)?
     ///
     /// Small enough to decode in one go, not already a derived view of something else, and
@@ -1493,6 +1593,10 @@ impl Viewer {
             Mode::Disasm => self.rows_disasm(width, height),
             Mode::Markdown => self.rows_markdown(width, height),
             Mode::Table => self.rows_table(width, height),
+            // A picture is not rows of text. The caller asks for [`Viewer::picture_cells`]
+            // instead and paints them; this keeps the window blank rather than putting the
+            // bytes of a PNG on the screen underneath it.
+            Mode::Image => Vec::new(),
         }
     }
 
@@ -2231,6 +2335,53 @@ mod tests {
 
     /// A base64 file decoded in place (SPEC 05 §1.13): the viewer keeps the path and shows
     /// what came out, as text when it is text and in the hex pane when it is not.
+    /// A picture opens as the picture (SPEC 05 §1.14), and `F4`'s wheel goes on to the
+    /// bytes for the times one came for those instead.
+    #[test]
+    fn a_picture_opens_as_a_picture_and_the_wheel_goes_on_to_its_bytes() {
+        // A 4×4 PNG written here, so the test depends on no file in the tree.
+        let buffer: image::RgbaImage = image::ImageBuffer::from_fn(4, 4, |x, _| {
+            image::Rgba(if x < 2 {
+                [255, 0, 0, 255]
+            } else {
+                [0, 0, 255, 255]
+            })
+        });
+        let mut bytes = Vec::new();
+        image::DynamicImage::ImageRgba8(buffer)
+            .write_to(
+                &mut std::io::Cursor::new(&mut bytes),
+                image::ImageFormat::Png,
+            )
+            .unwrap();
+
+        let mut v = Viewer::new(
+            Box::new(BytesSource::new(bytes)),
+            VPath::local("/tmp/shot.png"),
+        );
+        assert_eq!(v.mode, Mode::Image, "it opens as the picture");
+        assert_eq!(v.status().mode.letter(), 'i');
+        assert_eq!(v.picture_note().unwrap(), "PNG 4×4");
+        // Nothing is written in this mode: the caller paints the cells instead.
+        assert!(v.rows(40, 10).is_empty());
+        let cells = v.picture_cells(40, 10, [0, 0, 0]);
+        assert_eq!(
+            cells.len(),
+            2,
+            "four pixels tall is two rows of half blocks"
+        );
+        assert_eq!(cells[0][0].0, [255, 0, 0]);
+
+        // `F2` goes to the text, which for a PNG is the bytes as characters.
+        v.toggle_wrap();
+        assert_eq!(v.mode, Mode::Text);
+        // And a file that is not a picture says so rather than clearing the window.
+        let mut v = table_viewer("notes.txt", "just some prose\n");
+        assert!(!v.as_picture());
+        assert_eq!(v.mode, Mode::Text);
+        assert!(v.picture_note().is_err());
+    }
+
     #[test]
     fn a_base64_file_is_decoded_and_shown_as_what_came_out() {
         let mut v = table_viewer("token.txt", "aGVsbG8sIHdvcmxkCg==\n");

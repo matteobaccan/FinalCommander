@@ -13,6 +13,7 @@ pub mod il;
 pub mod jvm;
 pub mod markdown;
 pub mod nav;
+pub mod picture;
 pub mod search;
 pub mod source;
 pub mod structure;

@@ -53,6 +53,25 @@ out from the part of it that happens to be on screen, so the document is rendere
 four megabytes it stays the source, and says so. *Interface → Markdown laid out to be read*
 turns the first screen back into the source for good.
 
+# Pictures
+
+A `.png`, a `.jpg`, a `.gif` or a `.bmp` opens as the picture. `F4` goes on from there to the
+dump and the hex for the times you came for the bytes — the file is still a file.
+
+It is drawn in half blocks: a cell is about twice as tall as it is wide, so one holding `▀`
+with the top half one colour and the bottom another is two pixels that are nearly square, and
+the window is a canvas twice as tall in pixels as it is in rows. It is coarse, and it works in
+every terminal there is — which is why it comes before kitty's, iTerm2's and sixel's protocols
+rather than after them.
+
+What the file *is* decides, not what it is called: a `.txt` that is really a PNG opens as the
+picture. A photograph is fitted into the window keeping its shape and a small icon is left at
+its own size rather than blown up into coloured squares. What is transparent shows the
+viewer's own background through it.
+
+Nothing scrolls — the picture is already the size of the window — and a file that is damaged,
+too large, or not a picture says so instead of leaving you looking at a blank screen.
+
 # Base64
 
 `Alt+B` decodes a file that is base64 and shows what came out, keeping the file's own name in

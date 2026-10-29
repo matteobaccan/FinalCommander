@@ -8,6 +8,25 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **A picture is shown as the picture** (SPEC 05 §1.14). `F3` on a `.png`, `.jpg`, `.gif` or
+  `.bmp` draws it, and `F4`'s wheel goes on to the dump and the hex for the times one came
+  for the bytes instead.
+
+  It is drawn in half blocks: a terminal cell is about twice as tall as it is wide, so a cell
+  holding `▀` with the top half in the foreground colour and the bottom in the background is
+  two pixels that are each very nearly square, and a window is a canvas twice as tall in
+  pixels as it is in rows. It is coarse and it works in **every** terminal there is, which is
+  why it comes before kitty's, iTerm2's and sixel's protocols rather than after them — a
+  picture one cannot see at all is worse than one made of blocks, and nothing below the
+  drawing has to change when the protocols arrive.
+
+  The file's first bytes decide, never its name. A photograph is fitted to the window keeping
+  its shape; a sixteen-pixel icon is left at its own size rather than blown up into coloured
+  squares. The scaling averages the pixels it covers, so the text in a screenshot stays
+  legible. What is transparent shows the viewer's own background through it. Nothing scrolls,
+  because the picture is already the size of the window, and a file that is damaged, too
+  large or not a picture says so rather than leaving a blank screen.
+
 - **Base64, undone** (SPEC 05 §1.13). `Alt+B` in the viewer decodes a file that is base64 and
   shows what came out, keeping the path in the title. A certificate, a key, an attachment
   pulled out of a mail, a `data:` URI pasted into a file: all of them are bytes written down

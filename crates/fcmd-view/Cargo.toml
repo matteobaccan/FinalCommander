@@ -35,6 +35,16 @@ wasmprinter = "0.262.0"
 # own spelling of an instruction, which this crate then re-reads for the branch targets.
 yaxpeax-arm = { version = "0.5.0", default-features = false, features = ["std", "alloc", "fmt"] }
 yaxpeax-arch = { version = "0.3.3", default-features = false }
+# Pictures in the viewer (SPEC 05 §1.14): the decoder only, never the drawing, which is ours.
+# `default-features = false` is what keeps this small — the four formats a commander actually
+# opens and none of the research ones, no `rayon`, no C. One dependency instead of four
+# separate decoders, and the same crates underneath either way.
+image = { version = "0.25.10", default-features = false, features = [
+  "png",
+  "jpeg",
+  "gif",
+  "bmp",
+] }
 
 [dev-dependencies]
 tempfile = "3"

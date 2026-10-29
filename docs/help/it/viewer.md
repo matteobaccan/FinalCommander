@@ -59,6 +59,25 @@ documento viene impaginato tutto. Oltre i quattro megabyte resta il sorgente, e 
 *Interfaccia → Markdown impaginato per essere letto* riporta la prima schermata al sorgente per
 sempre.
 
+# Le immagini
+
+Un `.png`, un `.jpg`, un `.gif` o un `.bmp` si apre come immagine. Da lì `F4` prosegue verso il
+dump e l'esadecimale per le volte in cui sei venuto per i byte — il file resta un file.
+
+È disegnata a mezzi blocchi: una cella è alta circa il doppio di quanto è larga, quindi una
+cella con dentro `▀`, la metà di sopra di un colore e quella di sotto di un altro, sono due
+pixel quasi quadrati, e la finestra è una tela alta in pixel il doppio delle righe. È grossolana,
+e funziona in *qualunque* terminale — ed è per questo che viene prima dei protocolli di kitty,
+iTerm2 e sixel e non dopo.
+
+Decide quello che il file *è*, non come si chiama: un `.txt` che in realtà è un PNG si apre
+come immagine. Una fotografia viene rimpicciolita mantenendo la forma, e un'icona piccola resta
+della sua dimensione invece di essere gonfiata in quadratoni. Quello che è trasparente lascia
+vedere lo sfondo del visualizzatore.
+
+Non si scorre — l'immagine è già grande quanto la finestra — e un file rovinato, troppo grande
+o che non è un'immagine lo dice, invece di lasciarti davanti a uno schermo vuoto.
+
 # Base64
 
 `Alt+B` decodifica un file che è base64 e mostra quello che ne esce, tenendo nel titolo il nome

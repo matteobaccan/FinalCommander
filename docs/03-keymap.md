@@ -169,6 +169,7 @@ indistinguishable in a TTY — see §9.
 | hex mode | F4; Shift+F4 mode menu (text/hex/dump) | F4 | F4 / Shift+F4 |
 | a tabular file as a table | — | — | **Shift+F3** for a `.csv`, `.tsv`, `.jsonl` or `.dbf`: a heading that stays put, columns, one record a row (SPEC 05 §1.11); a dBase table is read a window at a time. The same key goes back to the source, and `Shift+F4` has it in the cycle |
 | a base64 file decoded | — | — | **Alt+B**: the payload, PEM armour or a `data:` URI decoded in place, shown as text or in the hex pane depending on what came out (SPEC 05 §1.13) |
+| a picture shown | — | — | **F3 on a `.png`, `.jpg`, `.gif` or `.bmp`** opens the picture, drawn in half blocks; `F4` goes on to the dump and the hex (SPEC 05 §1.14) |
 | switch to editor | F6 | — | F6 |
 | search / next / previous | F7 / Shift+F7 or Space / Alt+F7 | F7 / Ctrl+S, Ctrl+R | F7 / n / N (and Shift+F7/Alt+F7) |
 | codepage | F8 toggle, Shift+F8 menu | Alt+E | Shift+F8 |

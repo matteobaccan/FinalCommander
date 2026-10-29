@@ -27,7 +27,8 @@ decoding in process, and the diff viewer (§3).
 | `hex` | offset + hex + ASCII/decoded pane | bytes-per-row adjustable (the arrows, since sideways means nothing else in a dump) in **blocks of eight** — 8, 16, 24, 32, 40, 48, 56, 64, the group the dump already draws a gap between — the widest the window can hold, and jumps aligned to the width |
 | `markdown` | Markdown laid out to be read: the marks off, headings ruled, lists bulleted, tables drawn | **Implemented** (`Shift+F2`, and in `Shift+F4`'s ring). The one mode that reads the whole file, because a table's columns cannot be laid out from the part of it on screen: limited to 4 MiB, over which the file stays its source and says so. Every rendered line carries the `(offset, sub)` pair of the source line it came from, so scrolling, the bookmarks and the search need no line index. A search here searches what is on screen, not the marks behind it. |
 | `table` | a tabular file as columns: a header row, aligned columns, horizontal scroll | see §1.11 — one mode for CSV, TSV, JSONL and DBF, because what differs between them is the reader and not the screen |
-| `preview` | rendered content (image, markdown, PDF page, media info, archive listing) | pluggable, see §1.7 |
+| `image` | a picture, drawn in half blocks | see §1.14 — PNG, JPEG, GIF and BMP, decided by the file's first bytes; `F3` on a picture opens here and `F4` goes on to the bytes |
+| `preview` | rendered content (markdown, PDF page, media info, archive listing) | pluggable, see §1.7 |
 | `structure` | a side pane that decodes what the file *is*: header fields, section and segment tables, imports and exports | `F11`, see §1.8; it rides alongside `hex` and `disasm` rather than replacing them |
 
 Mode indicator in the status bar (`t`/`d`/`h`/`m`/`b`/`p`) plus encoding, position (offset, %,
@@ -344,6 +345,44 @@ does not toggle: the viewer now holds the decoded bytes, and `Esc` and opening t
 are the way back, as they are from a disassembly. One undoing per file: a decoded view is not
 decoded again.
 
+### 1.14 Pictures (`F3` on a picture)
+
+A `.png`, a `.jpg`, a `.gif` or a `.bmp` opens as the picture. That is what somebody pressing
+`F3` on a screenshot came for, and `F4`'s wheel goes on to the dump and the hex for the times
+they came for the bytes instead — the file is still a file, and nothing about it is hidden.
+
+**Half blocks, and why those first.** A terminal cell is about twice as tall as it is wide, so
+a cell holding `▀` with the top half in the foreground colour and the bottom in the background
+is two pixels that are each very nearly square. A window of `cols × rows` cells is therefore a
+canvas of `cols × 2·rows` pixels. It works in **every** terminal there is, which is the reason
+to do it this way before anything else: the graphics protocols — kitty's, iTerm2's, sixel —
+put real pixels on the screen and are worth having, but each works in some terminals and not
+others, and a picture one cannot see at all is worse than one made of blocks. They are the
+next step, not the first one, and nothing in the drawing has to change for them: the picture
+is decoded the same way either way.
+
+- **The file decides, not the name.** PNG, JPEG, GIF and BMP are recognised by their first
+  bytes. A `.txt` that is really a PNG opens as the picture and a `.png` that is really a
+  JPEG opens as the JPEG, because a magic number cannot lie and a name can.
+- **Scaled down, never up.** A photograph is fitted into the window keeping its shape; a
+  sixteen-pixel icon is drawn at sixteen by eight cells rather than blown up to fill the
+  screen, which would be a grid of coloured squares that says nothing. Centred, as every
+  picture viewer draws one.
+- **The scaling averages.** Each drawn pixel is the mean of the source rectangle it covers,
+  so the text in a screenshot stays legible where picking one source pixel per target would
+  drop half the strokes.
+- **What is transparent shows the viewer's own background through it**, mixed in the
+  proportion the pixel is transparent, so a PNG with a cut-out does not come out on a square
+  of whatever colour happened to be stored under the alpha.
+- A picture is decoded **whole** — there is no first screenful of a PNG — so the limits are
+  on the file (256 MiB) and on the picture (50 megapixels), and a file above either says so
+  instead of being read. A file that is damaged says what the decoder said.
+- Nothing scrolls: the picture is already the size of the window. The keys are not broken,
+  there is simply nowhere to go.
+
+The decoding is `image` with `default-features = false` — the four formats a commander
+actually opens, no research formats, no `rayon`, no C. The drawing is ours.
+
 ### 1.11 Table mode: the tabular formats
 
 A commander opens a `.csv`, a `.jsonl` and a `.dbf` every day, and all three read as what they
@@ -488,9 +527,11 @@ kind  = "text"
 ```
 
 Rules: every preview runs in a task with a timeout and a memory cap; failures degrade to text
-or hex, never block; images use kitty/iTerm2/sixel protocols when detected, otherwise a
-block-character renderer (`chafa`-style) is built in; results are cached by (path, size, mtime,
-geometry). Quick-view panel uses the same pipeline at lower priority.
+or hex, never block; results are cached by (path, size, mtime, geometry). Quick-view panel uses
+the same pipeline at lower priority. The block-character renderer this promised is built and is
+§1.14 — it is not a preview rule but a view of its own, because a picture one opened with `F3`
+is the file and not a preview of it. The kitty, iTerm2 and sixel protocols are the step after
+it, and change nothing below the drawing.
 
 ## 2. Editor (`F4`)
 
