@@ -285,7 +285,11 @@ program cannot replace them, so it does not take them away unasked.
 With it on: a click moves the cursor to the row and makes that panel the active one, a double
 click is `Enter` on it, the right button selects a row, and the wheel scrolls whatever is under
 the pointer — three rows a notch, without taking the focus, so you can read the other panel
-without leaving this one. The key bar always shows all twelve function keys, with the ones a
+without leaving this one. How many rows a notch moves is yours to set, and separately for the
+panels, the viewer and the editor: *All settings* has `ui.wheel_lines`, `ui.wheel_lines_viewer`
+and `ui.wheel_lines_editor`. The sideways wheel, if your mouse or trackpad has one, scrolls a
+long line in the viewer or the editor; over a panel it does nothing, because a panel's columns
+are a layout rather than a window onto something wider. The key bar always shows all twelve function keys, with the ones a
 screen has no use for left empty, so `F5` is the fifth box along wherever you are. It is
 clickable (hold `Shift` and click for `Shift+F5`), so
 is the menu bar and a dialog's list. A click outside an open dialog does nothing at all.

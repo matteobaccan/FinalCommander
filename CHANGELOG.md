@@ -8,6 +8,25 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **The wheel is as many rows as you say, per area, and the sideways wheel works** (SPEC 02
+  §12). Three rows a notch was a constant; it is three settings now, as it is in FAR, because
+  a notch that is right for a file listing is too much in a page of prose: `ui.wheel_lines` for
+  the panels and the lists, `ui.wheel_lines_viewer`, `ui.wheel_lines_editor`. Three by default
+  and never more than twenty, because a number nobody should be able to set is clamped rather
+  than trusted.
+
+  The sideways wheel — a trackpad has one, a mouse often does not — scrolls what has anything
+  to scroll sideways, by as many columns as the wheel moves rows: a long line in the viewer, a
+  long line in the editor. Over a panel it does nothing, and that is the right answer rather
+  than a gap: a panel's columns are a layout, not a window onto something wider, so there is
+  nothing there to move.
+
+  It also fixes something quieter. The wheel and the click *inside* the viewer and the editor
+  had nothing to hit: the areas they are drawn in were never recorded, so a notch over a file
+  being read did nothing at all whatever the documentation said. They are recorded now — after
+  the scrollbar and the structure pane have taken their columns, so a notch over the pane is
+  not a notch over the text.
+
 - **Raw devices on Windows** (SPEC 05 §1.10). `F3` and `F4` on `/dev/sdb` have worked since
   0.0.8 because on Linux and macOS a disk *is* a file; on Windows it is not, in three separate
   ways, and the backlog had carried all three. They are done:

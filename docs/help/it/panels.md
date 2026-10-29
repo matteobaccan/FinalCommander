@@ -308,7 +308,12 @@ toglie senza che tu lo chieda.
 Con il mouse acceso: un clic porta il cursore sulla riga e rende attivo quel pannello, un
 doppio clic è `Enter` su di essa, il tasto destro seleziona una riga, e la rotella scorre quello
 che sta sotto il puntatore — tre righe a scatto, senza prendere il fuoco, così puoi leggere
-l'altro pannello senza lasciare questo. La barra dei tasti mostra sempre tutti e dodici i tasti
+l'altro pannello senza lasciare questo. Quante righe fa uno scatto lo decidi tu, e
+separatamente per i pannelli, il visualizzatore e l'editor: in *Tutti i parametri* ci sono
+`ui.wheel_lines`, `ui.wheel_lines_viewer` e `ui.wheel_lines_editor`. La rotella orizzontale, se
+il mouse o il trackpad ce l'ha, scorre una riga lunga nel visualizzatore o nell'editor; sopra
+un pannello non fa niente, perché le colonne di un pannello sono una disposizione e non una
+finestra su qualcosa di più largo. La barra dei tasti mostra sempre tutti e dodici i tasti
 funzione, con quelli che una schermata non usa lasciati vuoti, così `F5` è la quinta casella
 dovunque ti trovi. È cliccabile (tieni `Shift` e clicca per `Shift+F5`), e così sono la barra
 dei menu e l'elenco di un dialogo. Un clic fuori da un dialogo aperto non fa assolutamente

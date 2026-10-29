@@ -3028,6 +3028,8 @@ impl App {
         match mouse.kind {
             MouseKind::ScrollUp => self.wheel(col, row, -1),
             MouseKind::ScrollDown => self.wheel(col, row, 1),
+            MouseKind::ScrollLeft => self.wheel_sideways(col, row, -1),
+            MouseKind::ScrollRight => self.wheel_sideways(col, row, 1),
             MouseKind::Press(Button::Left) => {
                 let double = self.is_double_click(col, row);
                 self.click(col, row, double);
@@ -3138,17 +3140,18 @@ impl App {
     /// The wheel scrolls whatever is under the pointer, without moving the focus: looking at
     /// the other panel is not working in it.
     fn wheel(&mut self, col: u16, row: u16, by: isize) {
-        // In the editor, the viewer and a list the wheel is the arrow keys: three rows at a
+        // In the editor, the viewer and a list the wheel is the arrow keys: a few rows at a
         // time, which is what every other program does and what a terminal's own scrollback
-        // does when the mouse is not captured.
-        const STEP: isize = 3;
+        // does when the mouse is not captured. How many is a setting per area, as it is in
+        // FAR: a notch that is right for a file listing is too much in a page of prose.
+        let step = self.wheel_step(col, row);
         match self.layout.hit(col, row) {
             Some(crate::hit::Hit::Row { side, .. }) | Some(crate::hit::Hit::Panel { side }) => {
                 let rows = self.rows.max(1);
                 let len = self.panels[side].listing.len();
                 let top = self.panels[side].top;
                 let last = len.saturating_sub(rows);
-                let top = (top as isize + by * STEP).clamp(0, last as isize) as usize;
+                let top = (top as isize + by * step).clamp(0, last as isize) as usize;
                 self.panels[side].top = top;
                 // The cursor follows the window rather than the window following the cursor:
                 // scrolling past the cursor and then typing a key would otherwise jump the
@@ -3157,7 +3160,7 @@ impl App {
                 self.panels[side].cursor_to(cursor);
             }
             Some(crate::hit::Hit::ListRow(_)) => {
-                for _ in 0..STEP {
+                for _ in 0..step {
                     match &mut self.mode {
                         Mode::Pick(pick) => pick.move_cursor(by),
                         Mode::Menu { menu, item, open } => {
@@ -3171,12 +3174,51 @@ impl App {
             }
             Some(crate::hit::Hit::Text { .. }) => {
                 let code = if by < 0 { KeyCode::Up } else { KeyCode::Down };
-                for _ in 0..STEP {
+                for _ in 0..step {
                     self.handle_key(Key {
                         code,
                         mods: Mods::NONE,
                     });
                 }
+            }
+            _ => {}
+        }
+    }
+
+    /// How many rows one notch moves here. The three areas FAR keeps apart: the panels and
+    /// the lists, the viewer, the editor — and a dialog's list is a list.
+    fn wheel_step(&self, col: u16, row: u16) -> isize {
+        let ui = &self.cfg.ui;
+        let lines = match self.layout.hit(col, row) {
+            Some(crate::hit::Hit::Text { .. }) => match &self.mode {
+                Mode::Editor(_) | Mode::Hex(_) => ui.wheel_lines_editor,
+                _ => ui.wheel_lines_viewer,
+            },
+            _ => ui.wheel_lines,
+        };
+        lines.clamp(1, 20) as isize
+    }
+
+    /// The sideways wheel, which a trackpad has: it scrolls what has something to scroll
+    /// sideways — a long line in the viewer, a long line in the editor — by as many columns
+    /// as the wheel moves rows. A panel has nothing of the kind: its columns are a layout,
+    /// not a window onto something wider, so there the sideways wheel does nothing rather
+    /// than moving the cursor about.
+    fn wheel_sideways(&mut self, col: u16, row: u16, by: isize) {
+        if !matches!(
+            self.layout.hit(col, row),
+            Some(crate::hit::Hit::Text { .. })
+        ) {
+            return;
+        }
+        let step = self.wheel_step(col, row);
+        let by = by * step;
+        match &mut self.mode {
+            Mode::Viewer(viewer) => viewer.scroll_h(by as i64),
+            Mode::Editor(editor) => {
+                // The editor's window follows its caret, so there is nothing to scroll on
+                // its own: the caret moves, and the view comes with it.
+                editor.move_by(0, by, false, fcmd_edit::BlockKind::Stream);
             }
             _ => {}
         }
@@ -27419,6 +27461,94 @@ abcdefghij
         // And it stops at the top rather than going negative.
         wheel(&mut app, right.x + 1, right.y + 1, false);
         assert_eq!(app.panels[1].top, 0);
+    }
+
+    /// How many rows a notch moves is a setting, and it is three settings: the panels, the
+    /// viewer, the editor. FAR keeps them apart for the same reason.
+    #[test]
+    fn the_wheel_moves_as_many_rows_as_the_setting_says() {
+        let mut app = app();
+        let mut entries = vec![Entry::parent_entry()];
+        for i in 0..100 {
+            entries.push(entry(&format!("file{i:03}.txt"), EntryKind::File, 10));
+        }
+        app.handle_event(Event::Listed {
+            panel: 1,
+            generation: app.panels[1].generation,
+            result: Ok(entries),
+        });
+        app.cfg.ui.wheel_lines = 7;
+        drawn(&mut app, 80, 25);
+        let right = app.layout.panels[1].expect("the right panel").area;
+        wheel(&mut app, right.x + 1, right.y + 1, true);
+        assert_eq!(app.panels[1].top, 7, "the setting, not the old constant");
+
+        // A number nobody should be able to set is clamped rather than trusted.
+        app.cfg.ui.wheel_lines = 9_000;
+        app.panels[1].top = 0;
+        wheel(&mut app, right.x + 1, right.y + 1, true);
+        assert_eq!(
+            app.panels[1].top, 20,
+            "twenty rows is the most a notch moves"
+        );
+    }
+
+    /// The sideways wheel scrolls what has something to scroll sideways, and nothing else: a
+    /// panel's columns are a layout rather than a window onto something wider, so there it
+    /// does nothing — in particular it does not move the cursor about.
+    #[test]
+    fn the_sideways_wheel_scrolls_a_long_line_and_leaves_a_panel_alone() {
+        let sideways = |app: &mut App, col: u16, row: u16, right: bool| {
+            app.handle_input(Input::Mouse(fcmd_tui::Mouse {
+                kind: if right {
+                    fcmd_tui::MouseKind::ScrollRight
+                } else {
+                    fcmd_tui::MouseKind::ScrollLeft
+                },
+                col,
+                row,
+                mods: Mods::NONE,
+            }));
+        };
+
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("wide.txt");
+        std::fs::write(&file, "x".repeat(500)).unwrap();
+
+        let mut app = app();
+        drawn(&mut app, 80, 25);
+        let area = app.layout.panels[0].expect("the left panel").area;
+        let (col, row) = (area.x + 1, area.y + 1);
+        let before = (app.panel().cursor, app.panel().top);
+        sideways(&mut app, col, row, true);
+        assert_eq!(
+            (app.panel().cursor, app.panel().top),
+            before,
+            "a panel has nothing to scroll sideways"
+        );
+
+        // In the viewer it is the long line that moves, by as many columns as the wheel
+        // moves rows.
+        app.cfg.ui.wheel_lines_viewer = 5;
+        app.view_path(&file.display().to_string());
+        drawn(&mut app, 80, 25);
+        let Some(text) = app.layout.text else {
+            panic!("the viewer was drawn with no text area: {:?}", app.layout)
+        };
+        let Mode::Viewer(viewer) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(viewer.col, 0);
+        sideways(&mut app, text.x + 1, text.y + 1, true);
+        let Mode::Viewer(viewer) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(viewer.col, 5, "five columns a notch");
+        sideways(&mut app, text.x + 1, text.y + 1, false);
+        let Mode::Viewer(viewer) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(viewer.col, 0, "and back, not past the start");
     }
 
     #[test]

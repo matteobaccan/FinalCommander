@@ -368,6 +368,17 @@ pub struct UiCfg {
     /// middle-click paste — the user's own tools, which this program cannot replace — go
     /// away. Somebody who wants the mouse says so once; everybody else keeps their terminal.
     pub mouse: bool,
+    /// How many rows one notch of the wheel moves, per area — the panels and the lists, the
+    /// viewer, the editor. FAR keeps the same three numbers separately, and for the same
+    /// reason: a notch that is right for a file listing is too much in a text one is reading
+    /// and not enough in a log one is skimming. Three is what every other program does.
+    ///
+    /// The sideways wheel moves the same number of *columns*, where there is anything to
+    /// scroll sideways: the viewer's long lines and the editor's. A panel has nothing to
+    /// scroll sideways, so there it does nothing.
+    pub wheel_lines: usize,
+    pub wheel_lines_viewer: usize,
+    pub wheel_lines_editor: usize,
     /// How many command lines to keep between sessions.
     pub command_history: usize,
     /// How many read-or-edited files to keep between sessions (`Alt+F11`).
@@ -427,6 +438,9 @@ impl Default for UiCfg {
             command_line: true,
             command_screen: true,
             mouse: false,
+            wheel_lines: 3,
+            wheel_lines_viewer: 3,
+            wheel_lines_editor: 3,
             command_history: 512,
             file_history: 512,
             history_lifetime: 90,
@@ -1457,6 +1471,14 @@ impl Config {
             "ui.markdown" => self.ui.markdown = parse_bool(value)?,
             "ui.table" => self.ui.table = parse_bool(value)?,
             "ui.mouse" => self.ui.mouse = parse_bool(value)?,
+            // One row at a time is a setting somebody will want; a hundred is a mistake.
+            "ui.wheel_lines" => self.ui.wheel_lines = parse_usize(value)?.clamp(1, 20),
+            "ui.wheel_lines_viewer" => {
+                self.ui.wheel_lines_viewer = parse_usize(value)?.clamp(1, 20)
+            }
+            "ui.wheel_lines_editor" => {
+                self.ui.wheel_lines_editor = parse_usize(value)?.clamp(1, 20)
+            }
             "ui.clipboard" => self.ui.clipboard = parse_bool(value)?,
             "ui.menu_bar" => self.ui.menu_bar = parse_bool(value)?,
             "ui.clock" => self.ui.clock = parse_bool(value)?,

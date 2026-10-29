@@ -660,7 +660,8 @@ What it does, and why it is this and not more:
 | left click inside a panel, past the last row | the panel becomes active and the cursor stays where it was |
 | double click on a row | the same as `Enter` on it: into a directory, into an archive, or open the file |
 | right click on a row | the cursor goes there and the row's selection is toggled — FAR's and mc's button, and nothing here wants it for a context menu |
-| wheel | scrolls what is **under the pointer**, three rows a notch, without taking the focus: looking at the other panel is not working in it |
+| wheel | scrolls what is **under the pointer**, without taking the focus: looking at the other panel is not working in it. How many rows a notch moves is a setting per area, as it is in FAR — `ui.wheel_lines` for the panels and the lists, `ui.wheel_lines_viewer`, `ui.wheel_lines_editor` — three by default and never more than twenty |
+| sideways wheel | scrolls what has anything to scroll sideways, by as many columns as the wheel moves rows: a long line in the viewer, a long line in the editor. A panel has nothing of the kind — its columns are a layout, not a window onto something wider — so there it does nothing rather than moving the cursor about |
 | left click on the key bar | presses the key written in the cell, with whatever modifiers are held — so `Shift` and a click is `Shift+F5` |
 | left click on the menu bar | opens that menu; one click on a dropdown row runs it |
 | left click on a dialog's list | moves its cursor; a double click answers the dialog |
@@ -671,9 +672,9 @@ Every one of them ends up in the same `run` the keyboard uses, so the macro reco
 confirmations and the error reporting are the ones already there — the mouse does what a key
 does rather than having powers of its own.
 
-Still to come: dragging to extend a selection, dragging a column rule to resize it, dragging
-between the panels, and the sideways wheel. Each wants state the click handling does not keep
-yet, and none of them is the difference between having a mouse and not.
+Still to come: dragging to extend a selection, dragging a column rule to resize it, and
+dragging between the panels. Each wants state the click handling does not keep yet, and none
+of them is the difference between having a mouse and not.
 
 ## 13. Descriptions (`descript.ion`, shipped in 0.7.3)
 

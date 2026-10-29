@@ -1241,6 +1241,9 @@ fn draw_hex(
         .unwrap_or(4);
     editor.bytes_per_row = per;
     app.editor_size = (body.w, body.h);
+    // The hex pane's rows, for the wheel. Sideways means nothing over a dump — its width is
+    // the row width, which `Alt+arrow` sets — so only the vertical notch does anything here.
+    app.layout.text = Some(body);
     editor.scroll_into_view(body.h as usize);
 
     // The header: the file, and where the cursor is in it. The hex pane is the editor in
@@ -1428,6 +1431,10 @@ fn draw_editor(
         app.theme.color("editor.selected.fg"),
         app.theme.color("editor.selected.bg"),
     );
+
+    // Where the text ended up, for the mouse: a click puts the caret there and the wheel
+    // scrolls. The editor draws its lines from column zero, so this is the body as it is.
+    app.layout.text = Some(body);
 
     let colouring = app.cfg.ui.syntax;
     for (row, line_index) in visible.clone().enumerate() {
@@ -1977,6 +1984,11 @@ fn draw_viewer(app: &mut App, viewer: &mut fcmd_view::Viewer, buf: &mut Buffer) 
     } else {
         None
     };
+
+    // Where the content ended up, for the mouse: the wheel over a viewer scrolls it, and
+    // the sideways wheel moves a long line. Recorded after the scrollbar and the structure
+    // pane have taken their columns, so a notch over the pane is not a notch over the text.
+    app.layout.text = Some(body);
 
     // Content. `Viewer.Text.Selected` marks a search hit — its own role in FAR's palette,
     // which the panel's background had no business being half of.

@@ -55,6 +55,10 @@ pub enum MouseKind {
     Drag(Button),
     ScrollUp,
     ScrollDown,
+    /// The sideways wheel, which a trackpad has and a mouse often does not. Reported by
+    /// every terminal that reports the other two.
+    ScrollLeft,
+    ScrollRight,
 }
 
 /// One mouse event, in cells from the top left of the screen.
@@ -455,8 +459,10 @@ pub fn map_mouse_event(m: crossterm::event::MouseEvent) -> Option<Input> {
         CKind::Drag(b) => MouseKind::Drag(button(b)),
         CKind::ScrollUp => MouseKind::ScrollUp,
         CKind::ScrollDown => MouseKind::ScrollDown,
-        // Sideways scrolling and bare movement: nothing here reads them.
-        CKind::Moved | CKind::ScrollLeft | CKind::ScrollRight => return None,
+        CKind::ScrollLeft => MouseKind::ScrollLeft,
+        CKind::ScrollRight => MouseKind::ScrollRight,
+        // Bare movement: nothing here reads it.
+        CKind::Moved => return None,
     };
     let mut mods = Mods::NONE;
     if m.modifiers.contains(KeyModifiers::CONTROL) {
