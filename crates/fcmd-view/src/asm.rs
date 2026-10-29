@@ -569,7 +569,7 @@ fn fits32(v: i64) -> bool {
 /// The address is what makes a branch writable the way a reader thinks of it: `jmp 0x401000`
 /// is the address to end up at, and the displacement is worked out from here.
 pub fn assemble(line: &str, arch: Arch, address: u64) -> Result<Assembled> {
-    if !arch.disassemblable() {
+    if !arch.assemblable() {
         return Err(AsmError::Arch(match arch {
             Arch::Aarch64 => "aarch64",
             _ => "this architecture",

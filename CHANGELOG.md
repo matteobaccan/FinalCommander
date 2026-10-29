@@ -8,6 +8,26 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **AArch64 is disassembled in the program** (SPEC 05 §1.6). `F5` decoded x86 and x86-64 and
+  sent everything else to `objdump`, which on an Apple Silicon laptop or an ARM server means
+  the viewer could not read the binaries actually on the machine. It reads them now, through
+  `yaxpeax-arm` — pure Rust, so the Windows and macOS builds need no C toolchain — and
+  everything built on the sweep comes with it: `Enter` follows a branch and `Backspace` comes
+  back, `F7` searches the instructions rather than the bytes, and the structure pane names the
+  symbols beside them.
+
+  Two differences from x86 are the whole of the decoder's character, and both are deliberate.
+  An instruction is four bytes, always: so a word nothing decodes is **one** `(bad)` line
+  rather than four — there is no sync to lose in a fixed-width instruction set — and stepping
+  backwards is arithmetic instead of decoding forward from a guess. And a branch is shown as
+  the address it arrives at, not as the displacement the encoding holds: `b $+0x14` is what
+  the bytes say, `b 401014h` is what the reader wants, and it is what `Enter` follows.
+
+  The assembler stays x86. Reading an architecture and writing it are now separate questions
+  in the code (`Arch::disassemblable` and `Arch::assemblable`), so `F9` in the hex pane on an
+  ARM binary says what it cannot do rather than writing four bytes of x86 into it and showing
+  a plausible listing of them.
+
 - **The assembler writes addresses** (SPEC 05 §2.8). `F9` in the hex pane assembled registers,
   numbers and branches, and refused anything in brackets by name — which left out half of what
   a patcher reads. `mov eax, [rbx+8]` is the line one has just looked at on the screen, and

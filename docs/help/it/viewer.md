@@ -122,8 +122,11 @@ file e lo colora esattamente.
 
 # I binari
 
-`F5` disassembla. x86 e x86-64 sono decodificati nel programma stesso; su un'altra
-architettura chiede a `objdump`, e lo dice invece di indovinare. `Enter` su una `call` o una
+`F5` disassembla. x86, x86-64 e AArch64 sono decodificati nel programma stesso; su un'altra
+architettura chiede a `objdump`, e lo dice invece di indovinare. Le istruzioni AArch64 sono
+lunghe quattro byte ciascuna, quindi una parola che non si decodifica è una riga `(bad)` e non
+quattro, e un salto è mostrato come l'indirizzo a cui arriva, non come lo scostamento scritto
+nell'istruzione. `Enter` su una `call` o una
 `jmp` la segue e `Backspace` torna, con i posti da cui sei saltato tenuti sullo schermo.
 
 Su un disassemblato `F7` cerca le *istruzioni*, non i byte: `call` trova tutte le chiamate,

@@ -25,6 +25,13 @@ serde_json = { version = "1.0.154", features = ["preserve_order"] }
 object = { version = "0.40.0", default-features = false, features = ["read_core", "elf", "pe", "macho", "archive", "std"] }
 iced-x86 = { version = "1.21.0", default-features = false, features = ["decoder", "intel", "std"] }
 wasmprinter = "0.262.0"
+# AArch64 decoding (SPEC 05 §1.6). A viewer that only reads x86 is half a tool on an Apple
+# Silicon laptop or an ARM server, and an instruction table is not something to write twice.
+# 0BSD, pure Rust — so the Windows and macOS builds need no C toolchain, unlike the usual
+# alternatives, which wrap a C disassembler. `fmt` is the one feature we want: the decoder's
+# own spelling of an instruction, which this crate then re-reads for the branch targets.
+yaxpeax-arm = { version = "0.5.0", default-features = false, features = ["std", "alloc", "fmt"] }
+yaxpeax-arch = { version = "0.3.3", default-features = false }
 
 [dev-dependencies]
 tempfile = "3"

@@ -114,8 +114,10 @@ colours it exactly.
 
 # Binaries
 
-`F5` disassembles. x86 and x86-64 are decoded in the program itself; on another architecture it
-asks `objdump`, and says so instead of guessing. `Enter` on a `call` or a `jmp` follows it and
+`F5` disassembles. x86, x86-64 and AArch64 are decoded in the program itself; on another
+architecture it asks `objdump`, and says so instead of guessing. AArch64 instructions are four
+bytes each, so a word nothing decodes is one `(bad)` line rather than four, and a branch is
+shown as the address it arrives at rather than as the displacement in the encoding. `Enter` on a `call` or a `jmp` follows it and
 `Backspace` comes back, with the places you jumped from kept on screen.
 
 Over a disassembly `F7` searches the *instructions*, not the bytes: `call` finds every call,

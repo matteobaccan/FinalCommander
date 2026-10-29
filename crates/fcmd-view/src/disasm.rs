@@ -3,8 +3,9 @@
 //! Two levels, and the difference matters:
 //!
 //! - **Disassembly** — machine code to mnemonics. Done here, in Rust, for x86 and x86-64
-//!   (`iced-x86`), with the file's own structure read by `object`; and WebAssembly to its
-//!   canonical text format (`wasmprinter`), which is as close to source as a `.wasm` has.
+//!   (`iced-x86`) and for AArch64 (`yaxpeax-arm`), with the file's own structure read by
+//!   `object`; and WebAssembly to its canonical text format (`wasmprinter`), which is as
+//!   close to source as a `.wasm` has.
 //! - **Decompilation** — machine code back to something C- or Java-like. That is a research
 //!   project in its own right (Ghidra, RetDec, ILSpy, javap, uncompyle6), so FinalCommander
 //!   does not reimplement it: it *calls* those tools when they are installed and shows their
@@ -17,6 +18,10 @@ use std::fmt;
 use iced_x86::{Decoder, DecoderOptions, Formatter, Instruction, IntelFormatter, Mnemonic, OpKind};
 use object::read::{Object, ObjectSection, ObjectSymbol};
 use object::{Architecture, BinaryFormat, SectionKind};
+use yaxpeax_arch::{Decoder as _, U8Reader};
+use yaxpeax_arm::armv8::a64::{
+    InstDecoder as A64Decoder, Opcode as A64Opcode, Operand as A64Operand,
+};
 
 /// How much of a file we are willing to parse structurally. Beyond this the viewer still
 /// disassembles, it just sweeps raw bytes instead of following sections.
@@ -111,9 +116,26 @@ impl Arch {
         }
     }
 
-    /// We disassemble x86 ourselves; anything else needs `objdump` or a plugin.
+    /// We disassemble x86 and AArch64 ourselves; anything else needs `objdump` or a plugin.
     pub fn disassemblable(self) -> bool {
+        matches!(self, Arch::X86 | Arch::X86_64 | Arch::Aarch64)
+    }
+
+    /// What the assembler writes, which is a shorter list than what the disassembler reads:
+    /// `F9` in the hex pane is x86 only (SPEC 05 §2.8). The two are asked separately so that
+    /// reading AArch64 — the point of the decoder — cannot be mistaken for writing it, which
+    /// would put x86 bytes into an ARM binary.
+    pub fn assemblable(self) -> bool {
         matches!(self, Arch::X86 | Arch::X86_64)
+    }
+
+    /// How long an instruction is, where that is one number. AArch64 is four bytes, always,
+    /// which is what makes stepping backwards through it arithmetic rather than a search.
+    pub fn instruction_len(self) -> Option<usize> {
+        match self {
+            Arch::Aarch64 => Some(4),
+            _ => None,
+        }
     }
 
     pub fn bitness(self) -> u32 {
@@ -418,6 +440,9 @@ pub fn disassemble(
     if !arch.disassemblable() {
         return Err(DisasmError::NoDisassembler(arch.as_str()));
     }
+    if arch == Arch::Aarch64 {
+        return Ok(aarch64(code, offset, address, limit));
+    }
     let mut decoder = Decoder::with_ip(arch.bitness(), code, address, DecoderOptions::NONE);
     let mut formatter = IntelFormatter::new();
     formatter.options_mut().set_first_operand_char_index(8);
@@ -465,12 +490,138 @@ pub fn disassemble(
     Ok(out)
 }
 
+/// AArch64: one instruction is one 32-bit word, and that is the whole decoder loop.
+///
+/// A word nothing decodes is one `(bad)` line of four bytes rather than one of a byte: there is
+/// no sync to lose in a fixed-width instruction set, so stepping a byte at a time — which is
+/// right for x86 — would turn one unallocated encoding into four lines of noise.
+///
+/// The text is written the way the x86 side writes it: the mnemonic in a column eight wide, and
+/// a branch shown as the address it arrives at rather than as the displacement in the encoding.
+/// `yaxpeax` prints `b $+0x14`, which is what the bytes say; `b 401014h` is what the reader
+/// wants, and it is what `Enter` then follows.
+fn aarch64(code: &[u8], offset: u64, address: u64, limit: usize) -> Vec<Line> {
+    let decoder = A64Decoder::default();
+    let mut out = Vec::with_capacity(limit.min(1024));
+    let mut position = 0usize;
+    while position < code.len() && out.len() < limit {
+        let at = position;
+        // The tail of a section that is not a whole word is not an instruction, and saying so
+        // is better than decoding whatever happens to follow it in memory.
+        let Some(word) = code.get(at..at + 4) else {
+            out.push(Line {
+                offset: offset + at as u64,
+                address: address + at as u64,
+                bytes: code[at..].to_vec(),
+                text: "(bad)".to_string(),
+                invalid: true,
+                target: None,
+            });
+            break;
+        };
+        position += 4;
+        let mut reader = U8Reader::new(word);
+        let (text, target, invalid) = match decoder.decode(&mut reader) {
+            Ok(instruction) if instruction.opcode != A64Opcode::Invalid => {
+                let here = address + at as u64;
+                (
+                    a64_text(&instruction, here),
+                    a64_target(&instruction, here),
+                    false,
+                )
+            }
+            _ => ("(bad)".to_string(), None, true),
+        };
+        out.push(Line {
+            offset: offset + at as u64,
+            address: address + at as u64,
+            bytes: word.to_vec(),
+            text,
+            invalid,
+            target,
+        });
+    }
+    out
+}
+
+/// One AArch64 instruction as a line of text, with any branch displacement turned into the
+/// address it names.
+fn a64_text(instruction: &yaxpeax_arm::armv8::a64::Instruction, here: u64) -> String {
+    let printed = instruction.to_string();
+    let (mnemonic, operands) = match printed.split_once(' ') {
+        Some((m, rest)) => (m, rest.trim().to_string()),
+        None => (printed.as_str(), String::new()),
+    };
+    let operands = match a64_offset(instruction) {
+        // The displacement as `yaxpeax` prints it, and the address it adds up to. Replacing
+        // the one with the other keeps everything else the decoder wrote.
+        Some(delta) => {
+            let was = if delta < 0 {
+                format!("$-{:#x}", delta.wrapping_neg())
+            } else {
+                format!("$+{delta:#x}")
+            };
+            let now = format!("{:X}h", here.wrapping_add(delta as u64));
+            operands.replace(&was, &now)
+        }
+        None => operands,
+    };
+    if operands.is_empty() {
+        mnemonic.to_string()
+    } else {
+        format!("{mnemonic:<8}{operands}")
+    }
+}
+
+/// The displacement of the one operand that carries one, if the instruction has it.
+fn a64_offset(instruction: &yaxpeax_arm::armv8::a64::Instruction) -> Option<i64> {
+    instruction
+        .operands
+        .iter()
+        .find_map(|operand| match operand {
+            A64Operand::PCOffset(delta) => Some(*delta),
+            _ => None,
+        })
+}
+
+/// Where an AArch64 instruction points — the same question as `branch_target`, asked of the
+/// decoder's own operands rather than of its text.
+fn a64_target(instruction: &yaxpeax_arm::armv8::a64::Instruction, here: u64) -> Option<Target> {
+    let delta = a64_offset(instruction)?;
+    let kind = match instruction.opcode {
+        A64Opcode::BL | A64Opcode::BLR => TargetKind::Call,
+        A64Opcode::B | A64Opcode::BR => TargetKind::Jump,
+        // `adr` and `adrp` compute the address of something — a string, a page of data —
+        // rather than of code to run, which is the same distinction x86 makes for `lea`.
+        A64Opcode::ADR | A64Opcode::ADRP => TargetKind::Data,
+        // What is left taking a displacement is conditional: `b.cc`, `cbz`, `cbnz`, `tbz`,
+        // `tbnz`, and the load-literal forms.
+        _ => TargetKind::Branch,
+    };
+    let kind = match (kind, instruction.opcode) {
+        // A literal load reads the bytes at the address, so it is data wherever it appears.
+        (TargetKind::Branch, A64Opcode::LDR | A64Opcode::LDRSW | A64Opcode::PRFM) => {
+            TargetKind::Data
+        }
+        (kind, _) => kind,
+    };
+    Some(Target {
+        address: here.wrapping_add(delta as u64),
+        offset: None,
+        kind,
+    })
+}
+
 /// Where the instruction before `target` starts.
 ///
 /// x86 instructions have no fixed length, so the only honest way back is to decode forward from
 /// a little earlier and take the last boundary that lands on `target`. 32 bytes of lead-in is
-/// enough for any x86 instruction (15 bytes is the architectural maximum).
+/// enough for any x86 instruction (15 bytes is the architectural maximum). AArch64 needs none
+/// of that: every instruction is four bytes, so the one before is four bytes back.
 pub fn previous_instruction(code_before: &[u8], target_offset: u64, arch: Arch) -> u64 {
+    if let Some(len) = arch.instruction_len() {
+        return target_offset.saturating_sub(len as u64);
+    }
     if code_before.is_empty() || !arch.disassemblable() {
         return target_offset.saturating_sub(1);
     }
@@ -564,7 +715,7 @@ mod tests {
         let binary = analyze(&bytes, true).expect("the test binary parses");
         assert!(binary.format.native_support());
         assert!(
-            binary.arch.disassemblable() || binary.arch == Arch::Aarch64,
+            binary.arch.disassemblable(),
             "unexpected architecture {}",
             binary.arch.as_str()
         );
@@ -639,9 +790,109 @@ mod tests {
         assert_eq!(previous_instruction(&[], 10, Arch::X86_64), 9);
     }
 
+    /// A hand-assembled AArch64 prologue, decoded. The words are little-endian in the file
+    /// and the bytes below are in file order, which is how anybody checking this against a
+    /// hex dump will read them.
+    #[test]
+    fn aarch64_words_decode_to_the_instructions_they_are() {
+        // stp x29, x30, [sp, #-16]!   mov x29, sp   bl $+8   ldp x29, x30, [sp], #16   ret
+        let code: Vec<u8> = [
+            0xA9BF7BFDu32,
+            0x910003FD,
+            0x94000002,
+            0xA8C17BFD,
+            0xD65F03C0,
+        ]
+        .iter()
+        .flat_map(|word| word.to_le_bytes())
+        .collect();
+        let lines = disassemble(&code, 0, 0x4000, Arch::Aarch64, 16).expect("aarch64 decodes");
+        assert_eq!(lines.len(), 5);
+        // Every instruction is four bytes, and the addresses step by four.
+        for (i, line) in lines.iter().enumerate() {
+            assert_eq!(line.bytes.len(), 4, "{line}");
+            assert_eq!(line.address, 0x4000 + 4 * i as u64);
+            assert!(!line.invalid, "{line}");
+        }
+        let text: Vec<&str> = lines.iter().map(|l| l.text.as_str()).collect();
+        assert!(text[0].starts_with("stp"), "{:?}", text[0]);
+        assert!(text[1].starts_with("mov"), "{:?}", text[1]);
+        assert!(text[3].starts_with("ldp"), "{:?}", text[3]);
+        assert_eq!(text[4], "ret");
+        // The mnemonic sits in a column eight wide, as it does for x86.
+        assert!(text[1].starts_with("mov     "), "{:?}", text[1]);
+        // A branch is shown as where it goes, not as the displacement in the encoding, and
+        // the target is the one `Enter` follows.
+        assert!(text[2].contains("4010h"), "{:?}", text[2]);
+        assert!(!text[2].contains('$'), "{:?}", text[2]);
+        let target = lines[2].target.expect("a call carries its target");
+        assert_eq!(target.address, 0x4010);
+        assert_eq!(target.kind, TargetKind::Call);
+    }
+
+    #[test]
+    fn aarch64_branches_name_their_kind_and_data_is_not_code() {
+        let at = |word: u32| {
+            let bytes = word.to_le_bytes();
+            disassemble(&bytes, 0, 0x1000, Arch::Aarch64, 1)
+                .expect("aarch64 decodes")
+                .remove(0)
+        };
+        // b $+0x20, b.eq $+0x10, cbz x0 $+8, adrp x0, $+0x1000
+        assert_eq!(at(0x14000008).target.unwrap().kind, TargetKind::Jump);
+        assert_eq!(at(0x54000080).target.unwrap().kind, TargetKind::Branch);
+        assert_eq!(at(0xB4000040).target.unwrap().kind, TargetKind::Branch);
+        assert_eq!(at(0x90000000).target.unwrap().kind, TargetKind::Data);
+        // An unconditional branch backwards, which is the one a loop ends with.
+        let back = at(0x17FFFFFF);
+        assert_eq!(back.target.unwrap().address, 0x0FFC);
+        assert!(back.text.contains("FFCh"), "{}", back.text);
+    }
+
+    /// A word nothing decodes is one line of four bytes: there is no sync to lose in a
+    /// fixed-width instruction set, so a byte-at-a-time resync would be four lines of noise.
+    #[test]
+    fn an_aarch64_word_that_decodes_to_nothing_is_one_bad_line() {
+        // `00 00 80 00` is unallocated; `FD 7B BF A9` right after it is the `stp` above,
+        // and it still decodes, which is the part that matters.
+        let code = [0x00, 0x00, 0x80, 0x00, 0xFD, 0x7B, 0xBF, 0xA9];
+        let lines = disassemble(&code, 0, 0, Arch::Aarch64, 8).expect("aarch64 decodes");
+        assert_eq!(lines.len(), 2);
+        assert!(lines[0].invalid);
+        assert_eq!(lines[0].bytes.len(), 4);
+        assert_eq!(lines[0].text, "(bad)");
+        assert!(!lines[1].invalid, "{}", lines[1]);
+        // And the tail that is not a whole word is not an instruction either.
+        let short = disassemble(&[0xFD, 0x7B], 0, 0, Arch::Aarch64, 8).expect("decodes");
+        assert_eq!(short.len(), 1);
+        assert!(short[0].invalid);
+        assert_eq!(short[0].bytes.len(), 2);
+    }
+
+    /// Stepping backwards is arithmetic here, not a search: four bytes, always.
+    #[test]
+    fn stepping_back_through_aarch64_is_four_bytes() {
+        assert_eq!(previous_instruction(&[], 0x40, Arch::Aarch64), 0x3C);
+        assert_eq!(previous_instruction(&[0; 32], 0x40, Arch::Aarch64), 0x3C);
+        assert_eq!(previous_instruction(&[], 2, Arch::Aarch64), 0);
+    }
+
+    /// Reading AArch64 and writing it are different questions, and the assembler answers only
+    /// the x86 one: an ARM binary must not get x86 bytes written into it by a dialog that
+    /// assumed too much.
+    #[test]
+    fn aarch64_is_read_but_not_assembled() {
+        assert!(Arch::Aarch64.disassemblable());
+        assert!(!Arch::Aarch64.assemblable());
+        assert!(Arch::X86_64.assemblable());
+        assert!(Arch::X86.assemblable());
+        assert!(!Arch::Other.disassemblable());
+    }
+
     #[test]
     fn an_unsupported_architecture_says_what_to_do() {
-        let err = disassemble(&[0; 8], 0, 0, Arch::Aarch64, 4).unwrap_err();
+        // AArch64 is ours now; what is left is everything else, and it names the way out.
+        let err = disassemble(&[0; 8], 0, 0, Arch::Other, 4).unwrap_err();
         assert!(err.to_string().contains("external tool"), "{err}");
     }
 

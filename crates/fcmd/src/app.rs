@@ -12164,7 +12164,7 @@ impl App {
             return;
         };
         let arch = self.hex_arch();
-        if !arch.disassemblable() {
+        if !arch.assemblable() {
             let msg = self
                 .i18n
                 .t_args("asm-no-arch", &[("arch", arch.as_str().into())]);
@@ -12196,12 +12196,12 @@ impl App {
             .unwrap_or_default();
         // The header alone, not the sections: this is one field, read from the front.
         if let Ok(binary) = fcmd_view::analyze(&head, false) {
-            if binary.arch.disassemblable() {
+            if binary.arch.assemblable() {
                 return binary.arch;
             }
         }
         let host = fcmd_view::disasm::host_arch();
-        if host.disassemblable() {
+        if host.assemblable() {
             host
         } else {
             fcmd_view::Arch::X86_64

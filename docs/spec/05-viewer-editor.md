@@ -5,7 +5,7 @@ wrapping; encoding detection (BOM, UTF-8 validity, the UTF-16 NUL pattern) with 
 switching between UTF-8, UTF-16LE/BE, CP1252 and CP437; plain, regex and hex-pattern search
 with highlighted hits and next/previous; go to offset, `0x` offset or percentage; position undo;
 bookmarks 0–9; follow mode; windowed reads with no line index, so file size does not matter.
-Also implemented: **disassembly** of ELF/PE/Mach-O/raw x86 and x86-64 with sections and
+Also implemented: **disassembly** of ELF/PE/Mach-O/raw x86, x86-64 and AArch64 with sections and
 symbols, **JVM class files and .NET assemblies** read in process (constant pool, members and
 JVM bytecode; metadata tables and CIL), and **decompilation** through WebAssembly's text format
 in process or an installed external tool (§1.6).
@@ -150,12 +150,19 @@ Two different things, and the viewer is honest about which one it is doing.
 | --- | --- |
 | Recognise the file | magic bytes: ELF, PE, Mach-O (incl. universal), WebAssembly, Java class, `.pyc`, `ar` archive, or raw |
 | Read its structure | `object` (MIT/Apache-2.0): architecture, bitness, entry point, sections, function symbols |
-| Decode instructions | `iced-x86` (MIT) for x86 and x86-64, Intel syntax, exact instruction lengths |
+| Decode instructions | `iced-x86` (MIT) for x86 and x86-64, Intel syntax, exact instruction lengths; `yaxpeax-arm` (0BSD) for AArch64, where every instruction is four bytes |
 | Row format | `address  bytes  mnemonic operands`, with a `<symbol>:` heading where a function starts |
-| Bad bytes | one `(bad)` line per byte and the sweep resyncs one byte on, so data between functions does not hide the code after it |
-| Scrolling | down decodes the next instruction; up uses the trail of offsets we came down through, because backward decoding of a variable-length instruction set can only guess |
+| Bad bytes | x86: one `(bad)` line per byte and the sweep resyncs one byte on, so data between functions does not hide the code after it. AArch64: one `(bad)` line per 32-bit word, because a fixed-width instruction set has no sync to lose and a byte-at-a-time resync would turn one unallocated encoding into four lines of noise |
+| Scrolling | down decodes the next instruction; up uses the trail of offsets we came down through, because backward decoding of a variable-length instruction set can only guess — on AArch64 it is four bytes back, which is arithmetic |
 | Huge files | ELF and PE keep their section tables at the *end*, so a prefix cannot be parsed. Above a 64 MiB limit (a debug build of a Rust program is routinely 100 MB) the viewer sweeps **raw bytes** with the host architecture and the status line says `raw x86-64 sweep (over the 64 MiB parse limit)` |
-| Other architectures | aarch64 and the rest are not decoded in process: the error names the external-tool route rather than pretending |
+| Branch targets | asked of the decoder's own operands, never of the formatted text. On AArch64 the displacement in the encoding is turned into the address it names, because `b $+0x14` is what the bytes say and `b 401014h` is what the reader wants — and it is what `Enter` then follows |
+| Other architectures | 32-bit ARM, RISC-V, MIPS, PowerPC and the rest are not decoded in process: the error names the external-tool route rather than pretending |
+
+**Reading an architecture and writing it are two questions.** `Arch::disassemblable` answers
+the first and `Arch::assemblable` the second, and the second is the shorter list: the assembler
+of §2.8 is x86 only. On an ARM binary `F9` in the hex pane says so and writes nothing, which is
+the only safe answer — a dialog that fell back to x86 there would put four bytes of nonsense
+into somebody's binary and show them a plausible listing of it.
 
 **Bytecode — in process, because it is a table not an analysis.** Where a format carries its
 own symbols, there is nothing to guess, so we read it ourselves:
@@ -536,7 +543,8 @@ the reader's back.
 
 One instruction at a time, written where the cursor is. The dialog names the offset and the
 architecture it is assembling for — the file's own header decides that, so a 32-bit PE is
-assembled as 32-bit code on a 64-bit machine — and what comes back names the bytes, the
+assembled as 32-bit code on a 64-bit machine, and an architecture this cannot write (AArch64,
+which §1.6 *reads*) is refused by name rather than assembled as x86 — and what comes back names the bytes, the
 instruction the *disassembler* reads in them, and by how much the length changed if it did.
 `Enter` writes into the patch list of §2.5, so `Ctrl+Z` takes it back and `F2` is still what
 commits. The instruction typed last comes back with the dialog, because patching is repetitive
