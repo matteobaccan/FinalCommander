@@ -529,7 +529,7 @@ key-sort-owner = Propr
 sort-none = Non trié
 sort-set = tri : { $name }
 btn-ok = OK
-pick-hint = ↑↓ choisir · Entrée appliquer · Échap fermer
+pick-hint = ↑↓ choisir · tapez pour filtrer · Entrée appliquer · Échap fermer
 pick-empty = (rien à choisir)
 # ------------------------------------------------- les trois historiques (SPEC 06 §6)
 hist-pinned = { $line } est épinglée · plus rien ne la chasse

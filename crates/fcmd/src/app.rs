@@ -12853,6 +12853,17 @@ impl App {
             other => history_of(other),
         };
         match key.code {
+            // `Esc` with something typed into the list clears that rather than closing the
+            // list: the filter is what one is looking through, and throwing away the list and
+            // the cursor's place in it to get out of a filter is a key that does too much.
+            // A second `Esc` closes it, as it always did.
+            KeyCode::Esc if !pick.filter.is_empty() => {
+                pick.filter_clear();
+            }
+            // The rows slide sideways, for a list of paths wider than the box. FAR's keys.
+            KeyCode::Left if key.mods.contains(Mods::ALT) => pick.scroll_sideways(-1),
+            KeyCode::Right if key.mods.contains(Mods::ALT) => pick.scroll_sideways(1),
+            KeyCode::Home if key.mods.contains(Mods::ALT) => pick.left = 0,
             // Inside a submenu, going back means the menu it was opened from — not out of the
             // menu altogether, which is what one press of `Esc` would otherwise do.
             KeyCode::Esc | KeyCode::Left
@@ -12961,17 +12972,6 @@ impl App {
                 let at = pick.cursor;
                 self.open_highlight_form(None);
                 self.highlight_at = Some(at);
-            }
-            // A list one types into: the letters are the filter rather than hotkeys, and
-            // `Backspace` takes one back. A history of four hundred commands is a list one
-            // finds a line in by typing part of it, which is what FAR does there too.
-            KeyCode::Char(c) if filters(kind) && !key.mods.contains(Mods::CTRL) => {
-                pick.filter.push(c);
-                pick.refilter();
-            }
-            KeyCode::Backspace if filters(kind) => {
-                pick.filter.pop();
-                pick.refilter();
             }
             // FAR's three keys in a history, and the reason they are three: the lines one
             // wants to keep for ever are rarer than the ones one wants rid of, and emptying
@@ -13258,12 +13258,27 @@ impl App {
                 let form = Form::drives(&self.cfg.drives, &self.i18n);
                 self.mode = Mode::Form(Box::new(form));
             }
+            // Typing narrows the list, which is how one finds a line in a history of four
+            // hundred commands or among thirty-odd code pages — and what FAR does in a menu.
+            // It comes after every key a list has of its own, so `Space` in the settings
+            // browser still flips the setting rather than starting a filter with a space in
+            // it.
+            //
+            // Where the rows have keys of their own, a letter takes its row instead and the
+            // filter is reached with `Alt` and the letter: the drive dialog's letters and a
+            // user menu's digits are what somebody who uses them twice a day presses, and a
+            // filter must not take them away.
+            KeyCode::Char(c) if key.mods.contains(Mods::ALT) => pick.filter_push(c),
             // A row with a key of its own: the key takes it, without the arrows.
-            KeyCode::Char(c) => {
+            KeyCode::Char(c) if pick.letters_are_hotkeys() => {
                 if let Some(row) = pick.by_hotkey(c) {
                     pick.cursor = row;
                     self.apply_pick();
                 }
+            }
+            KeyCode::Char(c) if !key.mods.contains(Mods::CTRL) => pick.filter_push(c),
+            KeyCode::Backspace => {
+                pick.filter_pop();
             }
             _ => {}
         }
@@ -17499,19 +17514,6 @@ fn highlight_name(h: &fcmd_config::HighlightCfg, index: usize) -> String {
     }
 }
 
-/// The lists one types into rather than picks a letter from: the folders, and the three
-/// histories — every one of them long enough that reading it is slower than typing into it.
-fn filters(kind: PickKind) -> bool {
-    matches!(
-        kind,
-        PickKind::Folders
-            | PickKind::CommandHistory
-            | PickKind::FileHistory
-            | PickKind::FoldersHistory
-            | PickKind::FieldHistory
-    )
-}
-
 /// The dialog fields worth a history of their own.
 ///
 /// The ones a person types the same thing into again: a mask, the text to find, where to copy
@@ -20133,6 +20135,92 @@ mod tests {
         assert!(outcome.errors.is_empty(), "{:?}", outcome.errors);
         assert_eq!(mode_of(&one), 0o600, "the bit was taken off");
         assert_eq!(mode_of(&two), 0o600, "and the other was already without it");
+    }
+
+    /// Every list is filterable now, not only the four that were: typing narrows it, `Esc`
+    /// clears what was typed before it closes anything, and where the rows have keys of
+    /// their own the letters stay theirs and `Alt` and a letter is the filter.
+    #[test]
+    fn typing_into_a_list_narrows_it_and_esc_takes_the_filter_back_off() {
+        let mut app = app();
+        // The code pages: thirty-odd rows, no keys of their own — the list this is for.
+        app.run(Command::OptCodepages);
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert!(!pick.letters_are_hotkeys(), "no row has a key of its own");
+        let all = pick.rows.len();
+        assert!(all > 10, "a list worth filtering: {all}");
+
+        press(&mut app, "k");
+        press(&mut app, "o");
+        press(&mut app, "i");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("the list closed")
+        };
+        assert_eq!(pick.filter, "koi");
+        assert!(pick.rows.len() < all, "the list did not narrow");
+        assert!(
+            pick.rows
+                .iter()
+                .all(|r| r.label.to_lowercase().contains("koi")),
+            "{:?}",
+            pick.rows
+        );
+        // The title says what was typed, so a list with three rows in it explains itself.
+        assert!(pick.heading().contains("koi"), "{}", pick.heading());
+
+        // `Backspace` takes a letter back.
+        press(&mut app, "Backspace");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("the list closed")
+        };
+        assert_eq!(pick.filter, "ko");
+
+        // `Esc` clears the filter and keeps the list; a second one closes it.
+        press(&mut app, "Esc");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("the first Esc closed the list instead of the filter")
+        };
+        assert!(pick.filter.is_empty());
+        assert_eq!(pick.rows.len(), all, "the whole list is back");
+        press(&mut app, "Esc");
+        assert!(matches!(app.mode, Mode::Normal), "{:?}", app.mode);
+    }
+
+    /// And `Alt+←/→` slides the rows sideways, for a list of paths wider than its box.
+    #[test]
+    fn a_list_of_long_rows_can_be_read_sideways() {
+        let mut app = app();
+        app.run(Command::OptCodepages);
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(pick.left, 0);
+        press(&mut app, "Alt+Right");
+        press(&mut app, "Alt+Right");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("the list closed")
+        };
+        assert_eq!(pick.left, 2);
+        press(&mut app, "Alt+Left");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("the list closed")
+        };
+        assert_eq!(pick.left, 1);
+        // Typing is a different list, so it starts from the left again.
+        press(&mut app, "u");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("the list closed")
+        };
+        assert_eq!(pick.left, 0, "a narrowed list is read from its left");
+        // And it never goes past the left edge.
+        press(&mut app, "Alt+Left");
+        press(&mut app, "Alt+Left");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("the list closed")
+        };
+        assert_eq!(pick.left, 0);
     }
 
     /// The key bar follows the modifier, and what it shows is what the keymap really does.

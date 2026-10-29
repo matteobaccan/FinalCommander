@@ -8,6 +8,22 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **Every list filters as you type** (SPEC 10 §2b). Four of them did — the folders and the
+  three histories — and the rest were read by scrolling, which with thirty-odd code pages or
+  four hundred plugin commands is slower than typing part of what you want. All of them do
+  now, and three details make it a feature rather than a change of key:
+
+  `Esc` clears what was typed **before** it closes the list, and a second `Esc` closes it:
+  throwing away the list and the cursor's place in it to get out of a filter is a key that
+  does too much. Where the rows have keys of their own — the drive dialog's letters, a user
+  menu's digits — the letters stay theirs and `Alt` and a letter is the filter, because those
+  keys are what somebody who uses them twice a day presses. And typing comes after every key
+  a list has of its own, so `Space` in the settings browser still flips the setting.
+
+  With it, `Alt+←/→` slides the rows sideways and `Alt+Home` puts them back: a folder history
+  of deep paths is wider than its box, and eliding the middle of every line is not the same as
+  being able to read the end of one.
+
 - **The wheel is as many rows as you say, per area, and the sideways wheel works** (SPEC 02
   §12). Three rows a notch was a constant; it is three settings now, as it is in FAR, because
   a notch that is right for a file listing is too much in a page of prose: `ui.wheel_lines` for

@@ -976,6 +976,14 @@ fn draw_pick(
     pick: &crate::form::Pick,
 ) -> Option<ListArea> {
     let mut lines = pick.lines();
+    // Scrolled sideways (`Alt+←/→`), for a list of paths wider than the box: the rows slide
+    // and the window labels below do not, because they are the renderer's own words rather
+    // than part of the list.
+    if pick.left > 0 {
+        for line in &mut lines {
+            *line = line.chars().skip(pick.left).collect();
+        }
+    }
     if lines.is_empty() {
         lines.push(app.i18n.t("pick-empty"));
     }

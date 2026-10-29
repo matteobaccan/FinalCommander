@@ -529,7 +529,7 @@ key-sort-owner = Propr
 sort-none = Non ordinato
 sort-set = ordine: { $name }
 btn-ok = OK
-pick-hint = ↑↓ scegli · Invio applica · Esc chiude
+pick-hint = ↑↓ scegli · scrivi per filtrare · Invio applica · Esc chiude
 pick-empty = (niente da scegliere)
 # ------------------------------------------------- le tre cronologie (SPEC 06 §6)
 hist-pinned = { $line } è fissata · ora niente la spinge fuori

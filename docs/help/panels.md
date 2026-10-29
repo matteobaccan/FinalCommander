@@ -219,7 +219,11 @@ want nine times in ten. With something typed on it, `↑` and `↓` walk back an
 what was run before, as a shell does; on an empty line the arrows belong to the panel, as
 every shared key does. `Alt+F8` shows the whole history as a list — and so do `Alt+F11` for the files you have read
 or edited and `Alt+F12` for the folders this panel has been in. All three are lists you type
-into: what you type narrows them, and the frame says what it was. `Ins` pins the row under the
+into — as every list in this program is: what you type narrows it, the frame says what it was,
+`Backspace` takes a letter back, and `Esc` clears the filter before a second one closes the
+list. Where the rows have keys of their own, as the drive dialog's letters do, those keys stay
+theirs and `Alt` and a letter is the filter. `Alt+←` and `Alt+→` slide long rows sideways —
+a history of deep paths is wider than its box — and `Alt+Home` puts them back. `Ins` pins the row under the
 cursor — a pinned row is marked with a `*`, and neither the size limit nor the lifetime can
 push it out — `Shift+Del` takes one row out of the history for good, and `Del` empties the
 list of everything you have not pinned, after asking. A line nobody has pinned and nobody has

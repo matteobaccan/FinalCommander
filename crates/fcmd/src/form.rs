@@ -2028,8 +2028,9 @@ pub struct Pick {
     pub cursor: usize,
     /// Which panel the choice applies to, for the panel-side lists.
     pub side: usize,
-    /// Every row there is, for a list one types into: `rows` is then what the filter leaves.
-    /// Empty for the lists nobody filters, which is all of them but the folders.
+    /// Every row there is: `rows` is what the filter leaves of it. Every list is filterable
+    /// now — a list of thirty code pages or four hundred commands is one you find a line in
+    /// by typing part of it — so this is always the whole list.
     pub all: Vec<PickRow>,
     /// What has been typed into a list that filters. The title shows it, so a reader can see
     /// why a list has three rows in it.
@@ -2037,6 +2038,10 @@ pub struct Pick {
     /// The values of the rows that are pinned, for the histories: a pinned line is marked in
     /// the list, because a pin one cannot see is a pin one does not trust.
     pub locked: Vec<String>,
+    /// How many columns the rows are scrolled by, for a list whose lines are wider than the
+    /// box — a folder history of deep paths, a list of long commands. `Alt+←/→` moves it,
+    /// which is FAR's own key for it; anything that changes the list puts it back to zero.
+    pub left: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -2096,25 +2101,71 @@ impl Pick {
         Pick {
             kind,
             title,
+            all: rows.clone(),
             rows,
             cursor,
             side,
-            all: Vec::new(),
             filter: String::new(),
             locked: Vec::new(),
+            left: 0,
         }
     }
 
-    /// A list one types into: every row is kept, and what is typed decides which are shown.
+    /// Kept for the callers that said so explicitly: every list is filterable now, so this is
+    /// [`Pick::new`] and nothing else.
     pub fn filtered(kind: PickKind, title: String, rows: Vec<PickRow>, side: usize) -> Pick {
-        let mut pick = Pick::new(kind, title, rows, side);
-        pick.all = pick.rows.clone();
-        pick
+        Pick::new(kind, title, rows, side)
+    }
+
+    /// Does a plain letter belong to a row rather than to the filter?
+    ///
+    /// Where the rows have keys of their own — the drive dialog's letters, a user menu's
+    /// digits — a typed letter takes its row, as it does in FAR, and the filter is reached
+    /// with `Alt` and the letter instead. Everywhere else a letter is the filter, which is
+    /// how one finds a line in a list of four hundred.
+    pub fn letters_are_hotkeys(&self) -> bool {
+        self.all.iter().any(|r| r.hotkey.is_some())
+    }
+
+    /// Add to the filter and narrow the list.
+    pub fn filter_push(&mut self, ch: char) {
+        self.filter.push(ch);
+        self.refilter();
+    }
+
+    /// Take the last character back out of the filter. `true` when there was one: `Backspace`
+    /// in a list with no filter means nothing, and a key that means nothing should not look
+    /// as though it did something.
+    pub fn filter_pop(&mut self) -> bool {
+        let had = self.filter.pop().is_some();
+        if had {
+            self.refilter();
+        }
+        had
+    }
+
+    /// Throw the filter away and show the whole list again. `true` when there was one to
+    /// throw away, which is how `Esc` tells "clear the filter" from "close the list".
+    pub fn filter_clear(&mut self) -> bool {
+        if self.filter.is_empty() {
+            return false;
+        }
+        self.filter.clear();
+        self.refilter();
+        true
+    }
+
+    /// `Alt+←/→`: the rows slide sideways, for the lines that are wider than the box.
+    pub fn scroll_sideways(&mut self, by: isize) {
+        self.left = (self.left as isize + by).max(0) as usize;
     }
 
     /// Keep the rows that hold what has been typed, case-insensitively, and put the cursor on
     /// the first of them. The rows nobody typed about come back the moment the filter does.
     pub fn refilter(&mut self) {
+        // A narrower list is a different list: whatever was scrolled off to the left is not
+        // what one is looking at now.
+        self.left = 0;
         let needle = self.filter.to_lowercase();
         self.rows = self
             .all

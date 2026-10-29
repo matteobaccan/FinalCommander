@@ -537,7 +537,7 @@ key-sort-owner = Owner
 sort-none = Unsorted
 sort-set = sort: { $name }
 btn-ok = OK
-pick-hint = ↑↓ choose · Enter apply · Esc close
+pick-hint = ↑↓ choose · type to filter · Enter apply · Esc close
 pick-empty = (nothing to choose)
 # ------------------------------------------------- the three histories (SPEC 06 §6)
 hist-pinned = { $line } is pinned · nothing pushes it out now

@@ -136,6 +136,29 @@ what it is for here is marking the three or four pages `F8` walks and giving one
 own. One list rather than a dialog beside it, because a second screen showing the same
 thirty-odd rows is a second screen to keep in step.
 
+## 2b. Lists one picks from
+
+A list — the drive dialog, the code pages, a history, the screens, the settings browser — is
+not a dialog: it is rows and one of them is chosen. The keys it has beyond the arrows:
+
+* **typing narrows it.** Every list, not a chosen few: a history of four hundred commands or
+  a list of thirty code pages is one you find a line in by typing part of it, which is what
+  FAR does in a menu. The title says what was typed, so a list with three rows in it explains
+  itself, and `Backspace` takes a letter back.
+* **`Esc` clears the filter before it closes the list.** A second `Esc` closes it. Throwing
+  away the list *and* the cursor's place in it to get out of a filter is a key that does too
+  much.
+* **where the rows have keys of their own, the letters stay theirs.** The drive dialog's
+  letters and a user menu's digits are what somebody who uses them twice a day presses; there
+  the filter is `Alt` and a letter.
+* **`Alt+←/→` slides the rows sideways**, and `Alt+Home` puts them back: a folder history of
+  deep paths is wider than its box, and eliding the middle of every line is not the same as
+  being able to read the end of one.
+
+Not done: locking the filter (FAR's `Ctrl+Alt+L`), which would have to outlive the list it
+belongs to — and every list here is built where it is opened, so there is nothing for it to
+outlive yet.
+
 ## 3. Settings dialogs
 
 A dialog is a framed list of rows above a row of buttons. Row kinds:

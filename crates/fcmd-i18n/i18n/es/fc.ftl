@@ -529,7 +529,7 @@ key-sort-owner = Propiet
 sort-none = Sin ordenar
 sort-set = orden: { $name }
 btn-ok = Aceptar
-pick-hint = ↑↓ elegir · Intro aplicar · Esc cerrar
+pick-hint = ↑↓ elegir · escribe para filtrar · Intro aplicar · Esc cerrar
 pick-empty = (nada que elegir)
 # ------------------------------------------------- los tres historiales (SPEC 06 §6)
 hist-pinned = { $line } está fijada · ya nada la desplaza

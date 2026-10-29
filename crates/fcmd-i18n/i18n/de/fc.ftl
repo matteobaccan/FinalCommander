@@ -529,7 +529,7 @@ key-sort-owner = Besitz
 sort-none = Unsortiert
 sort-set = Sortierung: { $name }
 btn-ok = OK
-pick-hint = ↑↓ wählen · Enter übernehmen · Esc schließen
+pick-hint = ↑↓ wählen · tippen filtert · Enter übernehmen · Esc schließen
 pick-empty = (nichts zur Auswahl)
 # ------------------------------------------------- die drei Verläufe (SPEC 06 §6)
 hist-pinned = { $line } ist angeheftet · nichts verdrängt sie mehr

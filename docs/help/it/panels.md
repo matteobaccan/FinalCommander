@@ -233,8 +233,13 @@ quello che vuoi nove volte su dieci. Con qualcosa scritto sopra, `↑` e `↓` c
 indietro per quello che è stato eseguito prima, come fa una shell; su una riga vuota le frecce
 appartengono al pannello, come ogni tasto condiviso. `Alt+F8` mostra tutta la cronologia come
 elenco — e così fanno `Alt+F11` per i file che hai letto o modificato e `Alt+F12` per le
-cartelle in cui questo pannello è stato. Tutti e tre sono elenchi in cui si scrive: quello che
-scrivi li restringe, e la cornice dice cosa hai scritto. `Ins` fissa la riga sotto il cursore —
+cartelle in cui questo pannello è stato. Tutti e tre sono elenchi in cui si scrive — come
+ogni elenco di questo programma: quello che scrivi lo restringe, la cornice dice cosa hai
+scritto, `Backspace` toglie una lettera, e `Esc` pulisce il filtro prima che un secondo chiuda
+l'elenco. Dove le righe hanno tasti propri, come le lettere del dialogo dei dischi, quei tasti
+restano loro e il filtro è `Alt` più la lettera. `Alt+←` e `Alt+→` fanno scorrere di lato le
+righe lunghe — una cronologia di percorsi profondi è più larga della sua cornice — e
+`Alt+Home` le rimette a posto. `Ins` fissa la riga sotto il cursore —
 una riga fissata è marcata con un `*`, e né il limite di dimensione né la durata possono
 spingerla fuori — `Maiusc+Canc` toglie quella riga dalla cronologia per sempre, e `Canc`
 svuota l'elenco di tutto ciò che non hai fissato, dopo averlo chiesto. Una riga che nessuno ha

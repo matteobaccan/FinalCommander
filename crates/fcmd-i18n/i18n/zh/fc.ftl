@@ -529,7 +529,7 @@ key-sort-owner = 所有者
 sort-none = 不排序
 sort-set = 排序：{ $name }
 btn-ok = 确定
-pick-hint = ↑↓ 选择 · Enter 应用 · Esc 关闭
+pick-hint = ↑↓ 选择 · 输入以筛选 · Enter 应用 · Esc 关闭
 pick-empty = （没有可选项）
 # ------------------------------------------------- 三份历史 (SPEC 06 §6)
 hist-pinned = { $line } 已固定 · 不再被挤出
