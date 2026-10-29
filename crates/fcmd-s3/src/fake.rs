@@ -36,10 +36,19 @@ pub struct Store {
     pub seen: Vec<String>,
     /// Refuse everything with this code, if set.
     pub refuse: Option<(u16, String, String)>,
+    /// Serve this many requests and refuse everything after them, for a transfer that breaks
+    /// in the middle. Zero means no such limit.
+    pub refuse_after: usize,
     /// Serve unsigned *reads*, the way a bucket with a public read policy does. Off by
     /// default, because a private bucket is the case that has to work. An unsigned write is
     /// refused whatever this says.
     pub public: bool,
+    /// Multipart uploads that have been started and not completed: id → the parts that have
+    /// arrived, by number. An upload that is aborted is taken out of here, which is how a
+    /// test sees that nothing is left behind.
+    pub uploads: BTreeMap<String, BTreeMap<u32, Vec<u8>>>,
+    /// How many uploads have been started, so each id is its own.
+    pub upload_count: u64,
 }
 
 /// A running fake service.
@@ -230,6 +239,11 @@ impl Server {
             if let Some((status, code, message)) = store.refuse.clone() {
                 return error_response(status, &code, &message);
             }
+            // The request being served is already in `seen`, so "after one request" means
+            // the second one is the first to be refused.
+            if store.refuse_after > 0 && store.seen.len() > store.refuse_after {
+                return error_response(500, "InternalError", "the service gave up");
+            }
         }
 
         // Path style only: `/`, `/bucket/`, `/bucket/key`.
@@ -256,11 +270,114 @@ impl Server {
         if key.is_empty() {
             return error_response(405, "MethodNotAllowed", "nothing to do with a bucket");
         }
+        // Multipart: start, one part, complete, abort. Each is told apart by its query, as
+        // the service tells them apart (SPEC 04 §6b).
+        if method == "POST" && params.contains_key("uploads") {
+            return self.start_upload(&bucket, &key);
+        }
+        if let Some(upload) = params.get("uploadId") {
+            let part = params.get("partNumber").and_then(|n| n.parse::<u32>().ok());
+            return match (method, part) {
+                ("PUT", Some(part)) => self.put_part(upload, part, body),
+                ("POST", _) => self.finish_upload(&bucket, &key, upload, &body),
+                ("DELETE", _) => self.abort_upload(upload),
+                _ => error_response(400, "InvalidRequest", "not a multipart request"),
+            };
+        }
         match method {
             "PUT" => self.put(&bucket, &key, body, header),
             "DELETE" => self.delete(&bucket, &key),
             _ => self.object(method, &bucket, &key, header),
         }
+    }
+
+    /// `POST ?uploads`: an id, which every part then carries.
+    fn start_upload(&self, bucket: &str, key: &str) -> Vec<u8> {
+        let mut store = self.store.lock().expect("the store");
+        if !store.buckets.contains_key(bucket) {
+            return error_response(404, "NoSuchBucket", "the specified bucket does not exist");
+        }
+        store.upload_count += 1;
+        let id = format!("upload-{}", store.upload_count);
+        store.uploads.insert(id.clone(), BTreeMap::new());
+        let body = format!(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?><InitiateMultipartUploadResult>\
+             <Bucket>{bucket}</Bucket><Key>{key}</Key><UploadId>{id}</UploadId>\
+             </InitiateMultipartUploadResult>"
+        );
+        ok_response(body.into_bytes(), &[])
+    }
+
+    /// `PUT ?partNumber&uploadId`: the bytes of one part, kept until the upload is completed.
+    fn put_part(&self, upload: &str, part: u32, body: Vec<u8>) -> Vec<u8> {
+        let mut store = self.store.lock().expect("the store");
+        let Some(parts) = store.uploads.get_mut(upload) else {
+            return error_response(404, "NoSuchUpload", "the upload does not exist");
+        };
+        let tag = format!("\"{}-{part}\"", body.len());
+        parts.insert(part, body);
+        ok_response(Vec::new(), &[("ETag", tag)])
+    }
+
+    /// `POST ?uploadId`: the parts named in the body, in the order given, become the object.
+    ///
+    /// The real service checks the tags and the order, and so does this: a list that names a
+    /// part nobody sent, or names them out of order, is the mistake worth catching in a test.
+    fn finish_upload(&self, bucket: &str, key: &str, upload: &str, body: &[u8]) -> Vec<u8> {
+        let text = String::from_utf8_lossy(body).to_string();
+        let mut wanted: Vec<u32> = Vec::new();
+        let mut inside = false;
+        for event in crate::xml::Scan::new(&text) {
+            match event {
+                crate::xml::Event::Open("PartNumber") => inside = true,
+                crate::xml::Event::Text(text) if inside => {
+                    if let Ok(n) = text.trim().parse::<u32>() {
+                        wanted.push(n);
+                    }
+                }
+                crate::xml::Event::Close("PartNumber") => inside = false,
+                _ => {}
+            }
+        }
+        let mut store = self.store.lock().expect("the store");
+        let Some(parts) = store.uploads.remove(upload) else {
+            return error_response(404, "NoSuchUpload", "the upload does not exist");
+        };
+        if wanted.is_empty() {
+            return error_response(400, "InvalidRequest", "no parts were named");
+        }
+        if wanted.windows(2).any(|w| w[0] >= w[1]) {
+            return error_response(400, "InvalidPartOrder", "the parts are out of order");
+        }
+        let mut bytes = Vec::new();
+        for number in &wanted {
+            match parts.get(number) {
+                Some(part) => bytes.extend_from_slice(part),
+                None => return error_response(400, "InvalidPart", "a named part is not here"),
+            }
+        }
+        let len = bytes.len();
+        store
+            .buckets
+            .get_mut(bucket)
+            .expect("the bucket is there")
+            .insert(key.to_string(), bytes);
+        let body = format!(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?><CompleteMultipartUploadResult>\
+             <Bucket>{bucket}</Bucket><Key>{key}</Key><ETag>&quot;{len:032x}-{}&quot;</ETag>\
+             </CompleteMultipartUploadResult>",
+            wanted.len()
+        );
+        ok_response(body.into_bytes(), &[])
+    }
+
+    /// `DELETE ?uploadId`: the parts go, and the object was never there.
+    fn abort_upload(&self, upload: &str) -> Vec<u8> {
+        let mut store = self.store.lock().expect("the store");
+        store.uploads.remove(upload);
+        let mut head = String::from("HTTP/1.1 204 No Content\r\n");
+        head.push_str("Content-Length: 0\r\nConnection: close\r\n\r\n");
+        head.into_bytes()
     }
 
     /// Recompute the signature from what arrived. `None` when it matches.

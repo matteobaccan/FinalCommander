@@ -332,7 +332,7 @@ and `F8` arrive with their dialog, progress bar, overwrite question and `Esc` al
 
 | Operation | How | 
 | --- | --- |
-| local → bucket | one `PUT`, the body streamed off the disk. The signature covers the body, so the file is read twice: once to hash it, once to send it — `UNSIGNED-PAYLOAD` would save the first read and not every service that speaks this protocol accepts it. |
+| local → bucket | one `PUT`, the body streamed off the disk, or **in parts** over 64 MiB (§8.3b). The signature covers the body, so the file is read twice: once to hash it, once to send it — `UNSIGNED-PAYLOAD` would save the first read and not every service that speaks this protocol accepts it. |
 | bucket → local | one `GET`, written to the file a chunk at a time, so an object larger than this process is not a problem. Cancelling removes the partial file. |
 | key → key, one service | `PUT` with `x-amz-copy-source`: the service does it and the bytes never come here. |
 | key → key, two services, or bucket ↔ server | down to a staging file under the temporary directory, then up again, and the staging copy goes however it ends. |
@@ -347,16 +347,44 @@ preserve the file's time, which is what every other client of these services als
 `apply_meta` returns success having done nothing, because a copy that failed on that account
 would fail every copy.
 
-Still to come: a **multipart upload**. One `PUT` is one object, which AWS caps at five
-gigabytes; above that the upload has to be cut into parts and completed with a manifest, and
-that is also the mechanism a resumable upload needs. Until it is here, the service's own
-refusal is what says so. A **batch delete** (`POST ?delete`) would turn a thousand keys into
-one request rather than a thousand, at the price of a `Content-MD5` the signer does not
-compute yet.
+Still to come: a **batch delete** (`POST ?delete`) would turn a thousand keys into one request
+rather than a thousand, at the price of a `Content-MD5` the signer does not compute yet.
 
 A service configured without credentials can read and nothing more. That is not expressible in
 `Caps`, which describes a provider and not each of the services behind it, so the rows it
 returns carry `READONLY` and `S3Vfs::writable` answers the question before an attempt is made.
+
+### 8.3b A large file goes up in parts
+
+One `PUT` is the better answer while it works: one signature, one round trip, and nothing left
+behind if it fails. It stops working at five gigabytes, which is the service's own limit for a
+single request, and well before that it is an all-or-nothing bet on a long transfer — an hour
+of upload thrown away by one dropped connection.
+
+So a file over `SINGLE_PUT_MOST` (64 MiB) goes up as a multipart upload: `POST ?uploads` for an
+id, a `PUT ?partNumber=N&uploadId=…` per part, and `POST ?uploadId=…` with the list of parts
+and their tags, which is the request that makes the object exist. A part is 8 MiB
+(`PART_SIZE`), doubled as often as it takes to fit the file into ten thousand parts, which is
+the service's limit on the count. Each part is signed over its own bytes, read from where they
+lie in the file rather than copied — `sign::sha256_file_range` — and sent one at a time: a file
+manager's upload shares a connection pool with the rest of the program, and a part that fails
+is retried by the same code that retries every other request.
+
+**A failure aborts the upload** (`DELETE ?uploadId=…`), with a cancellation token of its own so
+that `Esc` cannot cancel the cleanup as well. This is not tidiness: until the completion
+arrives the parts are stored and the object is not, and stored parts are a charge on somebody's
+account that no listing shows.
+
+The completion is also the one request whose failure can arrive inside a `200` — the service
+answers while it assembles — so the body is read and an error in it is reported as an error.
+
+From outside, none of this shows: `put_file` answers with the number of bytes written whichever
+way they went. `Client::with_parts` sets the two limits, which is how the tests drive the whole
+of the path with a thirty-byte file.
+
+What is still not here: **resuming** an upload that was interrupted — the parts and the id
+would have to outlive the session, which means writing them down somewhere — and sending
+several parts at once, which is a throughput decision rather than a correctness one.
 
 ### 8.4 Prefixes and keys
 
@@ -409,11 +437,11 @@ Not there yet: **a copy out through the job engine**. `F5` from a bucket to a lo
 `JobFs` implemented for object storage — `facts`, `read_dir` and `copy_file` — and that is the
 next increment rather than this one.
 
-And writing at all. The capabilities say `READ | SEEK | CASE_SENSITIVE` and nothing else, so
-the UI offers nothing it cannot do: no `F6` rename (object storage has no rename — it is a copy
-and a delete), no permissions, no timestamps. Upload, delete and server-side copy come with the
-job engine's side of it; a multipart upload is a protocol of its own, and a half-finished one
-of a large object is a charge on someone's account, so it is not worth shipping half-done.
+Both of those are **shipped** (0.3.0 and after): `ObjectFs` is the job engine's filesystem for
+`s3://`, so `F5`, `F6`, `F7` and `F8` work, and a file over 64 MiB goes up in parts (§8.3b) —
+which is the protocol of its own this paragraph used to say was not worth shipping half-done.
+What the capabilities still say nothing about is what object storage does not have: no
+permissions, no timestamps, and no rename that is not a copy and a delete.
 
 ### 8.7 How it is tested
 

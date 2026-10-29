@@ -94,6 +94,15 @@ impl<'a> Iterator for Scan<'a> {
     }
 }
 
+/// The other direction, for the one document this program *writes*: the list of parts a
+/// multipart upload is completed with. Only the three characters that could end the element
+/// early, which is all a tag or a number can hold.
+pub fn escape(text: &str) -> String {
+    text.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
 /// The five entities XML defines, and numeric references in both bases.
 pub fn unescape(text: &str) -> String {
     if !text.contains('&') {
@@ -304,6 +313,20 @@ pub fn parse_buckets(text: &str) -> Vec<BucketRow> {
 
 /// Read an error document. `None` when the body is not one — a proxy's HTML page, say, or
 /// nothing at all, which is what a bare `403` from a bucket policy gives.
+/// The id in `<InitiateMultipartUploadResult>`, which every part of the upload then carries.
+pub fn parse_upload_id(text: &str) -> Option<String> {
+    let mut inside = false;
+    for event in Scan::new(text) {
+        match event {
+            Event::Open("UploadId") => inside = true,
+            Event::Text(text) if inside => return Some(text.trim().to_string()),
+            Event::Close("UploadId") => inside = false,
+            _ => {}
+        }
+    }
+    None
+}
+
 pub fn parse_error(text: &str) -> Option<ServiceError> {
     let mut error = ServiceError::default();
     let mut path: Vec<&str> = Vec::new();

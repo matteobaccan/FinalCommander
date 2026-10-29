@@ -18,6 +18,23 @@ use crate::sign::{self, Credentials, Signable, Signer, EMPTY_SHA256};
 use crate::uri;
 use crate::xml::{self, BucketRow, Page};
 
+/// Above this, a file goes up in parts rather than as one `PUT` (SPEC 04 §6b).
+///
+/// One `PUT` is the better answer while it works: one signature, one round trip, and nothing
+/// left behind if it fails. It stops working at five gigabytes, which is the service's own
+/// limit, and well before that a single request is an all-or-nothing bet on a long transfer —
+/// an hour of upload thrown away by one dropped connection. Sixty-four mebibytes is where the
+/// bet stops being worth it.
+pub const SINGLE_PUT_MOST: u64 = 64 * 1024 * 1024;
+
+/// How much of the file one part carries. Eight mebibytes is comfortably over the service's
+/// five-mebibyte minimum for every part but the last.
+pub const PART_SIZE: u64 = 8 * 1024 * 1024;
+
+/// How many parts one upload may have — the service's own limit, and what makes the part size
+/// grow for a very large file rather than the part count.
+pub const PARTS_MOST: u64 = 10_000;
+
 /// How many keys one page of a listing asks for. A thousand is the service's own maximum, and
 /// asking for fewer only means more round trips.
 pub const PAGE_KEYS: u32 = 1000;
@@ -31,6 +48,21 @@ pub struct Client {
     signer: Option<Signer>,
     timeout: Duration,
     retries: u32,
+    /// Where one `PUT` stops and parts begin, and how big a part is. Fields rather than
+    /// constants so that a test can use five bytes and still exercise the whole of it.
+    single_most: u64,
+    part_size: u64,
+}
+
+/// Which part of a multipart upload, and where it is in the file.
+///
+/// Parts are numbered from one, as the service counts them; `at` and `len` say where this
+/// part lies, so its bytes are read from the file where they are rather than copied.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Part {
+    pub number: u32,
+    pub at: u64,
+    pub len: u64,
 }
 
 /// What a `HEAD` tells us about one object.
@@ -61,6 +93,8 @@ impl Client {
             signer,
             timeout: Duration::from_secs(30),
             retries: 3,
+            single_most: SINGLE_PUT_MOST,
+            part_size: PART_SIZE,
         })
     }
 
@@ -88,6 +122,14 @@ impl Client {
 
     pub fn with_timeout(mut self, timeout: Duration) -> Client {
         self.timeout = timeout;
+        self
+    }
+
+    /// Where one `PUT` stops and parts begin, and how big a part is. For the tests, and for
+    /// a service whose limits are not the ones AWS publishes.
+    pub fn with_parts(mut self, single_most: u64, part_size: u64) -> Client {
+        self.single_most = single_most.max(1);
+        self.part_size = part_size.max(1);
         self
     }
 
@@ -201,8 +243,12 @@ impl Client {
     /// One `PUT` is one operation to the service: it either arrives whole or leaves nothing
     /// behind, so there is no half-written object and no partial progress worth reporting
     /// after a failure. `Esc` is answered before the body starts and by the request timeout
-    /// after it. An object above five gigabytes needs a multipart upload, which this is not,
-    /// and the service's own refusal is what says so.
+    /// after it.
+    ///
+    /// A file over `SINGLE_PUT_MOST` goes up in parts instead (SPEC 04 §6b): the service
+    /// refuses a single `PUT` over five gigabytes outright, and long before that one request
+    /// is an all-or-nothing bet on a long transfer. The parts are an implementation detail
+    /// from here — the answer is the same number of bytes written.
     pub async fn put_file(
         &self,
         bucket: &str,
@@ -214,6 +260,11 @@ impl Client {
             .await
             .map_err(|e| local_error(source, e))?
             .len();
+        if len > self.single_most {
+            return self
+                .put_file_in_parts(bucket, key, source, len, cancel)
+                .await;
+        }
         let path = source.to_path_buf();
         let sha = tokio::task::spawn_blocking(move || sign::sha256_file(&path))
             .await
@@ -234,6 +285,219 @@ impl Client {
         )
         .await?;
         Ok(len)
+    }
+
+    /// Start a multipart upload, and get back the id every part of it carries.
+    pub async fn create_multipart(
+        &self,
+        bucket: &str,
+        key: &str,
+        cancel: &CancelToken,
+    ) -> Result<String> {
+        let response = self
+            .send(
+                "POST",
+                bucket,
+                key,
+                &[("uploads", String::new())],
+                &[],
+                Payload::Empty,
+                cancel,
+            )
+            .await?;
+        let text = response
+            .text()
+            .await
+            .map_err(|e| S3Error::Local(e.to_string()))?;
+        xml::parse_upload_id(&text).ok_or_else(|| {
+            S3Error::Local("the service started an upload without saying its id".to_string())
+        })
+    }
+
+    /// Send one part, and get back the tag that names it in the list below.
+    pub async fn upload_part(
+        &self,
+        bucket: &str,
+        key: &str,
+        upload: &str,
+        source: &std::path::Path,
+        part: Part,
+        cancel: &CancelToken,
+    ) -> Result<String> {
+        let path = source.to_path_buf();
+        let (at, len) = (part.at, part.len);
+        let sha = tokio::task::spawn_blocking(move || sign::sha256_file_range(&path, at, len))
+            .await
+            .map_err(|e| S3Error::Local(e.to_string()))?
+            .map_err(|e| local_error(source, e))?;
+        let response = self
+            .send(
+                "PUT",
+                bucket,
+                key,
+                &[
+                    ("partNumber", part.number.to_string()),
+                    ("uploadId", upload.to_string()),
+                ],
+                &[],
+                Payload::FileRange {
+                    path: source.to_path_buf(),
+                    at,
+                    len,
+                    sha256: sha,
+                },
+                cancel,
+            )
+            .await?;
+        response
+            .headers()
+            .get("etag")
+            .and_then(|v| v.to_str().ok())
+            .map(|e| e.to_string())
+            .ok_or_else(|| S3Error::Local(format!("part {} came back without a tag", part.number)))
+    }
+
+    /// Say that the parts are all there, which is what makes the object exist.
+    ///
+    /// Until this arrives the parts are stored and the object is not: that is why the failure
+    /// path below aborts rather than walking away.
+    pub async fn complete_multipart(
+        &self,
+        bucket: &str,
+        key: &str,
+        upload: &str,
+        parts: &[(u32, String)],
+        cancel: &CancelToken,
+    ) -> Result<()> {
+        let mut body = String::from("<CompleteMultipartUpload>");
+        for (number, etag) in parts {
+            body.push_str(&format!(
+                "<Part><PartNumber>{number}</PartNumber><ETag>{}</ETag></Part>",
+                xml::escape(etag)
+            ));
+        }
+        body.push_str("</CompleteMultipartUpload>");
+        let bytes = body.into_bytes();
+        let sha = sign::sha256_hex(&bytes);
+        let response = self
+            .send(
+                "POST",
+                bucket,
+                key,
+                &[("uploadId", upload.to_string())],
+                &[],
+                Payload::Bytes(Arc::new(bytes), sha),
+                cancel,
+            )
+            .await?;
+        // A completion can fail *inside* a 200: the service answers while it assembles, and
+        // an error then arrives in the body rather than in the status.
+        let text = response
+            .text()
+            .await
+            .map_err(|e| S3Error::Local(e.to_string()))?;
+        if let Some(error) = xml::parse_error(&text) {
+            return Err(S3Error::Service {
+                status: 200,
+                code: error.code,
+                message: error.message,
+                region: None,
+            });
+        }
+        Ok(())
+    }
+
+    /// Throw an unfinished upload away, so the parts already sent stop being storage somebody
+    /// is paying for. Best effort: the failure that brought us here is the one worth
+    /// reporting.
+    pub async fn abort_multipart(
+        &self,
+        bucket: &str,
+        key: &str,
+        upload: &str,
+        cancel: &CancelToken,
+    ) -> Result<()> {
+        self.send(
+            "DELETE",
+            bucket,
+            key,
+            &[("uploadId", upload.to_string())],
+            &[],
+            Payload::Empty,
+            cancel,
+        )
+        .await?;
+        Ok(())
+    }
+
+    /// A file in parts: start, send each part, say they are all there.
+    ///
+    /// How big a part is follows the file: the configured size, or as much larger as it takes
+    /// to fit in ten thousand parts, which is the service's limit. The parts go up one at a
+    /// time rather than several at once — a file manager's upload competes with the rest of
+    /// the program for the same connection pool, and a dropped part is retried by `send`
+    /// itself.
+    async fn put_file_in_parts(
+        &self,
+        bucket: &str,
+        key: &str,
+        source: &std::path::Path,
+        len: u64,
+        cancel: &CancelToken,
+    ) -> Result<u64> {
+        let mut part_size = self.part_size;
+        while len / part_size >= PARTS_MOST {
+            part_size *= 2;
+        }
+        let upload = self.create_multipart(bucket, key, cancel).await?;
+        let mut parts: Vec<(u32, String)> = Vec::new();
+        let mut at = 0u64;
+        let mut number = 1u32;
+        let outcome = loop {
+            if at >= len {
+                break Ok(());
+            }
+            let this = part_size.min(len - at);
+            match self
+                .upload_part(
+                    bucket,
+                    key,
+                    upload.as_str(),
+                    source,
+                    Part {
+                        number,
+                        at,
+                        len: this,
+                    },
+                    cancel,
+                )
+                .await
+            {
+                Ok(etag) => parts.push((number, etag)),
+                Err(e) => break Err(e),
+            }
+            at += this;
+            number += 1;
+        };
+        let outcome = match outcome {
+            Ok(()) => {
+                self.complete_multipart(bucket, key, upload.as_str(), &parts, cancel)
+                    .await
+            }
+            Err(e) => Err(e),
+        };
+        match outcome {
+            Ok(()) => Ok(len),
+            Err(e) => {
+                // The parts that did arrive are storage, and storage is billed: take them
+                // away before reporting what went wrong. A cancelled upload is aborted too,
+                // and with a token of its own, or the abort would be cancelled as well.
+                let _ = self
+                    .abort_multipart(bucket, key, upload.as_str(), &CancelToken::new())
+                    .await;
+                Err(e)
+            }
+        }
     }
 
     /// Copy an object inside the service, without the bytes coming through here.
@@ -572,6 +836,13 @@ enum Payload {
         len: u64,
         sha256: String,
     },
+    /// One stretch of a file: a part of a multipart upload, signed over its own bytes.
+    FileRange {
+        path: std::path::PathBuf,
+        at: u64,
+        len: u64,
+        sha256: String,
+    },
 }
 
 impl Payload {
@@ -582,6 +853,7 @@ impl Payload {
             Payload::Empty => EMPTY_SHA256,
             Payload::Bytes(_, sha) => sha,
             Payload::File { sha256, .. } => sha256,
+            Payload::FileRange { sha256, .. } => sha256,
         }
     }
 
@@ -592,7 +864,9 @@ impl Payload {
         match self {
             Payload::Empty => None,
             Payload::Bytes(body, _) => Some(("content-length", body.len().to_string())),
-            Payload::File { len, .. } => Some(("content-length", len.to_string())),
+            Payload::File { len, .. } | Payload::FileRange { len, .. } => {
+                Some(("content-length", len.to_string()))
+            }
         }
     }
 
@@ -612,6 +886,19 @@ impl Payload {
                     .await
                     .map_err(|e| local_error(&path, e))?;
                 let stream = tokio_util::io::ReaderStream::new(file);
+                let _ = host;
+                Ok(request.body(reqwest::Body::wrap_stream(stream)))
+            }
+            // The same, from an offset and for a length: the part and not the file.
+            Payload::FileRange { path, at, len, .. } => {
+                use tokio::io::{AsyncReadExt, AsyncSeekExt};
+                let mut file = tokio::fs::File::open(&path)
+                    .await
+                    .map_err(|e| local_error(&path, e))?;
+                file.seek(std::io::SeekFrom::Start(at))
+                    .await
+                    .map_err(|e| local_error(&path, e))?;
+                let stream = tokio_util::io::ReaderStream::new(file.take(len));
                 let _ = host;
                 Ok(request.body(reqwest::Body::wrap_stream(stream)))
             }
@@ -772,7 +1059,103 @@ mod tests {
             .is_ok_and(|m| m.size == 0));
     }
 
+    /// A file over the single-`PUT` limit goes up in parts, and what lands is the file.
+    ///
+    /// The limits are set to a few bytes here so the whole of the path runs: start, several
+    /// parts, a last short one, and the completion that makes the object exist.
+    #[tokio::test]
+    async fn a_large_file_is_uploaded_in_parts() {
+        let (fake, client) = service().await;
+        let client = client.with_parts(8, 4);
+        let cancel = CancelToken::new();
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("big.bin");
+        // Not a multiple of the part size, so the last part is a short one.
+        let body: Vec<u8> = (0..30u32).map(|i| (i % 251) as u8).collect();
+        std::fs::write(&file, &body).unwrap();
+
+        let sent = client
+            .put_file("logs", "big/parts.bin", &file, &cancel)
+            .await
+            .expect("the upload is accepted");
+        assert_eq!(sent, body.len() as u64);
+        let back = client
+            .get("logs", "big/parts.bin", None, &cancel)
+            .await
+            .expect("it reads back");
+        assert_eq!(back, body, "the parts went back together in order");
+        // Eight parts of four bytes, as asked for.
+        let seen = fake.store.lock().expect("the store").seen.clone();
+        let parts = seen.iter().filter(|r| r.contains("partNumber=")).count();
+        assert_eq!(parts, 8, "{seen:#?}");
+        assert!(
+            fake.store.lock().expect("the store").uploads.is_empty(),
+            "the upload was completed, so nothing is left unfinished"
+        );
+
+        // A file that fits in one `PUT` still goes as one: the parts are for the ones that
+        // do not.
+        let small = dir.path().join("small.bin");
+        std::fs::write(&small, b"12345678").unwrap();
+        fake.store.lock().expect("the store").seen.clear();
+        client
+            .put_file("logs", "big/small.bin", &small, &cancel)
+            .await
+            .expect("the upload is accepted");
+        let seen = fake.store.lock().expect("the store").seen.clone();
+        assert!(
+            !seen
+                .iter()
+                .any(|r| r.contains("uploads") || r.contains("uploadId")),
+            "{seen:#?}"
+        );
+    }
+
+    /// A part that cannot be sent takes the whole upload with it, and the parts that did
+    /// arrive are thrown away rather than left as storage somebody pays for.
+    #[tokio::test]
+    async fn a_failed_part_aborts_the_upload() {
+        let (fake, client) = service().await;
+        let client = client.with_parts(8, 4).with_timeout(Duration::from_secs(5));
+        let cancel = CancelToken::new();
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("big.bin");
+        std::fs::write(&file, vec![7u8; 30]).unwrap();
+
+        // The service refuses everything from the second request on: the upload starts and
+        // the first part fails, which is the shape of a dropped transfer.
+        {
+            let mut store = fake.store.lock().expect("the store");
+            store.refuse_after = 1;
+        }
+        let error = client
+            .put_file("logs", "big/doomed.bin", &file, &cancel)
+            .await
+            .expect_err("the part cannot be sent");
+        assert!(
+            matches!(error, S3Error::Service { .. }),
+            "the service's refusal is what is reported: {error}"
+        );
+        {
+            let mut store = fake.store.lock().expect("the store");
+            store.refuse_after = 0;
+            store.refuse = None;
+        }
+        assert!(
+            !fake
+                .store
+                .lock()
+                .expect("the store")
+                .buckets
+                .get("logs")
+                .expect("the bucket")
+                .contains_key("big/doomed.bin"),
+            "a failed upload leaves no object"
+        );
+    }
+
     /// A write to a bucket that is not there says which bucket, and a write with no
+    /// credentials is refused by the service rather than by a guess here.    /// A write to a bucket that is not there says which bucket, and a write with no
     /// credentials is refused by the service rather than by a guess here.
     #[tokio::test]
     async fn a_write_that_cannot_work_says_why() {

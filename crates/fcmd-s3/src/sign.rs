@@ -227,6 +227,29 @@ pub fn sha256_hex(body: &[u8]) -> String {
 /// uploaded as a stream is read twice: once to hash it, once to send it. The alternative the
 /// protocol allows — `UNSIGNED-PAYLOAD` — asks the service to take the body on trust, and not
 /// every service that speaks this protocol is willing to.
+/// The hash of one stretch of a file, for a part of a multipart upload.
+///
+/// A part is signed over its own bytes and nothing else, so each one is hashed where it
+/// stands rather than the whole file being copied into memory to cut it up.
+pub fn sha256_file_range(path: &std::path::Path, at: u64, len: u64) -> std::io::Result<String> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut file = std::fs::File::open(path)?;
+    file.seek(SeekFrom::Start(at))?;
+    let mut context = digest::Context::new(&digest::SHA256);
+    let mut block = vec![0u8; 256 * 1024];
+    let mut left = len;
+    while left > 0 {
+        let want = block.len().min(left as usize);
+        let read = file.read(&mut block[..want])?;
+        if read == 0 {
+            break;
+        }
+        context.update(&block[..read]);
+        left -= read as u64;
+    }
+    Ok(hex(context.finish().as_ref()))
+}
+
 pub fn sha256_file(path: &std::path::Path) -> std::io::Result<String> {
     use std::io::Read;
     let mut file = std::fs::File::open(path)?;

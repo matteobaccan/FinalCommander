@@ -4,6 +4,24 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
+## [Unreleased]
+
+### Added
+
+- **A large file goes up to object storage in parts** (SPEC 04 §8.3b). One `PUT` is the better
+  answer while it works — one signature, one round trip, nothing left behind if it fails — and
+  it stops working at five gigabytes, which is the service's own limit; well before that it is
+  an all-or-nothing bet on a long transfer, an hour of upload thrown away by one dropped
+  connection. So a file over 64 MiB is now cut into 8 MiB parts, each signed over its own
+  bytes and read from where it lies in the file rather than copied, and the part size doubles
+  as often as it takes to fit the file into the ten thousand parts the service allows. A
+  failure aborts the upload — with a cancellation token of its own, so `Esc` cannot cancel the
+  cleanup as well — because until the completion arrives the parts are stored and the object
+  is not, and stored parts are a charge on somebody's account that no listing shows. The
+  completion's own answer is read, too: it is the one request that can fail inside a `200`.
+  From outside nothing changes: the answer is the number of bytes written, whichever way they
+  went. `--set`-able limits, so the tests drive the whole path with a thirty-byte file.
+
 ## [0.16.0] — 2026-10-29
 
 ### Added
