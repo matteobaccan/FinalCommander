@@ -393,6 +393,18 @@ impl Panel {
             .collect()
     }
 
+    /// The directory a row *names*, for a drop that lands on it (SPEC 02 §12): the parent
+    /// for `..`, the directory itself for a directory, and `None` for anything else — a file
+    /// is not somewhere to copy into, and a drop on one means the panel it is in.
+    pub fn dir_at(&self, row: usize) -> Option<VPath> {
+        let e = self.listing.row(row)?;
+        match e.kind {
+            EntryKind::Parent => self.cwd.parent().map(|p| p.normalised()),
+            EntryKind::Dir | EntryKind::Symlink => Some(self.path_of(e)),
+            _ => None,
+        }
+    }
+
     /// Target of `Enter` / `Ctrl+PgDn`: `Some(path)` for a directory, `None` for a file.
     pub fn enter_target(&self) -> Option<VPath> {
         let e = self.current()?;

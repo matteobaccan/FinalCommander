@@ -679,12 +679,15 @@ went down, so that one gesture cannot turn into the other halfway:
 | --- | --- |
 | drag from a row | selects every row it sweeps, in the panel the press began in, and leaves the cursor where it stopped. It only ever selects: a sweep that overshoots and comes back leaves what it passed over selected, which is the right way round for a gesture nobody aims precisely — the right button takes one row out again and `Gray *` turns the lot round. A drag that wanders into the other panel selects nothing there, and carries on where it left off if it comes back |
 | drag the frame where the panels meet | moves the rule between them, within the same limits `Ctrl+←` and `Ctrl+→` keep, so the two ways of moving it cannot disagree about how narrow a panel may get. The press alone does nothing: a click on a frame never did, and a press that moved the split would be a trap |
+| drop on the other panel | opens the **copy dialog**, with the destination the pointer chose: the directory under it, or that panel's own when the row is a file — a file is not somewhere to copy into. What it acts on is what the sweep on the way over selected, or the row the press landed on, so it is `F5` with the destination filled in, down to the error when there is nothing to copy |
 
-Dragging *between* the panels — a selection dropped on the other side — is the one left, and it
-is left on purpose: what a drop means is a question rather than a gap. In the Explorer a drag
-within one drive moves and across drives copies, which is a rule that has surprised people for
-thirty years; FAR asks instead. Until that is answered a drop would be a destructive operation
-started by a slip of the hand, and `F5` with two panels open is already the short way to do it.
+A drop copies nothing by itself, and that is the decision rather than a gap. The gesture is
+imprecise by nature and starts by accident, so what answers for it is the dialog that was
+already there — the conflict policy, the filter, what travels with the file — and the way out
+is the `Esc` every dialog has. In the Explorer a drag within one drive moves and across drives
+copies: the same gesture doing two different things depending on where the files are, one of
+which deletes the original. That rule has surprised people for thirty years; FAR asks instead,
+and so does this.
 
 ## 13. Descriptions (`descript.ion`, shipped in 0.7.3)
 

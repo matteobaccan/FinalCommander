@@ -3088,7 +3088,21 @@ impl App {
             // it. Nothing here opens a context menu, so there is nothing to take it away from.
             MouseKind::Press(Button::Right) => self.right_click(col, row),
             MouseKind::Drag(Button::Left) => self.drag_to(col, row),
-            // A release ends whatever the press began, whichever button it was.
+            // A release ends whatever the press began — and when what it began was a sweep
+            // of one panel's rows and it ends over the *other* panel, that is a drop.
+            MouseKind::Release(Button::Left) => {
+                if let Some(Drag::Rows { side, .. }) = self.drag.take() {
+                    match self.layout.hit(col, row) {
+                        Some(crate::hit::Hit::Row { side: over, index }) if over != side => {
+                            self.drop_on(over, Some(index))
+                        }
+                        Some(crate::hit::Hit::Panel { side: over }) if over != side => {
+                            self.drop_on(over, None)
+                        }
+                        _ => {}
+                    }
+                }
+            }
             MouseKind::Release(_) => self.drag = None,
             MouseKind::Press(Button::Middle) | MouseKind::Drag(_) => {}
         }
@@ -3216,6 +3230,35 @@ impl App {
             }
             None => {}
         }
+    }
+
+    /// A selection dropped on the other panel (SPEC 02 §12).
+    ///
+    /// It opens the copy dialog with the destination the pointer chose — the directory under
+    /// it, or that panel's own — and copies nothing by itself. The gesture is imprecise by
+    /// nature and starts by accident, so what answers for it is the dialog that was already
+    /// there: the conflict policy, the filter, what travels with the file. The Explorer's
+    /// rule, where a drag within one drive moves and a drag across drives copies, is the
+    /// other way this could have gone and has surprised people for thirty years; FAR asks,
+    /// and so does this.
+    ///
+    /// The sources are whatever is selected in the panel the drag began in, which is what the
+    /// sweep on the way over has just selected — so this is `F5` with the destination filled
+    /// in, down to the error when there is nothing to copy.
+    fn drop_on(&mut self, over: usize, row: Option<usize>) {
+        let into = row
+            .and_then(|row| self.panels[over].dir_at(row))
+            .unwrap_or_else(|| self.panels[over].cwd.clone());
+        self.run(Command::FileCopy);
+        let Mode::Form(form) = &mut self.mode else {
+            // Nothing to copy: the command has already said so, and said it better.
+            return;
+        };
+        let mut text = into.to_string();
+        if !text.ends_with(std::path::MAIN_SEPARATOR) {
+            text.push(std::path::MAIN_SEPARATOR);
+        }
+        form.set_text("copy.target", text);
     }
 
     /// Select every row between the one the press landed on and the one the pointer is over,
@@ -28601,6 +28644,65 @@ abcdefghij
             panic!("{:?}", app.mode)
         };
         assert_eq!(viewer.col, 0, "and back, not past the start");
+    }
+
+    /// A selection dropped on the other panel opens the copy dialog with the destination the
+    /// pointer chose, and copies nothing by itself. A release inside the panel the drag began
+    /// in opens nothing at all: that gesture is the sweep.
+    #[test]
+    fn dropping_on_the_other_panel_opens_the_copy_dialog() {
+        let mut app = app();
+        drawn(&mut app, 80, 25);
+        let left = app.layout.panels[0].expect("the left panel").area;
+        let right = app.layout.panels[1].expect("the right panel").area;
+        let at = |app: &mut App, kind, col, row| {
+            app.handle_input(Input::Mouse(fcmd_tui::Mouse {
+                kind,
+                col,
+                row,
+                mods: Mods::NONE,
+            }));
+        };
+        let press = fcmd_tui::MouseKind::Press(fcmd_tui::Button::Left);
+        let release = fcmd_tui::MouseKind::Release(fcmd_tui::Button::Left);
+
+        // From `a.txt` in the left panel onto the `docs` directory in the right one.
+        at(&mut app, press, left.x + 1, left.y + 2);
+        assert_eq!(app.panel().cursor, 2);
+        at(&mut app, release, right.x + 1, right.y + 1);
+        let Mode::Form(form) = &app.mode else {
+            panic!("the copy dialog opened: {:?}", app.mode)
+        };
+        assert_eq!(form.kind, FormKind::Copy);
+        assert_eq!(
+            form.text_value("copy.target"),
+            format!("/tmp/docs{}", std::path::MAIN_SEPARATOR),
+            "the directory the pointer was over, not the panel's own"
+        );
+        assert_eq!(
+            app.copy_sources,
+            vec![VPath::local("/home/mb/a.txt")],
+            "the row the drag began on, nothing having been selected"
+        );
+
+        // Dropped on a *file* row, it is that panel's directory: a file is not somewhere to
+        // copy into.
+        app.mode = Mode::Normal;
+        at(&mut app, press, left.x + 1, left.y + 2);
+        at(&mut app, release, right.x + 1, right.y + 3);
+        let Mode::Form(form) = &app.mode else {
+            panic!("the copy dialog opened: {:?}", app.mode)
+        };
+        assert_eq!(
+            form.text_value("copy.target"),
+            format!("/tmp{}", std::path::MAIN_SEPARATOR)
+        );
+
+        // And a release inside the panel it began in is the sweep, not a drop.
+        app.mode = Mode::Normal;
+        at(&mut app, press, left.x + 1, left.y + 2);
+        at(&mut app, release, left.x + 1, left.y + 3);
+        assert!(matches!(app.mode, Mode::Normal), "{:?}", app.mode);
     }
 
     /// A drag over the rows selects what it sweeps, and leaves the cursor where it stopped.

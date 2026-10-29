@@ -6,6 +6,22 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **A drop on the other panel opens the copy dialog** (SPEC 02 §12). The third of the three
+  mouse drags, and the one that was held back as a question: what a drop *means*. It means the
+  dialog `F5` opens, with the destination the pointer chose — the directory under it, or that
+  panel's own when the row is a file, because a file is not somewhere to copy into — acting on
+  what the sweep selected on the way over, or on the row the press landed on.
+
+  It copies nothing by itself. The gesture is imprecise by nature and starts by accident, so
+  what answers for it is the dialog that was already there: the conflict policy, the filter,
+  what travels with the file, and the `Esc` every dialog has. The Explorer's rule — a drag
+  within one drive moves, a drag across drives copies — is the other way this could have gone:
+  the same gesture doing two different things depending on where the files are, one of which
+  deletes the original. It has surprised people for thirty years; FAR asks instead, and so
+  does this.
+
 ### Fixed
 
 - **The dialog's key bar keeps its twelve boxes.** Under a modifier a dialog answers nothing at
