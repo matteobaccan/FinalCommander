@@ -22,6 +22,61 @@ use std::collections::HashMap;
 /// same thing, which FAR also reads, and which still turns up in files downloaded from one.
 pub const DEFAULT_NAMES: [&str; 2] = ["descript.ion", "files.bbs"];
 
+/// How a directory's descriptions are looked for and written back (SPEC 02 §9).
+///
+/// Both of these are FAR's own settings. The names because a directory may keep its
+/// descriptions under either spelling and somebody with a tree full of `files.bbs` does not
+/// want a second file appearing beside each one; the code page because a `descript.ion` is
+/// often shared with the DOS-era tools that wrote it, and those cannot read UTF-8.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Rules {
+    /// The names tried, in order; the first is what a new file is written under. An empty
+    /// list is the two defaults, because a panel that looked for nothing would quietly stop
+    /// showing descriptions at all.
+    pub names: Vec<String>,
+    /// Write the file in UTF-8. Off, it is written back in the code page it was read in —
+    /// there is nothing else to go on, and guessing the machine's own would turn a Russian
+    /// `descript.ion` into a Latin one on a Latin machine. A file that does not exist yet,
+    /// and one that was already UTF-8, is written in UTF-8 either way.
+    pub utf8: bool,
+}
+
+impl Default for Rules {
+    fn default() -> Rules {
+        Rules {
+            names: DEFAULT_NAMES.iter().map(|n| n.to_string()).collect(),
+            utf8: true,
+        }
+    }
+}
+
+impl Rules {
+    /// The rules a configuration asks for, with an empty list of names meaning the defaults.
+    pub fn new(names: &[String], utf8: bool) -> Rules {
+        let names: Vec<String> = names
+            .iter()
+            .map(|n| n.trim().to_string())
+            .filter(|n| !n.is_empty())
+            .collect();
+        match names.is_empty() {
+            true => Rules {
+                utf8,
+                ..Rules::default()
+            },
+            false => Rules { names, utf8 },
+        }
+    }
+
+    /// Where a new file goes: the first name, which is `descript.ion` unless somebody said
+    /// otherwise.
+    pub fn write_name(&self) -> &str {
+        self.names
+            .first()
+            .map(String::as_str)
+            .unwrap_or(DEFAULT_NAMES[0])
+    }
+}
+
 /// How FAR writes a description that has more than one line in it: the two bytes stand for the
 /// break, because the format itself is one line per file and cannot hold a real newline.
 const BREAK: &str = "\u{4}\u{c2}";

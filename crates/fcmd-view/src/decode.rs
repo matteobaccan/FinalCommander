@@ -207,6 +207,24 @@ impl Codepage {
         }
     }
 
+    /// Can this page hold every character of `text`?
+    ///
+    /// [`Codepage::encode`] answers with a `?` for what it cannot write, which is the right
+    /// answer for a search query — a query with a character the file cannot contain finds
+    /// nothing either way — and the wrong one for a file being saved, where it is a word
+    /// quietly lost. Whoever is writing asks this first.
+    pub fn can_encode(self, text: &str) -> bool {
+        match self {
+            // Every one of these holds the whole of Unicode.
+            Codepage::Utf8 | Codepage::Utf16Le | Codepage::Utf16Be => true,
+            Codepage::Cp437 => text
+                .chars()
+                .all(|c| (c as u32) < 0x80 || CP437_HIGH.contains(&c)),
+            Codepage::Cp1252 => !WINDOWS_1252.encode(text).2,
+            Codepage::Enc(enc) => !enc.encode(text).2,
+        }
+    }
+
     /// Encode a search query the way the file is encoded, so searching for `café` finds it in
     /// a CP1252 file as well as in a UTF-8 one.
     pub fn encode(self, text: &str) -> Vec<u8> {
@@ -216,10 +234,13 @@ impl Codepage {
             Codepage::Utf16Be => text.encode_utf16().flat_map(|u| u.to_be_bytes()).collect(),
             Codepage::Cp1252 => WINDOWS_1252.encode(text).0.into_owned(),
             Codepage::Enc(enc) => enc.encode(text).0.into_owned(),
+            // CP437's low half is ASCII, control bytes included: a tab and a line break
+            // are themselves, which matters when the text being encoded is a *file* rather
+            // than a search query.
             Codepage::Cp437 => text
                 .chars()
                 .map(|c| match c {
-                    ' '..='~' => c as u8,
+                    c if (c as u32) < 0x80 => c as u8,
                     other => CP437_HIGH
                         .iter()
                         .position(|h| *h == other)

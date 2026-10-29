@@ -8,6 +8,19 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **Where a `descript.ion` lives, and in what code page** (SPEC 02 §13). Two settings of
+  FAR's: `panel.description_names` is the list of names looked for, in order, with the first
+  the one a new file is written under — a tree full of `files.bbs` no longer grows a second
+  file beside each one — and `panel.description_utf8 = false` writes the file back in the
+  code page it was read in, for a side file shared with the DOS-era tools that cannot read
+  anything else.
+
+  The page is the file's own and never this machine's: guessing the local one would turn a
+  Russian `descript.ion` into a Latin one on a Latin machine. A file that is not there yet,
+  one that was already UTF-8, and one whose page cannot hold what was typed are all written
+  in UTF-8 anyway — an encoder writes a `?` for what it has no room for, and a file a DOS
+  tool cannot read is better than a line that lost its words.
+
 - **The switches beside the columns, per view mode** (SPEC 02 §3b). A `[[column_set]]` block
   now carries what the rest of FAR's panel-mode dialog carries: `fullscreen`,
   `align_extensions`, `align_folder_extensions`, `folders_upper`, `files_lower` and

@@ -33,7 +33,7 @@ says what the decision stands on.
 | --- | --- | --- |
 | File attributes | `Ctrl+A` | FAR's *System properties* button, which hands the file to the shell's own property sheet, and `chown`, which wants a user picker and the privilege to use it. |
 | The files themselves on the clipboard | `Ctrl+Shift+C`/`X` | No terminal can be asked to carry a file — `OSC 52` carries text. This is window-system work, and it is what `fcmd-platform` would be for. |
-| Descriptions | `Ctrl+Z` | Writing one *inside* an archive, and FAR's settings for which names to look for and whether to write UTF-8. |
+| Descriptions | `Ctrl+Z` | Writing one *inside* an archive, which is a rebuild of the archive rather than a write to a file. |
 | rar | `Shift+F1`/`F2` | Needs `unrar`, whose licence is not free: an optional feature, off in distribution builds. |
 | `F7` inside an archive | — | No format stores a directory worth keeping, so this wants a decision about what an empty directory in an archive even is. |
 | An archive on a server | — | A progress bar while the copy comes down. Today a large one is simply a pause. |

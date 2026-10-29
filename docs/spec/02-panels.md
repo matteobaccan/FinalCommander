@@ -724,8 +724,25 @@ nothing after the name describes nothing and is dropped, because an empty descri
 description are the same thing. A description with more than one line in it is held on one line
 with FAR's own two-byte break (`04 C2`), and a panel shows it on the single line a row has. The
 file is read in the code page it is in — one written under DOS is in a DOS code page, one
-written today is UTF-8 — and written back in UTF-8. Both of FAR's names are read, `descript.ion`
-first and then `files.bbs`; the first is what is written.
+written today is UTF-8 — and written back in UTF-8. Both of FAR's names are read,
+`descript.ion` first and then `files.bbs`; the first is what is written.
+
+Two settings of FAR's say otherwise, for a tree somebody already keeps:
+
+```toml
+[panel]
+description_names = ["files.bbs", "descript.ion"]   # which, and in which order
+description_utf8  = false                           # keep the page it was read in
+```
+
+`description_names` is the list looked for, in order, and its first entry is what a new file
+is written under; an empty list is the two above. `description_utf8 = false` writes the file
+back **in the code page it was read in** — there is nothing else to go on, and guessing the
+machine's own page would turn a Russian `descript.ion` into a Latin one on a Latin machine.
+A file that is not there yet, and one that was already UTF-8 or UTF-16, is written in UTF-8
+either way. So is one whose page cannot hold what was typed: an encoder writes a `?` for what
+it has no room for, and a file a DOS tool cannot read is better than a line that lost its
+words.
 
 **Where it shows.** Two view modes, on FAR's own numbers: `Ctrl+6` is name and description,
 `Ctrl+7` is name, size, time and description. The name keeps two fifths of the row and the

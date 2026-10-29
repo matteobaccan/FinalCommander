@@ -191,6 +191,22 @@ informativo ne riporta una per esteso. Spento, il file non viene mai aperto — 
 vuole chi non tiene descrizioni su una condivisione di rete, dove un file di servizio per
 cartella è un giro di rete per cartella.
 
+Due impostazioni di FAR dicono dove sta quel file e come viene scritto:
+
+```toml
+[panel]
+description_names = ["files.bbs", "descript.ion"]   # quali nomi, e in che ordine
+description_utf8  = false                           # tieni la code page in cui era
+```
+
+I nomi vengono cercati in ordine e il primo è quello sotto cui viene scritto un file nuovo;
+una lista vuota sono i due qui sopra. Con `description_utf8` spento il file torna **nella
+code page in cui è stato letto** — non c'è altro su cui basarsi, e indovinare quella della
+macchina trasformerebbe un `descript.ion` russo in uno latino. Un file che ancora non c'è,
+uno che era già UTF-8 e uno la cui pagina non può contenere quello che hai scritto vengono
+scritti in UTF-8 lo stesso: un file che un programma DOS non legge è meglio di una riga che
+ha perso le parole.
+
 # Rompere la parità
 
 `panel.sort_chain` dice cosa risolve due righe che la chiave di ordinamento lascia pari:

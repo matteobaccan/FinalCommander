@@ -1207,13 +1207,14 @@ fn interactive(mut app: App) -> Result<()> {
                     panel,
                     generation,
                     dir,
+                    rules,
                 } => {
                     // One small file, off the UI thread because it is still a read from a
                     // disk that may be a network share pretending to be one.
                     let tx = tx.clone();
                     let sides = sides.clone();
                     runtime.spawn_blocking(move || {
-                        let descriptions = read_descriptions(&dir, &sides);
+                        let descriptions = read_descriptions(&dir, &sides, &rules);
                         let _ = tx.send(Event::Descriptions {
                             panel,
                             generation,
@@ -1221,9 +1222,15 @@ fn interactive(mut app: App) -> Result<()> {
                         });
                     });
                 }
-                Request::WriteDescriptions { dir, descriptions } => {
+                Request::WriteDescriptions {
+                    dir,
+                    descriptions,
+                    rules,
+                } => {
                     let sides = sides.clone();
-                    runtime.spawn_blocking(move || write_descriptions(&dir, &descriptions, &sides));
+                    runtime.spawn_blocking(move || {
+                        write_descriptions(&dir, &descriptions, &sides, &rules)
+                    });
                 }
                 Request::CarryDescriptions(carry) => {
                     let sides = sides.clone();
@@ -1837,8 +1844,9 @@ impl Away {
         })
     }
 
-    fn write(&self, path: &VPath, text: &str) -> Result<(), String> {
-        let bytes = text.as_bytes().to_vec();
+    /// Put a side file there, whole. The bytes rather than the text, because a
+    /// `descript.ion` may go back in the code page it was read in (SPEC 02 §13).
+    fn write_bytes(&self, path: &VPath, bytes: Vec<u8>) -> Result<(), String> {
         if path.scheme() == fcmd_core::Scheme::S3 {
             return self
                 .handle
@@ -1900,8 +1908,12 @@ impl Away {
 /// directory with neither has no descriptions, which is not an error and not worth a message.
 /// The text is decoded the way the viewer decodes a text file — a `descript.ion` written under
 /// DOS is in a DOS code page, and one written today is UTF-8.
-fn read_descriptions(dir: &VPath, sides: &Sides) -> fcmd_core::descriptions::Descriptions {
-    use fcmd_core::descriptions::{Descriptions, DEFAULT_NAMES};
+fn read_descriptions(
+    dir: &VPath,
+    sides: &Sides,
+    rules: &fcmd_core::descriptions::Rules,
+) -> fcmd_core::descriptions::Descriptions {
+    use fcmd_core::descriptions::Descriptions;
     const LIMIT: u64 = 4 * 1024 * 1024;
 
     // Inside an archive the file is an entry like any other, and the index has already been
@@ -1911,7 +1923,7 @@ fn read_descriptions(dir: &VPath, sides: &Sides) -> fcmd_core::descriptions::Des
         let Ok((archive, inner)) = sides.archives.open_in(dir, &CancelToken::new()) else {
             return Descriptions::default();
         };
-        for name in DEFAULT_NAMES {
+        for name in &rules.names {
             let at = if inner == "/" {
                 format!("/{name}")
             } else {
@@ -1938,7 +1950,7 @@ fn read_descriptions(dir: &VPath, sides: &Sides) -> fcmd_core::descriptions::Des
         let Some(away) = &sides.away else {
             return Descriptions::default();
         };
-        for name in DEFAULT_NAMES {
+        for name in &rules.names {
             let Some(bytes) = away.read(&dir.join(name), LIMIT) else {
                 continue;
             };
@@ -1948,7 +1960,7 @@ fn read_descriptions(dir: &VPath, sides: &Sides) -> fcmd_core::descriptions::Des
         return Descriptions::default();
     }
     let here = dir.os();
-    for name in DEFAULT_NAMES {
+    for name in &rules.names {
         // The name is matched as the filesystem matches it: `DESCRIPT.ION` is the same file
         // on Windows and a different one on Linux, which is the filesystem's business.
         let path = here.join(name);
@@ -1977,19 +1989,22 @@ fn write_descriptions(
     dir: &VPath,
     descriptions: &fcmd_core::descriptions::Descriptions,
     sides: &Sides,
+    rules: &fcmd_core::descriptions::Rules,
 ) -> Result<(), String> {
     if !dir.is_local() || dir.in_container() {
         let Some(away) = sides.away.as_ref().filter(|_| !dir.in_container()) else {
             return Err(format!("{dir}: descriptions cannot be written here"));
         };
-        let path = dir.join(fcmd_core::descriptions::DEFAULT_NAMES[0]);
+        let path = dir.join(rules.write_name());
         return if descriptions.is_empty() {
             away.remove(&path)
         } else {
-            away.write(&path, &descriptions.to_text())
+            let old = away.read(&path, 4 * 1024 * 1024);
+            let bytes = description_bytes(old.as_deref(), &descriptions.to_text(), rules);
+            away.write_bytes(&path, bytes)
         };
     }
-    let path = dir.os().join(fcmd_core::descriptions::DEFAULT_NAMES[0]);
+    let path = dir.os().join(rules.write_name());
     if descriptions.is_empty() {
         // An empty file is a file that says nothing and still has to be carried around.
         return match std::fs::remove_file(&path) {
@@ -1998,7 +2013,41 @@ fn write_descriptions(
             Err(e) => Err(format!("{}: {e}", path.display())),
         };
     }
-    std::fs::write(&path, descriptions.to_text()).map_err(|e| format!("{}: {e}", path.display()))
+    let old = std::fs::read(&path).ok();
+    let bytes = description_bytes(old.as_deref(), &descriptions.to_text(), rules);
+    std::fs::write(&path, bytes).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+/// The bytes a `descript.ion` is written as (SPEC 02 §9).
+///
+/// UTF-8 unless the rules say otherwise, and then the code page the file was already in —
+/// there is nothing else to go on, and guessing the machine's own page would turn a Russian
+/// `descript.ion` into a Latin one on a Latin machine. A file that is not there yet, and one
+/// that was already UTF-8 or UTF-16, is written in UTF-8 either way.
+///
+/// A page that cannot hold what somebody typed would write a `?` in its place, which is a
+/// description quietly ruined, so the file goes out in UTF-8 instead: one a DOS tool cannot
+/// read is better than a line that lost its words.
+fn description_bytes(
+    old: Option<&[u8]>,
+    text: &str,
+    rules: &fcmd_core::descriptions::Rules,
+) -> Vec<u8> {
+    use fcmd_view::decode::Codepage;
+    if rules.utf8 {
+        return text.as_bytes().to_vec();
+    }
+    let Some(old) = old.filter(|bytes| !bytes.is_empty()) else {
+        return text.as_bytes().to_vec();
+    };
+    let page = fcmd_view::decode::detect(old);
+    if matches!(page, Codepage::Utf8 | Codepage::Utf16Le | Codepage::Utf16Be) {
+        return text.as_bytes().to_vec();
+    }
+    match page.can_encode(text) {
+        true => page.encode(text),
+        false => text.as_bytes().to_vec(),
+    }
 }
 
 /// Carry descriptions after a job: the lines follow what they describe, or go when it goes.
@@ -2012,7 +2061,7 @@ fn write_descriptions(
 fn carry_descriptions(carry: &app::Carry, sides: &Sides) {
     let mut moved: Vec<(String, String)> = Vec::new();
     for group in &carry.from {
-        let mut source = read_descriptions(&group.dir, sides);
+        let mut source = read_descriptions(&group.dir, sides, &carry.rules);
         let mut changed = false;
         for (there, here) in &group.names {
             if let Some(text) = source.get(there) {
@@ -2023,18 +2072,18 @@ fn carry_descriptions(carry: &app::Carry, sides: &Sides) {
             }
         }
         if changed {
-            let _ = write_descriptions(&group.dir, &source, sides);
+            let _ = write_descriptions(&group.dir, &source, sides, &carry.rules);
         }
     }
     if moved.is_empty() {
         return; // nothing described, nothing to carry
     }
     if let Some(to) = &carry.to {
-        let mut target = read_descriptions(to, sides);
+        let mut target = read_descriptions(to, sides, &carry.rules);
         for (name, text) in &moved {
             target.set(name, text);
         }
-        let _ = write_descriptions(to, &target, sides);
+        let _ = write_descriptions(to, &target, sides, &carry.rules);
     }
 }
 
@@ -3447,6 +3496,83 @@ mod tests {
         assert!(printed.ends_with('\n'), "{printed:?}");
     }
 
+    /// FAR's two settings for the side file: which names it may be under, and whether a
+    /// write goes out as UTF-8 (SPEC 02 §9).
+    #[test]
+    fn the_descriptions_file_is_looked_for_under_the_names_asked_for() {
+        use fcmd_core::descriptions::{Descriptions, Rules};
+
+        let dir = tempfile::tempdir().unwrap();
+        let here = VPath::local(dir.path());
+        let sides = Sides::here(std::sync::Arc::new(
+            fcmd_arc::Cache::new(Default::default()),
+        ));
+        std::fs::write(
+            dir.path().join("notes.ion"),
+            "a.txt the one in a name of its own
+",
+        )
+        .unwrap();
+
+        // The defaults do not know that name, so there is nothing to find.
+        assert!(read_descriptions(&here, &sides, &Rules::default()).is_empty());
+
+        let mine = Rules::new(&["notes.ion".to_string()], true);
+        assert_eq!(
+            read_descriptions(&here, &sides, &mine).get("a.txt"),
+            Some("the one in a name of its own")
+        );
+        // And a write goes back under the first name, not under `descript.ion`.
+        let mut descriptions = Descriptions::default();
+        descriptions.set("a.txt", "written back");
+        write_descriptions(&here, &descriptions, &sides, &mine).expect("written");
+        assert!(!dir.path().join("descript.ion").exists());
+        assert_eq!(
+            read_descriptions(&here, &sides, &mine).get("a.txt"),
+            Some("written back")
+        );
+    }
+
+    /// With UTF-8 off the file goes back in the page it was read in — and in UTF-8 anyway
+    /// when that page cannot hold what was typed, because a description that lost its words
+    /// is worse than one a DOS tool cannot read.
+    #[test]
+    fn a_descriptions_file_keeps_its_code_page_when_asked_to() {
+        use fcmd_core::descriptions::Rules;
+
+        let keep = Rules::new(&[], false);
+        // A file written in a single-byte page, as a `descript.ion` of that age is. Which
+        // page exactly is the detector's business — what matters is that it is not UTF-8 and
+        // that the file goes back in the one it came in.
+        let old = fcmd_view::decode::Codepage::Cp1252.encode("fiché.txt nota");
+        let page = fcmd_view::decode::detect(&old);
+        assert_ne!(page, fcmd_view::decode::Codepage::Utf8, "the fixture");
+
+        let bytes = description_bytes(Some(&old), "fiché.txt altra nota", &keep);
+        assert_eq!(page.decode(&bytes), "fiché.txt altra nota");
+        assert!(
+            std::str::from_utf8(&bytes).is_err(),
+            "it is not UTF-8 any more"
+        );
+
+        // A character that page has no room for keeps the whole file in UTF-8, rather than
+        // writing the `?` the encoder would put in its place.
+        let bytes = description_bytes(Some(&old), "fiché.txt 日本語", &keep);
+        assert_eq!(std::str::from_utf8(&bytes).unwrap(), "fiché.txt 日本語");
+
+        // No file yet, and a file that was already UTF-8: UTF-8 either way.
+        assert_eq!(description_bytes(None, "a b\n", &keep), b"a b\n".to_vec());
+        assert_eq!(
+            description_bytes(Some("é x\n".as_bytes()), "é y\n", &keep),
+            "é y\n".as_bytes().to_vec()
+        );
+        // And with the setting on, nothing is converted at all.
+        assert_eq!(
+            description_bytes(Some(&old), "fiché.txt x", &Rules::default()),
+            "fiché.txt x".as_bytes().to_vec()
+        );
+    }
+
     /// A `descript.ion` inside an archive is an entry like any other, and the panel shows
     /// what it says.
     #[test]
@@ -3743,7 +3869,7 @@ mod tests {
 
     #[test]
     fn descriptions_are_read_and_written_on_a_server() {
-        use fcmd_core::descriptions::Descriptions;
+        use fcmd_core::descriptions::{Descriptions, Rules};
 
         let runtime = tokio::runtime::Runtime::new().unwrap();
         let pool = Pool::new();
@@ -3761,20 +3887,22 @@ mod tests {
         let dir = remote.site().start();
 
         // A directory with no side file describes nothing, which is not an error.
-        assert!(read_descriptions(&dir, &sides).is_empty());
+        assert!(read_descriptions(&dir, &sides, &Rules::default()).is_empty());
 
         let mut descriptions = Descriptions::default();
         descriptions.set("notes.txt", "what it is");
-        write_descriptions(&dir, &descriptions, &sides).expect("written to the server");
+        write_descriptions(&dir, &descriptions, &sides, &Rules::default())
+            .expect("written to the server");
         assert_eq!(
-            read_descriptions(&dir, &sides).get("notes.txt"),
+            read_descriptions(&dir, &sides, &Rules::default()).get("notes.txt"),
             Some("what it is"),
             "and read back off it"
         );
 
         // Nothing left to say takes the file away rather than leaving an empty one.
-        write_descriptions(&dir, &Descriptions::default(), &sides).expect("removed");
-        assert!(read_descriptions(&dir, &sides).is_empty());
+        write_descriptions(&dir, &Descriptions::default(), &sides, &Rules::default())
+            .expect("removed");
+        assert!(read_descriptions(&dir, &sides, &Rules::default()).is_empty());
         assert!(
             !runtime.block_on(remote.exists(&dir.join("descript.ion"))),
             "the file itself is gone"
@@ -4451,22 +4579,27 @@ timeout = 10
                     panel,
                     generation,
                     dir,
+                    rules,
                 } => {
                     let sides = Sides::here(std::sync::Arc::new(fcmd_arc::Cache::new(
                         Default::default(),
                     )));
-                    let descriptions = read_descriptions(&dir, &sides);
+                    let descriptions = read_descriptions(&dir, &sides, &rules);
                     app.handle_event(Event::Descriptions {
                         panel,
                         generation,
                         descriptions,
                     });
                 }
-                Request::WriteDescriptions { dir, descriptions } => {
+                Request::WriteDescriptions {
+                    dir,
+                    descriptions,
+                    rules,
+                } => {
                     let sides = Sides::here(std::sync::Arc::new(fcmd_arc::Cache::new(
                         Default::default(),
                     )));
-                    let _ = write_descriptions(&dir, &descriptions, &sides);
+                    let _ = write_descriptions(&dir, &descriptions, &sides, &rules);
                 }
                 Request::CarryDescriptions(carry) => carry_descriptions(
                     &carry,

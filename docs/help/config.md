@@ -183,6 +183,21 @@ information panel spells one out. Off, and the file is never opened — which is
 who keeps no descriptions wants on a network share, where a side file per directory is a round
 trip per directory.
 
+Two settings of FAR's say where that file is and how it is written:
+
+```toml
+[panel]
+description_names = ["files.bbs", "descript.ion"]   # which names, in which order
+description_utf8  = false                           # keep the code page it was read in
+```
+
+The names are looked for in order and the first is what a new file is written under; an empty
+list is the two above. With `description_utf8` off the file goes back **in the page it was
+read in** — there is nothing else to go on, and guessing this machine's own page would turn a
+Russian `descript.ion` into a Latin one. A file that is not there yet, one that was already
+UTF-8, and one whose page cannot hold what you typed are all written in UTF-8 anyway: a file
+a DOS tool cannot read beats a line that lost its words.
+
 # Breaking a tie
 
 `panel.sort_chain` says what settles two rows the sort key leaves equal:

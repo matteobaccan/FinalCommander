@@ -312,6 +312,13 @@ pub struct PanelCfg {
     /// file per directory read, which is what FAR does; off for somebody who keeps no
     /// descriptions and would rather the file were never opened.
     pub descriptions: bool,
+    /// The names a directory's descriptions may be under, in the order they are looked for;
+    /// the first is what a new file is written under. Empty is the two FAR looks for.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub description_names: Vec<String>,
+    /// Write a `descript.ion` in UTF-8. Off, it goes back in the code page it was read in,
+    /// for a file shared with the DOS-era tools that cannot read anything else.
+    pub description_utf8: bool,
 }
 
 impl Default for PanelCfg {
@@ -337,6 +344,8 @@ impl Default for PanelCfg {
             height_cut: 0,
             quick_search: QuickSearch::Alt,
             descriptions: true,
+            description_names: Vec::new(),
+            description_utf8: true,
         }
     }
 }
@@ -1589,6 +1598,15 @@ impl Config {
             }
             "panel.allow_reverse_sort" => self.panel.allow_reverse_sort = parse_bool(value)?,
             "panel.descriptions" => self.panel.descriptions = parse_bool(value)?,
+            "panel.description_names" => {
+                self.panel.description_names = value
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string)
+                    .collect()
+            }
+            "panel.description_utf8" => self.panel.description_utf8 = parse_bool(value)?,
             "panel.column_titles" => self.panel.column_titles = parse_bool(value)?,
             "panel.status_line" => self.panel.status_line = parse_bool(value)?,
             "panel.scrollbar" => self.panel.scrollbar = parse_bool(value)?,

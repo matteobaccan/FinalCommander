@@ -130,12 +130,17 @@ pub enum Request {
         panel: usize,
         generation: u64,
         dir: VPath,
+        /// Which names to look for and how to write one back (SPEC 02 §9). It rides on the
+        /// request rather than sitting in the worker, because the settings browser can
+        /// change it between one directory and the next.
+        rules: fcmd_core::descriptions::Rules,
     },
     /// Write one back. The whole file at once: it is a line per described file, and a
     /// directory with a thousand of those has a file of a few kilobytes.
     WriteDescriptions {
         dir: VPath,
         descriptions: fcmd_core::descriptions::Descriptions,
+        rules: fcmd_core::descriptions::Rules,
     },
     /// Carry descriptions after a job that moved, copied or deleted files (SPEC 02 §13): the
     /// lines follow what they describe, or go when it goes.
@@ -1571,6 +1576,8 @@ pub struct Carry {
     pub to: Option<VPath>,
     /// A copy leaves the line where it was; a move and a delete do not.
     pub keep: bool,
+    /// The same rules the panel reads and writes under.
+    pub rules: fcmd_core::descriptions::Rules,
 }
 
 /// One source directory and what was taken out of it.
@@ -4547,8 +4554,11 @@ impl App {
                 // On screen at once, written behind: the panel shows what was typed without
                 // waiting for a disk, and the file follows.
                 self.panels[panel].descriptions = descriptions.clone();
-                self.requests
-                    .push(Request::WriteDescriptions { dir, descriptions });
+                self.requests.push(Request::WriteDescriptions {
+                    dir,
+                    descriptions,
+                    rules: self.description_rules(),
+                });
                 let msg = if text.is_empty() {
                     self.i18n
                         .t_args("descr-cleared", &[("name", name.clone().into())])
@@ -5154,6 +5164,7 @@ impl App {
                 panel,
                 generation,
                 dir,
+                rules: self.description_rules(),
             });
         }
         let title = self
@@ -5226,11 +5237,22 @@ impl App {
         if !shown || p.temp.is_some() {
             return;
         }
+        let rules = self.description_rules();
         self.requests.push(Request::Descriptions {
             panel,
             generation: p.generation,
             dir: p.cwd.clone(),
+            rules,
         });
+    }
+
+    /// What the configuration says about a directory's side file (SPEC 02 §9): the names to
+    /// look for, and whether a write goes out as UTF-8.
+    fn description_rules(&self) -> fcmd_core::descriptions::Rules {
+        fcmd_core::descriptions::Rules::new(
+            &self.cfg.panel.description_names,
+            self.cfg.panel.description_utf8,
+        )
     }
 
     /// Ask how many names each file in a directory has, for the links view.
@@ -5539,7 +5561,12 @@ impl App {
         if from.is_empty() {
             return None;
         }
-        Some(Carry { from, to, keep })
+        Some(Carry {
+            from,
+            to,
+            keep,
+            rules: self.description_rules(),
+        })
     }
 
     /// Does this path name a directory that is there? A copy into one puts the sources in it;
