@@ -8,6 +8,36 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **A dialog has its own bottom row, and `F1` in one works** (SPEC 10 §3). FAR changes the key
+  bar inside a dialog, and for the same reason the panels' bar changes with the modifier: the
+  panels' keys are not on the screen, so a row still offering `Copy` and `MkFold` over a copy
+  dialog is describing something that is not there. The row says only what the dialog answers —
+  `F1` the help, `F10` `OK`, under `Ctrl` the `F5` that moves it, under `Alt` the `F10` that
+  opens the copy dialog's folder list — and a list says `F4` where its rows can be edited, `F9`
+  in the drive dialog, and `F10` as the way *out* rather than as an answer. It is short, and
+  that is the honest length of it: a dialog is answered with `Enter` and `Esc`, and inventing
+  function keys to fill the row out would be worse than leaving it empty.
+
+  Writing `Help` there turned up something quieter: `F1` in a dialog did nothing at all, and
+  the page it should have opened — *This dialog* — had been in the help since the help was
+  written, reachable from nowhere. It opens now, with the dialog parked behind it and
+  everything typed into it still there, and what the dialog was itself opened over — a file
+  being read, a file being edited — stays parked under it. The help's own pages have a section
+  on dialogs to follow it into, in both languages.
+
+- **Round boxes, where one answer excludes the others** (SPEC 10 §3). A row that cycles its
+  values in place is right for a long list — thirty code pages do not belong on the screen at
+  once — and wrong for a short one: *overwrite / skip / rename* are three answers to one
+  question, and a reader who cannot see the other two has to press a key to find out what they
+  are. So there is a `(•)` row now, each row of a group carrying the same configuration key and
+  the value it stands for, `Space` or `→` picking the one under the cursor and putting the rest
+  of the group out. Round where a box that stands on its own is square, so the shape says which
+  it is before the label is read.
+
+  The copy dialog's *what if it is already there* is the first group: six boxes instead of one
+  row that cycles through six values, because *rename* and *append* are the two nobody finds by
+  pressing `→` hopefully.
+
 - **`Ctrl+F5` moves a dialog** (SPEC 10 §3). FAR's own key, for FAR's own reason: a dialog
   covers the thing it is about — the file under the cursor, the panel one is copying from — and
   sometimes that is the one thing one needs to read. The arrows push it about while it is
@@ -22,12 +52,22 @@ Notable changes, newest first. The format follows
   with its separator when it is a directory, so the next `Tab` goes inside it — several are
   taken as far as they agree and the status line says how many there were.
 
-  Where there is nothing to add, `Tab` goes to the buttons as it always did, so the key never
-  stops working; and it reads one directory, the one the half-typed path names, because a
+  Where there is nothing to add, `Tab` moves on through the dialog as it always did, so the
+  key never stops working; and it reads one directory, the one the half-typed path names, because a
   dialog's `Tab` should not start a walk. The rows that complete are the ones that name a
   path: a copy's destination, an extraction's folder, an archive's name, a key file. A mask or
   a colour is not a path, and a `Tab` that tried to complete one against the filesystem would
   be a `Tab` that does nothing where it used to do something.
+
+### Changed
+
+- **`Tab` walks the whole dialog** (SPEC 10 §3). It went to the buttons and stayed among them:
+  somebody who had tabbed as far as `Cancel` to read it had no way back to the field they
+  wanted to correct except an arrow key they had no reason to try. Now the ring is the rows of
+  the page that is open, then the buttons, then the first row again, with `Shift+Tab` the other
+  way round — which is why one key out of the first row is the last button, the way out. On a
+  row that names a path `Tab` still completes it first, and only moves on when there is nothing
+  left to add.
 
 ## [0.19.0] — 2026-10-29
 

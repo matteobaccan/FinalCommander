@@ -192,8 +192,8 @@ here is the order to build it in: each item needs only the ones above it.
 | Item | Notes |
 | --- | --- |
 | A field that browses for a path | The key-file row in the session editor is typed by hand. A "pick a file" button wants the panel to open inside a dialog. |
-| Radio groups, dialog-wide `Tab` order | Needed as soon as a dialog has more than one kind of control. |
-| A different key bar inside dialogs | FAR changes the bottom row in a dialog. Cheap, cosmetic, not done. |
+| ~~Radio groups, dialog-wide `Tab` order~~ | **Both shipped.** `(•)` rows for a group where one answer excludes the others — every row carrying the same key and the value it stands for, `Space` or `→` picking the one under the cursor — and the copy dialog's *what if it is already there* is the first of them, because *rename* and *append* are two answers nobody finds by pressing `→` hopefully. `Tab` now walks the whole dialog and comes round again (rows, buttons, first row) with `Shift+Tab` backwards, instead of going to the buttons and staying there with no way back to a field one wanted to correct. |
+| ~~A different key bar inside dialogs~~ | **Shipped.** The bottom row is the dialog's own while one is open, built from what the dialog answers rather than written out: `F1`, `F10` `OK`, `Ctrl+F5` to move it, `Alt+F10` for the copy dialog's folder list, and for a list `F4` where its rows can be edited, `F9` in the drive dialog and `F10` as the way out. Short, which is the honest length of it. With it, `F1` in a dialog now opens the page about dialogs at all — it did nothing before, and the page existed — and parks the dialog behind it. |
 
 ## Windows-specific: what we do instead
 

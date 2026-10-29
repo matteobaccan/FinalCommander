@@ -168,6 +168,10 @@ A dialog is a framed list of rows above a row of buttons. Row kinds:
   `←` the previous one.
 * `[?] Label` — a box asked of several files that do not agree about it (SPEC 03 §7). `Space`
   walks three states: *on*, *off*, and *leave each file as it is*, which is where it starts.
+* `(•) Label` — one row of a group of which exactly one is chosen, every row of it carrying
+  the same key and the value it stands for. `Space` or `→` picks the row under the cursor and
+  puts the rest of the group out. Round where a box that stands on its own is square, so the
+  shape says which it is before the label is read.
 * a dim `[ ] Label` — in the dialog for completeness, not settable yet (its setting does not
   exist in the configuration either).
 * a separator line.
@@ -176,12 +180,31 @@ A text row that names a path completes on `Tab`, as a shell does: the destinatio
 the folder of an extraction, the name of an archive, a key file. One match is written out
 whole — with its separator when it is a directory, so the next `Tab` goes inside it — several
 are taken as far as they agree and the status line says how many there were, and where there
-is nothing to add `Tab` goes to the buttons as it always did. One directory is read, the one
+is nothing to add `Tab` moves on to the next control as it always did. One directory is read, the one
 the half-typed path names, which is the same rule the command line's own completion follows
 (SPEC 06 §7.4): a dialog's `Tab` should not start a walk.
 
-Keys: `↑`/`↓` move over the settable rows, `Tab` moves to the buttons and between them, `Enter`
-on the buttons answers the dialog, `F10` is `OK` from anywhere, `Esc` cancels and keeps nothing.
+Keys: `↑`/`↓` move over the settable rows, `Enter` on the buttons answers the dialog, `F10` is
+`OK` from anywhere, `Esc` cancels and keeps nothing.
+
+`Tab` walks the whole dialog and comes round again: the settable rows of the page that is
+open, in the order they are drawn, then the buttons, then the first row. `Shift+Tab` walks it
+backwards, which is why the key out of the first row is the last button — the way out. A
+`Tab` that went to the buttons and stayed among them would leave nobody a way back to a field
+they wanted to correct.
+
+The bottom row of the screen is the dialog's own while one is open, as it is in FAR: the
+panels' keys are not on the screen, so a bar still offering `Copy` and `MkFold` would be
+describing something that is not there. It says only what the dialog answers — `F1` the help,
+`F10` `OK`, under `Ctrl` the `F5` that moves it, and in the copy dialog under `Alt` the `F10`
+that opens the folder list — so the row is short, and that is the honest length of it: a
+dialog is answered with `Enter` and `Esc`. A list says `F4` where its rows can be edited,
+`F9` in the drive dialog, and `F10` as the way out rather than as an answer.
+
+`F1` in a dialog opens the page about dialogs, with the dialog itself parked behind it: coming
+out of the help comes back to it with everything that was typed into it still there. What the
+dialog was itself opened over — a file being read, a file being edited — is parked under it,
+and comes back when the dialog closes.
 
 `Ctrl+F5` hands the arrows to the dialog itself, as it does in FAR: a dialog covers the thing
 it is about — the file under the cursor, the panel one is copying from — and sometimes that is

@@ -325,3 +325,26 @@ all of it, newlines and all; the command line, a dialog row and a prompt are one
 they take the first line and say how many more there were. A command copied from a web page
 comes with its newline still attached, and running it before you have read it is exactly what
 that rule avoids.
+
+# Dialogs
+
+A dialog is a framed list of rows above a row of buttons. A square box `[x]` is a yes or no of
+its own; a round one `(•)` is one answer of a group, where picking it puts the rest of the
+group out; a row ending in `↓` holds a list of values that `Space` and the arrows walk; a
+`[?]` is a box asked of several files that do not agree about it, and left as it is it changes
+none of them.
+
+`↑` and `↓` move between the rows. `Tab` walks the whole dialog and comes round again — the
+rows, then the buttons, then the first row — and `Shift+Tab` walks it backwards, so the key
+out of the first row is the way out. `Enter` answers the dialog wherever the cursor is, `F10`
+is `OK` from anywhere, and `Esc` throws it away.
+
+A row that names a path completes on `Tab`, as a shell does, and `Ctrl+↓` opens what has been
+typed into that row before. `Ctrl+F5` hands the arrows to the dialog itself, for when it
+covers the one thing you need to read; `Enter` and `Esc` only stop moving it.
+
+The bottom row of the screen becomes the dialog's own while it is open: the panels' keys are
+not on the screen, so it would be describing something that is not there. It is short, because
+a dialog is answered with `Enter` and `Esc` — `F1` for this page, `F10` for `OK`, `Ctrl` for
+the key that moves it. `F1` leaves the dialog waiting behind the help, with everything you
+typed into it still there.

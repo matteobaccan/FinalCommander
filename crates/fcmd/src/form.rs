@@ -37,6 +37,22 @@ pub enum Field {
         /// Shown instead of the characters, for a secret.
         secret: bool,
     },
+    /// `(•) Label`: one row of a group of which exactly one is chosen (SPEC 10 §3).
+    ///
+    /// A choice row cycles through its values in place, which is right for a long list —
+    /// thirty code pages do not belong on the screen at once — and wrong for a short one:
+    /// *overwrite / skip / rename* read as three answers to one question, and a reader who
+    /// cannot see the other two has to press a key to find out what they are. FAR draws
+    /// those as a column of round boxes, and so does this: every row of the group carries
+    /// the same configuration key and the value it stands for, and `Space` or `→` on a row
+    /// is what picks it.
+    Radio {
+        key: &'static str,
+        label: String,
+        /// What the group writes when this is the row that is chosen.
+        value: String,
+        on: bool,
+    },
     /// `[?] Label`: a box asked of several files that do not agree about it (SPEC 03 §7).
     ///
     /// `Space` walks three states rather than two — on, off, and *leave each file as it is* —
@@ -89,7 +105,11 @@ impl Field {
     fn selectable(&self) -> bool {
         matches!(
             self,
-            Field::Toggle { .. } | Field::Choice { .. } | Field::Text { .. } | Field::Tri { .. }
+            Field::Toggle { .. }
+                | Field::Choice { .. }
+                | Field::Text { .. }
+                | Field::Tri { .. }
+                | Field::Radio { .. }
         )
     }
 }
@@ -158,6 +178,21 @@ fn choice(key: &'static str, label: String, options: &[(&str, String)], current:
         options,
         chosen,
     }
+}
+
+/// A group of round boxes for one key: one row per value, the one that matches `current`
+/// already chosen. A value nothing matches leaves the group with nothing picked, which is
+/// what it should look like rather than quietly picking the first row.
+fn radios(key: &'static str, options: &[(&str, String)], current: &str) -> Vec<Field> {
+    options
+        .iter()
+        .map(|(value, label)| Field::Radio {
+            key,
+            label: label.clone(),
+            value: (*value).to_string(),
+            on: *value == current,
+        })
+        .collect()
 }
 
 /// A message with a menu label's `&` marker taken off.
@@ -901,22 +936,24 @@ impl Form {
         })
     }
 
-    /// The value a choice row is on, by key.
+    /// The value a choice row is on, by key — or the one its group of round boxes is on,
+    /// which is the same question asked of a control that happens to be drawn as rows.
     pub fn choice_value(&self, want: &str) -> String {
         for field in &self.fields {
-            if let Field::Choice {
-                key,
-                options,
-                chosen,
-                ..
-            } = field
-            {
-                if *key == want {
+            match field {
+                Field::Choice {
+                    key,
+                    options,
+                    chosen,
+                    ..
+                } if *key == want => {
                     return options
                         .get(*chosen)
                         .map(|(v, _)| v.clone())
                         .unwrap_or_default();
                 }
+                Field::Radio { key, value, on, .. } if *key == want && *on => return value.clone(),
+                _ => {}
             }
         }
         String::new()
@@ -1025,11 +1062,18 @@ impl Form {
             ("rename", t("copy-conflict-rename")),
             ("append", t("copy-conflict-append")),
         ];
-        let fields = vec![
+        let mut fields = vec![
             Field::Note(what),
             Field::text("copy.target", t("copy-target"), target),
             Field::Separator,
-            choice("copy.conflict", t("copy-conflict"), &policies, conflict),
+            // FAR asks this as a column of round boxes rather than as one row that cycles,
+            // and six answers to "what if it is already there" are worth seeing at once:
+            // *rename* and *append* are the two nobody finds by pressing `→` hopefully.
+            Field::Note(t("copy-conflict")),
+        ];
+        fields.extend(radios("copy.conflict", &policies, conflict));
+        fields.extend([
+            Field::Separator,
             // FAR has this as a box of its own as well as a policy, and the two are not the
             // same: the box holds even when the policy says to overwrite, or when the user
             // has already answered "overwrite all" to a question.
@@ -1042,7 +1086,7 @@ impl Form {
             Field::toggle("copy.follow_links", t("copy-follow-links"), follow_links),
             Field::toggle("copy.times", t("copy-keep-times"), true),
             Field::toggle("copy.mode", t("copy-keep-mode"), true),
-        ];
+        ]);
         Form {
             pages: Vec::new(),
             page: 0,
@@ -1683,6 +1727,7 @@ impl Form {
                         .unwrap_or_default();
                 }
                 Field::Toggle { key, on, .. } if *key == want => return on.to_string(),
+                Field::Radio { key, value, on, .. } if *key == want && *on => return value.clone(),
                 _ => {}
             }
         }
@@ -1944,6 +1989,12 @@ impl Form {
                     "{label}: {} ↓",
                     options.get(*chosen).map(|(_, l)| l.as_str()).unwrap_or("")
                 )),
+                // Round boxes for a group where one answer excludes the others, square ones
+                // for a box that stands on its own: the shape says which it is before the
+                // label is read, as it does in every dialog since the first one.
+                Field::Radio { label, on, .. } => {
+                    FormRow::new(format!("({}) {label}", if *on { '•' } else { ' ' }))
+                }
             })
             .collect()
     }
@@ -1971,6 +2022,39 @@ impl Form {
         }
     }
 
+    /// `Tab` and `Shift+Tab` walk the whole dialog (SPEC 10 §3): the rows of the page that
+    /// is open, in the order they are drawn, then the buttons, then round to the first row.
+    ///
+    /// Before this `Tab` went to the buttons and stayed among them, and the rows could only
+    /// be reached again with the arrows — which is not what `Tab` means in any dialog
+    /// anywhere, and left somebody who had tabbed to `Cancel` with no way back to the field
+    /// they wanted to correct except a key they had no reason to try.
+    pub fn tab(&mut self, forward: bool) {
+        let range = self.visible();
+        let rows: Vec<usize> = range.filter(|i| self.fields[*i].selectable()).collect();
+        let total = rows.len() + self.buttons.len();
+        if total == 0 {
+            return;
+        }
+        // One list of controls, the rows and then the buttons, and where in it we are now.
+        let at = match self.button {
+            Some(button) => rows.len() + button.min(self.buttons.len().saturating_sub(1)),
+            None => rows.iter().position(|i| *i == self.cursor).unwrap_or(0),
+        };
+        let next = if forward {
+            (at + 1) % total
+        } else {
+            (at + total - 1) % total
+        };
+        match rows.get(next) {
+            Some(field) => {
+                self.cursor = *field;
+                self.button = None;
+            }
+            None => self.button = Some(next - rows.len()),
+        }
+    }
+
     /// `Space` on a checkbox, or `Space`/`→` on a choice.
     pub fn toggle(&mut self, forward: bool) {
         match self.fields.get_mut(self.cursor) {
@@ -1986,6 +2070,19 @@ impl Form {
                     (None, false) => Some(false),
                     (Some(false), false) => Some(true),
                     (Some(true), false) => None,
+                }
+            }
+            // One row of a group goes on and the rest of the group goes off. Both keys do
+            // the same thing here: there is no "off" for a single round box, and a group
+            // with nothing picked is a question with no answer.
+            Some(Field::Radio { key, .. }) => {
+                let (key, at) = (*key, self.cursor);
+                for (i, field) in self.fields.iter_mut().enumerate() {
+                    if let Field::Radio { key: k, on, .. } = field {
+                        if *k == key {
+                            *on = i == at;
+                        }
+                    }
                 }
             }
             Some(Field::Choice {
@@ -2009,12 +2106,19 @@ impl Form {
         self.fields
             .iter()
             .filter_map(|f| match f {
-                Field::Toggle { key, .. } | Field::Choice { key, .. } | Field::Text { key, .. } => {
-                    Some(*key)
-                }
+                Field::Toggle { key, .. }
+                | Field::Choice { key, .. }
+                | Field::Text { key, .. }
+                | Field::Radio { key, .. } => Some(*key),
                 _ => None,
             })
-            .collect()
+            // A group of round boxes is one key named by every row of it.
+            .fold(Vec::new(), |mut keys, key| {
+                if !keys.contains(&key) {
+                    keys.push(key);
+                }
+                keys
+            })
     }
 
     /// Write every row into the configuration. Returns what could not be applied.
@@ -2032,6 +2136,14 @@ impl Form {
                     Some((value, _)) => cfg.set(key, value),
                     None => Ok(()),
                 },
+                // Only the row that is on writes: a group is one setting, however many rows
+                // of it are on the screen.
+                Field::Radio {
+                    key,
+                    value,
+                    on: true,
+                    ..
+                } => cfg.set(key, value),
                 _ => Ok(()),
             };
             if let Err(e) = result {

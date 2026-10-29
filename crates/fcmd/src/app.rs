@@ -1806,6 +1806,10 @@ pub struct App {
     pub tree_cache: crate::tree::Cache,
     /// The hex editor, while a dialog of its own is open over it.
     hex_parked: Option<Box<HexEdit>>,
+    /// The dialog `F1` was pressed in, while its help page is on the screen. Whatever that
+    /// dialog was itself opened over — a viewer, an editor — stays parked in its own slot,
+    /// so closing the help comes back to the dialog and closing the dialog to the file.
+    dialog_under_help: Option<Box<Mode>>,
     /// The quick view's own reader, and what it is of: opened when the cursor lands on a file
     /// and kept while it stays there, so moving down a directory does not reopen a file.
     pub quick: Option<Box<Viewer>>,
@@ -2038,6 +2042,7 @@ impl App {
             user_scroll: 0,
             last_find: FindSpec::default(),
             hex_parked: None,
+            dialog_under_help: None,
             trees: [None, None],
             tree_cache: crate::tree::Cache::default(),
             quick: None,
@@ -3479,6 +3484,8 @@ impl App {
         // Two buttons, as every other dialog has: what this does, and the way out. The
         // arrows and `Tab` move between them, `Enter` takes the one that is lit.
         match key.code {
+            // The page about dialogs, with the question waiting behind it.
+            KeyCode::F(1) if key.mods == Mods::NONE => self.open_dialog_help(),
             KeyCode::Left | KeyCode::Right | KeyCode::Tab | KeyCode::BackTab => {
                 if let Mode::Confirm(open) = &mut self.mode {
                     open.button = 1 - open.button.min(1);
@@ -4289,6 +4296,8 @@ impl App {
 
     fn prompt_key(&mut self, key: Key, mut prompt: Prompt) {
         match key.code {
+            // The page about dialogs, with the question waiting behind it.
+            KeyCode::F(1) if key.mods == Mods::NONE => self.open_dialog_help(),
             KeyCode::Esc => {
                 if let PromptKind::QuickSearch { origin } = prompt.kind {
                     self.panel_mut().cursor_to(origin);
@@ -11237,6 +11246,12 @@ impl App {
             }
             return;
         }
+        // The page about dialogs, with this one waiting behind it. The key bar says `Help`
+        // in a dialog, and it is this that makes that true.
+        if key.code == KeyCode::F(1) && key.mods == Mods::NONE {
+            self.open_dialog_help();
+            return;
+        }
         match key.code {
             KeyCode::Esc => {
                 self.mode = Mode::Normal;
@@ -11319,6 +11334,10 @@ impl App {
             // of `/usr/local/`. Where there is nothing to add — another row, a name already
             // whole, a directory nothing matches — it does what it always did and goes to
             // the buttons, so the key never stops working.
+            // `Shift+Tab` the other way round the same ring. Some terminals send it as its
+            // own key and some as `Tab` with the modifier, so both are taken.
+            KeyCode::BackTab => form.tab(false),
+            KeyCode::Tab if key.mods.contains(Mods::SHIFT) => form.tab(false),
             KeyCode::Tab if text => {
                 let completes = form
                     .text_under_cursor()
@@ -11329,21 +11348,9 @@ impl App {
                 let Mode::Form(form) = &mut self.mode else {
                     return;
                 };
-                let last = form.buttons.len().saturating_sub(1);
-                form.button = Some(match form.button {
-                    None => 0,
-                    Some(at) if at < last => at + 1,
-                    Some(_) => 0,
-                })
+                form.tab(true);
             }
-            KeyCode::Tab => {
-                let last = form.buttons.len().saturating_sub(1);
-                form.button = Some(match form.button {
-                    None => 0,
-                    Some(at) if at < last => at + 1,
-                    Some(_) => 0,
-                })
-            }
+            KeyCode::Tab => form.tab(true),
             KeyCode::Enter => {
                 // Three of the attributes dialog's buttons do not answer it: they fill the
                 // time rows in and leave it on screen, as FAR's own do.
@@ -12327,8 +12334,26 @@ impl App {
             }
             Mode::Editor(_) => self.park_editor(),
             Mode::Hex(_) => self.park_hex(),
+            // A dialog is a screen too, for as long as its help page is in front of it: `F1`
+            // in the middle of filling in a copy dialog must not throw away what was typed.
+            Mode::Form(_) | Mode::Pick(_) | Mode::Prompt(_) | Mode::Confirm(_) => {
+                let dialog = std::mem::replace(&mut self.mode, Mode::Normal);
+                self.dialog_under_help = Some(Box::new(dialog));
+            }
             _ => {}
         }
+    }
+
+    /// `F1` inside a dialog: the page about dialogs, with the dialog itself waiting behind
+    /// it. The key bar says `Help` there, and this is what makes that true.
+    fn open_dialog_help(&mut self) {
+        let place = self.help_place();
+        self.park_front_screen();
+        self.mode = Mode::Help {
+            chapter: crate::help::Chapter::Here(place),
+            scroll: 0,
+            at: 0,
+        };
     }
 
     /// Open the screen grabber on the frame that is on the screen (SPEC 06 §11b).
@@ -12351,6 +12376,12 @@ impl App {
     /// And take it out again. The three are exclusive — one screen is in front — so asking
     /// each in turn is the whole of it.
     fn restore_front_screen(&mut self) {
+        // A dialog comes back first and alone: what it was opened over is parked in one of
+        // the three slots below, and that is for the dialog's own closing to put back.
+        if let Some(dialog) = self.dialog_under_help.take() {
+            self.mode = *dialog;
+            return;
+        }
         self.restore_viewer();
         self.restore_editor();
         self.restore_hex();
@@ -13029,6 +13060,8 @@ impl App {
             KeyCode::Esc if !pick.filter.is_empty() => {
                 pick.filter_clear();
             }
+            // The page about dialogs, with the list waiting behind it.
+            KeyCode::F(1) if key.mods == Mods::NONE => self.open_dialog_help(),
             // The rows slide sideways, for a list of paths wider than the box. FAR's keys.
             KeyCode::Left if key.mods.contains(Mods::ALT) => pick.scroll_sideways(-1),
             KeyCode::Right if key.mods.contains(Mods::ALT) => pick.scroll_sideways(1),
@@ -17153,6 +17186,57 @@ impl App {
         .collect()
     }
 
+    /// The key bar inside a dialog, or `None` when there is no dialog on the screen.
+    ///
+    /// FAR changes the bottom row in a dialog, and for the same reason the panels' bar
+    /// changes with the modifier: the keys there are not the panels' keys, and a bar that
+    /// still offered `Copy` and `MkFold` over a copy dialog would be describing something
+    /// that is not on the screen. What it says is only what the dialog answers — the help
+    /// page, `OK`, the way out, and under `Ctrl` the key that moves it — so the row is short.
+    /// That is the honest length of it: a dialog is answered with `Enter` and `Esc`, and
+    /// inventing function keys to fill the row out would be worse than leaving it empty.
+    pub fn keybar_dialog(&self, mods: Mods) -> Option<Vec<(u8, String)>> {
+        let t = |id: &str| self.i18n.t(id);
+        let rows = match &self.mode {
+            Mode::Form(form) => {
+                if mods == Mods::NONE {
+                    vec![(1u8, t("key-help")), (10, t("key-ok"))]
+                } else if mods == Mods::CTRL {
+                    vec![(5, t("key-dialog-move"))]
+                } else if mods == Mods::ALT && form.kind == FormKind::Copy {
+                    // The folder list the copy dialog's destination can be chosen from.
+                    vec![(10, t("key-tree"))]
+                } else {
+                    Vec::new()
+                }
+            }
+            // A list answers `F4` where its rows can be edited — a code page's own name, a
+            // highlight group, a setting — and the drive dialog answers `F9` with its
+            // settings, as FAR's does. Both are asked of the list rather than written out,
+            // so a list that does not answer them does not offer them.
+            Mode::Pick(pick) if mods == Mods::NONE => {
+                let mut rows = vec![(1u8, t("key-help"))];
+                if pick_edits_rows(pick.kind) {
+                    rows.push((4, t("key-edit")));
+                }
+                if pick.kind == PickKind::Drives {
+                    rows.push((9, t("key-config")));
+                }
+                rows.push((10, t("key-cancel")));
+                rows
+            }
+            Mode::Confirm(_) if mods == Mods::NONE => {
+                vec![(1u8, t("key-help")), (10, t("key-cancel"))]
+            }
+            // A question with one line to type in: `Enter` and `Esc` are the whole of it,
+            // so the only function key it has is the one that explains the rest.
+            Mode::Prompt(_) if mods == Mods::NONE => vec![(1u8, t("key-help"))],
+            Mode::Pick(_) | Mode::Confirm(_) | Mode::Prompt(_) => Vec::new(),
+            _ => return None,
+        };
+        Some(rows)
+    }
+
     /// The key bar while a modifier is held down.
     ///
     /// FAR swaps the whole bar as you press Shift, Ctrl or Alt, which is how anyone ever
@@ -17714,6 +17798,21 @@ fn field_keeps_history(key: &str) -> bool {
             | "unpack.to"
             | "hl.mask"
             | "sg.mask"
+    )
+}
+
+/// Does `F4` do anything in this list? What the dialog key bar asks before offering it,
+/// and the same seven kinds `pick_key` answers the key for.
+fn pick_edits_rows(kind: PickKind) -> bool {
+    matches!(
+        kind,
+        PickKind::Highlight
+            | PickKind::Codepages
+            | PickKind::Settings
+            | PickKind::MaskGroups
+            | PickKind::SortGroups
+            | PickKind::FileHistory
+            | PickKind::Bookmarks
     )
 }
 
@@ -20408,7 +20507,7 @@ mod tests {
     /// goes to the buttons where there is nothing to complete, so the key never stops
     /// working.
     #[test]
-    fn tab_completes_a_path_in_a_dialog_and_otherwise_goes_to_the_buttons() {
+    fn tab_completes_a_path_in_a_dialog_and_otherwise_walks_it() {
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(dir.path().join("target-one")).unwrap();
         std::fs::create_dir_all(dir.path().join("target-two")).unwrap();
@@ -20462,12 +20561,211 @@ mod tests {
             format!("{}/target-one/", dir.path().display())
         );
 
-        // And with nothing left to complete, `Tab` is what it always was.
+        // And with nothing left to complete, `Tab` is what it is everywhere else in the
+        // dialog: on to the next control, which here is the first row of the conflict group.
         press(&mut app, "Tab");
         let Mode::Form(form) = &app.mode else {
             panic!("the dialog closed")
         };
-        assert_eq!(form.button, Some(0), "Tab did not go to the buttons");
+        assert!(form.button.is_none(), "Tab left the rows");
+        assert!(
+            matches!(
+                form.fields.get(form.cursor),
+                Some(crate::form::Field::Radio { .. })
+            ),
+            "Tab went to the next control"
+        );
+    }
+
+    /// `Tab` walks the whole dialog and comes round again — rows, then buttons, then the
+    /// first row — and `Shift+Tab` walks it backwards. Before this it went to the buttons
+    /// and stayed there, which left no way back to a field one wanted to correct.
+    #[test]
+    fn tab_walks_the_whole_dialog_and_comes_round_again() {
+        let mut app = app();
+        app.run(Command::OptSystem);
+        let Mode::Form(form) = &mut app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        // Every row the cursor can stop on, and how many buttons there are under them.
+        let rows = (0..form.fields.len())
+            .filter(|i| {
+                !matches!(
+                    form.fields[*i],
+                    crate::form::Field::Separator
+                        | crate::form::Field::Note(_)
+                        | crate::form::Field::Dim(_)
+                )
+            })
+            .count();
+        let buttons = form.buttons.len();
+        assert!(rows > 1 && buttons > 1, "{rows} rows, {buttons} buttons");
+        let first = form.cursor;
+
+        // Through the rows: each `Tab` is one more row, and none of them is a button yet.
+        for _ in 1..rows {
+            press(&mut app, "Tab");
+            let Mode::Form(form) = &app.mode else {
+                panic!("the dialog closed")
+            };
+            assert!(form.button.is_none(), "still among the rows");
+        }
+        // Then the buttons, in order.
+        for at in 0..buttons {
+            press(&mut app, "Tab");
+            let Mode::Form(form) = &app.mode else {
+                panic!("the dialog closed")
+            };
+            assert_eq!(form.button, Some(at));
+        }
+        // And round to the first row again, rather than back to the first button.
+        press(&mut app, "Tab");
+        let Mode::Form(form) = &app.mode else {
+            panic!("the dialog closed")
+        };
+        assert!(form.button.is_none(), "the ring came back to the rows");
+        assert_eq!(form.cursor, first);
+
+        // Backwards is the last button, which is the way out — one key from the first row.
+        press(&mut app, "Shift+Tab");
+        let Mode::Form(form) = &app.mode else {
+            panic!("the dialog closed")
+        };
+        assert_eq!(form.button, Some(buttons - 1));
+    }
+
+    /// The bottom row inside a dialog is the dialog's own, as it is in FAR: the panels' keys
+    /// are not on the screen, so the bar must not offer them. What it says is only what the
+    /// dialog answers, which is why it is short.
+    #[test]
+    fn the_key_bar_in_a_dialog_is_the_dialogs_own() {
+        let mut app = app();
+        // With the panels in front there is no dialog bar at all, and the panels' own stands.
+        assert!(app.keybar_dialog(Mods::NONE).is_none());
+
+        app.run(Command::OptSystem);
+        let bar = app.keybar_dialog(Mods::NONE).expect("a dialog is open");
+        assert_eq!(
+            bar.iter().map(|(n, _)| *n).collect::<Vec<_>>(),
+            vec![1, 10],
+            "the help page and OK, which is what a settings dialog answers"
+        );
+        assert_ne!(bar, app.keybar(), "it is not the panels' row");
+        // Under `Ctrl` it is the key that moves the dialog, and nothing else.
+        assert_eq!(
+            app.keybar_dialog(Mods::CTRL)
+                .expect("a dialog is open")
+                .iter()
+                .map(|(n, _)| *n)
+                .collect::<Vec<_>>(),
+            vec![5]
+        );
+        // Nothing is held down that the dialog answers: an empty row, not the panels'.
+        assert_eq!(app.keybar_dialog(Mods::SHIFT), Some(Vec::new()));
+
+        // The copy dialog has one more: the folder list, on `Alt+F10`.
+        app.mode = Mode::Normal;
+        press(&mut app, "Down");
+        app.run(Command::FileCopyCurrent);
+        let alt = app
+            .keybar_dialog(Mods::ALT)
+            .expect("the copy dialog is open");
+        assert_eq!(alt.len(), 1);
+        assert_eq!(alt[0].0, 10);
+
+        // A list says what `F10` does there, which is leave rather than answer.
+        app.mode = Mode::Normal;
+        app.run(Command::PanelHistory);
+        let bar = app.keybar_dialog(Mods::NONE).expect("a list is open");
+        assert_eq!(bar.last().map(|(n, _)| *n), Some(10));
+        assert_eq!(
+            bar.last().map(|(_, l)| l.clone()),
+            Some(app.i18n.t("key-cancel"))
+        );
+    }
+
+    /// `F1` in a dialog is the page about dialogs, and the dialog is waiting behind it with
+    /// what was typed into it still there. The bar says `Help`; this is what makes it true.
+    #[test]
+    fn f1_in_a_dialog_opens_the_page_about_dialogs_and_comes_back_to_it() {
+        let mut app = app();
+        press(&mut app, "Down");
+        app.run(Command::FileCopyCurrent);
+        let Mode::Form(form) = &mut app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        form.set_text("copy.target", "/tmp/somewhere".to_string());
+
+        press(&mut app, "F1");
+        let Mode::Help { chapter, .. } = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(
+            *chapter,
+            crate::help::Chapter::Here(crate::help::Where::Dialog)
+        );
+
+        press(&mut app, "F10");
+        let Mode::Form(form) = &app.mode else {
+            panic!("the dialog came back: {:?}", app.mode)
+        };
+        assert_eq!(form.kind, FormKind::Copy);
+        assert_eq!(
+            form.text_value("copy.target"),
+            "/tmp/somewhere",
+            "and what was typed into it is still there"
+        );
+    }
+
+    /// A group of round boxes is one setting: the dot moves to the row that is picked, the
+    /// rest of the group goes out, and the value the dialog reports is that row's.
+    #[test]
+    fn a_group_of_round_boxes_answers_for_the_whole_group() {
+        let mut app = app();
+        press(&mut app, "Down");
+        app.run(Command::FileCopyCurrent);
+        let Mode::Form(form) = &mut app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        let group: Vec<usize> = form
+            .fields
+            .iter()
+            .enumerate()
+            .filter_map(|(i, f)| {
+                matches!(f, crate::form::Field::Radio { key, .. } if *key == "copy.conflict")
+                    .then_some(i)
+            })
+            .collect();
+        assert_eq!(group.len(), 6, "the six answers FAR asks here");
+        let on = |form: &crate::form::Form| {
+            form.fields
+                .iter()
+                .filter(|f| matches!(f, crate::form::Field::Radio { on, .. } if *on))
+                .count()
+        };
+        assert_eq!(on(form), 1, "exactly one of them starts picked");
+
+        // `Space` on the last row of the group picks it, and only it.
+        form.cursor = *group.last().expect("a group");
+        press(&mut app, "Space");
+        let Mode::Form(form) = &app.mode else {
+            panic!("the dialog closed")
+        };
+        assert_eq!(on(form), 1);
+        assert_eq!(form.choice_value("copy.conflict"), "append");
+        // The rows are drawn as round boxes, with the dot on the one that is picked.
+        let rows = form.rows();
+        let drawn: Vec<String> = rows
+            .iter()
+            .map(|r| r.text.clone())
+            .filter(|t| t.starts_with('('))
+            .collect();
+        assert_eq!(drawn.len(), 6);
+        assert_eq!(
+            drawn.iter().filter(|t| t.starts_with("(•)")).count(),
+            1,
+            "{drawn:?}"
+        );
     }
 
     /// `Ctrl+F5` hands the arrows to the dialog, so it can be pushed off whatever it is
@@ -23925,7 +24223,8 @@ run = ["echo one", "echo two", "echo three"]
             type_text(app, text);
         };
 
-        // The conflict policy is a choice row: Right steps it along.
+        // The conflict policy is a group of round boxes: the cursor goes to the row that
+        // says `append` and `Space` picks it.
         {
             let Mode::Form(form) = &mut app.mode else {
                 panic!("the dialog is open")
@@ -23933,14 +24232,13 @@ run = ["echo one", "echo two", "echo three"]
             form.cursor = form
                 .fields
                 .iter()
-                .position(
-                    |f| matches!(f, crate::form::Field::Choice { key, .. } if *key == "copy.conflict"),
-                )
+                .position(|f| {
+                    matches!(f, crate::form::Field::Radio { key, value, .. }
+                        if *key == "copy.conflict" && value == "append")
+                })
                 .expect("the policy row");
         }
-        for _ in 0..5 {
-            press(&mut app, "Right");
-        }
+        press(&mut app, "Space");
         set_toggle(&mut app, "copy.only_newer");
         set_toggle(&mut app, "copy.follow_links");
         set_toggle(&mut app, "copy.times");

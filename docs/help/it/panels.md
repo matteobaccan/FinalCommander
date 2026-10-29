@@ -353,3 +353,26 @@ L'editor lo prende tutto, ritorni a capo compresi; la riga di comando, una riga 
 domanda sono una riga ciascuna, quindi prendono la prima riga e dicono quante altre ce n'erano.
 Un comando copiato da una pagina web si porta dietro il ritorno a capo, ed eseguirlo prima di
 averlo letto è esattamente quello che quella regola evita.
+
+# I dialoghi
+
+Un dialogo è un elenco di righe in una cornice, con una riga di pulsanti sotto. Una casella
+quadra `[x]` è un sì o no a sé stante; una rotonda `(•)` è una risposta di un gruppo, e
+scegliendola le altre del gruppo si spengono; una riga che finisce con `↓` contiene un elenco
+di valori che `Spazio` e le frecce percorrono; `[?]` è una casella chiesta di più file che non
+sono d'accordo, e lasciata com'è non ne cambia nessuno.
+
+`↑` e `↓` si spostano fra le righe. `Tab` percorre tutto il dialogo e torna all'inizio — le
+righe, poi i pulsanti, poi la prima riga — e `Shift+Tab` lo percorre a rovescio, così il tasto
+che esce dalla prima riga è la via d'uscita. `Invio` risponde al dialogo da dove si trova il
+cursore, `F10` è `OK` da qualunque punto, `Esc` butta via tutto.
+
+Una riga che nomina un percorso si completa con `Tab`, come in una shell, e `Ctrl+↓` apre quel
+che è già stato scritto in quella riga. `Ctrl+F5` passa le frecce al dialogo stesso, per quando
+copre l'unica cosa che serve leggere; `Invio` ed `Esc` lo fermano soltanto.
+
+La riga in basso dello schermo diventa quella del dialogo finché è aperto: i tasti dei pannelli
+non sono sullo schermo, e descriverli sarebbe descrivere qualcosa che non c'è. È corta, perché
+a un dialogo si risponde con `Invio` ed `Esc` — `F1` per questa pagina, `F10` per `OK`, `Ctrl`
+per il tasto che lo sposta. `F1` lascia il dialogo in attesa dietro l'aiuto, con tutto quello
+che è stato scritto dentro ancora al suo posto.

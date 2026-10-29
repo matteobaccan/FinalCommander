@@ -515,7 +515,11 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
     }
 
     if keybar_h == 1 {
-        let labels = app.keybar_for(app.held);
+        // A dialog's own row, where one is open: its keys are not the panels' keys, and FAR
+        // changes the bar for the same reason.
+        let labels = app
+            .keybar_dialog(app.held)
+            .unwrap_or_else(|| app.keybar_for(app.held));
         let refs: Vec<(u8, &str)> = labels.iter().map(|(n, s)| (*n, s.as_str())).collect();
         widgets::draw_keybar(buf, &app.theme, Rect::new(0, h - 1, w, 1), &refs);
         app.layout.key_bar = Some((h - 1, labels.iter().map(|(n, _)| *n).collect()));
@@ -1506,7 +1510,11 @@ fn draw_editor(
     }
 
     if keybar_h == 1 {
-        let labels = app.keybar_editor();
+        // The same swap as under the panels: a dialog over the editor is what the bar is
+        // about while it is there.
+        let labels = app
+            .keybar_dialog(app.held)
+            .unwrap_or_else(|| app.keybar_editor());
         let refs: Vec<(u8, &str)> = labels.iter().map(|(n, s)| (*n, s.as_str())).collect();
         widgets::draw_keybar(buf, &app.theme, Rect::new(0, h - 1, w, 1), &refs);
     }
@@ -2107,7 +2115,9 @@ fn draw_viewer(app: &mut App, viewer: &mut fcmd_view::Viewer, buf: &mut Buffer) 
     }
 
     if keybar_h == 1 {
-        let labels = app.keybar_viewer();
+        let labels = app
+            .keybar_dialog(app.held)
+            .unwrap_or_else(|| app.keybar_viewer());
         let refs: Vec<(u8, &str)> = labels.iter().map(|(n, s)| (*n, s.as_str())).collect();
         widgets::draw_keybar(buf, &app.theme, Rect::new(0, h - 1, w, 1), &refs);
     }
