@@ -587,6 +587,14 @@ clip-off = die Ablage ist abgeschaltet — `ui.clipboard` in den Einstellungen
 history-gone = { $name } ist nicht mehr da
 hl-new = Neue Farbgruppe
 hl-edit = Farbgruppe
+# ------------------------------------------------- die Codepages (SPEC 05 §1.12)
+cp-title = Codepages
+cp-name-title = Wie diese Codepage heißen soll
+cp-set = Gelesen als { $name }
+cp-marked = { $name } gehört zu denen, die F8 durchgeht
+cp-unmarked = { $name } gehört nicht mehr zu denen, die F8 durchgeht
+cp-hint = ↑↓ wählen · Enter so lesen · Einfg für F8 markieren · F4 umbenennen · Esc schließen
+
 # ------------------------------------------------- die benannten Maskengruppen (SPEC 02 §5b)
 mg-title = Maskengruppe
 mg-name = Name

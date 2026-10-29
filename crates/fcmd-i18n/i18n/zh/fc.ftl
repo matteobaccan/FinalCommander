@@ -575,6 +575,14 @@ clip-off = 剪贴板已关闭 — 设置中的 `ui.clipboard`
 history-gone = { $name } 已经不在了
 hl-new = 新建颜色分组
 hl-edit = 颜色分组
+# ------------------------------------------------- 代码页 (SPEC 05 §1.12)
+cp-title = 代码页
+cp-name-title = 为这个代码页起个名字
+cp-set = 按 { $name } 读取
+cp-marked = { $name } 已加入 F8 的轮换
+cp-unmarked = { $name } 已移出 F8 的轮换
+cp-hint = ↑↓ 选择 · Enter 按此读取 · Ins 加入 F8 · F4 重命名 · Esc 关闭
+
 # ------------------------------------------------- 命名掩码组 (SPEC 02 §5b)
 mg-title = 掩码组
 mg-name = 名称

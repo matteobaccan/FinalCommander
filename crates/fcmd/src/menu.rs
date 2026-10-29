@@ -86,6 +86,8 @@ pub enum PickKind {
     SortGroups,
     /// The named mask lists every mask field can use as `<name>` (SPEC 02 §5b).
     MaskGroups,
+    /// The code pages, favourites first (`Shift+F8`, SPEC 05 §1.12).
+    Codepages,
     /// Every folder the tree knows under this panel's root: `Alt+F10`, and the destination
     /// chooser of the copy dialog (SPEC 02 §7).
     Folders,

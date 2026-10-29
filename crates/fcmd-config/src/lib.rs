@@ -967,6 +967,28 @@ pub struct SortGroupCfg {
     pub place: String,
 }
 
+/// One `[[codepage]]` block: a code page the viewer's `F8` cycles, and what to call it.
+///
+/// ```toml
+/// [[codepage]]
+/// id = "windows-1251"      # the id the list shows; `cp1251` and `CP-1251` are the same page
+/// name = "Russo"           # optional: what to call it in the list
+/// favourite = true         # `F8` walks only the favourites
+/// ```
+///
+/// With no block marked `favourite`, `F8` walks the five pages the program handles itself —
+/// which is what it did before any of this existed.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CodepageCfg {
+    pub id: String,
+    /// What the list calls it, or empty for the name the program has.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub name: String,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub favourite: bool,
+}
+
 /// One `[[mask_group]]` block: a named mask list that every mask field can use as `<name>`.
 ///
 /// ```toml
@@ -1219,6 +1241,10 @@ pub struct Config {
     /// `[[mask_group]]` blocks: the named mask lists every mask field can use (SPEC 02 §5b).
     #[serde(rename = "mask_group")]
     pub mask_groups: Vec<MaskGroupCfg>,
+    /// `[[codepage]]` blocks: which code pages `F8` cycles, and what to call them
+    /// (SPEC 05 §1.12).
+    #[serde(rename = "codepage")]
+    pub codepages: Vec<CodepageCfg>,
     /// Anything we did not recognise, kept so `--dump-config` can show it and warn.
     #[serde(flatten, skip_serializing)]
     pub unknown: BTreeMap<String, toml::Value>,

@@ -7,7 +7,14 @@ righe.
 `F2` cambia l'andata a capo, `F4` gira la ruota dei modi di leggere il file — testo, dump dei
 byte, esadecimale, documento impaginato, tabella — fermandosi solo su quelli che per questo
 file hanno senso, con la barra dei tasti che dice dove cade il giro successivo; `Shift+F4` è
-l'esadecimale e subito indietro. `F8` cambia la code page e `F7` apre il dialogo di ricerca:
+l'esadecimale e subito indietro.
+
+`Maiusc+F8` è l'elenco di tutte le code page che il programma offre, un elenco in cui si
+scrive: `Invio` legge il file con quella, `Ins` segna una pagina come una di quelle che usi —
+prende un `*` e sale in cima — e `F4` le dà un nome tuo. `F8` poi percorre le pagine che hai
+segnato, e le cinque che il programma gestisce da sé fin quando non ne segni nessuna.
+
+`F7` apre il dialogo di ricerca:
 cosa cercare, se è testo semplice, una sequenza di byte esadecimali o un'espressione regolare,
 se contano le maiuscole, se contano solo le parole intere — e poi *Trova successivo* o *Trova
 precedente*, perché sono la stessa domanda fatta due volte. `Shift+F7` e `Alt+F7` la ripetono

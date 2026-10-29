@@ -56,9 +56,40 @@ hole in it.
 ### 1.3 Encodings
 
 `encoding_rs` + BOM sniffing + heuristic detection (UTF-8 validity, UTF-16 nul pattern, legacy
-single-byte frequency); manual override from a codepage menu (`Shift+F8`) with a recent list
-and per-extension defaults. Invalid sequences render as a visible replacement glyph with the
-raw byte shown in the status line. Line endings CRLF/LF/CR/NEL all recognised and reported.
+single-byte frequency); manual override from the code page list of §1.12. Invalid sequences
+render as a visible replacement glyph with the raw byte shown in the status line. Line endings
+CRLF/LF/CR/NEL all recognised and reported. Per-extension defaults are still owed.
+
+### 1.12 The code page list (`Shift+F8`)
+
+**What the program decodes with.** Five code pages are handled here because they have to be:
+UTF-8 and the two UTF-16 byte orders are what a BOM names, and CP437 is the DOS box-drawing
+page `encoding_rs` does not ship. Everything else is one of `encoding_rs`'s own encodings —
+the Windows pages, CP866 and the two Macintosh ones, the ISO-8859 family, KOI8-R and KOI8-U,
+and the East Asian multi-byte pages — which is what makes the list as long as FAR's without a
+table per page in this repository.
+
+**The list.** `Shift+F8` in the viewer, which is FAR's own key there (on a panel `Shift+F8`
+deletes). It is a list one types into, the page the file is being read as is marked, and:
+
+| Key | What it does |
+| --- | --- |
+| `Enter` | read the file as that page, and say so in the status line |
+| `Ins` | mark the page as one `F8` walks, or unmark it. A marked page is shown with a `*` and comes first in the list |
+| `F4` | give the page a name of your own, opening on what it is called now; an empty answer gives it back the program's name |
+
+**`F8` walks the marked ones.** The list is thirty-odd pages long and nobody cycles through
+thirty; marking three is what makes one key enough. With nothing marked, `F8` walks the five
+the program handles itself, which is what it did before any of this existed.
+
+**Written down.** A `[[codepage]]` block holds the two answers — whether `F8` walks a page and
+what to call it — and *Save setup* writes them (SPEC 07). An id is the WHATWG name
+(`windows-1251`, `KOI8-R`), because an id has to survive the list being reordered; reading one
+is generous about how it was typed, so `cp1251`, `CP-1251` and the bare `1251` are the same
+page.
+
+Still owed: remembering the page a *file* was read as, which wants the same store as the
+viewer's remembered position (§1.5b).
 
 ### 1.4 Search
 

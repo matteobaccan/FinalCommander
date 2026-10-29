@@ -665,6 +665,11 @@ pub enum PromptKind {
     HexRead,
     /// How many bytes to insert at the cursor.
     HexInsert,
+    /// What to call a code page in the list (`F4` in it). An empty answer gives it back the
+    /// name the program has.
+    CodepageName {
+        id: String,
+    },
     /// What a just-recorded macro is for, in the author's own words.
     MacroDescription {
         key: Key,
@@ -4059,6 +4064,12 @@ impl App {
                         .t_args("descr-set", &[("name", name.clone().into())])
                 };
                 self.set_status(msg);
+            }
+            PromptKind::CodepageName { ref id } => {
+                let (id, name) = (id.clone(), prompt.text.trim().to_string());
+                self.name_codepage(&id, &name);
+                // Back to the list, where the name shows at once.
+                self.open_codepages();
             }
             PromptKind::Tunnel => {
                 let text = prompt.text.trim().to_string();
@@ -12109,6 +12120,8 @@ impl App {
             // Built by `open_field_history`, which knows which field asked and holds the
             // dialog while the list is on the screen.
             PickKind::FieldHistory => return,
+            // Built by `open_codepages`, which knows which page the reader is on.
+            PickKind::Codepages => return,
             // The same: `open_screens` knows what is open, and this does not.
             PickKind::Screens => return,
             // And `open_macros`, which knows what has been recorded.
@@ -12518,6 +12531,36 @@ impl App {
                     button: 0,
                 });
             }
+            // The code page list: `Ins` marks one as a page `F8` walks, `F4` gives it a name
+            // of its own. Both leave the list open where it was, because one marks three
+            // pages in a row or none.
+            KeyCode::Insert if kind == PickKind::Codepages => {
+                let id = pick.chosen().map(|r| r.value.clone());
+                let Some(id) = id else { return };
+                self.flip_codepage_favourite(&id);
+                let on = self
+                    .codepage_favourites()
+                    .iter()
+                    .any(|cp| cp.id() == id.as_str());
+                let label = fcmd_view::Codepage::parse(&id)
+                    .map(|cp| self.codepage_label(cp))
+                    .unwrap_or_else(|| id.clone());
+                let msg = self.i18n.t_args(
+                    if on { "cp-marked" } else { "cp-unmarked" },
+                    &[("name", label.into())],
+                );
+                self.open_codepages();
+                self.set_status(msg);
+            }
+            KeyCode::F(4) if kind == PickKind::Codepages => {
+                let id = pick.chosen().map(|r| r.value.clone());
+                let Some(id) = id else { return };
+                let now = fcmd_view::Codepage::parse(&id)
+                    .map(|cp| self.codepage_label(cp))
+                    .unwrap_or_default();
+                let title = self.plain("cp-name-title");
+                self.mode = Mode::Prompt(Prompt::new(PromptKind::CodepageName { id }, title, now));
+            }
             KeyCode::F(4) if kind == PickKind::MaskGroups => {
                 let name = pick.chosen().map(|r| r.value.clone());
                 if let Some(name) = name {
@@ -12852,6 +12895,19 @@ impl App {
                 self.open_sort_group_form(Some(at));
             }
             PickKind::MaskGroups => self.open_mask_group_form(Some(row.value.clone())),
+            PickKind::Codepages => {
+                self.restore_viewer();
+                let Some(cp) = fcmd_view::Codepage::parse(&row.value) else {
+                    return;
+                };
+                let label = self.codepage_label(cp);
+                match self.live_viewer_mut() {
+                    Some(viewer) => viewer.set_codepage_named(cp, label.clone()),
+                    None => return,
+                }
+                let msg = self.i18n.t_args("cp-set", &[("name", label.into())]);
+                self.set_status(msg);
+            }
             PickKind::FieldHistory => {
                 if let Some((mut form, key)) = self.field_for.take() {
                     form.set_text(key, row.value.clone());
@@ -13680,6 +13736,13 @@ impl App {
 
     fn viewer_command(&mut self, cmd: Command) {
         let (width, height) = self.live_viewer_size();
+        // `F8` walks the favourites, which is the whole point of marking any: the list is
+        // thirty-odd pages long and nobody cycles through thirty.
+        let favourites = self.codepage_favourites();
+        if cmd == Command::ViewerCodepageList {
+            self.open_codepages();
+            return;
+        }
         let mut message: Option<String> = None;
         let mut error: Option<String> = None;
         if let Some(viewer) = self.live_viewer_mut() {
@@ -13778,7 +13841,7 @@ impl App {
                 Command::ViewerChromeStatus => viewer.show_status_line = !viewer.show_status_line,
                 Command::ViewerChromeScrollbar => viewer.show_scrollbar = !viewer.show_scrollbar,
                 Command::ViewerPaneNext => viewer.toggle_struct_focus(),
-                Command::ViewerCodepageNext => viewer.next_codepage(),
+                Command::ViewerCodepageNext => viewer.next_codepage_in(&favourites),
                 Command::ViewerFollow => viewer.toggle_follow(),
                 Command::ViewerBytesLess => viewer.set_bytes_per_row(-1, width),
                 Command::ViewerBytesMore => viewer.set_bytes_per_row(1, width),
@@ -15486,6 +15549,142 @@ impl App {
         }
     }
 
+    /// The code pages `F8` walks: the ones marked `favourite`, or the five the program
+    /// handles itself when nobody has marked any.
+    ///
+    /// The order is the order they are written in, because that is the order `F8` goes
+    /// through them and somebody who wrote them down meant that order.
+    pub fn codepage_favourites(&self) -> Vec<fcmd_view::Codepage> {
+        let marked: Vec<fcmd_view::Codepage> = self
+            .cfg
+            .codepages
+            .iter()
+            .filter(|c| c.favourite)
+            .filter_map(|c| fcmd_view::Codepage::parse(&c.id))
+            .collect();
+        if marked.is_empty() {
+            fcmd_view::Codepage::ALL.to_vec()
+        } else {
+            marked
+        }
+    }
+
+    /// What to call a code page: the name the user gave it, or the program's own.
+    fn codepage_label(&self, cp: fcmd_view::Codepage) -> String {
+        self.cfg
+            .codepages
+            .iter()
+            .find(|c| !c.name.is_empty() && fcmd_view::Codepage::parse(&c.id) == Some(cp))
+            .map(|c| c.name.clone())
+            .unwrap_or_else(|| cp.name().to_string())
+    }
+
+    /// `Shift+F8` in the viewer: every code page, the favourites first.
+    ///
+    /// FAR's own key and FAR's own shape. The favourites come first and are marked, because
+    /// the list is thirty-odd pages long and the three or four one uses should be reachable
+    /// without reading it.
+    fn open_codepages(&mut self) {
+        let side = self.active;
+        let current = self.live_viewer().map(|v| v.codepage);
+        let favourites = self.codepage_favourites();
+        let mut rows: Vec<PickRow> = Vec::new();
+        for cp in &favourites {
+            rows.push(PickRow::plain(
+                self.codepage_label(*cp),
+                cp.id().to_string(),
+                current == Some(*cp),
+            ));
+        }
+        let rest: Vec<fcmd_view::Codepage> = fcmd_view::Codepage::every()
+            .into_iter()
+            .filter(|cp| !favourites.contains(cp))
+            .collect();
+        if !rows.is_empty() && !rest.is_empty() {
+            rows.push(PickRow {
+                label: String::new(),
+                value: String::new(),
+                current: false,
+                hotkey: None,
+                separator: true,
+            });
+        }
+        for cp in rest {
+            rows.push(PickRow::plain(
+                self.codepage_label(cp),
+                cp.id().to_string(),
+                current == Some(cp),
+            ));
+        }
+        let title = self.plain("cp-title");
+        let mut pick = Pick::filtered(PickKind::Codepages, title, rows, side);
+        pick.locked = favourites.iter().map(|cp| cp.id().to_string()).collect();
+        if let Some(at) = pick.rows.iter().position(|r| r.current) {
+            pick.cursor = at;
+        }
+        // The list opens *over* the viewer and the viewer waits underneath, as it does under
+        // a search prompt: closing the list reads the same file again, not the panels.
+        if let Mode::Viewer(viewer) = std::mem::replace(&mut self.mode, Mode::Normal) {
+            self.viewer_under_prompt = Some(viewer);
+        }
+        self.mode = Mode::Pick(Box::new(pick));
+    }
+
+    /// `Ins` in the list: mark a code page as one `F8` walks, or unmark it.
+    fn flip_codepage_favourite(&mut self, id: &str) {
+        let Some(cp) = fcmd_view::Codepage::parse(id) else {
+            return;
+        };
+        let id = cp.id().to_string();
+        match self
+            .cfg
+            .codepages
+            .iter()
+            .position(|c| fcmd_view::Codepage::parse(&c.id) == Some(cp))
+        {
+            Some(at) => {
+                self.cfg.codepages[at].favourite = !self.cfg.codepages[at].favourite;
+                // A block that says nothing at all is a block nobody needs to keep.
+                if !self.cfg.codepages[at].favourite && self.cfg.codepages[at].name.is_empty() {
+                    self.cfg.codepages.remove(at);
+                }
+            }
+            None => self.cfg.codepages.push(fcmd_config::CodepageCfg {
+                id,
+                name: String::new(),
+                favourite: true,
+            }),
+        }
+    }
+
+    /// `F4` in the list, once the name has been typed: an empty answer gives the page back
+    /// the name the program has.
+    fn name_codepage(&mut self, id: &str, name: &str) {
+        let Some(cp) = fcmd_view::Codepage::parse(id) else {
+            return;
+        };
+        let name = name.trim().to_string();
+        match self
+            .cfg
+            .codepages
+            .iter()
+            .position(|c| fcmd_view::Codepage::parse(&c.id) == Some(cp))
+        {
+            Some(at) => {
+                self.cfg.codepages[at].name = name;
+                if self.cfg.codepages[at].name.is_empty() && !self.cfg.codepages[at].favourite {
+                    self.cfg.codepages.remove(at);
+                }
+            }
+            None if !name.is_empty() => self.cfg.codepages.push(fcmd_config::CodepageCfg {
+                id: cp.id().to_string(),
+                name,
+                favourite: false,
+            }),
+            None => {}
+        }
+    }
+
     /// The named mask lists as rows: the three that are there without being written down,
     /// and the `[[mask_group]]` blocks over them, each with what it stands for.
     fn mask_group_rows(&self) -> Vec<PickRow> {
@@ -16354,6 +16553,7 @@ fn is_viewer_movement(cmd: Command) -> bool {
             | Command::ViewerPaneNext
             | Command::ViewerModeNext
             | Command::ViewerCodepageNext
+            | Command::ViewerCodepageList
             | Command::ViewerFollow
             | Command::ViewerLeft
             | Command::ViewerRight
@@ -22765,6 +22965,89 @@ run = ["echo one", "echo two", "echo three"]
         }
         app.viewer_size = (40, 4);
         app
+    }
+
+    /// `Shift+F8` in the viewer is the list of code pages: the ones marked first, `Ins`
+    /// marks one, `F4` gives it a name, and `F8` walks only the marked ones (SPEC 05 §1.12).
+    #[test]
+    fn the_code_page_list_marks_renames_and_sets() {
+        use fcmd_view::Codepage;
+
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("notes.txt"), b"one\ntwo\n").unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F3");
+        assert!(app.mode.viewer().is_some());
+
+        // With nothing marked, `F8` walks the five the program handles itself.
+        assert_eq!(
+            app.codepage_favourites(),
+            Codepage::ALL.to_vec(),
+            "the default cycle"
+        );
+
+        press(&mut app, "Shift+F8");
+        let Mode::Pick(pick) = &mut app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(pick.kind, crate::menu::PickKind::Codepages);
+        assert!(pick.rows.len() > 30, "{} rows", pick.rows.len());
+
+        // Mark KOI8-R: it joins the cycle and the list shows it marked.
+        pick.cursor = pick
+            .rows
+            .iter()
+            .position(|r| r.value.eq_ignore_ascii_case("koi8-r"))
+            .expect("KOI8-R is offered");
+        press(&mut app, "Ins");
+        assert_eq!(
+            app.codepage_favourites(),
+            vec![Codepage::parse("koi8-r").unwrap()],
+            "the marked one is the whole cycle now"
+        );
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("the list stays open: {:?}", app.mode)
+        };
+        assert!(
+            pick.lines().iter().any(|l| l.contains("* KOI8-R")),
+            "{:?}",
+            pick.lines()
+        );
+
+        // `F4` gives it a name of its own, and the list shows that instead.
+        press(&mut app, "F4");
+        let Mode::Prompt(prompt) = &mut app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        // It opens on what the page is called now, so a small change is a few keys.
+        assert_eq!(prompt.text, "KOI8-R (Russian)");
+        prompt.text = "Russo".to_string();
+        press(&mut app, "Enter");
+        let Mode::Pick(pick) = &mut app.mode else {
+            panic!("back to the list: {:?}", app.mode)
+        };
+        assert!(
+            pick.rows.iter().any(|r| r.label == "Russo"),
+            "{:?}",
+            pick.rows.iter().map(|r| &r.label).collect::<Vec<_>>()
+        );
+
+        // `Enter` reads the file as it, and the status line says the name we gave it.
+        pick.cursor = pick
+            .rows
+            .iter()
+            .position(|r| r.value.eq_ignore_ascii_case("koi8-r"))
+            .expect("still there");
+        press(&mut app, "Enter");
+        let viewer = app.mode.viewer_mut().expect("back in the viewer");
+        assert_eq!(viewer.codepage, Codepage::parse("koi8-r").unwrap());
+        assert_eq!(viewer.status().codepage, "Russo");
+
+        // And `F8` walks the marked ones: one marked page means `F8` stays on it.
+        press(&mut app, "F8");
+        let viewer = app.mode.viewer().expect("the viewer");
+        assert_eq!(viewer.codepage, Codepage::parse("koi8-r").unwrap());
     }
 
     #[test]

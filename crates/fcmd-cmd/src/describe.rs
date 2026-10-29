@@ -215,6 +215,7 @@ impl Command {
             Command::ViewerSearchPrev => "the hit before",
             Command::ViewerGoto => "go to an offset or a percentage",
             Command::ViewerCodepageNext => "read the bytes as another encoding",
+            Command::ViewerCodepageList => "the code pages, as a list",
             Command::ViewerFollow => "follow the file as it grows",
             Command::ViewerLeft => "left, or eight bytes narrower in hex",
             Command::ViewerRight => "right, or eight bytes wider in hex",

@@ -931,6 +931,8 @@ fn draw_pick(
         crate::menu::PickKind::CommandHistory
         | crate::menu::PickKind::FileHistory
         | crate::menu::PickKind::FoldersHistory => "history-hint",
+        // The code pages have keys of their own, and a footer that names them.
+        crate::menu::PickKind::Codepages => "cp-hint",
         _ => "pick-hint",
     });
 

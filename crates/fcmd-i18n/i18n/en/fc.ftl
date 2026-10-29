@@ -595,6 +595,14 @@ clip-off = the clipboard is turned off — `ui.clipboard` in the settings
 history-gone = { $name } is not there any more
 hl-new = New colour group
 hl-edit = Colour group
+# ------------------------------------------------- the code pages (SPEC 05 §1.12)
+cp-title = Code pages
+cp-name-title = What to call this code page
+cp-set = Reading as { $name }
+cp-marked = { $name } is one F8 walks
+cp-unmarked = { $name } is no longer one F8 walks
+cp-hint = ↑↓ choose · Enter read as it · Ins mark for F8 · F4 rename · Esc close
+
 # ------------------------------------------------- the named mask groups (SPEC 02 §5b)
 mg-title = Mask group
 mg-name = Name

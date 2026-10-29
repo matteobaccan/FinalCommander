@@ -587,6 +587,14 @@ clip-off = gli appunti sono disattivati — `ui.clipboard` nelle impostazioni
 history-gone = { $name } non c’è più
 hl-new = Nuovo gruppo di colore
 hl-edit = Gruppo di colore
+# ------------------------------------------------- le code page (SPEC 05 §1.12)
+cp-title = Code page
+cp-name-title = Come chiamare questa code page
+cp-set = Letto come { $name }
+cp-marked = { $name } è fra quelle che F8 percorre
+cp-unmarked = { $name } non è più fra quelle che F8 percorre
+cp-hint = ↑↓ scegli · Invio legge così · Ins segna per F8 · F4 rinomina · Esc chiude
+
 # ------------------------------------------------- i gruppi di maschere (SPEC 02 §5b)
 mg-title = Gruppo di maschere
 mg-name = Nome

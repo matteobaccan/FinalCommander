@@ -587,6 +587,14 @@ clip-off = le presse-papiers est désactivé — `ui.clipboard` dans les réglag
 history-gone = { $name } n’est plus là
 hl-new = Nouveau groupe de couleur
 hl-edit = Groupe de couleur
+# ------------------------------------------------- les pages de codes (SPEC 05 §1.12)
+cp-title = Pages de codes
+cp-name-title = Comment appeler cette page de codes
+cp-set = Lu comme { $name }
+cp-marked = { $name } fait partie de celles que F8 parcourt
+cp-unmarked = { $name } ne fait plus partie de celles que F8 parcourt
+cp-hint = ↑↓ choisir · Entrée lire ainsi · Inser marquer pour F8 · F4 renommer · Échap fermer
+
 # ------------------------------------------------- les groupes de masques (SPEC 02 §5b)
 mg-title = Groupe de masques
 mg-name = Nom

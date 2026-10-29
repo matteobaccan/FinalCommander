@@ -725,6 +725,12 @@ keys = ["F8"]
 scope = "viewer"
 cmd = "viewer.codepage.next"
 
+# FAR's own key for the list, in the viewer only: on a panel `Shift+F8` deletes.
+[[bind]]
+keys = ["Shift+F8"]
+scope = "viewer"
+cmd = "viewer.codepage.list"
+
 [[bind]]
 keys = ["Alt+F8", ":"]
 scope = "viewer"

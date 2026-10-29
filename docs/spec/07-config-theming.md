@@ -123,6 +123,20 @@ anyway), `objdump -d -C` (`*.o`, `*.so`, `*.a`), `retdec-decompiler` (`*.exe`). 
 `fcmd.toml` wins over a default for the same mask. `{file}` is substituted; a rule that forgets
 it still gets the path appended.
 
+## 2b-quater. `[[codepage]]` blocks
+
+Which code pages the viewer's `F8` walks, and what to call them (SPEC 05 §1.12).
+
+```toml
+[[codepage]]
+id = "KOI8-R"             # the WHATWG name; `koi8-r`, `cp-1251` and a bare `1251` are read too
+name = "Russo"            # optional: what the list calls it
+favourite = true          # `F8` walks only the favourites
+```
+
+With no block marked `favourite`, `F8` walks the five pages the program handles itself.
+`Shift+F8` in the viewer edits these, and *Save setup* writes them.
+
 ## 2b-ter. `[[mask_group]]` blocks
 
 A named mask list that every mask field can use as `<name>` (SPEC 02 §5b). `<arc>`, `<temp>`

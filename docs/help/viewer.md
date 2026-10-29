@@ -5,8 +5,14 @@ opens at once and `End` is one seek rather than a count of lines.
 
 `F2` cycles the wrapping, `F4` turns the wheel of ways to read the file — text, a byte dump,
 hex, a laid-out document, a table — stopping only on the ones this file has a use for, with
-the key bar saying where the next turn lands; `Shift+F4` is hex and straight back. `F8` changes the code page
-and `F7` opens the search dialog: what to look for, whether it is plain text, a run of hex
+the key bar saying where the next turn lands; `Shift+F4` is hex and straight back.
+
+`Shift+F8` is every code page the program offers, as a list you type into: `Enter` reads the
+file as one, `Ins` marks a page as one you use — it gets a `*` and comes to the top — and `F4`
+gives it a name of your own. `F8` then walks the pages you marked, and the five the program
+handles itself while you have marked none.
+
+`F7` opens the search dialog: what to look for, whether it is plain text, a run of hex
 bytes or a regular expression, whether case matters, whether only whole words count — and
 then *Find next* or *Find previous*, because they are the same question asked twice.
 `Shift+F7` and `Alt+F7` repeat it forwards and backwards without asking again. `F6` hands the file to the editor at the same place.

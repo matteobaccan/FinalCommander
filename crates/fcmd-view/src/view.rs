@@ -105,7 +105,9 @@ pub struct Status {
     pub name: String,
     pub mode: Mode,
     pub wrap: Wrap,
-    pub codepage: &'static str,
+    /// What the code page is called: the name the user gave it where there is one, and the
+    /// program's own otherwise, which is why it is owned rather than borrowed.
+    pub codepage: String,
     pub offset: u64,
     pub len: u64,
     pub percent: u16,
@@ -151,6 +153,9 @@ pub struct Viewer {
     pub base_mode: Mode,
     pub wrap: Wrap,
     pub codepage: Codepage,
+    /// What to call the code page, when the user has given it a name of its own. The viewer
+    /// does not read the configuration, so the name is handed to it with the page.
+    pub codepage_label: Option<String>,
     /// Offset of the first visible row (always a line start in text mode).
     pub top: u64,
     /// Which wrapped segment of that line is on the first row.
@@ -267,6 +272,7 @@ impl Viewer {
             base_mode,
             wrap: Wrap::Off,
             codepage,
+            codepage_label: None,
             top: 0,
             top_sub: 0,
             col: 0,
@@ -643,8 +649,21 @@ impl Viewer {
         self.codepage = self.codepage.next();
     }
 
+    /// `F8`: the next code page among the ones the user has marked (SPEC 05 §1.12).
+    pub fn next_codepage_in(&mut self, among: &[Codepage]) {
+        self.codepage = self.codepage.next_in(among);
+    }
+
     pub fn set_codepage(&mut self, codepage: Codepage) {
         self.codepage = codepage;
+        self.codepage_label = None;
+    }
+
+    /// The same, with the name the user gave this page: the status line says what the list
+    /// said, or the two would disagree about the same thing.
+    pub fn set_codepage_named(&mut self, codepage: Codepage, label: String) {
+        self.codepage = codepage;
+        self.codepage_label = Some(label).filter(|l| l != codepage.name());
     }
 
     /// Widen or narrow the dump by one step, within what the window can draw.
@@ -1786,7 +1805,10 @@ impl Viewer {
             name: self.path.display_name(),
             mode: self.mode,
             wrap: self.wrap,
-            codepage: self.codepage.name(),
+            codepage: self
+                .codepage_label
+                .clone()
+                .unwrap_or_else(|| self.codepage.name().to_string()),
             offset,
             len,
             percent,

@@ -587,6 +587,14 @@ clip-off = el portapapeles está desactivado — `ui.clipboard` en los ajustes
 history-gone = { $name } ya no está
 hl-new = Nuevo grupo de color
 hl-edit = Grupo de color
+# ------------------------------------------------- las páginas de códigos (SPEC 05 §1.12)
+cp-title = Páginas de códigos
+cp-name-title = Cómo llamar a esta página de códigos
+cp-set = Leído como { $name }
+cp-marked = { $name } está entre las que recorre F8
+cp-unmarked = { $name } ya no está entre las que recorre F8
+cp-hint = ↑↓ elegir · Intro leer así · Ins marcar para F8 · F4 renombrar · Esc cerrar
+
 # ------------------------------------------------- los grupos de máscaras (SPEC 02 §5b)
 mg-title = Grupo de máscaras
 mg-name = Nombre

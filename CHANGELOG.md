@@ -4,6 +4,20 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
+## [Unreleased]
+
+### Added
+
+- **The code pages are a list, and `F8` walks the ones you mark.** `Shift+F8` in the viewer
+  opens every code page the program offers — the five it handles itself and everything
+  `encoding_rs` knows: the Windows pages, CP866, the two Macintosh ones, the ISO-8859 family,
+  KOI8-R and KOI8-U, Shift_JIS, EUC-JP, ISO-2022-JP, GBK, GB18030, Big5 and EUC-KR. `Enter`
+  reads the file as one, `Ins` marks a page as one `F8` walks (shown with a `*`, and first in
+  the list), `F4` gives it a name of your own. `F8` then cycles the marked ones rather than a
+  fixed five — thirty-odd pages is not a cycle — and with nothing marked it walks the five it
+  always did. Both answers live in `[[codepage]]` blocks that *Save setup* writes; an id is
+  the WHATWG name, and `cp1251`, `CP-1251` and a bare `1251` all name the same page.
+
 ## [0.14.0] — 2026-10-29
 
 ### Added
