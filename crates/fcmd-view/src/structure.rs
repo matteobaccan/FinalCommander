@@ -1908,9 +1908,7 @@ fn pe_section_flags(f: u32) -> String {
 /// the header arithmetic without a second table to read.
 fn ne(src: &mut dyn Bytes, at: u64, nt: &[u8], mut rows: Vec<Row>, len: u64) -> Structure {
     let mut c = Cur::new(nt);
-    c.seek(2);
-    let linker = (c.u16() & 0xFF) as u8;
-    c.seek(2);
+    // The linker version is two bytes rather than a word, so it is read as bytes.
     let version = nt.get(2).copied().unwrap_or(0);
     let revision = nt.get(3).copied().unwrap_or(0);
     c.seek(4);
@@ -1938,7 +1936,6 @@ fn ne(src: &mut dyn Bytes, at: u64, nt: &[u8], mut rows: Vec<Row>, len: u64) -> 
     let target = nt.get(0x36).copied().unwrap_or(0);
     c.seek(0x3E);
     let expver = c.u16();
-    let _ = linker;
 
     let kind = if flags & 0x8000 != 0 {
         "dynamic library"
