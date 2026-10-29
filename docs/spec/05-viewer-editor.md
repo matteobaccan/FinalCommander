@@ -272,8 +272,24 @@ file beside the old one and renames it over the top, and there is no such move o
 Writing the bytes *out* to a file is allowed and is how a device is dumped — `F12` on a
 marked block, or `F2` to a name of its own.
 
-Windows needs `\\.\PhysicalDrive0` handling, where neither the seek nor the open works the
-same way: it is a later addition and the backlog carries it.
+**Windows** (shipped 0.19.0) is where a device stops looking like a file, in three ways, and
+each one is handled in exactly one place:
+
+| What is different | Where it is answered |
+| --- | --- |
+| The name. There is no `/dev`: a disk is `\\.\PhysicalDrive0` and a volume is `\\.\C:`, names the filesystem does not list, so they are typed rather than arrived at from a panel | `fcmd_platform::is_device_path` |
+| `metadata` on such a name *fails* — it asks the filesystem about something that is not in it — and a seek to the end answers nothing. The length is asked of the device: `IOCTL_DISK_GET_LENGTH_INFO`, with the drive geometry as a second try for a device that only implements that | `fcmd_platform::geometry` |
+| The handle refuses a read that does not start on a sector boundary or is not a whole number of sectors long — `ERROR_INVALID_PARAMETER`, for a call that works on any file. So the sector size comes back with the length, and every read is widened to the sectors around what was asked for | `fcmd_core::device::read_at` |
+
+The viewer and the hex pane both read through that one function, so they cannot disagree about
+it, and the arithmetic is tested against an ordinary file: reading *through* the sector path
+has to give exactly the bytes reading without it gives, at every offset and every length. A
+device that will not say how long it is reads as a length nobody knows rather than as empty.
+
+Opening a raw device on Windows needs Administrator rights, and the refusal says so instead of
+leaving the system's own "Access is denied" to be puzzled over. The `unsafe` is in
+`fcmd-platform` with everything else that needs it, which is the rule the workspace is built
+on.
 
 ### 1.11 Table mode: the tabular formats
 

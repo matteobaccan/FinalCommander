@@ -953,6 +953,7 @@ name = "fcmd-edit"
 version = "0.18.0"
 dependencies = [
  "fcmd-core",
+ "fcmd-platform",
  "fcmd-syntax",
  "fcmd-view",
  "regex",
@@ -1128,6 +1129,7 @@ version = "0.18.0"
 dependencies = [
  "encoding_rs",
  "fcmd-core",
+ "fcmd-platform",
  "fcmd-syntax",
  "iced-x86",
  "memchr",

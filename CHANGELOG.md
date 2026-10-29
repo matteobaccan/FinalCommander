@@ -6,6 +6,28 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Raw devices on Windows** (SPEC 05 §1.10). `F3` and `F4` on `/dev/sdb` have worked since
+  0.0.8 because on Linux and macOS a disk *is* a file; on Windows it is not, in three separate
+  ways, and the backlog had carried all three. They are done:
+
+  The **name**: there is no `/dev`, so a disk is `\\.\PhysicalDrive0` and a volume `\\.\C:`,
+  names the filesystem does not list and which are therefore typed rather than arrived at from
+  a panel. The **length**: `metadata` on such a name fails — it asks the filesystem about
+  something that is not in it — and seeking to the end answers nothing, so the device is asked
+  (`IOCTL_DISK_GET_LENGTH_INFO`, with the drive geometry as a second try for a device that only
+  implements that). And the **reading**: such a handle refuses a read that does not start on a
+  sector boundary or is not a whole number of sectors long, for a call that works on any file,
+  so the sector size comes back with the length and every read is widened to the sectors around
+  what was asked for.
+
+  The viewer and the hex pane read through one function for this, so they cannot disagree about
+  it, and its arithmetic is tested against an ordinary file: reading *through* the sector path
+  gives exactly the bytes reading without it gives, at every offset and every length. A refused
+  open says it needs Administrator rights instead of leaving the system's "Access is denied" to
+  be puzzled over, and the `unsafe` is in `fcmd-platform` with everything else that needs it.
+
 ### Changed
 
 - **`Ctrl+A` over several files no longer makes them agree** (SPEC 03 §7). The attributes

@@ -12,7 +12,7 @@
 //! where a map of offsets would have gone wrong by the length of the insert.
 
 use std::fs::File;
-use std::io::{self, Read, Seek, SeekFrom, Write};
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use fcmd_core::VPath;
@@ -116,6 +116,9 @@ pub struct HexEdit {
     /// Where a block was started, while it is being marked.
     pub mark: Option<u64>,
     pub read_only: bool,
+    /// The block a Windows raw device insists on being read in; `None` for a file and for
+    /// the devices that read like files, which is every device on Linux and macOS.
+    sector: Option<u32>,
     /// A raw device rather than a file (SPEC 05 §1.10). It opens, it is read, it is searched
     /// — and it is never written to from here: the atomic save writes a new file beside the
     /// old one and renames it over the top, which is not a thing one can do to a disk.
@@ -139,22 +142,46 @@ impl HexEdit {
     /// window needs them.
     pub fn open(path: &Path) -> Result<HexEdit> {
         let name = path.display().to_string();
-        let meta = std::fs::metadata(path).map_err(|e| HexError::Io {
-            path: name.clone(),
-            source: e,
-        })?;
-        if meta.is_dir() {
+        // Windows' own device names first: `\\.\PhysicalDrive0` is not a directory entry, so
+        // `metadata` on one of them fails — it is the filesystem being asked about something
+        // that is not in it. The device is asked instead, and answers both the length and the
+        // sector it will be read in (SPEC 05 §1.10). On every other platform this is skipped
+        // and a device stays what it has always been here: a file.
+        let on_windows_device = fcmd_platform::is_device_path(path);
+        let meta = if on_windows_device {
+            None
+        } else {
+            Some(std::fs::metadata(path).map_err(|e| HexError::Io {
+                path: name.clone(),
+                source: e,
+            })?)
+        };
+        if meta.as_ref().is_some_and(|m| m.is_dir()) {
             return Err(HexError::NotAFile(name));
         }
         // A device is opened read-only whatever its permissions say.
-        let device = fcmd_core::is_device(&meta);
-        let read_only = device || meta.permissions().readonly();
+        let device = on_windows_device || meta.as_ref().is_some_and(fcmd_core::is_device);
+        let read_only = device || meta.as_ref().is_some_and(|m| m.permissions().readonly());
         let mut file = File::open(path).map_err(|e| HexError::Io {
             path: name,
-            source: e,
+            source: if on_windows_device && e.kind() == std::io::ErrorKind::PermissionDenied {
+                std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    "reading a raw device needs Administrator rights",
+                )
+            } else {
+                e
+            },
         })?;
-        // A block device's metadata says it is zero bytes long; its length has to be measured.
-        let len = fcmd_core::device::length(&mut file, &meta).bytes;
+        let sector = fcmd_platform::geometry(path, &file).map(|g| g.sector);
+        // A block device's metadata says it is zero bytes long; its length has to be measured
+        // — by a seek where that answers, and by asking the device where it does not.
+        let len = match meta.as_ref() {
+            Some(meta) => fcmd_core::device::length(&mut file, meta).bytes,
+            None => fcmd_platform::geometry(path, &file)
+                .and_then(|g| g.bytes)
+                .unwrap_or(0),
+        };
         Ok(HexEdit {
             path: Some(VPath::local(path)),
             file: Some(file),
@@ -183,6 +210,7 @@ impl HexEdit {
             mark: None,
             read_only,
             device,
+            sector,
         })
     }
 
@@ -218,6 +246,7 @@ impl HexEdit {
             mark: None,
             read_only: false,
             device: false,
+            sector: None,
         }
     }
 
@@ -279,19 +308,12 @@ impl HexEdit {
             Source::Original => {
                 if let Some(file) = self.file.as_mut() {
                     let mut buf = vec![0u8; take as usize];
-                    if file.seek(SeekFrom::Start(from)).is_ok() {
-                        // A short read means the file shrank under us; what we got is what
-                        // there is, and the editor shows that rather than guessing.
-                        let mut filled = 0;
-                        while filled < buf.len() {
-                            match file.read(&mut buf[filled..]) {
-                                Ok(0) | Err(_) => break,
-                                Ok(n) => filled += n,
-                            }
-                        }
-                        buf.truncate(filled);
-                        out.extend_from_slice(&buf);
-                    }
+                    // A short read means the file shrank under us; what we got is what there
+                    // is, and the editor shows that rather than guessing.
+                    let filled =
+                        fcmd_core::device::read_at(file, from, &mut buf, self.sector).unwrap_or(0);
+                    buf.truncate(filled);
+                    out.extend_from_slice(&buf);
                 } else {
                     let a = from as usize;
                     let b = (from + take) as usize;
@@ -744,6 +766,34 @@ impl HexEdit {
 
 #[cfg(test)]
 mod tests {
+
+    /// A device that will only be read in whole sectors — which on Windows is every raw
+    /// device, and nowhere else. The sector arithmetic itself is proved in `fcmd-core`
+    /// against an ordinary file; what this says is that the *editor* reads through it, so a
+    /// patch list over a disk sees the same bytes as over a file.
+    #[test]
+    fn reading_in_whole_sectors_shows_the_same_bytes() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("disk.img");
+        let body: Vec<u8> = (0..4000u32).map(|i| (i % 241) as u8).collect();
+        std::fs::write(&path, &body).unwrap();
+
+        let mut plain = HexEdit::open(&path).unwrap();
+        let mut sectored = HexEdit::open(&path).unwrap();
+        sectored.sector = Some(512);
+        for (at, len) in [(0u64, 16usize), (7, 100), (511, 2), (1000, 600), (3990, 64)] {
+            assert_eq!(
+                sectored.read(at, len),
+                plain.read(at, len),
+                "{at}+{len} through the sectors"
+            );
+        }
+        // And a byte at a time, which is what the cursor does.
+        for at in [0u64, 1, 511, 512, 3999] {
+            assert_eq!(sectored.byte(at), plain.byte(at), "the byte at {at}");
+        }
+        assert_eq!(sectored.byte(4000), None, "and nothing past the end");
+    }
 
     /// A raw device (SPEC 05 §1.10). A disk needs permissions CI does not have, but
     /// `/dev/null` is the same kind of thing — a character device whose metadata says zero —

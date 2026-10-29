@@ -57,6 +57,12 @@ On Linux and macOS a disk is a file, so the hex editor opens `/dev/sdb` read-onl
 status line says what it is and how long it measured. The bytes are written *out* to a file,
 never back over the disk.
 
+On Windows the same works with the names Windows uses: `\\.\PhysicalDrive0` for a disk and
+`\\.\C:` for a volume, typed in rather than found in a panel — the filesystem does not list
+them. The length comes from the device itself, since there is nothing to measure by seeking,
+and the reading is done in whole sectors because that is all such a handle accepts. It needs
+Administrator rights, and says so if it does not have them.
+
 # Tabs, whitespace and the odd key
 
 `F9 → Options → Editor settings` has the six that matter. **Tabs** is three choices and not a

@@ -60,6 +60,12 @@ Su Linux e macOS un disco è un file, quindi l'editor esadecimale apre `/dev/sdb
 lettura e la riga di stato dice cos'è e quanto ha misurato. I byte si scrivono *fuori*, in un
 file, mai di nuovo sopra il disco.
 
+Su Windows funziona lo stesso con i nomi che usa Windows: `\\.\PhysicalDrive0` per un disco e
+`\\.\C:` per un volume, scritti a mano e non trovati in un pannello — il filesystem non li
+elenca. La lunghezza la dice il dispositivo, perché non c'è niente da misurare con un seek, e
+la lettura è fatta a settori interi perché è tutto quello che un handle così accetta. Servono
+i diritti di amministratore, e se non ci sono lo dice.
+
 # Tabulazioni, spazi e i tasti meno ovvi
 
 `F9 → Opzioni → Impostazioni dell'editor` ha le sei che contano. **Tabulazioni** è una scelta

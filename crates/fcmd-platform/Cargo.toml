@@ -45,6 +45,10 @@ windows-sys = { version = "0.61", features = [
   # What the machine runs in the background: the Service Control Manager, which is the one
   # place Windows keeps the list and the only way to start or stop one.
   "Win32_System_Services",
+  # A raw device: how long `\\.\PhysicalDrive0` is and the sector it insists on being read
+  # in, which are two `DeviceIoControl` calls (SPEC 05 §1.10).
+  "Win32_System_Ioctl",
+  "Win32_System_IO",
   # Which login session a process belongs to, which Windows counts as a Terminal Services
   # question even on a machine nobody logs into twice.
   "Win32_System_RemoteDesktop",

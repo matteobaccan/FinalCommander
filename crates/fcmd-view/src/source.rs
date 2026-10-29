@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::{self, Read, Seek, SeekFrom};
+use std::io::{self};
 use std::path::Path;
 
 /// Random-access bytes. The viewer never loads a file: it asks for the window it is showing.
@@ -28,21 +28,47 @@ pub trait Source: Send {
 
 /// A file on disk — or a raw device, which on Linux and macOS is the same thing (SPEC 05
 /// §1.10). Only the length has to be learned differently, and `fcmd_core::device` does that.
+///
+/// Windows is where a device stops looking like a file: `\\.\PhysicalDrive0` is not a
+/// filesystem entry, so there is no metadata to read, the length has to be asked of the
+/// device, and it will only be read in whole sectors. All three are handled here and nowhere
+/// else in the viewer.
 pub struct FileSource {
     file: File,
     len: u64,
     /// A device, a pipe, a socket: anything that is not a regular file. The length of one is
     /// measured rather than read from its metadata, and it is never re-stat'd.
     device: bool,
+    /// The block a Windows raw device insists on being read in; `None` for everything else,
+    /// where a read is a read.
+    sector: Option<u32>,
 }
 
 impl FileSource {
     pub fn open(path: &Path) -> io::Result<Self> {
+        // The Windows device names first, because `metadata` on one of them fails: the name
+        // is a device, not a directory entry, and asking the filesystem about it asks the
+        // wrong thing. On every other platform this is not taken.
+        if fcmd_platform::is_device_path(path) {
+            let file = File::open(path).map_err(|e| needs_rights(path, e))?;
+            let geometry = fcmd_platform::geometry(path, &file);
+            return Ok(FileSource {
+                file,
+                len: geometry.and_then(|g| g.bytes).unwrap_or(0),
+                device: true,
+                sector: geometry.map(|g| g.sector),
+            });
+        }
         let mut file = File::open(path)?;
         let meta = file.metadata()?;
         let device = fcmd_core::is_device(&meta);
         let len = fcmd_core::device::length(&mut file, &meta).bytes;
-        Ok(FileSource { file, len, device })
+        Ok(FileSource {
+            file,
+            len,
+            device,
+            sector: None,
+        })
     }
 
     /// Is this a device rather than a file? The viewer says so in the status line, and the
@@ -65,18 +91,23 @@ impl Source for FileSource {
     }
 
     fn read_at(&mut self, offset: u64, buf: &mut [u8]) -> io::Result<usize> {
-        self.file.seek(SeekFrom::Start(offset))?;
-        let mut read = 0;
-        while read < buf.len() {
-            match self.file.read(&mut buf[read..]) {
-                Ok(0) => break,
-                Ok(n) => read += n,
-                Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                Err(e) => return Err(e),
-            }
-        }
-        Ok(read)
+        fcmd_core::device::read_at(&mut self.file, offset, buf, self.sector)
     }
+}
+
+/// What a refused device open really means on Windows, said once rather than left as
+/// "Access is denied" — which is the whole message the system gives and explains nothing.
+fn needs_rights(path: &Path, error: io::Error) -> io::Error {
+    if error.kind() != io::ErrorKind::PermissionDenied {
+        return error;
+    }
+    io::Error::new(
+        io::ErrorKind::PermissionDenied,
+        format!(
+            "{}: reading a raw device needs Administrator rights",
+            path.display()
+        ),
+    )
 }
 
 /// Bytes in memory — used by the tests and by previews of generated content.

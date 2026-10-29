@@ -10,6 +10,9 @@ authors.workspace = true
 
 [dependencies]
 fcmd-core = { workspace = true }
+# A raw device on Windows: how long it is and the sector it insists on being read in, which
+# are the two calls `std` does not make (SPEC 05 §1.10).
+fcmd-platform = { workspace = true }
 fcmd-syntax = { workspace = true }
 encoding_rs = "0.8"
 memchr = "2"

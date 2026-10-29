@@ -10,6 +10,9 @@ authors.workspace = true
 
 [dependencies]
 fcmd-core = { workspace = true }
+# A raw device on Windows, where the name is not a directory entry and the length and the
+# sector have to be asked of the device itself (SPEC 05 §1.10).
+fcmd-platform = { workspace = true }
 fcmd-syntax = { workspace = true }
 fcmd-view = { workspace = true }
 regex = "1"

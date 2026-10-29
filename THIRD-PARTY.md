@@ -56,7 +56,7 @@ Unicode-3.0, or MPL-2.0 at file level). The policy and the allow-list live in `d
 | `trash` (with `urlencoding`, `scopeguard`, `once_cell`; `objc2-foundation` on macOS) | MIT | handing a file to the system's own wastebasket: the XDG trash spec, `NSFileManager`, `IFileOperation` |
 | `md5`, `sha1`, `sha2` | MIT OR Apache-2.0 | the three hashes the checksum dialog offers (all three were already in the tree under the SSH client) |
 | `nix` | MIT | the Unix calls the terminal and `fcmd-platform` need that `std` does not expose, `copy_file_range` among them |
-| `windows-sys` (Windows only) | MIT OR Apache-2.0 | Microsoft's own bindings, for the calls `fcmd-platform` makes on Windows: free space, cluster size, memory, `CopyFileExW`. Already in the tree under `rustix` and `mio` |
+| `windows-sys` (Windows only) | MIT OR Apache-2.0 | Microsoft's own bindings, for the calls `fcmd-platform` makes on Windows: free space, cluster size, memory, `CopyFileExW`, and the two `DeviceIoControl` codes a raw device answers with its length and its sector size. Already in the tree under `rustix` and `mio` |
 | `libc` (macOS only) | MIT OR Apache-2.0 | one `sysctl`, for how much memory the machine has, and `fcopyfile` for the system copy |
 | `shell-words` | MIT OR Apache-2.0 | splitting a command line the way a shell would |
 | `rand` | MIT OR Apache-2.0 | the random name a wipe renames to, and test fixtures |
