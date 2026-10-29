@@ -8,6 +8,20 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **The cursor may go past the end of a line** (`editor.beyond_eol`, SPEC 10 §3.6). The row was
+  in *Editor settings* as a dim one, because the setting did not exist: every movement and every
+  insert has to agree about a column that is not in the text. They do now. Off — the default, as
+  in FAR — the arrows stop at the last character and `Right` there goes to the next line. On,
+  the columns to the right of the text are somewhere to be, which is what one wants to line up a
+  column of numbers or to mark the same columns down lines of different lengths.
+
+  The bargain is that moving about out there writes nothing. The spaces appear at the keystroke
+  that puts a character in one of those columns, as part of that one edit, so a single `Ctrl+Z`
+  takes the character and its padding away together — a file does not quietly grow trailing
+  space because somebody moved the cursor through it. `Backspace` and `Del` out there move the
+  cursor and leave the file alone; `Del` in particular does not pull the next line up from three
+  columns past the end of this one.
+
 - **AArch64 is disassembled in the program** (SPEC 05 §1.6). `F5` decoded x86 and x86-64 and
   sent everything else to `objdump`, which on an Apple Silicon laptop or an ARM server means
   the viewer could not read the binaries actually on the machine. It reads them now, through

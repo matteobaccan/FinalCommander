@@ -85,6 +85,10 @@ pub struct Editor {
     pub show_whitespace: bool,
     /// Where the cursor lands on a match: at its start, or just past its end.
     pub cursor_after_match: bool,
+    /// May the cursor stand past the end of a line? Off, it is clamped to the last character,
+    /// which is what a text editor does; on, the columns past the end are somewhere to be,
+    /// and the line is padded with spaces only when something is actually typed there.
+    pub beyond_eol: bool,
     /// The next key typed goes in as itself, whatever it means — `Ctrl+Q` armed it. It is how
     /// a control character, or a tab where tabs are expanded, gets into a file at all.
     pub literal_next: bool,
@@ -138,6 +142,7 @@ impl Editor {
             auto_indent: true,
             show_whitespace: false,
             cursor_after_match: false,
+            beyond_eol: false,
             literal_next: false,
             bookmarks: [None; 10],
             clipboard: None,
@@ -188,7 +193,7 @@ impl Editor {
 
     /// Move the cursor; `extend` keeps (or starts) the block.
     pub fn move_to(&mut self, position: Position, extend: bool, kind: BlockKind) {
-        let position = self.buffer.clamp(position);
+        let position = self.clamp(position);
         if extend {
             match &mut self.block {
                 Some(block) if block.kind == kind => block.head = position,
@@ -212,8 +217,11 @@ impl Editor {
         line = line.min(self.buffer.len() - 1);
         let mut col = self.cursor.col as isize + cols;
 
-        // Moving left at the start of a line goes to the end of the previous one.
-        if cols != 0 {
+        // Moving left at the start of a line goes to the end of the previous one — unless the
+        // cursor is allowed past the end of a line, where the columns to the right of the text
+        // are somewhere to be and `Right` goes into them rather than to the next line. That is
+        // the whole of what the setting changes about the arrows.
+        if cols != 0 && !self.beyond_eol {
             while col < 0 && line > 0 {
                 line -= 1;
                 col += self.buffer.line_chars(line) as isize + 1;
@@ -225,6 +233,45 @@ impl Editor {
             }
         }
         self.move_to(Position::new(line, col.max(0) as usize), extend, kind);
+    }
+
+    /// Where a position actually is, given whether the cursor may stand past the text.
+    ///
+    /// The line is always clamped — there is no line beyond the last one — and the column is
+    /// clamped only when the cursor belongs inside the text. Everything below the editor
+    /// clamps as well, so a column past the end of a line is safe to carry around: it reads
+    /// as the end of the line wherever a character is actually wanted.
+    fn clamp(&self, position: Position) -> Position {
+        if self.beyond_eol {
+            let line = position.line.min(self.buffer.len() - 1);
+            Position::new(line, position.col)
+        } else {
+            self.buffer.clamp(position)
+        }
+    }
+
+    /// How far past the end of its line the cursor is, in characters. Zero whenever it is on
+    /// the text, which is always unless the setting is on.
+    fn virtual_cols(&self) -> usize {
+        self.cursor
+            .col
+            .saturating_sub(self.buffer.line_chars(self.cursor.line))
+    }
+
+    /// Put real spaces where the cursor is standing on nothing, so that what is typed there
+    /// lands in the column it was typed in.
+    ///
+    /// This is the one moment the setting changes the *file*, and it is the moment the user
+    /// asked for it: moving about past the end of a line writes nothing, typing there does.
+    fn fill_to_cursor(&mut self) -> Result<(), EditorError> {
+        let pad = self.virtual_cols();
+        if pad == 0 {
+            return Ok(());
+        }
+        let end = Position::new(self.cursor.line, self.buffer.line_chars(self.cursor.line));
+        self.buffer.insert(end, &" ".repeat(pad))?;
+        self.cursor = Position::new(self.cursor.line, end.col + pad);
+        Ok(())
     }
 
     pub fn move_line_start(&mut self, extend: bool) {
@@ -297,7 +344,9 @@ impl Editor {
                 column += unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0);
             }
         }
-        column
+        // A cursor past the end of the line stands in columns that hold nothing, and nothing
+        // is one column wide: there is no character there to be two.
+        column + position.col.saturating_sub(line.chars().count())
     }
 
     // ── editing ────────────────────────────────────────────────────────────────────────────
@@ -305,6 +354,7 @@ impl Editor {
     pub fn insert_char(&mut self, ch: char) -> Result<(), EditorError> {
         self.delete_block_if_any()?;
         self.buffer.begin_group(self.cursor);
+        self.fill_to_cursor()?;
         if ch == '\t' && self.expand_tabs {
             let pad = self.tab_width - (self.display_col(self.cursor) % self.tab_width);
             self.cursor = self.buffer.insert(self.cursor, &" ".repeat(pad))?;
@@ -320,6 +370,7 @@ impl Editor {
     pub fn insert_literal(&mut self, ch: char) -> Result<(), EditorError> {
         self.delete_block_if_any()?;
         self.buffer.begin_group(self.cursor);
+        self.fill_to_cursor()?;
         self.cursor = self.buffer.insert(self.cursor, &ch.to_string())?;
         Ok(())
     }
@@ -327,12 +378,14 @@ impl Editor {
     pub fn insert_text(&mut self, text: &str) -> Result<(), EditorError> {
         self.delete_block_if_any()?;
         self.buffer.begin_group(self.cursor);
+        self.fill_to_cursor()?;
         self.cursor = self.buffer.insert(self.cursor, text)?;
         self.buffer.end_group(self.cursor);
         Ok(())
     }
 
-    /// Enter: split the line, carrying the indentation when auto-indent is on.
+    /// Enter: split the line, carrying the indentation when auto-indent is on. Past the end
+    /// of a line there is nothing to split, so nothing is padded: it is a new empty line.
     pub fn insert_newline(&mut self) -> Result<(), EditorError> {
         self.delete_block_if_any()?;
         let indent: String = if self.auto_indent {
@@ -357,6 +410,12 @@ impl Editor {
         if self.cursor == Position::default() {
             return Ok(());
         }
+        // Past the end of a line there is nothing to take out: the cursor moves back and the
+        // file is left alone, which is the only reading of `Backspace` over nothing.
+        if self.virtual_cols() > 0 {
+            self.cursor = Position::new(self.cursor.line, self.cursor.col - 1);
+            return Ok(());
+        }
         let end = self.cursor;
         let start = if self.cursor.col > 0 {
             Position::new(self.cursor.line, self.cursor.col - 1)
@@ -372,6 +431,12 @@ impl Editor {
 
     pub fn delete_forward(&mut self) -> Result<(), EditorError> {
         if self.delete_block_if_any()? {
+            return Ok(());
+        }
+        // The same the other way: `Del` in the empty columns past a line deletes nothing. It
+        // does *not* pull the next line up — the cursor is not at the end of this one, and a
+        // key that joined two lines from three columns away would be a surprise.
+        if self.virtual_cols() > 0 {
             return Ok(());
         }
         let start = self.cursor;
@@ -435,7 +500,7 @@ impl Editor {
     pub fn delete_line(&mut self) -> Result<(), EditorError> {
         self.buffer.delete_line(self.cursor.line)?;
         self.buffer.end_group(self.cursor);
-        self.cursor = self.buffer.clamp(self.cursor);
+        self.cursor = self.clamp(self.cursor);
         self.block = None;
         Ok(())
     }
@@ -450,7 +515,7 @@ impl Editor {
     pub fn move_line(&mut self, down: bool) -> Result<(), EditorError> {
         let line = self.buffer.move_line(self.cursor.line, down)?;
         self.cursor = Position::new(line, self.cursor.col);
-        self.cursor = self.buffer.clamp(self.cursor);
+        self.cursor = self.clamp(self.cursor);
         Ok(())
     }
 
@@ -479,7 +544,7 @@ impl Editor {
             None => (self.cursor.line, self.cursor.line),
         };
         self.buffer.indent(top..bottom + 1, self.tab_width)?;
-        self.cursor = self.buffer.clamp(self.cursor);
+        self.cursor = self.clamp(self.cursor);
         Ok(())
     }
 
@@ -492,7 +557,7 @@ impl Editor {
             None => (self.cursor.line, self.cursor.line),
         };
         self.buffer.outdent(top..bottom + 1, self.tab_width)?;
-        self.cursor = self.buffer.clamp(self.cursor);
+        self.cursor = self.clamp(self.cursor);
         Ok(())
     }
 
@@ -1470,6 +1535,77 @@ mod tests {
         assert_eq!(e.buffer.line(2), "        three");
         // Again changes nothing: there are no tabs left.
         assert_eq!(e.expand_all_tabs().unwrap(), 0);
+    }
+
+    /// Off — the default, and what a text editor does — the cursor cannot leave the text.
+    #[test]
+    fn by_default_the_cursor_stops_at_the_end_of_the_line() {
+        let mut e = editor("ab\ncd\n");
+        e.move_by(0, 5, false, BlockKind::Stream);
+        // Past the end it went to the next line, which is where `Right` goes.
+        assert_eq!(e.cursor, Position::new(1, 2));
+        e.move_to(Position::new(0, 9), false, BlockKind::Stream);
+        assert_eq!(e.cursor, Position::new(0, 2), "clamped onto the text");
+    }
+
+    /// On, the columns past the text are somewhere to be — and nothing is written there
+    /// until something is typed, which is the whole bargain of the setting.
+    #[test]
+    fn the_cursor_may_stand_past_the_end_of_a_line_and_typing_there_pads_it() {
+        let mut e = editor("ab\ncd\n");
+        e.beyond_eol = true;
+        // `Right` four times goes into the empty columns rather than to the next line.
+        e.move_by(0, 4, false, BlockKind::Stream);
+        assert_eq!(e.cursor, Position::new(0, 4));
+        assert_eq!(e.buffer.line(0), "ab", "moving about writes nothing");
+        // The display column counts the empty ones as one each: there is nothing there to
+        // be two columns wide.
+        assert_eq!(e.display_col(e.cursor), 4);
+
+        // Typing there is the moment the spaces appear, and the character lands in the
+        // column it was typed in.
+        e.insert_char('x').unwrap();
+        assert_eq!(e.buffer.line(0), "ab  x");
+        assert_eq!(e.cursor, Position::new(0, 5));
+
+        // And one undo takes the padding and the character together: they are one edit,
+        // because they were one keystroke.
+        assert!(e.undo());
+        assert_eq!(e.buffer.line(0), "ab");
+    }
+
+    #[test]
+    fn past_the_end_of_a_line_backspace_and_del_change_nothing() {
+        let mut e = editor("ab\ncd\n");
+        e.beyond_eol = true;
+        e.move_to(Position::new(0, 5), false, BlockKind::Stream);
+        e.backspace().unwrap();
+        assert_eq!(e.cursor, Position::new(0, 4), "the cursor moves back");
+        assert_eq!(e.buffer.line(0), "ab", "and the file is left alone");
+        e.delete_forward().unwrap();
+        assert_eq!(e.buffer.line(0), "ab");
+        assert_eq!(e.buffer.len(), 2, "and the next line is not pulled up");
+        // Back on the text the two keys mean what they always did.
+        e.move_to(Position::new(0, 2), false, BlockKind::Stream);
+        e.backspace().unwrap();
+        assert_eq!(e.buffer.line(0), "a");
+    }
+
+    /// The reason anybody turns this on: the same columns down a file, whatever the lines
+    /// are. A rectangular block marked through the short lines still takes what is there.
+    #[test]
+    fn a_rectangle_may_be_marked_through_lines_that_are_too_short() {
+        let mut e = editor("aaaaaa\nbb\ncccccc\n");
+        e.beyond_eol = true;
+        e.move_to(Position::new(0, 2), false, BlockKind::Column);
+        e.move_to(Position::new(2, 5), true, BlockKind::Column);
+        assert_eq!(e.block_text().as_deref(), Some("aaa\n\nccc"));
+        // Enter past the end of a line splits nothing and pads nothing: a new empty line.
+        e.clear_block();
+        e.move_to(Position::new(1, 6), false, BlockKind::Stream);
+        e.insert_newline().unwrap();
+        assert_eq!(e.buffer.line(1), "bb");
+        assert_eq!(e.buffer.line(2), "");
     }
 
     #[test]

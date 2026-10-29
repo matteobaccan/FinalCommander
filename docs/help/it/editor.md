@@ -62,13 +62,21 @@ file, mai di nuovo sopra il disco.
 
 # Tabulazioni, spazi e i tasti meno ovvi
 
-`F9 → Opzioni → Impostazioni dell'editor` ha le cinque che contano. **Tabulazioni** è una scelta
+`F9 → Opzioni → Impostazioni dell'editor` ha le sei che contano. **Tabulazioni** è una scelta
 fra tre e non una casella: lasciarle come sono, trasformare in spazi una tabulazione appena
 scritta, oppure espandere ogni tabulazione del file quando lo si apre — l'ultima cambia il
 file, quindi dice quante righe ha toccato e il salvataggio successivo scrive quello. **Mostra
 spazi e tabulazioni** disegna uno spazio come `·` e una tabulazione come `→` con il suo
 riempimento, che è come un'indentazione mista diventa visibile. **Il cursore si ferma dopo il
 testo trovato** serve per scrivere sopra quello che è stato trovato invece di leggerlo.
+
+**Il cursore può andare oltre la fine della riga** è spenta per default. Accesa, le frecce
+entrano nelle colonne a destra del testo invece di saltare alla riga successiva: è quello che
+serve per allineare una colonna di numeri, o per marcare le stesse colonne su righe di
+lunghezza diversa. Muoversi là non scrive niente: gli spazi compaiono al tasto che mette un
+carattere in una di quelle colonne, dentro la stessa modifica, così un solo `Ctrl+Z` porta via
+il carattere e il suo riempimento insieme. `Backspace` e `Del` là fuori spostano il cursore e
+lasciano il file come sta.
 
 `Ctrl+Q` inserisce il tasto successivo per quello che è: un carattere di controllo, o una
 tabulazione vera dove le tabulazioni vengono espanse. Non c'è altro modo di mettere nel file né

@@ -765,6 +765,14 @@ pub struct EditCfg {
     /// Where the cursor lands on a match: at its start, or just after it. FAR offers both,
     /// because the first is for reading and the second for typing over what was found.
     pub cursor_after_match: bool,
+    /// May the cursor stand past the end of a line, where there is nothing?
+    ///
+    /// Off, the arrows and the mouse stop at the last character and `Right` there goes to the
+    /// next line, which is what a text editor does. On, the cursor goes where it is sent and
+    /// the line is padded with spaces only if something is typed there — which is what one
+    /// wants when lining up a column of numbers, or marking the same columns down a file. FAR
+    /// has the same setting, off by default, and so is this.
+    pub beyond_eol: bool,
 }
 
 impl Default for EditCfg {
@@ -775,6 +783,7 @@ impl Default for EditCfg {
             auto_indent: true,
             show_whitespace: false,
             cursor_after_match: false,
+            beyond_eol: false,
         }
     }
 }
@@ -1452,6 +1461,7 @@ impl Config {
             "editor.auto_indent" => self.editor.auto_indent = parse_bool(value)?,
             "editor.show_whitespace" => self.editor.show_whitespace = parse_bool(value)?,
             "editor.cursor_after_match" => self.editor.cursor_after_match = parse_bool(value)?,
+            "editor.beyond_eol" => self.editor.beyond_eol = parse_bool(value)?,
             "viewer.key_bar" => self.viewer.key_bar = parse_bool(value)?,
             "viewer.status_line" => self.viewer.status_line = parse_bool(value)?,
             "viewer.scrollbar" => self.viewer.scrollbar = parse_bool(value)?,

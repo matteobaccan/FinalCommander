@@ -13493,6 +13493,7 @@ impl App {
         editor.auto_indent = cfg.auto_indent;
         editor.show_whitespace = cfg.show_whitespace;
         editor.cursor_after_match = cfg.cursor_after_match;
+        editor.beyond_eol = cfg.beyond_eol;
         if cfg.expand_on_open() {
             match editor.expand_all_tabs() {
                 Ok(0) => {}

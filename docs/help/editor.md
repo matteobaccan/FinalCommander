@@ -59,12 +59,19 @@ never back over the disk.
 
 # Tabs, whitespace and the odd key
 
-`F9 → Options → Editor settings` has the five that matter. **Tabs** is three choices and not a
+`F9 → Options → Editor settings` has the six that matter. **Tabs** is three choices and not a
 box: leave them as they are, turn a newly typed tab into spaces, or expand every tab in the file
 when it is opened — the last one changes the file, so it says how many lines it touched and the
 next save writes that. **Show spaces and tabs** draws a space as `·` and a tab as `→` and its
 padding, which is how a mixed indent becomes visible. **The cursor lands after the text a search
 found** is for typing over what was found rather than reading it.
+
+**The cursor may go past the end of a line** is off by default. On, the arrows go into the
+columns to the right of the text instead of jumping to the next line, which is what you want to
+line up a column of numbers or to mark the same columns down lines of different lengths. Moving
+about there writes nothing: the spaces appear at the keystroke that puts a character in one of
+those columns, as part of the same edit, so one `Ctrl+Z` takes the character and its padding
+away together. `Backspace` and `Del` out there move the cursor and leave the file alone.
 
 `Ctrl+Q` puts the next key in as itself: a control character, or a real tab where tabs are being
 expanded. There is no other way to get either into a file.

@@ -250,9 +250,11 @@ impl Form {
                     cfg.editor.cursor_after_match,
                 ),
                 Field::Separator,
-                // In the dialog for completeness: the setting does not exist yet, and a row
-                // that pretended it did would be a row that lies.
-                Field::Dim(t("opt-editor-beyond-eol")),
+                Field::toggle(
+                    "editor.beyond_eol",
+                    t("opt-editor-beyond-eol"),
+                    cfg.editor.beyond_eol,
+                ),
             ],
             FormKind::ViewerSettings => vec![
                 // The three rows of chrome, in the order they are drawn: the top line, the
