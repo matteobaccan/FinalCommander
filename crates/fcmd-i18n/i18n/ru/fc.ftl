@@ -228,7 +228,7 @@ cmd-complete-nothing = дополнить нечем
 complete-several = { $count } имён начинаются так
 form-moving = стрелки перемещают диалог · Enter или Esc оставляет его там
 form-moved = диалог остаётся там, куда вы его поставили
-msg-trash-refused = { $path }: корзина его не принимает — Shift+Del удалит насовсем
+msg-trash-refused = Корзина его не принимает — Shift+Del удалит насовсем.
 
 # Checksums (SPEC 03 §9)
 sum-title = Контрольные суммы

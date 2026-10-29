@@ -134,6 +134,98 @@ impl JobFs for RoutedFs {
         self.run(async move { remote.remove_dir(path).await })
     }
 
+    /// The wastebasket is this machine's, so a local path gets the real one.
+    ///
+    /// Everything in this impl that is not routed falls back to the trait's refusal, and for
+    /// a while that is what `F8` got even on the local disk: this layer sits between the
+    /// panel and [`LocalFs`] for *every* job, so a method it forgets is a method the program
+    /// has not got. A server, an archive and a bucket still have no wastebasket, and the
+    /// refusal there says which path it is about.
+    fn trash(&self, path: &VPath) -> io::Result<()> {
+        if path.is_local() {
+            return self.local.trash(path);
+        }
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            format!("{path}: there is no wastebasket on a server"),
+        ))
+    }
+
+    fn append_file(
+        &self,
+        src: &VPath,
+        dst: &VPath,
+        buffer: usize,
+        on_bytes: &mut dyn FnMut(u64) -> bool,
+    ) -> io::Result<u64> {
+        if src.is_local() && dst.is_local() {
+            return self.local.append_file(src, dst, buffer, on_bytes);
+        }
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            format!("{dst}: appending to a file on a server is not supported"),
+        ))
+    }
+
+    fn hard_link(&self, target: &VPath, link: &VPath) -> io::Result<()> {
+        if target.is_local() && link.is_local() {
+            return self.local.hard_link(target, link);
+        }
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            format!("{link}: a server has no hard links"),
+        ))
+    }
+
+    fn read_chunks(
+        &self,
+        path: &VPath,
+        buffer: usize,
+        on_chunk: &mut dyn FnMut(&[u8]) -> bool,
+    ) -> io::Result<u64> {
+        if path.is_local() {
+            return self.local.read_chunks(path, buffer, on_chunk);
+        }
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            format!("{path}: a file on a server is copied, not read a chunk at a time"),
+        ))
+    }
+
+    fn wipe_file(
+        &self,
+        path: &VPath,
+        buffer: usize,
+        on_bytes: &mut dyn FnMut(u64) -> bool,
+    ) -> io::Result<()> {
+        if path.is_local() {
+            return self.local.wipe_file(path, buffer, on_bytes);
+        }
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            format!("{path}: a wipe can only overwrite a file on a local filesystem"),
+        ))
+    }
+
+    fn replace_in_file(
+        &self,
+        path: &VPath,
+        matcher: &fcmd_jobs::replace::Matcher,
+        pass: fcmd_jobs::replace::ReplacePass,
+        buffer: usize,
+        on_bytes: &mut dyn FnMut(u64) -> bool,
+    ) -> io::Result<fcmd_jobs::replace::Replaced> {
+        if path.is_local() {
+            return self
+                .local
+                .replace_in_file(path, matcher, pass, buffer, on_bytes);
+        }
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            format!("{path}: a replacement can only rewrite a file on a local filesystem"),
+        ))
+    }
+
     fn read_link(&self, path: &VPath) -> io::Result<PathBuf> {
         if path.is_local() {
             return self.local.read_link(path);
@@ -277,6 +369,52 @@ mod tests {
         pool.insert(Remote::new(site.clone(), fs.clone()));
         let routed = RoutedFs::new(pool.clone(), runtime.handle().clone());
         (runtime, pool, fs, routed, site)
+    }
+
+    /// Every job in the program goes through [`RoutedFs`], so a method it does not route is a
+    /// method the program has not got — and for a while `trash` was one of them: `F8` on a
+    /// local file answered "there is no wastebasket here", which is the refusal meant for a
+    /// server. These two check the local half really arrives at [`LocalFs`].
+    #[test]
+    fn a_local_file_still_reaches_the_systems_own_wastebasket() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("rubbish.txt");
+        std::fs::write(&file, b"out").unwrap();
+        let (_rt, _pool, _server, routed, _site) = setup();
+
+        routed
+            .trash(&VPath::local(&file))
+            .expect("the wastebasket took it");
+        assert!(!file.exists(), "it is no longer where it was");
+    }
+
+    #[test]
+    fn a_local_file_can_still_be_read_a_chunk_at_a_time_and_wiped() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = VPath::local(dir.path().join("secret.bin"));
+        std::fs::write(file.as_path(), vec![9u8; 5_000]).unwrap();
+        let (_rt, _pool, _server, routed, site) = setup();
+
+        let mut read = 0usize;
+        let bytes = routed
+            .read_chunks(&file, 1024, &mut |chunk| {
+                read += chunk.len();
+                true
+            })
+            .expect("a local file reads in chunks");
+        assert_eq!(bytes, 5_000);
+        assert_eq!(read, 5_000);
+
+        routed
+            .wipe_file(&file, 1024, &mut |_| true)
+            .expect("a local file can be wiped");
+        assert!(!file.as_path().exists(), "the wipe unlinked it");
+
+        // The server half of each is still a refusal, and it says which path it is about.
+        let remote = site.start().join("a.txt");
+        let refused = routed.trash(&remote).unwrap_err();
+        assert_eq!(refused.kind(), io::ErrorKind::Unsupported);
+        assert!(refused.to_string().contains("server"), "{refused}");
     }
 
     #[test]

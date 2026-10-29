@@ -234,7 +234,7 @@ cmd-complete-nothing = nothing to finish that with
 complete-several = { $count } names start that way
 form-moving = the arrows move the dialog · Enter or Esc leaves it there
 form-moved = the dialog stays where you put it
-msg-trash-refused = { $path }: the wastebasket would not take it — Shift+Del deletes it outright
+msg-trash-refused = The wastebasket would not take it — Shift+Del deletes it outright.
 
 # Checksums (SPEC 03 §9)
 sum-title = Checksums

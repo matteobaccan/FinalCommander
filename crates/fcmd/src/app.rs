@@ -5371,16 +5371,21 @@ impl App {
                 (title, lines)
             }
             Question::Error { path, error } => {
-                let mut lines = vec![path.to_string(), String::new(), error.clone()];
+                // Nearly every error from the engine already begins with the path it is
+                // about, and the box has just drawn that path on its own line: saying it
+                // three times over is how the dialog stopped being readable.
+                let whole = path.to_string();
+                let detail = error
+                    .strip_prefix(&format!("{whole}: "))
+                    .unwrap_or(error)
+                    .to_string();
+                let mut lines = vec![whole, String::new(), detail];
                 // A wastebasket that will not take a file is the one error here with an
                 // obvious next move, so the dialog names it: skip, and use the key that
                 // deletes outright.
                 if matches!(&self.mode, Mode::Job(job) if job.kind == JobKind::Trash) {
                     lines.push(String::new());
-                    lines.push(
-                        self.i18n
-                            .t_args("msg-trash-refused", &[("path", path.display_name().into())]),
-                    );
+                    lines.push(self.i18n.t("msg-trash-refused"));
                 }
                 (self.i18n.t("dialog-error"), lines)
             }

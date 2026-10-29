@@ -228,7 +228,7 @@ cmd-complete-nothing = no hay nada con que completarlo
 complete-several = { $count } nombres empiezan así
 form-moving = las flechas mueven el diálogo · Intro o Esc lo deja ahí
 form-moved = el diálogo se queda donde lo pusiste
-msg-trash-refused = { $path }: la papelera no lo acepta — Mayús+Supr lo borra definitivamente
+msg-trash-refused = La papelera no lo acepta — Mayús+Supr lo borra definitivamente.
 
 # Checksums (SPEC 03 §9)
 sum-title = Sumas de verificación

@@ -228,7 +228,7 @@ cmd-complete-nothing = nichts, womit sich das ergänzen ließe
 complete-several = { $count } Namen beginnen so
 form-moving = die Pfeile verschieben den Dialog · Enter oder Esc lässt ihn dort
 form-moved = der Dialog bleibt, wo Sie ihn hingestellt haben
-msg-trash-refused = { $path }: der Papierkorb nimmt es nicht — Shift+Entf löscht endgültig
+msg-trash-refused = Der Papierkorb nimmt es nicht — Shift+Entf löscht endgültig.
 
 # Checksums (SPEC 03 §9)
 sum-title = Prüfsummen

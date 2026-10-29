@@ -45,6 +45,22 @@ Notable changes, newest first. The format follows
 
 ### Fixed
 
+- **`F8` reaches the system's wastebasket again.** Every job in the program runs through the
+  routed filesystem — local paths to the local provider, remote paths to their connection —
+  and that layer implemented the methods a server needs and left the rest to the trait's own
+  refusals. A method it did not route was therefore a method the program had not got, and
+  `trash` was one: deleting a local file with the wastebasket on answered *there is no
+  wastebasket here*, which is the sentence meant for a server, on a disk that has one. Six
+  methods were in that state and all six are routed now — the wastebasket, appending to a
+  file, hard links, reading a file a chunk at a time (which is what a checksum does), the
+  wipe and the search-and-replace in a file — so a local path arrives where it always should
+  have. A server still refuses each of them, and now says it is a server that does.
+
+- **An error box says the path once.** Nearly every error the engine raises already begins
+  with the path it is about, and the box had just drawn that path on a line of its own: the
+  name appeared twice, and three times when the hint about `Shift+Del` added it again. The
+  duplicate prefix is stripped and the hint is a sentence rather than a line about a file.
+
 - **The dialog's key bar keeps its twelve boxes.** Under a modifier a dialog answers nothing at
   all, and an empty list of labels does not mean an empty row: it takes the row off the screen
   altogether. The blank bar is twelve numbered boxes with nothing written in them now, which is

@@ -228,7 +228,7 @@ cmd-complete-nothing = non c'è niente con cui completarlo
 complete-several = { $count } nomi iniziano così
 form-moving = le frecce spostano il dialogo · Invio o Esc lo lascia lì
 form-moved = il dialogo resta dove l'hai messo
-msg-trash-refused = { $path }: il cestino non lo accetta — Shift+Canc lo elimina definitivamente
+msg-trash-refused = Il cestino non lo accetta — Shift+Canc lo elimina definitivamente.
 
 # Checksums (SPEC 03 §9)
 sum-title = Checksum
