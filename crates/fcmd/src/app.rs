@@ -9184,6 +9184,31 @@ impl App {
         } else {
             owner_of(&under_cursor)
         };
+        // What the selection does not agree about. The boxes for those bits open at `[?]`
+        // and leave them alone, which is the whole difference between a dialog over one file
+        // and a dialog over a hundred: the mode under the cursor is not everybody's mode.
+        //
+        // Inside an archive there is nothing to ask: the listing carries one bit per entry
+        // (whether it is executable) rather than a mode, so the seed above is all there is.
+        let (mut mixed_mode, mut mixed_attributes) = (0u32, 0u32);
+        if sources.len() > 1 && !in_archive {
+            let first_mode = mode.unwrap_or(0o644);
+            let first_attrs = windows_attributes(&under_cursor);
+            for path in &sources {
+                if let Some(other) = mode_of(path) {
+                    mixed_mode |= (other ^ first_mode) & 0o7777;
+                }
+                mixed_attributes |= windows_attributes(path) ^ first_attrs;
+            }
+        }
+        // Read-only is the write bits on Unix and one attribute on Windows, so it is mixed
+        // when either of those is.
+        const WIN_READONLY: u32 = 0x1;
+        let mixed_readonly = if cfg!(windows) {
+            mixed_attributes & WIN_READONLY != 0
+        } else {
+            mixed_mode & 0o222 != 0
+        };
         let facts = crate::form::AttrFacts {
             what,
             count: sources.len(),
@@ -9198,6 +9223,9 @@ impl App {
                 windows_attributes(&under_cursor)
             },
             in_archive,
+            mixed_mode,
+            mixed_attributes,
+            mixed_readonly,
         };
         self.mode = Mode::Form(Box::new(Form::attributes(&facts, &self.i18n)));
         self.attr_targets = sources;
@@ -9404,18 +9432,56 @@ impl App {
             self.touch_in_archive(form, sources, bits, utc);
             return;
         }
+        // Which bits to turn on and which to turn off: a box left at `[?]` is in neither
+        // mask, and that bit stays as each file has it. A dialog over one file answers every
+        // box, so the two masks then cover all twelve bits and come to a whole mode.
+        //
+        // The twelve boxes only exist where the dialog offered them — on Windows there is no
+        // mode to set — and twelve absent rows read as "nothing answered", which is now the
+        // honest reading of them rather than `000`.
+        let (mut mode_set, mut mode_clear) = (0u32, 0u32);
+        for (key, bit) in [
+            ("attr.ur", 0o400),
+            ("attr.uw", 0o200),
+            ("attr.ux", 0o100),
+            ("attr.gr", 0o040),
+            ("attr.gw", 0o020),
+            ("attr.gx", 0o010),
+            ("attr.or", 0o004),
+            ("attr.ow", 0o002),
+            ("attr.ox", 0o001),
+            ("attr.setuid", 0o4000),
+            ("attr.setgid", 0o2000),
+            ("attr.sticky", 0o1000),
+        ] {
+            match form.tri_value(key) {
+                Some(true) => mode_set |= bit,
+                Some(false) => mode_clear |= bit,
+                None => {}
+            }
+        }
         let change = fcmd_jobs::Change {
-            // The mode is only sent where the dialog offered it: on Windows the twelve boxes
-            // are not there, and twelve absent toggles read as `000`, which would be a very
-            // surprising thing to apply.
-            mode: cfg!(unix).then(|| bits.bits()),
-            readonly: Some(form.toggle_value("attr.readonly")),
-            hidden: cfg!(windows).then(|| form.toggle_value("attr.hidden")),
-            system: cfg!(windows).then(|| form.toggle_value("attr.system")),
-            archive: cfg!(windows).then(|| form.toggle_value("attr.archive")),
-            temporary: cfg!(windows).then(|| form.toggle_value("attr.temporary")),
-            offline: cfg!(windows).then(|| form.toggle_value("attr.offline")),
-            indexed: cfg!(windows).then(|| form.toggle_value("attr.indexed")),
+            mode_set,
+            mode_clear,
+            readonly: form.tri_value("attr.readonly"),
+            hidden: cfg!(windows)
+                .then(|| form.tri_value("attr.hidden"))
+                .flatten(),
+            system: cfg!(windows)
+                .then(|| form.tri_value("attr.system"))
+                .flatten(),
+            archive: cfg!(windows)
+                .then(|| form.tri_value("attr.archive"))
+                .flatten(),
+            temporary: cfg!(windows)
+                .then(|| form.tri_value("attr.temporary"))
+                .flatten(),
+            offline: cfg!(windows)
+                .then(|| form.tri_value("attr.offline"))
+                .flatten(),
+            indexed: cfg!(windows)
+                .then(|| form.tri_value("attr.indexed"))
+                .flatten(),
             mtime: fcmd_ui::parse_stamp_in(&form.text_value("attr.mtime"), utc),
             atime: fcmd_ui::parse_stamp_in(&form.text_value("attr.atime"), utc),
             btime: fcmd_ui::parse_stamp_in(&form.text_value("attr.btime"), utc),
@@ -19869,7 +19935,10 @@ mod tests {
                 }) => (paths, change, recursive),
                 other => panic!("no attribute change was started: {other:?}"),
             };
-            assert_eq!(change.mode, Some(0o604), "only that bit moved");
+            // One box was pressed, so one bit is in the masks and the other eleven are
+            // answered as they were: over one file the dialog still covers all twelve.
+            assert_eq!(change.mode_over(0o644), 0o604, "only that bit moved");
+            assert_eq!(change.mode_set | change.mode_clear, 0o7777, "all answered");
             assert_eq!(paths, vec![VPath::local(&file)]);
             assert!(!recursive, "nothing here is a directory");
 
@@ -19888,6 +19957,140 @@ mod tests {
                 0o604
             );
         }
+    }
+
+    /// `Ctrl+A` over several files that do not agree: the boxes for the bits they differ
+    /// about open at `[?]`, and pressing `OK` without touching one leaves that bit as each
+    /// file has it (SPEC 03 §7). Before this, the dialog wrote the mode of the file under the
+    /// cursor onto everything selected.
+    #[cfg(unix)]
+    #[test]
+    fn the_attributes_of_a_mixed_selection_are_asked_three_ways() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let (one, two) = (dir.path().join("one.txt"), dir.path().join("two.txt"));
+        std::fs::write(&one, b"x").unwrap();
+        std::fs::write(&two, b"y").unwrap();
+        // They agree about the owner's bits and disagree about the group's read bit.
+        std::fs::set_permissions(&one, std::fs::Permissions::from_mode(0o640)).unwrap();
+        std::fs::set_permissions(&two, std::fs::Permissions::from_mode(0o600)).unwrap();
+
+        let mut app = app();
+        app.panels[app.active].cwd = VPath::local(dir.path());
+        let entries =
+            fcmd_vfs::local::list_blocking(&app.panels[app.active].cwd, &CancelToken::new())
+                .unwrap();
+        let (panel, generation) = (app.active, app.panels[app.active].generation);
+        app.handle_event(Event::Listed {
+            panel,
+            generation,
+            result: Ok(entries),
+        });
+        app.requests.clear();
+        // Both selected, the cursor on the first.
+        for name in ["one.txt", "two.txt"] {
+            let row = app.panels[app.active]
+                .listing
+                .row_of_name(name)
+                .expect("listed");
+            app.panels[app.active].cursor_to(row);
+            press(&mut app, "Insert");
+        }
+        let row = app.panels[app.active]
+            .listing
+            .row_of_name("one.txt")
+            .expect("listed");
+        app.panels[app.active].cursor_to(row);
+
+        press(&mut app, "Ctrl+A");
+        let Mode::Form(form) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        // The bit they agree about is an ordinary box; the one they do not is `[?]`.
+        assert_eq!(form.tri_value("attr.ur"), Some(true), "both are readable");
+        assert_eq!(form.tri_value("attr.gr"), None, "and they disagree here");
+        let drawn: Vec<String> = form.rows().into_iter().map(|r| r.text).collect();
+        assert!(
+            drawn.iter().any(|r| r.starts_with("[?]")),
+            "a mixed box is drawn as FAR draws it: {drawn:?}"
+        );
+
+        // Answer the dialog without touching anything: each file keeps the bit it had.
+        press(&mut app, "Enter");
+        let Some(Request::SetAttrs { paths, change, .. }) = app.take_requests().into_iter().next()
+        else {
+            panic!("no attribute change was started")
+        };
+        assert_eq!(paths.len(), 2);
+        let outcome = fcmd_jobs::set_attributes(
+            &fcmd_jobs::LocalFs,
+            &paths,
+            &change,
+            false,
+            &CancelToken::new(),
+            &mut |_, _| {},
+        );
+        assert!(outcome.errors.is_empty(), "{:?}", outcome.errors);
+        let mode_of =
+            |p: &std::path::Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o7777;
+        assert_eq!(mode_of(&one), 0o640, "the first kept its group read bit");
+        assert_eq!(mode_of(&two), 0o600, "and the second kept its absence");
+
+        // Now press that box twice — through "on" to "off" — and both files lose the bit,
+        // which is the other half of three states: it can be answered as well as left.
+        // (Answering the dialog left the progress box in front; the job itself is run above
+        // rather than by the loop, so the panel is put back by hand.)
+        app.mode = Mode::Normal;
+        app.panels[app.active].selection.clear();
+        for name in ["one.txt", "two.txt"] {
+            let row = app.panels[app.active]
+                .listing
+                .row_of_name(name)
+                .expect("listed");
+            app.panels[app.active].cursor_to(row);
+            press(&mut app, "Insert");
+        }
+        let row = app.panels[app.active]
+            .listing
+            .row_of_name("one.txt")
+            .expect("listed");
+        app.panels[app.active].cursor_to(row);
+        press(&mut app, "Ctrl+A");
+        let Mode::Form(form) = &mut app.mode else {
+            panic!("the dialog is open")
+        };
+        let at = form
+            .fields
+            .iter()
+            .position(|f| matches!(f, crate::form::Field::Tri { key, .. } if *key == "attr.gr"))
+            .expect("the row is three-state");
+        form.cursor = at;
+        press(&mut app, "Space");
+        press(&mut app, "Space");
+        let Mode::Form(form) = &app.mode else {
+            panic!("the dialog is open")
+        };
+        assert_eq!(
+            form.tri_value("attr.gr"),
+            Some(false),
+            "off, not left alone"
+        );
+        press(&mut app, "Enter");
+        let Some(Request::SetAttrs { paths, change, .. }) = app.take_requests().into_iter().next()
+        else {
+            panic!("no attribute change was started")
+        };
+        let outcome = fcmd_jobs::set_attributes(
+            &fcmd_jobs::LocalFs,
+            &paths,
+            &change,
+            false,
+            &CancelToken::new(),
+            &mut |_, _| {},
+        );
+        assert!(outcome.errors.is_empty(), "{:?}", outcome.errors);
+        assert_eq!(mode_of(&one), 0o600, "the bit was taken off");
+        assert_eq!(mode_of(&two), 0o600, "and the other was already without it");
     }
 
     /// The key bar follows the modifier, and what it shows is what the keymap really does.

@@ -22,9 +22,15 @@ use crate::run::Outcome;
 /// dialog the user did not touch means.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Change {
-    /// The whole Unix mode, assembled from the dialog's twelve boxes. Ignored on Windows,
-    /// which has no mode to set.
-    pub mode: Option<u32>,
+    /// Which permission bits to turn on, and which to turn off. Ignored on Windows, which
+    /// has no mode to set.
+    ///
+    /// Two masks rather than one whole mode, because over several files the dialog's boxes
+    /// are three-state (SPEC 03 §7): a box left at `[?]` is in neither mask, and that bit
+    /// stays as each file has it. For one file every box has an answer and the two masks
+    /// between them cover all twelve bits, which comes to the same thing as a whole mode.
+    pub mode_set: u32,
+    pub mode_clear: u32,
     /// Read-only: the write bits on Unix, the attribute on Windows. Applied after `mode`, so
     /// a dialog that offers both ends with the answer the user gave last.
     pub readonly: Option<bool>,
@@ -52,6 +58,24 @@ impl Change {
     /// Is there anything to do? A dialog closed with nothing touched should not walk a tree.
     pub fn is_empty(&self) -> bool {
         *self == Change::default()
+    }
+
+    /// The whole mode, for a caller that has one: every permission bit is answered, the ones
+    /// that are set by setting and the rest by clearing.
+    pub fn with_mode(mut self, mode: u32) -> Change {
+        self.mode_set = mode & 0o7777;
+        self.mode_clear = !mode & 0o7777;
+        self
+    }
+
+    /// What `mode` becomes once the two masks are applied to it.
+    pub fn mode_over(&self, mode: u32) -> u32 {
+        (mode | self.mode_set) & !self.mode_clear
+    }
+
+    /// Does anything here touch the permission bits?
+    pub fn touches_mode(&self) -> bool {
+        self.mode_set != 0 || self.mode_clear != 0
     }
 }
 
@@ -280,10 +304,7 @@ mod tests {
             |p: &std::path::Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o7777;
 
         // One file, and nothing else touched.
-        let change = Change {
-            mode: Some(0o600),
-            ..Change::default()
-        };
+        let change = Change::default().with_mode(0o600);
         let outcome = set_attributes(
             &LocalFs,
             &[VPath::local(root.join("one.txt"))],
@@ -300,10 +321,7 @@ mod tests {
         // The whole tree, directories included — and a directory keeps its execute bit or
         // nothing inside it could be reached, which is the caller's business and not this
         // function's: it sets what it was told to set.
-        let change = Change {
-            mode: Some(0o750),
-            ..Change::default()
-        };
+        let change = Change::default().with_mode(0o750);
         let outcome = set_attributes(
             &LocalFs,
             &[VPath::local(root)],
@@ -491,10 +509,7 @@ mod tests {
             }
         }
 
-        let change = Change {
-            mode: Some(0o600),
-            ..Change::default()
-        };
+        let change = Change::default().with_mode(0o600);
         let outcome = set_attributes(
             &Bare,
             &[VPath::parse("s3://bucket/key")],

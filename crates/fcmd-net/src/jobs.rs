@@ -180,12 +180,16 @@ impl JobFs for RoutedFs {
             return self.local.set_attrs(path, change);
         }
         let remote = self.remote(path)?;
-        let mut mode = change.mode;
+        // The same two masks over the file's own mode as locally: what the dialog did not
+        // answer stays as the server has it, which takes one round trip to read.
+        let mut mode = if change.touches_mode() || change.readonly.is_some() {
+            let current = self.facts(path)?.mode.unwrap_or(0o644);
+            Some(change.mode_over(current))
+        } else {
+            None
+        };
         if let Some(readonly) = change.readonly {
-            let current = match mode {
-                Some(mode) => mode,
-                None => self.facts(path)?.mode.unwrap_or(0o644),
-            };
+            let current = mode.unwrap_or(0o644);
             mode = Some(if readonly {
                 current & !0o222
             } else {

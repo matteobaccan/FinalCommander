@@ -178,6 +178,14 @@ One dialog, OS-aware:
 - Timestamps: modified/accessed/created(birth) with "set to now", "copy from other panel",
   and recursive apply.
 - Tri-state checkboxes for multi-selection (FAR's `[?]`), so an unchanged box stays unchanged.
+  **Shipped (0.19.0).** A box the selected files do not agree about opens at `[?]`; `Space`
+  walks it through *on*, *off* and back to *leave it alone*, so a box pressed by mistake can be
+  put back. What travels to the engine is two masks — the bits to set and the bits to clear —
+  rather than one whole mode, which is what lets a bit nobody answered stay as each file has
+  it. The same holds for the read-only box both platforms have and for Windows' own attribute
+  word. Before this the dialog wrote the mode of the file *under the cursor* onto everything
+  selected, which is a quiet way to make a hundred files agree about something nobody asked
+  about.
 
 ## 8. Multi-rename
 

@@ -226,6 +226,12 @@ può leggerlo — e una riga in grigio dice cos'altro è il file, quando è comp
 sparso o un punto di reparse: quelli si impostano facendo la cosa, non spuntando una casella.
 La sola lettura è su entrambi, perché su Unix sono i bit di scrittura.
 
+Su più file le caselle su cui non sono d'accordo si aprono come `[?]`, e premere *OK* lascia
+quei bit come ciascun file li ha: un dialogo su cento file non li mette d'accordo su qualcosa
+che non ti è stato chiesto. `Spazio` porta una casella così attraverso *accesa*, *spenta* e di
+nuovo `[?]`, così una premuta per sbaglio si può rimettere a non cambiare niente. Le caselle su
+cui invece sono d'accordo sono spunte normali, e rispondono per tutti.
+
 Sotto le caselle stanno gli orari — *Cambiato*, *Ultima lettura* e *Creato* — come
 `2026-10-24 17:42:05`. Un orario lasciato in bianco viene lasciato stare; un orario scritto
 viene impostato. *Orari in UTC* li legge e li scrive in quell'orologio invece che in quello di

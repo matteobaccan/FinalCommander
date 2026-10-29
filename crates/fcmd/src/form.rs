@@ -37,6 +37,16 @@ pub enum Field {
         /// Shown instead of the characters, for a secret.
         secret: bool,
     },
+    /// `[?] Label`: a box asked of several files that do not agree about it (SPEC 03 §7).
+    ///
+    /// `Space` walks three states rather than two — on, off, and *leave each file as it is* —
+    /// because the one thing a dialog over a mixed selection must not do is make them agree
+    /// by accident. A box that starts at `[?]` and is never touched changes nothing.
+    Tri {
+        key: &'static str,
+        label: String,
+        state: Option<bool>,
+    },
     /// In the dialog for completeness; not settable yet. Drawn as an unticked box, because
     /// that is what it is: a setting FAR has and this does not.
     Dim(String),
@@ -66,11 +76,20 @@ impl Field {
         }
     }
 
+    /// A box over several files that do not agree about it.
+    fn tri(key: &'static str, label: impl Into<String>, state: Option<bool>) -> Field {
+        Field::Tri {
+            key,
+            label: label.into(),
+            state,
+        }
+    }
+
     /// Can the cursor stop here?
     fn selectable(&self) -> bool {
         matches!(
             self,
-            Field::Toggle { .. } | Field::Choice { .. } | Field::Text { .. }
+            Field::Toggle { .. } | Field::Choice { .. } | Field::Text { .. } | Field::Tri { .. }
         )
     }
 }
@@ -168,6 +187,15 @@ pub struct AttrFacts {
     /// time, whatever platform the program is running on, and keeps nothing else — so the
     /// dialog offers those and says what changing them costs.
     pub in_archive: bool,
+    /// Which permission bits the selected files do *not* agree about (SPEC 03 §7). Each one
+    /// becomes a three-state box, so pressing `OK` leaves it as each file has it instead of
+    /// making a hundred files agree with whichever one the cursor happened to be on. Zero
+    /// for one file, where there is nothing to disagree.
+    pub mixed_mode: u32,
+    /// The same for Windows' own attribute word, and for the read-only box both platforms
+    /// have — which on Unix is the write bits, so it is mixed when they are.
+    pub mixed_attributes: u32,
+    pub mixed_readonly: bool,
 }
 
 /// The four times a file carries, as the attributes dialog shows them. Each is `None` where
@@ -846,8 +874,12 @@ impl Form {
     pub fn on_key(&self, want: &str) -> bool {
         matches!(
             self.fields.get(self.cursor),
-            Some(Field::Toggle { key, .. } | Field::Text { key, .. } | Field::Choice { key, .. })
-                if *key == want
+            Some(
+                Field::Toggle { key, .. }
+                    | Field::Text { key, .. }
+                    | Field::Choice { key, .. }
+                    | Field::Tri { key, .. }
+            ) if *key == want
         )
     }
 
@@ -855,6 +887,18 @@ impl Form {
         self.fields
             .iter()
             .any(|f| matches!(f, Field::Toggle { key, on, .. } if *key == want && *on))
+    }
+
+    /// What a box answered, where "nothing" is one of the answers: `Some` from an ordinary
+    /// box and from a three-state one that was given a value, `None` from a three-state box
+    /// left at `[?]` and from a row this dialog does not have at all. Both of those mean the
+    /// same thing to whoever applies it — leave this alone — which is why they are one value.
+    pub fn tri_value(&self, want: &str) -> Option<bool> {
+        self.fields.iter().find_map(|f| match f {
+            Field::Toggle { key, on, .. } if *key == want => Some(*on),
+            Field::Tri { key, state, .. } if *key == want => *state,
+            _ => None,
+        })
     }
 
     /// The value a choice row is on, by key.
@@ -1288,6 +1332,9 @@ impl Form {
             directories,
             win_attributes,
             in_archive,
+            mixed_mode: _,
+            mixed_attributes: _,
+            mixed_readonly: _,
         } = facts;
         let (count, mode, flags, directories) = (*count, *mode, *flags, *directories);
         let in_archive = *in_archive;
@@ -1323,26 +1370,35 @@ impl Form {
         // Inside an archive they are offered everywhere, because that is what the formats
         // hold: a zip, a tar and a 7z all record a Unix mode and nothing of Windows'.
         if cfg!(unix) || in_archive {
-            for (key, label, on) in [
-                ("attr.ur", "attr-owner-read", bits.owner_read),
-                ("attr.uw", "attr-owner-write", bits.owner_write),
-                ("attr.ux", "attr-owner-exec", bits.owner_exec),
-                ("attr.gr", "attr-group-read", bits.group_read),
-                ("attr.gw", "attr-group-write", bits.group_write),
-                ("attr.gx", "attr-group-exec", bits.group_exec),
-                ("attr.or", "attr-other-read", bits.other_read),
-                ("attr.ow", "attr-other-write", bits.other_write),
-                ("attr.ox", "attr-other-exec", bits.other_exec),
+            // A bit the selection does not agree about is a three-state box: `[?]`, and
+            // pressing `OK` without touching it leaves that bit as each file has it.
+            let box_for = |key, label: String, on, bit| {
+                if facts.mixed_mode & bit != 0 {
+                    Field::tri(key, label, None)
+                } else {
+                    Field::toggle(key, label, on)
+                }
+            };
+            for (key, label, on, bit) in [
+                ("attr.ur", "attr-owner-read", bits.owner_read, 0o400),
+                ("attr.uw", "attr-owner-write", bits.owner_write, 0o200),
+                ("attr.ux", "attr-owner-exec", bits.owner_exec, 0o100),
+                ("attr.gr", "attr-group-read", bits.group_read, 0o040),
+                ("attr.gw", "attr-group-write", bits.group_write, 0o020),
+                ("attr.gx", "attr-group-exec", bits.group_exec, 0o010),
+                ("attr.or", "attr-other-read", bits.other_read, 0o004),
+                ("attr.ow", "attr-other-write", bits.other_write, 0o002),
+                ("attr.ox", "attr-other-exec", bits.other_exec, 0o001),
             ] {
-                fields.push(Field::toggle(key, t(label), on));
+                fields.push(box_for(key, t(label), on, bit));
             }
             fields.push(Field::Separator);
-            for (key, label, on) in [
-                ("attr.setuid", "attr-setuid", bits.setuid),
-                ("attr.setgid", "attr-setgid", bits.setgid),
-                ("attr.sticky", "attr-sticky", bits.sticky),
+            for (key, label, on, bit) in [
+                ("attr.setuid", "attr-setuid", bits.setuid, 0o4000),
+                ("attr.setgid", "attr-setgid", bits.setgid, 0o2000),
+                ("attr.sticky", "attr-sticky", bits.sticky, 0o1000),
             ] {
-                fields.push(Field::toggle(key, t(label), on));
+                fields.push(box_for(key, t(label), on, bit));
             }
             fields.push(Field::Separator);
         }
@@ -1351,34 +1407,45 @@ impl Form {
         // the mode. An archive entry has no such bit of its own — its mode is the whole of
         // what it carries — so inside one the row is not there to be written by mistake.
         if !in_archive {
-            fields.push(Field::toggle(
-                "attr.readonly",
-                t("attr-readonly"),
-                flags.contains(fcmd_core::EntryFlags::READONLY),
-            ));
+            let on = flags.contains(fcmd_core::EntryFlags::READONLY);
+            fields.push(if facts.mixed_readonly {
+                Field::tri("attr.readonly", t("attr-readonly"), None)
+            } else {
+                Field::toggle("attr.readonly", t("attr-readonly"), on)
+            });
         }
         if cfg!(windows) && !in_archive {
             // Seeded from what the file carries, not from `false`. A box that opened empty on
             // a hidden file would not merely look wrong: `OK` writes every box, so it would
             // take the bit away from a file nobody meant to change.
-            for (key, label, on) in [
+            const HIDDEN: u32 = 0x2;
+            const SYSTEM: u32 = 0x4;
+            const ARCHIVE: u32 = 0x20;
+            for (key, label, on, bit) in [
                 (
                     "attr.hidden",
                     "attr-hidden",
                     flags.contains(fcmd_core::EntryFlags::HIDDEN),
+                    HIDDEN,
                 ),
                 (
                     "attr.system",
                     "attr-system",
                     flags.contains(fcmd_core::EntryFlags::SYSTEM),
+                    SYSTEM,
                 ),
                 (
                     "attr.archive",
                     "attr-archive",
                     flags.contains(fcmd_core::EntryFlags::ARCHIVE),
+                    ARCHIVE,
                 ),
             ] {
-                fields.push(Field::toggle(key, t(label), on));
+                fields.push(if facts.mixed_attributes & bit != 0 {
+                    Field::tri(key, t(label), None)
+                } else {
+                    Field::toggle(key, t(label), on)
+                });
             }
             // The three more that can be written. They are not in the listing's own flags —
             // no column shows them — so they come off the attribute word read beside the
@@ -1386,22 +1453,35 @@ impl Form {
             const TEMPORARY: u32 = 0x100;
             const OFFLINE: u32 = 0x1000;
             const NOT_INDEXED: u32 = 0x2000;
-            fields.push(Field::toggle(
-                "attr.temporary",
-                t("attr-temporary"),
-                win_attributes & TEMPORARY != 0,
-            ));
-            fields.push(Field::toggle(
-                "attr.offline",
-                t("attr-offline"),
-                win_attributes & OFFLINE != 0,
-            ));
-            // Asked the way round a reader thinks of it, which is the opposite of the bit.
-            fields.push(Field::toggle(
-                "attr.indexed",
-                t("attr-indexed"),
-                win_attributes & NOT_INDEXED == 0,
-            ));
+            for (key, label, on, bit) in [
+                (
+                    "attr.temporary",
+                    "attr-temporary",
+                    win_attributes & TEMPORARY != 0,
+                    TEMPORARY,
+                ),
+                (
+                    "attr.offline",
+                    "attr-offline",
+                    win_attributes & OFFLINE != 0,
+                    OFFLINE,
+                ),
+                // Asked the way round a reader thinks of it, which is the opposite of the
+                // bit — and a selection that disagrees about the bit disagrees about the
+                // question either way round.
+                (
+                    "attr.indexed",
+                    "attr-indexed",
+                    win_attributes & NOT_INDEXED == 0,
+                    NOT_INDEXED,
+                ),
+            ] {
+                fields.push(if facts.mixed_attributes & bit != 0 {
+                    Field::tri(key, t(label), None)
+                } else {
+                    Field::toggle(key, t(label), on)
+                });
+            }
             // And the ones that are set by doing the thing rather than by writing a bit:
             // shown, because they answer "why is this file green", and never offered.
             const COMPRESSED: u32 = 0x800;
@@ -1810,6 +1890,15 @@ impl Form {
                 Field::Toggle { label, on, .. } => {
                     FormRow::new(format!("[{}] {label}", if *on { 'x' } else { ' ' }))
                 }
+                // FAR's own spelling of a box with no one answer: `[?]`.
+                Field::Tri { label, state, .. } => FormRow::new(format!(
+                    "[{}] {label}",
+                    match state {
+                        Some(true) => 'x',
+                        Some(false) => ' ',
+                        None => '?',
+                    }
+                )),
                 Field::Text {
                     label,
                     value,
@@ -1863,6 +1952,19 @@ impl Form {
     pub fn toggle(&mut self, forward: bool) {
         match self.fields.get_mut(self.cursor) {
             Some(Field::Toggle { on, .. }) => *on = !*on,
+            // Three states, in the order a reader expects to find them: from "leave it" to
+            // on, to off, and back to "leave it" — so a box pressed by mistake can be put
+            // back to changing nothing, which a two-state box could not offer.
+            Some(Field::Tri { state, .. }) => {
+                *state = match (*state, forward) {
+                    (None, true) => Some(true),
+                    (Some(true), true) => Some(false),
+                    (Some(false), true) => None,
+                    (None, false) => Some(false),
+                    (Some(false), false) => Some(true),
+                    (Some(true), false) => None,
+                }
+            }
             Some(Field::Choice {
                 options, chosen, ..
             }) => {
@@ -2102,6 +2204,52 @@ impl Pick {
 
 #[cfg(test)]
 mod tests {
+
+    /// Three states, and the order they come in: from "leave it alone" to on, to off, and
+    /// back — so a box pressed by mistake can be put back to changing nothing, which is the
+    /// one thing a two-state box cannot offer.
+    #[test]
+    fn a_three_state_box_walks_through_leaving_it_alone() {
+        let mut form = Form {
+            kind: FormKind::Attributes,
+            title: "attributes".into(),
+            fields: vec![Field::tri("attr.gr", "group may read", None)],
+            pages: Vec::new(),
+            page: 0,
+            cursor: 0,
+            site: None,
+            button: None,
+            buttons: vec!["OK".into(), "Cancel".into()],
+        };
+        assert_eq!(form.tri_value("attr.gr"), None);
+        assert!(form.rows()[0].text.starts_with("[?]"), "{:?}", form.rows());
+        form.toggle(true);
+        assert_eq!(form.tri_value("attr.gr"), Some(true));
+        assert!(form.rows()[0].text.starts_with("[x]"));
+        form.toggle(true);
+        assert_eq!(form.tri_value("attr.gr"), Some(false));
+        assert!(form.rows()[0].text.starts_with("[ ]"));
+        form.toggle(true);
+        assert_eq!(form.tri_value("attr.gr"), None, "and back to leaving it");
+        // Backwards for somebody who went one too far.
+        form.toggle(false);
+        assert_eq!(form.tri_value("attr.gr"), Some(false));
+        // An ordinary box answers the same question with `Some` either way, so whoever
+        // applies a dialog does not have to know which kind of box it was.
+        let plain = Form {
+            kind: FormKind::Attributes,
+            title: "attributes".into(),
+            fields: vec![Field::toggle("attr.uw", "owner may write", true)],
+            pages: Vec::new(),
+            page: 0,
+            cursor: 0,
+            site: None,
+            button: None,
+            buttons: vec!["OK".into(), "Cancel".into()],
+        };
+        assert_eq!(plain.tri_value("attr.uw"), Some(true));
+        assert_eq!(plain.tri_value("attr.nothing"), None);
+    }
     use super::*;
     use crate::menu::FormKind;
 

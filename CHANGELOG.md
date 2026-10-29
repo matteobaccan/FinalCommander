@@ -4,6 +4,28 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
+## [Unreleased]
+
+### Changed
+
+- **`Ctrl+A` over several files no longer makes them agree** (SPEC 03 §7). The attributes
+  dialog read the mode of the file *under the cursor* and wrote it onto everything selected:
+  mark a hundred files with different permissions, press `OK` to change one bit, and the other
+  eleven went with it. FAR has had the answer to this since forever and the spec has promised
+  it since the beginning — a three-state box — and this is it.
+
+  A box the selection does not agree about opens at `[?]`. `Space` walks it through *on*,
+  *off* and back to *leave it alone*, so a box pressed by mistake can be put back to changing
+  nothing, which a two-state box cannot offer. The boxes they do agree about are ordinary ticks
+  and answer for all of them. The same holds for the read-only box both platforms have, and for
+  Windows' own hidden, system, archive, temporary, offline and indexed bits.
+
+  Underneath, what travels to the engine is two masks — the bits to set and the bits to clear —
+  instead of one whole mode, and a bit in neither mask keeps the value each file has. Over one
+  file every box is answered, so the two masks cover all twelve bits and come to exactly what a
+  whole mode meant; over a selection they are the difference between a dialog that asks and a
+  dialog that assumes. A server's files go the same way, with the mode read first.
+
 ## [0.18.0] — 2026-10-29
 
 ### Added

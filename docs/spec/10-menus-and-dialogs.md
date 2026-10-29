@@ -143,6 +143,8 @@ A dialog is a framed list of rows above a row of buttons. Row kinds:
 * `[x] Label` — a boolean configuration key. `Space` or `Enter` flips it.
 * `Label: value ↓` — a key with a fixed set of values. `Space`/`→` take the next value,
   `←` the previous one.
+* `[?] Label` — a box asked of several files that do not agree about it (SPEC 03 §7). `Space`
+  walks three states: *on*, *off*, and *leave each file as it is*, which is where it starts.
 * a dim `[ ] Label` — in the dialog for completeness, not settable yet (its setting does not
   exist in the configuration either).
 * a separator line.

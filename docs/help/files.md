@@ -215,6 +215,12 @@ read-only, hidden, system, archive, temporary, offline and whether the indexer m
 reparse point: those are set by doing the thing, not by ticking a box. Read-only is on both,
 because on Unix it is the write bits.
 
+Over several files the boxes they do not agree about open as `[?]`, and pressing `OK` leaves
+those bits as each file has them: a dialog over a hundred files does not make them agree about
+something you were not asked. `Space` walks such a box through *on*, *off* and back to `[?]`,
+so one pressed by mistake can be put back to changing nothing. The boxes they *do* agree about
+are ordinary ticks, and answer for all of them.
+
 Below the boxes are the times — *Changed*, *Last read* and *Created* — as
 `2026-10-24 17:42:05`. A time left blank is left alone; a time typed in is set. *Times in UTC*
 reads and writes them in that clock instead of this machine's, which is how a file here and

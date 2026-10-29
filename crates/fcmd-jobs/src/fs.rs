@@ -450,10 +450,13 @@ impl JobFs for LocalFs {
             use std::os::unix::fs::PermissionsExt;
             let current =
                 || -> io::Result<u32> { Ok(fs::metadata(&target)?.permissions().mode() & 0o7777) };
-            let mut mode = match change.mode {
-                Some(mode) => Some(mode),
-                None if change.readonly.is_some() => Some(current()?),
-                None => None,
+            // The file's own mode with the dialog's two masks over it: a bit nobody answered
+            // keeps the value this file has, which is what makes one dialog over a hundred
+            // files with different permissions safe to press `OK` on.
+            let mut mode = if change.touches_mode() || change.readonly.is_some() {
+                Some(change.mode_over(current()?))
+            } else {
+                None
             };
             // Read-only is applied after the mode, so a dialog that offers both ends with
             // whichever answer the user gave last. On Unix it is the write bits and nothing
