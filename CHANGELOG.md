@@ -25,6 +25,26 @@ Notable changes, newest first. The format follows
   being read, a file being edited — stays parked under it. The help's own pages have a section
   on dialogs to follow it into, in both languages.
 
+- **Two of the three mouse drags** (SPEC 02 §12). A drag from a row selects every row it
+  sweeps, in the panel the press began in, and leaves the cursor where it stopped; a drag on
+  the frame where the two panels meet moves the rule between them, within the same limits
+  `Ctrl+←` and `Ctrl+→` keep, so the two ways of moving it cannot disagree about how narrow a
+  panel may get. Which of the two a drag *is* was decided when the button went down, so one
+  gesture cannot turn into the other halfway, and a press on the frame alone does nothing — a
+  click on a frame never did, and a press that moved the split would be a trap.
+
+  The sweep only ever selects. A drag that overshoots and comes back leaves what it passed
+  over selected, which is the right way round for a gesture nobody aims precisely: the right
+  button takes one row out again and `Gray *` turns the lot round, while unselecting on the
+  way back would mean remembering the selection the drag started from — and a selection the
+  mouse quietly threw away is worse than one row too many.
+
+  The third drag, a selection dropped on the other panel, is left on purpose: what a drop
+  means is a question rather than a gap. The Explorer moves within a drive and copies across
+  one, a rule that has surprised people for thirty years; FAR asks instead. Until that is
+  answered a drop would be a destructive operation started by a slip of the hand, and `F5`
+  with two panels open is already the short way to do it.
+
 - **`Alt+F10` picks a path for the row that asks for one** (SPEC 10 §3). The copy dialog's
   destination could be chosen from the folder tree; a row that names a *file* — the key file of
   a stored connection — was typed by hand, and the backlog had wanted a `...` button opening a

@@ -287,8 +287,10 @@ the mouse and the middle-click paste stop working. Those are your terminal's own
 program cannot replace them, so it does not take them away unasked.
 
 With it on: a click moves the cursor to the row and makes that panel the active one, a double
-click is `Enter` on it, the right button selects a row, and the wheel scrolls whatever is under
-the pointer — three rows a notch, without taking the focus, so you can read the other panel
+click is `Enter` on it, the right button selects a row, a drag from a row selects every row it
+sweeps — it only ever selects, so the right button is what takes one out again — a drag on the
+frame where the two panels meet moves the rule between them, and the wheel scrolls whatever is
+under the pointer — three rows a notch, without taking the focus, so you can read the other panel
 without leaving this one. How many rows a notch moves is yours to set, and separately for the
 panels, the viewer and the editor: *All settings* has `ui.wheel_lines`, `ui.wheel_lines_viewer`
 and `ui.wheel_lines_editor`. The sideways wheel, if your mouse or trackpad has one, scrolls a

@@ -1807,6 +1807,8 @@ pub struct App {
     /// outlives the panel, so leaving the tree and coming back costs no reads.
     pub trees: [Option<Box<crate::tree::Tree>>; 2],
     pub tree_cache: crate::tree::Cache,
+    /// What the left button is dragging, between the press and the release (SPEC 02 §12).
+    drag: Option<Drag>,
     /// The hex editor, while a dialog of its own is open over it.
     hex_parked: Option<Box<HexEdit>>,
     /// The dialog `F1` was pressed in, while its help page is on the screen. Whatever that
@@ -2045,6 +2047,7 @@ impl App {
             panels_off: false,
             user_scroll: 0,
             last_find: FindSpec::default(),
+            drag: None,
             hex_parked: None,
             dialog_under_help: None,
             trees: [None, None],
@@ -3057,16 +3060,33 @@ impl App {
             MouseKind::ScrollLeft => self.wheel_sideways(col, row, -1),
             MouseKind::ScrollRight => self.wheel_sideways(col, row, 1),
             MouseKind::Press(Button::Left) => {
+                // Where the press lands is what a drag from it will mean: a row sweeps a
+                // selection, the frame where the panels meet moves the rule between them.
+                // Nothing happens *now* for the rule — a click on a frame never did
+                // anything, and a press that moved the split would be a trap.
+                self.drag = if self.layout.on_rule(col, row) {
+                    Some(Drag::Rule)
+                } else {
+                    match self.layout.hit(col, row) {
+                        Some(crate::hit::Hit::Row { side, index }) => {
+                            Some(Drag::Rows { side, from: index })
+                        }
+                        _ => None,
+                    }
+                };
+                if self.drag == Some(Drag::Rule) {
+                    return;
+                }
                 let double = self.is_double_click(col, row);
                 self.click(col, row, double);
             }
             // The right button selects, which is what both FAR and Midnight Commander do with
             // it. Nothing here opens a context menu, so there is nothing to take it away from.
             MouseKind::Press(Button::Right) => self.right_click(col, row),
-            // A drag over the panels extends nothing yet, and a release ends whatever the
-            // press did. Said here rather than left to a catch-all so that the day a drag
-            // means something there is one place to put it.
-            MouseKind::Press(Button::Middle) | MouseKind::Release(_) | MouseKind::Drag(_) => {}
+            MouseKind::Drag(Button::Left) => self.drag_to(col, row),
+            // A release ends whatever the press began, whichever button it was.
+            MouseKind::Release(_) => self.drag = None,
+            MouseKind::Press(Button::Middle) | MouseKind::Drag(_) => {}
         }
     }
 
@@ -3161,6 +3181,65 @@ impl App {
                 self.panel_mut().rebuild();
             }
         }
+    }
+
+    /// The pointer moved with the left button down: whatever the press armed, carried on
+    /// (SPEC 02 §12).
+    fn drag_to(&mut self, col: u16, row: u16) {
+        match self.drag {
+            Some(Drag::Rule) => {
+                let width = self.layout.screen_width();
+                if width == 0 {
+                    return;
+                }
+                // The same limits `Ctrl+←`/`Ctrl+→` keep, so the two ways of moving the rule
+                // cannot disagree about how narrow a panel is allowed to get.
+                let share = (u32::from(col) * 100 / u32::from(width)) as i32;
+                self.cfg.panel.split = share.clamp(10, 90) as u16;
+            }
+            Some(Drag::Rows { side, from }) => {
+                // Only over the panel the press began in: a drag that wandered into the
+                // other one must not select there, because its rows are not what is being
+                // swept — and a drag that comes back carries on where it left off.
+                let Some(crate::hit::Hit::Row { side: over, index }) = self.layout.hit(col, row)
+                else {
+                    return;
+                };
+                if over != side {
+                    return;
+                }
+                self.sweep(side, from, index);
+            }
+            None => {}
+        }
+    }
+
+    /// Select every row between the one the press landed on and the one the pointer is over,
+    /// and leave the cursor there.
+    ///
+    /// It only ever selects. A sweep that overshoots and comes back leaves what it passed
+    /// over selected, which is the right way round for a gesture nobody aims precisely: the
+    /// right button takes a row out again, one row at a time, and `Gray *` turns the lot
+    /// round. Unselecting on the way back would also mean remembering what was selected
+    /// before the drag started, and a selection the mouse quietly threw away is worse than
+    /// one row too many.
+    fn sweep(&mut self, side: usize, from: usize, to: usize) {
+        let (lo, hi) = (from.min(to), from.max(to));
+        let panel = &mut self.panels[side];
+        let ids: Vec<_> = (lo..=hi)
+            .filter_map(|row| panel.listing.row(row))
+            .filter(|entry| entry.is_selectable())
+            .map(|entry| entry.id)
+            .collect();
+        if ids.is_empty() {
+            return;
+        }
+        for id in ids {
+            panel.selection.set(id, true);
+        }
+        panel.cursor_to(to);
+        panel.rebuild();
+        self.scroll();
     }
 
     /// The wheel scrolls whatever is under the pointer, without moving the focus: looking at
@@ -17897,6 +17976,16 @@ fn field_completes(key: &str) -> bool {
     )
 }
 
+/// What the left button is dragging (SPEC 02 §12). Which it is was decided by where the
+/// press landed, so that one gesture cannot turn into the other halfway.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Drag {
+    /// Sweeping the rows of one panel: which panel, and the row the press landed on.
+    Rows { side: usize, from: usize },
+    /// The frame where the panels meet, which moves the split between them.
+    Rule,
+}
+
 /// What `Alt+F10` opens for a row: the tree of folders, or one directory at a time.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Browses {
@@ -28470,6 +28559,118 @@ abcdefghij
             panic!("{:?}", app.mode)
         };
         assert_eq!(viewer.col, 0, "and back, not past the start");
+    }
+
+    /// A drag over the rows selects what it sweeps, and leaves the cursor where it stopped.
+    /// It only ever selects, and it stops at the edge of the panel the press began in.
+    #[test]
+    fn dragging_over_the_rows_selects_what_it_sweeps() {
+        let mut app = app();
+        drawn(&mut app, 80, 25);
+        let area = app.layout.panels[0].expect("the left panel").area;
+        let mouse = |app: &mut App, kind, row| {
+            app.handle_input(Input::Mouse(fcmd_tui::Mouse {
+                kind,
+                col: area.x + 1,
+                row,
+                mods: Mods::NONE,
+            }));
+        };
+        // The press is a click: the cursor moves and nothing is selected by it.
+        mouse(
+            &mut app,
+            fcmd_tui::MouseKind::Press(fcmd_tui::Button::Left),
+            area.y + 2,
+        );
+        assert_eq!(app.panel().cursor, 2);
+        assert_eq!(app.panel().listing.totals.selected_files, 0);
+
+        // Dragging down to the row below sweeps both of them.
+        mouse(
+            &mut app,
+            fcmd_tui::MouseKind::Drag(fcmd_tui::Button::Left),
+            area.y + 3,
+        );
+        assert_eq!(app.panel().cursor, 3, "the cursor followed the pointer");
+        assert_eq!(
+            app.panel().listing.totals.selected_files,
+            2,
+            "the row it started on and the row it reached"
+        );
+
+        // Coming back up leaves what was swept selected, rather than quietly undoing it.
+        mouse(
+            &mut app,
+            fcmd_tui::MouseKind::Drag(fcmd_tui::Button::Left),
+            area.y + 2,
+        );
+        assert_eq!(app.panel().listing.totals.selected_files, 2);
+
+        // The release ends it: a move after that selects nothing.
+        mouse(
+            &mut app,
+            fcmd_tui::MouseKind::Release(fcmd_tui::Button::Left),
+            area.y + 2,
+        );
+        mouse(
+            &mut app,
+            fcmd_tui::MouseKind::Drag(fcmd_tui::Button::Left),
+            area.y + 4,
+        );
+        assert_eq!(app.panel().listing.totals.selected_files, 2);
+    }
+
+    /// Dragging the frame where the panels meet moves the rule between them, within the same
+    /// limits `Ctrl+←` and `Ctrl+→` keep. A press on it alone changes nothing.
+    #[test]
+    fn dragging_the_rule_between_the_panels_moves_the_split() {
+        let mut app = app();
+        drawn(&mut app, 80, 25);
+        assert_eq!(app.cfg.panel.split, 50);
+        let left = app.layout.panels[0].expect("the left panel").area;
+        let right = app.layout.panels[1].expect("the right panel").area;
+        let rule = left.right();
+        assert!(app.layout.on_rule(rule, left.y), "{left:?} {right:?}");
+
+        let press = |app: &mut App, col| {
+            app.handle_input(Input::Mouse(fcmd_tui::Mouse {
+                kind: fcmd_tui::MouseKind::Press(fcmd_tui::Button::Left),
+                col,
+                row: left.y,
+                mods: Mods::NONE,
+            }));
+        };
+        let drag = |app: &mut App, col| {
+            app.handle_input(Input::Mouse(fcmd_tui::Mouse {
+                kind: fcmd_tui::MouseKind::Drag(fcmd_tui::Button::Left),
+                col,
+                row: left.y,
+                mods: Mods::NONE,
+            }));
+        };
+        press(&mut app, rule);
+        assert_eq!(app.cfg.panel.split, 50, "the press alone moved nothing");
+        drag(&mut app, 60);
+        assert_eq!(app.cfg.panel.split, 75, "three quarters of eighty columns");
+        // Neither panel can be squeezed out, however far the pointer goes.
+        drag(&mut app, 2);
+        assert_eq!(app.cfg.panel.split, 10);
+        drag(&mut app, 79);
+        assert_eq!(app.cfg.panel.split, 90);
+
+        // And a drag that began on a row is a selection, not the rule.
+        app.handle_input(Input::Mouse(fcmd_tui::Mouse {
+            kind: fcmd_tui::MouseKind::Release(fcmd_tui::Button::Left),
+            col: 79,
+            row: left.y,
+            mods: Mods::NONE,
+        }));
+        app.cfg.panel.split = 50;
+        drawn(&mut app, 80, 25);
+        let area = app.layout.panels[0].expect("the left panel").area;
+        press(&mut app, area.x + 1);
+        drag(&mut app, area.x + 1);
+        assert_eq!(app.cfg.panel.split, 50, "the rule stayed where it was");
     }
 
     #[test]

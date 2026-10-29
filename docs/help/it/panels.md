@@ -311,8 +311,10 @@ sono strumenti del tuo terminale e questo programma non può sostituirli, quindi
 toglie senza che tu lo chieda.
 
 Con il mouse acceso: un clic porta il cursore sulla riga e rende attivo quel pannello, un
-doppio clic è `Enter` su di essa, il tasto destro seleziona una riga, e la rotella scorre quello
-che sta sotto il puntatore — tre righe a scatto, senza prendere il fuoco, così puoi leggere
+doppio clic è `Enter` su di essa, il tasto destro seleziona una riga, un trascinamento da una
+riga seleziona tutte le righe che tocca — seleziona soltanto, quindi è il tasto destro che ne
+toglie una — un trascinamento sulla cornice dove i due pannelli si incontrano sposta il confine
+fra loro, e la rotella scorre quello che sta sotto il puntatore — tre righe a scatto, senza prendere il fuoco, così puoi leggere
 l'altro pannello senza lasciare questo. Quante righe fa uno scatto lo decidi tu, e
 separatamente per i pannelli, il visualizzatore e l'editor: in *Tutti i parametri* ci sono
 `ui.wheel_lines`, `ui.wheel_lines_viewer` e `ui.wheel_lines_editor`. La rotella orizzontale, se

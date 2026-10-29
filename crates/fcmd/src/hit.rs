@@ -123,6 +123,27 @@ impl Layout {
         None
     }
 
+    /// Is this cell the frame where the two panels meet — the rule a drag moves (SPEC 02
+    /// §12)? Two columns wide, because that is what the two frames are, and only where both
+    /// panels are drawn: with one of them off there is nothing to divide.
+    pub fn on_rule(&self, col: u16, row: u16) -> bool {
+        let (Some(left), Some(right)) = (&self.panels[0], &self.panels[1]) else {
+            return false;
+        };
+        if left.area.w == 0 || right.area.w == 0 || right.area.x <= left.area.right() {
+            return false;
+        }
+        (left.area.right()..right.area.x).contains(&col)
+            && row >= left.area.y
+            && row < left.area.y + left.area.h
+    }
+
+    /// How wide the screen was when the panels were drawn on it, which is what the split is a
+    /// percentage of.
+    pub fn screen_width(&self) -> u16 {
+        self.width_hint().saturating_add(1)
+    }
+
     /// The key bar spans the screen, so its width is the widest thing recorded.
     fn width_hint(&self) -> u16 {
         let mut widest = 0;

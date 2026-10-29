@@ -672,9 +672,19 @@ Every one of them ends up in the same `run` the keyboard uses, so the macro reco
 confirmations and the error reporting are the ones already there — the mouse does what a key
 does rather than having powers of its own.
 
-Still to come: dragging to extend a selection, dragging a column rule to resize it, and
-dragging between the panels. Each wants state the click handling does not keep yet, and none
-of them is the difference between having a mouse and not.
+Two of the three drags are there as well. Which one a drag *is* was decided when the button
+went down, so that one gesture cannot turn into the other halfway:
+
+| gesture | what it does |
+| --- | --- |
+| drag from a row | selects every row it sweeps, in the panel the press began in, and leaves the cursor where it stopped. It only ever selects: a sweep that overshoots and comes back leaves what it passed over selected, which is the right way round for a gesture nobody aims precisely — the right button takes one row out again and `Gray *` turns the lot round. A drag that wanders into the other panel selects nothing there, and carries on where it left off if it comes back |
+| drag the frame where the panels meet | moves the rule between them, within the same limits `Ctrl+←` and `Ctrl+→` keep, so the two ways of moving it cannot disagree about how narrow a panel may get. The press alone does nothing: a click on a frame never did, and a press that moved the split would be a trap |
+
+Dragging *between* the panels — a selection dropped on the other side — is the one left, and it
+is left on purpose: what a drop means is a question rather than a gap. In the Explorer a drag
+within one drive moves and across drives copies, which is a rule that has surprised people for
+thirty years; FAR asks instead. Until that is answered a drop would be a destructive operation
+started by a slip of the hand, and `F5` with two panels open is already the short way to do it.
 
 ## 13. Descriptions (`descript.ion`, shipped in 0.7.3)
 
