@@ -989,6 +989,7 @@ version = "0.18.0"
 dependencies = [
  "fcmd-arc",
  "fcmd-core",
+ "fcmd-platform",
  "md5",
  "regex",
  "sha1",

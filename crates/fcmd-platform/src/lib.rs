@@ -11,6 +11,7 @@
 //! one that leaves the line blank, because a wrong free-space figure is the one a copy is
 //! planned against.
 
+pub mod copy;
 pub mod process;
 mod programs;
 pub mod service;
@@ -21,6 +22,7 @@ mod volume;
 #[cfg(windows)]
 mod windows;
 
+pub use copy::{have_system_copy, system_copy};
 pub use process::{details, processes, Details, Process};
 pub use programs::{programs, Program};
 pub use service::{control, services, Service, ServiceAction, ServiceError, ServiceState};

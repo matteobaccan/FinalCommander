@@ -365,7 +365,7 @@ fn attempt(
             let copied = if append {
                 fs.append_file(&src, &dst, spec.options.buffer, &mut tick)
             } else {
-                fs.copy_file(&src, &dst, spec.options.buffer, &mut tick)
+                fs.copy_file(&src, &dst, spec.options.copy_how(), &mut tick)
             };
             match copied {
                 Ok(bytes) => {

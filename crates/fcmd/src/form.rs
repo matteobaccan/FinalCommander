@@ -318,7 +318,11 @@ impl Form {
                 ),
                 Field::Separator,
                 Field::toggle("general.use_trash", t("opt-trash"), cfg.general.use_trash),
-                Field::Dim(t("opt-system-copy")),
+                Field::toggle(
+                    "general.system_copy",
+                    t("opt-system-copy"),
+                    cfg.general.system_copy,
+                ),
                 Field::Dim(t("opt-save-history")),
                 // How long a history line nobody has pinned is kept after its last use, which
                 // is FAR's own setting and the reason its default is ninety days.

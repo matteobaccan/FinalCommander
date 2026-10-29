@@ -484,7 +484,7 @@ mod tests {
                 &self,
                 _s: &VPath,
                 _d: &VPath,
-                _b: usize,
+                _b: crate::CopyHow,
                 _o: &mut dyn FnMut(u64) -> bool,
             ) -> std::io::Result<u64> {
                 Ok(0)

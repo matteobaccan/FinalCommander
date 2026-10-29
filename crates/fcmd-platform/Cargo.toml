@@ -12,8 +12,9 @@ authors.workspace = true
 
 # `statvfs` for the free space and the cluster size, and `getpwuid`/`getgrgid` behind safe
 # wrappers for the owner of a file. Already in the tree for the terminal.
+# `zerocopy` is `copy_file_range`, the in-kernel copy of `copy.rs`.
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.31.3", features = ["fs", "user"] }
+nix = { version = "0.31.3", features = ["fs", "user", "zerocopy"] }
 
 # How much memory the machine has, which on macOS is a `sysctl` and nothing else.
 [target.'cfg(target_os = "macos")'.dependencies]

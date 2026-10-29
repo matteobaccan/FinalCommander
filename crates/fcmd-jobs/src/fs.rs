@@ -87,7 +87,7 @@ pub trait JobFs: Send + Sync {
         &self,
         src: &VPath,
         dst: &VPath,
-        buffer: usize,
+        how: CopyHow,
         on_bytes: &mut dyn FnMut(u64) -> bool,
     ) -> io::Result<u64>;
 
@@ -258,6 +258,31 @@ fn unsupported(message: &'static str) -> io::Error {
 /// The local filesystem.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct LocalFs;
+
+/// How to copy one file: how much at a time, and whether the system's own routine may do it.
+///
+/// It travels with the copy rather than with the filesystem because it is the *job's*
+/// question — a user preference and a buffer size the dialog chose — and because a copy that
+/// crosses between a provider and the local disk has to hand the same answer to whichever
+/// half ends up reading the bytes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CopyHow {
+    /// How many bytes to move before reporting progress and asking whether to carry on.
+    pub buffer: usize,
+    /// May the kernel make the copy (`copy_file_range`, `fcopyfile`, `CopyFileExW`)? Off by
+    /// default, and only ever true for a local file: a provider moves its own bytes.
+    pub system: bool,
+}
+
+impl CopyHow {
+    /// The ordinary copy: a buffer this big, read and written by this program.
+    pub fn buffered(buffer: usize) -> CopyHow {
+        CopyHow {
+            buffer,
+            system: false,
+        }
+    }
+}
 
 /// Suffix of the temporary file a copy writes into. A destination never appears under its final
 /// name until it is complete.
@@ -492,13 +517,35 @@ impl JobFs for LocalFs {
         &self,
         src: &VPath,
         dst: &VPath,
-        buffer: usize,
+        how: CopyHow,
         on_bytes: &mut dyn FnMut(u64) -> bool,
     ) -> io::Result<u64> {
         let part = part_path(dst);
+        // The system's own routine, when `general.system_copy` asks for it (SPEC 03 §7b). It writes the
+        // same temporary file this function would, so everything after it — the permissions,
+        // the times, the rename into place — is unchanged; and when the platform declines it
+        // answers `None` and the loop below does the work, which is why there is no second
+        // code path for "it did not work".
+        if how.system {
+            let (from, to) = (src.os(), part.os());
+            match fcmd_platform::system_copy(&from, &to, how.buffer, on_bytes) {
+                Ok(Some(total)) => {
+                    if let Err(e) = fs::rename(part.os(), dst.os()) {
+                        let _ = fs::remove_file(part.os());
+                        return Err(e);
+                    }
+                    return Ok(total);
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    let _ = fs::remove_file(part.os());
+                    return Err(e);
+                }
+            }
+        }
         let mut reader = File::open(src.os())?;
         let mut writer = File::create(part.os())?;
-        let mut buf = vec![0u8; buffer.clamp(16 * 1024, 8 * 1024 * 1024)];
+        let mut buf = vec![0u8; how.buffer.clamp(16 * 1024, 8 * 1024 * 1024)];
         let mut total = 0u64;
 
         loop {
@@ -890,7 +937,7 @@ mod tests {
             &self,
             _src: &VPath,
             _dst: &VPath,
-            _buffer: usize,
+            _how: CopyHow,
             _on_bytes: &mut dyn FnMut(u64) -> bool,
         ) -> io::Result<u64> {
             Err(unsupported("nothing here"))
@@ -934,7 +981,7 @@ mod tests {
 
         let mut seen = 0u64;
         let copied = LocalFs
-            .copy_file(&src, &dst, 16 * 1024, &mut |n| {
+            .copy_file(&src, &dst, CopyHow::buffered(16 * 1024), &mut |n| {
                 seen += n;
                 true
             })
@@ -948,6 +995,63 @@ mod tests {
         );
     }
 
+    /// The same copy with the kernel doing it: the file that arrives, the progress that was
+    /// reported and the temporary file that is gone are the same three answers, which is the
+    /// whole promise of the setting. Where a platform has no such routine the ordinary loop
+    /// runs instead and the assertions hold anyway, which is why there is nothing here about
+    /// *how* it was copied.
+    #[test]
+    fn the_system_copy_leaves_the_same_file_behind() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = VPath::local(dir.path().join("src.bin"));
+        let dst = VPath::local(dir.path().join("dst.bin"));
+        let body: Vec<u8> = (0..300_000u32).map(|i| (i % 253) as u8).collect();
+        fs::write(src.as_path(), &body).unwrap();
+
+        let mut seen = 0u64;
+        let how = CopyHow {
+            buffer: 32 * 1024,
+            system: true,
+        };
+        let copied = LocalFs
+            .copy_file(&src, &dst, how, &mut |n| {
+                seen += n;
+                true
+            })
+            .unwrap();
+        assert_eq!(copied, body.len() as u64);
+        assert_eq!(seen, copied, "the progress adds up to the file");
+        assert_eq!(fs::read(dst.as_path()).unwrap(), body);
+        assert!(!LocalFs.exists(&part_path(&dst)));
+    }
+
+    /// And it is still a copy that can be refused: whichever routine moved the bytes, a
+    /// `false` from the progress callback leaves no destination and no temporary file. The
+    /// one difference the platforms have is *when* the answer is given, and that is the
+    /// setting's documentation rather than a thing to assert here.
+    #[test]
+    fn a_cancelled_system_copy_leaves_nothing_either() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = VPath::local(dir.path().join("src.bin"));
+        let dst = VPath::local(dir.path().join("dst.bin"));
+        fs::write(src.as_path(), vec![3u8; 400_000]).unwrap();
+
+        let how = CopyHow {
+            buffer: 4096,
+            system: true,
+        };
+        match LocalFs.copy_file(&src, &dst, how, &mut |_| false) {
+            Err(e) => {
+                assert_eq!(e.kind(), io::ErrorKind::Interrupted);
+                assert!(!LocalFs.exists(&dst), "a cancelled copy left a destination");
+                assert!(!LocalFs.exists(&part_path(&dst)));
+            }
+            // A platform that copies the whole file in one call cannot be stopped inside it,
+            // and the file is then there: that is the bargain, not a failure.
+            Ok(n) => assert_eq!(n, 400_000),
+        }
+    }
+
     #[test]
     fn a_cancelled_copy_removes_the_partial_file() {
         let dir = tempfile::tempdir().unwrap();
@@ -956,7 +1060,7 @@ mod tests {
         fs::write(src.as_path(), vec![0u8; 200_000]).unwrap();
 
         let err = LocalFs
-            .copy_file(&src, &dst, 16 * 1024, &mut |_| false)
+            .copy_file(&src, &dst, CopyHow::buffered(16 * 1024), &mut |_| false)
             .unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::Interrupted);
         assert!(!LocalFs.exists(&dst), "a cancelled copy left a destination");
@@ -979,7 +1083,7 @@ mod tests {
 
         let facts = LocalFs.facts(&src).unwrap();
         LocalFs
-            .copy_file(&src, &dst, 64 * 1024, &mut |_| true)
+            .copy_file(&src, &dst, CopyHow::buffered(64 * 1024), &mut |_| true)
             .unwrap();
         LocalFs
             .apply_meta(&dst, &facts, Preserve::default())
@@ -1183,7 +1287,7 @@ mod tests {
             fs::write(source.as_path(), b"a long way down\n").unwrap();
             let mut nothing = |_: u64| true;
             LocalFs
-                .copy_file(&source, &file, 64 * 1024, &mut nothing)
+                .copy_file(&source, &file, CopyHow::buffered(64 * 1024), &mut nothing)
                 .expect("the copy");
         }
         let mut read = Vec::new();

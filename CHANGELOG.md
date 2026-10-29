@@ -4,6 +4,31 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
+## [Unreleased]
+
+### Added
+
+- **The kernel can make a copy** (`general.system_copy`, SPEC 03 §3b). The row was in *System
+  settings* as a dim one. Reading a file into a buffer and writing it back is still the
+  default and still earns it — progress every chunk, `Esc` answered within a few kilobytes,
+  the same behaviour on every filesystem — but it is the one thing that cannot let the system
+  copy the file itself, and on the filesystems people keep large files on that is the whole
+  difference: `copy_file_range` on Linux, a chunk at a time, which is a reflink on btrfs, XFS
+  and bcachefs and a server-side copy over NFS 4.2; `fcopyfile` on macOS, which clones on
+  APFS; `CopyFileExW` on Windows, which knows a share's own server-side copy.
+
+  It is a faster copy, not a second copy engine. It writes the same `name.fcmd-part` file, so
+  the rename into place, the permissions and the times are the engine's own afterwards; a
+  platform that will not take the call answers *no* rather than an error and the byte loop
+  does the work with nobody told anything, because nothing went wrong; and only a failure an
+  ordinary copy would hit as well is reported as one. Every call that needs `unsafe` or a
+  `#[cfg]` is in `fcmd-platform`, as the workspace's rule has it.
+
+  Off by default, because the cost is told in the same breath as the gain: where the kernel
+  copies a whole file in one call — macOS and Windows — `Esc` is answered when that call
+  returns rather than within the next few kilobytes, and that file's progress arrives in one
+  piece. On Linux the copy is still made a chunk at a time, so neither applies there.
+
 ## [0.18.0] — 2026-10-29
 
 ### Added

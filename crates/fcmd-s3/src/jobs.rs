@@ -23,7 +23,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use fcmd_core::{CancelToken, EntryKind, Scheme, VPath};
-use fcmd_jobs::fs::{Facts, JobFs};
+use fcmd_jobs::fs::{CopyHow, Facts, JobFs};
 use fcmd_jobs::Preserve;
 use tokio::runtime::Handle;
 
@@ -278,11 +278,11 @@ impl<F: JobFs> JobFs for ObjectFs<F> {
         &self,
         src: &VPath,
         dst: &VPath,
-        buffer: usize,
+        how: CopyHow,
         on_bytes: &mut dyn FnMut(u64) -> bool,
     ) -> io::Result<u64> {
         match (mine(src), mine(dst)) {
-            (false, false) => self.inner.copy_file(src, dst, buffer, on_bytes),
+            (false, false) => self.inner.copy_file(src, dst, how, on_bytes),
 
             // Upload. One `PUT` is one operation to the service: it arrives whole or leaves
             // nothing, so the progress it reports is nothing and then all of it.
@@ -324,13 +324,13 @@ impl<F: JobFs> JobFs for ObjectFs<F> {
                         Ok(size)
                     }
                     // Two services: the bytes have to come through here after all.
-                    Err(_) => self.through_staging(src, dst, buffer, on_bytes),
+                    Err(_) => self.through_staging(src, dst, how, on_bytes),
                 }
             }
 
             // One end is object storage and the other is a server: neither can talk to the
             // other, so the bytes land here on the way past.
-            _ => self.through_staging(src, dst, buffer, on_bytes),
+            _ => self.through_staging(src, dst, how, on_bytes),
         }
     }
 }
@@ -342,14 +342,14 @@ impl<F: JobFs> ObjectFs<F> {
         &self,
         src: &VPath,
         dst: &VPath,
-        buffer: usize,
+        how: CopyHow,
         on_bytes: &mut dyn FnMut(u64) -> bool,
     ) -> io::Result<u64> {
         let staged = staging(src);
         let local = VPath::local(&staged);
         let result = self
-            .copy_file(src, &local, buffer, on_bytes)
-            .and_then(|_| self.copy_file(&local, dst, buffer, on_bytes));
+            .copy_file(src, &local, how, on_bytes)
+            .and_then(|_| self.copy_file(&local, dst, how, on_bytes));
         let _ = std::fs::remove_file(&staged);
         result
     }
@@ -432,7 +432,12 @@ mod tests {
             // Upload: a local file becomes a key.
             let up = VPath::parse("s3://logs/notes/up.txt");
             let written = fs
-                .copy_file(&VPath::local(&file), &up, 64 * 1024, &mut on_bytes)
+                .copy_file(
+                    &VPath::local(&file),
+                    &up,
+                    CopyHow::buffered(64 * 1024),
+                    &mut on_bytes,
+                )
                 .expect("the upload works");
             assert_eq!(written, 9);
             assert_eq!(seen.get(), 9, "the progress reported what went up");
@@ -441,7 +446,12 @@ mod tests {
             // Download: the key becomes a local file again, and the bytes match.
             let back = dir_path.join("back.txt");
             let read = fs
-                .copy_file(&up, &VPath::local(&back), 64 * 1024, &mut on_bytes)
+                .copy_file(
+                    &up,
+                    &VPath::local(&back),
+                    CopyHow::buffered(64 * 1024),
+                    &mut on_bytes,
+                )
                 .expect("the download works");
             assert_eq!(read, 9);
             assert_eq!(std::fs::read(&back).unwrap(), b"from disk");
@@ -454,7 +464,7 @@ mod tests {
 
             // Copy inside the service: the bytes never come through here.
             let beside = VPath::parse("s3://logs/notes/beside.txt");
-            fs.copy_file(&moved, &beside, 64 * 1024, &mut on_bytes)
+            fs.copy_file(&moved, &beside, CopyHow::buffered(64 * 1024), &mut on_bytes)
                 .expect("the copy works");
             assert!(fs.exists(&beside));
 

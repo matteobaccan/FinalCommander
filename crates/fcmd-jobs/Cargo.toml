@@ -11,6 +11,9 @@ authors.workspace = true
 [dependencies]
 fcmd-arc = { workspace = true }
 fcmd-core = { workspace = true }
+# The system's own copy routine, behind `general.system_copy`: every call that needs
+# `unsafe` or a `#[cfg]` lives in that crate, which is the rule the workspace is built on.
+fcmd-platform = { workspace = true }
 regex = "1"
 thiserror = "2"
 # The wastebasket. `default-features = false` keeps `chrono` out — it is only needed for

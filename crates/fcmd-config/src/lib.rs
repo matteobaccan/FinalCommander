@@ -221,6 +221,19 @@ pub struct General {
     /// the one key everybody presses by accident is the one that should land in it.
     /// `Shift+Del` deletes outright whatever this says.
     pub use_trash: bool,
+    /// May the kernel copy a file, instead of this program reading it and writing it back?
+    ///
+    /// `copy_file_range` on Linux, `fcopyfile` on macOS, `CopyFileExW` on Windows (SPEC 03
+    /// §7b). On btrfs, XFS and APFS it becomes a reflink — a second name for the same
+    /// extents, written in a moment however large the file is — and on a network share the
+    /// server copies the file without the bytes crossing the network.
+    ///
+    /// Off by default, because what it costs is told in the same breath: where the kernel
+    /// copies a whole file in one call, which is what macOS and Windows do, `Esc` is answered
+    /// when that call returns rather than within the next few kilobytes, and the progress for
+    /// that file arrives in one piece. On Linux the copy is still made a chunk at a time, so
+    /// neither applies there.
+    pub system_copy: bool,
 }
 // There is no `update_check` here, and that is the point: a setting nobody reads is a setting
 // that lies, and this one was a promise wearing a setting's clothes. The promise is kept in
@@ -236,6 +249,7 @@ impl Default for General {
             confirm_overwrite: true,
             desktop_open: true,
             use_trash: true,
+            system_copy: false,
         }
     }
 }
@@ -1540,6 +1554,7 @@ impl Config {
             "general.confirm_exit" => self.general.confirm_exit = parse_bool(value)?,
             "general.confirm_delete" => self.general.confirm_delete = parse_bool(value)?,
             "general.use_trash" => self.general.use_trash = parse_bool(value)?,
+            "general.system_copy" => self.general.system_copy = parse_bool(value)?,
             "general.desktop_open" => self.general.desktop_open = parse_bool(value)?,
             "general.confirm_overwrite" => self.general.confirm_overwrite = parse_bool(value)?,
             // The rest of the sections, so that every row of the settings browser is a row

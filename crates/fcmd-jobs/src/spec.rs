@@ -127,6 +127,13 @@ pub struct JobOptions {
     /// [`ConflictPolicy::OverwriteIfNewer`].
     pub only_newer: bool,
     pub buffer: usize,
+    /// May the system's own copy routine move the bytes? `copy_file_range` on Linux,
+    /// `fcopyfile` on macOS, `CopyFileExW` on Windows — the kernel copies, which on btrfs,
+    /// XFS and APFS means a reflink and on a network share means the server copies the file
+    /// itself. Off by default: it is faster where it works, and where it does not work it is
+    /// one more thing that can fail, so it is a setting rather than the default
+    /// (`general.system_copy`, SPEC 03 §7b).
+    pub system_copy: bool,
     /// Plan and report, change nothing.
     pub dry_run: bool,
     /// Only the names that match travel.
@@ -155,6 +162,16 @@ pub struct JobOptions {
     pub relative_to: Option<VPath>,
 }
 
+impl JobOptions {
+    /// What one file's copy is told: the buffer size and whether the kernel may do it.
+    pub fn copy_how(&self) -> crate::fs::CopyHow {
+        crate::fs::CopyHow {
+            buffer: self.buffer,
+            system: self.system_copy,
+        }
+    }
+}
+
 impl Default for JobOptions {
     fn default() -> Self {
         JobOptions {
@@ -163,6 +180,7 @@ impl Default for JobOptions {
             follow_symlinks: false,
             only_newer: false,
             buffer: 256 * 1024,
+            system_copy: false,
             dry_run: false,
             filter: None,
             contents: false,

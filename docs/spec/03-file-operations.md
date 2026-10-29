@@ -66,7 +66,7 @@ length limits, case-insensitive collision) → offered transliteration/truncatio
 | Aspect | Behaviour |
 | --- | --- |
 | Buffer | adaptive 64 KiB…8 MiB based on measured throughput; direct I/O never forced |
-| Fast paths | `copy_file_range`/`FICLONE` (Linux), `fclonefileat`/`copyfile` (macOS), `CopyFileEx` with `COPY_FILE_NO_BUFFERING` for large files (Windows), server-side copy on SFTP/S3 where supported |
+| Fast paths | **Shipped (0.18.0)** behind `general.system_copy`, see §3b: `copy_file_range` (Linux), `fcopyfile` (macOS), `CopyFileExW` (Windows); server-side copy on SFTP/S3 where supported, which the providers already do |
 | Sparse files | holes detected (`SEEK_HOLE`) and preserved; option to materialise |
 | Metadata | mtime always; atime/btime, mode, owner/group, ACLs, xattrs/ADS, compression/encryption flags per option set (default: mtime+mode) |
 | Symlinks | copy as link (default), follow, or ask; relative links rewritten when the target moves inside the copied tree (option) |
@@ -78,6 +78,38 @@ length limits, case-insensitive collision) → offered transliteration/truncatio
 Move: same-filesystem → `rename`; otherwise copy+verify+delete, and the delete step only runs
 after a successful verify. A cross-device Move that fails halfway leaves every file either at
 the source or fully at the target — never both-partial.
+
+### 3b. The system's own copy routine (`general.system_copy`, shipped 0.18.0)
+
+Reading a file into a buffer and writing it out again is the default, and it earns that: it
+reports progress every chunk, it stops the moment `Esc` is pressed, and it behaves the same on
+every filesystem anybody has. What it cannot do is let the *kernel* make the copy, and on the
+filesystems people keep large files on that is the whole difference:
+
+| Platform | Call | What it buys |
+| --- | --- | --- |
+| Linux | `copy_file_range`, a chunk at a time | the bytes never enter this program; on btrfs, XFS and bcachefs it becomes a reflink, and over NFS 4.2 the server copies the file |
+| macOS | `fcopyfile(COPYFILE_DATA)` | the routine the Finder uses, which clones on APFS |
+| Windows | `CopyFileExW` | the routine Explorer uses, and the one that knows a share's own server-side copy |
+
+Three rules keep it from being a second copy engine rather than a faster one:
+
+1. **It writes the same temporary file.** The destination is `name.fcmd-part` as always, and
+   the rename into place, the permissions and the times are the engine's own afterwards. The
+   routine moves bytes; it decides nothing.
+2. **A refusal is not a failure.** Two different filesystems, a kernel without the call, a
+   filesystem that does not implement it — each answers "no" rather than an error, and the
+   byte loop then does the work with nobody told anything, because nothing went wrong. Only a
+   failure an ordinary copy would hit as well is reported as one.
+3. **It is off by default, and what it costs is said in the same breath.** Where the kernel
+   copies a whole file in one call — macOS and Windows — `Esc` is answered when that call
+   returns rather than within the next few kilobytes, and that file's progress arrives in one
+   piece. On Linux the copy is still made a chunk at a time, so neither applies there. A
+   setting that is faster *and* answers a cancel later is a choice for the person doing the
+   copying, not a default.
+
+Every call that needs `unsafe` or a `#[cfg]` is in `fcmd-platform`, which is the rule the
+workspace is built on; the engine asks it one question and takes `None` for an answer.
 
 ## 4. Delete, trash, wipe (shipped)
 

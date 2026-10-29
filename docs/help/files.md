@@ -37,6 +37,16 @@ question, and says so in its own title.
 `Alt+F6` makes a link. `Ctrl+G` runs one command over everything selected, with the name of
 each file put into the line where you mark it.
 
+*Use the system copy routine* in the system settings is off by default and worth knowing about
+if you copy large files. On, the kernel makes the copy instead of this program reading the
+bytes and writing them back: on btrfs, XFS and APFS a copy inside one filesystem becomes a
+reflink — a second name for the same data, written in a moment however large the file — and
+over a network share the server copies the file without the bytes crossing the network twice.
+The reason it is off is the other half of the truth: on macOS and Windows the system copies a
+whole file in one call, so `Esc` is answered when that call finishes rather than within the
+next few kilobytes, and that file's progress arrives in one piece. On Linux the copy is still
+made a piece at a time, so neither applies.
+
 # Checksums
 
 *Checksums…* in the Files menu writes a list of digests for what is selected: SHA-256, SHA-1

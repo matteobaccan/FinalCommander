@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use fcmd_core::VPath;
-use fcmd_jobs::fs::{Facts, JobFs, LocalFs};
+use fcmd_jobs::fs::{CopyHow, Facts, JobFs, LocalFs};
 use fcmd_jobs::Preserve;
 use tokio::runtime::Handle;
 
@@ -210,11 +210,11 @@ impl JobFs for RoutedFs {
         &self,
         src: &VPath,
         dst: &VPath,
-        buffer: usize,
+        how: CopyHow,
         on_bytes: &mut dyn FnMut(u64) -> bool,
     ) -> io::Result<u64> {
         match (src.is_local(), dst.is_local()) {
-            (true, true) => self.local.copy_file(src, dst, buffer, on_bytes),
+            (true, true) => self.local.copy_file(src, dst, how, on_bytes),
             // Upload.
             (true, false) => {
                 let remote = self.remote(dst)?;

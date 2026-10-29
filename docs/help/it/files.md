@@ -39,6 +39,17 @@ dice nel proprio titolo.
 `Alt+F6` crea un link. `Ctrl+G` esegue un comando su tutto quello che è selezionato, con il
 nome di ciascun file messo nella riga dove lo segni tu.
 
+*Usa la copia di sistema* nelle impostazioni di sistema è spenta per default, e vale la pena
+saperlo se copi file grossi. Accesa, la copia la fa il kernel invece di questo programma che
+legge i byte e li riscrive: su btrfs, XFS e APFS una copia dentro lo stesso filesystem diventa
+un reflink — un secondo nome per gli stessi dati, scritto in un istante per quanto grande sia
+il file — e su una condivisione di rete è il server a copiare il file, senza che i byte
+attraversino la rete due volte. Il motivo per cui è spenta è l'altra metà della verità: su
+macOS e Windows il sistema copia un file intero in una sola chiamata, quindi `Esc` riceve
+risposta quando quella chiamata finisce e non entro i prossimi kilobyte, e l'avanzamento di
+quel file arriva tutto insieme. Su Linux la copia è ancora fatta a pezzi, quindi là non vale
+né l'una né l'altra cosa.
+
 # Le somme di controllo
 
 *Somme di controllo…* nel menu File scrive un elenco di impronte per quello che è selezionato:

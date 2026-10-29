@@ -5192,6 +5192,10 @@ impl App {
         {
             spec.options.on_conflict = fcmd_jobs::ConflictPolicy::Overwrite;
         }
+        // How the bytes move is a setting, not a dialog's choice: the dialogs say what to
+        // copy and this says who copies it, so it is set here, where every job passes,
+        // rather than in each of the dozen places a `JobSpec` is built.
+        spec.options.system_copy = self.cfg.general.system_copy;
         let id = self.next_job_id;
         self.next_job_id += 1;
         let cancel = CancelToken::new();

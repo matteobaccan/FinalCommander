@@ -6,7 +6,7 @@ use std::sync::Arc;
 use fcmd_arc::{ArcError, Archive, Cache};
 use fcmd_core::{CancelToken, EntryKind, VPath};
 
-use crate::fs::{Facts, JobFs};
+use crate::fs::{CopyHow, Facts, JobFs};
 use crate::spec::Preserve;
 
 /// A filesystem that can also read inside archives.
@@ -237,14 +237,14 @@ impl<F: JobFs> JobFs for ArcFs<F> {
         &self,
         src: &VPath,
         dst: &VPath,
-        buffer: usize,
+        how: CopyHow,
         on_bytes: &mut dyn FnMut(u64) -> bool,
     ) -> io::Result<u64> {
         if dst.in_container() {
             return Err(read_only(dst));
         }
         if !src.in_container() {
-            return self.inner.copy_file(src, dst, buffer, on_bytes);
+            return self.inner.copy_file(src, dst, how, on_bytes);
         }
         if !dst.is_local() {
             return Err(io::Error::new(
@@ -433,7 +433,7 @@ mod tests {
             fs.create_dir(&VPath::local(&zip).enter("/new"))
                 .unwrap_err(),
             fs.rename(&inside, &plain).unwrap_err(),
-            fs.copy_file(&plain, &inside, 4096, &mut |_| true)
+            fs.copy_file(&plain, &inside, CopyHow::buffered(4096), &mut |_| true)
                 .unwrap_err(),
         ] {
             assert_eq!(error.kind(), io::ErrorKind::Unsupported, "{error}");
@@ -467,8 +467,13 @@ mod tests {
         assert!(facts.readonly, "a copy is never written to");
 
         let out = dir.path().join("a.txt");
-        fs.copy_file(&deep, &VPath::local(&out), 4096, &mut |_| true)
-            .unwrap();
+        fs.copy_file(
+            &deep,
+            &VPath::local(&out),
+            CopyHow::buffered(4096),
+            &mut |_| true,
+        )
+        .unwrap();
         assert_eq!(std::fs::read(&out).unwrap(), b"aaaa");
     }
 

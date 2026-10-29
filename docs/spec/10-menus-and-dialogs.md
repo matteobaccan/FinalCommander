@@ -156,8 +156,8 @@ on the buttons answers the dialog, `F10` is `OK` from anywhere, `Esc` cancels an
 | --- | --- | --- |
 | Natural number order | `panel.natural_sort` | on/off |
 | Allow reverse sort | `panel.allow_reverse_sort` | on/off |
-| Use the system recycle bin | — | dim (backlog) |
-| Use the system copy routine | — | dim (backlog) |
+| Use the system recycle bin | `general.use_trash` | on/off, on by default |
+| Use the system copy routine | `general.system_copy` | on/off, off by default (SPEC 03 §3b: the kernel copies, and on macOS and Windows a cancel is answered when its one call returns) |
 | Keep history between sessions | — | dim (backlog) |
 | Remote file size limit | `net.fetch_limit_mb` | 64 / 256 / 512 / 2048 MB |
 | SSH keep-alive | `net.keepalive_secs` | off / 15 / 30 / 60 s |
