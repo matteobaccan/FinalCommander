@@ -32,6 +32,20 @@ size, weighs six kilobytes, and can be read and edited as text in a pull request
 stops moving for anyone whose system asks it to: `prefers-reduced-motion` leaves the same
 picture standing still.
 
+## Why there is no image bot
+
+Every picture here is either generated or the source of something generated: the SVGs in
+`docs/shots/` are what `write_the_screenshots` writes, and the PNGs and the `.ico` come from
+the SVGs beside them. An optimisation committed on top of either is overwritten the next time
+they are made again, and until then what is in the repository is no longer what the generator
+produces.
+
+The three SVGs drawn by hand are the ones a bot could honestly touch, and one of them is
+`logo.svg` — animated with a `<style>` block, and an SVG rather than a GIF precisely so that it
+can be read and edited as text in a pull request. An automated rewrite is the one thing that
+costs there. So `.imgbotconfig` ignores everything, and the pictures are made smaller, when
+they need to be, by drawing them with fewer elements.
+
 ## Making the rasters again
 
 The SVGs are the source; the PNGs and the `.ico` come from them. Chromium draws the SVG
