@@ -3023,8 +3023,12 @@ impl App {
 
     pub fn handle_input(&mut self, input: Input) {
         // Where a dialog was moved to is forgotten the moment there is no dialog: the next
-        // one opens where it belongs rather than where the last one was pushed.
-        if !matches!(self.mode, Mode::Form(_)) && self.form_offset != (0, 0) {
+        // one opens where it belongs rather than where the last one was pushed. A dialog
+        // waiting behind its own help page still counts as one — `F1` does not close it, so
+        // it must not move it either.
+        let dialog_up = matches!(self.mode, Mode::Form(_))
+            || matches!(self.dialog_under_help.as_deref(), Some(Mode::Form(_)));
+        if !dialog_up && self.form_offset != (0, 0) {
             self.form_offset = (0, 0);
             self.form_moving = false;
         }
@@ -20953,6 +20957,11 @@ mod tests {
             panic!("{:?}", app.mode)
         };
         form.set_text("copy.target", "/tmp/somewhere".to_string());
+        // Pushed one column over first, so the help can be shown not to undo that.
+        press(&mut app, "Ctrl+F5");
+        press(&mut app, "Right");
+        press(&mut app, "Esc");
+        assert_eq!(app.form_offset, (1, 0));
 
         press(&mut app, "F1");
         let Mode::Help { chapter, .. } = &app.mode else {
@@ -20968,6 +20977,11 @@ mod tests {
             panic!("the dialog came back: {:?}", app.mode)
         };
         assert_eq!(form.kind, FormKind::Copy);
+        assert_eq!(
+            app.form_offset,
+            (1, 0),
+            "and where it had been pushed to is kept: `F1` did not close it"
+        );
         assert_eq!(
             form.text_value("copy.target"),
             "/tmp/somewhere",
