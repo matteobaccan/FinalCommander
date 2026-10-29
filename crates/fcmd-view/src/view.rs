@@ -38,6 +38,22 @@ impl Mode {
         }
     }
 
+    /// The mode a letter names, for the state file: `t` is text, `h` is hex (SPEC 05 §1.12).
+    ///
+    /// A letter nobody knows is no mode at all rather than a guess, because a file remembered
+    /// in a mode this build does not have should open the way a new file does.
+    pub fn from_letter(letter: char) -> Option<Mode> {
+        match letter {
+            't' => Some(Mode::Text),
+            'd' => Some(Mode::Dump),
+            'h' => Some(Mode::Hex),
+            'a' => Some(Mode::Disasm),
+            'm' => Some(Mode::Markdown),
+            'b' => Some(Mode::Table),
+            _ => None,
+        }
+    }
+
     pub fn as_str(self) -> &'static str {
         match self {
             Mode::Text => "text",
@@ -58,11 +74,31 @@ pub enum Wrap {
 }
 
 impl Wrap {
+    /// The wrap a word names, as the state file and the settings spell it.
+    pub fn parse(text: &str) -> Option<Wrap> {
+        match text.trim() {
+            "off" => Some(Wrap::Off),
+            "char" => Some(Wrap::Char),
+            "word" => Some(Wrap::Word),
+            _ => None,
+        }
+    }
+
     pub fn as_str(self) -> &'static str {
         match self {
             Wrap::Off => "no wrap",
             Wrap::Char => "wrap",
             Wrap::Word => "word wrap",
+        }
+    }
+
+    /// The one word the settings and the state file use, which is not what the status line
+    /// says: a frame reads `word wrap` and a file reads `word`.
+    pub fn word(self) -> &'static str {
+        match self {
+            Wrap::Off => "off",
+            Wrap::Char => "char",
+            Wrap::Word => "word",
         }
     }
 }

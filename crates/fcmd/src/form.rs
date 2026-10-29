@@ -292,10 +292,11 @@ impl Form {
                     &cfg.viewer.tab_width.to_string(),
                 ),
                 Field::Separator,
-                // In the dialog because FAR has it and somebody will look for it: remembering
-                // a file's position wants the store the histories want, and a row that
-                // pretended otherwise would be a row that lies.
-                Field::Dim(t("opt-viewer-remember")),
+                Field::toggle(
+                    "viewer.remember",
+                    t("opt-viewer-remember"),
+                    cfg.viewer.remember,
+                ),
             ],
             FormKind::System => vec![
                 Field::toggle(

@@ -69,6 +69,7 @@ wipe_passes = 1
 [viewer]
 wrap = "off"                    # off | char | word
 tab_width = 8
+remember = true                 # open a file where it was left (SPEC 05 §1.12)
 detect_dump = true
 max_line = 10000
 

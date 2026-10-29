@@ -8,6 +8,14 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **A file opens where it was left.** `F3` on a file you have read before puts back the
+  position, the code page, the mode, the wrap and the ten numbered bookmarks — FAR's own
+  habit, and the dim row in *Viewer settings* is a real one now (`[viewer] remember`, on by
+  default). It lives in the state file, newest first and capped at five hundred and twelve
+  files; each answer is put back on its own, so a file remembered in a mode this build no
+  longer has still opens at the right offset. Somebody who reads log files and wants the end
+  of every one turns it off.
+
 - **The code pages are a list, and `F8` walks the ones you mark.** `Shift+F8` in the viewer
   opens every code page the program offers — the five it handles itself and everything
   `encoding_rs` knows: the Windows pages, CP866, the two Macintosh ones, the ISO-8859 family,

@@ -1611,6 +1611,8 @@ pub struct App {
     pub field_for: Option<(Box<Form>, &'static str)>,
     /// What has been typed into each dialog field that keeps a history, newest first.
     pub field_history: std::collections::BTreeMap<String, Vec<String>>,
+    /// Where each file was left: newest first, capped at [`Self::SEEN_KEPT`] (SPEC 05 §1.12).
+    pub seen: Vec<fcmd_config::SeenCfg>,
     /// The files that have been read or edited, oldest last — FAR's `Alt+F11`.
     ///
     /// Newest first in the list because that is the order somebody reaching back wants, and
@@ -1923,6 +1925,7 @@ impl App {
             folder_for: None,
             field_for: None,
             field_history: std::collections::BTreeMap::new(),
+            seen: Vec::new(),
             active: 0,
             mode: Mode::Normal,
             status: String::new(),
@@ -3182,7 +3185,19 @@ impl App {
         if self.recording.is_some() {
             self.record_key = Some(key);
         }
+        // What the viewer is showing, before the key: a key that closes it is the moment to
+        // remember where the file was left, and there are a dozen keys that close it.
+        let was = self
+            .live_viewer()
+            .filter(|_| self.cfg.viewer.remember)
+            .map(Self::seen_now);
         self.dispatch_key(key);
+        if let Some(was) = was {
+            let still = self.live_viewer().map(|v| v.path.to_string());
+            if still.as_deref() != Some(was.path.as_str()) {
+                self.remember_seen(was);
+            }
+        }
         if let (Some(key), Some(steps)) = (self.record_key.take(), self.recording.as_mut()) {
             steps.push(fcmd_cmd::Step::Press(key));
         }
@@ -12970,6 +12985,81 @@ impl App {
     /// are what a file opens with; the keys change them for the file in front of the reader
     /// and write nothing back, because a row taken away to read one long line is not a
     /// preference.
+    /// How many files are remembered. Enough for a week of reading and small enough that
+    /// the state file stays a file one can open.
+    pub const SEEN_KEPT: usize = 512;
+
+    /// What the viewer is showing of this file, for the state file.
+    pub fn seen_now(viewer: &fcmd_view::Viewer) -> fcmd_config::SeenCfg {
+        fcmd_config::SeenCfg {
+            path: viewer.path.to_string(),
+            top: viewer.top,
+            codepage: viewer.codepage.id().to_string(),
+            mode: viewer.mode.letter().to_string(),
+            wrap: viewer.wrap.word().to_string(),
+            bookmarks: viewer
+                .bookmarks
+                .iter()
+                .enumerate()
+                .filter_map(|(slot, at)| {
+                    at.map(|at| fcmd_config::SeenMark {
+                        slot: slot as u8,
+                        at,
+                    })
+                })
+                .collect(),
+        }
+    }
+
+    /// Remember where a file was left, newest first and one row per file.
+    pub fn remember_seen(&mut self, row: fcmd_config::SeenCfg) {
+        if !self.cfg.viewer.remember || row.path.is_empty() {
+            return;
+        }
+        self.seen.retain(|s| s.path != row.path);
+        self.seen.insert(0, row);
+        self.seen.truncate(Self::SEEN_KEPT);
+    }
+
+    /// Put a file back the way it was left, if it has been seen and the setting allows it.
+    ///
+    /// Each answer is applied on its own: a file remembered in a mode this build no longer
+    /// has still opens at the offset it was left at.
+    fn apply_seen(&self, viewer: &mut fcmd_view::Viewer) {
+        if !self.cfg.viewer.remember {
+            return;
+        }
+        let path = viewer.path.to_string();
+        let Some(seen) = self.seen.iter().find(|s| s.path == path) else {
+            return;
+        };
+        if let Some(cp) = fcmd_view::Codepage::parse(&seen.codepage) {
+            viewer.set_codepage_named(cp, self.codepage_label(cp));
+        }
+        if let Some(mode) = seen
+            .mode
+            .chars()
+            .next()
+            .and_then(fcmd_view::Mode::from_letter)
+        {
+            viewer.set_mode(mode);
+        }
+        if let Some(wrap) = fcmd_view::Wrap::parse(&seen.wrap) {
+            viewer.wrap = wrap;
+        }
+        for mark in &seen.bookmarks {
+            if let Some(slot) = viewer.bookmarks.get_mut(mark.slot as usize) {
+                *slot = Some(mark.at);
+            }
+        }
+        // Last, because setting the mode moves the position: a hex view and a text view do
+        // not count rows the same way.
+        if seen.top > 0 {
+            viewer.top = seen.top;
+            viewer.top_sub = 0;
+        }
+    }
+
     fn tune_viewer(&mut self, viewer: &mut fcmd_view::Viewer) {
         // Every viewer this program opens comes through here, which is why the history is
         // written here: the path is the one the viewer shows, so a file read off a server is
@@ -12986,6 +13076,9 @@ impl App {
             "word" => fcmd_view::Wrap::Word,
             _ => fcmd_view::Wrap::Off,
         };
+        // And then what this very file was last read as, which beats what every file opens
+        // with (SPEC 05 §1.12).
+        self.apply_seen(viewer);
     }
 
     fn tune_editor(&mut self, editor: &mut Editor) {
@@ -22965,6 +23058,51 @@ run = ["echo one", "echo two", "echo three"]
         }
         app.viewer_size = (40, 4);
         app
+    }
+
+    /// A file one comes back to opens where it was left, in the code page and the mode it
+    /// was read in (SPEC 05 §1.12).
+    #[test]
+    fn a_file_opens_where_it_was_left() {
+        use fcmd_view::Codepage;
+
+        let dir = tempfile::tempdir().unwrap();
+        let body: String = (0..200).map(|n| format!("line {n}\n")).collect();
+        std::fs::write(dir.path().join("log.txt"), body.as_bytes()).unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F3");
+
+        // Move, change the page, set a bookmark, and leave.
+        {
+            let viewer = app.mode.viewer_mut().expect("the viewer");
+            viewer.top = 700;
+            viewer.set_codepage(Codepage::Cp437);
+            viewer.bookmarks[2] = Some(64);
+            viewer.wrap = fcmd_view::Wrap::Word;
+        }
+        press(&mut app, "Esc");
+        assert!(app.mode.is_normal());
+        assert_eq!(app.seen.len(), 1, "{:?}", app.seen);
+        assert_eq!(app.seen[0].top, 700);
+        assert_eq!(app.seen[0].codepage, "cp437");
+        assert_eq!(app.seen[0].wrap, "word", "{:?}", app.seen[0]);
+
+        // `F3` again, and it is where it was.
+        press(&mut app, "F3");
+        let viewer = app.mode.viewer().expect("the viewer again");
+        assert_eq!(viewer.top, 700);
+        assert_eq!(viewer.codepage, Codepage::Cp437);
+        assert_eq!(viewer.wrap, fcmd_view::Wrap::Word);
+        assert_eq!(viewer.bookmarks[2], Some(64));
+        press(&mut app, "Esc");
+
+        // With the setting off, the file opens as a new one does.
+        app.cfg.viewer.remember = false;
+        press(&mut app, "F3");
+        let viewer = app.mode.viewer().expect("the viewer");
+        assert_eq!(viewer.top, 0, "nothing is put back");
+        assert_eq!(viewer.codepage, Codepage::Utf8);
     }
 
     /// `Shift+F8` in the viewer is the list of code pages: the ones marked first, `Ins`

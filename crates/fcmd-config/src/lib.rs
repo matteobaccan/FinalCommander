@@ -768,6 +768,12 @@ pub struct ViewCfg {
     /// What a tab expands to. Eight, which is what a terminal and `cat` do — a file that
     /// lined something up with tabs was written against that number.
     pub tab_width: usize,
+    /// Open a file where it was left last time, in the code page and the mode it was read in,
+    /// with the bookmarks that were set (SPEC 05 §1.12).
+    ///
+    /// FAR has this and so do we. It is a setting because somebody who reads log files all
+    /// day wants every one to open at the end rather than where they stopped last week.
+    pub remember: bool,
 }
 
 impl Default for ViewCfg {
@@ -776,6 +782,7 @@ impl Default for ViewCfg {
             key_bar: true,
             status_line: true,
             scrollbar: false,
+            remember: true,
             wrap: "off".into(),
             // The same eight `fcmd_view::TAB_WIDTH` has. This crate does not depend on the
             // viewer, so the number is written twice and a test compares the two.
@@ -1377,6 +1384,7 @@ impl Config {
             "viewer.key_bar" => self.viewer.key_bar = parse_bool(value)?,
             "viewer.status_line" => self.viewer.status_line = parse_bool(value)?,
             "viewer.scrollbar" => self.viewer.scrollbar = parse_bool(value)?,
+            "viewer.remember" => self.viewer.remember = parse_bool(value)?,
             "viewer.wrap" => {
                 let value = value.trim();
                 if !matches!(value, "off" | "char" | "word") {
@@ -1646,6 +1654,15 @@ mod tests {
                 path: "/usr/share".into(),
                 name: "shared".into(),
                 digit: Some(3),
+            }],
+            // Where a file was left travels too: a `F3` on it opens there.
+            seen: vec![SeenCfg {
+                path: "/home/mb/notes.txt".into(),
+                top: 2048,
+                codepage: "KOI8-R".into(),
+                mode: "h".into(),
+                wrap: "word".into(),
+                bookmarks: vec![SeenMark { slot: 3, at: 512 }],
             }],
             // A dialog field's own history, and what the histories say about themselves,
             // travel with their lines.
@@ -1928,6 +1945,10 @@ pub struct State {
     /// it would be a bug, not a setting.
     #[serde(default)]
     pub bookmarks: Vec<Bookmark>,
+    /// Where each file was left: the viewer's position, code page, mode and bookmarks,
+    /// newest first and capped (SPEC 05 §1.12).
+    #[serde(default)]
+    pub seen: Vec<SeenCfg>,
     /// What has been typed into the dialogs' own fields, newest first, one row per field.
     #[serde(default)]
     pub field_history: Vec<FieldHistory>,
@@ -1953,6 +1974,38 @@ pub struct FieldHistory {
     /// Newest first, which is the order the list shows.
     #[serde(default)]
     pub lines: Vec<String>,
+}
+
+/// What a reader was showing when it last had a file open (SPEC 05 §1.12, §1.5b).
+///
+/// A file one comes back to opens where it was left, in the code page and the mode it was
+/// being read in. It lives in the state file rather than the settings because nobody chose
+/// it: it is what happened.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SeenCfg {
+    pub path: String,
+    /// Offset of the first visible row.
+    #[serde(default)]
+    pub top: u64,
+    /// The code page's id, empty for "whatever the file looks like".
+    #[serde(default)]
+    pub codepage: String,
+    /// The viewer's mode, as the letter its status line shows: `t`, `d`, `h`, `a`, `m`, `b`.
+    #[serde(default)]
+    pub mode: String,
+    /// `off`, `char` or `word`.
+    #[serde(default)]
+    pub wrap: String,
+    /// The numbered bookmarks that were set.
+    #[serde(default)]
+    pub bookmarks: Vec<SeenMark>,
+}
+
+/// One numbered bookmark of a remembered file.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SeenMark {
+    pub slot: u8,
+    pub at: u64,
 }
 
 /// One history line's mark, as the state file holds it.

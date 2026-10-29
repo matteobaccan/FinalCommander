@@ -22,6 +22,10 @@ and `ui.history_lifetime` how many days a line nobody has pinned is kept after i
 used — ninety by default, `0` to keep them for ever. `Ins` in any of the three lists pins the
 row under the cursor, and nothing pushes a pinned row out.
 
+A file you have read before opens where you left it — the position, the code page, the mode,
+the wrap and the ten bookmarks — unless you turn *Remember where a file was left* off in
+*Options → Viewer settings*. The last five hundred and twelve files are kept.
+
 The list of files is written wherever a viewer or an editor opens, so it is the same list
 whichever key opened the file. A file on a server is remembered by its remote path, not by the
 copy that was fetched to read it; a file opened again moves to the top rather than appearing

@@ -88,8 +88,16 @@ what to call it — and *Save setup* writes them (SPEC 07). An id is the WHATWG 
 is generous about how it was typed, so `cp1251`, `CP-1251` and the bare `1251` are the same
 page.
 
-Still owed: remembering the page a *file* was read as, which wants the same store as the
-viewer's remembered position (§1.5b).
+**A file one comes back to.** `[viewer] remember` (on by default, and a row in *Viewer
+settings*) makes a file open where it was left: the offset of the first row, the code page it
+was being read in, the mode, the wrap, and the ten numbered bookmarks. It is written in the
+state file, newest first and capped at five hundred and twelve files, and each answer is put
+back on its own — a file remembered in a mode this build no longer has still opens at the
+offset it was left at. The state is taken when the viewer closes, whichever of the dozen keys
+closed it, and at exit for the file still on the screen.
+
+Somebody who reads log files wants the end of every one rather than where they stopped last
+week, which is why it is a setting and not a rule.
 
 ### 1.4 Search
 

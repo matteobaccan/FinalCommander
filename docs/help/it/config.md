@@ -24,6 +24,11 @@ che nessuno ha fissato dopo l'ultima volta che è stata usata — novanta di def
 tenerle per sempre. `Ins` in uno qualunque dei tre elenchi fissa la riga sotto il cursore, e
 niente spinge fuori una riga fissata.
 
+Un file che hai già letto si riapre dove l'avevi lasciato — la posizione, la code page, il
+modo, l'andata a capo e i dieci segnalibri — a meno che non togli *Ricorda posizione e
+codifica di ogni file* in *Opzioni → Impostazioni del visualizzatore*. Si tengono gli ultimi
+cinquecentododici file.
+
 L'elenco dei file viene scritto ogni volta che un visualizzatore o un editor si apre, quindi è
 lo stesso elenco qualunque tasto abbia aperto il file. Un file su un server è ricordato per il
 suo percorso remoto, non per la copia che è stata scaricata per leggerlo; un file riaperto

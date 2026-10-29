@@ -624,6 +624,7 @@ fn run(cli: Cli) -> Result<()> {
     // last used. A state file written before any of this has none, and every line in it
     // simply counts as used now.
     app.marks = crate::history::Marks::from_state(&state.history_marks);
+    app.seen = state.seen;
     app.field_history = state
         .field_history
         .into_iter()
@@ -1487,6 +1488,16 @@ fn interactive(mut app: App) -> Result<()> {
         // a state file nobody can open is worth keeping none of.
         tree: app.tree_cache.to_state(crate::app::TREE_CACHE_KEPT),
         history_marks: app.marks.to_state(),
+        // Where each file was left, so the next `F3` on it opens there (SPEC 05 §1.12). The
+        // viewer still on the screen at this moment counts, which is the one the user is most
+        // likely to come back to.
+        seen: {
+            if let Some(viewer) = app.live_viewer() {
+                let row = crate::app::App::seen_now(viewer);
+                app.remember_seen(row);
+            }
+            app.seen.clone()
+        },
         field_history: app
             .field_history
             .iter()
