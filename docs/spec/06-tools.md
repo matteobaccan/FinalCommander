@@ -379,6 +379,36 @@ Decisions, with the reasoning, because each of them is a question the dialog can
 - **Each command goes through the user screen**, so `Ctrl+O` afterwards shows the whole run,
   command by command, rather than only the last one.
 
+### 7.6 The insertion keys (`Ctrl+Enter` and its neighbours)
+
+FAR has eleven keys that put something about a panel on the command line. They are two
+questions asked in every combination — *what* about the panel, and *which* panel — so here
+they are one command with a table behind it rather than eleven arms:
+
+| What | Means |
+| --- | --- |
+| `name` | the name under the cursor, on its own. A cursor on `..` has no name to give, so the directory is the answer — which is what one wanted the key for anyway |
+| `path` | the panel's directory |
+| `full` | the directory and the name together: the one a command usually wants |
+| `unc` | the full name in the form another machine could use. A remote path already is one; a path on this disk is not, and the key says so rather than inserting a local path under a name that promises more |
+
+| Which | Means |
+| --- | --- |
+| `active` (the default) | the panel with the focus |
+| `passive`, written `.other` | the one without it |
+| `left`, `right` | that side of the screen, whatever has the focus |
+
+FAR has both pairs for the reason a script does: `active` follows the focus and `left` does
+not, so a line written once can mean either. The id is `cmd.insert.<what>` with the panel in
+brackets — `cmd.insert.full(left)` — and the two spellings the keymaps were written with
+before there was a table, `cmd.insert.name` and `cmd.insert.path.other`, keep working.
+
+The keys bound by default are FAR's own: `Ctrl+Enter` and `Ctrl+Shift+Enter` for the name,
+`Ctrl+[` and `Ctrl+]` for the path, `Ctrl+Shift+[` and `Ctrl+Shift+]` for the left and right
+panel's path, `Ctrl+F` for the full name, `Ctrl+Alt+F` for its network form, and
+`Ctrl+Alt+[` / `Ctrl+Alt+]` for the left and right panel's. Everything inserted is quoted for
+the platform, as the substitutions of §5b are.
+
 ## 8. Dialogs and common UI behaviour
 
 - Every dialog: `Tab`/`Shift+Tab` navigation, `Enter` = default action, `Esc` = cancel, `F1` =

@@ -13,7 +13,7 @@
 
 use fcmd_core::{SortKey, ViewMode};
 
-use crate::command::{Command, Side};
+use crate::command::{Command, Insert, Side, Which};
 
 impl Command {
     /// What this command does, in a few words.
@@ -176,10 +176,19 @@ impl Command {
             Command::CmdFileHistory => "the files that have been read or edited, as a list",
             Command::CmdClip => "copy the command line to the clipboard",
             Command::CmdComplete => "finish what is typed on the command line",
-            Command::CmdInsertName => "put the name under the cursor on the command line",
-            Command::CmdInsertNameOther => "the same, from the other panel",
-            Command::CmdInsertPath => "put this panel's path on the command line",
-            Command::CmdInsertPathOther => "the same, from the other panel",
+            Command::CmdInsert(what, which) => match (what, which) {
+                (Insert::Name, Which::Active) => {
+                    "put the name under the cursor on the command line"
+                }
+                (Insert::Name, _) => "the same, from the panel named",
+                (Insert::Path, Which::Active) => "put this panel's path on the command line",
+                (Insert::Path, _) => "the same, from the panel named",
+                (Insert::Full, Which::Active) => {
+                    "put the full name under the cursor on the command line"
+                }
+                (Insert::Full, _) => "the same, from the panel named",
+                (Insert::Unc, _) => "put the full name in its network form on the command line",
+            },
 
             Command::FilePack => "put what is selected into a new archive",
             Command::FileUnpack => "take an archive apart",

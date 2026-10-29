@@ -9,7 +9,7 @@ pub mod key;
 pub mod keymap;
 pub mod macros;
 
-pub use command::{Command, Side};
+pub use command::{Command, Insert, Side, Which};
 pub use key::{Key, KeyCode, KeyParseError, Mods};
 pub use keymap::{Keymap, KeymapError, Scope};
 pub use macros::{Macro, MacroError, Macros, Play, Step};

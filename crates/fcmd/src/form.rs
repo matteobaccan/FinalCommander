@@ -309,6 +309,11 @@ impl Form {
                     t("opt-allow-reverse"),
                     cfg.panel.allow_reverse_sort,
                 ),
+                Field::toggle(
+                    "panel.select_folders",
+                    t("opt-select-folders"),
+                    cfg.panel.select_folders,
+                ),
                 Field::Separator,
                 Field::toggle("general.use_trash", t("opt-trash"), cfg.general.use_trash),
                 Field::Dim(t("opt-system-copy")),

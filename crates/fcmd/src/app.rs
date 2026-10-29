@@ -4272,12 +4272,11 @@ impl App {
             PromptKind::SelectMask | PromptKind::DeselectMask => {
                 let on = prompt.kind == PromptKind::SelectMask;
                 let listing = self.panel().listing.clone();
-                let result = self.panel_mut().selection.apply_mask(
-                    &listing,
-                    &prompt.text,
-                    on,
-                    MaskScope::FilesOnly,
-                );
+                let scope = self.mask_scope();
+                let result =
+                    self.panel_mut()
+                        .selection
+                        .apply_mask(&listing, &prompt.text, on, scope);
                 match result {
                     Ok(changed) => {
                         self.panel_mut().rebuild();
@@ -6737,9 +6736,8 @@ impl App {
             }
             Command::SelInvert => {
                 let listing = self.panel().listing.clone();
-                self.panel_mut()
-                    .selection
-                    .invert(&listing, MaskScope::FilesOnly);
+                let scope = self.mask_scope();
+                self.panel_mut().selection.invert(&listing, scope);
                 self.panel_mut().rebuild();
             }
             Command::SelMaskAdd | Command::SelMaskRemove => {
@@ -6790,11 +6788,11 @@ impl App {
                     fold(here.file_stem())
                 };
                 let listing = self.panel().listing.clone();
-                let changed = self.panel_mut().selection.apply_where(
-                    &listing,
-                    MaskScope::FilesOnly,
-                    on,
-                    |e| {
+                let scope = self.mask_scope();
+                let changed = self
+                    .panel_mut()
+                    .selection
+                    .apply_where(&listing, scope, on, |e| {
                         let p = std::path::Path::new(&e.name);
                         let theirs = if by_extension {
                             fold(p.extension())
@@ -6802,8 +6800,7 @@ impl App {
                             fold(p.file_stem())
                         };
                         theirs == wanted
-                    },
-                );
+                    });
                 self.panel_mut().rebuild();
                 let msg = self.i18n.t_args(
                     if on { "msg-selected" } else { "msg-deselected" },
@@ -7031,10 +7028,7 @@ impl App {
                     self.set_status(m);
                 }
             }
-            Command::CmdInsertName => self.insert_into_line(false, false),
-            Command::CmdInsertNameOther => self.insert_into_line(false, true),
-            Command::CmdInsertPath => self.insert_into_line(true, false),
-            Command::CmdInsertPathOther => self.insert_into_line(true, true),
+            Command::CmdInsert(what, which) => self.insert_into_line(what, which),
             // FAR's `Ctrl+O`: the panels go away and the screen underneath comes back, with
             // the command line, the menus and the keys all still live. It is a toggle, and
             // the same key brings the panels back.
@@ -8046,21 +8040,60 @@ impl App {
 
     /// `Ctrl+J` and friends: put a name or a path from one of the panels on the line, quoted
     /// when it needs to be, with a trailing space so the next word can be typed straight away.
-    fn insert_into_line(&mut self, path_only: bool, other: bool) {
-        let panel = if other {
-            &self.panels[1 - self.active]
+    /// Do the mask keys touch directories? FAR's *Select folders* (SPEC 02 §2).
+    ///
+    /// The keys that name a mask — `+`, `-` and the two that take the name under the cursor
+    /// apart — ask this. *Select all* and *invert all* do not: they name no mask, so they
+    /// cannot be meaning files alone.
+    fn mask_scope(&self) -> MaskScope {
+        if self.cfg.panel.select_folders {
+            MaskScope::FilesAndDirs
         } else {
-            self.panel()
+            MaskScope::FilesOnly
+        }
+    }
+
+    /// FAR's `Ctrl+Enter` family: something about a panel, quoted, on the command line.
+    ///
+    /// One function and a table rather than a key each, because the eleven FAR has are the
+    /// same two questions — *what* about the panel, and *which* panel — asked in every
+    /// combination. `active` and `passive` follow the focus; `left` and `right` do not, which
+    /// is the whole reason FAR has both pairs.
+    fn insert_into_line(&mut self, what: fcmd_cmd::Insert, which: fcmd_cmd::Which) {
+        use fcmd_cmd::{Insert, Which};
+
+        let index = match which {
+            Which::Active => self.active,
+            Which::Passive => 1 - self.active,
+            Which::Left => 0,
+            Which::Right => 1,
         };
-        let text = if path_only {
-            panel.cwd.to_string()
-        } else {
-            match panel
-                .current()
-                .filter(|e| e.kind != fcmd_core::EntryKind::Parent)
-            {
-                Some(entry) => entry.name.to_string_lossy().into_owned(),
-                None => panel.cwd.to_string(),
+        let panel = &self.panels[index];
+        let name = panel
+            .current()
+            .filter(|e| e.kind != fcmd_core::EntryKind::Parent)
+            .map(|entry| entry.name.to_string_lossy().into_owned());
+        let full = || match panel
+            .current()
+            .filter(|e| e.kind != fcmd_core::EntryKind::Parent)
+        {
+            Some(entry) => panel.path_of(entry).to_string(),
+            None => panel.cwd.to_string(),
+        };
+        let text = match what {
+            // A cursor on `..` has no name to give, so the directory is the answer — which is
+            // what one wanted the key for anyway.
+            Insert::Name => name.unwrap_or_else(|| panel.cwd.to_string()),
+            Insert::Path => panel.cwd.to_string(),
+            Insert::Full => full(),
+            // The form another machine could use. A remote path already is one; a path on
+            // this disk is not, and saying so beats inserting a local path that looks like a
+            // network one (SPEC 06 §7.6).
+            Insert::Unc if !panel.cwd.is_local() => full(),
+            Insert::Unc => {
+                let m = self.i18n.t("cmd-no-network-name");
+                self.set_error(m);
+                return;
             }
         };
         let quoted = expand::quote(&text);
@@ -23058,6 +23091,116 @@ run = ["echo one", "echo two", "echo three"]
         }
         app.viewer_size = (40, 4);
         app
+    }
+
+    /// FAR's insertion keys: what about a panel, and which panel — the whole table, with the
+    /// two pairs that answer "which" differently (SPEC 06 §7.6).
+    #[test]
+    fn the_insertion_keys_put_each_part_of_a_panel_on_the_line() {
+        use fcmd_cmd::{Insert, Which};
+
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("notes.txt"), b"hi\n").unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down"); // notes.txt
+        let here = app.panels[0].cwd.to_string();
+
+        app.run(Command::CmdInsert(Insert::Name, Which::Active));
+        assert_eq!(app.cmd.text.trim(), "notes.txt");
+        app.cmd.clear();
+
+        app.run(Command::CmdInsert(Insert::Path, Which::Active));
+        assert_eq!(app.cmd.text.trim(), crate::expand::quote(&here));
+        app.cmd.clear();
+
+        // The full name is the path and the name together, which is the one a command wants.
+        app.run(Command::CmdInsert(Insert::Full, Which::Active));
+        let full = app.cmd.text.trim().to_string();
+        assert!(full.contains("notes.txt") && full.contains(here.trim_end_matches('/')));
+        app.cmd.clear();
+
+        // `left` and `right` do not follow the focus. The right panel is somewhere else.
+        app.panels[1].cwd = VPath::local("/srv");
+        app.run(Command::CmdInsert(Insert::Path, Which::Right));
+        assert_eq!(app.cmd.text.trim(), "/srv");
+        app.cmd.clear();
+        app.active = 1;
+        app.run(Command::CmdInsert(Insert::Path, Which::Left));
+        assert_eq!(app.cmd.text.trim(), crate::expand::quote(&here));
+        app.cmd.clear();
+        app.active = 0;
+
+        // A path on this disk has no network name, and the key says so rather than inserting
+        // the local one under a name that promises more.
+        app.run(Command::CmdInsert(Insert::Unc, Which::Active));
+        assert!(app.cmd.text.is_empty(), "{}", app.cmd.text);
+        assert!(app.status_error, "{}", app.status);
+
+        // The ids the keymaps hold keep working, and the new ones read back.
+        for (id, want) in [
+            (
+                "cmd.insert.name",
+                Command::CmdInsert(Insert::Name, Which::Active),
+            ),
+            (
+                "cmd.insert.path.other",
+                Command::CmdInsert(Insert::Path, Which::Passive),
+            ),
+            (
+                "cmd.insert.full(right)",
+                Command::CmdInsert(Insert::Full, Which::Right),
+            ),
+        ] {
+            assert_eq!(Command::parse(id), Some(want), "{id}");
+            assert_eq!(want.id(), id, "round trip");
+        }
+    }
+
+    /// FAR's *Select folders*: the keys that name a mask leave directories alone unless the
+    /// setting says otherwise, and *select all* includes them either way (SPEC 02 §2).
+    #[test]
+    fn a_mask_selects_files_and_folders_only_when_the_setting_says_so() {
+        let mut app = app();
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation: app.panels[0].generation,
+            result: Ok(vec![
+                Entry::parent_entry(),
+                entry("src", EntryKind::Dir, 0),
+                entry("notes.txt", EntryKind::File, 10),
+            ]),
+        });
+
+        let selected = |app: &App| -> usize {
+            let listing = &app.panels[0].listing;
+            (0..listing.len())
+                .filter_map(|i| listing.row(i))
+                .filter(|e| app.panels[0].selection.contains(e.id))
+                .count()
+        };
+
+        // `+` with a mask that matches both: only the file, as in FAR.
+        app.run(Command::SelMaskAdd);
+        if let Mode::Prompt(prompt) = &mut app.mode {
+            prompt.text = "*".to_string();
+        }
+        press(&mut app, "Enter");
+        assert_eq!(selected(&app), 1, "the directory was left alone");
+
+        app.panels[0].selection.clear();
+        app.cfg.panel.select_folders = true;
+        app.run(Command::SelMaskAdd);
+        if let Mode::Prompt(prompt) = &mut app.mode {
+            prompt.text = "*".to_string();
+        }
+        press(&mut app, "Enter");
+        assert_eq!(selected(&app), 2, "now the directory too");
+
+        // And *select all* never asked: it names no mask.
+        app.panels[0].selection.clear();
+        app.cfg.panel.select_folders = false;
+        app.run(Command::SelAll);
+        assert_eq!(selected(&app), 2);
     }
 
     /// A file one comes back to opens where it was left, in the code page and the mode it

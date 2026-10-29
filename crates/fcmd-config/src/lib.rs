@@ -263,6 +263,13 @@ pub struct PanelCfg {
     pub dirs_first: bool,
     pub selected_first: bool,
     pub natural_sort: bool,
+    /// Do the mask keys touch directories? FAR's *Select folders*, and FAR's default of no.
+    ///
+    /// `+`, `-`, `Ctrl+Gray+` and `Ctrl+Gray-` are about files nine times in ten: one types
+    /// `*.rs` to select the sources, not the directories whose names happen to end that way.
+    /// `Ctrl+A`-style *select all* and *invert all* include directories whatever this says,
+    /// because those keys name no mask and so cannot be meaning files alone.
+    pub select_folders: bool,
     /// On by default, and deliberately: a file manager that quietly leaves files out is
     /// lying about the directory. `.git` and `.env` are files like any other.
     pub show_hidden: bool,
@@ -303,6 +310,8 @@ impl Default for PanelCfg {
             dirs_first: true,
             selected_first: false,
             natural_sort: true,
+            // FAR's default: a mask is about files.
+            select_folders: false,
             show_hidden: true,
             allow_reverse_sort: true,
             column_titles: true,
@@ -1412,6 +1421,7 @@ impl Config {
             "panel.dirs_first" => self.panel.dirs_first = parse_bool(value)?,
             "panel.selected_first" => self.panel.selected_first = parse_bool(value)?,
             "panel.natural_sort" => self.panel.natural_sort = parse_bool(value)?,
+            "panel.select_folders" => self.panel.select_folders = parse_bool(value)?,
             "panel.split" => {
                 self.panel.split = value
                     .trim()

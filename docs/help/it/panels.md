@@ -136,6 +136,11 @@ risultato di una ricerca. Tutto questo vale anche su un server e in un bucket; d
 archivio la riga si legge ma non si scrive, perché scriverla vorrebbe dire ricostruirlo.
 *Opzioni → Impostazioni del pannello* spegne tutta l'abitudine per chi non tiene descrizioni.
 
+Una maschera scritta su `+` o `-` prende i file e lascia stare le cartelle, che è quello che
+si intende con `*.rs`; *Le maschere selezionano anche le cartelle* in *Opzioni → Impostazioni
+dei pannelli* cambia le cose. *Seleziona tutto* e *inverti tutto* prendono le cartelle in ogni
+caso, perché non nominano nessuna maschera.
+
 `Ctrl+R` rilegge. `Ctrl+L` trasforma l'altro pannello in un pannello informativo — cosa
 contiene il dispositivo e quanto ne resta, quanto sono grandi i suoi cluster e quanto costano a
 questa cartella, quanta memoria ha la macchina, e la riga sotto il cursore — `Ctrl+Q` in
@@ -234,6 +239,12 @@ spingerla fuori — `Maiusc+Canc` toglie quella riga dalla cronologia per sempre
 svuota l'elenco di tutto ciò che non hai fissato, dopo averlo chiesto. Una riga che nessuno ha
 fissato e nessuno usa da novanta giorni se ne va da sola; il numero sta in *Opzioni →
 Impostazioni di sistema*.
+
+`Ctrl+Invio` mette sulla riga il nome sotto il cursore, `Ctrl+Maiusc+Invio` quello dell'altro
+pannello, `Ctrl+[` e `Ctrl+]` i percorsi dei due pannelli, `Ctrl+Maiusc+[` e `Ctrl+Maiusc+]`
+quelli del pannello sinistro e destro qualunque abbia il fuoco, `Ctrl+F` il nome completo e
+`Ctrl+Alt+F` il nome completo nella forma che un'altra macchina potrebbe usare — un percorso
+su questo disco non ne ha una, e il tasto lo dice.
 
 Mentre scrivi, la riga ti offre quello che potrebbe diventare: i nomi della cartella che il
 pannello sta mostrando, le righe che hai già eseguito, e le variabili d'ambiente. `↑` e `↓`

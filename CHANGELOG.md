@@ -8,6 +8,19 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **The rest of FAR's insertion keys.** `Ctrl+Enter` and its neighbours are now a table
+  rather than four keys: *what* about a panel — the name, the path, the full name, or the
+  full name in the form another machine could use — and *which* panel, the active one, the
+  passive one, or the left or right one whatever has the focus. FAR's own keys are bound
+  (`Ctrl+F` for the full name, `Ctrl+Alt+F` for its network form, `Ctrl+Shift+[`/`]` and
+  `Ctrl+Alt+[`/`]` for the left and right panel), and a path on this disk has no network form,
+  so that key says so rather than inserting a local path under a name that promises more.
+
+- **`Masks select folders too`**, FAR's *Select folders*: `panel.select_folders`, off by
+  default as in FAR, and a row in *Panel settings*. The keys that name a mask leave
+  directories alone unless it is on — one types `*.rs` to select the sources — while *select
+  all* and *invert all* include them either way, because they name no mask.
+
 - **A file opens where it was left.** `F3` on a file you have read before puts back the
   position, the code page, the mode, the wrap and the ten numbered bookmarks — FAR's own
   habit, and the dim row in *Viewer settings* is a real one now (`[viewer] remember`, on by

@@ -128,6 +128,10 @@ search result. All of it works on a server and in a bucket as well; inside an ar
 is read but not written, because writing one there means building the archive again.
 *Options → Panel settings* turns the whole habit off for somebody who keeps no descriptions.
 
+A mask typed at `+` or `-` picks files and leaves folders alone, which is what one means by
+`*.rs`; *Masks select folders too* in *Options → Panel settings* changes that. *Select all*
+and *invert all* take folders either way, because they name no mask.
+
 `Ctrl+R` re-reads. `Ctrl+L` turns the other panel into an information panel — what the device
 holds and what is left on it, how big its clusters are and what they cost this directory, how
 much memory the machine has, and the row under the cursor — `Ctrl+Q` into a
@@ -219,6 +223,11 @@ cursor — a pinned row is marked with a `*`, and neither the size limit nor the
 push it out — `Shift+Del` takes one row out of the history for good, and `Del` empties the
 list of everything you have not pinned, after asking. A line nobody has pinned and nobody has
 used for ninety days goes by itself; *Options → System settings* is where that number lives.
+
+`Ctrl+Enter` puts the name under the cursor on the line, `Ctrl+Shift+Enter` the other panel's,
+`Ctrl+[` and `Ctrl+]` the two panels' paths, `Ctrl+Shift+[` and `Ctrl+Shift+]` the left and
+right one's whichever has the focus, `Ctrl+F` the full name and `Ctrl+Alt+F` the full name in
+the form another machine could use — a path on this disk has none, and the key says so.
 
 While you type, the line offers what it could become: the names in the directory the panel is
 showing, the lines you have run before, and the environment's variables. `↑` and `↓` walk the

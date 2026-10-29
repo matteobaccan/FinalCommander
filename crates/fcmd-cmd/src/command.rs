@@ -12,6 +12,76 @@ pub enum Side {
     Active,
 }
 
+/// Which panel an insertion key reads: the one with the focus, the one without it, or the
+/// one on a given side of the screen.
+///
+/// FAR has both pairs for the same reason a script does: *active* and *passive* follow the
+/// focus, and *left* and *right* do not, so a line one writes once can mean either.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Which {
+    Active,
+    Passive,
+    Left,
+    Right,
+}
+
+impl Which {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Which::Active => "active",
+            Which::Passive => "passive",
+            Which::Left => "left",
+            Which::Right => "right",
+        }
+    }
+
+    pub fn parse(text: &str) -> Option<Which> {
+        match text.trim() {
+            "" | "active" => Some(Which::Active),
+            "passive" | "other" => Some(Which::Passive),
+            "left" => Some(Which::Left),
+            "right" => Some(Which::Right),
+            _ => None,
+        }
+    }
+}
+
+/// What an insertion key puts on the command line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Insert {
+    /// The name under the cursor, on its own.
+    Name,
+    /// The panel's directory.
+    Path,
+    /// The directory and the name together.
+    Full,
+    /// The full name in the form another machine could use it: the URL of a remote path.
+    /// A path on this disk has no such form, and the key says so rather than inserting the
+    /// local path under a name that promises more.
+    Unc,
+}
+
+impl Insert {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Insert::Name => "name",
+            Insert::Path => "path",
+            Insert::Full => "full",
+            Insert::Unc => "unc",
+        }
+    }
+
+    pub fn parse(text: &str) -> Option<Insert> {
+        match text.trim() {
+            "name" => Some(Insert::Name),
+            "path" => Some(Insert::Path),
+            "full" => Some(Insert::Full),
+            "unc" => Some(Insert::Unc),
+            _ => None,
+        }
+    }
+}
+
 impl Side {
     pub fn as_str(self) -> &'static str {
         match self {
@@ -226,10 +296,9 @@ pub enum Command {
     /// Ask the command line what it could become (SPEC 06 §7.4).
     CmdComplete,
     /// Insert the name under the cursor, or the panel's path, into the line.
-    CmdInsertName,
-    CmdInsertNameOther,
-    CmdInsertPath,
-    CmdInsertPathOther,
+    /// Put something about a panel on the command line: FAR's `Ctrl+Enter` family, as one
+    /// command with a table behind it rather than eleven of them.
+    CmdInsert(Insert, Which),
     /// Put the selected files into a new archive (`Shift+F1`).
     FilePack,
     /// Take an archive apart, into a directory (`Shift+F2`).
@@ -517,10 +586,22 @@ impl Command {
             Command::CmdFileHistory,
             Command::CmdClip,
             Command::CmdComplete,
-            Command::CmdInsertName,
-            Command::CmdInsertNameOther,
-            Command::CmdInsertPath,
-            Command::CmdInsertPathOther,
+            Command::CmdInsert(Insert::Name, Which::Active),
+            Command::CmdInsert(Insert::Name, Which::Passive),
+            Command::CmdInsert(Insert::Name, Which::Left),
+            Command::CmdInsert(Insert::Name, Which::Right),
+            Command::CmdInsert(Insert::Path, Which::Active),
+            Command::CmdInsert(Insert::Path, Which::Passive),
+            Command::CmdInsert(Insert::Path, Which::Left),
+            Command::CmdInsert(Insert::Path, Which::Right),
+            Command::CmdInsert(Insert::Full, Which::Active),
+            Command::CmdInsert(Insert::Full, Which::Passive),
+            Command::CmdInsert(Insert::Full, Which::Left),
+            Command::CmdInsert(Insert::Full, Which::Right),
+            Command::CmdInsert(Insert::Unc, Which::Active),
+            Command::CmdInsert(Insert::Unc, Which::Passive),
+            Command::CmdInsert(Insert::Unc, Which::Left),
+            Command::CmdInsert(Insert::Unc, Which::Right),
             Command::FilePack,
             Command::FileUnpack,
             Command::ArcCommands,
@@ -764,10 +845,15 @@ impl Command {
             Command::CmdFileHistory => "cmd.history.files".into(),
             Command::CmdClip => "cmd.clip".into(),
             Command::CmdComplete => "cmd.complete".into(),
-            Command::CmdInsertName => "cmd.insert.name".into(),
-            Command::CmdInsertNameOther => "cmd.insert.name.other".into(),
-            Command::CmdInsertPath => "cmd.insert.path".into(),
-            Command::CmdInsertPathOther => "cmd.insert.path.other".into(),
+            // The two spellings the keymaps and the macros already hold keep working, and
+            // everything else is the systematic form: `cmd.insert.full(left)`.
+            Command::CmdInsert(what, Which::Active) => format!("cmd.insert.{}", what.as_str()),
+            Command::CmdInsert(what, Which::Passive) => {
+                format!("cmd.insert.{}.other", what.as_str())
+            }
+            Command::CmdInsert(what, which) => {
+                format!("cmd.insert.{}({})", what.as_str(), which.as_str())
+            }
             Command::FilePack => "file.pack".into(),
             Command::FileUnpack => "file.unpack".into(),
             Command::ArcCommands => "arc.commands".into(),
@@ -986,10 +1072,16 @@ impl Command {
             ("cmd.history.files", _) => Command::CmdFileHistory,
             ("cmd.clip", _) => Command::CmdClip,
             ("cmd.complete", _) => Command::CmdComplete,
-            ("cmd.insert.name", _) => Command::CmdInsertName,
-            ("cmd.insert.name.other", _) => Command::CmdInsertNameOther,
-            ("cmd.insert.path", _) => Command::CmdInsertPath,
-            ("cmd.insert.path.other", _) => Command::CmdInsertPathOther,
+            // `cmd.insert.<what>`, with the panel either in brackets or spelled `.other` —
+            // the two the keymaps were written with before there was a table.
+            (name, arg) if name.starts_with("cmd.insert.") => {
+                let rest = &name["cmd.insert.".len()..];
+                let (what, which) = match rest.strip_suffix(".other") {
+                    Some(what) => (what, Which::Passive),
+                    None => (rest, Which::parse(arg.unwrap_or(""))?),
+                };
+                Command::CmdInsert(Insert::parse(what)?, which)
+            }
             ("tool.compare.dirs", _) => Command::ToolCompareDirs,
             ("tool.compare", _) => Command::ToolCompare,
             ("tool.duplicates", _) => Command::ToolDuplicates,

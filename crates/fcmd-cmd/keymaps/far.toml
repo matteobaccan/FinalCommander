@@ -1136,6 +1136,39 @@ keys = ["Ctrl+]"]
 scope = "panel"
 cmd = "cmd.insert.path.other"
 
+# And the rest of FAR's insertion keys. `active` and `passive` follow the focus; `left` and
+# `right` do not, so a line written once can mean either.
+[[bind]]
+keys = ["Ctrl+Shift+["]
+scope = "panel"
+cmd = "cmd.insert.path(left)"
+
+[[bind]]
+keys = ["Ctrl+Shift+]"]
+scope = "panel"
+cmd = "cmd.insert.path(right)"
+
+# FAR's own key for the full name, and for the full name in its network form.
+[[bind]]
+keys = ["Ctrl+F"]
+scope = "panel"
+cmd = "cmd.insert.full"
+
+[[bind]]
+keys = ["Ctrl+Alt+F"]
+scope = "panel"
+cmd = "cmd.insert.unc"
+
+[[bind]]
+keys = ["Ctrl+Alt+["]
+scope = "panel"
+cmd = "cmd.insert.unc(left)"
+
+[[bind]]
+keys = ["Ctrl+Alt+]"]
+scope = "panel"
+cmd = "cmd.insert.unc(right)"
+
 # Bytes instead of lines, and back. `F4` already opens a binary this way; this is for the
 # times the guess was wrong, either way round.
 [[bind]]

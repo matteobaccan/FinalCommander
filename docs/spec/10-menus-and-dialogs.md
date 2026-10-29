@@ -157,6 +157,7 @@ on the buttons answers the dialog, `F10` is `OK` from anywhere, `Esc` cancels an
 | Panel view | `panel.view` | brief / full / detail / wide |
 | Sort by | `panel.sort` | name / ext / size / mtime / none |
 | Quick search | `panel.quick_search` | with Alt / by letters / off |
+| Masks select folders too | `panel.select_folders` | on/off |
 
 ### 3.3 Interface settings
 

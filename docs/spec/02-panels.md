@@ -301,6 +301,16 @@ middle of the object files is not what the mask was written for. And **`reverse`
 a band**: it turns the order round inside each one, because a band that swapped ends with it
 would make the list mean the opposite of what it says.
 
+### 4b. Selecting with a mask, and whether folders count
+
+The keys that name a mask — `+` and `-`, and the two that take the name under the cursor apart
+— leave directories alone unless `panel.select_folders` says otherwise, which is FAR's
+*Select folders* and FAR's default. One types `*.rs` to select the sources, not the
+directories whose names happen to end that way.
+
+*Select all* and *invert all* include directories whatever the setting says: they name no
+mask, so they cannot be meaning files alone.
+
 ## 5. Filters
 
 - **Quick filter bar** (`Ctrl+Shift+I`): live substring/glob, applied to the visible order
