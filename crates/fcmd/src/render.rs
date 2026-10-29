@@ -1,6 +1,6 @@
 use fcmd_ui::{widgets, Buffer, Rect, Style};
 
-use crate::app::{App, Mode};
+use crate::app::{App, Mode, PromptKind};
 use crate::hit::{Layout, ListArea, PanelArea};
 use crate::panel as fcmd_panel;
 
@@ -595,14 +595,32 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             } else {
                 prompt.text.clone()
             };
-            let (_, cx, cy) = widgets::draw_prompt(
-                buf,
-                &app.theme,
-                screen,
-                &prompt.title,
-                &shown,
-                shown.chars().count(),
-            );
+            // The quick search belongs to a panel, not to the screen, and FAR draws it in
+            // that panel's own bottom frame: a box in the middle of the screen covers the
+            // rows one is reading, and the whole point of the search is to read them
+            // (SPEC 02 §6). Everything else is a question about the program and is asked
+            // where a dialog is asked.
+            let at = matches!(prompt.kind, PromptKind::QuickSearch { .. })
+                .then(|| quick_search_box(areas[app.active]))
+                .flatten();
+            let (_, cx, cy) = match at {
+                Some(area) => widgets::draw_prompt_at(
+                    buf,
+                    &app.theme,
+                    area,
+                    &prompt.title,
+                    &shown,
+                    shown.chars().count(),
+                ),
+                None => widgets::draw_prompt(
+                    buf,
+                    &app.theme,
+                    screen,
+                    &prompt.title,
+                    &shown,
+                    shown.chars().count(),
+                ),
+            };
             Some((cx, cy))
         }
         Mode::Confirm(confirm) => {
@@ -728,6 +746,23 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
 /// The chrome is one row at the top, which says what is running and how to get out. The key
 /// bar is deliberately *not* drawn: every function key belongs to the program in here, and a
 /// bar that offered ours would be telling the reader something untrue.
+/// Where the quick search's box goes: standing on the panel's own bottom frame, two columns
+/// in from its left edge (SPEC 02 §6).
+///
+/// It covers the last rows of the list rather than the middle of it, which is where FAR puts
+/// it and why: the rows one has already walked past are the ones one can afford to lose
+/// sight of. `None` when the panel is too small to hold it — a panel ten columns wide is not
+/// somewhere to draw a box — and the box is then asked for in the middle of the screen,
+/// which is at least somewhere it fits.
+fn quick_search_box(panel: Rect) -> Option<Rect> {
+    const MIN_W: u16 = 24;
+    if panel.w < MIN_W + 4 || panel.h < 6 {
+        return None;
+    }
+    let w = (panel.w / 2).max(MIN_W).min(panel.w.saturating_sub(4));
+    Some(Rect::new(panel.x + 2, panel.y + panel.h - 3, w, 3))
+}
+
 fn draw_terminal(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
     let (w, h) = (buf.width(), buf.height());
     let header = Rect::new(0, 0, w, 1);
@@ -3045,6 +3080,43 @@ mod tests {
         // Leaving the mode gives it back, because the switch belongs to the mode.
         app.run(fcmd_cmd::Command::PanelViewSet(fcmd_core::ViewMode::Brief));
         assert_eq!(app.hidden, None);
+    }
+
+    /// The quick search is drawn in the panel it is searching, standing on that panel's own
+    /// bottom frame — not in the middle of the screen, over the rows one is reading.
+    #[test]
+    fn the_quick_search_box_sits_at_the_foot_of_its_own_panel() {
+        let mut app = app("far", "en");
+        app.cfg.panel.quick_search = fcmd_config::QuickSearch::Plain;
+        press(&mut app, "s"); // the fixture's `src`
+        assert!(matches!(app.mode, Mode::Prompt(_)), "{:?}", app.mode);
+
+        let text = frame(&mut app, 100, 24);
+        let rows: Vec<&str> = text.lines().collect();
+        let row = rows
+            .iter()
+            .position(|line| line.contains("Quick search"))
+            .unwrap_or_else(|| panic!("no search box in\n{text}"));
+        // The panels end three rows above the key bar (command line, status, keys), so the
+        // box standing on the bottom frame is near the foot of the screen rather than at
+        // its middle.
+        assert!(
+            row > rows.len() / 2,
+            "the box is at row {row} of {}",
+            rows.len()
+        );
+
+        // And in the *left* panel, which is the one being searched: its frame is at column 0,
+        // so the box starts a couple of columns in from there and never crosses the middle.
+        let line = rows[row];
+        let at = line.chars().position(|c| c == '┌' || c == '╔').unwrap();
+        assert_eq!(at, 2, "two columns in from the panel's own frame: {line}");
+
+        // The right panel is still whole: the two frames meet, so the box ended before it.
+        assert!(
+            line.contains("┤├") || line.contains("╝╚"),
+            "the box ran into the other panel: {line}"
+        );
     }
 
     /// The drive dialog belongs to its panel. FAR opens it five columns in from that panel's

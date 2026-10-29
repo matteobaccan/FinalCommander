@@ -6,6 +6,20 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **The quick search is drawn in its own panel's foot** (SPEC 02 §6). `Alt+`a letter opened a
+  box in the middle of the screen, over the rows one had started the search to read. It
+  stands on the panel's own bottom frame now, two columns in from its left edge, which is
+  where FAR draws it: the rows it covers are the last of the list, the ones already walked
+  past. A panel too small to hold it still gets the box in the middle, which is at least
+  somewhere it fits.
+
+- **Deleting the file under the cursor no longer throws the cursor to the top.** The panel
+  looks for the name it was on and, not finding it, fell back to row zero — `..`, the whole
+  list away from where one was working. It keeps the *row* instead, so the cursor lands on
+  whatever took the deleted file's place, and on the new last row when the last one went.
+
 ### Added
 
 - **CRC32, written as a `.sfv`** (SPEC 03 §9). The fourth entry in the checksum dialog, and

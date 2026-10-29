@@ -1494,7 +1494,23 @@ pub fn draw_prompt(
     let h = 3;
     let x = screen.x + (screen.w.saturating_sub(w)) / 2;
     let y = screen.y + (screen.h.saturating_sub(h)) / 2;
-    let area = Rect::new(x, y, w, h);
+    draw_prompt_at(buf, theme, Rect::new(x, y, w, h), title, text, cursor)
+}
+
+/// The same box, where the caller has already decided where it goes.
+///
+/// The quick search is the one that has: it belongs to a panel rather than to the screen, and
+/// FAR draws it down in that panel's own bottom frame so it covers the rows one has already
+/// walked past instead of the ones one is reading (SPEC 02 §6).
+pub fn draw_prompt_at(
+    buf: &mut Buffer,
+    theme: &Theme,
+    area: Rect,
+    title: &str,
+    text: &str,
+    cursor: usize,
+) -> (Rect, u16, u16) {
+    let w = area.w;
     let style = theme.dialog();
     buf.fill(area, ' ', style);
     buf.draw_frame(

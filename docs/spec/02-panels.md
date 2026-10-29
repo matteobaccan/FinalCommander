@@ -425,6 +425,13 @@ mc uses bare letters). Matching: prefix, then substring, then fuzzy, with `*`/`?
 accepted literally. `Ctrl+Enter` / `Ctrl+Shift+Enter` cycle matches forward/backward. The match
 is highlighted inside the name. `Esc` restores the previous cursor position.
 
+**Where the box is drawn.** In the panel it is searching, standing on that panel's own bottom
+frame, two columns in from its left edge — never in the middle of the screen. The search is
+about the rows, so the box must not cover the ones being read; the rows it does cover are the
+last of the list, which are the ones already walked past. It is FAR's own placement and FAR's
+own reason. A panel too narrow or too short to hold the box falls back to the middle of the
+screen, which is at least somewhere it fits.
+
 ## 7. Special panel kinds
 
 | Kind | Behaviour |

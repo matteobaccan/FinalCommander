@@ -226,15 +226,24 @@ impl Panel {
     /// Replace the listing after a read, keeping the cursor on the same name when possible.
     pub fn set_listing(&mut self, entries: Vec<Entry>, generation: u64) {
         let keep = self.current().map(|e| e.name_str().into_owned());
+        // Where the cursor was standing, for the case where the name it was on has gone.
+        // Entering a directory sets this to zero first (`go`), so it is the top of the list
+        // there and the row one was on here.
+        let here = self.cursor;
         self.listing = Listing::new(entries, generation);
         self.selection.retain_existing(&self.listing);
         self.rebuild();
         // A name somebody asked for wins over the one we were on, once.
         let wanted = self.want_cursor.take();
+        // And when neither name is in the new listing — the file under the cursor was just
+        // deleted, or renamed out of the filter — the *row* is kept rather than the top of
+        // the list: what one does after deleting a file is look at the next one, and being
+        // thrown back to `..` means scrolling down to where one was. `clamp` pulls the row
+        // back in when the listing got shorter than it.
         self.cursor = wanted
             .and_then(|name| self.listing.row_of_name(&name))
             .or_else(|| keep.and_then(|name| self.listing.row_of_name(&name)))
-            .unwrap_or(0);
+            .unwrap_or(here);
         self.loading = false;
         self.error = None;
         self.clamp();
@@ -481,6 +490,52 @@ mod tests {
             1,
         );
         p
+    }
+
+    /// After deleting the file under the cursor, the cursor stays on the row it was on —
+    /// which is now the file that came after it — rather than falling back to `..`.
+    #[test]
+    fn a_name_that_has_gone_leaves_the_cursor_on_its_row() {
+        let mut p = panel();
+        p.cursor_to(3); // beta.txt
+        assert_eq!(p.current().unwrap().name_str(), "beta.txt");
+
+        // The listing comes back without it, as it does after a delete.
+        p.set_listing(
+            vec![
+                Entry::parent_entry(),
+                entry("docs", EntryKind::Dir),
+                entry("alpha.txt", EntryKind::File),
+                entry("gamma.txt", EntryKind::File),
+            ],
+            2,
+        );
+        assert_eq!(p.cursor, 3);
+        assert_eq!(p.current().unwrap().name_str(), "gamma.txt");
+
+        // The last row deleted leaves the cursor on the new last one, not at the top.
+        p.set_listing(
+            vec![
+                Entry::parent_entry(),
+                entry("docs", EntryKind::Dir),
+                entry("alpha.txt", EntryKind::File),
+            ],
+            3,
+        );
+        assert_eq!(p.cursor, 2);
+        assert_eq!(p.current().unwrap().name_str(), "alpha.txt");
+
+        // And a name that is still there still wins: the row it moved to is the one.
+        p.cursor_to(1);
+        p.set_listing(
+            vec![
+                Entry::parent_entry(),
+                entry("aaa.txt", EntryKind::File),
+                entry("docs", EntryKind::Dir),
+            ],
+            4,
+        );
+        assert_eq!(p.current().unwrap().name_str(), "docs");
     }
 
     #[test]
