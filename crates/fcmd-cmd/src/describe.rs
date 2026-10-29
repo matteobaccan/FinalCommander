@@ -202,6 +202,7 @@ impl Command {
             Command::ToolCompareDirs => "compare the two panels by name, size and time",
             Command::ToolCompare => "compare the two panels, with the options dialog first",
             Command::ToolDuplicates => "find the files under this directory that are copies",
+            Command::ToolTaskList => "the running processes, as a panel",
             Command::ToolSyncDirs => "make the two directories hold the same thing",
             Command::ToolCompareContents => "compare them by what is in the files",
             Command::ToolDiff => "the two files under the cursors, side by side",

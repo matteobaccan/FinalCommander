@@ -1124,6 +1124,13 @@ keys = ["Ctrl+Shift+D"]
 scope = "panel"
 cmd = "tool.diff"
 
+# FAR's *Task list*: the running processes. On a line with something typed on it `Ctrl+W` is
+# the word-delete every readline has, as `Ctrl+K` is kill-to-end; on an empty line it is this.
+[[bind]]
+keys = ["Ctrl+W"]
+scope = "panel"
+cmd = "tool.task.list"
+
 [[bind]]
 keys = ["Ctrl+Enter"]
 scope = "panel"

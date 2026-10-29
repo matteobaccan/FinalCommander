@@ -109,7 +109,11 @@ other panel, Panels on/off, Compare folders, Synchronise folders, Open tunnel, T
 by content, View file differences (`Ctrl+Shift+D`, SPEC 05 §3), Compare with setup, Find
 duplicates, Calculator, Terminal · Connections, Disconnect · User menu, File associations,
 Folder shortcuts (§4.4b) · Plugin commands (backlog), Screens list, Record macro, Macros, Task
-list (backlog: the operating system's processes, as FAR's is — see `docs/BACKLOG.md`).
+list.
+
+*Task list* is the operating system's processes, as FAR's is — the panel the change-drive
+dialog opens (SPEC 02 §7b), with `F3` on a row showing that process's card. This program's own
+screens are the *Screens list* above it, on `F12`.
 
 *Folder shortcuts* appears once, after the associations, where FAR puts it. It used to appear
 twice — the same words, the same key and the same command, once up with the histories — which

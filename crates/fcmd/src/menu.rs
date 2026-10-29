@@ -525,7 +525,11 @@ pub fn menus() -> Vec<Menu> {
                     "Ctrl+Shift+.",
                     Action::Run(Command::MacroList),
                 ),
-                item("menu-task-list", "Ctrl+W", Action::Todo("task.list")),
+                item(
+                    "menu-task-list",
+                    "Ctrl+W",
+                    Action::Run(Command::ToolTaskList),
+                ),
             ],
         },
         Menu {

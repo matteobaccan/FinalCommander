@@ -15,8 +15,9 @@ Sotto una riga di separazione, su `Ctrl+1`…`Ctrl+9`, stanno le cose che non so
 
 * le **connessioni salvate** e gli **object store** scritti nella configurazione, che si
   collegano quando li scegli;
-* i **processi** in esecuzione sulla macchina, come pannello: `F3` su uno è la sua scheda, che
-  è una pagina — cos'è, di chi è, cosa ha preso e speso, la riga di comando, tutto il suo
+* i **processi** in esecuzione sulla macchina, come pannello — anche `Ctrl+W`, ed *Elenco
+  attività* nel menu Comandi, che è quello che quel tasto vuol dire in FAR: `F3` su uno è la
+  sua scheda, che è una pagina — cos'è, di chi è, cosa ha preso e speso, la riga di comando, tutto il suo
   ambiente e ogni libreria che ha caricato. Qui niente termina un processo: il tasto che
   cancella un file lo dice invece di farlo;
 * i **servizi** che la macchina esegue in sottofondo, con lo stato di ciascuno: `F3` è la sua

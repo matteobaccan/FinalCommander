@@ -8,6 +8,12 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **`Ctrl+W` is FAR's task list**, and so is the *Task list* row in the Commands menu: the
+  operating system's processes, which is what that key means in FAR — this program's own
+  screens are `F12`. It opens the process panel the change-drive dialog has opened since
+  0.10.0, so `F3` on a row still shows that process's card. On a line with something typed on
+  it `Ctrl+W` stays the word-delete every readline has, as `Ctrl+K` stays kill-to-end.
+
 - **`Options → Code pages`** opens the code page list, so the last dim row but one in that
   menu is a real one. It is the viewer's own `Shift+F8` list (`opt.codepages`), opened where
   there is no file to read: what it is for there is marking the three or four pages `F8` walks

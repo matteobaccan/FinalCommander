@@ -14,7 +14,8 @@ Under a rule, on `Ctrl+1` to `Ctrl+9`, are the things that are not filesystems:
 
 * the **stored connections** and the **object stores** written in the configuration, which
   connect when chosen;
-* the **processes** running on the machine, as a panel: `F3` on one is its card, which is a
+* the **processes** running on the machine, as a panel — also `Ctrl+W`, and *Task list* in the
+  Commands menu, which is what that key means in FAR: `F3` on one is its card, which is a
   page — what it is, whose it is, what it has taken and spent, its command line, its whole
   environment and every library it has loaded. Nothing here ends a process: the key that
   deletes a file says so rather than doing it;

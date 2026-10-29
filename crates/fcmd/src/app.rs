@@ -7075,6 +7075,10 @@ impl App {
             }
             Command::ToolCompareDirs => self.compare_dirs(),
             Command::ToolDuplicates => self.find_duplicates(),
+            // FAR's *Task list*: the operating system's processes, which we already have as
+            // a panel — the change-drive dialog opens the same one. The screens of this
+            // program are `F12`, which is a different list and a different question.
+            Command::ToolTaskList => self.open_process_panel(self.active),
             Command::ToolCompare => {
                 let form = Form::compare(&self.cfg.compare, &self.i18n);
                 self.mode = Mode::Form(Box::new(form));
@@ -23632,6 +23636,26 @@ five
         assert_eq!(app.cmd.text, "cp /usr/local/");
         press(&mut app, "Ctrl+W");
         assert_eq!(app.cmd.text, "cp /usr/");
+    }
+
+    /// On an empty line the same key is FAR's *Task list* — the operating system's
+    /// processes, not this program's screens — because there is no word to take off.
+    #[test]
+    fn ctrl_w_on_an_empty_line_opens_the_running_processes() {
+        let mut app = app();
+        press(&mut app, "Ctrl+W");
+        // A platform whose process list we cannot read says so and leaves the panel alone.
+        if app.panels[0].temp_origin() != Some(":processes") {
+            assert!(
+                !app.status.is_empty(),
+                "nothing opened and nothing was said"
+            );
+            return;
+        }
+        assert!(
+            app.panels[0].listing.len() > 1,
+            "a process list with no processes in it"
+        );
     }
 
     #[test]

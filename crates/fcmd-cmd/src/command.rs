@@ -324,6 +324,9 @@ pub enum Command {
     /// Find the files under this panel's directory that are copies of each other, and show
     /// them grouped (SPEC 03 §12).
     ToolDuplicates,
+    /// The running processes as a panel — FAR's *Task list*, which is the operating system's
+    /// processes and not this program's own screens (`F12` is those).
+    ToolTaskList,
     /// Make the two panels' directories hold the same thing: decide about every pair, show
     /// the table, and only then copy and delete (SPEC 03 §10).
     ToolSyncDirs,
@@ -619,6 +622,7 @@ impl Command {
             Command::ToolCompareDirs,
             Command::ToolCompare,
             Command::ToolDuplicates,
+            Command::ToolTaskList,
             Command::ToolSyncDirs,
             Command::ToolCompareContents,
             Command::ToolDiff,
@@ -873,6 +877,7 @@ impl Command {
             Command::ToolCompareDirs => "tool.compare.dirs".into(),
             Command::ToolCompare => "tool.compare".into(),
             Command::ToolDuplicates => "tool.duplicates".into(),
+            Command::ToolTaskList => "tool.task.list".into(),
             Command::ToolSyncDirs => "tool.sync.dirs".into(),
             Command::ToolCompareContents => "tool.compare.contents".into(),
             Command::ToolDiff => "tool.diff".into(),
@@ -1097,6 +1102,7 @@ impl Command {
             ("tool.diff", _) => Command::ToolDiff,
             ("tool.compare", _) => Command::ToolCompare,
             ("tool.duplicates", _) => Command::ToolDuplicates,
+            ("tool.task.list", _) => Command::ToolTaskList,
             ("tool.sync.dirs", _) => Command::ToolSyncDirs,
             ("tool.compare.contents", _) => Command::ToolCompareContents,
             ("tool.calculator", _) => Command::ToolCalculator,
