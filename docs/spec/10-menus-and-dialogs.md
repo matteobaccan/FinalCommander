@@ -197,8 +197,10 @@ The bottom row of the screen is the dialog's own while one is open, as it is in 
 panels' keys are not on the screen, so a bar still offering `Copy` and `MkFold` would be
 describing something that is not there. It says only what the dialog answers — `F1` the help,
 `F10` `OK`, under `Ctrl` the `F5` that moves it, and in the copy dialog under `Alt` the `F10`
-that opens the folder list — so the row is short, and that is the honest length of it: a
-dialog is answered with `Enter` and `Esc`. A list says `F4` where its rows can be edited,
+that opens the folder list — so most of its boxes are empty, and that is the honest answer: a
+dialog is answered with `Enter` and `Esc`. The twelve numbered boxes themselves stay, because
+`F5` being the fifth box along wherever one is standing (SPEC 02 §12) is worth more than a row
+that comes and goes. A list says `F4` where its rows can be edited,
 `F9` in the drive dialog, and `F10` as the way out rather than as an answer.
 
 `Alt+F10` on a row that names a path opens something to pick it from: the tree of folders —

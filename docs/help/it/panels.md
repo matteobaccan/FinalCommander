@@ -378,7 +378,7 @@ file è la risposta; `Esc` lascia la riga com'era. `Ctrl+F5` passa le frecce al 
 copre l'unica cosa che serve leggere; `Invio` ed `Esc` lo fermano soltanto.
 
 La riga in basso dello schermo diventa quella del dialogo finché è aperto: i tasti dei pannelli
-non sono sullo schermo, e descriverli sarebbe descrivere qualcosa che non c'è. È corta, perché
-a un dialogo si risponde con `Invio` ed `Esc` — `F1` per questa pagina, `F10` per `OK`, `Ctrl`
-per il tasto che lo sposta. `F1` lascia il dialogo in attesa dietro l'aiuto, con tutto quello
+non sono sullo schermo, e descriverli sarebbe descrivere qualcosa che non c'è. Quasi tutte le
+caselle sono vuote, perché a un dialogo si risponde con `Invio` ed `Esc` — `F1` è questa
+pagina, `F10` è `OK`, e `Ctrl` mostra il tasto che lo sposta. `F1` lascia il dialogo in attesa dietro l'aiuto, con tutto quello
 che è stato scritto dentro ancora al suo posto.

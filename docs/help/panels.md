@@ -350,7 +350,7 @@ as it was. `Ctrl+F5` hands the arrows to the dialog itself, for when it
 covers the one thing you need to read; `Enter` and `Esc` only stop moving it.
 
 The bottom row of the screen becomes the dialog's own while it is open: the panels' keys are
-not on the screen, so it would be describing something that is not there. It is short, because
-a dialog is answered with `Enter` and `Esc` — `F1` for this page, `F10` for `OK`, `Ctrl` for
-the key that moves it. `F1` leaves the dialog waiting behind the help, with everything you
+not on the screen, so it would be describing something that is not there. Most of its boxes
+are empty, because a dialog is answered with `Enter` and `Esc` — `F1` is this page, `F10` is
+`OK`, and `Ctrl` shows the key that moves it. `F1` leaves the dialog waiting behind the help, with everything you
 typed into it still there.

@@ -17413,7 +17413,7 @@ impl App {
                         None => Vec::new(),
                     }
                 } else {
-                    Vec::new()
+                    blank_keybar()
                 }
             }
             // A list answers `F4` where its rows can be edited — a code page's own name, a
@@ -17437,7 +17437,7 @@ impl App {
             // A question with one line to type in: `Enter` and `Esc` are the whole of it,
             // so the only function key it has is the one that explains the rest.
             Mode::Prompt(_) if mods == Mods::NONE => vec![(1u8, t("key-help"))],
-            Mode::Pick(_) | Mode::Confirm(_) | Mode::Prompt(_) => Vec::new(),
+            Mode::Pick(_) | Mode::Confirm(_) | Mode::Prompt(_) => blank_keybar(),
             _ => return None,
         };
         Some(rows)
@@ -18056,6 +18056,16 @@ fn field_keeps_history(key: &str) -> bool {
             | "hl.mask"
             | "sg.mask"
     )
+}
+
+/// Twelve boxes with nothing written in any of them.
+///
+/// A dialog answers nothing at all under `Shift`, and an empty list would take the row off
+/// the screen altogether — but the twelve numbered boxes are what makes `F5` the fifth box
+/// along wherever one is standing (SPEC 02 §12), and a bar that came and went would be worse
+/// than a bar with nothing in it.
+fn blank_keybar() -> Vec<(u8, String)> {
+    (1..=12u8).map(|n| (n, String::new())).collect()
 }
 
 /// Does `F4` do anything in this list? What the dialog key bar asks before offering it,
@@ -20922,8 +20932,11 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![5]
         );
-        // Nothing is held down that the dialog answers: an empty row, not the panels'.
-        assert_eq!(app.keybar_dialog(Mods::SHIFT), Some(Vec::new()));
+        // Nothing the dialog answers is held down: twelve empty boxes, so the row stays
+        // where it is and `F5` is still the fifth box along — not the panels' labels.
+        let shift = app.keybar_dialog(Mods::SHIFT).expect("a dialog is open");
+        assert_eq!(shift.len(), 12);
+        assert!(shift.iter().all(|(_, label)| label.is_empty()), "{shift:?}");
 
         // The copy dialog has one more: the folder list, on `Alt+F10`.
         app.mode = Mode::Normal;

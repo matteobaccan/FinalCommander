@@ -14,9 +14,11 @@ Notable changes, newest first. The format follows
   dialog is describing something that is not there. The row says only what the dialog answers —
   `F1` the help, `F10` `OK`, under `Ctrl` the `F5` that moves it, under `Alt` the `F10` that
   opens the copy dialog's folder list — and a list says `F4` where its rows can be edited, `F9`
-  in the drive dialog, and `F10` as the way *out* rather than as an answer. It is short, and
-  that is the honest length of it: a dialog is answered with `Enter` and `Esc`, and inventing
-  function keys to fill the row out would be worse than leaving it empty.
+  in the drive dialog, and `F10` as the way *out* rather than as an answer. Most of its boxes
+  are empty, and that is the honest answer: a dialog is answered with `Enter` and `Esc`, and
+  inventing function keys to fill the row out would be worse than leaving them blank. The
+  twelve numbered boxes themselves stay, because `F5` being the fifth box along wherever one
+  is standing is worth more than a row that comes and goes.
 
   Writing `Help` there turned up something quieter: `F1` in a dialog did nothing at all, and
   the page it should have opened — *This dialog* — had been in the help since the help was
