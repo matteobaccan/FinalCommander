@@ -1433,7 +1433,13 @@ impl Viewer {
                 if out.len() + 1 < height as usize {
                     out.push(Row {
                         offset: line.offset,
-                        text: format!("{:016X} <{}>:", line.address, symbol.name),
+                        // Clipped like the instruction rows: a mangled Rust or C++ name runs
+                        // to a couple of hundred characters, and a heading that overflowed
+                        // the pane would push the frame off the screen.
+                        text: truncate_to(
+                            &format!("{:016X} <{}>:", line.address, symbol.name),
+                            width as usize,
+                        ),
                         hits: Vec::new(),
                         kind: RowKind::Label,
                         spans: Vec::new(),
@@ -2683,6 +2689,16 @@ mod tests {
                 row.text
             );
         }
+        // And in a narrow pane, where the symbol headings have to be clipped as well: a
+        // mangled Rust name runs to a couple of hundred characters, and one row that
+        // overflowed would push the frame off the screen.
+        for row in v.rows(40, 10) {
+            assert!(
+                unicode_width::UnicodeWidthStr::width(row.text.as_str()) <= 40,
+                "row wider than a narrow pane: {:?}",
+                row.text
+            );
+        }
 
         // Scrolling moves by whole instructions, forwards and back to where it started.
         let start = v.top;
@@ -2774,17 +2790,26 @@ mod tests {
         // Not a container: a raw code fragment is disassembled from offset 0.
         let mut v = viewer(&[0x55, 0x48, 0x89, 0xE5, 0x31, 0xC0, 0x5D, 0xC3]);
         v.mode = Mode::Disasm;
+        let arch = v.disasm_arch();
         let rows = v.rows(80, 8);
         let joined = rows
             .iter()
             .map(|r| r.text.as_str())
             .collect::<Vec<_>>()
             .join("\n");
-        assert!(joined.contains("push"), "{joined}");
-        assert!(joined.contains("mov"), "{joined}");
-        assert!(joined.contains("ret"), "{joined}");
+        // Whatever the architecture, a row starts with the address.
         assert!(joined.contains("0000000000000000"), "{joined}");
-        assert!(joined.contains("48 89 E5"), "{joined}");
+        // A fragment with no header is decoded for the machine it is being read on, so these
+        // bytes are an x86 prologue on an x86 machine and four ARM words on an ARM one. The
+        // mnemonics are only the first file's; what is asserted on the other is the shape.
+        if arch == Arch::Aarch64 {
+            assert!(joined.contains("55 48 89 E5"), "one word a row: {joined}");
+        } else {
+            assert!(joined.contains("push"), "{joined}");
+            assert!(joined.contains("mov"), "{joined}");
+            assert!(joined.contains("ret"), "{joined}");
+            assert!(joined.contains("48 89 E5"), "{joined}");
+        }
     }
 
     #[test]

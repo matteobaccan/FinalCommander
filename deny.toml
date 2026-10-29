@@ -10,6 +10,11 @@ allow = [
   # treat it as free. Nothing in it reaches the user of the binary beyond the notice, which
   # `THIRD-PARTY.md` carries.
   "bzip2-1.0.6",
+  # The yaxpeax crates (the AArch64 decoder of SPEC 05 §1.6). 0BSD is the BSD licence with
+  # the attribution clause removed: use it for anything, no notice required. The OSI and the
+  # FSF both list it as free, and it is the most permissive licence there is — there is
+  # nothing in it to carry into the binary at all, and `THIRD-PARTY.md` names them anyway.
+  "0BSD",
 ]
 confidence-threshold = 0.9
 

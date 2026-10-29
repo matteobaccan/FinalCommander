@@ -4,7 +4,7 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
-## [Unreleased]
+## [0.18.0] — 2026-10-29
 
 ### Added
 
@@ -28,10 +28,6 @@ Notable changes, newest first. The format follows
   copies a whole file in one call — macOS and Windows — `Esc` is answered when that call
   returns rather than within the next few kilobytes, and that file's progress arrives in one
   piece. On Linux the copy is still made a chunk at a time, so neither applies there.
-
-## [0.18.0] — 2026-10-29
-
-### Added
 
 - **The cursor may go past the end of a line** (`editor.beyond_eol`, SPEC 10 §3.6). The row was
   in *Editor settings* as a dim one, because the setting did not exist: every movement and every
