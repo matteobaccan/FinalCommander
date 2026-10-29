@@ -1116,6 +1116,14 @@ keys = ["Ctrl+P"]
 scope = "panel"
 cmd = "panel.toggle.other"
 
+# Two files, side by side. FAR has no internal diff, so the key is ours: `Ctrl+Shift+D` for
+# *difference*, beside the hotlist's `Ctrl+D` and free on a panel — the editor has the same
+# key for duplicating a line, which is a different scope and so a different key.
+[[bind]]
+keys = ["Ctrl+Shift+D"]
+scope = "panel"
+cmd = "tool.diff"
+
 [[bind]]
 keys = ["Ctrl+Enter"]
 scope = "panel"

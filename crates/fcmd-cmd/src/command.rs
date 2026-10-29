@@ -326,6 +326,8 @@ pub enum Command {
     /// Compare the two panels by what is *in* the files: every pair with the same name is
     /// read on both sides and selected where the bytes differ. The slow, certain one.
     ToolCompareContents,
+    /// The two files under the cursors, side by side, with what differs marked (SPEC 05 §3).
+    ToolDiff,
     /// A sixty-four bit calculator, in every base at once.
     ToolCalculator,
     /// A real terminal, with a shell in it (SPEC 06 §4).
@@ -614,6 +616,7 @@ impl Command {
             Command::ToolDuplicates,
             Command::ToolSyncDirs,
             Command::ToolCompareContents,
+            Command::ToolDiff,
             Command::ToolCalculator,
             Command::ToolTerminal,
             Command::ToolFind,
@@ -866,6 +869,7 @@ impl Command {
             Command::ToolDuplicates => "tool.duplicates".into(),
             Command::ToolSyncDirs => "tool.sync.dirs".into(),
             Command::ToolCompareContents => "tool.compare.contents".into(),
+            Command::ToolDiff => "tool.diff".into(),
             Command::ToolCalculator => "tool.calculator".into(),
             Command::ToolTerminal => "tool.terminal".into(),
             Command::ToolFind => "tool.find".into(),
@@ -1083,6 +1087,7 @@ impl Command {
                 Command::CmdInsert(Insert::parse(what)?, which)
             }
             ("tool.compare.dirs", _) => Command::ToolCompareDirs,
+            ("tool.diff", _) => Command::ToolDiff,
             ("tool.compare", _) => Command::ToolCompare,
             ("tool.duplicates", _) => Command::ToolDuplicates,
             ("tool.sync.dirs", _) => Command::ToolSyncDirs,

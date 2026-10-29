@@ -589,6 +589,24 @@ clip-off = le presse-papiers est désactivé — `ui.clipboard` dans les réglag
 history-gone = { $name } n’est plus là
 hl-new = Nouveau groupe de couleur
 hl-edit = Groupe de couleur
+# ------------------------------------------------- les différences (SPEC 05 §3)
+diff-title = Différences
+menu-diff = Comparer deux &fichiers
+diff-needs-two = Mettre le curseur sur un fichier dans chaque panneau
+diff-not-here = { $name } n'est pas un fichier sur ce disque
+diff-too-big = { $name } est plus grand que { $most }
+diff-same = Les deux fichiers sont identiques
+diff-where = bloc { $at } sur { $count }
+diff-no-next = La dernière différence
+diff-no-previous = La première différence
+diff-hint = Alt+↑↓ blocs · Tab côté · W espaces · C casse · E fins de ligne · Échap fermer
+diff-ignore-space-on = Espaces ignorés
+diff-ignore-space-off = Les espaces comptent à nouveau
+diff-ignore-case-on = Casse ignorée
+diff-ignore-case-off = La casse compte à nouveau
+diff-ignore-eol-on = Fins de ligne ignorées
+diff-ignore-eol-off = Les fins de ligne comptent à nouveau
+
 # ------------------------------------------------- les pages de codes (SPEC 05 §1.12)
 cp-title = Pages de codes
 cp-name-title = Comment appeler cette page de codes

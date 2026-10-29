@@ -6,6 +6,7 @@
 
 pub mod asm;
 pub mod decode;
+pub mod diff;
 pub mod disasm;
 pub mod il;
 pub mod jvm;
@@ -19,6 +20,7 @@ pub mod view;
 
 pub use asm::{assemble, AsmError, Assembled};
 pub use decode::{detect, looks_binary, sniff_bom, Codepage};
+pub use diff::{Diff, Side};
 pub use disasm::{
     analyze, disassemble, probe, resolve_targets, wasm_text, Arch, Binary, DisasmError, Format,
     Line, Target, TargetKind,

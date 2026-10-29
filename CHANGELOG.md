@@ -8,6 +8,25 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **Two files side by side** (`Ctrl+Shift+D`, and *View file differences* in the Commands
+  menu). *Compare by content* says which of a hundred pairs differ; this says what differs in
+  one pair — the gap a commander coming from Midnight Commander or Krusader notices first.
+  The file under each panel's cursor, two columns with their own line numbers and a rule
+  between them, and inside a changed line the part that actually changed marked in the
+  selection's colours. `Alt+↓` and `Alt+↑` walk the differences, which is the key one presses
+  forty times; the arrows, `PgUp`, `PgDn`, `Home` and `End` are the rows, `←`/`→` scroll both
+  columns together, `Tab` changes which column one is reading, `F1` opens the chapter and
+  `F12` lists it with the other screens. `W`, `C` and `E` ignore blanks, case and line endings
+  and line the two files up again at once, so one watches the answer change; the line endings
+  start from what the comparison dialog was last told, so the two agree about what "the same"
+  means. Two files that are the same say so rather than leaving one scrolling for a difference
+  that is not there. The alignment is patience diff in `fcmd-core`, with no dependency: the
+  lines that occur once on each side are the anchors, the longest rising run of them is kept,
+  and a region with no unique line left is finished with an exact table under four hundred
+  lines. A moved function therefore reads as moved. Local files only, 16 MiB a side: the whole
+  of both has to be in memory, and a silent download of two hundred megabytes is not what the
+  key looks like it will do.
+
 - **The rest of FAR's insertion keys.** `Ctrl+Enter` and its neighbours are now a table
   rather than four keys: *what* about a panel — the name, the path, the full name, or the
   full name in the form another machine could use — and *which* panel, the active one, the

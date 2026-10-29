@@ -9,6 +9,7 @@ pub mod columns;
 pub mod compare;
 pub mod descriptions;
 pub mod device;
+pub mod diff;
 pub mod entry;
 pub mod error;
 pub mod filter;

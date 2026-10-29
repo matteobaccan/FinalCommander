@@ -577,6 +577,24 @@ clip-off = 剪贴板已关闭 — 设置中的 `ui.clipboard`
 history-gone = { $name } 已经不在了
 hl-new = 新建颜色分组
 hl-edit = 颜色分组
+# ------------------------------------------------- 差异 (SPEC 05 §3)
+diff-title = 差异
+menu-diff = 比较两个文件
+diff-needs-two = 请在两个面板中各把光标放在一个文件上
+diff-not-here = { $name } 不是本地磁盘上的文件
+diff-too-big = { $name } 大于 { $most }
+diff-same = 两个文件相同
+diff-where = 第 { $at } 块，共 { $count } 块
+diff-no-next = 已是最后一处差异
+diff-no-previous = 已是第一处差异
+diff-hint = Alt+↑↓ 差异块 · Tab 切换侧 · W 空白 · C 大小写 · E 行尾 · Esc 关闭
+diff-ignore-space-on = 已忽略空白
+diff-ignore-space-off = 空白重新计入
+diff-ignore-case-on = 已忽略大小写
+diff-ignore-case-off = 大小写重新计入
+diff-ignore-eol-on = 已忽略行尾
+diff-ignore-eol-off = 行尾重新计入
+
 # ------------------------------------------------- 代码页 (SPEC 05 §1.12)
 cp-title = 代码页
 cp-name-title = 为这个代码页起个名字

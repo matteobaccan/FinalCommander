@@ -589,6 +589,24 @@ clip-off = буфер обмена выключен — `ui.clipboard` в нас
 history-gone = { $name } больше нет
 hl-new = Новая цветовая группа
 hl-edit = Цветовая группа
+# ------------------------------------------------- различия (SPEC 05 §3)
+diff-title = Различия
+menu-diff = Сравнить два &файла
+diff-needs-two = Поставьте курсор на файл в каждой панели
+diff-not-here = { $name } — не файл на этом диске
+diff-too-big = { $name } больше, чем { $most }
+diff-same = Файлы одинаковы
+diff-where = блок { $at } из { $count }
+diff-no-next = Последнее различие
+diff-no-previous = Первое различие
+diff-hint = Alt+↑↓ блоки · Tab сторона · W пробелы · C регистр · E концы строк · Esc закрыть
+diff-ignore-space-on = Пробелы не учитываются
+diff-ignore-space-off = Пробелы учитываются снова
+diff-ignore-case-on = Регистр не учитывается
+diff-ignore-case-off = Регистр учитывается снова
+diff-ignore-eol-on = Концы строк не учитываются
+diff-ignore-eol-off = Концы строк учитываются снова
+
 # ------------------------------------------------- кодовые страницы (SPEC 05 §1.12)
 cp-title = Кодовые страницы
 cp-name-title = Как назвать эту кодовую страницу

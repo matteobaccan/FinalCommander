@@ -1396,6 +1396,8 @@ pub enum Mode {
     UserScreen {
         scroll: usize,
     },
+    /// Two files side by side, with what differs marked (SPEC 05 §3).
+    Diff(Box<fcmd_view::Diff>),
     /// `Ctrl+Alt+E`: a real terminal with a shell in it (SPEC 06 §4).
     ///
     /// It is a screen like a viewer: stepping away leaves the program running, and `F12`
@@ -1419,6 +1421,7 @@ impl Mode {
             // The whole path, not the name: two files called `README.md` open at once are two
             // screens, and a list that calls them both `README.md` is a list one cannot use.
             Mode::Viewer(v) => Some(format!("View  {}", v.path)),
+            Mode::Diff(d) => Some(format!("Diff  {} ↔ {}", d.left_name, d.right_name)),
             Mode::Editor(e) => Some(format!(
                 "Edit  {}",
                 e.path.as_ref().map(|p| p.to_string()).unwrap_or(e.name())
@@ -1459,6 +1462,13 @@ impl Mode {
     pub fn viewer(&self) -> Option<&Viewer> {
         match self {
             Mode::Viewer(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    pub fn diff(&self) -> Option<&fcmd_view::Diff> {
+        match self {
+            Mode::Diff(d) => Some(d),
             _ => None,
         }
     }
@@ -3265,6 +3275,10 @@ impl App {
                 self.mode = Mode::Viewer(viewer);
                 self.viewer_key(key);
             }
+            Mode::Diff(view) => {
+                self.mode = Mode::Diff(view);
+                self.diff_key(key);
+            }
             Mode::Editor(editor) => {
                 self.mode = Mode::Editor(editor);
                 self.editor_key(key);
@@ -3817,6 +3831,178 @@ impl App {
         }
         if let Some(cmd) = self.keymap.resolve(&[Scope::Viewer, Scope::Global], key) {
             self.run(cmd);
+        }
+    }
+
+    /// `Ctrl+Shift+D`: the file under each panel's cursor, side by side (SPEC 05 §3).
+    ///
+    /// The two cursors and not a dialog: the question "which two files" is already answered
+    /// by where the cursors are, which is how the comparison commands beside it work too. A
+    /// file this program cannot read as bytes on this disk — one on a server, one inside an
+    /// archive — says so rather than fetching a copy behind the user's back.
+    fn open_diff(&mut self) {
+        let pick = |panel: &Panel| -> Option<VPath> {
+            panel
+                .current()
+                .filter(|e| e.kind != fcmd_core::EntryKind::Parent && !e.kind.is_dirlike())
+                .map(|e| panel.path_of(e))
+        };
+        let (Some(left), Some(right)) = (pick(&self.panels[0]), pick(&self.panels[1])) else {
+            let m = self.i18n.t("diff-needs-two");
+            self.set_error(m);
+            return;
+        };
+        for path in [&left, &right] {
+            if !path.is_local() || path.in_container() {
+                let m = self
+                    .i18n
+                    .t_args("diff-not-here", &[("name", path.to_string().into())]);
+                self.set_error(m);
+                return;
+            }
+        }
+        let read = |path: &VPath| -> Result<Vec<u8>, String> {
+            let meta = std::fs::metadata(path.as_path()).map_err(|e| format!("{path}: {e}"))?;
+            if meta.len() > fcmd_view::diff::MOST {
+                return Err(self.i18n.t_args(
+                    "diff-too-big",
+                    &[
+                        ("name", path.display_name().into()),
+                        ("most", fcmd_core::format_size(fcmd_view::diff::MOST).into()),
+                    ],
+                ));
+            }
+            std::fs::read(path.as_path()).map_err(|e| format!("{path}: {e}"))
+        };
+        let (left_bytes, right_bytes) = match (read(&left), read(&right)) {
+            (Ok(a), Ok(b)) => (a, b),
+            (Err(e), _) | (_, Err(e)) => {
+                self.set_error(e);
+                return;
+            }
+        };
+        // The line endings follow what the comparison dialog was last told, so the two agree
+        // about what "the same" means (SPEC 03 §11). Space and case start off and are a
+        // keystroke away: they are a question one asks of the diff in front of one, not a
+        // setting one keeps.
+        let ignore = fcmd_core::diff::Ignore {
+            whitespace: false,
+            case: false,
+            line_endings: self.cfg.compare.ignore_eol,
+        };
+        let view = fcmd_view::Diff::new(
+            left.to_string(),
+            &left_bytes,
+            right.to_string(),
+            &right_bytes,
+            ignore,
+        );
+        let same = view.identical();
+        self.mode = Mode::Diff(Box::new(view));
+        if same {
+            let m = self.i18n.t("diff-same");
+            self.set_status(m);
+        }
+    }
+
+    /// The keys of the diff screen (SPEC 05 §3).
+    ///
+    /// Movement, `Tab` between the two columns, `Alt+↑` and `Alt+↓` for the hunks — the key
+    /// one presses forty times — and the three letters that change what is ignored, each of
+    /// which lines the files up again at once so one sees what the answer became.
+    fn diff_key(&mut self, key: Key) {
+        let height = self.viewer_size.1.max(1);
+        let mut message: Option<&'static str> = None;
+        let mut error: Option<&'static str> = None;
+        let Mode::Diff(view) = &mut self.mode else {
+            return;
+        };
+        match key.code {
+            KeyCode::Esc | KeyCode::F(10) | KeyCode::F(3) => {
+                self.mode = Mode::Normal;
+                return;
+            }
+            // `F12` is the list of screens, as it is everywhere else: this one is a screen
+            // like a viewer, and one steps away from a long diff and back.
+            KeyCode::F(12) => {
+                self.open_screens();
+                return;
+            }
+            // `F1` opens the written chapter rather than a generated page of keys: this
+            // screen's keys are its own rather than the keymap's, so the page of a place
+            // would not describe them. The foot line lists them while one is here.
+            KeyCode::F(1) => {
+                let chapter = crate::help::PROSE
+                    .iter()
+                    .position(|p| p.id == "viewer")
+                    .map(crate::help::Chapter::Prose)
+                    .unwrap_or(crate::help::Chapter::Index);
+                self.park_front_screen();
+                self.mode = Mode::Help {
+                    chapter,
+                    scroll: 0,
+                    at: 0,
+                };
+                return;
+            }
+            // The hunks, before the plain arrows below: the first arm that matches wins, and
+            // `Alt+↓` is a `Down` with a modifier. `Alt+arrow` because the plain arrows are
+            // the rows, and because a diff one reads is a diff one jumps through.
+            KeyCode::Down if key.mods.contains(Mods::ALT) => {
+                if !view.next_hunk() {
+                    error = Some("diff-no-next");
+                }
+            }
+            KeyCode::Up if key.mods.contains(Mods::ALT) => {
+                if !view.previous_hunk() {
+                    error = Some("diff-no-previous");
+                }
+            }
+            KeyCode::Up => view.scroll(-1, height),
+            KeyCode::Down => view.scroll(1, height),
+            KeyCode::PageUp => view.scroll(-(height as i64), height),
+            KeyCode::PageDown => view.scroll(height as i64, height),
+            KeyCode::Home => view.to_start(),
+            KeyCode::End => view.to_end(height),
+            KeyCode::Left => view.scroll_sideways(-1),
+            KeyCode::Right => view.scroll_sideways(1),
+            KeyCode::Tab => view.right_focused = !view.right_focused,
+            KeyCode::Char('w') | KeyCode::Char('W') => {
+                view.ignore.whitespace = !view.ignore.whitespace;
+                view.align();
+                message = Some(if view.ignore.whitespace {
+                    "diff-ignore-space-on"
+                } else {
+                    "diff-ignore-space-off"
+                });
+            }
+            KeyCode::Char('c') | KeyCode::Char('C') => {
+                view.ignore.case = !view.ignore.case;
+                view.align();
+                message = Some(if view.ignore.case {
+                    "diff-ignore-case-on"
+                } else {
+                    "diff-ignore-case-off"
+                });
+            }
+            KeyCode::Char('e') | KeyCode::Char('E') => {
+                view.ignore.line_endings = !view.ignore.line_endings;
+                view.align();
+                message = Some(if view.ignore.line_endings {
+                    "diff-ignore-eol-on"
+                } else {
+                    "diff-ignore-eol-off"
+                });
+            }
+            _ => {}
+        }
+        if let Some(id) = message {
+            let m = self.i18n.t(id);
+            self.set_status(m);
+        }
+        if let Some(id) = error {
+            let m = self.i18n.t(id);
+            self.set_error(m);
         }
     }
 
@@ -7048,6 +7234,7 @@ impl App {
             Command::OptHighlight => self.open_pick(PickKind::Highlight, self.active),
             Command::OptSortGroups => self.open_pick(PickKind::SortGroups, self.active),
             Command::OptMaskGroups => self.open_pick(PickKind::MaskGroups, self.active),
+            Command::ToolDiff => self.open_diff(),
             Command::ToolFindFolder => self.open_folder_list(None),
             Command::OptConfirmations => self.open_form(FormKind::Confirmations),
             Command::OptEditor => self.open_form(FormKind::EditorSettings),
@@ -23447,6 +23634,122 @@ five
         press(&mut app, "F8");
         assert_eq!(app.mode.viewer().unwrap().codepage.name(), "UTF-16LE");
         assert!(app.status.contains("codepage"), "{}", app.status);
+    }
+
+    /// A diff of two files that differ: the screen, the hunks, and what the three letters
+    /// change (SPEC 05 §3).
+    #[test]
+    fn two_files_are_compared_side_by_side_and_the_hunks_are_walked() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), b"one\ntwo\nthree\nfour\nfive\n").unwrap();
+        std::fs::write(dir.path().join("b.txt"), b"one\nTWO\nthree\nfour\nFIVE\n").unwrap();
+        let mut app = app_on_disk(dir.path());
+        // The left cursor on the first file, the right one on the second: the question
+        // "which two files" is answered by where the cursors are.
+        press(&mut app, "Down");
+        press(&mut app, "Tab");
+        press(&mut app, "Down");
+        press(&mut app, "Down");
+        press(&mut app, "Ctrl+Shift+D");
+
+        let Mode::Diff(view) = &app.mode else {
+            panic!("no diff: {}", app.status)
+        };
+        assert!(view.left_name.ends_with("a.txt"), "{}", view.left_name);
+        assert!(view.right_name.ends_with("b.txt"), "{}", view.right_name);
+        assert_eq!(view.hunks(), 2, "the second line and the fifth");
+        assert!(!view.identical());
+
+        // `Alt+↓` walks them, and the last one says it is the last rather than wrapping
+        // round to the top of a file one has just read.
+        assert_eq!(app.mode.diff().unwrap().hunk_at(), 0);
+        press(&mut app, "Alt+Down");
+        assert_eq!(app.mode.diff().unwrap().hunk_at(), 1);
+        press(&mut app, "Alt+Down");
+        assert_eq!(app.mode.diff().unwrap().hunk_at(), 2);
+        press(&mut app, "Alt+Down");
+        assert_eq!(
+            app.mode.diff().unwrap().hunk_at(),
+            2,
+            "it stays on the last"
+        );
+        assert_eq!(app.status, app.i18n.t("diff-no-next"));
+        assert!(app.status_error);
+        press(&mut app, "Alt+Up");
+        assert_eq!(app.mode.diff().unwrap().hunk_at(), 1);
+
+        // `Tab` is the other column, for the sideways scroll and for reading a long line.
+        assert!(!app.mode.diff().unwrap().right_focused);
+        press(&mut app, "Tab");
+        assert!(app.mode.diff().unwrap().right_focused);
+
+        // Ignoring case lines the two files up completely: both differences were a word in
+        // capitals, so the answer becomes "the same" while one looks at it.
+        press(&mut app, "C");
+        let view = app.mode.diff().unwrap();
+        assert!(view.ignore.case);
+        assert_eq!(view.hunks(), 0);
+        assert!(view.identical());
+        assert_eq!(app.status, app.i18n.t("diff-ignore-case-on"));
+        press(&mut app, "C");
+        assert_eq!(app.mode.diff().unwrap().hunks(), 2, "and back again");
+
+        // `W` and `E` are the other two questions one asks of a diff.
+        press(&mut app, "W");
+        assert!(app.mode.diff().unwrap().ignore.whitespace);
+        press(&mut app, "E");
+        assert!(
+            app.mode.diff().unwrap().ignore.line_endings,
+            "the comparison dialog leaves line endings counting, so `E` turns them off"
+        );
+
+        press(&mut app, "Esc");
+        assert!(matches!(app.mode, Mode::Normal), "and it closes");
+    }
+
+    /// Two files that are the same open all the same — one wants to see that they are —
+    /// and the screen says so rather than leaving the reader to scroll for a difference
+    /// that is not there.
+    #[test]
+    fn a_diff_of_two_equal_files_says_they_are_the_same() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), b"same\nlines\n").unwrap();
+        std::fs::write(dir.path().join("b.txt"), b"same\nlines\n").unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "Tab");
+        press(&mut app, "Down");
+        press(&mut app, "Down");
+        press(&mut app, "Ctrl+Shift+D");
+
+        let view = app.mode.diff().expect("the diff");
+        assert!(view.identical());
+        assert_eq!(view.hunks(), 0);
+        assert_eq!(app.status, app.i18n.t("diff-same"));
+    }
+
+    /// A cursor on `..`, on a directory, or on a file this program cannot read as bytes on
+    /// this disk: each says which it is instead of opening an empty screen.
+    #[test]
+    fn a_diff_needs_a_readable_file_under_each_cursor() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("docs")).unwrap();
+        std::fs::write(dir.path().join("a.txt"), b"one\n").unwrap();
+        let mut app = app_on_disk(dir.path());
+        // Both cursors are on `..`.
+        press(&mut app, "Ctrl+Shift+D");
+        assert!(matches!(app.mode, Mode::Normal));
+        assert_eq!(app.status, app.i18n.t("diff-needs-two"));
+        assert!(app.status_error);
+
+        // A directory is not a file either.
+        press(&mut app, "Down");
+        press(&mut app, "Tab");
+        press(&mut app, "Down");
+        press(&mut app, "Ctrl+Shift+D");
+        assert!(matches!(app.mode, Mode::Normal));
+        assert_eq!(app.status, app.i18n.t("diff-needs-two"));
+        assert!(app.status_error);
     }
 
     #[test]

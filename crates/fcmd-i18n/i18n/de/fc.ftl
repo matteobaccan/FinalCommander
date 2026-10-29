@@ -589,6 +589,24 @@ clip-off = die Ablage ist abgeschaltet — `ui.clipboard` in den Einstellungen
 history-gone = { $name } ist nicht mehr da
 hl-new = Neue Farbgruppe
 hl-edit = Farbgruppe
+# ------------------------------------------------- die Unterschiede (SPEC 05 §3)
+diff-title = Unterschiede
+menu-diff = Z&wei Dateien vergleichen
+diff-needs-two = Den Cursor in jedem Panel auf eine Datei setzen
+diff-not-here = { $name } ist keine Datei auf dieser Platte
+diff-too-big = { $name } ist größer als { $most }
+diff-same = Die beiden Dateien sind gleich
+diff-where = Block { $at } von { $count }
+diff-no-next = Der letzte Unterschied
+diff-no-previous = Der erste Unterschied
+diff-hint = Alt+↑↓ Blöcke · Tab Seite · W Leerzeichen · C Groß/Klein · E Zeilenenden · Esc schließen
+diff-ignore-space-on = Leerzeichen ignoriert
+diff-ignore-space-off = Leerzeichen zählen wieder
+diff-ignore-case-on = Groß- und Kleinschreibung ignoriert
+diff-ignore-case-off = Groß- und Kleinschreibung zählt wieder
+diff-ignore-eol-on = Zeilenenden ignoriert
+diff-ignore-eol-off = Zeilenenden zählen wieder
+
 # ------------------------------------------------- die Codepages (SPEC 05 §1.12)
 cp-title = Codepages
 cp-name-title = Wie diese Codepage heißen soll

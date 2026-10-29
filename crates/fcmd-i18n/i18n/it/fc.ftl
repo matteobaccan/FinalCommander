@@ -589,6 +589,24 @@ clip-off = gli appunti sono disattivati — `ui.clipboard` nelle impostazioni
 history-gone = { $name } non c’è più
 hl-new = Nuovo gruppo di colore
 hl-edit = Gruppo di colore
+# ------------------------------------------------- la schermata delle differenze (SPEC 05 §3)
+diff-title = Differenze
+menu-diff = Con&fronta due file
+diff-needs-two = Metti il cursore su un file in ciascun pannello
+diff-not-here = { $name } non è un file su questo disco
+diff-too-big = { $name } è più grande di { $most }
+diff-same = I due file sono uguali
+diff-where = blocco { $at } di { $count }
+diff-no-next = L'ultima differenza
+diff-no-previous = La prima differenza
+diff-hint = Alt+↑↓ blocchi · Tab lato · W spazi · C maiuscole · E fine riga · Esc chiude
+diff-ignore-space-on = Spazi ignorati
+diff-ignore-space-off = Gli spazi contano di nuovo
+diff-ignore-case-on = Maiuscole ignorate
+diff-ignore-case-off = Le maiuscole contano di nuovo
+diff-ignore-eol-on = Fine riga ignorata
+diff-ignore-eol-off = La fine riga conta di nuovo
+
 # ------------------------------------------------- le code page (SPEC 05 §1.12)
 cp-title = Code page
 cp-name-title = Come chiamare questa code page

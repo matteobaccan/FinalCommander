@@ -137,6 +137,7 @@ touch directories at all (a backlog line).
 | Apply a command line to each selected file | `Ctrl+G` | ✅ with FAR's metasymbols for the parts of the name |
 | Describe files (`descript.ion` / `files.bbs`) | `Ctrl+Z` | ✅ both names read, written back in UTF-8, shown by `Ctrl+6`/`Ctrl+7`, in the information panel and the status line, sorted by (`Ctrl+F10`), and carried by a copy, a move, a rename and a delete; ✗ inside an archive or on a server |
 | Compare folders | Commands menu | ✅ beyond FAR's own: by name, size and time; by content; and a dialog of what counts as a difference — case, a time tolerance, contents only when the time differs, a first-fragment read, line-endings-only, selected only, stop at the first, newer only — which is what `AdvCmpEx` is for in FAR. Recursive through the subdirectories, where the answer is a panel of marked rows, and `Find duplicates` by content under one tree |
+| Two files side by side with what differs marked | — (`Ctrl+Shift+D` here) | ✅ beyond FAR, which has no diff of its own and leaves it to a plugin: the file under each panel's cursor, two columns, the part of a changed line that changed marked inside it, `Alt+↑↓` from hunk to hunk, and blanks, case and line endings each a keystroke. Patience diff in `fcmd-core`, local files, 16 MiB a side |
 | Copy names, full names, UNC names, or the files themselves, to the clipboard | `Ctrl+Ins`, `Alt+Shift+Ins`, `Ctrl+Alt+Ins`, `Ctrl+Shift+C/X` | ◐ the names (`Ctrl+Ins`) and the whole paths (`Alt+Shift+Ins`), through the terminal's own `OSC 52`, so it works over `ssh` as well; ✗ the files themselves as clipboard objects, which is a desktop protocol and not a terminal one |
 
 ## 5. Masks, filters, groups, highlighting
@@ -290,7 +291,7 @@ What FAR ships as **plugins**, and what it tells us about scope:
 | `network` | network browser | ⊘ |
 | `tmppanel` | a panel made of an arbitrary file list | needed for find-panelize |
 | `proclist` | the process list as a panel | an idea, not a need |
-| `compare` | folder compare with contents and subfolders | planned |
+| `compare` | folder compare with contents and subfolders | ✅ shipped, with the dialog, the subfolders, and a side-by-side diff of two files beside it (`Ctrl+Shift+D`), which FAR has in no plugin of its own |
 | `emenu` | the OS context menu | ⊘ |
 | `farcmds` | the command prefixes above | wanted, cheap |
 | `luamacro` | the Lua macro engine | planned (SPEC 08) |

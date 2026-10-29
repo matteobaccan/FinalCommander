@@ -129,3 +129,33 @@ then name the functions in the disassembly. `Enter` on an offset takes the bytes
 Source files, class files and bytecode get a listing of their own where one makes sense: a
 `.class` is shown the way `javap -c` shows it, with the constant pool resolved into the
 comments.
+
+# Two files side by side
+
+`Ctrl+Shift+D` — *View file differences* in the Commands menu — puts the file under the left
+panel's cursor beside the file under the right panel's and marks what differs. *Compare by
+content* answers which of a hundred pairs differ; this answers what, in one pair, is
+different.
+
+Each column carries its own line numbers, and a line that exists on one side only has a number
+on that side and nothing opposite it. Where a line changed rather than appeared or vanished,
+the part that actually changed is marked inside it, so the eye goes to the one character that
+matters instead of reading both lines.
+
+`Alt+↓` and `Alt+↑` go from one difference to the next, which is how one reads a diff; the last
+one says it is the last rather than wrapping round. The arrows, `PgUp`, `PgDn`, `Home` and
+`End` move by rows, `←` and `→` scroll both columns together, and `Tab` changes which column is
+the one being read. `F12` lists this screen with the open viewers and editors, `F1` opens this
+chapter, and `Esc`, `F3` or `F10` closes it.
+
+Three keys change what counts as a difference, and each lines the two files up again at once:
+`W` ignores blanks, `C` ignores case, `E` ignores how the lines end. Line endings start from
+what the comparison dialog was last told, so the two agree about what "the same" means — the
+same checkout on Windows and on Linux differs in every line and in nothing that matters.
+
+Two files that are the same open all the same, and the screen says so rather than leaving you
+scrolling for a difference that is not there.
+
+Both files have to be on this disk and under 16 MiB: the whole of each is read into memory to
+line them up, so a file on a server or inside an archive says so by name rather than fetching
+a copy you did not ask for.

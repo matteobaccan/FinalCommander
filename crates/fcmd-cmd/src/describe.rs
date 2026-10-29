@@ -203,6 +203,7 @@ impl Command {
             Command::ToolDuplicates => "find the files under this directory that are copies",
             Command::ToolSyncDirs => "make the two directories hold the same thing",
             Command::ToolCompareContents => "compare them by what is in the files",
+            Command::ToolDiff => "the two files under the cursors, side by side",
             Command::ToolCalculator => "a calculator, in every base at once",
             Command::ToolTerminal => "a real terminal, with a shell in it",
             Command::ToolFind => "find files, by name or by what is in them",

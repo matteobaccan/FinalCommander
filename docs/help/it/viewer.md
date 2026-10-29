@@ -137,3 +137,34 @@ lì.
 
 I file sorgente, i class file e il bytecode hanno un listato tutto loro dove ha senso: un
 `.class` è mostrato come lo mostra `javap -c`, con la constant pool risolta nei commenti.
+
+# Due file affiancati
+
+`Ctrl+Shift+D` — *Confronta due file* nel menu Comandi — mette il file sotto il cursore
+del pannello di sinistra accanto a quello sotto il cursore di destra e segna quello che
+cambia. *Confronta per contenuto* risponde a quali di cento coppie sono diverse; questo
+risponde a cosa, in una coppia, è diverso.
+
+Ogni colonna porta i propri numeri di riga, e una riga che esiste da un solo lato ha il numero
+da quel lato e niente di fronte. Dove una riga è cambiata invece di comparire o sparire, la
+parte che è davvero cambiata è segnata dentro la riga, così l'occhio va al carattere che conta
+invece di rileggere tutte e due.
+
+`Alt+↓` e `Alt+↑` vanno da una differenza all'altra, che è il modo in cui si legge un diff;
+l'ultima dice che è l'ultima invece di ricominciare dall'inizio. Le frecce, `PgSu`, `PgGiù`,
+`Home` e `Fine` muovono per righe, `←` e `→` scorrono le due colonne insieme, e `Tab` cambia
+quale delle due stai leggendo. `F12` elenca questa schermata con i visualizzatori e gli editor
+aperti, `F1` apre questo capitolo, e `Esc`, `F3` o `F10` la chiude.
+
+Tre tasti cambiano cosa conta come differenza, e ognuno riallinea subito i due file: `W` ignora
+gli spazi, `C` ignora le maiuscole, `E` ignora come finiscono le righe. I fine riga partono da
+quello che è stato detto l'ultima volta al dialogo del confronto, così i due sono d'accordo su
+cosa vuol dire "uguale" — lo stesso checkout su Windows e su Linux è diverso in ogni riga e in
+niente che conti.
+
+Due file uguali si aprono comunque, e la schermata lo dice invece di lasciarti scorrere alla
+ricerca di una differenza che non c'è.
+
+I due file devono essere su questo disco e sotto i 16 MiB: di ognuno si legge tutto in memoria
+per allinearli, quindi un file su un server o dentro un archivio lo dice col suo nome invece di
+scaricarne una copia che non hai chiesto.

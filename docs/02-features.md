@@ -88,7 +88,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 3.12 | Split / combine files; ~~checksum create & verify (`.md5`, `.sha1`, `.sha256`)~~ | TC/KRU | **checksums shipped** (MD5, SHA-1, SHA-256, in the format those tools read); split, combine and `.sfv` still to come |
 | 3.13 | Apply command to each selected file (`Ctrl+G` style), with `%`-macros | FAR | M2 |
 | 3.14 | ~~Compare directories (by name/size/date/content), synchronise directories with preview and one-way/two-way modes~~ | TC/KRU | **shipped**; comparing subfolders in the *compare* command, and a saved sync job, still to come |
-| 3.15 | Compare files by content (internal diff viewer, side-by-side, word-level) | MC/KRU | M3 |
+| 3.15 | ~~Compare files by content (internal diff viewer, side-by-side, word-level)~~ | MC/KRU | **shipped**: `Ctrl+Shift+D` on the file under each cursor, patience diff, word-level marks inside a changed line, hunk-to-hunk with `Alt+↑↓`, blanks, case and line endings each a keystroke; a unified view, copying a hunk across and a byte comparison of two binaries still to come |
 | 3.16 | Change encoding / line endings in bulk (CRLF↔LF, codepage recode) | MC | M3 |
 | 3.17 | ~~File descriptions/comments (`descript.ion`, `files.bbs`)~~ | FAR | **shipped** (0.7.3): read, shown in two views, `Ctrl+Z` writes one, and the jobs carry them |
 | 3.18 | Undo for destructive operations where the FS allows (trash-based) | NEW | M3 |

@@ -104,11 +104,12 @@ Unselect group, Invert selection, Select all, Restore selection · Folder size.
 
 ### 2.3 Commands
 
-Find file, Command history (backlog), View and edit history (backlog), Folders history (§4.4) ·
-Swap panels, Sync other panel, Panels on/off, Compare folders, Compare by content · Connections,
-Disconnect · User menu, File associations (backlog), Folder shortcuts (§4.4b) · Plugin
-commands (backlog), Screens list (backlog: our own viewers, editors and jobs), Task list
-(backlog: the operating system's processes, as FAR's is — see `docs/BACKLOG.md`).
+Find file, Command history, View and edit history, Folders history (§4.4) · Swap panels, Sync
+other panel, Panels on/off, Compare folders, Synchronise folders, Open tunnel, Tunnels, Compare
+by content, View file differences (`Ctrl+Shift+D`, SPEC 05 §3), Compare with setup, Find
+duplicates, Calculator, Terminal · Connections, Disconnect · User menu, File associations,
+Folder shortcuts (§4.4b) · Plugin commands (backlog), Screens list, Record macro, Macros, Task
+list (backlog: the operating system's processes, as FAR's is — see `docs/BACKLOG.md`).
 
 *Folder shortcuts* appears once, after the associations, where FAR puts it. It used to appear
 twice — the same words, the same key and the same command, once up with the histories — which

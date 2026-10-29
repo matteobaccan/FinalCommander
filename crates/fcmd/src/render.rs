@@ -519,6 +519,10 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         draw_job(app, view, buf, screen);
         return None;
     }
+    if let Some(view) = app.mode.diff() {
+        draw_diff(app, view, buf, screen);
+        return None;
+    }
     match &app.mode {
         Mode::Normal => None,
         Mode::Find(view) => {
@@ -563,6 +567,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             None
         }
         Mode::Job(_) => None,    // handled above, through `Mode::job()`
+        Mode::Diff(_) => None,   // handled above, through `Mode::diff()`
         Mode::Viewer(_) => None, // handled above, before the panels are drawn
         Mode::Editor(_) | Mode::Hex(_) => None, // handled above, before the panels are drawn
         Mode::Message { title, lines } => {
@@ -2155,6 +2160,124 @@ fn draw_palette(app: &App, view: &crate::app::PaletteView, buf: &mut Buffer, scr
         dim,
         inner.w,
     );
+}
+
+/// Two files side by side, with what differs marked (SPEC 05 §3).
+///
+/// The two columns are the same width, because the eye compares by position: a left column
+/// sized to its longest line and a right one sized to its own would put the same line in two
+/// places. Both scroll sideways together for the same reason.
+fn draw_diff(app: &App, view: &fcmd_view::Diff, buf: &mut Buffer, screen: Rect) {
+    use fcmd_view::Side;
+
+    let base = app.theme.panel();
+    let frame = Style::new(app.theme.color("panel.frame"), app.theme.color("panel.bg"));
+    let dim = Style::new(
+        app.theme.color("panel.footer.fg"),
+        app.theme.color("panel.bg"),
+    );
+    // One ink per kind, taken from what the panel already uses for the same idea: a line that
+    // is only on one side is the colour of a file that is not there any more, and the part of
+    // a line that changed is the selection's.
+    let removed = Style::new(app.theme.color("file.exec"), app.theme.color("panel.bg"));
+    let added = Style::new(app.theme.color("file.archive"), app.theme.color("panel.bg"));
+    let inner_mark = Style::new(
+        app.theme.color("selected.fg"),
+        app.theme.color("selected.bg"),
+    );
+
+    buf.fill(screen, ' ', base);
+    let title = app.i18n.t("diff-title");
+    buf.draw_frame(screen, frame, Some(&title));
+    let inner = screen.inner();
+    if inner.h < 3 || inner.w < 20 {
+        return;
+    }
+    // A row at the top for the two names, and one at the foot for the keys and the count.
+    let rows_h = inner.h.saturating_sub(2) as usize;
+    // Each side: a line number, a space, and the text. The middle column is one character.
+    let side_w = (inner.w.saturating_sub(1) / 2).max(8);
+    let number_w = 6u16;
+    let text_w = side_w.saturating_sub(number_w + 1).max(4) as usize;
+
+    let names = format!(
+        "{}  ↔  {}",
+        fcmd_ui::elide_middle(&view.left_name, (side_w as usize).saturating_sub(2)),
+        fcmd_ui::elide_middle(&view.right_name, (side_w as usize).saturating_sub(2))
+    );
+    buf.put_str(inner.x, inner.y, &names, dim, inner.w);
+
+    let top = inner.y + 1;
+    for (i, row) in view.window(rows_h as u16).iter().enumerate() {
+        let y = top + i as u16;
+        let style = match row.kind {
+            Side::Same => base,
+            Side::Removed => removed,
+            Side::Added => added,
+            Side::Changed => base,
+        };
+        // The rule down the middle, drawn whatever is on either side of it.
+        buf.put_str(inner.x + side_w, y, "│", frame, 1);
+        let mut side =
+            |x: u16, number: Option<usize>, text: &str, mark: &std::ops::Range<usize>| {
+                let label = match number {
+                    Some(n) => format!("{n:>5} "),
+                    None => " ".repeat(number_w as usize),
+                };
+                buf.put_str(x, y, &label, dim, number_w);
+                let from = view.col.min(text.len());
+                let shown: String = text[from..].chars().take(text_w).collect();
+                buf.put_str(x + number_w, y, &shown, style, text_w as u16);
+                // The part that differs, over the top of what was just drawn: the eye goes
+                // there, which is the whole point of a word diff.
+                if row.kind == Side::Changed && !mark.is_empty() {
+                    let start = mark.start.max(from);
+                    let end = mark.end.max(start);
+                    if end > from {
+                        let before = text[from..start].chars().count();
+                        let part: String = text[start..end].chars().take(text_w).collect();
+                        if before < text_w {
+                            buf.put_str(
+                                x + number_w + before as u16,
+                                y,
+                                &part,
+                                inner_mark,
+                                (text_w - before) as u16,
+                            );
+                        }
+                    }
+                }
+            };
+        side(inner.x, row.left_no, &row.left, &row.left_inner);
+        side(
+            inner.x + side_w + 1,
+            row.right_no,
+            &row.right,
+            &row.right_inner,
+        );
+    }
+
+    let foot = if view.identical() {
+        app.i18n.t("diff-same")
+    } else {
+        app.i18n.t_args(
+            "diff-where",
+            &[
+                ("at", (view.hunk_at() as i64).into()),
+                ("count", (view.hunks() as i64).into()),
+            ],
+        )
+    };
+    let keys = app.i18n.t("diff-hint");
+    let y = inner.y + inner.h - 1;
+    buf.put_str(inner.x, y, &foot, dim, inner.w);
+    // The keys go at the right end, where there is room for them.
+    let room = inner.w as usize;
+    let used = foot.chars().count() + 2;
+    let want = keys.chars().count();
+    if room > used + want {
+        buf.put_str(inner.x + (room - want) as u16, y, &keys, dim, want as u16);
+    }
 }
 
 fn draw_sync(app: &App, view: &crate::app::SyncView, buf: &mut Buffer, screen: Rect) {

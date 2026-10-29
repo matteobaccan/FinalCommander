@@ -578,10 +578,58 @@ far is this offset from that one, what is this field with the top bit set — an
 reads the numbers typed into the assembler and the block operations, so a number means the same
 thing everywhere in the program.
 
-## 3. Diff viewer (M3)
+## 3. Diff: two files side by side (`Ctrl+Shift+D`)
 
-Side-by-side and unified views of two files (or the two panels' cursor items, or a file against
-its on-disk version), with word-level intra-line diff, synchronised scrolling, next/previous
-change, copy-block-to-other-side (producing a normal job), ignore-whitespace/case/EOL options,
-and binary comparison (first differing offset, hex context). Backed by a Myers/patience diff
-implementation in `fcmd-core`.
+Two files, two columns, and what differs marked — the screen a reader of two versions of the
+same file wants, and the one gap a commander coming from Midnight Commander or Krusader notices
+at once. `Compare by content` (§SPEC 03 §11) answers *which of these hundred pairs differ*; this
+answers *and what, in this pair, is different*, which is a different question and needs a screen
+rather than a selection.
+
+**Which two files.** The one under each panel's cursor. Not a dialog: the question is already
+answered by where the cursors are, which is how the comparison commands beside it in the same
+menu work too. A cursor on `..` or on a directory says so instead of opening an empty screen.
+
+**What it will not read.** A file on a server or inside an archive says so by name rather than
+fetching a copy behind the reader's back: the whole of both files has to be in memory to line
+them up, and a silent download of two hundred megabytes over SFTP is not what `Ctrl+Shift+D`
+looks like it will do. The limit is 16 MiB a side (`fcmd_view::diff::MOST`) and a file over it
+is refused with its size, because the alignment below is quadratic in the worst case and a
+screen that hangs is worse than one that declines.
+
+**The algorithm** is in `fcmd-core::diff`, with no dependency: patience diff — the lines that
+occur exactly once on each side are the anchors, the longest rising sequence of them is kept,
+and each region between two anchors is solved the same way again. A region with no unique line
+left and at most 400 lines (`EXACT`) is finished with a proper longest-common-subsequence
+table, which is where the quadratic cost is bounded; a larger anchorless region is reported as
+one removal and one addition, which is what it is. Patience rather than Myers because the
+answer is the one a reader expects — a moved function reads as moved, not as a thousand
+alternating lines — and because the whole of it is a hundred lines one can read and verify.
+Inside a changed pair of lines, `diff::inside` narrows the difference to the part that actually
+changed, on character boundaries, and that part is drawn in the selection's colours: the word
+diff is the eye's shortcut to the one character that matters.
+
+**What is ignored.** Three questions, each a keystroke and each lining the files up again at
+once, so one watches the answer change: `W` blanks, `C` case, `E` line endings. Line endings
+start from `[compare] ignore_eol`, so the screen and the folder comparison agree about what
+"the same" means; blanks and case start off, because they are a question one asks of the diff
+in front of one rather than a setting one keeps.
+
+**The screen.** Two equal columns with a rule between them, six columns of line number on each
+side — a line that exists on one side only has a number on that side and nothing on the other —
+and a foot line with which hunk of how many is under the cursor and the keys. `Alt+↓` and
+`Alt+↑` are the hunks, which is the key one presses forty times; the plain arrows, `PgUp`,
+`PgDn`, `Home` and `End` are the rows, `←` and `→` scroll both columns sideways together, and
+`Tab` changes which column is the one being read. `F1` opens the written chapter, `Esc`, `F3`
+and `F10` close. Two files that are the same open all the same — one wants to see that they
+are — and the screen says so rather than leaving the reader to scroll for a difference that is
+not there.
+
+**It is a screen**, so `F12` lists it with the viewers and editors and one steps away from it
+and back.
+
+Still to come, and deliberately not in the first cut: a unified view, which is a second layout
+of the same rows; copying a hunk to the other side, which is an edit of a file and belongs to
+the editor rather than to a reader; a diff of a file against the copy on disk, which is the
+editor's question; and a byte comparison of two binaries with the first differing offset and
+hex context, for which the pair is simply too large to line up as lines.

@@ -597,6 +597,24 @@ clip-off = the clipboard is turned off — `ui.clipboard` in the settings
 history-gone = { $name } is not there any more
 hl-new = New colour group
 hl-edit = Colour group
+# ------------------------------------------------- the diff screen (SPEC 05 §3)
+diff-title = Differences
+menu-diff = &View file differences
+diff-needs-two = Put the cursor on a file in each panel
+diff-not-here = { $name } is not a file on this disk
+diff-too-big = { $name } is larger than { $most }
+diff-same = The two files are the same
+diff-where = hunk { $at } of { $count }
+diff-no-next = The last difference
+diff-no-previous = The first difference
+diff-hint = Alt+↑↓ hunks · Tab side · W space · C case · E line ends · Esc close
+diff-ignore-space-on = Blanks ignored
+diff-ignore-space-off = Blanks count again
+diff-ignore-case-on = Case ignored
+diff-ignore-case-off = Case counts again
+diff-ignore-eol-on = Line endings ignored
+diff-ignore-eol-off = Line endings count again
+
 # ------------------------------------------------- the code pages (SPEC 05 §1.12)
 cp-title = Code pages
 cp-name-title = What to call this code page
