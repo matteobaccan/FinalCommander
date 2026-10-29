@@ -226,6 +226,8 @@ btn-cancel = Annuler
 msg-nothing-to-do = rien de sélectionné
 cmd-complete-nothing = rien pour compléter cela
 complete-several = { $count } noms commencent ainsi
+form-moving = les flèches déplacent la boîte · Entrée ou Échap la laisse là
+form-moved = la boîte reste où vous l'avez mise
 msg-trash-refused = { $path } : la corbeille le refuse — Maj+Suppr le supprime définitivement
 
 # Checksums (SPEC 03 §9)

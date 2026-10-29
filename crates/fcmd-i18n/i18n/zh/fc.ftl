@@ -226,6 +226,8 @@ btn-cancel = 取消
 msg-nothing-to-do = 未选择任何内容
 cmd-complete-nothing = 没有可补全的内容
 complete-several = { $count } 个名字以此开头
+form-moving = 方向键移动对话框 · Enter 或 Esc 将其留在那里
+form-moved = 对话框留在你放的位置
 msg-trash-refused = { $path }：回收站不接收它 — Shift+Del 可永久删除
 
 # Checksums (SPEC 03 §9)

@@ -643,6 +643,15 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             let rows = form.rows();
             let tabs = form.tabs();
             let buttons = form.buttons.clone();
+            let moved = (app.form_offset != (0, 0)).then(|| {
+                let (dx, dy) = app.form_offset;
+                Rect::new(
+                    screen.x.saturating_add_signed(dx),
+                    screen.y.saturating_add_signed(dy),
+                    screen.w,
+                    screen.h,
+                )
+            });
             let area = widgets::draw_form(
                 buf,
                 &app.theme,
@@ -655,7 +664,10 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
                     button: form.button,
                     tabs: &tabs,
                     tab: form.page,
-                    over: None,
+                    // Where `Ctrl+F5` has pushed it. The dialog is centred on what it is
+                    // *about*, so moving it is moving that rectangle; `draw_form` clamps the
+                    // result to the screen, which is why the offset needs no limit of its own.
+                    over: moved,
                 },
             );
             // A text row shows a real caret; everything else leaves the cursor hidden.

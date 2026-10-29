@@ -8,6 +8,14 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **`Ctrl+F5` moves a dialog** (SPEC 10 §3). FAR's own key, for FAR's own reason: a dialog
+  covers the thing it is about — the file under the cursor, the panel one is copying from — and
+  sometimes that is the one thing one needs to read. The arrows push it about while it is
+  moving, `Enter` and `Esc` only *stop* moving it (neither answers nor closes it, because a key
+  that threw the dialog away while one was pushing it about would be a trap), and where it was
+  pushed to is forgotten when it closes, so the next one opens where it belongs. It is clamped
+  to the screen rather than pushed off it.
+
 - **`Tab` completes a path in a dialog** (SPEC 10 §3). The destination of a copy is typed far
   more often than it is chosen from a tree, and `/usr/lo` is most of `/usr/local/`: `Tab` on a
   row that names a path now finishes it the way a shell does. One match is written out whole —

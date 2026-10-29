@@ -183,6 +183,14 @@ the half-typed path names, which is the same rule the command line's own complet
 Keys: `↑`/`↓` move over the settable rows, `Tab` moves to the buttons and between them, `Enter`
 on the buttons answers the dialog, `F10` is `OK` from anywhere, `Esc` cancels and keeps nothing.
 
+`Ctrl+F5` hands the arrows to the dialog itself, as it does in FAR: a dialog covers the thing
+it is about — the file under the cursor, the panel one is copying from — and sometimes that is
+the one thing one needs to read. While it is moving, `Enter` and `Esc` only *stop* moving it;
+neither answers nor closes it, because a key that threw the dialog away while one was pushing
+it about would be a trap. Where it was pushed to is forgotten when the dialog closes, so the
+next one opens where it belongs, and the dialog is clamped to the screen rather than pushed off
+it.
+
 ### 3.1 System settings
 
 | Row | Key | Values |

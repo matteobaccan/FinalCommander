@@ -1626,6 +1626,15 @@ pub struct App {
     pub tabs: [crate::tabs::Row; 2],
     /// The folders kept to hand (SPEC 02 §11), as the state file holds them.
     pub bookmarks: Vec<fcmd_config::Bookmark>,
+    /// How far the open dialog has been moved from where it opened, and whether the arrows
+    /// are moving it (`Ctrl+F5`, SPEC 10 §3).
+    ///
+    /// A dialog covers the thing it is about — the file under the cursor, the panel one is
+    /// copying from — and sometimes that is the one thing one needs to read. It lives here
+    /// rather than in the `Form` because it belongs to the dialog's time on the screen and
+    /// not to its contents: closing the dialog loses it, which is what one wants.
+    pub form_offset: (i16, i16),
+    pub form_moving: bool,
     /// Which colour group the open dialog is editing, or `None` for a new one
     /// (SPEC 10 §3.11).
     pub highlight_at: Option<usize>,
@@ -1956,6 +1965,8 @@ impl App {
             bookmarks: Vec::new(),
             file_history: Vec::new(),
             marks: crate::history::Marks::default(),
+            form_offset: (0, 0),
+            form_moving: false,
             highlight_at: None,
             sort_group_at: None,
             folder_scan: None,
@@ -2999,6 +3010,12 @@ impl App {
     }
 
     pub fn handle_input(&mut self, input: Input) {
+        // Where a dialog was moved to is forgotten the moment there is no dialog: the next
+        // one opens where it belongs rather than where the last one was pushed.
+        if !matches!(self.mode, Mode::Form(_)) && self.form_offset != (0, 0) {
+            self.form_offset = (0, 0);
+            self.form_moving = false;
+        }
         match input {
             Input::Key(key) => self.handle_key(key),
             Input::Paste(text) => self.paste(&text),
@@ -11185,6 +11202,41 @@ impl App {
         // A row that takes text takes the editing keys too, so a path with spaces or a minus
         // in it can be typed.
         let text = form.on_text() && form.button.is_none();
+        // `Ctrl+F5` hands the arrows to the dialog itself: it covers the thing it is about,
+        // and sometimes that is the one thing one needs to read. FAR's own key.
+        if key.code == KeyCode::F(5) && key.mods.contains(Mods::CTRL) {
+            self.form_moving = !self.form_moving;
+            let msg = self.i18n.t(if self.form_moving {
+                "form-moving"
+            } else {
+                "form-moved"
+            });
+            self.set_status(msg);
+            return;
+        }
+        if self.form_moving {
+            let (dx, dy) = &mut self.form_offset;
+            match key.code {
+                KeyCode::Left => *dx -= 1,
+                KeyCode::Right => *dx += 1,
+                KeyCode::Up => *dy -= 1,
+                KeyCode::Down => *dy += 1,
+                // Leaving the move is the one thing `Enter` and `Esc` do here: a dialog
+                // answered or thrown away by the key that stops moving it would be a trap.
+                KeyCode::Enter | KeyCode::Esc => {
+                    self.form_moving = false;
+                    let msg = self.i18n.t("form-moved");
+                    self.set_status(msg);
+                }
+                // Everything else is still the dialog's: typing into a row while the dialog
+                // is being moved is odd but harmless, and refusing keys silently is worse.
+                _ => {
+                    self.form_moving = false;
+                    self.form_key(key);
+                }
+            }
+            return;
+        }
         match key.code {
             KeyCode::Esc => {
                 self.mode = Mode::Normal;
@@ -20416,6 +20468,45 @@ mod tests {
             panic!("the dialog closed")
         };
         assert_eq!(form.button, Some(0), "Tab did not go to the buttons");
+    }
+
+    /// `Ctrl+F5` hands the arrows to the dialog, so it can be pushed off whatever it is
+    /// covering; `Enter` and `Esc` leave it where it was put without answering or closing it.
+    #[test]
+    fn ctrl_f5_moves_a_dialog_and_enter_only_stops_moving_it() {
+        let mut app = app();
+        app.run(Command::OptSystem);
+        assert!(matches!(app.mode, Mode::Form(_)), "{:?}", app.mode);
+        assert_eq!(app.form_offset, (0, 0));
+
+        press(&mut app, "Ctrl+F5");
+        assert!(app.form_moving);
+        press(&mut app, "Down");
+        press(&mut app, "Down");
+        press(&mut app, "Right");
+        assert_eq!(app.form_offset, (1, 2), "the arrows moved the dialog");
+
+        // The rows were not walked while the dialog was being moved.
+        let Mode::Form(form) = &app.mode else {
+            panic!("the dialog closed")
+        };
+        assert_eq!(form.cursor_row(), 0, "the cursor stayed where it was");
+
+        // `Enter` stops the move and does not answer the dialog.
+        press(&mut app, "Enter");
+        assert!(!app.form_moving);
+        assert!(matches!(app.mode, Mode::Form(_)), "Enter answered it");
+        assert_eq!(app.form_offset, (1, 2), "and it stayed where it was put");
+
+        // `Esc` now closes it as it always did, and the offset goes with the dialog.
+        press(&mut app, "Esc");
+        assert!(matches!(app.mode, Mode::Normal), "{:?}", app.mode);
+        press(&mut app, "Down");
+        assert_eq!(
+            app.form_offset,
+            (0, 0),
+            "the next dialog opens where it belongs"
+        );
     }
 
     /// The key bar follows the modifier, and what it shows is what the keymap really does.
