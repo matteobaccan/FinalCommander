@@ -8,6 +8,16 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **A host key that changed says where the old one is written** (SPEC 04 §6c). Accepting a key
+  nobody has seen was already a question with the fingerprint in view; a key that is *recorded
+  and different* was a refusal and a sentence, and then you had to go and find
+  `known_hosts` yourself. Now the refusal is the same — a rebuilt server and somebody in the
+  middle look exactly alike from here, and nothing accepts a changed key — but the dialog
+  names the file and the line the old key is on, and its other button opens that file in the
+  editor **on that line**. *Cancel* is under the cursor: this is not a question to answer by
+  pressing `Enter` without reading it. Taking the line out stays the reader's own act, which
+  is what `ssh` makes one do, for the same reason.
+
 - **A large file goes up to object storage in parts** (SPEC 04 §8.3b). One `PUT` is the better
   answer while it works — one signature, one round trip, nothing left behind if it fails — and
   it stops working at five gigabytes, which is the service's own limit; well before that it is

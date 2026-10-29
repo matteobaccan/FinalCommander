@@ -74,6 +74,12 @@ Una host key che il programma non ha mai visto lo fa fermare e la mostra prima c
 mandato qualcosa, e la registra solo se glielo dici. Una password viene chiesta quando serve,
 non viene mai mostrata e non viene mai scritta da nessuna parte.
 
+Una host key **registrata e diversa** viene rifiutata, e qui niente la accetta: un server che
+qualcuno ha rifatto e qualcuno che si è messo in mezzo, da questa parte, sono identici. Il
+dialogo dice quale file `known_hosts` e quale riga contiene la chiave vecchia, e il suo altro
+bottone apre quel file nell'editor su quella riga — sotto il cursore c'è *Annulla*. Togliere la
+riga tocca a te, con gli occhi sopra: è quello che `ssh` ti fa fare, per lo stesso motivo.
+
 `F7` nel gestore delle connessioni salva una sessione, `F4` ne modifica una, e `d` disconnette.
 Quello che viene salvato è l'host, l'utente e il percorso — non la password.
 

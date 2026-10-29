@@ -1033,6 +1033,12 @@ fn interactive(mut app: App) -> Result<()> {
                             Err(fcmd_net::NetError::UnknownHostKey { fingerprint, .. }) => {
                                 ConnectOutcome::UnknownHostKey { fingerprint }
                             }
+                            Err(fcmd_net::NetError::ChangedHostKey { path, line, .. }) => {
+                                ConnectOutcome::ChangedHostKey {
+                                    path: path.display().to_string(),
+                                    line,
+                                }
+                            }
                             Err(e) => ConnectOutcome::Failed(e.to_string()),
                         };
                         let _ = tx.send(Event::Connected {

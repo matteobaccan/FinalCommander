@@ -85,6 +85,7 @@ impl client::Handler for Client {
             }),
             Err(russh::keys::Error::KeyChanged { line }) => Err(NetError::ChangedHostKey {
                 host: self.host.clone(),
+                path: path.clone(),
                 line,
             }),
             Err(e) => Err(NetError::Connect {

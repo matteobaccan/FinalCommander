@@ -23,9 +23,14 @@ pub enum NetError {
     UnknownHostKey { host: String, fingerprint: String },
 
     /// The key changed. This is the interesting one: we refuse, loudly, and never offer to
-    /// "just accept it" in the same breath.
-    #[error("{host}: the host key has CHANGED (known_hosts line {line}) — refusing to connect")]
-    ChangedHostKey { host: String, line: usize },
+    /// "just accept it" in the same breath — but we say *where* the old one is written, so
+    /// the reader can go and look at it rather than hunt for the file.
+    #[error("{host}: the host key has CHANGED ({} line {line}) — refusing to connect", path.display())]
+    ChangedHostKey {
+        host: String,
+        path: std::path::PathBuf,
+        line: usize,
+    },
 
     /// The connection needs something we were not given (a password, a key passphrase).
     #[error("{user}@{host}: {} required", kind.as_str())]

@@ -224,8 +224,14 @@ files rather than guessing what its dialog says.
   `far/farlang.templ.m4`; French, Chinese and the rows FAR has not got keep our rule (first
   free word initial, then any free letter), and a row of ours gives way where it would collide
   with a FAR row. SPEC 10 §2 has the whole of it, and a test keeps the letters unique.
-- **The folders**, and what *Select folders* should do with them, are the author's to decide;
-  nothing is to be built there until the decisions arrive.
+- ~~The folders, and what *Select folders* should do with them~~ — answered: FAR's own rule,
+  and FAR's own default. The keys that name a mask leave directories alone unless
+  `panel.select_folders` is on, because one types `*.rs` to select the sources and not the
+  directories whose names happen to end that way; *select all* and *invert all* take them
+  either way, because they name no mask. A mask in a **filter** or a **highlight group**
+  still applies to directories, and that stays: both already have a *kind* condition (files
+  only, directories only) to say it with, which the selection keys have not. SPEC 02 §4b has
+  the whole of it.
 
 ## What is worth doing next, in rough order
 

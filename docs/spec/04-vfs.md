@@ -228,6 +228,22 @@ host-key check, one connection, one more channel.
 - Closing a tunnel drops its listener and every channel on it, which frees the port at once.
   The list shows connections carried, open now, and refused.
 
+### 6c. The host key, and the two cases that are not the same case
+
+**A key nobody has seen** is a question: the fingerprint is on the screen, `Enter` records it
+in `known_hosts` and connects, `Esc` does neither. Trust on first use, and one key at a time —
+saying yes to one host is not saying yes to every host from now on, so the flag is cleared
+after the attempt it was set for.
+
+**A key that is recorded and different** is not a question, and it is deliberately not asked
+as one. A rebuilt server and somebody in the middle look exactly alike from here, and a dialog
+that offered *accept the new key* beside *cancel* would be answered with `Enter` by the same
+reflex that answers every other dialog. So the connection is refused, and what the dialog
+offers instead is the *file*: it names `known_hosts` and the line the old key is written on,
+and its other button opens that file in the editor **on that line**, with *Cancel* under the
+cursor. Taking the line out is the reader's own act, which is what `ssh` makes one do, for the
+same reason. Nothing here ever rewrites `known_hosts` for a key that changed.
+
 ### 6.1 How the netbox is tested
 
 Two layers, because a provider that can only be tested against someone's server is not tested:

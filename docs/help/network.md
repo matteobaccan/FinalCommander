@@ -71,6 +71,13 @@ A host key the program has never seen stops and shows it before anything is sent
 it only if you say so. A password is asked for when it is needed, never echoed and never
 written anywhere.
 
+A host key that is **recorded and different** is refused, and nothing here will accept it: a
+server somebody rebuilt and somebody sitting in the middle look exactly alike from this end.
+The dialog says which `known_hosts` file and which line the old key is written on, and its
+other button opens that file in the editor on that line — *Cancel* is the one under the
+cursor. Taking the line out is yours to do, with your eyes on it, which is what `ssh` makes
+you do for the same reason.
+
 `F7` in the connection manager stores a session, `F4` edits one, and `d` disconnects. What is
 stored is the host, the user and the path — not the password.
 

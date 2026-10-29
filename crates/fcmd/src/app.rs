@@ -621,6 +621,12 @@ pub enum ConnectOutcome {
     UnknownHostKey {
         fingerprint: String,
     },
+    /// The host *is* in `known_hosts` and the key is not the one recorded. We refuse, and
+    /// say where the old one is written (SPEC 04 §6c).
+    ChangedHostKey {
+        path: String,
+        line: usize,
+    },
     Failed(String),
 }
 
@@ -942,6 +948,13 @@ pub enum ConfirmAction {
         side: usize,
         filter: String,
     },
+    /// Open `known_hosts` where the key that changed is written, at that line.
+    ///
+    /// Not "accept the new key": a key that is recorded and different is a rebuilt server or
+    /// somebody in the middle, and the two look the same from here. The file opens, the line
+    /// is under the cursor, and taking it out is the reader's own act — which is what
+    /// `ssh` makes one do, for the same reason.
+    OpenKnownHosts { path: String, line: usize },
     /// Record a host key we have never seen and connect.
     AcceptHostKey {
         panel: usize,
@@ -977,6 +990,7 @@ impl ConfirmAction {
                 _ => "btn-service-restart",
             },
             ConfirmAction::AcceptHostKey { .. } => "btn-accept",
+            ConfirmAction::OpenKnownHosts { .. } => "btn-open-file",
         }
     }
 }
@@ -3462,6 +3476,14 @@ impl App {
                             secret,
                             accept_host_key: true,
                         });
+                    }
+                    ConfirmAction::OpenKnownHosts { path, line } => {
+                        self.edit_path(&path);
+                        // On the line the old key is written on, so the reader is looking at
+                        // the thing they have to decide about.
+                        if let Mode::Editor(editor) = &mut self.mode {
+                            editor.goto(&line.to_string());
+                        }
                     }
                 }
             }
@@ -7984,6 +8006,34 @@ impl App {
                         secret,
                     },
                     button: 0,
+                });
+            }
+            // A key that is recorded and different: we refuse, and the dialog says where the
+            // old one is written rather than leaving the reader to find the file
+            // (SPEC 04 §6c). The default button is *Cancel* — this is not a question one
+            // answers by pressing `Enter` without reading it.
+            ConnectOutcome::ChangedHostKey { path, line } => {
+                self.pending_connect = None;
+                let title = self.i18n.t("net-hostkey-changed-title");
+                let lines = vec![
+                    self.i18n.t_args(
+                        "net-hostkey-changed-body",
+                        &[("host", site.host.clone().into())],
+                    ),
+                    self.i18n.t_args(
+                        "net-hostkey-changed-where",
+                        &[
+                            ("path", path.clone().into()),
+                            ("line", line.to_string().into()),
+                        ],
+                    ),
+                    self.i18n.t("net-hostkey-changed-what"),
+                ];
+                self.mode = Mode::Confirm(Confirm {
+                    title,
+                    lines,
+                    action: ConfirmAction::OpenKnownHosts { path, line },
+                    button: 1,
                 });
             }
             ConnectOutcome::Failed(detail) => {
@@ -25988,6 +26038,71 @@ abcdefghij
         press(&mut app, "Enter");
         let (_, _, _, accept) = connect_request(&mut app);
         assert!(accept, "the retry must carry the user's decision");
+    }
+
+    /// A key that is recorded and *different*: we refuse, say where the old one is written,
+    /// and offer to open that file rather than to accept anything (SPEC 04 §6c).
+    #[test]
+    fn a_changed_host_key_is_refused_and_points_at_the_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let known = dir.path().join("known_hosts");
+        std::fs::write(
+            &known,
+            "host.example ssh-ed25519 AAAAold\nother ssh-rsa AAAAkey\n",
+        )
+        .unwrap();
+        let mut app = net_app();
+        app.handle_event(Event::Connected {
+            panel: 0,
+            site: Box::new(site()),
+            outcome: ConnectOutcome::ChangedHostKey {
+                path: known.display().to_string(),
+                line: 1,
+            },
+        });
+        let Mode::Confirm(c) = &app.mode else {
+            panic!("expected the refusal, got {:?}", app.mode)
+        };
+        assert!(
+            c.lines.iter().any(|l| l.contains("known_hosts")),
+            "the dialog does not say which file: {:?}",
+            c.lines
+        );
+        assert!(
+            c.lines.iter().any(|l| l.contains('1')),
+            "nor which line: {:?}",
+            c.lines
+        );
+        assert!(matches!(c.action, ConfirmAction::OpenKnownHosts { .. }));
+        // *Cancel* is the button under the cursor: this is not a question one answers by
+        // pressing `Enter` without having read it.
+        assert_eq!(c.button, 1);
+
+        // `Esc` connects to nothing and accepts nothing.
+        press(&mut app, "Esc");
+        assert!(app.take_requests().is_empty());
+
+        // And the other button opens the file, on the line the old key is written on.
+        app.handle_event(Event::Connected {
+            panel: 0,
+            site: Box::new(site()),
+            outcome: ConnectOutcome::ChangedHostKey {
+                path: known.display().to_string(),
+                line: 2,
+            },
+        });
+        press(&mut app, "Left");
+        press(&mut app, "Enter");
+        let Mode::Editor(editor) = &app.mode else {
+            panic!("the file did not open: {:?}", app.mode)
+        };
+        assert_eq!(editor.cursor.line, 1, "the cursor is on the recorded line");
+        assert!(
+            !app.take_requests()
+                .iter()
+                .any(|r| matches!(r, Request::Connect { .. })),
+            "nothing reconnected"
+        );
     }
 
     #[test]

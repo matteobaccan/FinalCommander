@@ -311,6 +311,11 @@ directories whose names happen to end that way.
 *Select all* and *invert all* include directories whatever the setting says: they name no
 mask, so they cannot be meaning files alone.
 
+A mask in a **filter** or in a **highlight group** applies to directories regardless, and that
+is deliberate rather than an oversight: both carry a *kind* condition of their own — files
+only, directories only, either — so there one says it instead of inferring it. The selection
+keys have no such condition, which is why they need a default at all.
+
 ## 5. Filters
 
 - **Quick filter bar** (`Ctrl+Shift+I`): live substring/glob, applied to the visible order
