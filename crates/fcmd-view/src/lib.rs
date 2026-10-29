@@ -5,6 +5,7 @@
 //! `docs/spec/05-viewer-editor.md` §1.
 
 pub mod asm;
+pub mod base64;
 pub mod decode;
 pub mod diff;
 pub mod disasm;

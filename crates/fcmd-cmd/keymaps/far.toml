@@ -700,6 +700,15 @@ keys = ["Shift+F3"]
 scope = "viewer"
 cmd = "viewer.table"
 
+# `Alt+B` for base64, the one thing in this program that reads a file by undoing what was
+# done to it. `Alt+<letter>` is the quick search's in the *panels* and nowhere else — there is
+# no quick search in the viewer, and the editor already uses these letters for the same
+# reason.
+[[bind]]
+keys = ["Alt+B"]
+scope = "viewer"
+cmd = "viewer.base64"
+
 # Sorting and filtering the table that is on screen (SPEC 05 §1.11). `Ctrl+F3` because that
 # is the key that sorts in the panels, and `Ctrl+F7` because `F7` is the key that looks for
 # something — this is the other thing one does with what one is looking for.

@@ -181,6 +181,20 @@ pub const MARKDOWN_LIMIT: u64 = 4 * 1024 * 1024;
 /// size.
 pub const TABLE_LIMIT: u64 = 16 * 1024 * 1024;
 
+/// How much base64 is decoded in one go (SPEC 05 §1.13).
+///
+/// The whole file at once, because base64 is only meaningful whole: a window into the middle
+/// of it would decode to bytes offset by whatever the window cut through. Thirty-two
+/// mebibytes of payload is twenty-four of bytes, which is a certificate, a key, an attachment
+/// or a `data:` URI with room to spare, and a file larger than that is not one somebody is
+/// reading by eye.
+pub const BASE64_LIMIT: u64 = 32 * 1024 * 1024;
+
+/// Under this much payload a file is not called base64: a handful of letters is not something
+/// somebody encoded, and offering to decode every short text file would make the key look
+/// broken.
+const BASE64_MIN: usize = 16;
+
 pub struct Viewer {
     source: Box<dyn Source>,
     pub path: VPath,
@@ -651,7 +665,13 @@ impl Viewer {
     /// Point the viewer at generated text — WebAssembly's text format, or a decompiler's
     /// output — keeping the original path in the title.
     pub fn show_derived(&mut self, producer: &str, text: String) {
-        self.source = Box::new(crate::source::BytesSource::new(text.into_bytes()));
+        self.show_derived_bytes(producer, text.into_bytes())
+    }
+
+    /// The same, where what came out is bytes rather than text: base64 decodes to whatever
+    /// somebody encoded, and that is usually not something to read as letters.
+    pub fn show_derived_bytes(&mut self, producer: &str, bytes: Vec<u8>) {
+        self.source = Box::new(crate::source::BytesSource::new(bytes));
         self.derived = Some(producer.to_string());
         self.codepage = Codepage::Utf8;
         self.mode = Mode::Text;
@@ -1312,6 +1332,45 @@ impl Viewer {
             || name.ends_with(".mdown")
             || name.ends_with(".mkd");
         markdown && self.source.len() <= MARKDOWN_LIMIT && self.derived.is_none()
+    }
+
+    /// Is this a file the base64 decoder can read whole (SPEC 05 §1.13)?
+    ///
+    /// Small enough to decode in one go, not already a derived view of something else, and
+    /// base64 all the way through — whitespace, PEM armour and a `data:` label aside. A file
+    /// that is *mostly* base64 is not one: decoding half of it would be bytes nobody wrote.
+    pub fn reads_base64(&mut self) -> bool {
+        if self.derived.is_some() || self.source.len() > BASE64_LIMIT {
+            return false;
+        }
+        let len = self.source.len() as usize;
+        let Ok(bytes) = self.source.read_vec(0, len) else {
+            return false;
+        };
+        crate::base64::reads(&bytes, BASE64_MIN)
+    }
+
+    /// Decode the file and show what came out, keeping the original path in the title.
+    ///
+    /// The bytes decide how they are shown: text when they read as text, the hex pane when
+    /// they do not — which is the common case, because what people write down in base64 is
+    /// usually something that is not text in the first place. `F4` and the mode wheel go
+    /// back to the file as it is written.
+    pub fn as_base64(&mut self) -> Result<usize, crate::base64::Error> {
+        let len = self.source.len() as usize;
+        let bytes = self
+            .source
+            .read_vec(0, len)
+            .map_err(|_| crate::base64::Error::Empty)?;
+        let decoded = crate::base64::decode(&bytes)?;
+        let n = decoded.len();
+        let binary = crate::decode::looks_binary(&decoded[..decoded.len().min(8 * 1024)]);
+        self.show_derived_bytes("base64", decoded);
+        if binary {
+            self.set_mode(Mode::Hex);
+            self.base_mode = Mode::Dump;
+        }
+        Ok(n)
     }
 
     /// Show the file rendered, if it is one we can render. `false` when it is not, so the
@@ -2168,6 +2227,36 @@ mod tests {
             Box::new(BytesSource::new(text.as_bytes().to_vec())),
             VPath::local(format!("/tmp/{name}")),
         )
+    }
+
+    /// A base64 file decoded in place (SPEC 05 §1.13): the viewer keeps the path and shows
+    /// what came out, as text when it is text and in the hex pane when it is not.
+    #[test]
+    fn a_base64_file_is_decoded_and_shown_as_what_came_out() {
+        let mut v = table_viewer("token.txt", "aGVsbG8sIHdvcmxkCg==\n");
+        assert!(v.reads_base64());
+        assert_eq!(v.as_base64(), Ok(13));
+        assert_eq!(v.derived.as_deref(), Some("base64"));
+        assert_eq!(v.mode, Mode::Text);
+        assert_eq!(texts(&mut v, 40, 2)[0].trim_end(), "hello, world");
+
+        // Bytes that are not text open in the hex pane, which is what one came to look at.
+        // `AAECA/8=` is 00 01 02 03 ff.
+        let mut v = table_viewer("blob.b64", "AAECA/8=\n");
+        assert_eq!(v.as_base64(), Ok(5));
+        assert_eq!(v.mode, Mode::Hex);
+
+        // A file that is not base64 says where it stops being base64 and changes nothing.
+        let mut v = table_viewer("prose.txt", "This is a sentence, not a payload.\n");
+        assert!(!v.reads_base64());
+        assert!(v.as_base64().is_err());
+        assert_eq!(v.mode, Mode::Text);
+        assert_eq!(v.derived, None, "the file is still the file");
+
+        // And a derived view is not decoded again: there is one undoing per file.
+        let mut v = table_viewer("token.txt", "aGVsbG8sIHdvcmxkCg==\n");
+        assert_eq!(v.as_base64(), Ok(13));
+        assert!(!v.reads_base64());
     }
 
     #[test]

@@ -14881,6 +14881,11 @@ impl App {
         }
         let mut message: Option<String> = None;
         let mut error: Option<String> = None;
+        // Base64's two answers: how many bytes came out, and why nothing did. Both say
+        // something the reader wants — the size is how one knows the decode was the right
+        // one — so neither is folded into the generic "that key does not apply here".
+        let mut decoded: Option<usize> = None;
+        let mut error_text: Option<String> = None;
         if let Some(viewer) = self.live_viewer_mut() {
             match cmd {
                 Command::NavUp => viewer.scroll(-1, width, height),
@@ -14955,6 +14960,16 @@ impl App {
                         error = Some("viewer-not-table".into());
                     }
                 }
+                // Base64 is the one view that *replaces* the file rather than drawing it
+                // another way, so there is no going back by pressing the key again: the
+                // decoded bytes are what the viewer now has. `Esc` and opening the file
+                // again are the way back, as they are from a disassembly.
+                Command::ViewerBase64 => match viewer.as_base64() {
+                    Ok(bytes) => {
+                        decoded = Some(bytes);
+                    }
+                    Err(why) => error_text = Some(why.to_string()),
+                },
                 Command::ViewerFollowBranch => {
                     if viewer.follow_branch().is_none() {
                         error = Some("viewer-no-branch".into());
@@ -15004,6 +15019,19 @@ impl App {
         }
         if let Some(key) = error {
             let m = self.i18n.t(&key);
+            self.set_error(m);
+        }
+        if let Some(bytes) = decoded {
+            let m = self.i18n.t_args(
+                "viewer-base64-done",
+                &[("bytes", fcmd_core::format_size(bytes as u64).into())],
+            );
+            self.set_status(m);
+        }
+        if let Some(why) = error_text {
+            let m = self
+                .i18n
+                .t_args("viewer-not-base64", &[("why", why.into())]);
             self.set_error(m);
         }
         if let Some(tag) = message {

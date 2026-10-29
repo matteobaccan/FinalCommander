@@ -367,6 +367,8 @@ pub enum Command {
     ViewerMarkdown,
     /// A tabular file as a table, and back to its source (SPEC 05 §1.11).
     ViewerTable,
+    /// A base64 file decoded, and back to the characters it is written in (SPEC 05 §1.13).
+    ViewerBase64,
     /// Sort the table by the column the cursor is in: ascending, descending, then the order
     /// the records are in the file.
     ViewerTableSort,
@@ -652,6 +654,7 @@ impl Command {
             Command::ViewerHex,
             Command::ViewerMarkdown,
             Command::ViewerTable,
+            Command::ViewerBase64,
             Command::ViewerTableSort,
             Command::ViewerTableFilter,
             Command::ViewerModeNext,
@@ -911,6 +914,7 @@ impl Command {
             Command::ViewerHex => "viewer.hex".into(),
             Command::ViewerMarkdown => "viewer.markdown".into(),
             Command::ViewerTable => "viewer.table".into(),
+            Command::ViewerBase64 => "viewer.base64".into(),
             Command::ViewerTableSort => "viewer.table.sort".into(),
             Command::ViewerTableFilter => "viewer.table.filter".into(),
             Command::ViewerModeNext => "viewer.mode.next".into(),
@@ -1146,6 +1150,7 @@ impl Command {
             ("viewer.hex", _) => Command::ViewerHex,
             ("viewer.markdown", _) => Command::ViewerMarkdown,
             ("viewer.table", _) => Command::ViewerTable,
+            ("viewer.base64", _) => Command::ViewerBase64,
             ("viewer.table.sort", _) => Command::ViewerTableSort,
             ("viewer.table.filter", _) => Command::ViewerTableFilter,
             ("viewer.mode.next", _) => Command::ViewerModeNext,

@@ -6,6 +6,27 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Base64, undone** (SPEC 05 §1.13). `Alt+B` in the viewer decodes a file that is base64 and
+  shows what came out, keeping the path in the title. A certificate, a key, an attachment
+  pulled out of a mail, a `data:` URI pasted into a file: all of them are bytes written down
+  in sixty-four printable characters, and all of them are unreadable until something undoes
+  that.
+
+  The bytes decide how they are drawn — text when they read as text, the hex pane when they
+  do not, which is the usual case — and the status line says how many came out, because that
+  figure is how one knows the decode was the right one. Three shapes are read: the bare
+  payload (wrapped or not, padded or not), PEM armour with its `-----BEGIN …-----` lines
+  skipped, and a `data:` URI with its label taken off. Both alphabets work, the standard one
+  and the URL-safe one a token uses.
+
+  A file that is only *mostly* base64 is refused, with the byte that stopped it and where it
+  is: decoding as far as the first bad character would hand back bytes nobody wrote. It is
+  the one view that replaces the file rather than drawing it another way, so the key does not
+  toggle — `Esc` and opening the file again are the way back, as they are from a
+  disassembly.
+
 ### Fixed
 
 - **The quick search is drawn in its own panel's foot** (SPEC 02 §6). `Alt+`a letter opened a

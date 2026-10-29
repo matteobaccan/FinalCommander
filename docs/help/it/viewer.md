@@ -59,6 +59,27 @@ documento viene impaginato tutto. Oltre i quattro megabyte resta il sorgente, e 
 *Interfaccia → Markdown impaginato per essere letto* riporta la prima schermata al sorgente per
 sempre.
 
+# Base64
+
+`Alt+B` decodifica un file che è base64 e mostra quello che ne esce, tenendo nel titolo il nome
+del file. Un certificato, una chiave, un allegato tirato fuori da una mail, un `data:` URI
+incollato in un file: sono tutti byte scritti con sessantaquattro caratteri stampabili, e sono
+tutti illeggibili finché qualcosa non lo disfa.
+
+Quello che ne esce decide come viene disegnato: testo quando è testo, il pannello esadecimale
+quando non lo è, che è il caso normale. La riga di stato dice quanti byte sono usciti, ed è da
+lì che si capisce se la decodifica era quella giusta.
+
+Si leggono tre forme: il contenuto nudo, a capo o no, con o senza riempimento; l'**armatura
+PEM**, dove le righe `-----BEGIN …-----` vengono saltate e si decodifica quello che sta in
+mezzo; e un **`data:` URI**, dove tutto fino a `;base64,` è un'etichetta. Vanno bene entrambi
+gli alfabeti — quello standard e quello per URL che usano i token.
+
+Un file che è solo *quasi* base64 viene rifiutato, e il messaggio dice quale byte l'ha fermato
+e dove: decodificare fino al primo carattere sbagliato restituirebbe byte che non ha scritto
+nessuno. Il tasto non torna indietro, perché questa è l'unica vista che *sostituisce* il file
+invece di disegnarlo in un altro modo — `Esc` e riaprirlo sono la strada per tornare.
+
 # Le tabelle
 
 Un `.csv`, un `.tsv`, un `.jsonl` o un `.dbf` si apre come tabella invece che come le virgole,

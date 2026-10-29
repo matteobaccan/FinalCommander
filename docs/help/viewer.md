@@ -53,6 +53,27 @@ out from the part of it that happens to be on screen, so the document is rendere
 four megabytes it stays the source, and says so. *Interface → Markdown laid out to be read*
 turns the first screen back into the source for good.
 
+# Base64
+
+`Alt+B` decodes a file that is base64 and shows what came out, keeping the file's own name in
+the title. A certificate, a key, an attachment pulled out of a mail, a `data:` URI pasted into
+a file: all of them are bytes written down in sixty-four printable characters, and all of them
+are unreadable until something undoes that.
+
+What came out decides how it is drawn: text when it is text, the hex pane when it is not,
+which is the usual case. The status line says how many bytes came out, which is how you know
+the decode was the right one.
+
+Three shapes are read: the bare payload, wrapped or not, padded or not; **PEM armour**, where
+the `-----BEGIN …-----` lines are skipped and what is between them is decoded; and a **`data:`
+URI**, where everything up to `;base64,` is a label. Both alphabets work — the standard one
+and the URL-safe one a token uses.
+
+A file that is only *mostly* base64 is refused, and the message says which byte stopped it and
+where: decoding as far as the first bad character would hand you bytes nobody wrote. The key
+does not toggle back, because this is the one view that replaces the file rather than drawing
+it another way — `Esc` and opening it again are the way back.
+
 # Tables
 
 A `.csv`, a `.tsv`, a `.jsonl` or a `.dbf` opens as a table rather than as the commas, the

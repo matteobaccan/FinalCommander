@@ -292,6 +292,8 @@ viewer-no-undo = no hay posición anterior
 viewer-empty = (archivo vacío)
 viewer-not-markdown = no es un archivo Markdown, o es demasiado grande para maquetarlo
 viewer-not-table = no es un archivo tabular, o es demasiado grande para leerlo entero
+viewer-base64-done = Descodificado: { $bytes }
+viewer-not-base64 = Este archivo no es base64: { $why }
 viewer-status = { $mode } { $codepage }  { $offset } / { $len }  { $percent }%
 
 key-disasm = Desens

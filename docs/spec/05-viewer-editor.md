@@ -312,6 +312,38 @@ leaving the system's own "Access is denied" to be puzzled over. The `unsafe` is 
 `fcmd-platform` with everything else that needs it, which is the rule the workspace is built
 on.
 
+### 1.13 Base64 (`Alt+B`)
+
+A certificate, a private key, an attachment pulled out of a mail, a `data:` URI pasted into a
+file: all of them are bytes somebody wrote down in sixty-four printable characters, and all of
+them are unreadable until something decodes them. The viewer is where one looks at a file one
+did not write, so this is where the undoing belongs.
+
+`Alt+B` decodes the file and shows what came out, keeping the path in the title. The bytes
+decide how they are drawn: text when they read as text, the hex pane when they do not, which
+is the common case — what people write down in base64 is usually something that was never
+text. The status line says how many bytes came out, because that figure is how one knows the
+decode was the right one.
+
+Three shapes are read, because all three turn up: the bare payload, with or without padding
+and with or without line breaks; **PEM armour**, where `-----BEGIN …-----` and `-----END …-----`
+are skipped and the payload between them is decoded; and a **`data:` URI**, where everything up
+to and including `;base64,` is a label rather than data. Both alphabets are accepted — the
+standard one ending `+/` and the URL-safe one ending `-_` — because refusing the second would
+mean refusing every token a web application ever issued, and one file is never both.
+
+**A file that is only mostly base64 is not decoded.** The refusal names the byte that stopped
+it and where it is, which is the one thing worth knowing: decoding as far as the first bad
+character would produce bytes nobody wrote. The whole file is decoded at once, because base64
+is only meaningful whole — a window into the middle of it decodes to bytes offset by whatever
+the window cut through — so there is a limit (32 MiB of payload, 24 of bytes), above which
+the file is not one somebody is reading by eye.
+
+It is the one view that *replaces* the file rather than drawing it another way, so the key
+does not toggle: the viewer now holds the decoded bytes, and `Esc` and opening the file again
+are the way back, as they are from a disassembly. One undoing per file: a decoded view is not
+decoded again.
+
 ### 1.11 Table mode: the tabular formats
 
 A commander opens a `.csv`, a `.jsonl` and a `.dbf` every day, and all three read as what they

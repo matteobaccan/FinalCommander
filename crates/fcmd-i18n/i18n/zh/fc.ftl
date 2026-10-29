@@ -292,6 +292,8 @@ viewer-no-undo = 没有更早的位置
 viewer-empty = （空文件）
 viewer-not-markdown = 不是 Markdown 文件，或者太大无法排版
 viewer-not-table = 不是表格文件，或过大无法整体读取
+viewer-base64-done = 已解码：{ $bytes }
+viewer-not-base64 = 这个文件不是 base64：{ $why }
 viewer-status = { $mode } { $codepage }  { $offset } / { $len }  { $percent }%
 
 key-disasm = 反汇编
