@@ -498,6 +498,7 @@ opt-mouse = Поддержка мыши
 opt-clipboard = Буфер обмена через терминал (OSC 52)
 opt-command-screen = Показывать вывод команды, пока она выполняется
 opt-menu-always = Всегда показывать строку меню
+opt-save-exit = Сохранять настройки при выходе
 opt-confirm-delete = Удаление
 opt-confirm-overwrite = Перезапись
 opt-confirm-exit = Выход

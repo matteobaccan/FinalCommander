@@ -377,6 +377,18 @@ pub struct UiCfg {
     /// because a terminal that does know it is being asked by a program running on another
     /// machine, which somebody may not want.
     pub clipboard: bool,
+    /// Keep the menu bar on the top row rather than drawing it only while `F9` has it.
+    ///
+    /// FAR's *Always show menu bar*, and off by default as it is there: the row costs a line
+    /// of files, and somebody who knows the menus are on `F9` would rather have the line.
+    pub menu_bar: bool,
+    /// Write the configuration file on the way out, as *Save setup* writes it.
+    ///
+    /// FAR's *Auto save setup*. Off by default, because a setting changed to see what it does
+    /// should not become permanent by quitting — and because the file is the user's, not
+    /// ours to rewrite unasked. On, the two panels' directories go with it, so the next start
+    /// is where the last one ended.
+    pub save_setup_on_exit: bool,
 }
 
 impl Default for UiCfg {
@@ -397,6 +409,8 @@ impl Default for UiCfg {
             file_history: 512,
             history_lifetime: 90,
             clipboard: true,
+            menu_bar: false,
+            save_setup_on_exit: false,
         }
     }
 }
@@ -1376,6 +1390,8 @@ impl Config {
             "ui.table" => self.ui.table = parse_bool(value)?,
             "ui.mouse" => self.ui.mouse = parse_bool(value)?,
             "ui.clipboard" => self.ui.clipboard = parse_bool(value)?,
+            "ui.menu_bar" => self.ui.menu_bar = parse_bool(value)?,
+            "ui.save_setup_on_exit" => self.ui.save_setup_on_exit = parse_bool(value)?,
             "ui.command_screen" => self.ui.command_screen = parse_bool(value)?,
             "editor.tab_width" => {
                 self.editor.tab_width = parse_usize(value)?.clamp(1, 16);

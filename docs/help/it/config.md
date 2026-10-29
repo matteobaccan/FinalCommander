@@ -13,6 +13,12 @@ Application Support` su macOS, `%APPDATA%` su Windows. `fcmd --dump-config` stam
 impostazioni con cui il programma sta davvero girando, che è il modo più rapido di vedere come
 si chiama una chiave.
 
+`Opzioni → Salva impostazioni` scrive il file delle impostazioni; nient'altro lo fa, quindi
+un'impostazione cambiata per vedere cosa fa non c'è più al prossimo avvio. Se preferisci il
+contrario, *Salva le impostazioni all'uscita* in *Opzioni → Impostazioni dell'interfaccia*
+(`ui.save_setup_on_exit`) scrive il file anche quando esci. Dov'erano i pannelli è un altro
+file e torna in ogni caso.
+
 # Cosa viene ricordato
 
 Fra una sessione e l'altra il programma tiene, nel suo file di stato accanto alle impostazioni:

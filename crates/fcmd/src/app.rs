@@ -11111,7 +11111,7 @@ impl App {
     }
 
     /// Write the configuration file, so the dialogs are not lost on exit.
-    fn save_setup(&mut self) {
+    pub fn save_setup(&mut self) {
         let path = self.paths.config_file.clone();
         if let Some(parent) = path.parent() {
             if let Err(e) = std::fs::create_dir_all(parent) {
@@ -20164,6 +20164,34 @@ mod tests {
         };
         assert_eq!(pick.kind, PickKind::Drives);
         assert_eq!(pick.side, 1);
+    }
+
+    /// The two rows of *Interface settings* that used to be dim: the menu bar always on, and
+    /// the settings written on the way out.
+    #[test]
+    fn the_interface_dialog_keeps_the_menu_bar_and_the_auto_save() {
+        let mut app = app();
+        app.run(Command::OptInterface);
+        let Mode::Form(form) = &app.mode else {
+            panic!("no dialog: {:?}", app.mode)
+        };
+        assert_eq!(form.kind, crate::menu::FormKind::Interface);
+        assert!(!app.cfg.ui.menu_bar);
+        assert!(!app.cfg.ui.save_setup_on_exit);
+
+        set_toggle(&mut app, "ui.menu_bar", true);
+        set_toggle(&mut app, "ui.save_setup_on_exit", true);
+        press(&mut app, "F10");
+        assert!(app.cfg.ui.menu_bar);
+        assert!(app.cfg.ui.save_setup_on_exit);
+
+        // And both are settings a configuration file can carry, so what the dialog did
+        // survives being written and read back.
+        let mut cfg = Config::default();
+        cfg.set("ui.menu_bar", "yes").unwrap();
+        cfg.set("ui.save_setup_on_exit", "yes").unwrap();
+        assert!(cfg.ui.menu_bar);
+        assert!(cfg.ui.save_setup_on_exit);
     }
 
     /// A panel showing the process list is not on a drive, and the dialog opens on the row

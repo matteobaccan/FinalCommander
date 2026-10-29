@@ -153,7 +153,11 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
     let keybar_h = u16::from(app.cfg.ui.key_bar);
     let status_h = u16::from(app.cfg.ui.status_bar);
     let cmd_h = u16::from(app.cfg.ui.command_line);
-    let chrome = keybar_h + status_h + cmd_h;
+    // FAR's *Always show menu bar*: the top row belongs to the menu titles rather than to
+    // the panels' own frame, which costs a row of files and saves pressing `F9` to see what
+    // the menus are called. Off by default, as it is in FAR.
+    let menu_h = u16::from(app.cfg.ui.menu_bar);
+    let chrome = keybar_h + status_h + cmd_h + menu_h;
     let full_h = h.saturating_sub(chrome).max(3);
     // `Ctrl+Up`/`Ctrl+Down` take rows off the panels and give them to the user screen, which
     // is how FAR lets you watch what a command printed without leaving the panels. Six rows
@@ -172,16 +176,22 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
     // `Ctrl+F1`/`Ctrl+F2` hide one panel and give the screen to the other: a zero-width area
     // draws nothing, which is all "panel off" has to mean.
     let areas = match app.hidden {
-        Some(0) => [Rect::new(0, 0, 0, panels_h), Rect::new(0, 0, w, panels_h)],
-        Some(_) => [Rect::new(0, 0, w, panels_h), Rect::new(w, 0, 0, panels_h)],
+        Some(0) => [
+            Rect::new(0, menu_h, 0, panels_h),
+            Rect::new(0, menu_h, w, panels_h),
+        ],
+        Some(_) => [
+            Rect::new(0, menu_h, w, panels_h),
+            Rect::new(w, menu_h, 0, panels_h),
+        ],
         None => {
             // The split is a percentage, so it survives a resize of the terminal; a panel
             // narrower than ten columns is not a panel, so neither side can be squeezed out.
             let left_w = ((w as u32 * app.cfg.panel.split as u32) / 100) as u16;
             let left_w = left_w.clamp(10.min(w), w.saturating_sub(10));
             [
-                Rect::new(0, 0, left_w, panels_h),
-                Rect::new(left_w, 0, w - left_w, panels_h),
+                Rect::new(0, menu_h, left_w, panels_h),
+                Rect::new(left_w, menu_h, w - left_w, panels_h),
             ]
         }
     };
@@ -361,7 +371,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
     // What the panels gave up: the last lines of the user screen, which is the point of
     // giving them up at all.
     if panels_h < full_h {
-        let area = Rect::new(0, panels_h, w, full_h - panels_h);
+        let area = Rect::new(0, menu_h + panels_h, w, full_h - panels_h);
         // The terminal's own colours, not the theme's: what is shown here came out of the
         // shell, and it looked like that when it was printed.
         let style = Style::new(fcmd_ui::Color::Default, fcmd_ui::Color::Default);
@@ -383,7 +393,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
     // The command line: the panel's path as the prompt, then what is being typed.
     let mut cursor = None;
     if cmd_h == 1 {
-        let y = full_h;
+        let y = menu_h + full_h;
         let style = Style::new(app.theme.color("cmdline.fg"), app.theme.color("cmdline.bg"));
         buf.fill(Rect::new(0, y, w, 1), ' ', style);
         let prompt = app.prompt();
@@ -476,7 +486,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         } else {
             app.status.clone()
         };
-        let row = Rect::new(0, full_h + cmd_h, w, 1);
+        let row = Rect::new(0, menu_h + full_h + cmd_h, w, 1);
         widgets::draw_status(buf, &app.theme, row, &text, app.status_error);
         // The corner: whether a macro is recording, and how many screens are behind the
         // panels. The recording light comes first because it is the one that matters while it
@@ -511,7 +521,25 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         app.layout.key_bar = Some((h - 1, labels.iter().map(|(n, _)| *n).collect()));
     }
 
-    let screen = Rect::new(0, 0, w, panels_h);
+    // The bar itself, when it is always on and no menu is open: the open one draws it with
+    // its own title lit, below.
+    if menu_h == 1 && !matches!(app.mode, Mode::Menu { .. }) {
+        let titles: Vec<String> = crate::menu::menus()
+            .iter()
+            .map(|m| app.i18n.t(m.title))
+            .collect();
+        let starts = widgets::draw_menu_bar(
+            buf,
+            &app.theme,
+            Rect::new(0, 0, w, 1),
+            &titles,
+            // No title is lit: the bar is showing what there is, not where one is.
+            usize::MAX,
+        );
+        app.layout.menu_bar = Some((0, starts));
+    }
+
+    let screen = Rect::new(0, menu_h, w, panels_h);
     if app.mode.is_normal() {
         return cursor;
     }
@@ -579,8 +607,14 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             None
         }
         Mode::Menu { menu, item, open } => {
-            let (bar, list) =
-                draw_menus(app, buf, Rect::new(0, 0, w, panels_h), *menu, *item, *open);
+            let (bar, list) = draw_menus(
+                app,
+                buf,
+                Rect::new(0, 0, w, menu_h + panels_h),
+                *menu,
+                *item,
+                *open,
+            );
             app.layout.menu_bar = Some((0, bar));
             app.layout.list = list;
             None
@@ -3495,6 +3529,44 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
             without.rows
         };
         assert_eq!(rows_without, rows_with + 1);
+    }
+
+    /// FAR's *Always show menu bar*: the titles on the top row with no menu open, and the
+    /// panels a row further down — which costs them a file, as the titles row does.
+    #[test]
+    fn the_menu_bar_can_be_kept_on_the_top_row() {
+        let mut app = app("commander", "en");
+        let rows_without = {
+            let mut buf = Buffer::new(80, 24);
+            draw(&mut app, &mut buf);
+            app.rows
+        };
+        let out = frame(&mut app, 80, 24);
+        assert!(
+            !out.lines().next().unwrap().contains("Commands"),
+            "the bar is not there until it is asked for: {}",
+            out.lines().next().unwrap()
+        );
+
+        app.cfg.ui.menu_bar = true;
+        let out = frame(&mut app, 80, 24);
+        let lines: Vec<&str> = out.lines().collect();
+        for title in ["Left", "Files", "Commands", "Options", "Right"] {
+            assert!(
+                lines[0].contains(title),
+                "`{title}` is not on the bar: {}",
+                lines[0]
+            );
+        }
+        // The panel frame starts under it rather than being drawn over.
+        assert!(lines[1].starts_with('╔'), "{}", lines[1]);
+        assert_eq!(app.rows + 1, rows_without, "the row comes off the files");
+
+        // `F9` from there opens a menu on the same row, and the bar is drawn once.
+        app.handle_input(Input::Key("F9".parse().unwrap()));
+        app.handle_input(Input::Key("Enter".parse().unwrap()));
+        let out = frame(&mut app, 80, 24);
+        assert!(out.lines().next().unwrap().contains("Left"), "{out}");
     }
 
     #[test]

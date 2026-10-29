@@ -8,6 +8,13 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **Two settings that were dim rows.** *Always show the menu bar* (`ui.menu_bar`) keeps the
+  menu titles on the top row and starts the panels under it, so it costs a file the way the
+  column titles do, and `F9` lights a title and opens its menu on that same row. *Save the
+  setup on exit* (`ui.save_setup_on_exit`) writes `fcmd.toml` on the way out, as *Save setup*
+  writes it. Both are off by default, as they are in FAR: the row is a row of files, and a
+  setting changed to see what it does should not become permanent by quitting.
+
 - **`Ctrl+W` is FAR's task list**, and so is the *Task list* row in the Commands menu: the
   operating system's processes, which is what that key means in FAR — this program's own
   screens are `F12`. It opens the process panel the change-drive dialog has opened since

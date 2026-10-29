@@ -176,9 +176,16 @@ on the buttons answers the dialog, `F10` is `OK` from anywhere, `Esc` cancels an
 | Show the key bar | `ui.key_bar` | on/off |
 | Show the status bar | `ui.status_bar` | on/off |
 | Keymap | `ui.keymap` | far / mc |
-| Clock in the corner | — | dim (backlog) |
-| Mouse support | `ui.mouse` | **shipped**, off by default (SPEC 02 §12) |
-| Always show the menu bar | — | dim (backlog) |
+| Mouse support | `ui.mouse` | off by default (SPEC 02 §12) |
+| Always show the menu bar | `ui.menu_bar` | on/off, off by default as in FAR |
+| Save the setup on exit | `ui.save_setup_on_exit` | on/off, off by default as in FAR |
+| Clock in the corner | — | dim (backlog: it wants a repaint on a timer) |
+
+*Always show the menu bar* takes the top row for the menu titles and moves the panels a row
+down, so it costs a file the way the column titles do; `F9` then lights a title and opens its
+menu on the same row. *Save the setup on exit* writes `fcmd.toml` on the way out, as *Save
+setup* writes it — the two panels' directories are in the state file and come back either
+way, which is what that question is usually about.
 
 ### 3.4 Confirmations
 

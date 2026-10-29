@@ -456,8 +456,13 @@ impl Form {
                     cfg.ui.command_screen,
                 ),
                 Field::Separator,
+                Field::toggle("ui.menu_bar", t("opt-menu-always"), cfg.ui.menu_bar),
+                Field::toggle(
+                    "ui.save_setup_on_exit",
+                    t("opt-save-exit"),
+                    cfg.ui.save_setup_on_exit,
+                ),
                 Field::Dim(t("opt-clock")),
-                Field::Dim(t("opt-menu-always")),
             ],
             FormKind::Confirmations => vec![
                 Field::toggle(

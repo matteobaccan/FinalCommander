@@ -1469,6 +1469,13 @@ fn interactive(mut app: App) -> Result<()> {
     // The lines nobody has pinned and nobody has used for `ui.history_lifetime` days go
     // here, once, where all three histories are in hand (SPEC 06 §6).
     app.sweep_histories();
+    // FAR's *Auto save setup*: the settings the dialogs changed, written without having been
+    // asked to. Off by default — a setting changed to see what it does should not become
+    // permanent by quitting — and the panels' folders go into the state file below either
+    // way, which is what brings the next start back where this one ended.
+    if app.cfg.ui.save_setup_on_exit {
+        app.save_setup();
+    }
     let state = fcmd_config::State {
         command_history: app.cmd.history().to_vec(),
         file_history: app.file_history.clone(),

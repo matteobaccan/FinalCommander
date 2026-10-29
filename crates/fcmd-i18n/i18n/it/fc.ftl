@@ -498,6 +498,7 @@ opt-mouse = Supporto del mouse
 opt-clipboard = Appunti attraverso il terminale (OSC 52)
 opt-command-screen = Mostra l'output del comando mentre gira
 opt-menu-always = Mostra sempre la barra dei menu
+opt-save-exit = Salva le impostazioni all'uscita
 opt-confirm-delete = Eliminazione
 opt-confirm-overwrite = Sovrascrittura
 opt-confirm-exit = Uscita

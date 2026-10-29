@@ -498,6 +498,7 @@ opt-mouse = 鼠标支持
 opt-clipboard = 通过终端使用剪贴板 (OSC 52)
 opt-command-screen = 命令运行时显示它的输出
 opt-menu-always = 始终显示菜单栏
+opt-save-exit = 退出时保存设置
 opt-confirm-delete = 删除
 opt-confirm-overwrite = 覆盖
 opt-confirm-exit = 退出

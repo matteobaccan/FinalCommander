@@ -12,6 +12,11 @@ They live where the platform keeps such things — `~/.config/fcmd` on Linux, `L
 Application Support` on macOS, `%APPDATA%` on Windows. `fcmd --dump-config` prints the settings
 the program is actually running with, which is the quickest way to see what a key is called.
 
+`Options → Save setup` writes the settings file; nothing else does, so a setting changed to see
+what it does is gone at the next start. If you would rather it were not, *Save the setup on
+exit* in *Options → Interface settings* (`ui.save_setup_on_exit`) writes the file on the way
+out as well. Where the panels were is a different file and comes back either way.
+
 # What is remembered
 
 Between sessions the program keeps, in its state file beside the settings: the command lines

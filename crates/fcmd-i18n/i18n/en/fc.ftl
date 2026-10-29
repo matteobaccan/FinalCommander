@@ -506,6 +506,7 @@ opt-mouse = Mouse support
 opt-clipboard = Let the terminal carry the clipboard (OSC 52)
 opt-command-screen = Show a command's output while it runs
 opt-menu-always = Always show the menu bar
+opt-save-exit = Save the setup on exit
 opt-confirm-delete = Delete
 opt-confirm-overwrite = Overwrite
 opt-confirm-exit = Exit

@@ -498,6 +498,7 @@ opt-mouse = Mausunterstützung
 opt-clipboard = Ablage über das Terminal (OSC 52)
 opt-command-screen = Die Ausgabe eines Befehls zeigen, während er läuft
 opt-menu-always = Menüleiste immer anzeigen
+opt-save-exit = Einstellungen beim Beenden speichern
 opt-confirm-delete = Löschen
 opt-confirm-overwrite = Überschreiben
 opt-confirm-exit = Beenden
