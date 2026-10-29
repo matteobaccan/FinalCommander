@@ -382,6 +382,14 @@ pub struct UiCfg {
     /// FAR's *Always show menu bar*, and off by default as it is there: the row costs a line
     /// of files, and somebody who knows the menus are on `F9` would rather have the line.
     pub menu_bar: bool,
+    /// The clock in the top right corner, as FAR has it.
+    ///
+    /// Off by default, and the reason is the terminal rather than the screen: a clock means
+    /// the program wakes up when the minute turns to redraw four characters, and over `ssh`
+    /// or inside a multiplexer that is traffic somebody is paying for. On, it wakes once a
+    /// minute and not once a second — the clock shows hours and minutes, so a second is
+    /// fifty-nine redraws nobody can see.
+    pub clock: bool,
     /// Write the configuration file on the way out, as *Save setup* writes it.
     ///
     /// FAR's *Auto save setup*. Off by default, because a setting changed to see what it does
@@ -410,6 +418,7 @@ impl Default for UiCfg {
             history_lifetime: 90,
             clipboard: true,
             menu_bar: false,
+            clock: false,
             save_setup_on_exit: false,
         }
     }
@@ -1427,6 +1436,7 @@ impl Config {
             "ui.mouse" => self.ui.mouse = parse_bool(value)?,
             "ui.clipboard" => self.ui.clipboard = parse_bool(value)?,
             "ui.menu_bar" => self.ui.menu_bar = parse_bool(value)?,
+            "ui.clock" => self.ui.clock = parse_bool(value)?,
             "ui.save_setup_on_exit" => self.ui.save_setup_on_exit = parse_bool(value)?,
             "ui.command_screen" => self.ui.command_screen = parse_bool(value)?,
             "editor.tab_width" => {

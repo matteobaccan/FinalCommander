@@ -15,8 +15,8 @@ pub use svg::to_svg;
 pub use theme::{Theme, ThemeError, ThemeSet, ThemeSource, Variant, BUILTIN_THEMES, DEFAULT_THEME};
 
 pub use widgets::{
-    brief_columns, draw_bar, draw_buttons, draw_choice, draw_cmdline, draw_dialog, draw_keybar,
-    draw_panel, draw_progress, draw_prompt, draw_status, format_mtime, format_stamp,
+    brief_columns, clock_now, draw_bar, draw_buttons, draw_choice, draw_cmdline, draw_dialog,
+    draw_keybar, draw_panel, draw_progress, draw_prompt, draw_status, format_mtime, format_stamp,
     format_stamp_in, format_stamp_utc, mnemonic, panel_rows, parse_stamp, parse_stamp_in,
     parse_stamp_utc, PanelRender, ProgressView, KEYBAR_SLOTS,
 };

@@ -13,6 +13,12 @@ Application Support` su macOS, `%APPDATA%` su Windows. `fcmd --dump-config` stam
 impostazioni con cui il programma sta davvero girando, che è il modo più rapido di vedere come
 si chiama una chiave.
 
+L'orologio nell'angolo in alto a destra è spento finché non lo chiedi, in `F9 → Opzioni →
+Impostazioni dell'interfaccia`: è l'unica cosa sullo schermo che cambia senza che nessuno prema
+niente, quindi con lui acceso il programma si sveglia quando scatta il minuto per ridisegnare
+quattro caratteri. È un ridisegno al minuto, e su `ssh` è traffico che stai pagando tu — che è
+tutto il motivo per cui non è acceso di default.
+
 `F9 → Opzioni → Tutti i parametri` è ogni impostazione che esiste, in un elenco: la chiave, il
 valore a cui sta, e un `·` su quelle che non sono più quelle con cui il programma è stato
 costruito. Scrivi per filtrare, `Invio` o `F4` per scrivere un valore, `Spazio` per invertire un

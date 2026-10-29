@@ -12,6 +12,12 @@ They live where the platform keeps such things — `~/.config/fcmd` on Linux, `L
 Application Support` on macOS, `%APPDATA%` on Windows. `fcmd --dump-config` prints the settings
 the program is actually running with, which is the quickest way to see what a key is called.
 
+The clock in the top right corner is off until you ask for it, in `F9 → Options → Interface
+settings`: it is the only thing on the screen that changes with nobody pressing anything, so
+with it on the program wakes up when the minute turns to redraw four characters. That is one
+redraw a minute, and over `ssh` it is traffic you are paying for — which is the whole of why it
+is not on by default.
+
 `F9 → Options → All settings` is every setting there is, in one list: the key, the value it is
 at, and a `·` on the ones that are no longer what the program was built with. Type to narrow it,
 `Enter` or `F4` to type a value, `Space` to flip a yes-or-no one, `Del` to put the built-in

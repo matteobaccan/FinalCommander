@@ -462,7 +462,7 @@ impl Form {
                     t("opt-save-exit"),
                     cfg.ui.save_setup_on_exit,
                 ),
-                Field::Dim(t("opt-clock")),
+                Field::toggle("ui.clock", t("opt-clock"), cfg.ui.clock),
             ],
             FormKind::Confirmations => vec![
                 Field::toggle(

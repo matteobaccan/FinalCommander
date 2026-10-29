@@ -1042,6 +1042,14 @@ fn attrs(e: &Entry) -> String {
     s
 }
 
+/// `17:42`: the time now, in local time, for the clock in the corner (SPEC 10 §3.3).
+///
+/// Hours and minutes and no seconds, which is what decides how often the clock has to be
+/// redrawn: once a minute rather than once a second.
+pub fn clock_now() -> String {
+    Local::now().format("%H:%M").to_string()
+}
+
 /// `2026-10-23 17:42`, in local time.
 pub fn format_mtime(t: SystemTime) -> String {
     let dt: DateTime<Local> = t.into();

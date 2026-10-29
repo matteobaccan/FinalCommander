@@ -521,6 +521,20 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         app.layout.key_bar = Some((h - 1, labels.iter().map(|(n, _)| *n).collect()));
     }
 
+    // The clock, in the top right corner where FAR puts it: over the panel frame, or at the
+    // end of the menu bar when that is always on. Four characters and a space either side,
+    // which is the whole of what a clock in a file manager has to be.
+    if app.cfg.ui.clock && w > 10 {
+        let now = format!(" {} ", fcmd_ui::clock_now());
+        let width = unicode_width::UnicodeWidthStr::width(now.as_str()) as u16;
+        let style = if app.cfg.ui.menu_bar {
+            Style::new(app.theme.color("hmenu.fg"), app.theme.color("hmenu.bg"))
+        } else {
+            Style::new(app.theme.color("panel.frame"), app.theme.color("panel.bg"))
+        };
+        buf.put_str(w - width, 0, &now, style, width);
+    }
+
     // The bar itself, when it is always on and no menu is open: the open one draws it with
     // its own title lit, below.
     if menu_h == 1 && !matches!(app.mode, Mode::Menu { .. }) {
@@ -3586,6 +3600,37 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
             without.rows
         };
         assert_eq!(rows_without, rows_with + 1);
+    }
+
+    /// The clock in the corner, on FAR's own spot: four characters over the frame, and the
+    /// panels not a row shorter for it.
+    #[test]
+    fn the_clock_sits_in_the_corner_without_costing_a_row() {
+        let mut app = app("commander", "en");
+        let rows_without = {
+            let mut buf = Buffer::new(80, 24);
+            draw(&mut app, &mut buf);
+            app.rows
+        };
+        assert!(
+            !frame(&mut app, 80, 24)
+                .lines()
+                .next()
+                .unwrap()
+                .contains(':'),
+            "there is no clock until it is asked for"
+        );
+
+        app.cfg.ui.clock = true;
+        let out = frame(&mut app, 80, 24);
+        let top = out.lines().next().unwrap().to_string();
+        let clock = fcmd_ui::clock_now();
+        assert!(top.contains(&clock), "`{clock}` is not in `{top}`");
+        {
+            let mut buf = Buffer::new(80, 24);
+            draw(&mut app, &mut buf);
+            assert_eq!(app.rows, rows_without, "it costs the panels nothing");
+        }
     }
 
     /// FAR's *Always show menu bar*: the titles on the top row with no menu open, and the

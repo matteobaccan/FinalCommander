@@ -254,7 +254,7 @@ modifiers on !@!   Q quote, S forward slashes, F full paths, A ANSI, U UTF-8, W 
 | Portable: profile location, template profile, global user menu folder, read-only configuration — all from `Far.exe.ini` | ◐ portable mode, one config file |
 | Colour **groups** and colour **themes**, with 16-colour, 256-colour and RGB pickers | ◐ 6 themes, no per-group editor |
 | Virtual-terminal rendering (8- and 24-bit colour), fullwidth-aware rendering, ClearType-friendly redraw | ◐ 24-bit with degradation; width handled always |
-| Clock, screen saver with a timeout, mouse, always-show-menu-bar, console icon, window-title variables (`%Ver`, `%Platform`, `%Admin`, `%PID`) | ◐ the mouse (off by default, and the reason is in the help); ✗ the rest — the clock and the screen saver both want a repaint on a timer, which the input-driven loop does not do yet |
+| Clock, screen saver with a timeout, mouse, always-show-menu-bar, console icon, window-title variables (`%Ver`, `%Platform`, `%Admin`, `%PID`) | ◐ the clock (`ui.clock`), the always-on menu bar (`ui.menu_bar`) and the mouse, each off by default and each with its reason in the help; ✗ the screen saver, the console icon and the title variables — the screen saver can use the deadline the clock gave the event loop |
 | Sorting collation: ordinal / invariant / linguistic, digits-as-numbers, case sensitivity — as three separate settings | ◐ natural sort only |
 | Elevation: ask for administrator rights per operation class (modify / read / extra privileges) | ⊘ |
 | XLat: transliterate a typed line between keyboard layouts, with tables, rules and flags | ✗ |
@@ -327,7 +327,7 @@ What is still different, and why:
 | Difference | Why |
 | --- | --- |
 | One status line at the bottom of the screen, not one inside each panel | FAR shows the item under the cursor in the panel's own bottom line. Ours is global, which is a real design choice to revisit when the command line lands, because that is what competes for the same rows. |
-| No free space in the panel frame, no scrollbar, no screens counter, no clock | Each is a small drawing job; the clock also needs a repaint on a timer, which the input-driven loop does not do yet. |
+| The screens counter is in the status line's corner rather than the panel's | The free space, the scrollbar and the clock are all in the frame now, each behind a setting; the count of what is behind the panels sits with the recording light instead, where both marks are read together. |
 | Four view modes, not ten | The missing six are descriptions, long descriptions, owners, links, medium and alternative full — and most of them need data we do not read yet (descriptions, owners). |
 | No dialog shadow *under* a dropped-down list inside a dialog | We have no nested floating windows yet. |
 

@@ -1452,9 +1452,28 @@ fn interactive(mut app: App) -> Result<()> {
             break;
         }
 
-        match rx.recv() {
-            Ok(event) => app.handle_event(event),
-            Err(_) => break,
+        // The loop is input-driven: it blocks until something happens, which is why the
+        // program costs nothing while nobody is touching it. The clock is the one thing that
+        // changes on its own, so when it is on the wait has a deadline — the moment the
+        // minute turns — and the frame after it draws the new time (SPEC 10 §3.3).
+        let event = if app.cfg.ui.clock {
+            let secs = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| 60 - d.as_secs() % 60)
+                .unwrap_or(60);
+            match rx.recv_timeout(std::time::Duration::from_secs(secs.max(1))) {
+                Ok(event) => Some(event),
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => None,
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+            }
+        } else {
+            match rx.recv() {
+                Ok(event) => Some(event),
+                Err(_) => break,
+            }
+        };
+        if let Some(event) = event {
+            app.handle_event(event);
         }
         // Coalesce whatever else is already queued, then draw once.
         while let Ok(event) = rx.try_recv() {

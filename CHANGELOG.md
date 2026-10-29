@@ -8,6 +8,16 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **The clock in the corner** (`ui.clock`), FAR's own spot: `HH:MM` in the top right corner
+  over the panel frame, or at the end of the menu bar when that is always on, costing the
+  panels no row. It is the last dim row in *Interface settings*, and the reason it was dim is
+  the interesting part: the event loop waits for something to happen rather than polling, and
+  a clock is the one thing on screen that changes with nobody pressing anything. So the wait
+  now has a deadline when the clock is on — it ends when the minute turns, which is one redraw
+  a minute rather than the fifty-nine a second-hand would need. Off by default, because over
+  `ssh` or inside a multiplexer that redraw is traffic somebody is paying for. The screen
+  saver and the window title can use the same deadline when they come.
+
 - **Every setting, as a list** (*Options → All settings*). The dialogs group the dozen
   settings one changes often and say what each means; this is the other seventy, which is what
   FAR reaches by typing `far:config`. It is generated from the configuration itself — the file

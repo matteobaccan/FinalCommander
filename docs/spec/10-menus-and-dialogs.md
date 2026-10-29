@@ -185,7 +185,14 @@ on the buttons answers the dialog, `F10` is `OK` from anywhere, `Esc` cancels an
 | Mouse support | `ui.mouse` | off by default (SPEC 02 §12) |
 | Always show the menu bar | `ui.menu_bar` | on/off, off by default as in FAR |
 | Save the setup on exit | `ui.save_setup_on_exit` | on/off, off by default as in FAR |
-| Clock in the corner | — | dim (backlog: it wants a repaint on a timer) |
+| Clock in the corner | `ui.clock` | on/off, off by default |
+
+*Clock in the corner* draws `HH:MM` in the top right corner, over the panel frame — FAR's own
+spot — or at the end of the menu bar when that is always on. It costs the panels no row. It is
+the one thing on the screen that changes with nobody pressing anything, so it is also the one
+thing that makes the event loop wait with a deadline: the wait ends when the minute turns,
+which is one redraw a minute rather than the fifty-nine a second-hand would need. Off by
+default, because over `ssh` or inside a multiplexer that redraw is traffic somebody pays for.
 
 *Always show the menu bar* takes the top row for the menu titles and moves the panels a row
 down, so it costs a file the way the column titles do; `F9` then lights a title and opens its
