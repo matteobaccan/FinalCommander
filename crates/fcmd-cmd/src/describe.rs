@@ -39,6 +39,7 @@ impl Command {
             Command::OptSortGroups => "the sort groups, as a list",
             Command::OptMaskGroups => "the named mask groups, as a list",
             Command::OptCodepages => "the code pages, and which ones F8 walks",
+            Command::OptSettings => "every setting, as a list one types into",
             Command::OptConfirmations => "which questions are asked",
             Command::OptColors => "edit the colours of the theme in use",
             Command::OptEditor => "how the editor behaves",

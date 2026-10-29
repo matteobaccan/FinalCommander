@@ -86,6 +86,8 @@ pub enum PickKind {
     SortGroups,
     /// The named mask lists every mask field can use as `<name>` (SPEC 02 §5b).
     MaskGroups,
+    /// Every setting, as a list one types into (SPEC 07 §2e).
+    Settings,
     /// The code pages, favourites first (`Shift+F8`, SPEC 05 §1.12).
     Codepages,
     /// Every folder the tree knows under this panel's root: `Alt+F10`, and the destination
@@ -547,6 +549,7 @@ pub fn menus() -> Vec<Menu> {
                 item("menu-themes", "", Action::Run(Command::AppThemes)),
                 item("menu-colors", "", Action::Run(Command::OptColors)),
                 item("menu-mask-groups", "", Action::Run(Command::OptMaskGroups)),
+                item("menu-settings-all", "", Action::Run(Command::OptSettings)),
                 Entry::Separator,
                 item(
                     "menu-confirmations",

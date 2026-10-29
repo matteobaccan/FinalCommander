@@ -8,6 +8,21 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **Every setting, as a list** (*Options → All settings*). The dialogs group the dozen
+  settings one changes often and say what each means; this is the other seventy, which is what
+  FAR reaches by typing `far:config`. It is generated from the configuration itself — the file
+  is dumped and each scalar becomes a row — so a setting added to the program is in the list
+  the same day and a list that drifts from it is impossible. Typing narrows it, `Enter` or
+  `F4` types a value, `Space` flips a `true`/`false` one, `Del` puts back the value the
+  program was built with, and a row that is no longer that is marked with a `·`. Every value
+  goes in through the same function `--set key=value` uses, so a word a setting cannot take is
+  refused with a reason rather than written and found out later; a test holds the two ends
+  together, so the list can never offer a setting nobody can change. The `[[blocks]]` — the
+  highlighting and sort groups, the mask groups, the sites, the column sets — are left out:
+  each has an editor of its own. The other half of that work is that `--set` now reaches every
+  setting too: the comparison options, the drive dialog's columns, the archive limits and the
+  shell prompt were readable in the file and not settable by name.
+
 - **The screen grabber** (`Alt+Ins`, from any screen). The copy keys take what the program
   *knows* — names, paths, a block of a file; this takes what it *drew*, which is the set with
   no other answer: a process card, a help page, a hex dump, the sentence a comparison ended

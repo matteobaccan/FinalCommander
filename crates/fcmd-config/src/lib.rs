@@ -1358,6 +1358,42 @@ impl Config {
         toml::to_string_pretty(self).unwrap_or_else(|e| format!("# cannot serialise: {e}\n"))
     }
 
+    /// Every setting this configuration holds, as the key `set` takes and the value it is at
+    /// (SPEC 07 §2e).
+    ///
+    /// Generated from what the file itself holds rather than from a list written by hand: a
+    /// list beside the struct is wrong the day a field is added, and this cannot be. The
+    /// `[[blocks]]` — the highlighting groups, the sort groups, the sites, the column sets —
+    /// are not here: each is a list with an editor of its own, and a row saying
+    /// `highlight = [table]` would be a row nobody can do anything with.
+    pub fn settings(&self) -> Vec<(String, String)> {
+        let text = self.dump();
+        let Ok(table) = toml::from_str::<toml::Table>(&text) else {
+            return Vec::new();
+        };
+        let mut rows = Vec::new();
+        // The top level holds the scalars of no section and the sections themselves; two
+        // levels is the whole shape of this file, so two levels is what this walks.
+        for (section, value) in &table {
+            match value {
+                toml::Value::Table(inner) => {
+                    for (name, value) in inner {
+                        if let Some(text) = scalar(value) {
+                            rows.push((format!("{section}.{name}"), text));
+                        }
+                    }
+                }
+                other => {
+                    if let Some(text) = scalar(other) {
+                        rows.push((section.clone(), text));
+                    }
+                }
+            }
+        }
+        rows.sort();
+        rows
+    }
+
     /// Apply a `--set key=value` override. Returns an error message when it does not apply.
     pub fn set(&mut self, key: &str, value: &str) -> Result<(), String> {
         match key {
@@ -1486,16 +1522,66 @@ impl Config {
             "general.use_trash" => self.general.use_trash = parse_bool(value)?,
             "general.desktop_open" => self.general.desktop_open = parse_bool(value)?,
             "general.confirm_overwrite" => self.general.confirm_overwrite = parse_bool(value)?,
+            // The rest of the sections, so that every row of the settings browser is a row
+            // somebody can change (SPEC 07 §2e): the browser is generated from this file, and
+            // a key it shows that `set` refuses would be a setting nobody can reach.
+            "cmdline.prompt" => self.cmdline.prompt = value.to_string(),
+            "arc.max_entries" => self.arc.max_entries = parse_usize(value)?,
+            "arc.max_depth" => self.arc.max_depth = parse_usize(value)?,
+            "arc.max_total_mb" => self.arc.max_total_mb = parse_u64(value)?,
+            "arc.max_ratio" => self.arc.max_ratio = parse_u64(value)?,
+            "arc.max_spill_mb" => self.arc.max_spill_mb = parse_u64(value)?,
+            "compare.case" => self.compare.case = parse_bool(value)?,
+            "compare.size" => self.compare.size = parse_bool(value)?,
+            "compare.time" => self.compare.time = parse_bool(value)?,
+            "compare.seconds" => self.compare.seconds = parse_u64(value)?,
+            "compare.contents" => self.compare.contents = parse_bool(value)?,
+            "compare.when_time_differs" => self.compare.when_time_differs = parse_bool(value)?,
+            "compare.fragment_kb" => self.compare.fragment_kb = parse_u64(value)?,
+            "compare.ignore_eol" => self.compare.ignore_eol = parse_bool(value)?,
+            "compare.selected_only" => self.compare.selected_only = parse_bool(value)?,
+            "compare.stop_on_first" => self.compare.stop_on_first = parse_bool(value)?,
+            "compare.newer_only" => self.compare.newer_only = parse_bool(value)?,
+            "compare.subdirs" => self.compare.subdirs = parse_bool(value)?,
+            "compare.depth" => self.compare.depth = parse_u64(value)?,
+            "drives.show_type" => self.drives.show_type = parse_bool(value)?,
+            "drives.show_device" => self.drives.show_device = parse_bool(value)?,
+            "drives.show_label" => self.drives.show_label = parse_bool(value)?,
+            "drives.show_fs" => self.drives.show_fs = parse_bool(value)?,
+            "drives.show_size" => self.drives.show_size = parse_bool(value)?,
+            "drives.show_removable" => self.drives.show_removable = parse_bool(value)?,
+            "drives.show_panels" => self.drives.show_panels = parse_bool(value)?,
+            "drives.show_optical" => self.drives.show_optical = parse_bool(value)?,
+            "drives.show_network" => self.drives.show_network = parse_bool(value)?,
             other => return Err(format!("unknown setting `{other}`")),
         }
         Ok(())
     }
 }
 
+fn parse_u64(v: &str) -> Result<u64, String> {
+    v.trim()
+        .parse()
+        .map_err(|_| format!("expected a whole number, got `{}`", v.trim()))
+}
+
 fn parse_usize(v: &str) -> Result<usize, String> {
     v.trim()
         .parse()
         .map_err(|_| format!("expected a whole number, got `{}`", v.trim()))
+}
+
+/// A setting's value as `set` would take it back: a string without its quotes, because that
+/// is what one types, and everything else as the file writes it.
+fn scalar(value: &toml::Value) -> Option<String> {
+    match value {
+        toml::Value::String(text) => Some(text.clone()),
+        toml::Value::Integer(n) => Some(n.to_string()),
+        toml::Value::Float(f) => Some(f.to_string()),
+        toml::Value::Boolean(b) => Some(b.to_string()),
+        toml::Value::Datetime(d) => Some(d.to_string()),
+        toml::Value::Array(_) | toml::Value::Table(_) => None,
+    }
 }
 
 fn parse_bool(v: &str) -> Result<bool, String> {
@@ -1509,6 +1595,29 @@ fn parse_bool(v: &str) -> Result<bool, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The settings browser is generated from the file, so every row it shows has to be a row
+    /// `set` can take back — otherwise the browser would offer a setting nobody can change.
+    #[test]
+    fn every_setting_in_the_file_can_be_set_by_its_own_name() {
+        let cfg = Config::default();
+        let rows = cfg.settings();
+        assert!(rows.len() > 40, "only {} settings?", rows.len());
+        let mut refused = Vec::new();
+        for (key, value) in &rows {
+            let mut copy = Config::default();
+            if let Err(e) = copy.set(key, value) {
+                refused.push(format!("{key} = {value}: {e}"));
+                continue;
+            }
+            assert_eq!(
+                copy,
+                Config::default(),
+                "setting `{key}` to the value it already had changed something else"
+            );
+        }
+        assert!(refused.is_empty(), "{refused:#?}");
+    }
 
     #[test]
     fn a_configuration_from_before_the_rename_is_still_read_and_says_so() {

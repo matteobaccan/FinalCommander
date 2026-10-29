@@ -12,6 +12,13 @@ They live where the platform keeps such things — `~/.config/fcmd` on Linux, `L
 Application Support` on macOS, `%APPDATA%` on Windows. `fcmd --dump-config` prints the settings
 the program is actually running with, which is the quickest way to see what a key is called.
 
+`F9 → Options → All settings` is every setting there is, in one list: the key, the value it is
+at, and a `·` on the ones that are no longer what the program was built with. Type to narrow it,
+`Enter` or `F4` to type a value, `Space` to flip a yes-or-no one, `Del` to put the built-in
+value back. The dialogs above it in that menu are the dozen settings most people change, with
+words saying what each one means; this is the rest, and the way to find out what a key is
+called.
+
 `Options → Save setup` writes the settings file; nothing else does, so a setting changed to see
 what it does is gone at the next start. If you would rather it were not, *Save the setup on
 exit* in *Options → Interface settings* (`ui.save_setup_on_exit`) writes the file on the way

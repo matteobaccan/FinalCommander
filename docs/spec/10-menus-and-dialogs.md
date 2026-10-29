@@ -121,9 +121,15 @@ is the sort of thing only a reader of the whole menu notices.
 
 ### 2.4 Options
 
-System settings, Panel settings, Interface settings, Languages, Themes, Colours, Mask groups ·
-Confirmations, Viewer settings (§3.6), Editor settings (§3.6b), Code pages, Files highlighting
-(§3.11), Sort groups · Plugins configuration (backlog) · Help, Save setup, Quit.
+System settings, Panel settings, Interface settings, Languages, Themes, Colours, Mask groups,
+All settings · Confirmations, Viewer settings (§3.6), Editor settings (§3.6b), Code pages,
+Files highlighting (§3.11), Sort groups · Plugins configuration (backlog) · Help, Save setup,
+Quit.
+
+*All settings* is the list of every setting the configuration holds, generated from the
+configuration itself (SPEC 07 §2e): what FAR reaches by typing `far:config`. The dialogs above
+it stay what they are — the dozen settings somebody changes often, with words saying what each
+one means.
 
 *Code pages* is the viewer's own list (SPEC 05 §1.12), opened where there is no file to read:
 what it is for here is marking the three or four pages `F8` walks and giving one a name of its

@@ -670,6 +670,14 @@ pub enum PromptKind {
     CodepageName {
         id: String,
     },
+    /// One setting's value, typed in the settings browser (SPEC 07 §2e).
+    Setting {
+        key: String,
+        /// Which panel the list was opened for, and the row it was on, so it comes back where
+        /// it was rather than at the top of two hundred rows.
+        side: usize,
+        cursor: usize,
+    },
     /// What a just-recorded macro is for, in the author's own words.
     MacroDescription {
         key: Key,
@@ -4328,6 +4336,14 @@ impl App {
                 // Back to the list, where the name shows at once.
                 self.open_codepages();
             }
+            PromptKind::Setting {
+                ref key,
+                side,
+                cursor,
+            } => {
+                let (key, value) = (key.clone(), prompt.text.trim().to_string());
+                self.set_setting(&key, &value, side, cursor);
+            }
             PromptKind::Tunnel => {
                 let text = prompt.text.trim().to_string();
                 if text.is_empty() {
@@ -7301,6 +7317,7 @@ impl App {
             // read one in, so what it is for here is the marking and the naming — which is
             // what FAR's *Code pages* dialog in this menu is for too.
             Command::OptCodepages => self.open_codepages(),
+            Command::OptSettings => self.open_settings(self.active, 0),
             Command::ToolDiff => self.open_diff(),
             Command::ToolFindFolder => self.open_folder_list(None),
             Command::OptConfirmations => self.open_form(FormKind::Confirmations),
@@ -12457,6 +12474,8 @@ impl App {
             PickKind::OpenWith => return,
             // And `open_user_menu`, which reads the file and keeps the level stack.
             PickKind::UserMenu => return,
+            // And `open_settings`, which knows which row the list was left on.
+            PickKind::Settings => return,
             PickKind::Languages => Pick::new(
                 kind,
                 self.plain("menu-languages"),
@@ -12880,6 +12899,29 @@ impl App {
                 let title = self.plain("cp-name-title");
                 self.mode = Mode::Prompt(Prompt::new(PromptKind::CodepageName { id }, title, now));
             }
+            // The settings browser: `Enter` and `F4` type a value, `Space` flips a boolean,
+            // `Del` puts back the one the program was built with (SPEC 07 §2e).
+            KeyCode::F(4) if kind == PickKind::Settings => {
+                let (side, cursor) = (pick.side, pick.cursor);
+                let key = pick.chosen().map(|r| r.value.clone());
+                if let Some(key) = key {
+                    self.open_setting_prompt(&key, side, cursor);
+                }
+            }
+            KeyCode::Char(' ') if kind == PickKind::Settings => {
+                let (side, cursor) = (pick.side, pick.cursor);
+                let key = pick.chosen().map(|r| r.value.clone());
+                if let Some(key) = key {
+                    self.flip_setting(&key, side, cursor);
+                }
+            }
+            KeyCode::Delete if kind == PickKind::Settings => {
+                let (side, cursor) = (pick.side, pick.cursor);
+                let key = pick.chosen().map(|r| r.value.clone());
+                if let Some(key) = key {
+                    self.default_setting(&key, side, cursor);
+                }
+            }
             KeyCode::F(4) if kind == PickKind::MaskGroups => {
                 let name = pick.chosen().map(|r| r.value.clone());
                 if let Some(name) = name {
@@ -13214,6 +13256,10 @@ impl App {
                 self.open_sort_group_form(Some(at));
             }
             PickKind::MaskGroups => self.open_mask_group_form(Some(row.value.clone())),
+            PickKind::Settings => {
+                let (side, cursor) = (pick.side, pick.cursor);
+                self.open_setting_prompt(&row.value.clone(), side, cursor);
+            }
             PickKind::Codepages => {
                 self.restore_viewer();
                 let Some(cp) = fcmd_view::Codepage::parse(&row.value) else {
@@ -16215,6 +16261,130 @@ impl App {
             };
             panel.filter_set = fcmd_core::filter::MaskSet::parse_with(&source, &groups, false).ok();
             panel.rebuild();
+        }
+    }
+
+    // ── the settings browser (SPEC 07 §2e) ───────────────────────────────────────────────
+
+    /// Every setting, one per row: the key, the value it is at, and a mark on the ones that
+    /// are no longer what the program was built with.
+    ///
+    /// Generated from the configuration itself rather than from a list written here, so a
+    /// setting added to `fcmd-config` is in the browser the same day and cannot be forgotten.
+    /// The dialogs stay where they are: they group the dozen settings somebody changes often
+    /// and say what each one *means*, which a list of keys cannot. This is for the other
+    /// hundred — and for finding out what a key is called.
+    fn setting_rows(&self) -> Vec<PickRow> {
+        let fresh: std::collections::BTreeMap<String, String> = fcmd_config::Config::default()
+            .settings()
+            .into_iter()
+            .collect();
+        self.cfg
+            .settings()
+            .into_iter()
+            .map(|(key, value)| {
+                let changed = fresh.get(&key).map(|was| *was != value).unwrap_or(true);
+                let label = if changed {
+                    format!("{key} = {value}  ·")
+                } else {
+                    format!("{key} = {value}")
+                };
+                PickRow::plain(label, key, false)
+            })
+            .collect()
+    }
+
+    /// The list, filtered as one types: two hundred keys is too many to walk, and the key one
+    /// is after is the one one can half remember the name of.
+    fn open_settings(&mut self, side: usize, cursor: usize) {
+        let rows = self.setting_rows();
+        let title = self.plain("menu-settings-all");
+        let mut pick = Pick::filtered(PickKind::Settings, title, rows, side);
+        pick.cursor = cursor.min(pick.rows.len().saturating_sub(1));
+        self.mode = Mode::Pick(Box::new(pick));
+    }
+
+    /// `Enter` or `F4` on a row: the value, to type over.
+    fn open_setting_prompt(&mut self, key: &str, side: usize, cursor: usize) {
+        let now = self.setting_value(key);
+        let title = self
+            .i18n
+            .t_args("opt-set-title", &[("key", key.to_string().into())]);
+        self.mode = Mode::Prompt(Prompt::new(
+            PromptKind::Setting {
+                key: key.to_string(),
+                side,
+                cursor,
+            },
+            title,
+            now,
+        ));
+    }
+
+    /// What one setting is at now, by its key.
+    fn setting_value(&self, key: &str) -> String {
+        self.cfg
+            .settings()
+            .into_iter()
+            .find(|(name, _)| name == key)
+            .map(|(_, value)| value)
+            .unwrap_or_default()
+    }
+
+    /// Set one setting from the browser: the value is parsed by the configuration itself, so
+    /// a word a setting cannot take is refused here with the same sentence `--set` gives.
+    fn set_setting(&mut self, key: &str, value: &str, side: usize, cursor: usize) {
+        match self.cfg.set(key, value) {
+            Ok(()) => {
+                // Whatever the change means for what is on screen: a sort key, a view, the
+                // mouse. The same path the dialogs take, so one setting cannot behave
+                // differently for having been changed here.
+                self.apply_config(&[key]);
+                let m = self.i18n.t_args(
+                    "opt-set",
+                    &[
+                        ("key", key.to_string().into()),
+                        ("value", value.to_string().into()),
+                    ],
+                );
+                self.set_status(m);
+            }
+            Err(e) => self.set_error(e),
+        }
+        self.open_settings(side, cursor);
+    }
+
+    /// `Space` in the browser: a setting that is `true` or `false` is flipped rather than
+    /// typed, because typing `false` to turn something off is three keys too many.
+    fn flip_setting(&mut self, key: &str, side: usize, cursor: usize) {
+        let now = self.setting_value(key);
+        let next = match now.as_str() {
+            "true" => "false",
+            "false" => "true",
+            // Not a boolean: `Space` is not a value, so the row is left alone and the key
+            // that *is* for typing says so.
+            _ => {
+                let m = self.i18n.t("opt-not-a-toggle");
+                self.set_error(m);
+                self.open_settings(side, cursor);
+                return;
+            }
+        };
+        self.set_setting(key, next, side, cursor);
+    }
+
+    /// `Del` in the browser: back to the value the program was built with, which is the one
+    /// thing a list of keys cannot otherwise tell you.
+    fn default_setting(&mut self, key: &str, side: usize, cursor: usize) {
+        let fresh = fcmd_config::Config::default();
+        let was = fresh
+            .settings()
+            .into_iter()
+            .find(|(name, _)| name == key)
+            .map(|(_, value)| value);
+        match was {
+            Some(value) => self.set_setting(key, &value, side, cursor),
+            None => self.open_settings(side, cursor),
         }
     }
 
@@ -19437,6 +19607,99 @@ mod tests {
             app.status
         );
         assert!(app.mode.is_normal());
+    }
+
+    /// The settings browser: every key, the value it is at, and the three keys that change
+    /// one. Generated from the configuration, so it cannot drift from it (SPEC 07 §2e).
+    #[test]
+    fn the_settings_browser_lists_every_setting_and_changes_one() {
+        let mut app = app();
+        app.run(Command::OptSettings);
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("no list: {}", app.status)
+        };
+        assert_eq!(pick.kind, crate::menu::PickKind::Settings);
+        assert!(pick.rows.len() > 40, "only {} settings", pick.rows.len());
+        // The keys are the ones `--set` and the configuration file use.
+        assert!(pick.rows.iter().any(|r| r.value == "ui.key_bar"));
+        assert!(
+            pick.rows
+                .iter()
+                .any(|r| r.label.starts_with("ui.key_bar = true")),
+            "the value is on the row"
+        );
+        // A `[[block]]` has an editor of its own and is not a row here.
+        assert!(!pick.rows.iter().any(|r| r.value.starts_with("highlight")));
+
+        // `Space` flips a yes-or-no setting, and the list comes back with the new value on
+        // the row rather than going away.
+        let at = pick
+            .rows
+            .iter()
+            .position(|r| r.value == "panel.show_hidden")
+            .expect("the hidden-files setting");
+        let Mode::Pick(pick) = &mut app.mode else {
+            unreachable!()
+        };
+        pick.cursor = at;
+        assert!(app.cfg.panel.show_hidden, "it starts on, as FAR has it");
+        press(&mut app, "Space");
+        assert!(!app.cfg.panel.show_hidden, "`Space` did not flip it");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("the list did not come back: {:?}", app.mode)
+        };
+        assert_eq!(pick.cursor, at, "and it comes back on the same row");
+        assert!(
+            pick.rows[at].label.contains("= false"),
+            "{}",
+            pick.rows[at].label
+        );
+        // A setting that is no longer the built-in one is marked.
+        assert!(
+            pick.rows[at].label.ends_with('·'),
+            "{}",
+            pick.rows[at].label
+        );
+
+        // `Del` puts the built-in value back, and the mark goes with it.
+        press(&mut app, "Del");
+        assert!(app.cfg.panel.show_hidden);
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("the list did not come back: {:?}", app.mode)
+        };
+        assert!(
+            !pick.rows[at].label.ends_with('·'),
+            "{}",
+            pick.rows[at].label
+        );
+
+        // `Enter` types a value, and one the setting cannot take is refused with a reason
+        // while the list stays where it was.
+        press(&mut app, "Enter");
+        let Mode::Prompt(prompt) = &app.mode else {
+            panic!("no prompt: {:?}", app.mode)
+        };
+        assert_eq!(prompt.text, "true", "the prompt opens on the value");
+        let Mode::Prompt(prompt) = &mut app.mode else {
+            unreachable!()
+        };
+        prompt.text = "maybe".to_string();
+        press(&mut app, "Enter");
+        assert!(app.status_error, "`maybe` is not a boolean: {}", app.status);
+        assert!(matches!(app.mode, Mode::Pick(_)), "{:?}", app.mode);
+        assert!(app.cfg.panel.show_hidden, "and nothing was changed");
+
+        // A setting that is not a yes-or-no says what `Space` cannot do for it.
+        let Mode::Pick(pick) = &mut app.mode else {
+            unreachable!()
+        };
+        pick.cursor = pick
+            .rows
+            .iter()
+            .position(|r| r.value == "ui.theme")
+            .expect("the theme setting");
+        press(&mut app, "Space");
+        assert_eq!(app.status, app.i18n.t("opt-not-a-toggle"));
     }
 
     /// *Options → Code pages* is the viewer's own list, opened where there is no file to

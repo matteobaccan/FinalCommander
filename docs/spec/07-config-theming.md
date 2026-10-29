@@ -280,6 +280,31 @@ something the file format does not accept:
 `Save setup` (`Shift+F9`) writes the whole configuration back out, themes declared in the file
 included, and what it writes parses back into the same configuration.
 
+## 2e. Every setting, as a list (`Options → All settings`)
+
+The dialogs above group the dozen settings somebody changes often and say what each one
+*means*, which a list of keys cannot. This is for the other seventy: the list of every setting
+the configuration holds, the value it is at, and the keys to change one. FAR reaches the same
+thing by typing `far:config`, and the reason it has one is the count — 311 settings there, and
+rather more here than any sensible number of dialogs.
+
+It is **generated from the configuration itself**: the file is dumped, the dump is walked, and
+each scalar becomes a row. A setting added to `fcmd-config` is therefore in the list the same
+day, and a list that drifts from the struct beside it is impossible. The `[[blocks]]` — the
+highlighting groups, the sort groups, the mask groups, the sites, the column sets — are left
+out: each is a list with an editor of its own, and a row reading `highlight = [table]` is a row
+nobody could do anything with.
+
+The keys: typing narrows the list (seventy keys is too many to walk, and one usually half
+remembers the name), `Enter` or `F4` types a value, `Space` flips a `true`/`false` one, `Del`
+puts back the value the program was built with — which is the one thing a list of keys cannot
+otherwise tell you — and a row that is no longer the built-in value is marked with a `·`.
+
+Every value goes in through `Config::set`, the same function `--set key=value` and the dialogs
+use, so a word a setting cannot take is refused with the same sentence rather than written and
+found out later. A test holds the two ends together: every row the list can show must be a key
+`set` accepts, so the browser can never offer a setting nobody can change.
+
 ## 3. Keymaps
 
 ```toml

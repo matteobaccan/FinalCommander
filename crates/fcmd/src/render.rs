@@ -978,6 +978,8 @@ fn draw_pick(
         | crate::menu::PickKind::FoldersHistory => "history-hint",
         // The code pages have keys of their own, and a footer that names them.
         crate::menu::PickKind::Codepages => "cp-hint",
+        // So does the settings browser, where three of the four keys are its own.
+        crate::menu::PickKind::Settings => "opt-settings-hint",
         _ => "pick-hint",
     });
 

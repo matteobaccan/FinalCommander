@@ -13,6 +13,13 @@ Application Support` su macOS, `%APPDATA%` su Windows. `fcmd --dump-config` stam
 impostazioni con cui il programma sta davvero girando, che è il modo più rapido di vedere come
 si chiama una chiave.
 
+`F9 → Opzioni → Tutti i parametri` è ogni impostazione che esiste, in un elenco: la chiave, il
+valore a cui sta, e un `·` su quelle che non sono più quelle con cui il programma è stato
+costruito. Scrivi per filtrare, `Invio` o `F4` per scrivere un valore, `Spazio` per invertire un
+sì-o-no, `Canc` per rimettere il valore di partenza. I dialoghi sopra, in quel menu, sono la
+dozzina di impostazioni che si cambiano più spesso, con le parole che dicono cosa significa
+ognuna; questo è tutto il resto, ed è il modo di scoprire come si chiama una chiave.
+
 `Opzioni → Salva impostazioni` scrive il file delle impostazioni; nient'altro lo fa, quindi
 un'impostazione cambiata per vedere cosa fa non c'è più al prossimo avvio. Se preferisci il
 contrario, *Salva le impostazioni all'uscita* in *Opzioni → Impostazioni dell'interfaccia*

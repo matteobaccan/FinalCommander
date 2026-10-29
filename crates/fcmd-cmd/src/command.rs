@@ -136,6 +136,9 @@ pub enum Command {
     /// The same list the viewer's `Shift+F8` opens — from here it is the favourites one edits
     /// rather than the page a file is being read in.
     OptCodepages,
+    /// Every setting, as a list one types into: the key, the value, and `Enter` to change it
+    /// (SPEC 07 §2e). What FAR reaches with `far:config`.
+    OptSettings,
     OptConfirmations,
     /// The palette editor: every colour the interface uses, on the live theme.
     OptColors,
@@ -493,6 +496,7 @@ impl Command {
             Command::OptSortGroups,
             Command::OptMaskGroups,
             Command::OptCodepages,
+            Command::OptSettings,
             Command::OptConfirmations,
             Command::OptColors,
             Command::OptEditor,
@@ -759,6 +763,7 @@ impl Command {
             Command::OptSortGroups => "opt.sort.groups".into(),
             Command::OptMaskGroups => "opt.mask.groups".into(),
             Command::OptCodepages => "opt.codepages".into(),
+            Command::OptSettings => "opt.settings".into(),
             Command::OptConfirmations => "opt.confirmations".into(),
             Command::OptColors => "opt.colors".into(),
             Command::OptEditor => "opt.editor".into(),
@@ -995,6 +1000,7 @@ impl Command {
             ("opt.sort.groups", _) => Command::OptSortGroups,
             ("opt.mask.groups", _) => Command::OptMaskGroups,
             ("opt.codepages", _) => Command::OptCodepages,
+            ("opt.settings", _) => Command::OptSettings,
             ("opt.confirmations", _) => Command::OptConfirmations,
             ("opt.colors", _) => Command::OptColors,
             ("opt.editor", _) => Command::OptEditor,
