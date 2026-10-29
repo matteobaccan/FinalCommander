@@ -28852,6 +28852,11 @@ abcdefghij
         let press = fcmd_tui::MouseKind::Press(fcmd_tui::Button::Left);
         let release = fcmd_tui::MouseKind::Release(fcmd_tui::Button::Left);
 
+        // Built from the panel's own path: the same `VPath` renders with a backslash on
+        // Windows, and a test that writes one out passes here and fails there.
+        let into = app.panels[1].cwd.join("docs").to_string();
+        let onto = app.panels[1].cwd.to_string();
+
         // From `a.txt` in the left panel onto the `docs` directory in the right one.
         at(&mut app, press, left.x + 1, left.y + 2);
         assert_eq!(app.panel().cursor, 2);
@@ -28862,7 +28867,7 @@ abcdefghij
         assert_eq!(form.kind, FormKind::Copy);
         assert_eq!(
             form.text_value("copy.target"),
-            format!("/tmp/docs{}", std::path::MAIN_SEPARATOR),
+            format!("{into}{}", std::path::MAIN_SEPARATOR),
             "the directory the pointer was over, not the panel's own"
         );
         assert_eq!(
@@ -28881,7 +28886,7 @@ abcdefghij
         };
         assert_eq!(
             form.text_value("copy.target"),
-            format!("/tmp{}", std::path::MAIN_SEPARATOR)
+            format!("{onto}{}", std::path::MAIN_SEPARATOR)
         );
 
         // And a release inside the panel it began in is the sweep, not a drop.
