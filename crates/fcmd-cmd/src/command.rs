@@ -132,6 +132,10 @@ pub enum Command {
     /// The `[[sort_group]]` bands as a list, with a dialog per band (SPEC 02 §4).
     OptSortGroups,
     OptMaskGroups,
+    /// The code pages as a list: which ones `F8` walks, and what to call each (SPEC 05 §1.12).
+    /// The same list the viewer's `Shift+F8` opens — from here it is the favourites one edits
+    /// rather than the page a file is being read in.
+    OptCodepages,
     OptConfirmations,
     /// The palette editor: every colour the interface uses, on the live theme.
     OptColors,
@@ -483,6 +487,7 @@ impl Command {
             Command::OptHighlight,
             Command::OptSortGroups,
             Command::OptMaskGroups,
+            Command::OptCodepages,
             Command::OptConfirmations,
             Command::OptColors,
             Command::OptEditor,
@@ -746,6 +751,7 @@ impl Command {
             Command::OptHighlight => "opt.highlight".into(),
             Command::OptSortGroups => "opt.sort.groups".into(),
             Command::OptMaskGroups => "opt.mask.groups".into(),
+            Command::OptCodepages => "opt.codepages".into(),
             Command::OptConfirmations => "opt.confirmations".into(),
             Command::OptColors => "opt.colors".into(),
             Command::OptEditor => "opt.editor".into(),
@@ -979,6 +985,7 @@ impl Command {
             ("opt.highlight", _) => Command::OptHighlight,
             ("opt.sort.groups", _) => Command::OptSortGroups,
             ("opt.mask.groups", _) => Command::OptMaskGroups,
+            ("opt.codepages", _) => Command::OptCodepages,
             ("opt.confirmations", _) => Command::OptConfirmations,
             ("opt.colors", _) => Command::OptColors,
             ("opt.editor", _) => Command::OptEditor,

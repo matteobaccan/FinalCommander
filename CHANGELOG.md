@@ -4,6 +4,16 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
+## [Unreleased]
+
+### Added
+
+- **`Options → Code pages`** opens the code page list, so the last dim row but one in that
+  menu is a real one. It is the viewer's own `Shift+F8` list (`opt.codepages`), opened where
+  there is no file to read: what it is for there is marking the three or four pages `F8` walks
+  and giving one a name of its own, which is what FAR's dialog of that name is for too. One
+  list rather than a second screen showing the same thirty-odd rows.
+
 ## [0.15.0] — 2026-10-29
 
 ### Added

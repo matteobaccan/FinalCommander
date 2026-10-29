@@ -117,9 +117,14 @@ is the sort of thing only a reader of the whole menu notices.
 
 ### 2.4 Options
 
-System settings, Panel settings, Interface settings, Languages, Themes, Colours · Confirmations,
-Viewer settings (backlog), Editor settings (backlog), Code pages (backlog), Files highlighting
-(backlog), Plugins configuration (backlog) · Help, Save setup, Quit.
+System settings, Panel settings, Interface settings, Languages, Themes, Colours, Mask groups ·
+Confirmations, Viewer settings (§3.6), Editor settings (§3.6b), Code pages, Files highlighting
+(§3.11), Sort groups · Plugins configuration (backlog) · Help, Save setup, Quit.
+
+*Code pages* is the viewer's own list (SPEC 05 §1.12), opened where there is no file to read:
+what it is for here is marking the three or four pages `F8` walks and giving one a name of its
+own. One list rather than a dialog beside it, because a second screen showing the same
+thirty-odd rows is a second screen to keep in step.
 
 ## 3. Settings dialogs
 

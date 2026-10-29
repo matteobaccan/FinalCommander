@@ -551,7 +551,7 @@ pub fn menus() -> Vec<Menu> {
                 ),
                 item("menu-viewer-settings", "", Action::Run(Command::OptViewer)),
                 item("menu-editor-settings", "", Action::Run(Command::OptEditor)),
-                item("menu-codepages", "", Action::Todo("settings.codepages")),
+                item("menu-codepages", "", Action::Run(Command::OptCodepages)),
                 item("menu-highlighting", "", Action::Run(Command::OptHighlight)),
                 item("menu-sort-groups", "", Action::Run(Command::OptSortGroups)),
                 item("menu-plugins-config", "", Action::Todo("settings.plugins")),

@@ -332,6 +332,34 @@ mod tests {
         assert_eq!(env["FCMD_SELECTED_COUNT"], "2");
     }
 
+    /// Run a program a test has just written, trying again while the system says the file is
+    /// busy.
+    ///
+    /// Not a workaround for a bug of ours: between a `fork` in another thread and its `exec`,
+    /// that child holds every descriptor this process has open — including the one a test has
+    /// just written its script through — and Linux refuses to execute a file another process
+    /// holds open for writing (`ETXTBSY`). Nothing the host can do closes that window, and the
+    /// tests here write and run programs in parallel, so the answer is to try again rather
+    /// than to fail a build over a race between two tests.
+    fn run_written(
+        path: &std::path::Path,
+        cwd: Option<&std::path::Path>,
+        ctx: &Context,
+        seconds: Option<u64>,
+    ) -> Result<Reply, RunError> {
+        for _ in 0..50 {
+            match run_command(path, cwd, ctx, seconds) {
+                Err(RunError::Spawn { source, .. })
+                    if source.kind() == std::io::ErrorKind::ExecutableFileBusy =>
+                {
+                    std::thread::sleep(std::time::Duration::from_millis(20));
+                }
+                other => return other,
+            }
+        }
+        run_command(path, cwd, ctx, seconds)
+    }
+
     /// The whole conversation, through a real process. A shell script on Unix and a batch
     /// file on Windows: the protocol has to work with whatever a user actually writes.
     #[test]
@@ -364,7 +392,7 @@ mod tests {
             }),
             ..Context::new("user.hello")
         };
-        let reply = run_command(&path, Some(dir.path()), &ctx, Some(10)).expect("it runs");
+        let reply = run_written(&path, Some(dir.path()), &ctx, Some(10)).expect("it runs");
         assert_eq!(reply.actions.len(), 2, "{:?}", reply);
         assert_eq!(reply.actions[0], Action::Status("user.hello".into()));
         assert_eq!(reply.actions[1], Action::Run("panel.reread".into()));
@@ -380,7 +408,7 @@ mod tests {
         let path = dir.path().join("hang.sh");
         std::fs::write(&path, "#!/bin/sh\nsleep 60\n").unwrap();
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
-        let err = run_command(&path, None, &Context::new("user.hang"), Some(1)).unwrap_err();
+        let err = run_written(&path, None, &Context::new("user.hang"), Some(1)).unwrap_err();
         assert!(matches!(err, RunError::Timeout { .. }), "{err}");
     }
 

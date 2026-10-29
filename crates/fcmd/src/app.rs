@@ -7234,6 +7234,10 @@ impl App {
             Command::OptHighlight => self.open_pick(PickKind::Highlight, self.active),
             Command::OptSortGroups => self.open_pick(PickKind::SortGroups, self.active),
             Command::OptMaskGroups => self.open_pick(PickKind::MaskGroups, self.active),
+            // The same list as the viewer's `Shift+F8`. With no file open there is no page to
+            // read one in, so what it is for here is the marking and the naming — which is
+            // what FAR's *Code pages* dialog in this menu is for too.
+            Command::OptCodepages => self.open_codepages(),
             Command::ToolDiff => self.open_diff(),
             Command::ToolFindFolder => self.open_folder_list(None),
             Command::OptConfirmations => self.open_form(FormKind::Confirmations),
@@ -19344,14 +19348,44 @@ mod tests {
     #[test]
     fn an_entry_with_no_feature_behind_it_says_so_instead_of_pretending() {
         let mut app = app();
-        // The code pages list is still to come — the viewer cycles them with `F8`, but the
-        // list-and-pick version is not built. Options is the fourth menu.
-        open(&mut app, 3, "menu-codepages");
+        // Configuring the plugins is still to come — there is nothing to configure until
+        // plugins load from disk. Options is the fourth menu.
+        open(&mut app, 3, "menu-plugins-config");
         assert!(
-            app.status.contains("settings.codepages"),
+            app.status.contains("settings.plugins"),
             "a missing feature must say so instead of doing nothing quietly: `{}`",
             app.status
         );
+        assert!(app.mode.is_normal());
+    }
+
+    /// *Options → Code pages* is the viewer's own list, opened where there is no file to
+    /// read: what it is for there is marking the three or four one uses and naming them.
+    #[test]
+    fn the_options_menu_opens_the_code_page_list_and_marks_a_favourite() {
+        let mut app = app();
+        open(&mut app, 3, "menu-codepages");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("no list: {}", app.status)
+        };
+        assert_eq!(pick.kind, crate::menu::PickKind::Codepages);
+        assert!(pick.rows.len() > 30, "every code page is in it");
+
+        // `Ins` marks the row under the cursor, and the mark is a line of the settings file
+        // rather than something this session keeps to itself.
+        let id = pick.rows[pick.cursor].value.clone();
+        press(&mut app, "Ins");
+        assert!(
+            app.cfg.codepages.iter().any(|c| c.id == id && c.favourite),
+            "`{id}` is not marked: {:?}",
+            app.cfg.codepages
+        );
+        press(&mut app, "Ins");
+        assert!(
+            !app.cfg.codepages.iter().any(|c| c.id == id),
+            "unmarking a page that has no name of its own leaves nothing behind"
+        );
+        press(&mut app, "Esc");
         assert!(app.mode.is_normal());
     }
 
