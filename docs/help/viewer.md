@@ -124,7 +124,8 @@ Over a disassembly `F7` searches the *instructions*, not the bytes: `call` finds
 `mov *, eax` every move into that register, and `*` stands for whatever lies between the pieces
 of the pattern.
 
-`F11` opens the structure of an executable: ELF, PE, Mach-O and `ar`, each header field with the
+`F11` opens the structure of an executable: ELF, PE, Mach-O, `ar`, and the older families — NE,
+LE and LX, and the TE that UEFI firmware is made of — each header field with the
 raw bytes beside the meaning, the sections, the imports and exports, and the symbols — which
 then name the functions in the disassembly. `Enter` on an offset takes the bytes there.
 

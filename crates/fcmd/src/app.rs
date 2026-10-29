@@ -21033,7 +21033,7 @@ mod tests {
     fn alt_f10_on_a_row_that_names_a_file_browses_for_one() {
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(dir.path().join("keys")).unwrap();
-        std::fs::write(dir.path().join("keys/id_ed25519"), b"-").unwrap();
+        std::fs::write(dir.path().join("keys").join("id_ed25519"), b"-").unwrap();
         std::fs::write(dir.path().join("notes.txt"), b"-").unwrap();
         let here = dir.path().display().to_string();
 
@@ -21067,7 +21067,7 @@ mod tests {
         // `Enter` on a directory goes into it rather than answering anything.
         let at = labels
             .iter()
-            .position(|l| l == "keys/")
+            .position(|label| *label == folder)
             .expect("the folder");
         let Mode::Pick(pick) = &mut app.mode else {
             panic!("the list closed")

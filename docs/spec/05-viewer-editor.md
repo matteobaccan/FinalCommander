@@ -148,7 +148,7 @@ Two different things, and the viewer is honest about which one it is doing.
 
 | What | How |
 | --- | --- |
-| Recognise the file | magic bytes: ELF, PE, Mach-O (incl. universal), WebAssembly, Java class, `.pyc`, `ar` archive, or raw |
+| Recognise the file | magic bytes: ELF, PE, NE, LE/LX, TE, Mach-O (incl. universal), WebAssembly, Java class, `.pyc`, `ar` archive, or raw |
 | Read its structure | `object` (MIT/Apache-2.0): architecture, bitness, entry point, sections, function symbols |
 | Decode instructions | `iced-x86` (MIT) for x86 and x86-64, Intel syntax, exact instruction lengths; `yaxpeax-arm` (0BSD) for AArch64, where every instruction is four bytes |
 | Row format | `address  bytes  mnemonic operands`, with a `<symbol>:` heading where a function starts |
@@ -238,7 +238,28 @@ Rules it follows:
 
 Formats, in the order they are worth having: ELF, PE (including .NET's CLI header) and Mach-O
 first, because those are the files people open; then archives (`ar`, and the member list of a
-`zip`), then the older DOS and EFI families if anyone asks.
+`zip`); and the older families after them, which are there now:
+
+- **NE**, the 16-bit New Executable of Windows 1.0 to 3.11 and OS/2 1.x. Its header and its
+  segment table, whose entries are the one place in these families where a file offset falls
+  out of the header arithmetic — a sector number shifted by `ne_align` — so those rows are
+  what `Enter` follows.
+- **LE** and **LX**, the Linear Executables: OS/2 2.0 and later, and the DOS extenders and
+  Windows 9x VxDs. The two share this header as far as the object table, and differ in how a
+  page becomes a file offset — `LX` shifts a page's own offset, `LE` numbers its pages from
+  one data base — so the objects are listed with their sizes and permissions and the *tables*
+  are what `Enter` follows. A page decoded against the wrong one of the two layouts would
+  send a reader to a plausible wrong place, which is worse than sending them to the table.
+- **TE**, the Terse Executable that UEFI firmware is built out of: a PE with the stub, the
+  signature and most of the optional header cut off, so it has a magic of its own (`VZ`) and
+  no `MZ` in front of it. `StrippedSize` is the whole of the arithmetic — the section headers
+  still carry the offsets the PE had, so a file offset is that offset less what was removed
+  plus this header's own forty bytes. There is no separate TE64: the header always carries a
+  64-bit image base, and `Machine` is what says x86-64 from IA-32.
+
+What none of the three gets is the equivalent of the PE reader's import and export walks:
+those want a second format each — a stream of counted strings, a stream of entry bundles —
+and nothing here can be tested against a real file of them.
 
 ### 1.9 Following a branch
 

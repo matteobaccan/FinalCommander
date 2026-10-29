@@ -25,6 +25,30 @@ Notable changes, newest first. The format follows
   being read, a file being edited — stays parked under it. The help's own pages have a section
   on dialogs to follow it into, in both languages.
 
+- **NE, LE/LX and TE in the structure pane** (SPEC 05 §1.8). Three families the pane met and
+  called `MZ`: the 16-bit New Executable of Windows 1.0 to 3.11 and OS/2 1.x, the Linear
+  Executables of OS/2 2.0 and of the DOS extenders and Windows 9x VxDs, and the Terse
+  Executable that UEFI firmware is built out of — which has no `MZ` in front of it at all,
+  because it is a PE with the stub and most of the headers cut off, so `VZ` is what is left to
+  recognise. Nothing current produces any of them; people *read* them, which is what this pane
+  is for.
+
+  Each gets its header decoded field by field and the one table that says where the file's
+  contents are. An NE's segment table is the one place in these families where a file offset
+  falls out of the header arithmetic — a sector number shifted by `ne_align` — so those rows
+  are what `Enter` follows. An LX or LE object is reached through a page table that is laid out
+  one way in `LX` and another in `LE`, so the objects carry their sizes and permissions and the
+  *tables* are what `Enter` follows: a page decoded against the wrong one of the two layouts
+  would send a reader to a plausible wrong place, which is worse than sending them to the table
+  and letting them look. A TE's sections do get offsets, because `StrippedSize` is the whole of
+  the arithmetic — the section headers still carry the offsets the PE had — and the mapping
+  from a virtual address follows the same sum, so `va:` in the viewer works there too.
+
+  What none of the three gets is the equivalent of the PE reader's import and export walks:
+  those want a second format each, and nothing here can be tested against a real file of them.
+  There is no separate TE64 either: the header always carries a 64-bit image base, and
+  `Machine` is what says x86-64 from IA-32.
+
 - **Two of the three mouse drags** (SPEC 02 §12). A drag from a row selects every row it
   sweeps, in the panel the press began in, and leaves the cursor where it stopped; a drag on
   the frame where the two panels meet moves the rule between them, within the same limits

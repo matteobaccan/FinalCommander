@@ -311,6 +311,11 @@ pub fn read(src: &mut dyn Bytes) -> Option<Structure> {
     if head.len() >= 8 && head[..8] == *b"!<arch>\n" {
         return Some(ar(src, len));
     }
+    // A Terse Executable has no `MZ` in front of it: UEFI firmware is built out of PE images
+    // with the stub and most of the headers cut off, and `VZ` is what is left to recognise.
+    if head.len() >= 40 && head[..2] == *b"VZ" {
+        return Some(te(src, &head, len));
+    }
     None
 }
 
@@ -1131,11 +1136,18 @@ fn pe(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
     rows.push(Row::field("e_magic", "4D 5A", "MZ"));
     rows.push(Row::entry(
         "e_lfanew",
-        format!("PE header at {lfanew:08X}"),
+        format!("new header at {lfanew:08X}"),
         in_file(lfanew, len),
     ));
 
     let nt = src.at(lfanew, 256);
+    // The three other things an `MZ` stub can point at. Each is a format of its own that
+    // happens to share the stub, so the DOS rows already built are handed on as they are.
+    match nt.first_chunk::<2>() {
+        Some(b"NE") => return ne(src, lfanew, &nt, rows, len),
+        Some(b"LE") | Some(b"LX") => return lx(src, lfanew, &nt, rows, len),
+        _ => {}
+    }
     if nt.len() < 24 || nt[..4] != *b"PE\0\0" {
         return Structure {
             format: "MZ",
@@ -1873,6 +1885,722 @@ fn pe_section_flags(f: u32) -> String {
     s
 }
 
+// ── NE, LE/LX and TE: the executables that are not PE ───────────────────────────────────────
+//
+// Three families that share the `MZ` stub with PE, or stand on their own, and that a
+// disassembler-shaped pane meets in the wild rather than in a build directory: a 16-bit
+// Windows or OS/2 program, an OS/2 32-bit module or a VxD, and the stripped PE that UEFI
+// firmware is built out of. None of them is produced by anything current; all of them are
+// *read* by people looking at old software or at a firmware image, which is what this pane is
+// for.
+//
+// What each one gets is its own header, decoded field by field, and the one table that says
+// where the file's contents are. What none of them gets is the equivalent of the import and
+// export walks the PE reader does: those want a second format each, and nothing here can be
+// tested against a real file of them.
+
+/// A 16-bit New Executable: Windows 1.0 to 3.11, and OS/2 1.x.
+///
+/// The header is 64 bytes at `at`, and every table offset in it is relative to `at` rather
+/// than to the file — except the non-resident name table, which is a file offset. The segment
+/// table is the one worth listing: its entries say where a segment's bytes are, in units of
+/// `1 << ne_align`, which is the only place in this family where a file offset falls out of
+/// the header arithmetic without a second table to read.
+fn ne(src: &mut dyn Bytes, at: u64, nt: &[u8], mut rows: Vec<Row>, len: u64) -> Structure {
+    let mut c = Cur::new(nt);
+    c.seek(2);
+    let linker = (c.u16() & 0xFF) as u8;
+    c.seek(2);
+    let version = nt.get(2).copied().unwrap_or(0);
+    let revision = nt.get(3).copied().unwrap_or(0);
+    c.seek(4);
+    let _enttab = c.u16();
+    let _cbenttab = c.u16();
+    let crc = c.u32();
+    let flags = c.u16();
+    let autodata = c.u16();
+    let heap = c.u16();
+    let stack = c.u16();
+    let csip = c.u32();
+    let sssp = c.u32();
+    let segments = c.u16();
+    let modules = c.u16();
+    let _cbnrestab = c.u16();
+    let segtab = c.u16();
+    let rsrctab = c.u16();
+    let restab = c.u16();
+    let modtab = c.u16();
+    let imptab = c.u16();
+    let nrestab = c.u32();
+    let _cmovent = c.u16();
+    let align = c.u16();
+    let resources = c.u16();
+    let target = nt.get(0x36).copied().unwrap_or(0);
+    c.seek(0x3E);
+    let expver = c.u16();
+    let _ = linker;
+
+    let kind = if flags & 0x8000 != 0 {
+        "dynamic library"
+    } else {
+        "program"
+    };
+    let summary = format!(
+        "NE {} · {} · {segments} segment{}",
+        ne_target(target),
+        kind,
+        if segments == 1 { "" } else { "s" }
+    );
+
+    rows.push(Row::group("NE header"));
+    rows.push(Row::field("ne_magic", "4E 45", "NE"));
+    rows.push(Row::field(
+        "ne_ver.ne_rev",
+        format!("{version:02X} {revision:02X}"),
+        format!("linker {version}.{revision}"),
+    ));
+    rows.push(Row::field("ne_crc", format!("{crc:08X}"), "checksum"));
+    rows.push(Row::field(
+        "ne_flags",
+        format!("{flags:04X}"),
+        ne_flags(flags),
+    ));
+    rows.push(Row::field(
+        "ne_autodata",
+        format!("{autodata:04X}"),
+        if autodata == 0 {
+            "no automatic data segment".to_string()
+        } else {
+            format!("segment {autodata}")
+        },
+    ));
+    rows.push(Row::field(
+        "ne_heap",
+        format!("{heap:04X}"),
+        size_cell(u64::from(heap)),
+    ));
+    rows.push(Row::field(
+        "ne_stack",
+        format!("{stack:04X}"),
+        size_cell(u64::from(stack)),
+    ));
+    rows.push(Row::field(
+        "ne_csip",
+        format!("{csip:08X}"),
+        format!("entry at segment {}:{:04X}", csip >> 16, csip & 0xFFFF),
+    ));
+    rows.push(Row::field(
+        "ne_sssp",
+        format!("{sssp:08X}"),
+        format!("stack at segment {}:{:04X}", sssp >> 16, sssp & 0xFFFF),
+    ));
+    rows.push(Row::field(
+        "ne_cseg",
+        format!("{segments:04X}"),
+        format!("{segments}"),
+    ));
+    rows.push(Row::field(
+        "ne_cmod",
+        format!("{modules:04X}"),
+        format!(
+            "{modules} module reference{}",
+            if modules == 1 { "" } else { "s" }
+        ),
+    ));
+    rows.push(Row::field(
+        "ne_align",
+        format!("{align:04X}"),
+        format!("segments in units of {}", 1u32 << align.min(15)),
+    ));
+    rows.push(Row::field(
+        "ne_exetyp",
+        format!("{target:02X}"),
+        ne_target(target),
+    ));
+    rows.push(Row::field(
+        "ne_expver",
+        format!("{expver:04X}"),
+        format!("needs {}.{:02}", expver >> 8, expver & 0xFF),
+    ));
+
+    // The tables, each at its own offset from the header. They are listed rather than walked:
+    // a resident name table is a stream of counted strings and an entry table is a stream of
+    // bundles, and both want a reader of their own.
+    rows.push(Row::group("Tables"));
+    for (label, offset) in [
+        ("Segment table", u64::from(segtab)),
+        ("Resource table", u64::from(rsrctab)),
+        ("Resident names", u64::from(restab)),
+        ("Module references", u64::from(modtab)),
+        ("Imported names", u64::from(imptab)),
+    ] {
+        let where_ = (offset != 0).then(|| at + offset);
+        rows.push(Row::entry(
+            format!("  {label}"),
+            match where_ {
+                Some(off) => format!("{off:08X}"),
+                None => "not present".to_string(),
+            },
+            where_.and_then(|off| in_file(off, len)),
+        ));
+    }
+    rows.push(Row::entry(
+        "  Non-resident names",
+        match nrestab {
+            0 => "not present".to_string(),
+            off => format!("{off:08X}"),
+        },
+        in_file(u64::from(nrestab), len),
+    ));
+    rows.push(Row::field(
+        "  Resource segments",
+        format!("{resources:04X}"),
+        format!("{resources}"),
+    ));
+
+    // The segments. `sector` is in units of `1 << ne_align`, and zero means a segment with no
+    // bytes in the file at all — an uninitialised data segment, which the loader makes.
+    let mut truncated = c.short;
+    if segments > 0 && segtab != 0 {
+        let count = (segments as usize).min(MAX_ENTRIES);
+        let table = read_table(src, at + u64::from(segtab), 8, count, len);
+        truncated |= table.len() < count * 8;
+        rows.push(Row::group("Segments"));
+        let shift = u32::from(align.min(15));
+        for i in 0..table.len() / 8 {
+            let mut s = Cur::new(&table[i * 8..i * 8 + 8]);
+            let sector = s.u16();
+            let length = s.u16();
+            let seg_flags = s.u16();
+            let alloc = s.u16();
+            // A length of zero means 65 536 bytes, which is the one quirk of this table.
+            let bytes = if length == 0 && sector != 0 {
+                0x1_0000u32
+            } else {
+                u32::from(length)
+            };
+            let offset = (u64::from(sector)) << shift;
+            let offset = (sector != 0)
+                .then_some(offset)
+                .and_then(|o| in_file(o, len));
+            rows.push(Row::entry(
+                format!("  #{}", i + 1),
+                format!(
+                    "{}  {}  {}  allocates {}",
+                    off_cell(offset),
+                    size_cell(u64::from(bytes)),
+                    ne_segment_flags(seg_flags),
+                    size_cell(if alloc == 0 {
+                        0x1_0000
+                    } else {
+                        u64::from(alloc)
+                    })
+                ),
+                offset,
+            ));
+        }
+    }
+
+    Structure {
+        format: "NE",
+        summary,
+        rows,
+        symbols: Vec::new(),
+        maps: Vec::new(),
+        clr: None,
+        truncated,
+    }
+}
+
+fn ne_target(t: u8) -> &'static str {
+    match t {
+        1 => "OS/2",
+        2 => "Windows",
+        3 => "European MS-DOS 4.x",
+        4 => "Windows 386",
+        5 => "BOSS",
+        _ => "unknown target",
+    }
+}
+
+fn ne_flags(f: u16) -> String {
+    let mut out = Vec::new();
+    out.push(match f & 0x0003 {
+        1 => "single data",
+        2 => "multiple data",
+        _ => "no automatic data",
+    });
+    if f & 0x8000 != 0 {
+        out.push("library");
+    }
+    if f & 0x0008 != 0 {
+        out.push("protected mode only");
+    }
+    if f & 0x2000 != 0 {
+        out.push("errors in image");
+    }
+    out.join(", ")
+}
+
+fn ne_segment_flags(f: u16) -> String {
+    let mut out = String::from(if f & 0x0001 != 0 { "data" } else { "code" });
+    for (bit, name) in [
+        (0x0010u16, "iterated"),
+        (0x0020, "moveable"),
+        (0x0040, "shareable"),
+        (0x0080, "preload"),
+        (0x0100, "read-only"),
+        (0x0200, "relocations"),
+        (0x1000, "discardable"),
+    ] {
+        if f & bit != 0 {
+            out.push(' ');
+            out.push_str(name);
+        }
+    }
+    out
+}
+
+/// A Linear Executable: `LX` for OS/2 2.0 and later, `LE` for the mixed 16/32-bit modules —
+/// DOS extenders and the Windows 9x VxDs, which are `LE` with a different page table.
+///
+/// The two share this header exactly as far as the object table, which is what is decoded
+/// here, and differ in how a page becomes a file offset: `LX` shifts a page's own offset,
+/// `LE` numbers its pages from a single data base. So the objects are listed with their sizes
+/// and permissions and the *tables* are what `Enter` follows — a page table entry decoded
+/// against the wrong one of the two layouts would send a reader to a plausible wrong place,
+/// which is worse than sending them to the table and letting them look.
+fn lx(src: &mut dyn Bytes, at: u64, nt: &[u8], mut rows: Vec<Row>, len: u64) -> Structure {
+    let linear = if nt.first_chunk::<2>() == Some(b"LX") {
+        "LX"
+    } else {
+        "LE"
+    };
+    let mut c = Cur::new(nt);
+    c.seek(4);
+    let level = c.u32();
+    let cpu = c.u16();
+    let os = c.u16();
+    let version = c.u32();
+    let flags = c.u32();
+    let pages = c.u32();
+    let eip_object = c.u32();
+    let eip = c.u32();
+    let esp_object = c.u32();
+    let esp = c.u32();
+    let page_size = c.u32();
+    let page_shift = c.u32();
+    let fixup_size = c.u32();
+    let _fixup_sum = c.u32();
+    let loader_size = c.u32();
+    let _loader_sum = c.u32();
+    let objtab = c.u32();
+    let objects = c.u32();
+    let objpagetab = c.u32();
+    let _iterpages = c.u32();
+    let rsrctab = c.u32();
+    let resources = c.u32();
+    let restab = c.u32();
+    let enttab = c.u32();
+    c.seek(0x68);
+    let fixup_pagetab = c.u32();
+    let fixup_rectab = c.u32();
+    let imptab = c.u32();
+    let _impcount = c.u32();
+    let impproc = c.u32();
+    let _pagesum = c.u32();
+    let datapages = c.u32();
+
+    let summary = format!(
+        "{linear} {} · {} · {objects} object{}",
+        lx_cpu(cpu),
+        lx_kind(flags),
+        if objects == 1 { "" } else { "s" }
+    );
+
+    rows.push(Row::group(format!("{linear} header")));
+    rows.push(Row::field(
+        "magic",
+        c.hex(0, 2),
+        format!("{linear} (linear executable)"),
+    ));
+    rows.push(Row::field(
+        "border.worder",
+        c.hex(2, 2),
+        match (nt.get(2), nt.get(3)) {
+            (Some(0), Some(0)) => "little-endian".to_string(),
+            _ => "big-endian".to_string(),
+        },
+    ));
+    rows.push(Row::field(
+        "level",
+        format!("{level:08X}"),
+        format!("format level {level}"),
+    ));
+    rows.push(Row::field("cpu", format!("{cpu:04X}"), lx_cpu(cpu)));
+    rows.push(Row::field("os", format!("{os:04X}"), lx_os(os)));
+    rows.push(Row::field(
+        "version",
+        format!("{version:08X}"),
+        format!("module version {version}"),
+    ));
+    rows.push(Row::field("flags", format!("{flags:08X}"), lx_flags(flags)));
+    rows.push(Row::field(
+        "pages",
+        format!("{pages:08X}"),
+        format!("{pages} page{}", if pages == 1 { "" } else { "s" }),
+    ));
+    rows.push(Row::field(
+        "eip",
+        format!("{eip:08X}"),
+        format!("object {eip_object} + {eip:X}"),
+    ));
+    rows.push(Row::field(
+        "esp",
+        format!("{esp:08X}"),
+        format!("object {esp_object} + {esp:X}"),
+    ));
+    rows.push(Row::field(
+        "pagesize",
+        format!("{page_size:08X}"),
+        size_cell(u64::from(page_size)),
+    ));
+    rows.push(Row::field(
+        if linear == "LX" {
+            "pageshift"
+        } else {
+            "lastpagesize"
+        },
+        format!("{page_shift:08X}"),
+        if linear == "LX" {
+            format!("page offsets shift by {page_shift}")
+        } else {
+            size_cell(u64::from(page_shift))
+        },
+    ));
+    rows.push(Row::field(
+        "loadersize",
+        format!("{loader_size:08X}"),
+        size_cell(u64::from(loader_size)),
+    ));
+    rows.push(Row::field(
+        "fixupsize",
+        format!("{fixup_size:08X}"),
+        size_cell(u64::from(fixup_size)),
+    ));
+
+    rows.push(Row::group("Tables"));
+    for (label, offset, from_header) in [
+        ("Object table", objtab, true),
+        ("Object page table", objpagetab, true),
+        ("Resource table", rsrctab, true),
+        ("Resident names", restab, true),
+        ("Entry table", enttab, true),
+        ("Fixup page table", fixup_pagetab, true),
+        ("Fixup records", fixup_rectab, true),
+        ("Import modules", imptab, true),
+        ("Import procedures", impproc, true),
+        ("Data pages", datapages, false),
+    ] {
+        let where_ = (offset != 0).then(|| {
+            if from_header {
+                at + u64::from(offset)
+            } else {
+                u64::from(offset)
+            }
+        });
+        rows.push(Row::entry(
+            format!("  {label}"),
+            match where_ {
+                Some(off) => format!("{off:08X}"),
+                None => "not present".to_string(),
+            },
+            where_.and_then(|off| in_file(off, len)),
+        ));
+    }
+    rows.push(Row::field(
+        "  Resource entries",
+        format!("{resources:08X}"),
+        format!("{resources}"),
+    ));
+
+    // The objects: a linear executable's sections. Their bytes are reached through the page
+    // table, which is why these rows carry a size and permissions rather than an offset.
+    let mut truncated = c.short;
+    if objects > 0 && objtab != 0 {
+        let count = (objects as usize).min(MAX_ENTRIES);
+        let table = read_table(src, at + u64::from(objtab), 24, count, len);
+        truncated |= table.len() < count * 24;
+        rows.push(Row::group("Objects"));
+        for i in 0..table.len() / 24 {
+            let mut o = Cur::new(&table[i * 24..i * 24 + 24]);
+            let size = o.u32();
+            let base = o.u32();
+            let obj_flags = o.u32();
+            let page_index = o.u32();
+            let page_count = o.u32();
+            rows.push(Row::entry(
+                format!("  #{}", i + 1),
+                format!(
+                    "{base:08X}  {}  {}  pages {page_index}+{page_count}",
+                    size_cell(u64::from(size)),
+                    lx_object_flags(obj_flags)
+                ),
+                None,
+            ));
+        }
+    }
+
+    Structure {
+        format: if linear == "LX" { "LX" } else { "LE" },
+        summary,
+        rows,
+        symbols: Vec::new(),
+        maps: Vec::new(),
+        clr: None,
+        truncated,
+    }
+}
+
+fn lx_cpu(c: u16) -> &'static str {
+    match c {
+        1 => "i286",
+        2 => "i386",
+        3 => "i486",
+        4 => "Pentium",
+        0x20 => "i860 N10",
+        0x21 => "i860 N11",
+        0x40 => "MIPS R2000",
+        0x41 => "MIPS R6000",
+        0x42 => "MIPS R4000",
+        _ => "unknown cpu",
+    }
+}
+
+fn lx_os(o: u16) -> &'static str {
+    match o {
+        1 => "OS/2",
+        2 => "Windows",
+        3 => "DOS 4.x",
+        4 => "Windows 386",
+        5 => "IBM Microkernel",
+        _ => "unknown target",
+    }
+}
+
+/// The module type, which is what the flags are read for first: the five values of the type
+/// field say whether this is a program, a library or one of the two kinds of device driver.
+fn lx_kind(f: u32) -> &'static str {
+    match f & 0x0003_8000 {
+        0x0000_8000 => "library",
+        0x0001_8000 => "protected memory library",
+        0x0002_0000 => "physical device driver",
+        0x0002_8000 => "virtual device driver",
+        _ => "program",
+    }
+}
+
+fn lx_flags(f: u32) -> String {
+    let mut out = vec![lx_kind(f).to_string()];
+    for (bit, name) in [
+        (0x0000_0004u32, "per-process init"),
+        (0x0000_0010, "internal fixups done"),
+        (0x0000_0020, "external fixups done"),
+        (0x0000_2000, "not loadable"),
+    ] {
+        if f & bit != 0 {
+            out.push(name.to_string());
+        }
+    }
+    out.push(
+        match f & 0x0000_0300 {
+            0x0000_0100 => "no windowing",
+            0x0000_0200 => "windowing compatible",
+            0x0000_0300 => "uses windowing",
+            _ => "windowing unspecified",
+        }
+        .to_string(),
+    );
+    out.join(", ")
+}
+
+fn lx_object_flags(f: u32) -> String {
+    let mut out = String::new();
+    out.push(if f & 0x0001 != 0 { 'r' } else { '-' });
+    out.push(if f & 0x0002 != 0 { 'w' } else { '-' });
+    out.push(if f & 0x0004 != 0 { 'x' } else { '-' });
+    out.push_str(if f & 0x2000 != 0 {
+        " 32-bit"
+    } else {
+        " 16-bit"
+    });
+    for (bit, name) in [
+        (0x0008u32, "resource"),
+        (0x0010, "discardable"),
+        (0x0020, "shared"),
+        (0x0040, "preload"),
+        (0x0100, "zero-filled"),
+        (0x1000, "alias"),
+    ] {
+        if f & bit != 0 {
+            out.push(' ');
+            out.push_str(name);
+        }
+    }
+    out
+}
+
+/// A Terse Executable: the PE that UEFI firmware is built out of (PI specification, volume 1).
+///
+/// It is a PE image with the DOS stub, the PE signature and most of the optional header cut
+/// off, which is why it has a magic of its own: `VZ`, in a 40-byte header, followed by the
+/// same section headers a PE has. `StrippedSize` says how many bytes were cut, and it is the
+/// whole of the arithmetic — every offset in the section headers is still the one the PE had,
+/// so a file offset here is that offset less what was removed plus this header's own 40 bytes.
+///
+/// There is no separate TE64: the header carries a 64-bit image base whatever the machine is,
+/// and `Machine` is what says x86-64 from IA-32.
+fn te(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
+    let mut rows = Vec::new();
+    let mut c = Cur::new(head);
+    c.seek(2);
+    let machine = c.u16();
+    let nsections = head.get(4).copied().unwrap_or(0);
+    let subsystem = head.get(5).copied().unwrap_or(0);
+    c.seek(6);
+    let stripped = c.u16();
+    let entry = c.u32();
+    let base_of_code = c.u32();
+    let image_base = c.u64();
+
+    let machine_name = pe_machine(machine);
+    let summary = format!(
+        "TE {} · {} · {nsections} section{}",
+        machine_name,
+        pe_subsystem(u16::from(subsystem)),
+        if nsections == 1 { "" } else { "s" }
+    );
+
+    rows.push(Row::group("TE header"));
+    rows.push(Row::field("Signature", "56 5A", "VZ"));
+    rows.push(Row::field(
+        "Machine",
+        format!("{machine:04X}"),
+        machine_name,
+    ));
+    rows.push(Row::field(
+        "NumberOfSections",
+        format!("{nsections:02X}"),
+        format!("{nsections}"),
+    ));
+    rows.push(Row::field(
+        "Subsystem",
+        format!("{subsystem:02X}"),
+        pe_subsystem(u16::from(subsystem)),
+    ));
+    rows.push(Row::field(
+        "StrippedSize",
+        format!("{stripped:04X}"),
+        format!("{stripped} bytes of PE headers removed"),
+    ));
+    rows.push(Row::field(
+        "AddressOfEntryPoint",
+        format!("{entry:08X}"),
+        format!("RVA {entry:X}"),
+    ));
+    rows.push(Row::field(
+        "BaseOfCode",
+        format!("{base_of_code:08X}"),
+        format!("RVA {base_of_code:X}"),
+    ));
+    rows.push(Row::field(
+        "ImageBase",
+        format!("{image_base:016X}"),
+        format!("{image_base:X}"),
+    ));
+
+    // What a TE keeps of the data directories: the relocations and the debug directory, in
+    // that order, and nothing else.
+    for (i, label) in ["Relocations", "Debug"].iter().enumerate() {
+        let mut d = Cur::new(head);
+        d.seek(0x18 + i * 8);
+        let rva = d.u32();
+        let size = d.u32();
+        rows.push(Row::field(
+            format!("  {label}"),
+            format!("{rva:08X} {size:08X}"),
+            if rva == 0 {
+                "not present".to_string()
+            } else {
+                format!("RVA {rva:X}, {}", size_cell(u64::from(size)))
+            },
+        ));
+    }
+
+    // The sections, which are a PE's own 40-byte headers at the end of this one.
+    let mut maps = Vec::new();
+    let mut truncated = c.short;
+    let count = usize::from(nsections).min(MAX_ENTRIES);
+    if count > 0 {
+        let table = read_table(src, 40, 40, count, len);
+        truncated |= table.len() < count * 40;
+        rows.push(Row::group("Sections"));
+        for i in 0..table.len() / 40 {
+            let entry = &table[i * 40..i * 40 + 40];
+            let name = str_at(entry, 0);
+            let mut s = Cur::new(entry);
+            s.seek(8);
+            let virtual_size = s.u32();
+            let virtual_address = s.u32();
+            let raw_size = s.u32();
+            let raw_ptr = s.u32();
+            s.seek(36);
+            let flags = s.u32();
+            // The offsets are the ones the PE had: what was stripped off the front comes off
+            // them, and this header's own forty bytes go back on.
+            let offset = u64::from(raw_ptr)
+                .checked_sub(u64::from(stripped))
+                .map(|o| o + 40);
+            let mapped = if virtual_size == 0 {
+                raw_size
+            } else {
+                raw_size.min(virtual_size)
+            };
+            if let Some(offset) = offset {
+                add_map(
+                    &mut maps,
+                    image_base.saturating_add(u64::from(virtual_address)),
+                    u64::from(mapped),
+                    offset,
+                    len,
+                );
+            }
+            let offset = offset.and_then(|o| in_file(o, len));
+            rows.push(Row::entry(
+                format!("  {name}"),
+                format!(
+                    "{}  {}  {}  RVA {virtual_address:X}/{virtual_size:X}",
+                    off_cell(offset),
+                    size_cell(u64::from(raw_size)),
+                    pe_section_flags(flags)
+                ),
+                offset,
+            ));
+        }
+    }
+    maps.sort_by_key(|m| m.address);
+
+    Structure {
+        format: "TE",
+        summary,
+        rows,
+        symbols: Vec::new(),
+        maps,
+        clr: None,
+        truncated,
+    }
+}
+
 // ── Mach-O ──────────────────────────────────────────────────────────────────────────────────
 
 fn macho(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
@@ -2560,6 +3288,149 @@ mod tests {
         assert!(s.summary.contains("DLL"), "{}", s.summary);
         let text = s.rows.iter().find(|r| r.label.trim() == ".text").unwrap();
         assert_eq!(text.offset, Some(0x200));
+    }
+
+    /// A 16-bit New Executable: the header FAR's own viewer shows, and the one table whose
+    /// entries say where a segment's bytes are.
+    #[test]
+    fn an_ne_decodes_its_header_and_segments() {
+        let mut f = vec![0u8; 0x200];
+        f[..2].copy_from_slice(b"MZ");
+        f[0x3C..0x40].copy_from_slice(&0x40u32.to_le_bytes());
+        let ne = 0x40usize;
+        f[ne..ne + 2].copy_from_slice(b"NE");
+        f[ne + 2] = 5; // linker 5.1
+        f[ne + 3] = 1;
+        f[ne + 0x0C..ne + 0x0E].copy_from_slice(&0x8002u16.to_le_bytes()); // library, multi-data
+        f[ne + 0x0E..ne + 0x10].copy_from_slice(&1u16.to_le_bytes()); // automatic data segment
+        f[ne + 0x1C..ne + 0x1E].copy_from_slice(&2u16.to_le_bytes()); // two segments
+        f[ne + 0x1E..ne + 0x20].copy_from_slice(&3u16.to_le_bytes()); // three modules
+        f[ne + 0x22..ne + 0x24].copy_from_slice(&0x40u16.to_le_bytes()); // segment table
+        f[ne + 0x32..ne + 0x34].copy_from_slice(&4u16.to_le_bytes()); // units of 16 bytes
+        f[ne + 0x36] = 2; // Windows
+        f[ne + 0x3E..ne + 0x40].copy_from_slice(&0x030Au16.to_le_bytes()); // needs 3.10
+        let seg = ne + 0x40;
+        f[seg..seg + 2].copy_from_slice(&0x10u16.to_le_bytes()); // sector 0x10 → 0x100
+        f[seg + 2..seg + 4].copy_from_slice(&0x20u16.to_le_bytes());
+        f[seg + 4..seg + 6].copy_from_slice(&0x0080u16.to_le_bytes()); // code, preload
+        f[seg + 6..seg + 8].copy_from_slice(&0x40u16.to_le_bytes());
+        f[seg + 8..seg + 10].copy_from_slice(&0x12u16.to_le_bytes()); // sector 0x12 → 0x120
+        f[seg + 10..seg + 12].copy_from_slice(&0x10u16.to_le_bytes());
+        f[seg + 12..seg + 14].copy_from_slice(&0x1001u16.to_le_bytes()); // data, discardable
+
+        let s = read(&mut f.as_slice()).expect("NE recognised");
+        assert_eq!(s.format, "NE");
+        assert!(s.summary.contains("Windows"), "{}", s.summary);
+        assert!(s.summary.contains("dynamic library"), "{}", s.summary);
+        assert!(s.summary.contains("2 segments"), "{}", s.summary);
+        let first = s.rows.iter().find(|r| r.label.trim() == "#1").unwrap();
+        assert_eq!(first.offset, Some(0x100), "sector 0x10 shifted by four");
+        assert!(first.value.contains("code"), "{}", first.value);
+        assert!(first.value.contains("preload"), "{}", first.value);
+        let second = s.rows.iter().find(|r| r.label.trim() == "#2").unwrap();
+        assert_eq!(second.offset, Some(0x120));
+        assert!(
+            second.value.contains("data discardable"),
+            "{}",
+            second.value
+        );
+        // The DOS stub's own row still points at the header that follows it.
+        let lfanew = s.rows.iter().find(|r| r.label == "e_lfanew").unwrap();
+        assert_eq!(lfanew.offset, Some(0x40));
+    }
+
+    /// A Linear Executable. The objects are listed with their permissions; what `Enter`
+    /// follows are the tables, because the page table that would give an object a file
+    /// offset is laid out one way in `LX` and another in `LE`.
+    #[test]
+    fn an_lx_decodes_its_header_and_objects() {
+        let mut f = vec![0u8; 0x400];
+        f[..2].copy_from_slice(b"MZ");
+        f[0x3C..0x40].copy_from_slice(&0x40u32.to_le_bytes());
+        let lx = 0x40usize;
+        f[lx..lx + 2].copy_from_slice(b"LX");
+        f[lx + 8..lx + 10].copy_from_slice(&2u16.to_le_bytes()); // i386
+        f[lx + 0x0A..lx + 0x0C].copy_from_slice(&1u16.to_le_bytes()); // OS/2
+        f[lx + 0x10..lx + 0x14].copy_from_slice(&0x8000u32.to_le_bytes()); // library
+        f[lx + 0x14..lx + 0x18].copy_from_slice(&4u32.to_le_bytes()); // four pages
+        f[lx + 0x28..lx + 0x2C].copy_from_slice(&0x1000u32.to_le_bytes()); // page size
+        f[lx + 0x40..lx + 0x44].copy_from_slice(&0xC0u32.to_le_bytes()); // object table → 0x100
+        f[lx + 0x44..lx + 0x48].copy_from_slice(&1u32.to_le_bytes()); // one object
+        f[lx + 0x80..lx + 0x84].copy_from_slice(&0x200u32.to_le_bytes()); // data pages
+        let obj = 0x100usize;
+        f[obj..obj + 4].copy_from_slice(&0x1234u32.to_le_bytes()); // virtual size
+        f[obj + 4..obj + 8].copy_from_slice(&0x1_0000u32.to_le_bytes()); // base address
+        f[obj + 8..obj + 12].copy_from_slice(&0x2005u32.to_le_bytes()); // r-x, 32-bit
+        f[obj + 12..obj + 16].copy_from_slice(&1u32.to_le_bytes()); // first page
+        f[obj + 16..obj + 20].copy_from_slice(&2u32.to_le_bytes()); // two pages
+
+        let s = read(&mut f.as_slice()).expect("LX recognised");
+        assert_eq!(s.format, "LX");
+        assert!(s.summary.contains("i386"), "{}", s.summary);
+        assert!(s.summary.contains("library"), "{}", s.summary);
+        let object = s.rows.iter().find(|r| r.label.trim() == "#1").unwrap();
+        assert!(object.value.contains("r-x 32-bit"), "{}", object.value);
+        assert!(object.value.contains("00010000"), "{}", object.value);
+        assert_eq!(
+            object.offset, None,
+            "an object is reached through its pages"
+        );
+        let table = s
+            .rows
+            .iter()
+            .find(|r| r.label.trim() == "Object table")
+            .unwrap();
+        assert_eq!(table.offset, Some(0x100));
+        let data = s
+            .rows
+            .iter()
+            .find(|r| r.label.trim() == "Data pages")
+            .unwrap();
+        assert_eq!(data.offset, Some(0x200), "a file offset, not a header one");
+
+        // `LE` is the same header as far as this reader goes, and says so.
+        f[lx..lx + 2].copy_from_slice(b"LE");
+        let s = read(&mut f.as_slice()).expect("LE recognised");
+        assert_eq!(s.format, "LE");
+    }
+
+    /// A Terse Executable: a PE with its headers cut off, which is what UEFI firmware is
+    /// built out of. `StrippedSize` is the whole of the arithmetic.
+    #[test]
+    fn a_te_maps_its_sections_through_the_stripped_size() {
+        let mut f = vec![0u8; 0x400];
+        f[..2].copy_from_slice(b"VZ");
+        f[2..4].copy_from_slice(&0x8664u16.to_le_bytes()); // x86-64
+        f[4] = 1; // one section
+        f[5] = 11; // EFI boot service driver
+        f[6..8].copy_from_slice(&0x90u16.to_le_bytes()); // StrippedSize
+        f[8..12].copy_from_slice(&0x1000u32.to_le_bytes()); // entry point
+        f[12..16].copy_from_slice(&0x200u32.to_le_bytes()); // base of code
+        f[16..24].copy_from_slice(&0x8000_0000u64.to_le_bytes()); // image base
+        let sec = 40usize;
+        f[sec..sec + 5].copy_from_slice(b".text");
+        f[sec + 8..sec + 12].copy_from_slice(&0x100u32.to_le_bytes()); // VirtualSize
+        f[sec + 12..sec + 16].copy_from_slice(&0x200u32.to_le_bytes()); // VirtualAddress
+        f[sec + 16..sec + 20].copy_from_slice(&0x100u32.to_le_bytes()); // SizeOfRawData
+        f[sec + 20..sec + 24].copy_from_slice(&0x200u32.to_le_bytes()); // PointerToRawData
+        f[sec + 36..sec + 40].copy_from_slice(&0x6000_0020u32.to_le_bytes()); // r-x
+
+        let s = read(&mut f.as_slice()).expect("TE recognised");
+        assert_eq!(s.format, "TE");
+        assert!(s.summary.contains("x86-64"), "{}", s.summary);
+        assert!(
+            s.summary.contains("EFI boot service driver"),
+            "{}",
+            s.summary
+        );
+        let text = s.rows.iter().find(|r| r.label.trim() == ".text").unwrap();
+        // 0x200 as the PE had it, less the 0x90 that was stripped, plus this header's 40.
+        assert_eq!(text.offset, Some(0x200 - 0x90 + 40));
+        assert_eq!(
+            s.offset_for_va(0x8000_0200),
+            Some(0x200 - 0x90 + 40),
+            "and the mapping follows the same arithmetic"
+        );
     }
 
     #[test]
