@@ -330,7 +330,7 @@ unless all of that is green.
 | [`docs/spec/08-plugins.md`](docs/spec/08-plugins.md) | command bus, Lua API, WASM plugin ABI (WIT), native ABI, macros |
 | [`docs/spec/09-roadmap.md`](docs/spec/09-roadmap.md) | M1→M4 with issue-sized chunks, risks, contribution rules |
 | [`docs/spec/10-menus-and-dialogs.md`](docs/spec/10-menus-and-dialogs.md) | the menu bar, the settings dialogs and the choose-one lists, with every row mapped to a config key |
-| [`docs/BACKLOG.md`](docs/BACKLOG.md) | what is specified but not built yet, and the decisions still open |
+| [`docs/BACKLOG.md`](docs/BACKLOG.md) | what is left to do, item by item; the open questions, with what each decision stands on; and the things that were asked and settled, so they are not asked again |
 
 ## Asking for something: issues, not pull requests
 
