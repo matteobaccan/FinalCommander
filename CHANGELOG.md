@@ -6,6 +6,8 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+## [0.21.0] — 2026-10-29
+
 ### Added
 
 - **A server reached through another one** (SPEC 04 §6.3). A session has a **Jump host** field
