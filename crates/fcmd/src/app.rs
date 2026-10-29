@@ -16506,10 +16506,15 @@ impl App {
                 for entry in entries.flatten() {
                     let name = entry.file_name().to_string_lossy().to_string();
                     let full = at.join(&name).to_string();
-                    // A directory is marked as the panels mark one, with a separator, and it
-                    // is what tells a reader which rows `Enter` goes *into*.
+                    // A directory carries the separator this platform writes, which is what
+                    // tells a reader which rows `Enter` goes *into* — and the same character
+                    // the completion appends for the same reason.
                     match entry.file_type().map(|kind| kind.is_dir()) {
-                        Ok(true) => dirs.push(PickRow::plain(format!("{name}/"), full, false)),
+                        Ok(true) => dirs.push(PickRow::plain(
+                            format!("{name}{}", std::path::MAIN_SEPARATOR),
+                            full,
+                            false,
+                        )),
                         _ => files.push(PickRow::plain(name, full, false)),
                     }
                 }
@@ -20806,7 +20811,12 @@ mod tests {
         };
         assert_eq!(
             form.text_value("copy.target"),
-            format!("{}/target-one/", dir.path().display())
+            format!(
+                "{}/target-one{}",
+                dir.path().display(),
+                std::path::MAIN_SEPARATOR
+            ),
+            "the name, with the separator this platform writes"
         );
 
         // And with nothing left to complete, `Tab` is what it is everywhere else in the
@@ -21049,7 +21059,8 @@ mod tests {
         assert_eq!(pick.title, here, "the heading says which directory it is");
         let labels: Vec<String> = pick.rows.iter().map(|r| r.label.clone()).collect();
         assert_eq!(labels.first().map(String::as_str), Some(".."));
-        assert!(labels.contains(&"keys/".to_string()), "{labels:?}");
+        let folder = format!("keys{}", std::path::MAIN_SEPARATOR);
+        assert!(labels.contains(&folder), "{labels:?}");
         assert!(labels.contains(&"notes.txt".to_string()), "{labels:?}");
         assert!(app.browse_for.is_some(), "the dialog waits behind it");
 
@@ -21084,7 +21095,7 @@ mod tests {
         pick.cursor = pick
             .rows
             .iter()
-            .position(|r| r.label == "keys/")
+            .position(|r| r.label == folder)
             .expect("the folder");
         press(&mut app, "Enter");
         let Mode::Pick(pick) = &mut app.mode else {
@@ -21101,7 +21112,11 @@ mod tests {
         };
         assert_eq!(
             form.text_value("site.key"),
-            dir.path().join("keys/id_ed25519").display().to_string()
+            dir.path()
+                .join("keys")
+                .join("id_ed25519")
+                .display()
+                .to_string()
         );
         assert!(app.browse_for.is_none());
     }
