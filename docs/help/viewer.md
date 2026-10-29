@@ -74,6 +74,16 @@ last column ends rather than scrolling on into nothing. `Ctrl+←` and `Ctrl+→
 column at a time — a table has a unit for sideways that a wall of text has not. `Home` and
 `End` go to the first and the last screenful of rows.
 
+`Ctrl+F3` sorts the rows by the column you are on: once up, again down, a third time back to
+the order the file has them in. `Ctrl+F7` asks what a row has to hold and keeps only those
+rows; an empty answer gives them all back. A column of numbers sorts as numbers, so 1000 comes
+after 9 rather than before it, and the status line says what the view is doing — `↑name`,
+`/tor` — so you can always see it. Neither writes anything: what changes is the order the rows
+are read in, the file is untouched, and a search or a bookmark still means the record itself.
+A table of more than two hundred thousand records refuses both and says so, because reading a
+million records for one keystroke is not what this mode is for. Changing a cell is not here on
+purpose: a viewer that writes is an editor, and `F4` is where that lives.
+
 The status line says what the file was read as, which delimiter was *guessed* — a comma, a
 semicolon, a tab or a bar, whichever gave a table — and how many rows and columns there are:
 that is how you can tell at a glance that the guess was right. A `.tsv` is not guessed at. For

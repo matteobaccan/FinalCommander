@@ -63,7 +63,37 @@ pub struct Table {
     /// Lines that were not records: a JSONL line that is not an object, a CSV row with more
     /// fields than the header. Counted rather than announced one at a time.
     pub skipped: usize,
+    /// The rows as the *view* shows them: one record index per visible row, and `None` while
+    /// the view is the file's own order, so a table of a million records costs no index at
+    /// all until somebody sorts or filters it (SPEC 05 §1.11).
+    ///
+    /// This is the whole of sorting and filtering a table: an index, rebuilt from the
+    /// records. Nothing is written, the records are untouched, and the view goes back to the
+    /// file's own order by throwing the index away.
+    order: Option<Vec<usize>>,
+    /// Which column the view is sorted by and which way, for the status line to say.
+    sort: Option<(usize, bool)>,
+    /// What the rows are filtered on, for the status line to say.
+    filter: Option<String>,
 }
+
+/// What sorting a column did, which is what the caller has to say out loud.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Sorted {
+    Ascending,
+    Descending,
+    /// Back to the order the records are in the file.
+    Natural,
+    /// More records than [`MAX_VIEW`]: nothing was changed.
+    TooMany,
+}
+
+/// The most records a sort or a filter will walk.
+///
+/// Both read the key out of every record, which for a DBF is a read apiece. The text formats
+/// are already bounded by what the mode reads whole, so this only ever bites a dBase table of
+/// millions — and a table of millions is one to query rather than to sort in a viewer.
+pub const MAX_VIEW: usize = 200_000;
 
 /// One record, and where in the file it began — which is what lets a search or a bookmark in
 /// table mode mean the same thing it means in every other mode.
@@ -92,6 +122,9 @@ impl Table {
             delimiter: None,
             cut,
             skipped: 0,
+            order: None,
+            sort: None,
+            filter: None,
         };
         // The declared widths, with the headings allowed to widen a column.
         for (i, name) in table.columns.iter().enumerate() {
@@ -144,6 +177,9 @@ impl Table {
             delimiter: guessed.then_some(delimiter),
             cut: false,
             skipped: 0,
+            order: None,
+            sort: None,
+            filter: None,
         };
         // A row with more fields than the header has them: a header short of a column is a
         // common export, and dropping the data would be worse than naming the column after
@@ -225,6 +261,9 @@ impl Table {
             delimiter: None,
             cut: false,
             skipped,
+            order: None,
+            sort: None,
+            filter: None,
         };
         table.measure();
         table
@@ -295,11 +334,19 @@ impl Table {
         }
     }
 
-    /// How many records the table has.
-    pub fn len(&self) -> usize {
+    /// How many records the file has, whatever the view is showing of them.
+    pub fn records_len(&self) -> usize {
         match &self.records {
             Records::Read(rows) => rows.len(),
             Records::Dbf(dbf) => dbf.records,
+        }
+    }
+
+    /// How many rows the view shows: every record, until a filter leaves fewer.
+    pub fn len(&self) -> usize {
+        match &self.order {
+            Some(order) => order.len(),
+            None => self.records_len(),
         }
     }
 
@@ -307,16 +354,45 @@ impl Table {
         self.len() == 0
     }
 
-    /// Where record `n` begins in the file — what a search or a bookmark in table mode means.
+    /// Which record a view row is, following whatever the view has been sorted or filtered
+    /// to. The two are the same number until something sorts or filters.
+    fn record_of(&self, row: usize) -> Option<usize> {
+        match &self.order {
+            Some(order) => order.get(row).copied(),
+            None => (row < self.records_len()).then_some(row),
+        }
+    }
+
+    /// Where the record a view row shows begins in the file — what a search or a bookmark in
+    /// table mode means.
     pub fn offset(&self, n: usize) -> u64 {
+        let Some(rec) = self.record_of(n) else {
+            return 0;
+        };
+        self.record_offset(rec)
+    }
+
+    fn record_offset(&self, rec: usize) -> u64 {
         match &self.records {
-            Records::Read(rows) => rows.get(n).map(|r| r.offset).unwrap_or(0),
-            Records::Dbf(dbf) => dbf.offset(n),
+            Records::Read(rows) => rows.get(rec).map(|r| r.offset).unwrap_or(0),
+            Records::Dbf(dbf) => dbf.offset(rec),
+        }
+    }
+
+    /// Which *view row* a byte offset falls in: the record that holds it, found where the
+    /// view happens to be showing it. A sorted view is not in file order, so this is a
+    /// lookup rather than arithmetic there — but every offset the viewer asks about came
+    /// from [`Table::offset`], so the record it names is one the view is showing.
+    pub fn row_at(&self, offset: u64) -> usize {
+        let rec = self.record_at(offset);
+        match &self.order {
+            None => rec,
+            Some(order) => order.iter().position(|i| *i == rec).unwrap_or_default(),
         }
     }
 
     /// Which record a byte offset falls in: the last one that starts at or before it.
-    pub fn row_at(&self, offset: u64) -> usize {
+    fn record_at(&self, offset: u64) -> usize {
         match &self.records {
             Records::Read(rows) => rows
                 .iter()
@@ -325,6 +401,142 @@ impl Table {
             Records::Dbf(dbf) => {
                 let past = offset.saturating_sub(dbf.first) / dbf.record_len.max(1) as u64;
                 (past as usize).min(dbf.records.saturating_sub(1))
+            }
+        }
+    }
+
+    /// Which column the view is sorted by, and whether it is the other way round.
+    pub fn sorted_by(&self) -> Option<(usize, bool)> {
+        self.sort
+    }
+
+    /// What the rows are filtered on, where they are.
+    pub fn filtered_on(&self) -> Option<&str> {
+        self.filter.as_deref()
+    }
+
+    /// `Ctrl+F3` on a column: ascending, then descending, then the file's own order again
+    /// (SPEC 05 §1.11). A third press is what puts a table back the way it was read, which a
+    /// sort with no way out would not.
+    ///
+    /// Nothing is written. What changes is the index the view reads the records through, so
+    /// the file is untouched and the rows keep their own offsets — a search, a bookmark and
+    /// `Ctrl+F10` still mean the record, not the place in the sorted list.
+    pub fn cycle_sort(
+        &mut self,
+        source: &mut dyn crate::source::Source,
+        memo: Option<&mut (dyn crate::source::Source + '_)>,
+        col: usize,
+    ) -> Sorted {
+        let next = match self.sort {
+            Some((was, false)) if was == col => Some((col, true)),
+            Some((was, true)) if was == col => None,
+            _ => Some((col, false)),
+        };
+        if self.records_len() > MAX_VIEW {
+            return Sorted::TooMany;
+        }
+        self.sort = next;
+        self.rebuild(source, memo);
+        match next {
+            Some((_, false)) => Sorted::Ascending,
+            Some((_, true)) => Sorted::Descending,
+            None => Sorted::Natural,
+        }
+    }
+
+    /// Keep only the rows that hold `needle`, or all of them again when it is empty. `false`
+    /// when there are more records than this will walk, in which case nothing changed.
+    pub fn set_filter(
+        &mut self,
+        source: &mut dyn crate::source::Source,
+        memo: Option<&mut (dyn crate::source::Source + '_)>,
+        needle: &str,
+    ) -> bool {
+        if self.records_len() > MAX_VIEW {
+            return false;
+        }
+        let needle = needle.trim();
+        self.filter = (!needle.is_empty()).then(|| needle.to_lowercase());
+        self.rebuild(source, memo);
+        true
+    }
+
+    /// Build the index the view reads through: the filter decides which records are in it,
+    /// the sort decides the order they are in. Both from the records, so applying one does
+    /// not depend on what the other did last.
+    fn rebuild(
+        &mut self,
+        source: &mut dyn crate::source::Source,
+        mut memo: Option<&mut (dyn crate::source::Source + '_)>,
+    ) {
+        if self.sort.is_none() && self.filter.is_none() {
+            self.order = None;
+            return;
+        }
+        let count = self.records_len();
+        // The cells each record is judged by, read once: the whole record for a filter, the
+        // one column for a sort. A DBF is a read apiece, which is why `MAX_VIEW` exists.
+        let mut keep: Vec<(usize, String)> = Vec::with_capacity(count);
+        let col = self.sort.map(|(col, _)| col);
+        for rec in 0..count {
+            let cells = self.cells_of(source, memo.as_deref_mut(), rec);
+            if let Some(needle) = &self.filter {
+                if !cells.iter().any(|c| c.to_lowercase().contains(needle)) {
+                    continue;
+                }
+            }
+            let key = col
+                .and_then(|col| cells.get(col))
+                .cloned()
+                .unwrap_or_default();
+            keep.push((rec, key));
+        }
+        if let Some((_, reverse)) = self.sort {
+            // A column whose every cell reads as a number sorts as numbers: a column of
+            // sizes must not put 1000 before 9. Anything else sorts as text, with the same
+            // comparison the panels sort names with.
+            let numeric = keep
+                .iter()
+                .all(|(_, key)| key.trim().is_empty() || as_number(key).is_some());
+            keep.sort_by(|(_, a), (_, b)| {
+                let order = if numeric {
+                    let (x, y) = (as_number(a).unwrap_or(0.0), as_number(b).unwrap_or(0.0));
+                    x.partial_cmp(&y).unwrap_or(std::cmp::Ordering::Equal)
+                } else {
+                    fcmd_core::sort::natural_cmp(a, b, false)
+                };
+                if reverse {
+                    order.reverse()
+                } else {
+                    order
+                }
+            });
+        }
+        self.order = Some(keep.into_iter().map(|(rec, _)| rec).collect());
+    }
+
+    /// The cells of one *record*, by its own index rather than the view's.
+    fn cells_of(
+        &self,
+        source: &mut dyn crate::source::Source,
+        memo: Option<&mut (dyn crate::source::Source + '_)>,
+        rec: usize,
+    ) -> Vec<String> {
+        match &self.records {
+            Records::Read(rows) => rows.get(rec).map(|r| r.cells.clone()).unwrap_or_default(),
+            Records::Dbf(dbf) => {
+                if rec >= dbf.records {
+                    return Vec::new();
+                }
+                let bytes = source
+                    .read_vec(dbf.offset(rec), dbf.record_len)
+                    .unwrap_or_default();
+                if bytes.len() < dbf.record_len {
+                    // A table shorter than its header claims: the rest is not there to read.
+                    return Vec::new();
+                }
+                dbf.cells(&bytes, memo)
             }
         }
     }
@@ -340,22 +552,10 @@ impl Table {
         memo: Option<&mut (dyn crate::source::Source + '_)>,
         row: usize,
     ) -> Vec<String> {
-        match &self.records {
-            Records::Read(rows) => rows.get(row).map(|r| r.cells.clone()).unwrap_or_default(),
-            Records::Dbf(dbf) => {
-                if row >= dbf.records {
-                    return Vec::new();
-                }
-                let bytes = source
-                    .read_vec(dbf.offset(row), dbf.record_len)
-                    .unwrap_or_default();
-                if bytes.len() < dbf.record_len {
-                    // A table shorter than its header claims: the rest is not there to read.
-                    return Vec::new();
-                }
-                dbf.cells(&bytes, memo)
-            }
-        }
+        let Some(rec) = self.record_of(row) else {
+            return Vec::new();
+        };
+        self.cells_of(source, memo, rec)
     }
 
     /// One row of cells, laid out in the columns.
@@ -395,6 +595,33 @@ impl Table {
         let gaps = self.widths.len().saturating_sub(1) * 3;
         self.widths.iter().sum::<usize>() + gaps
     }
+}
+
+/// A cell as a number, where it reads as one: what decides whether a column sorts as numbers.
+///
+/// A thousands separator is taken off and a decimal comma is taken as a decimal point, which
+/// is what a cell written by a spreadsheet in half of Europe looks like. Anything else is
+/// text, and text is what it sorts as.
+fn as_number(cell: &str) -> Option<f64> {
+    let cell = cell.trim();
+    if cell.is_empty() {
+        return None;
+    }
+    // A comma is a decimal point only when it is the one comma in the cell and three digits
+    // do not follow it: `1,20` is a price, `1,200` is a thousand and two hundred.
+    let decimal_comma = cell.matches(',').count() == 1
+        && cell
+            .split_once(',')
+            .is_some_and(|(_, rest)| rest.len() != 3 || rest.contains(['.', ' ']));
+    let mut text = String::with_capacity(cell.len());
+    for ch in cell.chars() {
+        match ch {
+            ',' if decimal_comma => text.push('.'),
+            ',' | '\'' | ' ' | '_' => {}
+            other => text.push(other),
+        }
+    }
+    text.parse::<f64>().ok().filter(|n| n.is_finite())
 }
 
 /// A JSON value as one cell of a table. A string is itself — quoting it again would double
@@ -1008,6 +1235,79 @@ pub(crate) mod tests {
     /// do read — the dBase ones — build their own.
     fn src() -> crate::source::BytesSource {
         crate::source::BytesSource::new(Vec::new())
+    }
+
+    /// Sorting a table is an index and nothing else: the rows come out in order, the records
+    /// keep their own offsets, and a third press puts the file's own order back.
+    #[test]
+    fn sorting_a_column_reorders_the_view_and_goes_back() {
+        let text = "name,size\nzoe,9\nadam,1000\nmia,20\n";
+        let mut table = Table::of("x.csv", text).expect("a CSV");
+        let mut src = src();
+        assert_eq!(table.len(), 3);
+        let names = |t: &Table, src: &mut crate::source::BytesSource| -> Vec<String> {
+            (0..t.len())
+                .map(|row| t.cells(src, None, row)[0].clone())
+                .collect()
+        };
+        assert_eq!(names(&table, &mut src), ["zoe", "adam", "mia"]);
+
+        // By name, ascending.
+        assert_eq!(table.cycle_sort(&mut src, None, 0), Sorted::Ascending);
+        assert_eq!(names(&table, &mut src), ["adam", "mia", "zoe"]);
+        assert_eq!(table.sorted_by(), Some((0, false)));
+        // The offsets are still the records': the first row is where `adam` is in the file.
+        assert_eq!(table.offset(0), text.find("adam").unwrap() as u64);
+        // And a byte offset still finds the row that shows it, wherever the sort put it.
+        assert_eq!(table.row_at(table.offset(2)), 2);
+
+        // Again, the other way; a third press is the file's own order.
+        assert_eq!(table.cycle_sort(&mut src, None, 0), Sorted::Descending);
+        assert_eq!(names(&table, &mut src), ["zoe", "mia", "adam"]);
+        assert_eq!(table.cycle_sort(&mut src, None, 0), Sorted::Natural);
+        assert_eq!(names(&table, &mut src), ["zoe", "adam", "mia"]);
+        assert_eq!(table.sorted_by(), None);
+
+        // The size column is numbers, so 1000 sorts after 20 rather than before it.
+        assert_eq!(table.cycle_sort(&mut src, None, 1), Sorted::Ascending);
+        assert_eq!(names(&table, &mut src), ["zoe", "mia", "adam"]);
+    }
+
+    /// A filter keeps the rows that hold what was typed, and an empty one gives them back.
+    #[test]
+    fn a_filter_keeps_the_rows_that_hold_it() {
+        let text = "name,town\nmia,Torino\nadam,Asti\nzoe,Trento\n";
+        let mut table = Table::of("x.csv", text).expect("a CSV");
+        let mut src = src();
+
+        assert!(table.set_filter(&mut src, None, "t"));
+        // Three rows hold a `t`: Torino, Asti and Trento.
+        assert_eq!(table.len(), 3);
+        assert!(table.set_filter(&mut src, None, "tor"));
+        assert_eq!(table.len(), 1);
+        assert_eq!(table.cells(&mut src, None, 0)[0], "mia");
+        assert_eq!(table.filtered_on(), Some("tor"));
+        // It composes with a sort, and each is undone on its own.
+        assert_eq!(table.cycle_sort(&mut src, None, 0), Sorted::Ascending);
+        assert_eq!(table.len(), 1, "the filter still holds");
+        assert!(table.set_filter(&mut src, None, "  "));
+        assert_eq!(table.len(), 3, "and the sort still holds over all of them");
+        assert_eq!(table.cells(&mut src, None, 0)[0], "adam");
+        assert_eq!(table.filtered_on(), None);
+    }
+
+    /// A cell reads as a number where it is one, including the way half of Europe writes a
+    /// price — and `1,200` is a thousand and two hundred rather than one and a fifth.
+    #[test]
+    fn a_number_is_a_number_however_it_is_written() {
+        assert_eq!(as_number("42"), Some(42.0));
+        assert_eq!(as_number(" -3.5 "), Some(-3.5));
+        assert_eq!(as_number("1,20"), Some(1.2));
+        assert_eq!(as_number("1,200"), Some(1200.0));
+        assert_eq!(as_number("1 000"), Some(1000.0));
+        assert_eq!(as_number("mia"), None);
+        assert_eq!(as_number(""), None);
+        assert_eq!(as_number("12 euro"), None);
     }
 
     #[test]

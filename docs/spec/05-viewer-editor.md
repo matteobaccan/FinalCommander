@@ -338,11 +338,37 @@ same key goes back to the source, so a wrong guess costs one keystroke. The head
 under them, because a table whose heading scrolled away is a wall of numbers again; `←`/`→`
 move the window sideways and stop where the last column ends rather than scrolling into empty
 space, `Ctrl+←`/`Ctrl+→` jump a whole column (the unit a table has and a wall of text has
-not), `Home` and `End` go to the first and last screenful of *rows*; the status line says the format, the delimiter that was guessed, the
+not), `Home` and `End` go to the first and last screenful of *rows*, `Ctrl+F3` sorts by the
+column the view is on and `Ctrl+F7` filters the rows; the status line says the format, the delimiter that was guessed, the
 shape of the table (`rows × columns`) and what was left out. A cell wider than forty columns is
 cut with a `…` — one 4 kB cell must not push every other column off the screen — and the
 horizontal scroll reads the rest. A search finds what is on the screen, so a value is found in
 its cell, as in a laid-out Markdown document.
+
+**Sorting and filtering, and not editing.** `Ctrl+F3` sorts the rows by the column the view is
+on — the same column `Ctrl+←`/`Ctrl+→` walks to — ascending, then the other way round, then back
+to the order the records are in the file: a sort with no third press is a sort with no way out.
+`Ctrl+F7` asks what a row has to hold and keeps only those, and an empty answer gives them all
+back. `Ctrl+F3` because that is the key that sorts in the panels; `Ctrl+F7` because `F7` is the
+key that looks for something, and this is the other thing one does with what one is looking for.
+
+Both are **an index and nothing else**: one record number per visible row, built from the
+records and thrown away to go back. Nothing is written, the records are untouched, and every
+row keeps its own offset — so a search, a bookmark and `Alt+F8` still mean the record rather
+than its place in the sorted list. A column whose every cell reads as a number sorts as
+numbers, so a column of sizes does not put 1000 before 9; anything else sorts as text, with the
+same natural comparison the panels sort names with. The status line says what the view is
+doing — `↑name`, `↓size`, `/tor` — because a table sorted by a column one cannot see sorted is
+a table one mistrusts, and a sort of a file the mode read only the start of says *that* out
+loud as well. Both walk every record to read the key out of it, so above `MAX_VIEW` records
+(200 000) they refuse and say so rather than reading a million records for a keystroke: a table
+that large is one to query rather than to sort in a viewer.
+
+**Editing a cell stays out**, and that is the decision rather than a gap: a viewer that writes
+is an editor, and `F4` and the hex pane are where writing lives. Writing a cell back would also
+be three jobs rather than one — a line rewritten for CSV, fixed-length records and a memo file
+beside them for DBF, and nothing honest at all for a file that was read only as far as the
+limit.
 
 **The text formats are read whole**, up to a limit (`TABLE_LIMIT`, sixteen megabytes), exactly
 as the Markdown render is and for the same reason — a column's width cannot be known from the

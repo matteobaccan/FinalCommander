@@ -700,6 +700,19 @@ keys = ["Shift+F3"]
 scope = "viewer"
 cmd = "viewer.table"
 
+# Sorting and filtering the table that is on screen (SPEC 05 §1.11). `Ctrl+F3` because that
+# is the key that sorts in the panels, and `Ctrl+F7` because `F7` is the key that looks for
+# something — this is the other thing one does with what one is looking for.
+[[bind]]
+keys = ["Ctrl+F3"]
+scope = "viewer"
+cmd = "viewer.table.sort"
+
+[[bind]]
+keys = ["Ctrl+F7"]
+scope = "viewer"
+cmd = "viewer.table.filter"
+
 [[bind]]
 keys = ["Shift+F4"]
 scope = "viewer"

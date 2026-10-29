@@ -643,6 +643,8 @@ pub enum PromptKind {
     Filter,
     /// Query for the viewer's search.
     ViewerSearch,
+    /// What the table's rows have to hold to stay on the screen (SPEC 05 §1.11).
+    TableFilter,
     /// Offset or percentage for the viewer.
     ViewerGoto,
     EditorReplaceFrom,
@@ -4833,6 +4835,32 @@ impl App {
                 }
                 self.reopen_bookmarks(side, row);
             }
+            PromptKind::TableFilter => {
+                let needle = prompt.text.trim().to_string();
+                self.restore_viewer();
+                let did = self.live_viewer_mut().and_then(|v| v.filter_table(&needle));
+                let rows = self.live_viewer_mut().map(|v| v.table_rows()).unwrap_or(0);
+                match did {
+                    Some(true) if needle.is_empty() => {
+                        let m = self.i18n.t("table-unfiltered");
+                        self.set_status(m);
+                    }
+                    Some(true) => {
+                        let m = self
+                            .i18n
+                            .t_args("table-filtered", &[("rows", (rows as i64).into())]);
+                        self.set_status(m);
+                    }
+                    Some(false) => {
+                        let m = self.i18n.t("table-too-many");
+                        self.set_error(m);
+                    }
+                    None => {
+                        let m = self.i18n.t("viewer-not-table");
+                        self.set_error(m);
+                    }
+                }
+            }
             PromptKind::ViewerSearch => {
                 let query = prompt.text.trim().to_string();
                 self.restore_viewer();
@@ -7657,6 +7685,53 @@ impl App {
             Command::ViewerGoto if self.mode.viewer().is_some() => {
                 let title = self.i18n.t("viewer-prompt-goto");
                 self.mode_prompt_over_viewer(PromptKind::ViewerGoto, title, String::new());
+            }
+            // `Ctrl+F3` on a table: sort it by the column the view is on, and say what that
+            // did — ascending, the other way round, or back to the order the file has the
+            // records in (SPEC 05 §1.11). Nothing is written: it is an index.
+            Command::ViewerTableSort if self.mode.viewer().is_some() => {
+                use fcmd_view::table::Sorted;
+                let cut = self
+                    .live_viewer_mut()
+                    .and_then(|v| v.table_cut().then_some(v.table_rows()));
+                let Some((col, did)) = self.live_viewer_mut().and_then(|v| v.sort_table()) else {
+                    let m = self.i18n.t("viewer-not-table");
+                    self.set_error(m);
+                    return;
+                };
+                let name = self
+                    .live_viewer_mut()
+                    .and_then(|v| v.table_column_name(col))
+                    .unwrap_or_else(|| format!("#{}", col + 1));
+                if did == Sorted::TooMany {
+                    let m = self.i18n.t("table-too-many");
+                    self.set_error(m);
+                    return;
+                }
+                let id = match did {
+                    Sorted::Ascending => "table-sorted",
+                    Sorted::Descending => "table-sorted-back",
+                    _ => "table-unsorted",
+                };
+                let mut msg = self.i18n.t_args(id, &[("column", name.into())]);
+                // A table the mode read only the start of is sorted only as far as it was
+                // read, and saying so is the difference between a view and a lie.
+                if let Some(rows) = cut.filter(|_| did != Sorted::Natural) {
+                    let note = self
+                        .i18n
+                        .t_args("table-cut-sorted", &[("rows", (rows as i64).into())]);
+                    msg.push_str("  ");
+                    msg.push_str(&note);
+                }
+                self.set_status(msg);
+            }
+            Command::ViewerTableFilter if self.mode.viewer().is_some() => {
+                let title = self.i18n.t("table-prompt-filter");
+                let now = self
+                    .live_viewer_mut()
+                    .and_then(|v| v.table_filter().map(str::to_string))
+                    .unwrap_or_default();
+                self.mode_prompt_over_viewer(PromptKind::TableFilter, title, now);
             }
             Command::ViewerSearchNext | Command::ViewerSearchPrev
                 if self.mode.viewer().is_some() =>
@@ -28644,6 +28719,66 @@ abcdefghij
             panic!("{:?}", app.mode)
         };
         assert_eq!(viewer.col, 0, "and back, not past the start");
+    }
+
+    /// `Ctrl+F3` sorts the table by the column the view is on and says so, `Ctrl+F7` keeps
+    /// only the rows that hold what is typed, and neither writes a byte.
+    #[test]
+    fn the_table_sorts_and_filters_without_touching_the_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("people.csv");
+        let text = "name,town\nzoe,Torino\nadam,Asti\nmia,Trento\n";
+        std::fs::write(&path, text).unwrap();
+        let before = std::fs::read(&path).unwrap();
+
+        let mut app = app();
+        app.view_path(&path.display().to_string());
+        app.run(Command::ViewerTable);
+        let Some(viewer) = app.live_viewer_mut() else {
+            panic!("the viewer is open")
+        };
+        assert_eq!(viewer.mode, fcmd_view::Mode::Table);
+        assert_eq!(viewer.table_rows(), 3);
+
+        // The view opens on the first column, so that is what `Ctrl+F3` sorts by.
+        press(&mut app, "Ctrl+F3");
+        assert!(app.status.contains("name"), "{}", app.status);
+        let Some(viewer) = app.live_viewer_mut() else {
+            panic!("the viewer is open")
+        };
+        let first = |app: &mut App| -> String {
+            app.live_viewer_mut()
+                .map(|v| v.table_note().unwrap_or_default())
+                .unwrap_or_default()
+        };
+        assert_eq!(viewer.table_column(), Some(0));
+        // The note says what the view is doing to the rows.
+        assert!(first(&mut app).contains("↑name"), "{}", first(&mut app));
+        press(&mut app, "Ctrl+F3");
+        assert!(first(&mut app).contains("↓name"), "{}", first(&mut app));
+        press(&mut app, "Ctrl+F3");
+        assert!(
+            !first(&mut app).contains("name"),
+            "a third press is the file's own order: {}",
+            first(&mut app)
+        );
+
+        // `Ctrl+F7` asks what the rows have to hold, and keeps those.
+        press(&mut app, "Ctrl+F7");
+        let Mode::Prompt(prompt) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(prompt.kind, PromptKind::TableFilter);
+        type_text(&mut app, "tor");
+        press(&mut app, "Enter");
+        let Some(viewer) = app.live_viewer_mut() else {
+            panic!("the viewer came back")
+        };
+        assert_eq!(viewer.table_rows(), 1);
+        assert!(viewer.table_note().unwrap_or_default().contains("/tor"));
+
+        // And the file is exactly as it was: sorting and filtering are an index.
+        assert_eq!(std::fs::read(&path).unwrap(), before);
     }
 
     /// A selection dropped on the other panel opens the copy dialog with the destination the

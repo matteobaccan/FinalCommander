@@ -8,6 +8,27 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **A table sorts and filters, and still writes nothing** (SPEC 05 §1.11). `Ctrl+F3` sorts the
+  rows by the column the view is on — the one `Ctrl+←`/`Ctrl+→` walks to — ascending, then the
+  other way round, then back to the order the records are in the file, because a sort with no
+  third press is a sort with no way out. `Ctrl+F7` asks what a row has to hold and keeps only
+  those; an empty answer gives them all back. `Ctrl+F3` is the key that sorts in the panels and
+  `Ctrl+F7` the other thing one does with what `F7` looks for.
+
+  Both are an index and nothing else: one record number per visible row, built from the records
+  and thrown away to go back. Nothing is written, and every row keeps its own offset, so a
+  search, a bookmark and `Alt+F8` still mean the record rather than its place in the sorted
+  list. A column whose every cell reads as a number sorts as numbers — a column of sizes does
+  not put 1000 before 9 — and `1,20` is read as a price while `1,200` is a thousand and two
+  hundred. The status line says what the view is doing (`↑name`, `↓size`, `/tor`), and says out
+  loud when a sorted table is only as much of the file as the mode read. Above 200 000 records
+  both refuse and say so: a table that large is one to query rather than to sort in a viewer.
+
+  **Editing a cell stays out**, which was the question this row had been waiting on. A viewer
+  that writes is an editor, and `F4` and the hex pane are where writing lives; a cell written
+  back would be a line rewritten for CSV, fixed-length records and a memo file beside them for
+  DBF, and nothing honest at all for a file read only as far as the limit.
+
 - **A drop on the other panel opens the copy dialog** (SPEC 02 §12). The third of the three
   mouse drags, and the one that was held back as a question: what a drop *means*. It means the
   dialog `F5` opens, with the destination the pointer chose — the directory under it, or that

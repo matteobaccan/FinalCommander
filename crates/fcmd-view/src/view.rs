@@ -840,6 +840,94 @@ impl Viewer {
         self.col = next.unwrap_or(if forward { at } else { 0 });
     }
 
+    /// How many rows the table shows — after a filter, the ones it left.
+    pub fn table_rows(&mut self) -> usize {
+        if self.mode != Mode::Table {
+            return 0;
+        }
+        self.parse_table();
+        self.table.as_ref().map(|t| t.len()).unwrap_or(0)
+    }
+
+    /// Was the file longer than the table mode reads whole? Then the rows are its start, and
+    /// anything said about all of them has to say so.
+    pub fn table_cut(&mut self) -> bool {
+        if self.mode != Mode::Table {
+            return false;
+        }
+        self.parse_table();
+        self.table.as_ref().is_some_and(|t| t.cut)
+    }
+
+    /// What the table's rows are filtered on, where they are.
+    pub fn table_filter(&mut self) -> Option<&str> {
+        if self.mode != Mode::Table {
+            return None;
+        }
+        self.parse_table();
+        self.table.as_ref()?.filtered_on()
+    }
+
+    /// What a column is called, for a message that names the one just sorted by.
+    pub fn table_column_name(&mut self, col: usize) -> Option<String> {
+        if self.mode != Mode::Table {
+            return None;
+        }
+        self.parse_table();
+        self.table.as_ref()?.columns.get(col).cloned()
+    }
+
+    /// Which column of the table the view is on: the one the horizontal scroll has reached,
+    /// which is the column `Ctrl` and an arrow walks to and the one `Ctrl+F3` sorts by.
+    pub fn table_column(&mut self) -> Option<usize> {
+        if self.mode != Mode::Table {
+            return None;
+        }
+        self.parse_table();
+        let table = self.table.as_ref()?;
+        let starts = table.column_starts();
+        let at = self.col;
+        Some(
+            starts
+                .iter()
+                .rposition(|start| *start <= at)
+                .unwrap_or_default(),
+        )
+    }
+
+    /// `Ctrl+F3`: sort the table by the column the view is on, and say what that did
+    /// (SPEC 05 §1.11). The cursor goes back to the first row, because the row it was on is
+    /// somewhere else now and following it would be following a number, not a record.
+    pub fn sort_table(&mut self) -> Option<(usize, crate::table::Sorted)> {
+        let col = self.table_column()?;
+        let (table, source, memo) = (&mut self.table, &mut self.source, &mut self.memo);
+        let table = table.as_mut()?;
+        let did = table.cycle_sort(&mut **source, memo.as_deref_mut(), col);
+        if did != crate::table::Sorted::TooMany {
+            self.table_row = 0;
+            self.top = self.table.as_ref().map(|t| t.offset(0)).unwrap_or(0);
+        }
+        Some((col, did))
+    }
+
+    /// `Ctrl+F7`: keep only the rows that hold `needle`, or all of them again when it is
+    /// empty. `None` for a file that is not open as a table, `Some(false)` for a table with
+    /// more records than a filter will walk.
+    pub fn filter_table(&mut self, needle: &str) -> Option<bool> {
+        if self.mode != Mode::Table {
+            return None;
+        }
+        self.parse_table();
+        let (table, source, memo) = (&mut self.table, &mut self.source, &mut self.memo);
+        let table = table.as_mut()?;
+        let did = table.set_filter(&mut **source, memo.as_deref_mut(), needle);
+        if did {
+            self.table_row = 0;
+            self.top = self.table.as_ref().map(|t| t.offset(0)).unwrap_or(0);
+        }
+        Some(did)
+    }
+
     /// Remember where we are, then jump: `Ctrl+Z` in the viewer comes back here.
     pub fn jump(&mut self, offset: u64) {
         self.history.push((self.top, self.top_sub));
@@ -1192,6 +1280,20 @@ impl Viewer {
             note.push_str(&format!(" `{shown}`"));
         }
         note.push_str(&format!(" · {} × {}", table.len(), table.fields()));
+        // What the view is doing to the records, which a reader has to be able to see: a
+        // table sorted by a column one cannot see sorted is a table one mistrusts.
+        if let Some((col, reverse)) = table.sorted_by() {
+            let name = table
+                .columns
+                .get(col)
+                .cloned()
+                .unwrap_or_else(|| format!("#{}", col + 1));
+            let arrow = if reverse { '↓' } else { '↑' };
+            note.push_str(&format!(" · {arrow}{name}"));
+        }
+        if let Some(needle) = table.filtered_on() {
+            note.push_str(&format!(" · /{needle}"));
+        }
         if table.skipped > 0 {
             note.push_str(&format!(" · {} skipped", table.skipped));
         }

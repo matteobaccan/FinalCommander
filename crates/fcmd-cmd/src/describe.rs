@@ -223,6 +223,8 @@ impl Command {
             Command::ViewerHex => "between the text and the bytes",
             Command::ViewerMarkdown => "between Markdown laid out to be read and its source",
             Command::ViewerTable => "between a tabular file as a table and its source",
+            Command::ViewerTableSort => "sort the table by the column the cursor is in",
+            Command::ViewerTableFilter => "keep only the table's rows that hold what you type",
             Command::ViewerModeNext => "the next way of reading this file",
             Command::ViewerSearch => "search: what, as what, and which way",
             Command::ViewerSearchNext => "the next hit",

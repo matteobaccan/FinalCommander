@@ -367,6 +367,11 @@ pub enum Command {
     ViewerMarkdown,
     /// A tabular file as a table, and back to its source (SPEC 05 §1.11).
     ViewerTable,
+    /// Sort the table by the column the cursor is in: ascending, descending, then the order
+    /// the records are in the file.
+    ViewerTableSort,
+    /// Keep only the table's rows that hold what is typed.
+    ViewerTableFilter,
     ViewerModeNext,
     ViewerSearch,
     ViewerSearchNext,
@@ -647,6 +652,8 @@ impl Command {
             Command::ViewerHex,
             Command::ViewerMarkdown,
             Command::ViewerTable,
+            Command::ViewerTableSort,
+            Command::ViewerTableFilter,
             Command::ViewerModeNext,
             Command::ViewerSearch,
             Command::ViewerSearchNext,
@@ -904,6 +911,8 @@ impl Command {
             Command::ViewerHex => "viewer.hex".into(),
             Command::ViewerMarkdown => "viewer.markdown".into(),
             Command::ViewerTable => "viewer.table".into(),
+            Command::ViewerTableSort => "viewer.table.sort".into(),
+            Command::ViewerTableFilter => "viewer.table.filter".into(),
             Command::ViewerModeNext => "viewer.mode.next".into(),
             Command::ViewerSearch => "viewer.search".into(),
             Command::ViewerSearchNext => "viewer.search.next".into(),
@@ -1137,6 +1146,8 @@ impl Command {
             ("viewer.hex", _) => Command::ViewerHex,
             ("viewer.markdown", _) => Command::ViewerMarkdown,
             ("viewer.table", _) => Command::ViewerTable,
+            ("viewer.table.sort", _) => Command::ViewerTableSort,
+            ("viewer.table.filter", _) => Command::ViewerTableFilter,
             ("viewer.mode.next", _) => Command::ViewerModeNext,
             ("viewer.search", _) => Command::ViewerSearch,
             ("viewer.search.next", _) => Command::ViewerSearchNext,

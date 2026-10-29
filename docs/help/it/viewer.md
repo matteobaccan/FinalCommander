@@ -80,6 +80,17 @@ dove finisce l'ultima colonna invece di continuare nel vuoto. `Ctrl+←` e `Ctrl
 colonna intera per volta — una tabella ha un'unità per andare di lato che un muro di testo non
 ha. `Home` e `End` vanno alla prima e all'ultima schermata di righe.
 
+`Ctrl+F3` ordina le righe per la colonna dove ti trovi: una volta in salita, un'altra in
+discesa, la terza torna all'ordine che hanno nel file. `Ctrl+F7` chiede che cosa deve contenere
+una riga e tiene solo quelle; una risposta vuota le ridà tutte. Una colonna di numeri si ordina
+come numeri, quindi 1000 viene dopo 9 e non prima, e la riga di stato dice che cosa sta facendo
+la vista — `↑name`, `/tor` — così lo vedi sempre. Nessuno dei due scrive niente: cambia
+l'ordine in cui le righe si leggono, il file resta com'è, e una ricerca o un segnalibro
+continuano a voler dire il record. Una tabella di più di duecentomila record li rifiuta
+entrambi e lo dice, perché leggere un milione di record per un tasto non è a cosa serve questa
+modalità. Modificare una cella non c'è di proposito: un visualizzatore che scrive è un editor,
+e quello sta in `F4`.
+
 La riga di stato dice come è stato letto il file, quale separatore è stato *indovinato* — una
 virgola, un punto e virgola, una tabulazione o una barra, quello che ha dato una tabella — e
 quante righe e colonne ci sono: è così che capisci a prima vista che l'ipotesi era giusta. Un
