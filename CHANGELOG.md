@@ -8,6 +8,22 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **A server reached through another one** (SPEC 04 §6.3). A session has a **Jump host** field
+  on its SFTP page — `bastion`, `gate@bastion`, `gate@bastion:2222`, an address in brackets —
+  and that is `ssh -J`: a session on the bastion, a `direct-tcpip` channel from it to the
+  destination, and the destination's own SSH session inside that channel. The bastion carries
+  a stream it cannot read, so the key exchange, the authentication and the files are between
+  this program and the server behind it, which is the whole reason to prefer this to
+  forwarding an agent.
+
+  Each machine's host key is checked under its own name, so a first connection can ask twice —
+  saying yes to the bastion is not saying yes to what is behind it. The bastion is
+  authenticated with the agent or with the session's own key file, **never with the
+  destination's password**: a password typed for one machine is not sent to another, and the
+  error says so when there is no agent to fall back on. SFTP only, because FTP and WebDAV have
+  nothing to build a tunnel out of, and a `jump` written on one of those is refused with a
+  sentence rather than ignored. One hop, not a chain.
+
 - **A table sorts and filters, and still writes nothing** (SPEC 05 §1.11). `Ctrl+F3` sorts the
   rows by the column the view is on — the one `Ctrl+←`/`Ctrl+→` walks to — ascending, then the
   other way round, then back to the order the records are in the file, because a sort with no

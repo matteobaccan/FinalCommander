@@ -106,26 +106,21 @@ pub async fn connect(site: &Site, secret: Option<&str>, policy: &HostKeyPolicy) 
         inactivity_timeout: Some(Duration::from_secs(3600)),
         ..client::Config::default()
     });
-    let handler = Client {
-        host: site.host.clone(),
-        port: site.port,
-        policy: policy.clone(),
+    // Straight at the server, or through the one host it can be reached from (SPEC 04 §6.3).
+    // The bastion's own session is kept beside the destination's: the channel the destination
+    // speaks through lives inside it, so dropping it would drop the connection.
+    let (mut handle, through) = match &site.jump {
+        None => (
+            open(config, site.host.as_str(), site.port, site, policy).await?,
+            None,
+        ),
+        Some(jump) => {
+            let (destination, hop) = open_through(config, site, jump, secret, policy).await?;
+            (destination, Some(hop))
+        }
     };
-    let mut handle = client::connect(config, (site.host.as_str(), site.port), handler)
-        .await
-        .map_err(|e| match e {
-            // The handler's own refusals must not be buried under "connection failed".
-            NetError::UnknownHostKey { .. }
-            | NetError::ChangedHostKey { .. }
-            | NetError::Unsupported { .. }
-            | NetError::Connect { .. } => e,
-            other => NetError::Connect {
-                host: format!("{}:{}", site.host, site.port),
-                detail: other.to_string(),
-            },
-        })?;
 
-    authenticate(&mut handle, site, secret).await?;
+    authenticate(&mut handle, &site.user, &site.host, &site.auth, secret).await?;
 
     let channel = handle
         .channel_open_session()
@@ -146,29 +141,144 @@ pub async fn connect(site: &Site, secret: Option<&str>, policy: &HostKeyPolicy) 
         Arc::new(SftpBackend {
             session,
             keep: handle,
+            keep_jump: through,
         }),
     ))
 }
 
+/// One TCP connection to an SSH server, with the host-key decision made against the name it
+/// was reached under. `site` is only there for the shape of the error.
+async fn open(
+    config: Arc<client::Config>,
+    host: &str,
+    port: u16,
+    site: &Site,
+    policy: &HostKeyPolicy,
+) -> Result<Handle<Client>> {
+    let handler = Client {
+        host: host.to_string(),
+        port,
+        policy: policy.clone(),
+    };
+    client::connect(config, (host, port), handler)
+        .await
+        .map_err(|e| match e {
+            // The handler's own refusals must not be buried under "connection failed".
+            NetError::UnknownHostKey { .. }
+            | NetError::ChangedHostKey { .. }
+            | NetError::Unsupported { .. }
+            | NetError::Connect { .. } => e,
+            other => NetError::Connect {
+                host: format!("{}:{}", site.host, site.port),
+                detail: other.to_string(),
+            },
+        })
+}
+
+/// The destination, reached through a jump host — `ssh -J`'s one hop (SPEC 04 §6.3).
+///
+/// Three steps and nothing clever: a session on the bastion, a `direct-tcpip` channel from it
+/// to the destination, and the destination's own SSH session *inside that channel*. The
+/// second session is a session like any other — its host key is checked under the
+/// destination's name, and it authenticates as the site says — because the tunnel is only how
+/// its bytes travel. Nothing in this program decrypts anything on the way: the bastion carries
+/// a stream it cannot read, which is the whole point of `ProxyJump` over an agent-forwarding
+/// hop.
+///
+/// Returns the destination and the bastion, in that order; the caller keeps both.
+async fn open_through(
+    config: Arc<client::Config>,
+    site: &Site,
+    jump: &crate::site::Jump,
+    secret: Option<&str>,
+    policy: &HostKeyPolicy,
+) -> Result<(Handle<Client>, Handle<Client>)> {
+    // The bastion is a server like any other, so its key is checked under *its* name:
+    // trusting the destination's key says nothing about the machine in front of it.
+    let mut hop = open(config.clone(), jump.host.as_str(), jump.port, site, policy).await?;
+    let auth = jump_auth(site);
+    authenticate(&mut hop, &jump.user, &jump.host, &auth, secret)
+        .await
+        .map_err(|e| match (&site.auth, e) {
+            // The one case worth a longer sentence: the site types a password, which is not
+            // sent on to another machine, so the bastion was tried with the agent.
+            (Auth::Password, NetError::Auth { user, host, detail }) => NetError::Auth {
+                user,
+                host,
+                detail: format!(
+                    "{detail} — a jump host is authenticated with the agent or with the \
+                     session's key file, never with the password typed for {}",
+                    site.host
+                ),
+            },
+            (_, other) => other,
+        })?;
+
+    // The channel the destination's session will speak over. The originator is this program,
+    // which has no address the bastion cares about: `ssh` sends its own loopback and so does
+    // this.
+    let channel = hop
+        .channel_open_direct_tcpip(site.host.clone(), u32::from(site.port), "127.0.0.1", 0)
+        .await
+        .map_err(|e| NetError::Connect {
+            host: format!("{}:{}", site.host, site.port),
+            detail: format!("{} would not open a channel to it: {e}", jump.authority()),
+        })?;
+
+    let handler = Client {
+        host: site.host.clone(),
+        port: site.port,
+        policy: policy.clone(),
+    };
+    let destination = client::connect_stream(config, channel.into_stream(), handler)
+        .await
+        .map_err(|e| match e {
+            NetError::UnknownHostKey { .. }
+            | NetError::ChangedHostKey { .. }
+            | NetError::Unsupported { .. }
+            | NetError::Connect { .. } => e,
+            other => NetError::Connect {
+                host: format!("{}:{}", site.host, site.port),
+                detail: format!("through {}: {other}", jump.authority()),
+            },
+        })?;
+    Ok((destination, hop))
+}
+
+/// How the jump host is authenticated: the agent, or the same key file the session uses.
+///
+/// Never the destination's password. A password typed for one machine must not be sent to
+/// another, and asking for a second secret means a second one through the pool, the prompts
+/// and the retry — which is a bigger change than this, and is the thing to do the day
+/// somebody has a bastion that wants one.
+fn jump_auth(site: &Site) -> Auth {
+    match &site.auth {
+        Auth::Key { path } => Auth::Key { path: path.clone() },
+        Auth::Agent | Auth::Password => Auth::Agent,
+    }
+}
+
 async fn authenticate(
     handle: &mut Handle<Client>,
-    site: &Site,
+    user: &str,
+    host: &str,
+    auth: &Auth,
     secret: Option<&str>,
 ) -> Result<()> {
     let auth_failed = |detail: String| NetError::Auth {
-        user: site.user.clone(),
-        host: site.host.clone(),
+        user: user.to_string(),
+        host: host.to_string(),
         detail,
     };
-    match &site.auth {
+    match auth {
         Auth::Password => {
             let password = secret.ok_or_else(|| NetError::NeedsSecret {
-                user: site.user.clone(),
-                host: site.host.clone(),
+                user: user.to_string(),
+                host: host.to_string(),
                 kind: SecretKind::Password,
             })?;
             let result = handle
-                .authenticate_password(&site.user, password)
+                .authenticate_password(user, password)
                 .await
                 .map_err(|e| auth_failed(e.to_string()))?;
             if !result.success() {
@@ -179,8 +289,8 @@ async fn authenticate(
         Auth::Key { path } => {
             let key = russh::keys::load_secret_key(path, secret).map_err(|e| match e {
                 russh::keys::Error::KeyIsEncrypted => NetError::NeedsSecret {
-                    user: site.user.clone(),
-                    host: site.host.clone(),
+                    user: user.to_string(),
+                    host: host.to_string(),
                     kind: SecretKind::Passphrase,
                 },
                 other => auth_failed(format!("{}: {other}", path.display())),
@@ -192,10 +302,7 @@ async fn authenticate(
                 .flatten()
                 .flatten();
             let result = handle
-                .authenticate_publickey(
-                    &site.user,
-                    PrivateKeyWithHashAlg::new(Arc::new(key), hash_alg),
-                )
+                .authenticate_publickey(user, PrivateKeyWithHashAlg::new(Arc::new(key), hash_alg))
                 .await
                 .map_err(|e| auth_failed(e.to_string()))?;
             if !result.success() {
@@ -232,7 +339,7 @@ async fn authenticate(
                 };
                 let fingerprint = key.fingerprint(HashAlg::Sha256).to_string();
                 match handle
-                    .authenticate_publickey_with(&site.user, key, hash_alg, &mut agent)
+                    .authenticate_publickey_with(user, key, hash_alg, &mut agent)
                     .await
                 {
                     Ok(result) if result.success() => return Ok(()),
@@ -308,6 +415,9 @@ fn russh_err(site: &Site, e: russh::Error) -> NetError {
 struct SftpBackend {
     session: SftpSession,
     keep: Handle<Client>,
+    /// The jump host's own connection, where the site goes through one: the channel `keep`
+    /// speaks over is inside it, so it has to outlive the session as well.
+    keep_jump: Option<Handle<Client>>,
 }
 
 impl std::fmt::Debug for SftpBackend {
@@ -471,6 +581,13 @@ impl RemoteFs for SftpBackend {
             .keep
             .disconnect(russh::Disconnect::ByApplication, "", "en")
             .await;
+        // Inside out: the destination's session first, then the hop that carried it, so the
+        // bastion is told goodbye rather than left to notice a channel going quiet.
+        if let Some(jump) = &self.keep_jump {
+            let _ = jump
+                .disconnect(russh::Disconnect::ByApplication, "", "en")
+                .await;
+        }
         Ok(())
     }
 }

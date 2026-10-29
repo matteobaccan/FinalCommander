@@ -205,28 +205,9 @@ connection, and a `sftp://user@host:port/dir` URL typed into `Ctrl+L` connects):
 with groups and a connected marker, `auth = "agent" | "key:<path>" | "ask"`, one pooled
 connection per `user@host:port` shared by both panels and every job, host-key verification
 with the fingerprint shown before anything is recorded, a changed host key refused outright,
-and the password or key passphrase asked for in a masked prompt and kept only for the
-connection attempt. **Not yet**: the OS keyring (so a password is asked for every connection),
-`ProxyJump` chains, automatic reconnect, and `charset`.
-
-§TMP§
-
-A connection is a session, and a session can carry more than the files. `direct-tcpip` — what
-`ssh -L` is built on — makes a port on this machine stand for a port the *server* can reach,
-and the netbox opens one on the session the panel is already using: one authentication, one
-host-key check, one connection, one more channel.
-
-- The spec is `[local:]host:port`, or a port on its own, which is the server's own loopback on
-  the same number. Parsed before anything is opened, so a typing mistake is answered by the
-  dialog rather than by a worker.
-- **The local end binds 127.0.0.1.** A tunnel is the server's network handed to this machine;
-  binding it to every interface hands it to the network this machine is on. There is a flag for
-  that case and nothing sets it by accident.
-- Each connection to the local port opens its own channel, and the bytes are copied both ways
-  until either end stops. A far end that refuses costs the connection that arrived and nothing
-  else: the session, and the panel on it, carry on.
-- Closing a tunnel drops its listener and every channel on it, which frees the port at once.
-  The list shows connections carried, open now, and refused.
+the password or key passphrase asked for in a masked prompt and kept only for the
+connection attempt, and one jump host per site (§6.3). **Not yet**: the OS keyring (so a password is asked for every connection),
+chains of more than one jump host, automatic reconnect, and `charset`.
 
 ### 6c. The host key, and the two cases that are not the same case
 
@@ -273,6 +254,43 @@ host-key check, one connection, one more channel.
   else: the session, and the panel on it, carry on.
 - Closing a tunnel drops its listener and every channel on it, which frees the port at once.
   The list shows connections carried, open now, and refused.
+
+### 6.3 The jump host
+
+`jump` on a `[[site]]` is `ssh -J`: the one host this site is reached *through*, written as
+`host`, `user@host` or `user@host:port` (an IPv6 literal in brackets, as everywhere else
+here). No user means the session's own, because a bastion in front of one's own servers
+usually wants the same name; no port means 22, because a jump host is an SSH server whatever
+port the destination listens on. It is SFTP only — FTP and WebDAV have nothing to build a
+tunnel out of — and a `jump` on one of those is refused with a sentence rather than ignored.
+
+Three steps, and nothing clever about any of them:
+
+1. a session on the bastion, authenticated and host-key-checked **under its own name** —
+   trusting the destination's key says nothing about the machine standing in front of it;
+2. a `direct-tcpip` channel from the bastion to the destination's host and port, the same
+   kind of channel §6.2's tunnels are made of;
+3. the destination's own SSH session *inside that channel*: its own key exchange, its own
+   host-key decision, its own authentication.
+
+The point of the third step is what the bastion does **not** get. It carries a stream it
+cannot read; nothing here decrypts anything on the way, and no key of the reader's is
+forwarded to it. That is the difference between `ProxyJump` and the agent forwarding people
+reach for instead.
+
+**The bastion is authenticated with the agent, or with the same key file the session uses —
+never with the destination's password.** A password typed for one machine must not be sent to
+another, and asking for a second one would mean a second secret through the pool, the prompts
+and the retry: a bigger change than this, and the thing to do the day somebody has a bastion
+that wants one. A site that authenticates with a password therefore tries the agent for its
+jump host, and the error says so when there is no agent to try.
+
+The bastion's connection is held for as long as the session it carries — the channel lives
+inside it — and both are disconnected, innermost first, when the panel disconnects.
+
+**One hop, not a chain.** `ssh -J a,b,c` is a list; this is a single host. The shape
+generalises (step 3 could itself be a jump), and until somebody has two bastions in a row it
+is a field to fill in rather than a list to edit.
 
 ## 7. Performance rules
 

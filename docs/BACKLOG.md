@@ -92,7 +92,7 @@ says what the decision stands on.
 
 | Item | Where | What is left |
 | --- | --- | --- |
-| `ProxyJump` in the session editor | `Alt+N` → `F4` | The session stores host, port, user, authentication, remote folder, group, keep-alive and compression; FAR's NetBox also goes through a jump host. One field in the dialog, one hop in the transport: the jump host's session first, then a `direct-tcpip` channel to the destination through it, which `russh` does. |
+| A chain of jump hosts | SPEC 04 §6.3 | One hop is there — a `jump` field on the session, the bastion's session and a `direct-tcpip` channel to the destination inside it. `ssh -J a,b,c` is a list, and the shape generalises (the third step could itself be a jump), but a list is a different dialog from a field; worth building the day somebody has two bastions in a row. A bastion that wants a password of its own is the other half: a second secret through the pool, the prompts and the retry. |
 | FTP | SPEC 04 §6 | Resuming an interrupted transfer with `REST`, active mode for a server behind an awkward firewall, and a tested path through a proxy. |
 | WebDAV | SPEC 04 §6 | Digest authentication, locking, quota, and a `PROPPATCH` for the servers that do let a time be set. |
 | Multipart upload | object storage | **Resuming** one that was interrupted, which needs the id and the parts to outlive the session, and sending several parts at once, which is throughput rather than correctness. |

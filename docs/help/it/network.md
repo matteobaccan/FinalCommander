@@ -104,6 +104,35 @@ server consegnata a questa macchina, e aprirlo ovunque la consegnerebbe al resto
 aperte ora, rifiutate dall'altro capo — e `Enter` su una riga lo chiude, liberando subito la
 porta.
 
+## Attraverso un host di salto
+
+Un server che da qui non si raggiunge, ma che si raggiunge da una macchina che invece sì, è un
+campo nell'editor della sessione e non un problema: `Alt+N`, `F4` sulla sessione, pagina
+*SFTP*, **Host di salto**.
+
+    bastion.example.net               l'utente della sessione, porta 22
+    gate@bastion.example.net          un altro account per entrare
+    gate@bastion.example.net:2222     e un'altra porta
+    [2001:db8::1]:2222                un indirizzo, fra parentesi quadre come altrove
+
+È `ssh -J`, e funziona come lo fa `ssh`: prima una sessione sul bastione, poi un canale dal
+bastione alla destinazione, poi la sessione SSH della destinazione *dentro quel canale*. Il
+bastione trasporta byte che non può leggere — scambio di chiavi, autenticazione e file della
+destinazione restano da un capo all'altro — e non vede nessuna chiave tua, che è ciò che rende
+questa strada più sicura dell'inoltro dell'agente.
+
+La chiave di ogni macchina è verificata sotto il proprio nome, quindi la prima connessione può
+chiedere due volte: una per il bastione, una per il server dietro di lui. Dire di sì a uno non
+è dire di sì all'altro, ed è esattamente il punto.
+
+**Il bastione viene autenticato con l'agente, oppure con lo stesso file di chiave della
+sessione.** Una password scritta per una macchina non viene mai mandata a un'altra, così una
+sessione impostata su *chiedi la password* arriva all'host di salto con l'agente, e lo dice
+quando un agente non c'è. L'host di salto è solo di SFTP: FTP e WebDAV non hanno nulla con cui
+costruire un tunnel, e per loro la pagina del campo è grigia.
+
+Un salto solo, non una catena: `ssh -J a,b,c` è una lista, questo è un host.
+
 ## I bucket
 
 Un servizio di object storage — S3 stesso, o MinIO, Ceph, R2, Wasabi, qualunque cosa parli lo

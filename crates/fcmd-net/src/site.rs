@@ -52,6 +52,95 @@ impl Auth {
     }
 }
 
+/// The host a connection is made *through*: one hop, as `ssh -J` does it (SPEC 04 §6.3).
+///
+/// A bastion is the ordinary reason a server cannot be reached directly, and without this the
+/// netbox cannot reach such a server at all. One hop and not a chain: `ssh` takes a
+/// comma-separated list and nests them, and a second hop is the same code one level deeper —
+/// worth doing when somebody has two, rather than guessing at the shape of it now.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Jump {
+    pub user: String,
+    pub host: String,
+    pub port: u16,
+}
+
+impl Jump {
+    /// `host`, `user@host`, `user@host:port`, `[::1]:2222` — what one writes after `ssh -J`.
+    ///
+    /// Without a user it is the one the destination uses, which is what a bastion in front of
+    /// one's own servers usually wants; without a port it is 22, because a jump host is an SSH
+    /// server whatever the destination's own port is.
+    pub fn parse(text: &str, user_of_site: &str) -> Result<Jump> {
+        let text = text.trim();
+        if text.is_empty() {
+            return Err(NetError::Connect {
+                host: "config".into(),
+                detail: "a jump host needs a name".into(),
+            });
+        }
+        let bad = || NetError::Connect {
+            host: "config".into(),
+            detail: format!("`{text}` is not a jump host (user@host:port)"),
+        };
+        let (user, host_port) = match text.rsplit_once('@') {
+            Some((user, rest)) if !user.is_empty() => (user.to_string(), rest),
+            Some(_) => return Err(bad()),
+            None => (user_of_site.to_string(), text),
+        };
+        // An IPv6 literal is bracketed, as it is everywhere else here: `[::1]:2222`.
+        let (host, port) = if let Some(rest) = host_port.strip_prefix('[') {
+            match rest.split_once(']') {
+                Some((host, tail)) => (host, tail.strip_prefix(':')),
+                None => return Err(bad()),
+            }
+        } else {
+            match host_port.rsplit_once(':') {
+                Some((host, port)) => (host, Some(port)),
+                None => (host_port, None),
+            }
+        };
+        if host.is_empty() {
+            return Err(bad());
+        }
+        let port = match port {
+            Some(text) => text.trim().parse().map_err(|_| bad())?,
+            None => DEFAULT_SSH_PORT,
+        };
+        Ok(Jump {
+            user,
+            host: host.to_string(),
+            port,
+        })
+    }
+
+    /// What the dialog shows and the configuration stores: the shortest thing that parses
+    /// back to this.
+    pub fn describe(&self, user_of_site: &str) -> String {
+        let host = if self.host.contains(':') {
+            format!("[{}]", self.host)
+        } else {
+            self.host.clone()
+        };
+        let mut out = String::new();
+        if self.user != user_of_site {
+            out.push_str(&self.user);
+            out.push('@');
+        }
+        out.push_str(&host);
+        if self.port != DEFAULT_SSH_PORT {
+            out.push(':');
+            out.push_str(&self.port.to_string());
+        }
+        out
+    }
+
+    /// `user@host:port`, for a message and for the host-key file.
+    pub fn authority(&self) -> String {
+        format!("{}@{}:{}", self.user, self.host, self.port)
+    }
+}
+
 /// One entry of the connection manager's site list.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Site {
@@ -67,6 +156,9 @@ pub struct Site {
     pub group: Option<String>,
     pub keepalive: Option<Duration>,
     pub compress: bool,
+    /// The host to reach this one *through*, where it cannot be reached directly (SPEC 04
+    /// §6.3). `None` is the ordinary case: straight at the server.
+    pub jump: Option<Jump>,
 }
 
 pub const DEFAULT_SSH_PORT: u16 = 22;
@@ -84,6 +176,7 @@ impl Site {
             group: None,
             keepalive: Some(Duration::from_secs(30)),
             compress: false,
+            jump: None,
         }
     }
 
@@ -247,6 +340,22 @@ impl Site {
             None => site.keepalive,
         };
         site.compress = cfg.compress.unwrap_or(false);
+        site.jump = match cfg.jump.as_deref().map(str::trim).filter(|j| !j.is_empty()) {
+            None => None,
+            // A jump host is an SSH tunnel and nothing else can carry one, so a `jump` on an
+            // FTP or WebDAV site is said out loud rather than quietly ignored: it is a
+            // sentence the user wrote expecting it to do something.
+            Some(_) if scheme != Scheme::Sftp => {
+                return Err(NetError::Connect {
+                    host: cfg.host.clone(),
+                    detail: format!(
+                        "a jump host needs SSH, and this site is {}",
+                        scheme.as_str()
+                    ),
+                })
+            }
+            Some(text) => Some(Jump::parse(text, &site.user)?),
+        };
         Ok(site)
     }
 
@@ -430,6 +539,66 @@ mod tests {
             cfg.site("JUMP").map(|s| s.host.as_str()),
             Some("jump.example.net")
         );
+    }
+
+    #[test]
+    fn the_four_ways_a_jump_host_is_written() {
+        let plain = Jump::parse("bastion.example.net", "mb").unwrap();
+        assert_eq!(plain.user, "mb", "it borrows the session's own user");
+        assert_eq!(plain.port, DEFAULT_SSH_PORT);
+        assert_eq!(plain.describe("mb"), "bastion.example.net");
+        assert_eq!(plain.authority(), "mb@bastion.example.net:22");
+
+        let named = Jump::parse("gate@bastion.example.net", "mb").unwrap();
+        assert_eq!(named.user, "gate");
+        assert_eq!(named.describe("mb"), "gate@bastion.example.net");
+
+        let ported = Jump::parse("gate@bastion.example.net:2222", "mb").unwrap();
+        assert_eq!(ported.port, 2222);
+        assert_eq!(ported.describe("mb"), "gate@bastion.example.net:2222");
+
+        // An IPv6 literal keeps its brackets, so what comes out parses back in.
+        let six = Jump::parse("[2001:db8::1]:2222", "mb").unwrap();
+        assert_eq!(six.host, "2001:db8::1");
+        assert_eq!(six.port, 2222);
+        assert_eq!(six.describe("mb"), "[2001:db8::1]:2222");
+        assert_eq!(Jump::parse(&six.describe("mb"), "mb").unwrap(), six);
+
+        for bad in ["", "   ", "@host", "host:nope", "[::1", "gate@"] {
+            assert!(
+                Jump::parse(bad, "mb").is_err(),
+                "`{bad}` is not a jump host"
+            );
+        }
+    }
+
+    #[test]
+    fn a_jump_host_comes_out_of_the_config_and_only_for_ssh() {
+        let (cfg, warnings) = fcmd_config::Config::parse(
+            "fcmd.toml",
+            r#"
+            [[site]]
+            id = "behind"
+            host = "db.internal"
+            user = "mb"
+            jump = "gate@bastion.example.net:2222"
+
+            [[site]]
+            id = "nonsense"
+            scheme = "ftp"
+            host = "files.example.net"
+            jump = "bastion.example.net"
+            "#,
+        )
+        .unwrap();
+        assert!(warnings.is_empty(), "{warnings:?}");
+        let (sites, problems) = Site::list_from_config(&cfg);
+        assert_eq!(sites.len(), 1);
+        let jump = sites[0].jump.as_ref().expect("the site goes through one");
+        assert_eq!(jump.authority(), "gate@bastion.example.net:2222");
+        // FTP has no tunnel to build one out of, and saying so beats ignoring the line.
+        assert_eq!(problems.len(), 1, "{problems:?}");
+        assert!(problems[0].contains("needs SSH"), "{}", problems[0]);
     }
 
     #[test]

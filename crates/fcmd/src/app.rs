@@ -11843,6 +11843,7 @@ impl App {
             empty if empty.is_empty() => "sftp".to_string(),
             given => given,
         };
+        let scheme_is_sftp = scheme == "sftp";
         let cfg = fcmd_config::SiteCfg {
             id,
             scheme,
@@ -11854,6 +11855,14 @@ impl App {
             group: empty_to_none(form.text_value("site.group")),
             keepalive_secs: keepalive,
             compress: Some(form.text_value("site.compress") == "true"),
+            // A jump host is an SSH tunnel, and its row is on the page that goes grey for
+            // every other protocol. Dropping it rather than storing it is what keeps a
+            // session that was switched to FTP from being refused over a field the dialog
+            // will no longer let anyone reach.
+            jump: match scheme_is_sftp {
+                true => empty_to_none(form.text_value("site.jump")),
+                false => None,
+            },
         };
 
         // What the editor produced has to be a site the netbox can actually use; if it is not,
@@ -19050,6 +19059,43 @@ mod tests {
         // The list the dialog came from shows it straight away.
         assert!(app.sites.iter().any(|s| s.id == "jump"));
         assert!(matches!(app.mode, Mode::Sites { .. }));
+    }
+
+    #[test]
+    fn the_session_editor_stores_the_jump_host_and_refuses_a_bad_one() {
+        let mut app = app();
+        app.open_site_form(None);
+        let Mode::Form(form) = &mut app.mode else {
+            panic!("the session editor did not open")
+        };
+        form.set_text("site.host", "db.internal".into());
+        form.set_text("site.user", "mb".into());
+        form.set_text("site.jump", "gate@bastion.example.net:2222".into());
+        press(&mut app, "F10");
+
+        assert_eq!(app.cfg.sites.len(), 1);
+        assert_eq!(
+            app.cfg.sites[0].jump.as_deref(),
+            Some("gate@bastion.example.net:2222")
+        );
+        let site = fcmd_net::Site::from_config(&app.cfg.sites[0]).unwrap();
+        assert_eq!(
+            site.jump.as_ref().map(|j| j.authority()).as_deref(),
+            Some("gate@bastion.example.net:2222")
+        );
+
+        // Something that is not a host at all keeps the dialog open rather than storing a
+        // session that could never connect.
+        app.open_site_form(None);
+        let Mode::Form(form) = &mut app.mode else {
+            panic!("the session editor did not reopen")
+        };
+        form.set_text("site.host", "db.internal".into());
+        form.set_text("site.jump", "@nowhere".into());
+        press(&mut app, "F10");
+        assert!(matches!(app.mode, Mode::Form(_)));
+        assert!(app.status_error, "{}", app.status);
+        assert_eq!(app.cfg.sites.len(), 1, "nothing new was stored");
     }
 
     #[test]

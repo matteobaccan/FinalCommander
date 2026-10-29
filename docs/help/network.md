@@ -101,6 +101,35 @@ office. `Tunnels…` in the same menu lists what is open with three counters —
 carried, open now, refused by the far end — and `Enter` on a row closes it, which frees the
 port at once.
 
+## Through a jump host
+
+A server that cannot be reached from here, but can be reached from one machine that can, is a
+field in the session editor rather than a problem: `Alt+N`, `F4` on the session, the *SFTP*
+page, **Jump host**.
+
+    bastion.example.net               the session's own user, port 22
+    gate@bastion.example.net          a different account on the way in
+    gate@bastion.example.net:2222     and a different port
+    [2001:db8::1]:2222                an address, in brackets as everywhere else
+
+It is `ssh -J`, and it works the way `ssh` does it: a session on the bastion first, then a
+channel from the bastion to the destination, then the destination's own SSH session *inside
+that channel*. The bastion carries bytes it cannot read — the destination's key exchange,
+authentication and files are all end-to-end — and it never sees a key of yours, which is what
+makes this safer than forwarding the agent to it.
+
+Each machine's host key is checked under its own name, so the first connection may ask twice:
+once for the bastion, once for the server behind it. Saying yes to one is not saying yes to
+the other, which is the point.
+
+**The bastion is authenticated with the agent, or with the same key file the session uses.**
+A password typed for one machine is never sent to another, so a session set to *ask for a
+password* reaches its jump host with the agent, and says so when there is no agent to use.
+Only SFTP has a jump host: FTP and WebDAV have nothing to build a tunnel out of, and the page
+the field is on is grey for them.
+
+One hop, not a chain: `ssh -J a,b,c` is a list, this is one host.
+
 ## Buckets
 
 An object storage service — S3 itself, or MinIO, Ceph, R2, Wasabi, anything that speaks the

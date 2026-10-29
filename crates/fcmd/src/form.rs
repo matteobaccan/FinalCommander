@@ -692,6 +692,12 @@ impl Form {
             ),
             // The protocol's own page.
             Field::text("site.key", t("site-key-file"), key_path),
+            Field::text(
+                "site.jump",
+                t("site-jump"),
+                cfg.jump.clone().unwrap_or_default(),
+            ),
+            Field::Note(t("site-jump-note")),
             Field::Dim(t("site-sftp-ciphers")),
         ];
         let pages = vec![
@@ -716,7 +722,7 @@ impl Form {
             Page {
                 label: t("site-page-sftp"),
                 from: 14,
-                to: 16,
+                to: 18,
                 enabled: sftp,
             },
         ];

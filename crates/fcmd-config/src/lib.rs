@@ -914,6 +914,11 @@ pub struct SiteCfg {
     pub keepalive_secs: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub compress: Option<bool>,
+    /// `ssh -J`: the one host this site is reached *through*, as `host`, `user@host` or
+    /// `user@host:port`. SFTP only — it is an SSH tunnel, and FTP and WebDAV have nothing to
+    /// build one out of.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub jump: Option<String>,
 }
 
 /// A blank site, as the session editor starts from: the scheme is the only field with a
@@ -931,6 +936,7 @@ impl Default for SiteCfg {
             group: None,
             keepalive_secs: None,
             compress: None,
+            jump: None,
         }
     }
 }
