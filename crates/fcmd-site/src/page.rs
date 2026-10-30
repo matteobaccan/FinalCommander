@@ -20,8 +20,6 @@ pub struct Page<'a> {
     /// The same page in the other languages, as `(code, path)`. Empty for a page that exists
     /// only in English — the switcher then takes the reader to that language's home instead.
     pub translations: Vec<(&'static str, String)>,
-    /// The version this site was built from, for the footer.
-    pub version: &'a str,
 }
 
 impl Page<'_> {
@@ -38,16 +36,28 @@ impl Page<'_> {
             (lang.nav_home, format!("index{suffix}.html")),
             (lang.nav_features, format!("features{suffix}.html")),
             (lang.nav_replaces, format!("replaces{suffix}.html")),
-            (lang.nav_download, format!("download{suffix}.html")),
+            // Out of the site and into the releases: that page is always the latest build,
+            // where one of ours would name the archives of whichever version it was last
+            // generated from and go stale the day after a release.
+            (
+                lang.nav_download,
+                format!("{}/releases/latest", crate::md::REPO),
+            ),
             (lang.nav_help, format!("help/index{suffix}.html")),
-            (lang.nav_commanders, "commanders.html".to_string()),
-            (lang.nav_changelog, "changelog.html".to_string()),
+            (lang.nav_commanders, format!("commanders{suffix}.html")),
+            (lang.nav_changelog, format!("changelog{suffix}.html")),
         ];
         let mut links = String::new();
         for (label, target) in nav {
             let current = target == self.path;
+            // A link that leaves the site is absolute and must not be climbed out of.
+            let prefix = if target.contains("://") {
+                ""
+            } else {
+                up.as_str()
+            };
             links.push_str(&format!(
-                "<a href=\"{up}{target}\"{}>{}</a>",
+                "<a href=\"{prefix}{target}\"{}>{}</a>",
                 if current { " class=\"here\"" } else { "" },
                 escape(label)
             ));
@@ -100,7 +110,7 @@ impl Page<'_> {
 </main>
 <footer>
 <div class="languages">{switcher}</div>
-<p>{version} · <a href="{repo}">{source}</a> · MIT</p>
+<p><a href="{repo}">{source}</a> · MIT</p>
 </footer>
 </body>
 </html>
@@ -113,7 +123,6 @@ impl Page<'_> {
             links = links,
             body = self.body,
             switcher = switcher,
-            version = escape(self.version),
             repo = crate::md::REPO,
             source = escape(lang.nav_source),
         )
@@ -262,7 +271,6 @@ mod tests {
                 .expect("the language"),
             body: "<p>body</p>".to_string(),
             translations: Vec::new(),
-            version: "9.9.9",
         }
     }
 
@@ -272,7 +280,12 @@ mod tests {
         assert!(html.starts_with("<!doctype html>"), "{html}");
         assert!(html.contains("<html lang=\"en\">"));
         assert!(html.contains("<p>body</p>"));
-        assert!(html.contains("9.9.9"));
+        // No version anywhere on a page: the site is built from the documents and not from a
+        // release, so nothing on it goes stale the day one is cut.
+        assert!(
+            !html.contains("0.2"),
+            "a version number crept back in: {html}"
+        );
         // The promise the site makes about itself.
         assert!(!html.contains("<script"), "there is no JavaScript here");
         assert!(!html.contains("//fonts."), "and no fonts from elsewhere");
@@ -287,6 +300,11 @@ mod tests {
         let html = page("help/files.html", "en").render();
         assert!(html.contains(r#"href="../style.css""#), "{html}");
         assert!(html.contains(r#"href="../index.html""#), "{html}");
+        // But a link that leaves the site is absolute and is not climbed out of.
+        assert!(
+            html.contains(&format!(r#"href="{}/releases/latest""#, crate::md::REPO)),
+            "{html}"
+        );
         assert_eq!(page("help/files.html", "en").depth(), 1);
         assert_eq!(page("index.html", "en").depth(), 0);
     }

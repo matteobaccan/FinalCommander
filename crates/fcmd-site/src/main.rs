@@ -2,9 +2,8 @@
 //!
 //! `cargo run -p fcmd-site -- --out site` writes a static site into `site/`: a landing page in
 //! each of the seven languages the program speaks, the README's own argument, the survey of the
-//! other commanders, the help pages that `F1` shows inside the program, the changelog, and
-//! where to download the release. `.github/workflows/pages.yml` runs it and publishes the
-//! result to GitHub Pages.
+//! other commanders, the help pages that `F1` shows inside the program, and the changelog.
+//! `.github/workflows/pages.yml` runs it and publishes the result to GitHub Pages.
 //!
 //! Three rules it keeps:
 //!
@@ -17,7 +16,13 @@
 //! in it should not need a build pipeline to say so.
 //!
 //! **It says what it does not have.** The long documents are in English; a page that shows one
-//! says so in the reader's own language instead of pretending otherwise.
+//! says so in the reader's own language instead of pretending otherwise — and the page *around*
+//! it stays in that language, so following a link inside one's own site does not turn the site
+//! English.
+//!
+//! **Nothing here names a version.** Where to get the binaries is the releases page, which is
+//! always the latest one; a page of ours listing the archives of one version would be wrong the
+//! day after a release and would make every release a reason to publish the site again.
 
 mod md;
 mod page;
@@ -80,27 +85,35 @@ const HELP_PAGES: [(&str, &str); 7] = [
     ("about.md", "About"),
 ];
 
-fn build(repo: &Path, out: &Path) -> Result<usize, String> {
-    let version = version_of(repo)?;
-    let readme = read(repo, "README.md")?;
-    let changelog = read(repo, "CHANGELOG.md")?;
-    let landscape = read(repo, "docs/00-landscape.md")?;
-
-    // What the site publishes, so a link to one of these documents becomes a link to its page
-    // rather than one into the repository.
-    let mut published: Vec<(&str, String)> = vec![
-        ("CHANGELOG.md", "changelog.html".to_string()),
-        ("docs/00-landscape.md", "commanders.html".to_string()),
-        ("README.md", "index.html".to_string()),
+/// What the site publishes, so a link to one of these documents becomes a link to its page
+/// rather than one into the repository — **in the reader's own language**.
+///
+/// This is per language and not a constant because the pages are: `help/files.html` is the
+/// English chapter and `help/files.it.html` the Italian one. A single table meant that a link
+/// from one Italian page to another landed on the English page, and the reader lost their
+/// language by following a link inside their own site.
+fn published_for(lang: &Text) -> Vec<(&'static str, String)> {
+    let suffix = suffix_of(lang.code);
+    let mut out: Vec<(&'static str, String)> = vec![
+        ("CHANGELOG.md", format!("changelog{suffix}.html")),
+        ("docs/00-landscape.md", format!("commanders{suffix}.html")),
+        ("README.md", format!("index{suffix}.html")),
     ];
     for (file, _) in HELP_PAGES {
         let name = file.trim_end_matches(".md");
-        published.push((
+        out.push((
             // The leaked string is the generator's own table living as long as it runs.
             Box::leak(format!("docs/help/{file}").into_boxed_str()),
-            format!("help/{name}.html"),
+            format!("help/{name}{suffix}.html"),
         ));
     }
+    out
+}
+
+fn build(repo: &Path, out: &Path) -> Result<usize, String> {
+    let readme = read(repo, "README.md")?;
+    let changelog = read(repo, "CHANGELOG.md")?;
+    let landscape = read(repo, "docs/00-landscape.md")?;
 
     fs::create_dir_all(out).map_err(|e| format!("{}: {e}", out.display()))?;
     write(out, "style.css", page::STYLE)?;
@@ -115,6 +128,7 @@ fn build(repo: &Path, out: &Path) -> Result<usize, String> {
     let works = md::section(&readme, "What works today")
         .ok_or("README.md: the section `What works today` is gone")?;
     for lang in LANGUAGES {
+        let published = published_for(&lang);
         let translations = |stem: &str| -> Vec<(&'static str, String)> {
             LANGUAGES
                 .iter()
@@ -127,9 +141,8 @@ fn build(repo: &Path, out: &Path) -> Result<usize, String> {
                 path: format!("index{}.html", suffix_of(lang.code)),
                 title: lang.tagline,
                 lang: &lang,
-                body: landing(&lang, &version),
+                body: landing(&lang),
                 translations: translations("index"),
-                version: &version,
             },
         )?;
         pages += 1;
@@ -142,7 +155,6 @@ fn build(repo: &Path, out: &Path) -> Result<usize, String> {
                 lang: &lang,
                 body: document(&lang, lang.nav_features, &works, &published, 0),
                 translations: translations("features"),
-                version: &version,
             },
         )?;
         pages += 1;
@@ -155,7 +167,21 @@ fn build(repo: &Path, out: &Path) -> Result<usize, String> {
                 lang: &lang,
                 body: document(&lang, lang.nav_replaces, &replaces, &published, 0),
                 translations: translations("replaces"),
-                version: &version,
+            },
+        )?;
+        pages += 1;
+
+        // The long documents, in this reader's language's chrome. The text itself is
+        // English and says so; what is translated is the page around it, so following
+        // `Changelog` from the Italian site does not turn the whole site English.
+        write_page(
+            out,
+            Page {
+                path: format!("commanders{}.html", suffix_of(lang.code)),
+                title: lang.nav_commanders,
+                lang: &lang,
+                body: document_in(&lang, lang.nav_commanders, &landscape, &published, 0, true),
+                translations: translations("commanders"),
             },
         )?;
         pages += 1;
@@ -163,55 +189,15 @@ fn build(repo: &Path, out: &Path) -> Result<usize, String> {
         write_page(
             out,
             Page {
-                path: format!("download{}.html", suffix_of(lang.code)),
-                title: lang.download_title,
+                path: format!("changelog{}.html", suffix_of(lang.code)),
+                title: lang.nav_changelog,
                 lang: &lang,
-                body: download(&lang, &version),
-                translations: translations("download"),
-                version: &version,
+                body: document_in(&lang, lang.nav_changelog, &changelog, &published, 0, true),
+                translations: translations("changelog"),
             },
         )?;
         pages += 1;
     }
-
-    // The long documents, once, in English — with the note on each saying so.
-    write_page(
-        out,
-        Page {
-            path: "commanders.html".to_string(),
-            title: text::english().nav_commanders,
-            lang: text::english(),
-            body: document(
-                text::english(),
-                text::english().nav_commanders,
-                &landscape,
-                &published,
-                0,
-            ),
-            translations: Vec::new(),
-            version: &version,
-        },
-    )?;
-    pages += 1;
-
-    write_page(
-        out,
-        Page {
-            path: "changelog.html".to_string(),
-            title: text::english().nav_changelog,
-            lang: text::english(),
-            body: document(
-                text::english(),
-                text::english().nav_changelog,
-                &changelog,
-                &published,
-                0,
-            ),
-            translations: Vec::new(),
-            version: &version,
-        },
-    )?;
-    pages += 1;
 
     // The help: an index and the chapters, in every language. The chapters are written in
     // English and translated one at a time, so a language whose chapter is not translated yet
@@ -219,6 +205,7 @@ fn build(repo: &Path, out: &Path) -> Result<usize, String> {
     // Italian that silently opens an English page, which is what this used to do.
     for lang in LANGUAGES {
         let suffix = suffix_of(lang.code);
+        let published = published_for(&lang);
         let mut index = format!(
             "<h1>{}</h1>\n<p>{}</p>\n<ul class=\"pages\">\n",
             escape(lang.help_title),
@@ -248,7 +235,6 @@ fn build(repo: &Path, out: &Path) -> Result<usize, String> {
                         )
                     })
                     .collect(),
-                version: &version,
             },
         )?;
         pages += 1;
@@ -273,7 +259,6 @@ fn build(repo: &Path, out: &Path) -> Result<usize, String> {
                             )
                         })
                         .collect(),
-                    version: &version,
                 },
             )?;
             pages += 1;
@@ -284,7 +269,7 @@ fn build(repo: &Path, out: &Path) -> Result<usize, String> {
 }
 
 /// The landing page: the promise, a picture of it, and the way in.
-fn landing(lang: &Text, version: &str) -> String {
+fn landing(lang: &Text) -> String {
     let suffix = suffix_of(lang.code);
     let mut body = String::new();
     body.push_str(&format!(
@@ -294,10 +279,11 @@ fn landing(lang: &Text, version: &str) -> String {
     ));
     body.push_str(&format!(
         "<div class=\"buttons\">\
-         <a href=\"download{suffix}.html\">{} {version}</a>\
+         <a href=\"{}/releases/latest\">{}</a>\
          <a href=\"features{suffix}.html\">{}</a>\
          <a href=\"{}\">{}</a>\
          </div>\n",
+        md::REPO,
         escape(lang.nav_download),
         escape(lang.nav_features),
         md::REPO,
@@ -384,62 +370,6 @@ fn help_source(repo: &Path, lang: &Text, file: &str) -> Result<(String, bool), S
     Ok((read(repo, &format!("docs/help/{file}"))?, lang.code != "en"))
 }
 
-/// The download page: the archives of the latest release, named as the release names them.
-fn download(lang: &Text, version: &str) -> String {
-    let rows = [
-        (
-            "Linux (x86-64)",
-            format!("FinalCommander-linux-x86_64-{version}.tar.gz"),
-        ),
-        (
-            "Linux (x86-64, static)",
-            format!("FinalCommander-linux-x86_64-static-{version}.tar.gz"),
-        ),
-        (
-            "macOS (Intel and Apple Silicon)",
-            format!("FinalCommander-macos-universal-{version}.tar.gz"),
-        ),
-        (
-            "Windows (x86-64)",
-            format!("FinalCommander-windows-x86_64-{version}.zip"),
-        ),
-    ];
-    let mut body = format!(
-        "<h1>{}</h1>\n<p>{}</p>\n<table>\n<tr><th>{}</th><th>{}</th></tr>\n",
-        escape(lang.download_title),
-        inline_code(lang.download_intro),
-        escape(lang.download_platform),
-        escape(lang.download_file),
-    );
-    for (platform, file) in rows {
-        body.push_str(&format!(
-            "<tr><td>{}</td><td><a href=\"{}/releases/latest/download/{file}\"><code>{file}</code></a></td></tr>\n",
-            escape(platform),
-            md::REPO,
-        ));
-    }
-    body.push_str("</table>\n");
-    body.push_str(&format!(
-        "<p>{}</p>\n<pre><code>tar xzf FinalCommander-linux-x86_64-{version}.tar.gz\n\
-         sudo install -m755 fcmd /usr/local/bin/fcmd\nfcmd --version</code></pre>\n",
-        inline_code(lang.download_checksums)
-    ));
-    body.push_str(&format!(
-        "<h2>{}</h2>\n<pre><code>git clone {}\ncd FinalCommander\n\
-         cargo build --release\n</code></pre>\n",
-        escape(lang.download_source),
-        md::REPO,
-    ));
-    body.push_str(&format!(
-        "<p><a href=\"{}/releases\">{}</a></p>\n",
-        md::REPO,
-        escape(lang.nav_download)
-    ));
-    body
-}
-
-/// The site's own strings carry `` `code` `` spans, because the sentences they are in are about
-/// files and commands. This turns those into `<code>` and escapes everything else.
 fn inline_code(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut in_code = false;
@@ -457,16 +387,6 @@ fn inline_code(text: &str) -> String {
         out.push_str("</code>");
     }
     out
-}
-
-/// The workspace version, which is the version the site is about.
-fn version_of(repo: &Path) -> Result<String, String> {
-    let manifest = read(repo, "Cargo.toml")?;
-    manifest
-        .lines()
-        .find_map(|line| line.trim().strip_prefix("version = "))
-        .map(|value| value.trim().trim_matches('"').to_string())
-        .ok_or_else(|| "Cargo.toml: no version".to_string())
 }
 
 /// The pictures and the logo, copied as they are: they are drawn by the program itself.
@@ -528,22 +448,16 @@ mod tests {
     fn the_whole_site_is_written_from_the_repositorys_own_documents() {
         let (_dir, out) = built();
 
-        // The pages somebody arrives at exist in every language, and English has no suffix.
+        // Every page a reader can reach exists in every language, and English has no
+        // suffix. The long documents are among them: their text is English and their page
+        // is not, so a link to one does not take somebody out of their own language.
         for lang in LANGUAGES {
-            for stem in ["index", "features", "replaces", "download"] {
+            for stem in ["index", "features", "replaces", "commanders", "changelog"] {
                 let path = format!("{stem}{}.html", suffix_of(lang.code));
                 assert!(out.join(&path).is_file(), "{path} is missing");
             }
         }
-        // The long ones exist once.
-        for path in [
-            "changelog.html",
-            "commanders.html",
-            "help/index.html",
-            "style.css",
-        ] {
-            assert!(out.join(path).is_file(), "{path} is missing");
-        }
+        assert!(out.join("style.css").is_file());
         // Every help page the program shows is a page here, in every language.
         for lang in LANGUAGES {
             let suffix = suffix_of(lang.code);
@@ -656,25 +570,59 @@ mod tests {
             "the survey is not there"
         );
         assert!(commanders.contains("Norton Commander"));
+
+        // Both are English documents, and both exist in every language's *chrome*: the text
+        // says it is in English, and the navigation around it stays in the reader's language
+        // instead of turning the whole site English for anybody who followed a link to it.
+        let italian = page_text(&out, "changelog.it.html");
+        assert!(italian.contains("Unreleased") || italian.contains("0.3.0"));
+        assert!(
+            italian.contains("<html lang=\"it\">"),
+            "the chrome is Italian"
+        );
+        assert!(
+            italian.contains("in inglese") || italian.contains("inglese"),
+            "and it says the document itself is English"
+        );
+        let italian = page_text(&out, "commanders.it.html");
+        assert!(italian.contains("FAR Manager"));
+        assert!(italian.contains("<html lang=\"it\">"));
     }
 
+    /// There is no download page: the navigation and the landing button lead to the
+    /// releases, which are always the latest without anybody rebuilding this site.
     #[test]
-    fn the_download_page_names_the_archives_of_this_version() {
+    fn the_way_to_the_binaries_is_the_releases_page_and_not_a_page_of_ours() {
         let (_dir, out) = built();
-        let version = version_of(&default_repo()).expect("a version");
-        let page = page_text(&out, "download.html");
-        for platform in ["linux-x86_64", "macos-universal", "windows-x86_64"] {
-            // The archives carry the project's name, as `release.yml` writes it; the
-            // executable inside is `fcmd`, and a page that mixed the two would send
-            // somebody to a link that is not there.
-            let file = if platform == "windows-x86_64" {
-                format!("FinalCommander-{platform}-{version}.zip")
-            } else {
-                format!("FinalCommander-{platform}-{version}.tar.gz")
-            };
-            assert!(page.contains(&file), "{file} is not offered: {page}");
+        assert!(
+            !out.join("download.html").exists() && !out.join("download.it.html").exists(),
+            "the download page is gone"
+        );
+        for page in ["index.html", "index.it.html", "help/files.it.html"] {
+            let text = page_text(&out, page);
+            assert!(
+                text.contains(&format!("{}/releases/latest", md::REPO)),
+                "{page} does not lead to the releases"
+            );
         }
-        assert!(page.contains("releases/latest/download/"), "{page}");
+        // And no page names a version, so a release does not make this site wrong.
+        for path in pages_of(&out) {
+            let text = fs::read_to_string(&path).expect("a page");
+            // The changelog is the one page that names versions, because that is what it is.
+            if path
+                .file_name()
+                .is_some_and(|n| n.to_string_lossy().starts_with("changelog"))
+            {
+                continue;
+            }
+            for line in text.lines() {
+                assert!(
+                    !line.contains("FinalCommander-linux-x86_64-0."),
+                    "{}: an archive of one version is named: {line}",
+                    path.display()
+                );
+            }
+        }
     }
 
     #[test]
@@ -731,14 +679,69 @@ mod tests {
         found
     }
 
+    /// The defect this test exists for: a reader on the Italian site followed a link and
+    /// landed on the English page, because the table of what the site publishes named one
+    /// page per document instead of one per document *per language*.
+    #[test]
+    fn every_link_on_a_page_stays_in_the_language_of_that_page() {
+        let (_dir, out) = built();
+        for lang in LANGUAGES {
+            if lang.code == "en" {
+                continue;
+            }
+            let suffix = suffix_of(lang.code);
+            for path in pages_of(&out) {
+                let name = path.strip_prefix(&out).expect("under the site").to_owned();
+                let name = name.to_string_lossy().replace('\\', "/");
+                if !name.ends_with(&format!("{suffix}.html")) {
+                    continue;
+                }
+                let whole = fs::read_to_string(&path).expect("a page");
+                // The language switcher points at the other languages on purpose, which is
+                // the one place in a page that is allowed to, so it is cut out first.
+                let text = match (
+                    whole.find("<div class=\"languages\">"),
+                    whole.find("</div>"),
+                ) {
+                    (Some(from), _) => {
+                        let end = whole[from..]
+                            .find("</div>")
+                            .map(|n| from + n)
+                            .unwrap_or(whole.len());
+                        format!("{}{}", &whole[..from], &whole[end..])
+                    }
+                    _ => whole.clone(),
+                };
+                for target in hrefs(&text) {
+                    // What leaves the site, the stylesheet and the pictures are not this
+                    // test's business.
+                    if target.contains("://")
+                        || target.starts_with('#')
+                        || target.ends_with(".css")
+                        || target.ends_with(".svg")
+                    {
+                        continue;
+                    }
+                    let file = target.rsplit('/').next().unwrap_or(target);
+                    assert!(
+                        file.ends_with(&format!("{suffix}.html")),
+                        "{name}: {target} leaves {}",
+                        lang.code
+                    );
+                }
+            }
+        }
+    }
+
     #[test]
     fn nothing_on_the_site_is_fetched_from_somewhere_else() {
         let (_dir, out) = built();
         for path in [
             "index.html",
+            "index.it.html",
             "help/files.html",
             "changelog.html",
-            "download.html",
+            "commanders.it.html",
         ] {
             let text = page_text(&out, path);
             assert!(!text.contains("<script"), "{path} has a script in it");

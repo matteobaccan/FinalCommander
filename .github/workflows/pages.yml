@@ -52,7 +52,8 @@ jobs:
       - name: Check what was written
         run: |
           set -eu
-          for page in index.html download.html changelog.html commanders.html help/index.html; do
+          for page in index.html index.it.html changelog.html changelog.it.html \
+                      commanders.html help/index.html help/panels.it.html; do
             test -s "site/$page" || { echo "site/$page is missing or empty"; exit 1; }
           done
           echo "$(find site -name '*.html' | wc -l) pages, $(du -sh site | cut -f1)"

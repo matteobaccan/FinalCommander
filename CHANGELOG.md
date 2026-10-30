@@ -6,7 +6,31 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **A link inside the site no longer takes the reader out of their own language.** The table
+  that says which repository document became which page named one page per document —
+  `docs/help/files.md` → `help/files.html` — while the pages themselves are one per document
+  *per language*: `help/files.html` is the English chapter and `help/files.it.html` the
+  Italian one. So every cross-document link on a translated page landed on the English page,
+  and following a link inside one's own site was a way out of it. The table is now built per
+  language, and a test walks every translated page and fails on any link that leaves its
+  language — the switcher excepted, which is the one place allowed to.
+
+  The changelog and the survey of the other commanders were the louder half of the same
+  thing: they existed once, in English, so their *navigation* was English too and reaching
+  them turned the whole site English. Their text is still the English document, with the line
+  in the reader's language saying so, but the page around it is now theirs — as the help
+  chapters have been since they were translated one at a time.
+
 ### Changed
+
+- **The site has no download page, and names no version anywhere.** The page listed the
+  archives of whichever version it was generated from, so it was wrong the day after a release
+  and made every release a reason to publish the site again. *Download the latest version* now
+  leads to the releases page, which is always the latest one, and the version is gone from the
+  footer too. Nothing on the site goes stale when a release is cut: what is published are the
+  repository's documents, and they change when they change.
 
 - **The README no longer names a version, and says plainly what the project wants.** Its
   status line read *Status: 0.10.0*, fourteen releases ago, and listed image previews among
