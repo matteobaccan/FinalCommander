@@ -87,6 +87,7 @@ impl Command {
             },
             Command::FileDescribe => "write what this file is, in the directory's descript.ion",
             Command::PanelTempAdd => "put what is selected into the temporary panel",
+            Command::PanelPanelize => "fill the panel with the paths a command prints",
             Command::PanelSortReverse => "turn the order round",
             Command::PanelSortGroups => "use the sort groups, which put some kinds of file first",
             Command::PanelSplit(by) => {

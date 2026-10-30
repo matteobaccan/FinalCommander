@@ -946,6 +946,16 @@ real files. It opens empty from the dialog; `Ctrl+Shift+Ins` puts what is select
 other panel into it, adding to what is there and never adding the same path twice. The rows
 are whole paths, because that is the only thing that tells two files of one name apart.
 
+The same list can be filled by a command instead of by hand — Midnight Commander's *external
+panelize*, and `panel.panelize` here. A command line is asked for, run where the panel is, and
+every line it prints is taken as the name of a file: `find`, `git ls-files`, `grep -rl`, and
+whatever else the shell knows how to find that no dialog here will ever ask about. A relative
+name is relative to the panel, since that is where the command ran; a line naming something
+that is not there is left out rather than drawn as a row that cannot be opened, and the status
+line says how many were left out, because a command whose every line was dropped was printing
+something other than file names. A failing exit status does not throw the list away: a `find`
+that could not read one directory out of fifty has still found the other forty-nine.
+
 **Network** is the one of FAR's four this does not have: browsing a Windows network needs SMB
 discovery, which is a protocol and not a panel, and a line in `docs/BACKLOG.md`. The sessions
 panel is where a server one has already named lives.

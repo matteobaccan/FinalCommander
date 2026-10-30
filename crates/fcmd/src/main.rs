@@ -1393,6 +1393,27 @@ fn interactive(mut app: App) -> Result<()> {
                     // there.
                     archives.remember_password(&archive, &password);
                 }
+                // A command whose output is a list of paths rather than a screenful of
+                // text: it runs on the pool like any other, and what it printed comes back
+                // as lines (SPEC 02 §7b).
+                Request::Panelize { id, line, cwd } => {
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || {
+                        let lines = std::sync::Mutex::new(Vec::new());
+                        let (_, status) = run_shell(&line, &cwd, None, &|text| {
+                            if let Ok(mut lines) = lines.lock() {
+                                lines.extend(text.lines().map(str::to_string));
+                            }
+                        });
+                        let lines = lines.into_inner().unwrap_or_default();
+                        let _ = tx.send(Event::Panelized {
+                            id,
+                            line,
+                            lines,
+                            status,
+                        });
+                    });
+                }
                 Request::ArcTest {
                     id,
                     archive,
@@ -4862,6 +4883,23 @@ timeout = 10
                         id,
                         action,
                         result,
+                    });
+                }
+                // Panelize runs its command in the tests too: what it prints is what the
+                // panel then holds, and that is the whole of the feature.
+                Request::Panelize { id, line, cwd } => {
+                    let lines = std::sync::Mutex::new(Vec::new());
+                    let (_, status) = run_shell(&line, &cwd, None, &|text| {
+                        if let Ok(mut lines) = lines.lock() {
+                            lines.extend(text.lines().map(str::to_string));
+                        }
+                    });
+                    let lines = lines.into_inner().unwrap_or_default();
+                    app.handle_event(Event::Panelized {
+                        id,
+                        line,
+                        lines,
+                        status,
                     });
                 }
                 Request::DirSize { .. }

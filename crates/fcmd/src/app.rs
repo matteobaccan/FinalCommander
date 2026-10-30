@@ -249,6 +249,13 @@ pub enum Request {
         /// Where to put the output instead of the user screen (`run:file<command`).
         into: Option<std::path::PathBuf>,
     },
+    /// Run a command line and bring back what it printed, line by line, to become a panel's
+    /// rows rather than a screenful of text.
+    Panelize {
+        id: u64,
+        line: String,
+        cwd: std::path::PathBuf,
+    },
     /// Run a file operation off the UI thread.
     Job {
         id: u64,
@@ -566,6 +573,13 @@ pub enum Event {
         output: String,
         status: Option<i32>,
     },
+    /// What a panelize command printed: one line per path, as it printed them.
+    Panelized {
+        id: u64,
+        line: String,
+        lines: Vec<String>,
+        status: Option<i32>,
+    },
     JobProgress {
         id: u64,
         progress: Progress,
@@ -687,6 +701,8 @@ pub enum PromptKind {
     },
     /// `Ctrl+G`: one command line, run once per selected file (SPEC 06 §5).
     ApplyCommand,
+    /// The command whose output becomes the panel's rows (SPEC 02 §7b).
+    Panelize,
     /// Where a tunnel goes: `[local:]host:port`, or a port on its own.
     Tunnel,
     /// The byte to fill a block with, in hex.
@@ -1930,6 +1946,8 @@ pub struct App {
     apply_total: usize,
     /// The shell command we are waiting for, if any, and the line that started it.
     shell: Option<(u64, String)>,
+    /// The panelize command we are waiting for, if any (SPEC 02 §7b).
+    panelize: Option<u64>,
     /// The shell kept alive behind the command line (SPEC 06 §7), once there is one.
     ///
     /// Started by the first command rather than at startup: a session that never runs one
@@ -2132,6 +2150,7 @@ impl App {
             apply_queue: Vec::new(),
             apply_total: 0,
             shell: None,
+            panelize: None,
             subshell: None,
             shell_cwd: None,
             prev_dir: [None, None],
@@ -2774,6 +2793,18 @@ impl App {
                     return; // a command we already stopped waiting for
                 }
                 self.shell_finished(line, output, status);
+            }
+            Event::Panelized {
+                id,
+                line,
+                lines,
+                status,
+            } => {
+                if self.panelize != Some(id) {
+                    return; // a list we already stopped waiting for
+                }
+                self.panelize = None;
+                self.fill_panel_from(line, lines, status);
             }
             Event::TreeScanned { root, dirs, whole } => {
                 let found = dirs.len();
@@ -4775,6 +4806,37 @@ impl App {
                         self.set_error(msg);
                     }
                 }
+            }
+            PromptKind::Panelize => {
+                let line = prompt.text.trim().to_string();
+                if line.is_empty() {
+                    return;
+                }
+                // The same substitutions the command line takes, so `find !.! -name '*.rs'`
+                // means what it looks like it means.
+                let ctx = self.expand_context();
+                let line = match expand::expand(&line, &ctx, None) {
+                    Ok(expand::Expanded::Line(line)) => line,
+                    // A command that wants an answer is a command for the command line: one
+                    // answer for a list of paths would be a different feature.
+                    Ok(expand::Expanded::Ask { .. }) | Err(_) => line,
+                };
+                let here = self.panel().cwd.clone();
+                if !here.is_local() || here.in_container() {
+                    let m = self.i18n.t("cmd-not-remote");
+                    self.set_error(m);
+                    return;
+                }
+                let id = self.next_job_id;
+                self.next_job_id += 1;
+                self.panelize = Some(id);
+                self.requests.push(Request::Panelize {
+                    id,
+                    line: line.clone(),
+                    cwd: here.as_path().to_path_buf(),
+                });
+                let msg = self.i18n.t_args("cmd-running", &[("command", line.into())]);
+                self.set_status(msg);
             }
             PromptKind::ApplyCommand => {
                 let template = prompt.text.trim().to_string();
@@ -7493,6 +7555,19 @@ impl App {
                     sources,
                 });
             }
+            // Midnight Commander's external panelize: a command prints paths, and they
+            // become the panel's rows. `find`, `git ls-files`, `grep -l` — anything that
+            // names files, which is most of the shell.
+            Command::PanelPanelize => {
+                let title = self.i18n.t("prompt-panelize");
+                self.mode = Mode::Prompt(Prompt {
+                    kind: PromptKind::Panelize,
+                    title,
+                    text: String::new(),
+                    secret: false,
+                    sources: Vec::new(),
+                });
+            }
             // FAR's `Ctrl+P`: the panel you are not in goes away, and comes back on the same
             // key. The focus never has to move, which is the difference from `Ctrl+F1`/`F2`.
             Command::PanelToggleOther => {
@@ -9466,6 +9541,81 @@ impl App {
         }
         let msg = self.i18n.t_args("cmd-running", &[("command", line.into())]);
         self.set_status(msg);
+    }
+
+    /// Turn what a command printed into the panel's rows (SPEC 02 §7b).
+    ///
+    /// One path per line, as the shell's own tools print them: `find`, `git ls-files`,
+    /// `grep -l`. A relative one is relative to the panel, which is where the command ran. A
+    /// line naming something that is not there is left out rather than drawn as a row that
+    /// cannot be opened — and the status line says how many were left out, because a command
+    /// whose every line was dropped is a command that printed something else entirely.
+    fn fill_panel_from(&mut self, line: String, lines: Vec<String>, status: Option<i32>) {
+        use fcmd_core::Entry;
+
+        let here = self.panel().cwd.clone();
+        let base = here.as_path().to_path_buf();
+        let mut items: Vec<(VPath, Entry)> = Vec::new();
+        let mut seen: Vec<String> = Vec::new();
+        let mut dropped = 0usize;
+        for row in &lines {
+            let text = row.trim_end_matches(['\r', '\n']).trim();
+            if text.is_empty() {
+                continue;
+            }
+            let path = std::path::Path::new(text);
+            let full = if path.is_absolute() {
+                path.to_path_buf()
+            } else {
+                base.join(path)
+            };
+            if !full.exists() {
+                dropped += 1;
+                continue;
+            }
+            let path = VPath::local(full);
+            let key = path.to_string();
+            if seen.contains(&key) {
+                continue;
+            }
+            seen.push(key);
+            let entry = Self::temp_entry(&path, items.len());
+            items.push((path, entry));
+        }
+        if items.is_empty() {
+            let msg = self.i18n.t_args(
+                "panelize-nothing",
+                &[
+                    ("command", line.into()),
+                    ("dropped", (dropped as i64).into()),
+                ],
+            );
+            self.set_error(msg);
+            return;
+        }
+        let found = items.len();
+        let side = self.active;
+        let title = self
+            .i18n
+            .t_args("panelize-title", &[("command", line.clone().into())]);
+        let generation = self.panels[side].generation + 1;
+        self.panels[side].generation = generation;
+        self.panels[side].set_temp(title, items, generation);
+        self.panels[side].set_temp_origin(":temp");
+        let msg = self.i18n.t_args(
+            "panelize-done",
+            &[
+                ("count", (found as i64).into()),
+                ("dropped", (dropped as i64).into()),
+            ],
+        );
+        match status {
+            Some(0) | None => self.set_status(msg),
+            // The list is still shown: a `find` that could not read one directory out of
+            // fifty has still found the other forty-nine, and saying so is better than
+            // throwing them away.
+            Some(_) => self.set_error(msg),
+        }
     }
 
     /// What to start as a shell: what the configuration says, or the one the session already
@@ -24973,6 +25123,77 @@ run = ["echo one", "echo two", "echo three"]
         assert!(
             about.iter().any(|line| line.contains(&note[..20])),
             "{about:?}"
+        );
+    }
+
+    /// Midnight Commander's external panelize: a command names the files, and they become
+    /// the panel's rows wherever they live.
+    #[test]
+    fn a_command_can_fill_the_panel_with_the_paths_it_prints() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("one.txt"), b"1").unwrap();
+        let elsewhere = dir.path().join("elsewhere");
+        std::fs::create_dir(&elsewhere).unwrap();
+        std::fs::write(elsewhere.join("three.txt"), b"3").unwrap();
+        let mut app = app_on_disk(dir.path());
+
+        app.run(Command::PanelPanelize);
+        let Mode::Prompt(mut prompt) = std::mem::replace(&mut app.mode, Mode::Normal) else {
+            panic!("the panelize prompt did not open")
+        };
+        assert_eq!(prompt.kind, PromptKind::Panelize);
+        prompt.text = "find . -name '*.txt'".to_string();
+        app.prompt_accept(prompt);
+        // The command went off to a worker, with the panel's own directory to run in.
+        let asked = app
+            .requests
+            .iter()
+            .find_map(|request| match request {
+                Request::Panelize { line, cwd, .. } => Some((line.clone(), cwd.clone())),
+                _ => None,
+            })
+            .expect("the command was sent");
+        assert_eq!(asked.0, "find . -name '*.txt'");
+        assert_eq!(asked.1, dir.path());
+
+        // What it printed: one relative, one absolute, and one name that is not there.
+        let id = app.panelize.expect("a list is being waited for");
+        app.handle_event(Event::Panelized {
+            id,
+            line: "find".into(),
+            lines: vec![
+                "one.txt".into(),
+                elsewhere.join("three.txt").display().to_string(),
+                "nowhere.txt".into(),
+                String::new(),
+            ],
+            status: Some(0),
+        });
+
+        let listing = &app.panel().listing;
+        let names: Vec<String> = (0..listing.len())
+            .filter_map(|row| listing.row(row))
+            .map(|entry| entry.name_str().to_string())
+            .collect();
+        assert_eq!(
+            names.len(),
+            2,
+            "the line naming nothing was left out, and so was the empty one: {names:?}"
+        );
+        assert!(
+            names.iter().any(|name| name.ends_with("one.txt")),
+            "the relative path was resolved against the panel: {names:?}"
+        );
+        assert!(
+            names.iter().any(|name| name.ends_with("three.txt")),
+            "and the absolute one taken as it was: {names:?}"
+        );
+        // It is a list, not a directory, and the status line says what came of it.
+        assert!(app.panel().temp.is_some());
+        assert!(
+            app.status.contains('2') && app.status.contains('1'),
+            "{}",
+            app.status
         );
     }
 

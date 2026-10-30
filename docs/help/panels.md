@@ -32,6 +32,15 @@ Under a rule, on `Ctrl+1` to `Ctrl+9`, are the things that are not filesystems:
   is selected to it from anywhere, and the files in it can come from a dozen directories at
   once.
 
+The same list can be filled by a command rather than by hand: *Commands → Panelize a
+command's output* asks for a command line, runs it where the panel is, and takes every line
+it prints as the name of a file. `find . -newer Makefile`, `git ls-files`, `grep -rl TODO .` —
+anything in the shell that names files gives you a panel of them, and then `F5`, `F6`, `F8`
+and the selection keys work on that list as on any other. A line naming something that is not
+there is left out, and the status line says how many were. It is Midnight Commander's external
+panelize, and the reason it is worth having is that the shell knows how to find things no
+dialog of ours will ever ask about.
+
 `Ctrl+R` inside the dialog reads the drives again, for a stick that was plugged in after it
 opened. What the system runs on — anything under `/proc`, `/sys`, `/dev`, `/run` — is left
 out of the table, because none of it is somewhere to put a file.

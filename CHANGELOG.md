@@ -8,6 +8,17 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **A command can fill the panel: Midnight Commander's external panelize.** *Commands →
+  Panelize a command's output* asks for a command line, runs it where the panel is, and takes
+  every line it prints as the name of a file — `find . -newer Makefile`, `git ls-files`,
+  `grep -rl TODO .`. What comes back is the temporary panel that already existed, so `F5`,
+  `F6`, `F8` and the selection keys work on it as on any other list. A relative name is
+  resolved against the panel, a line naming something that is not there is left out rather
+  than drawn as a row that cannot be opened, and the status line says how many were left out —
+  a command whose every line was dropped was printing something other than file names. A
+  failing exit status does not throw the list away: a `find` that could not read one directory
+  out of fifty has still found the other forty-nine.
+
 - **One shell, kept, behind the command line.** The command line ran each command in a child of
   its own, which is why typing `cd ..` into it did nothing a person could see: the child changed
   its own directory and died with it, and so did an `export`, a shell function, a `TMPDIR` set

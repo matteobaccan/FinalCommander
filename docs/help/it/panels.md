@@ -33,6 +33,15 @@ Sotto una riga di separazione, su `Ctrl+1`…`Ctrl+9`, stanno le cose che non so
   quello che è selezionato da qualunque posto, e i file dentro possono venire da una dozzina di
   cartelle diverse.
 
+Lo stesso elenco lo può riempire un comando invece della tua mano: *Comandi → Pannello
+dall'uscita di un comando* chiede una riga di comando, la esegue dove sta il pannello, e prende
+ogni riga che stampa come il nome di un file. `find . -newer Makefile`, `git ls-files`,
+`grep -rl TODO .` — qualunque cosa nella shell che nomini dei file ti dà un pannello di quei
+file, e da lì `F5`, `F6`, `F8` e i tasti di selezione funzionano su quell'elenco come su
+qualunque altro. Una riga che nomina qualcosa che non c'è viene lasciata fuori, e la riga di
+stato dice quante. È l'*external panelize* di Midnight Commander, e vale la pena averlo perché
+la shell sa trovare cose che nessun dialogo nostro chiederà mai.
+
 `Ctrl+R` dentro il dialogo rilegge i dischi, per una chiavetta infilata dopo che si era aperto.
 Quello su cui gira il sistema — tutto ciò che sta sotto `/proc`, `/sys`, `/dev`, `/run` — resta
 fuori dalla tabella, perché niente di quello è un posto dove mettere un file.

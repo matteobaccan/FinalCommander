@@ -272,6 +272,9 @@ pub enum Command {
     FileDescribe,
     /// Put what is selected into the temporary panel on the other side (SPEC 02 §7b).
     PanelTempAdd,
+    /// Run a command and put the paths it printed into the panel (Midnight Commander's
+    /// external panelize, SPEC 02 §7b).
+    PanelPanelize,
     FileChecksum,
     /// Check the files beside a list of digests against it.
     FileChecksumVerify,
@@ -570,6 +573,7 @@ impl Command {
             Command::FileEditAlt,
             Command::FileDescribe,
             Command::PanelTempAdd,
+            Command::PanelPanelize,
             Command::FileChecksum,
             Command::FileChecksumVerify,
             Command::FileApply,
@@ -841,6 +845,7 @@ impl Command {
             Command::FileEditAlt => "file.edit.external".into(),
             Command::FileDescribe => "file.describe".into(),
             Command::PanelTempAdd => "panel.temp.add".into(),
+            Command::PanelPanelize => "panel.panelize".into(),
             Command::FileChecksum => "file.checksum.create".into(),
             Command::FileChecksumVerify => "file.checksum.verify".into(),
             Command::FileApply => "file.apply".into(),
@@ -1080,6 +1085,7 @@ impl Command {
             ("file.edit.external", _) => Command::FileEditAlt,
             ("file.describe", _) => Command::FileDescribe,
             ("panel.temp.add", _) => Command::PanelTempAdd,
+            ("panel.panelize", _) => Command::PanelPanelize,
             ("file.checksum.create", _) => Command::FileChecksum,
             ("file.checksum.verify", _) => Command::FileChecksumVerify,
             ("file.apply", _) => Command::FileApply,
