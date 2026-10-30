@@ -25614,11 +25614,33 @@ run = ["echo one", "echo two", "echo three"]
             settle(&mut app, |app| app.shell.is_none()),
             "the command was seen to end"
         );
-        // The panel followed the shell out of the directory it was in.
+        // Two halves, asserted apart, because they fail for different reasons: the shell
+        // has to *say* where it went, and the panel has to follow what it said.
+        let said = settle(&mut app, |app| {
+            app.subshell.as_ref().is_some_and(|shell| {
+                shell.with_out(|out| out.cwd.as_deref().is_some_and(|at| at.ends_with("inner")))
+            })
+        });
+        let seen = app
+            .subshell
+            .as_ref()
+            .map(|shell| shell.with_out(|out| out.cwd.clone()));
+        // `None` for the whole of it means the shell is no longer there, which is a different
+        // failure from a shell that is there and said nothing.
+        assert!(
+            said,
+            "the shell said where it had gone: said={seen:?} alive={} status={:?} screen={:?}",
+            app.subshell.is_some(),
+            app.subshell
+                .as_ref()
+                .map(|shell| shell.with_out(|out| out.status)),
+            app.user_screen,
+        );
         assert!(
             settle(&mut app, |app| app.panel().cwd.as_path().ends_with("inner")),
-            "the panel is where the shell went: {:?}",
-            app.panel().cwd
+            "the panel followed it: panel={:?} last={:?} said={seen:?}",
+            app.panel().cwd,
+            app.shell_cwd,
         );
 
         // And the next command is run by the same shell, which still has what the last one
