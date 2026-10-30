@@ -19,8 +19,9 @@ redirects the old repository URL to the new one.
 
 - **The specs are the contract.** `docs/spec/01`…`10` describe the program. Implement from
   them; if the implementation has to deviate, change the spec in the same commit and say why.
-  A feature is not finished until the spec, `docs/02-features.md`, the help chapter and
-  `CHANGELOG.md` agree with the code.
+  A feature is not finished until the spec, the help chapter and `CHANGELOG.md` agree with
+  the code, and the row in `docs/02-features.md` carries the right state character — `✓`, or
+  `~` with what is left. Prose about what shipped goes in the changelog, not in that table.
 - **`main` is the branch**, and the release machinery watches it (`tag.yml` also watches the
   development branches, for work that is cut elsewhere).
 - **Commits are authored by Matteo Baccan** (`matteo.baccan@gmail.com`) and carry no

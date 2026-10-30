@@ -84,8 +84,9 @@ cargo run -- --dump-config      # the effective configuration
   languages, because the test suite fails on a message id that is missing from one of them.
 - Nothing may block the UI thread: filesystem and network work goes through a request to the
   runner, never a blocking call inside a key handler.
-- A feature is not finished until the spec, `docs/02-features.md`, the help chapter and
-  `CHANGELOG.md` agree with the code.
+- A feature is not finished until the spec, the help chapter and `CHANGELOG.md` agree with
+  the code, and the row in `docs/02-features.md` carries the right state character — `✓`, or
+  `~` with what is left. Prose about what shipped goes in the changelog, not in that table.
 
 ## Translations
 

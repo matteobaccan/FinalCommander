@@ -17,7 +17,7 @@ says what the decision stands on.
 
 | Item | Where | What is left |
 | --- | --- | --- |
-| Info panel | `Ctrl+L` | Mount options and a git summary. |
+| Info panel | `Ctrl+L` | Mount options, a git summary, and the filesystem's *name*, which today is only in the drives dialog. |
 | Tabs per panel | `Ctrl+Alt+T`/`W`/`N`/`P`/`M`/`K` | Reordering a tab within its row, and a list of them to pick from. |
 | Custom columns | the view keys `Ctrl+1..0` | The `+1`/`+2` precision suffixes of FAR's width strings, which our format strings say another way. |
 
@@ -31,7 +31,7 @@ says what the decision stands on.
 
 | Item | Where | What is left |
 | --- | --- | --- |
-| File attributes | `Ctrl+A` | FAR's *System properties* button, which hands the file to the shell's own property sheet, and `chown`, which wants a user picker and the privilege to use it. |
+| File attributes | `Ctrl+A` | FAR's *System properties* button, which hands the file to the shell's own property sheet; `chown`, which wants a user picker and the privilege to use it; and the NTFS compressed and encrypted bits. |
 | The files themselves on the clipboard | `Ctrl+Shift+C`/`X` | No terminal can be asked to carry a file — `OSC 52` carries text. This is window-system work, and it is what `fcmd-platform` would be for. |
 | Descriptions | `Ctrl+Z` | Writing one *inside* an archive, which is a rebuild of the archive rather than a write to a file. |
 | rar | `Shift+F1`/`F2` | Needs `unrar`, whose licence is not free: an optional feature, off in distribution builds. |
@@ -44,6 +44,7 @@ says what the decision stands on.
 | Item | Where | What is left |
 | --- | --- | --- |
 | Autocomplete | the line, `Ctrl+Space` | From FAR's version: appending the first match as one types, and a modal list. |
+| A terminal in a panel | Commands menu | One at a time. Several, as tabs of terminals, wants the pane to own a list rather than one child, which is the same shape the panel tabs already have. |
 
 ## Histories and screens
 
