@@ -4,7 +4,7 @@
 This file is narrower and harder: it is what **FAR Manager 3.x actually does**, read from its own
 repository (`FarGroup/FarManager`, BSD-3-Clause, HEAD `60567ba`, fetched 2026-10-24), and compared
 line by line with what FinalCommander does. The FAR side of every row is fixed — it is read
-from that revision — and the **status column is re-read at each release**; it is as of 0.10.0
+from that revision — and the **status column is re-read at each release**; it is as of 0.26.0
 here. `docs/BACKLOG.md` is the live list of what is deliberately not built yet, with reasons;
 this file is the measuring stick it is measured against.
 
@@ -19,7 +19,7 @@ Sources used, in order of authority:
 | `far/changelog` | 66 662 lines of history: when and why a behaviour is the way it is |
 | `plugins/*` | what FAR ships as plugins rather than as core |
 
-Status column: ✅ in fcmd 0.10.0 · ◐ partly, with what is missing spelled out · ✗ missing ·
+Status column: ✅ in fcmd 0.26.0 · ◐ partly, with what is missing spelled out · ✗ missing ·
 ⊘ Windows-specific, needs a different answer on three platforms (not a straight port).
 
 > Method note: the help text is FAR's expression and stays FAR's. What is taken here are facts —
@@ -40,8 +40,8 @@ FAR 3.x is bigger than it looks from the screen:
 - 20 bundled plugins, including the archive layer and the FTP client — in FAR these are *not*
   core, which is why FAR's core looks smaller than it is.
 
-For comparison, fcmd 0.10.0 has 86 configuration keys in 11 sections, all 10 view modes, all 9
-sort keys, macros in 5 scopes, 3 confirmations, and providers for local files, archives
+For comparison, fcmd 0.26.0 has 110 configuration keys in 11 sections, all 10 view modes, all 9
+sort keys, macros in 6 scopes, 3 confirmations, and providers for local files, archives
 (zip, 7z, the tar family), SFTP, FTP, FTPS, WebDAV and object storage. What is left of the gap
 is the roadmap, and most of what remains is Windows-specific or is a plugin in FAR too.
 
@@ -53,7 +53,7 @@ is the roadmap, and most of what remains is Windows-specific or is a plugin in F
 | Re-read | `Ctrl+R` | ✅ |
 | Info panel | `Ctrl+L` | ✅ device, cluster size, what the directory costs, memory, the row under the cursor |
 | Quick view panel | `Ctrl+Q` | ✅ (a folder shows the same device and directory figures) |
-| Tree panel, with an on-disk tree cache per drive | `Ctrl+T` | ◐ the panel, read live; no on-disk cache per drive, which is what `Alt+F10` and the copy dialog's tree are waiting for |
+| Tree panel, with an on-disk tree cache per drive | `Ctrl+T` | ✅ the panel, read live, and a cache on disk the state file keeps per root — which is what `Alt+F10` and the copy dialog's tree chooser read |
 | Hide both panels / hide passive / hide left / hide right | `Ctrl+O`, `Ctrl+P`, `Ctrl+F1`, `Ctrl+F2` | ✅ all four, and with the panels off the command line, the menus and the keys all still work |
 | Temporarily uncover the screen while keys are held | `Ctrl+Alt+Shift` | ✗ — a terminal reports a key, not a modifier being held, so there is nothing to act on; `Ctrl+O` is the answer here |
 | Resize panels: width, height, per-panel height, and reset | `Ctrl+←/→`, `Ctrl+↑/↓`, `Ctrl+Shift+↑/↓`, `Ctrl+Numpad5`, `Ctrl+Alt+Numpad5` | ◐ width (`Ctrl+←/→`) and the shared bottom edge (`Ctrl+↑/↓`), both settings `Shift+F9` keeps; no per-panel height and no numpad reset |
@@ -65,11 +65,11 @@ is the roadmap, and most of what remains is Windows-specific or is a plugin in F
 | Sort by name, extension, write time, size, unsorted, creation time, access time, description, owner | `Ctrl+F3…F11` | ✅ all nine; the last two are fetched by a worker and sort again when the answer lands |
 | Sort modes list, with `+`/`-`/`*` to set the direction and `F4` to fine-tune | `Ctrl+F12` | ✅ (list, and re-choosing reverses) |
 | **Sort criteria chain**: per sort mode, an ordered set of tie-breakers, edited with `Ins`/`Del`/`F4`/`+`/`-`/`*`/`=`/`Ctrl+↑↓`/`Ctrl+R` | — | ◐ `panel.sort_chain` in the configuration, up to three tie-breakers, with the name having the last word; no dialog to edit it and not per sort mode |
-| Sort groups: named mask groups that sort before or after everything else | `Shift+F11` | ◐ the bands work, from `[[sort_group]]` blocks, and `Shift+F11` turns them on and off; the editor for them is a backlog line |
+| Sort groups: named mask groups that sort before or after everything else | `Shift+F11` | ✅ the bands from `[[sort_group]]` blocks, `Shift+F11` to turn them on and off, and an editor for them under *Options* |
 | Selected files first | `Shift+F12` | ✅ (setting) |
 | Folder shortcuts: 10 slots, set and jump | `Ctrl+Shift+0…9`, `RightCtrl+0…9` | ✅ `Ctrl+Shift+0…9` sets, `Alt+0…9` goes — no terminal can tell the two control keys apart — and `Ctrl+D` is the whole list, where one can be named |
 | Scroll long names and descriptions sideways | `Alt+←/→`, `Alt+Home/End` | ◐ `Ctrl+Shift+←/→` scrolls the name column, because `Alt+←/→` is the folder history here and `Alt+<letter>` belongs to the quick search; no jump to either end |
-| Column titles, status line, file totals, free size, scrollbar, sort-mode letter, `..` in root, background-screen count — each a setting | — | ◐ column titles, the sort letter and the filter mark, file totals yes (`panel.column_titles`); free size, the per-panel status line, the scrollbar, `..` in root and the screen count no |
+| Column titles, status line, file totals, free size, scrollbar, sort-mode letter, `..` in root, background-screen count — each a setting | — | ◐ the column titles, the status line, the scrollbar, the free size, the sort letter, the filter mark and the file totals are each a setting (`panel.column_titles`, `panel.status_line`, `panel.scrollbar`, `panel.free_space`); `..` in root and the background-screen count are not |
 | Automatic update on filesystem change, with a size threshold that turns it off, and a separate switch for network drives | — | ◐ a local panel watches its directory (`panel.auto_refresh`) and keeps the cursor on its file; no size threshold and no separate switch for network drives — a remote panel simply does not watch |
 | Detect volume mount points, distinguish junctions | — | ◐ a junction is recognised, drawn as a link and sorted with the folders; FAR's mount-point detection is Windows-specific and not ported |
 | Drag and drop between panels and with the OS | — | ⊘ |
@@ -131,9 +131,9 @@ touch directories at all (a backlog line).
 | Copy the contents of symbolic links instead of the links | — | ✅ `copy.follow_links`, off by default as it is in FAR: a copy that silently turned links into copies of their targets would duplicate a tree the first time anybody tried it |
 | Copy files other programs hold open for writing | — | ⊘ |
 | A **filter** applied to the copy, so only matching files travel | — | ✅ a mask in the copy dialog |
-| Destination picked from a folder tree, prefilled from the active panel, the passive one, or the typed path | `F10`, `Alt+F10`, `Shift+F10` | ◐ prefilled from the passive panel only |
+| Destination picked from a folder tree, prefilled from the active panel, the passive one, or the typed path | `F10`, `Alt+F10`, `Shift+F10` | ◐ prefilled from the passive panel, and `F10` in the row opens the folder tree to pick a destination out of; the three different prefills are one |
 | Total progress bar, and average speed / elapsed / ETA | — | ✅ a per-file and a total bar, with the speed and the time left beside them (and no time left shown while there is nothing to compute it from) |
-| File attributes dialog: the full NTFS attribute set, four timestamps, owner, hard links, streams | `Ctrl+A`, `F4` on a folder | ◐ the Unix mode bit by bit (owner/group/other, setuid, setgid, sticky), the read-only, hidden and system flags where the platform has them, the write and read times, and recursion into a folder; ✗ the NTFS streams and the owner as something to *change* |
+| File attributes dialog: the full NTFS attribute set, four timestamps, owner, hard links, streams | `Ctrl+A`, `F4` on a folder | ◐ the Unix mode bit by bit (owner/group/other, setuid, setgid, sticky), the owner and the group as a `user:group` row that `chown`s, the read-only, hidden and system flags where the platform has them, the write and read times, and recursion into a folder; ✗ the NTFS streams, and the hard-link count in the dialog rather than in a column of its own |
 | Apply a command line to each selected file | `Ctrl+G` | ✅ with FAR's metasymbols for the parts of the name |
 | Describe files (`descript.ion` / `files.bbs`) | `Ctrl+Z` | ✅ both names read, written back in UTF-8, shown by `Ctrl+6`/`Ctrl+7`, in the information panel and the status line, sorted by (`Ctrl+F10`), and carried by a copy, a move, a rename and a delete; ✗ inside an archive or on a server |
 | Compare folders | Commands menu | ✅ beyond FAR's own: by name, size and time; by content; and a dialog of what counts as a difference — case, a time tolerance, contents only when the time differs, a first-fragment read, line-endings-only, selected only, stop at the first, newer only — which is what `AdvCmpEx` is for in FAR. Recursive through the subdirectories, where the answer is a panel of marked rows, and `Find duplicates` by content under one tree |
@@ -166,11 +166,11 @@ On top of masks sit three features we have none of:
 
 | Feature | Keys | Status |
 | --- | --- | --- |
-| Find file: masks, text or hex, case, whole words, **fuzzy** (diacritics, ligatures, fancy numerals), "not containing", code page (one, all standard, or a chosen set), search in archives, include folders, follow symlinks, search alternate streams | `Alt+F7` | ◐ masks, a size condition, text or hex (and a regular expression, which FAR has not), case, whole words, not-containing, folders, symlinks; ✗ fuzzy matching, the code-page set, searching inside archives (dim in the dialog, which says so), and alternate streams |
+| Find file: masks, text or hex, case, whole words, **fuzzy** (diacritics, ligatures, fancy numerals), "not containing", code page (one, all standard, or a chosen set), search in archives, include folders, follow symlinks, search alternate streams | `Alt+F7` | ◐ masks, a size condition, text or hex (and a regular expression, which FAR has not), case, whole words, not-containing, folders, symlinks, and inside archives; ✗ fuzzy matching, the code-page set, and alternate streams |
 | Search scope: fixed drives, local drives, `%PATH%`, from here, this folder only, the selected folders | — | ◐ from here, this folder only, the selected folders, the root, and the other panel; ✗ all fixed drives and `%PATH%`, which on three platforms mean three different things |
 | Advanced: stop after the first N bytes (with size suffixes), result columns in the column grammar | — | ✗ both, and the second waits on the column grammar itself (§2) |
 | Results: new search, go to, view (search continues behind the viewer), **panelize**, stop | — | ✅ the list fills while the walk is still running, `Enter` goes to a row, `F3` views one, `F5` puts the results in the panel, and `Esc` stops the walk |
-| Find folder in the tree | `Alt+F10` | ✗ — wants the tree cache (§2) |
+| Find folder in the tree | `Alt+F10` | ✅ the folder list of this panel's root, read from the tree cache, with the filter every list has |
 | Four histories — commands, folders, view/edit, dialogs — each with a size and a lifetime in days, saved across sessions, with items that can be **locked** so new entries do not push them out | `Alt+F8`, `Alt+F12`, `Alt+F11`, `Ctrl+↑/↓` | ✓ all four, each with a size and all persisted in the state file: the commands (`Alt+F8`, and `↑`/`↓` on the line), the folders per panel (`Alt+F12`), the files read or edited (`Alt+F11`); ✓ a lifetime in days, lines pinned with `Ins`, filtering a history as one types, and the dialogs' own fields (`Ctrl+↓`) |
 | Task list, screens list, user screen, and the count of background screens | `Ctrl+W`, `F12`, `Ctrl+O` | ◐ the screens list (`F12`), the user screen (`Ctrl+O`, with `PgUp`/`PgDn` through what the commands printed) and the task list — the processes, on FAR's own `Ctrl+W` and in the Commands menu, as the panel `Alt+F1` also opens, with `F3` on a row showing the process's card, and the count of what is behind the panels in the status line's corner rather than the panel's own; ✗ killing a process with `Del` |
 | Screen grabber: stream or block selection, extend, move, append to the clipboard | `Alt+Ins` | ◐ a rectangle of the screen, marked with `Shift+arrows` from where the cursor already was, `Ctrl+A` for the lot, `Enter` or `Ctrl+Ins` to copy, and the row under the cursor when nothing is marked (SPEC 06 §11b); ✗ a stream selection, and appending to the clipboard — which wants the clipboard to be readable, and over `OSC 52` it is not |
@@ -186,7 +186,7 @@ Both are close to ours; these are the differences worth noting.
 | Next / previous file of the panel without leaving the viewer | `Gray +/-` | ✅ |
 | Select text with the mouse, copy to clipboard | — | ✗ — with `ui.mouse` off, which is the default, the terminal's own selection does this, which is why it is not urgent |
 | Key bar, status line, scrollbar toggles | `Ctrl+B`, `Ctrl+Shift+B`, `Ctrl+S` | ✅ all three, on FAR's own keys, and each is a setting as well |
-| Remember per file: position, code page, view mode, wrap mode, bookmarks | — | ✗ — a dim row in the viewer's own dialog says so, so that it is visible as owed rather than forgotten |
+| Remember per file: position, code page, view mode, wrap mode, bookmarks | — | ✅ `viewer.remember`, kept in the state file: where each file was left, its code page, its mode, its wrap and its bookmarks |
 | Max line width setting (100…100 000) | — | ✗ |
 | Show a printable character for `\0` | — | ✗ |
 | Editor: append block to the clipboard | `Ctrl+Gray +` | ✅ on `Ctrl+Shift+Ins`, because `Ctrl++` is the font key here |
@@ -194,9 +194,9 @@ Both are close to ours; these are the differences worth noting.
 | Editor: start/end of screen | `Ctrl+N`, `Ctrl+E` | ✅ |
 | Editor: indent the current line when nothing is selected | `Alt+U`, `Alt+I` | ✅ on FAR's own two keys, with `Tab`/`Shift+Tab` on a block |
 | Editor: read-only lock, warn on opening read-only, allow editing files held open | `Ctrl+L` | ◐ the lock (`Ctrl+Alt+L`, since `Ctrl+L` is the information panel); ✗ the warning and the override |
-| Editor: show whitespace, cursor beyond end of line, select found, cursor at end of found | — | ◐ show whitespace and the cursor after a match, both settings; ✗ the cursor beyond the end of a line and leaving a match selected |
+| Editor: show whitespace, cursor beyond end of line, select found, cursor at end of found | — | ◐ show whitespace, the cursor after a match, and the cursor beyond the end of a line, all three settings; ✗ leaving a match selected |
 | Editor: three tab policies (don't expand, expand new only, expand all on open) | — | ✅ `editor.tabs` is `keep`, `typed` or `all` |
-| Code pages menu with favourites, auto-detection, a configurable `F8` cycle, custom names | `Shift+F8` | ◐ detection and a fixed `F8` cycle; ✗ the menu, favourites and custom names |
+| Code pages menu with favourites, auto-detection, a configurable `F8` cycle, custom names | `Shift+F8` | ✅ the menu (`Shift+F8`), favourites with `Ins`, a name of one's own with `F4`, an `F8` cycle over the favourites, and detection |
 
 ## 8. Command line
 
@@ -248,9 +248,9 @@ modifiers on !@!   Q quote, S forward slashes, F full paths, A ANSI, U UTF-8, W 
 
 | Feature | Status |
 | --- | --- |
-| 311 settings, every one reachable from a `far:config` browser with search, and a `Default.farconfig` template | ◐ 86 keys in 11 sections, `--dump-config` to see them all with their values, no browser |
-| Settings dialogs: system, panel, tree, interface, dialogs, menus, command line, autocomplete, viewer, editor, confirmations (15), plugin manager, mask groups, code pages, colours, panel modes, descriptions | ◐ system, panel, interface, viewer, editor, the highlighting groups, the comparison, the drive dialog's own columns, and the lists for themes, languages, colours and code pages; ✗ the tree, the dialogs' and menus' own settings, autocomplete, the mask groups, the sort groups and the panel modes |
-| Save setup, plus an **auto-save on exit** option that also stores both panels' folders | ◐ `Shift+F9` saves on demand, and the tabs, the histories and the hotlist come back by themselves; ✗ the auto-save switch and starting where the last session ended |
+| 311 settings, every one reachable from a `far:config` browser with search, and a `Default.farconfig` template | ◐ 110 keys in 11 sections, a browser over all of them with a filter and `F4` to edit a value (*Options → All parameters*), and `--dump-config` to see them with their values; ✗ a template file |
+| Settings dialogs: system, panel, tree, interface, dialogs, menus, command line, autocomplete, viewer, editor, confirmations (15), plugin manager, mask groups, code pages, colours, panel modes, descriptions | ◐ system, panel, interface, confirmations, viewer, editor, the highlighting groups, the mask groups, the sort groups, the comparison, the drive dialog's own columns, and the lists for themes, languages, colours and code pages — nine of FAR's twenty-three, plus a browser over every setting there is; ✗ the tree panel's own, the dialogs' and menus' own, autocomplete, the panel view modes and the plugin manager |
+| Save setup, plus an **auto-save on exit** option that also stores both panels' folders | ✅ `Shift+F9` saves on demand, an auto-save-on-exit switch in the Interface dialog, and the tabs, the histories and the hotlist come back by themselves |
 | Portable: profile location, template profile, global user menu folder, read-only configuration — all from `Far.exe.ini` | ◐ portable mode, one config file |
 | Colour **groups** and colour **themes**, with 16-colour, 256-colour and RGB pickers | ◐ 6 themes, no per-group editor |
 | Virtual-terminal rendering (8- and 24-bit colour), fullwidth-aware rendering, ClearType-friendly redraw | ◐ 24-bit with degradation; width handled always |
@@ -258,10 +258,10 @@ modifiers on !@!   Q quote, S forward slashes, F full paths, A ANSI, U UTF-8, W 
 | Sorting collation: ordinal / invariant / linguistic, digits-as-numbers, case sensitivity — as three separate settings | ◐ natural sort only |
 | Elevation: ask for administrator rights per operation class (modify / read / extra privileges) | ⊘ |
 | XLat: transliterate a typed line between keyboard layouts, with tables, rules and flags | ✗ |
-| Mouse wheel everywhere, with a configurable line count per area, and horizontal wheel support | ◐ the wheel scrolls whatever is under the pointer, three rows a notch, without taking the focus — in the panels, the lists, the viewer and the editor; ✗ a configurable count per area and the horizontal wheel. The mouse as a whole is off until asked for (`ui.mouse`), because a terminal that is reporting it stops acting on it, and the text selection and middle-click paste are the terminal's own |
-| Menus: filter-as-you-type (`RAlt`), lock the filter, horizontal scrolling and alignment of items, hide fixed columns | ✗ |
-| Dialogs: history in edit controls (with lockable items), autocomplete, three-state checkboxes, move with `Ctrl+F5`, click outside to accept or cancel, insert a file name with `Shift+Enter` | ◐ dialogs with pages, text rows, choices, toggles and dim rows that say what is not implemented, and a click outside does nothing at all (deliberately); ✗ the rest |
-| Macros: 14 areas, double-modifier hotkeys, record and play, two play modes, per-macro settings, a list, and a Lua engine (`luamacro`) | ◐ record and play (`Ctrl+.`), a list (`Ctrl+Shift+.`), five scopes rather than fourteen areas, persisted in their own file, and a macro that records *commands* rather than keystrokes — so it survives a keymap change and can run once for every selected file; ✗ the conditions and the Lua engine, which both want the plugin host's question-asking API |
+| Mouse wheel everywhere, with a configurable line count per area, and horizontal wheel support | ✅ the wheel scrolls whatever is under the pointer without taking the focus — in the panels, the lists, the viewer and the editor — with a line count per area (`ui.wheel_lines`, `ui.wheel_lines_viewer`, `ui.wheel_lines_editor`) and the horizontal wheel. The mouse as a whole is off until asked for (`ui.mouse`), because a terminal that is reporting it stops acting on it, and the text selection and middle-click paste are the terminal's own |
+| Menus: filter-as-you-type (`RAlt`), lock the filter, horizontal scrolling and alignment of items, hide fixed columns | ◐ filter-as-you-type (plain letters, or `Alt+<letter>` where a letter is a hotkey), `Esc` to clear it, and horizontal scrolling of items too long for the list; ✗ locking the filter and hiding fixed columns |
+| Dialogs: history in edit controls (with lockable items), autocomplete, three-state checkboxes, move with `Ctrl+F5`, click outside to accept or cancel, insert a file name with `Shift+Enter` | ◐ history in the edit rows with lockable items, autocomplete, three-state checkboxes, `Ctrl+F5` to move a dialog off what it covers, and a click outside that does nothing at all — deliberately, rather than accepting or cancelling; `F10` in a row opens a file or a folder to put in it, which is FAR's `Shift+Enter` under another key |
+| Macros: 14 areas, double-modifier hotkeys, record and play, two play modes, per-macro settings, a list, and a Lua engine (`luamacro`) | ◐ record and play (`Ctrl+.`), a list (`Ctrl+Shift+.`), six scopes rather than fourteen areas, persisted in their own file, and a macro that records *commands* rather than keystrokes — so it survives a keymap change and can run once for every selected file; ✗ the conditions and the Lua engine, which both want the plugin host's question-asking API |
 
 ## 10. Drives, network, plugins
 
@@ -326,28 +326,42 @@ What is still different, and why:
 
 | Difference | Why |
 | --- | --- |
-| One status line at the bottom of the screen, not one inside each panel | FAR shows the item under the cursor in the panel's own bottom line. Ours is global, which is a real design choice to revisit when the command line lands, because that is what competes for the same rows. |
+| Still one status line at the bottom of the screen, as well as the panel's own | FAR shows the item under the cursor in the panel's own bottom line, and so do we now (`panel.status_line`). The global one stayed: it is where a job's result, an error and the screen count go, and none of those belong to one panel. |
 | The screens counter is in the status line's corner rather than the panel's | The free space, the scrollbar and the clock are all in the frame now, each behind a setting; the count of what is behind the panels sits with the recording light instead, where both marks are read together. |
-| Four view modes, not ten | The missing six are descriptions, long descriptions, owners, links, medium and alternative full — and most of them need data we do not read yet (descriptions, owners). |
+| ~~Four view modes, not ten~~ | All ten, since 0.12.0: descriptions and long descriptions read `descript.ion`, owners resolve through NSS, links count the names a file has, and medium and alternative full are column sets like the rest. The row is kept struck through because this file is read as a diff against FAR and a reader who remembers it should see that it closed. |
 | No dialog shadow *under* a dropped-down list inside a dialog | We have no nested floating windows yet. |
 
 ## 11. What this changes for us
 
-Nothing in the specs turned out wrong, but the gap list grew and sharpened. In rough order of
-how much each one unlocks:
+The seven items this section listed when it was written for 0.10.0 have all landed: the command
+line and everything that came with it, filters as a shared object, the column grammar, histories
+with lifetimes and locked rows, the selection matrix, the sort keys with their chain and their
+groups, and find-file with the temporary panel that holds its results. What follows is the list
+as it stands now, in rough order of how much each one unlocks.
 
-1. **The command line** (`docs/BACKLOG.md`): with it come history, `Ctrl+O`, apply-command,
-   prefixes, metasymbols and the user menu. Without it, six menu entries stay dim.
-2. **Filters as a shared object**: used by the panel, by find and by copy. Building it once, as
-   FAR does, is cheaper than three times.
-3. **The column grammar**: it is what makes 10 view modes one feature instead of ten. Worth
-   adopting verbatim, including the status-line columns.
-4. **Histories with lifetimes and locked items**, persisted — small, and felt every day.
-5. **The selection matrix** and the under-cursor variants of `F5`/`F6`/`F8`: an afternoon each,
-   and they are the keys a FAR user hits without thinking.
-6. **Sort: ctime/atime/owner/description, criteria chains, sort groups** — our `Sort` already has
-   the shape (`chain` is in SPEC 07), so this is filling in rather than designing.
-7. **Find file**, which is a project of its own, and the temporary panel that holds its results.
+1. **The colour editor.** Six themes and no way to change one from inside the program. FAR edits
+   colours by *group* — the panel, the dialogs, the menus, the editor, each a named set — which
+   is also how our theme files are shaped, so this is a dialog over something that already
+   exists rather than a new idea.
+2. **The settings dialogs FAR has and we do not**: the tree panel's own, the dialogs' and the
+   menus' own, autocomplete, the panel view modes. The all-parameters browser reaches every one
+   of the 110 keys already, so these are a convenience over a surface that is complete — which
+   is why they are second rather than first.
+3. **Find file's last three**: fuzzy matching (diacritics, ligatures, fancy numerals), a chosen
+   set of code pages rather than one, and the byte limit that stops a content search early. The
+   result columns want the column grammar pointed at a temporary panel, which is a smaller job
+   than it was.
+4. **The keys that are settings but not keys**: the key bar in the panels (`Ctrl+B`, which works
+   in the viewer only), what the size figure counts (`Ctrl+Shift+S`), per-panel height and the
+   numpad reset. Each is an afternoon, and each is a key a FAR user presses without thinking.
+5. **Collation as three settings** — ordinal, invariant, linguistic — with digits-as-numbers and
+   case sensitivity separable. We have natural sort and nothing to turn it into.
+6. **The macro areas**: six scopes against FAR's fourteen, and no conditions. The Lua engine is
+   a different question and wants the plugin host's own API.
+7. **The editor's remaining three**: the warning on opening a read-only file and the override, a
+   maximum line width, and a printable glyph for `\0`.
+8. **XLat**, which transliterates a typed line between keyboard layouts. It is a table-driven
+   feature with nothing hard in it, and nobody has asked for it.
 
 Everything in this file that we intend to build has a line in `docs/BACKLOG.md`; everything we
 intend *not* to build (`⊘`) is marked there as Windows-specific, with what we do instead.

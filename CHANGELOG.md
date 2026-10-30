@@ -4,6 +4,32 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
+## [Unreleased]
+
+### Changed
+
+- **The FAR inventory was read against the code again, and so was the backlog.**
+  `docs/04-far-inventory.md` is FAR 3.x read from its own repository and compared row by row
+  with what this program does, and its status column said "as of 0.10.0" — sixteen releases
+  ago. Seventeen of its 124 rows had stopped being true: seven are now done (the on-disk tree
+  cache and `Alt+F10` over it, the sort-group editor, the code pages menu with its favourites
+  and its own names, auto-save on exit, the wheel with a line count per area and the horizontal
+  wheel, what the viewer remembers per file, and finding a folder in the tree), one that read
+  `✗` is now partly there, and nine more had their "what is left" corrected — among them the
+  attributes dialog, which now changes the owner, and the find dialog, which now searches inside
+  archives.
+
+  Two sentences of its prose contradicted its own first section: it said four view modes where
+  §1 said ten, and it said the per-panel status line was a design choice to revisit "when the
+  command line lands", which it did long ago. And §11, the list of what to build next, was the
+  0.10.0 plan — all seven of its items have shipped. It is now the list as it stands, in the
+  same order of how much each unlocks.
+
+  The numbers in §1 with it: 110 configuration keys rather than 86, and macros in six scopes
+  rather than five. Two rows of `docs/BACKLOG.md` went with them, because 0.26.0 built what
+  they were waiting for: `chown` in the attributes dialog, and copying a hunk across in the
+  diff.
+
 ## [0.26.0] — 2026-10-30
 
 ### Added

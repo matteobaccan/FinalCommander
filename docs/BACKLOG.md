@@ -29,7 +29,7 @@ says what the decision stands on.
 
 | Item | Where | What is left |
 | --- | --- | --- |
-| File attributes | `Ctrl+A` | FAR's *System properties* button, which hands the file to the shell's own property sheet; `chown`, which wants a user picker and the privilege to use it; and the NTFS compressed and encrypted bits. |
+| File attributes | `Ctrl+A` | FAR's *System properties* button, which hands the file to the shell's own property sheet; the NTFS compressed and encrypted bits; and a picker for the owner row, which takes a name or a number and completes neither. |
 | The files themselves on the clipboard | `Ctrl+Shift+C`/`X` | No terminal can be asked to carry a file — `OSC 52` carries text. This is window-system work, and it is what `fcmd-platform` would be for. |
 | Descriptions | `Ctrl+Z` | Writing one *inside* an archive, which is a rebuild of the archive rather than a write to a file. |
 | rar | `Shift+F1`/`F2` | Needs `unrar`, whose licence is not free: an optional feature, off in distribution builds. |
@@ -65,7 +65,7 @@ says what the decision stands on.
 | Synchronise folders | `Ctrl+Shift+Y` | A saved pair of directories as a named job, and a written report. |
 | User menu | `F2` | Reading FAR's `FarMenu.ini` as it stands, separators between groups, a dialog to edit the entries, and `Shift+F10` for the row taken last. |
 | File associations | Commands menu | Defaults read off the OS (xdg-mime, `LSCopyDefaultRoleHandler`, the registry), a dialog to edit the blocks, and `execute`/`extract`/`preview` entries. |
-| Two files side by side | `Ctrl+Shift+D` | A unified view, copying a hunk to the other side (an edit, so the editor's), a file against the copy on disk, and the first differing offset of two binaries. |
+| Two files side by side | `Ctrl+Shift+D` | A unified view, a file against the copy on disk, and the first differing offset of two binaries. |
 
 ## Interface and configuration
 
