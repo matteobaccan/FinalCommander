@@ -8,6 +8,26 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **The code page the names in a panel are read as.** *Left* / *Right* → *Names code page…*,
+  for a tree that came off another machine. A panel starts at *as the system gives them*, which
+  on Unix means the bytes are taken as UTF-8 — and a directory copied off a Russian Windows, or
+  unpacked from a zip that carried no code page, then draws as a column of replacement
+  characters. Those bytes are a name: in CP866 or CP1251 they say something, and the question
+  marks are ours rather than the filesystem's.
+
+  Only the screen changes. The real path of every row whose name was read differently is kept
+  beside the listing, so opening, copying, renaming and deleting all work on the file the system
+  has while the row says something a person can read. The name is read once, when a listing
+  arrives, so everything downstream — the sort, the filter, the quick search, the drawing —
+  sees the readable name and knows nothing about any of this; which is also why choosing a page
+  reads the directory again. The first row of the list goes back to the system's own answer.
+
+  Unix only, because a name on Windows is already UTF-16 and there are no bytes to read a second
+  way; the menu says that there rather than offering a page that would change nothing. Midnight
+  Commander asks the same question inside the path — `#enc:cp866`, which is its own VFS — and a
+  list is the same question with the answers in front of the reader, and leaves the path
+  something every other program can still read.
+
 - **Taking a difference across, in the diff screen.** `F5`, Midnight Commander's merge key:
   the column you are in takes the other one's version of the difference at the top of the
   screen, so `Tab` chooses which file changes and `Alt+↓` chooses which difference. Whole lines

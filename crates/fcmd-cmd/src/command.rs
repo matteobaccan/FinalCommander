@@ -191,6 +191,8 @@ pub enum Command {
     /// The selected files first in the order (`Shift+F12`, FAR's `SelUp`).
     PanelSelectedFirst,
     PanelFilterQuick,
+    /// The code page the names in this panel are read as (SPEC 02 §6b).
+    PanelCodePage,
     PanelOtherSync,
     /// Choose the sort order from a list.
     PanelSortMenu,
@@ -538,6 +540,7 @@ impl Command {
             Command::PanelDirsFirst,
             Command::PanelSelectedFirst,
             Command::PanelFilterQuick,
+            Command::PanelCodePage,
             Command::PanelOtherSync,
             Command::PanelSortMenu,
             Command::PanelDrive(Side::Active),
@@ -812,6 +815,7 @@ impl Command {
             Command::PanelDirsFirst => "panel.dirs.first".into(),
             Command::PanelSelectedFirst => "panel.selected.first".into(),
             Command::PanelFilterQuick => "panel.filter.quick".into(),
+            Command::PanelCodePage => "panel.codepage".into(),
             Command::PanelOtherSync => "panel.other.sync".into(),
             Command::PanelSortMenu => "panel.sort.menu".into(),
             Command::PanelDrive(Side::Active) => "panel.drive".into(),
@@ -1059,6 +1063,7 @@ impl Command {
             ("panel.dirs.first", _) => Command::PanelDirsFirst,
             ("panel.selected.first", _) => Command::PanelSelectedFirst,
             ("panel.filter.quick", _) => Command::PanelFilterQuick,
+            ("panel.codepage", _) => Command::PanelCodePage,
             ("panel.other.sync", _) => Command::PanelOtherSync,
             ("nav.up", _) => Command::NavUp,
             ("nav.down", _) => Command::NavDown,

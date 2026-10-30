@@ -84,6 +84,22 @@ pub struct Panel {
     pub groups: Arc<SortGroups>,
     pub view: ViewMode,
     pub show_hidden: bool,
+    /// Which code page the *names* in this panel are read as (SPEC 02 §6b).
+    ///
+    /// `None`, which is the default, means the system's own answer: on Unix the bytes are
+    /// taken as UTF-8 and anything that is not becomes a replacement character. A page set
+    /// here is for a directory that came off another machine — a tree copied from a Russian
+    /// Windows, a zip unpacked without its code page — where those bytes *are* a name, in
+    /// CP866 or CP1251, and the question marks are ours rather than the filesystem's.
+    ///
+    /// Only what is on the screen changes. The real path of each row is kept beside it and
+    /// that is what is opened, copied and renamed, so a panel showing a readable name still
+    /// works on the file the system has.
+    pub name_page: Option<fcmd_view::Codepage>,
+    /// The real path of each row, where [`Panel::name_page`] has made the name on the screen
+    /// something the filesystem would not recognise. `None` when no page is set, which is the
+    /// usual case and costs nothing.
+    real_paths: Option<HashMap<EntryId, VPath>>,
     /// What was typed in the filter bar, for the status line.
     pub filter: Option<String>,
     /// The same thing compiled. Both are set together, or neither is.
@@ -149,6 +165,8 @@ impl Panel {
             links: Default::default(),
             view,
             show_hidden,
+            name_page: None,
+            real_paths: None,
             filter: None,
             filter_set: None,
             want_cursor: None,
@@ -232,13 +250,50 @@ impl Panel {
         self.clamp();
     }
 
+    /// Read the names of a fresh listing in this panel's code page, in place.
+    ///
+    /// The real path of each row is taken *first*, from the bytes the filesystem gave, and
+    /// comes back to be kept beside the listing; then the name on the row becomes the text
+    /// those bytes mean in that page. A name that already reads as UTF-8 and comes out of the
+    /// page unchanged is left alone and gets no entry in the map, so a directory of ordinary
+    /// names costs an allocation nobody keeps.
+    ///
+    /// `None` when there is no page set, which is the usual case: the names are then whatever
+    /// the system said they were, as they always were.
+    ///
+    /// Unix only. A name on Windows is already UTF-16 — there are no bytes to read a second
+    /// way — and the menu says so there rather than offering a page that would do nothing.
+    fn read_names(&self, entries: &mut [Entry]) -> Option<HashMap<EntryId, VPath>> {
+        let page = self.name_page?;
+        if !cfg!(unix) {
+            return None;
+        }
+        let mut real = HashMap::new();
+        for entry in entries.iter_mut() {
+            if entry.kind == EntryKind::Parent {
+                continue;
+            }
+            let Some(bytes) = os_bytes(&entry.name) else {
+                continue;
+            };
+            let text = page.decode(bytes);
+            if text.as_bytes() == bytes {
+                continue;
+            }
+            real.insert(entry.id, self.cwd.join(&entry.name));
+            entry.name = std::ffi::OsString::from(text);
+        }
+        Some(real)
+    }
+
     /// Replace the listing after a read, keeping the cursor on the same name when possible.
-    pub fn set_listing(&mut self, entries: Vec<Entry>, generation: u64) {
+    pub fn set_listing(&mut self, mut entries: Vec<Entry>, generation: u64) {
         let keep = self.current().map(|e| e.name_str().into_owned());
         // Where the cursor was standing, for the case where the name it was on has gone.
         // Entering a directory sets this to zero first (`go`), so it is the top of the list
         // there and the row one was on here.
         let here = self.cursor;
+        self.real_paths = self.read_names(&mut entries);
         self.listing = Listing::new(entries, generation);
         self.selection.retain_existing(&self.listing);
         self.rebuild();
@@ -361,14 +416,19 @@ impl Panel {
     /// the name on the end; for a list panel it is whatever the list said, which is the whole
     /// reason this method exists rather than `cwd.join(name)` spread across the program.
     pub fn path_of(&self, e: &Entry) -> VPath {
-        match &self.temp {
-            Some(list) => list
+        if let Some(list) = &self.temp {
+            return list
                 .paths
                 .get(&e.id)
                 .cloned()
-                .unwrap_or_else(|| self.cwd.join(&e.name)),
-            None => self.cwd.join(&e.name),
+                .unwrap_or_else(|| self.cwd.join(&e.name));
         }
+        // A name read in another code page is not the name the filesystem has: the real one
+        // was kept when the listing arrived, and this is the only way back to it.
+        if let Some(real) = self.real_paths.as_ref().and_then(|m| m.get(&e.id)) {
+            return real.clone();
+        }
+        self.cwd.join(&e.name)
     }
 
     /// The path under the cursor, if the cursor is on something addressable.
@@ -459,6 +519,24 @@ impl Panel {
                 }
             }
         }
+        None
+    }
+}
+
+/// The bytes behind a name, where the system keeps names as bytes.
+///
+/// `None` on Windows, where a name is UTF-16 and there is no second way to read it. Every
+/// `#[cfg]` in this file is this one function, which is what keeps the panel itself free of
+/// them.
+fn os_bytes(name: &std::ffi::OsStr) -> Option<&[u8]> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStrExt;
+        Some(name.as_bytes())
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = name;
         None
     }
 }

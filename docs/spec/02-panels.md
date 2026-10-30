@@ -437,6 +437,29 @@ last of the list, which are the ones already walked past. It is FAR's own placem
 own reason. A panel too narrow or too short to hold the box falls back to the middle of the
 screen, which is at least somewhere it fits.
 
+### 6b. The code page the names are read as (shipped)
+
+*Left* / *Right* → *Names code page…* reads the names of this panel in a chosen code page.
+Every panel starts at *as the system gives them*: on Unix the bytes are taken as UTF-8 and
+anything that is not becomes a replacement character. The page is for a tree that came off
+another machine — copied off a Russian Windows, unpacked from a zip that carried no code page —
+where those bytes *are* a name, in CP866 or CP1251, and the question marks on the screen are
+ours rather than the filesystem's. The list is the viewer's own code page list, favourites
+first, with the system's answer above it.
+
+**Only the screen changes.** The real path of every row whose name was read differently is kept
+beside the listing, and `Panel::path_of` hands that back — so opening, copying, renaming and
+deleting all work on the file the system has, while the row says something a person can read.
+The name is read once, when a listing arrives, which is why choosing a page reads the directory
+again; everything downstream — the sort, the filter, the quick search, the drawing — sees the
+readable name and knows nothing about any of this.
+
+**Unix only.** A name on Windows is already UTF-16: there are no bytes to read a second way,
+and the menu says so rather than offering a page that would change nothing. Midnight Commander
+asks the same question inside the path (`#enc:cp866`, which is its VFS); a list is the same
+question with the answers in front of the reader, and it does not make the path something only
+mc can read.
+
 ## 7. Special panel kinds
 
 | Kind | Behaviour |

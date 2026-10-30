@@ -8058,6 +8058,7 @@ impl App {
             // read one in, so what it is for here is the marking and the naming — which is
             // what FAR's *Code pages* dialog in this menu is for too.
             Command::OptCodepages => self.open_codepages(),
+            Command::PanelCodePage => self.open_panel_names(),
             Command::OptSettings => self.open_settings(self.active, 0),
             Command::ToolDiff => self.open_diff(),
             Command::ToolFindFolder => self.open_folder_list(None),
@@ -14008,6 +14009,8 @@ impl App {
             PickKind::Browse => return,
             // Built by `open_codepages`, which knows which page the reader is on.
             PickKind::Codepages => return,
+            // And by `open_panel_names`, which knows which panel asked.
+            PickKind::PanelNames => return,
             // The same: `open_screens` knows what is open, and this does not.
             PickKind::Screens => return,
             // And `open_macros`, which knows what has been recorded.
@@ -14846,6 +14849,30 @@ impl App {
                     None => return,
                 }
                 let msg = self.i18n.t_args("cp-set", &[("name", label.into())]);
+                self.set_status(msg);
+            }
+            PickKind::PanelNames => {
+                // The empty value is the first row: back to what the system says the names
+                // are. Anything else is a page, and either way the directory is read again,
+                // because the names on the screen are made when a listing arrives.
+                let page = if row.value.is_empty() {
+                    None
+                } else {
+                    match fcmd_view::Codepage::parse(&row.value) {
+                        Some(cp) => Some(cp),
+                        None => return,
+                    }
+                };
+                let side = pick.side;
+                self.panels[side].name_page = page;
+                self.read_panel(side);
+                let msg = match page {
+                    Some(cp) => {
+                        let label = self.codepage_label(cp);
+                        self.i18n.t_args("names-set", &[("name", label.into())])
+                    }
+                    None => self.i18n.t("names-system-set"),
+                };
                 self.set_status(msg);
             }
             PickKind::FieldHistory => {
@@ -17806,6 +17833,60 @@ impl App {
     ///
     /// FAR's own key and FAR's own shape. The favourites come first and are marked, because
     /// the list is thirty-odd pages long and the three or four one uses should be reachable
+    /// The code page the *names* in this panel are read as (SPEC 02 §6b).
+    ///
+    /// The same list as the viewer's `Shift+F8`, with one row above it: *as the system gives
+    /// them*, which is where every panel starts and what one goes back to. Midnight Commander
+    /// asks this as part of the path (`#enc:cp866`); a list is the same question with the
+    /// answers in front of the reader.
+    fn open_panel_names(&mut self) {
+        // Windows has no bytes to read a second way: a name there is already UTF-16, and a
+        // page would change nothing on the screen.
+        if !cfg!(unix) {
+            let m = self.i18n.t("names-not-here");
+            self.set_error(m);
+            return;
+        }
+        let side = self.active;
+        let current = self.panels[side].name_page;
+        let mut rows = vec![PickRow::plain(
+            self.plain("names-system"),
+            String::new(),
+            current.is_none(),
+        )];
+        rows.push(PickRow {
+            label: String::new(),
+            value: String::new(),
+            current: false,
+            hotkey: None,
+            separator: true,
+        });
+        let favourites = self.codepage_favourites();
+        for cp in &favourites {
+            rows.push(PickRow::plain(
+                self.codepage_label(*cp),
+                cp.id().to_string(),
+                current == Some(*cp),
+            ));
+        }
+        for cp in fcmd_view::Codepage::every()
+            .into_iter()
+            .filter(|cp| !favourites.contains(cp))
+        {
+            rows.push(PickRow::plain(
+                self.codepage_label(cp),
+                cp.id().to_string(),
+                current == Some(cp),
+            ));
+        }
+        let title = self.plain("names-title");
+        let mut pick = Pick::filtered(PickKind::PanelNames, title, rows, side);
+        if let Some(at) = pick.rows.iter().position(|r| r.current) {
+            pick.cursor = at;
+        }
+        self.mode = Mode::Pick(Box::new(pick));
+    }
+
     /// without reading it.
     fn open_codepages(&mut self) {
         let side = self.active;
@@ -26842,6 +26923,88 @@ run = ["echo one", "echo two", "echo three"]
         }
         app.viewer_size = (40, 4);
         app
+    }
+
+    /// A panel's names read in another code page: what the screen says, and the file it still
+    /// opens (SPEC 02 §6b).
+    ///
+    /// The file is made with a name that is *not* UTF-8 — the bytes a Russian Windows writes
+    /// for `привет.txt` in CP1251 — which is exactly the case this is for: the system has no
+    /// opinion about those bytes, and the panel used to draw them as replacement characters.
+    #[cfg(unix)]
+    #[test]
+    fn a_panels_names_can_be_read_in_another_code_page_and_still_open_the_file() {
+        use std::os::unix::ffi::OsStrExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        // "привет.txt" in CP1251: one byte per Cyrillic letter.
+        let raw: &[u8] = &[0xEF, 0xF0, 0xE8, 0xE2, 0xE5, 0xF2, b'.', b't', b'x', b't'];
+        let file = dir.path().join(std::ffi::OsStr::from_bytes(raw));
+        std::fs::write(&file, b"hello\n").unwrap();
+
+        let mut app = app_on_disk(dir.path());
+        let names = |app: &App| -> Vec<String> {
+            let l = &app.panels[app.active].listing;
+            (0..l.len())
+                .filter_map(|i| l.row(i))
+                .map(|e| e.name_str().into_owned())
+                .collect()
+        };
+        // As the system gives them: not UTF-8, so the name is drawn with replacements and
+        // nobody can read it.
+        let shown = names(&app);
+        assert!(
+            shown.iter().any(|n| n.contains('\u{fffd}')),
+            "the bytes are not UTF-8 to begin with: {shown:?}"
+        );
+
+        // Read as CP1251 they are a name. The directory is read again, which is where the
+        // names on the screen are made.
+        app.panels[app.active].name_page =
+            Some(fcmd_view::Codepage::parse("windows-1251").expect("CP1251 is a page"));
+        let entries =
+            fcmd_vfs::local::list_blocking(&app.panels[app.active].cwd, &CancelToken::new())
+                .unwrap();
+        let (panel, generation) = (app.active, app.panels[app.active].generation);
+        app.handle_event(Event::Listed {
+            panel,
+            generation,
+            result: Ok(entries),
+        });
+        let shown = names(&app);
+        assert!(
+            shown.iter().any(|n| n == "привет.txt"),
+            "the name is readable now: {shown:?}"
+        );
+
+        // And it is still the file on the disk: the path under the cursor is the one the
+        // filesystem has, bytes and all, not the text on the screen.
+        let row = app.panels[app.active]
+            .listing
+            .row_of_name("привет.txt")
+            .expect("the row is there");
+        app.panels[app.active].cursor_to(row);
+        let path = app.panels[app.active]
+            .current_path()
+            .expect("the cursor is on it");
+        assert_eq!(
+            path.as_path().file_name().map(|n| n.as_bytes()),
+            Some(raw),
+            "the real name, not the readable one"
+        );
+        assert_eq!(std::fs::read_to_string(path.as_path()).unwrap(), "hello\n");
+
+        // And back to the system's answer, which is where every panel starts.
+        app.panels[app.active].name_page = None;
+        let entries =
+            fcmd_vfs::local::list_blocking(&app.panels[app.active].cwd, &CancelToken::new())
+                .unwrap();
+        app.handle_event(Event::Listed {
+            panel,
+            generation: app.panels[panel].generation,
+            result: Ok(entries),
+        });
+        assert!(names(&app).iter().any(|n| n.contains('\u{fffd}')));
     }
 
     /// FAR's insertion keys: what about a panel, and which panel — the whole table, with the

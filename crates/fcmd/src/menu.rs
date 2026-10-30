@@ -92,6 +92,9 @@ pub enum PickKind {
     Settings,
     /// The code pages, favourites first (`Shift+F8`, SPEC 05 §1.12).
     Codepages,
+    /// The same list, for the names in a panel rather than for a file's text, with "as the
+    /// system gives them" at the top of it (SPEC 02 §6b).
+    PanelNames,
     /// Every folder the tree knows under this panel's root: `Alt+F10`, and the destination
     /// chooser of the copy dialog (SPEC 02 §7).
     Folders,
@@ -308,6 +311,7 @@ fn panel_menu(title: &'static str, side: usize) -> Menu {
                 "Ctrl+Shift+I",
                 Action::Run(Command::PanelFilterQuick),
             ),
+            item("menu-panel-names", "", Action::Run(Command::PanelCodePage)),
             Entry::Separator,
             item(
                 "menu-panel-onoff",

@@ -141,6 +141,18 @@ comando gira per conto suo come ha sempre fatto; niente a metà. *Opzioni → Tu
 `term.subshell`* spegne del tutto la shell tenuta viva, e `term.follow_cwd` spegne solo
 l'inseguimento.
 
+*Sinistra* / *Destra* → *Code page dei nomi…* legge i nomi di questo pannello in una code page
+scelta. Ogni pannello parte da *come li dà il sistema*, che su Linux e macOS vuol dire che i
+byte vengono presi come UTF-8 — e un nome che non è UTF-8 esce pieno di caratteri di
+sostituzione. Succede a un albero copiato da un Windows russo, o estratto da uno zip che non
+portava la sua code page: quei byte sono davvero un nome, in CP866 o CP1251, e i punti di
+domanda sono nostri e non del disco. Scegli la pagina e i nomi diventano leggibili.
+
+Cambia solo lo schermo. Il file che ogni riga rappresenta è sempre quello che ha il sistema,
+byte compresi, quindi aprirlo, copiarlo, rinominarlo e cancellarlo funzionano come prima — e la
+prima riga della lista ti riporta alla risposta del sistema. Su Windows non c'è niente da
+scegliere: un nome lì è già testo e non byte, e il menu lo dice.
+
 # Cosa è un file
 
 Una cartella può tenere una riga su ciascuno dei suoi file, in un file di testo chiamato

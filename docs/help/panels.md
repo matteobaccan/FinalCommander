@@ -134,6 +134,18 @@ each command runs on its own as it always did; nothing is half-done. *Options �
 → `term.subshell`* turns the kept shell off altogether, and `term.follow_cwd` turns off only
 the following.
 
+*Left* / *Right* → *Names code page…* reads the names in this panel in a chosen code page.
+Every panel starts at *as the system gives them*, which on Linux and macOS means the bytes are
+taken as UTF-8 — and a name that is not UTF-8 comes out full of replacement characters. That
+happens to a tree copied off a Russian Windows, or unpacked from a zip that carried no code
+page: those bytes really are a name, in CP866 or CP1251, and the question marks are ours rather
+than the disk's. Choose the page and the names become readable.
+
+Only the screen changes. The file each row stands for is still the file the system has, bytes
+and all, so opening it, copying it, renaming it and deleting it all work as they did — and the
+first row of the list takes you back to the system's own answer. On Windows there is nothing to
+choose: a name there is already text rather than bytes, and the menu says so.
+
 # What a file is
 
 A directory can keep a line about each of its files, in a plain file called `descript.ion`
