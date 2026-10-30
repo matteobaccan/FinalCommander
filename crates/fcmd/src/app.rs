@@ -9941,11 +9941,20 @@ impl App {
     /// panel follows; or the command ended, and everything that follows the end of a command
     /// follows this one too.
     fn poll_subshell(&mut self) {
+        // A command typed before the shell had reached its first prompt has been waiting for
+        // it; this is where it goes in.
+        if let Some(shell) = &mut self.subshell {
+            let _ = shell.nudge();
+        }
         let Some(shell) = &self.subshell else {
             return;
         };
-        let (lines, cwd, running, status) =
-            shell.with_out(|out| (out.take_lines(), out.cwd.clone(), out.running(), out.status));
+        let (lines, cwd, status) =
+            shell.with_out(|out| (out.take_lines(), out.cwd.clone(), out.status));
+        // `busy` rather than `running`: a line still waiting for the first prompt has
+        // certainly not finished, and the prompt the shell prints when it starts must not be
+        // read as the end of it.
+        let running = shell.busy();
         let gone = shell.gone();
         if !lines.is_empty() {
             // Even with nothing running: a job left in the background prints to the console,
@@ -9984,6 +9993,18 @@ impl App {
         if here.as_path() == dir {
             return;
         }
+        // Two names for one place is not a move. A shell sets `$PWD` from the operating
+        // system, which answers with the real path, while the panel holds the one it was
+        // given: on macOS the temporary directory is `/var/…` and the shell calls the same
+        // place `/private/var/…`. Following that would jump the panel to a path the user did
+        // not type, for a directory they are already in.
+        let same = std::fs::canonicalize(here.as_path())
+            .ok()
+            .zip(std::fs::canonicalize(&dir).ok())
+            .is_some_and(|(here, there)| here == there);
+        if same {
+            return;
+        }
         self.goto(VPath::local(dir));
     }
 
@@ -9996,7 +10017,7 @@ impl App {
         if !self.cfg.term.follow_cwd || self.shell.is_some() || self.subshell.is_none() {
             return;
         }
-        if self.subshell.as_ref().is_some_and(|shell| shell.running()) {
+        if self.subshell.as_ref().is_some_and(|shell| shell.busy()) {
             return;
         }
         let here = self.panel().cwd.clone();

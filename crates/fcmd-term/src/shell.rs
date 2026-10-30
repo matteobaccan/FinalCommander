@@ -35,6 +35,13 @@ pub struct Shell {
     child: Box<dyn portable_pty::Child + Send + Sync>,
     out: Arc<Mutex<Transcript>>,
     gone: Arc<AtomicBool>,
+    /// A command line written before the shell had reached its first prompt, waiting for it.
+    ///
+    /// A shell takes a moment to start, and the hook is installed in that moment. A line
+    /// written into it before then would be answered by the *startup* prompt — the mark that
+    /// prompt carries would be read as this command having ended, before it had run. So the
+    /// line waits here, and goes in when the shell is ready to be typed at.
+    waiting: Option<String>,
     /// The shell as it was named, for the message that says one is running.
     pub program: String,
 }
@@ -101,6 +108,7 @@ impl Shell {
             child,
             out,
             gone,
+            waiting: None,
             program: head.clone(),
         };
         if let Some(hook) = hook_for(&head) {
@@ -110,9 +118,29 @@ impl Shell {
     }
 
     /// Run a command line: what the user typed, into the shell, as if typed at its prompt.
+    ///
+    /// A line that arrives before the shell has reached its first prompt waits for it — see
+    /// [`Shell::waiting`] — and [`Shell::nudge`] is what lets it in.
     pub fn run(&mut self, line: &str) -> Result<(), TermError> {
+        if !self.with_out(|out| out.ready()) {
+            self.waiting = Some(line.to_string());
+            return Ok(());
+        }
         self.with_out(|out| out.sent(line));
         self.line(line)
+    }
+
+    /// Let a waiting line in, if the shell has become ready for it. Called wherever the
+    /// output is collected, which is after every read.
+    pub fn nudge(&mut self) -> Result<(), TermError> {
+        if self.waiting.is_none() || !self.with_out(|out| out.ready()) {
+            return Ok(());
+        }
+        let Some(line) = self.waiting.take() else {
+            return Ok(());
+        };
+        self.with_out(|out| out.sent(&line));
+        self.line(&line)
     }
 
     /// Follow the panel: the shell changes directory too.
@@ -153,6 +181,14 @@ impl Shell {
     /// Is a command running in it?
     pub fn running(&self) -> bool {
         self.with_out(|out| out.running())
+    }
+
+    /// Is there a command in it at all — running, or still waiting for the first prompt?
+    ///
+    /// This is the one to ask before saying a command has ended: a line that has not gone in
+    /// yet has certainly not finished.
+    pub fn busy(&self) -> bool {
+        self.waiting.is_some() || self.running()
     }
 
     /// Tell the shell how wide the screen is, so what it prints wraps where it is shown.
@@ -299,6 +335,37 @@ mod tests {
             lines.iter().any(|line| line.contains("inner yes")),
             "the directory and the variable are still there: {lines:?}"
         );
+    }
+
+    /// The race this answers, which only showed itself on a slower machine: a command typed
+    /// before the shell had reached its first prompt was answered by the *startup* prompt,
+    /// whose mark was read as the command having ended before it had run.
+    #[cfg(unix)]
+    #[test]
+    fn a_command_written_before_the_shell_is_ready_waits_for_it() {
+        let mut shell = Shell::start("/bin/sh", None, 80, 24, || {}).expect("a shell starts");
+        // Immediately, with no wait: the hook has not even been sent yet.
+        shell.run("printf 'ran %s\\n' late").unwrap();
+        assert!(shell.busy(), "the command is in hand, waiting for a prompt");
+
+        let mut lines: Vec<String> = Vec::new();
+        for _ in 0..400 {
+            let _ = shell.nudge();
+            lines.extend(shell.with_out(|out| out.take_lines()));
+            if lines.iter().any(|line| line.contains("ran late")) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        assert!(
+            lines.iter().any(|line| line.contains("ran late")),
+            "the waiting command ran once the shell was ready: {lines:?}"
+        );
+        assert!(
+            wait_until(&shell, |out| !out.running()),
+            "and then it ended"
+        );
+        assert!(!shell.busy());
     }
 
     /// And it says where it is, which is what the panel follows.
