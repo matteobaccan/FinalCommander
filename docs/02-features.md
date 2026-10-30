@@ -93,7 +93,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 3.2 | Delete to trash and permanent delete; wipe (overwrite then delete) | FAR | ✓ |
 | 3.3 | Create directory (`F7`), create file (`Shift+F4`), create nested path `a/b/c` in one go | all | ✓ |
 | 3.4 | Hard links, symlinks (absolute/relative), junctions/reparse points, link targets shown and followed | FAR/MC | ✓ |
-| 3.5 | Attributes/permissions dialog: chmod (numeric + rwx matrix), timestamps, recursive apply; chown, the Windows compressed and encrypted attributes | FAR/MC | ~ `chown`, the shell's own property sheet, the NTFS compressed and encrypted bits |
+| 3.5 | Attributes/permissions dialog: chmod (numeric + rwx matrix), timestamps, recursive apply; chown, the Windows compressed and encrypted attributes | FAR/MC | ~ the shell's own property sheet, the NTFS compressed and encrypted bits, and the owner on Windows |
 | 3.6 | Extended attributes / ADS (NTFS streams), xattr on Linux/macOS, resource forks | FAR | M3 |
 | 3.7 | Operation engine: queue of jobs, parallel or serial, pause/resume/cancel, background with progress, speed/ETA, per-job log | TC/KRU/MTN2 | ~ a queue |
 | 3.8 | Conflict resolution: overwrite / skip / rename / append / newer-only / size-differs, "apply to all", per-conflict dialog | all | ✓ |
@@ -134,7 +134,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | --- | --- | --- | --- |
 | 5.1 | Text mode with and without wrap (char/word wrap), horizontal scroll, arbitrary line length | FAR | ✓ |
 | 5.2 | Hex mode and dump mode, configurable bytes per row | FAR | M2 |
-| 5.3 | Encoding detection + manual codepage selection, BOM handling, invalid-byte display | FAR/MC | M2 |
+| 5.3 | Encoding detection + manual codepage selection, BOM handling, invalid-byte display | FAR/MC | ✓ |
 | 5.4 | Search (plain, case-insensitive, whole word, regex, hex pattern), search next/previous, highlight all hits, copy selection | FAR | ✓ |
 | 5.5 | Go to offset/line/percent; bookmarks 0..9; "undo position" | FAR | M2 |
 | 5.6 | Streaming/mmap for huge files (GB+) without loading; follow mode (`tail -f`) | FAR/MTN2 | M2 |

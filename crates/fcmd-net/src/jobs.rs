@@ -272,6 +272,16 @@ impl JobFs for RoutedFs {
             return self.local.set_attrs(path, change);
         }
         let remote = self.remote(path)?;
+        // Not the owner. SFTP would take a pair of numbers, but the dialog's row is typed as
+        // names and the names on the other side are the server's, not this machine's — a
+        // lookup this program cannot make. So it is refused rather than applied to whoever
+        // happens to hold that number here.
+        if change.touches_owner() {
+            return Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                format!("{path}: the owner of a file on a server is the server's to name"),
+            ));
+        }
         // The same two masks over the file's own mode as locally: what the dialog did not
         // answer stays as the server has it, which takes one round trip to read.
         let mut mode = if change.touches_mode() || change.readonly.is_some() {

@@ -172,7 +172,10 @@ job to the background; `Esc`/`Ctrl+C` cancels after confirmation.
 One dialog, OS-aware:
 
 - Unix: rwx matrix + numeric field, setuid/setgid/sticky, recursive with separate dir/file
-  masks (mc's `-R` behaviour), owner/group pickers (name completion), ACL editor (M3).
+  masks (mc's `-R` behaviour), owner and group as one `user:group` row — a name or a number
+  either side, an empty half left alone, the link itself rather than its target, and the
+  `chown` made before the `chmod` because a successful one clears setuid and setgid. Name
+  completion and an ACL editor are M3.
 - Windows: R/A/S/H checkboxes, compressed/encrypted/not-content-indexed, inheritance note,
   owner (M3).
 - Timestamps: modified/accessed/created(birth) with "set to now", "copy from other panel",

@@ -166,12 +166,14 @@ attr-btime = Created
 attr-ctime = Record changed
 attr-btime-readonly = (the creation time can only be set on Windows)
 attr-utc = Times in UTC
+attr-owner = Owner (user:group)
 attr-owner-is = owner { $who }
 btn-attr-original = Original
 btn-attr-current = Current
 btn-attr-blank = Blank
 attr-recursive = And everything inside the folders
 attr-bad-time = `{ $text }` is not a date and time (YYYY-MM-DD HH:MM:SS)
+attr-bad-owner = no account or group is called `{ $text }` here
 attr-in-archive = changing this writes the archive again, with every other entry as it is
 job-attrs = Setting attributes
 

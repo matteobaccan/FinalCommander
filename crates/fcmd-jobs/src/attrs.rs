@@ -52,6 +52,15 @@ pub struct Change {
     /// When it was made. Only Windows keeps one that can be set; everywhere else the row is
     /// shown and not offered, because there is no call to write it with.
     pub btime: Option<SystemTime>,
+    /// Who it is to belong to, already looked up: the dialog's owner row was typed as names
+    /// and turned into numbers there, where a name nothing knows can still be said back to
+    /// the person who typed it. `None` for either half leaves that half alone, which is what
+    /// a row nobody touched means.
+    ///
+    /// Unix only. Ownership on Windows is an entry in a security descriptor rather than a
+    /// pair of numbers, and the dialog does not offer the row there.
+    pub uid: Option<u32>,
+    pub gid: Option<u32>,
 }
 
 impl Change {
@@ -76,6 +85,11 @@ impl Change {
     /// Does anything here touch the permission bits?
     pub fn touches_mode(&self) -> bool {
         self.mode_set != 0 || self.mode_clear != 0
+    }
+
+    /// Does anything here hand the file to somebody else?
+    pub fn touches_owner(&self) -> bool {
+        self.uid.is_some() || self.gid.is_some()
     }
 }
 
@@ -269,6 +283,59 @@ mod tests {
         assert_eq!(Mode::of(0o4755).text(), "rwsr-xr-x");
         assert_eq!(Mode::of(0o4655).text(), "rwSr-xr-x");
         assert_eq!(Mode::of(0o1777).text(), "rwxrwxrwt");
+    }
+
+    /// Giving a file away, where the answer is the owner it already has: the one `chown` that
+    /// every account on every system is allowed to make, so a test can make it and still be
+    /// a test about the call being made at all. It also pins the ordering: the setuid bit the
+    /// twelve boxes asked for survives, which it would not if the `chown` ran afterwards.
+    #[cfg(unix)]
+    #[test]
+    fn a_file_can_be_handed_to_the_owner_it_already_has_without_losing_its_mode() {
+        use std::os::unix::fs::MetadataExt;
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("mine");
+        std::fs::write(&file, b"x").unwrap();
+        let meta = std::fs::metadata(&file).unwrap();
+        let change = Change {
+            uid: Some(meta.uid()),
+            gid: Some(meta.gid()),
+            ..Change::default()
+        }
+        .with_mode(0o4755);
+        assert!(change.touches_owner());
+        let outcome = set_attributes(
+            &LocalFs,
+            &[VPath::local(file.clone())],
+            &change,
+            false,
+            &CancelToken::new(),
+            &mut |_, _| {},
+        );
+        assert_eq!(outcome.errors, Vec::new());
+        assert_eq!(outcome.files, 1);
+        let after = std::fs::metadata(&file).unwrap();
+        assert_eq!(after.uid(), meta.uid());
+        assert_eq!(after.gid(), meta.gid());
+        assert_eq!(
+            after.permissions().mode() & 0o7777,
+            0o4755,
+            "the mode was written after the owner, not before it"
+        );
+    }
+
+    /// A name nothing knows is not an owner. The dialog says so rather than calling `chown`,
+    /// but the lookup is what tells it: `root` is on every Unix, and a name made of this
+    /// test's own initials is on none.
+    #[cfg(unix)]
+    #[test]
+    fn a_name_nothing_knows_has_no_number_behind_it() {
+        assert_eq!(fcmd_platform::user_id("0"), Some(0));
+        assert_eq!(fcmd_platform::group_id("0"), Some(0));
+        assert!(fcmd_platform::user_id("fcmd-no-such-account").is_none());
+        assert!(fcmd_platform::group_id("fcmd-no-such-group").is_none());
     }
 
     #[test]

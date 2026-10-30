@@ -243,7 +243,15 @@ leaves the original whole, and a script that was executable stays executable.
 
 On Linux and macOS that is the mode, as twelve boxes — owner, group and world, each with read,
 write and run, plus setuid, setgid and sticky — and the line above them says what the file is
-now, both as `rw-r--r--` and as `0644`, with who it belongs to above that. On Windows it is
+now, both as `rw-r--r--` and as `0644`. Above that is *Owner*, as `user:group`, and on Linux
+and macOS it is a row to type a different answer in: either half may be a name or a number,
+and a half left empty leaves that half alone — `:staff` changes the group and nothing else.
+Giving a file to somebody else needs a privilege an ordinary account has not got, and a group
+can only be set to one you are in; what the system refuses is reported by name, and the dialog
+does not ask you for a password over it — `sudo` is one line away in the command line under the
+panels, where you can see what it is for. On Windows the row is a line to read: ownership there
+is an entry in a security descriptor, and the shell's own property sheet is the place that asks
+for the privilege properly. On Windows it is
 read-only, hidden, system, archive, temporary, offline and whether the indexer may look at it
 — and a dim line says what else the file is, where it is compressed, encrypted, sparse or a
 reparse point: those are set by doing the thing, not by ticking a box. Read-only is on both,
@@ -275,7 +283,11 @@ modification time, which is what SFTP carries. An entry inside an archive has th
 permissions and an object in a bucket has the policy of its bucket, so neither has anything to
 set, and both say so instead of pretending.
 
-What is not there yet: the owner and the group, and Windows' advanced bits.
+Something typed in that is not an answer — a date that is not a date, a name no account or
+group here goes by — leaves the dialog open with what you typed still in it, and says which
+word it could not make sense of.
+
+What is not there yet: Windows' advanced bits, and the owner there.
 
 ## Comparing two folders
 

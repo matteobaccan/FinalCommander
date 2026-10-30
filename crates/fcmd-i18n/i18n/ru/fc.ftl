@@ -160,12 +160,14 @@ attr-btime = Создан
 attr-ctime = Запись изменена
 attr-btime-readonly = (время создания можно задать только в Windows)
 attr-utc = Время в UTC
+attr-owner = Владелец (пользователь:группа)
 attr-owner-is = владелец { $who }
 btn-attr-original = Исходное
 btn-attr-current = Сейчас
 btn-attr-blank = Пусто
 attr-recursive = И всё внутри папок
 attr-bad-time = `{ $text }` — это не дата и время (ГГГГ-ММ-ДД ЧЧ:ММ:СС)
+attr-bad-owner = здесь нет ни пользователя, ни группы с именем `{ $text }`
 attr-in-archive = изменение этого перезапишет архив, оставив остальные записи как есть
 job-attrs = Установка атрибутов
 

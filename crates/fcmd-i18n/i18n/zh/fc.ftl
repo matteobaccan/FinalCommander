@@ -160,12 +160,14 @@ attr-btime = 创建时间
 attr-ctime = 记录更改时间
 attr-btime-readonly = （创建时间只能在 Windows 上设置）
 attr-utc = 使用 UTC 时间
+attr-owner = 所有者（用户:组）
 attr-owner-is = 所有者 { $who }
 btn-attr-original = 原值
 btn-attr-current = 现在
 btn-attr-blank = 清空
 attr-recursive = 以及文件夹里的全部内容
 attr-bad-time = `{ $text }` 不是日期时间（YYYY-MM-DD HH:MM:SS）
+attr-bad-owner = 此处没有名为 `{ $text }` 的用户或组
 attr-in-archive = 更改此项会重写压缩包，其他条目保持原样
 job-attrs = 正在设置属性
 

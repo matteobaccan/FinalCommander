@@ -1443,12 +1443,30 @@ impl Form {
         } else {
             i18n.t_args("attr-count", &[("count", (count as i64).into())])
         })];
-        // Whose it is. A row rather than a box: a dialog that offered to change the owner
-        // would have to ask for a password it has no business taking.
+        // Whose it is, as `user:group`, and on Unix a row to type a different answer in —
+        // `chown`, which is what Midnight Commander's own dialog does. Either half may be a
+        // name or a number, and a half left empty leaves that half alone.
+        //
+        // What the kernel refuses comes back named: giving a file away needs a privilege an
+        // ordinary user has not got, and a group can only be set to one the user is in. The
+        // dialog does not ask for a password over it — `sudo` is one line away in the command
+        // line under the panels, where the user can see what it is for.
+        //
+        // On Windows the row stays a line to read. Ownership there is an entry in a security
+        // descriptor, not a pair of numbers, and the shell's own property sheet is the place
+        // that asks for the privilege properly.
         if let Some(owner) = owner {
-            fields.push(Field::Note(
-                i18n.t_args("attr-owner-is", &[("who", owner.to_string().into())]),
-            ));
+            if cfg!(unix) {
+                fields.push(Field::text(
+                    "attr.owner",
+                    t("attr-owner"),
+                    owner.to_string(),
+                ));
+            } else {
+                fields.push(Field::Note(
+                    i18n.t_args("attr-owner-is", &[("who", owner.to_string().into())]),
+                ));
+            }
         }
         if let Some(mode) = mode {
             fields.push(Field::Note(i18n.t_args(

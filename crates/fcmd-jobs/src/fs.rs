@@ -412,6 +412,12 @@ impl JobFs for LocalFs {
     fn set_attrs(&self, path: &VPath, change: &crate::attrs::Change) -> io::Result<()> {
         not_mine(path)?;
         let target = path.os();
+        // Whose it is, before the mode: a `chown` that succeeds takes the setuid and setgid
+        // bits off the file, so doing it the other way round would quietly undo an answer the
+        // user had just given in the twelve boxes.
+        if change.touches_owner() {
+            fcmd_platform::set_owner(target.as_ref(), change.uid, change.gid)?;
+        }
         // A directory's own times cannot be set on Windows through the standard library: it
         // has no way to open a directory as a handle (that needs `FILE_FLAG_BACKUP_SEMANTICS`
         // on `CreateFileW`), so there is nothing to call `set_times` on. The files inside it

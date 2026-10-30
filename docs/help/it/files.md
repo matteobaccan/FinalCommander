@@ -257,7 +257,15 @@ eseguibile resta eseguibile.
 
 Su Linux e macOS sono i permessi, come dodici caselle — proprietario, gruppo e tutti, ognuno con
 lettura, scrittura ed esecuzione, più setuid, setgid e sticky — e la riga sopra di esse dice cosa
-è il file ora, sia come `rw-r--r--` sia come `0644`, e sopra ancora di chi è. Su Windows sono
+è il file ora, sia come `rw-r--r--` sia come `0644`. Sopra ancora c'è *Proprietario*, come
+`utente:gruppo`, e su Linux e macOS è una riga in cui scrivere una risposta diversa: ciascuna
+metà può essere un nome o un numero, e una metà lasciata vuota resta com'è — `:staff` cambia
+il gruppo e nient'altro. Dare un file a qualcun altro richiede un privilegio che un utente
+normale non ha, e il gruppo si può impostare solo a uno di cui fai parte; quello che il sistema
+rifiuta viene riferito per nome, e il dialogo non ti chiede una password per farlo — `sudo` è
+a una riga di distanza nella riga di comando sotto i pannelli, dove si vede a cosa serve. Su
+Windows la riga è solo da leggere: la proprietà lì è una voce in un descrittore di sicurezza, e
+il pannello delle proprietà della shell è il posto che chiede il privilegio come si deve. Su Windows sono
 invece sola lettura, nascosto, sistema, archivio, temporaneo, non in linea e se l'indicizzatore
 può leggerlo — e una riga in grigio dice cos'altro è il file, quando è compresso, cifrato,
 sparso o un punto di reparse: quelli si impostano facendo la cosa, non spuntando una casella.
@@ -292,7 +300,11 @@ quello che porta SFTP. Una voce dentro un archivio ha i permessi dell'archivio e
 bucket ha la policy del suo bucket, quindi nessuno dei due ha niente da impostare, ed entrambi lo
 dicono invece di fingere.
 
-Quello che non c'è ancora: il proprietario e il gruppo, e i bit avanzati di Windows.
+Qualcosa di scritto che non è una risposta — una data che non è una data, un nome che qui
+nessun utente o gruppo porta — lascia il dialogo aperto con quello che hai scritto ancora
+dentro, e dice quale parola non ha saputo interpretare.
+
+Quello che non c'è ancora: i bit avanzati di Windows, e il proprietario lì.
 
 ## Confrontare due cartelle
 

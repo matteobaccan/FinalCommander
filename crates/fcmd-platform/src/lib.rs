@@ -98,6 +98,55 @@ pub struct OwnerCache {
     pub sids: std::collections::HashMap<String, String>,
 }
 
+/// The number a user name stands for, and the same for a group — the two halves of what the
+/// attributes dialog's owner row was typed as.
+///
+/// `None` everywhere but Unix, and the dialog does not offer the row there: ownership on
+/// Windows is an entry in a security descriptor rather than a pair of numbers, and handing a
+/// file to somebody else needs a privilege the shell's own property sheet asks for properly.
+pub fn user_id(name: &str) -> Option<u32> {
+    #[cfg(unix)]
+    {
+        unix::user_id(name)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = name;
+        None
+    }
+}
+
+pub fn group_id(name: &str) -> Option<u32> {
+    #[cfg(unix)]
+    {
+        unix::group_id(name)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = name;
+        None
+    }
+}
+
+/// Hand a local file to somebody else. `None` for either half leaves that half as it is.
+///
+/// Unix only, for the reason above; everywhere else this says so rather than reporting a
+/// success nothing performed.
+pub fn set_owner(path: &Path, uid: Option<u32>, gid: Option<u32>) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        unix::set_owner(path, uid, gid)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (path, uid, gid);
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "this system has no owner to set",
+        ))
+    }
+}
+
 /// Who a local file belongs to. `None` for a path that has gone away, a filesystem that
 /// carries no ownership at all, or a platform with no way to ask.
 pub fn owner(path: &Path, cache: &mut OwnerCache) -> Option<Owner> {

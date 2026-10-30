@@ -160,12 +160,14 @@ attr-btime = Créé
 attr-ctime = Enregistrement modifié
 attr-btime-readonly = (la date de création ne se règle que sous Windows)
 attr-utc = Heures en UTC
+attr-owner = Propriétaire (utilisateur:groupe)
 attr-owner-is = propriétaire { $who }
 btn-attr-original = Original
 btn-attr-current = Maintenant
 btn-attr-blank = Vide
 attr-recursive = Et tout ce qui est dans les dossiers
 attr-bad-time = `{ $text }` n'est pas une date et heure (AAAA-MM-JJ HH:MM:SS)
+attr-bad-owner = ici aucun utilisateur ni groupe ne s'appelle `{ $text }`
 attr-in-archive = changer ceci réécrit l'archive, avec toutes les autres entrées telles quelles
 job-attrs = Réglage des attributs
 

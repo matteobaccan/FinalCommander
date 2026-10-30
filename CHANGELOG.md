@@ -8,6 +8,30 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **Who a file belongs to, in the dialog that says what it is.** `Ctrl+A` showed the owner and
+  would not change it. Now *Owner* is a row, as `user:group`: either half may be a name or a
+  number — a number because a filesystem with no matching accounts shows one, and typing it
+  back has to mean it — and a half left empty leaves that half alone, so `:staff` changes the
+  group and nothing else. A row nobody typed in is not a `chown` at all, which is what keeps a
+  dialog over a hundred files from handing them all to whoever the cursor happened to be on.
+
+  It is the link itself and not what it points at, because the row was read with an `lstat` and
+  showing one owner while changing another would be answering a question nobody asked. The
+  `chown` is made before the `chmod`: a successful one takes the setuid and setgid bits off the
+  file, so the other order would quietly undo an answer just given in the twelve boxes.
+
+  What the system refuses is reported by name. Giving a file away needs a privilege an ordinary
+  account has not got and a group can only be set to one the user is in — neither is worth
+  pretending about, and neither is worth asking for a password over: `sudo` is one line away in
+  the command line under the panels, where the user can see what it is for. A name no account
+  or group here goes by is said back before anything is called. On Windows the row stays a line
+  to read, where ownership is an entry in a security descriptor rather than a pair of numbers,
+  and over SFTP it is refused, because the names on the other side are the server's to look up.
+
+  While there: something typed into that dialog which is not an answer — that name, or a date
+  that is not a date — now leaves the dialog open with what was typed still in it, rather than
+  closing it and making the reader type the whole thing again.
+
 - **Writing text files again: another code page, another line ending.** *Files → Write again
   as…* takes the selection and writes each file as asked. What they are *now* is worked out per
   file — from the byte-order mark where there is one, from what the bytes look like where there

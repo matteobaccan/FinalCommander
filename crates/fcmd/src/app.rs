@@ -1863,6 +1863,10 @@ pub struct App {
     /// not carry a mode, so the boxes are seeded from what it does say; a mode that comes
     /// back unchanged is therefore not a mode anybody asked to write, and is not written.
     attr_seed_mode: Option<u32>,
+    /// What the owner row of the attributes dialog opened with, so that a row nobody touched
+    /// is not a `chown` to the owner it already has. `None` where the dialog had no such row:
+    /// an entry inside an archive, a file on a server, Windows.
+    attr_owner: Option<String>,
     /// The service list the `:services` panel was built from, so a row can be turned back
     /// into the service it stands for.
     services: Vec<fcmd_platform::Service>,
@@ -2190,6 +2194,7 @@ impl App {
             status_error: false,
             held: Mods::NONE,
             attr_targets: Vec::new(),
+            attr_owner: None,
             attr_seed_mode: None,
             services: Vec::new(),
             attr_times: Default::default(),
@@ -10364,6 +10369,7 @@ impl App {
         self.attr_targets = sources;
         self.attr_times = times;
         self.attr_seed_mode = in_archive.then_some(mode).flatten();
+        self.attr_owner = facts.owner.clone();
     }
 
     /// `Ctrl+A` inside an archive: write the mode and the time the dialog asked for into the
@@ -10539,6 +10545,7 @@ impl App {
     /// OK in the attributes dialog: what the boxes say, applied to what was selected.
     fn apply_attributes_form(&mut self, form: &Form) {
         let sources = std::mem::take(&mut self.attr_targets);
+        let was_owner = self.attr_owner.take();
         if sources.is_empty() {
             return;
         }
@@ -10593,9 +10600,53 @@ impl App {
                 None => {}
             }
         }
+        // Whose it is to be. Only a row that was *typed in* is a `chown`: the row opens at
+        // the owner the file already has, and sending that back would be a call per file to
+        // set what is already set — and on a selection, a call that gave every one of them to
+        // whoever the file under the cursor belonged to.
+        let (mut uid, mut gid) = (None, None);
+        if let Some(was) = was_owner.as_deref() {
+            let now = form.text_value("attr.owner");
+            if !now.is_empty() && now != was {
+                // `user:group`, and either half may be left out to leave it alone: `:staff`
+                // is a group and nothing else, `root` an owner and nothing else. A name is
+                // looked up; a number is taken as itself, because that is what a filesystem
+                // with no matching accounts shows.
+                let (user, group) = match now.split_once(':') {
+                    Some((user, group)) => (user.trim(), group.trim()),
+                    None => (now.trim(), ""),
+                };
+                for (text, slot, lookup) in [
+                    (
+                        user,
+                        &mut uid,
+                        fcmd_platform::user_id as fn(&str) -> Option<u32>,
+                    ),
+                    (group, &mut gid, fcmd_platform::group_id),
+                ] {
+                    if text.is_empty() {
+                        continue;
+                    }
+                    match lookup(text) {
+                        Some(id) => *slot = Some(id),
+                        // A name nothing knows is said back rather than guessed at: a
+                        // `chown` to the wrong account is not an error anything reports.
+                        None => {
+                            let msg = self
+                                .i18n
+                                .t_args("attr-bad-owner", &[("text", text.to_string().into())]);
+                            self.reopen_attributes(form, sources, was_owner, msg);
+                            return;
+                        }
+                    }
+                }
+            }
+        }
         let change = fcmd_jobs::Change {
             mode_set,
             mode_clear,
+            uid,
+            gid,
             readonly: form.tri_value("attr.readonly"),
             hidden: cfg!(windows)
                 .then(|| form.tri_value("attr.hidden"))
@@ -10629,7 +10680,7 @@ impl App {
             let typed = form.text_value(key);
             if !typed.trim().is_empty() && parsed.is_none() {
                 let msg = self.i18n.t_args("attr-bad-time", &[("text", typed.into())]);
-                self.set_error(msg);
+                self.reopen_attributes(form, sources, was_owner, msg);
                 return;
             }
         }
@@ -10657,6 +10708,25 @@ impl App {
             recursive,
             cancel,
         });
+    }
+
+    /// Something that was typed into the attributes dialog is not an answer: say so, and put
+    /// the dialog back with what was typed still in it.
+    ///
+    /// The dialog has already gone by the time `OK` is handled, and what it was about went
+    /// with it — a dialog that came back empty-handed would do nothing the next time `OK` was
+    /// pressed. So the targets and the owner it opened with go back too.
+    fn reopen_attributes(
+        &mut self,
+        form: &Form,
+        sources: Vec<VPath>,
+        was_owner: Option<String>,
+        msg: String,
+    ) {
+        self.attr_targets = sources;
+        self.attr_owner = was_owner;
+        self.mode = Mode::Form(Box::new(form.clone()));
+        self.set_error(msg);
     }
 
     /// OK in the archive dialog: work out the format, and start writing.
@@ -21650,6 +21720,122 @@ mod tests {
                 0o604
             );
         }
+    }
+
+    /// The owner row: `chown`, which the dialog used to show and not offer.
+    ///
+    /// Three things, because they are the three ways the row can be answered: left alone, in
+    /// which case nothing is handed to anybody; typed as a name nothing knows, which is said
+    /// back rather than guessed at; and typed as the two numbers, which come through as the
+    /// two numbers.
+    #[cfg(unix)]
+    #[test]
+    fn the_attributes_dialog_hands_a_file_to_whoever_the_owner_row_names() {
+        use std::os::unix::fs::MetadataExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("mine.txt");
+        std::fs::write(&file, b"x").unwrap();
+        let meta = std::fs::metadata(&file).unwrap();
+
+        let mut app = app();
+        app.panels[app.active].cwd = VPath::local(dir.path());
+        let entries =
+            fcmd_vfs::local::list_blocking(&app.panels[app.active].cwd, &CancelToken::new())
+                .unwrap();
+        let (panel, generation) = (app.active, app.panels[app.active].generation);
+        app.handle_event(Event::Listed {
+            panel,
+            generation,
+            result: Ok(entries),
+        });
+        app.requests.clear();
+        let row = app.panels[app.active]
+            .listing
+            .row_of_name("mine.txt")
+            .expect("the file is listed");
+        app.panels[app.active].cursor_to(row);
+
+        // The row is offered, and it opens at the owner the file has — so the format is in
+        // front of the reader rather than in the manual.
+        press(&mut app, "Ctrl+A");
+        let Mode::Form(form) = &app.mode else {
+            panic!("Ctrl+A opens the attributes dialog: {:?}", app.mode)
+        };
+        let opened = form.text_value("attr.owner");
+        assert!(
+            opened.contains(':'),
+            "the row opens at `user:group`: {opened:?}"
+        );
+
+        // Left alone: nothing is handed to anybody, which is what stops a dialog over a
+        // hundred files from giving them all to whoever the cursor was on.
+        press(&mut app, "Enter");
+        let change = match app.take_requests().into_iter().next() {
+            Some(Request::SetAttrs { change, .. }) => change,
+            other => panic!("no attribute change was started: {other:?}"),
+        };
+        assert!(
+            !change.touches_owner(),
+            "a row nobody typed in is not a chown: {:?}",
+            (change.uid, change.gid)
+        );
+        // Answering the dialog leaves the job's own box on screen; the panels are back for
+        // the next round.
+        app.mode = Mode::Normal;
+
+        // A name nothing knows: said back, and nothing is started.
+        press(&mut app, "Ctrl+A");
+        set_owner_row(&mut app, "fcmd-no-such-account");
+        press(&mut app, "Enter");
+        assert!(
+            app.status.contains("fcmd-no-such-account"),
+            "the name that could not be looked up is named: {}",
+            app.status
+        );
+        assert!(
+            app.take_requests().is_empty(),
+            "and nothing was started for it"
+        );
+        // And the dialog is still there, with what was typed still in it: a refused answer
+        // that took the dialog with it would make the reader type the whole thing again.
+        let Mode::Form(form) = &app.mode else {
+            panic!("the dialog is back: {:?}", app.mode)
+        };
+        assert_eq!(form.text_value("attr.owner"), "fcmd-no-such-account");
+
+        // The two numbers: through as the two numbers. A filesystem with no matching
+        // accounts shows numbers, so typing them back has to mean them.
+        press(&mut app, "Ctrl+A");
+        set_owner_row(&mut app, &format!("{}:{}", meta.uid(), meta.gid()));
+        press(&mut app, "Enter");
+        let change = match app.take_requests().into_iter().next() {
+            Some(Request::SetAttrs { change, .. }) => change,
+            other => panic!("no attribute change was started: {other:?}"),
+        };
+        assert_eq!(change.uid, Some(meta.uid()));
+        assert_eq!(change.gid, Some(meta.gid()));
+    }
+
+    /// Type a whole answer into the owner row of the dialog that is open.
+    #[cfg(unix)]
+    fn set_owner_row(app: &mut App, text: &str) {
+        let Mode::Form(form) = &mut app.mode else {
+            panic!("the dialog is open")
+        };
+        for field in &mut form.fields {
+            if let crate::form::Field::Text {
+                key, value, caret, ..
+            } = field
+            {
+                if *key == "attr.owner" {
+                    *value = text.to_string();
+                    *caret = value.chars().count();
+                    return;
+                }
+            }
+        }
+        panic!("the owner row is in the dialog");
     }
 
     /// `Ctrl+A` over several files that do not agree: the boxes for the bits they differ
