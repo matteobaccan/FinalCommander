@@ -6,6 +6,8 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+## [0.22.0] — 2026-10-30
+
 ### Added
 
 - **A picture is shown as the picture** (SPEC 05 §1.14). `F3` on a `.png`, `.jpg`, `.gif` or
