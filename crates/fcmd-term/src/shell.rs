@@ -223,6 +223,14 @@ impl Drop for Shell {
 /// directory. They are written with `printf`, whose `\033` the shell's own builtin expands, so
 /// the line itself is plain text.
 ///
+/// None of them puts the directory *in* the prompt. A prompt belongs to the shell's line
+/// editor, which counts its width to know where the cursor is -- and an escape sequence it was
+/// not told to ignore is counted as letters on the screen. A directory long enough to carry
+/// that count past the edge of the terminal is then redrawn, and a redrawn prompt is not the
+/// prompt: `readline` repeats the character that falls in the last column, which in a path is
+/// a letter that was never there. So the marks are printed *to the terminal*, from a hook that
+/// runs before the prompt is drawn, and what the editor is handed is empty.
+///
 /// `None` for a shell with no hook to set. The caller runs commands in a child of their own
 /// for those, which is what everything did before there was a shell to keep.
 ///
@@ -251,14 +259,14 @@ pub fn hook_for(program: &str) -> Option<String> {
                 .to_string(),
         ),
         // A plain POSIX shell — `dash`, `ash`, busybox, and whatever `/bin/sh` is here — has
-        // no hook before a command and no `PROMPT_COMMAND`. It does expand `$?` and `$PWD` in
-        // its prompt, every time it draws one, which is the same thing arriving at the same
-        // moment. The escapes have to be real bytes, because a POSIX prompt is not unescaped.
-        "sh" | "dash" | "ash" | "busybox" | "ksh" | "mksh" => Some(
-            "__fcmd_e=$(printf '\\033'); __fcmd_a=$(printf '\\007'); \
-             PS1=\"${__fcmd_e}]133;D;\\$?${__fcmd_a}${__fcmd_e}]7;file://\\$PWD${__fcmd_a}\""
-                .to_string(),
-        ),
+        // no hook before a command and no `PROMPT_COMMAND`. What it does have is a prompt it
+        // expands afresh every time it draws one, which is the same moment: so the prompt is
+        // one command substitution, it prints the marks straight to the terminal, and it
+        // expands to nothing. Nothing is what the line editor is then given to measure — see
+        // above for what it does to a prompt it measures wrongly.
+        "sh" | "dash" | "ash" | "busybox" | "ksh" | "mksh" => {
+            Some(format!("PS1='$({DONE} \"$?\" \"\" \"$PWD\" >/dev/tty)'"))
+        }
         _ => None,
     }
 }
@@ -303,6 +311,69 @@ mod tests {
         assert!(hook_for("/bin/bash").is_some());
         assert!(hook_for("/usr/bin/zsh").is_some());
         assert!(hook_for("/bin/sh").is_some());
+    }
+
+    /// The directory does not travel in the prompt, and this is the line that says so.
+    ///
+    /// A line editor measures the prompt to know where the cursor is, counting an escape
+    /// sequence it was not told to ignore as letters on the screen. A prompt it measures
+    /// wrongly it redraws wrongly — `readline` repeats the character that falls in the last
+    /// column — and in a path that is a letter that was never there, so the panel follows a
+    /// directory nobody has. The prompt is therefore one substitution that prints to the
+    /// terminal and expands to nothing.
+    #[test]
+    fn the_posix_hook_keeps_the_directory_out_of_the_prompt() {
+        let hook = hook_for("/bin/sh").expect("a POSIX shell has a hook to set");
+        let (_, prompt) = hook.split_once("PS1=").expect("it is the prompt it sets");
+        assert!(
+            prompt.starts_with("'$(") && prompt.ends_with(")'"),
+            "the whole of it is one substitution: {prompt}"
+        );
+        assert!(
+            prompt.contains(">/dev/tty"),
+            "which prints to the terminal rather than into the prompt: {prompt}"
+        );
+    }
+
+    /// And the same thing proved against a real shell that has a line editor: `bash` under
+    /// the name `sh` reads the POSIX hook and brings `readline` with it. The directory is
+    /// named longer than the terminal is wide, which is the case that used to come back with
+    /// a letter doubled in it.
+    #[cfg(unix)]
+    #[test]
+    fn a_shell_with_a_line_editor_names_a_long_directory_letter_for_letter() {
+        let Some(bash) = ["/bin/bash", "/usr/bin/bash"]
+            .into_iter()
+            .map(Path::new)
+            .find(|at| at.exists())
+        else {
+            return;
+        };
+        let dir = tempfile::tempdir().unwrap();
+        // Under the name `sh`: that is what puts `bash` in POSIX mode, and what picks the
+        // POSIX hook for it.
+        let sh = dir.path().join("sh");
+        std::os::unix::fs::symlink(bash, &sh).unwrap();
+        let deep = dir.path().join("a".repeat(120));
+        std::fs::create_dir(&deep).unwrap();
+        let want = std::fs::canonicalize(&deep).unwrap();
+
+        let mut shell = Shell::start(&sh.display().to_string(), Some(dir.path()), 40, 24, || {})
+            .expect("a shell starts");
+        assert!(wait_until(&shell, |out| out.ready()), "it reaches a prompt");
+        shell.cd(&deep).unwrap();
+        // Canonicalised on both sides, because a shell answers with the path the system gives
+        // it and the test holds the one it asked for — on macOS those are two names for one
+        // place. A mangled path is no name for anywhere and does not canonicalise at all.
+        assert!(
+            wait_until(&shell, |out| out
+                .cwd
+                .as_deref()
+                .and_then(|at| std::fs::canonicalize(at).ok())
+                .is_some_and(|at| at == want)),
+            "it named the directory as it is: {:?}",
+            shell.with_out(|out| out.cwd.clone())
+        );
     }
 
     #[test]

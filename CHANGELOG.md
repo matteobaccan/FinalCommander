@@ -73,10 +73,17 @@ Notable changes, newest first. The format follows
   it starts, and what the hook emits is `OSC 133;C` before a command, `OSC 133;D;<status>` when
   one ends, and `OSC 7` for the directory — so a shell whose own configuration emits them is
   understood without being asked twice. There is a hook for `bash`, `zsh`, `fish` and for a
-  plain POSIX `sh`, which has no hook before a command but does expand `$?` and `$PWD` every
-  time it draws a prompt. `cmd.exe` has none at all and keeps a child per command: half a
-  session, where `cd` works and the exit status never arrives, would be worse than none.
+  plain POSIX `sh`, which has no hook before a command but does expand its prompt afresh every
+  time it draws one. `cmd.exe` has none at all and keeps a child per command: half a session,
+  where `cd` works and the exit status never arrives, would be worse than none.
   `[term] subshell` turns it off, `[term] follow_cwd` turns off only the following.
+
+  None of the hooks puts the directory *in* the prompt. A prompt belongs to the shell's line
+  editor, which measures its width to know where the cursor is and counts an escape sequence it
+  was not told to ignore as letters on the screen; a prompt it measures wrongly it redraws
+  wrongly, repeating the character that lands in the last column. In a path that is a letter
+  that was never there, and the panel would follow a directory nobody has. So the marks are
+  printed to the terminal and the prompt is left empty.
 
   What the shell prints is read as lines rather than into a grid (`fcmd_term::Transcript`),
   because the screen `Ctrl+O` opens is a line buffer: a progress bar rewriting itself with a
