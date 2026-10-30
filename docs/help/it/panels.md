@@ -151,7 +151,9 @@ domanda sono nostri e non del disco. Scegli la pagina e i nomi diventano leggibi
 Cambia solo lo schermo. Il file che ogni riga rappresenta è sempre quello che ha il sistema,
 byte compresi, quindi aprirlo, copiarlo, rinominarlo e cancellarlo funzionano come prima — e la
 prima riga della lista ti riporta alla risposta del sistema. Su Windows non c'è niente da
-scegliere: un nome lì è già testo e non byte, e il menu lo dice.
+scegliere: un nome lì è già testo e non byte, e il menu lo dice. Su macOS di solito non c'è
+niente da scegliere nemmeno lì — il sistema si rifiuta di creare un nome che non sia UTF-8
+valido — quindi questa è soprattutto una questione Linux.
 
 # Cosa è un file
 

@@ -185,6 +185,13 @@ mod tests {
             Some(0),
             "a file in the panel's directory is a change"
         );
+        // Wait for the first phase to go quiet before counting the second. Writing until the
+        // watch was armed can take several rounds, and rounds spread over more than one
+        // debounce window are more than one change -- so there may be another event already
+        // in the channel, and the burst below would be credited with it. The loop ends on a
+        // whole window with nothing in it, which is what "quiet" means here.
+        while rx.recv_timeout(DEBOUNCE * 4).is_ok() {}
+
         // The burst collapses: twenty files are not twenty events.
         for round in 0..20 {
             std::fs::write(dir.path().join(format!("g{round}")), b"x").expect("write");

@@ -144,7 +144,9 @@ than the disk's. Choose the page and the names become readable.
 Only the screen changes. The file each row stands for is still the file the system has, bytes
 and all, so opening it, copying it, renaming it and deleting it all work as they did — and the
 first row of the list takes you back to the system's own answer. On Windows there is nothing to
-choose: a name there is already text rather than bytes, and the menu says so.
+choose: a name there is already text rather than bytes, and the menu says so. On macOS there is
+usually nothing to choose either — the system refuses to create a name that is not valid UTF-8
+in the first place — so this is mostly a Linux question.
 
 # What a file is
 

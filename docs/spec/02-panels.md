@@ -455,7 +455,10 @@ again; everything downstream — the sort, the filter, the quick search, the dra
 readable name and knows nothing about any of this.
 
 **Unix only.** A name on Windows is already UTF-16: there are no bytes to read a second way,
-and the menu says so rather than offering a page that would change nothing. Midnight Commander
+and the menu says so rather than offering a page that would change nothing. In practice it is
+a Linux question even among the Unixes: macOS will not *create* a name that is not valid UTF-8
+— the call comes back `EILSEQ` — so a local directory there has nothing to read differently,
+and the test for this says so by not running there rather than by failing. Midnight Commander
 asks the same question inside the path (`#enc:cp866`, which is its VFS); a list is the same
 question with the answers in front of the reader, and it does not make the path something only
 mc can read.
