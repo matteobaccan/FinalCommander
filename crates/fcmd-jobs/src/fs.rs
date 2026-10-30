@@ -805,6 +805,39 @@ pub fn part_path(dst: &VPath) -> VPath {
     }
 }
 
+/// Write `bytes` over a file that is already there, without a moment where it is half a file.
+///
+/// The new contents go beside the original under [`PART_SUFFIX`] and are renamed over it, so
+/// an interruption — a full disk, a power cut, a `kill` — leaves the original whole rather
+/// than truncated. The original's mode is carried across, because a rename does not carry one
+/// and a script that was executable has to stay executable.
+///
+/// The one place a new file is written: a caller with nothing to replace has
+/// `std::fs::write`, which is simpler and right for that.
+pub fn replace_file(file: &std::path::Path, bytes: &[u8]) -> io::Result<()> {
+    let part = match file.file_name() {
+        Some(name) => {
+            let mut name = name.to_os_string();
+            name.push(PART_SUFFIX);
+            file.with_file_name(name)
+        }
+        None => return Err(io::Error::new(io::ErrorKind::InvalidInput, "not a file")),
+    };
+    fs::write(&part, bytes)?;
+    #[cfg(unix)]
+    if let Ok(meta) = fs::metadata(file) {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&part, fs::Permissions::from_mode(meta.permissions().mode()));
+    }
+    match fs::rename(&part, file) {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            let _ = fs::remove_file(&part);
+            Err(e)
+        }
+    }
+}
+
 fn facts_from(meta: &fs::Metadata) -> Facts {
     let kind = if meta.is_dir() {
         EntryKind::Dir

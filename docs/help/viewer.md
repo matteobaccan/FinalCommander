@@ -220,6 +220,19 @@ one says it is the last rather than wrapping round. The arrows, `PgUp`, `PgDn`, 
 the one being read. `F12` lists this screen with the open viewers and editors, `F1` opens this
 chapter, and `Esc`, `F3` or `F10` closes it.
 
+`F5` takes a difference across: the column you are in takes the other one's version of the
+difference at the top of the screen, so `Tab` chooses which file changes and `Alt+↓` chooses
+which difference. Whole lines move — a line only the other side has is added, a line only this
+side has goes — and a line coming out of a Unix file into a DOS one is given DOS line endings,
+so you do not end up with the one odd line in it. On a line both files agree about, `F5` says
+there is no difference here rather than taking the next one by surprise.
+
+Nothing is written until `F2`. The file that took something carries a `*` beside its name,
+`F2` writes it — beside the original and renamed over it, so an interruption leaves what was
+there whole — and once written the `*` goes, so a second `F2` has nothing to do and says so.
+`Esc` with something unwritten says so and leaves at the next press, which is how a screen with
+no dialog of its own asks whether you meant it.
+
 Three keys change what counts as a difference, and each lines the two files up again at once:
 `W` ignores blanks, `C` ignores case, `E` ignores how the lines end. Line endings start from
 what the comparison dialog was last told, so the two agree about what "the same" means — the

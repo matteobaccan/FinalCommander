@@ -231,6 +231,20 @@ l'ultima dice che è l'ultima invece di ricominciare dall'inizio. Le frecce, `Pg
 quale delle due stai leggendo. `F12` elenca questa schermata con i visualizzatori e gli editor
 aperti, `F1` apre questo capitolo, e `Esc`, `F3` o `F10` la chiude.
 
+`F5` porta una differenza da una parte all'altra: la colonna in cui stai prende la versione
+dell'altra della differenza in cima allo schermo, quindi `Tab` scegli quale file cambia e
+`Alt+↓` quale differenza. Si spostano righe intere — una riga che ha solo l'altro lato viene
+aggiunta, una riga che ha solo questo lato va via — e una riga che esce da un file Unix per
+entrare in uno DOS riceve i fine riga DOS, così non ti ritrovi con l'unica riga strana dentro.
+Su una riga su cui i due file sono d'accordo, `F5` dice che qui non c'è nessuna differenza
+invece di prendere la prossima di sorpresa.
+
+Niente viene scritto fino a `F2`. Il file che ha preso qualcosa porta un `*` accanto al nome,
+`F2` lo scrive — accanto all'originale e rinominato sopra, così un'interruzione lascia intero
+quello che c'era — e appena scritto il `*` va via, così un secondo `F2` non ha niente da fare
+e lo dice. `Esc` con qualcosa non scritto lo dice e se ne va alla pressione dopo, che è il modo
+in cui una schermata senza un dialogo proprio ti chiede se hai fatto sul serio.
+
 Tre tasti cambiano cosa conta come differenza, e ognuno riallinea subito i due file: `W` ignora
 gli spazi, `C` ignora le maiuscole, `E` ignora come finiscono le righe. I fine riga partono da
 quello che è stato detto l'ultima volta al dialogo del confronto, così i due sono d'accordo su

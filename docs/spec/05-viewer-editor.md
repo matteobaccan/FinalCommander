@@ -828,11 +828,28 @@ and `F10` close. Two files that are the same open all the same — one wants to 
 are — and the screen says so rather than leaving the reader to scroll for a difference that is
 not there.
 
+**Taking a difference across.** `F5`, which is Midnight Commander's merge key: the focused
+column takes the other one's version of the hunk at the top of the screen, so `Tab` chooses
+which way it goes and `Alt+↓` chooses which hunk. Whole lines, because a hunk is whole lines
+— a row only the other side has is inserted, a row only this side has goes, a row both have
+with different text is replaced — and the incoming lines are re-ended to match the file they
+are going into, so a Unix line dropped into a DOS file does not become the one bare newline in
+it. A hunk one side has no lines in still has a place to go: where it goes is counted from the
+rows before it rather than read off a line number it has not got. On a row both files agree
+about, `F5` says there is no difference here rather than taking the next one by surprise.
+
+Nothing reaches a disk until `F2`. The side that was merged into is marked with a `*` beside
+its name, `F2` writes the marked side or sides — beside the original and renamed over it, as
+everything else in the program replaces a file — and a side that was written is no longer
+marked, so a second `F2` has nothing to do and says so. A side that refused keeps its mark.
+`Esc` with something unwritten says so and takes the next `Esc` as the answer: this screen has
+no dialog of its own, and a warning one can walk past deliberately is better than a question
+one has to answer twice an hour.
+
 **It is a screen**, so `F12` lists it with the viewers and editors and one steps away from it
 and back.
 
 Still to come, and deliberately not in the first cut: a unified view, which is a second layout
-of the same rows; copying a hunk to the other side, which is an edit of a file and belongs to
-the editor rather than to a reader; a diff of a file against the copy on disk, which is the
-editor's question; and a byte comparison of two binaries with the first differing offset and
-hex context, for which the pair is simply too large to line up as lines.
+of the same rows; a diff of a file against the copy on disk, which is the editor's question;
+and a byte comparison of two binaries with the first differing offset and hex context, for
+which the pair is simply too large to line up as lines.

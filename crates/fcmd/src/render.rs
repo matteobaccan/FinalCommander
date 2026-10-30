@@ -2523,10 +2523,21 @@ fn draw_diff(app: &App, view: &fcmd_view::Diff, buf: &mut Buffer, screen: Rect) 
     let number_w = 6u16;
     let text_w = side_w.saturating_sub(number_w + 1).max(4) as usize;
 
+    // A side that has been merged into carries a `*`, the way every editor has said "this is
+    // not what is on the disk" since there were editors.
+    let name = |text: &str, edited: bool| {
+        let room = (side_w as usize).saturating_sub(if edited { 4 } else { 2 });
+        let shown = fcmd_ui::elide_middle(text, room);
+        if edited {
+            format!("*{shown}")
+        } else {
+            shown
+        }
+    };
     let names = format!(
         "{}  ↔  {}",
-        fcmd_ui::elide_middle(&view.left_name, (side_w as usize).saturating_sub(2)),
-        fcmd_ui::elide_middle(&view.right_name, (side_w as usize).saturating_sub(2))
+        name(&view.left_name, view.left_edited),
+        name(&view.right_name, view.right_edited)
     );
     buf.put_str(inner.x, inner.y, &names, dim, inner.w);
 

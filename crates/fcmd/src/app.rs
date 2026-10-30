@@ -1867,6 +1867,12 @@ pub struct App {
     /// is not a `chown` to the owner it already has. `None` where the dialog had no such row:
     /// an entry inside an archive, a file on a server, Windows.
     attr_owner: Option<String>,
+    /// The two files the diff screen is comparing. The view holds their names to draw; `F2`
+    /// needs the paths, and a name is not a path.
+    diff_paths: Option<(VPath, VPath)>,
+    /// Has an `Esc` already said there is something unwritten? The second one leaves anyway,
+    /// which is how a screen with no dialog of its own asks "are you sure".
+    diff_warned: bool,
     /// The service list the `:services` panel was built from, so a row can be turned back
     /// into the service it stands for.
     services: Vec<fcmd_platform::Service>,
@@ -2195,6 +2201,8 @@ impl App {
             held: Mods::NONE,
             attr_targets: Vec::new(),
             attr_owner: None,
+            diff_paths: None,
+            diff_warned: false,
             attr_seed_mode: None,
             services: Vec::new(),
             attr_times: Default::default(),
@@ -4359,6 +4367,8 @@ impl App {
             ignore,
         );
         let same = view.identical();
+        self.diff_paths = Some((left, right));
+        self.diff_warned = false;
         self.mode = Mode::Diff(Box::new(view));
         if same {
             let m = self.i18n.t("diff-same");
@@ -4375,13 +4385,54 @@ impl App {
         let height = self.viewer_size.1.max(1);
         let mut message: Option<&'static str> = None;
         let mut error: Option<&'static str> = None;
+        // What `F2` is to write, worked out while the view is in hand and done once it is
+        // not: one text per side, and `None` for a side nobody merged into.
+        let mut write: Option<(Option<String>, Option<String>)> = None;
+        let warned = self.diff_warned;
+        // Any key but `Esc` ends the warning: an `Esc` that leaves has to be the one right
+        // after the one that warned, or a keystroke half an hour ago would close the screen.
+        self.diff_warned = false;
         let Mode::Diff(view) = &mut self.mode else {
             return;
         };
         match key.code {
             KeyCode::Esc | KeyCode::F(10) | KeyCode::F(3) => {
+                // A merge nobody wrote is a merge nobody asked to lose. This screen has no
+                // dialog of its own, so it says so and takes the next `Esc` as the answer.
+                if view.edited() && !warned {
+                    self.diff_warned = true;
+                    let m = self.i18n.t("diff-unwritten");
+                    self.set_error(m);
+                    return;
+                }
                 self.mode = Mode::Normal;
+                self.diff_paths = None;
                 return;
+            }
+            // Midnight Commander's merge: the focused column takes the other one's version
+            // of the hunk at the top of the screen. `Tab` chooses which way it goes.
+            KeyCode::F(5) => {
+                let into_right = view.right_focused;
+                if view.merge_hunk() {
+                    message = Some(if into_right {
+                        "diff-merged-right"
+                    } else {
+                        "diff-merged-left"
+                    });
+                } else {
+                    error = Some("diff-no-hunk-here");
+                }
+            }
+            // And the only thing that puts a merge on the disk.
+            KeyCode::F(2) => {
+                if view.edited() {
+                    write = Some((
+                        view.left_edited.then(|| view.text(false)),
+                        view.right_edited.then(|| view.text(true)),
+                    ));
+                } else {
+                    message = Some("diff-nothing-to-write");
+                }
             }
             // `F12` is the list of screens, as it is everywhere else: this one is a screen
             // like a viewer, and one steps away from a long diff and back.
@@ -4464,6 +4515,56 @@ impl App {
         if let Some(id) = error {
             let m = self.i18n.t(id);
             self.set_error(m);
+        }
+        if let Some(sides) = write {
+            self.write_diff(sides);
+        }
+    }
+
+    /// `F2` on the diff screen: put the merged side, or both, on the disk.
+    ///
+    /// Beside the original and renamed over it, which is how everything else in the program
+    /// replaces a file: an interruption leaves what was there whole. A side that was written
+    /// is no longer edited, so a second `F2` has nothing to do and says so; a side that
+    /// refused keeps its mark, so the work is not quietly lost.
+    fn write_diff(&mut self, sides: (Option<String>, Option<String>)) {
+        let Some((left_path, right_path)) = self.diff_paths.clone() else {
+            return;
+        };
+        let (left, right) = sides;
+        let mut written = 0usize;
+        let mut failed = None;
+        for (path, text, is_right) in [(left_path, left, false), (right_path, right, true)] {
+            let Some(text) = text else { continue };
+            match fcmd_jobs::replace_file(path.as_path(), text.as_bytes()) {
+                Ok(()) => {
+                    written += 1;
+                    if let Mode::Diff(view) = &mut self.mode {
+                        if is_right {
+                            view.right_edited = false;
+                        } else {
+                            view.left_edited = false;
+                        }
+                    }
+                }
+                Err(e) => {
+                    failed = Some(format!("{path}: {e}"));
+                    break;
+                }
+            }
+        }
+        match failed {
+            Some(e) => self.set_error(e),
+            None => {
+                let m = self
+                    .i18n
+                    .t_args("diff-written", &[("count", (written as i64).into())]);
+                self.set_status(m);
+                // Both panels are looking at these two files: their sizes and their dates
+                // have just changed.
+                self.read_panel(0);
+                self.read_panel(1);
+            }
         }
     }
 
@@ -27186,6 +27287,62 @@ five
             "the comparison dialog leaves line endings counting, so `E` turns them off"
         );
 
+        press(&mut app, "Esc");
+        assert!(matches!(app.mode, Mode::Normal), "and it closes");
+    }
+
+    /// `F5` and `F2` on the diff screen: take a difference across, and write it.
+    #[test]
+    fn a_difference_is_taken_across_and_written_to_the_file_that_took_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let (a, b) = (dir.path().join("a.txt"), dir.path().join("b.txt"));
+        std::fs::write(&a, b"one\ntwo\nthree\n").unwrap();
+        std::fs::write(&b, b"one\nTWO\nthree\n").unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "Tab");
+        press(&mut app, "Down");
+        press(&mut app, "Down");
+        press(&mut app, "Ctrl+Shift+D");
+        assert!(app.mode.diff().is_some(), "no diff: {}", app.status);
+
+        // Nothing to write before anything is taken, and the top row is a line both files
+        // agree about, so `F5` there says so rather than taking the next hunk by surprise.
+        press(&mut app, "F2");
+        assert_eq!(app.status, app.i18n.t("diff-nothing-to-write"));
+        press(&mut app, "F5");
+        assert_eq!(app.status, app.i18n.t("diff-no-hunk-here"));
+        assert!(!app.mode.diff().unwrap().edited());
+
+        // On the hunk, `F5` gives the left file the right one's line. Nothing on the disk yet.
+        press(&mut app, "Alt+Down");
+        press(&mut app, "F5");
+        assert_eq!(app.status, app.i18n.t("diff-merged-left"));
+        let view = app.mode.diff().unwrap();
+        assert!(view.left_edited && !view.right_edited);
+        assert!(view.identical(), "the two now agree on screen");
+        assert_eq!(
+            std::fs::read_to_string(&a).unwrap(),
+            "one\ntwo\nthree\n",
+            "and the disk has not been touched"
+        );
+
+        // `Esc` does not throw that away without saying so; a second one would.
+        press(&mut app, "Esc");
+        assert!(app.mode.diff().is_some(), "it is still open");
+        assert_eq!(app.status, app.i18n.t("diff-unwritten"));
+
+        // `F2` writes it, and only the side that was merged into.
+        press(&mut app, "F2");
+        assert_eq!(std::fs::read_to_string(&a).unwrap(), "one\nTWO\nthree\n");
+        assert_eq!(std::fs::read_to_string(&b).unwrap(), "one\nTWO\nthree\n");
+        assert!(!app.mode.diff().unwrap().edited(), "nothing left to write");
+        assert!(
+            !dir.path().join("a.txt.fcmd-part").exists(),
+            "and the part file it was written through is gone"
+        );
+
+        // Which means `Esc` now leaves at the first press.
         press(&mut app, "Esc");
         assert!(matches!(app.mode, Mode::Normal), "and it closes");
     }

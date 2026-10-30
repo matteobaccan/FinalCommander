@@ -71,8 +71,25 @@ pub struct Diff {
     pub top: usize,
     /// Horizontal scroll, in characters, shared by both columns so the eye can compare.
     pub col: usize,
-    /// Which column the cursor is in, for the key bar and for a future copy-to-the-other-side.
+    /// Which column the cursor is in: the side a merge writes into, and the side the key bar
+    /// names.
     pub right_focused: bool,
+    /// How each file ends its lines, for a merge: a line taken from the other side is re-ended
+    /// to match the file it is going into, so merging a Unix file into a DOS one does not
+    /// leave one bare newline in the middle of it.
+    ///
+    /// The lines themselves keep whatever they came with — the split is on `\n` alone, so a
+    /// `\r` stays at the end of the line it belongs to. That is what lets a file be written
+    /// back exactly as it was read, and what [`Ignore::line_endings`] is there to see past.
+    left_crlf: bool,
+    right_crlf: bool,
+    /// Did each file end with a newline? A file that did not is not given one back.
+    left_final_eol: bool,
+    right_final_eol: bool,
+    /// Has either side been merged into since it was read? What is on screen is then not what
+    /// is on the disk, and `F2` is the only thing that puts it there.
+    pub left_edited: bool,
+    pub right_edited: bool,
 }
 
 impl Diff {
@@ -97,6 +114,14 @@ impl Diff {
             }
             out
         };
+        // Which ending the file uses, by counting rather than by the first one found: a file
+        // that is mostly DOS with one stray Unix line is a DOS file, and a merge into it
+        // should write DOS lines.
+        let crlf = |bytes: &[u8]| -> bool {
+            let lf = bytes.iter().filter(|b| **b == b'\n').count();
+            let crlf = bytes.windows(2).filter(|w| w == b"\r\n").count();
+            lf > 0 && crlf * 2 > lf
+        };
         let mut diff = Diff {
             left_name,
             right_name,
@@ -108,6 +133,12 @@ impl Diff {
             top: 0,
             col: 0,
             right_focused: false,
+            left_crlf: crlf(left_bytes),
+            right_crlf: crlf(right_bytes),
+            left_final_eol: left_bytes.last() == Some(&b'\n'),
+            right_final_eol: right_bytes.last() == Some(&b'\n'),
+            left_edited: false,
+            right_edited: false,
         };
         diff.align();
         diff
@@ -307,6 +338,109 @@ impl Diff {
     pub fn hunk_at(&self) -> usize {
         self.hunks.iter().filter(|at| **at <= self.top).count()
     }
+
+    /// The run of rows the hunk at the top of the screen covers, or `None` when the top row
+    /// is a line both files agree about.
+    ///
+    /// The top row is the position in this view — there is no cursor of its own — so the
+    /// hunk one acts on is the one at the top, which is exactly where `Alt+↓` parks one.
+    fn hunk_rows(&self) -> Option<std::ops::Range<usize>> {
+        if self.rows.get(self.top)?.kind == Side::Same {
+            return None;
+        }
+        let start = self.rows[..self.top]
+            .iter()
+            .rposition(|r| r.kind == Side::Same)
+            .map_or(0, |at| at + 1);
+        let end = self.rows[self.top..]
+            .iter()
+            .position(|r| r.kind == Side::Same)
+            .map_or(self.rows.len(), |at| self.top + at);
+        Some(start..end)
+    }
+
+    /// Take the other side's version of the hunk at the top: Midnight Commander's `F5`.
+    ///
+    /// The focused column is the one written into, so `Tab` chooses the direction and the
+    /// key bar says which way it will go. What moves is whole lines, because a hunk is whole
+    /// lines: a row only the other side has is inserted, a row only this side has goes, and a
+    /// row both have with different text is replaced.
+    ///
+    /// Nothing is written to any disk. The side is marked as edited and `F2` is the only
+    /// thing that puts it there, which is what lets one merge four hunks and look at the
+    /// result before committing to it.
+    ///
+    /// `false` when the top row is not in a hunk, which is the caller's cue to say so.
+    pub fn merge_hunk(&mut self) -> bool {
+        let Some(rows) = self.hunk_rows() else {
+            return false;
+        };
+        // Where the hunk starts in each file, counted rather than read off the line numbers:
+        // a hunk one side has no lines in has no line number to read, and the place it goes
+        // is still exactly "after everything before it".
+        let before = &self.rows[..rows.start];
+        let (left_from, right_from) = (
+            before.iter().filter(|r| r.left_no.is_some()).count(),
+            before.iter().filter(|r| r.right_no.is_some()).count(),
+        );
+        let inside = &self.rows[rows.clone()];
+        let (left_len, right_len) = (
+            inside.iter().filter(|r| r.left_no.is_some()).count(),
+            inside.iter().filter(|r| r.right_no.is_some()).count(),
+        );
+        // Re-ended to match the file it is going into: a Unix line dropped into a DOS file
+        // would otherwise be the one line in it that ends differently.
+        let reend = |lines: &[String], crlf: bool| -> Vec<String> {
+            lines
+                .iter()
+                .map(|line| {
+                    let bare = line.strip_suffix('\r').unwrap_or(line);
+                    if crlf {
+                        format!("{bare}\r")
+                    } else {
+                        bare.to_string()
+                    }
+                })
+                .collect()
+        };
+        if self.right_focused {
+            let taken = reend(&self.left[left_from..left_from + left_len], self.right_crlf);
+            self.right.splice(right_from..right_from + right_len, taken);
+            self.right_edited = true;
+        } else {
+            let taken = reend(
+                &self.right[right_from..right_from + right_len],
+                self.left_crlf,
+            );
+            self.left.splice(left_from..left_from + left_len, taken);
+            self.left_edited = true;
+        }
+        // Lined up again, and the eye kept where it was: the hunk that was at the top has
+        // gone, so the top row now holds whatever took its place.
+        self.align();
+        self.top = rows.start.min(self.rows.len().saturating_sub(1));
+        true
+    }
+
+    /// Has either side been merged into since it was read?
+    pub fn edited(&self) -> bool {
+        self.left_edited || self.right_edited
+    }
+
+    /// One side as it now stands, ready to be written: its own line endings, because the `\r`
+    /// never left the lines, and its own answer about a final newline.
+    pub fn text(&self, right: bool) -> String {
+        let (lines, final_eol) = if right {
+            (&self.right, self.right_final_eol)
+        } else {
+            (&self.left, self.left_final_eol)
+        };
+        let mut out = lines.join("\n");
+        if final_eol && !lines.is_empty() {
+            out.push('\n');
+        }
+        out
+    }
 }
 
 #[cfg(test)]
@@ -321,6 +455,84 @@ mod tests {
             right.as_bytes(),
             Ignore::default(),
         )
+    }
+
+    /// `F5`: the focused side takes the other one's version of the hunk at the top. Three
+    /// shapes, because a hunk is one of three things — a line both sides have and differ
+    /// about, a line only one side has, and a line only the other side has.
+    #[test]
+    fn a_hunk_is_taken_from_the_other_side_into_the_focused_one() {
+        // A changed line, merged leftwards: the left file ends up as the right one.
+        let mut d = diff("one\ntwo\nthree\n", "one\nTWO\nthree\n");
+        assert!(!d.identical());
+        assert!(d.next_hunk(), "there is a hunk to stand on");
+        assert!(d.merge_hunk(), "and it is taken");
+        assert!(d.left_edited && !d.right_edited, "the focused side changed");
+        assert_eq!(d.text(false), "one\nTWO\nthree\n");
+        assert!(d.identical(), "and the two files now agree: {:?}", d.rows());
+
+        // A line only the right side has: merged leftwards it is inserted, in its place.
+        let mut d = diff("one\nthree\n", "one\ntwo\nthree\n");
+        assert!(d.next_hunk());
+        assert!(d.merge_hunk());
+        assert_eq!(d.text(false), "one\ntwo\nthree\n");
+        assert!(d.identical());
+
+        // A line only the left side has: merged *rightwards* it is added there, and merged
+        // leftwards it would go. `Tab` is what chooses, so this is the same key both ways.
+        let mut d = diff("one\ntwo\nthree\n", "one\nthree\n");
+        d.right_focused = true;
+        assert!(d.next_hunk());
+        assert!(d.merge_hunk());
+        assert!(d.right_edited && !d.left_edited);
+        assert_eq!(d.text(true), "one\ntwo\nthree\n");
+        assert!(d.identical());
+    }
+
+    /// The top row is the position, so a merge asked for on a line both files agree about is
+    /// not a merge of the next hunk by accident: it says there is nothing here.
+    #[test]
+    fn nothing_is_merged_from_a_line_the_two_files_agree_about() {
+        let mut d = diff("one\ntwo\n", "one\nTWO\n");
+        assert_eq!(d.top, 0, "which is a line they agree about");
+        assert!(!d.merge_hunk());
+        assert!(!d.edited());
+        assert_eq!(d.text(false), "one\ntwo\n");
+    }
+
+    /// A file read and written back without being touched is the same file, down to the line
+    /// endings and the last byte: the `\r` of a DOS file stays on its line, and a file that
+    /// ended without a newline does not get one.
+    #[test]
+    fn a_side_written_back_untouched_is_the_file_that_was_read() {
+        for text in ["a\nb\n", "a\r\nb\r\n", "a\nb", "", "\n"] {
+            let d = diff(text, "zzz\n");
+            assert_eq!(d.text(false), text, "{text:?}");
+        }
+    }
+
+    /// A line taken out of a Unix file into a DOS one is written as a DOS line: one bare
+    /// newline in the middle of a file is the kind of thing that shows up in a later diff
+    /// and not in this one.
+    ///
+    /// With the line endings ignored, which is the only way these two files have one hunk
+    /// between them rather than three — and the way anybody actually compares a file off a
+    /// Windows machine with the copy here.
+    #[test]
+    fn a_line_merged_into_a_dos_file_is_given_dos_line_endings() {
+        let mut d = Diff::new(
+            "left".into(),
+            b"one\r\ntwo\r\nthree\r\n",
+            "right".into(),
+            b"one\nTWO\nthree\n",
+            Ignore {
+                line_endings: true,
+                ..Ignore::default()
+            },
+        );
+        assert!(d.next_hunk(), "the one line they differ about");
+        assert!(d.merge_hunk(), "leftwards, into the DOS file");
+        assert_eq!(d.text(false), "one\r\nTWO\r\nthree\r\n");
     }
 
     #[test]

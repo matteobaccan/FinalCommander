@@ -1930,28 +1930,10 @@ fn recode_one(
     if out == bytes {
         return Ok(false);
     }
-    let part = file.with_extension(match file.extension() {
-        Some(ext) => format!("{}.fcmd-part", ext.to_string_lossy()),
-        None => "fcmd-part".to_string(),
-    });
-    std::fs::write(&part, &out).map_err(|e| format!("{}: {e}", part.display()))?;
-    // The mode of the original, because a rename does not carry one and a script that was
-    // executable has to stay executable.
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(
-            &part,
-            std::fs::Permissions::from_mode(meta.permissions().mode()),
-        );
-    }
-    match std::fs::rename(&part, file) {
-        Ok(()) => Ok(true),
-        Err(e) => {
-            let _ = std::fs::remove_file(&part);
-            Err(e.to_string())
-        }
-    }
+    // Beside the original and renamed over it, so an interruption leaves the original whole
+    // and the mode comes across with it.
+    fcmd_jobs::replace_file(file, &out).map_err(|e| e.to_string())?;
+    Ok(true)
 }
 
 /// How many names each of these files has, by name (SPEC 02 §3).

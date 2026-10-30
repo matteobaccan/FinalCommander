@@ -23,7 +23,7 @@ pub mod sync;
 
 pub use arcfs::ArcFs;
 pub use attrs::{set_attributes, Change, Mode};
-pub use fs::{free_name, part_path, CopyHow, Facts, JobFs, LocalFs, PART_SUFFIX};
+pub use fs::{free_name, part_path, replace_file, CopyHow, Facts, JobFs, LocalFs, PART_SUFFIX};
 pub use link::{create_link, LinkError, LinkKind};
 pub use plan::{plan, Plan, PlanError, Unit, UnitKind};
 pub use replace::{

@@ -8,6 +8,24 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **Taking a difference across, in the diff screen.** `F5`, Midnight Commander's merge key:
+  the column you are in takes the other one's version of the difference at the top of the
+  screen, so `Tab` chooses which file changes and `Alt+↓` chooses which difference. Whole lines
+  move, because a difference is whole lines — a line only the other side has is added, a line
+  only this side has goes, a line both have with different text is replaced — and a line
+  coming out of a Unix file into a DOS one is given DOS line endings, so the result is not a
+  file with one odd line in it. A difference one side has no lines in still has a place to go:
+  where it goes is counted from the rows above it rather than read off a line number it has
+  not got. On a line both files agree about, `F5` says there is no difference here rather than
+  taking the next one by surprise.
+
+  Nothing reaches a disk until `F2`. The file that took something carries a `*` beside its
+  name, `F2` writes it — beside the original and renamed over it, so an interruption leaves
+  what was there whole and the original's mode comes across — and once written the `*` goes,
+  so a second `F2` has nothing to do and says so. `Esc` with something unwritten says so and
+  leaves at the next press: this screen has no dialog of its own, and a warning one walks past
+  deliberately beats a question one answers twice an hour.
+
 - **Who a file belongs to, in the dialog that says what it is.** `Ctrl+A` showed the owner and
   would not change it. Now *Owner* is a row, as `user:group`: either half may be a name or a
   number — a number because a filesystem with no matching accounts shows one, and typing it
