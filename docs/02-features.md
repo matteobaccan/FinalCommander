@@ -7,7 +7,7 @@ Milestones: **M1** = usable daily driver (MVP), **M2** = feature parity with mc 
 **M3** = parity with FAR/TC, **M4** = beyond (new ideas). M1 closed long ago, so no row
 carries it any more: what it owned is a `✓`.
 
-**How to read the `State` column**, as of 0.22.0:
+**How to read the `State` column**, as of 0.26.0:
 
 | | |
 | --- | --- |
@@ -16,6 +16,12 @@ carries it any more: what it owned is a `✓`.
 | `M2` | the milestone in progress owns it, and it is not there |
 | `M3`, `M4` | an idea with a milestone against it, which is not a promise |
 | `—` | a decision, not a feature |
+
+Every `M2` row was read against the code again for 0.26.0, and thirty of the thirty-six were
+out of date: twelve because the work had been finished and nobody changed the character, and
+eighteen because most of it had and the cell now says what is left. Six still say `M2` and
+mean it — a stacked layout, the branch view, icons, the multi-rename tool, a disk-usage view,
+and opening the item in the desktop's own file manager.
 
 Until 0.22.0 this column held a paragraph per row about what had shipped and in which
 version, which was a second changelog to keep in step with the first — and a tax on every
@@ -40,7 +46,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | --- | --- | --- | --- |
 | 1.1 | Two equal panels, active/passive, `Tab` to switch | NC | ✓ |
 | 1.2 | Panel layouts: side-by-side and stacked (horizontal split) | KRU | M2 |
-| 1.3 | Resizable split, saved per session; restore defaults | FAR | M2 |
+| 1.3 | Resizable split, saved per session; restore defaults | FAR | ~ a key that puts the split back to the middle |
 | 1.4 | View modes: brief (multi-column names), medium, full (size/date), wide, detailed, owners, links, custom columns | FAR | ✓ |
 | 1.5 | User-definable column sets (which fields, widths, alignment, formats) | FAR/TC | ✓ |
 | 1.6 | Tabs per panel, named, persisted, lockable, duplicate/move-to-other-side | TC/MTN2 | ~ reordering a tab within its row |
@@ -55,9 +61,9 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 1.14 | Secondary sort criteria chain (tie-breakers, configurable): per sort mode an ordered set, with its own editor (add, remove, replace, direction, inherit, reorder, reset) | FAR | M3 |
 | 1.14b | Sort groups: named mask groups that sort ahead of or behind everything else, ordered, applied on top of the sort mode | FAR (`Shift+F11`) | ✓ |
 | 1.14c | Sort by creation time, access time, owner and description, besides name/ext/size/write time | FAR (`Ctrl+F8…F11`) | ✓ |
-| 1.15 | Filters: per-panel display filter, quick filter bar, filter by mask/size/date/attrs, named filter sets, filter menu | FAR/KRU | M2 |
+| 1.15 | Filters: per-panel display filter, quick filter bar, filter by mask/size/date/attrs, named filter sets, filter menu | FAR/KRU | ~ the dialog for the size, date and attribute conditions, and a list of named sets |
 | 1.15b | A column grammar for view modes: per column a property letter with modifiers (name with selection marks / no extension / right-aligned, extension, size / allocated size / stream size with grouping, decimal units, fractions, four date-and-time pairs with brief and month-name forms, attributes, description, owner with domain, hard-link count, stream count), widths absolute or automatic or a percentage, repeated groups giving newspaper stripes, and the same grammar for the panel status line and for search results | FAR | ✓ |
-| 1.15c | Per view mode: fullscreen, align file and folder extensions, folders uppercase, files lowercase, uppercase names shown lowercase | FAR | M2 |
+| 1.15c | Per view mode: fullscreen, align file and folder extensions, folders uppercase, files lowercase, uppercase names shown lowercase | FAR | ✓ |
 | 1.16 | Hidden/system files toggle (`Ctrl+H`). A dotfile counts as hidden on every platform, and Windows adds the hidden and system attributes, so the key means the same thing everywhere | all | ✓ |
 | 1.17 | Branch view (flat recursive listing of the current tree) | TC | M2 |
 | 1.18 | Panelize: fill a panel with the result of a search or an external command | MC | ✓ |
@@ -97,11 +103,11 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 3.6 | Extended attributes / ADS (NTFS streams), xattr on Linux/macOS, resource forks | FAR | M3 |
 | 3.7 | Operation engine: queue of jobs, parallel or serial, pause/resume/cancel, background with progress, speed/ETA, per-job log | TC/KRU/MTN2 | ~ a queue |
 | 3.8 | Conflict resolution: overwrite / skip / rename / append / newer-only / size-differs, "apply to all", per-conflict dialog | all | ✓ |
-| 3.9 | Verify after copy (hash compare), preserve mode/owner/times/xattrs, sparse files, reflink/`copy_file_range`/CoW, `FSCTL` server-side copy | TC/NEW | M2 |
+| 3.9 | Verify after copy (hash compare), preserve mode/owner/times/xattrs, sparse files, reflink/`copy_file_range`/CoW, `FSCTL` server-side copy | TC/NEW | ~ verifying as part of the copy, the owner and extended attributes, sparse files |
 | 3.10 | Resume interrupted copy of large files | TC | M3 |
 | 3.11 | Multi-rename tool: patterns (`[N]`, `[E]`, counters, date, regex, case changes), live preview, undo | TC/KRU | M2 |
 | 3.12 | Split / combine files; checksum create & verify (`.md5`, `.sha1`, `.sha256`, `.sfv`) | TC/KRU | ~ splitting and combining |
-| 3.13 | Apply command to each selected file (`Ctrl+G` style), with `%`-macros | FAR | M2 |
+| 3.13 | Apply command to each selected file (`Ctrl+G` style), with `%`-macros | FAR | ✓ |
 | 3.14 | Compare directories (by name/size/date/content), synchronise directories with preview and one-way/two-way modes | TC/KRU | ~ a saved sync job and a written report |
 | 3.15 | Compare files by content (internal diff viewer, side-by-side, word-level) | MC/KRU | ~ a unified view, two binaries byte by byte |
 | 3.16 | Change encoding / line endings in bulk (CRLF↔LF, codepage recode) | MC | ✓ |
@@ -115,7 +121,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | --- | --- | --- | --- |
 | 4.1 | Archives browsable as directories, read: zip, tar(+gz/bz2/xz/zst), 7z, rar(read-only), cab, iso, ar/deb/rpm, cpio, lha, arj, zip64, encrypted zip/7z | FAR/TC/MC | ~ rar, which needs `unrar` |
 | 4.2 | Archive write: create/add/delete/update in zip, 7z, tar family; pack dialog with format options (level, solid, encryption, split volumes) | TC | ~ split volumes |
-| 4.3 | Pack/unpack shortcuts (`Alt+F5`/`Alt+F6`/`Shift+F1`/`Shift+F2`), test archive, extract-here vs extract-to | FAR/TC | M2 |
+| 4.3 | Pack/unpack shortcuts (`Alt+F5`/`Alt+F6`/`Shift+F1`/`Shift+F2`), test archive, extract-here vs extract-to | FAR/TC | ~ `Alt+F5`/`Alt+F6`, which are Total Commander's keys and taken here |
 | 4.4 | Open a file inside an archive in the viewer/editor; edit-in-place writes back | FAR | M3 |
 | 4.4b | **Remote file in the viewer and the editor**: `F3` views a fetched copy, `F4` edits it and `F2` writes it back (rename into place, change check, the local copy named if it fails) | FAR NetBox | ✓ |
 | 4.5 | **SFTP/SSH** panels: listing, navigation, mkdir, rename, delete, symlinks, mode and mtime | far2l NetRocks/termscp | ✓ |
@@ -123,7 +129,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 4.5c | **S3-compatible object storage, read**: prefix as directory, any endpoint, credentials from the environment or `~/.aws/credentials`, a cap on a flat listing of a huge bucket | far2l NetRocks | ✓ |
 | 4.6 | **Connection manager** (`Alt+N`): saved `[[site]]` list with groups, agent / key file / asked password, host-key verification with a trust-on-first-use prompt, one pooled connection per host, one jump host per site (`ssh -J`), explicit disconnect | TC/KRU | ~ the OS keyring, and a code page of its own |
 | 4.7 | **Transfers through the local operation engine**: copy and move up, down, between two servers and inside one, with progress, conflicts and cancellation; a `sftp://` URL in `Ctrl+L` connects | TC | ~ a background queue, resume, a bandwidth limit |
-| 4.8 | Temporary panel (collect unrelated files into a virtual panel and act on them) | FAR `tmppanel` | M2 |
+| 4.8 | Temporary panel (collect unrelated files into a virtual panel and act on them) | FAR `tmppanel` | ✓ |
 | 4.9 | Special VFS: process list, services, registry (Windows), `/proc`-style views, package contents, git status/worktree view | FAR/far2l | ~ the registry, package contents, a git view |
 | 4.10 | Trash as a browsable VFS | NEW | M3 |
 | 4.11 | VFS API available to plugins (so a plugin can add a scheme) | FAR/TC(WFX) | M3 |
@@ -133,11 +139,11 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | # | Feature | Origin | State |
 | --- | --- | --- | --- |
 | 5.1 | Text mode with and without wrap (char/word wrap), horizontal scroll, arbitrary line length | FAR | ✓ |
-| 5.2 | Hex mode and dump mode, configurable bytes per row | FAR | M2 |
+| 5.2 | Hex mode and dump mode, configurable bytes per row | FAR | ✓ |
 | 5.3 | Encoding detection + manual codepage selection, BOM handling, invalid-byte display | FAR/MC | ✓ |
 | 5.4 | Search (plain, case-insensitive, whole word, regex, hex pattern), search next/previous, highlight all hits, copy selection | FAR | ✓ |
-| 5.5 | Go to offset/line/percent; bookmarks 0..9; "undo position" | FAR | M2 |
-| 5.6 | Streaming/mmap for huge files (GB+) without loading; follow mode (`tail -f`) | FAR/MTN2 | M2 |
+| 5.5 | Go to offset/line/percent; bookmarks 0..9; "undo position" | FAR | ✓ |
+| 5.6 | Streaming/mmap for huge files (GB+) without loading; follow mode (`tail -f`) | FAR/MTN2 | ✓ |
 | 5.7 | Syntax highlighting in the viewer; Markdown rendering; tabs expansion | MTN2 | ✓ |
 | 5.8 | Previews: images (sixel/kitty/iterm protocols), video thumbnails, PDF, archives, media metadata, office/JSON/CSV pretty print — pluggable pipeline with timeouts | YAZI | M3 |
 | 5.9 | Filtered view: pipe the file through a command and view the output | MC | ✓ |
@@ -151,9 +157,9 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 5.13 | **JVM bytecode and .NET IL in process**: class files listed javap-style with the constant pool resolved; managed PEs listed ildasm-style with metadata-resolved tokens and `#US` string literals | NEW | ✓ |
 | 5.14 | Still external: Python bytecode, aarch64/riscv decoding, .NET signatures and generics | NEW | M3 |
 | 5.15 | **Structure pane** (`F11`): what the file is and where anything inside it is — format, architecture, kind, entry point, the header field by field, sections and segments, imports and exports, the interpreter and build id; `Tab` moves the focus, `Enter` takes the hex or disassembly pane to that offset. Read through a seeking reader, so a section table at the end of a 3 GB file costs two seeks | NEW | ✓ |
-| 5.16 | Following a branch in the disassembly (`Enter` on a `call`/`jmp`, `Backspace` back, the jumped-from stack on screen), and `Alt+F8` taking a virtual address as well as an offset | NEW | M2 |
-| 5.17 | Raw devices: a block device or a partition opened as a file, size from an `ioctl`, read-only unless told otherwise | NEW | M2 |
-| 5.23 | Next/previous file in panel without leaving the viewer (`+`/`-`) | FAR | M2 |
+| 5.16 | Following a branch in the disassembly (`Enter` on a `call`/`jmp`, `Backspace` back, the jumped-from stack on screen), and `Alt+F8` taking a virtual address as well as an offset | NEW | ~ the jumped-from stack on the screen, and a virtual address in the goto |
+| 5.17 | Raw devices: a block device or a partition opened as a file, size from an `ioctl`, read-only unless told otherwise | NEW | ✓ |
+| 5.23 | Next/previous file in panel without leaving the viewer (`+`/`-`) | FAR | ✓ |
 
 ## 5b. Hiew release VIII, feature by feature
 
@@ -212,7 +218,7 @@ a binary into something readable rather than only into instructions.
 | # | Feature | Origin | State |
 | --- | --- | --- | --- |
 | 7.1 | Find files: mask, content (text/regex/hex), size/date/attr filters, archives included, encoding list, results panel, panelize results, "find folder" | FAR/TC | ~ dates and attributes in the dialog, code pages, saving a search |
-| 7.2 | Grep-like content search with result navigation and jump-to-match in the editor | NEW | M2 |
+| 7.2 | Grep-like content search with result navigation and jump-to-match in the editor | NEW | ~ opening a hit at the line it was found on |
 | 7.3 | Disk usage / occupied space view (per-dir sizes, sortable, graphical bars) | KRU/TC | M2 |
 | 7.4 | User menu (`F2`) with user-defined entries, submenus, hotkeys, per-directory menus | FAR/MC | ~ `FarMenu.ini`, separators, an editor for the entries, `Shift+F10` |
 | 7.5 | File associations by mask: view/edit/execute/alternative commands | FAR/MC | ✓ |
@@ -222,7 +228,7 @@ a binary into something readable rather than only into instructions.
 | 7.9 | Print files / print manager | FAR | M4 |
 | 7.10 | Screen grabber (copy a rectangle of the screen to clipboard) | FAR | M4 |
 | 7.11 | Learn-keys / terminal key diagnostics | MC | ~ the escape sequence cannot be typed in: it is read by a library with a table for the terminals in use |
-| 7.12 | Help system: context-sensitive `F1`, searchable, localised, offline | FAR/KRU | M2 |
+| 7.12 | Help system: context-sensitive `F1`, searchable, localised, offline | FAR/KRU | ~ a search across the pages |
 
 ## 8. Shell & terminal integration
 
@@ -244,10 +250,10 @@ a binary into something readable rather than only into instructions.
 | 9.1 | Human-editable config files (TOML) + in-app settings dialogs (System, Panel, Interface, Confirmations — every row bound to a config key and applied through the same code as `--set`, SPEC 10 §3); portable mode (config next to the binary) | MTN2 | ✓ |
 | 9.2 | Full keymap remapping, multiple **keymap profiles** (`far`, `tc`, `mc`, `nc`, `vi`) switchable at runtime | KRU/MTN2 | ~ the `tc`, `nc` and `vi` profiles |
 | 9.3 | Themes: 7 built-in (`commander`, `far` — FAR's own default palette element for element, `black`, `white`, `matrix`, `tron`, `blade`) + `[[theme]]` blocks in `fcmd.toml` or from plugins, hot-reloaded, `inherit`-able, exportable with `--export-theme`; 24-bit colour with 256/16/mono degradation | MTN2 | ✓ |
-| 9.4 | Localisation (fluent-based): EN, IT, DE, FR, ES, RU, ZH-Hans; UI + help + key names, runtime switchable from the `Languages` list, drop-in language dirs | FAR/MTN2 | M2 |
-| 9.5 | CJK/wide-character correct layout, combining marks, RTL-safe truncation, emoji width | MTN2 | M2 |
+| 9.4 | Localisation (fluent-based): EN, IT, DE, FR, ES, RU, ZH-Hans; UI + help + key names, runtime switchable from the `Languages` list, drop-in language dirs | FAR/MTN2 | ✓ |
+| 9.5 | CJK/wide-character correct layout, combining marks, RTL-safe truncation, emoji width | MTN2 | ~ combining marks and RTL-safe truncation |
 | 9.6 | Accessibility: no-colour mode, screen-reader-friendly output mode, configurable focus indication | NEW | M3 |
-| 9.7 | Session save/restore (tabs, paths, selections, viewer positions) | TC | M2 |
+| 9.7 | Session save/restore (tabs, paths, selections, viewer positions) | TC | ~ the selection, which is not kept |
 | 9.8 | Settings search ("where is that option?") | NEW | M3 |
 | 9.9 | No telemetry, no network calls except explicit user actions; optional update check off by default | MTN2 | ✓ |
 | 9.10 | Menu bar (`F9`) with FAR's five menus; every entry is a command from the vocabulary, the shortcut shown is read from the keymap in force, and an entry whose feature is missing is drawn dim and says so (SPEC 10 §2) | FAR | ✓ |
@@ -264,23 +270,23 @@ Found by reading FAR's own help and configuration tables; the detail is in
 
 | # | Feature | Origin | State |
 | --- | --- | --- | --- |
-| 9b.1 | The selection matrix: the modifier picks the criterion — mask, same extension as the cursor, same name, everything — across select, deselect and invert, with separate rules for folders | FAR | M2 |
+| 9b.1 | The selection matrix: the modifier picks the criterion — mask, same extension as the cursor, same name, everything — across select, deselect and invert, with separate rules for folders | FAR | ✓ |
 | 9b.2 | `Shift+F5`/`Shift+F6`/`Shift+F8`: copy, move and delete the item under the cursor, ignoring the selection | FAR | ✓ |
-| 9b.3 | Filters as one shared object used by the panel display, by find and by copy: mask, size range (binary and decimal suffixes), date range on any of four timestamps, absolute or relative in days, attributes as three-state include/exclude/ignore, more-than-one-hard-link | FAR/KRU | M2 |
-| 9b.4 | Mask groups (`<arc>`, `<temp>`, `<exec>`, nestable) and the full mask grammar: character ranges, `/regex/i`, `include | exclude` | M2 |
+| 9b.3 | Filters as one shared object used by the panel display, by find and by copy: mask, size range (binary and decimal suffixes), date range on any of four timestamps, absolute or relative in days, attributes as three-state include/exclude/ignore, more-than-one-hard-link | FAR/KRU | ~ the copy takes only the masks, not the size, date and attribute conditions |
+| 9b.4 | Mask groups (`<arc>`, `<temp>`, `<exec>`, nestable) and the full mask grammar: character ranges, `/regex/i`, `include | exclude` | ✓ |
 | 9b.5 | Four histories (commands, folders, view/edit, dialogs), each with a size and a lifetime in days, persisted, with items that can be locked so new entries do not evict them | FAR | ✓ |
 | 9b.6 | File descriptions (`descript.ion`, `files.bbs`): edit, display as a column, carry through copy/move/rename/delete, show the folder's own description file in the info panel | FAR/NC | ✓ |
-| 9b.7 | Copy dialog depth: several destinations, append to existing, only-newer as a policy, copy symlink contents, a filter on the operation, destination from the folder tree, speed and ETA | FAR | M2 |
-| 9b.8 | Metasymbol language for the user menu, file associations and apply-command: name forms, the selected-file list as a file or inline, path forms, resolved paths, the description, a prompt with history, panel-switching prefixes, and quoting/case/encoding modifiers | FAR | M2 |
-| 9b.9 | Command prefixes on the command line (`view:`, `edit:`, `goto:`, `clip:`, `whereis:`, `link:`, `run:`), as FAR's `farcmds` does | FAR | M2 |
-| 9b.10 | Internal shell commands that need no shell: `cls`, `cd`/`chdir` with a configurable `cd ~`, `chcp`, `set`, nestable `if [not] exist` / `if [not] defined`, `pushd`/`popd`/`clrd`, `title`, `exit` | FAR | M2 |
+| 9b.7 | Copy dialog depth: several destinations, append to existing, only-newer as a policy, copy symlink contents, a filter on the operation, destination from the folder tree, speed and ETA | FAR | ~ several destinations at once, and appending to an existing file |
+| 9b.8 | Metasymbol language for the user menu, file associations and apply-command: name forms, the selected-file list as a file or inline, path forms, resolved paths, the description, a prompt with history, panel-switching prefixes, and quoting/case/encoding modifiers | FAR | ~ resolved paths, the description, and the case and encoding modifiers |
+| 9b.9 | Command prefixes on the command line (`view:`, `edit:`, `goto:`, `clip:`, `whereis:`, `link:`, `run:`), as FAR's `farcmds` does | FAR | ~ `clip:` and `link:` |
+| 9b.10 | Internal shell commands that need no shell: `cls`, `cd`/`chdir` with a configurable `cd ~`, `chcp`, `set`, nestable `if [not] exist` / `if [not] defined`, `pushd`/`popd`/`clrd`, `title`, `exit` | FAR | ~ `title`, `chcp`, and the nestable `if` |
 | 9b.11 | Autocomplete with four separately switchable sources (filesystem, history, `PATH`, environment), each three-state, as a list or appended inline | FAR | ✓ |
 | 9b.12 | Screen grabber: select any region of the screen, stream or block, extend, move, append to the clipboard | FAR (`Alt+Ins`) | M3 |
-| 9b.13 | Viewer ⇄ editor at the same position, jump to the open file in the panel, next/previous file of the panel from inside the viewer | FAR (`F6`, `Ctrl+F10`, `Gray ±`) | M2 |
-| 9b.14 | Remember per file: position, code page, view mode, wrap mode, bookmarks | FAR | M2 |
+| 9b.13 | Viewer ⇄ editor at the same position, jump to the open file in the panel, next/previous file of the panel from inside the viewer | FAR (`F6`, `Ctrl+F10`, `Gray ±`) | ~ jumping from the viewer to the file's row in the panel |
+| 9b.14 | Remember per file: position, code page, view mode, wrap mode, bookmarks | FAR | ✓ |
 | 9b.15 | Sorting collation as three settings — collation (ordinal/invariant/linguistic), digits-as-numbers, case sensitivity — rather than one "natural sort" flag | FAR | M3 |
 | 9b.16 | A searchable settings browser, because the setting count only grows (FAR: 311) | FAR (`far:config`) | M3 |
-| 9b.17 | Dialog framework: history in edit fields with lockable items, autocomplete, three-state checkboxes, movable dialogs, click outside to accept or cancel | FAR | M2 |
+| 9b.17 | Dialog framework: history in edit fields with lockable items, autocomplete, three-state checkboxes, movable dialogs, click outside to accept or cancel | FAR | ~ moving a dialog with the mouse |
 | 9b.18 | Menus that filter as you type, with a lock and horizontal scrolling | FAR (`RAlt`) | M3 |
 
 ## 10. Extensibility
@@ -303,7 +309,7 @@ Found by reading FAR's own help and configuration tables; the detail is in
 | 11.1 | Linux, macOS, Windows first-class; FreeBSD best-effort | — | ✓ |
 | 11.2 | TUI backend (any terminal, works over SSH/tmux) as the primary UI | — | ✓ |
 | 11.3 | **No GUI backend, ever** — strictly TUI; terminal extras (inline images, kitty keyboard, OSC 52) are capability-detected, not a second UI | decision | — |
-| 11.4 | Single static binary, no installer required; packages: `.deb`, `.rpm`, Homebrew, Scoop/winget, AUR, Flatpak | — | M2 |
+| 11.4 | Single static binary, no installer required; packages: `.deb`, `.rpm`, Homebrew, Scoop/winget, AUR, Flatpak | — | ~ the packages: the release publishes the four archives and their sums |
 | 11.5 | Startup under ~50 ms, listing of 100k entries without blocking the UI | YAZI | ✓ |
-| 11.6 | Crash safety: no data loss on operation interruption; journaled job state | NEW | M2 |
+| 11.6 | Crash safety: no data loss on operation interruption; journaled job state | NEW | ~ a journal of the job state across a restart |
 | 11.7 | Tests: unit + golden-screen snapshot tests + VFS integration + fuzzed archive/path parsing | — | ✓ |

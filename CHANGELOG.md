@@ -4,7 +4,7 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
-## [Unreleased]
+## [0.26.0] — 2026-10-30
 
 ### Added
 
@@ -151,6 +151,25 @@ Notable changes, newest first. The format follows
   because the screen `Ctrl+O` opens is a line buffer: a progress bar rewriting itself with a
   carriage return stays one line, and the prompt and the echo of the command are left out, so
   the heading that screen writes for the command is not printed twice underneath it.
+
+### Changed
+
+- **The feature table was read against the code again.** `docs/02-features.md` is the map of
+  everything the commanders of the world do and where each idea came from, and its `State`
+  column had drifted: thirty of the thirty-six rows that said "the milestone in progress owns
+  this, and it is not there" were wrong. Twelve were finished long ago and nobody changed the
+  character — the hex and dump modes, go-to and the bookmarks, streaming and follow mode, the
+  next file from inside the viewer, raw devices, the per-mode view flags, apply-a-command, the
+  temporary panel, the selection matrix, the mask grammar, the seven languages, and what is
+  remembered per file. Eighteen more had most of the work done, and the cell now names what is
+  left rather than implying none of it exists. Six still say `M2` and mean it: a stacked
+  layout, the branch view, icons, the multi-rename tool, a disk-usage view, and opening the
+  item in the desktop's own file manager.
+
+  A map that says a road is missing when it is there is worse than no map, because it is the
+  thing one plans from. This is a reading job rather than a writing one and it had never been
+  done in one pass; the legend now says when it was.
+
 
 ## [0.25.0] — 2026-10-30
 
