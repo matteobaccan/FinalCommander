@@ -1114,6 +1114,7 @@ help-here-editor = L'éditeur
 help-here-hex = L'éditeur hexadécimal
 help-here-dialog = Cette boîte de dialogue
 help-in-english = Ce chapitre n'est pas encore traduit dans votre langue : il suit en anglais. Les touches et les réglages qu'il nomme sont les mêmes dans toutes les langues.
+help-about-byline = FinalCommander { $version } — par Matteo Baccan
 key-ok = OK
 key-cancel = Annuler
 key-dialog-move = Déplac

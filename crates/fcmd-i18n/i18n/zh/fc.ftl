@@ -1102,6 +1102,7 @@ help-here-editor = 编辑器
 help-here-hex = 十六进制编辑器
 help-here-dialog = 此对话框
 help-in-english = 本章尚未翻译成你的语言，因此以英文呈现。其中提到的按键和设置在所有语言中都是一样的。
+help-about-byline = FinalCommander { $version } — 作者：Matteo Baccan
 key-ok = 确定
 key-cancel = 取消
 key-dialog-move = 移动

@@ -17847,11 +17847,23 @@ impl App {
                     // silently opened an English page would be the program lying about
                     // itself, and the note costs two rows.
                     let (text, in_english) = page.text(self.i18n.tag());
-                    if in_english {
-                        format!("{}\n\n{text}", self.i18n.t("help-in-english"))
-                    } else {
-                        text.to_string()
+                    let mut out = String::new();
+                    // The chapter that says what this is says, first, which version is
+                    // saying it and who wrote it. The version is the binary's own rather
+                    // than a line in the page, so it cannot be left behind by a release.
+                    if page.id == "about" {
+                        out.push_str(&self.i18n.t_args(
+                            "help-about-byline",
+                            &[("version", env!("CARGO_PKG_VERSION").into())],
+                        ));
+                        out.push_str("\n\n");
                     }
+                    if in_english {
+                        out.push_str(&self.i18n.t("help-in-english"));
+                        out.push_str("\n\n");
+                    }
+                    out.push_str(text);
+                    out
                 }
                 None => String::new(),
             },
@@ -24756,6 +24768,35 @@ run = ["echo one", "echo two", "echo three"]
         assert!(
             about.iter().any(|line| line.contains(&note[..20])),
             "{about:?}"
+        );
+    }
+
+    /// The chapter that says what the program is says which version it is and who wrote it.
+    /// It is taken from the binary, not written in the page, so a release cannot leave it
+    /// behind.
+    #[test]
+    fn the_chapter_about_the_program_names_the_version_and_the_author() {
+        use crate::help::Chapter;
+        let mut app = app();
+
+        let about = app.help_lines(Chapter::Prose(0), 76);
+        assert!(
+            about[0].contains(env!("CARGO_PKG_VERSION")),
+            "the version is not on the first line: {about:?}"
+        );
+        assert!(
+            about[0].contains("Matteo Baccan"),
+            "the author is not on the first line: {about:?}"
+        );
+
+        // In the reader's own language, and only on that chapter.
+        app.i18n = I18n::new("it");
+        let about = app.help_lines(Chapter::Prose(0), 76);
+        assert!(about[0].contains("di Matteo Baccan"), "{about:?}");
+        let panels = app.help_lines(Chapter::Prose(1), 76);
+        assert!(
+            !panels.iter().any(|line| line.contains("Matteo Baccan")),
+            "the byline is on every chapter: {panels:?}"
         );
     }
 
