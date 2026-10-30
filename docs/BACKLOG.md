@@ -17,7 +17,6 @@ says what the decision stands on.
 
 | Item | Where | What is left |
 | --- | --- | --- |
-| Info panel | `Ctrl+L` | Mount options, a git summary, and the filesystem's *name*, which today is only in the drives dialog. |
 | Tabs per panel | `Ctrl+Alt+T`/`W`/`N`/`P`/`M`/`K` | Reordering a tab within its row, and a list of them to pick from. |
 
 ## Selection and sorting

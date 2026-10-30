@@ -101,6 +101,13 @@ pub struct Panel {
     /// holds in all, and how big its allocation unit is. `None` where the platform or the
     /// provider cannot say — a server reports nothing of the sort.
     pub disk: Option<fcmd_platform::Disk>,
+    /// What this directory is sitting on: the filesystem's name and how it was mounted, which
+    /// is the other half of "where am I" and the usual reason a write is refused. Read once
+    /// per directory, and only while something on screen is asking (SPEC 02 §9).
+    pub mount: Option<fcmd_platform::Mount>,
+    /// The git repository this directory is in, as its own files say: the branch, the commit,
+    /// whether a merge or a rebase is halfway through, and how much differs from the index.
+    pub git: Option<fcmd_core::git::Repo>,
     /// Columns the name column is scrolled by, for names wider than it.
     pub name_scroll: usize,
     /// Set when this panel is a list rather than a directory.
@@ -146,6 +153,8 @@ impl Panel {
             filter_set: None,
             want_cursor: None,
             disk: None,
+            mount: None,
+            git: None,
             name_scroll: 0,
             temp: None,
             content: Content::default(),
@@ -324,6 +333,8 @@ impl Panel {
         self.filter_set = None;
         self.name_scroll = 0;
         self.disk = None;
+        self.mount = None;
+        self.git = None;
         self.selection.clear();
         self.loading = true;
         self.listing = Listing::default();

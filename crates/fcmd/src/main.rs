@@ -875,6 +875,7 @@ fn interactive(mut app: App) -> Result<()> {
                     panel,
                     path,
                     generation,
+                    facts,
                 } => {
                     // Watch what we are about to read, if it is a directory a watch can see:
                     // a remote one has no local events, and one inside an archive is a file.
@@ -919,6 +920,17 @@ fn interactive(mut app: App) -> Result<()> {
                             panel,
                             disk: device(&path),
                         });
+                        // Where this directory is, for the information panel: the mount is one
+                        // small file, the git index is a `stat` per tracked file, and neither
+                        // is read unless something on screen is showing it.
+                        if facts && path.is_local() && !path.in_container() {
+                            let local = path.os().to_path_buf();
+                            let _ = tx.send(Event::Place {
+                                panel,
+                                mount: fcmd_platform::mount_of(&local),
+                                git: fcmd_core::git::describe(&local).map(Box::new),
+                            });
+                        }
                     });
                 }
                 Request::Job { id, spec, cancel } => {
@@ -4546,6 +4558,7 @@ timeout = 10
                     panel,
                     path,
                     generation,
+                    facts,
                 } => {
                     let cancel = CancelToken::new();
                     let result = if path.in_container() {
@@ -4559,6 +4572,14 @@ timeout = 10
                         generation,
                         result: result.map_err(|e| e.to_string()),
                     });
+                    if facts && path.is_local() && !path.in_container() {
+                        let local = path.os().to_path_buf();
+                        app.handle_event(Event::Place {
+                            panel,
+                            mount: fcmd_platform::mount_of(&local),
+                            git: fcmd_core::git::describe(&local).map(Box::new),
+                        });
+                    }
                 }
                 // The side file, read and written for real, so a test drives the same two
                 // functions the binary does.

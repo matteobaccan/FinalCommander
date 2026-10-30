@@ -25,6 +25,10 @@ pub enum Request {
         panel: usize,
         path: VPath,
         generation: u64,
+        /// Is anything on screen asking *where* this directory is — the mount it is on, the
+        /// repository it is in? Reading a git index is a `stat` per tracked file, so the
+        /// answer is only fetched when a panel is in the information mode that shows it.
+        facts: bool,
     },
     DirSize {
         panel: usize,
@@ -505,6 +509,15 @@ pub enum Event {
     FreeSpace {
         panel: usize,
         disk: Option<fcmd_platform::Disk>,
+    },
+    /// Where a directory *is*, which the information panel asks for and nothing else needs:
+    /// the mount it sits on and the git repository it is in. Sent after `Listed`, like
+    /// `FreeSpace`, and only when a panel is showing that information — reading a git index
+    /// is a `stat` per tracked file, and nobody should pay for it to draw a file list.
+    Place {
+        panel: usize,
+        mount: Option<fcmd_platform::Mount>,
+        git: Option<Box<fcmd_core::git::Repo>>,
     },
     /// One file a search matched.
     FindHit {
@@ -2156,10 +2169,17 @@ impl App {
             return;
         }
         let path = self.panels[index].cwd.clone();
+        // The information panel shows the other side's directory, so either panel being in
+        // that mode is a reason to read the facts about this one.
+        let facts = self
+            .panels
+            .iter()
+            .any(|p| p.content == crate::panel::Content::Info);
         self.requests.push(Request::Read {
             panel: index,
             path,
             generation,
+            facts,
         });
     }
 
@@ -2284,6 +2304,12 @@ impl App {
             Event::FreeSpace { panel, disk } => {
                 if let Some(p) = self.panels.get_mut(panel) {
                     p.disk = disk;
+                }
+            }
+            Event::Place { panel, mount, git } => {
+                if let Some(p) = self.panels.get_mut(panel) {
+                    p.mount = mount;
+                    p.git = git.map(|g| *g);
                 }
             }
             Event::Connected {
@@ -22552,7 +22578,8 @@ mod tests {
             vec![Request::Read {
                 panel: 0,
                 path: VPath::local("/home/mb/docs"),
-                generation: 2
+                generation: 2,
+                facts: false,
             }]
         );
         assert_eq!(app.panel().cwd, VPath::local("/home/mb/docs"));

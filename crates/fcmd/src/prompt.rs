@@ -174,54 +174,10 @@ fn elevated() -> bool {
 /// The branch the directory is on, where it is in a git repository.
 ///
 /// Nothing is run: `git` need not be installed, and a prompt that starts a process on every
-/// keystroke is a prompt that makes a slow terminal slower. `HEAD` is one small file, and the
-/// walk upwards stops at the first `.git` — which may be a file rather than a directory, as it
-/// is in a worktree or a submodule, and then it says where the real one is.
+/// keystroke is a prompt that makes a slow terminal slower. The walk and the two reads are in
+/// `fcmd_core::git`, beside the fuller answer the information panel asks for.
 pub fn branch_of(dir: &std::path::Path) -> Option<String> {
-    let mut at = Some(dir);
-    while let Some(here) = at {
-        let dot = here.join(".git");
-        if dot.is_dir() {
-            return head_of(&dot);
-        }
-        if dot.is_file() {
-            // `gitdir: /path/to/.git/worktrees/name`
-            let text = std::fs::read_to_string(&dot).ok()?;
-            let target = text.trim().strip_prefix("gitdir:")?.trim();
-            let target = std::path::Path::new(target);
-            let target = if target.is_absolute() {
-                target.to_path_buf()
-            } else {
-                here.join(target)
-            };
-            return head_of(&target);
-        }
-        at = here.parent();
-    }
-    None
-}
-
-/// `ref: refs/heads/main` as `main`, and a head that is not on a branch as the short commit.
-fn head_of(git_dir: &std::path::Path) -> Option<String> {
-    let head = std::fs::read_to_string(git_dir.join("HEAD")).ok()?;
-    let head = head.trim();
-    match head.strip_prefix("ref:") {
-        Some(reference) => {
-            let reference = reference.trim();
-            Some(
-                reference
-                    .strip_prefix("refs/heads/")
-                    .unwrap_or(reference)
-                    .to_string(),
-            )
-        }
-        // Detached: the file holds the commit itself, and seven characters of it is what
-        // everything else that shows a commit shows.
-        None if head.len() >= 7 && head.chars().all(|c| c.is_ascii_hexdigit()) => {
-            Some(head[..7].to_string())
-        }
-        None => None,
-    }
+    fcmd_core::git::branch_of(dir)
 }
 
 #[cfg(test)]

@@ -13,6 +13,7 @@ pub mod diff;
 pub mod entry;
 pub mod error;
 pub mod filter;
+pub mod git;
 pub mod listing;
 pub mod longpath;
 pub mod selection;

@@ -1880,6 +1880,66 @@ fn device_lines(app: &App, panel: &crate::panel::Panel) -> Vec<(String, String)>
             },
         ));
     }
+    // What the directory is sitting on, which is the other half of "where am I": the
+    // filesystem's name, and how it was mounted where the platform keeps that. `ro` and
+    // `noexec` are the two words that explain most of the refusals a panel can produce.
+    if let Some(m) = &panel.mount {
+        lines.push((
+            t("info-filesystem"),
+            if m.options.is_empty() {
+                m.fs.clone()
+            } else {
+                format!("{} ({})", m.fs, m.options_line())
+            },
+        ));
+        lines.push((
+            t("info-mount"),
+            format!("{} on {}", m.source, m.target.display()),
+        ));
+    }
+    // The repository, as its own files say it. The branch and the commit are two small reads;
+    // the count is a `stat` per tracked file, and says nothing rather than guess when the
+    // index is one this reader does not know or is too big to glance at.
+    if let Some(repo) = &panel.git {
+        let mut value = repo.name();
+        if let (Some(_), Some(head)) = (&repo.branch, &repo.head) {
+            value = format!("{value} · {head}");
+        }
+        if let Some(state) = repo.state {
+            // Spelled out rather than built from the state's name: a message id that is not
+            // written anywhere is a message id nobody can find, and the catalogue's own test
+            // says so.
+            value = format!(
+                "{value} · {}",
+                t(match state {
+                    fcmd_core::git::State::Merge => "info-git-merge",
+                    fcmd_core::git::State::Rebase => "info-git-rebase",
+                    fcmd_core::git::State::CherryPick => "info-git-cherry-pick",
+                    fcmd_core::git::State::Revert => "info-git-revert",
+                    fcmd_core::git::State::Bisect => "info-git-bisect",
+                })
+            );
+        }
+        match repo.index {
+            Some(index) if index.differing == 0 => {
+                value = format!("{value} · {}", t("info-git-clean"));
+            }
+            Some(index) => {
+                value = format!(
+                    "{value} · {}",
+                    app.i18n.t_args(
+                        "info-git-differing",
+                        &[
+                            ("count", (index.differing as i64).into()),
+                            ("tracked", (index.tracked as i64).into()),
+                        ],
+                    )
+                );
+            }
+            None => value = format!("{value} · {}", t("info-git-uncounted")),
+        }
+        lines.push((t("info-git"), value));
+    }
     let totals = &panel.listing.totals;
     lines.push((
         t("info-contents"),
@@ -6092,6 +6152,103 @@ third line
 
         app.handle_input(Input::Key("Ctrl+L".parse().unwrap()));
         assert_eq!(app.panels[1].content, crate::panel::Content::Files);
+    }
+
+    /// The other half of "where am I": what the directory is sitting on, and what the
+    /// repository it is in is doing. Both are facts the panel is handed, so this drives the
+    /// event the worker sends rather than the machine this runs on.
+    #[test]
+    fn the_information_panel_says_the_filesystem_and_the_repository() {
+        let mut app = app("commander", "en");
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation: app.panels[0].generation,
+            result: Ok(vec![Entry::parent_entry()]),
+        });
+        app.handle_event(Event::Place {
+            panel: 0,
+            mount: Some(fcmd_platform::Mount {
+                source: "/dev/vda1".into(),
+                target: "/".into(),
+                fs: "ext4".into(),
+                options: vec!["rw".into(), "noatime".into()],
+            }),
+            git: Some(Box::new(fcmd_core::git::Repo {
+                root: "/home/mb/project".into(),
+                git_dir: "/home/mb/project/.git".into(),
+                branch: Some("main".into()),
+                head: Some("3a7f2e1".into()),
+                state: None,
+                index: Some(fcmd_core::git::Index {
+                    tracked: 42,
+                    differing: 3,
+                }),
+            })),
+        });
+        app.active = 0;
+        app.handle_input(Input::Key("Ctrl+L".parse().unwrap()));
+
+        let out = frame(&mut app, 150, 18);
+        assert!(out.contains("ext4 (rw,noatime)"), "{out}");
+        assert!(out.contains("/dev/vda1 on /"), "{out}");
+        assert!(out.contains("main · 3a7f2e1"), "{out}");
+        assert!(out.contains("3 of 42 differ from the index"), "{out}");
+
+        // A repository halfway through something says which something, and a working tree
+        // that matches its index says so instead of a number.
+        app.handle_event(Event::Place {
+            panel: 0,
+            mount: None,
+            git: Some(Box::new(fcmd_core::git::Repo {
+                root: "/home/mb/project".into(),
+                git_dir: "/home/mb/project/.git".into(),
+                branch: Some("main".into()),
+                head: Some("3a7f2e1".into()),
+                state: Some(fcmd_core::git::State::Rebase),
+                index: Some(fcmd_core::git::Index {
+                    tracked: 42,
+                    differing: 0,
+                }),
+            })),
+        });
+        let out = frame(&mut app, 150, 18);
+        assert!(out.contains("rebasing"), "{out}");
+        assert!(out.contains("as the index has it"), "{out}");
+        // And with no mount to report there is no line claiming one.
+        assert!(!out.contains("ext4"), "{out}");
+    }
+
+    /// Nobody pays for a git index to draw a list of files: the facts are only asked for
+    /// while a panel is showing them.
+    #[test]
+    fn where_a_directory_is_is_only_read_while_something_shows_it() {
+        let mut app = app("commander", "en");
+        app.active = 0;
+        app.take_requests();
+        // `Ctrl+R` is a read of the panel, which is the request this is about.
+        app.handle_input(Input::Key("Ctrl+R".parse().unwrap()));
+        let asked = app
+            .take_requests()
+            .into_iter()
+            .find_map(|r| match r {
+                crate::app::Request::Read { facts, .. } => Some(facts),
+                _ => None,
+            })
+            .expect("a refresh reads the panel");
+        assert!(!asked, "a file list asks for no facts");
+
+        app.handle_input(Input::Key("Ctrl+L".parse().unwrap()));
+        app.take_requests();
+        app.handle_input(Input::Key("Ctrl+R".parse().unwrap()));
+        let asked = app
+            .take_requests()
+            .into_iter()
+            .find_map(|r| match r {
+                crate::app::Request::Read { facts, .. } => Some(facts),
+                _ => None,
+            })
+            .expect("a refresh reads the panel");
+        assert!(asked, "the information panel asks");
     }
 
     #[test]

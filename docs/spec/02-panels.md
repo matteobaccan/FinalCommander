@@ -489,6 +489,24 @@ wire, and the folder history and the hotlist are what answer that question there
 change-directory dialog moved to `Ctrl+Shift+L`, which it can afford now that `cd` works on
 the command line.
 
+**What the info panel knows about *where* it is**, beside the device's free space: the
+filesystem's name with the options it was mounted with (`ext4 (rw,noatime)`), what is mounted
+where (`/dev/vda1 on /`), and the git repository the directory is in — the branch, the commit,
+a merge or a rebase halfway through, and how many tracked files differ from the index. Three
+rules hold all of it together:
+
+- **Nothing is run.** `git` need not be installed; the branch, the commit and the state are
+  small files, and the mount table is one more. Linux keeps the options in
+  `/proc/self/mountinfo`, macOS answers `statfs`, and Windows has none to keep.
+- **Nothing is hashed.** The count is one `stat` per tracked file against what the index
+  recorded, so the line says *differ from the index* rather than *modified*: a file that was
+  touched, or rewritten with the same bytes, is counted. An index of more than twenty thousand
+  files, or one in a version this reader does not know, says *not counted*. Untracked files are
+  not looked for, because that means walking the tree and reading every `.gitignore` on the way
+  down — a search, not a glance.
+- **Nobody pays for it who is not looking.** The request for a listing says whether any panel
+  is in this mode, and a panel of files asks for none of it.
+
 **The quick view is the viewer, in a panel's frame.** It is not a preview of its own: it is a
 real reader with its chrome turned off, so everything the viewer does it does. While the files
 have the focus it only follows the cursor, as FAR's does. Give it the focus with `Tab` and its

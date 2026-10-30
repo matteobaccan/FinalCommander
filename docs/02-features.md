@@ -45,7 +45,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 1.5 | User-definable column sets (which fields, widths, alignment, formats) | FAR/TC | ✓ |
 | 1.6 | Tabs per panel, named, persisted, lockable, duplicate/move-to-other-side | TC/MTN2 | ~ reordering a tab within its row |
 | 1.7 | Quick view panel (preview of the file under the cursor in the other panel) | FAR/MC | ✓ |
-| 1.8 | Info panel (drive info, disk usage, selected size, archive/VFS metadata) | FAR/MC | ~ mount options, a git summary, the filesystem's name |
+| 1.8 | Info panel (drive info, disk usage, selected size, archive/VFS metadata) | FAR/MC | ✓ |
 | 1.9 | Tree panel (directory tree in a panel, synced with the other side) | FAR/MC | ✓ |
 | 1.10 | More than two panels / floating panel windows | DN/MTN2 | M4 |
 | 1.11 | Status line (name, size, date of the current item) and total/selected counters | FAR | ✓ |

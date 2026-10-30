@@ -8,6 +8,31 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **The information panel says what the directory is sitting on, and what its repository is
+  doing** (`Ctrl+L`, SPEC 02 §9). Two lines that were the other half of *where am I*:
+
+  - **the filesystem and the mount**: `ext4 (rw,noatime)` and `/dev/vda1 on /`. Linux keeps
+    the whole table in `/proc/self/mountinfo`, so it is read with no call at all and the
+    deepest mount point that covers the path wins — which is what makes a bind mount inside
+    another answer for itself. macOS answers `statfs`, and its flags are reported in Linux's
+    spelling so that nobody has to learn two vocabularies. Windows has no mount options; what
+    it has is the filesystem's name, which the drives dialog already asks for. `ro` and
+    `noexec` are the two words that explain most of the refusals a panel can produce.
+  - **the git repository**: `main · 3a7f2e1 · 3 of 42 differ from the index`, with a merge or
+    a rebase halfway through named as such. Nothing is run — `git` need not even be installed
+    — and nothing is hashed: the branch, the commit and the state are small files, and the
+    count is one `stat` per tracked file against what the index recorded. Which is why the
+    line says *differ from the index* and not *modified*: a file that was touched, or rewritten
+    with the same bytes, is counted here, and telling those apart is what hashing is for. An
+    index larger than twenty thousand files, or in a version this reader does not know, says
+    *not counted* rather than guessing. Untracked files are not looked for, because that means
+    walking the tree and reading every `.gitignore` on the way down.
+
+  Neither is read unless a panel is showing it: the request for a listing now says whether
+  anything on screen is asking, and a panel of files asks for none of this. The prompt's own
+  `%gitbranch%` moved onto the same reader, so there is one walk upwards in the program rather
+  than two.
+
 - **FAR's precision suffix on a column width** (SPEC 02 §3b). `Column widths` may carry a
   `+n` after a number — `8+2` — which is not width but precision, and importing a FAR mode
   dropped it without saying so. FAR counts precision where we spell a format, so this is where
