@@ -255,6 +255,7 @@ impl Command {
             Command::ViewerPrevFile => "the file before",
             Command::ViewerToPanel => "make the panel catch up with what you are reading",
             Command::ViewerDecompile => "decompile, where a tool for it exists",
+            Command::ViewerFilter => "read the output of a command instead of the file",
 
             Command::EditorQuit => "close the editor",
             Command::EditorSave => "save",

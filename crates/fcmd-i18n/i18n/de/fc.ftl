@@ -437,6 +437,7 @@ menu-compare-folders = Ordner verglei&chen
 menu-sync-folders = Ordner ab&gleichen
 menu-compare-contents = Nach &Inhalt vergleichen
 menu-panelize = Ausgabe eines Befehls als Panel
+menu-view-filtered = Durch einen Befehl ansehen
 menu-tunnel = Tunnel &öffnen…
 menu-tunnels = Tunnel…
 tunnel-title = Tunnel: [lokal:]Host:Port
@@ -721,6 +722,7 @@ editor-unsaved-for-viewer = zuerst speichern: der Betrachter liest die Datei von
 # ------------------------------------------------- Befehlszeile (SPEC 06 §7)
 cmd-running = läuft: { $command }
 prompt-panelize = Befehl, dessen Ausgabe die Dateien nennt
+prompt-viewer-filter = Befehl, dessen Ausgabe statt der Datei gelesen wird
 panelize-title = { $command }
 panelize-done = { $count } Dateien, { $dropped } Zeilen übersprungen
 panelize-nothing = { $command }: keine Zeile nennt eine vorhandene Datei

@@ -437,6 +437,7 @@ menu-compare-folders = &Сравнить папки
 menu-sync-folders = Син&хронизировать папки
 menu-compare-contents = Сравнит&ь по содержимому
 menu-panelize = Вывод команды в панель
+menu-view-filtered = Смотреть через команду
 menu-tunnel = От&крыть туннель…
 menu-tunnels = Т&уннели…
 tunnel-title = Туннель: [локальный:]хост:порт
@@ -721,6 +722,7 @@ editor-unsaved-for-viewer = сначала сохраните: просмотр�
 # ------------------------------------------------- командная строка (SPEC 06 §7)
 cmd-running = выполняется: { $command }
 prompt-panelize = Команда, чей вывод называет файлы
+prompt-viewer-filter = Команда, чей вывод читать вместо файла
 panelize-title = { $command }
 panelize-done = файлов: { $count }, пропущено строк: { $dropped }
 panelize-nothing = { $command }: ни одна строка не называет существующий файл

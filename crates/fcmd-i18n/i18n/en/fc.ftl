@@ -445,6 +445,7 @@ menu-compare-folders = &Compare folders
 menu-sync-folders = Sy&nchronise folders
 menu-compare-contents = Compare &by content
 menu-panelize = Panelize a command's output
+menu-view-filtered = View through a command
 menu-tunnel = Open a &tunnel…
 menu-tunnels = Tunn&els…
 tunnel-title = Tunnel: [local:]host:port
@@ -729,6 +730,7 @@ editor-unsaved-for-viewer = save first: the viewer reads the file on disk
 # ------------------------------------------------- command line (SPEC 06 §7)
 cmd-running = running: { $command }
 prompt-panelize = Command whose output names the files
+prompt-viewer-filter = Command whose output to read instead of the file
 panelize-title = { $command }
 panelize-done = { $count } files, { $dropped } lines skipped
 panelize-nothing = { $command }: no line named a file that is there

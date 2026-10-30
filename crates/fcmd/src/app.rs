@@ -249,6 +249,13 @@ pub enum Request {
         /// Where to put the output instead of the user screen (`run:file<command`).
         into: Option<std::path::PathBuf>,
     },
+    /// Run a command line and bring back what it printed as one piece of text, for the
+    /// viewer to read instead of the file.
+    Filter {
+        id: u64,
+        line: String,
+        cwd: std::path::PathBuf,
+    },
     /// Run a command line and bring back what it printed, line by line, to become a panel's
     /// rows rather than a screenful of text.
     Panelize {
@@ -703,6 +710,8 @@ pub enum PromptKind {
     ApplyCommand,
     /// The command whose output becomes the panel's rows (SPEC 02 §7b).
     Panelize,
+    /// The command whose output the viewer reads instead of the file (SPEC 05 §1).
+    ViewerFilter,
     /// Where a tunnel goes: `[local:]host:port`, or a port on its own.
     Tunnel,
     /// The byte to fill a block with, in hex.
@@ -4807,6 +4816,16 @@ impl App {
                     }
                 }
             }
+            PromptKind::ViewerFilter => {
+                let line = prompt.text.trim().to_string();
+                // The viewer comes back first: it is what the answer is about, and what the
+                // output will be shown in.
+                self.restore_viewer();
+                if line.is_empty() {
+                    return;
+                }
+                self.run_filter(line);
+            }
             PromptKind::Panelize => {
                 let line = prompt.text.trim().to_string();
                 if line.is_empty() {
@@ -7555,6 +7574,11 @@ impl App {
                     sources,
                 });
             }
+            // Midnight Commander's filtered view: a command is typed, and what it prints is
+            // read instead of the file. The same screen the decompiler's output lands on,
+            // with the tool chosen by hand rather than by a rule — which is what makes it
+            // useful on a file nobody wrote a rule for.
+            Command::ViewerFilter => self.open_filter_prompt(),
             // Midnight Commander's external panelize: a command prints paths, and they
             // become the panel's rows. `find`, `git ls-files`, `grep -l` — anything that
             // names files, which is most of the shell.
@@ -15269,6 +15293,71 @@ impl App {
         }
     }
 
+    /// Ask for the command whose output the viewer should read (SPEC 05 §1).
+    ///
+    /// From the viewer it is asked over the file one is looking at. From the panels it opens
+    /// the file first, which is what somebody who pressed it there meant: Midnight Commander
+    /// asks the same question from its own panel and shows the answer in its viewer.
+    fn open_filter_prompt(&mut self) {
+        if self.live_viewer().is_none() {
+            self.open_viewer();
+        }
+        if self.live_viewer().is_none() {
+            return;
+        }
+        let title = self.i18n.t("prompt-viewer-filter");
+        self.mode_prompt_over_viewer(PromptKind::ViewerFilter, title, String::new());
+    }
+
+    /// Run it, and let the answer land where the decompiler's does.
+    ///
+    /// The file is given to the command: wherever `!.!` is in the line, or appended when the
+    /// line does not mention it, which is the same courtesy a `[[decompile]]` rule gets. The
+    /// path is quoted, because a name with a space in it is not two arguments.
+    fn run_filter(&mut self, line: String) {
+        let Some(viewer) = self.live_viewer() else {
+            return;
+        };
+        let path = viewer.path.clone();
+        if !path.is_local() {
+            let m = self.i18n.t("cmd-not-remote");
+            self.set_error(m);
+            return;
+        }
+        let quoted = shell_quote(&path.as_path().display().to_string());
+        let ctx = expand::Context {
+            active_file: Some(path.display_name()),
+            selection: vec![path.display_name()],
+            ..self.expand_context()
+        };
+        let line = match expand::expand(&line, &ctx, None) {
+            Ok(expand::Expanded::Line(expanded)) => expanded,
+            Ok(expand::Expanded::Ask { .. }) | Err(_) => line,
+        };
+        let line = if line.contains(&path.display_name()) || line.contains(&quoted) {
+            line
+        } else {
+            format!("{line} {quoted}")
+        };
+        let cwd = path
+            .as_path()
+            .parent()
+            .map(|dir| dir.to_path_buf())
+            .unwrap_or_else(std::env::temp_dir);
+        let id = self.next_job_id;
+        self.next_job_id += 1;
+        self.decompile_id = Some(id);
+        let msg = self.i18n.t_args(
+            "viewer-decompile-running",
+            &[
+                ("tool", line.clone().into()),
+                ("name", path.display_name().into()),
+            ],
+        );
+        self.set_status(msg);
+        self.requests.push(Request::Filter { id, line, cwd });
+    }
+
     /// A prompt that keeps the viewer underneath it (search, go to).
     fn mode_prompt_over_viewer(&mut self, kind: PromptKind, title: String, text: String) {
         let Mode::Viewer(viewer) = std::mem::replace(&mut self.mode, Mode::Normal) else {
@@ -18616,6 +18705,18 @@ fn flip_case(ext: &str) -> String {
         ext.to_lowercase()
     } else {
         ext.to_uppercase()
+    }
+}
+
+/// One path, quoted for the shell that is about to be handed the line.
+///
+/// Single quotes everywhere a POSIX shell is what runs it, and double quotes for `cmd.exe`,
+/// which knows no others. A name with a quote of its own in it closes, escapes and reopens.
+fn shell_quote(path: &str) -> String {
+    if cfg!(windows) {
+        format!("\"{}\"", path.replace('"', "\"\""))
+    } else {
+        fcmd_term::quote(path)
     }
 }
 
@@ -27035,6 +27136,60 @@ abcdefghij
         assert!(
             app.mode.viewer().is_some(),
             "the viewer should still be open"
+        );
+    }
+
+    /// Midnight Commander's filtered view: a command one types, and what it printed read
+    /// instead of the file. The file is handed to the command, quoted, and the answer lands
+    /// on the screen the decompiler's output lands on.
+    #[test]
+    fn a_command_can_be_read_in_place_of_the_file() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), b"alpha\nbeta\n").unwrap();
+        let mut app = app_on_disk(dir.path());
+        press(&mut app, "Down"); // a.txt
+        press(&mut app, "F3");
+        assert!(app.mode.viewer().is_some(), "the viewer is open");
+        app.take_requests();
+
+        press(&mut app, "Shift+F5");
+        let Mode::Prompt(mut prompt) = std::mem::replace(&mut app.mode, Mode::Normal) else {
+            panic!("the filter prompt did not open")
+        };
+        assert_eq!(prompt.kind, PromptKind::ViewerFilter);
+        // The viewer is kept underneath it, as it is for the search.
+        assert!(app.viewer_under_prompt.is_some());
+        prompt.text = "sed s/alpha/ALPHA/".to_string();
+        app.prompt_accept(prompt);
+
+        let (id, line) = app
+            .take_requests()
+            .into_iter()
+            .find_map(|request| match request {
+                Request::Filter { id, line, .. } => Some((id, line)),
+                _ => None,
+            })
+            .expect("the command was sent");
+        // The line did not name the file, so the file was put at the end of it, quoted.
+        assert!(
+            line.starts_with("sed s/alpha/ALPHA/ ") && line.contains("a.txt"),
+            "{line}"
+        );
+        assert!(
+            line.contains('\'') || cfg!(windows),
+            "the path is quoted: {line}"
+        );
+
+        app.handle_event(Event::Decompiled {
+            id,
+            tool: line.clone(),
+            result: Ok("ALPHA\nbeta\n".into()),
+        });
+        let viewer = app.mode.viewer_mut().expect("the viewer came back");
+        assert_eq!(viewer.derived.as_deref(), Some(line.as_str()));
+        assert_eq!(
+            viewer.rows(40, 1).first().map(|row| row.text.clone()),
+            Some("ALPHA".to_string())
         );
     }
 

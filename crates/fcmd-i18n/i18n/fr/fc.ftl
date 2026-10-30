@@ -437,6 +437,7 @@ menu-compare-folders = Comparer &les dossiers
 menu-sync-folders = S&ynchroniser les dossiers
 menu-compare-contents = Comparer par co&ntenu
 menu-panelize = Panneau depuis la sortie d'une commande
+menu-view-filtered = Voir à travers une commande
 menu-tunnel = &Ouvrir un tunnel…
 menu-tunnels = &Tunnels…
 tunnel-title = Tunnel : [local:]hôte:port
@@ -721,6 +722,7 @@ editor-unsaved-for-viewer = enregistrez d'abord : la visionneuse lit le fichier 
 # ------------------------------------------------- ligne de commande (SPEC 06 §7)
 cmd-running = en cours : { $command }
 prompt-panelize = Commande dont la sortie nomme les fichiers
+prompt-viewer-filter = Commande dont lire la sortie au lieu du fichier
 panelize-title = { $command }
 panelize-done = { $count } fichiers, { $dropped } lignes ignorées
 panelize-nothing = { $command } : aucune ligne ne nomme un fichier existant

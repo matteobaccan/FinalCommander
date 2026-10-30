@@ -437,6 +437,7 @@ menu-compare-folders = &Confronta cartelle
 menu-sync-folders = Si&ncronizza cartelle
 menu-compare-contents = Confronta per contenuto
 menu-panelize = Pannello dall'uscita di un comando
+menu-view-filtered = Guarda attraverso un comando
 menu-tunnel = Apri un tunne&l…
 menu-tunnels = Tunnel…
 tunnel-title = Tunnel: [locale:]host:porta
@@ -721,6 +722,7 @@ editor-unsaved-for-viewer = salva prima: il visualizzatore legge il file su disc
 # ------------------------------------------------- riga di comando (SPEC 06 §7)
 cmd-running = in corso: { $command }
 prompt-panelize = Comando la cui uscita nomina i file
+prompt-viewer-filter = Comando di cui leggere l'uscita invece del file
 panelize-title = { $command }
 panelize-done = { $count } file, { $dropped } righe saltate
 panelize-nothing = { $command }: nessuna riga nomina un file che esiste

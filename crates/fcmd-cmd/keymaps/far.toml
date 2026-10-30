@@ -899,6 +899,14 @@ keys = ["Shift+F6"]
 scope = "viewer"
 cmd = "viewer.decompile"
 
+# The other way of looking at a file through something else: a command one types, whose output
+# is read instead of the file. Beside the decompiler, because it is the same idea with the tool
+# chosen by hand — Midnight Commander's filtered view.
+[[bind]]
+keys = ["Shift+F5"]
+scope = "viewer"
+cmd = "viewer.filter"
+
 [[bind]]
 keys = ["+"]
 scope = "viewer"

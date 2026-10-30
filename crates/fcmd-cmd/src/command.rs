@@ -421,6 +421,9 @@ pub enum Command {
     ViewerToPanel,
     /// Decompile: WebAssembly to text, or an external decompiler's output.
     ViewerDecompile,
+    /// Run a command and read its output instead of the file: Midnight Commander's filtered
+    /// view (SPEC 05 §1).
+    ViewerFilter,
 
     // Editor (scope `editor`). Movement and typing are handled directly by the editor; the
     // keymap binds its commands.
@@ -685,6 +688,7 @@ impl Command {
             Command::ViewerPaneNext,
             Command::ViewerDisasm,
             Command::ViewerDecompile,
+            Command::ViewerFilter,
             Command::ViewerToEditor,
             Command::ViewerNextFile,
             Command::ViewerPrevFile,
@@ -950,6 +954,7 @@ impl Command {
             Command::ViewerPrevFile => "viewer.file.prev".into(),
             Command::ViewerToPanel => "viewer.to.panel".into(),
             Command::ViewerDecompile => "viewer.decompile".into(),
+            Command::ViewerFilter => "viewer.filter".into(),
             Command::EditorQuit => "editor.quit".into(),
             Command::EditorSave => "editor.save".into(),
             Command::EditorSaveAs => "editor.save.as".into(),
@@ -1187,6 +1192,7 @@ impl Command {
             ("viewer.file.prev", _) => Command::ViewerPrevFile,
             ("viewer.to.panel", _) => Command::ViewerToPanel,
             ("viewer.decompile", _) => Command::ViewerDecompile,
+            ("viewer.filter", _) => Command::ViewerFilter,
             ("editor.quit", _) => Command::EditorQuit,
             ("editor.save", _) => Command::EditorSave,
             ("editor.save.as", _) => Command::EditorSaveAs,
@@ -1297,6 +1303,7 @@ mod tests {
             Command::ViewerPaneNext,
             Command::ViewerDisasm,
             Command::ViewerDecompile,
+            Command::ViewerFilter,
             Command::EditorSave,
             Command::EditorPaste,
             Command::EditorToggleReadOnly,

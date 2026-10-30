@@ -437,6 +437,7 @@ menu-compare-folders = 比较文件夹
 menu-sync-folders = 同步文件夹
 menu-compare-contents = 按内容比较
 menu-panelize = 把命令输出放进面板
+menu-view-filtered = 通过命令查看
 menu-tunnel = 打开隧道…
 menu-tunnels = 隧道…
 tunnel-title = 隧道：[本地:]主机:端口
@@ -709,6 +710,7 @@ editor-unsaved-for-viewer = 请先保存：查看器读取磁盘上的文件
 # ------------------------------------------------- 命令行 (SPEC 06 §7)
 cmd-running = 正在执行：{ $command }
 prompt-panelize = 其输出列出文件的命令
+prompt-viewer-filter = 读取其输出而非文件的命令
 panelize-title = { $command }
 panelize-done = { $count } 个文件，跳过 { $dropped } 行
 panelize-nothing = { $command }：没有一行指向存在的文件

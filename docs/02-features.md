@@ -140,7 +140,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 5.6 | Streaming/mmap for huge files (GB+) without loading; follow mode (`tail -f`) | FAR/MTN2 | M2 |
 | 5.7 | Syntax highlighting in the viewer; Markdown rendering; tabs expansion | MTN2 | ✓ |
 | 5.8 | Previews: images (sixel/kitty/iterm protocols), video thumbnails, PDF, archives, media metadata, office/JSON/CSV pretty print — pluggable pipeline with timeouts | YAZI | M3 |
-| 5.9 | Filtered view: pipe the file through a command and view the output | MC | M3 |
+| 5.9 | Filtered view: pipe the file through a command and view the output | MC | ✓ |
 | 5.18 | **Table mode**: one viewer mode for the tabular formats — a header row, aligned columns, horizontal scroll — with CSV/TSV, JSONL/NDJSON and DBF behind it | NEW (MTN2 has none either) | ~ sorting or filtering a table |
 | 5.21 | **Base64 decoded in the viewer** (`Alt+B`): the bare payload, PEM armour or a `data:` URI, shown as text or in the hex pane depending on what came out | NEW | ✓ |
 | 5.22 | **Pictures in the viewer**: `F3` on a PNG, JPEG, GIF or BMP draws it in half blocks, in any terminal; `F4` goes on to the bytes | TC/KRU (lister plugins) | ~ the kitty/iTerm2/sixel protocols |

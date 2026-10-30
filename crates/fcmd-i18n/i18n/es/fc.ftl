@@ -437,6 +437,7 @@ menu-compare-folders = &Comparar carpetas
 menu-sync-folders = S&incronizar carpetas
 menu-compare-contents = Compa&rar por contenido
 menu-panelize = Panel con la salida de una orden
+menu-view-filtered = Ver a través de una orden
 menu-tunnel = Abrir &un túnel…
 menu-tunnels = T&úneles…
 tunnel-title = Túnel: [local:]host:puerto
@@ -721,6 +722,7 @@ editor-unsaved-for-viewer = guarda primero: el visor lee el archivo del disco
 # ------------------------------------------------- línea de comandos (SPEC 06 §7)
 cmd-running = en curso: { $command }
 prompt-panelize = Orden cuya salida nombra los archivos
+prompt-viewer-filter = Orden cuya salida leer en lugar del archivo
 panelize-title = { $command }
 panelize-done = { $count } archivos, { $dropped } líneas omitidas
 panelize-nothing = { $command }: ninguna línea nombra un archivo que exista

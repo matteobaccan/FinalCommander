@@ -8,6 +8,14 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **The viewer can read a command instead of the file: Midnight Commander's filtered view.**
+  `Shift+F5` asks for a command, hands it the file, and shows what it printed — `strings`,
+  `xxd`, `pdftotext`, `objdump -d`, `jq .`, a script of one's own. A `[[decompile]]` rule did
+  this already for the formats somebody had written a rule for; this is the same screen with
+  the tool named by hand, which is the answer for every format nobody has. The line is run by
+  the shell, so a pipe works; the file goes at the end of it unless the line already names it
+  (`!.!` says where); and `Backspace` goes back to the file itself.
+
 - **A command can fill the panel: Midnight Commander's external panelize.** *Commands →
   Panelize a command's output* asks for a command line, runs it where the panel is, and takes
   every line it prints as the name of a file — `find . -newer Makefile`, `git ls-files`,

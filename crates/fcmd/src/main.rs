@@ -1414,6 +1414,34 @@ fn interactive(mut app: App) -> Result<()> {
                         });
                     });
                 }
+                // The viewer's filtered view: one command, and what it printed read as
+                // text instead of the file (SPEC 05 §1). It lands on the same event the
+                // decompiler's output does, because it is the same screen.
+                Request::Filter { id, line, cwd } => {
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || {
+                        let text = std::sync::Mutex::new(String::new());
+                        let (_, status) = run_shell(&line, &cwd, None, &|chunk| {
+                            if let Ok(mut text) = text.lock() {
+                                text.push_str(&chunk);
+                            }
+                        });
+                        let text = text.into_inner().unwrap_or_default();
+                        // A command that printed nothing and failed has nothing to show but
+                        // the failure, which the viewer says in its own words.
+                        let result = match status {
+                            Some(code) if code != 0 && text.trim().is_empty() => {
+                                Err(format!("{line}: exit status {code}"))
+                            }
+                            _ => Ok(text),
+                        };
+                        let _ = tx.send(Event::Decompiled {
+                            id,
+                            tool: line,
+                            result,
+                        });
+                    });
+                }
                 Request::ArcTest {
                     id,
                     archive,
@@ -4900,6 +4928,28 @@ timeout = 10
                         line,
                         lines,
                         status,
+                    });
+                }
+                // The filtered view runs its command in the tests too: what it printed is
+                // what the viewer then holds.
+                Request::Filter { id, line, cwd } => {
+                    let text = std::sync::Mutex::new(String::new());
+                    let (_, status) = run_shell(&line, &cwd, None, &|chunk| {
+                        if let Ok(mut text) = text.lock() {
+                            text.push_str(&chunk);
+                        }
+                    });
+                    let text = text.into_inner().unwrap_or_default();
+                    let result = match status {
+                        Some(code) if code != 0 && text.trim().is_empty() => {
+                            Err(format!("{line}: exit status {code}"))
+                        }
+                        _ => Ok(text),
+                    };
+                    app.handle_event(Event::Decompiled {
+                        id,
+                        tool: line,
+                        result,
                     });
                 }
                 Request::DirSize { .. }

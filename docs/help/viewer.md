@@ -191,6 +191,13 @@ The same key answers for the files that are not programs:
 Neither shows a picture of the file: for a frame of a video or a page of a PDF rendered as an
 image, set up a `[[decompile]]` rule (`ffprobe`, `pdftotext`) and press `Shift+F6`.
 
+`Shift+F5` does the same thing without a rule: it asks for a command, hands it this file, and
+reads what the command printed instead of the file — `strings`, `xxd`, `pdftotext`, `objdump
+-d`, `jq .`, a script of your own. The file is put at the end of the line unless the line
+already names it (`!.!` is where it goes if you want it in the middle), the whole of it is run
+by your shell, so pipes work, and `Backspace` goes back to the file itself. It is Midnight
+Commander's filtered view, and it is the answer to every format nobody has written a rule for.
+
 Source files, class files and bytecode get a listing of their own where one makes sense: a
 `.class` is shown the way `javap -c` shows it, with the constant pool resolved into the
 comments.

@@ -203,6 +203,13 @@ Nessuno dei due mostra un'immagine del file: per un fotogramma di un video o una
 resa come immagine si prepara una regola `[[decompile]]` (`ffprobe`, `pdftotext`) e si preme
 `Shift+F6`.
 
+`Shift+F5` fa la stessa cosa senza regola: chiede un comando, gli passa questo file, e legge
+quello che il comando ha stampato invece del file — `strings`, `xxd`, `pdftotext`, `objdump
+-d`, `jq .`, uno script tuo. Il file va in coda alla riga a meno che la riga non lo nomini già
+(`!.!` è dove finisce se lo vuoi in mezzo), la riga la esegue la tua shell, quindi le pipe
+funzionano, e `Backspace` torna al file vero. È la *filtered view* di Midnight Commander, ed è
+la risposta a tutti i formati per cui nessuno ha scritto una regola.
+
 I file sorgente, i class file e il bytecode hanno un listato tutto loro dove ha senso: un
 `.class` è mostrato come lo mostra `javap -c`, con la constant pool risolta nei commenti.
 
