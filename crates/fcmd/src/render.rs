@@ -434,6 +434,24 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             .take(app.cmd.caret)
             .filter_map(unicode_width::UnicodeWidthChar::width)
             .sum::<usize>() as u16;
+        // What the best answer would add, after the caret and dimmed: it is not in the line,
+        // so `Enter` runs what was typed and `→` is what takes it (SPEC 06 §7.4).
+        if let Some(hint) = app.completion_hint() {
+            let dim = Style::new(
+                app.theme.color("cmdline.hint.fg"),
+                app.theme.color("cmdline.bg"),
+            );
+            let left = room.saturating_sub(caret);
+            if left > 0 {
+                buf.put_str(
+                    prompt_w + caret,
+                    y,
+                    &fcmd_ui::truncate_cols(hint, left as usize),
+                    dim,
+                    left,
+                );
+            }
+        }
         cursor = Some((prompt_w + caret.min(room.saturating_sub(1)), y));
         app.layout.command_line = Some(y);
 
@@ -3104,6 +3122,102 @@ mod tests {
         assert!(list_row < line_row, "the list is above the line: {screen}");
         // The key bar is still there, which is the reason it goes above.
         assert!(screen.contains("Quit"), "{screen}");
+    }
+
+    /// The best answer, drawn after the caret and *not* in the line: `Enter` still runs what
+    /// was typed, and `→` is what takes the offer (SPEC 06 §7.4).
+    #[test]
+    fn the_best_answer_is_offered_after_the_caret_and_the_arrow_takes_it() {
+        let mut app = app("far", "en");
+        for key in ["v", "i", "m", "Space", "s"] {
+            press(&mut app, key);
+        }
+        // `src` is a directory in the panel's listing, so the answer is it with a separator.
+        assert_eq!(app.completion_hint(), Some("rc/"));
+        assert_eq!(app.cmd.text, "vim s", "the line is what was typed");
+        assert_eq!(app.cmd.selection(), None, "and nothing of it is marked");
+        let screen = frame(&mut app, 100, 24);
+        assert!(screen.contains("vim src/"), "{screen}");
+
+        // `→` at the end of the line takes it.
+        press(&mut app, "Right");
+        assert_eq!(app.cmd.text, "vim src/");
+        assert_eq!(app.cmd.caret, "vim src/".chars().count());
+
+        // Walking into the list puts the cursor's row in charge, so the hint goes: two
+        // answers on the screen at once would be one too many.
+        app.cmd.clear();
+        for key in ["v", "i", "m", "Space", "s"] {
+            press(&mut app, key);
+        }
+        press(&mut app, "Down");
+        assert_eq!(app.completion_hint(), None);
+    }
+
+    /// An answer that would change what is already typed is not appended: `Cargo.toml` is
+    /// offered for `car` — a completion that minded the case would be one nobody uses — but
+    /// drawing `go.toml` after `car` would show a line that is not the line one would get.
+    /// `Tab` takes that one.
+    #[test]
+    fn an_answer_that_rewrites_what_was_typed_is_not_offered_inline() {
+        let mut app = app("far", "en");
+        for key in ["v", "i", "m", "Space", "c", "a", "r"] {
+            press(&mut app, key);
+        }
+        assert!(app.complete.is_some(), "it is in the list");
+        assert_eq!(app.completion_hint(), None, "but not after the caret");
+        press(&mut app, "Tab");
+        assert_eq!(app.cmd.text, "vim Cargo.toml");
+    }
+
+    /// FAR's own appending, for somebody who wants FAR: the rest goes into the line, marked,
+    /// so the next character replaces it.
+    #[test]
+    fn fars_appending_writes_into_the_line_and_a_keystroke_undoes_it() {
+        let mut app = app("far", "en");
+        app.cfg.cmdline.complete.append = "line".into();
+        for key in ["v", "i", "m", "Space", "s"] {
+            press(&mut app, key);
+        }
+        assert_eq!(app.cmd.text, "vim src/");
+        // What was added is marked out, which is what makes it safe: every key that types or
+        // deletes takes the selection first.
+        assert_eq!(app.cmd.selected_text().as_deref(), Some("rc/"));
+        // And no hint is drawn on top of it.
+        assert_eq!(app.completion_hint(), None);
+
+        // Typing on replaces the offer rather than adding to it.
+        press(&mut app, "y");
+        assert!(
+            app.cmd.text.starts_with("vim sy"),
+            "the typed line comes back: {:?}",
+            app.cmd.text
+        );
+    }
+
+    /// FAR's list owns `Enter` the moment it appears. Ours waits to be walked into, unless
+    /// the configuration asks for FAR's manners.
+    #[test]
+    fn a_modal_list_takes_enter_at_once() {
+        let mut app = app("far", "en");
+        app.cfg.cmdline.complete.append = "off".into();
+        for key in ["v", "i", "m", "Space", "C", "a", "r"] {
+            press(&mut app, key);
+        }
+        // Ours: `Enter` runs the line, which clears it and does not complete it.
+        assert!(app.complete.is_some());
+        press(&mut app, "Enter");
+        assert_ne!(app.cmd.text, "vim Cargo.toml");
+
+        app.cfg.cmdline.complete.modal = true;
+        for key in ["v", "i", "m", "Space", "C", "a", "r"] {
+            press(&mut app, key);
+        }
+        press(&mut app, "Enter");
+        assert_eq!(
+            app.cmd.text, "vim Cargo.toml",
+            "FAR's list takes it at once"
+        );
     }
 
     /// A `[[column_set]]` on a view's own digit is what that view draws (SPEC 02 §3a): FAR's

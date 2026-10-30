@@ -635,6 +635,13 @@ pub struct CompleteCfg {
     pub path: String,
     /// The environment's variable names, for a word that starts with `$` or `%`.
     pub env: String,
+    /// What becomes of the best answer while one types: `hint` draws it after the caret and
+    /// leaves the line alone, `line` writes it into the line selected as FAR does, `off`
+    /// does neither.
+    pub append: String,
+    /// Does the list take `Enter` the moment it appears, as FAR's does? Ours waits until
+    /// somebody has walked into it, so that typing and pressing `Enter` runs what was typed.
+    pub modal: bool,
     /// How many answers the list holds at once.
     pub rows: u16,
     /// How many answers are kept at all, however many there are.
@@ -648,6 +655,8 @@ impl Default for CompleteCfg {
             history: "on".into(),
             path: "asked".into(),
             env: "on".into(),
+            append: "hint".into(),
+            modal: false,
             rows: 8,
             limit: 200,
         }

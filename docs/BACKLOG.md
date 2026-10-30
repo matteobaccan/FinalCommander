@@ -41,7 +41,6 @@ says what the decision stands on.
 
 | Item | Where | What is left |
 | --- | --- | --- |
-| Autocomplete | the line, `Ctrl+Space` | From FAR's version: appending the first match as one types, and a modal list. |
 | A terminal in a panel | Commands menu | One at a time. Several, as tabs of terminals, wants the pane to own a list rather than one child, which is the same shape the panel tabs already have. |
 
 ## Histories and screens

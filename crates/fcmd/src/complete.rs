@@ -59,6 +59,50 @@ pub struct Sources<'a> {
     pub commands: &'a [&'a str],
 }
 
+/// What becomes of the best answer while one types (SPEC 06 §7.4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Append {
+    /// Nothing: the list is the whole of the offer.
+    Off,
+    /// Shown after the caret in a dim colour and *not* in the line, so `Enter` still runs
+    /// what was typed. `→` or `End` takes it. This is what the shells that have grown this
+    /// habit since FAR do, and it cannot change what a line means.
+    Hint,
+    /// FAR's own: the rest of the match goes into the line, selected, so the next character
+    /// replaces it — and `Enter` runs the line with it. For somebody who wants FAR exactly.
+    Line,
+}
+
+impl Append {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "off" | "no" | "false" | "none" => Some(Append::Off),
+            "hint" | "ghost" | "suggest" => Some(Append::Hint),
+            "line" | "on" | "yes" | "true" | "far" => Some(Append::Line),
+            _ => None,
+        }
+    }
+}
+
+/// What the best answer would add to the end of the line, when it adds anything.
+///
+/// Three things have to hold, and each of them is a case where appending would be wrong
+/// rather than merely unhelpful: the caret is at the end of the line, so there is an end to
+/// append to; the answer begins with what is already typed, so nothing already typed is
+/// changed; and the answer leaves its caret at its own end, so a row that would put the caret
+/// in the middle of what it writes — a prefix like `view:` does — is not an append.
+pub fn tail<'a>(line: &str, caret: usize, rows: &'a [Row]) -> Option<&'a str> {
+    if caret != line.chars().count() {
+        return None;
+    }
+    let best = rows.first()?;
+    if best.caret != best.line.chars().count() {
+        return None;
+    }
+    let rest = best.line.strip_prefix(line)?;
+    (!rest.is_empty()).then_some(rest)
+}
+
 /// One answer: what the line becomes, where the caret lands, and what the list shows.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Row {
@@ -314,6 +358,40 @@ pub fn split_path(word: &str) -> (&str, &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn what_the_best_answer_would_add_to_the_line() {
+        let row = |line: &str| Row {
+            caret: line.chars().count(),
+            line: line.to_string(),
+            text: String::new(),
+        };
+        let rows = [row("vim src/")];
+        assert_eq!(tail("vim s", 5, &rows), Some("rc/"));
+        assert_eq!(tail("vim src/", 8, &rows), None, "nothing left to add");
+        // The caret has to be at the end: there is nowhere else to append to.
+        assert_eq!(tail("vim s", 3, &rows), None);
+        // An answer that would change what is typed is not an append — `Tab` takes that one.
+        assert_eq!(tail("vim S", 5, &rows), None);
+        // And a row that puts the caret inside what it writes is not one either.
+        let prefix = [Row {
+            line: "view: file".to_string(),
+            caret: 6,
+            text: String::new(),
+        }];
+        assert_eq!(tail("view:", 5, &prefix), None);
+        assert_eq!(tail("", 0, &[]), None);
+    }
+
+    #[test]
+    fn the_three_ways_to_spell_what_happens_while_one_types() {
+        assert_eq!(Append::parse("hint"), Some(Append::Hint));
+        assert_eq!(Append::parse(" LINE "), Some(Append::Line));
+        // `on` means FAR's own, because that is what turning it on meant in FAR.
+        assert_eq!(Append::parse("on"), Some(Append::Line));
+        assert_eq!(Append::parse("off"), Some(Append::Off));
+        assert_eq!(Append::parse("sometimes"), None);
+    }
 
     fn cfg() -> CompleteCfg {
         CompleteCfg::default()

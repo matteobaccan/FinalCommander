@@ -319,10 +319,28 @@ what makes it worth having: a line one has run is a line one may run again.
 
 The list is drawn **above** the command line, over the bottom of the panels — below it are the
 status line and the key bar, and a list that covered those would hide the row that says what
-the keys do. It owns four keys and no others: `↑`/`↓` walk it, `Tab` takes what is under the
-cursor, `Esc` closes it. `Enter` runs the line as it always did **until** somebody has walked
-into the list, and takes the row after that — a list that stole `Enter` the moment it appeared
-would make typing feel like a trap. Every other key closes the list and goes on to the line.
+the keys do. It owns five keys and no others: `↑`/`↓` walk it, `Tab` takes what is under the
+cursor, `→`/`End` take what is drawn after the caret, `Esc` closes it. `Enter` runs the line as
+it always did **until** somebody has walked into the list, and takes the row after that — a
+list that stole `Enter` the moment it appeared would make typing feel like a trap. Every other
+key closes the list and goes on to the line. `cmdline.complete.modal = true` gives FAR's
+manners instead, where the list takes `Enter` as soon as it appears.
+
+**The best answer while one types**, which is `cmdline.complete.append`:
+
+| | |
+| --- | --- |
+| `hint` (the default) | drawn after the caret in a dim colour and **not** in the line, so `Enter` runs what was typed. `→` or `End` takes it. This is the habit the shells that grew it after FAR settled on, and it cannot change what a line means |
+| `line` | FAR's own: the rest goes into the line, marked out, so the next character replaces it — and `Enter` runs the line with it |
+| `off` | neither; the list is the whole of the offer |
+
+Three things have to hold before anything is appended, and each is a case where appending
+would be *wrong* rather than merely unhelpful: the caret is at the end of the line, so there is
+an end to append to; the answer begins with what is already typed, so nothing typed is changed;
+and the answer leaves its caret at its own end, so a row that writes a prefix like `view:` and
+puts the caret inside it is not an append. The second is why `Cargo.toml`, which is offered for
+`car` because a completion that minded the case would be one nobody uses, is *not* drawn after
+`car`: the line would read `cargo.toml` and one would get `Cargo.toml`. `Tab` takes that one.
 
 ### 7.1 Commands we run ourselves
 

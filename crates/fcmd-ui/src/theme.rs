@@ -170,6 +170,9 @@ const DEFAULTS: &[(&str, Color)] = &[
     ("syntax.text", Color::Default),
     ("cmdline.fg", Color::Default),
     ("cmdline.bg", Color::Default),
+    // What the completion would add, drawn after the caret and not in the line (SPEC 06
+    // §7.4): dim on purpose, because it is an offer and not text somebody typed.
+    ("cmdline.hint.fg", Color::Ansi(8)),
     // The menu bar (horizontal) and a pulled-down menu or list.
     ("hmenu.fg", Color::Ansi(0)),
     ("hmenu.bg", Color::Ansi(6)),

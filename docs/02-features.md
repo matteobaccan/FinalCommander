@@ -274,7 +274,7 @@ Found by reading FAR's own help and configuration tables; the detail is in
 | 9b.8 | Metasymbol language for the user menu, file associations and apply-command: name forms, the selected-file list as a file or inline, path forms, resolved paths, the description, a prompt with history, panel-switching prefixes, and quoting/case/encoding modifiers | FAR | M2 |
 | 9b.9 | Command prefixes on the command line (`view:`, `edit:`, `goto:`, `clip:`, `whereis:`, `link:`, `run:`), as FAR's `farcmds` does | FAR | M2 |
 | 9b.10 | Internal shell commands that need no shell: `cls`, `cd`/`chdir` with a configurable `cd ~`, `chcp`, `set`, nestable `if [not] exist` / `if [not] defined`, `pushd`/`popd`/`clrd`, `title`, `exit` | FAR | M2 |
-| 9b.11 | Autocomplete with four separately switchable sources (filesystem, history, `PATH`, environment), each three-state, as a list or appended inline | FAR | M2 |
+| 9b.11 | Autocomplete with four separately switchable sources (filesystem, history, `PATH`, environment), each three-state, as a list or appended inline | FAR | ✓ |
 | 9b.12 | Screen grabber: select any region of the screen, stream or block, extend, move, append to the clipboard | FAR (`Alt+Ins`) | M3 |
 | 9b.13 | Viewer ⇄ editor at the same position, jump to the open file in the panel, next/previous file of the panel from inside the viewer | FAR (`F6`, `Ctrl+F10`, `Gray ±`) | M2 |
 | 9b.14 | Remember per file: position, code page, view mode, wrap mode, bookmarks | FAR | M2 |

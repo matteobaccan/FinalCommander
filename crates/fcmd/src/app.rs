@@ -8511,6 +8511,19 @@ impl App {
             }
             None
         } else {
+            // FAR's own appending: the rest of the best answer goes into the line, selected,
+            // so the next character replaces it and `Enter` runs the line with it. The
+            // selection is what makes this safe to leave on — every key that types or deletes
+            // takes the selection out first, so the tail never survives a keystroke that
+            // disagreed with it.
+            if crate::complete::Append::parse(&cfg.append) == Some(crate::complete::Append::Line) {
+                if let Some(tail) = crate::complete::tail(&line, caret, &rows) {
+                    let tail = tail.to_string();
+                    let at = self.cmd.caret;
+                    self.cmd.insert_str(&tail);
+                    self.cmd.anchor = Some(at);
+                }
+            }
             Some(Completion {
                 rows,
                 cursor: 0,
@@ -8650,6 +8663,23 @@ impl App {
     }
 
     /// Take the row under the cursor: the line becomes what it says, and the list closes.
+    /// What the best answer would add to the end of the line: the hint the line draws, and
+    /// what `→` and `End` take. `None` in `line` mode, where it is in the line already.
+    pub fn completion_hint(&self) -> Option<&str> {
+        if crate::complete::Append::parse(&self.cfg.cmdline.complete.append)
+            != Some(crate::complete::Append::Hint)
+        {
+            return None;
+        }
+        let c = self.complete.as_ref()?;
+        // Once somebody has walked the list, the cursor is the answer and the first row is
+        // not: a hint for a row nobody is looking at would be a second answer on the screen.
+        if c.picked {
+            return None;
+        }
+        crate::complete::tail(&self.cmd.text, self.cmd.caret, &c.rows)
+    }
+
     fn take_completion(&mut self) {
         let Some(c) = self.complete.take() else {
             return;
@@ -8693,8 +8723,23 @@ impl App {
                     self.take_completion();
                     return true;
                 }
-                KeyCode::Enter if self.complete.as_ref().is_some_and(|c| c.picked) => {
+                KeyCode::Enter
+                    if self.cfg.cmdline.complete.modal
+                        || self.complete.as_ref().is_some_and(|c| c.picked) =>
+                {
                     self.take_completion();
+                    return true;
+                }
+                // At the end of the line with something drawn after the caret, `→` and `End`
+                // take it — the habit every shell that suggests has settled on. Anywhere else
+                // they move the caret, which is what the line's own arms do with them.
+                KeyCode::Right | KeyCode::End
+                    if key.mods == Mods::NONE && self.completion_hint().is_some() =>
+                {
+                    let tail = self.completion_hint().unwrap_or_default().to_string();
+                    self.cmd.mark(false);
+                    self.cmd.insert_str(&tail);
+                    self.refresh_completion(false);
                     return true;
                 }
                 KeyCode::Esc => {

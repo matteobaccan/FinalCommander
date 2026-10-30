@@ -8,6 +8,24 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **The best answer appears while one types, and the list can have FAR's manners** (SPEC 06
+  §7.4). Two settings under `[cmdline.complete]`:
+
+  - `append` — `hint` by default: the rest of the best answer is drawn after the caret in a
+    dim colour and is **not** in the line, so `Enter` still runs what was typed, and `→` or
+    `End` takes it. `line` is FAR's own, where it goes into the line marked out so the next
+    character replaces it and `Enter` runs it with the offer attached; `off` is neither.
+    Nothing is appended unless the caret is at the end of the line, the answer continues what
+    is typed without changing it, and the answer's own caret is at its end — so `Cargo.toml`,
+    which is offered for `car` because a completion that minded the case would be one nobody
+    uses, is in the list but not after the caret: the line would read `cargo.toml` and one
+    would get `Cargo.toml`. `Tab` takes that one.
+  - `modal` — off by default. FAR's list owns `Enter` the moment it appears; ours waits until
+    somebody has walked into it, because a list that stole `Enter` would make typing feel like
+    a trap. `true` asks for FAR's manners.
+
+  Every theme gained `cmdline.hint.fg`, which is the dim of its own palette.
+
 - **The information panel says what the directory is sitting on, and what its repository is
   doing** (`Ctrl+L`, SPEC 02 §9). Two lines that were the other half of *where am I*:
 
