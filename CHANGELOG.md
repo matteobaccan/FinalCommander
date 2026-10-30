@@ -23,10 +23,11 @@ Notable changes, newest first. The format follows
   carry it back.
 
 - **The help says which version is talking, and who wrote it.** The chapter that explains what
-  the program is now opens on a line of its own — *FinalCommander 0.0.0 — by Matteo Baccan*,
-  with the real version and in the language the program is running in. The version is read out
-  of the binary rather than written into the page, so a release cannot leave it behind, and the
-  byline is on that one chapter rather than at the top of every page of the help.
+  the program is now opens on a line of its own — `FinalCommander <version> — by Matteo Baccan`
+  — with the version the binary really is, in the language the program is running in. The
+  version is read out of the binary rather than written into the page, so a release cannot
+  leave it behind, and the byline is on that one chapter rather than at the top of every page
+  of the help.
 
 ### Fixed
 
