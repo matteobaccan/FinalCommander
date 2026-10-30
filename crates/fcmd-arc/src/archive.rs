@@ -960,7 +960,7 @@ impl Cache {
             limits,
             open: Mutex::new(Vec::new()),
             capacity: 4,
-            nest: Nest::new(),
+            nest: Nest::with_capacity(limits.depth.max(4)),
             keys: Mutex::new(HashMap::new()),
         }
     }

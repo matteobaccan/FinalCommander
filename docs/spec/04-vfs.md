@@ -108,7 +108,9 @@ where the code lives, not whether it is linked into the binary.
   over it is refused with its size and the limit rather than quietly filling the disk. The
   path stays what it is — `sftp://srv/outer.zip!/inner.zip!/readme.md` — because that is where
   the file really is; nothing above this layer learns that a copy happened. A container read
-  from a copy is **read-only**: see the rebuild below.
+  from a copy can be written into as well — see the rebuild below, which rebuilds the copy and
+  then puts it back where it came from. One on a server cannot: there is nowhere to put it
+  back.
 - An encrypted container asks for its password rather than refusing. **Implemented** for 7z,
   whose header may itself be encrypted: the refusal the reader answers with is the one the
   panel and the viewer turn into a masked prompt, and the answer goes into the container
@@ -144,11 +146,16 @@ where the code lives, not whether it is linked into the binary.
   time, which live in the entry's header and cannot be patched in a compressed stream — in a
   zip only that entry is decompressed and written again, a tar writes every header anyway,
   and a 7z records the mode where `p7zip` does, in the top half of the attribute word.
-  A container that is not a file on this disk is read
-  from a copy, and the copy is thrown away when the program ends, so a rebuild of one is
-  refused with that as the reason rather than reporting a change nobody will see again:
-  changing something three archives down means rebuilding all three, which is a plan this
-  does not make yet.
+  A container inside another container is rebuilt too, as `fcmd_arc::rebuild_in`: it is read
+  from a copy, so the copy is rebuilt and then put back into the archive it was taken out of,
+  which may itself be a copy — so it goes on outwards until the file on this disk, which is
+  the one that really changes. Three zips deep is three rebuilds, each atomic in itself, and
+  an interruption leaves an outer archive still holding the old inner one rather than a broken
+  archive. The container cache is dropped for every level it touches, and the copies made at
+  each level are stale the moment the file at the bottom of the chain is rewritten, so the
+  next listing reads the archive that was just written rather than the copy it came from. A
+  container on a *server* is still read-only, and says so: the copy could be written, but
+  nothing would then put it back where it came from.
 
 ## 5. Editing inside a VFS
 

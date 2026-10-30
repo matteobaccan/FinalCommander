@@ -21,9 +21,9 @@ use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use fcmd_core::CancelToken;
+use fcmd_core::{CancelToken, VPath};
 
-use crate::archive::{decoder, normalise, tar_path, Archive};
+use crate::archive::{decoder, normalise, tar_path, Archive, Cache};
 use crate::write::{Level, Written};
 use crate::{ArcError, Format, Limits, Result};
 
@@ -152,6 +152,64 @@ pub fn rebuild(
             Err(e)
         }
     }
+}
+
+/// Apply `changes` to the container `host` names, wherever that container is (SPEC 04 §4).
+///
+/// [`rebuild`] writes a file on this disk, and for an archive that *is* one that is the whole
+/// story. A container inside another one is not: every decoder here reads a file, so a nested
+/// container is read from a copy of itself on this disk. Writing into it is therefore three
+/// steps rather than one — rebuild the copy, then put the rebuilt copy back into the archive it
+/// was taken out of, and that archive may itself be a copy, so it goes on outwards until it
+/// reaches the file on the disk, which is the one that really changes.
+///
+/// Three zips deep that is three rebuilds, each of them atomic in itself: the innermost copy is
+/// replaced only once it has been written and read back, and so is the file on the disk. What
+/// an interruption can leave behind is an outer archive still holding the old inner one, which
+/// is the state the user started from rather than a broken archive.
+///
+/// What comes back counts the innermost rebuild. It is the one that was asked for; the
+/// repacking of the hosts above it is the price of asking, not the result.
+pub fn rebuild_in(
+    cache: &Cache,
+    host: &VPath,
+    changes: &[Change],
+    level: Level,
+    cancel: &CancelToken,
+    progress: &mut dyn FnMut(&str, u64),
+) -> Result<Written> {
+    if Cache::is_writable_host(host) {
+        // The ordinary case, and the end of the chain: an archive that is a file on this disk.
+        // The index is dropped on both sides of the write, because the file it describes is
+        // about to be a different one and the panel asks for the new one immediately.
+        cache.forget(host.as_path());
+        let written = rebuild(host.as_path(), changes, level, cancel, progress);
+        cache.forget(host.as_path());
+        return written;
+    }
+    let Some(outer) = host.leave() else {
+        // Not in a container and not a file on this disk: an archive on a server or in a
+        // bucket. Rebuilding the copy it is read from would change a file that is thrown away
+        // when the program ends, and report that the archive had changed.
+        return Err(ArcError::Refused {
+            path: host.to_string(),
+            reason: "an archive that is not a file on this disk can only be read".into(),
+        });
+    };
+    // The copy this container is read from — made here if this is the first time anybody
+    // asked — is the file the rebuild can write.
+    let copy = cache.host_file(host, cancel)?;
+    cache.forget(&copy);
+    let written = rebuild(&copy, changes, level, cancel, progress)?;
+    cache.forget(&copy);
+    // And back it goes, under the name it has inside its host. `Put` replaces what is there,
+    // which is the old bytes of this very container.
+    let put = [Change::Put {
+        inner: host.inner_path().to_string(),
+        source: copy,
+    }];
+    rebuild_in(cache, &outer, &put, level, cancel, progress)?;
+    Ok(written)
 }
 
 fn write_new(
@@ -667,6 +725,173 @@ mod tests {
             .unwrap()
             .read(inner, &CancelToken::new())
             .unwrap()
+    }
+
+    /// A zip at `path` holding `sources` as they are named on disk.
+    fn zip_of(path: &Path, sources: &[PathBuf]) -> PathBuf {
+        create(
+            path,
+            Format::Zip,
+            sources,
+            Level::Fast,
+            false,
+            &CancelToken::new(),
+            &mut |_, _| {},
+        )
+        .expect("the archive");
+        path.to_path_buf()
+    }
+
+    /// One file to put into an archive, with its bytes.
+    fn a_file(dir: &Path, name: &str, body: &[u8]) -> PathBuf {
+        let at = dir.join(name);
+        std::fs::write(&at, body).unwrap();
+        at
+    }
+
+    /// The entries of the archive `host` names, read through a cache that has never seen it:
+    /// what the next run of the program would find, rather than what this one remembers.
+    fn names_in(host: &VPath) -> Vec<String> {
+        let cache = Cache::new(Limits::default());
+        let archive = cache
+            .open_host(host, &CancelToken::new())
+            .unwrap_or_else(|e| panic!("{host}: {e}"));
+        let mut out: Vec<String> = archive
+            .entries()
+            .iter()
+            .filter(|e| e.kind != fcmd_core::EntryKind::Dir)
+            .map(|e| e.path.clone())
+            .collect();
+        out.sort();
+        out
+    }
+
+    /// A zip inside a zip: writing into the inner one means writing the outer one, because the
+    /// inner one is read from a copy and a copy is not where the archive lives.
+    #[test]
+    fn a_file_written_into_a_nested_container_reaches_the_one_on_the_disk() {
+        let dir = tempfile::tempdir().unwrap();
+        let held = dir.path().join("held");
+        std::fs::create_dir_all(&held).unwrap();
+        let inner = archive(&held, Format::Zip);
+        let outer = zip_of(&dir.path().join("outer.zip"), &[inner]);
+        let added = a_file(dir.path(), "added.txt", b"written two deep\n");
+
+        let host = VPath::local(&outer).enter("/tree.zip");
+        // This is the host that used to be refused: not a file on this disk.
+        assert!(!Cache::is_writable_host(&host));
+        let cache = Cache::new(Limits::default());
+        let written = rebuild_in(
+            &cache,
+            &host,
+            &[Change::Put {
+                inner: "/added.txt".into(),
+                source: added,
+            }],
+            Level::Fast,
+            &CancelToken::new(),
+            &mut |_, _| {},
+        )
+        .expect("the nested rebuild");
+        // What comes back counts the inner archive — the three files it held and the new one.
+        assert_eq!(written.files, 4, "{written:?}");
+
+        // The file on the disk still holds one entry, and it is the inner archive.
+        assert_eq!(names(&outer), ["/tree.zip"]);
+        // And the inner archive, read afresh out of the file on the disk, holds the new file
+        // with the bytes that went in, and everything it held before.
+        assert_eq!(
+            names_in(&host),
+            [
+                "/added.txt",
+                "/tree/readme.md",
+                "/tree/src/deep/notes.txt",
+                "/tree/src/main.rs"
+            ]
+        );
+        let cache = Cache::new(Limits::default());
+        let archive = cache.open_host(&host, &CancelToken::new()).unwrap();
+        assert_eq!(
+            archive.read("/added.txt", &CancelToken::new()).unwrap(),
+            b"written two deep\n"
+        );
+    }
+
+    /// The bug as it was reported: a zip in a zip in a zip, and a file put into the innermost
+    /// one. Three containers, two of them copies, and the one on the disk is the one that
+    /// changes.
+    #[test]
+    fn three_containers_deep_is_three_rebuilds_and_the_file_is_in_the_innermost() {
+        let dir = tempfile::tempdir().unwrap();
+        let held = dir.path().join("held");
+        std::fs::create_dir_all(&held).unwrap();
+        let third = archive(&held, Format::Zip);
+        let second = zip_of(&dir.path().join("second.zip"), &[third]);
+        let first = zip_of(&dir.path().join("first.zip"), &[second]);
+        let added = a_file(dir.path(), "deep.txt", b"three deep\n");
+
+        let host = VPath::local(&first).enter("/second.zip").enter("/tree.zip");
+        let cache = Cache::new(Limits::default());
+        rebuild_in(
+            &cache,
+            &host,
+            &[Change::Put {
+                inner: "/src/deep.txt".into(),
+                source: added,
+            }],
+            Level::Fast,
+            &CancelToken::new(),
+            &mut |_, _| {},
+        )
+        .expect("the rebuild three deep");
+
+        // Every level still holds what it held, and the innermost holds the new file.
+        assert_eq!(names(&first), ["/second.zip"]);
+        assert_eq!(
+            names_in(&VPath::local(&first).enter("/second.zip")),
+            ["/tree.zip"]
+        );
+        assert!(
+            names_in(&host).contains(&"/src/deep.txt".to_string()),
+            "{:?}",
+            names_in(&host)
+        );
+        let cache = Cache::new(Limits::default());
+        let archive = cache.open_host(&host, &CancelToken::new()).unwrap();
+        assert_eq!(
+            archive.read("/src/deep.txt", &CancelToken::new()).unwrap(),
+            b"three deep\n"
+        );
+        // And the file that was already two directories down inside it is still there.
+        assert_eq!(
+            archive
+                .read("/tree/src/deep/notes.txt", &CancelToken::new())
+                .unwrap(),
+            TREE[2].1
+        );
+    }
+
+    /// An archive on a server is read from a copy too, but there is nowhere to put the copy
+    /// back: the chain of rebuilds only reaches a file on this disk.
+    #[test]
+    fn an_archive_that_is_not_on_this_disk_says_it_can_only_be_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let added = a_file(dir.path(), "added.txt", b"nowhere to go\n");
+        let host = VPath::remote(fcmd_core::Scheme::Sftp, "host", "/over-there.zip");
+        let cache = Cache::new(Limits::default());
+        let error = rebuild_in(
+            &cache,
+            &host,
+            &[Change::Put {
+                inner: "/added.txt".into(),
+                source: added,
+            }],
+            Level::Fast,
+            &CancelToken::new(),
+            &mut |_, _| {},
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("can only be read"), "{error}");
     }
 
     /// What the panel's `Ctrl+A` asks for inside an archive: the mode and the time of one

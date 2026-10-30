@@ -223,9 +223,15 @@ Quello che questo ti dà, da dentro un archivio:
   caselle si aprono su quello che l'elenco sa, quindi un dialogo che non tocchi non scrive
   niente.
 
+Un archivio dentro un archivio prende tutto questo. Si legge da una copia, perché ogni lettore
+qui dentro legge un file, quindi scriverci dentro vuol dire scrivere la copia e poi rimettere la
+copia nell'archivio da cui è uscita — fino al file che sta sul disco, che è quello che cambia
+davvero. Tre zip uno dentro l'altro sono tre archivi riscritti, e il job dice quando ha finito.
+
 Quello che non c'è: `F7` non crea una cartella dentro un archivio — nessuno di questi formati
 conserva una cartella vuota che valga la pena di tenere. E non si può scrivere dentro un
-archivio che non è un file su questo disco, per il motivo appena detto.
+archivio che sta su un *server*: anche quello si legge da una copia, e niente rimetterebbe
+indietro la copia.
 
 # Cosa è un file
 

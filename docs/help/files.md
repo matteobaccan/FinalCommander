@@ -211,9 +211,14 @@ What that gives you, from inside an archive:
   again — the dim line in the dialog says so — and everything else is kept as it was. The
   boxes open from what the listing knows, so a dialog you do not touch writes nothing.
 
+An archive inside an archive takes all of that too. It is read from a copy, because every
+reader here reads a file, so writing into it means writing the copy and then putting the copy
+back into the archive it came out of — as far out as the file on the disk, which is the one
+that changes. Three zips deep is three archives written, and the job says when it is done.
+
 What is not there: `F7` does not make a directory inside an archive — nothing stores an empty
-one worth keeping. Nor can an archive that is not a file on this disk be written into, for the
-reason above.
+one worth keeping. Nor can an archive on a *server* be written into: that one is read from a
+copy as well, and nothing would put the copy back.
 
 # What a file is
 

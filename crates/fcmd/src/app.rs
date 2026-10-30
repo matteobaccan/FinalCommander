@@ -6492,16 +6492,14 @@ impl App {
     }
 
     /// The container a path inside an archive belongs to, and the path inside it.
+    ///
+    /// The *innermost* container, which is the one the path is in. This used to climb out to
+    /// the file on the disk, and the two halves of what it returned then belonged to two
+    /// different archives: in `outer.zip!/inner.zip!/` the host was `outer.zip` while the path
+    /// inside was `inner.zip`'s. A file copied in two containers deep went into the outer
+    /// archive, silently, and a deletion looked for the name there.
     fn inside(path: &VPath) -> Option<(VPath, String)> {
-        if !path.in_container() {
-            return None;
-        }
-        let inner = path.inner_path().to_string();
-        let mut host = path.clone();
-        while let Some(outer) = host.leave() {
-            host = outer;
-        }
-        Some((host, inner))
+        Some((path.leave()?, path.inner_path().to_string()))
     }
 
     /// The archive the archive commands are about: the file under the cursor when it is one,
@@ -14501,8 +14499,9 @@ impl App {
             return;
         };
         // A file that came out of an archive goes back into it, which means writing the
-        // archive again (SPEC 04 §4). There is no upload and no stamp to check: the container
-        // is a local file, and the job engine is what notices if somebody else moved it.
+        // archive again (SPEC 04 §4) — and if that archive is itself inside another one, the
+        // chain of rebuilds carries it out to the file on the disk. There is no upload and no
+        // stamp to check: the job engine is what notices if somebody else moved it.
         if let Some((archive, inner)) = Self::inside(&edit.remote) {
             let msg = self.i18n.t_args(
                 "arc-writing-back",
@@ -24769,6 +24768,36 @@ run = ["echo one", "echo two", "echo three"]
             about.iter().any(|line| line.contains(&note[..20])),
             "{about:?}"
         );
+    }
+
+    /// The bug this answers, reported by a user: open a zip, put a zip inside it, step into
+    /// that one and put a third zip inside *it*. Two containers deep, what the panel was
+    /// standing in and what the write was applied to were two different archives — the host
+    /// climbed out to the file on the disk while the path inside stayed the inner archive's —
+    /// so the file went into the outer zip without a word, and a deletion looked for the name
+    /// there.
+    #[test]
+    fn what_a_path_inside_an_archive_is_in_is_the_innermost_container() {
+        let dir = tempfile::tempdir().unwrap();
+        let outer = VPath::local(dir.path().join("outer.zip"));
+
+        // One container deep: the archive is the file on the disk, as it always was.
+        let (host, inner) = App::inside(&outer.enter("/a.txt")).unwrap();
+        assert_eq!(host, outer);
+        assert_eq!(inner, "/a.txt");
+        assert!(fcmd_arc::Cache::is_writable_host(&host));
+
+        // Two deep: the archive is the inner container, and the path is the path in it.
+        let nested = outer.enter("/inner.zip");
+        let (host, inner) = App::inside(&nested.enter("/a.txt")).unwrap();
+        assert_eq!(host, nested);
+        assert_eq!(inner, "/a.txt");
+        // Which is not a file on this disk, so the write goes through the chain of rebuilds
+        // rather than into the archive that happens to be at the bottom of it.
+        assert!(!fcmd_arc::Cache::is_writable_host(&host));
+
+        // And a path that is in no container is in no archive.
+        assert!(App::inside(&outer).is_none());
     }
 
     /// The chapter that says what the program is says which version it is and who wrote it.

@@ -10,9 +10,11 @@
 //! happened — a path stays `/srv/outer.zip!/inner.zip!/readme.md`, which is where the file
 //! really is, rather than becoming the name of a temporary file nobody asked for.
 //!
-//! What a copy cannot do is be written to, which is why the rebuild of SPEC 04 §4 refuses a
-//! container it did not find on the disk itself: writing into the copy would change a file
-//! that is about to be deleted, and say it had changed the archive.
+//! A copy can be written to, but writing it is not the whole job: the archive it came out of
+//! still holds the bytes it had. So the rebuild of SPEC 04 §4 puts the rebuilt copy back where
+//! it came from and goes on outwards until the file on this disk, which is the one that really
+//! changes. The container on a server is the one that cannot be written into: its copy would
+//! change and nothing would carry it back.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -71,11 +73,14 @@ impl std::fmt::Debug for Nest {
 }
 
 impl Nest {
-    pub fn new() -> Nest {
+    /// A cache holding `capacity` copies at once. A rebuild of a container nested inside
+    /// others holds one copy of every level alive while it walks back out to the disk, so the
+    /// cache has to be at least as deep as the nesting limit allows.
+    pub fn with_capacity(capacity: usize) -> Nest {
         Nest {
             made: Mutex::new(Vec::new()),
             fetch: Mutex::new(None),
-            capacity: 4,
+            capacity,
         }
     }
 

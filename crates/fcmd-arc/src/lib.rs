@@ -25,7 +25,7 @@ pub use archive::{ArcEntry, Archive, Cache, Report};
 pub use format::Format;
 pub use limits::Limits;
 pub use nest::Fetch;
-pub use rebuild::{rebuild, Change};
+pub use rebuild::{rebuild, rebuild_in, Change};
 pub use write::{create, Level, Written};
 
 /// What can go wrong with a container, in the words the UI shows.

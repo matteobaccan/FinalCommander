@@ -8,6 +8,20 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **Writing into an archive that is inside another archive.** Every reader here reads a file,
+  so a container inside a container is read from a copy of itself on this disk — and until now
+  that copy was the end of the road: a write into it was refused, because rebuilding the copy
+  would change a file that is thrown away when the program ends and claim the archive had
+  changed. It is now not the end of the road but the first step of it. The copy is rebuilt,
+  and then the rebuilt copy is put back into the archive it was taken out of, which may itself
+  be a copy — so it goes on outwards until the file on the disk, which is the one that really
+  changes. Three zips deep is three rebuilds, each atomic in itself, so an interruption leaves
+  an outer archive still holding the old inner one rather than a broken archive. The container
+  cache is dropped at every level, and the copies are stale the moment the file at the bottom
+  of the chain is rewritten, so the next listing reads what was just written. An archive on a
+  *server* is still read-only and still says so: its copy could be written, but nothing would
+  carry it back.
+
 - **The help says which version is talking, and who wrote it.** The chapter that explains what
   the program is now opens on a line of its own — *FinalCommander 0.0.0 — by Matteo Baccan*,
   with the real version and in the language the program is running in. The version is read out
@@ -15,6 +29,17 @@ Notable changes, newest first. The format follows
   byline is on that one chapter rather than at the top of every page of the help.
 
 ### Fixed
+
+- **A file copied into an archive inside an archive went into the wrong archive.** Open a zip,
+  put a zip inside it, step into that one and put a third zip inside *it*: nothing appeared.
+  The write had been applied to the *outer* archive, at the path the inner one would have used,
+  without a word. What a path inside an archive is *in* used to climb out to the file on the
+  disk while the path inside stayed the innermost container's, so the two halves of the answer
+  belonged to two different archives. The same pairing was behind a deletion two containers
+  deep looking for the name in the outer archive — and taking a file of that name out of it if
+  one was there — and behind a rename failing with the archive complaining that what it had
+  just written was not in it. It is now the innermost container: the archive the panel is
+  actually standing in.
 
 - **A link inside the site no longer takes the reader out of their own language.** The table
   that says which repository document became which page named one page per document —

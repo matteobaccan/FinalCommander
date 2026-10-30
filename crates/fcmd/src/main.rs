@@ -3070,29 +3070,15 @@ fn run_rebuild(
     use fcmd_jobs::{Outcome, Phase, Progress};
 
     let started = std::time::Instant::now();
-    // Only an archive that is a file on this disk can be changed: one read out of another
-    // archive, or off a server, is read from a copy, and rebuilding the copy would report a
-    // change to a file that is thrown away when the program ends (SPEC 04 §4).
-    if !fcmd_arc::Cache::is_writable_host(&archive) {
-        let _ = tx.send(Event::JobDone {
-            id,
-            kind: fcmd_jobs::JobKind::Rebuild,
-            outcome: Outcome {
-                errors: vec![(
-                    archive.clone(),
-                    "an archive that is not a file on this disk can only be read".to_string(),
-                )],
-                ..Outcome::default()
-            },
-        });
-        return;
-    }
-    archives.forget(&archive.os());
     let total = changes.len() as u64;
     let mut done = 0u64;
     let mut last = std::time::Instant::now();
-    let result = fcmd_arc::rebuild(
-        archive.as_path(),
+    // A container inside another container is rebuilt too, by rebuilding the copy it is read
+    // from and putting that copy back into the archive it came out of, as far out as the file
+    // on this disk (SPEC 04 §4). One on a server is still read-only, and says so.
+    let result = fcmd_arc::rebuild_in(
+        archives,
+        &archive,
         &changes,
         level,
         &cancel,
@@ -3116,7 +3102,6 @@ fn run_rebuild(
             });
         },
     );
-    archives.forget(&archive.os());
     let outcome = match result {
         Ok(written) => Outcome {
             files: written.files,
