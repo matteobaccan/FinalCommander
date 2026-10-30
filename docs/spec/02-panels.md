@@ -225,7 +225,12 @@ LN   hard links    F  streams
 Widths: a number, `0` for automatic, or `n%` of the space left after the fixed columns; `+1` on a
 time column means 12-hour, more gives seconds and milliseconds; `+2` on a date column gives a
 four-digit year. A repeated group of columns means newspaper stripes. Our equivalents are named
-(`{ type = "mtime", fmt = "…" }`), and the mapping is one to one for everything we support;
+(`{ type = "mtime", fmt = "…" }`), and the mapping is one to one for everything we support —
+**the precision suffix included**: FAR counts precision where we spell a format, so `T` with
+`+1` arrives as `%I:%M %p`, with `+2` as `%H:%M:%S` and with `+3` as `%H:%M:%S%.3f`, a `DM`
+keeps its date and lengthens only the clock, and `+2` on a date on its own is already true of
+ours and is passed over in silence. A precision on a column that has none — a size, a name —
+is reported;
 what we do not support (allocated size, streams, descriptions before they exist) is reported as
 a warning on import, never dropped silently.
 

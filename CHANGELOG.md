@@ -4,6 +4,21 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
+## [Unreleased]
+
+### Added
+
+- **FAR's precision suffix on a column width** (SPEC 02 §3b). `Column widths` may carry a
+  `+n` after a number — `8+2` — which is not width but precision, and importing a FAR mode
+  dropped it without saying so. FAR counts precision where we spell a format, so this is where
+  the one becomes the other: on a time column `+1` arrives as `%I:%M %p`, `+2` as `%H:%M:%S`
+  and `+3` as `%H:%M:%S%.3f`; a date-and-time column keeps its date and lengthens only the
+  clock; and `+2` on a date on its own asks for the four digits of the year, which ours writes
+  in any case, so there is nothing to change and nothing to report. A precision on a column
+  that has none — a size, a name — is reported, like every other part of a FAR mode we cannot
+  honour.
+
+
 ## [0.23.0] — 2026-10-30
 
 ### Added

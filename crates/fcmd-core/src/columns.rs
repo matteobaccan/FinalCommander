@@ -162,11 +162,43 @@ impl Width {
             let p: u16 = num.trim().parse().ok()?;
             return (p > 0 && p <= 100).then_some(Width::Percent(p));
         }
-        // FAR appends `+1` or `+2` to a date or time column to ask for a longer one. We take
-        // the width and the caller says the rest is not applied.
+        // FAR appends `+1` or `+2` to a date or a time column to ask for a longer one. That
+        // is precision and not width, so it is read here and applied by [`Width::precision`].
         let digits = s.split('+').next().unwrap_or(s).trim();
         let n: u16 = digits.parse().ok()?;
         Some(if n == 0 { Width::Auto } else { Width::Fixed(n) })
+    }
+
+    /// The `+n` after a width: how much precision a date or a time column is asking for.
+    /// `None` when the width carries none, which is most of them.
+    ///
+    /// FAR counts precision where we spell a format: a time column asks for twelve-hour with
+    /// `+1`, for the seconds with `+2` and for the milliseconds with `+3`, and a date column
+    /// asks for a four-digit year with `+2` (SPEC 02 §3b). So this is a number here and a
+    /// `strftime` string by the time it reaches a column.
+    pub fn precision(s: &str) -> Option<u8> {
+        let (_, after) = s.trim().split_once('+')?;
+        after.trim().parse().ok()
+    }
+}
+
+/// What a `+n` on a date or time column means, in the format string our columns take.
+///
+/// `time_only` is FAR's `T`, which draws the clock and no date; everything else draws both,
+/// and the suffix lengthens the clock half of it either way.
+fn far_time_fmt(time_only: bool, precision: u8) -> String {
+    let time = match precision {
+        0 => "%H:%M",
+        // Twelve-hour, which is the one of these that is a *different* spelling rather than a
+        // longer one.
+        1 => "%I:%M %p",
+        2 => "%H:%M:%S",
+        _ => "%H:%M:%S%.3f",
+    };
+    if time_only {
+        time.to_string()
+    } else {
+        format!("%Y-%m-%d {time}")
     }
 }
 
@@ -449,6 +481,27 @@ impl ColumnSet {
                     )),
                 }
             }
+            // The precision rides on the width string, so it is applied once the column knows
+            // which half of a date and time it draws.
+            if let Some(n) = width.as_ref().and_then(|(text, _)| Width::precision(text)) {
+                match kind {
+                    ColumnKind::Mtime | ColumnKind::Btime | ColumnKind::Atime if upper != "D" => {
+                        column.fmt = Some(far_time_fmt(upper == "T", n));
+                    }
+                    // A date with no clock in it: `+2` asks for the four digits of the year,
+                    // which is what ours writes in any case, so there is nothing to change
+                    // and nothing to report.
+                    ColumnKind::Mtime if n == 2 => {}
+                    ColumnKind::Mtime => warnings.push(format!(
+                        "column `{token}`: `+{n}` on a date asks for something other than a \
+                         four-digit year, which it already has"
+                    )),
+                    _ => warnings.push(format!(
+                        "column `{token}`: `+{n}` is a date's or a time's precision, and this \
+                         column has none"
+                    )),
+                }
+            }
             match width {
                 Some((_, Some(w))) => column.width = w,
                 Some((text, None)) => warnings.push(format!(
@@ -608,6 +661,54 @@ mod tests {
         assert_eq!(s.columns[1].fmt.as_deref(), Some("%Y-%m-%d"));
         assert_eq!(s.columns[2].kind, ColumnKind::Mtime);
         assert_eq!(s.columns[2].fmt.as_deref(), Some("%H:%M"));
+    }
+
+    #[test]
+    fn fars_precision_suffix_becomes_our_format_string() {
+        // `+1` on the time half is twelve-hour, `+2` the seconds, `+3` the milliseconds.
+        for (width, fmt) in [
+            ("5", "%H:%M"),
+            ("8+1", "%I:%M %p"),
+            ("8+2", "%H:%M:%S"),
+            ("12+3", "%H:%M:%S%.3f"),
+        ] {
+            let (s, warnings) = ColumnSet::from_far(0, "N,T", &format!("0,{width}"));
+            assert!(warnings.is_empty(), "{width}: {warnings:?}");
+            assert_eq!(s.columns[1].fmt.as_deref(), Some(fmt), "{width}");
+        }
+        // The width itself is still the width: the suffix is not part of it.
+        let (s, _) = ColumnSet::from_far(0, "N,T", "0,8+2");
+        assert_eq!(s.columns[1].width, Width::Fixed(8));
+
+        // A column that draws both halves keeps the date and lengthens the clock.
+        let (s, warnings) = ColumnSet::from_far(0, "N,DM", "0,19+2");
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(s.columns[1].fmt.as_deref(), Some("%Y-%m-%d %H:%M:%S"));
+
+        // `+2` on a date on its own asks for the four digits of the year, which ours has:
+        // nothing to change, and nothing to complain about.
+        let (s, warnings) = ColumnSet::from_far(0, "N,D", "0,10+2");
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(s.columns[1].fmt.as_deref(), Some("%Y-%m-%d"));
+
+        // Anything else carrying a precision is reported rather than silently obeyed.
+        let (_, warnings) = ColumnSet::from_far(0, "N,S", "0,9+2");
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(warnings[0].contains("`+2`"), "{warnings:?}");
+        let (_, warnings) = ColumnSet::from_far(0, "N,D", "0,10+1");
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(warnings[0].contains("four-digit"), "{warnings:?}");
+    }
+
+    #[test]
+    fn a_precision_is_read_apart_from_the_width_it_rides_on() {
+        assert_eq!(Width::precision("8+2"), Some(2));
+        assert_eq!(Width::precision(" 12 + 3 "), Some(3));
+        assert_eq!(Width::precision("8"), None);
+        assert_eq!(Width::precision("*"), None);
+        assert_eq!(Width::precision("30%"), None);
+        // A `+` with nothing after it is not a precision.
+        assert_eq!(Width::precision("8+"), None);
     }
 
     #[test]

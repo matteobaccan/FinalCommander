@@ -19,7 +19,6 @@ says what the decision stands on.
 | --- | --- | --- |
 | Info panel | `Ctrl+L` | Mount options, a git summary, and the filesystem's *name*, which today is only in the drives dialog. |
 | Tabs per panel | `Ctrl+Alt+T`/`W`/`N`/`P`/`M`/`K` | Reordering a tab within its row, and a list of them to pick from. |
-| Custom columns | the view keys `Ctrl+1..0` | The `+1`/`+2` precision suffixes of FAR's width strings, which our format strings say another way. |
 
 ## Selection and sorting
 
