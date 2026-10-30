@@ -23610,6 +23610,80 @@ run = ["echo one", "echo two", "echo three"]
     }
 
     #[test]
+    fn ins_del_and_backspace_change_the_length_of_a_binary_from_the_keyboard() {
+        // The model has carried insertion and deletion since the hex editor was written, and
+        // the keys have been wired to it for as long — but nothing tested the wiring, and a
+        // method this layer forgets is a method the program has not got. That is exactly how
+        // the wastebasket went missing on a server.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("bytes.bin");
+        std::fs::write(&path, b"ABCDEFGH").unwrap();
+        let mut app = app();
+        app.open_hex(&path);
+
+        // Overwrite is what a binary opens in: a shifted byte usually breaks the file.
+        assert!(!app.mode.hex_mut().unwrap().insert, "opens in overwrite");
+        press(&mut app, "Del");
+        assert_eq!(
+            app.mode.hex_mut().unwrap().read(0, 8),
+            b"ABCDEFGH",
+            "Del must not shift a file in overwrite"
+        );
+        press(&mut app, "3");
+        press(&mut app, "1");
+        let editor = app.mode.hex_mut().unwrap();
+        assert_eq!(editor.read(0, 8), b"1BCDEFGH", "two digits make one byte");
+        assert_eq!(editor.len(), 8, "overwriting never changes the length");
+
+        // `Ins` turns insertion on, and the status line says which of the two it is.
+        press(&mut app, "Ins");
+        assert!(app.mode.hex_mut().unwrap().insert);
+
+        // Typing now pushes the rest of the file along instead of writing over it.
+        press(&mut app, "Tab"); // the text pane, where a byte is a character
+        press(&mut app, "x");
+        let editor = app.mode.hex_mut().unwrap();
+        assert_eq!(editor.read(0, 9), b"1xBCDEFGH");
+        assert_eq!(editor.len(), 9);
+
+        // `Backspace` takes out the byte before the cursor, `Del` the one under it.
+        press(&mut app, "Backspace");
+        let editor = app.mode.hex_mut().unwrap();
+        assert_eq!(editor.read(0, 8), b"1BCDEFGH");
+        assert_eq!(editor.cursor, 1);
+        press(&mut app, "Del");
+        let editor = app.mode.hex_mut().unwrap();
+        assert_eq!(editor.read(0, 7), b"1CDEFGH");
+        assert_eq!(editor.len(), 7);
+
+        // And all of it comes back one undo at a time, which is what makes editing a binary
+        // safe: the two halves of a typed byte are two steps, each deletion is one more.
+        let mut steps = 0;
+        while app.mode.hex_mut().unwrap().undo() {
+            steps += 1;
+            assert!(steps < 64, "undo should run out, not run on");
+        }
+        assert_eq!(
+            steps, 5,
+            "two for the typed byte, one for each of x, BS and Del"
+        );
+        let editor = app.mode.hex_mut().unwrap();
+        assert_eq!(editor.read(0, 8), b"ABCDEFGH");
+        assert_eq!(editor.len(), 8);
+        assert!(!editor.modified(), "back to the file as it was on disk");
+
+        // `Ins` back to overwrite, and `Backspace` is a step left again rather than a cut.
+        press(&mut app, "Ins");
+        let editor = app.mode.hex_mut().unwrap();
+        assert!(!editor.insert);
+        editor.cursor = 4;
+        press(&mut app, "Backspace");
+        let editor = app.mode.hex_mut().unwrap();
+        assert_eq!(editor.cursor, 3);
+        assert_eq!(editor.read(0, 8), b"ABCDEFGH");
+    }
+
+    #[test]
     fn a_range_for_a_block_operation_is_an_offset_and_a_length_in_hex() {
         assert_eq!(App::hex_range("10 4"), Some((0x10, 4)));
         assert_eq!(App::hex_range(" 0x1F,0x10 "), Some((0x1f, 0x10)));

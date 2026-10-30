@@ -191,7 +191,7 @@ a binary into something readable rather than only into instructions.
 | --- | --- | --- | --- |
 | 6.1 | Full-screen editor, 256 MiB open limit, read-only files opened and marked | FAR | ~ more than one file open at once |
 | 6.2 | Block operations: stream blocks and **column/vertical blocks**, copy/cut/paste (a column paste pads short lines), indent/outdent | FAR | ✓ |
-| 6.2b | **Hex mode** (`F4` on a binary, `Ins` for insert/overwrite): byte editing with a patch list, the editor's own undo, and the same temp-file-and-rename save; in-place writing only when explicitly chosen | NEW | ~ the `Ins` toggle between inserting and overwriting |
+| 6.2b | **Hex mode** (`F4` on a binary, `Ins` for insert/overwrite): byte editing with a patch list, the editor's own undo, and the same temp-file-and-rename save; in-place writing only when explicitly chosen | NEW | ✓ |
 | 6.2c | **Byte blocks** (`F3` marks, `F12` operates): write out, read in, fill, XOR with a key, copy or move from elsewhere, insert, delete — large ones through the job engine, each showing the resulting length first | NEW | ✓ |
 | 6.2d | **Inline assembler** (`F9`): one instruction, showing the bytes it produces, the instruction it replaces and whether the length changed, written into the patch list rather than to disk | NEW | ✓ |
 | 6.3 | Undo/redo grouped per command | FAR | ~ typing-burst grouping and a configurable depth |

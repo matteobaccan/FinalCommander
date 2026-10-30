@@ -45,6 +45,14 @@ Notable changes, newest first. The format follows
 
 ### Fixed
 
+- **The keys that change a binary's length are tested now.** `Ins` has chosen between
+  inserting and overwriting in the hex editor since it was written, `Backspace` takes out the
+  byte before the cursor while inserting and steps back while overwriting, `Del` takes out the
+  one under it, and the header says `ins` or `ovr` — all of it was there, and none of it was
+  covered by a test: the editor's own tests exercise the model, which cannot tell whether a key
+  reaches it. That is precisely how the wastebasket went missing on a server earlier in this
+  cycle. Two tests now press the keys and read the header.
+
 - **A table's columns stay where the heading says they are.** A cell holding a newline — a
   CSV field between quotes, a JSON string somebody wrote as a paragraph — slid every column
   to its right one place left, on that row and on no other. The two halves of the program

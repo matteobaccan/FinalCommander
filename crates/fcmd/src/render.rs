@@ -4082,6 +4082,24 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
         (dir, app)
     }
 
+    /// Which of insert and overwrite is on is a thing one has to be able to *see*: in a
+    /// binary the difference is whether the file keeps its length.
+    #[test]
+    fn the_hex_header_says_whether_typing_inserts_or_overwrites() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("bytes.bin");
+        std::fs::write(&path, b"ABCDEFGH").unwrap();
+        let mut app = app("far", "en");
+        app.open_hex(&path);
+        let out = frame(&mut app, 100, 20);
+        assert!(out.contains("ovr"), "{out}");
+        assert!(!out.contains("ins"), "{out}");
+
+        app.handle_input(Input::Key("Ins".parse().unwrap()));
+        let out = frame(&mut app, 100, 20);
+        assert!(out.contains("ins"), "{out}");
+    }
+
     #[test]
     fn f11_decodes_the_file_beside_the_bytes() {
         let (_dir, mut app) = app_with_viewer("prog.bin", &elf_bytes());
