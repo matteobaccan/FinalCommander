@@ -1930,6 +1930,14 @@ pub struct App {
     apply_total: usize,
     /// The shell command we are waiting for, if any, and the line that started it.
     shell: Option<(u64, String)>,
+    /// The shell kept alive behind the command line (SPEC 06 §7), once there is one.
+    ///
+    /// Started by the first command rather than at startup: a session that never runs one
+    /// never pays for it, and a shell nobody has typed at is a process for nothing.
+    subshell: Option<fcmd_term::Shell>,
+    /// The directory that shell last said it was in, so a move is noticed once and so the
+    /// panel and the shell do not chase each other round the same directory.
+    shell_cwd: Option<std::path::PathBuf>,
     /// Whether the screen showing what the command prints was opened by the command itself,
     /// and so should be closed again when it ends. `Esc` clears it: a user who has gone back
     /// to the panels has said what they want, and the output keeps arriving behind them.
@@ -2124,6 +2132,8 @@ impl App {
             apply_queue: Vec::new(),
             apply_total: 0,
             shell: None,
+            subshell: None,
+            shell_cwd: None,
             prev_dir: [None, None],
             remote_edit: None,
             upload_id: None,
@@ -2222,7 +2232,9 @@ impl App {
                 }
             },
             // Nothing to do: the loop draws after every event, which is the whole request.
-            Event::Redraw => {}
+            // Every read from the kept shell wakes the interface, and this is where what it
+            // printed is collected: the wake carries nothing itself.
+            Event::Redraw => self.poll_subshell(),
             Event::Input(input) => self.handle_input(input),
             Event::FindHit { id, path, entry } => {
                 if let Some(view) = self.find_mut() {
@@ -2761,69 +2773,7 @@ impl App {
                 if self.shell.as_ref().map(|(running, _)| *running) != Some(id) {
                     return; // a command we already stopped waiting for
                 }
-                self.shell = None;
-                // The output itself has already arrived, line by line; what comes with the
-                // end is only what the run has to add — a spawn failure, where the output
-                // was written, that there was more of it than we would keep.
-                self.append_user_screen(&output);
-                if self.shell_screen && self.apply_queue.is_empty() && self.menu_queue.is_empty() {
-                    // The panels come back when the command ends, as they do in FAR, and
-                    // `Ctrl+O` is how what it printed is read again.
-                    self.shell_screen = false;
-                    self.panels_off = false;
-                }
-                match status {
-                    Some(0) | None => {
-                        let msg = self
-                            .i18n
-                            .t_args("cmd-done", &[("command", line.clone().into())]);
-                        self.set_status(msg);
-                    }
-                    Some(code) => {
-                        let msg = self.i18n.t_args(
-                            "cmd-failed",
-                            &[
-                                ("command", line.clone().into()),
-                                ("code", (code as i64).into()),
-                            ],
-                        );
-                        self.set_error(msg);
-                    }
-                }
-                // A command may have changed what is on disk, so both panels are re-read.
-                self.read_panel(0);
-                self.read_panel(1);
-                // A `Ctrl+G` run carries on where the last command left off, and stops at the
-                // first failure rather than running ninety-nine more over a broken one.
-                if !self.apply_queue.is_empty() {
-                    if matches!(status, Some(code) if code != 0) {
-                        let done = self.apply_total - self.apply_queue.len();
-                        let total = self.apply_total;
-                        self.apply_queue.clear();
-                        self.apply_total = 0;
-                        let msg = self.i18n.t_args(
-                            "cmd-apply-stopped",
-                            &[
-                                ("command", line.into()),
-                                ("done", (done as i64).into()),
-                                ("total", (total as i64).into()),
-                            ],
-                        );
-                        self.set_error(msg);
-                    } else {
-                        self.run_next_apply();
-                    }
-                }
-                // A menu entry with several lines is the same promise: the next one runs when
-                // this one is done, and a failure stops the list rather than carrying on
-                // through it. The message above has already said which command failed.
-                if !self.menu_queue.is_empty() {
-                    if matches!(status, Some(code) if code != 0) {
-                        self.menu_queue.clear();
-                    } else {
-                        self.run_menu_next();
-                    }
-                }
+                self.shell_finished(line, output, status);
             }
             Event::TreeScanned { root, dirs, whole } => {
                 let found = dirs.len();
@@ -3096,6 +3046,8 @@ impl App {
             }
             Input::Eof => self.quit = true,
         }
+        // A key may have moved the panel, and the shell goes where the panel goes.
+        self.sync_subshell();
     }
 
     /// What the mouse did, answered against the layout the last frame recorded.
@@ -9473,12 +9425,36 @@ impl App {
         // The heading goes up now, not when the command ends: what it prints arrives line by
         // line and has to have somewhere to land.
         self.start_user_screen(&line);
-        self.requests.push(Request::Shell {
-            id,
-            line: line.clone(),
-            cwd: cwd.as_path().to_path_buf(),
-            into,
-        });
+        // Into the shell that is kept, where there is one: that is what makes a `cd`, an
+        // `export` or a shell function outlive the command that set it (SPEC 06 §7). A
+        // redirection into a file is still a child of its own — its output goes somewhere we
+        // never read, and a job like that has no business holding the session's shell.
+        let kept = into.is_none() && self.start_subshell();
+        let failed = if kept {
+            self.subshell
+                .as_mut()
+                .and_then(|shell| shell.run(&line).err())
+        } else {
+            None
+        };
+        match failed {
+            // A shell that will not take a line is a shell that is no longer there: say so,
+            // throw it away, and let the next command start another.
+            Some(e) => {
+                self.subshell = None;
+                self.shell_cwd = None;
+                self.shell = None;
+                self.set_error(e.to_string());
+                return;
+            }
+            None if kept => {}
+            None => self.requests.push(Request::Shell {
+                id,
+                line: line.clone(),
+                cwd: cwd.as_path().to_path_buf(),
+                into,
+            }),
+        }
         // And the panels go off while it runs, the way the console comes forward in FAR: a
         // command whose output only turns up at the end, under a key, is a command one cannot
         // watch. Everything else stays live, `Ctrl+O` brings the panels back early, and the
@@ -9490,6 +9466,223 @@ impl App {
         }
         let msg = self.i18n.t_args("cmd-running", &[("command", line.into())]);
         self.set_status(msg);
+    }
+
+    /// What to start as a shell: what the configuration says, or the one the session already
+    /// uses, which is where somebody's aliases and prompt live.
+    fn shell_program(&self) -> String {
+        if self.cfg.term.shell.trim().is_empty() {
+            fcmd_term::default_shell()
+        } else {
+            self.cfg.term.shell.clone()
+        }
+    }
+
+    /// Make sure there is a shell kept for the command line, and say whether there is one.
+    ///
+    /// `false` where there cannot be: turned off, or a shell with no prompt hook to set, in
+    /// which case each command runs in a child of its own as everything did before. Half a
+    /// session — where `cd` works and the exit status never arrives — would be worse.
+    fn start_subshell(&mut self) -> bool {
+        if !self.cfg.term.subshell {
+            return false;
+        }
+        if self.subshell.as_ref().is_some_and(|shell| shell.gone()) {
+            self.subshell = None;
+            self.shell_cwd = None;
+        }
+        if self.subshell.is_some() {
+            return true;
+        }
+        let program = self.shell_program();
+        if fcmd_term::hook_for(&program).is_none() {
+            return false;
+        }
+        // A panel inside an archive or on a server has no directory the operating system
+        // knows, so the shell starts where the program was started rather than not at all.
+        let here = self.panel().cwd.clone();
+        let cwd = (here.is_local() && !here.in_container())
+            .then(|| here.as_path().to_path_buf())
+            .filter(|path| path.is_dir());
+        let (cols, rows) = self.term_area;
+        let wake = self.wake.clone();
+        match fcmd_term::Shell::start(&program, cwd.as_deref(), cols, rows, move || {
+            if let Some(wake) = &wake {
+                wake();
+            }
+        }) {
+            Ok(shell) => {
+                self.shell_cwd = cwd;
+                self.subshell = Some(shell);
+                true
+            }
+            Err(e) => {
+                self.set_error(format!("{program}: {e}"));
+                false
+            }
+        }
+    }
+
+    /// Collect what the kept shell has printed and what it has said about itself.
+    ///
+    /// Called on every wake, which the shell does after every read. Three things can have
+    /// happened: it printed something, which goes where `Ctrl+O` finds it; it moved, and the
+    /// panel follows; or the command ended, and everything that follows the end of a command
+    /// follows this one too.
+    fn poll_subshell(&mut self) {
+        let Some(shell) = &self.subshell else {
+            return;
+        };
+        let (lines, cwd, running, status) =
+            shell.with_out(|out| (out.take_lines(), out.cwd.clone(), out.running(), out.status));
+        let gone = shell.gone();
+        if !lines.is_empty() {
+            // Even with nothing running: a job left in the background prints to the console,
+            // and the console is this screen.
+            self.append_user_screen(&lines.join("\n"));
+        }
+        if cwd != self.shell_cwd {
+            self.shell_cwd = cwd.clone();
+            if self.cfg.term.follow_cwd {
+                if let Some(dir) = cwd {
+                    self.follow_shell_into(dir);
+                }
+            }
+        }
+        if let Some((_, line)) = self.shell.clone() {
+            if !running || gone {
+                self.shell_finished(line, String::new(), status);
+            }
+        }
+        if gone {
+            self.subshell = None;
+            self.shell_cwd = None;
+        }
+    }
+
+    /// The shell said it had moved, so the panel goes there too — the half of following that
+    /// a `cd` inside a command line gives: `cd /tmp && make` moves the panel as well.
+    fn follow_shell_into(&mut self, dir: std::path::PathBuf) {
+        if !dir.is_dir() {
+            return;
+        }
+        let here = self.panel().cwd.clone();
+        if !here.is_local() || here.in_container() {
+            return;
+        }
+        if here.as_path() == dir {
+            return;
+        }
+        self.goto(VPath::local(dir));
+    }
+
+    /// Keep the shell where the panel is: the other half of following.
+    ///
+    /// Nothing is sent while a command is running — the line would go to the command rather
+    /// than to the shell — and nothing is sent for a directory it is already in, which is
+    /// what stops the panel and the shell from chasing each other.
+    fn sync_subshell(&mut self) {
+        if !self.cfg.term.follow_cwd || self.shell.is_some() || self.subshell.is_none() {
+            return;
+        }
+        if self.subshell.as_ref().is_some_and(|shell| shell.running()) {
+            return;
+        }
+        let here = self.panel().cwd.clone();
+        if !here.is_local() || here.in_container() {
+            return;
+        }
+        let dir = here.as_path().to_path_buf();
+        if self.shell_cwd.as_deref() == Some(dir.as_path()) {
+            return;
+        }
+        self.shell_cwd = Some(dir.clone());
+        if let Some(shell) = &mut self.subshell {
+            let _ = shell.cd(&dir);
+        }
+    }
+
+    /// `Ctrl+C` on the screen a command is printing to: the interrupt, to the shell, which
+    /// passes it to whatever it is running.
+    fn interrupt_subshell(&mut self) {
+        let sent = self
+            .subshell
+            .as_mut()
+            .map(|shell| shell.send(&[0x03]))
+            .is_some();
+        if sent {
+            let msg = self.i18n.t("cmd-interrupted");
+            self.set_status(msg);
+        }
+    }
+
+    /// A command has ended, however it was run — in a child of its own, or in the shell kept
+    /// alive behind the command line. What follows the end of a command is the same either
+    /// way, so it is here rather than twice.
+    fn shell_finished(&mut self, line: String, output: String, status: Option<i32>) {
+        self.shell = None;
+        // The output itself has already arrived, line by line; what comes with the
+        // end is only what the run has to add — a spawn failure, where the output
+        // was written, that there was more of it than we would keep.
+        self.append_user_screen(&output);
+        if self.shell_screen && self.apply_queue.is_empty() && self.menu_queue.is_empty() {
+            // The panels come back when the command ends, as they do in FAR, and
+            // `Ctrl+O` is how what it printed is read again.
+            self.shell_screen = false;
+            self.panels_off = false;
+        }
+        match status {
+            Some(0) | None => {
+                let msg = self
+                    .i18n
+                    .t_args("cmd-done", &[("command", line.clone().into())]);
+                self.set_status(msg);
+            }
+            Some(code) => {
+                let msg = self.i18n.t_args(
+                    "cmd-failed",
+                    &[
+                        ("command", line.clone().into()),
+                        ("code", (code as i64).into()),
+                    ],
+                );
+                self.set_error(msg);
+            }
+        }
+        // A command may have changed what is on disk, so both panels are re-read.
+        self.read_panel(0);
+        self.read_panel(1);
+        // A `Ctrl+G` run carries on where the last command left off, and stops at the
+        // first failure rather than running ninety-nine more over a broken one.
+        if !self.apply_queue.is_empty() {
+            if matches!(status, Some(code) if code != 0) {
+                let done = self.apply_total - self.apply_queue.len();
+                let total = self.apply_total;
+                self.apply_queue.clear();
+                self.apply_total = 0;
+                let msg = self.i18n.t_args(
+                    "cmd-apply-stopped",
+                    &[
+                        ("command", line.into()),
+                        ("done", (done as i64).into()),
+                        ("total", (total as i64).into()),
+                    ],
+                );
+                self.set_error(msg);
+            } else {
+                self.run_next_apply();
+            }
+        }
+        // A menu entry with several lines is the same promise: the next one runs when
+        // this one is done, and a failure stops the list rather than carrying on
+        // through it. The message above has already said which command failed.
+        if !self.menu_queue.is_empty() {
+            if matches!(status, Some(code) if code != 0) {
+                self.menu_queue.clear();
+            } else {
+                self.run_menu_next();
+            }
+        }
     }
 
     /// Start the next command `Ctrl+G` has queued, counting through the list in the status
@@ -10237,11 +10430,7 @@ impl App {
     /// Start a shell where the active panel is, which is what somebody looking at a directory
     /// and reaching for a shell means.
     fn start_terminal(&mut self) {
-        let shell = if self.cfg.term.shell.trim().is_empty() {
-            fcmd_term::default_shell()
-        } else {
-            self.cfg.term.shell.clone()
-        };
+        let shell = self.shell_program();
         // A shell has to start somewhere the operating system knows. A panel inside an archive
         // or on a server has no such directory, so the shell starts where the program was
         // started rather than failing to start at all.
@@ -11340,6 +11529,12 @@ impl App {
                 scroll: at.min(last),
             }
         };
+        // `Ctrl+C` where the output is: the one place it can mean *stop that* without taking
+        // the key away from the copy it means in the panels.
+        if key.code == KeyCode::Char('c') && key.mods.contains(Mods::CTRL) && self.shell.is_some() {
+            self.interrupt_subshell();
+            return;
+        }
         match key.code {
             KeyCode::Esc | KeyCode::F(10) | KeyCode::Char('q') | KeyCode::Char('o') => {
                 self.mode = Mode::Normal
@@ -18535,8 +18730,19 @@ mod tests {
     }
 
     fn app() -> App {
+        // No shell is kept behind the command line unless a test asks for one, and the test
+        // that asks names the shell as well. Otherwise every test about what reaches a shell
+        // would depend on the `$SHELL` of whoever is running them: one with a prompt hook
+        // takes the kept path, one without takes the child.
+        let cfg = Config {
+            term: fcmd_config::TermCfg {
+                subshell: false,
+                ..Default::default()
+            },
+            ..Config::default()
+        };
         let mut app = App::new(Startup {
-            cfg: Config::default(),
+            cfg,
             paths: Paths::discover(Some(std::path::Path::new("/tmp/fcmd-test/fcmd.toml")), None),
             i18n: I18n::new("en"),
             keymap: Keymap::builtin("far").unwrap(),
@@ -24770,6 +24976,113 @@ run = ["echo one", "echo two", "echo three"]
         );
     }
 
+    /// Let the kept shell get on with it, the way the event loop does: every read wakes the
+    /// interface, and every wake collects what arrived.
+    #[cfg(unix)]
+    fn settle(app: &mut App, done: impl Fn(&App) -> bool) -> bool {
+        for _ in 0..400 {
+            app.poll_subshell();
+            if done(app) {
+                return true;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        false
+    }
+
+    /// The point of keeping a shell: a `cd` typed at the command line moves the panel, and
+    /// what the command set is still set for the next one.
+    #[cfg(unix)]
+    #[test]
+    fn a_command_runs_in_a_shell_that_stays_and_the_panel_follows_its_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let inner = dir.path().join("inner");
+        std::fs::create_dir(&inner).unwrap();
+        let mut app = app_on_disk(dir.path());
+        // A named shell rather than whatever the machine's `$SHELL` is, so the test is about
+        // the program and not about the person running it.
+        app.cfg.term.shell = "/bin/sh".into();
+        app.cfg.term.subshell = true;
+
+        app.run_shell("cd inner; FCMD_TEST=kept".into(), None);
+        assert!(app.subshell.is_some(), "a shell was started for it");
+        assert!(
+            settle(&mut app, |app| app.shell.is_none()),
+            "the command was seen to end"
+        );
+        // The panel followed the shell out of the directory it was in.
+        assert!(
+            settle(&mut app, |app| app.panel().cwd.as_path().ends_with("inner")),
+            "the panel is where the shell went: {:?}",
+            app.panel().cwd
+        );
+
+        // And the next command is run by the same shell, which still has what the last one
+        // set — the whole reason for keeping it.
+        app.run_shell("printf 'kept=%s\\n' \"$FCMD_TEST\"".into(), None);
+        assert!(settle(&mut app, |app| app.shell.is_none()));
+        let screen = app.user_screen.join("\n");
+        assert!(
+            screen.contains("kept=kept"),
+            "what the first command set outlived it: {screen}"
+        );
+        // What the shell printed is there once, not twice: the heading is ours, the echo of
+        // the command is the shell's and is left out.
+        assert_eq!(
+            screen.matches("kept=kept").count(),
+            1,
+            "and it arrived once: {screen}"
+        );
+    }
+
+    /// The other direction: the panel moves, and the shell is taken along, so the next
+    /// command runs where the user is looking.
+    #[cfg(unix)]
+    #[test]
+    fn moving_the_panel_takes_the_kept_shell_with_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let inner = dir.path().join("a dir with spaces");
+        std::fs::create_dir(&inner).unwrap();
+        let mut app = app_on_disk(dir.path());
+        app.cfg.term.shell = "/bin/sh".into();
+        app.cfg.term.subshell = true;
+        app.run_shell("printf 'first\\n'".into(), None);
+        assert!(settle(&mut app, |app| app.shell.is_none()));
+
+        app.goto(VPath::local(inner.clone()));
+        app.sync_subshell();
+        let there = settle(&mut app, |app| {
+            app.subshell.as_ref().is_some_and(|shell| {
+                shell.with_out(|out| {
+                    out.cwd
+                        .as_deref()
+                        .is_some_and(|p| p.ends_with("a dir with spaces"))
+                })
+            })
+        });
+        assert!(there, "the shell followed the panel, spaces and all");
+    }
+
+    /// A shell with no prompt hook to set — `cmd.exe` — runs a child per command, as
+    /// everything did before there was a shell to keep. Half a session would be worse.
+    #[test]
+    fn a_shell_that_cannot_mark_its_prompts_keeps_running_a_child_per_command() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = app_on_disk(dir.path());
+        app.cfg.term.shell = "cmd.exe".into();
+        app.cfg.term.subshell = true;
+        app.requests.clear();
+        app.run_shell("dir".into(), None);
+        assert!(app.subshell.is_none(), "nothing was kept");
+        assert!(
+            app.requests
+                .iter()
+                .any(|request| matches!(request, Request::Shell { .. })),
+            "and the command went off to a child of its own: {:?}",
+            app.requests.len()
+        );
+    }
+
     /// The bug this answers, reported by a user: open a zip, put a zip inside it, step into
     /// that one and put a third zip inside *it*. Two containers deep, what the panel was
     /// standing in and what the write was applied to were two different archives — the host
@@ -25580,8 +25893,17 @@ run = ["echo one", "echo two", "echo three"]
 
     /// A panel over a real directory, so `F3` can open a real file.
     fn app_on_disk(dir: &std::path::Path) -> App {
+        // As in `app`: a kept shell is something a test asks for by name, never something it
+        // inherits from the machine it runs on.
+        let cfg = Config {
+            term: fcmd_config::TermCfg {
+                subshell: false,
+                ..Default::default()
+            },
+            ..Config::default()
+        };
         let mut app = App::new(Startup {
-            cfg: Config::default(),
+            cfg,
             paths: Paths::discover(Some(&dir.join("fcmd.toml")), None),
             i18n: I18n::new("en"),
             keymap: Keymap::builtin("far").unwrap(),

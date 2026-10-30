@@ -727,6 +727,7 @@ viewer-no-more-files = no more files in the panel
 editor-unsaved-for-viewer = save first: the viewer reads the file on disk
 # ------------------------------------------------- command line (SPEC 06 §7)
 cmd-running = running: { $command }
+cmd-interrupted = interrupt sent to the command
 cmd-done = { $command } finished
 cmd-failed = { $command } exited with { $code }
 cmd-busy = a command is already running

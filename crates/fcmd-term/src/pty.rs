@@ -70,47 +70,13 @@ impl Terminal {
         rows: u16,
         wake: impl Fn() + Send + 'static,
     ) -> Result<Terminal, TermError> {
-        let parts = shell_split(program);
-        let Some((head, tail)) = parts.split_first() else {
-            return Err(TermError::Spawn("no program to run".into()));
-        };
-        let pair = portable_pty::native_pty_system()
-            .openpty(PtySize {
-                rows: rows.max(1),
-                cols: cols.max(1),
-                pixel_width: 0,
-                pixel_height: 0,
-            })
-            .map_err(|e| TermError::Spawn(e.to_string()))?;
-
-        let mut command = CommandBuilder::new(head);
-        command.args(tail);
-        if let Some(cwd) = cwd {
-            command.cwd(cwd);
-        }
-        // What the program is told it is talking to. `xterm-256color` is what every terminal
-        // in use claims and what every program has a table for; claiming something rarer
-        // would mean programs falling back to no colour at all.
-        command.env("TERM", "xterm-256color");
-        command.env("COLORTERM", "truecolor");
-
-        let child = pair
-            .slave
-            .spawn_command(command)
-            .map_err(|e| TermError::Spawn(e.to_string()))?;
-        // The slave end is held by the child now. Dropping ours is what lets a read of the
-        // master end report end-of-file when the child exits — without it the read would
-        // block for ever on a terminal nobody is writing to.
-        drop(pair.slave);
-
-        let writer = pair
-            .master
-            .take_writer()
-            .map_err(|e| TermError::Spawn(e.to_string()))?;
-        let mut reader = pair
-            .master
-            .try_clone_reader()
-            .map_err(|e| TermError::Spawn(e.to_string()))?;
+        let Open {
+            writer,
+            mut reader,
+            master,
+            child,
+            head,
+        } = open(program, cwd, cols, rows)?;
 
         let screen = Arc::new(Mutex::new(Screen::new(cols, rows)));
         let finished = Arc::new(AtomicBool::new(false));
@@ -148,10 +114,10 @@ impl Terminal {
         Ok(Terminal {
             screen,
             writer,
-            master: pair.master,
+            master,
             child,
             finished,
-            name: head.clone(),
+            name: head,
         })
     }
 
@@ -208,6 +174,76 @@ impl Drop for Terminal {
     fn drop(&mut self) {
         self.kill();
     }
+}
+
+/// A pair that has just been opened, with a program already running on the far end of it.
+pub(crate) struct Open {
+    pub writer: Box<dyn Write + Send>,
+    pub reader: Box<dyn Read + Send>,
+    pub master: Box<dyn portable_pty::MasterPty + Send>,
+    pub child: Box<dyn portable_pty::Child + Send + Sync>,
+    /// The program, as it was named: what to call this in a list.
+    pub head: String,
+}
+
+/// Open a pseudo-terminal and start `program` on the far end of it.
+///
+/// Shared by the terminal pane and the shell behind the command line, because the two differ
+/// in what they do with the output and in nothing else.
+pub(crate) fn open(
+    program: &str,
+    cwd: Option<&std::path::Path>,
+    cols: u16,
+    rows: u16,
+) -> Result<Open, TermError> {
+    let parts = shell_split(program);
+    let Some((head, tail)) = parts.split_first() else {
+        return Err(TermError::Spawn("no program to run".into()));
+    };
+    let pair = portable_pty::native_pty_system()
+        .openpty(PtySize {
+            rows: rows.max(1),
+            cols: cols.max(1),
+            pixel_width: 0,
+            pixel_height: 0,
+        })
+        .map_err(|e| TermError::Spawn(e.to_string()))?;
+
+    let mut command = CommandBuilder::new(head);
+    command.args(tail);
+    if let Some(cwd) = cwd {
+        command.cwd(cwd);
+    }
+    // What the program is told it is talking to. `xterm-256color` is what every terminal in
+    // use claims and what every program has a table for; claiming something rarer would mean
+    // programs falling back to no colour at all.
+    command.env("TERM", "xterm-256color");
+    command.env("COLORTERM", "truecolor");
+
+    let child = pair
+        .slave
+        .spawn_command(command)
+        .map_err(|e| TermError::Spawn(e.to_string()))?;
+    // The slave end is held by the child now. Dropping ours is what lets a read of the master
+    // end report end-of-file when the child exits — without it the read would block for ever
+    // on a terminal nobody is writing to.
+    drop(pair.slave);
+
+    let writer = pair
+        .master
+        .take_writer()
+        .map_err(|e| TermError::Spawn(e.to_string()))?;
+    let reader = pair
+        .master
+        .try_clone_reader()
+        .map_err(|e| TermError::Spawn(e.to_string()))?;
+    Ok(Open {
+        writer,
+        reader,
+        master: pair.master,
+        child,
+        head: head.clone(),
+    })
 }
 
 /// Split a command line the way a shell splits one, keeping quoted words whole.

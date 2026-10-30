@@ -736,6 +736,17 @@ pub struct TermCfg {
     pub shell: String,
     /// How many lines of what has scrolled off the top to keep.
     pub scrollback: usize,
+    /// Keep one shell alive behind the command line, so what a command does outlives it: a
+    /// `cd`, an `export`, a function. Off runs each command in a child of its own, which
+    /// cannot remember anything but also cannot be confused by a shell that misbehaves.
+    ///
+    /// A shell with no prompt hook to set — `cmd.exe` — runs a child per command whatever
+    /// this says, because half a session, where `cd` works and the exit status does not,
+    /// would be worse than none.
+    pub subshell: bool,
+    /// The panel follows the shell: a `cd` typed at the command line moves the panel too, and
+    /// moving the panel moves the shell. The reason the shell is kept at all.
+    pub follow_cwd: bool,
 }
 
 impl Default for TermCfg {
@@ -743,6 +754,8 @@ impl Default for TermCfg {
         TermCfg {
             shell: String::new(),
             scrollback: fcmd_term::SCROLLBACK,
+            subshell: true,
+            follow_cwd: true,
         }
     }
 }
@@ -1553,6 +1566,8 @@ impl Config {
             }
             "term.shell" => self.term.shell = value.to_string(),
             "term.scrollback" => self.term.scrollback = parse_usize(value)?,
+            "term.subshell" => self.term.subshell = parse_bool(value)?,
+            "term.follow_cwd" => self.term.follow_cwd = parse_bool(value)?,
             "panel.view" => self.panel.view = value.to_string(),
             "panel.sort" => self.panel.sort = value.to_string(),
             "panel.sort_chain" => {

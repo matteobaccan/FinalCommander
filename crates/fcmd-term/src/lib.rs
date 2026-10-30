@@ -14,6 +14,10 @@
 
 pub mod pty;
 pub mod screen;
+pub mod shell;
+pub mod transcript;
 
 pub use pty::{default_shell, TermError, Terminal};
 pub use screen::{Screen, SCROLLBACK};
+pub use shell::{hook_for, quote, Shell};
+pub use transcript::Transcript;

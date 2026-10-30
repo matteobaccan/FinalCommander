@@ -707,6 +707,7 @@ viewer-no-more-files = 面板中没有更多文件
 editor-unsaved-for-viewer = 请先保存：查看器读取磁盘上的文件
 # ------------------------------------------------- 命令行 (SPEC 06 §7)
 cmd-running = 正在执行：{ $command }
+cmd-interrupted = 已向命令发送中断
 cmd-done = { $command } 已结束
 cmd-failed = { $command } 退出码 { $code }
 cmd-busy = 已有命令在执行

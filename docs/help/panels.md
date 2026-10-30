@@ -111,6 +111,20 @@ it finishes. `Ctrl+O` gives the screen back early and the command carries on beh
 *Options → Interface → Show a command's output while it runs* turns the whole habit off, and
 the output still fills the screen as it is printed, for whenever you press `Ctrl+O`.
 
+What runs the commands is **one shell, kept for as long as the program is open**. The line goes
+into it as you typed it, which means what a command does outlives it: `cd ..` moves the panel,
+an `export` is still set for the next command, a function you define is there to call, and an
+alias of yours means what it means in your own shell — there is no second shell in between. It
+works the other way round as well: move the panel and the shell comes along, so the next
+command runs where you are looking. `Ctrl+C` on the output screen sends the interrupt to
+whatever is running in it.
+
+The shell is your own — `$SHELL`, or whatever `[term] shell` names — and `bash`, `zsh`, `fish`
+and a plain `sh` can all be asked where they are. `cmd.exe` cannot, so on Windows with `cmd`
+each command runs on its own as it always did; nothing is half-done. *Options → All parameters
+→ `term.subshell`* turns the kept shell off altogether, and `term.follow_cwd` turns off only
+the following.
+
 # What a file is
 
 A directory can keep a line about each of its files, in a plain file called `descript.ion`

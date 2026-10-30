@@ -719,6 +719,7 @@ viewer-no-more-files = non ci sono altri file nel pannello
 editor-unsaved-for-viewer = salva prima: il visualizzatore legge il file su disco
 # ------------------------------------------------- riga di comando (SPEC 06 §7)
 cmd-running = in corso: { $command }
+cmd-interrupted = interruzione mandata al comando
 cmd-done = { $command } terminato
 cmd-failed = { $command } è uscito con { $code }
 cmd-busy = c'è già un comando in corso

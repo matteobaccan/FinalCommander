@@ -719,6 +719,7 @@ viewer-no-more-files = keine weiteren Dateien im Panel
 editor-unsaved-for-viewer = zuerst speichern: der Betrachter liest die Datei von der Platte
 # ------------------------------------------------- Befehlszeile (SPEC 06 §7)
 cmd-running = läuft: { $command }
+cmd-interrupted = Unterbrechung an den Befehl gesendet
 cmd-done = { $command } beendet
 cmd-failed = { $command } endete mit { $code }
 cmd-busy = es läuft schon ein Befehl

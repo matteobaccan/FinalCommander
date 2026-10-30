@@ -230,9 +230,9 @@ a binary into something readable rather than only into instructions.
 | --- | --- | --- | --- |
 | 8.1 | Command line with the panel as context; `%`-macros for current/other panel, names, paths, selections | FAR/MC | ✓ |
 | 8.2 | Run a command and keep the output visible (`Ctrl+O` user screen) | FAR/MC | ✓ |
-| 8.3 | Real subshell / PTY: persistent shell session sharing the cwd with the panel | MC/MTN2 | M2 |
+| 8.3 | Real subshell / PTY: persistent shell session sharing the cwd with the panel | MC/MTN2 | ✓ |
 | 8.4 | Embedded terminal pane(s), tabs of terminals, alternate-screen apps inside the pane | MTN2/KRU | ~ tabs of terminals |
-| 8.5 | Shell integration both ways: `cd` in the shell moves the panel, panel moves the shell | MC/NEW | M2 |
+| 8.5 | Shell integration both ways: `cd` in the shell moves the panel, panel moves the shell | MC/NEW | ✓ |
 | 8.6 | Run as administrator / another user | FAR | M3 |
 | 8.7 | Output search (`Ctrl+Shift+F`) and output capture into a panel | MTN2 | M3 |
 | 8.8 | Open OS file manager / terminal / shell menu for the current item | TC/KRU | M2 |

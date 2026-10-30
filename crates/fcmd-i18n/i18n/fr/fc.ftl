@@ -719,6 +719,7 @@ viewer-no-more-files = plus de fichiers dans le panneau
 editor-unsaved-for-viewer = enregistrez d'abord : la visionneuse lit le fichier sur le disque
 # ------------------------------------------------- ligne de commande (SPEC 06 §7)
 cmd-running = en cours : { $command }
+cmd-interrupted = interruption envoyée à la commande
 cmd-done = { $command } terminé
 cmd-failed = { $command } s'est terminé avec { $code }
 cmd-busy = une commande est déjà en cours

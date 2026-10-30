@@ -118,6 +118,20 @@ finisce. `Ctrl+O` restituisce lo schermo prima del tempo e il comando continua d
 *Opzioni → Interfaccia → Mostra l'output di un comando mentre gira* spegne tutta l'abitudine, e
 l'output continua a riempire lo schermo mentre viene stampato, per quando premi `Ctrl+O`.
 
+Quello che esegue i comandi è **una shell sola, tenuta viva per tutto il tempo in cui il
+programma è aperto**. La riga le arriva come l'hai scritta, e questo vuol dire che quello che un
+comando fa sopravvive al comando: `cd ..` sposta il pannello, un `export` è ancora impostato per
+il comando dopo, una funzione che definisci resta chiamabile, e un tuo alias vuol dire quello
+che vuol dire nella tua shell — non c'è una seconda shell in mezzo. Vale anche al contrario:
+spostando il pannello la shell viene dietro, così il comando dopo gira dove stai guardando.
+`Ctrl+C` sullo schermo dell'output manda l'interruzione a quello che ci sta girando dentro.
+
+La shell è la tua — `$SHELL`, o quello che dice `[term] shell` — e a `bash`, `zsh`, `fish` e a
+una `sh` qualunque si può chiedere dove sono. A `cmd.exe` no, quindi su Windows con `cmd` ogni
+comando gira per conto suo come ha sempre fatto; niente a metà. *Opzioni → Tutti i parametri →
+`term.subshell`* spegne del tutto la shell tenuta viva, e `term.follow_cwd` spegne solo
+l'inseguimento.
+
 # Cosa è un file
 
 Una cartella può tenere una riga su ciascuno dei suoi file, in un file di testo chiamato

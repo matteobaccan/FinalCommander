@@ -4,6 +4,37 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
+## [Unreleased]
+
+### Added
+
+- **One shell, kept, behind the command line.** The command line ran each command in a child of
+  its own, which is why typing `cd ..` into it did nothing a person could see: the child changed
+  its own directory and died with it, and so did an `export`, a shell function, a `TMPDIR` set
+  once. Midnight Commander answered this in the eighties by keeping one shell alive behind the
+  panels and writing the typed line into it; this is that, and it is the thing an `mc` user
+  would have missed first.
+
+  The line goes in as it was typed — there is no second shell in between, so an alias, a `*` and
+  a `$HOME` mean what *that* shell says they mean — and what a command does outlives it. The
+  directory travels both ways: a `cd` in the shell moves the panel, and moving the panel takes
+  the shell along, so the next command runs where you are looking. `Ctrl+C` on the output screen
+  sends the interrupt to whatever is running there.
+
+  How the shell is asked is the mechanism terminals already use: it is sent a prompt hook when
+  it starts, and what the hook emits is `OSC 133;C` before a command, `OSC 133;D;<status>` when
+  one ends, and `OSC 7` for the directory — so a shell whose own configuration emits them is
+  understood without being asked twice. There is a hook for `bash`, `zsh`, `fish` and for a
+  plain POSIX `sh`, which has no hook before a command but does expand `$?` and `$PWD` every
+  time it draws a prompt. `cmd.exe` has none at all and keeps a child per command: half a
+  session, where `cd` works and the exit status never arrives, would be worse than none.
+  `[term] subshell` turns it off, `[term] follow_cwd` turns off only the following.
+
+  What the shell prints is read as lines rather than into a grid (`fcmd_term::Transcript`),
+  because the screen `Ctrl+O` opens is a line buffer: a progress bar rewriting itself with a
+  carriage return stays one line, and the prompt and the echo of the command are left out, so
+  the heading that screen writes for the command is not printed twice underneath it.
+
 ## [0.25.0] — 2026-10-30
 
 ### Added

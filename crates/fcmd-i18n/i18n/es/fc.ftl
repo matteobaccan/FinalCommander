@@ -719,6 +719,7 @@ viewer-no-more-files = no hay más archivos en el panel
 editor-unsaved-for-viewer = guarda primero: el visor lee el archivo del disco
 # ------------------------------------------------- línea de comandos (SPEC 06 §7)
 cmd-running = en curso: { $command }
+cmd-interrupted = interrupción enviada al comando
 cmd-done = { $command } terminado
 cmd-failed = { $command } salió con { $code }
 cmd-busy = ya hay un comando en curso
