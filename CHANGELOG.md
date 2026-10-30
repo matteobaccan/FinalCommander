@@ -6,6 +6,34 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **A good many packages are zips, and `Enter` now opens them.** `.jar` was already read as one;
+  `.war`, `.ear`, `.aar`, `.apk`, `.aab`, `.ipa`, `.whl`, `.nupkg`, `.vsix` and `.xpi` are now
+  too — eleven names for the same container, all of them things one opens to see what is
+  inside. A `.docx`, an `.epub` and a `.cbz` are zips as well and are deliberately left off the
+  list: there the program that reads such a file is the more useful answer to `Enter`, and
+  `Shift+F2` unpacks one anyway. The line is about which of the two `Enter` should mean, not
+  about what can be read. `.crx` is off the list for a different reason — a Chrome extension is
+  a zip with a `Cr24` header in front of it, so it is not one.
+
+- **The Unix archive, and the Debian package that is one.** `.a` and `.ar` open as directories,
+  and so do `.deb`, `.udeb` and `.ddeb`, because a Debian package *is* an `ar`: inside it are
+  `debian-binary`, a `control.tar.*` and a `data.tar.*`, and `Enter` on either tar goes on into
+  it through the nesting that was already there, so the files a package would install are two
+  keystrokes away. The reader is about eighty lines written here rather than a new dependency:
+  sixty ASCII bytes of header per member, no compression anywhere, GNU and BSD long names both,
+  and the `/` and `/SYM64/` symbol tables are not listed as files because they are not files.
+  Reading one entry needs no reading of the ones in front of it, so a member comes out of a
+  large `.deb` with one seek.
+
+  These two are read and not written, and the distinction is new: the formats now split into
+  the ones this program creates and the ones it only opens. Nothing builds a `.a` or a `.deb`
+  by hand any more — `ar` and `dpkg-deb` do — and a package written without its control file
+  would look like a package without being one. So the pack dialog offers the writable formats
+  only, and a name like `libfoo.a` typed into it is refused with a reason, with the dialog still
+  open, rather than starting a job that would fail.
+
 ### Changed
 
 - **The FAR inventory was read against the code again, and so was the backlog.**

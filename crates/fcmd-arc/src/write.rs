@@ -50,6 +50,14 @@ pub fn create(
     progress: &mut dyn FnMut(&Path, u64),
 ) -> Result<Written> {
     let name = path.display().to_string();
+    // A format this crate only reads is refused here, by name, rather than further in where
+    // the only honest thing left would be a panic.
+    if !format.writable() {
+        return Err(ArcError::Refused {
+            path: name,
+            reason: format!("{} is read here, not written", format.label()),
+        });
+    }
     let part = path.with_extension(format!("{}.part", format.extension()));
     let result = write_all(&part, format, sources, level, solid, cancel, progress);
     match result {
@@ -284,7 +292,7 @@ impl Sink {
                 )
                 .map_err(|e| broken(path, e))?,
             ),
-            Format::Zip | Format::SevenZ => {
+            Format::Zip | Format::SevenZ | Format::Ar => {
                 unreachable!("a {} is not written through a tar", format.label())
             }
         })
@@ -588,7 +596,7 @@ mod tests {
     #[test]
     fn what_goes_in_comes_out_again_in_every_format() {
         let dir = tree();
-        for format in Format::ALL {
+        for format in Format::writable_formats() {
             let archive = dir.path().join(format!("out.{}", format.extension()));
             let sources = vec![dir.path().join("src"), dir.path().join("readme.md")];
             let mut seen = Vec::new();

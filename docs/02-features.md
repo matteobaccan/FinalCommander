@@ -119,7 +119,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 
 | # | Feature | Origin | State |
 | --- | --- | --- | --- |
-| 4.1 | Archives browsable as directories, read: zip, tar(+gz/bz2/xz/zst), 7z, rar(read-only), cab, iso, ar/deb/rpm, cpio, lha, arj, zip64, encrypted zip/7z | FAR/TC/MC | ~ rar, which needs `unrar` |
+| 4.1 | Archives browsable as directories, read: zip, tar(+gz/bz2/xz/zst), 7z, rar(read-only), cab, iso, ar/deb/rpm, cpio, lha, arj, zip64, encrypted zip/7z | FAR/TC/MC | ~ rar (needs `unrar`), cab, iso, rpm, cpio, lha, arj. zip covers the packages that are zips (`.jar .war .ear .aar .apk .aab .ipa .whl .nupkg .vsix .xpi`) and `ar` covers `.a` and the `.deb` family, whose inner `control.tar.*` and `data.tar.*` open as archives in an archive |
 | 4.2 | Archive write: create/add/delete/update in zip, 7z, tar family; pack dialog with format options (level, solid, encryption, split volumes) | TC | ~ split volumes |
 | 4.3 | Pack/unpack shortcuts (`Alt+F5`/`Alt+F6`/`Shift+F1`/`Shift+F2`), test archive, extract-here vs extract-to | FAR/TC | ~ `Alt+F5`/`Alt+F6`, which are Total Commander's keys and taken here |
 | 4.4 | Open a file inside an archive in the viewer/editor; edit-in-place writes back | FAR | M3 |

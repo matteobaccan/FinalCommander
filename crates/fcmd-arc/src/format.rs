@@ -12,11 +12,14 @@ pub enum Format {
     TarBz2,
     TarXz,
     TarZst,
+    /// The Unix archive: `.a`, and the outer layer of a `.deb`. Read only — see
+    /// [`Format::writable`].
+    Ar,
 }
 
 impl Format {
-    /// Every format, for the places that offer a choice.
-    pub const ALL: [Format; 7] = [
+    /// Every format this crate knows, read or write.
+    pub const ALL: [Format; 8] = [
         Format::Zip,
         Format::SevenZ,
         Format::Tar,
@@ -24,7 +27,27 @@ impl Format {
         Format::TarBz2,
         Format::TarXz,
         Format::TarZst,
+        Format::Ar,
     ];
+
+    /// The ones a dialog may offer to *create*.
+    ///
+    /// Not every format this crate reads is one it writes, and a list of formats offered for a
+    /// new archive has to be the writable ones or it is a promise it cannot keep. The one
+    /// place that offers a choice reads this; [`Format::ALL`] is for the places that have to
+    /// cover every format, such as a test that walks them.
+    pub fn writable_formats() -> Vec<Format> {
+        Format::ALL.into_iter().filter(|f| f.writable()).collect()
+    }
+
+    /// Can an archive of this format be created and written into?
+    ///
+    /// `ar` cannot, and deliberately: nothing makes a `.a` or a `.deb` by hand any more — `ar`
+    /// and `dpkg-deb` do, and a `.deb` written without its `control.tar` would be a file that
+    /// looks like a package and is not one. Reading them is what a commander is for.
+    pub fn writable(self) -> bool {
+        !matches!(self, Format::Ar)
+    }
 
     /// What it is called in a dialog or a panel frame.
     pub fn label(self) -> &'static str {
@@ -36,6 +59,7 @@ impl Format {
             Format::TarBz2 => "tar.bz2",
             Format::TarXz => "tar.xz",
             Format::TarZst => "tar.zst",
+            Format::Ar => "ar",
         }
     }
 
@@ -49,6 +73,7 @@ impl Format {
             Format::TarBz2 => "tar.bz2",
             Format::TarXz => "tar.xz",
             Format::TarZst => "tar.zst",
+            Format::Ar => "a",
         }
     }
 
@@ -69,14 +94,30 @@ impl Format {
     /// of them cannot be found without decoding what is in front of them. Its index, on the
     /// other hand, is a header read in one go — which is why listing a 7z is quick and reading
     /// the last file in one is not.
+    /// An `ar` says it too, and more simply than a tar: a header of sixty ASCII bytes, the
+    /// member's bytes after it, no compression anywhere.
     pub fn seekable(self) -> bool {
-        matches!(self, Format::Zip | Format::Tar)
+        matches!(self, Format::Zip | Format::Tar | Format::Ar)
     }
 
     /// The format a *name* suggests. Longest suffix first, so `.tar.gz` is not read as `.gz`.
+    ///
+    /// This is what decides whether `Enter` on a file goes *into* it (`ArcFs::looks_like
+    /// _archive`), so it is also a list of what a reader is invited to look inside. Once one
+    /// is inside, [`Format::of_bytes`] takes over and a renamed archive opens anyway — the
+    /// names here only decide what is *offered*.
+    ///
+    /// Which is why the zip-based formats below stop where they do. A `.apk`, a `.whl`, a
+    /// `.nupkg` is a thing one opens to look at what is in it; a `.docx`, a `.epub`, a `.cbz`
+    /// is a thing one opens to *read*, and there the file association is the more useful
+    /// answer. Both are zips and both open from the inside; the line is about which one
+    /// `Enter` should mean, and it is a line that can be moved.
+    ///
+    /// `.crx` is not on the list for a different reason: a Chrome extension is a zip with a
+    /// `Cr24` header in front of it, so it is not one.
     pub fn of_name(name: &str) -> Option<Format> {
         let lower = name.to_ascii_lowercase();
-        const BY_SUFFIX: [(&str, Format); 13] = [
+        const BY_SUFFIX: [(&str, Format); 28] = [
             (".tar.gz", Format::TarGz),
             (".tgz", Format::TarGz),
             (".tar.bz2", Format::TarBz2),
@@ -89,7 +130,24 @@ impl Format {
             (".tar", Format::Tar),
             (".7z", Format::SevenZ),
             (".zip", Format::Zip),
+            // A zip under another name, for the packages one opens to look inside.
             (".jar", Format::Zip),
+            (".war", Format::Zip),
+            (".ear", Format::Zip),
+            (".aar", Format::Zip),
+            (".apk", Format::Zip),
+            (".aab", Format::Zip),
+            (".ipa", Format::Zip),
+            (".whl", Format::Zip),
+            (".nupkg", Format::Zip),
+            (".vsix", Format::Zip),
+            (".xpi", Format::Zip),
+            // The Unix archive, and the Debian package that is one.
+            (".a", Format::Ar),
+            (".ar", Format::Ar),
+            (".deb", Format::Ar),
+            (".udeb", Format::Ar),
+            (".ddeb", Format::Ar),
         ];
         BY_SUFFIX
             .iter()
@@ -125,6 +183,9 @@ impl Format {
         }
         if head.starts_with(&[0x28, 0xb5, 0x2f, 0xfd]) {
             return Some(Format::TarZst);
+        }
+        if head.starts_with(b"!<arch>\n") {
+            return Some(Format::Ar);
         }
         // A tar has no magic at the start: the word `ustar` sits 257 bytes in.
         if head.len() > 262 && (&head[257..262] == b"ustar") {
@@ -175,11 +236,11 @@ mod tests {
     }
 
     #[test]
-    fn only_the_two_that_can_be_read_out_of_order_say_they_can() {
+    fn only_the_ones_that_can_be_read_out_of_order_say_they_can() {
         for f in Format::ALL {
             assert_eq!(
                 f.seekable(),
-                matches!(f, Format::Zip | Format::Tar),
+                matches!(f, Format::Zip | Format::Tar | Format::Ar),
                 "{}",
                 f.label()
             );

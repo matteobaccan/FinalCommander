@@ -157,6 +157,21 @@ tar, and tar with gzip, bzip2, xz or zstd — and the path says where you are:
 
 Everything that reads a file works in there: the viewer, the hex editor, the search.
 
+A good many things are zips without saying so, and `Enter` opens those too: `.jar`, `.war`,
+`.ear`, `.aar`, `.apk`, `.aab`, `.ipa`, `.whl`, `.nupkg`, `.vsix`, `.xpi` — the packages one
+opens to see what is inside. A `.docx` or an `.epub` is a zip as well and is deliberately not
+on that list: there the program that reads such a file is the more useful answer, and `Enter`
+hands it over to that. If you do want to see inside one, `Shift+F2` unpacks it anyway, and a
+renamed archive opens by its bytes once you are already inside a container.
+
+`Enter` also opens the Unix archive — `.a` and `.ar` — and a Debian package, `.deb`,
+`.udeb` or `.ddeb`, which *is* one: inside it you find `debian-binary`, a `control.tar.*` and a
+`data.tar.*`, and `Enter` on either tar goes on into it, so the files a package would install
+are two keystrokes away. These are read here and not written: `ar` and `dpkg-deb` build them,
+and a package written without its control file would look like a package without being one. The
+pack dialog therefore does not offer the format, and a name like `libfoo.a` typed into it is
+refused with a reason rather than half-written.
+
 An archive inside an archive opens too, and so does one on a server or in a bucket. Neither is
 a file this program can seek in, so it is copied into the temporary directory first, once, and
 read from there — a pause the first time and nothing afterwards, with the path still saying

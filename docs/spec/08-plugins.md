@@ -306,7 +306,7 @@ Rules that keep the promise:
 
 | Classic plugin (FAR / TC / far2l) | Our destination | Why |
 | --- | --- | --- |
-| multiarc, arclite, zip/7z packers (WCX) | **core** VFS providers (`zip`, `tar`, `7z`, `libarchive` fallback) — SPEC 04 §3 | archives are table stakes, must work offline on every platform |
+| multiarc, arclite, zip/7z packers (WCX) | **core** VFS providers (`zip`, `tar`, `7z`, `ar`, `libarchive` fallback) — SPEC 04 §3 | archives are table stakes, must work offline on every platform |
 | NetRocks, FTP/SFTP/WebDAV/S3/SMB (WFX) | **core** VFS providers + connection manager | ditto; async networking belongs in the engine, not in a sandbox |
 | TmpPanel | **core** (temp panel kind, SPEC 02 §7) | it is panel behaviour, not an add-on |
 | Advanced compare, SyncDirs, Checksums, split/combine, multi-rename | **core** tools (SPEC 03, SPEC 06) | they drive the job engine |

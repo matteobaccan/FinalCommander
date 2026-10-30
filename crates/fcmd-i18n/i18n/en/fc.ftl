@@ -854,6 +854,7 @@ pack-level-fast = fast
 pack-level-best = best
 pack-scope = { $count } files selected
 pack-needs-name = the archive needs a name
+pack-format-read-only = { $format } is read here, not written: choose another format or another name
 unpack-title = Extract from archive
 unpack-to = Extract to
 unpack-scope = from { $name }

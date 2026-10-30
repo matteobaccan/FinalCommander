@@ -134,6 +134,12 @@ pub fn rebuild(
     }
     let format =
         Format::of_path(path).ok_or_else(|| ArcError::Unknown(path.display().to_string()))?;
+    if !format.writable() {
+        return Err(ArcError::Refused {
+            path: path.display().to_string(),
+            reason: format!("{} is read here, not written", format.label()),
+        });
+    }
     let part = path.with_extension(format!("{}.part", format.extension()));
     let result = write_new(path, &part, format, &plan, level, cancel, progress)
         .and_then(|written| verify(&part, &plan, cancel).map(|_| written));
@@ -957,7 +963,7 @@ mod tests {
 
     #[test]
     fn an_entry_is_replaced_in_every_format() {
-        for format in Format::ALL {
+        for format in Format::writable_formats() {
             let dir = tempfile::tempdir().unwrap();
             let path = archive(dir.path(), format);
             let new = dir.path().join("replacement");
@@ -995,7 +1001,7 @@ mod tests {
 
     #[test]
     fn an_entry_and_a_whole_directory_can_be_taken_out() {
-        for format in Format::ALL {
+        for format in Format::writable_formats() {
             let dir = tempfile::tempdir().unwrap();
             let path = archive(dir.path(), format);
             rebuild(
@@ -1014,7 +1020,7 @@ mod tests {
 
     #[test]
     fn an_entry_keeps_its_bytes_under_a_new_name() {
-        for format in Format::ALL {
+        for format in Format::writable_formats() {
             let dir = tempfile::tempdir().unwrap();
             let path = archive(dir.path(), format);
             rebuild(
@@ -1044,7 +1050,7 @@ mod tests {
 
     #[test]
     fn a_file_is_added_where_it_was_asked_for() {
-        for format in Format::ALL {
+        for format in Format::writable_formats() {
             let dir = tempfile::tempdir().unwrap();
             let path = archive(dir.path(), format);
             let new = dir.path().join("extra.txt");
@@ -1071,7 +1077,7 @@ mod tests {
     /// archive exactly as it was.
     #[test]
     fn a_cancelled_rebuild_leaves_the_archive_alone() {
-        for format in Format::ALL {
+        for format in Format::writable_formats() {
             let dir = tempfile::tempdir().unwrap();
             let path = archive(dir.path(), format);
             let before = std::fs::read(&path).unwrap();

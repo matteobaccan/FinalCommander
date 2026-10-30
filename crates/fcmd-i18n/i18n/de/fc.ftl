@@ -846,6 +846,7 @@ pack-level-fast = schnell
 pack-level-best = maximal
 pack-scope = { $count } Dateien ausgewählt
 pack-needs-name = das Archiv braucht einen Namen
+pack-format-read-only = { $format } wird hier gelesen, nicht geschrieben: wähle ein anderes Format oder einen anderen Namen
 unpack-title = Aus Archiv entpacken
 unpack-to = Entpacken nach
 unpack-scope = aus { $name }

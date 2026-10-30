@@ -1003,8 +1003,10 @@ impl Form {
         i18n: &I18n,
     ) -> Form {
         let t = |id: &str| i18n.t(id);
-        let formats: Vec<(&str, String)> = fcmd_arc::Format::ALL
-            .iter()
+        // The writable ones, not every one this program reads: a list that offered `ar` would
+        // be promising a `.deb` it cannot make.
+        let formats: Vec<(&str, String)> = fcmd_arc::Format::writable_formats()
+            .into_iter()
             .map(|f| (f.extension(), f.label().to_string()))
             .collect();
         let levels = [

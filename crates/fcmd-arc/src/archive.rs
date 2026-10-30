@@ -157,6 +157,7 @@ impl Archive {
         let entries = match format {
             Format::Zip => index_zip(path, &name, limits, cancel)?,
             Format::SevenZ => index_sevenz(path, &name, limits, cancel, key)?,
+            Format::Ar => index_ar(path, &name, limits, cancel)?,
             _ => index_tar(path, &name, format, limits, cancel)?,
         };
 
@@ -483,8 +484,9 @@ impl Archive {
                 let mut item = zip.by_index(index).map_err(|e| self.broken(e))?;
                 copy(&mut item, out, cancel, progress)
             }
-            Format::Tar => {
-                // A plain tar says where each entry's bytes start, so one seek is enough.
+            Format::Tar | Format::Ar => {
+                // A plain tar and an `ar` both say where each entry's bytes start, and neither
+                // compresses them, so one seek is enough.
                 let mut file = File::open(&self.source).map_err(|e| self.io(e))?;
                 let at = entry.at.ok_or_else(|| ArcError::Broken {
                     path: self.name(),
@@ -686,7 +688,7 @@ pub(crate) fn decoder(path: &Path, format: Format) -> Result<Box<dyn Read>> {
                 reason: e.to_string(),
             }
         })?),
-        Format::Zip | Format::SevenZ => {
+        Format::Zip | Format::SevenZ | Format::Ar => {
             return Err(ArcError::Broken {
                 path: name,
                 reason: format!("a {} is not a stream", format.label()),
@@ -783,6 +785,207 @@ fn index_zip(
 /// The index of a 7z: its header, read in one go.
 ///
 /// A 7z stores a Windows attribute word per entry and, when it was written on a Unix, the Unix
+/// The index of a Unix archive (`.a`, and the outer layer of a `.deb`).
+///
+/// The format is the oldest one here and the simplest: eight magic bytes, then for each member
+/// a header of sixty ASCII bytes — name, modification time, uid, gid, mode, size — followed by
+/// the member's bytes, padded to an even offset. Nothing is compressed, nothing is nested, and
+/// there is no index at the end, so the whole of it is read by walking the headers once.
+///
+/// Two conventions put a long name somewhere other than the sixteen bytes the header has for
+/// it, and both are met in the wild:
+///
+/// * **GNU** stores every long name in a member called `//`, newline-separated, and writes
+///   `/<offset>` in the header. A name there ends at the `/` before the newline.
+/// * **BSD** writes `#1/<length>` in the header and puts the name in front of the member's
+///   bytes, which also shortens the data by that much.
+///
+/// A plain GNU name ends with `/` to allow trailing spaces; `/` and `//` are the symbol table
+/// and the name table and are not files, so they are left out of the listing rather than shown
+/// as entries nobody can use.
+fn index_ar(
+    path: &Path,
+    name: &str,
+    limits: &Limits,
+    cancel: &CancelToken,
+) -> Result<Vec<ArcEntry>> {
+    const MAGIC: &[u8; 8] = b"!<arch>\n";
+    const HEADER: u64 = 60;
+
+    let mut file = BufReader::with_capacity(
+        64 * 1024,
+        File::open(path).map_err(|e| ArcError::Io {
+            path: name.to_string(),
+            source: e,
+        })?,
+    );
+    let broken = |reason: &str| ArcError::Broken {
+        path: name.to_string(),
+        reason: reason.to_string(),
+    };
+    let mut magic = [0u8; 8];
+    file.read_exact(&mut magic)
+        .map_err(|_| broken("it is too short to be an archive"))?;
+    if &magic != MAGIC {
+        return Err(broken("it does not start with `!<arch>`"));
+    }
+
+    // The GNU long-name table, read when it is met. It always comes before the members that
+    // point into it, so one pass is enough.
+    let mut long_names: Vec<u8> = Vec::new();
+    let mut out: Vec<ArcEntry> = Vec::new();
+    let mut at = MAGIC.len() as u64;
+    loop {
+        if cancel.is_cancelled() {
+            return Err(ArcError::Cancelled);
+        }
+        if out.len() >= limits.entries {
+            return Err(ArcError::Refused {
+                path: name.to_string(),
+                reason: format!("it holds more than {} members", limits.entries),
+            });
+        }
+        let mut header = [0u8; HEADER as usize];
+        match file.read_exact(&mut header) {
+            Ok(()) => {}
+            // The end of the file is the end of the archive: there is no trailer to find.
+            Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => break,
+            Err(e) => {
+                return Err(ArcError::Io {
+                    path: name.to_string(),
+                    source: e,
+                })
+            }
+        }
+        if &header[58..60] != b"`\n" {
+            return Err(broken("a member header does not end where it should"));
+        }
+        let field = |from: usize, to: usize| -> String {
+            String::from_utf8_lossy(&header[from..to])
+                .trim()
+                .to_string()
+        };
+        let raw_name = field(0, 16);
+        let size: u64 = field(48, 58)
+            .parse()
+            .map_err(|_| broken("a member does not say how long it is"))?;
+        let mtime = field(16, 28)
+            .parse::<i64>()
+            .ok()
+            .and_then(|secs| u64::try_from(secs).ok())
+            .map(|secs| SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(secs));
+        // The mode is octal here, as it is in a tar, and masked to the permission bits: `ar`
+        // writes `0644` and `dpkg-deb` writes `100644` for the same thing, and two archives of
+        // one format should not report it two ways.
+        let mode = u32::from_str_radix(&field(40, 48), 8)
+            .ok()
+            .map(|mode| mode & 0o7777);
+
+        let body = at + HEADER;
+        // Where the member's bytes start and how many there are, after whichever long-name
+        // convention this header uses has taken its share.
+        let (member, start, length) = if raw_name == "//" {
+            // The name table itself: read it and move on. It is not a file.
+            long_names = read_exactly(&mut file, size, &broken)?;
+            skip_padding(&mut file, size, &broken)?;
+            at = body + size + (size % 2);
+            continue;
+        } else if raw_name == "/" || raw_name == "/SYM64/" {
+            // The symbol table, which is an index into this archive rather than a member of
+            // it. `ar t` does not list it either.
+            skip_bytes(&mut file, size + (size % 2), &broken)?;
+            at = body + size + (size % 2);
+            continue;
+        } else if let Some(count) = raw_name.strip_prefix("#1/") {
+            // BSD: the name is the first `count` bytes of the member.
+            let count: u64 = count
+                .parse()
+                .map_err(|_| broken("a BSD long name does not say how long it is"))?;
+            if count > size {
+                return Err(broken("a BSD long name is longer than its member"));
+            }
+            let text = read_exactly(&mut file, count, &broken)?;
+            let text = String::from_utf8_lossy(&text)
+                .trim_end_matches('\0')
+                .to_string();
+            skip_bytes(&mut file, size - count + (size % 2), &broken)?;
+            (text, body + count, size - count)
+        } else if let Some(offset) = raw_name.strip_prefix('/') {
+            // GNU: an offset into the table read above.
+            let offset: usize = offset
+                .parse()
+                .map_err(|_| broken("a GNU long name is not an offset"))?;
+            // A name in the table ends at the newline, and carries one `/` in front of it to
+            // allow a trailing space. Stopping at the first `/` instead would cut
+            // `src/deep/notes.txt` down to `src`: a member name may hold slashes, and in an
+            // archive built from a source tree it usually does.
+            let text = long_names
+                .get(offset..)
+                .map(|rest| {
+                    let end = rest.iter().position(|b| *b == b'\n').unwrap_or(rest.len());
+                    let name = &rest[..end];
+                    let name = name.strip_suffix(b"/").unwrap_or(name);
+                    String::from_utf8_lossy(name).to_string()
+                })
+                .ok_or_else(|| broken("a GNU long name points outside the name table"))?;
+            skip_bytes(&mut file, size + (size % 2), &broken)?;
+            (text, body, size)
+        } else {
+            skip_bytes(&mut file, size + (size % 2), &broken)?;
+            (raw_name.trim_end_matches('/').to_string(), body, size)
+        };
+
+        at = body + size + (size % 2);
+        if member.is_empty() {
+            continue;
+        }
+        out.push(ArcEntry {
+            path: normalise(&member),
+            size: length,
+            packed: Some(length),
+            mtime,
+            mode,
+            kind: EntryKind::File,
+            link_target: None,
+            at: Some(start),
+        });
+    }
+    Ok(out)
+}
+
+/// Exactly `count` bytes, or a broken archive. Bounded by the caller's own limit on how much
+/// an entry may be, because this is used for the name table and nothing else.
+fn read_exactly(
+    file: &mut impl Read,
+    count: u64,
+    broken: &impl Fn(&str) -> ArcError,
+) -> Result<Vec<u8>> {
+    const MOST: u64 = 16 * 1024 * 1024;
+    if count > MOST {
+        return Err(broken("its name table is larger than 16 MiB"));
+    }
+    let mut buffer = vec![0u8; count as usize];
+    file.read_exact(&mut buffer)
+        .map_err(|_| broken("it ends in the middle of a member"))?;
+    Ok(buffer)
+}
+
+/// Past `count` bytes without keeping them.
+fn skip_bytes(file: &mut impl Read, count: u64, broken: &impl Fn(&str) -> ArcError) -> Result<()> {
+    if io::copy(&mut file.take(count), &mut io::sink())
+        .map_err(|_| broken("it ends in the middle of a member"))?
+        != count
+    {
+        return Err(broken("it ends in the middle of a member"));
+    }
+    Ok(())
+}
+
+/// The one padding byte an odd-sized member is followed by.
+fn skip_padding(file: &mut impl Read, size: u64, broken: &impl Fn(&str) -> ArcError) -> Result<()> {
+    skip_bytes(file, size % 2, broken)
+}
+
 /// mode in the top half of it with bit 15 set — which is the convention `p7zip` and `7-Zip`
 /// both follow, and the only way the mode of a file in a 7z is ever recorded.
 fn index_sevenz(
@@ -1144,6 +1347,57 @@ mod tests {
         builder.into_inner().unwrap()
     }
 
+    /// An `ar` built by hand, so the test needs no `ar` on the machine running it.
+    ///
+    /// Short names go in the header as `name/`; a name too long for the sixteen bytes there
+    /// goes into the GNU `//` table and the header carries `/<offset>`. Both conventions are
+    /// what `ar` itself writes, and the reader is asked to understand both.
+    fn ar_bytes(names: &[(&str, &[u8])]) -> Vec<u8> {
+        let mut table = Vec::new();
+        let mut offsets = Vec::new();
+        for (name, _) in names {
+            if name.len() > 15 {
+                offsets.push(Some(table.len()));
+                table.extend_from_slice(name.as_bytes());
+                table.extend_from_slice(b"/\n");
+            } else {
+                offsets.push(None);
+            }
+        }
+        let header = |name: &str, size: usize| -> Vec<u8> {
+            let mut h = Vec::with_capacity(60);
+            h.extend_from_slice(format!("{name:<16}").as_bytes());
+            h.extend_from_slice(format!("{:<12}", 1_700_000_000u64).as_bytes());
+            h.extend_from_slice(format!("{:<6}", 0).as_bytes());
+            h.extend_from_slice(format!("{:<6}", 0).as_bytes());
+            h.extend_from_slice(format!("{:<8}", "100644").as_bytes());
+            h.extend_from_slice(format!("{size:<10}").as_bytes());
+            h.extend_from_slice(b"`\n");
+            assert_eq!(h.len(), 60);
+            h
+        };
+        let mut out = b"!<arch>\n".to_vec();
+        if !table.is_empty() {
+            out.extend_from_slice(&header("//", table.len()));
+            out.extend_from_slice(&table);
+            if table.len() % 2 == 1 {
+                out.push(b'\n');
+            }
+        }
+        for (i, (name, body)) in names.iter().enumerate() {
+            let in_header = match offsets[i] {
+                Some(at) => format!("/{at}"),
+                None => format!("{name}/"),
+            };
+            out.extend_from_slice(&header(&in_header, body.len()));
+            out.extend_from_slice(body);
+            if body.len() % 2 == 1 {
+                out.push(b'\n');
+            }
+        }
+        out
+    }
+
     fn write_archive(path: &Path, format: Format, names: &[(&str, &[u8])]) {
         if format == Format::Zip {
             return write_zip(path, names);
@@ -1181,6 +1435,10 @@ mod tests {
                     ruzstd::encoding::CompressionLevel::Fastest,
                 );
                 out.write_all(&packed).unwrap();
+            }
+            Format::Ar => {
+                let mut out = out;
+                out.write_all(&ar_bytes(names)).unwrap();
             }
             Format::Zip | Format::SevenZ => unreachable!("handled above"),
         }
@@ -1485,6 +1743,161 @@ mod tests {
             SystemTime::UNIX_EPOCH + Duration::from_secs(20_750 * 86_400 + 9 * 3_600 + 30 * 60)
         );
     }
+    /// A Unix archive, listed and read, with both conventions for a name too long for the
+    /// sixteen bytes a header has.
+    ///
+    /// Verified against what GNU `ar` and `dpkg-deb` actually write before this was committed;
+    /// the fixture is built here rather than shelled out for, so the test needs no `ar` on the
+    /// machine running it.
+    #[test]
+    fn an_ar_lists_its_members_and_reads_them_back() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("libstuff.a");
+        let long = "un-nome-molto-lungo-oltre-sedici.o";
+        write_archive(
+            &path,
+            Format::Ar,
+            &[
+                ("short.o", b"uno" as &[u8]),
+                (long, b"due due"),
+                ("terzo.o", b"tre"),
+            ],
+        );
+        let archive = open(&path);
+        assert_eq!(archive.format, Format::Ar);
+        let names: Vec<&str> = archive.entries().iter().map(|e| e.path.as_str()).collect();
+        assert_eq!(
+            names,
+            vec!["/short.o", &format!("/{long}")[..], "/terzo.o"],
+            "a long name comes out of the GNU table whole"
+        );
+        // An odd-sized member is padded to an even offset, so the one after it is only found
+        // if the padding was stepped over.
+        assert_eq!(
+            archive.read("/terzo.o", &CancelToken::new()).unwrap(),
+            b"tre"
+        );
+        assert_eq!(
+            archive
+                .read(&format!("/{long}"), &CancelToken::new())
+                .unwrap(),
+            b"due due"
+        );
+        // The mode is the permission bits, whichever of the two ways the writer wrote it.
+        assert_eq!(archive.entries()[0].mode, Some(0o644));
+    }
+
+    /// The symbol table and the name table are an index into the archive, not members of it:
+    /// `ar t` does not list them and neither does the panel.
+    #[test]
+    fn the_tables_of_an_ar_are_not_files_in_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("withindex.a");
+        // Built by hand, because `ar_bytes` writes no symbol table: `/` first, as `ar -s` puts
+        // it, then one ordinary member.
+        let header = |name: &str, size: usize| {
+            format!(
+                "{name:<16}{:<12}{:<6}{:<6}{:<8}{size:<10}`\n",
+                0, 0, 0, "100644"
+            )
+        };
+        let mut bytes = b"!<arch>\n".to_vec();
+        bytes.extend_from_slice(header("/", 4).as_bytes());
+        bytes.extend_from_slice(&[0, 0, 0, 0]);
+        bytes.extend_from_slice(header("real.o/", 2).as_bytes());
+        bytes.extend_from_slice(b"ok");
+        std::fs::write(&path, &bytes).unwrap();
+
+        let archive = open(&path);
+        let names: Vec<&str> = archive.entries().iter().map(|e| e.path.as_str()).collect();
+        assert_eq!(names, vec!["/real.o"], "the symbol table is not a file");
+        assert_eq!(archive.read("/real.o", &CancelToken::new()).unwrap(), b"ok");
+    }
+
+    /// A `.deb` is an `ar` of three members, and the one that holds the package's files is a
+    /// compressed tar — so opening a package is the archive-in-an-archive this program already
+    /// does, with nothing new underneath it (SPEC 04 §4).
+    #[test]
+    fn a_deb_is_an_ar_and_the_tar_inside_it_opens() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("finto_1.0_all.deb");
+        let mut packed = Vec::new();
+        {
+            let tar = tar_bytes(&[("usr/bin/finto", b"#!/bin/sh\n" as &[u8])]);
+            let mut enc = flate2::write::GzEncoder::new(&mut packed, flate2::Compression::fast());
+            enc.write_all(&tar).unwrap();
+            enc.finish().unwrap();
+        }
+        write_archive(
+            &path,
+            Format::Ar,
+            &[
+                ("debian-binary", b"2.0\n" as &[u8]),
+                ("control.tar.gz", &packed[..]),
+                ("data.tar.gz", &packed[..]),
+            ],
+        );
+        let outer = open(&path);
+        assert_eq!(outer.format, Format::Ar);
+        assert_eq!(
+            outer.read("/debian-binary", &CancelToken::new()).unwrap(),
+            b"2.0\n"
+        );
+
+        // And into the tar, through the cache, which is what the panel does.
+        let cache = Cache::default();
+        let inner = fcmd_core::VPath::local(&path)
+            .enter("")
+            .join("data.tar.gz")
+            .enter("");
+        let (nested, _) = cache
+            .open_in(&inner, &CancelToken::new())
+            .expect("the tar inside the package");
+        assert_eq!(nested.format, Format::TarGz);
+        assert!(
+            nested
+                .entries()
+                .iter()
+                .any(|e| e.path == "/usr/bin/finto" && e.size == 10),
+            "the package's own file: {:?}",
+            nested.entries()
+        );
+    }
+
+    /// A format this program reads and does not write is not offered for a new archive, and
+    /// refuses by name if something asks anyway.
+    #[test]
+    fn a_format_that_is_only_read_is_not_offered_for_a_new_archive() {
+        assert!(!Format::Ar.writable());
+        assert!(
+            !Format::writable_formats().contains(&Format::Ar),
+            "the dialog's list is the writable ones"
+        );
+        assert!(
+            Format::writable_formats().len() + 1 == Format::ALL.len(),
+            "and it is every other one"
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let out = dir.path().join("nope.a");
+        let source = dir.path().join("one.txt");
+        std::fs::write(&source, b"x").unwrap();
+        match crate::write::create(
+            &out,
+            Format::Ar,
+            &[source],
+            crate::Level::Normal,
+            false,
+            &CancelToken::new(),
+            &mut |_, _| {},
+        ) {
+            Err(ArcError::Refused { reason, .. }) => {
+                assert!(reason.contains("read here, not written"), "{reason}")
+            }
+            other => panic!("writing an ar should be refused: {other:?}"),
+        }
+        assert!(!out.exists(), "and nothing is left behind");
+    }
+
     #[test]
     fn a_solid_7z_gives_up_each_file_on_its_own() {
         // Solid is 7z's own default and the case that could go wrong: several files share one

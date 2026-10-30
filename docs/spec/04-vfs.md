@@ -72,11 +72,12 @@ where the code lives, not whether it is linked into the binary.
 | Scheme | Crate / mechanism | Caps | Milestone |
 | --- | --- | --- | --- |
 | `file` | `std::fs` + `fcmd-platform` | all native | M1 |
-| `zip` | `zip` (**implemented, read + create**, deflate/deflate64/bzip2/lzma/xz, zip64) | READ SEEK, CREATE as a whole archive | M2 |
+| `zip` | `zip` (**implemented, read + create**, deflate/deflate64/bzip2/lzma/xz, zip64); also the packages that are zips under another name — `.jar .war .ear .aar .apk .aab .ipa .whl .nupkg .vsix .xpi` | READ SEEK, CREATE as a whole archive | M2 |
 | `tar` family | `tar` + `flate2`/`lzma-rust2`/`ruzstd`/`bzip2`, all pure Rust (**implemented, read + create**) | READ SEEK (plain tar and zip only), CREATE as a whole archive | M2 |
 | `7z` | `sevenz-rust2` (**implemented, read + create + rebuild**, LZMA/LZMA2/bzip2/deflate/PPMd, BCJ and delta filters) | READ, CREATE as a whole archive, WRITE as a rebuild — and deliberately not SEEK: a solid block is one stream, so one entry cannot be found without decoding what is in front of it | M2 |
 | `rar` | `unrar` (read-only, non-free licence, optional feature, off by default in distro builds) | READ SEEK | M3 |
-| `iso`, `cab`, `ar`/`deb`, `rpm`, `cpio`, `lha`, `arj`, `squashfs` | `libarchive` binding as one fallback provider | READ | M3 |
+| `ar` | hand-written, no dependency (**implemented, read only**): `.a`, `.ar`, and the Debian package family `.deb`/`.udeb`/`.ddeb`, whose `control.tar.*` and `data.tar.*` then open through §4's nesting. GNU and BSD long names both; the `/` and `/SYM64/` symbol tables are not listed as files | READ SEEK — and deliberately not CREATE: `ar` and `dpkg-deb` build these, and a `.deb` written without its `control.tar` would be a file that looks like a package and is not one | M2 |
+| `iso`, `cab`, `rpm`, `cpio`, `lha`, `arj`, `squashfs` | `libarchive` binding as one fallback provider | READ | M3 |
 | `sftp` | `russh` + `russh-sftp` (**implemented**, `fcmd-net`) | READ WRITE CREATE DELETE RENAME SEEK TRUNCATE META_TIMES META_MODE META_OWNER LINKS RESUME RANDOM_WRITE CASE_SENSITIVE | M1 |
 | `ftp`/`ftps` | `suppaftp` (**implemented**, `fcmd-net`; explicit TLS with rustls, `MLSD` where the server has it) | READ WRITE CREATE DELETE RENAME META_TIMES (`MFMT`) META_MODE (`SITE CHMOD`) CASE_SENSITIVE — and deliberately not SEEK, TRUNCATE, RANDOM_WRITE, LINKS or RESUME | M2 |
 | `webdav`/`davs` | hand-written over `reqwest` (**implemented**, `fcmd-net`; `PROPFIND`, `GET`, `PUT`, `MKCOL`, `DELETE`, `MOVE`, basic auth) | READ WRITE CREATE DELETE RENAME CASE_SENSITIVE — and deliberately not SEEK, TRUNCATE, RANDOM_WRITE, RESUME, LINKS, META_TIMES or META_MODE: a `PUT` replaces a file whole, and the server owns its time | M2 |

@@ -165,6 +165,21 @@ bzip2, xz o zstd — e il percorso dice dove sei:
 Tutto quello che legge un file funziona là dentro: il visualizzatore, l'editor esadecimale, la
 ricerca.
 
+Parecchie cose sono zip senza dirlo, e `Enter` apre anche quelle: `.jar`, `.war`, `.ear`,
+`.aar`, `.apk`, `.aab`, `.ipa`, `.whl`, `.nupkg`, `.vsix`, `.xpi` — i pacchetti che si aprono
+per vedere cosa c'è dentro. Anche un `.docx` o un `.epub` è uno zip, e di proposito non sta in
+quella lista: lì il programma che legge un file così è la risposta più utile, e `Enter` glielo
+passa. Se invece vuoi vederci dentro, `Shift+F2` lo spacchetta comunque, e un archivio
+rinominato si apre per i suoi byte una volta che sei già dentro un contenitore.
+
+`Enter` apre anche l'archivio Unix — `.a` e `.ar` — e un pacchetto Debian, `.deb`, `.udeb` o
+`.ddeb`, che *è* uno di quelli: dentro ci trovi `debian-binary`, un `control.tar.*` e un
+`data.tar.*`, e `Enter` su uno dei due tar ci va dentro, così i file che il pacchetto
+installerebbe sono a due tasti di distanza. Questi si leggono e non si scrivono: li costruiscono
+`ar` e `dpkg-deb`, e un pacchetto scritto senza il suo file di controllo sembrerebbe un
+pacchetto senza esserlo. Il dialogo di compressione quindi non offre il formato, e un nome come
+`libfoo.a` scritto lì dentro viene rifiutato con una ragione invece che scritto a metà.
+
 Si apre anche un archivio dentro un archivio, e uno su un server o in un bucket. Nessuno dei due
 è un file in cui questo programma possa spostarsi, quindi viene prima copiato nella cartella
 temporanea, una volta sola, e letto da lì — una pausa la prima volta e niente dopo, con il

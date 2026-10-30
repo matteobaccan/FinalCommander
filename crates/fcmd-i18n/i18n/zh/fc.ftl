@@ -834,6 +834,7 @@ pack-level-fast = 快速
 pack-level-best = 最大
 pack-scope = 已选择 { $count } 个文件
 pack-needs-name = 压缩包需要一个名字
+pack-format-read-only = { $format } 在这里只能读取，不能写入：请换一个格式或换一个名字
 unpack-title = 从压缩包解压
 unpack-to = 解压到
 unpack-scope = 来自 { $name }

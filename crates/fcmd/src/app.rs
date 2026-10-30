@@ -10849,12 +10849,23 @@ impl App {
         let archive = self.resolve_path(&name);
         // The name wins over the choice: a user who typed `.tar.gz` means that, whatever the
         // row below says, and a name with no format in it takes the one that is chosen.
-        let chosen = fcmd_arc::Format::ALL
-            .iter()
-            .copied()
+        let chosen = fcmd_arc::Format::writable_formats()
+            .into_iter()
             .find(|f| f.extension() == form.text_value("pack.format"))
             .unwrap_or(fcmd_arc::Format::Zip);
         let format = fcmd_arc::Format::of_name(&archive.display_name()).unwrap_or(chosen);
+        // The name can name a format this program only reads: `libfoo.a` is a real name to
+        // type, and `ar` is not written here. Say so with the dialog still open, rather than
+        // letting the job start and fail.
+        if !format.writable() {
+            let m = self.i18n.t_args(
+                "pack-format-read-only",
+                &[("format", format.label().into())],
+            );
+            self.set_error(m);
+            self.mode = Mode::Form(Box::new(form.clone()));
+            return;
+        }
         let level = match form.text_value("pack.level").as_str() {
             "fast" => fcmd_arc::Level::Fast,
             "best" => fcmd_arc::Level::Best,
