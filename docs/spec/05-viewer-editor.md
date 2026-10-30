@@ -258,7 +258,43 @@ first, because those are the files people open; then archives (`ar`, and the mem
   plus this header's own forty bytes. There is no separate TE64: the header always carries a
   64-bit image base, and `Machine` is what says x86-64 from IA-32.
 
-What none of the three gets is the equivalent of the PE reader's import and export walks:
+Then the files that are **not programs** but are still a tree of records with a length on each,
+which is the same walk and the same question — what is this, and where inside it is anything:
+
+- **ISO base media** (MP4, MOV, M4A, M4V, 3GP, HEIF/AVIF): a tree of boxes. The brands, the
+  movie header's timescale and duration, every track with its handler, its codec, its stored
+  size or its sample rate, the language, the iTunes-style tags of an `.m4a`, and the top-level
+  boxes with one level inside `moov` as the rows `Enter` follows. A film is three gigabytes of
+  `mdat` and this reads sixteen bytes per box plus the `moov`.
+- **Matroska** (MKV, WebM, MKA): EBML, whose ids and lengths are variable-width integers. The
+  `DocType`, the segment's `TimecodeScale` and `Duration`, the title and the writing
+  application, every `TrackEntry`, and the segment's children as navigation — with the clusters
+  listed once and then counted, because a two-hour film has tens of thousands of them. An
+  element of unknown length, which is how a stream still being written says so, stops the walk
+  at that level instead of the file.
+- **RIFF** (AVI, WAVE, WebP): the ancestor of both. AVI's main header and one group per stream
+  with the codec taken from the *format* chunk, because `strh`'s handler is zero in half the
+  files ever written; WAVE's format and how long its data plays; WebP's canvas, which is the
+  one picture size our own decoder cannot give.
+- **PDF**: the index is at the end, may be a chain of them — one per incremental save — and
+  since 1.5 is itself a deflated object whose catalogue lives inside *object streams*. So this
+  follows `startxref`, reads either the classic table or the stream, inflates what it must
+  (undoing the PNG predictor), and reports the version, the page count, the first page's paper,
+  the `/Info` fields, what `/Encrypt` allows, and how many revisions the file carries. The pages
+  are rows `Enter` follows; an object packed into a stream sends `Enter` to the stream that
+  holds it, because that is where its bytes are. **When the index does not lead anywhere the
+  file is read for `N G obj` and that is believed instead**, which is what a repair tool does
+  and what a truncated download or a hand-edited file needs. An encrypted file's strings are
+  ciphertext and are shown as `(encrypted)` rather than as rubbish.
+
+What a container reader deliberately does *not* do is decode a frame, and what the PDF reader
+does not do is pull out the text: the first wants a video codec — a C library and a licence
+this project has refused — and the second wants the content stream's operators and the font's
+`ToUnicode` map, which is a typesetting engine that still gets a scanned page wrong. Both have
+an honest answer already: a `[[decompile]]` rule with `ffprobe` or `pdftotext` (SPEC 06 §5b),
+chosen by mask and run on `Shift+F6`.
+
+What none of the three executable families gets is the equivalent of the PE reader's import and export walks:
 those want a second format each — a stream of counted strings, a stream of entry bundles —
 and nothing here can be tested against a real file of them.
 

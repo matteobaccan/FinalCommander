@@ -190,6 +190,19 @@ byte grezzi accanto al significato, le sezioni, gli import e gli export, e i sim
 danno il nome alle funzioni nel disassemblato. `Enter` su una posizione prende i byte che stanno
 lì.
 
+Lo stesso tasto risponde anche per i file che non sono programmi:
+
+- **un video o un suono** — MP4, MOV, M4A, MKV, WebM, AVI, WAV: quanto dura, le tracce, il
+  codec di ognuna, la risoluzione o la frequenza di campionamento, la lingua, i tag, e i box o
+  i chunk del contenitore come righe su cui `Enter` salta;
+- **un PDF**: la versione, quante pagine, il formato della prima, il titolo, l'autore e il
+  produttore, se è cifrato e cosa permette allora, quante volte è stato salvato da quando è
+  stato scritto — e le pagine stesse, ogni riga che porta al suo oggetto.
+
+Nessuno dei due mostra un'immagine del file: per un fotogramma di un video o una pagina di PDF
+resa come immagine si prepara una regola `[[decompile]]` (`ffprobe`, `pdftotext`) e si preme
+`Shift+F6`.
+
 I file sorgente, i class file e il bytecode hanno un listato tutto loro dove ha senso: un
 `.class` è mostrato come lo mostra `javap -c`, con la constant pool risolta nei commenti.
 

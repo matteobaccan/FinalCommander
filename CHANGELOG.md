@@ -6,6 +6,43 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **`F11` reads a video, a sound and a PDF, not only a program** (SPEC 05 §1.8). The structure
+  pane existed because a binary is a tree of records with a length on each; so are the files
+  people actually keep in a folder, and they raise the same question — what is this, and where
+  inside it is anything.
+
+  - **ISO base media** — MP4, MOV, M4A, M4V, 3GP, HEIF: the brands, the duration, every track
+    with its codec, its resolution or its sample rate and its language, the tags an audio
+    player writes into an `.m4a`, and the boxes as rows `Enter` follows. A film is three
+    gigabytes of `mdat` and this reads sixteen bytes per box plus the `moov`. A `.mov` from
+    before `ftyp` existed is recognised by the box it opens with.
+  - **Matroska** — MKV, WebM, MKA: the `DocType`, the `TimecodeScale` and `Duration`, the title
+    and the writing application, every `TrackEntry`, and the segment's children as navigation,
+    with the clusters listed once and then counted because a film has tens of thousands. An
+    element of unknown length — a stream still being written — stops the walk at that level
+    rather than at the file.
+  - **RIFF** — AVI, WAVE, WebP: AVI's main header and a group per stream, with the codec taken
+    from the *format* chunk because `strh`'s handler is zero in half the files ever written;
+    WAVE's format and how long its data plays; WebP's canvas, which is the one picture size our
+    own decoder cannot give.
+  - **PDF**: the version, the page count, the first page's paper in points, millimetres and by
+    name, the `/Info` fields, what `/Encrypt` allows, how many times the file has been saved
+    since it was written — and the pages themselves, each row going to its object. The index of
+    a PDF is at the end and, since 1.5, is itself a deflated object whose catalogue lives inside
+    object streams, so this follows `startxref`, reads the classic table or the stream, and
+    inflates what it must, undoing the PNG predictor. **An index that leads nowhere is not an
+    error**: the file is read for `N G obj` and that is believed instead, which is what a
+    truncated download or a hand-edited file needs. An object packed into a stream sends `Enter`
+    to the stream that holds it, because that is where its bytes are, and an encrypted file's
+    strings are shown as `(encrypted)` rather than as the ciphertext they hold.
+
+  Neither reader decodes a frame or pulls out a page's text: the first wants a video codec,
+  which means a C library and a licence this project has refused, and the second wants the
+  content stream's operators and a font's `ToUnicode` map. Both already have an honest answer
+  in a `[[decompile]]` rule with `ffprobe` or `pdftotext` on `Shift+F6`.
+
 ### Fixed
 
 - **A table's columns stay where the heading says they are.** A cell holding a newline — a

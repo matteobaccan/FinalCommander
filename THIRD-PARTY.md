@@ -42,7 +42,7 @@ Unicode-3.0, or MPL-2.0 at file level). The policy and the allow-list live in `d
 | `ssh-key`, `ssh-encoding`, `ssh-cipher` | Apache-2.0 OR MIT | OpenSSH key and `known_hosts` formats |
 | `zip` | MIT | reading and writing zip archives |
 | `tar` | MIT OR Apache-2.0 | reading and writing the tar family |
-| `flate2` (with `miniz_oxide`) | MIT OR Apache-2.0 | gzip, in pure Rust |
+| `flate2` (with `miniz_oxide`) | MIT OR Apache-2.0 | gzip, in pure Rust — and inflate for a PDF's own tables in the structure pane |
 | `bzip2` (with `libbz2-rs-sys`) | MIT OR Apache-2.0 / **bzip2-1.0.6** | bzip2, in pure Rust |
 | `lzma-rust2` | Apache-2.0 | xz, in pure Rust |
 | `ruzstd` | MIT | zstd, in pure Rust |

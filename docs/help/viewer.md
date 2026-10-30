@@ -179,6 +179,18 @@ LE and LX, and the TE that UEFI firmware is made of — each header field with t
 raw bytes beside the meaning, the sections, the imports and exports, and the symbols — which
 then name the functions in the disassembly. `Enter` on an offset takes the bytes there.
 
+The same key answers for the files that are not programs:
+
+- **a video or a sound** — MP4, MOV, M4A, MKV, WebM, AVI, WAV: how long it is, the tracks, the
+  codec of each, the resolution or the sample rate, the language, the tags, and the boxes or
+  chunks of the container as rows `Enter` follows;
+- **a PDF**: the version, how many pages, the paper of the first one, the title, the author and
+  the producer, whether it is encrypted and what it then allows, how many times it has been
+  saved since it was written — and the pages themselves, each row going to its object.
+
+Neither shows a picture of the file: for a frame of a video or a page of a PDF rendered as an
+image, set up a `[[decompile]]` rule (`ffprobe`, `pdftotext`) and press `Shift+F6`.
+
 Source files, class files and bytecode get a listing of their own where one makes sense: a
 `.class` is shown the way `javap -c` shows it, with the constant pool resolved into the
 comments.

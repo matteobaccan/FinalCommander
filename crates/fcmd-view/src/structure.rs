@@ -39,7 +39,7 @@ pub struct Row {
 }
 
 impl Row {
-    fn group(label: impl Into<String>) -> Row {
+    pub(crate) fn group(label: impl Into<String>) -> Row {
         Row {
             kind: RowKind::Group,
             label: label.into(),
@@ -49,7 +49,11 @@ impl Row {
         }
     }
 
-    fn field(label: impl Into<String>, raw: impl Into<String>, value: impl Into<String>) -> Row {
+    pub(crate) fn field(
+        label: impl Into<String>,
+        raw: impl Into<String>,
+        value: impl Into<String>,
+    ) -> Row {
         Row {
             kind: RowKind::Field,
             label: label.into(),
@@ -59,7 +63,11 @@ impl Row {
         }
     }
 
-    fn entry(label: impl Into<String>, value: impl Into<String>, offset: Option<u64>) -> Row {
+    pub(crate) fn entry(
+        label: impl Into<String>,
+        value: impl Into<String>,
+        offset: Option<u64>,
+    ) -> Row {
         Row {
             kind: RowKind::Entry,
             label: label.into(),
@@ -195,16 +203,16 @@ impl Bytes for &[u8] {
 /// A window of bytes with its own position, which answers 0 past its end and remembers that it
 /// was asked. That is how a truncated file stops being a special case: the fields that are
 /// there decode, the ones that are not read as zero and the row says so.
-struct Cur<'a> {
+pub(crate) struct Cur<'a> {
     bytes: &'a [u8],
-    pos: usize,
+    pub(crate) pos: usize,
     /// Set when a read went past the end.
-    short: bool,
-    big_endian: bool,
+    pub(crate) short: bool,
+    pub(crate) big_endian: bool,
 }
 
 impl<'a> Cur<'a> {
-    fn new(bytes: &'a [u8]) -> Cur<'a> {
+    pub(crate) fn new(bytes: &'a [u8]) -> Cur<'a> {
         Cur {
             bytes,
             pos: 0,
@@ -213,12 +221,12 @@ impl<'a> Cur<'a> {
         }
     }
 
-    fn seek(&mut self, pos: usize) -> &mut Self {
+    pub(crate) fn seek(&mut self, pos: usize) -> &mut Self {
         self.pos = pos;
         self
     }
 
-    fn take(&mut self, n: usize) -> &'a [u8] {
+    pub(crate) fn take(&mut self, n: usize) -> &'a [u8] {
         let start = self.pos.min(self.bytes.len());
         let end = (start + n).min(self.bytes.len());
         if end - start < n {
@@ -228,7 +236,7 @@ impl<'a> Cur<'a> {
         &self.bytes[start..end]
     }
 
-    fn u16(&mut self) -> u16 {
+    pub(crate) fn u16(&mut self) -> u16 {
         let b = self.take(2);
         let mut v = [0u8; 2];
         v[..b.len()].copy_from_slice(b);
@@ -239,7 +247,7 @@ impl<'a> Cur<'a> {
         }
     }
 
-    fn u32(&mut self) -> u32 {
+    pub(crate) fn u32(&mut self) -> u32 {
         let b = self.take(4);
         let mut v = [0u8; 4];
         v[..b.len()].copy_from_slice(b);
@@ -250,7 +258,7 @@ impl<'a> Cur<'a> {
         }
     }
 
-    fn u64(&mut self) -> u64 {
+    pub(crate) fn u64(&mut self) -> u64 {
         let b = self.take(8);
         let mut v = [0u8; 8];
         v[..b.len()].copy_from_slice(b);
@@ -262,7 +270,7 @@ impl<'a> Cur<'a> {
     }
 
     /// A field: its raw bytes as hex, and whatever they mean.
-    fn hex(&self, from: usize, n: usize) -> String {
+    pub(crate) fn hex(&self, from: usize, n: usize) -> String {
         let start = from.min(self.bytes.len());
         let end = (start + n).min(self.bytes.len());
         let mut out = String::with_capacity(n * 3);
@@ -278,7 +286,7 @@ impl<'a> Cur<'a> {
 
 /// How many rows of a table we are willing to show. A file can claim 65 535 sections; a pane
 /// that tries to list them all is a pane that hangs.
-const MAX_ENTRIES: usize = 512;
+pub(crate) const MAX_ENTRIES: usize = 512;
 /// The most we read for a name table.
 const MAX_STRTAB: usize = 1 << 20;
 /// The most we read looking for the end of one name. A name table with no NUL in it is a
@@ -315,6 +323,16 @@ pub fn read(src: &mut dyn Bytes) -> Option<Structure> {
     // with the stub and most of the headers cut off, and `VZ` is what is left to recognise.
     if head.len() >= 40 && head[..2] == *b"VZ" {
         return Some(te(src, &head, len));
+    }
+    // The files that are not programs but are still a tree of records with a length on each:
+    // a video container, and a document. They answer the same question this pane exists for —
+    // what is this, and where inside it is anything — so they are rows here rather than a
+    // pane of their own.
+    if let Some(s) = crate::media::read(src, &head, len) {
+        return Some(s);
+    }
+    if let Some(s) = crate::pdf::read(src, &head, len) {
+        return Some(s);
     }
     None
 }
@@ -3037,7 +3055,7 @@ fn ar(src: &mut dyn Bytes, len: u64) -> Structure {
 // ── helpers ─────────────────────────────────────────────────────────────────────────────────
 
 /// An offset is only a target if it is really inside the file.
-fn in_file(offset: u64, len: u64) -> Option<u64> {
+pub(crate) fn in_file(offset: u64, len: u64) -> Option<u64> {
     (offset < len).then_some(offset)
 }
 
@@ -3112,12 +3130,12 @@ fn str_at(table: &[u8], at: usize) -> String {
     String::from_utf8_lossy(&table[at..end]).to_string()
 }
 
-fn size_cell(size: u64) -> String {
+pub(crate) fn size_cell(size: u64) -> String {
     fcmd_core::format_size(size)
 }
 
 /// A timestamp as a date, or the raw number when it is obviously not one.
-fn unix_time(secs: u64) -> String {
+pub(crate) fn unix_time(secs: u64) -> String {
     if secs == 0 || secs > 4_000_000_000 {
         return format!("{secs}");
     }

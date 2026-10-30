@@ -1150,6 +1150,7 @@ dependencies = [
  "fcmd-core",
  "fcmd-platform",
  "fcmd-syntax",
+ "flate2",
  "iced-x86",
  "image",
  "memchr",
