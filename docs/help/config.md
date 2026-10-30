@@ -63,6 +63,20 @@ The keymap is a profile plus your changes. Two profiles ship: `far`, which is th
 one of the names on the "Commands" page of this help. `fcmd --check-keymap` says whether a
 keymap is sound and names anything bound twice.
 
+Before rebinding anything, it is worth knowing what your terminal actually sends: *Options →
+Learn keys* draws a cell for every key worth testing — the function keys with each modifier,
+the arrows with `Ctrl` and `Shift`, the editing keys — and lights the cell up when that key
+arrives. Press them and watch. A cell that never lights is a key your terminal is not sending
+at all, and no binding will conjure it; the line underneath says what the last key that *did*
+arrive is bound to here, which is how you tell "the terminal swallowed it" from "it arrived
+and does nothing". Two `Esc` leave, because one `Esc` is a key under test like any other.
+
+Midnight Commander, where this comes from, goes on to let you type in the escape sequence a
+key should have sent. This does not: the sequences are read by a library with a table for the
+terminals in use, which is better at it than anything typed in by hand — so what is missing
+here is missing from the terminal, and the answer is a different key rather than a different
+table.
+
 # Colours
 
 `Ctrl+Shift+T` steps through the themes; the menu offers them as a list. A theme is a TOML file

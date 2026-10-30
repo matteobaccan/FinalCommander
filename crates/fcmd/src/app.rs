@@ -677,6 +677,110 @@ pub enum ConnectOutcome {
     Failed(String),
 }
 
+/// What the terminal has been seen to deliver, while somebody presses keys at it.
+///
+/// Midnight Commander calls this *learn keys*, and the reason it exists is that a terminal
+/// decides for itself which keys it sends: `Shift+F3` arrives as `F3` on one, as nothing at
+/// all on another, and `Alt+Left` is anybody's guess over ssh. Pressing the keys and watching
+/// what arrives is the only way to find out, and knowing is what turns rebinding from a guess
+/// into a decision.
+///
+/// Where mc goes on to let one *teach* it an escape sequence, this does not: the sequences are
+/// read by `crossterm`, which carries a parser for the terminals in use and is better at it
+/// than a table typed in by hand. What is missing from a key here is missing from the
+/// terminal, and the answer to that is a different key rather than a different table.
+#[derive(Debug, Default, Clone)]
+pub struct LearnKeys {
+    /// Every key that has arrived, by the name the keymap gives it.
+    pub seen: Vec<String>,
+    /// The last one, with what it is bound to where the panels are.
+    pub last: Option<(String, Option<Command>)>,
+    /// How many `Esc` have arrived in a row: one is a key under test like any other, two are
+    /// how one leaves — mc's own answer to the same problem.
+    pub escapes: usize,
+}
+
+/// The keys worth pressing, in rows, with the short label each cell wears.
+///
+/// Not every key the program knows: the ones a terminal is likely to swallow. The function
+/// keys with each modifier, because that is where a terminal's table runs out; the arrows
+/// with `Ctrl` and `Shift`, which is where ssh and `tmux` disagree; and the editing keys,
+/// which an old terminal sends as something else entirely.
+pub fn learn_rows() -> Vec<(&'static str, Vec<(String, String)>)> {
+    let fkeys = |prefix: &str| -> Vec<(String, String)> {
+        (1..=12)
+            .map(|n| (n.to_string(), format!("{prefix}F{n}")))
+            .collect()
+    };
+    let named = |keys: &[&str]| -> Vec<(String, String)> {
+        keys.iter()
+            .map(|key| {
+                let label = key.rsplit('+').next().unwrap_or(key);
+                let label = match *key {
+                    k if k.starts_with("Ctrl+") => format!("^{label}"),
+                    k if k.starts_with("Shift+") => format!("⇧{label}"),
+                    k if k.starts_with("Alt+") => format!("⌥{label}"),
+                    _ => label.to_string(),
+                };
+                (label, key.to_string())
+            })
+            .collect()
+    };
+    vec![
+        ("F1-F12", fkeys("")),
+        ("Shift+F", fkeys("Shift+")),
+        ("Ctrl+F", fkeys("Ctrl+")),
+        ("Alt+F", fkeys("Alt+")),
+        (
+            "Arrows",
+            named(&[
+                "Up",
+                "Down",
+                "Left",
+                "Right",
+                "Ctrl+Up",
+                "Ctrl+Down",
+                "Ctrl+Left",
+                "Ctrl+Right",
+                "Shift+Up",
+                "Shift+Down",
+                "Shift+Left",
+                "Shift+Right",
+            ]),
+        ),
+        (
+            "Editing",
+            named(&[
+                "Ins",
+                "Del",
+                "Home",
+                "End",
+                "PgUp",
+                "PgDn",
+                "Shift+Ins",
+                "Shift+Del",
+                "Ctrl+Home",
+                "Ctrl+End",
+                "Ctrl+PgUp",
+                "Ctrl+PgDn",
+            ]),
+        ),
+        (
+            "Other",
+            named(&[
+                "Tab",
+                "Shift+Tab",
+                "Enter",
+                "Backspace",
+                "Esc",
+                "Space",
+                "Ctrl+Space",
+                "Alt+Enter",
+            ]),
+        ),
+    ]
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PromptKind {
     /// What the directory's `descript.ion` should say about a file (FAR's `Ctrl+Z`). The
@@ -1467,6 +1571,8 @@ pub enum Mode {
     MacroKey {
         steps: Vec<fcmd_cmd::Step>,
     },
+    /// Which keys this terminal delivers, and what each one does (SPEC 06 §7).
+    LearnKeys(Box<LearnKeys>),
     /// `Ctrl+O`: the output of the commands that have run, full screen.
     UserScreen {
         scroll: usize,
@@ -3503,6 +3609,16 @@ impl App {
                 }
             }
             Mode::MacroKey { steps } => self.macro_key(key, steps),
+            Mode::LearnKeys(learn) => {
+                let mut learn = learn;
+                self.learn_key(&mut learn, key);
+                // Two `Esc` in a row are the way out; anything else is another key tested.
+                if learn.escapes >= 2 {
+                    self.mode = Mode::Normal;
+                } else {
+                    self.mode = Mode::LearnKeys(learn);
+                }
+            }
             Mode::UserScreen { scroll } => {
                 self.mode = Mode::UserScreen { scroll };
                 self.user_screen_key(key, scroll);
@@ -7573,6 +7689,10 @@ impl App {
                     secret: false,
                     sources,
                 });
+            }
+            // Midnight Commander's learn keys: press them and see which ones arrive.
+            Command::AppLearnKeys => {
+                self.mode = Mode::LearnKeys(Box::new(LearnKeys::default()));
             }
             // Midnight Commander's filtered view: a command is typed, and what it prints is
             // read instead of the file. The same screen the decompiler's output lands on,
@@ -11693,6 +11813,26 @@ impl App {
             let drop = self.user_screen.len() - MAX_LINES;
             self.user_screen.drain(..drop);
         }
+    }
+
+    /// One key, while the terminal is being tested: what arrived, and what it does here.
+    ///
+    /// Every key counts, including the ones bound to nothing: the question being asked is
+    /// what the *terminal* sends, and a key that arrives and does nothing has still arrived.
+    fn learn_key(&mut self, learn: &mut LearnKeys, key: Key) {
+        let name = key.to_string();
+        if key.code == KeyCode::Esc && key.mods == Mods::NONE {
+            learn.escapes += 1;
+        } else {
+            learn.escapes = 0;
+        }
+        let bound = self
+            .keymap
+            .resolve(&[fcmd_cmd::Scope::Panel, fcmd_cmd::Scope::Global], key);
+        if !learn.seen.contains(&name) {
+            learn.seen.push(name.clone());
+        }
+        learn.last = Some((name, bound));
     }
 
     fn user_screen_key(&mut self, key: Key, scroll: usize) {

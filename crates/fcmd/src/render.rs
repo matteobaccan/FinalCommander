@@ -741,6 +741,10 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             None
         }
         Mode::UserScreen { .. } => None, // drawn full screen, before the panels
+        Mode::LearnKeys(learn) => {
+            draw_learn_keys(app, learn, buf, screen);
+            None
+        }
         // Drawn full screen too, and before this: `draw` returns early for it.
         Mode::Term(_) => None,
         Mode::Help {
@@ -2908,6 +2912,101 @@ fn help_ink(class: fcmd_view::markdown::Class) -> &'static str {
     }
 }
 
+/// Which keys this terminal delivers (SPEC 06 §7).
+///
+/// A row per family, a cell per key, and a cell is lit once that key has arrived. What one is
+/// looking for is the cell that never lights up: that key is not reaching the program, and no
+/// binding will make it.
+fn draw_learn_keys(app: &App, learn: &crate::app::LearnKeys, buf: &mut Buffer, screen: Rect) {
+    let rows = crate::app::learn_rows();
+    // The widest label, so the cells of every row start in the same column.
+    let label_w = rows
+        .iter()
+        .map(|(label, _)| label.chars().count())
+        .max()
+        .unwrap_or(8);
+    let cells = rows.iter().map(|(_, keys)| keys.len()).max().unwrap_or(12);
+    let cell_w = rows
+        .iter()
+        .flat_map(|(_, keys)| keys.iter().map(|(cell, _)| cell.chars().count()))
+        .max()
+        .unwrap_or(3)
+        + 2;
+    let box_w = ((label_w + 2 + cells * cell_w) as u16 + 4)
+        .min(screen.w.saturating_sub(2))
+        .max(24);
+    let box_h = (rows.len() as u16 + 7)
+        .min(screen.h.saturating_sub(1))
+        .max(8);
+    let area = Rect::new(
+        screen.x + (screen.w.saturating_sub(box_w)) / 2,
+        screen.y + (screen.h.saturating_sub(box_h)) / 2,
+        box_w,
+        box_h,
+    );
+    let style = app.theme.dialog();
+    buf.fill(area, ' ', style);
+    let title = app.i18n.t("learn-title");
+    buf.draw_frame(
+        area,
+        Style::new(
+            app.theme.color("dialog.frame"),
+            app.theme.color("dialog.bg"),
+        ),
+        Some(&title),
+    );
+    let inner = area.inner();
+    // A dialog has no colour of its own for "not yet": the lit cell is drawn bold and
+    // carries a dot, which reads the same on a terminal with eight colours and on paper.
+    let dim = style;
+    let mut seen_style = style;
+    seen_style.bold = true;
+    let mut y = inner.y;
+    buf.put_str(inner.x, y, &app.i18n.t("learn-hint"), dim, inner.w);
+    y += 2;
+    for (label, keys) in &rows {
+        if y >= inner.bottom() {
+            break;
+        }
+        buf.put_str(inner.x, y, label, style, inner.w);
+        let mut x = inner.x + label_w as u16 + 2;
+        for (cell, name) in keys {
+            if x + cell_w as u16 > inner.right() {
+                break;
+            }
+            let seen = learn.seen.iter().any(|key| key == name);
+            let text = if seen {
+                format!("{cell}·")
+            } else {
+                cell.clone()
+            };
+            buf.put_str(
+                x,
+                y,
+                &text,
+                if seen { seen_style } else { dim },
+                cell_w as u16,
+            );
+            x += cell_w as u16;
+        }
+        y += 1;
+    }
+    // What arrived last, and what it does: the other half of the question.
+    if let Some((name, bound)) = &learn.last {
+        let what = match bound {
+            Some(cmd) => cmd.id().to_string(),
+            None => app.i18n.t("learn-unbound"),
+        };
+        let line = app.i18n.t_args(
+            "learn-last",
+            &[("key", name.clone().into()), ("command", what.into())],
+        );
+        if y < inner.bottom() {
+            buf.put_str(inner.x, y + 1, &line, style, inner.w);
+        }
+    }
+}
+
 fn draw_help(
     app: &App,
     buf: &mut Buffer,
@@ -3833,6 +3932,37 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
             app.handle_input(Input::Key("Down".parse().unwrap()));
         }
         println!("{}", frame(&mut app, 80, 20));
+    }
+
+    /// Midnight Commander's learn keys: the cell of a key that has arrived is marked, and
+    /// the one that never arrives is the answer to "why does that key do nothing".
+    #[test]
+    fn the_key_test_marks_what_the_terminal_sent_and_says_what_it_does() {
+        let mut app = app("far", "en");
+        app.run(fcmd_cmd::Command::AppLearnKeys);
+        assert!(matches!(app.mode, crate::app::Mode::LearnKeys(_)));
+
+        // Nothing has arrived yet, so no cell is marked.
+        let before = frame(&mut app, 100, 30);
+        assert!(before.contains("F1-F12"), "{before}");
+        assert!(!before.contains("1·"), "{before}");
+
+        press(&mut app, "F5");
+        press(&mut app, "Shift+F3");
+        let after = frame(&mut app, 100, 30);
+        assert!(after.contains("5·"), "F5 arrived: {after}");
+        assert!(after.contains("3·"), "and Shift+F3: {after}");
+        // And the last one says what it does here, by the name of the command.
+        assert!(
+            after.contains("file.copy") || after.contains("Shift+F3"),
+            "{after}"
+        );
+
+        // One Esc is a key like any other; two leave.
+        press(&mut app, "Esc");
+        assert!(matches!(app.mode, crate::app::Mode::LearnKeys(_)));
+        press(&mut app, "Esc");
+        assert!(app.mode.is_normal());
     }
 
     #[test]

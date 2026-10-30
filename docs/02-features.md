@@ -221,7 +221,7 @@ a binary into something readable rather than only into instructions.
 | 7.8 | Scripting console (Lua) with the full command vocabulary | far2m/YAZI | M3 |
 | 7.9 | Print files / print manager | FAR | M4 |
 | 7.10 | Screen grabber (copy a rectangle of the screen to clipboard) | FAR | M4 |
-| 7.11 | Learn-keys / terminal key diagnostics | MC | M2 |
+| 7.11 | Learn-keys / terminal key diagnostics | MC | ~ the escape sequence cannot be typed in: it is read by a library with a table for the terminals in use |
 | 7.12 | Help system: context-sensitive `F1`, searchable, localised, offline | FAR/KRU | M2 |
 
 ## 8. Shell & terminal integration

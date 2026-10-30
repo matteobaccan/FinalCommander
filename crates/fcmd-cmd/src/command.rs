@@ -275,6 +275,8 @@ pub enum Command {
     /// Run a command and put the paths it printed into the panel (Midnight Commander's
     /// external panelize, SPEC 02 §7b).
     PanelPanelize,
+    /// Find out which keys this terminal delivers, and what each one does here (SPEC 06 §7).
+    AppLearnKeys,
     FileChecksum,
     /// Check the files beside a list of digests against it.
     FileChecksumVerify,
@@ -577,6 +579,7 @@ impl Command {
             Command::FileDescribe,
             Command::PanelTempAdd,
             Command::PanelPanelize,
+            Command::AppLearnKeys,
             Command::FileChecksum,
             Command::FileChecksumVerify,
             Command::FileApply,
@@ -850,6 +853,7 @@ impl Command {
             Command::FileDescribe => "file.describe".into(),
             Command::PanelTempAdd => "panel.temp.add".into(),
             Command::PanelPanelize => "panel.panelize".into(),
+            Command::AppLearnKeys => "app.learn.keys".into(),
             Command::FileChecksum => "file.checksum.create".into(),
             Command::FileChecksumVerify => "file.checksum.verify".into(),
             Command::FileApply => "file.apply".into(),
@@ -1091,6 +1095,7 @@ impl Command {
             ("file.describe", _) => Command::FileDescribe,
             ("panel.temp.add", _) => Command::PanelTempAdd,
             ("panel.panelize", _) => Command::PanelPanelize,
+            ("app.learn.keys", _) => Command::AppLearnKeys,
             ("file.checksum.create", _) => Command::FileChecksum,
             ("file.checksum.verify", _) => Command::FileChecksumVerify,
             ("file.apply", _) => Command::FileApply,

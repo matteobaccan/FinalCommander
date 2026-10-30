@@ -483,6 +483,7 @@ pub fn menus() -> Vec<Menu> {
                 ),
                 item("menu-panelize", "", Action::Run(Command::PanelPanelize)),
                 item("menu-view-filtered", "", Action::Run(Command::ViewerFilter)),
+                item("menu-learn-keys", "", Action::Run(Command::AppLearnKeys)),
                 item("menu-diff", "Ctrl+Shift+D", Action::Run(Command::ToolDiff)),
                 item("menu-compare-setup", "", Action::Run(Command::ToolCompare)),
                 item("menu-duplicates", "", Action::Run(Command::ToolDuplicates)),

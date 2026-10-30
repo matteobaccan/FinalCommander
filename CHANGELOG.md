@@ -8,6 +8,20 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **Learn keys: which keys this terminal actually sends.** *Options → Learn keys* draws a cell
+  for every key worth testing — the function keys with each modifier, the arrows with `Ctrl`
+  and `Shift`, the editing keys — and lights it when that key arrives. A cell that never lights
+  is a key the terminal is not sending at all, which no binding can conjure; the line
+  underneath names the last key that *did* arrive and what it is bound to here, which is how
+  one tells "the terminal swallowed it" from "it arrived and does nothing". Two `Esc` leave,
+  because one `Esc` is a key under test like any other.
+
+  Midnight Commander, where this comes from, goes on to let one type in the escape sequence a
+  key should have sent. This does not, and the reason is in the row of the feature table: the
+  sequences are read by a library with a table for the terminals in use, which is better at it
+  than anything typed in by hand — so what is missing here is missing from the terminal, and
+  the answer is a different key rather than a different table.
+
 - **The viewer can read a command instead of the file: Midnight Commander's filtered view.**
   `Shift+F5` asks for a command, hands it the file, and shows what it printed — `strings`,
   `xxd`, `pdftotext`, `objdump -d`, `jq .`, a script of one's own. A `[[decompile]]` rule did

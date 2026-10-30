@@ -68,6 +68,21 @@ per default, e `mc`. Una tua assegnazione è una riga in `keymap.toml`:
 nella pagina "Tutti i comandi" di questo aiuto. `fcmd --check-keymap` dice se una mappatura sta
 in piedi e nomina tutto quello che è assegnato due volte.
 
+Prima di riassegnare qualcosa vale la pena sapere cosa manda davvero il tuo terminale:
+*Opzioni → Impara i tasti* disegna una casella per ogni tasto che vale la pena provare — i
+tasti funzione con ogni modificatore, le frecce con `Ctrl` e `Shift`, i tasti di modifica — e
+accende la casella quando quel tasto arriva. Premili e guarda. Una casella che non si accende
+mai è un tasto che il tuo terminale non sta mandando affatto, e nessuna assegnazione lo farà
+comparire; la riga sotto dice a cosa è legato l'ultimo tasto che invece è arrivato, che è come
+si distingue "il terminale l'ha mangiato" da "è arrivato e non fa niente". Due `Esc` escono,
+perché un `Esc` è un tasto sotto prova come tutti gli altri.
+
+Midnight Commander, da cui questa cosa viene, ti lascia anche scrivere a mano la sequenza di
+escape che un tasto avrebbe dovuto mandare. Qui no: le sequenze le legge una libreria che ha
+una tabella per i terminali in uso, e lo fa meglio di qualunque cosa scritta a mano — quindi
+quello che qui manca manca al terminale, e la risposta è un tasto diverso, non una tabella
+diversa.
+
 # I colori
 
 `Ctrl+Shift+T` passa da un tema all'altro; il menu li offre come elenco. Un tema è un file TOML
