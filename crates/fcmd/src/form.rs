@@ -271,6 +271,7 @@ impl Form {
             | FormKind::Attributes
             | FormKind::Copy
             | FormKind::Checksum
+            | FormKind::Recode
             | FormKind::Compare
             | FormKind::Drives
             | FormKind::Sync
@@ -564,6 +565,7 @@ impl Form {
             FormKind::Attributes => "attr-title",
             FormKind::Copy => "copy-title",
             FormKind::Checksum => "sum-title",
+            FormKind::Recode => "recode-title",
             FormKind::Compare => "cmp-title",
             FormKind::Drives => "drives-title",
             FormKind::Sync => "sync-title",
@@ -1212,6 +1214,47 @@ impl Form {
         }
     }
 
+    /// What to write the selected files as: a code page, and line endings (SPEC 03 §13).
+    ///
+    /// Three questions, and the first of them is the one that matters: *what are they now*.
+    /// A file's code page is not written down anywhere, so the honest default is to work it
+    /// out per file and say so, and the other rows exist for the file that was guessed wrong
+    /// — a `.txt` of nothing but ASCII looks like every page at once.
+    pub fn recode(i18n: &I18n, count: usize) -> Form {
+        let t = |id: &str| i18n.t(id);
+        let mut pages: Vec<(&str, String)> = vec![("auto", t("recode-auto"))];
+        for page in fcmd_view::Codepage::ALL {
+            pages.push((page.id(), page.name().to_string()));
+        }
+        let targets: Vec<(&str, String)> = fcmd_view::Codepage::ALL
+            .iter()
+            .map(|page| (page.id(), page.name().to_string()))
+            .collect();
+        let endings = [
+            ("keep", t("recode-eol-keep")),
+            ("lf", "LF (Unix)".to_string()),
+            ("crlf", "CRLF (DOS)".to_string()),
+        ];
+        let fields = vec![
+            Field::Note(i18n.t_args("recode-what", &[("count", (count as i64).into())])),
+            choice("recode.from", t("recode-from"), &pages, "auto"),
+            choice("recode.to", t("recode-to"), &targets, "utf8"),
+            Field::Separator,
+            choice("recode.eol", t("recode-eol"), &endings, "keep"),
+        ];
+        Form {
+            pages: Vec::new(),
+            page: 0,
+            kind: FormKind::Recode,
+            title: t("recode-title"),
+            fields,
+            cursor: 1,
+            site: None,
+            button: None,
+            buttons: vec![i18n.t("btn-ok"), i18n.t("btn-cancel")],
+        }
+    }
+
     /// What counts as the same file, before the two panels are compared (SPEC 03 §11).
     ///
     /// FAR has this as a plugin with a dialog of its own, and the dialog is the point: the
@@ -1714,6 +1757,28 @@ impl Form {
                 if *key == want {
                     *caret = text.chars().count();
                     *value = text;
+                    return;
+                }
+            }
+        }
+    }
+
+    /// Put a row of choices on the one with this value. Nothing happens where there is no
+    /// such row or no such value, which is what a dialog built from a configuration that has
+    /// moved on should do.
+    pub fn set_choice(&mut self, want: &str, value: &str) {
+        for field in &mut self.fields {
+            if let Field::Choice {
+                key,
+                options,
+                chosen,
+                ..
+            } = field
+            {
+                if *key == want {
+                    if let Some(at) = options.iter().position(|(v, _)| v == value) {
+                        *chosen = at;
+                    }
                     return;
                 }
             }

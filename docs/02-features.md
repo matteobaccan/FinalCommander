@@ -104,7 +104,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 3.13 | Apply command to each selected file (`Ctrl+G` style), with `%`-macros | FAR | M2 |
 | 3.14 | Compare directories (by name/size/date/content), synchronise directories with preview and one-way/two-way modes | TC/KRU | ~ a saved sync job and a written report |
 | 3.15 | Compare files by content (internal diff viewer, side-by-side, word-level) | MC/KRU | ~ a unified view, copying a hunk across, two binaries byte by byte |
-| 3.16 | Change encoding / line endings in bulk (CRLF↔LF, codepage recode) | MC | M3 |
+| 3.16 | Change encoding / line endings in bulk (CRLF↔LF, codepage recode) | MC | ✓ |
 | 3.17 | File descriptions/comments (`descript.ion`, `files.bbs`) | FAR | ✓ |
 | 3.18 | Undo for destructive operations where the FS allows (trash-based) | NEW | M3 |
 | 3.19 | Elevated operations (UAC / `sudo` / `pkexec` helper) for privileged paths | FAR/KRU | M3 |

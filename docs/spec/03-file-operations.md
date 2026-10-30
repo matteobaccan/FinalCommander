@@ -405,3 +405,28 @@ how much is wasted, how many files could not be read, and whether `Esc` stopped 
 Still to come: the plugin's other two definitions of a duplicate — same name whatever the
 contents, and same size whatever the name — and its picture and music comparisons, which need
 an image decoder and a tag reader.
+
+## 13. Writing files again (`file.recode`, shipped)
+
+Text arrives from somewhere else: a zip from a Windows machine, a dump out of a database, a
+file somebody mailed. What it is in is not written down anywhere — a `.txt` of nothing but
+ASCII is every code page at once — so this asks three questions and the first is the one that
+matters: *what are they now*. The honest default is to work it out per file, from the byte-order
+mark where there is one and from what the bytes look like where there is not; the row exists so
+a file that was guessed wrong can be told.
+
+Then: what to write them as, and what to do about the line endings — leave them, `LF`, or
+`CRLF`. The selection, or the file under the cursor; a directory is never one, because a code
+page is a property of bytes.
+
+Three refusals, each of them a decision rather than an accident. A file that does not look like
+text is refused, because nothing good comes of "converting" a disk image. A file larger than
+64 MB is refused, because decoding reads the whole of it and a file that does not fit in memory
+is a file this is the wrong tool for. A target page that cannot hold every character in the
+file is refused by name, rather than writing a file full of question marks.
+
+A file that would come out exactly as it went in is **not written at all**: rewriting it would
+change its modification time and tell every backup in the house that it had changed. The write
+itself goes to a file beside the original and is renamed over it, so an interruption leaves the
+original whole, and the original's mode is carried across, because a script that was executable
+has to stay executable.

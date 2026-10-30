@@ -220,6 +220,23 @@ What is not there: `F7` does not make a directory inside an archive — nothing 
 one worth keeping. Nor can an archive on a *server* be written into: that one is read from a
 copy as well, and nothing would put the copy back.
 
+# Writing a text file again
+
+Text arrives from somewhere else: a zip off a Windows machine, a dump out of a database, a
+file somebody mailed. *Files → Write again as…* takes the selection and writes each file with
+the code page and the line endings you choose. What they are *now* is worked out per file, from
+the byte-order mark where there is one and from what the bytes look like where there is not —
+a `.txt` of nothing but ASCII is every code page at once, so the first row of the dialog is
+there to be told when the guess is wrong.
+
+Three things are refused rather than done badly: a file that does not look like text (nothing
+good comes of "converting" a disk image), a file over 64 MB (decoding reads the whole of it),
+and a target page that cannot hold every character in the file — said by name, instead of
+writing a file full of question marks. A file that would come out exactly as it went in is not
+written at all: that would change its modification time and tell every backup that it had
+changed. What is written goes beside the original and is renamed over it, so an interruption
+leaves the original whole, and a script that was executable stays executable.
+
 # What a file is
 
 `Ctrl+A` opens the attributes dialog: what the file *is*, rather than what is in it.

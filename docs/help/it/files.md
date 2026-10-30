@@ -233,6 +233,24 @@ conserva una cartella vuota che valga la pena di tenere. E non si può scrivere 
 archivio che sta su un *server*: anche quello si legge da una copia, e niente rimetterebbe
 indietro la copia.
 
+# Riscrivere un file di testo
+
+Il testo arriva da altrove: uno zip da una macchina Windows, un dump da un database, un file
+che ti ha mandato qualcuno. *File → Riscrivi come…* prende la selezione e riscrive ogni file
+con la code page e il fine riga che scegli. Cosa *sono ora* lo deduce file per file, dal
+byte-order mark dove c'è e da come sono i byte dove non c'è — un `.txt` di solo ASCII è tutte
+le code page insieme, quindi la prima riga del dialogo sta lì per dirglielo quando la deduzione
+sbaglia.
+
+Tre cose vengono rifiutate invece che fatte male: un file che non sembra testo (niente di buono
+viene dal "convertire" un'immagine di disco), un file oltre i 64 MB (per decodificarlo va letto
+tutto), e una code page di destinazione che non può contenere tutti i caratteri del file —
+detto per nome, invece di scrivere un file pieno di punti di domanda. Un file che uscirebbe
+esattamente come è entrato non viene riscritto affatto: cambierebbe la sua data di modifica e
+direbbe a ogni backup che è cambiato. Quello che si scrive va accanto all'originale e gli viene
+rinominato sopra, così un'interruzione lascia l'originale intero, e uno script che era
+eseguibile resta eseguibile.
+
 # Cosa è un file
 
 `Ctrl+A` apre il dialogo degli attributi: quello che il file *è*, invece di quello che contiene.

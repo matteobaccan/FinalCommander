@@ -35,6 +35,8 @@ pub enum FormKind {
     Attributes,
     /// Copy or move: where to, and under what rules (SPEC 03 §4).
     Copy,
+    /// What code page and what line endings the selected files should be written with.
+    Recode,
     /// Which hash, and where the list of digests goes (SPEC 03 §9).
     Checksum,
     /// What counts as the same file when the two panels are compared (SPEC 03 §11).
@@ -375,6 +377,7 @@ pub fn menus() -> Vec<Menu> {
                 item("menu-archive-test", "", Action::Run(Command::ArcTest)),
                 Entry::Separator,
                 item("menu-checksum", "", Action::Run(Command::FileChecksum)),
+                item("menu-recode", "", Action::Run(Command::FileRecode)),
                 item(
                     "menu-checksum-verify",
                     "",

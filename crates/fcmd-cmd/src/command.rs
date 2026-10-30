@@ -278,6 +278,8 @@ pub enum Command {
     /// Find out which keys this terminal delivers, and what each one does here (SPEC 06 §7).
     AppLearnKeys,
     FileChecksum,
+    /// Write the selected files with another code page or another line ending (SPEC 03 §13).
+    FileRecode,
     /// Check the files beside a list of digests against it.
     FileChecksumVerify,
     /// `Ctrl+G`: run a command line once per selected file (SPEC 06 §5).
@@ -330,7 +332,7 @@ pub enum Command {
     /// what counts as the same, whether the bytes are read (SPEC 03 §11).
     ToolCompare,
     /// Find the files under this panel's directory that are copies of each other, and show
-    /// them grouped (SPEC 03 §12).
+    /// them grouped (SPEC 03 §13).
     ToolDuplicates,
     /// The running processes as a panel — FAR's *Task list*, which is the operating system's
     /// processes and not this program's own screens (`F12` is those).
@@ -581,6 +583,7 @@ impl Command {
             Command::PanelPanelize,
             Command::AppLearnKeys,
             Command::FileChecksum,
+            Command::FileRecode,
             Command::FileChecksumVerify,
             Command::FileApply,
             Command::FileLink,
@@ -855,6 +858,7 @@ impl Command {
             Command::PanelPanelize => "panel.panelize".into(),
             Command::AppLearnKeys => "app.learn.keys".into(),
             Command::FileChecksum => "file.checksum.create".into(),
+            Command::FileRecode => "file.recode".into(),
             Command::FileChecksumVerify => "file.checksum.verify".into(),
             Command::FileApply => "file.apply".into(),
             Command::FileLink => "file.link".into(),
@@ -1097,6 +1101,7 @@ impl Command {
             ("panel.panelize", _) => Command::PanelPanelize,
             ("app.learn.keys", _) => Command::AppLearnKeys,
             ("file.checksum.create", _) => Command::FileChecksum,
+            ("file.recode", _) => Command::FileRecode,
             ("file.checksum.verify", _) => Command::FileChecksumVerify,
             ("file.apply", _) => Command::FileApply,
             ("file.link", _) => Command::FileLink,

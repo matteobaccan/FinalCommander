@@ -66,7 +66,7 @@ pub enum Request {
         work: TreeWork,
         cancel: CancelToken,
     },
-    /// Walk a tree and find the files that are copies of each other (SPEC 03 §12). The
+    /// Walk a tree and find the files that are copies of each other (SPEC 03 §13). The
     /// walking and the reading are both the worker's: a directory of forty thousand files is
     /// a minute of disk, and the panels keep working while it happens.
     Duplicates {
@@ -248,6 +248,17 @@ pub enum Request {
         cwd: std::path::PathBuf,
         /// Where to put the output instead of the user screen (`run:file<command`).
         into: Option<std::path::PathBuf>,
+    },
+    /// Write these files again with another code page, or another line ending, or both
+    /// (SPEC 03 §13).
+    Recode {
+        id: u64,
+        files: Vec<std::path::PathBuf>,
+        /// The page they are in now, or `None` to work it out per file.
+        from: Option<String>,
+        to: String,
+        /// `keep`, `lf` or `crlf`.
+        eol: String,
     },
     /// Run a command line and bring back what it printed as one piece of text, for the
     /// viewer to read instead of the file.
@@ -579,6 +590,14 @@ pub enum Event {
         line: String,
         output: String,
         status: Option<i32>,
+    },
+    /// What came of writing those files again: how many changed, how many were already as
+    /// asked, and what went wrong where it did.
+    Recoded {
+        id: u64,
+        changed: usize,
+        same: usize,
+        failed: Vec<(std::path::PathBuf, String)>,
     },
     /// What a panelize command printed: one line per path, as it printed them.
     Panelized {
@@ -2063,6 +2082,10 @@ pub struct App {
     shell: Option<(u64, String)>,
     /// The panelize command we are waiting for, if any (SPEC 02 §7b).
     panelize: Option<u64>,
+    /// The recode we are waiting for, if any (SPEC 03 §13).
+    recode: Option<u64>,
+    /// What the last recode was asked for, so the dialog opens on it again.
+    last_recode: (String, String),
     /// The shell kept alive behind the command line (SPEC 06 §7), once there is one.
     ///
     /// Started by the first command rather than at startup: a session that never runs one
@@ -2266,6 +2289,8 @@ impl App {
             apply_total: 0,
             shell: None,
             panelize: None,
+            recode: None,
+            last_recode: ("utf8".to_string(), "keep".to_string()),
             subshell: None,
             shell_cwd: None,
             prev_dir: [None, None],
@@ -2908,6 +2933,43 @@ impl App {
                     return; // a command we already stopped waiting for
                 }
                 self.shell_finished(line, output, status);
+            }
+            Event::Recoded {
+                id,
+                changed,
+                same,
+                failed,
+            } => {
+                if self.recode != Some(id) {
+                    return; // one we already stopped waiting for
+                }
+                self.recode = None;
+                let msg = self.i18n.t_args(
+                    "recode-done",
+                    &[
+                        ("changed", (changed as i64).into()),
+                        ("same", (same as i64).into()),
+                        ("failed", (failed.len() as i64).into()),
+                    ],
+                );
+                if failed.is_empty() {
+                    self.set_status(msg);
+                } else {
+                    // The first reason, in the line, and the rest where `Ctrl+O` finds them:
+                    // twenty files that failed for twenty reasons is a list, not a line.
+                    let first = failed
+                        .first()
+                        .map(|(path, why)| format!("{}: {why}", path.display()))
+                        .unwrap_or_default();
+                    self.set_error(format!("{msg} — {first}"));
+                    let lines: Vec<String> = failed
+                        .iter()
+                        .map(|(path, why)| format!("{}: {why}", path.display()))
+                        .collect();
+                    self.push_user_screen(&self.i18n.t("recode-title"), &lines.join("\n"));
+                }
+                self.read_panel(0);
+                self.read_panel(1);
             }
             Event::Panelized {
                 id,
@@ -6255,6 +6317,60 @@ impl App {
     }
 
     /// What the dialog asked for: hash these, with that, into there.
+    /// `Files → Write again as…`: ask what these files should be written as (SPEC 03 §13).
+    fn open_recode_form(&mut self) {
+        let files = self.recode_sources();
+        if files.is_empty() {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        }
+        let (to, eol) = self.last_recode.clone();
+        let mut form = Form::recode(&self.i18n, files.len());
+        // The dialog opens on what was asked for last time, which for this one is the whole
+        // of its memory: a tree converted file by file is one answer given many times.
+        form.set_choice("recode.to", &to);
+        form.set_choice("recode.eol", &eol);
+        self.mode = Mode::Form(Box::new(form));
+    }
+
+    /// The files a recode is about: what is selected, or what the cursor is on, and never a
+    /// directory — a code page is a property of bytes, and a directory has none.
+    fn recode_sources(&self) -> Vec<std::path::PathBuf> {
+        self.sum_sources()
+            .into_iter()
+            .filter(|path| path.is_local() && !path.in_container())
+            .map(|path| path.as_path().to_path_buf())
+            .collect()
+    }
+
+    fn apply_recode_form(&mut self, form: &Form) {
+        let from = form.text_value("recode.from");
+        let to = form.text_value("recode.to");
+        let eol = form.text_value("recode.eol");
+        let files = self.recode_sources();
+        if files.is_empty() {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        }
+        self.last_recode = (to.clone(), eol.clone());
+        let id = self.next_job_id;
+        self.next_job_id += 1;
+        self.recode = Some(id);
+        let msg = self
+            .i18n
+            .t_args("recode-working", &[("count", (files.len() as i64).into())]);
+        self.set_status(msg);
+        self.requests.push(Request::Recode {
+            id,
+            files,
+            from: (from != "auto").then_some(from),
+            to,
+            eol,
+        });
+    }
+
     fn apply_checksum_form(&mut self, form: &Form) {
         let algorithm =
             fcmd_jobs::Algorithm::parse(&form.text_value("sum.algorithm")).unwrap_or_default();
@@ -7690,9 +7806,10 @@ impl App {
                     sources,
                 });
             }
+            Command::FileRecode => self.open_recode_form(),
             // Midnight Commander's learn keys: press them and see which ones arrive.
             Command::AppLearnKeys => {
-                self.mode = Mode::LearnKeys(Box::new(LearnKeys::default()));
+                self.mode = Mode::LearnKeys(Box::default());
             }
             // Midnight Commander's filtered view: a command is typed, and what it prints is
             // read instead of the file. The same screen the decompiler's output lands on,
@@ -12331,6 +12448,10 @@ impl App {
         }
         if form.kind == FormKind::Checksum {
             self.apply_checksum_form(&form);
+            return;
+        }
+        if form.kind == FormKind::Recode {
+            self.apply_recode_form(&form);
             return;
         }
         if form.kind == FormKind::Sync {

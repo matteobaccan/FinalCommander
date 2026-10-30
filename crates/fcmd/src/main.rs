@@ -1442,6 +1442,27 @@ fn interactive(mut app: App) -> Result<()> {
                         });
                     });
                 }
+                // Writing files again with another code page or another line ending (SPEC
+                // 03 §12). On the pool, because it reads and writes every one of them.
+                Request::Recode {
+                    id,
+                    files,
+                    from,
+                    to,
+                    eol,
+                } => {
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || {
+                        let (changed, same, failed) =
+                            run_recode(&files, from.as_deref(), &to, &eol);
+                        let _ = tx.send(Event::Recoded {
+                            id,
+                            changed,
+                            same,
+                            failed,
+                        });
+                    });
+                }
                 Request::ArcTest {
                     id,
                     archive,
@@ -1824,6 +1845,113 @@ fn run_shell(
         String::new()
     };
     (note, status)
+}
+
+/// Write these files again with another code page, or another line ending, or both.
+///
+/// What a text file is in is not written down anywhere — a `.txt` of nothing but ASCII is
+/// every page at once — so `from` is either what the user said it was or what the bytes look
+/// like, per file. A file that would come out exactly as it went in is not written at all:
+/// rewriting it would change its modification time and tell every backup it had changed.
+///
+/// The limit is deliberate. This reads the whole file to decode it, and a file that does not
+/// fit in memory is a file this is the wrong tool for; saying so beats filling the machine.
+/// A file that does not look like text is refused for the same reason: nothing good comes of
+/// "converting" a disk image.
+///
+/// The write is atomic in the one way that matters: the new text goes to a file beside the
+/// old one and is renamed over it, so an interruption leaves the original whole.
+fn run_recode(
+    files: &[std::path::PathBuf],
+    from: Option<&str>,
+    to: &str,
+    eol: &str,
+) -> (usize, usize, Vec<(std::path::PathBuf, String)>) {
+    const MAX_BYTES: u64 = 64 << 20;
+
+    let Some(target) = fcmd_view::Codepage::parse(to) else {
+        let why = format!("{to}: no such code page");
+        return (
+            0,
+            0,
+            files.iter().map(|f| (f.clone(), why.clone())).collect(),
+        );
+    };
+    let asked = from.and_then(fcmd_view::Codepage::parse);
+    let mut changed = 0;
+    let mut same = 0;
+    let mut failed = Vec::new();
+    for file in files {
+        match recode_one(file, asked, target, eol, MAX_BYTES) {
+            Ok(true) => changed += 1,
+            Ok(false) => same += 1,
+            Err(why) => failed.push((file.clone(), why)),
+        }
+    }
+    (changed, same, failed)
+}
+
+/// One file. `Ok(true)` when it was written, `Ok(false)` when it was already as asked.
+fn recode_one(
+    file: &std::path::Path,
+    from: Option<fcmd_view::Codepage>,
+    to: fcmd_view::Codepage,
+    eol: &str,
+    max: u64,
+) -> Result<bool, String> {
+    let meta = std::fs::metadata(file).map_err(|e| e.to_string())?;
+    if meta.is_dir() {
+        return Err("a directory has no code page".into());
+    }
+    if meta.len() > max {
+        return Err(format!("larger than {} MB", max >> 20));
+    }
+    let bytes = std::fs::read(file).map_err(|e| e.to_string())?;
+    let head = &bytes[..bytes.len().min(4096)];
+    if fcmd_view::looks_binary(head) {
+        return Err("does not look like text".into());
+    }
+    // The BOM is what a file says about itself, and it outranks a guess.
+    let (page, skip) = match (from, fcmd_view::sniff_bom(head)) {
+        (Some(page), _) => (page, 0),
+        (None, Some((page, len))) => (page, len),
+        (None, None) => (fcmd_view::detect(head), 0),
+    };
+    let text = page.decode(&bytes[skip..]);
+    let text = match eol {
+        "lf" => text.replace("\r\n", "\n"),
+        "crlf" => text.replace("\r\n", "\n").replace('\n', "\r\n"),
+        _ => text,
+    };
+    if !to.can_encode(&text) {
+        return Err(format!("{} cannot hold every character in it", to.name()));
+    }
+    let out = to.encode(&text);
+    if out == bytes {
+        return Ok(false);
+    }
+    let part = file.with_extension(match file.extension() {
+        Some(ext) => format!("{}.fcmd-part", ext.to_string_lossy()),
+        None => "fcmd-part".to_string(),
+    });
+    std::fs::write(&part, &out).map_err(|e| format!("{}: {e}", part.display()))?;
+    // The mode of the original, because a rename does not carry one and a script that was
+    // executable has to stay executable.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(
+            &part,
+            std::fs::Permissions::from_mode(meta.permissions().mode()),
+        );
+    }
+    match std::fs::rename(&part, file) {
+        Ok(()) => Ok(true),
+        Err(e) => {
+            let _ = std::fs::remove_file(&part);
+            Err(e.to_string())
+        }
+    }
 }
 
 /// How many names each of these files has, by name (SPEC 02 §3).
@@ -2772,7 +2900,7 @@ fn run_compare_trees(
     });
 }
 
-/// Find the files under a directory that are copies of each other (SPEC 03 §12).
+/// Find the files under a directory that are copies of each other (SPEC 03 §13).
 ///
 /// Three passes, each cheaper than the one that would do the job on its own:
 ///
@@ -4952,6 +5080,22 @@ timeout = 10
                         result,
                     });
                 }
+                // A recode is files on disk and nothing else, so the tests run it for real.
+                Request::Recode {
+                    id,
+                    files,
+                    from,
+                    to,
+                    eol,
+                } => {
+                    let (changed, same, failed) = run_recode(&files, from.as_deref(), &to, &eol);
+                    app.handle_event(Event::Recoded {
+                        id,
+                        changed,
+                        same,
+                        failed,
+                    });
+                }
                 Request::DirSize { .. }
                 | Request::Shell { .. }
                 | Request::Decompile { .. }
@@ -5151,6 +5295,71 @@ timeout = 10
             "the passive panel was not refreshed"
         );
         assert!(app.status.contains("11 B"), "{}", app.status);
+    }
+
+    /// A DOS text file becomes a Unix one, and a file that is already as asked is not
+    /// touched at all — which is the half that matters, because rewriting it would tell
+    /// every backup in the house that it had changed.
+    #[test]
+    fn writing_files_again_changes_the_code_page_and_the_line_endings() {
+        let root = tempfile::tempdir().unwrap();
+        let left = root.path().join("left");
+        let right = root.path().join("right");
+        std::fs::create_dir_all(&left).unwrap();
+        std::fs::create_dir_all(&right).unwrap();
+        // Windows-1252, CRLF, with a character that is not ASCII so the page shows.
+        let dos: Vec<u8> = b"caf\xe9\r\nsecond line\r\n".to_vec();
+        std::fs::write(left.join("dos.txt"), &dos).unwrap();
+        // Already UTF-8 with LF: nothing to do to this one.
+        std::fs::write(left.join("unix.txt"), "already fine\n".as_bytes()).unwrap();
+        let before = std::fs::metadata(left.join("unix.txt"))
+            .unwrap()
+            .modified()
+            .unwrap();
+
+        let mut app = app_on(&left, &right);
+        serve(&mut app);
+        // Both files, selected the way one does: `Ins` marks a row and moves on.
+        key(&mut app, "Down");
+        key(&mut app, "Ins");
+        key(&mut app, "Ins");
+        app.run(fcmd_cmd::Command::FileRecode);
+        let app::Mode::Form(form) = &mut app.mode else {
+            panic!("the dialog did not open: {:?}", app.mode)
+        };
+        assert_eq!(form.kind, menu::FormKind::Recode);
+        // What they are now is worked out per file; write them as UTF-8 with LF.
+        form.set_choice("recode.to", "utf8");
+        form.set_choice("recode.eol", "lf");
+        key(&mut app, "F10"); // OK
+        serve(&mut app);
+
+        assert_eq!(
+            std::fs::read(left.join("dos.txt")).unwrap(),
+            "café\nsecond line\n".as_bytes(),
+            "the DOS file is now UTF-8 with Unix line endings"
+        );
+        assert_eq!(
+            std::fs::read_to_string(left.join("unix.txt")).unwrap(),
+            "already fine\n"
+        );
+        assert_eq!(
+            std::fs::metadata(left.join("unix.txt"))
+                .unwrap()
+                .modified()
+                .unwrap(),
+            before,
+            "the file that was already as asked was not written again"
+        );
+        assert!(app.status.contains('1'), "{}", app.status);
+        // And nothing was left beside them.
+        let names: Vec<String> = std::fs::read_dir(&left)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.contains("part"))
+            .collect();
+        assert!(names.is_empty(), "a part file was left behind: {names:?}");
     }
 
     /// The whole chain: two trees on disk, the table, a row answered by hand, and then the

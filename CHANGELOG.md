@@ -8,6 +8,21 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **Writing text files again: another code page, another line ending.** *Files → Write again
+  as…* takes the selection and writes each file as asked. What they are *now* is worked out per
+  file — from the byte-order mark where there is one, from what the bytes look like where there
+  is not — because a `.txt` of nothing but ASCII is every code page at once; the first row of
+  the dialog is there to be told when that guess is wrong. Line endings are left alone, made
+  `LF` or made `CRLF`.
+
+  What it refuses, it refuses by name: a file that does not look like text, a file over 64 MB
+  (decoding reads the whole of it), and a target page that cannot hold every character in the
+  file — rather than writing one full of question marks. A file that would come out exactly as
+  it went in is not written at all, because that would change its modification time and tell
+  every backup in the house it had changed. The new text goes beside the original and is
+  renamed over it, so an interruption leaves the original whole, and the original's mode is
+  carried across so a script that was executable stays executable.
+
 - **Learn keys: which keys this terminal actually sends.** *Options → Learn keys* draws a cell
   for every key worth testing — the function keys with each modifier, the arrows with `Ctrl`
   and `Shift`, the editing keys — and lights it when that key arrives. A cell that never lights
