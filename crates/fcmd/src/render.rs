@@ -1666,6 +1666,55 @@ fn block_columns(editor: &fcmd_edit::Editor, line: usize) -> Option<(usize, usiz
 /// The viewer, full screen: name and status on the top line, content, key bar at the bottom.
 /// The quick view (`Ctrl+Q`): the viewer's own rows, inside a panel's frame, on whatever the
 /// other panel's cursor is on.
+/// A picture, painted into `area` in half blocks (SPEC 05 §1.14). Does nothing unless the
+/// viewer is in that mode, so the callers can ask without checking first.
+///
+/// Both of them paint it the same way — the viewer across `F3`'s whole window, the quick view
+/// inside the passive panel's frame — and they differ only in the colour a transparent pixel
+/// is mixed with, which is whatever that window is drawn in.
+fn paint_picture(
+    viewer: &mut fcmd_view::Viewer,
+    theme: &fcmd_ui::Theme,
+    buf: &mut Buffer,
+    area: Rect,
+    base: Style,
+    bg_key: &str,
+) -> bool {
+    if viewer.mode != fcmd_view::Mode::Image {
+        return false;
+    }
+    let under = match theme.color(bg_key) {
+        fcmd_ui::Color::Rgb(r, g, b) => [r, g, b],
+        // A theme written in palette colours has no bytes to mix a transparent pixel with,
+        // so the picture is composited onto black.
+        _ => [0, 0, 0],
+    };
+    let cells = viewer.picture_cells(area.w, area.h, under);
+    // Centred, as every picture viewer draws one: the window is almost never the shape of
+    // the picture, and a picture in the corner looks like a mistake.
+    let shown_h = cells.len() as u16;
+    let shown_w = cells.first().map(|row| row.len() as u16).unwrap_or(0);
+    let x0 = area.x + area.w.saturating_sub(shown_w) / 2;
+    let y0 = area.y + area.h.saturating_sub(shown_h) / 2;
+    for (row, line) in cells.iter().enumerate() {
+        for (col, (top, bottom)) in line.iter().enumerate() {
+            let style = Style::new(
+                fcmd_ui::Color::Rgb(top[0], top[1], top[2]),
+                fcmd_ui::Color::Rgb(bottom[0], bottom[1], bottom[2]),
+            );
+            buf.set(x0 + col as u16, y0 + row as u16, '▀', style);
+        }
+    }
+    // Nothing could be decoded: the window says why rather than staying blank.
+    if cells.is_empty() {
+        if let Err(why) = viewer.picture_note() {
+            let text = fcmd_ui::truncate_cols(&why, area.w as usize);
+            buf.put_str(area.x, area.y, &text, base, area.w);
+        }
+    }
+    true
+}
+
 fn draw_quick_view(app: &mut App, index: usize, area: Rect, buf: &mut Buffer) {
     if area.w < 8 || area.h < 3 {
         return;
@@ -1708,9 +1757,18 @@ fn draw_quick_view(app: &mut App, index: usize, area: Rect, buf: &mut Buffer) {
         return;
     };
 
+    // A picture is painted rather than written, here as in the viewer: without this the
+    // quick view of a `.png` is an empty frame, because a picture has no rows of text.
+    let body = Rect::new(inner.x + 1, inner.y, inner.w.saturating_sub(1), inner.h);
+    let drew = paint_picture(viewer, &app.theme, buf, body, base, "panel.bg");
+
     // The name on the frame's foot, as a panel's totals are, so the preview itself is all
     // the room the rows get.
-    let rows = viewer.rows(inner.w.saturating_sub(1), inner.h);
+    let rows = if drew {
+        Vec::new()
+    } else {
+        viewer.rows(inner.w.saturating_sub(1), inner.h)
+    };
     for (n, row) in rows.iter().enumerate() {
         let text = fcmd_ui::truncate_cols(&row.text, inner.w.saturating_sub(1) as usize);
         buf.put_str(
@@ -2127,40 +2185,7 @@ fn draw_viewer(app: &mut App, viewer: &mut fcmd_view::Viewer, buf: &mut Buffer) 
     if rows.is_empty() && viewer.mode != fcmd_view::Mode::Image {
         buf.put_str(0, body.y, &app.i18n.t("viewer-empty"), base, body.w);
     }
-    if viewer.mode == fcmd_view::Mode::Image {
-        // A picture is painted rather than written: two pixels to a cell, the top half in
-        // the foreground colour and the bottom in the background, which is the one way of
-        // drawing one that works in every terminal there is (SPEC 05 §1.14).
-        let under = match app.theme.color("viewer.bg") {
-            fcmd_ui::Color::Rgb(r, g, b) => [r, g, b],
-            // A theme written in palette colours has no bytes to mix a transparent pixel
-            // with, so the picture is composited onto black.
-            _ => [0, 0, 0],
-        };
-        let cells = viewer.picture_cells(body.w, body.h, under);
-        // Centred, as every picture viewer draws one: the window is almost never the shape
-        // of the picture, and a picture in the corner looks like a mistake.
-        let shown_h = cells.len() as u16;
-        let shown_w = cells.first().map(|row| row.len() as u16).unwrap_or(0);
-        let x0 = body.x + body.w.saturating_sub(shown_w) / 2;
-        let y0 = body.y + body.h.saturating_sub(shown_h) / 2;
-        for (row, line) in cells.iter().enumerate() {
-            for (col, (top, bottom)) in line.iter().enumerate() {
-                let style = Style::new(
-                    fcmd_ui::Color::Rgb(top[0], top[1], top[2]),
-                    fcmd_ui::Color::Rgb(bottom[0], bottom[1], bottom[2]),
-                );
-                buf.set(x0 + col as u16, y0 + row as u16, '▀', style);
-            }
-        }
-        // Nothing could be decoded: the window says why rather than staying blank.
-        if cells.is_empty() {
-            if let Err(why) = viewer.picture_note() {
-                let text = fcmd_ui::truncate_cols(&why, body.w as usize);
-                buf.put_str(body.x, body.y, &text, base, body.w);
-            }
-        }
-    }
+    paint_picture(viewer, &app.theme, buf, body, base, "viewer.bg");
 
     if let Some(at) = pane {
         draw_structure(app, viewer, buf, at);

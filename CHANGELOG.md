@@ -6,6 +6,26 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **A table's columns stay where the heading says they are.** A cell holding a newline — a
+  CSV field between quotes, a JSON string somebody wrote as a paragraph — slid every column
+  to its right one place left, on that row and on no other. The two halves of the program
+  disagreed about a control character: `UnicodeWidthStr::width` counts one as a column while
+  the screen buffer skips it and draws none, so the cell was measured a column wider than it
+  appeared. A cell is flattened to one line before it is measured or drawn now, with each
+  control character replaced by a space rather than dropped — `Attività:` and a list beneath
+  it read as `Attività: - Eseguire` instead of running together — and the two measures cannot
+  disagree because there is nothing left to disagree about.
+
+- **The quick view shows a picture.** `Ctrl+Q` beside a `.png` left an empty frame: a picture
+  has no rows of text, and only the viewer's own window knew to paint one. Both windows paint
+  it the same way now. The quick view decodes at most eight mebibytes, because it draws
+  whatever the cursor is standing on and the decoding runs on the thread that draws — a
+  directory of photographs would otherwise make every arrow key feel stuck. Anything larger
+  waits for the `F3` one presses on purpose.
+
+
 ## [0.22.0] — 2026-10-30
 
 ### Added

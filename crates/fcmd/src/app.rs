@@ -306,6 +306,14 @@ pub enum ArcRetry {
 /// open in an editor.
 pub const TREE_CACHE_KEPT: usize = 20_000;
 
+/// How large a picture the quick view decodes (SPEC 05 §1.14).
+///
+/// It draws whatever the cursor is standing on and the decoding runs on the thread that
+/// draws, so a directory of photographs would make every arrow key feel stuck. Eight
+/// mebibytes is a screenshot, a diagram and most photographs; anything larger waits for the
+/// `F3` the reader presses on purpose.
+pub const QUICK_PICTURE_LIMIT: u64 = 8 * 1024 * 1024;
+
 /// Why a remote file is being fetched.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Fetched {
@@ -16168,6 +16176,10 @@ impl App {
                 viewer.show_key_bar = false;
                 viewer.show_status_line = false;
                 viewer.show_scrollbar = false;
+                // A picture is decoded on the thread that draws it, and this window redraws
+                // on every arrow key: a directory of photographs would feel stuck. Small
+                // ones are shown, the rest wait for `F3`.
+                viewer.limit_pictures(QUICK_PICTURE_LIMIT);
                 self.quick = Some(Box::new(viewer));
                 self.quick_of = Some(path);
                 self.quick_why = None;

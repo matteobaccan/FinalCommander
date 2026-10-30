@@ -244,6 +244,11 @@ pub struct Viewer {
     /// The decoded picture, once it has been asked for: `None` = not looked yet,
     /// `Some(Err(…))` = looked and it is not one, or is one this cannot read (SPEC 05 §1.14).
     picture: Option<Result<crate::picture::Picture, String>>,
+    /// How large a picture file this viewer will decode. [`PICTURE_LIMIT`] for the one `F3`
+    /// opens, where the reader asked for this file and will wait for it; much smaller for the
+    /// quick view, where the cursor walks a directory of photographs and every step would
+    /// otherwise be a decode on the drawing thread.
+    picture_limit: u64,
     /// Structure of the compiled file, once we have looked.
     pub binary: Option<Binary>,
     /// Is the structure pane open (SPEC 05 §1.8)?
@@ -354,6 +359,7 @@ impl Viewer {
             show_scrollbar: false,
             tab_width: TAB_WIDTH,
             picture: None,
+            picture_limit: PICTURE_LIMIT,
             binary: None,
             show_structure: false,
             structure: None,
@@ -1384,7 +1390,7 @@ impl Viewer {
             return Err("not a picture".into());
         }
         let len = self.source.len();
-        if len > PICTURE_LIMIT {
+        if len > self.picture_limit {
             return Err(format!(
                 "{} is more picture file than this reads",
                 fcmd_core::format_size(len)
@@ -1393,6 +1399,20 @@ impl Viewer {
         match self.source.read_vec(0, len as usize) {
             Ok(bytes) => crate::picture::read(&bytes),
             Err(e) => Err(e.to_string()),
+        }
+    }
+
+    /// Cap how large a picture this viewer decodes, and forget what it decoded before.
+    ///
+    /// The quick view sets this: it draws whatever the cursor is standing on, and a decode
+    /// runs on the thread that is drawing, so a directory of photographs would make every
+    /// arrow key feel stuck. `F3` keeps the whole limit, because there the reader asked for
+    /// this file and this file only.
+    pub fn limit_pictures(&mut self, bytes: u64) {
+        self.picture_limit = bytes;
+        self.picture = None;
+        if self.mode == Mode::Image && self.decode_picture().is_err() {
+            self.mode = self.base_mode;
         }
     }
 
@@ -2356,7 +2376,7 @@ mod tests {
             .unwrap();
 
         let mut v = Viewer::new(
-            Box::new(BytesSource::new(bytes)),
+            Box::new(BytesSource::new(bytes.clone())),
             VPath::local("/tmp/shot.png"),
         );
         assert_eq!(v.mode, Mode::Image, "it opens as the picture");
@@ -2371,6 +2391,18 @@ mod tests {
             "four pixels tall is two rows of half blocks"
         );
         assert_eq!(cells[0][0].0, [255, 0, 0]);
+
+        // A limit smaller than the file puts the viewer back on the bytes rather than
+        // leaving it in a mode it cannot draw: the quick view sets one, so that the cursor
+        // walking a directory of photographs does not decode one per keystroke.
+        let mut small = Viewer::new(
+            Box::new(BytesSource::new(bytes.clone())),
+            VPath::local("/tmp/shot.png"),
+        );
+        assert_eq!(small.mode, Mode::Image);
+        small.limit_pictures(8);
+        assert_ne!(small.mode, Mode::Image, "too large for this window's limit");
+        assert!(small.picture_note().is_err());
 
         // `F2` goes to the text, which for a PNG is the bytes as characters.
         v.toggle_wrap();

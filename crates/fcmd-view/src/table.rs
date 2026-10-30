@@ -282,7 +282,10 @@ impl Table {
                     if i >= self.widths.len() {
                         continue;
                     }
-                    self.widths[i] = self.widths[i].max(cell.width()).min(MAX_COL);
+                    // The width of the cell *as it will be drawn*: one line, so a value
+                    // with a newline in it is not measured a column wider than it appears.
+                    let shown = as_drawn(cell);
+                    self.widths[i] = self.widths[i].max(shown.width()).min(MAX_COL);
                 }
             }
         }
@@ -635,6 +638,34 @@ fn flatten(value: &serde_json::Value) -> String {
     }
 }
 
+/// A cell's text as the screen will draw it: every control character replaced by a space.
+///
+/// A table row *is* one line, and a value with a newline in it — which a CSV field may hold
+/// between quotes and a JSON string holds whenever somebody wrote a paragraph — cannot be
+/// drawn as one. Replacing rather than dropping is what keeps the words apart: a description
+/// reading `Attività:` then a list would otherwise come out as `Attività:- Eseguire`.
+///
+/// It is also what keeps the columns lined up, and that is the sharper reason. The two halves
+/// of the program disagree about a control character: `UnicodeWidthStr::width` counts one as
+/// **one** column, while the screen buffer skips it and draws **none**. A cell holding a
+/// newline was therefore measured one column wider than it was drawn, and every column to the
+/// right of it slid one place left on that row and on no other. With the controls gone the
+/// two measures cannot disagree, which is a better answer than teaching each of them the
+/// other's rule.
+///
+/// Borrowed where there is nothing to replace, which is nearly every cell of nearly every
+/// table.
+fn as_drawn(text: &str) -> std::borrow::Cow<'_, str> {
+    if !text.chars().any(|c| c.is_control()) {
+        return std::borrow::Cow::Borrowed(text);
+    }
+    std::borrow::Cow::Owned(
+        text.chars()
+            .map(|c| if c.is_control() { ' ' } else { c })
+            .collect(),
+    )
+}
+
 /// Lay cells out in columns of the given widths, then take the window the screen shows.
 fn lay_out(cells: &[&str], widths: &[usize], aligns: &[Align], col: usize, width: usize) -> String {
     let mut line = String::new();
@@ -665,10 +696,14 @@ fn lay_out(cells: &[&str], widths: &[usize], aligns: &[Align], col: usize, width
 /// wide. Written in display columns rather than characters because a table of CJK text would
 /// otherwise come apart.
 fn shift(line: &str, col: usize, width: usize) -> String {
+    use unicode_width::UnicodeWidthChar;
     let mut out = String::new();
     let mut at = 0usize;
     for ch in line.chars() {
-        let w = ch.to_string().width();
+        // Per character and not per string: `UnicodeWidthStr::width` gives a control
+        // character one column and the screen buffer gives it none, and this has to agree
+        // with the screen.
+        let w = ch.width().unwrap_or(0);
         if at + w > col && out.width() + w <= width {
             out.push(ch);
         }
@@ -681,7 +716,12 @@ fn shift(line: &str, col: usize, width: usize) -> String {
 }
 
 /// Cut a cell to a width, with a `…` where something was cut off.
+///
+/// The cell is flattened to one line first ([`as_drawn`]), so what is measured here is what
+/// the screen will draw.
 fn truncate(cell: &str, width: usize) -> String {
+    let cell = as_drawn(cell);
+    let cell: &str = &cell;
     if cell.width() <= width {
         return cell.to_string();
     }
@@ -1354,6 +1394,70 @@ pub(crate) mod tests {
         let table = Table::separated("a,b\n1,2,3\n", Some(','));
         assert_eq!(table.columns, ["a", "b", "#3"]);
         assert_eq!(table.rows()[0].cells, ["1", "2", "3"]);
+    }
+
+    /// A value with a newline in it is still one row, and every column to the right of it
+    /// stays where the heading says it is.
+    ///
+    /// The two halves of the program used to disagree about a control character —
+    /// `UnicodeWidthStr::width` gives one a column and the screen buffer draws none — so a
+    /// cell holding one was measured a column wider than it appeared, and the rest of that
+    /// row slid one place left. A job description written as a paragraph and a list did it
+    /// on every record that had one.
+    #[test]
+    fn a_cell_with_a_newline_in_it_does_not_move_the_columns() {
+        let text = concat!(
+            r#"{"titolo":"Ortopedico","descrizione":"Attivita:\n- Eseguire visite","citta":"Fidenza"}"#,
+            "\n",
+            r#"{"titolo":"Ecografista","descrizione":"Indagini diagnostiche","citta":"Savona"}"#,
+            "\n",
+        );
+        let table = Table::json_lines(text);
+        assert_eq!(table.records_len(), 2, "both records were read");
+        let header = table.header(0, 200);
+        let a = table.line(
+            &mut crate::source::BytesSource::new(Vec::new()),
+            None,
+            0,
+            0,
+            200,
+        );
+        let b = table.line(
+            &mut crate::source::BytesSource::new(Vec::new()),
+            None,
+            1,
+            0,
+            200,
+        );
+
+        // Measured the way the screen measures it: a control character is worth nothing,
+        // which is what `Buffer::put_str` draws.
+        let drawn = |line: &str| -> usize {
+            use unicode_width::UnicodeWidthChar;
+            line.chars().map(|c| c.width().unwrap_or(0)).sum()
+        };
+        assert_eq!(drawn(&a), drawn(&b), "{a:?}\n{b:?}");
+        assert_eq!(drawn(&a), drawn(&header), "{a:?}\n{header:?}");
+
+        // The separators therefore stand in the same columns on every row.
+        let bars = |line: &str| -> Vec<usize> {
+            use unicode_width::UnicodeWidthChar;
+            let mut at = 0;
+            let mut out = Vec::new();
+            for ch in line.chars() {
+                if ch == '│' {
+                    out.push(at);
+                }
+                at += ch.width().unwrap_or(0);
+            }
+            out
+        };
+        assert_eq!(bars(&a), bars(&header));
+        assert_eq!(bars(&b), bars(&header));
+
+        // And the newline itself is a space, so the words do not run together.
+        assert!(a.contains("Attivita: - Eseguire"), "{a:?}");
+        assert!(!a.contains('\n'));
     }
 
     #[test]
