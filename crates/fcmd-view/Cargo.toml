@@ -32,7 +32,7 @@ unicode-width = "0.2"
 serde_json = { version = "1.0.154", features = ["preserve_order"] }
 object = { version = "0.40.0", default-features = false, features = ["read_core", "elf", "pe", "macho", "archive", "std"] }
 iced-x86 = { version = "1.21.0", default-features = false, features = ["decoder", "intel", "std"] }
-wasmprinter = "0.262.0"
+wasmprinter = "0.263.0"
 # AArch64 decoding (SPEC 05 §1.6). A viewer that only reads x86 is half a tool on an Apple
 # Silicon laptop or an ARM server, and an instruction table is not something to write twice.
 # 0BSD, pure Rust — so the Windows and macOS builds need no C toolchain, unlike the usual
