@@ -200,6 +200,9 @@ h3 { font-size: 1.1rem; margin-top: 1.75rem; }
 .tagline { font-size: 1.3rem; color: var(--accent); margin: 0.25rem 0 1rem; }
 .pitch { font-size: 1.05rem; }
 .note { color: var(--dim); font-size: 0.9rem; font-style: italic; }
+/* What the site asks of a reader. Set apart because it is the one sentence here that asks for
+   something rather than describing something. */
+.ideas { border-left: 3px solid var(--accent); padding: 0.6rem 0 0.6rem 0.9rem; margin: 1.4rem 0; }
 code, pre, kbd {
   font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", Menlo, Consolas, monospace;
   font-size: 0.92em;

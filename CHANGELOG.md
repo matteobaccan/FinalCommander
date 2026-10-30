@@ -4,6 +4,25 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
+## [Unreleased]
+
+### Changed
+
+- **The README no longer names a version, and says plainly what the project wants.** Its
+  status line read *Status: 0.10.0*, fourteen releases ago, and listed image previews among
+  what was missing — they shipped in 0.22.0. A version written in prose is a second copy of
+  the release badge that sits two inches above it, so it is gone rather than corrected: the
+  badge is the version. What the line says instead is the one thing this repository asks for
+  — **"I do not need your code. I need your ideas: open an issue with your idea and it goes
+  into the next release."** The section that explains why it is that way round was already
+  there and is unchanged.
+
+- **The site's landing page asks for it too**, in all seven languages, beside the download
+  button where somebody who read that far will see it, with a link into the issue chooser. The
+  site had no such sentence anywhere: the message reached whoever read the README on GitHub
+  and nobody who arrived at the page.
+
+
 ## [0.24.0] — 2026-10-30
 
 ### Added

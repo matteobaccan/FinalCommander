@@ -39,6 +39,12 @@ pub struct Text {
     /// chapter yet still gets its own index and its own note saying what it is about to read.
     pub help_chapters: [&'static str; 7],
     pub shots_title: &'static str,
+    /// The one thing the site asks of a reader: an idea, not a patch. The call to action on
+    /// the landing page, and the reason the repository takes issues and not pull requests —
+    /// `README.md` says the same at length.
+    pub ideas: &'static str,
+    /// The words on the link that opens the issue chooser, beside the sentence above.
+    pub ideas_link: &'static str,
     pub footer: &'static str,
 }
 
@@ -76,6 +82,8 @@ pub const LANGUAGES: [Text; 7] = [
                      executable and need nothing from this site.",
         help_chapters: ["Panels", "Files and archives", "Viewer", "Editor", "Servers and buckets", "Configuration", "About"],
         shots_title: "What it looks like",
+        ideas: "I do not need your code. I need your ideas: open an issue with your idea and it goes into the next release.",
+        ideas_link: "Open an issue",
         footer: "Drawn by the program itself, not photographed.",
     },
     Text {
@@ -112,6 +120,8 @@ pub const LANGUAGES: [Text; 7] = [
                      nell'eseguibile e non hanno bisogno di questo sito.",
         help_chapters: ["I pannelli", "File e archivi", "Il visualizzatore", "L'editor", "Server e bucket", "Configurazione", "Che cos'è"],
         shots_title: "Com'è fatto",
+        ideas: "Non mi serve il tuo codice, mi servono le tue idee: apri una issue con la tua idea e la inserisco nella prossima release.",
+        ideas_link: "Apri una issue",
         footer: "Disegnato dal programma stesso, non fotografato.",
     },
     Text {
@@ -148,6 +158,8 @@ pub const LANGUAGES: [Text; 7] = [
                      Datei einkompiliert und brauchen diese Website nicht.",
         help_chapters: ["Die Panels", "Dateien und Archive", "Der Betrachter", "Der Editor", "Server und Buckets", "Konfiguration", "Worum es geht"],
         shots_title: "Wie es aussieht",
+        ideas: "Ich brauche nicht deinen Code, ich brauche deine Ideen: öffne ein Issue mit deiner Idee, und sie kommt in die nächste Version.",
+        ideas_link: "Ein Issue öffnen",
         footer: "Vom Programm selbst gezeichnet, nicht abfotografiert.",
     },
     Text {
@@ -184,6 +196,8 @@ pub const LANGUAGES: [Text; 7] = [
                      en el ejecutable y no necesitan este sitio.",
         help_chapters: ["Los paneles", "Archivos y comprimidos", "El visor", "El editor", "Servidores y buckets", "Configuración", "Qué es esto"],
         shots_title: "Qué aspecto tiene",
+        ideas: "No necesito tu código, necesito tus ideas: abre una issue con tu idea y entrará en la próxima versión.",
+        ideas_link: "Abrir una issue",
         footer: "Dibujado por el propio programa, no fotografiado.",
     },
     Text {
@@ -220,6 +234,8 @@ pub const LANGUAGES: [Text; 7] = [
                      dans l'exécutable et n'ont pas besoin de ce site.",
         help_chapters: ["Les panneaux", "Fichiers et archives", "La visionneuse", "L'éditeur", "Serveurs et buckets", "Configuration", "Ce que c'est"],
         shots_title: "À quoi cela ressemble",
+        ideas: "Je n'ai pas besoin de votre code, j'ai besoin de vos idées : ouvrez une issue avec votre idée et elle entrera dans la prochaine version.",
+        ideas_link: "Ouvrir une issue",
         footer: "Dessiné par le programme lui-même, pas photographié.",
     },
     Text {
@@ -256,6 +272,8 @@ pub const LANGUAGES: [Text; 7] = [
                      исполняемый файл и этот сайт им не нужен.",
         help_chapters: ["Панели", "Файлы и архивы", "Просмотрщик", "Редактор", "Серверы и бакеты", "Настройки", "Что это такое"],
         shots_title: "Как это выглядит",
+        ideas: "Мне нужен не ваш код, а ваши идеи: откройте issue со своей идеей, и она войдёт в следующий выпуск.",
+        ideas_link: "Открыть issue",
         footer: "Нарисовано самой программой, а не снято с экрана.",
     },
     Text {
@@ -285,6 +303,8 @@ pub const LANGUAGES: [Text; 7] = [
         help_intro: "与程序里按 `F1` 看到的是同一批页面：它们编译进了可执行文件，并不依赖这个网站。",
         help_chapters: ["两个面板", "文件与压缩包", "查看器", "编辑器", "服务器与存储桶", "配置", "这是什么"],
         shots_title: "界面是什么样",
+        ideas: "我需要的不是你的代码，而是你的想法：带着想法开一个 issue，它会进入下一个版本。",
+        ideas_link: "开一个 issue",
         footer: "由程序自己绘制，而非截图。",
     },
 ];
@@ -331,6 +351,8 @@ mod tests {
                 ("help_title", text.help_title),
                 ("help_intro", text.help_intro),
                 ("shots_title", text.shots_title),
+                ("ideas", text.ideas),
+                ("ideas_link", text.ideas_link),
                 ("footer", text.footer),
             ] {
                 assert!(!value.trim().is_empty(), "{}: {field} is empty", text.code);

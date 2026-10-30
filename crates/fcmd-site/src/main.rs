@@ -303,6 +303,14 @@ fn landing(lang: &Text, version: &str) -> String {
         md::REPO,
         escape(lang.nav_source),
     ));
+    // The one thing this site asks for, where somebody who read the buttons will see it: an
+    // idea and an issue, not a patch (`README.md` says it at length, and says why).
+    body.push_str(&format!(
+        "<p class=\"ideas\">{} <a href=\"{}/issues/new/choose\">{}</a></p>\n",
+        escape(lang.ideas),
+        md::REPO,
+        escape(lang.ideas_link),
+    ));
     body.push_str(&format!(
         "<figure><img src=\"docs/shots/panels.svg\" alt=\"{}\" width=\"880\"></figure>\n",
         escape(lang.tagline)

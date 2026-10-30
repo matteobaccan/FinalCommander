@@ -81,12 +81,16 @@ console in it, which is the one thing a terminal program cannot borrow from a te
 none of them is, is the same program on all three systems, in one file, with nothing to
 install — and that is the hole this fills.
 
-> **Status: 0.10.0, and what it wants is ideas.** Everything described above works today, so
-> the useful thing to send is not a bug hunt but a *feature*: what you reach for in FAR,
-> Midnight Commander, Total Commander or Far-NetBox that is not here, or is here and does
-> less. Open an issue and it gets built — that is how most of the last few releases happened.
-> What is *not* there says so rather than failing quietly: image previews and plugins loaded
-> from disk are not here yet. [`CHANGELOG.md`](CHANGELOG.md) is what has landed and
+> **I do not need your code. I need your ideas.** Everything described above works today, so
+> the useful thing to send is not a patch but a *feature*: what you reach for in FAR, Midnight
+> Commander, Total Commander or Far-NetBox that is not here, or is here and does less. **Open
+> an issue with your idea and it goes into the next release** — that is how most of the
+> releases so far happened. Please do not open a pull request with new code; the reasons are
+> further down, and at length in [`CONTRIBUTING.md`](CONTRIBUTING.md).
+>
+> The release badge above is the version, so this line does not have to be a second copy of
+> it. What is *not* there says so rather than failing quietly — plugins loaded from disk are
+> the large one. [`CHANGELOG.md`](CHANGELOG.md) is what has landed and
 > [`docs/BACKLOG.md`](docs/BACKLOG.md) is what has not, item by item, with the reason each one
 > is still a line.
 
@@ -339,7 +343,8 @@ program does not do yet, or what it does wrong — [*Something is
 missing*](https://github.com/matteobaccan/FinalCommander/issues/new?template=missing.yml) and
 [*A bug*](https://github.com/matteobaccan/FinalCommander/issues/new?template=bug.yml) are the
 two forms, and they ask for exactly what is needed to act on them. **We will build it for
-you**, and the issue is where you will see it land, with the release it landed in.
+you, and it goes into the next release** — the issue is where you will see it land, with the
+release it landed in.
 
 Why it is that way round, plainly:
 
