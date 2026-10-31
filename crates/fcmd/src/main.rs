@@ -70,7 +70,7 @@ struct Cli {
     #[arg(long, value_name = "FILE")]
     config: Option<PathBuf>,
 
-    /// Use this plugins directory (the only directory sc ever reads besides the config file).
+    /// Use this plugins directory (the only directory fcmd ever reads besides the config file).
     #[arg(long, value_name = "DIR")]
     plugins: Option<PathBuf>,
 
