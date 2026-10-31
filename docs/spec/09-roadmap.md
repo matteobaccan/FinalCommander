@@ -58,7 +58,7 @@ later items goes first. Sizes are honest estimates of focused work, not of calen
 Running alongside, each going out with whichever release it is ready for: **mouse support**, the
 **OS clipboard** (`fcmd-platform`), the **trash**, **descriptions** (`descript.ion`), the
 **settings browser** for the ~50 keys we have, **AArch64 disassembly**, and the packaging work
-(`.deb`, `.rpm`, Homebrew, Scoop, AUR).
+(`.deb`, `.rpm`, Homebrew, Scoop, AUR), which SPEC 11 costs channel by channel.
 
 Two things are explicitly *not* on this list, and `docs/BACKLOG.md` says why: Netware module
 formats, and anything that needs reverse engineering a proprietary program rather than reading

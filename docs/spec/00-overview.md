@@ -143,5 +143,6 @@ regenerate it does not build.
 | **M4** | Beyond | multi-panel/windowed layout *inside the TUI*, plugin registry, native plugin ABI, special VFS (process/registry/git), headless CLI, split engine/UI over ssh |
 
 Specs: `01-architecture`, `02-panels`, `03-file-operations`, `04-vfs`, `05-viewer-editor`,
-`06-tools`, `07-config-theming`, `08-plugins`, `09-roadmap`, `10-menus-and-dialogs`.
+`06-tools`, `07-config-theming`, `08-plugins`, `09-roadmap`, `10-menus-and-dialogs`,
+`11-distribution`.
 What is specified but not built yet is listed, item by item, in `../BACKLOG.md`.

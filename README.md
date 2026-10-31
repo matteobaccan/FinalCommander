@@ -329,6 +329,7 @@ unless all of that is green.
 | [`docs/spec/08-plugins.md`](docs/spec/08-plugins.md) | command bus, Lua API, WASM plugin ABI (WIT), native ABI, macros |
 | [`docs/spec/09-roadmap.md`](docs/spec/09-roadmap.md) | M1→M4 with issue-sized chunks, risks, contribution rules |
 | [`docs/spec/10-menus-and-dialogs.md`](docs/spec/10-menus-and-dialogs.md) | the menu bar, the settings dialogs and the choose-one lists, with every row mapped to a config key |
+| [`docs/spec/11-distribution.md`](docs/spec/11-distribution.md) | how the program reaches a machine: the archives it ships as today, and what each packaging channel would cost — a proposal, not a plan |
 | [`docs/BACKLOG.md`](docs/BACKLOG.md) | what is left to do, item by item; the open questions, with what each decision stands on; and the things that were asked and settled, so they are not asked again |
 
 ## Asking for something: issues, not pull requests
