@@ -11,6 +11,16 @@ rimovibile, ottico, di rete, in memoria), come si chiama, con che filesystem è 
 quanto è grande e quanto ne resta. Quali di queste colonne vengano disegnate lo scegli tu, con
 `F9` dentro il dialogo.
 
+Un disco su cui l'*altro* pannello è già aperto si apre dove sta quel pannello, non in cima
+al disco. Due pannelli su un disco solo è il modo in cui si lavora su un disco — un albero
+da una parte, una destinazione dall'altra — e arrivare nella radice vorrebbe dire riscendere
+un percorso che è già sullo schermo. Il disco su cui un pannello è già aperto continua ad
+aprirsi nella radice: scegliere quello è il modo di arrivare in cima con un tasto solo. E
+così `/`, che è il prefisso di qualunque percorso esista e altrimenti non vorrebbe più dire
+la radice. Un pannello su un server, o che mostra una delle liste sotto la riga di
+separazione, non è su un disco e non presta niente; un pannello dentro un archivio presta la
+cartella in cui l'archivio sta, invece di un percorso che riaprirebbe l'archivio.
+
 Sotto una riga di separazione, su `Ctrl+1`…`Ctrl+9`, stanno le cose che non sono filesystem:
 
 * le **connessioni salvate** e gli **object store** scritti nella configurazione, che si

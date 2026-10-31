@@ -529,6 +529,27 @@ The roots this platform has — `/` and the home directory on Unix, the drive le
 on Windows — followed by every open SFTP connection as `sftp://user@host`. `Enter` takes *that*
 panel there; for a connection that is configured but not open, it connects first.
 
+**Where `Enter` lands.** The root of the drive, except when the *other* panel is already
+somewhere on that drive: then it is that panel's own directory. Two panels on one disk is how
+one works on a disk — a tree on one side, a target on the other — and landing on the root
+means walking back down a path the other panel is already showing. Four cases where the rule
+would be a surprise, and so does not fire:
+
+- A panel **already on that drive** goes to the root, as it always did. Choosing the drive one
+  is on is how one gets to the top of it in one keystroke, and a rule that took that away to
+  offer a directory one can already see on the other side of the screen would be a bad trade.
+- **`/` is not a drive** for this purpose. It is a prefix of every path there is, so every
+  other panel is "already on it" and that row would never mean the root again. The dialog's own
+  current-row mark leaves `/` out for the same reason.
+- A panel **on a server**, or showing one of the lists that is not a filesystem, is not on a
+  drive and lends nothing.
+- A panel **inside an archive** lends the directory the archive lives in — never a path that
+  would reopen the archive, which is not what choosing a drive asks for.
+
+A drive letter is compared case-folded, because the rows are built from `A:\` upwards while a
+path typed into the command line keeps the case it was typed in. Nothing else about a path is
+folded, and the comparison is by path component, so `/mnt/data` is not inside `/mnt/dat`.
+
 It is a table rather than a list, laid out the way FAR lays it out: the path, then a space, then
 the columns with a rule between each pair of them — the kind of thing it is, the device, the
 label, the filesystem, the size and the free space.

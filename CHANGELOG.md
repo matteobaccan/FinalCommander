@@ -36,6 +36,23 @@ Notable changes, newest first. The format follows
 
 ### Changed
 
+- **A drive the other panel is already on opens where that panel is.** `Alt+F1` on a panel
+  showing `C:\` while the other one is on `D:\work\src` used to land it on `D:\`, and the
+  work of getting to `src` had to be done again on a path that was already on the screen. Now
+  the drive row means that directory. Two panels on one disk is how one works on a disk — a
+  tree on one side, a target on the other — and the dialog already knew which panel was where;
+  it just was not saying.
+
+  Four cases where the rule would be a surprise, and so does not fire. The drive a panel is
+  **already on** still opens at its root: choosing it is how one gets to the top of a disk in
+  one keystroke, and trading that away for a directory one can already see would be a bad
+  bargain. **`/`** is not a drive for this purpose — it is a prefix of every path there is, so
+  every other panel is "already on it" and that row would never mean the root again; the
+  dialog's own current-row mark leaves it out for the same reason. A panel **on a server**, or
+  showing one of the lists under the rule, is not on a drive and lends nothing. And a panel
+  **inside an archive** lends the directory the archive lives in, rather than a path that
+  would open the archive a second time.
+
 - **The FAR inventory was read against the code again, and so was the backlog.**
   `docs/04-far-inventory.md` is FAR 3.x read from its own repository and compared row by row
   with what this program does, and its status column said "as of 0.10.0" — sixteen releases

@@ -928,6 +928,25 @@ impl Prompt {
 /// uses and the only one that can express a directory called `a;b`. A line with no separator
 /// is one destination, quotes and all, so a user who never copies to two places at once never
 /// meets any of this.
+/// The same path with its drive letter in upper case, so that two paths can be compared.
+///
+/// `d:\work` and `D:\work` are the same directory: the change-drive dialog builds its rows
+/// from `A:\` upwards, while a path typed into the command line keeps the case it was typed
+/// in, and a comparison between the two would otherwise say they are on different disks.
+/// Only the letter is folded. The rest of the path is the filesystem's business — on Windows
+/// it is usually case-insensitive and on Unix it is not — and `Path` already compares it
+/// component by component, so `/mnt/data` is not inside `/mnt/dat`.
+fn drive_letter_folded(path: &VPath) -> VPath {
+    let text = path.to_string();
+    let mut chars = text.chars();
+    match (chars.next(), chars.next()) {
+        (Some(letter), Some(':')) if letter.is_ascii_lowercase() => {
+            VPath::parse(&format!("{}{}", letter.to_ascii_uppercase(), &text[1..]))
+        }
+        _ => path.clone(),
+    }
+}
+
 fn split_targets(line: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut current = String::new();
@@ -7068,6 +7087,66 @@ impl App {
             rows,
             side,
         )
+    }
+
+    /// Where a panel lands when the change-drive dialog sends it to a drive.
+    ///
+    /// The root of that drive, except when the *other* panel is already somewhere on it:
+    /// then it is that panel's own directory. Two panels on one disk is how one works on a
+    /// disk — a tree on one side, a target on the other — and landing on the root means
+    /// walking back down a path the other panel is already showing.
+    ///
+    /// Three things keep the rule from firing where it would be a surprise:
+    ///
+    /// - A panel already on that drive goes to the root, as it always did. Choosing the
+    ///   drive one is on is how one gets to the top of it in one keystroke, and a rule that
+    ///   took that away to offer a directory one can already see would be a bad trade.
+    /// - `/` is not a drive for this purpose. It is a prefix of every path there is, so
+    ///   every other panel is "already on it" and the row would never mean the root again.
+    ///   The dialog's own current-row mark leaves `/` out for the same reason.
+    /// - The other panel has to be showing a real directory on this machine. A panel on a
+    ///   server, or one of the lists that is not a filesystem at all, is not on a drive; a
+    ///   panel inside an archive is, and what it lends is the directory the archive lives
+    ///   in rather than a path that would open the archive again.
+    fn drive_landing(&self, side: usize, root: &str) -> String {
+        let keep = || root.to_string();
+        // `/` is a prefix of every path there is, so a rule about "the other panel is on
+        // this drive" would make that row never mean the root again. The dialog's own
+        // current-row mark leaves it out for the same reason. A row that is not a local
+        // path at all — a connection, a bucket — is somebody else's root.
+        let root_path = VPath::parse(root);
+        if root == "/" || !root_path.is_local() {
+            return keep();
+        }
+        // The real directory a panel is showing: inside an archive, the one the archive
+        // lives in, because a path that would open the archive again is not what a drive
+        // row means. One of the lists that is not a filesystem is not on a drive at all.
+        let real_dir = |panel: &Panel| -> Option<VPath> {
+            if panel.temp_origin().is_some() || !panel.cwd.is_local() {
+                return None;
+            }
+            match panel.cwd.in_container() {
+                true => VPath::local(panel.cwd.as_path()).parent(),
+                false => Some(panel.cwd.clone()),
+            }
+        };
+        let on_this_drive =
+            |dir: &VPath| drive_letter_folded(dir).starts_with(&drive_letter_folded(&root_path));
+
+        let Some(theirs) = real_dir(&self.panels[1 - side]) else {
+            return keep();
+        };
+        if !on_this_drive(&theirs) {
+            return keep();
+        }
+        // A panel already on this drive goes to the root, as it always did: choosing the
+        // drive one is on is how one gets to the top of it in one keystroke, and a rule
+        // that took that away to offer a directory one can already see on the other side
+        // would be a bad trade.
+        if real_dir(&self.panels[side]).is_some_and(|mine| on_this_drive(&mine)) {
+            return keep();
+        }
+        theirs.to_string()
     }
 
     /// `Shift+F3`: what can be done with the archive at hand, as a menu. MultiArc calls it
@@ -14823,6 +14902,13 @@ impl App {
                     ":programs" => self.open_programs_panel(pick.side),
                     ":services" => self.open_services_panel(pick.side),
                     ":temp" => self.open_temp_panel(pick.side),
+                    // A drive row is where the panel *goes*, and where it goes is not always
+                    // the root of it: see `drive_landing`. A bookmark and a line of history
+                    // are a directory somebody chose, and are taken as they are.
+                    _ if pick.kind == PickKind::Drives => {
+                        let target = self.drive_landing(pick.side, &row.value);
+                        self.go_to_bookmark(&target);
+                    }
                     _ => self.go_to_bookmark(&row.value),
                 }
             }
@@ -23471,6 +23557,138 @@ mod tests {
             1,
             "{:?}",
             pick.rows
+        );
+    }
+
+    /// Sending a panel to the drive the other one is already on lands it where that panel
+    /// is, not at the top of the disk.
+    #[test]
+    fn a_drive_the_other_panel_is_on_opens_where_that_panel_is() {
+        let mut app = app();
+        app.panels[0].cwd = VPath::local("/mnt/c/work");
+        app.panels[1].cwd = VPath::local("/mnt/d/src/deep");
+        assert_eq!(app.drive_landing(0, "/mnt/d"), "/mnt/d/src/deep");
+        // And the same in the other direction, because neither side is special.
+        assert_eq!(app.drive_landing(1, "/mnt/c"), "/mnt/c/work");
+
+        // The drive a panel is already on still means the top of it: that is how one gets
+        // there in one keystroke, and the other panel's directory is in plain sight anyway.
+        app.panels[0].cwd = VPath::local("/mnt/d/elsewhere");
+        assert_eq!(app.drive_landing(0, "/mnt/d"), "/mnt/d");
+
+        // A drive nobody is on is opened at its root, as it always was.
+        app.panels[0].cwd = VPath::local("/mnt/c/work");
+        assert_eq!(app.drive_landing(0, "/mnt/e"), "/mnt/e");
+
+        // `/mnt/d` is not inside `/mnt/dd`: the comparison is by path component, so a drive
+        // whose name merely starts with another's borrows nothing from it.
+        app.panels[1].cwd = VPath::local("/mnt/dd/src");
+        assert_eq!(app.drive_landing(0, "/mnt/d"), "/mnt/d");
+    }
+
+    /// And through the dialog, on the one row every machine has: the home directory. The
+    /// panels have to be real directories here, because choosing a row really does send a
+    /// panel there — so the other panel is put in a directory made under the home for the
+    /// purpose, and the one being moved is put somewhere outside it.
+    #[test]
+    fn the_dialog_sends_a_panel_to_where_the_other_one_is() {
+        let Some(home) = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"))
+        else {
+            return; // no home row to choose
+        };
+        let home = std::path::PathBuf::from(home);
+        let Ok(theirs) = tempfile::tempdir_in(&home) else {
+            return; // a home we may not write in
+        };
+        let mine = std::env::temp_dir();
+        if mine.starts_with(&home) || !mine.is_dir() {
+            return; // the two panels have to be on different sides of the home row
+        }
+
+        let mut app = app();
+        app.panels[0].cwd = VPath::local(&mine);
+        app.panels[1].cwd = VPath::local(theirs.path());
+        app.run(Command::PanelDrive(fcmd_cmd::Side::Left));
+        let Mode::Pick(pick) = &mut app.mode else {
+            panic!("no dialog")
+        };
+        let home_text = home.to_string_lossy().into_owned();
+        let Some(at) = pick.rows.iter().position(|r| r.value == home_text) else {
+            return; // a machine whose mount table we could not read
+        };
+        pick.cursor = at;
+        press(&mut app, "Enter");
+        assert_eq!(
+            app.panels[0].cwd,
+            VPath::local(theirs.path()),
+            "the panel went to {} rather than to the other panel's directory",
+            app.panels[0].cwd
+        );
+    }
+
+    /// The three cases where the rule would be a surprise, and so does not fire.
+    #[test]
+    fn a_drive_opens_at_its_root_where_lending_a_directory_would_surprise() {
+        let mut app = app();
+        app.panels[0].cwd = VPath::local("/mnt/c/work");
+
+        // `/` is a prefix of every path there is. If it took the other panel's directory it
+        // would never mean the root again, which is the one thing that row is for. The panel
+        // being moved is put on a server, because a panel anywhere on this machine is under
+        // `/` already and would be kept at the root by the next rule rather than by this one.
+        app.panels[0].cwd = VPath::parse("sftp://srv/etc");
+        app.panels[1].cwd = VPath::local("/usr/share");
+        assert_eq!(app.drive_landing(0, "/"), "/");
+        // The same panel, the same server, a drive that is not `/`: there the rule fires.
+        assert_eq!(app.drive_landing(0, "/usr"), "/usr/share");
+        app.panels[0].cwd = VPath::local("/mnt/c/work");
+
+        // A panel on a server is not on a drive of this machine's.
+        app.panels[1].cwd = VPath::parse("sftp://srv/var/log");
+        assert_eq!(app.drive_landing(0, "/mnt/d"), "/mnt/d");
+
+        // Neither is one showing a list that is not a filesystem. The row for that list is
+        // where such a panel is, and the drive row still means the drive.
+        app.panels[1].cwd = VPath::local("/mnt/d/src");
+        app.open_process_panel(1);
+        if app.panels[1].temp_origin() == Some(":processes") {
+            assert_eq!(app.drive_landing(0, "/mnt/d"), "/mnt/d");
+        }
+    }
+
+    /// A panel inside an archive lends the directory the archive lives in — never a path
+    /// that would open the archive again, which is not what choosing a drive asks for.
+    #[test]
+    fn a_panel_inside_an_archive_lends_the_directory_that_holds_it() {
+        let mut app = app();
+        app.panels[0].cwd = VPath::local("/mnt/c/work");
+        app.panels[1].cwd = VPath::local("/mnt/d/src/tree.zip").enter("/doc");
+        assert_eq!(app.drive_landing(0, "/mnt/d"), "/mnt/d/src");
+
+        // Two containers deep is the same answer: the directory holding the outermost one.
+        app.panels[1].cwd = VPath::local("/mnt/d/src/outer.zip")
+            .enter("/inner.tar")
+            .enter("/etc");
+        assert_eq!(app.drive_landing(0, "/mnt/d"), "/mnt/d/src");
+    }
+
+    /// `d:` and `D:` are the same disk, and the dialog's rows are built from `A:\` upwards
+    /// while a path typed by hand keeps the case it was typed in.
+    #[test]
+    fn a_drive_letter_is_the_same_letter_in_either_case() {
+        assert_eq!(
+            drive_letter_folded(&VPath::parse("d:/work/src")).to_string(),
+            "D:/work/src"
+        );
+        assert_eq!(
+            drive_letter_folded(&VPath::parse("D:/work")).to_string(),
+            "D:/work"
+        );
+        // Only the drive letter. A Unix path that happens to start with a letter and a colon
+        // has no drive in it, and nothing else about any path is folded.
+        assert_eq!(
+            drive_letter_folded(&VPath::local("/mnt/Data")).to_string(),
+            "/mnt/Data"
         );
     }
 

@@ -10,6 +10,15 @@ table of everything mounted — what each one is (disk, removable, optical, netw
 what it is called, what it is formatted as, how big it is and how much is left. Which of
 those columns are drawn is yours to choose, with `F9` inside the dialog.
 
+A drive the *other* panel is already on opens where that panel is, not at the top of the
+disk. Two panels on one disk is how one works on a disk — a tree on one side, a target on
+the other — and landing on the root would mean walking back down a path that is already on
+the screen. The drive a panel is already on still opens at its root: choosing it is how one
+gets to the top in one keystroke. So is `/`, which is a prefix of every path there is and
+would otherwise never mean the root again. A panel on a server, or showing one of the lists
+below the rule, is not on a drive and lends nothing; a panel inside an archive lends the
+directory the archive lives in, rather than a path that would open the archive again.
+
 Under a rule, on `Ctrl+1` to `Ctrl+9`, are the things that are not filesystems:
 
 * the **stored connections** and the **object stores** written in the configuration, which
