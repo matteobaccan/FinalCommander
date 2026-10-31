@@ -4,7 +4,7 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
-## [Unreleased]
+## [0.27.0] — 2026-10-31
 
 ### Added
 
@@ -44,6 +44,16 @@ Notable changes, newest first. The format follows
   items gone (`LEGACY_NAMES`, `Paths::legacy`, and the two helpers behind them), and the
   discovery order in SPEC 07 §1 is now the three steps it always said it was, with no
   footnote. Each file is looked for under one name.
+
+### Fixed
+
+- **A malformed 7z is refused instead of taking the program with it.** `sevenz-rust2` 0.24.2
+  closes a long list of ways a broken or hostile header could panic, exhaust memory or abort
+  the process outright: a header declaring streams with no files, a block using one stream
+  twice, a chain of coders deep enough to overflow the stack, counts large enough to run past
+  the address space, a file time outside what the platform can hold. Each is an error now. A
+  commander is pointed at files it did not make, so "this archive is broken" has to be
+  something it can say rather than something that happens to it.
 
 ### Changed
 
