@@ -98,11 +98,13 @@ impl Page<'_> {
 <title>{title} — FinalCommander</title>
 <meta name="description" content="{tagline}">
 <link rel="stylesheet" href="{up}style.css">
-<link rel="icon" href="{up}assets/logo.svg" type="image/svg+xml">
+<link rel="icon" href="{up}assets/icon.svg" type="image/svg+xml">
 </head>
 <body>
 <header>
-<a class="wordmark" href="{up}index{suffix}.html">FinalCommander</a>
+<a class="wordmark" href="{up}index{suffix}.html"><img src="{up}assets/icon.svg" alt="" width="30" height="30">FinalCommander</a>
+<input type="checkbox" id="burger" class="burger" aria-label="{menu}">
+<label for="burger" class="burger-label"><span></span><span></span><span></span></label>
 <nav>{links}</nav>
 </header>
 <main>
@@ -125,6 +127,7 @@ impl Page<'_> {
             switcher = switcher,
             repo = crate::md::REPO,
             source = escape(lang.nav_source),
+            menu = escape(lang.nav_menu),
         )
     }
 }
@@ -194,12 +197,65 @@ header {
   padding: 0.9rem 1.25rem;
   border-bottom: 1px solid var(--frame);
 }
-.wordmark { font-weight: 700; letter-spacing: 0.02em; color: var(--fg); text-decoration: none; }
+.wordmark {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--fg);
+  text-decoration: none;
+}
+/* The mark carries its own background and its own corners, so it needs nothing from the
+   page and reads the same under either colour scheme. */
+.wordmark img { width: 30px; height: 30px; border-radius: 6px; flex: none; }
 nav { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; }
 nav a { color: var(--dim); text-decoration: none; }
 nav a:hover, nav a:focus { color: var(--accent); }
 nav a.here { color: var(--fg); border-bottom: 2px solid var(--accent); }
 nav a.source { margin-left: auto; }
+/* On a wide screen there is no button: the links are the navigation, and the checkbox that
+   would hold its state is not in the page at all. */
+.burger, .burger-label { display: none; }
+/* Below this the eight links wrap into three lines, and three lines of links above the page
+   is a menu that has eaten the page. There is no JavaScript on this site — a test makes sure
+   of it — so the open state is a checkbox, and the thing a reader presses is its label. */
+@media (max-width: 48rem) {
+  header { flex-wrap: wrap; gap: 0; }
+  /* Off the screen rather than `display: none`, so that it stays in the tab order and a
+     keyboard can open the menu. */
+  .burger {
+    display: block;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    opacity: 0;
+  }
+  .burger-label {
+    display: block;
+    margin-left: auto;
+    padding: 0.55rem;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .burger-label span {
+    display: block;
+    width: 24px;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--fg);
+  }
+  .burger-label span + span { margin-top: 6px; }
+  .burger:focus-visible + .burger-label { outline: 2px solid var(--accent); outline-offset: 2px; }
+  header nav { display: none; flex-direction: column; width: 100%; gap: 0; margin-top: 0.6rem; }
+  .burger:checked ~ nav { display: flex; }
+  /* A row to press rather than a word to hit: each link is as tall as a finger and the
+     separators say where one ends. */
+  header nav a { padding: 0.7rem 0.1rem; border-top: 1px solid var(--frame); }
+  header nav a.here { border-bottom: none; border-left: 3px solid var(--accent); padding-left: 0.6rem; }
+  header nav a.source { margin-left: 0; }
+}
 main { max-width: 56rem; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
 a { color: var(--link); }
 h1, h2, h3, h4 { line-height: 1.25; }
@@ -292,6 +348,56 @@ mod tests {
         assert!(
             !html.to_lowercase().contains("http://"),
             "and nothing over plain HTTP"
+        );
+    }
+
+    /// On a phone the eight links wrapped into three lines above every page. They fold into a
+    /// button now, and the mark sits where a reader looks for it.
+    #[test]
+    fn the_navigation_folds_into_a_button_on_a_narrow_screen() {
+        let html = page("index.html", "en").render();
+        // The mark, beside the name rather than instead of it, and with no alternative text:
+        // the word next to it already says what it is, and a reader using a screen reader
+        // should hear the name once.
+        assert!(
+            html.contains(r#"<img src="assets/icon.svg" alt="" width="30" height="30">"#),
+            "{html}"
+        );
+        // The button and what it opens. The state is a checkbox because there is no
+        // JavaScript here to hold it — and the checkbox carries the name, in the page's own
+        // language, because the label has three lines in it rather than a word.
+        assert!(
+            html.contains(
+                r#"<input type="checkbox" id="burger" class="burger" aria-label="Menu">"#
+            ),
+            "{html}"
+        );
+        assert!(
+            html.contains(r#"<label for="burger" class="burger-label">"#),
+            "{html}"
+        );
+        assert!(!html.contains("<script"), "and still no JavaScript");
+
+        // Every language names the button in its own words.
+        for lang in LANGUAGES {
+            let html = page("index.html", lang.code).render();
+            assert!(
+                html.contains(&format!(r#"aria-label="{}""#, lang.nav_menu)),
+                "{} does not name its menu button: {html}",
+                lang.code
+            );
+        }
+
+        // And the stylesheet is what makes it a button rather than a list: the links are
+        // hidden until the checkbox is ticked, and only below the width where they wrapped.
+        assert!(STYLE.contains("@media (max-width: 48rem)"), "{STYLE}");
+        assert!(
+            STYLE.contains(".burger:checked ~ nav { display: flex; }"),
+            "{STYLE}"
+        );
+        assert!(
+            STYLE.contains(".burger, .burger-label { display: none; }"),
+            "the button has to be gone on a wide screen: {STYLE}"
         );
     }
 

@@ -4,6 +4,24 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
+## [Unreleased]
+
+### Changed
+
+- **The site's navigation folds into a button on a phone.** Eight links and a language
+  switcher wrapped into three lines above every page, which is a menu that has eaten the
+  page. Below 48rem they are now behind the three lines everybody recognises, each one a row
+  as tall as a finger; above it nothing has changed. The state is a checkbox and the thing
+  one presses is its label, because there is no JavaScript on this site and a test makes sure
+  there never is. The checkbox is off the screen rather than `display: none`, so it stays in
+  the tab order and a keyboard can open the menu, and it carries the button's name in each of
+  the seven languages — what is drawn is three lines, what is read out is "Menu".
+
+- **The mark, top left, where a reader looks for it.** `assets/icon.svg` beside the name, with
+  no alternative text because the word next to it already says what it is. The same file is
+  now the favicon: that had been `logo.svg`, which is the 880×236 banner — a browser asked for
+  a tab icon and got a landscape.
+
 ## [0.27.0] — 2026-10-31
 
 ### Added

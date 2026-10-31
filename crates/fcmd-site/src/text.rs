@@ -24,6 +24,9 @@ pub struct Text {
     pub nav_changelog: &'static str,
     pub nav_download: &'static str,
     pub nav_source: &'static str,
+    /// The name of the button that opens the navigation on a narrow screen. It is read out
+    /// rather than drawn: what is drawn is three lines.
+    pub nav_menu: &'static str,
     /// Said above a document that is in English.
     pub in_english: &'static str,
     pub help_title: &'static str,
@@ -62,6 +65,7 @@ pub const LANGUAGES: [Text; 7] = [
         nav_changelog: "Changelog",
         nav_download: "Download the latest version",
         nav_source: "Source",
+        nav_menu: "Menu",
         in_english: "This page is one of the repository's own documents, and it is in English.",
         help_title: "Help",
         help_intro: "The same pages `F1` shows inside the program, which are compiled into the \
@@ -92,6 +96,7 @@ pub const LANGUAGES: [Text; 7] = [
         nav_changelog: "Novità",
         nav_download: "Scarica l'ultima versione",
         nav_source: "Codice",
+        nav_menu: "Menu",
         in_english: "Questa pagina è un documento del repository, ed è in inglese.",
         help_title: "Guida",
         help_intro: "Le stesse pagine che `F1` mostra dentro il programma: sono compilate \
@@ -122,6 +127,7 @@ pub const LANGUAGES: [Text; 7] = [
         nav_changelog: "Änderungen",
         nav_download: "Neueste Version herunterladen",
         nav_source: "Quellcode",
+        nav_menu: "Menü",
         in_english: "Diese Seite ist ein Dokument des Repositorys und auf Englisch.",
         help_title: "Hilfe",
         help_intro: "Dieselben Seiten, die `F1` im Programm zeigt: Sie sind in die ausführbare \
@@ -152,6 +158,7 @@ pub const LANGUAGES: [Text; 7] = [
         nav_changelog: "Cambios",
         nav_download: "Descargar la última versión",
         nav_source: "Código",
+        nav_menu: "Menú",
         in_english: "Esta página es un documento del repositorio y está en inglés.",
         help_title: "Ayuda",
         help_intro: "Las mismas páginas que `F1` muestra dentro del programa: están compiladas \
@@ -182,6 +189,7 @@ pub const LANGUAGES: [Text; 7] = [
         nav_changelog: "Nouveautés",
         nav_download: "Télécharger la dernière version",
         nav_source: "Sources",
+        nav_menu: "Menu",
         in_english: "Cette page est un document du dépôt, et elle est en anglais.",
         help_title: "Aide",
         help_intro: "Les mêmes pages que `F1` affiche dans le programme : elles sont compilées \
@@ -212,6 +220,7 @@ pub const LANGUAGES: [Text; 7] = [
         nav_changelog: "Изменения",
         nav_download: "Скачать последнюю версию",
         nav_source: "Исходники",
+        nav_menu: "Меню",
         in_english: "Эта страница — документ из репозитория, и она на английском.",
         help_title: "Справка",
         help_intro: "Те же страницы, что `F1` показывает в программе: они вкомпилированы в \
@@ -238,6 +247,7 @@ pub const LANGUAGES: [Text; 7] = [
         nav_changelog: "更新记录",
         nav_download: "下载最新版本",
         nav_source: "源码",
+        nav_menu: "菜单",
         in_english: "本页是仓库里的文档，内容为英文。",
         help_title: "帮助",
         help_intro: "与程序里按 `F1` 看到的是同一批页面：它们编译进了可执行文件，并不依赖这个网站。",
