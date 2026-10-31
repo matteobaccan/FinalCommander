@@ -10,10 +10,9 @@ A cross-platform orthodox file manager for the terminal: two panels, FAR Manager
 executable of about five megabytes with no runtime, no asset directory and no plugin tree to
 assemble. Linux, macOS and Windows, the same program on each. Rust, MSRV 1.89, MIT.
 
-It shipped as **SupremeCommander** with the command `scmd` up to 0.4.0; since then it is
-**FinalCommander**, command `fcmd`, and the repository is `matteobaccan/FinalCommander`. The
-releases published before the rename still carry the old name in their archives, and GitHub
-redirects the old repository URL to the new one.
+The repository is `matteobaccan/FinalCommander`. It was renamed, and GitHub redirects the old
+URL, so a working copy cloned before the rename still fetches and pushes — `git remote -v` in
+such a checkout names a repository that no longer exists under that name.
 
 ## House rules
 

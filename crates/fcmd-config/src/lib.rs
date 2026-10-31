@@ -21,41 +21,6 @@ pub const MACROS_FILE_NAME: &str = "fcmd-macros.toml";
 /// The one directory: optional, and the only thing that may live outside the binary.
 pub const PLUGINS_DIR_NAME: &str = "plugins";
 
-/// The names these files had while the program was called SupremeCommander, and the new name
-/// each one answers to now. A configuration somebody already has is not something to lose
-/// over a rename: every file is looked for under its own name first and the old one after,
-/// `--paths` shows which one was found, and the startup screen says so once.
-pub const LEGACY_NAMES: [(&str, &str); 4] = [
-    (CONFIG_FILE_NAME, "scmd.toml"),
-    (STATE_FILE_NAME, "scmd-state.toml"),
-    (MACROS_FILE_NAME, "scmd-macros.toml"),
-    (usermenu::MENU_FILE_NAME, "scmd-menu.toml"),
-];
-
-/// `dir/name` unless it is not there and `dir/legacy` is, which is the file from before the
-/// rename and the one to go on using.
-fn kept(dir: &Path, name: &str, legacy: &str) -> PathBuf {
-    let fresh = dir.join(name);
-    if fresh.exists() {
-        return fresh;
-    }
-    let old = dir.join(legacy);
-    if old.exists() {
-        old
-    } else {
-        fresh
-    }
-}
-
-/// The old name for a file we read, if that is the one on disk.
-fn legacy_of(path: &Path) -> Option<&'static str> {
-    let name = path.file_name()?.to_str()?;
-    LEGACY_NAMES
-        .iter()
-        .find(|(_, legacy)| *legacy == name)
-        .map(|(fresh, _)| *fresh)
-}
-
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
     #[error("{path}: {source}")]
@@ -103,16 +68,14 @@ impl Paths {
             .and_then(|p| p.parent().map(Path::to_path_buf))
             .unwrap_or_else(|| PathBuf::from("."));
 
-        let portable_config = kept(&exe_dir, CONFIG_FILE_NAME, LEGACY_NAMES[0].1);
+        let portable_config = exe_dir.join(CONFIG_FILE_NAME);
         let (config_file, portable) = match config {
             Some(explicit) => (explicit.to_path_buf(), false),
             None if portable_config.exists() => (portable_config, true),
             None => (
-                kept(
-                    &dirs::config_dir().unwrap_or_else(|| PathBuf::from(".")),
-                    CONFIG_FILE_NAME,
-                    LEGACY_NAMES[0].1,
-                ),
+                dirs::config_dir()
+                    .unwrap_or_else(|| PathBuf::from("."))
+                    .join(CONFIG_FILE_NAME),
                 false,
             ),
         };
@@ -121,9 +84,9 @@ impl Paths {
             .parent()
             .map(Path::to_path_buf)
             .unwrap_or_else(|| PathBuf::from("."));
-        let state_file = kept(&config_parent, STATE_FILE_NAME, LEGACY_NAMES[1].1);
-        let macros_file = kept(&config_parent, MACROS_FILE_NAME, LEGACY_NAMES[2].1);
-        let menu_file = kept(&config_parent, usermenu::MENU_FILE_NAME, LEGACY_NAMES[3].1);
+        let state_file = config_parent.join(STATE_FILE_NAME);
+        let macros_file = config_parent.join(MACROS_FILE_NAME);
+        let menu_file = config_parent.join(usermenu::MENU_FILE_NAME);
 
         let plugins_dir = plugins
             .map(Path::to_path_buf)
@@ -133,13 +96,7 @@ impl Paths {
                 if beside_exe.is_dir() {
                     beside_exe
                 } else {
-                    let fresh = config_parent.join("fcmd-plugins");
-                    let old = config_parent.join("scmd-plugins");
-                    if !fresh.is_dir() && old.is_dir() {
-                        old
-                    } else {
-                        fresh
-                    }
+                    config_parent.join("fcmd-plugins")
                 }
             });
 
@@ -152,21 +109,6 @@ impl Paths {
             plugins_dir,
             portable,
         }
-    }
-
-    /// The files being read under the name they had before the rename, each with the name it
-    /// should have. Empty for anyone who started with FinalCommander.
-    pub fn legacy(&self) -> Vec<(String, &'static str)> {
-        [
-            &self.config_file,
-            &self.state_file,
-            &self.macros_file,
-            &self.menu_file,
-        ]
-        .into_iter()
-        .filter(|p| p.exists())
-        .filter_map(|p| legacy_of(p).map(|fresh| (p.display().to_string(), fresh)))
-        .collect()
     }
 
     /// Human-readable summary for `fcmd --paths`: the first question anyone asks.
@@ -1400,14 +1342,7 @@ impl Config {
 
     /// Load the config file if it exists. A missing file is not an error; a broken one is.
     pub fn load(paths: &Paths) -> Result<(Config, Vec<String>), ConfigError> {
-        // Said before anything is parsed, so that it is said even when the file is empty.
-        let mut warnings: Vec<String> = paths
-            .legacy()
-            .into_iter()
-            .map(|(path, fresh)| {
-                format!("{path}: the name from before the rename — still read, and still written; rename it to `{fresh}` when convenient")
-            })
-            .collect();
+        let mut warnings: Vec<String> = Vec::new();
         let file = paths.config_file.clone();
         if !file.exists() {
             return Ok((Config::default(), warnings));
@@ -1737,53 +1672,6 @@ mod tests {
             );
         }
         assert!(refused.is_empty(), "{refused:#?}");
-    }
-
-    #[test]
-    fn a_configuration_from_before_the_rename_is_still_read_and_says_so() {
-        let dir = std::env::temp_dir().join(format!(
-            "fcmd-legacy-{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_nanos())
-                .unwrap_or(0)
-        ));
-        std::fs::create_dir_all(&dir).expect("the fixture directory");
-        let old = dir.join("scmd.toml");
-        std::fs::write(&old, "[ui]\ntheme = \"midnight\"\n").expect("the old file");
-        std::fs::write(dir.join("scmd-state.toml"), "").expect("the old state");
-
-        let paths = Paths::discover(None, None);
-        assert!(
-            paths.legacy().is_empty() || !paths.config_file.exists(),
-            "nothing of this machine's own is claimed to be legacy"
-        );
-
-        // `--config` names a file outright, so the fallback is exercised through `kept`.
-        assert_eq!(kept(&dir, CONFIG_FILE_NAME, "scmd.toml"), old);
-        std::fs::write(dir.join(CONFIG_FILE_NAME), "").expect("the new file");
-        assert_eq!(
-            kept(&dir, CONFIG_FILE_NAME, "scmd.toml"),
-            dir.join(CONFIG_FILE_NAME),
-            "the new name wins when both are there"
-        );
-        std::fs::remove_file(dir.join(CONFIG_FILE_NAME)).expect("undo");
-
-        let paths = Paths::discover(Some(&old), None);
-        assert_eq!(paths.config_file, old);
-        assert_eq!(paths.state_file, dir.join("scmd-state.toml"));
-        let (cfg, warnings) = Config::load(&paths).expect("it loads");
-        assert_eq!(cfg.ui.theme, "midnight");
-        assert_eq!(
-            warnings.len(),
-            2,
-            "one line per file, and no more: {warnings:?}"
-        );
-        assert!(
-            warnings.iter().all(|w| w.contains("before the rename")),
-            "{warnings:?}"
-        );
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

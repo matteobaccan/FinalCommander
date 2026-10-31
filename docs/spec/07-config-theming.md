@@ -20,12 +20,6 @@ Discovery, in order:
    `~/Library/Application Support/fcmd.toml`, `%APPDATA%\fcmd.toml`. Note the absence of a
    directory of our own — there is one file to back up and one file to delete.
 
-Each of these files is looked for under its own name first and under the name it had before
-the program was renamed after that (`scmd.toml`, `scmd-state.toml`, `scmd-macros.toml`,
-`scmd-menu.toml`, `scmd-plugins/`). A configuration somebody already has is not something to
-lose over a rename: the old file is read, and written back to, and the startup screen says
-once which file that was and what it should be called.
-
 `fcmd --paths` prints all three locations and says whether each exists. `fcmd --dump-config` prints
 the effective configuration (including the themes it carries) with provenance
 (`default` / `fcmd.toml` / `--set`), which is what a bug report should include.

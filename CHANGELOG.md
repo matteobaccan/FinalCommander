@@ -34,6 +34,17 @@ Notable changes, newest first. The format follows
   only, and a name like `libfoo.a` typed into it is refused with a reason, with the dialog still
   open, rather than starting a job that would fail.
 
+### Removed
+
+- **The configuration files of the name the program had before 0.5.0.** Every one of the four
+  was looked for under its own name and then under an older one, the older one was read *and
+  written back to*, `Config::load` began by warning about it, and a test held the whole
+  arrangement in place. It was written for people migrating from a version nobody ran: a
+  kindness to an empty room. A hundred and nineteen lines out of `fcmd-config`, four public
+  items gone (`LEGACY_NAMES`, `Paths::legacy`, and the two helpers behind them), and the
+  discovery order in SPEC 07 §1 is now the three steps it always said it was, with no
+  footnote. Each file is looked for under one name.
+
 ### Changed
 
 - **A drive the other panel is already on opens where that panel is.** `Alt+F1` on a panel
