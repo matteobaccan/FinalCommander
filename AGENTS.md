@@ -88,7 +88,9 @@ that target — but the crates that carry the `#[cfg]`s will.)
 | `fcmd` | the binary: the app, the panels, the rendering, the event loop |
 
 Documentation: `docs/spec/` (the contract), `docs/02-features.md` (the feature inventory with
-its sources), `docs/03-keymap.md` (every key, comparing FAR/MC/TC), `docs/BACKLOG.md` (what is
+its sources), `docs/03-keymap.md` (every key, comparing FAR/MC/TC), `docs/05-multiarc.md` (how
+FAR drives external archivers, read from its own source — the reference for any work on external
+packers), `docs/BACKLOG.md` (what is
 deliberately not built yet, with reasons), `docs/help/` (the in-program help, which the site
 and `F1` both read), `docs/shots/` (SVG screenshots, which are **generated, never hand-edited** —
 `cargo test -p fcmd --bin fcmd write_the_screenshots -- --ignored` rewrites all of them from
