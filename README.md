@@ -115,11 +115,6 @@ One file, nothing to install beside it. Download the archive for your machine fr
 [releases page](https://github.com/matteobaccan/FinalCommander/releases), unpack it, and put
 `fcmd` somewhere on your `PATH`.
 
-Up to and including 0.4.0 the program was called SupremeCommander and its command was `scmd`,
-which is the name the archives of those releases carry. A configuration from that version keeps
-working: every file is read under its new name first and its old one after, and the startup
-screen says which one it found.
-
 | Platform | Archive |
 | --- | --- |
 | Linux (x86-64) | `FinalCommander-linux-x86_64-<version>.tar.gz`, or `FinalCommander-linux-x86_64-static-<version>.tar.gz` for a statically linked build that runs on any distribution |
