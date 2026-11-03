@@ -7,7 +7,7 @@ how work is done here, what has just been done and what comes next. Read this fi
 ## What it is
 
 A cross-platform orthodox file manager for the terminal: two panels, FAR Manager's keys, one
-executable of about five megabytes with no runtime, no asset directory and no plugin tree to
+executable with no dependencies: no runtime, no asset directory and no plugin tree to
 assemble. Linux, macOS and Windows, the same program on each. Rust, MSRV 1.89, MIT.
 
 The repository is `matteobaccan/FinalCommander`. It was renamed, and GitHub redirects the old

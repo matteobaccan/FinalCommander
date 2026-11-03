@@ -51,8 +51,8 @@ pub const LANGUAGES: [Text; 7] = [
         name: "English",
         tagline: "One file. Every system. Everything in it.",
         pitch: "FinalCommander is an orthodox file manager for the terminal: two panels, the \
-                keys FAR Manager gave them, and no installer. One executable of about five \
-                megabytes carries the archiver, the SFTP and FTP and WebDAV client, the S3 \
+                keys FAR Manager gave them, and no installer. One executable with no \
+                dependencies carries the archiver, the SFTP and FTP and WebDAV client, the S3 \
                 browser, the viewer that opens a forty-gigabyte log at once, the hex editor \
                 with its assembler, the search across files and the editor that colours code. \
                 Copy it onto Linux, macOS or Windows and it is the same program with the same \
@@ -81,8 +81,8 @@ pub const LANGUAGES: [Text; 7] = [
         name: "Italiano",
         tagline: "Un file. Ogni sistema. Tutto dentro.",
         pitch: "FinalCommander è un file manager ortodosso per il terminale: due pannelli, i \
-                tasti che FAR Manager gli ha dato, nessun installatore. Un eseguibile di circa \
-                cinque megabyte che contiene l'archiviatore, il client SFTP, FTP e WebDAV, il \
+                tasti che FAR Manager gli ha dato, nessun installatore. Un eseguibile solo, senza \
+                dipendenze, che contiene l'archiviatore, il client SFTP, FTP e WebDAV, il \
                 browser S3, il visualizzatore che apre un log da quaranta gigabyte \
                 istantaneamente, l'editor esadecimale con il suo assemblatore, la ricerca nei \
                 file e l'editor che colora il codice. Copialo su Linux, macOS o Windows ed è lo \
@@ -112,8 +112,8 @@ pub const LANGUAGES: [Text; 7] = [
         name: "Deutsch",
         tagline: "Eine Datei. Jedes System. Alles darin.",
         pitch: "FinalCommander ist ein orthodoxer Dateimanager für das Terminal: zwei \
-                Fenster, die Tasten von FAR Manager, kein Installationsprogramm. Eine \
-                ausführbare Datei von etwa fünf Megabyte enthält das Archivprogramm, den \
+                Fenster, die Tasten von FAR Manager, kein Installationsprogramm. Eine einzige \
+                ausführbare Datei ohne Abhängigkeiten enthält das Archivprogramm, den \
                 SFTP-, FTP- und WebDAV-Client, den S3-Browser, den Betrachter, der ein \
                 vierzig Gigabyte großes Protokoll sofort öffnet, den Hex-Editor mit Assembler, \
                 die Suche über Dateien hinweg und den Editor, der Code einfärbt. Kopieren Sie \
@@ -143,8 +143,8 @@ pub const LANGUAGES: [Text; 7] = [
         name: "Español",
         tagline: "Un archivo. Cualquier sistema. Todo dentro.",
         pitch: "FinalCommander es un gestor de archivos ortodoxo para la terminal: dos \
-                paneles, las teclas que les dio FAR Manager y ningún instalador. Un ejecutable \
-                de unos cinco megabytes que lleva dentro el archivador, el cliente SFTP, FTP y \
+                paneles, las teclas que les dio FAR Manager y ningún instalador. Un solo ejecutable \
+                sin dependencias que lleva dentro el archivador, el cliente SFTP, FTP y \
                 WebDAV, el navegador de S3, el visor que abre un registro de cuarenta \
                 gigabytes al instante, el editor hexadecimal con su ensamblador, la búsqueda \
                 entre archivos y el editor que colorea el código. Cópialo en Linux, macOS o \
@@ -175,7 +175,7 @@ pub const LANGUAGES: [Text; 7] = [
         tagline: "Un fichier. Tous les systèmes. Tout dedans.",
         pitch: "FinalCommander est un gestionnaire de fichiers orthodoxe pour le terminal : \
                 deux panneaux, les touches que FAR Manager leur a données, aucun installateur. \
-                Un exécutable d'environ cinq mégaoctets qui contient l'archiveur, le client \
+                Un seul exécutable, sans dépendances, qui contient l'archiveur, le client \
                 SFTP, FTP et WebDAV, le navigateur S3, la visionneuse qui ouvre un journal de \
                 quarante gigaoctets d'un coup, l'éditeur hexadécimal et son assembleur, la \
                 recherche à travers les fichiers et l'éditeur qui colore le code. Copiez-le sur \
@@ -205,8 +205,8 @@ pub const LANGUAGES: [Text; 7] = [
         name: "Русский",
         tagline: "Один файл. Любая система. Всё внутри.",
         pitch: "FinalCommander — ортодоксальный файловый менеджер для терминала: две панели, \
-                клавиши FAR Manager и никакого установщика. Один исполняемый файл размером \
-                около пяти мегабайт содержит архиватор, клиент SFTP, FTP и WebDAV, браузер S3, \
+                клавиши FAR Manager и никакого установщика. Один исполняемый файл \
+                без зависимостей содержит архиватор, клиент SFTP, FTP и WebDAV, браузер S3, \
                 просмотрщик, который открывает журнал на сорок гигабайт мгновенно, \
                 шестнадцатеричный редактор с ассемблером, поиск по файлам и редактор с \
                 подсветкой кода. Скопируйте его на Linux, macOS или Windows — это та же \
@@ -236,7 +236,7 @@ pub const LANGUAGES: [Text; 7] = [
         name: "中文",
         tagline: "一个文件。任何系统。应有尽有。",
         pitch: "FinalCommander 是终端里的正统文件管理器：两个面板、FAR Manager 的按键，不需要安装程序。\
-                一个约五兆字节的可执行文件里装着压缩工具、SFTP/FTP/WebDAV 客户端、S3 浏览器、能瞬间打开四十 GB \
+                一个没有任何依赖的可执行文件里装着压缩工具、SFTP/FTP/WebDAV 客户端、S3 浏览器、能瞬间打开四十 GB \
                 日志的查看器、带汇编器的十六进制编辑器、跨文件搜索，以及会着色的代码编辑器。把它复制到 Linux、\
                 macOS 或 Windows 上，都是同一个程序、同一套按键；用 `scp` 送到服务器上，在那里同样能用。",
         nav_home: "首页",

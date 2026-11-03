@@ -29,8 +29,8 @@
 You already use a two-panel file manager. Around it you have also collected an archiver, an
 SFTP client, something for S3, a hex editor, a viewer that survives a four-gigabyte log, a
 grep-across-files tool, an editor that colours code — and a different set of all of those on
-the other operating system you work on. **FinalCommander is one binary, about five megabytes
-to download, that does all of it with the same keys on all three platforms.** No installer. No
+the other operating system you work on. **FinalCommander is one binary with no dependencies
+that does all of it with the same keys on all three platforms.** No installer. No
 runtime. No DLLs, no asset directory, no plugin tree to assemble: the themes, the keymaps,
 seven interface languages, the whole help and the manual page are compiled into the file.
 `scp` it to a server and it works there too.
