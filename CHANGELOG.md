@@ -4,6 +4,30 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
+## [Unreleased]
+
+### Removed
+
+- **WebAssembly is no longer printed in process.** `wasmprinter` is out, and with it 1,319,536
+  bytes — 7.3% of the binary, measured on the same tree with and without it. What it bought was
+  one thing: `F5` or `Shift+F6` on a `.wasm` printing the module in WebAssembly's canonical text
+  format. Nothing else — the structure pane for a module was always empty, and the four bytes of
+  magic that recognise one are our own, so a `.wasm` is still named as WebAssembly in the status
+  line and still opens in the hex dump.
+
+  It cost that much because `wasmprinter` carries `wasmparser`, the reference parser for the
+  whole WebAssembly specification: every instruction of every accepted proposal and the
+  component model's type system. We used the printer and linked the validator as well. For
+  scale: the x86 and AArch64 decoders together are 1.4% of the binary, so the format fewest
+  readers ever open cost five times the two that every executable on the machine is made of.
+
+  The replacement was already compiled in and needed no new code: a `[[decompile]]` default
+  rule, `wasm2wat` for `*.wasm` (SPEC 07 §2b). `Shift+F6` on a module now takes the same road as
+  `javap` on a `.class` and `objdump` on a `.so` — WebAssembly's own tool when it is installed,
+  and a plain "no decompiler for WebAssembly" when it is not. `F5` says there is no disassembler
+  for it and points at the configuration, rather than sweeping bytecode as if it were x86, which
+  is the one thing it must not do.
+
 ## [0.28.0] — 2026-11-04
 
 ### Added

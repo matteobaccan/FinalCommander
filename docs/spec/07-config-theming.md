@@ -113,8 +113,7 @@ cmd = "javap -c -p -constants {file}"   # run directly, never through a shell
 ```
 
 Compiled-in defaults, each active only if present: `javap` (`*.class`), `ilspycmd` (`*.dll`),
-`python3 -m dis` (`*.pyc`), `wasm2wat` (`*.wasm`, though WebAssembly is printed in process
-anyway), `objdump -d -C` (`*.o`, `*.so`, `*.a`), `retdec-decompiler` (`*.exe`). A rule in
+`python3 -m dis` (`*.pyc`), `wasm2wat` (`*.wasm`), `objdump -d -C` (`*.o`, `*.so`, `*.a`), `retdec-decompiler` (`*.exe`). A rule in
 `fcmd.toml` wins over a default for the same mask. `{file}` is substituted; a rule that forgets
 it still gets the path appended.
 

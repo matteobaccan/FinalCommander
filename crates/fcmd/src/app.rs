@@ -15917,9 +15917,11 @@ impl App {
 
     /// `F6`: produce readable text from a compiled file.
     ///
-    /// WebAssembly is printed in process; everything else goes to an external tool, because a
-    /// decompiler is a research project and we would rather call a good one than ship a bad
-    /// one. See `[[decompile]]` in the config.
+    /// Every format goes to an external tool, because a decompiler is a research project and
+    /// we would rather call a good one than ship a bad one. See `[[decompile]]` in the config,
+    /// whose compiled-in defaults name `javap`, `ilspycmd`, `python3 -m dis`, `wasm2wat`,
+    /// `objdump` and `retdec`; a rule is used only when its program is on the `PATH`, so a
+    /// format with no tool here says so rather than failing.
     fn decompile(&mut self) {
         let Some(viewer) = self.live_viewer_mut() else {
             return;
@@ -15927,27 +15929,6 @@ impl App {
         let name = viewer.path.display_name();
         let path = viewer.path.clone();
         let format = viewer.format();
-
-        if format == fcmd_view::Format::Wasm {
-            match viewer.wasm_text() {
-                Ok(text) => {
-                    viewer.show_derived("WAT", text);
-                    let msg = self.i18n.t_args(
-                        "viewer-derived",
-                        &[("producer", "WAT".into()), ("name", name.into())],
-                    );
-                    self.set_status(msg);
-                }
-                Err(e) => {
-                    let msg = self.i18n.t_args(
-                        "viewer-disasm-failed",
-                        &[("name", name.into()), ("error", e.to_string().into())],
-                    );
-                    self.set_error(msg);
-                }
-            }
-            return;
-        }
 
         match self.cfg.decompiler_for(&name) {
             Some(rule) => {
@@ -28255,7 +28236,7 @@ abcdefghij
     }
 
     #[test]
-    fn shift_f6_prints_a_wasm_module_as_text_without_an_external_tool() {
+    fn shift_f6_sends_a_wasm_module_to_the_tool_the_rules_name() {
         let dir = tempfile::tempdir().unwrap();
         let wasm: &[u8] = &[
             0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x05, 0x01, 0x60, 0x00, 0x01,
@@ -28268,14 +28249,27 @@ abcdefghij
         press(&mut app, "Shift+F6");
 
         let viewer = app.mode.viewer_mut().expect("still open");
-        assert_eq!(viewer.derived.as_deref(), Some("WAT"));
-        let rows: Vec<String> = viewer.rows(80, 6).into_iter().map(|r| r.text).collect();
-        assert!(rows.iter().any(|r| r.contains("i32.const 42")), "{rows:?}");
-        assert!(app.status.contains("WAT"), "{}", app.status);
         assert!(
-            app.take_requests().is_empty(),
-            "no external tool was needed"
+            viewer.derived.is_none(),
+            "nothing is produced in process any more"
         );
+        // Which of the two happens depends on the machine, and that is the point: a rule is
+        // used only when its program is on the `PATH`. With `wasm2wat` installed the job is
+        // asked for; without it the viewer says there is no tool for this format, naming it.
+        let asked = app.take_requests();
+        if asked.is_empty() {
+            assert!(
+                app.status.to_lowercase().contains("webassembly"),
+                "the format has to be named: {}",
+                app.status
+            );
+        } else {
+            assert!(
+                app.status.contains("wasm2wat"),
+                "the tool has to be named: {}",
+                app.status
+            );
+        }
     }
 
     #[test]

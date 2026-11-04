@@ -153,7 +153,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 5.19 | **DBF**: dBase III/IV and FoxPro tables in table mode — the typed header, fixed-length records read at an offset so a 2 GB table opens at once, the deleted flag, and the memo files beside it (`.dbt`, `.fpt`) | NEW | ✓ |
 | 5.10 | Chrome toggles (key bar, status line, scrollbar) and the viewer's own settings | FAR | ✓ |
 | 5.11 | **Disassembly** (`F5`): ELF/PE/Mach-O/raw recognition, sections and symbols, x86/x86-64 decoding with symbol headings, instruction-accurate scrolling, raw sweep for files over the parse limit | NEW | ✓ |
-| 5.12 | **Decompilation** (`F6`): WebAssembly to its text format in process; `[[decompile]]` rules call installed tools (javap, ilspycmd, python -m dis, objdump, retdec) and the output is viewed as text | NEW | ✓ |
+| 5.12 | **Decompilation** (`Shift+F6`): `[[decompile]]` rules call installed tools (javap, ilspycmd, python -m dis, wasm2wat, objdump, retdec) and the output is viewed as text; a rule is used only when its program is on the `PATH`, and a format with no tool says so | NEW | ✓ |
 | 5.13 | **JVM bytecode and .NET IL in process**: class files listed javap-style with the constant pool resolved; managed PEs listed ildasm-style with metadata-resolved tokens and `#US` string literals | NEW | ✓ |
 | 5.14 | Still external: Python bytecode, aarch64/riscv decoding, .NET signatures and generics | NEW | M3 |
 | 5.15 | **Structure pane** (`F11`): what the file is and where anything inside it is — format, architecture, kind, entry point, the header field by field, sections and segments, imports and exports, the interpreter and build id; `Tab` moves the focus, `Enter` takes the hex or disassembly pane to that offset. Read through a seeking reader, so a section table at the end of a 3 GB file costs two seeks | NEW | ✓ |
@@ -188,8 +188,8 @@ published list, item for item, against what we have.
 
 Two things on this list we have and Hiew does not, so they are worth saying out loud: the
 structure pane decodes imports, exports and the .NET header beside the raw bytes, and the
-decompilers (WebAssembly in process, JVM and .NET IL in process, external tools by rule) turn
-a binary into something readable rather than only into instructions.
+decompilers (JVM and .NET IL in process, external tools by rule) turn a binary into
+something readable rather than only into instructions.
 
 ## 6. Editor (`F4`)
 

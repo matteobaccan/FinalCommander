@@ -4,8 +4,7 @@
 //!
 //! - **Disassembly** — machine code to mnemonics. Done here, in Rust, for x86 and x86-64
 //!   (`iced-x86`) and for AArch64 (`yaxpeax-arm`), with the file's own structure read by
-//!   `object`; and WebAssembly to its canonical text format (`wasmprinter`), which is as
-//!   close to source as a `.wasm` has.
+//!   `object`.
 //! - **Decompilation** — machine code back to something C- or Java-like. That is a research
 //!   project in its own right (Ghidra, RetDec, ILSpy, javap, uncompyle6), so FinalCommander
 //!   does not reimplement it: it *calls* those tools when they are installed and shows their
@@ -635,11 +634,6 @@ pub fn previous_instruction(code_before: &[u8], target_offset: u64, arch: Arch) 
         .unwrap_or_else(|| target_offset.saturating_sub(1))
 }
 
-/// WebAssembly's canonical text format: as close to source as a `.wasm` file gets.
-pub fn wasm_text(bytes: &[u8]) -> Result<String, DisasmError> {
-    wasmprinter::print_bytes(bytes).map_err(|e| DisasmError::Parse(e.to_string()))
-}
-
 /// The architecture this build of FinalCommander is running on — the only sensible guess
 /// when a file is too large to parse but the user still wants to see instructions.
 pub fn host_arch() -> Arch {
@@ -897,7 +891,7 @@ mod tests {
     }
 
     #[test]
-    fn a_wasm_module_prints_as_text() {
+    fn a_wasm_module_is_still_recognised_without_a_printer_for_it() {
         // (module (func (export "answer") (result i32) i32.const 42))
         let wasm: &[u8] = &[
             0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, // header
@@ -906,14 +900,16 @@ mod tests {
             0x07, 0x0a, 0x01, 0x06, b'a', b'n', b's', b'w', b'e', b'r', 0x00, 0x00, // export
             0x0a, 0x06, 0x01, 0x04, 0x00, 0x41, 0x2a, 0x0b, // code: i32.const 42
         ];
+        // The four bytes of magic are ours, so the status line still names the format and the
+        // hex pane still has a title; what is gone is only the printing, which a `[[decompile]]`
+        // rule does instead.
         assert_eq!(probe(wasm), Format::Wasm);
-        let text = wasm_text(wasm).expect("the module prints");
-        assert!(text.contains("(module"), "{text}");
-        assert!(text.contains("i32.const 42"), "{text}");
-        assert!(text.contains("answer"), "{text}");
-
         let binary = analyze(wasm, true).unwrap();
         assert_eq!(binary.format, Format::Wasm);
+        assert!(
+            binary.sections.is_empty() && binary.functions.is_empty(),
+            "a module has no structure pane here, and never had one"
+        );
     }
 
     #[test]

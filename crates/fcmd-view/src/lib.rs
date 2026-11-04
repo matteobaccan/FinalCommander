@@ -26,8 +26,8 @@ pub use asm::{assemble, AsmError, Assembled};
 pub use decode::{detect, looks_binary, sniff_bom, Codepage};
 pub use diff::{Diff, Side};
 pub use disasm::{
-    analyze, disassemble, probe, resolve_targets, wasm_text, Arch, Binary, DisasmError, Format,
-    Line, Target, TargetKind,
+    analyze, disassemble, probe, resolve_targets, Arch, Binary, DisasmError, Format, Line, Target,
+    TargetKind,
 };
 pub use search::{compile, Match, Pattern, SearchError, SearchMode};
 pub use source::{BytesSource, FileSource, Source};

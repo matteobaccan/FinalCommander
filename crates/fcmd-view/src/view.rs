@@ -158,7 +158,7 @@ pub struct Status {
     pub bookmarks: Vec<usize>,
     /// What this file is, when we recognised a compiled format.
     pub binary: Option<String>,
-    /// Set when we are looking at generated text (WAT, a decompiler's output).
+    /// Set when we are looking at generated text (a decompiler's output, a bytecode listing).
     pub derived: Option<String>,
     /// In table mode: what it was read as, the delimiter that was guessed, the shape of the
     /// table and what was left out (SPEC 05 §1.11).
@@ -284,7 +284,7 @@ pub struct Viewer {
     pub struct_cursor: usize,
     struct_top: usize,
     pub struct_focus: bool,
-    /// Name of the producer when the content is generated (`WAT`, `javap`, …).
+    /// Name of the producer when the content is generated (`javap`, `IL`, `wasm2wat`, …).
     pub derived: Option<String>,
     /// Set when the file was too large to parse and we are sweeping raw bytes; carries the
     /// limit, for the status line.
@@ -619,10 +619,10 @@ impl Viewer {
     /// Switch to disassembly, jumping to the code section the first time.
     ///
     /// Bytecode formats produce a listing instead of instruction rows, because that is how
-    /// they are read: a `.class` file becomes a `javap`-style listing, a managed PE becomes an
-    /// IL listing, a `.wasm` becomes its text format — all in process. A file too large to
-    /// parse structurally is still disassembled, as a raw sweep from where the cursor already
-    /// is, using the host architecture; the status line says so.
+    /// they are read: a `.class` file becomes a `javap`-style listing and a managed PE an IL
+    /// listing, both in process. A file too large to parse structurally is still
+    /// disassembled, as a raw sweep from where the cursor already is, using the host
+    /// architecture; the status line says so.
     pub fn start_disasm(&mut self) -> Result<Started, DisasmError> {
         match self.format() {
             Format::JavaClass => {
@@ -631,11 +631,10 @@ impl Viewer {
                 self.show_derived("bytecode", text);
                 return Ok(Started::Derived("bytecode"));
             }
-            Format::Wasm => {
-                let text = self.wasm_text()?;
-                self.show_derived("WAT", text);
-                return Ok(Started::Derived("WAT"));
-            }
+            // A module is bytecode, so a raw sweep with the host architecture would be
+            // nonsense rather than a fallback. Its text format comes from a `[[decompile]]`
+            // rule — `wasm2wat`, which ships as a default — and the error says exactly that.
+            Format::Wasm => return Err(DisasmError::NoDisassembler("WebAssembly")),
             Format::Pe => {
                 let bytes = self.whole_file()?;
                 if il::is_managed(&bytes) {
@@ -710,16 +709,6 @@ impl Viewer {
         self.top_sub = 0;
         self.col = 0;
         self.clear_search();
-    }
-
-    /// WebAssembly to its canonical text format, in process.
-    pub fn wasm_text(&mut self) -> Result<String, DisasmError> {
-        let len = self.source.len();
-        let bytes = self
-            .source
-            .read_vec(0, len.min(disasm::MAX_PARSE as u64) as usize)
-            .map_err(|e| DisasmError::Parse(e.to_string()))?;
-        disasm::wasm_text(&bytes)
     }
 
     /// What this file is, for the decompile command to decide what to do.
@@ -3202,33 +3191,27 @@ mod tests {
     }
 
     #[test]
-    fn a_wasm_module_is_shown_as_its_text_format() {
+    fn a_wasm_module_is_sent_to_an_external_tool_rather_than_swept_as_x86() {
         let wasm: &[u8] = &[
             0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x05, 0x01, 0x60, 0x00, 0x01,
             0x7f, 0x03, 0x02, 0x01, 0x00, 0x0a, 0x06, 0x01, 0x04, 0x00, 0x41, 0x2a, 0x0b,
         ];
         let mut v = viewer(wasm);
         assert_eq!(v.format(), crate::disasm::Format::Wasm);
-        let text = v.wasm_text().expect("prints");
-        v.show_derived("WAT", text);
-
-        assert_eq!(v.mode, Mode::Text);
-        assert_eq!(v.derived.as_deref(), Some("WAT"));
-        assert_eq!(v.status().derived.as_deref(), Some("WAT"));
-        let rows = texts(&mut v, 80, 10);
-        assert!(rows[0].contains("(module"), "{rows:?}");
-        assert!(rows.iter().any(|r| r.contains("i32.const 42")), "{rows:?}");
-
-        // Searching works on the generated text like on any file.
-        assert!(v
-            .search(
-                "i32.const",
-                SearchMode::Plain,
-                false,
-                false,
-                &CancelToken::new()
-            )
-            .unwrap());
+        // A module is bytes, so the viewer opens it in the hex dump; whatever it was showing
+        // has to still be showing after a refusal.
+        let before = v.mode;
+        // `F5` on bytecode has nothing to sweep: the error names the format and points at the
+        // configuration, which is where `wasm2wat` is.
+        let why = v.start_disasm().expect_err("nothing to disassemble");
+        assert!(
+            matches!(why, DisasmError::NoDisassembler("WebAssembly")),
+            "{why}"
+        );
+        assert!(why.to_string().contains("external tool"), "{why}");
+        // Nothing was derived, and the viewer is still showing the file.
+        assert!(v.derived.is_none());
+        assert_eq!(v.mode, before, "the mode must not change on failure");
     }
 
     #[test]

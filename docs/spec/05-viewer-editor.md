@@ -7,8 +7,8 @@ with highlighted hits and next/previous; go to offset, `0x` offset or percentage
 bookmarks 0–9; follow mode; windowed reads with no line index, so file size does not matter.
 Also implemented: **disassembly** of ELF/PE/Mach-O/raw x86, x86-64 and AArch64 with sections and
 symbols, **JVM class files and .NET assemblies** read in process (constant pool, members and
-JVM bytecode; metadata tables and CIL), and **decompilation** through WebAssembly's text format
-in process or an installed external tool (§1.6).
+JVM bytecode; metadata tables and CIL), and **decompilation** through an installed external
+tool (§1.6).
 Also implemented: the **editor** (`F4`, `Shift+F4` for a new file) — see the note under §2.
 Also implemented: **syntax highlighting** in both (§2.5), for the languages and markups
 `fcmd-syntax` knows, off with `ui.syntax = false`.
@@ -172,7 +172,7 @@ own symbols, there is nothing to guess, so we read it ourselves:
 | --- | --- |
 | `.class` | a `javap -c`-style listing: class file version, flags, fields, and every method's bytecode with the constant pool resolved into the comments (`invokevirtual #17 // java/io/PrintStream.println:(Ljava/lang/String;)V`), absolute branch targets, `tableswitch`/`lookupswitch` with their cases, `wide` applied to the instruction it widens, and exception handlers |
 | managed PE (.NET) | an `ildasm`-flavoured listing: the CLI header and metadata root, the `#~` table stream walked as far as MemberRef, methods grouped by type, tiny and fat method bodies, and IL with tokens resolved to names — `ldstr` literals come out of the `#US` heap as text |
-| `.wasm` | the canonical text format via `wasmprinter`, as close to source as a module has |
+| `.wasm` | nothing: a module is bytecode, so a raw sweep would be nonsense. `F5` says there is no disassembler for WebAssembly and points at the configuration, where a `[[decompile]]` rule names `wasm2wat`. Printing one in process cost 1,318,704 bytes of binary — 7.3% of it, five times what the x86 and AArch64 decoders cost together — for the format fewest readers open, and the tool that does it properly is the one WebAssembly's own authors ship |
 
 The class-file parser is written here rather than taken as a dependency: the format is small
 and completely specified (JVMS §4), and the interesting part — resolving the constant pool into
