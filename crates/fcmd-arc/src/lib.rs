@@ -29,8 +29,8 @@ mod write;
 
 pub use archive::{ArcEntry, Archive, Cache, Report};
 pub use ext::{
-    builtin_tools, claimed_by_a_tool, missing_program, tool_for, ExtError, Fill, Line, Listing,
-    Magic, Op, Ran, Reader, Row, Run, Spawn, Tool,
+    builtin_tools, claimed_by_a_tool, install_tools, merge, missing_program, tables, tool_for,
+    Anchor, ExtError, Fill, Line, Listing, Magic, Op, Ran, Reader, Row, Run, Spawn, Tool,
 };
 pub use format::Format;
 pub use limits::Limits;

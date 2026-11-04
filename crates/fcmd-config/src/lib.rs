@@ -920,8 +920,8 @@ fn default_scheme() -> String {
 
 /// A `[[decompile]]` rule: an external tool that turns a compiled file into readable text.
 ///
-/// FinalCommander disassembles x86 code and prints WebAssembly itself; real decompilation is
-/// a research project, so it calls the specialists instead of reimplementing them.
+/// FinalCommander disassembles x86 and AArch64 code itself; real decompilation is a research
+/// project, so it calls the specialists instead of reimplementing them.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DecompileRule {
     /// Shown in the viewer's status line.
@@ -932,6 +932,220 @@ pub struct DecompileRule {
     /// The command. `{file}` is replaced with the path; it is executed directly, never
     /// through a shell.
     pub cmd: String,
+}
+
+/// An `[[archiver]]` block: a program on the machine that reads a format this program does not.
+///
+/// The table language is FAR's MultiArc, written down in `docs/05-multiarc.md`. The shipped
+/// `7z` table is a default: a block here with the same `name` replaces it, and any other goes
+/// in front of it, so it is asked first.
+///
+/// ```toml
+/// [[archiver]]
+/// name = "unace"
+/// extensions = ["ace"]
+/// magic = "2A 2A 41 43 45 2A 2A"
+/// magic_at = 7
+/// List = "v %A"
+/// Extract = "x -y %A @%L"
+///
+/// [archiver.listing]
+/// start = "^Date    Time"
+/// end = "^listed:"
+/// rows = ['^(?<size>\d+)\s+(?<name>\S.*)$']
+/// ```
+///
+/// The operations are written at the top of the block under MultiArc's own key names, so a
+/// table copied out of a `custom.ini` keeps its keys. They are collected rather than declared,
+/// which is also what lets a key that is not an operation be named in a warning instead of
+/// vanishing.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ArchiverCfg {
+    /// What the table is called: in a message, in the panel's frame, and to replace a shipped
+    /// table of the same name.
+    pub name: String,
+    /// The program to run, found on the `PATH`. When absent, the `name` is the program.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub program: Option<String>,
+    /// The extensions it claims, without the dot.
+    #[serde(default)]
+    pub extensions: Vec<String>,
+    /// The bytes that prove the format, as two-digit hex separated by spaces: `"52 61 72 21"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub magic: Option<String>,
+    /// Where the magic is. Absent means at the very start.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub magic_at: Option<usize>,
+    /// Trust the bytes and ignore the name.
+    #[serde(default)]
+    pub magic_only: bool,
+    #[serde(default)]
+    pub listing: ListingCfg,
+    /// `List`, `Extract`, `ExtractWithoutPath`, `Test`: the command lines, by operation.
+    #[serde(flatten)]
+    pub commands: BTreeMap<String, toml::Value>,
+}
+
+/// How to read what an `[[archiver]]`'s `List` printed (`docs/05-multiarc.md` §5).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ListingCfg {
+    /// Rows begin after the line this matches; a leading `^` anchors it to the line's start.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start: Option<String>,
+    /// And stop at the line this matches.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end: Option<String>,
+    /// Lines to drop wherever they are.
+    pub skip: Vec<String>,
+    /// Patterns with named captures, tried in order: `name` is required; `size`,
+    /// `packedSize`, `attr`, `crc` and `mYear` `mMonth` `mDay` `mHour` `mMin` `mSec` are read
+    /// when they are there.
+    pub rows: Vec<String>,
+    /// The letter that, in the `attr` capture, means the row is a directory.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dir_attr: Option<String>,
+}
+
+impl ArchiverCfg {
+    /// The table this block describes, or the reason it does not describe one.
+    ///
+    /// A block that is wrong is refused whole, with its name in the reason, rather than
+    /// installed half-working: a table that lists but whose grammar reads nothing is a format
+    /// that opens empty, which is worse than one that does not open and says why.
+    pub fn tool(&self) -> Result<fcmd_arc::Tool, String> {
+        let name = self.name.trim();
+        if name.is_empty() {
+            return Err("an [[archiver]] block has no name".to_string());
+        }
+        let why = |reason: String| format!("[[archiver]] `{name}`: {reason}");
+
+        let mut commands = BTreeMap::new();
+        for (key, value) in &self.commands {
+            let Some(op) = fcmd_arc::Op::of_key(key) else {
+                return Err(why(format!(
+                    "`{key}` is neither a setting of the block nor an operation"
+                )));
+            };
+            let Some(line) = value.as_str() else {
+                return Err(why(format!("`{key}` has to be a command line, in quotes")));
+            };
+            // The rule of `docs/05-multiarc.md` §9: a program driven from a table only reads.
+            // A line for an operation that writes is refused by name, so that somebody who
+            // copied a whole MultiArc table across learns why `Add` does nothing, instead of
+            // finding out by pressing it.
+            if op.writes() {
+                return Err(why(format!(
+                    "`{key}` would change the archive, and a program driven from a table only \
+                     reads (docs/05-multiarc.md §9) — take the line out"
+                )));
+            }
+            commands.insert(op, line.to_string());
+        }
+        if !commands.contains_key(&fcmd_arc::Op::List) {
+            return Err(why(
+                "it has no `List` line, so nothing could ever be read with it".to_string(),
+            ));
+        }
+
+        let magic = match &self.magic {
+            None => None,
+            Some(hex) => {
+                let mut bytes = Vec::new();
+                for pair in hex.split_whitespace() {
+                    let byte = u8::from_str_radix(pair, 16).map_err(|_| {
+                        why(format!(
+                            "`magic` is two-digit hex separated by spaces, and `{pair}` is not"
+                        ))
+                    })?;
+                    bytes.push(byte);
+                }
+                if bytes.is_empty() {
+                    return Err(why("`magic` is empty".to_string()));
+                }
+                Some(fcmd_arc::Magic {
+                    bytes,
+                    at: self.magic_at,
+                })
+            }
+        };
+        if self.magic_only && magic.is_none() {
+            return Err(why(
+                "`magic_only` with no `magic` would claim nothing at all".to_string(),
+            ));
+        }
+        let extensions: Vec<String> = self
+            .extensions
+            .iter()
+            .map(|e| e.trim().trim_start_matches('.').to_ascii_lowercase())
+            .filter(|e| !e.is_empty())
+            .collect();
+        if extensions.is_empty() && magic.is_none() {
+            return Err(why(
+                "it has neither `extensions` nor `magic`, so no file would ever be handed to it"
+                    .to_string(),
+            ));
+        }
+
+        let dir_attr = match self.listing.dir_attr.as_deref() {
+            None => None,
+            Some(text) => {
+                let mut chars = text.chars();
+                match (chars.next(), chars.next()) {
+                    (Some(c), None) => Some(c),
+                    _ => {
+                        return Err(why(format!(
+                            "`listing.dir_attr` is one letter, not `{text}`"
+                        )))
+                    }
+                }
+            }
+        };
+        if self.listing.rows.is_empty() {
+            return Err(why(
+                "`listing.rows` is empty, so every listing would come back with nothing in it"
+                    .to_string(),
+            ));
+        }
+        let listing = fcmd_arc::Listing {
+            start: self.listing.start.as_deref().map(fcmd_arc::Anchor::new),
+            end: self.listing.end.as_deref().map(fcmd_arc::Anchor::new),
+            skip: self
+                .listing
+                .skip
+                .iter()
+                .map(|s| fcmd_arc::Anchor::new(s))
+                .collect(),
+            rows: self.listing.rows.clone(),
+            dir_attr,
+        };
+        // Compiled here, once, so a pattern that does not compile is refused at startup with
+        // the regex's own reason — not on the first `Enter`, as an archive that "is broken".
+        listing.reader().map_err(|e| why(e.to_string()))?;
+
+        let tool = fcmd_arc::Tool {
+            name: name.to_string(),
+            program: self
+                .program
+                .clone()
+                .filter(|p| !p.trim().is_empty())
+                .unwrap_or_else(|| name.to_string()),
+            extensions,
+            magic,
+            magic_only: self.magic_only,
+            commands,
+            all_files: None,
+            default_extension: None,
+            listing,
+        };
+        // And every line has to fill in, with nothing in hand and with everything: a brace
+        // that is never closed is found now.
+        for op in fcmd_arc::Op::ALL.into_iter().filter(|op| tool.can(*op)) {
+            tool.line(op, &fcmd_arc::Fill::default())
+                .map_err(|e| why(e.to_string()))?;
+        }
+        Ok(tool)
+    }
 }
 
 /// Does `mask` apply to `name`? `*.ext` compares the extension, anything else the whole file
@@ -1282,6 +1496,10 @@ pub struct Config {
     /// `[[decompile]]` blocks: external tools the viewer may call.
     #[serde(rename = "decompile")]
     pub decompile: Vec<DecompileRule>,
+    /// `[[archiver]]` blocks: programs on the machine that read formats this one does not,
+    /// in front of the shipped table (`docs/05-multiarc.md`).
+    #[serde(rename = "archiver", skip_serializing_if = "Vec::is_empty")]
+    pub archivers: Vec<ArchiverCfg>,
     pub net: NetCfg,
     pub cmdline: CmdLineCfg,
     pub compare: CompareCfg,
@@ -1376,6 +1594,23 @@ impl Config {
         self.sites
             .iter()
             .find(|s| s.id.eq_ignore_ascii_case(id.trim()))
+    }
+
+    /// The `[[archiver]]` blocks as tables, and a sentence for every one that is not.
+    ///
+    /// A broken block is a warning and not a stop, like every other problem in this file: the
+    /// program starts, the startup warnings name the block and the reason, and the shipped
+    /// table still answers for the formats it claims.
+    pub fn archiver_tools(&self) -> (Vec<fcmd_arc::Tool>, Vec<String>) {
+        let mut tools = Vec::new();
+        let mut problems = Vec::new();
+        for block in &self.archivers {
+            match block.tool() {
+                Ok(tool) => tools.push(tool),
+                Err(reason) => problems.push(reason),
+            }
+        }
+        (tools, problems)
     }
 
     pub fn decompiler_for(&self, name: &str) -> Option<DecompileRule> {
@@ -1970,6 +2205,154 @@ mod tests {
         let parent = p.config_file.parent().unwrap();
         assert_ne!(parent.file_name(), Some(std::ffi::OsStr::new("fcmd")));
         assert!(p.describe().contains("plugins"));
+    }
+
+    // ── [[archiver]] ──────────────────────────────────────────────────────────────────────
+
+    /// A table somebody might really write: MultiArc's key names at the top, the grammar in
+    /// its own table.
+    const UNACE: &str = r#"
+[[archiver]]
+name = "unace"
+extensions = ["ACE", ".c00"]
+magic = "2A 2A 41 43 45 2A 2A"
+magic_at = 7
+List = "v -y %A"
+Extract = "x -y %A @%L"
+Test = "t -y %A"
+
+[archiver.listing]
+start = "^Date    Time"
+end = "^listed:"
+skip = ["Warning"]
+rows = ['^(?<mDay>\d{2})\.(?<mMonth>\d{2})\.(?<mYear>\d{2,4})\s+(?<size>\d+)\s+(?<name>\S.*)$']
+dir_attr = "D"
+"#;
+
+    #[test]
+    fn an_archiver_block_becomes_a_table() {
+        let (cfg, warnings) = Config::parse("test", UNACE).expect("it parses");
+        assert!(warnings.is_empty(), "{warnings:?}");
+        let (tools, problems) = cfg.archiver_tools();
+        assert!(problems.is_empty(), "{problems:?}");
+        assert_eq!(tools.len(), 1);
+        let tool = &tools[0];
+        assert_eq!(tool.name, "unace");
+        // No `program`, so the name is the program.
+        assert_eq!(tool.program, "unace");
+        // Lowercased, and the dot somebody wrote is not part of an extension.
+        assert_eq!(tool.extensions, ["ace", "c00"]);
+        let magic = tool.magic.as_ref().expect("a magic");
+        assert_eq!(magic.bytes, b"**ACE**");
+        assert_eq!(magic.at, Some(7));
+        assert!(tool.can(fcmd_arc::Op::List));
+        assert!(tool.can(fcmd_arc::Op::Extract));
+        assert!(tool.can(fcmd_arc::Op::Test));
+        assert!(!tool.can(fcmd_arc::Op::Add));
+        assert_eq!(tool.listing.dir_attr, Some('D'));
+        assert_eq!(tool.listing.skip.len(), 1);
+        // And the grammar really reads a row, so the block is not merely well-formed.
+        let reader = tool.listing.reader().expect("it compiles");
+        let rows = reader.read("Date    Time\n04.11.26  1234  docs/readme.txt\nlisted: 1 file\n");
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        assert_eq!(rows[0].name, "docs/readme.txt");
+        assert_eq!(rows[0].size, Some(1234));
+    }
+
+    /// Every way of getting one wrong, and what each one says. A wrong block is refused whole,
+    /// with its name and the reason, rather than installed half-working.
+    #[test]
+    fn a_wrong_archiver_block_is_refused_with_its_name_and_the_reason() {
+        let base = |extra: &str, listing: &str| {
+            format!(
+                "[[archiver]]\nname = \"broken\"\nextensions = [\"brk\"]\n{extra}\n\
+                 [archiver.listing]\n{listing}\n"
+            )
+        };
+        let good_rows = r#"rows = ['^(?<name>\S+)$']"#;
+        let cases: [(String, &str); 9] = [
+            (base("", good_rows), "no `List`"),
+            (
+                base("List = \"l %A\"\nAdd = \"a %A @%L\"", good_rows),
+                "only reads",
+            ),
+            (
+                base("List = \"l %A\"\nDelete = \"d %A\"", good_rows),
+                "only reads",
+            ),
+            (
+                base("List = \"l %A\"\nListt = \"l %A\"", good_rows),
+                "`Listt`",
+            ),
+            (base("List = \"l {%A\"", good_rows), "never closed"),
+            (base("List = \"l %A\"", ""), "`listing.rows` is empty"),
+            (
+                base("List = \"l %A\"", r#"rows = ['^(?<size>\d+)$']"#),
+                "no (?<name>",
+            ),
+            (base("List = \"l %A\"\nmagic = \"5Z\"", good_rows), "`5Z`"),
+            (
+                base(
+                    "List = \"l %A\"",
+                    &format!("{good_rows}\ndir_attr = \"DIR\""),
+                ),
+                "one letter",
+            ),
+        ];
+        for (src, says) in cases {
+            let (cfg, _) = Config::parse("test", &src).expect("the TOML itself is fine");
+            let (tools, problems) = cfg.archiver_tools();
+            assert!(tools.is_empty(), "{src}\n— was accepted");
+            assert_eq!(problems.len(), 1, "{src}\n— {problems:?}");
+            assert!(
+                problems[0].contains("`broken`"),
+                "the block is named: {}",
+                problems[0]
+            );
+            assert!(problems[0].contains(says), "{src}\n— {}", problems[0]);
+        }
+    }
+
+    #[test]
+    fn an_archiver_that_could_never_be_handed_a_file_is_refused() {
+        let src = "[[archiver]]\nname = \"nothing\"\nList = \"l %A\"\n\
+                   [archiver.listing]\nrows = ['^(?<name>\\S+)$']\n";
+        let (cfg, _) = Config::parse("test", src).expect("it parses");
+        let (_, problems) = cfg.archiver_tools();
+        assert!(
+            problems[0].contains("neither `extensions` nor `magic`"),
+            "{problems:?}"
+        );
+        // And `magic_only` with no magic claims nothing either.
+        let src = "[[archiver]]\nname = \"blind\"\nmagic_only = true\nextensions = [\"x\"]\n\
+                   List = \"l %A\"\n[archiver.listing]\nrows = ['^(?<name>\\S+)$']\n";
+        let (cfg, _) = Config::parse("test", src).expect("it parses");
+        let (_, problems) = cfg.archiver_tools();
+        assert!(problems[0].contains("`magic_only`"), "{problems:?}");
+    }
+
+    #[test]
+    fn one_wrong_block_does_not_take_the_good_ones_with_it() {
+        let src = format!(
+            "{UNACE}\n[[archiver]]\nname = \"broken\"\nextensions = [\"brk\"]\n\
+             [archiver.listing]\nrows = ['^(?<name>\\S+)$']\n"
+        );
+        let (cfg, _) = Config::parse("test", &src).expect("it parses");
+        let (tools, problems) = cfg.archiver_tools();
+        assert_eq!(tools.len(), 1, "the good one survives");
+        assert_eq!(tools[0].name, "unace");
+        assert_eq!(problems.len(), 1);
+        assert!(problems[0].contains("`broken`"));
+    }
+
+    #[test]
+    fn a_configuration_with_no_archiver_blocks_is_unchanged_by_them() {
+        let (cfg, _) = Config::parse("test", "").expect("it parses");
+        assert!(cfg.archivers.is_empty());
+        let (tools, problems) = cfg.archiver_tools();
+        assert!(tools.is_empty() && problems.is_empty());
+        // And the dump does not grow an empty `archiver = []` for everybody.
+        assert!(!cfg.dump().contains("archiver"), "{}", cfg.dump());
     }
 
     #[test]

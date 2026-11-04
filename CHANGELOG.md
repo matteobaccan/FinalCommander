@@ -8,6 +8,33 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **A format somebody adds, without waiting for a release.** `[[archiver]]` blocks in
+  `fcmd.toml` name a program on the machine, its command lines and how to read what it prints,
+  and `Enter` goes into the files it claims. It was the last thing Midnight Commander did that
+  this did not: an mc user drops a shell script into `extfs` and has a new format the same day.
+  The language is FAR's MultiArc, so a table copied out of a `custom.ini` keeps its key names.
+  SPEC 07 §2b-ter is the reference.
+
+  The blocks are read once at startup and installed into one table for the whole run, which
+  every archive cache and the decision whether `Enter` goes into a file both read — a format a
+  user added is the same format everywhere, rather than known to one part of the program and
+  not another. They are asked before the shipped `7z` table, and one named `7z` replaces it,
+  which is how somebody changes our switches: MultiArc's `custom_user.ini` rule, that what ships
+  is a default and not a fixed list.
+
+  A wrong block is refused whole, with its name and the reason, as a startup warning: no `List`
+  line, a pattern that does not compile or captures no `name`, a magic that is not hex, a brace
+  that is never closed, an extension list and a magic that are both missing so nothing would
+  ever reach it. Every one of those is found at startup rather than on the first `Enter`, where
+  it would have looked like a broken archive. And a block with a line for an operation that
+  would change an archive — `Add`, `Delete`, `SFX` — is refused by name: this is where the rule
+  that a program driven from a table only reads is enforced, so somebody who copied a whole
+  MultiArc table across learns why `Add` is not there instead of finding out by pressing it.
+
+  Verified through the whole road against the real `7z`: a block in a configuration, the table
+  it becomes, and a file with an extension nothing shipped claims, listed and read through it.
+
+
 - **The shell is left where the panel was.** `mc`, navigate, `F10`, and you are there: it is
   how people use Midnight Commander, and it was the one gap with it that had no row in the
   feature table at all. A process cannot change its parent's working directory — there is no

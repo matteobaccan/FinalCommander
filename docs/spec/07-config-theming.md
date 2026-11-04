@@ -117,6 +117,58 @@ Compiled-in defaults, each active only if present: `javap` (`*.class`), `ilspycm
 `fcmd.toml` wins over a default for the same mask. `{file}` is substituted; a rule that forgets
 it still gets the path appended.
 
+## 2b-ter. `[[archiver]]` blocks
+
+A program on the machine that reads a format this one does not (`docs/05-multiarc.md`). The
+language is FAR's MultiArc, so a table out of a `custom.ini` keeps its key names.
+
+```toml
+[[archiver]]
+name = "unace"                    # in messages and the panel's frame; replaces a shipped table of this name
+program = "unace"                 # found on the PATH; the name when left out
+extensions = ["ace"]              # without the dot
+magic = "2A 2A 41 43 45 2A 2A"    # two-digit hex, separated by spaces (optional)
+magic_at = 7                      # where the magic is; the start when left out
+magic_only = false                # trust the bytes and ignore the name
+
+List = "v -y %A"                  # required: what lists the archive
+Extract = "x -y %A @%L"           # what gets an entry out: F3, F5
+Test = "t -y %A"
+
+[archiver.listing]
+start = "^Date    Time"           # rows begin after this line; `^` anchors to the line's start
+end = "^listed:"                  # and stop at this one
+skip = ["Warning"]                # lines dropped wherever they are
+rows = ['^(?<size>\d+)\s+(?<name>\S.*)$']   # named captures; `name` is required
+dir_attr = "D"                    # this letter in `attr` means a directory
+```
+
+The holes in a line are `%A` the archive, `%L` a file holding the names (one per line, UTF-8),
+`%P` the password, `%R` the folder inside the archive, `%W` a temporary folder, `%S` extra
+switches, `%E<n>` the highest exit code still counted as success, and `%%` a literal `%`. A part
+of a line in `{ }` is kept only if a hole inside it came out with something. A line is a
+template for an argument list and is **never given to a shell**: it is split on spaces once,
+while being filled in, and a value with a space in it stays one argument.
+
+The fields a row may capture are `name`, `size`, `packedSize`, `attr`, `crc`, and `mYear`
+`mMonth` `mDay` `mHour` `mMin` `mSec`. The patterns are Rust's `regex`, which has no
+backreferences and no lookaround; a pattern that uses either is refused at startup.
+
+**Read only.** Only `List`, `Extract`, `ExtractWithoutPath` and `Test` are accepted. A block
+with a line for an operation that would change an archive — `Add`, `Delete`, `Move`, `SFX` and
+the rest — is refused, by name: a program driven from a table may read and never write
+(`docs/05-multiarc.md` §9).
+
+**Order.** The configuration's blocks are asked first, then the shipped `7z` table. A block
+named `7z` *replaces* the shipped one rather than sitting beside it, which is how its switches
+are changed. A format this program reads itself (zip, 7z, the tar family, `ar`, the bare
+compressors) is never handed to a table, whatever the table claims.
+
+**A wrong block** is a startup warning naming the block and the reason — no `List`, a pattern
+that does not compile or has no `name`, a magic that is not hex, a brace never closed, a line
+for an operation that writes — and is left out whole, never installed half-working. The other
+blocks, and the shipped table, still answer.
+
 ## 2b-quater. `[[codepage]]` blocks
 
 Which code pages the viewer's `F8` walks, and what to call them (SPEC 05 §1.12).

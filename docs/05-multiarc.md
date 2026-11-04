@@ -309,7 +309,9 @@ Still to build:
 
 - a selection extracted through the job engine, with the bar counting bytes as they land;
 - `Test` on `Alt+F6`;
-- `[[archiver]]` blocks in the configuration, so the shipped table is a default and not a fixed
-  list, which is MultiArc's own `custom_user.ini` rule — until then `looks_like_archive` knows
-  only the shipped tables, which is the whole truth as long as nothing can add one;
+- ~~`[[archiver]]` blocks in the configuration~~ — built: SPEC 07 §2b-ter is the reference.
+  They are read once at startup and installed into one table for the whole run, which every
+  archive cache and the decision whether `Enter` goes into a file both read, so a format a user
+  added is the same format everywhere. A block named like a shipped one replaces it; a block
+  with a line for an operation that writes is refused by name, which is where §9 is enforced;
 - a `rar` table, which wants a machine with RARLAB's `rar` on it to be verified the same way.

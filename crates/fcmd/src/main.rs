@@ -510,6 +510,14 @@ fn run(cli: Cli) -> Result<()> {
         cfg.ui.language = l.clone();
     }
 
+    // The `[[archiver]]` tables, installed before anything can open an archive: every cache
+    // built from here on, and the decision whether `Enter` goes into a file, see the same
+    // tables. A block that is wrong is a startup warning naming it, never a stop, and the
+    // shipped table still answers for the formats it claims.
+    let (archivers, archiver_problems) = cfg.archiver_tools();
+    warnings.extend(archiver_problems);
+    fcmd_arc::install_tools(archivers);
+
     let i18n = I18n::new(&cfg.ui.language);
     let origin = paths.config_file.display().to_string();
     let themes = ThemeSet::builtin_only().with_tables(&origin, &cfg.themes);
@@ -4799,6 +4807,75 @@ timeout = 10
     fn has_word(text: &str, word: &str) -> bool {
         text.split(|c: char| !c.is_alphanumeric() && c != '_')
             .any(|piece| piece == word)
+    }
+
+    /// The whole road for a table somebody writes: a block in the configuration, the table it
+    /// becomes, and a program on the machine reading a file through it. The extension is one
+    /// nothing shipped claims, so if the file opens it is the user's block that opened it.
+    ///
+    /// Skipped where `7z` is not installed rather than failed — what it would report then is
+    /// somebody's package manager.
+    #[test]
+    fn an_archiver_block_in_the_configuration_opens_a_format_nothing_shipped_knows() {
+        let Some(sevenzip) = fcmd_arc::tables().first().and_then(|t| t.found()) else {
+            eprintln!("no 7z on this machine: skipped");
+            return;
+        };
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("src")).unwrap();
+        std::fs::write(dir.path().join("src/main.rs"), b"ciao\n").unwrap();
+        std::fs::write(dir.path().join("readme.md"), b"leggimi\n").unwrap();
+        let made = std::process::Command::new(&sevenzip)
+            .args(["a", "-bd", "-twim", "prova.wim", "src", "readme.md"])
+            .current_dir(dir.path())
+            .output()
+            .expect("7z runs");
+        assert!(made.status.success(), "{made:?}");
+        // An extension nothing knows: the shipped table does not claim it.
+        let path = dir.path().join("prova.mybox");
+        std::fs::rename(dir.path().join("prova.wim"), &path).unwrap();
+        assert!(!fcmd_arc::claimed_by_a_tool("prova.mybox"));
+        let plain = fcmd_arc::Cache::new(fcmd_arc::Limits::default());
+        assert!(
+            plain.open(&path, &CancelToken::new()).is_err(),
+            "without the block it is not an archive"
+        );
+
+        let src = r#"
+[[archiver]]
+name = "mybox"
+program = "7z"
+extensions = ["mybox"]
+List = "l -bd -- %A"
+Extract = "x -y -bd -scsUTF-8 -i@%L -- %A"
+
+[archiver.listing]
+start = "^-------------------"
+end = "^-------------------"
+rows = ['^(?<mYear>\d{4})-(?<mMonth>\d{2})-(?<mDay>\d{2}) (?<mHour>\d{2}):(?<mMin>\d{2}):(?<mSec>\d{2}) (?<attr>[A-Za-z.]{5}) *(?<size>\d*) *(?<packedSize>\d*) {2}(?<name>\S.*)$']
+dir_attr = "D"
+"#;
+        let (cfg, warnings) = Config::parse("test", src).expect("it parses");
+        assert!(warnings.is_empty(), "{warnings:?}");
+        let (tools, problems) = cfg.archiver_tools();
+        assert!(problems.is_empty(), "{problems:?}");
+        let cache = fcmd_arc::Cache::new(fcmd_arc::Limits::default())
+            .with_tools(tools.into_iter().map(std::sync::Arc::new).collect());
+
+        let archive = cache
+            .open(&path, &CancelToken::new())
+            .expect("the block opens it");
+        assert_eq!(archive.label(), "mybox", "the frame names the user's table");
+        let root: Vec<String> = archive
+            .list("/")
+            .iter()
+            .map(|e| e.name_str().into_owned())
+            .collect();
+        assert_eq!(root, ["readme.md", "src"]);
+        let out = archive
+            .read("/src/main.rs", &CancelToken::new())
+            .expect("it comes out");
+        assert_eq!(out, b"ciao\n");
     }
 
     /// The one example that ships a program for each system: on Unix the host picks the shell

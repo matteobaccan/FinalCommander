@@ -1561,10 +1561,9 @@ impl Cache {
             capacity: 4,
             nest: Nest::with_capacity(limits.depth.max(4)),
             keys: Mutex::new(HashMap::new()),
-            tools: crate::ext::builtin_tools()
-                .into_iter()
-                .map(Arc::new)
-                .collect(),
+            // The run's tables — the configuration's in front of the shipped ones — so a cache
+            // built anywhere sees what the panel sees.
+            tools: crate::ext::tables().iter().cloned().map(Arc::new).collect(),
             runner: Arc::new(crate::ext::Spawn),
         }
     }

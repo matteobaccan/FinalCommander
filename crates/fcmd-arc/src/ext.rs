@@ -127,10 +127,16 @@ impl Op {
             .find(|op| op.key().eq_ignore_ascii_case(key))
     }
 
-    /// Does this operation change the archive? The ones that do go through a copy that is
-    /// renamed over the original, because the tools modify in place and SPEC 04 §4 does not.
+    /// Does this operation change the archive?
+    ///
+    /// Extracting writes files, but beside the archive and not into it, so it is on the
+    /// reading side of the line — which is the line `docs/05-multiarc.md` §9 draws: a program
+    /// driven from a table may do the four that answer no here, and never the others.
     pub fn writes(self) -> bool {
-        !matches!(self, Op::List | Op::Test)
+        !matches!(
+            self,
+            Op::List | Op::Test | Op::Extract | Op::ExtractWithoutPath
+        )
     }
 }
 
@@ -1052,14 +1058,55 @@ fn shipped() -> &'static [Tool] {
     ONCE.get_or_init(builtin_tools)
 }
 
-/// Does any shipped table claim a file called this?
+/// The tables this run knows, once the configuration has been read.
+static INSTALLED: std::sync::OnceLock<Vec<Tool>> = std::sync::OnceLock::new();
+
+/// Put the configuration's `[[archiver]]` tables in front of the shipped ones, for the rest
+/// of the run.
+///
+/// Called once, at startup, after the configuration is read and before anything opens an
+/// archive — every [`crate::Cache`] built after this sees the same tables, and so does the
+/// decision whether `Enter` goes into a file. There is one truth for the run, rather than a
+/// cache that knows a user's table and a panel that does not.
+///
+/// A second call is refused rather than half-applied, and answers `false`: the tables a run
+/// knows are fixed for that run.
+pub fn install_tools(user: Vec<Tool>) -> bool {
+    INSTALLED.set(merge(user, builtin_tools())).is_ok()
+}
+
+/// The configuration's tables, then the shipped ones that are not replaced by one of them.
+///
+/// MultiArc's `custom_user.ini` rule (`docs/05-multiarc.md` §6): what ships is a default, not
+/// a fixed list. A table named like a shipped one *replaces* it — so `[[archiver]] name =
+/// "7z"` is how somebody changes our switches — and any other table goes first, so it is
+/// asked first. Kept apart from [`install_tools`] so it can be tested without process-wide
+/// state.
+pub fn merge(user: Vec<Tool>, shipped: Vec<Tool>) -> Vec<Tool> {
+    let mut out = user;
+    for tool in shipped {
+        if !out.iter().any(|t| t.name.eq_ignore_ascii_case(&tool.name)) {
+            out.push(tool);
+        }
+    }
+    out
+}
+
+/// The tables this run knows: the installed ones, or the shipped ones when nothing was
+/// installed — which is every test, and any program that never read a configuration.
+pub fn tables() -> &'static [Tool] {
+    INSTALLED.get().map(Vec::as_slice).unwrap_or_else(shipped)
+}
+
+/// Does any table this run knows claim a file called this?
 ///
 /// By the name alone, with no bytes read, because this is what deciding whether `Enter` goes
 /// *into* a file has to be: cheap, and wrong only for a file somebody has renamed — the same
-/// promise `Format::of_name` makes. A table from the configuration is not asked here, and
-/// cannot be: nothing in the configuration adds one yet.
+/// promise `Format::of_name` makes. A table that claims by magic alone (`magic_only`) is
+/// therefore not asked here; it is found when the file is opened, which is when the bytes are
+/// read anyway.
 pub fn claimed_by_a_tool(name: &str) -> bool {
-    shipped().iter().any(|tool| tool.claims(name, &[]))
+    tables().iter().any(|tool| tool.claims(name, &[]))
 }
 
 /// The tables this program comes with.
@@ -1576,11 +1623,17 @@ Blocks = 1\n\
         for op in Op::ALL {
             assert_eq!(
                 op.writes(),
-                !matches!(op, Op::List | Op::Test),
+                !matches!(
+                    op,
+                    Op::List | Op::Test | Op::Extract | Op::ExtractWithoutPath
+                ),
                 "{}",
                 op.key()
             );
         }
+        // Extracting writes files, beside the archive: it is reading, by the rule in §9.
+        assert!(!Op::Extract.writes());
+        assert!(Op::Add.writes() && Op::Delete.writes() && Op::Sfx.writes());
     }
 
     #[test]
@@ -1592,6 +1645,33 @@ Blocks = 1\n\
         assert_eq!(crate::needs_program(&said), Some("7z"), "{said}");
         // And it says nothing about a message that is about something else.
         assert_eq!(crate::needs_program("tree.zip: broken archive"), None);
+    }
+
+    #[test]
+    fn a_users_table_goes_first_and_one_named_like_a_shipped_one_replaces_it() {
+        let shipped = builtin_tools();
+        let mut mine = shipped[0].clone();
+        mine.name = "unace".to_string();
+        mine.extensions = vec!["ace".to_string()];
+        let merged = merge(vec![mine], shipped.clone());
+        assert_eq!(
+            merged.iter().map(|t| t.name.as_str()).collect::<Vec<_>>(),
+            ["unace", "7z"],
+            "the user's in front, so it is asked first"
+        );
+
+        // A table called `7z` is how somebody changes our switches: it replaces ours rather
+        // than sitting beside it, so there is never a second `7z` answering differently.
+        let mut own_7z = shipped[0].clone();
+        own_7z.extensions = vec!["rar".to_string()];
+        let merged = merge(vec![own_7z], shipped.clone());
+        assert_eq!(merged.len(), 1, "{merged:?}");
+        assert_eq!(merged[0].extensions, ["rar"], "the user's, not ours");
+
+        // The name compares without regard to case, as the key names do.
+        let mut shouting = shipped[0].clone();
+        shouting.name = "7Z".to_string();
+        assert_eq!(merge(vec![shouting], shipped).len(), 1);
     }
 
     #[test]
