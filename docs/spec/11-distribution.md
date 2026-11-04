@@ -189,6 +189,14 @@ Nothing else. No configuration file is installed: SPEC 07 §1 has the themes, ke
 catalogues and help compiled in, so the program is fully usable with nothing else on disk, and
 a missing config file is a normal state.
 
+**The shell wrapper is not a file.** Leaving the shell where the panel was needs a function in
+the shell (`--printwd` writes the directory, the function reads it and goes there). Midnight
+Commander installs `/etc/profile.d/mc.sh` and `mc-wrapper.sh` for this; a package here installs
+neither, because §1 says it may deliver the binary, the man page and the licence and nothing
+else. `fcmd --shell-init bash|zsh|fish|powershell` prints the function instead and the reader
+adds one line to their own startup file — which also means the function can never be out of step
+with the binary that printed it.
+
 **Shell completions are missing and belong here.** There are none today. `clap` generates them
 for bash, zsh, fish, PowerShell and Elvish from the parser that already exists, which is a
 hidden `--completions <shell>` flag and a few lines; a package is the natural place to install

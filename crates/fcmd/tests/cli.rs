@@ -207,3 +207,44 @@ fn every_informational_mode_works_without_a_terminal() {
         assert!(!stdout.is_empty(), "{args:?} printed nothing");
     }
 }
+
+/// `--shell-init` is half of `--printwd`: the other half is a function in the shell, and the
+/// program prints it rather than a package installing it, because SPEC 11 §1 says a package
+/// delivers the binary, the man page and the licence and nothing else.
+#[test]
+fn the_shell_function_is_printed_for_each_shell_and_passes_printwd() {
+    for shell in ["bash", "zsh", "fish", "powershell"] {
+        let (stdout, stderr, ok) = run(&["--shell-init", shell]);
+        assert!(ok, "{shell}: {stderr}");
+        assert!(
+            stdout.contains("--printwd"),
+            "{shell}: it has to pass the flag: {stdout}"
+        );
+        // It must call the program and not itself, and clean up after itself.
+        assert!(
+            stdout.contains("command fcmd") || stdout.contains("Get-Command"),
+            "{shell}: it would call itself: {stdout}"
+        );
+        assert!(
+            stdout.contains("rm -f") || stdout.contains("Remove-Item"),
+            "{shell}: the temporary file is left behind: {stdout}"
+        );
+        // And nothing is written anywhere: this is a print-and-exit mode.
+        assert!(stderr.is_empty(), "{shell}: {stderr}");
+    }
+    // A shell nobody wrote one for is refused by the parser, not answered with a guess.
+    let (_, stderr, ok) = run(&["--shell-init", "tcsh"]);
+    assert!(!ok, "tcsh is not on the list");
+    assert!(stderr.contains("tcsh"), "{stderr}");
+}
+
+/// The two halves meet: the program writes where the panel was, and a shell could read it.
+/// Here there are no panels to quit from, so what is checked is the flag's own plumbing —
+/// that `-P` is `--printwd` and that both are accepted beside the other modes.
+#[test]
+fn printwd_is_spelled_the_way_midnight_commander_spells_it() {
+    let (stdout, _, ok) = run(&["--help"]);
+    assert!(ok);
+    assert!(stdout.contains("--printwd"), "{stdout}");
+    assert!(stdout.contains("-P"), "mc's own spelling: {stdout}");
+}

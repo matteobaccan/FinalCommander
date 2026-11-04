@@ -134,6 +134,17 @@ fcmd --version
 `SHA256SUMS` beside the archives lets you check what you downloaded:
 `sha256sum --check SHA256SUMS`.
 
+**One line worth adding**, if you want the shell to be left where the panel was when you quit —
+the way `mc` does it. A process cannot change its parent's working directory, so this takes a
+small function in the shell, and the program prints its own:
+
+```sh
+eval "$(fcmd --shell-init bash)"      # or zsh, fish, powershell — in your shell's startup file
+```
+
+Nothing is installed anywhere: the function comes out of the binary that will use it, so the two
+cannot drift apart.
+
 macOS will refuse a binary it has not seen before; it is not signed yet, so the first run
 needs `xattr -d com.apple.quarantine fcmd` (or Open anyway in System Settings → Privacy).
 

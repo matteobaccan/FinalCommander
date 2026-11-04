@@ -8,6 +8,27 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **The shell is left where the panel was.** `mc`, navigate, `F10`, and you are there: it is
+  how people use Midnight Commander, and it was the one gap with it that had no row in the
+  feature table at all. A process cannot change its parent's working directory — there is no
+  call that does it — so it takes two halves. `-P FILE` (`--printwd`, mc's own spelling) writes
+  the directory the active panel ended in; a function in the shell passes the file, reads it
+  and goes there.
+
+  The function is **printed, not installed**: `fcmd --shell-init bash|zsh|fish|powershell`, one
+  line in a startup file. mc installs `/etc/profile.d/mc.sh` and a wrapper script; SPEC 11 §1
+  says a package here delivers the binary, the man page and the licence and nothing else, and
+  printing it also means the function cannot be out of step with the binary that printed it.
+  All four are careful about the same four things: the exit status survives, the temporary file
+  is removed whatever happened, the program is called and not the function, and the `cd`
+  happens only if what came back is a directory that is there.
+
+  One point better than mc: quitting **inside an archive** leaves the shell in the folder
+  holding it, however deeply nested. mc writes the archive's own path and its wrapper's
+  `test -d` refuses it in silence, so you stay where you were with nothing said. A panel on a
+  server names nothing, because there is no local answer, and the shell stays put.
+
+
 - **`Enter` opens a `.rar`, and the rest of what a program on the machine can read.** The
   table from `docs/05-multiarc.md` now runs: `7z` lists the archive, its output goes through
   the table's own grammar, and what comes back becomes entries of exactly the shape a zip's

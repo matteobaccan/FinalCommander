@@ -1,3 +1,4 @@
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::Sender;
 
 use fcmd_cmd::{Command, Key, KeyCode, Keymap, Mods, Scope, Side};
@@ -13666,6 +13667,43 @@ impl App {
         }
     }
 
+    /// Where a shell should be left when the program ends: `--printwd`.
+    ///
+    /// A process cannot change its parent's working directory — there is no call that does it
+    /// — so the only thing that can `cd` is the shell itself, and the only way it learns where
+    /// to go is for us to write it down and for a wrapper to read it. See `--shell-init`.
+    ///
+    /// The active panel's directory, and when that is not a directory a shell can go to, the
+    /// nearest one that is: out of an archive and into the folder holding it, however deeply
+    /// nested. Midnight Commander writes the path whatever it is and lets its wrapper's
+    /// `test -d` refuse it in silence, so quitting inside a tarball leaves you where you
+    /// started with nothing said; coming out to the archive's own folder is the answer to the
+    /// question that was asked. A panel on a server has no local answer at all, and then
+    /// nothing is written and the shell stays where it was.
+    pub fn exit_directory(&self) -> Option<PathBuf> {
+        let mut here = self.panel().cwd.clone();
+        // Out of however many containers: `a.zip!/b.zip!/c` leaves twice.
+        let was_in_a_container = here.in_container();
+        while here.in_container() {
+            here = here.leave()?;
+        }
+        if !here.is_local() {
+            return None;
+        }
+        let path = here.as_path();
+        if was_in_a_container {
+            // What is left is the archive *file*, so the folder holding it is where somebody
+            // who was looking inside it meant to be.
+            return path
+                .parent()
+                .filter(|parent| parent.is_dir())
+                .map(Path::to_path_buf);
+        }
+        // And a directory that is not there any more names nothing, rather than quietly
+        // sending the shell to its parent: a `cd` nobody asked for is worse than no `cd`.
+        path.is_dir().then(|| path.to_path_buf())
+    }
+
     // ── started on one file: `--view`, `--edit`, `--diff` ─────────────────────────────────
     //
     // Three ways in that skip the panels, for the places a file manager is called from rather
@@ -19744,6 +19782,67 @@ mod tests {
             result: Err(broken.clone()),
         });
         assert_eq!(app.status, broken);
+    }
+
+    // ── where the shell is left (`--printwd`) ─────────────────────────────────────────────
+
+    #[test]
+    fn the_directory_a_shell_is_left_in_is_the_panels_own() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let mut app = app();
+        app.panels[app.active].cwd = VPath::local(dir.path());
+        assert_eq!(app.exit_directory().as_deref(), Some(dir.path()));
+    }
+
+    #[test]
+    fn quitting_inside_an_archive_leaves_the_shell_in_the_folder_holding_it() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        // The helper leaves the panel inside the zip, which is the state under test.
+        let (mut app, _) = app_inside_a_zip(dir.path());
+        assert!(
+            app.panels[app.active].cwd.in_container(),
+            "the panel is inside the zip"
+        );
+
+        // Not the zip, and not nothing: the folder the zip is in, which is where somebody who
+        // was looking inside it can actually be left. Midnight Commander writes the archive's
+        // own path here and its wrapper refuses it without saying why.
+        assert_eq!(
+            app.exit_directory().as_deref(),
+            Some(dir.path()),
+            "out of the archive and into its folder"
+        );
+
+        // And out of two of them, for an archive inside an archive.
+        let nested = VPath::local(dir.path().join("box.zip"))
+            .enter("/inner.zip")
+            .enter("/deep");
+        app.panels[app.active].cwd = nested;
+        assert_eq!(app.exit_directory().as_deref(), Some(dir.path()));
+    }
+
+    #[test]
+    fn a_panel_on_a_server_names_no_local_directory_at_all() {
+        let mut app = app();
+        app.panels[app.active].cwd = VPath::remote(fcmd_core::Scheme::Sftp, "mb@srv", "/var/log");
+        assert_eq!(
+            app.exit_directory(),
+            None,
+            "there is nowhere local to leave the shell"
+        );
+    }
+
+    #[test]
+    fn a_directory_that_is_gone_by_the_time_we_leave_names_nothing() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let gone = dir.path().join("deleted");
+        std::fs::create_dir(&gone).unwrap();
+        let mut app = app();
+        app.panels[app.active].cwd = VPath::local(&gone);
+        std::fs::remove_dir(&gone).unwrap();
+        // The wrapper tests for this too, but answering it here means the file is empty
+        // rather than holding a path that cannot be used.
+        assert_eq!(app.exit_directory(), None);
     }
 
     // ── started on one file: `--view`, `--edit`, `--diff` ─────────────────────────────────

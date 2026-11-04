@@ -24,7 +24,7 @@ mod termkeys;
 mod tree;
 mod watch;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 
 use anyhow::{Context, Result};
@@ -101,6 +101,21 @@ struct Cli {
     /// Compare these two files side by side.
     #[arg(long, num_args = 2, value_names = ["A", "B"], conflicts_with_all = ["view", "edit"])]
     diff: Vec<PathBuf>,
+
+    /// Write the directory the panel ended in to this file, for a shell wrapper to read.
+    ///
+    /// A process cannot change its parent's working directory, so leaving the shell where the
+    /// panel was takes two halves: this, and a function in the shell. `--shell-init` prints
+    /// the function. Midnight Commander spells this `-P`, and so does this.
+    #[arg(short = 'P', long, value_name = "FILE")]
+    printwd: Option<PathBuf>,
+
+    /// Print the shell function that makes the shell follow the panel, for this shell.
+    ///
+    /// Add `eval "$(fcmd --shell-init bash)"` to the shell's startup file — one line, and no
+    /// file installed anywhere, which is the rule in SPEC 11 §1.
+    #[arg(long, value_name = "SHELL", value_parser = ["bash", "zsh", "fish", "powershell"])]
+    shell_init: Option<String>,
 
     /// List the themes found in this run and where each came from.
     #[arg(long)]
@@ -522,7 +537,8 @@ fn run(cli: Cli) -> Result<()> {
     // Each of these says something on the command line rather than taking the screen, so each
     // gets the name above it — except `--man`, whose bytes are a file a packager installs and
     // which a test compares against `docs/fcmd.1` byte for byte.
-    if cli.show_paths
+    if cli.shell_init.is_some()
+        || cli.show_paths
         || cli.list_plugins
         || cli.list_themes
         || cli.list_commands
@@ -579,6 +595,10 @@ fn run(cli: Cli) -> Result<()> {
     }
     if cli.man {
         print!("{}", man_page());
+        return Ok(());
+    }
+    if let Some(shell) = &cli.shell_init {
+        print!("{}", shell_init(shell));
         return Ok(());
     }
     if cli.dump_config {
@@ -672,7 +692,93 @@ fn run(cli: Cli) -> Result<()> {
         app.start_on_diff(&absolute(left, &here), &absolute(right, &here))
             .map_err(anyhow::Error::msg)?;
     }
-    interactive(app)
+    interactive(app, cli.printwd.as_deref())
+}
+
+/// The shell function that makes the shell follow the panel.
+///
+/// Two halves make this work, and this is the second one. A process cannot change its
+/// parent's working directory — there is no call that does it, the working directory being a
+/// private attribute of a process — so the only thing that can `cd` is the shell, and the
+/// only way it learns where to go is for us to write it down and for it to read it. Hence
+/// `--printwd FILE` and a function that passes one, reads it, and goes there.
+///
+/// Printed rather than installed. SPEC 11 §1 has it that a package may deliver the binary,
+/// the man page and the licence and nothing else — so there is no file in `/etc/profile.d`,
+/// which is where Midnight Commander puts its own, and one line in the shell's startup file
+/// does it instead. It also means the function can never be out of step with the binary that
+/// printed it.
+///
+/// Each one is careful about the same four things: the exit status survives (a wrapper that
+/// swallows it breaks `fcmd && something`); the temporary file is made by `mktemp` and
+/// removed whatever happened; `command`/`&` calls the program and not the function, which
+/// would otherwise call itself; and the `cd` happens only if what came back is a directory
+/// that exists and is not where we already are.
+fn shell_init(shell: &str) -> String {
+    match shell {
+        // ksh is not offered: it has no `local`, and nobody has asked.
+        "bash" | "zsh" => r#"fcmd() {
+    local wd status where
+    wd="$(mktemp "${TMPDIR:-/tmp}/fcmd-wd.XXXXXX")" || return 1
+    command fcmd --printwd "$wd" "$@"
+    status=$?
+    where="$(cat -- "$wd" 2>/dev/null)"
+    command rm -f -- "$wd"
+    if [ -n "$where" ] && [ "$where" != "$PWD" ] && [ -d "$where" ]; then
+        cd -- "$where" || true
+    fi
+    return $status
+}
+"#
+        .to_string(),
+        "fish" => {
+            r#"function fcmd --description 'FinalCommander, leaving the shell where the panel was'
+    set -l dir /tmp
+    if set -q TMPDIR
+        set dir $TMPDIR
+    end
+    set -l wd (mktemp $dir/fcmd-wd.XXXXXX)
+    command fcmd --printwd $wd $argv
+    # `status` is read-only in fish, so the code is kept under a name of our own.
+    set -l code $status
+    set -l where (cat $wd 2>/dev/null)
+    command rm -f $wd
+    if test -n "$where" -a "$where" != "$PWD" -a -d "$where"
+        cd $where
+    end
+    return $code
+end
+"#
+            .to_string()
+        }
+        // On Windows the problem is the same one, and so is the answer. `Get-Command` is what
+        // finds the executable rather than this function, which would otherwise recurse.
+        "powershell" => r#"function fcmd {
+    $exe = (Get-Command -CommandType Application fcmd -ErrorAction SilentlyContinue |
+        Select-Object -First 1).Source
+    if (-not $exe) { Write-Error 'fcmd is not on the PATH'; return }
+    $wd = [System.IO.Path]::GetTempFileName()
+    try {
+        & $exe --printwd $wd @args
+        $code = $LASTEXITCODE
+        $where = (Get-Content -Raw -LiteralPath $wd -ErrorAction SilentlyContinue)
+        if ($where) {
+            $where = $where.Trim()
+            if ($where -and $where -ne $PWD.Path -and
+                (Test-Path -LiteralPath $where -PathType Container)) {
+                Set-Location -LiteralPath $where
+            }
+        }
+    }
+    finally { Remove-Item -LiteralPath $wd -Force -ErrorAction SilentlyContinue }
+    $global:LASTEXITCODE = $code
+}
+"#
+        .to_string(),
+        // `clap` checks the name against its own list, so this is unreachable from the
+        // command line and is still worth answering rather than panicking.
+        other => format!("# no shell function for `{other}`\n"),
+    }
 }
 
 /// A name from the command line, against the directory the program was started in.
@@ -825,7 +931,7 @@ fn command_ids() -> Vec<String> {
     FcCommand::all().into_iter().map(|c| c.id()).collect()
 }
 
-fn interactive(mut app: App) -> Result<()> {
+fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
     fcmd_tui::install_panic_hook();
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
@@ -1683,6 +1789,18 @@ fn interactive(mut app: App) -> Result<()> {
     };
     if let Err(e) = state.save(&app.paths) {
         eprintln!("fcmd: cannot write {}: {e}", app.paths.state_file.display());
+    }
+    // And where the shell should go, if somebody asked. An empty file is the answer when
+    // there is no local directory to name — a panel on a server — because the wrapper reads
+    // "nothing to do" from that and leaves the shell where it was.
+    if let Some(file) = printwd {
+        let where_to = app
+            .exit_directory()
+            .map(|p| p.display().to_string())
+            .unwrap_or_default();
+        if let Err(e) = std::fs::write(file, where_to) {
+            eprintln!("fcmd: cannot write {}: {e}", file.display());
+        }
     }
     Ok(())
 }

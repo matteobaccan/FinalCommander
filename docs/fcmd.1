@@ -4,7 +4,7 @@
 .SH NAME
 fcmd \- FinalCommander — orthodox file manager for the terminal
 .SH SYNOPSIS
-\fBfcmd\fR [\fB\-\-config\fR] [\fB\-\-plugins\fR] [\fB\-\-theme\fR] [\fB\-\-keymap\fR] [\fB\-\-lang\fR] [\fB\-\-set\fR] [\fB\-\-view\fR] [\fB\-\-edit\fR] [\fB\-\-diff\fR] [\fB\-\-list\-themes\fR] [\fB\-\-list\-commands\fR] [\fB\-\-list\-languages\fR] [\fB\-\-check\-keymap\fR] [\fB\-\-export\-theme\fR] [\fB\-\-dump\-config\fR] [\fB\-\-paths\fR] [\fB\-\-list\-plugins\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIPATH\fR] 
+\fBfcmd\fR [\fB\-\-config\fR] [\fB\-\-plugins\fR] [\fB\-\-theme\fR] [\fB\-\-keymap\fR] [\fB\-\-lang\fR] [\fB\-\-set\fR] [\fB\-\-view\fR] [\fB\-\-edit\fR] [\fB\-\-diff\fR] [\fB\-P\fR|\fB\-\-printwd\fR] [\fB\-\-shell\-init\fR] [\fB\-\-list\-themes\fR] [\fB\-\-list\-commands\fR] [\fB\-\-list\-languages\fR] [\fB\-\-check\-keymap\fR] [\fB\-\-export\-theme\fR] [\fB\-\-dump\-config\fR] [\fB\-\-paths\fR] [\fB\-\-list\-plugins\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIPATH\fR] 
 .SH DESCRIPTION
 FinalCommander is a two\-panel file manager for the terminal that works the same way on Linux, macOS and Windows: one program, one set of keys, one configuration file.
 .PP
@@ -39,6 +39,30 @@ Open this file in the editor; a name that is not there starts an empty file
 .TP
 \fB\-\-diff\fR \fI<A>\fR\fI \fR\fI<B>\fR
 Compare these two files side by side
+.TP
+\fB\-P\fR, \fB\-\-printwd\fR \fI<FILE>\fR
+Write the directory the panel ended in to this file, for a shell wrapper to read.
+
+A process cannot change its parent\*(Aqs working directory, so leaving the shell where the panel was takes two halves: this, and a function in the shell. `\-\-shell\-init` prints the function. Midnight Commander spells this `\-P`, and so does this.
+.TP
+\fB\-\-shell\-init\fR \fI<SHELL>\fR
+Print the shell function that makes the shell follow the panel, for this shell.
+
+Add `eval "$(fcmd \-\-shell\-init bash)"` to the shell\*(Aqs startup file — one line, and no file installed anywhere, which is the rule in SPEC 11 §1.
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+bash
+.IP \(bu 2
+zsh
+.IP \(bu 2
+fish
+.IP \(bu 2
+powershell
+.RE
 .TP
 \fB\-\-list\-themes\fR
 List the themes found in this run and where each came from
