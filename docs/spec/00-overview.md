@@ -137,7 +137,7 @@ regenerate it does not build.
 
 | M | Theme | Done when |
 | --- | --- | --- |
-| **M1** | Daily driver | two panels, navigation, selection, copy/move/delete/mkdir with conflicts and progress, command line + user screen, viewer (text), config/keymap, the six built-in themes plus external theme loading, far+mc profiles, Linux/macOS/Windows builds |
+| **M1** | Daily driver | two panels, navigation, selection, copy/move/delete/mkdir with conflicts and progress, command line + user screen, viewer (text), config/keymap, the built-in themes plus external theme loading, far+mc profiles, Linux/macOS/Windows builds |
 | **M2** | mc/FAR parity | tabs, quick view/info/tree panels, filters, find files, archives (zip/tar/7z) read+write, job queue, editor, multi-rename, compare dirs, checksums, PTY subshell, trash, help system |
 | **M3** | Commander parity | full VFS (SFTP/FTP/WebDAV/S3), connection manager, previews, syntax highlighting, macros, Lua API, WASM plugin ABI, diff viewer, synchroniser, elevated ops |
 | **M4** | Beyond | multi-panel/windowed layout *inside the TUI*, plugin registry, native plugin ABI, special VFS (process/registry/git), headless CLI, split engine/UI over ssh |

@@ -39,6 +39,8 @@ reqwest = { version = "0.12", default-features = false, features = [
 # `StreamReader` and `ReaderStream`: a WebDAV body is read and written as it travels rather
 # than held in memory. Already in the tree under `reqwest`.
 tokio-util = { version = "0.7", default-features = false, features = ["io"] }
+# `TryStreamExt::map_err`, to turn a WebDAV response body's errors into `io::Error` before
+# `StreamReader` reads it. Already in the tree under `reqwest`, `hyper-util` and `tokio-util`.
 futures-util = { version = "0.3", default-features = false }
 thiserror = "2"
 tokio = { version = "1", features = ["rt", "io-util", "net", "time", "macros", "fs"] }

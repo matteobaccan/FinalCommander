@@ -16,7 +16,7 @@ such a checkout names a repository that no longer exists under that name.
 
 ## House rules
 
-- **The specs are the contract.** `docs/spec/01`…`10` describe the program. Implement from
+- **The specs are the contract.** `docs/spec/00`…`11` describe the program. Implement from
   them; if the implementation has to deviate, change the spec in the same commit and say why.
   A feature is not finished until the spec, the help chapter and `CHANGELOG.md` agree with
   the code, and the row in `docs/02-features.md` carries the right state character — `✓`, or
@@ -38,7 +38,7 @@ such a checkout names a repository that no longer exists under that name.
 
 ```sh
 cargo fmt --all
-cargo test --workspace --all-targets      # ~1 400 tests, 22 binaries
+cargo test --workspace --all-targets      # ~1 750 tests, 22 binaries
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
@@ -138,73 +138,31 @@ keeps it as the run's artifact; publishing happens only through `workflow_dispat
 
 ## Where the work is right now
 
-**0.13.0 is the version in `main`.** 0.11.0 and 0.12.0 are both tagged and released, with
-four archives and `SHA256SUMS` each; the queue moves now that the repository is public, so a
-push that touches `CHANGELOG.md` or `Cargo.toml` is what makes `tag.yml` fire. The site is
-published, by hand, through `pages.yml`'s `workflow_dispatch`.
+**0.29.0 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
+like every release before it. A push to `main` that touches `CHANGELOG.md` or `Cargo.toml`
+is what makes `tag.yml` fire. The site is published by hand, through `pages.yml`'s
+`workflow_dispatch`. `CHANGELOG.md` is the history, release by release; this section only
+says where things stand.
 
-What is in the last few, newest first:
+What the last few were about, newest first:
 
-- **0.12.0** — the author's own side-by-side list again: the **menu bar wears its letters**
-  and `F9` lights it without pulling a menu down, as FAR's does; the **help is drawn by the
-  viewer's Markdown view** instead of a little renderer of its own, with the generated
-  chapters written as Markdown too; the **process card is a page** in the viewer, as full as
-  FAR's proclist (owner, SID, session, priority, the memory figures, processor time, handles,
-  I/O, the whole environment, every loaded module); the **quick view is that viewer**, with
-  the reader's keys once it has the focus and a row's card beside a process, socket or
-  programs list; **`Ctrl+A`** gained the four times, the UTC box, the Original/Current/Blank
-  buttons, the owner and Windows' remaining bits; and a **services panel** in the change-drive
-  dialog that starts, restarts and stops — systemd, the Service Control Manager, `launchctl` —
-  and never escalates.
-- **0.11.0** — the help per language with the whole Italian translation, column sets
-  (`[[column_set]]` per view digit, in our spelling or FAR's strings), autocomplete on the
-  command line, folder sizes measured for a whole selection and kept in the panel, the empty
-  NetBox panel, and the pick lists in FAR's menu colours.
-- **0.10.0** — the comparison the plugin everybody uses has (`AdvCmpEx`): a dialog of what
-  counts as a difference (case, size, time to a tolerance, contents, contents only when the
-  time differs, a first-fragment read, line-endings-only, selected only, stop at the first,
-  newer only), **recursive through the subdirectories** with the answer as a panel of marked
-  rows rather than a selection, and **find duplicates** under a directory by content. The
-  change-drive dialog gained `F9` for its own switches and filled columns on Windows
-  (`GetDriveTypeW`, `GetVolumeInformationW`, `WNetGetConnectionW`), and the prompt gained `$+`.
-- **0.9.0** (folded into 0.10.0's notes) — the change-drive dialog as FAR draws it, over the
-  panel it is about, with `Ctrl+1..9`, `Ctrl+R` and FAR's separators; `F3` on the process
-  list as a real process card, on Windows too; a **socket list** as a panel of its own with
-  the process holding each socket; a panel of **installed programs** with its card and its
-  own uninstall command put on the command line unrun; the **prompt as a format** with the
-  git branch in it (`$p$r$g `, FAR's letters, `%GITBRANCH%`); and the NetBox session editor
-  with the pages the plugin's own dialog has.
-- **0.8.0** — the author's own list, from FAR screenshots: the last two view modes (`Ctrl+9`
-  links, `Ctrl+0` alternative full), so all ten of FAR's are there; `F4` in the viewer turns
-  a wheel through text, dump, hex, document and table; the `wide` view fits its columns to
-  the names it has; three panels that are not drives in `Alt+F1`/`Alt+F2` — NetBox (the
-  stored sessions), the process list, the temporary panel — and text that can be marked out
-  on the command line with `Shift` and an arrow.
-- **0.7.3** — **file descriptions** (`descript.ion`), the one FAR habit the program had none
-  of: read in whatever code page they are in, shown by `Ctrl+6` and `Ctrl+7`, in the
-  information panel and in the status line, written by `Ctrl+Z`, and carried by a copy, a
-  move, a rename and a delete. With them a sort criteria chain (`panel.sort_chain`).
-- **0.7.2** — the memo file beside a dBase table (`.dbt`, `.fpt`, all three formats); the sort
-  groups on `Shift+F11`, from `[[sort_group]]` blocks; an arrow ends a quick search and leaves
-  the cursor where it found; the name drawn in letters above what the program says on the
+- **0.29.0** — formats nobody here implements. `Enter` on a `.rar`, `.cab`, `.iso`, `.wim`
+  and the rest goes in through a program already on the machine (7z, from a table in
+  MultiArc's own language, `crates/fcmd-arc/src/ext.rs`), and `[[archiver]]` blocks in
+  `fcmd.toml` add a format without a release. Decided in `docs/05-multiarc.md` §9: a program
+  driven from a table **only reads**. Also `-P`/`--printwd` and `--shell-init`, which leave
+  the shell where the panel was, and `wasmprinter` removed (−7.3% of the binary).
+- **0.28.0** — `--view`, `--edit` and `--diff` straight from the command line; a bare `.gz`,
+  `.bz2`, `.xz` or `.zst` opens as an archive of one entry (read only); fat LTO.
+- **0.27.0** — the zip-shaped packages (`.apk`, `.whl`, `.nupkg`, …) and `ar`/`.deb`.
+- **0.26.0** — Midnight Commander's own: the filtered view, external panelize, `F5` merge
+  in the diff, learn keys, a names code page per panel, and one shell kept behind the
   command line.
-- **0.7.1** — what the author found by using 0.7.0: the key bar always draws all twelve keys;
-  the hex dump widens in blocks of eight; the table mode's arrows, `Ctrl+`arrows, `Home` and
-  `End`; the command line's history on `↑`/`↓`; and a command's output arriving while it runs
-  rather than all at the end.
-- **0.7.0** — the dBase reader for table mode, read a window at a time; the dialog that edits
-  the `[[highlight]]` groups (`F9 → Options → Files highlighting`); `Alt+F11`, the files that
-  have been read or edited, persisted in the state file.
-- **0.6.0** — `[[highlight]]` groups; the find dialog's size condition; the system clipboard
-  through the terminal with `OSC 52`, which also works over `ssh`; pasted text reaching the
-  command line, a dialog row, the editor and a terminal; `Ctrl+8`, the file-owners view;
-  table mode in the viewer (`Shift+F3`) for CSV, TSV and JSON Lines.
 
-**All ten of FAR's view modes and all nine of its sort keys are there** (`Ctrl+1..0`,
-`Ctrl+F3..F11`), the last two sort keys — by description and by owner — since 0.10.0's
-`Unreleased` section. The column grammar is there too, since
-0.10.0's `Unreleased`: each of the ten modes is re-definable from a `[[column_set]]` block on
-its own digit, in our spelling or in FAR's own pair of strings.
+Where it stands against the others: `docs/00-landscape.md` is the survey, `docs/02-features.md`
+the row-by-row table, `docs/03-far-inventory.md` FAR feature by feature. Every one of FAR's
+ten view modes, nine sort keys and its column grammar is there; Midnight Commander's
+`extfs` is answered by `[[archiver]]`, and its `cd` on exit by `--shell-init`.
 
 ## What the author's reviews have asked for, and where it went
 
@@ -237,17 +195,15 @@ files rather than guessing what its dialog says.
 
 ## What is worth doing next, in rough order
 
-Everything here is unblocked and specified; the backlog has the reasons.
+Everything here is unblocked; `docs/BACKLOG.md` has the reasons and the rest.
 
-1. **Descriptions on a server**, and carried out of a search result — what SPEC 02 §13 still
-   owes now that the archives read theirs.
-2. **The histories' lifetime and locked rows**, and a history for the dialogs' own fields:
-   the three that exist are filtered and cleared from inside them now, which was the half
-   that mattered.
-3. **The code pages menu** (`Shift+F8`): favourites, a configurable `F8` cycle, custom names.
-   Ours cycles a fixed list.
-4. **The mask-group editor** in the Options menu: the groups are values and the filter bar
-   reads them, but `<arc>` and its friends can only be written by hand.
+1. **Writing a bare `.gz`, `.bz2`, `.xz` or `.zst`**: they read as archives of one entry, and
+   packing one file into one is the half that is missing.
+2. **`cpio`, then `rpm` on it, then `cab`, read in process**: `docs/05-multiarc.md` §10.
+   `cpio` needs no dependency — it is the `ar` reader again.
+3. **A queue for background jobs** (feature 3.7): they run at once today, side by side.
+4. **A table for RARLAB's `rar`**, written on a machine that has it rather than from memory
+   of its manual.
 
 One rule that came out of that review and holds everywhere: **`Alt+<letter>` belongs to the
 quick search**, so nothing else may take it (`Ctrl+Shift+N/I/T` moved for this reason), and

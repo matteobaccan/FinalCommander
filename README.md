@@ -126,7 +126,7 @@ one directory down.
 
 ```sh
 # Linux, for example
-tar xzf FinalCommander-linux-x86_64-0.5.0.tar.gz
+tar xzf FinalCommander-linux-x86_64-0.29.0.tar.gz
 sudo install -m755 fcmd /usr/local/bin/fcmd
 fcmd --version
 ```
@@ -233,7 +233,7 @@ every key on the screen you are looking at does.
 - **Servers and buckets**: SFTP, FTP, FTPS and WebDAV panels and transfers, a session editor,
   host-key checking against `known_hosts`, port forwarding, and `s3://` panels with the credentials read
   from the environment or `~/.aws/credentials` — never written into the configuration file.
-- **The program itself**: six themes, seven interface languages switchable while it runs, two
+- **The program itself**: seven themes, seven interface languages switchable while it runs, two
   keymap profiles (FAR and mc) and your own on top, macros, the screens list (`F12`), plugin
   commands (`F11`), a help system whose key pages are generated from the keymap in force, and a
   manual page.
@@ -269,8 +269,8 @@ crates are all called, and it is four letters. Please do not "fix" it to somethi
 
 ## Themes and languages
 
-Six themes are compiled in — `commander` (the classic blue, default), `black`, `white`,
-`matrix`, `tron`, `blade` — and `[[theme]]` blocks in `fcmd.toml` are read at startup,
+Seven themes are compiled in — `commander` (the classic blue, default), `far` (FAR's own
+colours), `black`, `white`, `matrix`, `tron`, `blade` — and `[[theme]]` blocks in `fcmd.toml` are read at startup,
 hot-reloaded, may `inherit` a built-in one, and replace a built-in with the same id.
 
 The interface ships in English, Italian, German, French, Spanish, Russian and Simplified

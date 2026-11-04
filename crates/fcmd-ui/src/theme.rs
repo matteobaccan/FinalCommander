@@ -74,7 +74,7 @@ pub enum ThemeSource {
     Plugin(String),
 }
 
-/// The six themes compiled into the binary. `commander` is the default.
+/// The seven themes compiled into the binary. `commander` is the default.
 pub const BUILTIN_THEMES: &[(&str, &str)] = &[
     ("commander", include_str!("../themes/commander.toml")),
     ("far", include_str!("../themes/far.toml")),
@@ -439,7 +439,7 @@ impl Theme {
     }
 }
 
-/// Every theme available in this run: the six built-ins plus whatever was found on disk.
+/// Every theme available in this run: the seven built-ins plus whatever was found on disk.
 /// A file theme with the id of a built-in replaces it, so a user can retune `commander`
 /// without renaming it.
 #[derive(Debug, Clone)]

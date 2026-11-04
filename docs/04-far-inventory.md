@@ -59,7 +59,7 @@ is the roadmap, and most of what remains is Windows-specific or is a plugin in F
 | Resize panels: width, height, per-panel height, and reset | `Ctrl+←/→`, `Ctrl+↑/↓`, `Ctrl+Shift+↑/↓`, `Ctrl+Numpad5`, `Ctrl+Alt+Numpad5` | ◐ width (`Ctrl+←/→`) and the shared bottom edge (`Ctrl+↑/↓`), both settings `Shift+F9` keeps; no per-panel height and no numpad reset |
 | Key bar on/off | `Ctrl+B` | ◐ a setting in the panels (`ui.key_bar`, and the Interface dialog); a key in the viewer, where `Ctrl+B`, `Ctrl+Shift+B` and `Ctrl+S` turn the bar, the status line and the scrollbar |
 | Total/free size display mode | `Ctrl+Shift+S` | ◐ the free space is drawn in the frame and is a setting (`panel.free_space`); there is no key to change what the figure counts |
-| 10 view modes: brief, medium, full, wide, detailed, descriptions, long descriptions, owners, links, alternative full | `LeftCtrl+1…0` | ✅ all ten, on FAR's own numbers (`Ctrl+1…0`); the three that need what a listing does not carry are each filled by a worker while that view is on screen. What is still owed is the column grammar that makes each mode re-definable — ours are ten fixed lists |
+| 10 view modes: brief, medium, full, wide, detailed, descriptions, long descriptions, owners, links, alternative full | `LeftCtrl+1…0` | ✅ all ten, on FAR's own numbers (`Ctrl+1…0`); the three that need what a listing does not carry are each filled by a worker while that view is on screen. Each is re-definable since 0.11.0 from a `[[column_set]]` block on its digit, in our spelling or FAR's own pair of strings |
 | Hidden and system files | `Ctrl+H` | ✅ |
 | Long/short (8.3) names | `Ctrl+N` | ⊘ |
 | Sort by name, extension, write time, size, unsorted, creation time, access time, description, owner | `Ctrl+F3…F11` | ✅ all nine; the last two are fetched by a worker and sort again when the answer lands |
@@ -168,7 +168,7 @@ On top of masks sit three features we have none of:
 | --- | --- | --- |
 | Find file: masks, text or hex, case, whole words, **fuzzy** (diacritics, ligatures, fancy numerals), "not containing", code page (one, all standard, or a chosen set), search in archives, include folders, follow symlinks, search alternate streams | `Alt+F7` | ◐ masks, a size condition, text or hex (and a regular expression, which FAR has not), case, whole words, not-containing, folders, symlinks, and inside archives; ✗ fuzzy matching, the code-page set, and alternate streams |
 | Search scope: fixed drives, local drives, `%PATH%`, from here, this folder only, the selected folders | — | ◐ from here, this folder only, the selected folders, the root, and the other panel; ✗ all fixed drives and `%PATH%`, which on three platforms mean three different things |
-| Advanced: stop after the first N bytes (with size suffixes), result columns in the column grammar | — | ✗ both, and the second waits on the column grammar itself (§2) |
+| Advanced: stop after the first N bytes (with size suffixes), result columns in the column grammar | — | ✗ both. The column grammar exists since 0.11.0; what is missing is pointing it at the result list |
 | Results: new search, go to, view (search continues behind the viewer), **panelize**, stop | — | ✅ the list fills while the walk is still running, `Enter` goes to a row, `F3` views one, `F5` puts the results in the panel, and `Esc` stops the walk |
 | Find folder in the tree | `Alt+F10` | ✅ the folder list of this panel's root, read from the tree cache, with the filter every list has |
 | Four histories — commands, folders, view/edit, dialogs — each with a size and a lifetime in days, saved across sessions, with items that can be **locked** so new entries do not push them out | `Alt+F8`, `Alt+F12`, `Alt+F11`, `Ctrl+↑/↓` | ✓ all four, each with a size and all persisted in the state file: the commands (`Alt+F8`, and `↑`/`↓` on the line), the folders per panel (`Alt+F12`), the files read or edited (`Alt+F11`); ✓ a lifetime in days, lines pinned with `Ins`, filtering a history as one types, and the dialogs' own fields (`Ctrl+↓`) |
@@ -252,7 +252,7 @@ modifiers on !@!   Q quote, S forward slashes, F full paths, A ANSI, U UTF-8, W 
 | Settings dialogs: system, panel, tree, interface, dialogs, menus, command line, autocomplete, viewer, editor, confirmations (15), plugin manager, mask groups, code pages, colours, panel modes, descriptions | ◐ system, panel, interface, confirmations, viewer, editor, the highlighting groups, the mask groups, the sort groups, the comparison, the drive dialog's own columns, and the lists for themes, languages, colours and code pages — nine of FAR's twenty-three, plus a browser over every setting there is; ✗ the tree panel's own, the dialogs' and menus' own, autocomplete, the panel view modes and the plugin manager |
 | Save setup, plus an **auto-save on exit** option that also stores both panels' folders | ✅ `Shift+F9` saves on demand, an auto-save-on-exit switch in the Interface dialog, and the tabs, the histories and the hotlist come back by themselves |
 | Portable: profile location, template profile, global user menu folder, read-only configuration — all from `Far.exe.ini` | ◐ portable mode, one config file |
-| Colour **groups** and colour **themes**, with 16-colour, 256-colour and RGB pickers | ◐ 6 themes, no per-group editor |
+| Colour **groups** and colour **themes**, with 16-colour, 256-colour and RGB pickers | ◐ 7 themes, and a palette editor over every key (*Options → Colours*, live, `F2` writes it) — no colour *groups* and no grid to pick from |
 | Virtual-terminal rendering (8- and 24-bit colour), fullwidth-aware rendering, ClearType-friendly redraw | ◐ 24-bit with degradation; width handled always |
 | Clock, screen saver with a timeout, mouse, always-show-menu-bar, console icon, window-title variables (`%Ver`, `%Platform`, `%Admin`, `%PID`) | ◐ the clock (`ui.clock`), the always-on menu bar (`ui.menu_bar`) and the mouse, each off by default and each with its reason in the help; ✗ the screen saver, the console icon and the title variables — the screen saver can use the deadline the clock gave the event loop |
 | Sorting collation: ordinal / invariant / linguistic, digits-as-numbers, case sensitivity — as three separate settings | ◐ natural sort only |
@@ -339,10 +339,10 @@ with lifetimes and locked rows, the selection matrix, the sort keys with their c
 groups, and find-file with the temporary panel that holds its results. What follows is the list
 as it stands now, in rough order of how much each one unlocks.
 
-1. **The colour editor.** Six themes and no way to change one from inside the program. FAR edits
-   colours by *group* — the panel, the dialogs, the menus, the editor, each a named set — which
-   is also how our theme files are shaped, so this is a dialog over something that already
-   exists rather than a new idea.
+1. **The colour groups.** The palette editor (*Options → Colours*, since 0.4.0) changes any
+   one colour, live; what it cannot do is what FAR's groups do — one change for every
+   "selected" colour at once — nor offer a grid of the sixteen and the 256 to pick from rather
+   than a name to type. SPEC 10 §4b says both are still to come.
 2. **The settings dialogs FAR has and we do not**: the tree panel's own, the dialogs' and the
    menus' own, autocomplete, the panel view modes. The all-parameters browser reaches every one
    of the 110 keys already, so these are a convenience over a surface that is complete — which
