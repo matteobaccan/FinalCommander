@@ -302,6 +302,7 @@ key-disasm = 反汇编
 viewer-disasm-failed = 无法反汇编 { $name }：{ $error }
 viewer-decompile-running = { $tool } 正在处理 { $name }…
 viewer-decompile-none = 没有可用于反编译 { $format } 的工具；请安装后在 fcmd.toml 中添加 [[decompile]] 规则
+arc-needs-program = 此压缩包由 `{ $program }` 读取，但本机未安装
 viewer-decompile-failed = { $tool }：{ $error }
 viewer-derived = { $name } 的 { $producer }
 

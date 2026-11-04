@@ -302,6 +302,7 @@ key-disasm = Desens
 viewer-disasm-failed = no se puede desensamblar { $name }: { $error }
 viewer-decompile-running = { $tool } se está ejecutando sobre { $name }…
 viewer-decompile-none = aquí no hay nada que descompile { $format }; instala una herramienta y añade una regla [[decompile]] en fcmd.toml
+arc-needs-program = este archivo lo lee `{ $program }`, que no está instalado en esta máquina
 viewer-decompile-failed = { $tool }: { $error }
 viewer-derived = { $producer } de { $name }
 

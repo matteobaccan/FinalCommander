@@ -31,8 +31,18 @@ impl ArcVfs {
 
     /// Could `path` be an archive we can open? By name, which is what deciding whether `Enter`
     /// goes into a file has to be: cheap, and wrong only for a file someone has renamed.
+    ///
+    /// Two answers in one: a format this program reads itself, or one a table hands to a
+    /// program on the machine (`docs/05-multiarc.md`). A reader pressing `Enter` on a `.rar`
+    /// means the same thing either way, so the question is asked once and the difference is
+    /// below here — including the case where the table's program is not installed, which is a
+    /// message naming it rather than a file that would not open.
     pub fn looks_like_archive(path: &Path) -> bool {
-        Format::of_path(path).is_some()
+        if Format::of_path(path).is_some() {
+            return true;
+        }
+        path.file_name()
+            .is_some_and(|name| fcmd_arc::claimed_by_a_tool(&name.to_string_lossy()))
     }
 
     /// The archive `path` is inside, and where `path` sits in it.

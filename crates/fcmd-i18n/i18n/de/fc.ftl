@@ -302,6 +302,7 @@ key-disasm = Disass
 viewer-disasm-failed = { $name } kann nicht disassembliert werden: { $error }
 viewer-decompile-running = { $tool } läuft auf { $name }…
 viewer-decompile-none = hier kann nichts { $format } dekompilieren; Werkzeug installieren und eine [[decompile]]-Regel in fcmd.toml ergänzen
+arc-needs-program = dieses Archiv liest `{ $program }`, das auf diesem Rechner fehlt
 viewer-decompile-failed = { $tool }: { $error }
 viewer-derived = { $producer } von { $name }
 

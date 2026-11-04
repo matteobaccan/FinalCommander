@@ -285,15 +285,31 @@ reads it today. **`iso` goes through the table**, and so do `rar`, `lha` and `ar
 a candidate for being read in process is `cpio` (which needs no dependency at all — it is the
 `ar` reader again), `rpm` on top of it, and `cab`.
 
-## 10. What is still to build
+## 10. Running it
 
-With §9 decided, what is left is work rather than questions:
+Built, with §9 decided:
 
-- a `Tool`'s `List` run and its output read into entries, presented the way `Archive` presents
-  a zip, so the panel, the search inside archives and `Ctrl+A` on an entry need nothing new;
-- `Extract` for one entry and for a selection, through the job engine;
+| | |
+| --- | --- |
+| `Run` / `Spawn` / `Ran` | the one place in the program that spawns a child. Behind a trait, so the grammar is tested against output a real program really printed without that program having to be installed where the tests run, and so `Esc` has one thing to kill. Both pipes are drained on threads of their own, because a program that fills one while we read the other stops and so do we |
+| `Tool::list` | `List` runs, its exit code is judged against `%E<n>`, and its output goes through the table's grammar |
+| `Tool::extract` | `Extract` runs in a folder of ours, which is where the files land: none of these tools takes an output folder the same way and all of them write into the folder they were started in, which is MultiArc's answer too. The names go in a list file, never on the line |
+| `Archive::open_external` | the rows become entries of the shape a zip's are, so the panel, the tree, the search inside archives and `Ctrl+A` needed no new code at all |
+| `Archive::format` → `Option<Format>` | there is no `Format` for a `.rar`, and saying so in the type is what keeps the in-process paths from being asked about one. `Archive::label` is what the frame draws |
+| `Cache::read` | this crate first, a table only for what is left: a `.zip` is never handed to `7z`, which would also read it |
+| `ArcVfs::looks_like_archive` | says yes for a `.rar` too, by name and with no bytes read — so `Enter` means the same thing whichever reader is behind it |
+| `needs_program` + `arc-needs-program` | a table that claims the format on a machine without the program is the one refusal the panel answers in the reader's own language, naming the program. The sentence is written by `ExtError::NotInstalled` and read back by `fcmd_arc::needs_program`, from two constants they share so they cannot drift; a test asserts they still agree |
+
+Verified against the real thing, not only against canned output: `7z` makes a `.wim` — a
+container this crate has no reader for — and the shipped table lists it, walks into `src`, and
+hands back the bytes `7z` wrote. The test skips where `7z` is not installed rather than
+failing, because what it would be reporting then is somebody's package manager.
+
+Still to build:
+
+- a selection extracted through the job engine, with the bar counting bytes as they land;
 - `Test` on `Alt+F6`;
-- the message when a format is claimed by a table whose program is not installed, which has to
-  name the program — `Tool::found` answers it and seven languages have to say it;
 - `[[archiver]]` blocks in the configuration, so the shipped table is a default and not a fixed
-  list, which is MultiArc's own `custom_user.ini` rule.
+  list, which is MultiArc's own `custom_user.ini` rule — until then `looks_like_archive` knows
+  only the shipped tables, which is the whole truth as long as nothing can add one;
+- a `rar` table, which wants a machine with RARLAB's `rar` on it to be verified the same way.

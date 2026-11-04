@@ -2667,6 +2667,20 @@ impl App {
                                 return;
                             }
                         }
+                        // And an archive a program on the machine reads, on a machine that
+                        // has not got the program, is one thing the reader can do something
+                        // about — so it is said in their own language and names the program,
+                        // rather than passed through as the English the crate wrote
+                        // (`docs/05-multiarc.md` §10).
+                        if let Some(program) = fcmd_arc::needs_program(&e) {
+                            let m = self
+                                .i18n
+                                .t_args("arc-needs-program", &[("program", program.into())]);
+                            self.panels[panel].loading = false;
+                            self.panels[panel].error = Some(m.clone());
+                            self.set_error(m);
+                            return;
+                        }
                         self.panels[panel].error = Some(e.clone());
                         self.set_error(e);
                     }
@@ -19691,6 +19705,45 @@ mod tests {
                 form.button = Some(at);
             }
         }
+    }
+
+    #[test]
+    fn a_panel_that_needs_a_program_it_has_not_got_says_so_in_the_readers_language() {
+        let mut app = app();
+        let generation = app.panels[0].generation;
+        // What `fcmd-arc` writes when a table claims the format and the program is absent.
+        // The panel does not pass that English on: it recognises it and says its own.
+        let from_the_crate = fcmd_arc::ExtError::NotInstalled {
+            program: "7z".to_string(),
+        }
+        .to_string();
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation,
+            result: Err(from_the_crate.clone()),
+        });
+
+        let want = app
+            .i18n
+            .t_args("arc-needs-program", &[("program", "7z".into())]);
+        assert_eq!(
+            app.status, want,
+            "the catalogue's sentence, not the crate's"
+        );
+        assert!(app.status_error);
+        assert_ne!(app.status, from_the_crate);
+        assert_eq!(app.panels[0].error.as_deref(), Some(want.as_str()));
+        assert!(!app.panels[0].loading);
+
+        // Every other archive error still travels as it was written: this is one condition,
+        // not a new way of reporting all of them.
+        let broken = "tree.zip: broken archive (central directory)".to_string();
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation: app.panels[0].generation,
+            result: Err(broken.clone()),
+        });
+        assert_eq!(app.status, broken);
     }
 
     // ── started on one file: `--view`, `--edit`, `--diff` ─────────────────────────────────

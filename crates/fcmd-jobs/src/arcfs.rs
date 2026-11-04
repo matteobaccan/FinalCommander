@@ -87,6 +87,9 @@ fn into_io(error: ArcError) -> io::Error {
         ArcError::NoEntry { .. } => io::ErrorKind::NotFound,
         ArcError::Io { source, .. } => source.kind(),
         ArcError::Unknown(_) | ArcError::Broken { .. } => io::ErrorKind::InvalidData,
+        // A program on the machine said no, or is not there at all. Its own words travel
+        // with it, because they are the only ones that know why.
+        ArcError::External { .. } => io::ErrorKind::Other,
         // A password this cannot ask for is a door that is shut, not a file that is missing.
         ArcError::Refused { .. } | ArcError::NeedsPassword { .. } => {
             io::ErrorKind::PermissionDenied

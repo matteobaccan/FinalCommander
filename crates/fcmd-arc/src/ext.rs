@@ -44,6 +44,7 @@ use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
+use fcmd_core::CancelToken;
 use regex::Regex;
 
 use crate::archive::days_from_civil;
@@ -754,7 +755,7 @@ pub fn which(program: &str) -> Option<PathBuf> {
     None
 }
 
-/// What can go wrong before a program is even started.
+/// What can go wrong driving somebody else's program.
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum ExtError {
     #[error("`{tool}` has no command for {}", op.key())]
@@ -763,9 +764,303 @@ pub enum ExtError {
     Template { template: String, reason: String },
     #[error("{reason} — in `{pattern}`")]
     Pattern { pattern: String, reason: String },
+    /// The table claims the format and the program is not on this machine. The name of the
+    /// program is the whole message: it is the one thing the reader can act on, and
+    /// [`crate::needs_program`] reads it back out to say so in the reader's own language.
+    #[error(
+        "{}{program}{}",
+        crate::NEEDS_PROGRAM_BEFORE,
+        crate::NEEDS_PROGRAM_AFTER
+    )]
+    NotInstalled { program: String },
+    #[error("`{program}` could not be run: {reason}")]
+    Io { program: String, reason: String },
+    /// It ran and said no. The exit code and whatever it printed on its standard error, which
+    /// is where every one of these programs puts its reason.
+    #[error("`{program}` failed{}{}", match code { Some(c) => format!(" ({c})"), None => " (killed)".to_string() }, if reason.is_empty() { String::new() } else { format!(": {reason}") })]
+    Failed {
+        program: String,
+        code: Option<i32>,
+        reason: String,
+    },
+    #[error("cancelled")]
+    Cancelled,
+}
+
+// ── running it ────────────────────────────────────────────────────────────────────────────
+
+/// What a program printed and how it ended.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Ran {
+    /// `None` when it was killed rather than returning.
+    pub code: Option<i32>,
+    pub out: String,
+    pub err: String,
+}
+
+/// How a program is run.
+///
+/// Behind a trait for two reasons. The parsing can then be tested against output a real
+/// program really printed, without that program having to be installed wherever the tests run
+/// — which is the difference between a test that checks our grammar and a test that checks
+/// somebody's package manager. And spawning a child is the one thing in this crate that
+/// reaches outside the process, so it is worth having exactly one place that does it.
+pub trait Run: std::fmt::Debug + Send + Sync {
+    /// `cwd` is where the program runs, and for an extraction it is where the files land:
+    /// none of these tools takes an output folder the same way, and all of them write into
+    /// the folder they were started in. It is MultiArc's answer too.
+    fn run(
+        &self,
+        program: &Path,
+        args: &[OsString],
+        cwd: Option<&Path>,
+        cancel: &CancelToken,
+    ) -> Result<Ran, ExtError>;
+}
+
+/// The real one: a child process, no shell, output captured, `Esc` kills it.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Spawn;
+
+impl Run for Spawn {
+    fn run(
+        &self,
+        program: &Path,
+        args: &[OsString],
+        cwd: Option<&Path>,
+        cancel: &CancelToken,
+    ) -> Result<Ran, ExtError> {
+        use std::io::Read as _;
+        use std::process::{Command, Stdio};
+
+        let name = program.display().to_string();
+        let io = |e: std::io::Error| ExtError::Io {
+            program: name.clone(),
+            reason: e.to_string(),
+        };
+        // No shell, and nothing on the standard input: a program that decides to ask a
+        // question would otherwise wait for an answer nobody can give it, for ever.
+        let mut command = Command::new(program);
+        if let Some(cwd) = cwd {
+            command.current_dir(cwd);
+        }
+        let mut child = command
+            .args(args)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(io)?;
+
+        // Both pipes are drained on threads of their own. A program that fills one while we
+        // read the other would stop, waiting for a reader, and so would we: the deadlock that
+        // every first attempt at this has.
+        let mut stdout = child.stdout.take();
+        let mut stderr = child.stderr.take();
+        let out_thread = std::thread::spawn(move || {
+            let mut buf = Vec::new();
+            if let Some(pipe) = stdout.as_mut() {
+                let _ = pipe.read_to_end(&mut buf);
+            }
+            buf
+        });
+        let err_thread = std::thread::spawn(move || {
+            let mut buf = Vec::new();
+            if let Some(pipe) = stderr.as_mut() {
+                let _ = pipe.read_to_end(&mut buf);
+            }
+            buf
+        });
+
+        let mut killed = false;
+        let status = loop {
+            if cancel.is_cancelled() && !killed {
+                // `Esc` against a child process can only mean this. What it was writing is the
+                // caller's to clean up, which is why nothing driven this way ever writes
+                // *into* an archive (`docs/05-multiarc.md` §9).
+                let _ = child.kill();
+                killed = true;
+            }
+            match child.try_wait().map_err(io)? {
+                Some(status) => break status,
+                None => std::thread::sleep(std::time::Duration::from_millis(25)),
+            }
+        };
+        let out = out_thread.join().unwrap_or_default();
+        let err = err_thread.join().unwrap_or_default();
+        if killed {
+            return Err(ExtError::Cancelled);
+        }
+        Ok(Ran {
+            code: status.code(),
+            // These programs print in whatever the terminal's encoding is and a name can be
+            // anything; lossy is the only honest reading, and a replacement character in one
+            // row is better than a listing that failed.
+            out: String::from_utf8_lossy(&out).into_owned(),
+            err: String::from_utf8_lossy(&err).into_owned(),
+        })
+    }
+}
+
+// ── asking a tool what is in an archive ───────────────────────────────────────────────────
+
+impl Tool {
+    /// Run `List` and read what it printed into rows.
+    ///
+    /// The program's own exit code is judged against `%E<n>`: most of these say 0 for "fine"
+    /// and something else for "I could not", but a few count 1 as "finished, with warnings",
+    /// which is why the table gets to say so.
+    pub fn list(
+        &self,
+        archive: &Path,
+        runner: &dyn Run,
+        cancel: &CancelToken,
+    ) -> Result<Vec<Row>, ExtError> {
+        let program = self.found().ok_or_else(|| ExtError::NotInstalled {
+            program: self.program.clone(),
+        })?;
+        let reader = self.listing.reader()?;
+        let line = self.line(
+            Op::List,
+            &Fill {
+                archive: Some(archive),
+                ..Fill::default()
+            },
+        )?;
+        let ran = runner.run(&program, &line.args, None, cancel)?;
+        let bad = match ran.code {
+            Some(code) => code > line.success_up_to,
+            // Killed, and not by us — `Spawn` reports cancellation as cancellation.
+            None => true,
+        };
+        if bad {
+            return Err(ExtError::Failed {
+                program: self.program.clone(),
+                code: ran.code,
+                // Some of them put the reason on the standard output instead, so the one that
+                // has something is the one shown, and the first line of it is enough: the
+                // rest is a usage screen.
+                reason: first_line(if ran.err.trim().is_empty() {
+                    &ran.out
+                } else {
+                    &ran.err
+                }),
+            });
+        }
+        Ok(reader.read(&ran.out))
+    }
+}
+
+impl Tool {
+    /// Extract these entries into `into`, by running `Extract`.
+    ///
+    /// The names go in a file, one per line, and never on the command line: no length limit,
+    /// and no name a program could mistake for a switch (`docs/05-multiarc.md` §3). The file
+    /// is written in UTF-8, which is what the shipped table tells `7z` to expect.
+    ///
+    /// `into` is where the program runs, so it is where the files land — with the paths they
+    /// have inside the archive, which is what `Extract` means as against
+    /// `ExtractWithoutPath`.
+    pub fn extract(
+        &self,
+        archive: &Path,
+        names: &[String],
+        into: &Path,
+        runner: &dyn Run,
+        cancel: &CancelToken,
+    ) -> Result<(), ExtError> {
+        let program = self.found().ok_or_else(|| ExtError::NotInstalled {
+            program: self.program.clone(),
+        })?;
+        let list = into.join(".fcmd-names");
+        let mut text = String::new();
+        for name in names {
+            // Inside an archive the separator is `/` and a leading one is ours, not the
+            // archive's: what goes in the file is the name the tool printed.
+            text.push_str(name.trim_start_matches('/'));
+            text.push('\n');
+        }
+        std::fs::write(&list, text).map_err(|e| ExtError::Io {
+            program: self.program.clone(),
+            reason: format!("{}: {e}", list.display()),
+        })?;
+        let line = self.line(
+            Op::Extract,
+            &Fill {
+                archive: Some(archive),
+                list_file: Some(&list),
+                ..Fill::default()
+            },
+        )?;
+        let ran = runner.run(&program, &line.args, Some(into), cancel);
+        // The list file is ours and goes whatever happened, so it cannot be mistaken for
+        // something that came out of the archive.
+        let _ = std::fs::remove_file(&list);
+        let ran = ran?;
+        let bad = match ran.code {
+            Some(code) => code > line.success_up_to,
+            None => true,
+        };
+        if bad {
+            return Err(ExtError::Failed {
+                program: self.program.clone(),
+                code: ran.code,
+                reason: first_line(if ran.err.trim().is_empty() {
+                    &ran.out
+                } else {
+                    &ran.err
+                }),
+            });
+        }
+        Ok(())
+    }
+}
+
+/// The first line with anything on it, trimmed — a program's reason, without its banner.
+fn first_line(text: &str) -> String {
+    text.lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .unwrap_or_default()
+        .to_string()
+}
+
+/// Which table claims a file called this, starting with these bytes.
+///
+/// First match wins, and the shipped tables come last, so a table the user wrote under the
+/// same name is the one that answers — MultiArc's `custom_user.ini` rule (§6).
+pub fn tool_for<'a>(tools: &'a [Tool], name: &str, head: &[u8]) -> Option<&'a Tool> {
+    tools.iter().find(|tool| tool.claims(name, head))
+}
+
+/// The program a table needs for this file and has not got.
+///
+/// Answered separately from opening, because the message is different in kind: "install `7z`"
+/// is something a reader can act on, and it has to be able to say so before anything has
+/// failed. `None` means either that no table claims the file or that the program is there.
+pub fn missing_program(tools: &[Tool], name: &str, head: &[u8]) -> Option<String> {
+    let tool = tool_for(tools, name, head)?;
+    tool.found().is_none().then(|| tool.program.clone())
 }
 
 // ── what is shipped ───────────────────────────────────────────────────────────────────────
+
+/// The shipped tables, built once — for the questions asked often enough that building the
+/// list every time would be silly.
+fn shipped() -> &'static [Tool] {
+    static ONCE: std::sync::OnceLock<Vec<Tool>> = std::sync::OnceLock::new();
+    ONCE.get_or_init(builtin_tools)
+}
+
+/// Does any shipped table claim a file called this?
+///
+/// By the name alone, with no bytes read, because this is what deciding whether `Enter` goes
+/// *into* a file has to be: cheap, and wrong only for a file somebody has renamed — the same
+/// promise `Format::of_name` makes. A table from the configuration is not asked here, and
+/// cannot be: nothing in the configuration adds one yet.
+pub fn claimed_by_a_tool(name: &str) -> bool {
+    shipped().iter().any(|tool| tool.claims(name, &[]))
+}
 
 /// The tables this program comes with.
 ///
@@ -837,13 +1132,15 @@ fn sevenzip() -> Tool {
             skip: Vec::new(),
             // `2026-11-04 08:21:13 D....            0            0  src`
             //
-            // The compressed column is empty for a file inside a solid block, which is why
-            // `packedSize` may match nothing. The name runs to the end of the line, spaces
-            // and all: it is the last column, so nothing after it needs telling apart.
+            // Both numeric columns can be empty and often are: a file inside a solid block
+            // has no compressed size of its own, and a directory in a `.wim` has neither. The
+            // name is separated from them by the two spaces 7-Zip puts there, which is what
+            // keeps a name that begins with digits — or holds spaces — from being read as a
+            // number; after that it runs to the end of the line, being the last column.
             rows: vec![concat!(
                 r"^(?<mYear>\d{4})-(?<mMonth>\d{2})-(?<mDay>\d{2}) ",
                 r"(?<mHour>\d{2}):(?<mMin>\d{2}):(?<mSec>\d{2}) ",
-                r"(?<attr>[A-Za-z.]{5}) +(?<size>\d+) +(?<packedSize>\d*) +(?<name>\S.*)$"
+                r"(?<attr>[A-Za-z.]{5}) *(?<size>\d*) *(?<packedSize>\d*) {2}(?<name>\S.*)$"
             )
             .to_string()],
             dir_attr: Some('D'),
@@ -1284,6 +1581,17 @@ Blocks = 1\n\
                 op.key()
             );
         }
+    }
+
+    #[test]
+    fn the_sentence_about_a_missing_program_can_be_read_back_out_of_itself() {
+        let said = ExtError::NotInstalled {
+            program: "7z".to_string(),
+        }
+        .to_string();
+        assert_eq!(crate::needs_program(&said), Some("7z"), "{said}");
+        // And it says nothing about a message that is about something else.
+        assert_eq!(crate::needs_program("tree.zip: broken archive"), None);
     }
 
     #[test]

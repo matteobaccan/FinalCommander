@@ -309,6 +309,7 @@ key-disasm = Disasm
 viewer-disasm-failed = cannot disassemble { $name }: { $error }
 viewer-decompile-running = { $tool } is running on { $name }…
 viewer-decompile-none = nothing here can decompile { $format }; install a tool and add a [[decompile]] rule to fcmd.toml
+arc-needs-program = this archive is read by `{ $program }`, which is not installed on this machine
 viewer-decompile-failed = { $tool }: { $error }
 viewer-derived = { $producer } of { $name }
 

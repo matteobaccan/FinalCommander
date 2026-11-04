@@ -6,6 +6,38 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **`Enter` opens a `.rar`, and the rest of what a program on the machine can read.** The
+  table from `docs/05-multiarc.md` now runs: `7z` lists the archive, its output goes through
+  the table's own grammar, and what comes back becomes entries of exactly the shape a zip's
+  are — so the panel, the tree, the search inside archives and `Ctrl+A` on an entry needed no
+  new code at all. `F3` on an entry runs the program again into a folder of ours and pours the
+  file out of it. One shipped table, `7z`, which brings `rar`, `cab`, `iso`, `rpm`, `cpio`,
+  `lha`, `arj`, `msi`, `wim` and more with it.
+
+  Verified against the real thing and not only against canned output: a test makes a `.wim`
+  with `7z` — a container this crate has no reader for — then lists it, walks into a
+  subdirectory and checks the bytes that come back are the bytes `7z` wrote. It skips where
+  `7z` is not installed rather than failing, because what it would be reporting then is
+  somebody's package manager.
+
+  Three things are deliberate in the shape of it. Spawning a child happens in exactly one
+  place, behind a trait, so the grammar can be tested without the program being installed and
+  `Esc` has one thing to kill; both of the child's pipes are drained on threads of their own,
+  because a program that fills one while we read the other would stop and so would we. An
+  archive's format is now `Option<Format>`, because there is no `Format` for a `.rar` and
+  saying so in the type is what keeps the in-process readers from ever being asked about one.
+  And this crate is always asked first: a `.zip` is never handed to `7z`, which would also
+  read it.
+
+- **A machine without the program says which program.** A table that claims a format where
+  its program is not installed is the one refusal the panel answers in the reader's own
+  language, naming what to install — seven languages, rather than the English the archive
+  crate wrote. The sentence is written in one place and read back in another from two
+  constants they share, with a test that they still agree, because a message recognised by its
+  words is a message that can drift.
+
 ### Changed
 
 - **Decided: an archiver driven from a table only ever reads.** It may list an archive and

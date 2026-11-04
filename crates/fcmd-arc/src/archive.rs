@@ -100,7 +100,15 @@ fn hash(text: &str) -> u64 {
 /// archive does not pay it again.
 #[derive(Debug)]
 pub struct Archive {
-    format: Format,
+    /// The format this crate read it as, or `None` when a program on the machine read it
+    /// instead — `tool` then says which (`docs/05-multiarc.md` §9).
+    format: Option<Format>,
+    /// The table that read this, when one did. Kept because getting an entry out runs the
+    /// program again: an archive this crate cannot parse cannot be seeked into either.
+    tool: Option<Arc<crate::ext::Tool>>,
+    /// And how to run it, which the cache owns and lends: one place in the program spawns a
+    /// child, and a test puts its own in here.
+    runner: Option<Arc<dyn crate::ext::Run>>,
     source: PathBuf,
     /// Size and modification time when it was read, so the cache can tell a stale index.
     stamp: (u64, Option<SystemTime>),
@@ -196,7 +204,9 @@ impl Archive {
         }
 
         let mut archive = Archive {
-            format,
+            format: Some(format),
+            tool: None,
+            runner: None,
             source: path.to_path_buf(),
             stamp: (meta.len(), meta.modified().ok()),
             entries,
@@ -206,6 +216,141 @@ impl Archive {
         };
         archive.build_tree();
         Ok(archive)
+    }
+
+    /// Read an archive this crate cannot parse, by asking a program that can.
+    ///
+    /// The table says how (`docs/05-multiarc.md`): `List` runs, its output goes through the
+    /// table's own grammar, and what comes back becomes entries of the same shape a zip's
+    /// are — so the panel, the search inside archives and `Ctrl+A` on an entry need nothing
+    /// new. Read only, by the rule in §9.
+    pub fn open_external(
+        path: &Path,
+        tool: Arc<crate::ext::Tool>,
+        runner: Arc<dyn crate::ext::Run>,
+        limits: &Limits,
+        cancel: &CancelToken,
+    ) -> Result<Archive> {
+        let name = path.display().to_string();
+        let meta = std::fs::metadata(path).map_err(|e| ArcError::Io {
+            path: name.clone(),
+            source: e,
+        })?;
+        let rows = tool
+            .list(path, runner.as_ref(), cancel)
+            .map_err(|e| match e {
+                crate::ext::ExtError::Cancelled => ArcError::Cancelled,
+                other => ArcError::External {
+                    path: name.clone(),
+                    reason: other.to_string(),
+                },
+            })?;
+        if rows.len() > limits.entries {
+            return Err(ArcError::Refused {
+                path: name,
+                reason: format!(
+                    "it holds {} entries, over the limit of {}",
+                    rows.len(),
+                    limits.entries
+                ),
+            });
+        }
+        let mut entries = Vec::with_capacity(rows.len());
+        let mut total: u64 = 0;
+        for row in rows {
+            let kind = if row.is_dir {
+                EntryKind::Dir
+            } else {
+                EntryKind::File
+            };
+            total = total.saturating_add(row.size.unwrap_or(0));
+            entries.push(ArcEntry {
+                path: normalise(&row.name),
+                size: row.size.unwrap_or(0),
+                packed: row.packed,
+                mtime: row.mtime,
+                // These listings print a mode as letters, not bits, and guessing bits from
+                // letters would be inventing: `Ctrl+A` shows nothing rather than a wrong 644.
+                mode: None,
+                kind,
+                link_target: None,
+                at: None,
+            });
+        }
+        if total > limits.total_bytes {
+            return Err(ArcError::Refused {
+                path: name,
+                reason: format!(
+                    "it unpacks to {total} bytes, over the limit of {}",
+                    limits.total_bytes
+                ),
+            });
+        }
+        let mut archive = Archive {
+            format: None,
+            tool: Some(tool),
+            runner: Some(runner),
+            source: path.to_path_buf(),
+            stamp: (meta.len(), meta.modified().ok()),
+            entries,
+            by_path: HashMap::new(),
+            children: HashMap::new(),
+            key: None,
+        };
+        archive.build_tree();
+        Ok(archive)
+    }
+
+    /// One entry out of an archive a program read: the program runs again, into a temporary
+    /// folder, and the file it wrote is poured into `out`.
+    ///
+    /// A whole copy of the entry reaches the disk first, which is what asking a program for
+    /// one file costs: none of them will write a single member to a pipe in a way that is the
+    /// same across tools, and the alternative — parsing the format ourselves — is the thing
+    /// this exists not to do.
+    fn copy_out_through_tool(
+        &self,
+        inner: &str,
+        size: u64,
+        out: &mut dyn Write,
+        cancel: &CancelToken,
+        progress: &mut dyn FnMut(u64),
+    ) -> Result<u64> {
+        let (Some(tool), Some(runner)) = (&self.tool, &self.runner) else {
+            return Err(ArcError::External {
+                path: self.name(),
+                reason: "no program is attached to this archive".to_string(),
+            });
+        };
+        let _ = size;
+        let temp = scratch()?;
+        let outcome = (|| -> Result<u64> {
+            tool.extract(
+                &self.source,
+                std::slice::from_ref(&inner.to_string()),
+                &temp,
+                runner.as_ref(),
+                cancel,
+            )
+            .map_err(|e| match e {
+                crate::ext::ExtError::Cancelled => ArcError::Cancelled,
+                other => ArcError::External {
+                    path: self.name(),
+                    reason: other.to_string(),
+                },
+            })?;
+            // It landed under the temporary folder at the path it has inside the archive.
+            let landed = temp.join(inner.trim_start_matches('/'));
+            let mut file = File::open(&landed).map_err(|e| ArcError::External {
+                path: self.name(),
+                reason: format!("`{}` wrote nothing for {inner}: {e}", tool.program),
+            })?;
+            copy(&mut file, out, cancel, progress)
+        })();
+        // Whatever happened, including a cancellation that left the program's half-written
+        // files behind: this folder is ours and nothing outside here knows its name.
+        let _ = std::fs::remove_dir_all(&temp);
+        outcome
     }
 
     /// The directories an archive does not bother to list are still directories: a tar of
@@ -249,8 +394,24 @@ impl Archive {
         }
     }
 
-    pub fn format(&self) -> Format {
+    /// The format this crate read it as. `None` for an archive a program on the machine read:
+    /// there is no `Format` for a `.rar`, because this crate cannot parse one.
+    pub fn format(&self) -> Option<Format> {
         self.format
+    }
+
+    /// What the frame calls it: the format's own name, or the table's.
+    pub fn label(&self) -> &str {
+        match (&self.format, &self.tool) {
+            (Some(format), _) => format.label(),
+            (None, Some(tool)) => &tool.name,
+            (None, None) => "archive",
+        }
+    }
+
+    /// The table that reads this, when a program on the machine does.
+    pub fn tool(&self) -> Option<&Arc<crate::ext::Tool>> {
+        self.tool.as_ref()
     }
 
     pub fn source(&self) -> &Path {
@@ -387,7 +548,7 @@ impl Archive {
         progress: &mut dyn FnMut(&str, u64),
     ) -> Result<Report> {
         let mut report = Report::default();
-        if self.format == Format::SevenZ {
+        if self.format == Some(Format::SevenZ) {
             // One pass over the whole archive rather than one read per entry: a 7z block holds
             // several files together, so asking for them one at a time would decode the block
             // once per file in it. The decoder checks each entry's CRC as it goes, which is
@@ -423,8 +584,9 @@ impl Archive {
             outcome.map_err(|e| self.sevenz_error(e))?;
             return Ok(report);
         }
-        if self.format.is_tar() && !self.format.seekable() {
-            let mut stream = tar::Archive::new(decoder(&self.source, self.format)?);
+        if self.format.is_some_and(|f| f.is_tar() && !f.seekable()) {
+            let format = self.format.expect("just asked");
+            let mut stream = tar::Archive::new(decoder(&self.source, format)?);
             let items = stream.entries().map_err(|e| self.broken(e))?;
             for item in items {
                 if cancel.is_cancelled() {
@@ -485,7 +647,12 @@ impl Archive {
                 entry: format!("{inner} is a directory"),
             });
         }
-        match self.format {
+        let Some(format) = self.format else {
+            // Nothing in this crate can parse it, so there is nothing to seek into: the
+            // program that listed it runs again and hands the entry over.
+            return self.copy_out_through_tool(&inner, entry.size, out, cancel, progress);
+        };
+        match format {
             Format::Zip => {
                 let file = File::open(&self.source).map_err(|e| self.io(e))?;
                 let mut zip =
@@ -548,7 +715,7 @@ impl Archive {
             // A compressed tar is one stream: the only way to the last entry is through all
             // of it. That is the format's doing, not ours, and it is why `seekable` says no.
             _ => {
-                let mut stream = tar::Archive::new(decoder(&self.source, self.format)?);
+                let mut stream = tar::Archive::new(decoder(&self.source, format)?);
                 let items = stream.entries().map_err(|e| self.broken(e))?;
                 for item in items {
                     let mut item = item.map_err(|e| self.broken(e))?;
@@ -714,6 +881,35 @@ pub(crate) fn decoder(path: &Path, format: Format) -> Result<Box<dyn Read>> {
             })
         }
     })
+}
+
+/// The first bytes of a file, for deciding what it is. A file that cannot be read answers with
+/// nothing, because the question "what format is this" is not the place to report that.
+fn head_of(path: &Path) -> Option<Vec<u8>> {
+    let mut file = File::open(path).ok()?;
+    let mut head = [0u8; 264];
+    let read = read_up_to(&mut file, &mut head).ok()?;
+    Some(head[..read].to_vec())
+}
+
+/// A folder of our own for a program to write into, in the same place and under the same
+/// convention `nest` uses: one directory per process, so a crash leaves something a person
+/// can recognise and delete rather than scattered files with invented names.
+///
+/// The caller removes it. There is no guard type doing it on drop because the one caller
+/// wants it gone on every path, cancellation included, and says so once.
+fn scratch() -> Result<PathBuf> {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let dir = std::env::temp_dir()
+        .join(format!("fcmd-{}", std::process::id()))
+        .join("ext")
+        .join(n.to_string());
+    std::fs::create_dir_all(&dir).map_err(|e| ArcError::Io {
+        path: dir.display().to_string(),
+        source: e,
+    })?;
+    Ok(dir)
 }
 
 /// `/`-separated, leading slash, no trailing slash, `.` and `..` resolved. An entry whose name
@@ -1330,7 +1526,7 @@ pub(crate) fn days_from_civil(year: i64, month: u32, day: u32) -> Option<i64> {
 /// The container cache of SPEC 04 §4: an open index per archive, so stepping in and out of one
 /// does not read it again. Keyed by the file and its stamp, so an archive that changed on disk
 /// is read afresh rather than answered from a stale index.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Cache {
     limits: Limits,
     /// Most recently used last; small by design, because an index can be large.
@@ -1341,6 +1537,20 @@ pub struct Cache {
     /// The passwords given for the archives that wanted one, by the path they were given for.
     /// They live as long as the program does and are never written anywhere.
     keys: Mutex<HashMap<String, String>>,
+    /// The tables for the formats this crate does not parse, in the order they are asked —
+    /// a user's own first, the shipped ones last (`docs/05-multiarc.md` §6).
+    tools: Vec<Arc<crate::ext::Tool>>,
+    /// And how their programs are run. One place in the program spawns a child.
+    runner: Arc<dyn crate::ext::Run>,
+}
+
+impl Default for Cache {
+    /// The default limits, and the shipped tables. Written out rather than derived because a
+    /// derived one would leave the cache with room for nothing and no tables at all, which is
+    /// not what "default" means for either.
+    fn default() -> Cache {
+        Cache::new(Limits::default())
+    }
 }
 
 impl Cache {
@@ -1351,7 +1561,39 @@ impl Cache {
             capacity: 4,
             nest: Nest::with_capacity(limits.depth.max(4)),
             keys: Mutex::new(HashMap::new()),
+            tools: crate::ext::builtin_tools()
+                .into_iter()
+                .map(Arc::new)
+                .collect(),
+            runner: Arc::new(crate::ext::Spawn),
         }
+    }
+
+    /// Put these tables in front of the shipped ones, which is what a `[[archiver]]` block in
+    /// the configuration does — and what a test does to drive a program of its own.
+    pub fn with_tools(mut self, tools: Vec<Arc<crate::ext::Tool>>) -> Cache {
+        let mut all = tools;
+        all.append(&mut self.tools);
+        self.tools = all;
+        self
+    }
+
+    /// Run the tables' programs some other way. A test hands over canned output; nothing else
+    /// has a reason to.
+    pub fn with_runner(mut self, runner: Arc<dyn crate::ext::Run>) -> Cache {
+        self.runner = runner;
+        self
+    }
+
+    /// The program a table needs for this file and has not got, if that is the case.
+    ///
+    /// Asked before anything has failed, because "install `7z`" is a different message from
+    /// "this is broken" and the reader can act on only one of them.
+    pub fn missing_program(&self, path: &Path) -> Option<String> {
+        let leaf = path.file_name()?.to_string_lossy().into_owned();
+        let head = head_of(path).unwrap_or_default();
+        let tool = self.tools.iter().find(|tool| tool.claims(&leaf, &head))?;
+        tool.found().is_none().then(|| tool.program.clone())
     }
 
     /// Keep the password somebody typed for this archive, so the next read of it — the
@@ -1468,7 +1710,7 @@ impl Cache {
                 open.remove(i);
             }
         }
-        let archive = Arc::new(Archive::open_with(path, &self.limits, cancel, key)?);
+        let archive = Arc::new(self.read(path, cancel, key)?);
         if let Ok(mut open) = self.open.lock() {
             open.push((path.to_path_buf(), archive.clone()));
             while open.len() > self.capacity {
@@ -1476,6 +1718,38 @@ impl Cache {
             }
         }
         Ok(archive)
+    }
+
+    /// Which reader: this crate's own when it knows the format, a program on the machine when
+    /// a table claims it, and neither when nothing does.
+    ///
+    /// The order matters and is the one it looks like: what we can parse ourselves, we parse.
+    /// A table is the answer for the formats we do not implement, not an override for the ones
+    /// we do — a `.zip` is never handed to `7z` because `7z` would also read it.
+    fn read(&self, path: &Path, cancel: &CancelToken, key: Option<&str>) -> Result<Archive> {
+        match Archive::open_with(path, &self.limits, cancel, key) {
+            Ok(archive) => Ok(archive),
+            Err(ArcError::Unknown(_)) => {
+                let leaf = path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                let head = head_of(path).unwrap_or_default();
+                let tool = self
+                    .tools
+                    .iter()
+                    .find(|tool| tool.claims(&leaf, &head))
+                    .ok_or_else(|| ArcError::Unknown(path.display().to_string()))?;
+                Archive::open_external(
+                    path,
+                    tool.clone(),
+                    self.runner.clone(),
+                    &self.limits,
+                    cancel,
+                )
+            }
+            Err(other) => Err(other),
+        }
     }
 
     /// Forget an archive, for when something has written to it.
@@ -1676,7 +1950,7 @@ mod tests {
             let path = dir.path().join(format!("tree.{}", format.extension()));
             write_archive(&path, format, &TREE);
             let archive = open(&path);
-            assert_eq!(archive.format(), format, "{}", format.label());
+            assert_eq!(archive.format(), Some(format), "{}", format.label());
 
             let root: Vec<String> = archive
                 .list("/")
@@ -1884,6 +2158,359 @@ mod tests {
         assert!(!Arc::ptr_eq(&third, &fourth));
     }
 
+    // ── an archive a program on the machine read ──────────────────────────────────────────
+
+    /// One run the fake runner was asked for: the program, its arguments, and the folder it
+    /// was given to work in.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct Call {
+        program: String,
+        args: Vec<String>,
+        cwd: Option<PathBuf>,
+    }
+
+    /// A runner that answers from a script rather than from a program, and remembers what it
+    /// was asked. Every test about the grammar and the plumbing uses this, so none of them
+    /// depends on what is installed where they run.
+    #[derive(Debug)]
+    struct Canned {
+        out: String,
+        code: i32,
+        err: String,
+        /// Each call, in order.
+        asked: Mutex<Vec<Call>>,
+        /// A file to write into that folder, as an extraction would.
+        writes: Option<(String, Vec<u8>)>,
+    }
+
+    impl Canned {
+        fn listing(out: &str) -> Canned {
+            Canned {
+                out: out.to_string(),
+                code: 0,
+                err: String::new(),
+                asked: Mutex::new(Vec::new()),
+                writes: None,
+            }
+        }
+        fn failing(code: i32, err: &str) -> Canned {
+            Canned {
+                out: String::new(),
+                code,
+                err: err.to_string(),
+                asked: Mutex::new(Vec::new()),
+                writes: None,
+            }
+        }
+        fn calls(&self) -> Vec<Call> {
+            self.asked.lock().expect("not poisoned").clone()
+        }
+    }
+
+    impl crate::ext::Run for Canned {
+        fn run(
+            &self,
+            program: &Path,
+            args: &[OsString],
+            cwd: Option<&Path>,
+            cancel: &CancelToken,
+        ) -> std::result::Result<crate::ext::Ran, crate::ext::ExtError> {
+            if cancel.is_cancelled() {
+                return Err(crate::ext::ExtError::Cancelled);
+            }
+            if let Ok(mut asked) = self.asked.lock() {
+                asked.push(Call {
+                    program: program.display().to_string(),
+                    args: args
+                        .iter()
+                        .map(|a| a.to_string_lossy().into_owned())
+                        .collect(),
+                    cwd: cwd.map(Path::to_path_buf),
+                });
+            }
+            if let (Some((name, bytes)), Some(cwd)) = (&self.writes, cwd) {
+                let at = cwd.join(name);
+                if let Some(parent) = at.parent() {
+                    std::fs::create_dir_all(parent).expect("the folder");
+                }
+                std::fs::write(at, bytes).expect("it writes");
+            }
+            Ok(crate::ext::Ran {
+                code: Some(self.code),
+                out: self.out.clone(),
+                err: self.err.clone(),
+            })
+        }
+    }
+
+    /// A table for a program that is certainly there, so `Tool::found` says yes wherever
+    /// these run: the test binary itself. Nothing is ever really spawned — `Canned` answers.
+    fn table() -> crate::ext::Tool {
+        let mut tool = crate::ext::builtin_tools()
+            .into_iter()
+            .next()
+            .expect("the shipped table");
+        tool.program = std::env::current_exe()
+            .expect("this test binary")
+            .display()
+            .to_string();
+        tool
+    }
+
+    /// What `7z l` printed for a `.wim` on the machine this was written on, 7-Zip 23.01 —
+    /// chosen because a directory row there has *both* numeric columns empty, which is the
+    /// case a column grammar gets wrong.
+    const WIM_LISTING: &str = concat!(
+        "\n7-Zip 23.01 (x64) : Copyright (c) 1999-2023 Igor Pavlov : 2023-06-20\n\n",
+        "Listing archive: prova.wim\n\n",
+        "--\nPath = prova.wim\nType = wim\nImages = 1\n\n",
+        "   Date      Time    Attr         Size   Compressed  Name\n",
+        "------------------- ----- ------------ ------------  ------------------------\n",
+        "2026-11-04 09:57:13 D....                            src\n",
+        "2026-11-04 09:57:13 D....                            src/deep\n",
+        "2026-11-04 09:57:13 ....A            8            8  readme.md\n",
+        "2026-11-04 09:57:13 ....A            5            5  src/main.rs\n",
+        "2026-11-04 09:57:13 ....A            1            1  src/deep/x.bin\n",
+        "------------------- ----- ------------ ------------  ------------------------\n",
+        "2026-11-04 09:57:13                 14           14  3 files, 2 folders\n",
+    );
+
+    #[test]
+    fn a_program_on_the_machine_lists_an_archive_this_crate_cannot_parse() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("prova.wim");
+        std::fs::write(&path, b"MSWIM\x00\x00\x00 and some more").unwrap();
+        let runner = Arc::new(Canned::listing(WIM_LISTING));
+        let archive = Archive::open_external(
+            &path,
+            Arc::new(table()),
+            runner.clone(),
+            &Limits::default(),
+            &CancelToken::new(),
+        )
+        .expect("it lists");
+
+        // No `Format`, because this crate parses nothing here; the frame has the table's name.
+        assert_eq!(archive.format(), None);
+        assert_eq!(archive.label(), "7z");
+
+        let root: Vec<String> = archive
+            .list("/")
+            .iter()
+            .map(|e| e.name_str().into_owned())
+            .collect();
+        assert_eq!(root, ["readme.md", "src"]);
+        let src: Vec<String> = archive
+            .list("/src")
+            .iter()
+            .map(|e| e.name_str().into_owned())
+            .collect();
+        assert_eq!(src, ["deep", "main.rs"]);
+        assert!(archive.is_dir("/src") && archive.is_dir("/src/deep"));
+
+        assert_eq!(archive.entry("/readme.md").expect("there").size, 8);
+        assert_eq!(archive.entry("/src/deep/x.bin").expect("there").size, 1);
+        // A listing prints a mode as letters, not bits, so nothing is invented.
+        assert_eq!(archive.entry("/readme.md").expect("there").mode, None);
+
+        // One call, no shell, and the archive's path as one argument of its own.
+        let calls = runner.calls();
+        assert_eq!(calls.len(), 1, "{calls:?}");
+        let call = &calls[0];
+        assert_eq!(call.args[0], "l", "the table's own first word");
+        assert!(
+            call.args.iter().any(|a| a == &path.display().to_string()),
+            "{:?}",
+            call.args
+        );
+        assert_eq!(
+            call.cwd, None,
+            "listing writes nothing, so it needs no folder"
+        );
+    }
+
+    #[test]
+    fn getting_one_entry_out_runs_the_program_again_into_a_folder_of_our_own() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("prova.wim");
+        std::fs::write(&path, b"MSWIM\x00\x00\x00").unwrap();
+        let runner = Arc::new(Canned {
+            writes: Some(("src/main.rs".to_string(), b"ciao\n".to_vec())),
+            ..Canned::listing(WIM_LISTING)
+        });
+        let archive = Archive::open_external(
+            &path,
+            Arc::new(table()),
+            runner.clone(),
+            &Limits::default(),
+            &CancelToken::new(),
+        )
+        .expect("it lists");
+
+        let out = archive
+            .read("/src/main.rs", &CancelToken::new())
+            .expect("it comes out");
+        assert_eq!(out, b"ciao\n");
+
+        let calls = runner.calls();
+        assert_eq!(calls.len(), 2, "the listing, then the extraction");
+        let call = &calls[1];
+        assert_eq!(call.args[0], "x", "extract");
+        let folder = call.cwd.as_ref().expect("an extraction is given a folder");
+        // The names never go on the command line: one argument carries a list file's path.
+        assert!(
+            call.args.iter().any(|a| a.starts_with("-i@")),
+            "the names go in a file: {:?}",
+            call.args
+        );
+        assert!(
+            !call.args.iter().any(|a| a.contains("main.rs")),
+            "no name on the line: {:?}",
+            call.args
+        );
+        // And the folder is gone, with the program's files in it.
+        assert!(!folder.exists(), "{folder:?} was left behind");
+    }
+
+    #[test]
+    fn a_table_whose_program_is_not_installed_names_the_program() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("prova.wim");
+        std::fs::write(&path, b"MSWIM").unwrap();
+        let mut tool = table();
+        tool.program = "fcmd-no-such-archiver".to_string();
+        let why = Archive::open_external(
+            &path,
+            Arc::new(tool),
+            Arc::new(Canned::listing("")),
+            &Limits::default(),
+            &CancelToken::new(),
+        )
+        .expect_err("it cannot be read");
+        let said = why.to_string();
+        assert!(said.contains("fcmd-no-such-archiver"), "{said}");
+        assert!(said.contains("not installed"), "{said}");
+    }
+
+    #[test]
+    fn a_program_that_says_no_hands_its_own_reason_over() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("prova.wim");
+        std::fs::write(&path, b"MSWIM").unwrap();
+        let why = Archive::open_external(
+            &path,
+            Arc::new(table()),
+            Arc::new(Canned::failing(2, "Cannot open the file as an archive\n")),
+            &Limits::default(),
+            &CancelToken::new(),
+        )
+        .expect_err("it said no");
+        let said = why.to_string();
+        assert!(
+            said.contains("Cannot open the file as an archive"),
+            "{said}"
+        );
+        assert!(said.contains('2'), "the exit code is in it: {said}");
+    }
+
+    #[test]
+    fn the_cache_asks_this_crate_first_and_a_table_only_for_what_is_left() {
+        let dir = tempfile::tempdir().unwrap();
+        // A zip is read here, and never handed to a program that would also read it.
+        let zip = dir.path().join("tree.zip");
+        write_archive(&zip, Format::Zip, &TREE);
+        let runner = Arc::new(Canned::listing(WIM_LISTING));
+        let cache = Cache::new(Limits::default())
+            .with_tools(vec![Arc::new(table())])
+            .with_runner(runner.clone());
+        let read = cache.open(&zip, &CancelToken::new()).expect("the zip");
+        assert_eq!(read.format(), Some(Format::Zip));
+        assert!(
+            runner.calls().is_empty(),
+            "no program was asked about a zip"
+        );
+
+        // And a format this crate does not know goes to the table.
+        let wim = dir.path().join("prova.wim");
+        std::fs::write(&wim, b"MSWIM\x00\x00\x00").unwrap();
+        let read = cache.open(&wim, &CancelToken::new()).expect("the wim");
+        assert_eq!(read.format(), None);
+        assert_eq!(read.entry("/readme.md").expect("there").size, 8);
+        assert_eq!(runner.calls().len(), 1);
+    }
+
+    #[test]
+    fn a_file_nothing_claims_is_still_not_an_archive() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("notes.txt");
+        std::fs::write(&path, b"just text\n").unwrap();
+        let cache = Cache::new(Limits::default());
+        match cache.open(&path, &CancelToken::new()) {
+            Err(ArcError::Unknown(_)) => {}
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn the_cache_says_which_program_is_missing_before_anything_has_failed() {
+        let dir = tempfile::tempdir().unwrap();
+        let wim = dir.path().join("prova.wim");
+        std::fs::write(&wim, b"MSWIM").unwrap();
+        let mut absent = table();
+        absent.program = "fcmd-no-such-archiver".to_string();
+        let cache = Cache::new(Limits::default()).with_tools(vec![Arc::new(absent)]);
+        assert_eq!(
+            cache.missing_program(&wim).as_deref(),
+            Some("fcmd-no-such-archiver")
+        );
+        // A table whose program *is* there has nothing to say, and nor has a file no table
+        // claims at all.
+        let here = Cache::new(Limits::default()).with_tools(vec![Arc::new(table())]);
+        assert_eq!(here.missing_program(&wim), None);
+        let txt = dir.path().join("notes.txt");
+        std::fs::write(&txt, b"x").unwrap();
+        assert_eq!(here.missing_program(&txt), None);
+    }
+
+    /// The real thing, when the machine has it: `7z` makes a `.wim` — a container this crate
+    /// has no reader for — and the shipped table lists it and gets a file out of it.
+    ///
+    /// Skipped where `7z` is not installed rather than failed, because what it would be
+    /// reporting then is somebody's package manager.
+    #[test]
+    fn the_shipped_table_really_reads_a_wim_when_7z_is_here() {
+        let Some(program) = crate::ext::which("7z") else {
+            eprintln!("no 7z on this machine: skipped");
+            return;
+        };
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("src")).unwrap();
+        std::fs::write(dir.path().join("src/main.rs"), b"ciao\n").unwrap();
+        std::fs::write(dir.path().join("readme.md"), b"leggimi\n").unwrap();
+        let made = std::process::Command::new(&program)
+            .args(["a", "-bd", "-twim", "prova.wim", "src", "readme.md"])
+            .current_dir(dir.path())
+            .output()
+            .expect("7z runs");
+        assert!(made.status.success(), "{made:?}");
+
+        let cache = Cache::new(Limits::default());
+        let path = dir.path().join("prova.wim");
+        let archive = cache.open(&path, &CancelToken::new()).expect("it opens");
+        assert_eq!(archive.format(), None, "no reader of ours parsed it");
+        let root: Vec<String> = archive
+            .list("/")
+            .iter()
+            .map(|e| e.name_str().into_owned())
+            .collect();
+        assert_eq!(root, ["readme.md", "src"]);
+        assert_eq!(archive.entry("/readme.md").expect("there").size, 8);
+        let out = archive
+            .read("/src/main.rs", &CancelToken::new())
+            .expect("it comes out");
+        assert_eq!(out, b"ciao\n", "the bytes 7z wrote are the bytes we read");
+    }
+
     // ── one compressed file, which is an archive of one entry ─────────────────────────────
 
     #[test]
@@ -1894,7 +2521,7 @@ mod tests {
             let path = dir.path().join(format!("notes.txt.{}", format.extension()));
             write_single(&path, format, bytes);
             let archive = open(&path);
-            assert_eq!(archive.format(), format, "{}", format.label());
+            assert_eq!(archive.format(), Some(format), "{}", format.label());
 
             // One row, named after the file without the suffix that says how it was packed.
             let root: Vec<String> = archive
@@ -1923,7 +2550,7 @@ mod tests {
         let path = dir.path().join("dump");
         write_single(&path, Format::Bz2, b"x");
         let archive = open(&path);
-        assert_eq!(archive.format(), Format::Bz2);
+        assert_eq!(archive.format(), Some(Format::Bz2));
         let root: Vec<String> = archive
             .list("/")
             .iter()
@@ -1944,7 +2571,7 @@ mod tests {
         enc.finish().unwrap();
 
         let archive = open(&path);
-        assert_eq!(archive.format(), Format::TarGz, "the peek settles it");
+        assert_eq!(archive.format(), Some(Format::TarGz), "the peek settles it");
         let root: Vec<String> = archive
             .list("/")
             .iter()
@@ -2113,7 +2740,7 @@ mod tests {
             ],
         );
         let archive = open(&path);
-        assert_eq!(archive.format, Format::Ar);
+        assert_eq!(archive.format, Some(Format::Ar));
         let names: Vec<&str> = archive.entries().iter().map(|e| e.path.as_str()).collect();
         assert_eq!(
             names,
@@ -2187,7 +2814,7 @@ mod tests {
             ],
         );
         let outer = open(&path);
-        assert_eq!(outer.format, Format::Ar);
+        assert_eq!(outer.format, Some(Format::Ar));
         assert_eq!(
             outer.read("/debian-binary", &CancelToken::new()).unwrap(),
             b"2.0\n"
@@ -2202,7 +2829,7 @@ mod tests {
         let (nested, _) = cache
             .open_in(&inner, &CancelToken::new())
             .expect("the tar inside the package");
-        assert_eq!(nested.format, Format::TarGz);
+        assert_eq!(nested.format, Some(Format::TarGz));
         assert!(
             nested
                 .entries()

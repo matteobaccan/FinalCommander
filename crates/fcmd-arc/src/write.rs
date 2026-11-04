@@ -632,7 +632,7 @@ mod tests {
             // And the archive reads back as the tree that went in.
             let read = Archive::open(&archive, &Limits::default(), &CancelToken::new())
                 .unwrap_or_else(|e| panic!("{}: {e}", format.label()));
-            assert_eq!(read.format(), format);
+            assert_eq!(read.format(), Some(format));
             let names: Vec<String> = read
                 .list("/")
                 .iter()

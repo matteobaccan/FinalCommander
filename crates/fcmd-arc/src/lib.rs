@@ -28,7 +28,10 @@ mod rebuild;
 mod write;
 
 pub use archive::{ArcEntry, Archive, Cache, Report};
-pub use ext::{builtin_tools, ExtError, Fill, Line, Listing, Magic, Op, Reader, Row, Tool};
+pub use ext::{
+    builtin_tools, claimed_by_a_tool, missing_program, tool_for, ExtError, Fill, Line, Listing,
+    Magic, Op, Ran, Reader, Row, Run, Spawn, Tool,
+};
 pub use format::Format;
 pub use limits::Limits;
 pub use nest::Fetch;
@@ -50,6 +53,12 @@ pub enum ArcError {
 
     #[error("{path}: broken archive ({reason})")]
     Broken { path: String, reason: String },
+
+    /// A program on the machine was asked to read this and did not. The reason is that
+    /// program's own, because it is the only one that knows: a table cannot explain a format
+    /// it does not parse (`docs/05-multiarc.md` §9).
+    #[error("{path}: {reason}")]
+    External { path: String, reason: String },
 
     /// A guard fired: the archive is or claims to be far bigger than the limits allow. The
     /// message says which limit and what the archive wanted, because a user who meets this
@@ -89,5 +98,21 @@ pub fn wants_password(message: &str) -> bool {
 
 /// The words that say a password is what is missing. Kept beside the error that writes them.
 pub(crate) const NEEDS_PASSWORD: &str = "it is encrypted and wants a password";
+
+/// Which program a listing failed for want of, when that is why it failed.
+///
+/// The same shape and the same reason as [`wants_password`]: by the time a listing reaches
+/// the panel it is a string, and this is the one other refusal the panel has something of its
+/// own to say about. "Install `7z`" is a sentence the reader can act on, in their own
+/// language; "this needs `7z`, which is not installed" is not, being English.
+pub fn needs_program(message: &str) -> Option<&str> {
+    let rest = message.split_once(NEEDS_PROGRAM_BEFORE)?.1;
+    Some(rest.split_once(NEEDS_PROGRAM_AFTER)?.0)
+}
+
+/// The two halves of that sentence, so the error that writes it and the function that reads
+/// it cannot drift apart. A test asserts they still agree.
+pub(crate) const NEEDS_PROGRAM_BEFORE: &str = "this needs `";
+pub(crate) const NEEDS_PROGRAM_AFTER: &str = "`, which is not installed";
 
 pub type Result<T> = std::result::Result<T, ArcError>;
