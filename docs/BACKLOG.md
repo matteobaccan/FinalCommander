@@ -18,6 +18,7 @@ says what the decision stands on.
 | Item | Where | What is left |
 | --- | --- | --- |
 | Tabs per panel | `Ctrl+Alt+T`/`W`/`N`/`P`/`M`/`K` | Reordering a tab within its row, and a list of them to pick from. |
+| Columns from a plugin | `[[column_set]]` | Total Commander's content plugins: a column whose value a plugin computes (an EXIF date, a track's tags). The column grammar is there; a column API for plugins is SPEC 08's next tier. |
 
 ## Selection and sorting
 
@@ -32,7 +33,9 @@ says what the decision stands on.
 | File attributes | `Ctrl+A` | FAR's *System properties* button, which hands the file to the shell's own property sheet; the NTFS compressed and encrypted bits; and a picker for the owner row, which takes a name or a number and completes neither. |
 | The files themselves on the clipboard | `Ctrl+Shift+C`/`X` | No terminal can be asked to carry a file — `OSC 52` carries text. This is window-system work, and it is what `fcmd-platform` would be for. |
 | Descriptions | `Ctrl+Z` | Writing one *inside* an archive, which is a rebuild of the archive rather than a write to a file. |
-| rar | `Shift+F1`/`F2` | Needs `unrar`, whose licence is not free: an optional feature, off in distribution builds. |
+| Formats through a program on the machine | `Enter` on a `.rar`, `.iso`, `.cab`… | A selection extracted through the job engine, with the bar counting bytes as they land; `Test` on `Alt+F6`; a table for RARLAB's `rar`, verified on a machine that has it (`docs/05-multiarc.md` §10). Writing is not on this list: it is decided against (§9). |
+| A bare `.gz`, `.bz2`, `.xz`, `.zst` | `Shift+F1` | They read as an archive of one entry; packing one file into one is not there, so the pack dialog does not offer them. |
+| `cpio`, `rpm`, `cab` read here | `Enter` | Read through `7z` today. `cpio` needs no dependency — it is the `ar` reader again — and `rpm` is a header and a `cpio`; `cab` is the one that wants a crate (`docs/05-multiarc.md` §9). |
 | `F7` inside an archive | — | No format stores a directory worth keeping, so this wants a decision about what an empty directory in an archive even is. |
 | An archive on a server | — | A progress bar while the copy comes down. Today a large one is simply a pause. |
 | 7z | `Shift+F1` | Writing an encrypted archive, split volumes, and the codecs only 7-Zip ZS writes (zstd, lz4, brotli). A zip encrypted with AES wants a feature of the `zip` crate we do not build, so it says what it is rather than asking. |
@@ -62,6 +65,7 @@ says what the decision stands on.
 | --- | --- | --- |
 | Find file | `Alt+F7` | From FAR's dialog: a sixth scope, one code page or a chosen set, fuzzy matching, alternate streams, the advanced page (a first-N-bytes limit, result columns in the column grammar), saving and loading a search, and a new search from the results. |
 | Checksums | Files menu | Splitting and combining, and checksums of something that is not on this machine, which waits on `JobFs::read_chunks` beyond the local filesystem. |
+| A queue for jobs | `job.queue.show` | SPEC 03 §5: a panel of the jobs, running, queued, paused and finished, that reorders, pauses, resumes and retries the failed items; one job per target device and the rest queued, as Total Commander's copy by queue does (feature 3.7). Today a job runs in the background with its bar, and there is no list of them. |
 | Synchronise folders | `Ctrl+Shift+Y` | A saved pair of directories as a named job, and a written report. |
 | User menu | `F2` | Reading FAR's `FarMenu.ini` as it stands, separators between groups, a dialog to edit the entries, and `Shift+F10` for the row taken last. |
 | File associations | Commands menu | Defaults read off the OS (xdg-mime, `LSCopyDefaultRoleHandler`, the registry), a dialog to edit the blocks, and `execute`/`extract`/`preview` entries. |
@@ -140,5 +144,12 @@ way", and the reason is here so it does not have to be found again.
   locale; the title shows the path and the version.
 * **`Ctrl+F12`** opens the sort list, which is FAR's own behaviour; reversing moved to
   `Ctrl+Shift+F12`.
+* **`fish://`** — a filesystem over a plain ssh shell, mc's answer for a host without sftp.
+  `sftp://` covers the hosts people meet, and the protocol is shell snippets echoed into a
+  remote shell and `ls` output parsed back in an unknown locale (feature 4.5d).
+* **Printing WebAssembly in process** — `wasmprinter` was 7.3% of the binary for one
+  feature. `Shift+F6` on a `.wasm` runs `wasm2wat` like any other `[[decompile]]` rule.
+* **Writing an archive through a program on the machine** — a table may list and extract,
+  never create, add or delete (`docs/05-multiarc.md` §9).
 * **`Ctrl+M`** — FAR's *restore selection* is `Ctrl+Shift+M` here, because a terminal
   delivers `Ctrl+M` as `Enter`. This one will not change.

@@ -26,17 +26,14 @@ reviewable and testable.
 | 22 | ✅ `fcmd-net` (netbox): SFTP provider, site list, connection pool, host-key policy, transfers through the job engine; `Ctrl+Shift+N`, remote panels, `sftp://` in `Ctrl+L` | 5,12,13 |
 | 23 | ✅ menu bar (`F9`) with FAR's five menus, settings dialogs (System/Panel/Interface/Confirmations), languages, themes, drives, folder history and sort-mode lists, `Save setup` (SPEC 10) | 4,10,12 |
 | 16 | `fcmd-platform` M1 slice: long paths, trash, clipboard, drives/mounts, FS watch | 1 |
-| 17 | theming: theme loader, `far-classic` + `mono`, colour degradation | 3,12 |
+| 17 | ✅ theming: theme loader, seven built-in themes (`commander`, `far`, `black`, `white`, `matrix`, `tron`, `blade`), colour degradation | 3,12 |
 | 18 | ✅ packaging: a tag builds linux-gnu, linux-musl (static), macOS universal and windows-msvc, with checksums and release notes from the changelog | 1 |
 | 19 | snapshot test harness + keymap tests + job property tests + perf budget check | all |
-| 20 | docs: README, help pages generated from `docs/`, man page | all |
+| 20 | ✅ docs: README, help pages generated from `docs/`, man page | all |
 
-**Done so far**: chunks 1–19 and 21–23, including the operation engine (13), the viewer (15),
-the editor (21), the netbox (22) — the three priority components of SPEC 08 §8 are all in the
-binary — the menu bar with its settings dialogs (23), and the command line with the user screen
-(14, shipped in 0.0.3). What M1 still owes: the generated help and man pages (20), the trash,
-and the performance budget checks in CI. `docs/BACKLOG.md` lists every menu entry that is in the
-bar but not yet behind a feature.
+**Done so far**: every chunk, the help and the man page (20) since 0.1.0 among them, except one
+part of 19 — the performance budget checks in CI, which are what M1 still owes. `docs/BACKLOG.md`
+lists every menu entry that is in the bar but not yet behind a feature.
 
 Exit criteria: the authors use it instead of `mc`/FAR for a week without reaching for the old
 tool for anything in M1 scope; all quality gates green on three platforms.
@@ -55,10 +52,12 @@ later items goes first. Sizes are honest estimates of focused work, not of calen
 0.0.7 was a fix release for a hang in 0.0.6's tree panel, which is why the Hiew track is
 0.0.8 rather than 0.0.7.
 
-Running alongside, each going out with whichever release it is ready for: **mouse support**, the
-**OS clipboard** (`fcmd-platform`), the **trash**, **descriptions** (`descript.ion`), the
-**settings browser** for the ~50 keys we have, **AArch64 disassembly**, and the packaging work
-(`.deb`, `.rpm`, Homebrew, Scoop, AUR), which SPEC 11 costs channel by channel.
+Running alongside: **mouse support** (0.4.0), the **OS clipboard** through `OSC 52` (0.6.0),
+the **trash**, **descriptions** (0.7.3), the **settings browser** (0.16.0), and **AArch64
+disassembly** (0.18.0) have all gone out. What is still running alongside is the packaging work
+(`.deb`, `.rpm`, Homebrew, Scoop, AUR), which SPEC 11 costs channel by channel. Since 0.1.0 a
+release is cut when there is something worth having in it rather than to a plan written in
+advance, and `CHANGELOG.md` is the record of what each one held.
 
 Two things are explicitly *not* on this list, and `docs/BACKLOG.md` says why: Netware module
 formats, and anything that needs reverse engineering a proprietary program rather than reading
@@ -75,6 +74,13 @@ compare dirs · checksums/split/combine · attributes & permissions dialogs · l
 PTY subshell with cwd sync · user menu · associations · histories with pinning · hex/dump
 viewer modes + regex/hex search · help system · session restore · `tc`/`nc` keymap profiles ·
 `.deb`/`.rpm`/Homebrew/Scoop/AUR packages.
+
+**Where it stands** (read against `docs/02-features.md` for 0.29.0): almost all of it is in.
+Still open, with the row that tracks each — the disk-usage view (7.3), the job queue panel and
+the journal that resumes after a crash (3.7, 11.6), more than one file open in the editor (6.1),
+the multi-rename tool (3.11), splitting and combining files (3.12), the selection kept by
+session restore (9.7), the `tc` and `nc` keymap profiles (only `far` and `mc` ship), and the
+packages.
 
 ## M3 — Commander parity and beyond the terminal's usual limits
 
@@ -108,7 +114,7 @@ remote `fcmd` protocol (run the engine on the server, the UI locally — far2l's
 | Licence contamination | `01-licensing.md` rules + `cargo deny` + PR review checklist |
 | Single-maintainer bus factor | small crates, documented specs, generated help/docs, no hidden tribal knowledge |
 
-## How to contribute (once M1 starts)
+## How to contribute
 
 1. Pick a chunk from the table; the spec section it implements is linked in the issue.
 2. Specs are the contract: if the implementation needs to deviate, the PR updates the spec in

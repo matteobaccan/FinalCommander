@@ -201,7 +201,8 @@ Everything here is unblocked; `docs/BACKLOG.md` has the reasons and the rest.
    packing one file into one is the half that is missing.
 2. **`cpio`, then `rpm` on it, then `cab`, read in process**: `docs/05-multiarc.md` §10.
    `cpio` needs no dependency — it is the `ar` reader again.
-3. **A queue for background jobs** (feature 3.7): they run at once today, side by side.
+3. **A queue for jobs** (feature 3.7, SPEC 03 §5): a panel that lists them, reorders, pauses
+   and resumes them, with one job per target device and the rest waiting.
 4. **A table for RARLAB's `rar`**, written on a machine that has it rather than from memory
    of its manual.
 

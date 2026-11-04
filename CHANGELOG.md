@@ -28,6 +28,14 @@ Notable changes, newest first. The format follows
   grabber's modes (9b.12) and the lists' filter (9b.18) are partly there, and each cell now
   says what is left. New rows for two things other commanders have and this does not: Total
   Commander's content plugins as columns (1.27), and saved searches (7.13).
+- **The backlog and the roadmap say what is open now.** The backlog still had `rar` as needing
+  a non-free `unrar`; it is read through `7z`, and what is left of that road has its row, with
+  rows for writing a bare `.gz`, reading `cpio`, `rpm` and `cab` here, the job queue and columns
+  from a plugin, and `fish://`, the WebAssembly printer and writing through a program among the
+  things settled. The roadmap's M1 still owed the help, the man page and the trash, all long
+  shipped; its list of what runs alongside was all out; and M2 now says which few of its items
+  are still open. A test now refuses a feature-table row whose state is not one the legend
+  defines, which is how a `✗` had crept in for a decision.
 - **The numbers.** Seven themes are compiled in, not six — `far` was never counted — in the
   README, the overview, `--help` and the man page. `AGENTS.md` said 0.13.0 was the version in
   `main`. The FAR inventory said there was no colour editor (there has been one since 0.4.0)

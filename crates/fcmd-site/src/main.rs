@@ -545,6 +545,34 @@ mod tests {
         );
     }
 
+    /// Every row of the feature table says its state with one of the marks its legend
+    /// defines. A row that invented its own (`✗` had crept in for a decision) reads as a
+    /// fourth state to whoever counts them, and the table is what gets counted.
+    #[test]
+    fn every_feature_row_has_a_state_the_legend_defines() {
+        let text = std::fs::read_to_string(default_repo().join("docs/02-features.md")).unwrap();
+        let marks = ["✓", "~", "M2", "M3", "M4", "—"];
+        let mut rows = 0;
+        let mut odd = Vec::new();
+        for (n, line) in text.lines().enumerate() {
+            let cells: Vec<&str> = line.split('|').map(str::trim).collect();
+            // `| 1.4 | feature | origin | state |` splits into six, the ends empty.
+            let numbered = cells
+                .get(1)
+                .is_some_and(|c| c.starts_with(|ch: char| ch.is_ascii_digit()));
+            if !numbered || cells.len() < 6 {
+                continue;
+            }
+            rows += 1;
+            let state = cells[cells.len() - 2];
+            if !marks.iter().any(|m| state.starts_with(m)) {
+                odd.push(format!("line {}: {state}", n + 1));
+            }
+        }
+        assert!(rows > 150, "read only {rows} rows");
+        assert!(odd.is_empty(), "{odd:#?}");
+    }
+
     /// Build the whole site into a temporary directory, from this checkout.
     fn built() -> (tempfile::TempDir, PathBuf) {
         let dir = tempfile::tempdir().expect("a directory");
