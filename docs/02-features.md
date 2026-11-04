@@ -58,7 +58,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 1.11b | Column titles row (`Name │ Size │ Date Time`), with the sort-mode letter in the corner — lower case ascending, upper case descending — and a `*` beside it while a filter is on | FAR | ✓ |
 | 1.12 | Function-key bar (`F1..F12`, follows modifiers: Shift/Alt/Ctrl rows) | NC | ✓ |
 | 1.13 | Sort by name/ext/size/mtime/ctime/atime/owner/unsorted, reversible, group dirs first, selected first, natural ("version") sort, locale-aware collation | FAR/TC | ~ locale-aware collation |
-| 1.14 | Secondary sort criteria chain (tie-breakers, configurable): per sort mode an ordered set, with its own editor (add, remove, replace, direction, inherit, reorder, reset) | FAR | M3 |
+| 1.14 | Secondary sort criteria chain (tie-breakers, configurable): per sort mode an ordered set, with its own editor (add, remove, replace, direction, inherit, reorder, reset) | FAR | ~ `panel.sort_chain`: up to three tie-breakers, the name last, `reverse` over the whole; one chain for every sort mode, and no editor — it is written in the file |
 | 1.14b | Sort groups: named mask groups that sort ahead of or behind everything else, ordered, applied on top of the sort mode | FAR (`Shift+F11`) | ✓ |
 | 1.14c | Sort by creation time, access time, owner and description, besides name/ext/size/write time | FAR (`Ctrl+F8…F11`) | ✓ |
 | 1.15 | Filters: per-panel display filter, quick filter bar, filter by mask/size/date/attrs, named filter sets, filter menu | FAR/KRU | ~ the dialog for the size, date and attribute conditions, and a list of named sets |
@@ -75,6 +75,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 1.24 | Panel history (back/forward), directory history, folder shortcuts/bookmarks (0..9 + named), hotlist | FAR/TC/MC | ✓ |
 | 1.25 | Auto-refresh via filesystem watch (inotify/FSEvents/ReadDirectoryChangesW), manual `Ctrl+R` | TC/MTN2 | ✓ |
 | 1.26 | Names and full paths to the system clipboard | FAR (`Ctrl+Ins`, `Alt+Shift+Ins`) | ✓ |
+| 1.27 | Columns whose values a plugin computes — Total Commander's content plugins (`.wdx`): a photo's EXIF date, a track's tags, a document's page count, sortable and searchable like any other column | TC | M3 — a plugin can say the same in a message (`examples/plugins/what-is-this`); a column API is SPEC 08's next tier |
 
 ## 2. Navigation & selection
 
@@ -123,7 +124,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 4.1b | **A format the user adds**, without waiting for us: a table naming a program on the machine, its command lines and how to read its listing | MC (`extfs` scripts) | ✓ `[[archiver]]` blocks in `fcmd.toml` (SPEC 07 §2b-quinquies), in MultiArc's own language so a `custom.ini` table keeps its keys. Asked before the shipped `7z` table, and one named `7z` replaces it. Read only, like every table: a block with a line that would change an archive is refused by name. A wrong block is a startup warning naming it, never installed half-working |
 | 4.2 | Archive write: create/add/delete/update in zip, 7z, tar family; pack dialog with format options (level, solid, encryption, split volumes) | TC | ~ split volumes, and compressing one file into a bare `.gz`/`.bz2`/`.xz`/`.zst`, which are read but not yet written. The dialog's list is the formats *this program* writes and never a property of the machine: an external tool only ever reads (`docs/05-multiarc.md` §9) |
 | 4.3 | Pack/unpack shortcuts (`Alt+F5`/`Alt+F6`/`Shift+F1`/`Shift+F2`), test archive, extract-here vs extract-to | FAR/TC | ~ `Alt+F5`/`Alt+F6`, which are Total Commander's keys and taken here |
-| 4.4 | Open a file inside an archive in the viewer/editor; edit-in-place writes back | FAR | M3 |
+| 4.4 | Open a file inside an archive in the viewer/editor; edit-in-place writes back | FAR | ✓ |
 | 4.4b | **Remote file in the viewer and the editor**: `F3` views a fetched copy, `F4` edits it and `F2` writes it back (rename into place, change check, the local copy named if it fails) | FAR NetBox | ✓ |
 | 4.5 | **SFTP/SSH** panels: listing, navigation, mkdir, rename, delete, symlinks, mode and mtime | far2l NetRocks/termscp | ✓ |
 | 4.5b | FTP/FTPS, WebDAV, SMB, NFS, MTP/ADB (Android), rclone bridge | far2l NetRocks/termscp | ~ FTP resume and active mode, WebDAV digest and locking |
@@ -206,7 +207,7 @@ something readable rather than only into instructions.
 | 6.4 | Search/replace: plain search with wrap, replace once, replace all (the engine already does regex and case-insensitive; the dialog that exposes them is M2) | FAR | ~ whole word, capture references, "preserve style", a list of every match |
 | 6.5 | Go to `line` or `line:column`, bookmarks 0..9 | FAR | ~ jumping to the matching bracket |
 | 6.6 | Keep the original encoding, EOL, BOM and final newline on save | FAR | ~ explicit conversion commands |
-| 6.7 | Syntax highlighting (tree-sitter), bracket matching, auto-indent, tabs/spaces policy, trailing-space trim | MTN2/NEW | M3 |
+| 6.7 | Syntax highlighting (tree-sitter), bracket matching, auto-indent, tabs/spaces policy, trailing-space trim | MTN2/NEW | ~ colouring for 25 languages and markups by a scanner of our own rather than tree-sitter, auto-indent, the three tab policies of `editor.tabs`; no bracket matching and no trailing-space trim |
 | 6.8 | Insert file name / path / current date, character by code, macros | FAR | M3 |
 | 6.9 | External editor delegation (`$EDITOR`, per-type associations) | all | ✓ |
 | 6.10 | LSP-lite: completion/diagnostics for the open file (optional plugin) | NEW | M4 |
@@ -228,9 +229,10 @@ something readable rather than only into instructions.
 | 7.7 | Macro recorder/player, keyboard macros with conditions, assignable to any key | FAR/far2m | ~ conditions on a macro |
 | 7.8 | Scripting console (Lua) with the full command vocabulary | far2m/YAZI | M3 |
 | 7.9 | Print files / print manager | FAR | M4 |
-| 7.10 | Screen grabber (copy a rectangle of the screen to clipboard) | FAR | M4 |
+| 7.10 | Screen grabber (copy a rectangle of the screen to clipboard) | FAR | ✓ `Alt+Ins` |
 | 7.11 | Learn-keys / terminal key diagnostics | MC | ~ the escape sequence cannot be typed in: it is read by a library with a table for the terminals in use |
 | 7.12 | Help system: context-sensitive `F1`, searchable, localised, offline | FAR/KRU | ~ a search across the pages |
+| 7.13 | Saved searches: a find-file query kept under a name and run again from a list, mask, text and conditions and all | TC/DC/KRU | M3 — each field of the find dialog has its own history (`Ctrl+↓`), which is not the same as the query as a whole |
 
 ## 8. Shell & terminal integration
 
@@ -242,7 +244,7 @@ something readable rather than only into instructions.
 | 8.4 | Embedded terminal pane(s), tabs of terminals, alternate-screen apps inside the pane | MTN2/KRU | ~ tabs of terminals |
 | 8.5 | Shell integration both ways: `cd` in the shell moves the panel, panel moves the shell | MC/NEW | ✓ |
 | 8.6 | Run as administrator / another user | FAR | M3 |
-| 8.7 | Output search (`Ctrl+Shift+F`) and output capture into a panel | MTN2 | M3 |
+| 8.7 | Output search (`Ctrl+Shift+F`) and output capture into a panel | MTN2 | ~ capture into a panel is external panelize (*Commands → External panelize*); searching the output is not there |
 | 8.8 | Open OS file manager / terminal / shell menu for the current item | TC/KRU | M2 |
 | 8.10 | **The shell is left where the panel was**: quitting leaves the shell that started it in the directory the active panel ended in — the gesture `mc` is used with. A process cannot change its parent's working directory, so it takes two halves: `-P FILE` (`--printwd`, mc's own spelling) writes it, and a shell function reads it and goes there. `fcmd --shell-init bash|zsh|fish|powershell` prints the function, so nothing is installed anywhere (SPEC 11 §1) and it cannot be out of step with the binary | MC (`mc-wrapper.sh`) | ✓ and better on one point: quitting inside an archive leaves the shell in the folder holding it, where mc writes the archive's own path and its wrapper refuses it without saying why |
 | 8.9 | **Called from outside instead of opened**: the viewer, the editor and the comparison reachable from the command line, so the program can be `$VISUAL`, a `git difftool` or a pager in a script | MC (`mcview`, `mcedit`, `mcdiff`) | ✓ `--view FILE`, `--edit FILE`, `--diff A B`; leaving that screen ends the run, and a name that is not there opens an empty editor under it |
@@ -258,7 +260,7 @@ something readable rather than only into instructions.
 | 9.5 | CJK/wide-character correct layout, combining marks, RTL-safe truncation, emoji width | MTN2 | ~ combining marks and RTL-safe truncation |
 | 9.6 | Accessibility: no-colour mode, screen-reader-friendly output mode, configurable focus indication | NEW | M3 |
 | 9.7 | Session save/restore (tabs, paths, selections, viewer positions) | TC | ~ the selection, which is not kept |
-| 9.8 | Settings search ("where is that option?") | NEW | M3 |
+| 9.8 | Settings search ("where is that option?") | NEW | ✓ *Options → All settings*, a list of every setting that narrows as you type |
 | 9.9 | No telemetry, no network calls except explicit user actions; optional update check off by default | MTN2 | ✓ |
 | 9.10 | Menu bar (`F9`) with FAR's five menus; every entry is a command from the vocabulary, the shortcut shown is read from the keymap in force, and an entry whose feature is missing is drawn dim and says so (SPEC 10 §2) | FAR | ✓ |
 | 9.14 | Screens (`F12`, `Ctrl+Tab`): a viewer or an editor one steps away from and comes back to, keeping its position and its unsaved changes, with the panels as screen zero of the ring and a count of what is behind them in the corner. `F10` from the panels names every background screen with unwritten changes (SPEC 02 §10) | FAR | ✓ |
@@ -285,13 +287,13 @@ Found by reading FAR's own help and configuration tables; the detail is in
 | 9b.9 | Command prefixes on the command line (`view:`, `edit:`, `goto:`, `clip:`, `whereis:`, `link:`, `run:`), as FAR's `farcmds` does | FAR | ~ `clip:` and `link:` |
 | 9b.10 | Internal shell commands that need no shell: `cls`, `cd`/`chdir` with a configurable `cd ~`, `chcp`, `set`, nestable `if [not] exist` / `if [not] defined`, `pushd`/`popd`/`clrd`, `title`, `exit` | FAR | ~ `title`, `chcp`, and the nestable `if` |
 | 9b.11 | Autocomplete with four separately switchable sources (filesystem, history, `PATH`, environment), each three-state, as a list or appended inline | FAR | ✓ |
-| 9b.12 | Screen grabber: select any region of the screen, stream or block, extend, move, append to the clipboard | FAR (`Alt+Ins`) | M3 |
+| 9b.12 | Screen grabber: select any region of the screen, stream or block, extend, move, append to the clipboard | FAR (`Alt+Ins`) | ~ a rectangle, marked from the cursor, copied whole; no stream mode, no appending to what is on the clipboard |
 | 9b.13 | Viewer ⇄ editor at the same position, jump to the open file in the panel, next/previous file of the panel from inside the viewer | FAR (`F6`, `Ctrl+F10`, `Gray ±`) | ~ jumping from the viewer to the file's row in the panel |
 | 9b.14 | Remember per file: position, code page, view mode, wrap mode, bookmarks | FAR | ✓ |
 | 9b.15 | Sorting collation as three settings — collation (ordinal/invariant/linguistic), digits-as-numbers, case sensitivity — rather than one "natural sort" flag | FAR | M3 |
-| 9b.16 | A searchable settings browser, because the setting count only grows (FAR: 311) | FAR (`far:config`) | M3 |
+| 9b.16 | A searchable settings browser, because the setting count only grows (FAR: 311) | FAR (`far:config`) | ✓ the same feature as 9.8 |
 | 9b.17 | Dialog framework: history in edit fields with lockable items, autocomplete, three-state checkboxes, movable dialogs, click outside to accept or cancel | FAR | ~ moving a dialog with the mouse |
-| 9b.18 | Menus that filter as you type, with a lock and horizontal scrolling | FAR (`RAlt`) | M3 |
+| 9b.18 | Menus that filter as you type, with a lock and horizontal scrolling | FAR (`RAlt`) | ~ every list filters as you type, `Esc` clears before it closes, `Alt+←/→` slides the rows; FAR's lock on the filter is not there |
 
 ## 10. Extensibility
 
@@ -304,7 +306,7 @@ Found by reading FAR's own help and configuration tables; the detail is in
 | 10.4 | Native plugin ABI (stable C ABI) for performance-critical/OS-specific plugins | FAR | M4 |
 | 10.5 | Plugin manager: discovery, install from a registry, versions, permissions | YAZI | M4 |
 | 10.6 | Event hooks (on-copy, on-enter-dir, on-select) for automation | NEW | M3 |
-| 10.7 | Headless/CLI mode: run commander operations from scripts (`sc copy --queue …`) | NEW | M4 |
+| 10.7 | Headless/CLI mode: run commander operations from scripts (`fcmd copy --queue …`) | NEW | M4 |
 
 ## 11. Platform & quality
 

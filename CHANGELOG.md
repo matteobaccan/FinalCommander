@@ -21,6 +21,13 @@ Notable changes, newest first. The format follows
   renumbered under the references to them; two specs also used one number twice. All of them
   are retargeted, and a test in the site builder scans the repository for them, so a reference
   that points nowhere now fails the build instead of a reader.
+- **The feature table claimed less than the program does, and missed two rows.** Read against
+  the code again: opening and saving an entry inside an archive (4.4), the screen grabber
+  (7.10) and the settings list (9.8, and 9b.16, which is the same feature) are there; the
+  sort chain (1.14), the editor's colouring and indent (6.7), output into a panel (8.7), the
+  grabber's modes (9b.12) and the lists' filter (9b.18) are partly there, and each cell now
+  says what is left. New rows for two things other commanders have and this does not: Total
+  Commander's content plugins as columns (1.27), and saved searches (7.13).
 - **The numbers.** Seven themes are compiled in, not six — `far` was never counted — in the
   README, the overview, `--help` and the man page. `AGENTS.md` said 0.13.0 was the version in
   `main`. The FAR inventory said there was no colour editor (there has been one since 0.4.0)
