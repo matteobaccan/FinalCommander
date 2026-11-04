@@ -666,6 +666,12 @@ fn run(cli: Cli) -> Result<()> {
     // last used. A state file written before any of this has none, and every line in it
     // simply counts as used now.
     app.marks = crate::history::Marks::from_state(&state.history_marks);
+    app.rename_undo = state.last_rename.map(|j| {
+        (
+            VPath::parse(&j.dir),
+            j.renamed.into_iter().map(|r| (r.from, r.to)).collect(),
+        )
+    });
     app.seen = state.seen;
     app.field_history = state
         .field_history
@@ -1793,6 +1799,19 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
         // a state file nobody can open is worth keeping none of.
         tree: app.tree_cache.to_state(crate::app::TREE_CACHE_KEPT),
         history_marks: app.marks.to_state(),
+        last_rename: app
+            .rename_undo
+            .as_ref()
+            .map(|(dir, plan)| fcmd_config::RenameJournal {
+                dir: dir.to_string(),
+                renamed: plan
+                    .iter()
+                    .map(|(from, to)| fcmd_config::RenamedFile {
+                        from: from.clone(),
+                        to: to.clone(),
+                    })
+                    .collect(),
+            }),
         // Where each file was left, so the next `F3` on it opens there (SPEC 05 §1.12). The
         // viewer still on the screen at this moment counts, which is the one the user is most
         // likely to come back to.

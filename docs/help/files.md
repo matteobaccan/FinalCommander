@@ -79,7 +79,8 @@ until it is fixed. Names that trade places are fine — `1.txt` and `2.txt` swap
 through a temporary name, which is never left behind — and if a rename fails halfway, the ones
 already done are put back, so the folder is either all in the new names or as it was.
 
-*Files → Undo the last multi-rename* puts the names back, for as long as the program runs.
+*Files → Undo the last multi-rename* puts the names back, after a restart too: the last one is
+kept in the state file.
 
 # Checksums
 

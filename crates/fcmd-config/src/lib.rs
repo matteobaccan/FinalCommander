@@ -2060,6 +2060,14 @@ mod tests {
                 path: "/home".into(),
                 dirs: vec!["/home/mb".into()],
             }],
+            // And the last multi-rename, so its undo outlives the session that did it.
+            last_rename: Some(RenameJournal {
+                dir: "/home/mb/photos".into(),
+                renamed: vec![RenamedFile {
+                    from: "IMG_0001.jpg".into(),
+                    to: "holiday_1.jpg".into(),
+                }],
+            }),
         };
         state.save(&paths).unwrap();
         let (back, problem) = State::load(&paths);
@@ -2490,6 +2498,25 @@ pub struct State {
     /// that opens empty and fills as it is walked.
     #[serde(default)]
     pub tree: Vec<TreeDir>,
+    /// The last multi-rename, so *Undo the last multi-rename* still works after a restart
+    /// (SPEC 03 §8's journal). One plan, not a history: undoing reaches back one step, which
+    /// is the step somebody who has just looked at a folder of wrong names wants back.
+    #[serde(default)]
+    pub last_rename: Option<RenameJournal>,
+}
+
+/// A multi-rename as it was done: the folder, and each file's name before and after.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RenameJournal {
+    pub dir: String,
+    #[serde(default)]
+    pub renamed: Vec<RenamedFile>,
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RenamedFile {
+    pub from: String,
+    pub to: String,
 }
 
 /// One dialog field's history, as the state file holds it.

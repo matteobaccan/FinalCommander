@@ -84,7 +84,8 @@ invertiti passano per un nome temporaneo, che non resta mai in giro — e se una
 a metà quelle già fatte vengono annullate, così la cartella è o tutta con i nomi nuovi o come
 era.
 
-*File → Annulla l'ultima rinomina multipla* rimette i nomi, finché il programma è aperto.
+*File → Annulla l'ultima rinomina multipla* rimette i nomi, anche dopo un riavvio: l'ultima
+rinomina resta scritta nel file di stato.
 
 # Le somme di controllo
 

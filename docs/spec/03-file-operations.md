@@ -216,9 +216,9 @@ one of four: nothing left, not a name (a slash, a NUL, `.`, `..`), two rows to o
 name of a file that is there and is not itself being renamed away. A plan with any problem in
 it starts nothing. Only the files whose current name is another rename's target take the detour
 through a temporary name; a failure halfway undoes the renames already made, in reverse. Undo
-(*Files → Undo the last multi-rename*) is the last plan reversed, kept in memory: the journal
-and the export are still to come, and so are the ordered list of regex rules, transliteration
-and the dedup rule.
+(*Files → Undo the last multi-rename*) is the last plan reversed, kept in the state file as
+`[last_rename]` so it outlives the session that did it — one step, not a history. The export,
+the ordered list of regex rules, transliteration and the dedup rule are still to come.
 
 ## 9. Checksums (shipped), split, combine
 

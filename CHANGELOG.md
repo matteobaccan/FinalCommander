@@ -20,7 +20,8 @@ Notable changes, newest first. The format follows
   All or nothing. A plan with a problem in it starts nothing; names that trade places go
   through temporary names, and only the files that need it take that detour; a rename that
   fails halfway puts the ones already done back, so a folder is never left half in each scheme.
-  *Undo the last multi-rename* reverses it for as long as the program runs. Done through the
+  *Undo the last multi-rename* reverses it, after a restart too — the last plan is kept in the
+  state file, which a second session was seen to read back and undo. Done through the
   panel's own filesystem, so it works on a server as it does here, and refused inside an
   archive, where `F6` renames one entry.
 
