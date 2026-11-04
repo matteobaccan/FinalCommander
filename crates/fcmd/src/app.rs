@@ -1912,6 +1912,12 @@ pub struct App {
     /// rather than in the job because the delete only happens if the archive was written.
     pack_delete: Option<Vec<VPath>>,
     pub quit: bool,
+    /// The program was started on one file rather than on the panels (`--view`, `--edit`,
+    /// `--diff`), the way `mcview`, `mcedit` and `mcdiff` start. The panels are still built
+    /// behind the screen — `Gray +` in the viewer walks the directory the file is in — but
+    /// leaving that screen ends the run, because coming back to a pair of panels nobody
+    /// asked for is not what one types `fcmd --view` for.
+    pub alone: bool,
     /// `Alt+Ins` was pressed and the screen grabber is waiting for the screen: the loop that
     /// draws is the only place the frame exists, so it hands it over on the way round
     /// (SPEC 06 §11b).
@@ -2230,6 +2236,7 @@ impl App {
             queued_jobs: std::collections::VecDeque::new(),
             pack_delete: None,
             quit: false,
+            alone: false,
             requests: Vec::new(),
             rows: 20,
             columns: 1,
@@ -3894,6 +3901,7 @@ impl App {
                     ConfirmAction::DiscardEdits => {
                         self.editor_parked = None;
                         self.remote_edit = None;
+                        self.leave_screen();
                     }
                     ConfirmAction::QuitWithScreens => self.quit = true,
                     ConfirmAction::PlayMacro(which) => self.run_macro(&which),
@@ -3901,6 +3909,7 @@ impl App {
                     ConfirmAction::Service { id, action } => self.start_service_action(id, action),
                     ConfirmAction::DiscardHex => {
                         // The mode is already Normal: the bytes go with it.
+                        self.leave_screen();
                         self.read_panel(0);
                         self.read_panel(1);
                     }
@@ -4035,7 +4044,7 @@ impl App {
     fn close_hex(&mut self) {
         let dirty = self.mode.hex().map(|e| e.modified()).unwrap_or(false);
         if !dirty {
-            self.mode = Mode::Normal;
+            self.leave_screen();
             self.read_panel(0);
             self.read_panel(1);
             return;
@@ -4340,6 +4349,15 @@ impl App {
             self.set_error(m);
             return;
         };
+        self.open_diff_on(left, right);
+    }
+
+    /// The side-by-side comparison once the two files are known.
+    ///
+    /// The tail of [`App::open_diff`], split off because `--diff a b` names them on the
+    /// command line and the two must then be read, measured and compared the same way the
+    /// two panel cursors are.
+    fn open_diff_on(&mut self, left: VPath, right: VPath) {
         for path in [&left, &right] {
             if !path.is_local() || path.in_container() {
                 let m = self
@@ -4424,7 +4442,7 @@ impl App {
                     self.set_error(m);
                     return;
                 }
-                self.mode = Mode::Normal;
+                self.leave_screen();
                 self.diff_paths = None;
                 return;
             }
@@ -8194,7 +8212,7 @@ impl App {
             }
             Command::ViewerDecompile if self.mode.viewer().is_some() => self.decompile(),
 
-            Command::ViewerQuit => self.mode = Mode::Normal,
+            Command::ViewerQuit => self.leave_screen(),
             Command::ViewerToPanel if self.mode.viewer().is_some() => {
                 // `Ctrl+F10`: the panel catches up with what is being viewed, which is the
                 // point once `Gray +`/`Gray -` have walked away from where F3 was pressed.
@@ -13621,6 +13639,80 @@ impl App {
         }
     }
 
+    /// Leaving the viewer, the editor, the hex editor or the diff.
+    ///
+    /// Normally that is the way back to the panels. When the program was started on that one
+    /// file — `--view`, `--edit`, `--diff` — there is nothing behind it that anybody asked
+    /// for, so the run ends instead. Every exit from those screens goes through here, which
+    /// is what keeps the two cases from drifting apart.
+    fn leave_screen(&mut self) {
+        self.mode = Mode::Normal;
+        if self.alone {
+            self.quit = true;
+        }
+    }
+
+    // ── started on one file: `--view`, `--edit`, `--diff` ─────────────────────────────────
+    //
+    // Three ways in that skip the panels, for the places a file manager is called from rather
+    // than opened: `git difftool`, `VISUAL`, a pager in a script. Midnight Commander ships
+    // three separate programs for this (`mcview`, `mcedit`, `mcdiff`); one binary with three
+    // flags is the same thing without three names to install.
+
+    /// `--view FILE`: come up on the viewer.
+    ///
+    /// A file that cannot be read is a failure of the command line, not a status line on a
+    /// screen nobody asked for: the reason comes back here, and the caller prints it without
+    /// ever taking the terminal.
+    pub fn start_on_view(&mut self, file: &std::path::Path) -> Result<(), String> {
+        let shown = VPath::local(file).normalised();
+        self.open_viewer_on(file, shown);
+        self.started(matches!(self.mode, Mode::Viewer(_)))
+    }
+
+    /// `--edit FILE`: come up on the editor, or on the hex editor if the bytes say so.
+    pub fn start_on_edit(&mut self, file: &std::path::Path) -> Result<(), String> {
+        let path = VPath::local(file).normalised();
+        if !file.exists() {
+            // A name that is not there is not an error here: the reason to name a file that
+            // does not exist is to write it, which is what `Shift+F4` and `mcedit` both do.
+            let mut editor = Editor::empty(Some(path));
+            self.tune_editor(&mut editor);
+            self.mode = Mode::Editor(Box::new(editor));
+        } else {
+            self.open_editor_on(&path);
+        }
+        self.started(matches!(self.mode, Mode::Editor(_) | Mode::Hex(_)))
+    }
+
+    /// `--diff A B`: come up on the two files, side by side.
+    pub fn start_on_diff(
+        &mut self,
+        left: &std::path::Path,
+        right: &std::path::Path,
+    ) -> Result<(), String> {
+        let left = VPath::local(left).normalised();
+        let right = VPath::local(right).normalised();
+        self.open_diff_on(left, right);
+        self.started(matches!(self.mode, Mode::Diff(_)))
+    }
+
+    /// Did the screen open? If it did, the run is tied to it and [`App::leave_screen`] ends
+    /// the program. If it did not, the reason is in the status line, and on this one path it
+    /// belongs on the command line instead.
+    fn started(&mut self, opened: bool) -> Result<(), String> {
+        if opened {
+            self.alone = true;
+            return Ok(());
+        }
+        let why = std::mem::take(&mut self.status);
+        Err(if why.is_empty() {
+            "the file could not be opened".to_string()
+        } else {
+            why
+        })
+    }
+
     /// `F1` inside a dialog: the page about dialogs, with the dialog itself waiting behind
     /// it. The key bar says `Help` there, and this is what makes that true.
     fn open_dialog_help(&mut self) {
@@ -15207,6 +15299,15 @@ impl App {
             self.fetch_remote(path, entry.size, Fetched::Edit);
             return;
         }
+        self.open_editor_on(&path);
+    }
+
+    /// `F4` once the file is known: a path on this machine, whatever found it.
+    ///
+    /// It is the tail of [`App::open_editor`], split off because `--edit` arrives with the
+    /// path already in hand and must take the same three decisions — device, binary, text —
+    /// rather than a fourth one of its own.
+    fn open_editor_on(&mut self, path: &VPath) {
         // A raw device is bytes by definition and never lines: it opens in hex, read-only,
         // without the text editor being given a chance to try (SPEC 05 §1.10).
         if std::fs::metadata(path.os())
@@ -15562,7 +15663,7 @@ impl App {
             .map(|e| e.buffer.modified())
             .unwrap_or(false);
         if !dirty {
-            self.mode = Mode::Normal;
+            self.leave_screen();
             self.editor_parked = None;
             self.remote_edit = None;
             // The file may have been saved: refresh both panels.
@@ -19609,6 +19710,91 @@ mod tests {
                 form.button = Some(at);
             }
         }
+    }
+
+    // ── started on one file: `--view`, `--edit`, `--diff` ─────────────────────────────────
+
+    #[test]
+    fn the_viewer_flag_comes_up_on_the_file_and_leaving_it_ends_the_run() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let file = dir.path().join("notes.txt");
+        std::fs::write(&file, "one\ntwo\n").unwrap();
+        let mut app = app();
+        app.start_on_view(&file).expect("the viewer opens");
+        assert!(app.mode.viewer().is_some(), "the viewer is in front");
+        assert!(app.alone, "the run is tied to that screen");
+        assert!(!app.quit);
+        // `Esc` out of the viewer: there are no panels anybody asked for behind it.
+        app.run(Command::ViewerQuit);
+        assert!(app.quit, "leaving the viewer ends the run");
+    }
+
+    #[test]
+    fn the_viewer_flag_on_a_file_that_is_not_there_says_so_and_draws_nothing() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let mut app = app();
+        let why = app
+            .start_on_view(&dir.path().join("absent.txt"))
+            .expect_err("it cannot open");
+        assert!(!why.is_empty(), "the reason comes back: {why}");
+        assert!(!app.alone, "nothing was started");
+        assert!(matches!(app.mode, Mode::Normal));
+    }
+
+    #[test]
+    fn the_editor_flag_on_a_name_that_is_not_there_starts_an_empty_file_under_it() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let file = dir.path().join("new.txt");
+        let mut app = app();
+        app.start_on_edit(&file).expect("the editor opens");
+        let editor = app.mode.editor().expect("an editor is in front");
+        assert_eq!(editor.name(), "new.txt");
+        assert!(!editor.buffer.modified(), "an empty file is not a change");
+        assert!(app.alone);
+        app.run(Command::EditorQuit);
+        assert!(app.quit, "leaving the editor ends the run");
+    }
+
+    #[test]
+    fn the_editor_flag_reads_the_file_that_is_there() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let file = dir.path().join("notes.txt");
+        std::fs::write(&file, "hello\n").unwrap();
+        let mut app = app();
+        app.start_on_edit(&file).expect("the editor opens");
+        let editor = app.mode.editor().expect("an editor is in front");
+        assert_eq!(editor.buffer.to_text(), "hello\n");
+    }
+
+    #[test]
+    fn the_diff_flag_comes_up_on_the_two_files() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let left = dir.path().join("left.txt");
+        let right = dir.path().join("right.txt");
+        std::fs::write(&left, "one\ntwo\n").unwrap();
+        std::fs::write(&right, "one\nthree\n").unwrap();
+        let mut app = app();
+        app.start_on_diff(&left, &right).expect("the diff opens");
+        assert!(app.mode.diff().is_some(), "the comparison is in front");
+        assert!(app.alone);
+        // The diff has no command of its own for leaving: `Esc` is read where it is handled.
+        press(&mut app, "Esc");
+        assert!(app.quit, "leaving the comparison ends the run");
+    }
+
+    #[test]
+    fn a_screen_opened_from_a_panel_still_comes_back_to_the_panels() {
+        // The same exits, with `alone` unset: the regression this guards against is a
+        // `leave_screen` that ends the program whenever a viewer closes.
+        let dir = tempfile::tempdir().expect("temp dir");
+        let file = dir.path().join("notes.txt");
+        std::fs::write(&file, "one\n").unwrap();
+        let mut app = app();
+        app.start_on_view(&file).expect("the viewer opens");
+        app.alone = false;
+        app.run(Command::ViewerQuit);
+        assert!(!app.quit, "F3 from a panel comes back to the panel");
+        assert!(matches!(app.mode, Mode::Normal));
     }
 
     fn app() -> App {

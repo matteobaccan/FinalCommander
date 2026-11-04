@@ -4,7 +4,7 @@
 .SH NAME
 fcmd \- FinalCommander — orthodox file manager for the terminal
 .SH SYNOPSIS
-\fBfcmd\fR [\fB\-\-config\fR] [\fB\-\-plugins\fR] [\fB\-\-theme\fR] [\fB\-\-keymap\fR] [\fB\-\-lang\fR] [\fB\-\-set\fR] [\fB\-\-list\-themes\fR] [\fB\-\-list\-commands\fR] [\fB\-\-list\-languages\fR] [\fB\-\-check\-keymap\fR] [\fB\-\-export\-theme\fR] [\fB\-\-dump\-config\fR] [\fB\-\-paths\fR] [\fB\-\-list\-plugins\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIPATH\fR] 
+\fBfcmd\fR [\fB\-\-config\fR] [\fB\-\-plugins\fR] [\fB\-\-theme\fR] [\fB\-\-keymap\fR] [\fB\-\-lang\fR] [\fB\-\-set\fR] [\fB\-\-view\fR] [\fB\-\-edit\fR] [\fB\-\-diff\fR] [\fB\-\-list\-themes\fR] [\fB\-\-list\-commands\fR] [\fB\-\-list\-languages\fR] [\fB\-\-check\-keymap\fR] [\fB\-\-export\-theme\fR] [\fB\-\-dump\-config\fR] [\fB\-\-paths\fR] [\fB\-\-list\-plugins\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIPATH\fR] 
 .SH DESCRIPTION
 FinalCommander is a two\-panel file manager for the terminal that works the same way on Linux, macOS and Windows: one program, one set of keys, one configuration file.
 .PP
@@ -30,6 +30,15 @@ Interface language: en, it, de, fr, es, ru, zh, or auto
 .TP
 \fB\-\-set\fR \fI<KEY=VALUE>\fR
 Override a setting, e.g. \-\-set panel.show_hidden=true
+.TP
+\fB\-\-view\fR \fI<FILE>\fR
+Open this file in the viewer; leaving the viewer ends the run
+.TP
+\fB\-\-edit\fR \fI<FILE>\fR
+Open this file in the editor; a name that is not there starts an empty file
+.TP
+\fB\-\-diff\fR \fI<A>\fR\fI \fR\fI<B>\fR
+Compare these two files side by side
 .TP
 \fB\-\-list\-themes\fR
 List the themes found in this run and where each came from

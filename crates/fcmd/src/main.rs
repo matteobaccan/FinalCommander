@@ -90,6 +90,18 @@ struct Cli {
     #[arg(long = "set", value_name = "KEY=VALUE")]
     set: Vec<String>,
 
+    /// Open this file in the viewer; leaving the viewer ends the run.
+    #[arg(long, value_name = "FILE", conflicts_with_all = ["edit", "diff"])]
+    view: Option<PathBuf>,
+
+    /// Open this file in the editor; a name that is not there starts an empty file.
+    #[arg(long, value_name = "FILE", conflicts_with_all = ["view", "diff"])]
+    edit: Option<PathBuf>,
+
+    /// Compare these two files side by side.
+    #[arg(long, num_args = 2, value_names = ["A", "B"], conflicts_with_all = ["view", "edit"])]
+    diff: Vec<PathBuf>,
+
     /// List the themes found in this run and where each came from.
     #[arg(long)]
     list_themes: bool,
@@ -584,6 +596,7 @@ fn run(cli: Cli) -> Result<()> {
     }
 
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let here = cwd.clone();
     let left = VPath::local(cli.paths.first().cloned().unwrap_or_else(|| cwd.clone())).normalised();
     let right = VPath::local(cli.paths.get(1).cloned().unwrap_or(cwd)).normalised();
 
@@ -641,7 +654,37 @@ fn run(cli: Cli) -> Result<()> {
         // Startup problems are shown once, as a dialog: they are easy to miss in a status line.
         app.show_message("Startup warnings", warnings.clone());
     }
+    // `--view`, `--edit` and `--diff`: the program comes up on the file instead of on the
+    // panels, and leaving that screen ends the run. The panels are still built behind it, so
+    // `Gray +` in the viewer walks the directory the file is in and `Ctrl+F10` has somewhere
+    // to go; what changes is only where the program starts and what `Esc` means there.
+    //
+    // A file that cannot be opened stops here, with the reason on the standard error and
+    // nothing drawn: taking over the terminal to show an error about a file the command line
+    // named is the wrong way round, and a script that calls `--view` wants a status code.
+    if let Some(file) = cli.view.as_deref() {
+        app.start_on_view(&absolute(file, &here))
+            .map_err(anyhow::Error::msg)?;
+    } else if let Some(file) = cli.edit.as_deref() {
+        app.start_on_edit(&absolute(file, &here))
+            .map_err(anyhow::Error::msg)?;
+    } else if let [left, right] = &cli.diff[..] {
+        app.start_on_diff(&absolute(left, &here), &absolute(right, &here))
+            .map_err(anyhow::Error::msg)?;
+    }
     interactive(app)
+}
+
+/// A name from the command line, against the directory the program was started in.
+///
+/// The viewer and the editor put the path in their title and the panels walk away from it, so
+/// a relative name kept as it was typed would soon be a name that means somewhere else.
+fn absolute(path: &std::path::Path, here: &std::path::Path) -> PathBuf {
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        here.join(path)
+    }
 }
 
 /// A `[[keymap]]` block from the config file wins over a built-in profile of the same name.

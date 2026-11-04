@@ -6,7 +6,27 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **`--view`, `--edit` and `--diff`: three ways in that skip the panels.** `fcmd --view
+  FILE` comes up on the viewer, `--edit FILE` on the editor, `--diff A B` on the two files
+  side by side, and leaving that screen ends the run rather than dropping into a pair of
+  panels nobody asked for. This is what makes the program usable from the places a file
+  manager is *called* from instead of opened: `git difftool`, `$VISUAL`, a pager in a script.
+  Midnight Commander ships three separate programs for it — `mcview`, `mcedit`, `mcdiff` —
+  and one binary with three flags is the same thing without three names to install. A name
+  that is not there opens an empty editor under it, as `Shift+F4` does. A file that cannot be
+  read says so on the standard error with a status code, and never takes the terminal to show
+  an error about a file the command line named.
+
 ### Changed
+
+- **Link-time optimisation across the whole program, not one crate at a time.** The release
+  profile moves from `lto = "thin"` to `"fat"`: measured on this workspace the binary goes
+  from 19,913,216 to 18,011,056 bytes, 1.9 MB less, and the build from 3m38 to 5m11 with the
+  link step's peak memory going from 834 MB to 1.53 GB in one process. The build machines
+  have 7 GB, and the minute and a half is paid once per release on three machines that build
+  in parallel.
 
 - **The site's navigation folds into a button on a phone.** Eight links and a language
   switcher wrapped into three lines above every page, which is a menu that has eaten the
@@ -21,13 +41,6 @@ Notable changes, newest first. The format follows
   no alternative text because the word next to it already says what it is. The same file is
   now the favicon: that had been `logo.svg`, which is the 880×236 banner — a browser asked for
   a tab icon and got a landscape.
-- **Link-time optimisation across the whole program, not one crate at a time.** The release
-  profile moves from `lto = "thin"` to `"fat"`: measured on this workspace the binary goes
-  from 19,913,216 to 18,011,056 bytes, 1.9 MB less, and the build from 3m38 to 5m11 with the
-  link step's peak memory going from 834 MB to 1.53 GB in one process. The build machines
-  have 7 GB, and the minute and a half is paid once per release on three machines that build
-  in parallel.
-
 
 ## [0.27.0] — 2026-10-31
 
