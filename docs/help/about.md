@@ -31,3 +31,23 @@ shows the shifted row.
 Nothing is hidden behind a mouse: every action in the program is a named command, every
 command can be bound to a key, and the "Keys" and "Commands" pages of this help are generated
 from the keymap the program is actually running, so they cannot drift from the truth.
+
+# Coming in, and going out
+
+`fcmd --view FILE` starts on the viewer, `fcmd --edit FILE` on the editor and `fcmd --diff A
+B` on the two files side by side; leaving that screen ends the program rather than dropping
+into the panels. That is what makes it usable where a file manager is *called*: as
+`$VISUAL`, as `git difftool`, as a pager in a script. A name that is not there opens an empty
+editor, as `Shift+F4` does.
+
+Leaving the program can leave the shell where the panel was, as Midnight Commander's does. A
+program cannot change the directory of the shell that started it, so it takes a small function
+in the shell, which `fcmd --shell-init` prints for `bash`, `zsh`, `fish` or `powershell`. One
+line in the shell's startup file is all of it:
+
+    eval "$(fcmd --shell-init bash)"
+
+From then on `fcmd` is the function: it runs the program with `-P FILE`, which writes down the
+directory the active panel ended in, and goes there. Quitting inside an archive leaves you in
+the folder that holds it; a panel on a server leaves the shell where it was.
+

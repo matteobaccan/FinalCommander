@@ -292,3 +292,34 @@ condition it cannot read leaves the row on screen and says why, rather than hidi
 
 A directory can carry its own `.fcmd-menu.toml`, and its rows come above the ones that are
 everywhere: the menu of the project you are in is the one you want while you are in it.
+
+# Formats of your own
+
+An `[[archiver]]` block in `fcmd.toml` teaches the panels a format nothing shipped reads: it
+names a program on the machine, the command line that lists an archive and the one that takes
+an entry out, and how to read what the listing prints. The language is FAR's MultiArc, so a
+table copied out of a `custom.ini` keeps its key names.
+
+    [[archiver]]
+    name = "unace"
+    extensions = ["ace"]
+    List = "v -y %A"
+    Extract = "x -y %A @%L"
+
+    [archiver.listing]
+    start = "^Date    Time"
+    end = "^listed:"
+    rows = ['^(?<size>\d+)\s+(?<name>\S.*)$']
+
+`%A` is the archive and `%L` a file holding the names to take out. A command line is never
+handed to a shell: it is split on spaces once, and a name with a space in it stays one
+argument. The rows are patterns with named captures, and `name` is the one that must be there.
+
+Only reading is accepted — `List`, `Extract`, `ExtractWithoutPath`, `Test`. A block with a line
+that would change an archive (`Add`, `Delete`, `SFX`…) is refused by name, and so is a block
+that is wrong in any other way: each one is a warning at startup, with the block's name and
+the reason, rather than a broken archive on the first `Enter`. Your blocks are asked before the
+shipped `7z` one, and a block named `7z` replaces it, which is how its switches are changed. A
+format this program reads itself — zip, 7z, the tars, `ar`, the bare compressors — is never
+handed to a block.
+

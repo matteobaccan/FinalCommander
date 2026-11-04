@@ -172,6 +172,25 @@ and a package written without its control file would look like a package without
 pack dialog therefore does not offer the format, and a name like `libfoo.a` typed into it is
 refused with a reason rather than half-written.
 
+A file that is only compressed — `notes.txt.gz`, `dump.sql.bz2`, `core.xz`, `blob.zst` —
+opens as an archive of one entry: `Enter` goes in and shows the file it holds, named as it was
+before it was compressed, and `F3` reads it. gzip keeps that name in its header and it is used
+when it is there; the other three keep nothing of the kind, so the name is the file's own with
+the suffix taken off. A `.tar.gz` is still a directory tree, and so is a tarball somebody
+renamed `backup.gz`: what is inside is looked at before deciding. These four are read here and
+not written yet.
+
+The formats this program does not read itself — `.rar`, `.cab`, `.iso`, `.wim`, `.lha`, `.arj`,
+`.msi`, an `.rpm`, a `.cpio` — open through a program already on the machine: `7z`, by
+default. `Enter` goes in exactly as it does into a zip, the frame names the format, and the
+viewer, the search inside archives and `Ctrl+A` on an entry all work. `F3` and `F5` on an
+entry run the program again, into a temporary folder that is removed afterwards, and `Esc`
+stops it. Such an archive is **read only**, and on purpose: nothing driven that way ever
+creates an archive, adds to one or deletes from one, so the pack dialog keeps offering only
+the formats this program writes itself. Where the program is not installed, the panel says
+which one to install instead of calling the archive broken. Another program, or other switches
+for `7z`, go in `fcmd.toml` as an `[[archiver]]` block — see *Formats of your own*.
+
 An archive inside an archive opens too, and so does one on a server or in a bucket. Neither is
 a file this program can seek in, so it is copied into the temporary directory first, once, and
 read from there — a pause the first time and nothing afterwards, with the path still saying

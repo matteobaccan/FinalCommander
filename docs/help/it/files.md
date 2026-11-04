@@ -180,6 +180,26 @@ installerebbe sono a due tasti di distanza. Questi si leggono e non si scrivono:
 pacchetto senza esserlo. Il dialogo di compressione quindi non offre il formato, e un nome come
 `libfoo.a` scritto lì dentro viene rifiutato con una ragione invece che scritto a metà.
 
+Un file che è soltanto compresso — `note.txt.gz`, `dump.sql.bz2`, `core.xz`, `blob.zst` — si
+apre come un archivio di una voce sola: `Enter` entra e mostra il file che contiene, con il nome
+che aveva prima di essere compresso, e `F3` lo legge. gzip conserva quel nome nella sua
+intestazione e, se c'è, viene usato; gli altri tre non conservano niente del genere, e il nome è
+quello del file senza il suffisso. Un `.tar.gz` resta un albero di cartelle, e così un tarball
+che qualcuno ha rinominato `backup.gz`: prima di decidere si guarda che cosa c'è dentro. Questi
+quattro formati qui si leggono e non si scrivono, per ora.
+
+I formati che questo programma non legge da sé — `.rar`, `.cab`, `.iso`, `.wim`, `.lha`, `.arj`,
+`.msi`, un `.rpm`, un `.cpio` — si aprono attraverso un programma già presente sulla macchina:
+`7z`, in partenza. `Enter` entra esattamente come in uno zip, la cornice dice il formato, e il
+visualizzatore, la ricerca dentro gli archivi e `Ctrl+A` su una voce funzionano tutti. `F3` e
+`F5` su una voce lanciano di nuovo il programma, in una cartella temporanea che poi viene
+cancellata, ed `Esc` lo ferma. Un archivio del genere è **in sola lettura**, e di proposito:
+niente di ciò che viene guidato così crea mai un archivio, ci aggiunge o ne toglie qualcosa, per
+cui il dialogo di compressione continua a offrire solo i formati che questo programma scrive da
+sé. Dove il programma non è installato, il pannello dice quale installare invece di dare
+l'archivio per rotto. Un altro programma, o altre opzioni per `7z`, vanno in `fcmd.toml` come
+blocco `[[archiver]]` — vedi *Formati tuoi*.
+
 Si apre anche un archivio dentro un archivio, e uno su un server o in un bucket. Nessuno dei due
 è un file in cui questo programma possa spostarsi, quindi viene prima copiato nella cartella
 temporanea, una volta sola, e letto da lì — una pausa la prima volta e niente dopo, con il

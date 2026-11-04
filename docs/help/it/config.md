@@ -305,3 +305,36 @@ nasconderla in silenzio.
 
 Una cartella può portarsi il suo `.fcmd-menu.toml`, e le sue righe stanno sopra quelle che
 valgono sempre: il menu del progetto in cui sei è quello che vuoi mentre ci sei dentro.
+
+# Formati tuoi
+
+Un blocco `[[archiver]]` in `fcmd.toml` insegna ai pannelli un formato che nulla di ciò che è
+incluso sa leggere: nomina un programma della macchina, la riga di comando che elenca un
+archivio e quella che ne estrae una voce, e come leggere quello che l'elenco stampa. La lingua è
+quella di MultiArc di FAR, quindi una tabella copiata da un `custom.ini` tiene i nomi delle sue
+chiavi.
+
+    [[archiver]]
+    name = "unace"
+    extensions = ["ace"]
+    List = "v -y %A"
+    Extract = "x -y %A @%L"
+
+    [archiver.listing]
+    start = "^Date    Time"
+    end = "^listed:"
+    rows = ['^(?<size>\d+)\s+(?<name>\S.*)$']
+
+`%A` è l'archivio e `%L` un file con i nomi da estrarre. Una riga di comando non viene mai data
+a una shell: è divisa sugli spazi una volta sola, e un nome con uno spazio resta un argomento
+solo. Le righe dell'elenco sono espressioni con catture con nome, e `name` è quella che non può
+mancare.
+
+Si accetta solo la lettura — `List`, `Extract`, `ExtractWithoutPath`, `Test`. Un blocco con una
+riga che cambierebbe un archivio (`Add`, `Delete`, `SFX`…) viene rifiutato per nome, e così un
+blocco sbagliato in qualunque altro modo: ciascuno è un avviso all'avvio, con il nome del blocco
+e il motivo, invece di un archivio rotto al primo `Enter`. I tuoi blocchi sono interrogati prima
+di quello `7z` incluso, e un blocco chiamato `7z` lo sostituisce: è così che se ne cambiano le
+opzioni. Un formato che questo programma legge da sé — zip, 7z, i tar, `ar`, i compressori
+nudi — non viene mai passato a un blocco.
+

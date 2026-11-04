@@ -34,3 +34,23 @@ Niente è nascosto dietro un mouse: ogni azione del programma è un comando con 
 comando si può legare a un tasto, e le pagine "I tasti" e "Tutti i comandi" di questo aiuto
 sono generate dalla mappatura che il programma sta davvero usando, quindi non possono
 allontanarsi dalla verità.
+
+# Entrare, e uscire
+
+`fcmd --view FILE` parte sul visualizzatore, `fcmd --edit FILE` sull'editor e `fcmd --diff A B`
+sui due file affiancati; lasciare quella schermata chiude il programma invece di finire sui
+pannelli. È questo che lo rende usabile dove un file manager viene *chiamato*: come `$VISUAL`,
+come `git difftool`, come pager in uno script. Un nome che non esiste apre un editor vuoto, come
+fa `Shift+F4`.
+
+Uscendo, il programma può lasciare la shell dove era il pannello, come fa quello di Midnight
+Commander. Un programma non può cambiare la cartella della shell che l'ha avviato, quindi serve
+una piccola funzione nella shell, che `fcmd --shell-init` stampa per `bash`, `zsh`, `fish` o
+`powershell`. Basta una riga nel file di avvio della shell:
+
+    eval "$(fcmd --shell-init bash)"
+
+Da lì in poi `fcmd` è la funzione: lancia il programma con `-P FILE`, che annota la cartella in
+cui è finito il pannello attivo, e ci va. Uscire dentro un archivio ti lascia nella cartella che
+lo contiene; un pannello su un server lascia la shell dov'era.
+

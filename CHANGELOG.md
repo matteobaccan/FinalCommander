@@ -4,6 +4,29 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
+## [Unreleased]
+
+### Fixed
+
+- **The help knows what 0.28.0 and 0.29.0 brought.** Five features had shipped with a spec
+  and a changelog entry and no chapter in the help, in either language, which the house rule
+  that a feature is not finished until the three agree does not allow: `--view`, `--edit` and
+  `--diff`; a bare `.gz`, `.bz2`, `.xz` or `.zst` as an archive of one entry; `.rar`, `.iso`
+  and the rest read through a program on the machine; the shell left where the panel was; and
+  `[[archiver]]` blocks. *Archives* gained the middle two, *Coming in, and going out* is new
+  in the first chapter and *Formats of your own* in the configuration's, in English and
+  Italian.
+- **Every `SPEC NN §X` names a section that exists.** Forty-two did not: sections planned and
+  never written, rows of the feature table cited as if they were sections, and sections
+  renumbered under the references to them; two specs also used one number twice. All of them
+  are retargeted, and a test in the site builder scans the repository for them, so a reference
+  that points nowhere now fails the build instead of a reader.
+- **The numbers.** Seven themes are compiled in, not six — `far` was never counted — in the
+  README, the overview, `--help` and the man page. `AGENTS.md` said 0.13.0 was the version in
+  `main`. The FAR inventory said there was no colour editor (there has been one since 0.4.0)
+  and that the column grammar was still owed (since 0.11.0). `futures-util` had no line saying
+  why it is a dependency and no entry in `THIRD-PARTY.md`.
+
 ## [0.29.0] — 2026-11-04
 
 ### Added
