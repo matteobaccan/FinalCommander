@@ -119,7 +119,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 
 | # | Feature | Origin | State |
 | --- | --- | --- | --- |
-| 4.1 | Archives browsable as directories, read: zip, tar(+gz/bz2/xz/zst), 7z, rar(read-only), cab, iso, ar/deb/rpm, cpio, lha, arj, zip64, encrypted zip/7z | FAR/TC/MC | ~ rar (needs `unrar`), cab, iso, rpm, cpio, lha, arj. zip covers the packages that are zips (`.jar .war .ear .aar .apk .aab .ipa .whl .nupkg .vsix .xpi`) and `ar` covers `.a` and the `.deb` family, whose inner `control.tar.*` and `data.tar.*` open as archives in an archive. A bare `.gz`, `.bz2`, `.xz` or `.zst` opens as an archive of one entry, named as the file was before it was compressed |
+| 4.1 | Archives browsable as directories, read: zip, tar(+gz/bz2/xz/zst), 7z, rar(read-only), cab, iso, ar/deb/rpm, cpio, lha, arj, zip64, encrypted zip/7z | FAR/TC/MC | ~ rar (needs `unrar`), cab, iso, rpm, cpio, lha, arj. zip covers the packages that are zips (`.jar .war .ear .aar .apk .aab .ipa .whl .nupkg .vsix .xpi`) and `ar` covers `.a` and the `.deb` family, whose inner `control.tar.*` and `data.tar.*` open as archives in an archive. A bare `.gz`, `.bz2`, `.xz` or `.zst` opens as an archive of one entry, named as the file was before it was compressed. The seven that are left go through a program already on the machine rather than seven readers of our own: the table that drives one is built and tested (`fcmd-arc::ext`, `docs/05-multiarc.md` §8) and not yet wired to the panels, which waits on the four questions in §7 |
 | 4.2 | Archive write: create/add/delete/update in zip, 7z, tar family; pack dialog with format options (level, solid, encryption, split volumes) | TC | ~ split volumes, and compressing one file into a bare `.gz`/`.bz2`/`.xz`/`.zst`, which are read but not yet written |
 | 4.3 | Pack/unpack shortcuts (`Alt+F5`/`Alt+F6`/`Shift+F1`/`Shift+F2`), test archive, extract-here vs extract-to | FAR/TC | ~ `Alt+F5`/`Alt+F6`, which are Total Commander's keys and taken here |
 | 4.4 | Open a file inside an archive in the viewer/editor; edit-in-place writes back | FAR | M3 |
@@ -242,6 +242,7 @@ a binary into something readable rather than only into instructions.
 | 8.6 | Run as administrator / another user | FAR | M3 |
 | 8.7 | Output search (`Ctrl+Shift+F`) and output capture into a panel | MTN2 | M3 |
 | 8.8 | Open OS file manager / terminal / shell menu for the current item | TC/KRU | M2 |
+| 8.9 | **Called from outside instead of opened**: the viewer, the editor and the comparison reachable from the command line, so the program can be `$VISUAL`, a `git difftool` or a pager in a script | MC (`mcview`, `mcedit`, `mcdiff`) | ✓ `--view FILE`, `--edit FILE`, `--diff A B`; leaving that screen ends the run, and a name that is not there opens an empty editor under it |
 
 ## 9. Configuration, UI, i18n
 
