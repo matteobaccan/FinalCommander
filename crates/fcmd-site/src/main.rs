@@ -545,6 +545,68 @@ mod tests {
         );
     }
 
+    /// A document named in backticks — `docs/BACKLOG.md`, `spec/08-plugins.md`,
+    /// `05-multiarc.md` — is a file that exists. These are not links, so the site's link
+    /// check never sees them, and two had gone stale: one named a spec by the number it had
+    /// before the specs were renumbered, the other the inventory by the wrong number.
+    #[test]
+    fn every_document_named_in_backticks_exists() {
+        let repo = default_repo();
+        let mut missing = Vec::new();
+        let mut stack = vec![repo.clone()];
+        while let Some(dir) = stack.pop() {
+            for entry in std::fs::read_dir(&dir).expect("a directory") {
+                let path = entry.expect("an entry").path();
+                let name = path.file_name().unwrap().to_string_lossy().into_owned();
+                if path.is_dir() {
+                    if !matches!(name.as_str(), "target" | ".git" | "node_modules") {
+                        stack.push(path);
+                    }
+                    continue;
+                }
+                if !(name.ends_with(".md") || name.ends_with(".rs") || name.ends_with(".toml")) {
+                    continue;
+                }
+                let Ok(text) = std::fs::read_to_string(&path) else {
+                    continue;
+                };
+                for (n, line) in text.lines().enumerate() {
+                    for (i, quoted) in line.split('`').enumerate() {
+                        // Odd pieces are the ones between a pair of backticks.
+                        if i % 2 == 0
+                            || !quoted.ends_with(".md")
+                            || quoted.contains([' ', '<', '*', '{'])
+                        {
+                            continue;
+                        }
+                        let numbered = quoted.rsplit('/').next().is_some_and(|f| {
+                            f.len() > 3
+                                && f[..2].bytes().all(|b| b.is_ascii_digit())
+                                && &f[2..3] == "-"
+                        });
+                        let candidates: Vec<std::path::PathBuf> = if quoted.starts_with("docs/") {
+                            vec![repo.join(quoted)]
+                        } else if quoted.starts_with("spec/") {
+                            vec![repo.join("docs").join(quoted)]
+                        } else if numbered && !quoted.contains('/') {
+                            vec![
+                                repo.join("docs").join(quoted),
+                                repo.join("docs/spec").join(quoted),
+                            ]
+                        } else {
+                            continue;
+                        };
+                        if !candidates.iter().any(|c| c.exists()) {
+                            let shown = path.strip_prefix(&repo).unwrap_or(&path).display();
+                            missing.push(format!("{shown}:{}: {quoted}", n + 1));
+                        }
+                    }
+                }
+            }
+        }
+        assert!(missing.is_empty(), "{}", missing.join("\n"));
+    }
+
     /// Every row of the feature table says its state with one of the marks its legend
     /// defines. A row that invented its own (`✗` had crept in for a decision) reads as a
     /// fourth state to whoever counts them, and the table is what gets counted.

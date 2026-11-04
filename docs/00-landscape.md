@@ -84,15 +84,16 @@ Licences of these were **not** verified; treat them as prior art to learn from, 
    additions from yazi/MTN2 (async previews, wasm/Lua plugins, JSON/TOML config).
 2. **Nobody owns "orthodox file manager in Rust" yet.** The Rust entries are either single-pane
    browsers (yazi, joshuto, xplr) or very young GTK4 apps. A complete, portable,
-   complete, portable, terminal-only commander is an open slot.
+   terminal-only commander is an open slot.
 3. **Strictly TUI is a positioning choice, not a limitation.** The GUI-toolkit commanders
    (Krusader, Double Commander, the young GTK4 Rust ones) already crowd that space; the open
    slot is a terminal commander with a modern engine that works identically over SSH.
 4. **Keymap profiles are the migration path.** Krusader, Double Commander, MTN2 and mc all ship
-   alternative key-binding sets. We make that a first-class feature (`far`, `mc`, `tc`, `nc`,
-   `vi` profiles) — see `03-keymap.md`.
+   alternative key-binding sets. We make that a first-class feature — see `03-keymap.md`.
+   `far` and `mc` ship; `tc`, `nc` and `vi` are planned.
 5. **Plugins decide longevity.** FAR's and TC's ecosystems are why they survived 30 years.
-   We need a stable ABI from day one: WASM (sandboxed, portable) + Lua (scripting) + an
-   optional native C ABI. See `spec/09-plugins.md`.
+   The first tier ships: a plugin is a program the host runs, with the context as JSON on
+   its standard input (`F11`); WASM (sandboxed, portable), Lua (scripting) and an optional
+   native C ABI are the tiers after it. See `spec/08-plugins.md`.
 6. **Licence-wise the clean path is FAR (BSD) as the model**, with GPL projects (far2l, mc,
    Krusader, DC) used as *behavioural* references only. See `01-licensing.md`.

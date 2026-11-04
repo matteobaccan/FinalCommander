@@ -160,7 +160,7 @@ What the last few were about, newest first:
   command line.
 
 Where it stands against the others: `docs/00-landscape.md` is the survey, `docs/02-features.md`
-the row-by-row table, `docs/03-far-inventory.md` FAR feature by feature. Every one of FAR's
+the row-by-row table, `docs/04-far-inventory.md` FAR feature by feature. Every one of FAR's
 ten view modes, nine sort keys and its column grammar is there; Midnight Commander's
 `extfs` is answered by `[[archiver]]`, and its `cd` on exit by `--shell-init`.
 
