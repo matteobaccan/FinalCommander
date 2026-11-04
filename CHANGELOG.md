@@ -45,6 +45,33 @@ Notable changes, newest first. The format follows
   panel sorted by size agrees with the list. Krusader and Total Commander have this as a tool
   of its own, FAR as a plugin; here it is one key on the panel.
 
+- **A queue for the jobs** (`Alt+Shift+F5`, *Commands → Jobs*). A job for a disk that is busy
+  with another one waits for it instead of fighting it: one job per target device by default,
+  so two copies onto one disk run one after the other while one onto a memory stick goes on
+  beside them — Total Commander's copy by queue. `general.job_queue` makes it one at a time
+  for everything (`one`) or no waiting at all (`off`). `B` in a progress box sends the job to
+  the background, and the top row counts the jobs nobody is watching (`⧗2`, `?` while one is
+  asking); a question from one of them comes up over the panels at once. The list shows every
+  job, running, paused, waiting or finished, with how far it got: `Space` pauses and resumes —
+  or holds a waiting job back — `Ctrl+↑↓` changes the order the waiting ones start in, `Del`
+  stops or takes out, `Enter` brings a box back or shows a finished job's errors, and `F5`
+  retries a failed job for what it did not do. Quitting with jobs running asks, and names them.
+
+  Pausing lives in the cancel token: a paused token holds the worker at the next place it
+  already checked for a cancel, so every engine pauses without knowing what a pause is.
+
+  Driven in a terminal on the real binary: a 3 GB copy sent to the background, paused at 60%
+  with its partial file no longer growing, a second copy onto the same disk waiting behind it
+  and starting by itself when the first was done, and `F10` naming the paused job and, on
+  *Quit*, stopping it and removing its partial file.
+
+### Fixed
+
+- **A large file's progress.** The engine counted the bytes of a file as it copied them but
+  told the screen only once the file was finished, so one big file sat on *planning…* with a
+  per-file bar that never moved until the end. It reports every megabyte now, inside the file
+  as between files, and the same for a wipe and a replacement.
+
 ## [0.30.0] — 2026-11-04
 
 ### Added

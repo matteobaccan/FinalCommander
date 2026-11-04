@@ -1918,10 +1918,12 @@ pub struct App {
     /// What the copy dialog was last answered with, so the next one opens on it. FAR does
     /// the same: the rules somebody set once are usually the rules they want again.
     last_copy: CopyChoices,
-    /// Jobs waiting for the one on screen to finish, for a copy to several destinations.
-    /// One at a time and in order, because two jobs writing at once would fight over the
-    /// progress box and over the disk.
+    /// Jobs that follow the next one started, for a copy to several destinations or the
+    /// steps of a synchronisation. `start_job` hands them to the job it starts, which runs
+    /// them in order once it has ended well.
     queued_jobs: std::collections::VecDeque<JobSpec>,
+    /// Every job asked for, running, waiting or finished (SPEC 03 §5).
+    pub queue: crate::queue::Queue,
     /// What to delete once the archive is written, when the dialog asked for it — or when
     /// `F6` put the files into the archive, which is a move and not a copy. It is held here
     /// rather than in the job because the delete only happens if the archive was written.
@@ -2104,9 +2106,6 @@ pub struct App {
     /// A replacement runs twice: once to count, and then, if the user says so, for real. This
     /// is the real one, waiting for the count to come back.
     pending_replace: Option<JobSpec>,
-    /// What the running job will do to the descriptions once it has succeeded (SPEC 02 §13).
-    /// One job runs at a time from the panels' point of view, so one is enough.
-    carry: Option<(u64, Carry)>,
     /// Which group gives a file its colour. Compiled once: it parses mask lists.
     pub highlight: fcmd_ui::Highlight,
     /// The `[[sort_group]]` bands, as every panel and every new tab gets them.
@@ -2258,6 +2257,7 @@ impl App {
             copy_sources: Vec::new(),
             last_copy: CopyChoices::default(),
             queued_jobs: std::collections::VecDeque::new(),
+            queue: Default::default(),
             pack_delete: None,
             quit: false,
             alone: false,
@@ -2339,7 +2339,6 @@ impl App {
             rename_undo: None,
             last_replace: fcmd_jobs::ReplaceOptions::default(),
             pending_replace: None,
-            carry: None,
             highlight,
             sort_groups,
             column_sets,
@@ -3132,11 +3131,15 @@ impl App {
                 self.tree_reveal(panel);
             }
             Event::JobProgress { id, progress } => {
+                if let Some(job) = self.queue.get_mut(id) {
+                    job.progress = progress.clone();
+                }
                 if let Mode::Job(view) = &mut self.mode {
                     if view.id == id {
                         view.progress = progress;
                     }
                 }
+                self.refresh_jobs_pick();
             }
             Event::JobQuestion {
                 id,
@@ -3144,20 +3147,39 @@ impl App {
                 reply,
             } => {
                 let buttons = self.buttons_for(&question);
+                let pending = PendingQuestion {
+                    question,
+                    buttons,
+                    reply,
+                };
+                let shown = matches!(&self.mode, Mode::Job(view) if view.id == id);
                 match &mut self.mode {
-                    Mode::Job(view) if view.id == id => {
+                    Mode::Job(view) if shown => {
                         view.choice = 0;
-                        view.question = Some(PendingQuestion {
-                            question,
-                            buttons,
-                            reply,
-                        });
+                        view.question = Some(pending);
                     }
-                    // A question for a job we are no longer showing cannot be answered by a
-                    // human, so it must not block the engine for ever.
-                    _ => {
-                        let _ = reply.send(Decision::Cancel);
-                    }
+                    // A job running in the background waits for its answer: over the panels
+                    // the question comes up at once, and anywhere else the status line says
+                    // a job is asking and the queue (`Alt+Shift+F5`) has it.
+                    _ => match self.queue.get_mut(id) {
+                        Some(job) if job.state == crate::queue::JobState::Running => {
+                            // (the mode is not borrowed past this point)
+                            job.question = Some(pending);
+                            let kind = job.kind;
+                            if !(matches!(self.mode, Mode::Normal) && self.job_to_front(id)) {
+                                let msg = self
+                                    .i18n
+                                    .t_args("job-asks", &[("kind", self.kind_label(kind).into())]);
+                                self.set_error(msg);
+                                self.refresh_jobs_pick();
+                            }
+                        }
+                        // A question for a job nobody can show any more cannot be answered by
+                        // a human, so it must not block the engine for ever.
+                        _ => {
+                            let _ = pending.reply.send(Decision::Cancel);
+                        }
+                    },
                 }
             }
             Event::JobDone { id, kind, outcome } => self.job_done(id, kind, outcome),
@@ -3985,7 +4007,12 @@ impl App {
                         self.remote_edit = None;
                         self.leave_screen();
                     }
-                    ConfirmAction::QuitWithScreens => self.quit = true,
+                    ConfirmAction::QuitWithScreens => {
+                        // Jobs are threads of this process: they end with it, so they are
+                        // told to stop rather than cut off halfway through a file.
+                        self.stop_all_jobs();
+                        self.quit = true;
+                    }
                     ConfirmAction::PlayMacro(which) => self.run_macro(&which),
                     ConfirmAction::RunPlugin(which) => self.start_plugin_command(which),
                     ConfirmAction::Service { id, action } => self.start_service_action(id, action),
@@ -4040,7 +4067,19 @@ impl App {
         };
         match &view.question {
             None => {
-                // No question pending: the only thing to do is stop the job.
+                // No question pending: stop the job, or send it to the background, which
+                // only a job of the queue can go to — the others have nowhere to be listed.
+                if matches!(key.code, KeyCode::Char('b') | KeyCode::Char('B'))
+                    && self.queue.get(view.id).is_some()
+                {
+                    let kind = view.kind;
+                    self.mode = Mode::Normal;
+                    let msg = self
+                        .i18n
+                        .t_args("job-background", &[("kind", self.kind_label(kind).into())]);
+                    self.set_status(msg);
+                    return;
+                }
                 if matches!(key.code, KeyCode::Esc | KeyCode::Char('c')) {
                     view.cancel.cancel();
                     let kind = view.kind;
@@ -5941,8 +5980,16 @@ impl App {
         }
     }
 
-    /// Hand a job to the runner and show its progress overlay.
-    pub fn start_job(&mut self, mut spec: JobSpec) {
+    /// Hand a job to the runner and show its progress overlay — or, when its device is busy
+    /// with another job, put it in the queue behind that one (SPEC 03 §5).
+    pub fn start_job(&mut self, spec: JobSpec) {
+        self.enqueue(spec, true);
+    }
+
+    /// The one way into the queue. `front` says whether the progress box comes up when the
+    /// job starts now: yes for what the user just asked for, no for the jobs a finished
+    /// background job hands on.
+    fn enqueue(&mut self, mut spec: JobSpec, front: bool) {
         // `general.confirm_overwrite = false` means "do not ask me about a file that is
         // already there, write over it". It was a toggle in the settings dialog that changed
         // nothing: the engine's policy stayed `Ask` whatever the file said.
@@ -5960,20 +6007,186 @@ impl App {
         spec.options.system_copy = self.cfg.general.system_copy;
         let id = self.next_job_id;
         self.next_job_id += 1;
-        let cancel = CancelToken::new();
-        let kind = spec.kind;
+        // A replacement counts first and asks before it writes: its first run is a question,
+        // not work to leave in a queue, so it is shown at once and kept out of the list.
+        if spec.kind == JobKind::Replace {
+            let cancel = CancelToken::new();
+            self.mode = Mode::Job(Box::new(JobView {
+                id,
+                kind: spec.kind,
+                progress: Progress::default(),
+                question: None,
+                cancel: cancel.clone(),
+                choice: 0,
+            }));
+            self.requests.push(Request::Job { id, spec, cancel });
+            return;
+        }
+        let lane = crate::queue::lane(&spec);
+        let mut job = crate::queue::Job::new(id, spec, lane);
         // What this will do to the descriptions, worked out now: the sources and the target
         // are here, and by the time it ends the panels may be somewhere else.
-        self.carry = self.carry_for(&spec).map(|c| (id, c));
-        self.mode = Mode::Job(Box::new(JobView {
-            id,
-            kind,
-            progress: Progress::default(),
-            question: None,
-            cancel: cancel.clone(),
-            choice: 0,
-        }));
+        job.carry = self.carry_for(&job.spec);
+        job.then = std::mem::take(&mut self.queued_jobs);
+        let busy = self.queue.lane_busy(&job.lane, self.cfg.general.job_queue);
+        let kind = job.kind;
+        self.queue.jobs.push(job);
+        if busy {
+            let ahead = self.queue.active().saturating_sub(1);
+            let msg = self.i18n.t_args(
+                "job-queued",
+                &[
+                    ("kind", self.kind_label(kind).into()),
+                    ("ahead", (ahead as i64).into()),
+                ],
+            );
+            self.set_status(msg);
+            self.refresh_jobs_pick();
+        } else {
+            self.launch(id, front);
+        }
+    }
+
+    /// Start a job of the queue: its thread, and its progress box when `front`.
+    fn launch(&mut self, id: u64, front: bool) {
+        let Some(job) = self.queue.get_mut(id) else {
+            return;
+        };
+        job.state = crate::queue::JobState::Running;
+        let (kind, spec, cancel) = (job.kind, job.spec.clone(), job.cancel.clone());
+        if front {
+            self.mode = Mode::Job(Box::new(JobView {
+                id,
+                kind,
+                progress: Progress::default(),
+                question: None,
+                cancel: cancel.clone(),
+                choice: 0,
+            }));
+        }
         self.requests.push(Request::Job { id, spec, cancel });
+        self.refresh_jobs_pick();
+    }
+
+    /// Start whatever waits for a lane that has come free. Those run without a box: nobody
+    /// is waiting in front of the screen for them, and the queue shows where they are.
+    fn launch_ready(&mut self) {
+        for id in self.queue.startable(self.cfg.general.job_queue) {
+            self.launch(id, false);
+        }
+    }
+
+    /// Bring a running job's box back to the front, with the question it is blocked on if it
+    /// has one. Only over the panels: a box over the editor would take its keys.
+    fn job_to_front(&mut self, id: u64) -> bool {
+        if !matches!(self.mode, Mode::Normal | Mode::Pick(_)) {
+            return false;
+        }
+        let Some(job) = self.queue.get_mut(id) else {
+            return false;
+        };
+        if job.state != crate::queue::JobState::Running {
+            return false;
+        }
+        let view = JobView {
+            id,
+            kind: job.kind,
+            progress: job.progress.clone(),
+            question: job.question.take(),
+            cancel: job.cancel.clone(),
+            choice: 0,
+        };
+        self.mode = Mode::Job(Box::new(view));
+        true
+    }
+
+    /// Stop a job wherever it is: a waiting one is taken out of the list, a running one is
+    /// cancelled (and let go if it was paused, or answered if it was asking).
+    fn stop_job(&mut self, id: u64) {
+        let Some(job) = self.queue.get_mut(id) else {
+            return;
+        };
+        match job.state {
+            crate::queue::JobState::Queued => {
+                self.queue.jobs.retain(|j| j.id != id);
+            }
+            crate::queue::JobState::Running => {
+                job.cancel.cancel();
+                job.cancel.resume();
+                if let Some(pending) = job.question.take() {
+                    let _ = pending.reply.send(Decision::Cancel);
+                }
+            }
+            crate::queue::JobState::Done => {}
+        }
+    }
+
+    /// Every job, for quitting: nothing more starts, and what runs is told to stop.
+    fn stop_all_jobs(&mut self) {
+        let ids: Vec<u64> = self.queue.jobs.iter().map(|j| j.id).collect();
+        for id in ids {
+            self.stop_job(id);
+        }
+        if let Mode::Job(view) = &self.mode {
+            view.cancel.cancel();
+        }
+    }
+
+    /// Pause a running job at its next step, or hold a waiting one back; the same key lets
+    /// it go again.
+    fn pause_job(&mut self, id: u64) {
+        let Some(job) = self.queue.get_mut(id) else {
+            return;
+        };
+        if job.state == crate::queue::JobState::Done {
+            return;
+        }
+        job.paused = !job.paused;
+        if job.state == crate::queue::JobState::Running {
+            if job.paused {
+                job.cancel.pause();
+            } else {
+                job.cancel.resume();
+            }
+        }
+        let paused = job.paused;
+        let kind = job.kind;
+        let msg = self.i18n.t_args(
+            if paused { "job-paused" } else { "job-resumed" },
+            &[("kind", self.kind_label(kind).into())],
+        );
+        self.set_status(msg);
+        if !paused {
+            self.launch_ready();
+        }
+    }
+
+    /// Run a finished job again for what it did not do: what is already at the destination
+    /// is skipped — the engine never leaves half a file behind, so whatever is there is whole
+    /// — and the sources a move or a delete already took away are left out.
+    fn retry_job(&mut self, id: u64) {
+        let Some(job) = self.queue.get(id) else {
+            return;
+        };
+        if !job.failed() {
+            let m = self.i18n.t("job-retry-nothing");
+            self.set_error(m);
+            return;
+        }
+        let mut spec = job.spec.clone();
+        spec.sources
+            .retain(|p| !p.is_local() || p.in_container() || p.as_path().exists());
+        if spec.sources.is_empty() {
+            let m = self.i18n.t("job-retry-nothing");
+            self.set_error(m);
+            return;
+        }
+        if matches!(spec.kind, JobKind::Copy | JobKind::Move) {
+            spec.options.on_conflict = fcmd_jobs::ConflictPolicy::Skip;
+        }
+        self.queue.jobs.retain(|j| j.id != id);
+        self.enqueue(spec, false);
+        self.refresh_jobs_pick();
     }
 
     /// What a job will do to the descriptions, or `None` when it does nothing to them.
@@ -7327,44 +7540,71 @@ impl App {
     }
 
     fn job_done(&mut self, id: u64, kind: JobKind, outcome: Outcome) {
-        if let Mode::Job(view) = &self.mode {
-            if view.id != id {
-                return;
+        let shown = matches!(&self.mode, Mode::Job(view) if view.id == id);
+        // A job of the queue keeps its row, now with what it did; what it was carrying
+        // forward comes out of it here.
+        let from_queue = self.queue.get_mut(id).map(|job| {
+            job.state = crate::queue::JobState::Done;
+            job.paused = false;
+            job.question = None;
+            job.outcome = Some(outcome.clone());
+            (job.carry.take(), std::mem::take(&mut job.then))
+        });
+        let Some((carry, mut then)) = from_queue else {
+            // One of the jobs that are not in the queue — a pack, an archive test — which
+            // are only ever shown.
+            if let Mode::Job(view) = &self.mode {
+                if view.id != id {
+                    return;
+                }
             }
-        }
-        self.mode = Mode::Normal;
-
-        // A replacement runs twice. The first run only counted, and `pending_replace` holds
-        // the one that would write: so this is the count, and it asks rather than reports.
-        if kind == JobKind::Replace && self.pending_replace.is_some() {
-            self.replace_counted(&outcome);
+            self.mode = Mode::Normal;
+            self.job_finished_alone(kind, outcome);
             return;
+        };
+        if shown {
+            self.mode = Mode::Normal;
         }
-        if kind == JobKind::Replace {
-            let msg = self.i18n.t_args(
-                "replace-done",
-                &[
-                    ("count", (outcome.occurrences() as i64).into()),
-                    ("files", (outcome.replacements.len() as i64).into()),
-                ],
-            );
-            self.set_status(msg);
-            self.read_panel(0);
-            self.read_panel(1);
-            return;
-        }
-
+        self.queue.prune();
+        self.job_summary(kind, &outcome, shown);
         // The descriptions follow what the job moved, copied or deleted — but only what it
         // really did: a job that was cancelled or that failed outright must not leave a line
         // pointing at a file that never arrived, or take one away from a file still there.
-        if let Some((job, carry)) = self.carry.take() {
+        if let Some(carry) = carry {
             let did_something = outcome.files > 0 || outcome.dirs > 0 || outcome.renamed > 0;
-            if job == id && !outcome.cancelled && did_something {
+            if !outcome.cancelled && did_something {
                 self.requests
                     .push(Request::CarryDescriptions(Box::new(carry)));
             }
         }
+        // The next destination of a copy to several places. A cancelled or failed job stops
+        // the rest: somebody who pressed `Esc` meant the whole thing, and a disk that filled
+        // up for the first destination will fill up for the second.
+        let next = if outcome.cancelled || !outcome.errors.is_empty() {
+            None
+        } else {
+            then.pop_front()
+        };
+        if let Some(next) = next {
+            self.queued_jobs = then;
+            self.enqueue(next, shown);
+        }
+        self.launch_ready();
+        self.refresh_jobs_pick();
+        // Both panels may be looking at what just changed. The selection goes only when the
+        // job was the one on screen: a job ending in the background must not take away what
+        // somebody is selecting now.
+        if shown {
+            self.panels[self.active].selection.clear();
+        }
+        self.read_panel(0);
+        self.read_panel(1);
+    }
 
+    /// What a finished job did, on the status line — and when it went wrong, in a box if it
+    /// was the job on screen. A job that ended in the background says it on the line alone:
+    /// a box would land over whatever the user is doing now, and the queue keeps the errors.
+    fn job_summary(&mut self, kind: JobKind, outcome: &Outcome, shown: bool) {
         let kind_label = self.kind_label(kind);
         let mut summary = if outcome.renamed > 0 && outcome.bytes == 0 {
             self.i18n.t_args(
@@ -7401,42 +7641,62 @@ impl App {
                 .i18n
                 .t_args("job-cancelled", &[("kind", kind_label.into())]);
         }
-
         if outcome.errors.is_empty() {
             self.set_status(summary);
+        } else if shown && matches!(self.mode, Mode::Normal) {
+            self.set_error(summary);
+            self.show_job_errors(outcome);
         } else {
             self.set_error(summary);
-            let title = self.i18n.t("job-errors-title");
-            let lines: Vec<String> = outcome
-                .errors
-                .iter()
-                .take(8)
-                .map(|(path, error)| format!("{path}: {error}"))
-                .collect();
-            self.show_message(title, lines);
         }
+    }
+
+    fn show_job_errors(&mut self, outcome: &Outcome) {
+        let title = self.i18n.t("job-errors-title");
+        let lines: Vec<String> = outcome
+            .errors
+            .iter()
+            .take(8)
+            .map(|(path, error)| format!("{path}: {error}"))
+            .collect();
+        self.show_message(title, lines);
+    }
+
+    /// The end of a job outside the queue: a replacement, a pack, a rebuild.
+    fn job_finished_alone(&mut self, kind: JobKind, outcome: Outcome) {
+        // A replacement runs twice. The first run only counted, and `pending_replace` holds
+        // the one that would write: so this is the count, and it asks rather than reports.
+        if kind == JobKind::Replace && self.pending_replace.is_some() {
+            self.replace_counted(&outcome);
+            return;
+        }
+        if kind == JobKind::Replace {
+            let msg = self.i18n.t_args(
+                "replace-done",
+                &[
+                    ("count", (outcome.occurrences() as i64).into()),
+                    ("files", (outcome.replacements.len() as i64).into()),
+                ],
+            );
+            self.set_status(msg);
+            self.read_panel(0);
+            self.read_panel(1);
+            return;
+        }
+
+        self.job_summary(kind, &outcome, true);
 
         // The dialog asked for the originals to go once the archive was written. Written
         // is the condition: nothing is deleted after a pack that failed or was stopped.
-        if let Some(sources) = self.pack_delete.take() {
-            if matches!(kind, JobKind::Pack | JobKind::Rebuild)
-                && outcome.errors.is_empty()
-                && !outcome.cancelled
-            {
-                self.start_job(JobSpec::new(JobKind::Delete, sources, None));
-                return;
+        if matches!(kind, JobKind::Pack | JobKind::Rebuild) {
+            if let Some(sources) = self.pack_delete.take() {
+                if outcome.errors.is_empty() && !outcome.cancelled {
+                    self.start_job(JobSpec::new(JobKind::Delete, sources, None));
+                    return;
+                }
             }
         }
-
-        // The next destination of a copy to several places. A cancelled or failed job stops
-        // the rest: somebody who pressed `Esc` meant the whole thing, and a disk that filled
-        // up for the first destination will fill up for the second.
-        if outcome.cancelled || !outcome.errors.is_empty() {
-            self.queued_jobs.clear();
-        } else if let Some(next) = self.queued_jobs.pop_front() {
-            self.start_job(next);
-            return;
-        }
+        self.launch_ready();
 
         // Both panels may be looking at what just changed.
         self.panels[self.active].selection.clear();
@@ -8265,6 +8525,7 @@ impl App {
             Command::PanelSortMenu => self.open_pick(PickKind::SortModes, self.active),
             Command::PanelHistory => self.open_pick(PickKind::FoldersHistory, self.active),
             Command::PanelUsage => self.open_usage(),
+            Command::JobQueue => self.open_pick(PickKind::Jobs, self.active),
             Command::PanelDrive(side) => {
                 let side = match side {
                     Side::Left => 0,
@@ -10446,6 +10707,120 @@ impl App {
     /// OK in the replace dialog: count first, always. The dry run and the write share the
     /// engine's one code path, so what the confirmation says is what the write will do.
     /// `Shift+F1`: the dialog for a new archive out of what is selected.
+    /// The rows of the queue, in its order: what each job is, where it is, how far it got.
+    fn job_rows(&self) -> Vec<PickRow> {
+        use crate::queue::JobState;
+        self.queue
+            .jobs
+            .iter()
+            .map(|job| {
+                let state = match (job.state, job.paused) {
+                    (JobState::Running, _) if job.question.is_some() => "job-state-asking",
+                    (JobState::Running, true) => "job-state-paused",
+                    (JobState::Running, false) => "job-state-running",
+                    (JobState::Queued, true) => "job-state-held",
+                    (JobState::Queued, false) => "job-state-queued",
+                    (JobState::Done, _) => match &job.outcome {
+                        Some(o) if o.cancelled => "job-state-cancelled",
+                        Some(o) if !o.errors.is_empty() => "job-state-failed",
+                        _ => "job-state-done",
+                    },
+                };
+                let state = self.i18n.t(state);
+                let percent = match job.state {
+                    JobState::Running => format!("{:>3}%", job.progress.percent()),
+                    JobState::Done if !job.failed() => "100%".to_string(),
+                    _ => "    ".to_string(),
+                };
+                let first = job
+                    .spec
+                    .sources
+                    .first()
+                    .map(|p| p.display_name())
+                    .unwrap_or_default();
+                let more = job.spec.sources.len().saturating_sub(1);
+                let mut what = if more > 0 {
+                    format!("{first} (+{more})")
+                } else {
+                    first
+                };
+                if let Some(target) = &job.spec.target {
+                    what.push_str(&format!(" → {target}"));
+                }
+                // The state words differ in length by language; padded to the widest so the
+                // percentages line up.
+                let width = unicode_width::UnicodeWidthStr::width(state.as_str());
+                let pad = " ".repeat(12usize.saturating_sub(width));
+                let label = format!(
+                    "{state}{pad}  {percent}  {}: {what}",
+                    self.kind_label(job.kind)
+                );
+                PickRow {
+                    label,
+                    value: job.id.to_string(),
+                    current: job.state == JobState::Running,
+                    hotkey: None,
+                    separator: false,
+                }
+            })
+            .collect()
+    }
+
+    /// The queue list, again, when something in it changed — keeping the row the cursor is
+    /// on and what was typed into the filter.
+    fn refresh_jobs_pick(&mut self) {
+        self.refresh_jobs_pick_on(None);
+    }
+
+    fn refresh_jobs_pick_on(&mut self, on: Option<u64>) {
+        let Mode::Pick(pick) = &self.mode else {
+            return;
+        };
+        if pick.kind != PickKind::Jobs {
+            return;
+        }
+        let keep = on
+            .map(|id| id.to_string())
+            .or_else(|| pick.chosen().map(|r| r.value.clone()));
+        let (side, filter, cursor) = (pick.side, pick.filter.clone(), pick.cursor);
+        self.open_pick(PickKind::Jobs, side);
+        if let Mode::Pick(fresh) = &mut self.mode {
+            fresh.filter = filter;
+            fresh.refilter();
+            fresh.cursor = keep
+                .and_then(|v| fresh.rows.iter().position(|r| r.value == v))
+                .unwrap_or(cursor.min(fresh.rows.len().saturating_sub(1)));
+        }
+    }
+
+    /// `Enter` on a job: a running one comes to the front, with its question if it is asking;
+    /// a finished one shows its errors, or says what it did.
+    fn job_enter(&mut self, id: u64, pick: Pick) {
+        use crate::queue::JobState;
+        let Some(job) = self.queue.get(id) else {
+            return;
+        };
+        match job.state {
+            JobState::Running => {
+                self.job_to_front(id);
+            }
+            JobState::Queued => {
+                let m = self.i18n.t("job-still-waiting");
+                self.mode = Mode::Pick(Box::new(pick));
+                self.set_status(m);
+            }
+            JobState::Done => {
+                let (kind, outcome) = (job.kind, job.outcome.clone().unwrap_or_default());
+                if outcome.errors.is_empty() {
+                    self.mode = Mode::Pick(Box::new(pick));
+                    self.job_summary(kind, &outcome, false);
+                } else {
+                    self.show_job_errors(&outcome);
+                }
+            }
+        }
+    }
+
     /// `Alt+Shift+F3`: where the space in this folder goes (SPEC 06 §12). Every folder not yet
     /// measured is measured, and the list fills in as the answers come back.
     fn open_usage(&mut self) {
@@ -11054,16 +11429,20 @@ impl App {
         // Several destinations are several jobs, in the order they were typed. A move to
         // more than one place would mean deleting the source after the first, so the ones
         // after it are copies — which is the only reading that does not lose data.
-        for (n, target) in targets.iter().enumerate() {
-            let target = self.resolve_path(target);
-            let kind = if n == 0 { kind } else { JobKind::Copy };
-            let spec =
-                JobSpec::new(kind, sources.clone(), Some(target)).with_options(options.clone());
-            if n == 0 {
-                self.start_job(spec);
-            } else {
-                self.queued_jobs.push_back(spec);
-            }
+        //
+        // The ones after the first ride on it, and start when it has ended well.
+        let mut specs: std::collections::VecDeque<JobSpec> = targets
+            .iter()
+            .enumerate()
+            .map(|(n, target)| {
+                let target = self.resolve_path(target);
+                let kind = if n == 0 { kind } else { JobKind::Copy };
+                JobSpec::new(kind, sources.clone(), Some(target)).with_options(options.clone())
+            })
+            .collect();
+        if let Some(first) = specs.pop_front() {
+            self.queued_jobs = specs;
+            self.start_job(first);
         }
         if targets.len() > 1 {
             let msg = self
@@ -13430,6 +13809,42 @@ impl App {
             .filter(|s| s.screen_modified())
             .filter_map(|s| s.screen_title())
             .collect();
+        // Jobs still running or waiting end with the program, so it asks, naming them. The
+        // answer is "stop them and quit" or "stay": there is no detaching a job from the
+        // process that runs it (SPEC 03 §5).
+        let jobs: Vec<String> = self
+            .queue
+            .jobs
+            .iter()
+            .filter(|j| j.state != crate::queue::JobState::Done)
+            .map(|j| {
+                let what = j
+                    .spec
+                    .sources
+                    .first()
+                    .map(|p| p.display_name())
+                    .unwrap_or_default();
+                format!("{}: {what}", self.kind_label(j.kind))
+            })
+            .collect();
+        if !jobs.is_empty() {
+            let title = self.i18n.t("jobs-quit-title");
+            let mut lines = vec![self.i18n.t("jobs-quit-body"), String::new()];
+            lines.extend(jobs);
+            if !dirty.is_empty() {
+                lines.push(String::new());
+                lines.push(self.i18n.t("screens-quit-body"));
+                lines.extend(dirty);
+            }
+            lines.push(String::new());
+            self.mode = Mode::Confirm(Confirm {
+                title,
+                lines,
+                action: ConfirmAction::QuitWithScreens,
+                button: 0,
+            });
+            return;
+        }
         if dirty.is_empty() {
             // `general.confirm_exit` is FAR's own question, off by default. It was a toggle in
             // the settings dialog that changed nothing.
@@ -14630,6 +15045,14 @@ impl App {
                 side,
             ),
             PickKind::Drives => self.drive_list(side),
+            PickKind::Jobs => {
+                let rows = self.job_rows();
+                let title = self.i18n.t_args(
+                    "jobs-title",
+                    &[("active", (self.queue.active() as i64).into())],
+                );
+                Pick::new(kind, title, rows, side)
+            }
             PickKind::Usage => {
                 let panel = &self.panels[side];
                 let (rows, total) = usage_rows(panel);
@@ -14922,6 +15345,40 @@ impl App {
                     self.apply_sort_groups();
                     self.reopen_sort_groups(side, other);
                 }
+            }
+            // The queue's own keys (SPEC 03 §5). `Space` pauses as it does in a player, and
+            // `Ctrl+↑↓` moves a row as it does in the highlight groups.
+            KeyCode::Up | KeyCode::Down
+                if kind == PickKind::Jobs && key.mods.contains(Mods::CTRL) =>
+            {
+                let id = pick.chosen().and_then(|r| r.value.parse::<u64>().ok());
+                if let Some(id) = id {
+                    self.queue.shift(id, key.code == KeyCode::Up);
+                    self.refresh_jobs_pick_on(Some(id));
+                }
+            }
+            KeyCode::Char(' ') | KeyCode::Delete | KeyCode::F(8) | KeyCode::F(5)
+                if kind == PickKind::Jobs =>
+            {
+                let id = pick.chosen().and_then(|r| r.value.parse::<u64>().ok());
+                let Some(id) = id else { return };
+                match key.code {
+                    KeyCode::Char(' ') => self.pause_job(id),
+                    KeyCode::F(5) => self.retry_job(id),
+                    _ => {
+                        // A finished row is only taken off the list; anything else stops.
+                        let done = self
+                            .queue
+                            .get(id)
+                            .is_some_and(|j| j.state == crate::queue::JobState::Done);
+                        if done {
+                            self.queue.jobs.retain(|j| j.id != id);
+                        } else {
+                            self.stop_job(id);
+                        }
+                    }
+                }
+                self.refresh_jobs_pick();
             }
             KeyCode::Up => pick.move_cursor(-1),
             KeyCode::Down => pick.move_cursor(1),
@@ -15277,6 +15734,12 @@ impl App {
             return;
         };
         match pick.kind {
+            PickKind::Jobs => {
+                let Ok(id) = row.value.parse::<u64>() else {
+                    return;
+                };
+                self.job_enter(id, *pick);
+            }
             PickKind::Usage => {
                 self.active = pick.side;
                 let panel = &mut self.panels[pick.side];
@@ -25875,6 +26338,8 @@ run = ["echo one", "echo two", "echo three"]
         // already there; off, the job is started with the policy that writes over it.
         fn conflict_of(app: &mut App) -> fcmd_jobs::ConflictPolicy {
             app.requests.clear();
+            // Each one is a fresh job, not one waiting behind the last for the same disk.
+            app.queue.jobs.clear();
             app.start_job(JobSpec::new(
                 JobKind::Copy,
                 vec![VPath::local("/a")],
@@ -25896,6 +26361,7 @@ run = ["echo one", "echo two", "echo three"]
         // And a dialog that chose `skip` on purpose is not overridden by a setting about
         // asking: the two mean different things.
         jobs.requests.clear();
+        jobs.queue.jobs.clear();
         let mut spec = JobSpec::new(
             JobKind::Copy,
             vec![VPath::local("/a")],
@@ -25912,6 +26378,229 @@ run = ["echo one", "echo two", "echo three"]
             })
             .unwrap();
         assert_eq!(chosen, fcmd_jobs::ConflictPolicy::Skip);
+    }
+
+    /// Two copies onto the same disk: the second waits, and starts on its own once the first
+    /// is done — in the background, because nobody asked to watch it (SPEC 03 §5).
+    #[test]
+    fn a_second_job_for_the_same_disk_waits_for_the_first() {
+        let mut app = app();
+        let copy = |to: &str| {
+            JobSpec::new(
+                JobKind::Copy,
+                vec![VPath::local("/home/mb/a.txt")],
+                Some(VPath::local(to)),
+            )
+        };
+        app.start_job(copy("/home/mb/one"));
+        let (first, _) = job_request(&mut app);
+        assert!(matches!(app.mode, Mode::Job(_)));
+        app.mode = Mode::Normal;
+        app.start_job(copy("/home/mb/two"));
+        assert!(
+            !app.take_requests()
+                .iter()
+                .any(|r| matches!(r, Request::Job { .. })),
+            "the second one must wait"
+        );
+        assert_eq!(app.queue.active(), 2);
+
+        app.handle_event(Event::JobDone {
+            id: first,
+            kind: JobKind::Copy,
+            outcome: Outcome::default(),
+        });
+        let (second, spec) = job_request(&mut app);
+        assert_ne!(second, first);
+        assert_eq!(spec.target, Some(VPath::local("/home/mb/two")));
+        assert!(
+            matches!(app.mode, Mode::Normal),
+            "no box for a job from the queue"
+        );
+        assert_eq!(app.queue.active(), 1);
+    }
+
+    /// With the queue off, both start at once.
+    #[test]
+    fn with_the_queue_off_every_job_starts_at_once() {
+        let mut app = app();
+        app.cfg.general.job_queue = fcmd_config::JobQueue::Off;
+        for to in ["/home/mb/one", "/home/mb/two"] {
+            app.start_job(JobSpec::new(
+                JobKind::Copy,
+                vec![VPath::local("/home/mb/a.txt")],
+                Some(VPath::local(to)),
+            ));
+        }
+        let started = app
+            .take_requests()
+            .iter()
+            .filter(|r| matches!(r, Request::Job { .. }))
+            .count();
+        assert_eq!(started, 2);
+    }
+
+    /// `B` sends the box away and the job goes on; when it ends with errors the status line
+    /// says so, and no box lands over what the user is doing now.
+    #[test]
+    fn a_job_sent_to_the_background_ends_without_a_box() {
+        let mut app = app();
+        app.start_job(JobSpec::new(
+            JobKind::Copy,
+            vec![VPath::local("/home/mb/a.txt")],
+            Some(VPath::local("/home/mb/one")),
+        ));
+        let (id, _) = job_request(&mut app);
+        press(&mut app, "b");
+        assert!(matches!(app.mode, Mode::Normal));
+        assert_eq!(
+            app.queue.get(id).unwrap().state,
+            crate::queue::JobState::Running
+        );
+        app.handle_event(Event::JobDone {
+            id,
+            kind: JobKind::Copy,
+            outcome: Outcome {
+                errors: vec![(VPath::local("/home/mb/a.txt"), "denied".into())],
+                ..Outcome::default()
+            },
+        });
+        assert!(matches!(app.mode, Mode::Normal), "{:?}", app.mode);
+        assert!(app.queue.get(id).unwrap().failed());
+    }
+
+    /// A job in the background that has a question brings it up at once over the panels.
+    #[test]
+    fn a_background_job_with_a_question_comes_to_the_front() {
+        let mut app = app();
+        app.start_job(JobSpec::new(
+            JobKind::Copy,
+            vec![VPath::local("/home/mb/a.txt")],
+            Some(VPath::local("/home/mb/one")),
+        ));
+        let (id, _) = job_request(&mut app);
+        press(&mut app, "b");
+        let (reply, answer) = std::sync::mpsc::channel();
+        app.handle_event(Event::JobQuestion {
+            id,
+            question: fcmd_jobs::Question::Error {
+                path: VPath::local("/home/mb/a.txt"),
+                error: "denied".into(),
+            },
+            reply,
+        });
+        let Mode::Job(view) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(view.id, id);
+        assert!(view.question.is_some());
+        press(&mut app, "Esc");
+        assert_eq!(answer.recv().unwrap(), Decision::Cancel);
+    }
+
+    /// The list: `Space` pauses and lets go, `Ctrl+↑` moves a waiting job ahead, `Del` takes
+    /// a waiting one out and stops a running one.
+    #[test]
+    fn the_queue_list_pauses_reorders_and_stops() {
+        let mut app = app();
+        let copy = |to: &str| {
+            JobSpec::new(
+                JobKind::Copy,
+                vec![VPath::local("/home/mb/a.txt")],
+                Some(VPath::local(to)),
+            )
+        };
+        app.start_job(copy("/home/mb/one"));
+        app.mode = Mode::Normal;
+        app.start_job(copy("/home/mb/two"));
+        app.start_job(copy("/home/mb/three"));
+        let ids: Vec<u64> = app.queue.jobs.iter().map(|j| j.id).collect();
+
+        press(&mut app, "Alt+Shift+F5");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(pick.kind, PickKind::Jobs);
+        assert_eq!(pick.rows.len(), 3);
+
+        // The running one, paused and let go again.
+        press(&mut app, "Space");
+        assert!(app.queue.get(ids[0]).unwrap().cancel.is_paused());
+        press(&mut app, "Space");
+        assert!(!app.queue.get(ids[0]).unwrap().cancel.is_paused());
+
+        // The third moves ahead of the second.
+        press(&mut app, "End");
+        press(&mut app, "Ctrl+Up");
+        let order: Vec<u64> = app.queue.jobs.iter().map(|j| j.id).collect();
+        assert_eq!(order, vec![ids[0], ids[2], ids[1]]);
+
+        // `Del` on a waiting one takes it out; on the running one it stops it.
+        press(&mut app, "Del");
+        assert_eq!(app.queue.jobs.len(), 2);
+        press(&mut app, "Home");
+        press(&mut app, "Del");
+        assert!(app.queue.get(ids[0]).unwrap().cancel.is_cancelled());
+    }
+
+    /// `F5` on a job that failed runs it again, skipping what is already at the destination.
+    #[test]
+    fn retrying_a_failed_copy_skips_what_arrived() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("a.txt");
+        std::fs::write(&src, "x").unwrap();
+        let mut app = app();
+        app.start_job(JobSpec::new(
+            JobKind::Copy,
+            vec![VPath::local(&src)],
+            Some(VPath::local(dir.path().join("out"))),
+        ));
+        let (id, _) = job_request(&mut app);
+        app.handle_event(Event::JobDone {
+            id,
+            kind: JobKind::Copy,
+            outcome: Outcome {
+                errors: vec![(VPath::local(&src), "denied".into())],
+                ..Outcome::default()
+            },
+        });
+        app.mode = Mode::Normal;
+        app.take_requests();
+        press(&mut app, "Alt+Shift+F5");
+        press(&mut app, "F5");
+        let (again, spec) = job_request(&mut app);
+        assert_ne!(again, id);
+        assert_eq!(spec.options.on_conflict, fcmd_jobs::ConflictPolicy::Skip);
+        assert!(
+            app.queue.get(id).is_none(),
+            "the failed row gives way to the new one"
+        );
+    }
+
+    /// Quitting with a job running asks, names it, and stops it on yes.
+    #[test]
+    fn quitting_with_a_job_running_asks_and_stops_it() {
+        let mut app = app();
+        app.start_job(JobSpec::new(
+            JobKind::Copy,
+            vec![VPath::local("/home/mb/a.txt")],
+            Some(VPath::local("/home/mb/one")),
+        ));
+        let (id, _) = job_request(&mut app);
+        press(&mut app, "b");
+        app.run(Command::AppQuit);
+        assert!(!app.quit);
+        let Mode::Confirm(confirm) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert!(
+            confirm.lines.iter().any(|l| l.contains("a.txt")),
+            "{:?}",
+            confirm.lines
+        );
+        press(&mut app, "Enter");
+        assert!(app.quit);
+        assert!(app.queue.get(id).unwrap().cancel.is_cancelled());
     }
 
     #[test]
@@ -27749,7 +28438,7 @@ run = ["echo one", "echo two", "echo three"]
         let (id, first) = job_request(&mut app);
         assert_eq!(first.kind, JobKind::Move);
         assert_eq!(first.target, Some(VPath::local(&one)));
-        assert_eq!(app.queued_jobs.len(), 1);
+        assert_eq!(app.queue.get(id).unwrap().then.len(), 1);
         assert!(app.status.contains('2'), "{}", app.status);
 
         // When it finishes cleanly, the next one starts — as a copy.
@@ -27761,7 +28450,7 @@ run = ["echo one", "echo two", "echo three"]
         let (_, second) = job_request(&mut app);
         assert_eq!(second.kind, JobKind::Copy, "the source is already gone");
         assert_eq!(second.target, Some(VPath::local(&two)));
-        assert!(app.queued_jobs.is_empty());
+        assert!(app.queue.jobs.iter().all(|j| j.then.is_empty()));
     }
 
     /// A destination with a `;` in its name is quoted, and a line with no separator is one
@@ -27798,7 +28487,7 @@ run = ["echo one", "echo two", "echo three"]
         type_path(&mut app, "a;b;c");
         press(&mut app, "Enter");
         let (id, _) = job_request(&mut app);
-        assert_eq!(app.queued_jobs.len(), 2);
+        assert_eq!(app.queue.get(id).unwrap().then.len(), 2);
 
         app.handle_event(Event::JobDone {
             id,
@@ -27808,7 +28497,10 @@ run = ["echo one", "echo two", "echo three"]
                 ..Outcome::default()
             },
         });
-        assert!(app.queued_jobs.is_empty(), "the rest is dropped");
+        assert!(
+            app.queue.jobs.iter().all(|j| j.then.is_empty()),
+            "the rest is dropped"
+        );
         assert!(
             !app.take_requests()
                 .iter()

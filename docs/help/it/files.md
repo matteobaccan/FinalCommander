@@ -57,6 +57,36 @@ risposta quando quella chiamata finisce e non entro i prossimi kilobyte, e l'ava
 quel file arriva tutto insieme. Su Linux la copia è ancora fatta a pezzi, quindi là non vale
 né l'una né l'altra cosa.
 
+# I job, in background e in coda
+
+Una copia, uno spostamento, una cancellazione e le altre operazioni sui file girano ciascuna
+come un *job*, con il suo riquadro sullo schermo. `B` in quel riquadro lo manda in background:
+il riquadro sparisce, il job continua, e la riga in alto conta i job che nessuno sta guardando
+— `⧗2`, con un `?` quando uno di loro sta chiedendo qualcosa. Un job in background che ha una
+domanda la porta subito sopra i pannelli; sopra il visualizzatore o l'editor aspetta, e la riga
+di stato lo dice.
+
+Un job per un disco occupato da un altro aspetta che finisca. Due copie sullo stesso disco se
+lo contendono e finiscono entrambe più tardi che una dopo l'altra, quindi per default c'è un job
+per dispositivo — una copia su una chiavetta non aspetta quella verso la rete.
+`general.job_queue` lo cambia: `one` esegue un job alla volta qualunque sia il dispositivo,
+`off` li fa partire tutti insieme.
+
+`Alt+Shift+F5` — *Comandi → Coda dei job* — li elenca: in corso, in attesa, in pausa e finiti,
+con quanto ha fatto ciascuno.
+
+- `Enter` riporta davanti il riquadro di un job in corso; su uno finito ne mostra gli errori.
+- `Spazio` mette in pausa un job in corso al suo prossimo passo, e lo fa ripartire. Su uno in
+  attesa lo trattiene, e quello dietro passa prima.
+- `Ctrl+↑` e `Ctrl+↓` spostano un job in attesa su e giù: l'ordine è quello in cui partono.
+- `Canc` toglie un job in attesa, ferma uno in corso, e toglie dalla lista uno finito.
+- `F5` riesegue un job fallito per quello che non ha fatto: quello che è già a destinazione
+  viene saltato, e un file che il job aveva fatto a metà non c'è, perché il motore non lascia
+  mai mezzo file.
+
+Uscire con dei job in corso chiede prima e li nomina: fanno parte di questo programma e finiscono
+con lui, quindi la scelta è fermarli o restare.
+
 # Rinominare molti file in una volta
 
 `Ctrl+Shift+F6` rinomina ciò che è selezionato a partire da un modello — *File → Rinomina in

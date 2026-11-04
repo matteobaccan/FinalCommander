@@ -72,6 +72,8 @@ pub enum FormKind {
 pub enum PickKind {
     /// Where the space in a folder goes, largest first.
     Usage,
+    /// The jobs: running, waiting and finished (SPEC 03 §5).
+    Jobs,
     Languages,
     Themes,
     /// Drives, mount points and open connections.
@@ -474,6 +476,7 @@ pub fn menus() -> Vec<Menu> {
                     "Alt+Shift+F3",
                     Action::Run(Command::PanelUsage),
                 ),
+                item("menu-jobs", "Alt+Shift+F5", Action::Run(Command::JobQueue)),
                 Entry::Separator,
                 item(
                     "menu-swap-panels",

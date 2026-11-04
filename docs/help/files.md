@@ -53,6 +53,35 @@ whole file in one call, so `Esc` is answered when that call finishes rather than
 next few kilobytes, and that file's progress arrives in one piece. On Linux the copy is still
 made a piece at a time, so neither applies.
 
+# Jobs, in the background and in the queue
+
+A copy, a move, a delete and the other file operations each run as a *job*, with its box on
+the screen. `B` in that box sends it to the background: the box goes, the job goes on, and the
+top row counts the jobs nobody is watching — `⧗2`, with a `?` when one of them is asking
+something. A job in the background that has a question brings it up over the panels at once;
+over the viewer or the editor it waits, and the status line says so.
+
+A job for a disk that is busy with another one waits for it. Two copies onto the same disk
+fight over it and both end later than one after the other would, so by default there is one
+job per device — a copy onto a memory stick does not wait for one onto the network.
+`general.job_queue` changes that: `one` runs one job at a time whatever the devices, `off`
+starts every job at once.
+
+`Alt+Shift+F5` — *Commands → Jobs* — lists them: running, waiting, paused and finished, with
+how far each one got.
+
+- `Enter` brings a running job's box back; on a finished one it shows its errors.
+- `Space` pauses a running job at its next step, and lets it go again. On a waiting one it
+  holds it back, and the one behind it goes first.
+- `Ctrl+↑` and `Ctrl+↓` move a waiting job up and down: the order is the order they start in.
+- `Del` takes a waiting job out, stops a running one, and clears a finished one from the list.
+- `F5` runs a job that failed again, for what it did not do: what is already at the
+  destination is skipped, and a file the job was halfway through is never there, because the
+  engine does not leave half a file behind.
+
+Quitting with jobs running asks first and names them: they are part of this program and end
+with it, so the choice is to stop them or to stay.
+
 # Renaming many files at once
 
 `Ctrl+Shift+F6` renames what is selected from one pattern — *Files → Rename from a pattern*.

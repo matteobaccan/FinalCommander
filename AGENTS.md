@@ -201,14 +201,15 @@ files rather than guessing what its dialog says.
 
 Everything here is unblocked; `docs/BACKLOG.md` has the reasons and the rest.
 
-1. **A queue for jobs** (feature 3.7, SPEC 03 §5): a panel that lists them, reorders, pauses
-   and resumes them, with one job per target device and the rest waiting.
-2. **A table for RARLAB's `rar`**, written on a machine that has it rather than from memory
+1. **A table for RARLAB's `rar`**, written on a machine that has it rather than from memory
    of its manual.
-3. **`cab` read in process**, the last of the three `docs/05-multiarc.md` §9 kept as
+2. **`cab` read in process**, the last of the three `docs/05-multiarc.md` §9 kept as
    candidates; it is the one that wants a crate.
-4. **Splitting and combining files** (feature 3.12), the last of Total Commander's file tools
+3. **Splitting and combining files** (feature 3.12), the last of Total Commander's file tools
    this has not got.
+4. **The job journal** (SPEC 03 §5, features 3.7 and 11.6): each job's planned units and
+   completion marks on disk, so a copy interrupted by a crash can be reported and resumed.
+   The queue itself is in (0.31.0).
 
 One rule that came out of that review and holds everywhere: **`Alt+<letter>` belongs to the
 quick search**, so nothing else may take it (`Ctrl+Shift+N/I/T` moved for this reason), and

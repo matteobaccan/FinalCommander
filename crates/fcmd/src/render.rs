@@ -546,15 +546,32 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
     // The clock, in the top right corner where FAR puts it: over the panel frame, or at the
     // end of the menu bar when that is always on. Four characters and a space either side,
     // which is the whole of what a clock in a file manager has to be.
+    let corner = if app.cfg.ui.menu_bar {
+        Style::new(app.theme.color("hmenu.fg"), app.theme.color("hmenu.bg"))
+    } else {
+        Style::new(app.theme.color("panel.frame"), app.theme.color("panel.bg"))
+    };
+    let mut right = w;
     if app.cfg.ui.clock && w > 10 {
         let now = format!(" {} ", fcmd_ui::clock_now());
         let width = unicode_width::UnicodeWidthStr::width(now.as_str()) as u16;
-        let style = if app.cfg.ui.menu_bar {
-            Style::new(app.theme.color("hmenu.fg"), app.theme.color("hmenu.bg"))
-        } else {
-            Style::new(app.theme.color("panel.frame"), app.theme.color("panel.bg"))
-        };
-        buf.put_str(w - width, 0, &now, style, width);
+        buf.put_str(w - width, 0, &now, corner, width);
+        right = w - width;
+    }
+    // The jobs nobody is watching, next to the clock: how many run or wait, with a mark when
+    // one of them is asking something. `Alt+Shift+F5` lists them (SPEC 03 §5).
+    let unseen: Vec<&crate::queue::Job> = app
+        .queue
+        .jobs
+        .iter()
+        .filter(|j| j.state != crate::queue::JobState::Done)
+        .filter(|j| !matches!(&app.mode, Mode::Job(v) if v.id == j.id))
+        .collect();
+    if !unseen.is_empty() && right > 20 {
+        let asking = unseen.iter().any(|j| j.question.is_some());
+        let mark = format!(" ⧗{}{} ", unseen.len(), if asking { "?" } else { "" });
+        let width = unicode_width::UnicodeWidthStr::width(mark.as_str()) as u16;
+        buf.put_str(right - width, 0, &mark, corner, width);
     }
 
     // The bar itself, when it is always on and no menu is open: the open one draws it with
@@ -1066,6 +1083,7 @@ fn draw_pick(
         crate::menu::PickKind::Drives => "drives-hint",
         crate::menu::PickKind::Bookmarks => "bookmarks-hint",
         crate::menu::PickKind::Highlight => "hl-hint",
+        crate::menu::PickKind::Jobs => "jobs-hint",
         // A history has three keys of its own, and a footer that does not name them is a
         // footer that keeps them secret.
         crate::menu::PickKind::CommandHistory
@@ -1294,7 +1312,12 @@ fn draw_job(app: &App, view: &crate::app::JobView, buf: &mut Buffer, screen: Rec
             total_percent: p.percent(),
             file_percent: p.file_percent(),
             show_file_bar: p.files_total > 1,
-            hint: &app.i18n.t("job-hint"),
+            // A job of the queue can also go to the background, and the box says so.
+            hint: &app.i18n.t(if app.queue.get(view.id).is_some() {
+                "job-hint-queue"
+            } else {
+                "job-hint"
+            }),
         },
     );
 }
@@ -4143,6 +4166,24 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
 
     /// The clock in the corner, on FAR's own spot: four characters over the frame, and the
     /// panels not a row shorter for it.
+    /// A job running in the background is counted in the top row, next to where the clock
+    /// goes, so nobody forgets one is there (SPEC 03 §5).
+    #[test]
+    fn a_job_in_the_background_is_counted_in_the_corner() {
+        let mut app = app("commander", "en");
+        let top = |app: &mut App| frame(app, 80, 24).lines().next().unwrap().to_string();
+        assert!(!top(&mut app).contains('⧗'));
+        app.start_job(fcmd_jobs::JobSpec::new(
+            fcmd_jobs::JobKind::Copy,
+            vec![fcmd_core::VPath::local("/home/mb/a.txt")],
+            Some(fcmd_core::VPath::local("/home/mb/one")),
+        ));
+        // On screen it is the box, not a count.
+        assert!(!top(&mut app).contains('⧗'));
+        app.mode = Mode::Normal;
+        assert!(top(&mut app).contains("⧗1"), "{}", top(&mut app));
+    }
+
     #[test]
     fn the_clock_sits_in_the_corner_without_costing_a_row() {
         let mut app = app("commander", "en");

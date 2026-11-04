@@ -1328,3 +1328,9 @@ cmd = "plugin.commands"
 # goes. Total Commander's is a separate tool, FAR's a plugin; neither has a key to take.
 keys = ["Alt+Shift+F3"]
 cmd = "panel.usage"
+
+[[bind]]
+# The jobs (SPEC 03 §5): next to `F5`, because what waits in it is mostly copies. Total
+# Commander opens its queue from the copy dialog; FAR has none.
+keys = ["Alt+Shift+F5"]
+cmd = "job.queue.show"

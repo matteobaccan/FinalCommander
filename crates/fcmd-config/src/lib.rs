@@ -176,6 +176,21 @@ pub struct General {
     /// that file arrives in one piece. On Linux the copy is still made a chunk at a time, so
     /// neither applies there.
     pub system_copy: bool,
+    /// Which jobs wait for which (SPEC 03 §5). `device`, the default, runs one job per target
+    /// device and queues the next one for the same device behind it, which is Total
+    /// Commander's copy by queue: two copies onto one disk fight over its head and both end
+    /// later than one after the other would. `one` runs one job at a time whatever the
+    /// devices; `off` starts every job at once.
+    pub job_queue: JobQueue,
+}
+
+/// How jobs share the machine: see [`General::job_queue`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum JobQueue {
+    Device,
+    One,
+    Off,
 }
 // There is no `update_check` here, and that is the point: a setting nobody reads is a setting
 // that lies, and this one was a promise wearing a setting's clothes. The promise is kept in
@@ -192,6 +207,7 @@ impl Default for General {
             desktop_open: true,
             use_trash: true,
             system_copy: false,
+            job_queue: JobQueue::Device,
         }
     }
 }
@@ -1815,6 +1831,18 @@ impl Config {
             "general.confirm_delete" => self.general.confirm_delete = parse_bool(value)?,
             "general.use_trash" => self.general.use_trash = parse_bool(value)?,
             "general.system_copy" => self.general.system_copy = parse_bool(value)?,
+            "general.job_queue" => {
+                self.general.job_queue = match value {
+                    "device" => JobQueue::Device,
+                    "one" => JobQueue::One,
+                    "off" => JobQueue::Off,
+                    other => {
+                        return Err(format!(
+                            "general.job_queue: expected device|one|off, got `{other}`"
+                        ))
+                    }
+                }
+            }
             "general.desktop_open" => self.general.desktop_open = parse_bool(value)?,
             "general.confirm_overwrite" => self.general.confirm_overwrite = parse_bool(value)?,
             // The rest of the sections, so that every row of the settings browser is a row

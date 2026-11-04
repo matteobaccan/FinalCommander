@@ -360,6 +360,15 @@ fn attempt(
                 state.progress.bytes_done += n;
                 state.progress.file_bytes_done += n;
                 state.bytes_since_report += n;
+                // Inside the file too, and not only once it is done: one file of some
+                // gigabytes is otherwise minutes of a box that says "planning" and a per-file
+                // bar that never moves. The reporter keeps the frames down to what a screen
+                // can show.
+                if state.bytes_since_report > 1024 * 1024 {
+                    state.bytes_since_report = 0;
+                    state.progress.elapsed = state.started.elapsed();
+                    reporter.progress(&state.progress);
+                }
                 !cancel.is_cancelled()
             };
             let copied = if append {
@@ -480,6 +489,15 @@ fn attempt(
                 state.progress.bytes_done += n;
                 state.progress.file_bytes_done += n;
                 state.bytes_since_report += n;
+                // Inside the file too, and not only once it is done: one file of some
+                // gigabytes is otherwise minutes of a box that says "planning" and a per-file
+                // bar that never moves. The reporter keeps the frames down to what a screen
+                // can show.
+                if state.bytes_since_report > 1024 * 1024 {
+                    state.bytes_since_report = 0;
+                    state.progress.elapsed = state.started.elapsed();
+                    reporter.progress(&state.progress);
+                }
                 !cancel.is_cancelled()
             };
             match fs.wipe_file(&unit.dst, spec.options.buffer, &mut tick) {
@@ -518,6 +536,15 @@ fn attempt(
                 state.progress.bytes_done += n;
                 state.progress.file_bytes_done += n;
                 state.bytes_since_report += n;
+                // Inside the file too, and not only once it is done: one file of some
+                // gigabytes is otherwise minutes of a box that says "planning" and a per-file
+                // bar that never moves. The reporter keeps the frames down to what a screen
+                // can show.
+                if state.bytes_since_report > 1024 * 1024 {
+                    state.bytes_since_report = 0;
+                    state.progress.elapsed = state.started.elapsed();
+                    reporter.progress(&state.progress);
+                }
                 !cancel.is_cancelled()
             };
             match fs.replace_in_file(&unit.dst, matcher, pass, spec.options.buffer, &mut tick) {
@@ -1371,6 +1398,45 @@ mod tests {
             "every byte of every file was read, matched or not"
         );
         assert_eq!(frames.last.percent(), 100);
+    }
+
+    /// One large file is reported while it is being copied, not only once it is there: the
+    /// box would otherwise sit on "planning" for as long as the file takes.
+    #[test]
+    fn a_large_file_is_reported_while_it_is_copied() {
+        struct Middle(Vec<(u64, u64)>);
+        impl Reporter for Middle {
+            fn progress(&mut self, p: &Progress) {
+                self.0.push((p.file_bytes_done, p.file_bytes_total));
+            }
+
+            fn ask(&mut self, _q: Question) -> Decision {
+                Decision::Cancel
+            }
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("big.bin");
+        stdfs::write(&src, vec![7u8; 5 * 1024 * 1024]).unwrap();
+        let mut spec = JobSpec::new(
+            JobKind::Copy,
+            vec![VPath::local(&src)],
+            Some(VPath::local(dir.path().join("out.bin"))),
+        );
+        spec.options.buffer = 64 * 1024;
+        let cancel = CancelToken::new();
+        let p = plan(&LocalFs, &spec, &cancel).unwrap();
+        let mut frames = Middle(Vec::new());
+        let out = execute(&LocalFs, &spec, p, &mut frames, &cancel);
+        assert!(out.errors.is_empty(), "{:?}", out.errors);
+        assert!(
+            frames
+                .0
+                .iter()
+                .any(|&(done, total)| done > 0 && done < total),
+            "no frame from inside the file: {:?}",
+            frames.0
+        );
     }
 
     #[test]

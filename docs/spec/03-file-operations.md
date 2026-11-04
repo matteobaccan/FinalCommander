@@ -141,17 +141,50 @@ program.
 
 ## 5. Queue and background
 
-- Jobs are listed in a **queue panel** (`job.queue.show`): running, queued, paused, finished
-  with results. Jobs can be reordered, paused, resumed, cancelled, cloned, retried for failed
-  items only.
-- Default concurrency: one job per *target device*, others queued (TC-style "copy by queue"),
-  configurable. Network targets get their own lane with a bandwidth cap option.
-- A job survives panel navigation, tab switching and viewer/editor use. Quitting with running
-  jobs asks; `--detach` is not supported in M2 (jobs are in-process), so the dialog offers
-  "wait" or "cancel".
-- **Journal**: each job writes an append-only record (`$STATE/jobs/<id>.jsonl`) with planned
-  units and completion marks, so after a crash `fcmd` can report what had been done and offer to
-  resume a Copy/Move.
+**Built (0.31.0).** Every job `start_job` starts — copy, move, delete, wastebasket, wipe,
+attributes, links and the rest of what is a `JobSpec` — is a row of the queue (`App::queue`,
+`crates/fcmd/src/queue.rs`) from the moment it is asked for until well after it ends.
+
+- **Lanes.** A job waits while another runs on its *lane*. By default the lane is the device
+  of the target — `st_dev` of the target, or of its nearest existing ancestor, on Unix; the
+  drive or share on Windows; `scheme://authority` for a server; the archive's own file for a
+  path inside one — and of the first source's folder for a job with no target. Two copies
+  onto one disk run one after the other, and one onto a memory stick does not wait for one
+  onto the network (Total Commander's copy by queue). `general.job_queue` is `device` (the
+  default), `one` (one lane for everything) or `off` (no waiting).
+- **Background.** `B` in a job's progress box sends it to the background; the top row then
+  counts the jobs nobody is watching (`⧗N`, and `?` while one is asking). A question from a
+  job in the background comes up at once over the panels, and waits — with a line on the
+  status bar — over the viewer, the editor or a dialog. A job that ends in the background
+  says so on the status line, never in a box over what the user is doing now.
+- **The list** (`job.queue.show`, `Alt+Shift+F5`, *Commands → Jobs*): running, paused, asking,
+  waiting, held and finished rows, with the percentage done. `Enter` brings a running job's
+  box back or shows a finished one's errors; `Space` pauses a running job and holds a waiting
+  one; `Ctrl+↑↓` reorders the waiting ones, which is the order they start in; `Del` takes a
+  waiting job out, stops a running one and clears a finished one; `F5` retries a job that
+  failed or was stopped, for what it did not do — a copy or a move again with conflicts
+  *skipped*, which is exact because the engine never leaves part of a file behind, and
+  without the sources a move or a delete already took away. The last twenty finished jobs are
+  kept.
+- **Pausing** is in `CancelToken`: a paused token makes `is_cancelled()` wait, so every place
+  an engine already checks for a cancel is a place it holds, with no engine knowing about
+  pauses. A paused job keeps its lane. Its elapsed time keeps counting, so its speed and
+  estimate are of the wall clock.
+- **Chains.** The next destinations of a copy to several places and the steps of a
+  synchronisation ride on the job before them and start when it ends well; a failure or a
+  cancel drops them.
+- **Quitting** with jobs running or waiting asks, naming them, and the answer is *stop them
+  and quit* or *stay*: jobs are threads of this process.
+
+Outside the queue, shown as before and never in the background: the replacement's counting
+run (its result is a question), packing and rewriting an archive, archive tests, checksums.
+
+**Still to come:**
+
+- Cloning a finished job into a new one, and a bandwidth cap for the lane of a server.
+- **Journal**: each job writing an append-only record (`$STATE/jobs/<id>.jsonl`) with planned
+  units and completion marks, so after a crash `fcmd` can report what had been done and offer
+  to resume a Copy/Move.
 
 ## 6. Progress UI
 

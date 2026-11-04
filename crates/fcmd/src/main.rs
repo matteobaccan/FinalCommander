@@ -18,6 +18,7 @@ mod menu;
 mod panel;
 mod proccard;
 mod prompt;
+mod queue;
 mod render;
 mod tabs;
 mod termkeys;

@@ -66,7 +66,7 @@ says what the decision stands on.
 | --- | --- | --- |
 | Find file | `Alt+F7` | From FAR's dialog: a sixth scope, one code page or a chosen set, fuzzy matching, alternate streams, the advanced page (a first-N-bytes limit, result columns in the column grammar), saving and loading a search, and a new search from the results. |
 | Checksums | Files menu | Splitting and combining, and checksums of something that is not on this machine, which waits on `JobFs::read_chunks` beyond the local filesystem. |
-| A queue for jobs | `job.queue.show` | SPEC 03 §5: a panel of the jobs, running, queued, paused and finished, that reorders, pauses, resumes and retries the failed items; one job per target device and the rest queued, as Total Commander's copy by queue does (feature 3.7). Today a job runs in the background with its bar, and there is no list of them. |
+| A queue for jobs | `Alt+Shift+F5` | The queue, the lanes per device, background, pause, reordering and retries are in (0.31.0, SPEC 03 §5). Left: cloning a job, a bandwidth cap for a server's lane, and the on-disk journal that would let a copy resume after a crash (feature 3.7, 11.6). |
 | Disk usage | `Alt+Shift+F3` | A whole tree at once rather than one folder's level, and a treemap (SPEC 06 §12). |
 | Synchronise folders | `Ctrl+Shift+Y` | A saved pair of directories as a named job, and a written report. |
 | User menu | `F2` | Reading FAR's `FarMenu.ini` as it stands, separators between groups, a dialog to edit the entries, and `Shift+F10` for the row taken last. |

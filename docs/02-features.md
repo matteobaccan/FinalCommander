@@ -103,7 +103,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 3.4 | Hard links, symlinks (absolute/relative), junctions/reparse points, link targets shown and followed | FAR/MC | ✓ |
 | 3.5 | Attributes/permissions dialog: chmod (numeric + rwx matrix), timestamps, recursive apply; chown, the Windows compressed and encrypted attributes | FAR/MC | ~ the shell's own property sheet, the NTFS compressed and encrypted bits, and the owner on Windows |
 | 3.6 | Extended attributes / ADS (NTFS streams), xattr on Linux/macOS, resource forks | FAR | M3 |
-| 3.7 | Operation engine: queue of jobs, parallel or serial, pause/resume/cancel, background with progress, speed/ETA, per-job log | TC/KRU/MTN2 | ~ a queue |
+| 3.7 | Operation engine: queue of jobs, parallel or serial, pause/resume/cancel, background with progress, speed/ETA, per-job log | TC/KRU/MTN2 | ~ a per-job log kept on disk |
 | 3.8 | Conflict resolution: overwrite / skip / rename / append / newer-only / size-differs, "apply to all", per-conflict dialog | all | ✓ |
 | 3.9 | Verify after copy (hash compare), preserve mode/owner/times/xattrs, sparse files, reflink/`copy_file_range`/CoW, `FSCTL` server-side copy | TC/NEW | ~ verifying as part of the copy, the owner and extended attributes, sparse files |
 | 3.10 | Resume interrupted copy of large files | TC | M3 |

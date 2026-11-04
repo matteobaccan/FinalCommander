@@ -114,6 +114,9 @@ impl Command {
             Command::PanelDrive(_) => "the drives, mount points and open connections",
             Command::PanelHistory => "where this panel has been",
             Command::PanelUsage => "what the space in this folder goes on, largest first",
+            Command::JobQueue => {
+                "the jobs, running, waiting and finished, to pause, reorder or retry"
+            }
             Command::PanelToggle(side) => match side {
                 Side::Left => "hide the left panel, or bring it back",
                 Side::Right => "hide the right panel, or bring it back",
