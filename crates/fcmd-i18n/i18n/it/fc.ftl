@@ -848,6 +848,7 @@ pack-level-best = massima
 pack-scope = { $count } file selezionati
 pack-needs-name = l'archivio ha bisogno di un nome
 pack-format-read-only = { $format } qui si legge, non si scrive: scegli un altro formato o un altro nome
+pack-single-one-file = un { $format } contiene un solo file: scegline uno, oppure usa { $tar } per una cartella o più file
 unpack-title = Estrai dall'archivio
 unpack-to = Estrai in
 unpack-scope = da { $name }

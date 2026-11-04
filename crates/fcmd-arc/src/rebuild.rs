@@ -140,7 +140,21 @@ pub fn rebuild(
             reason: format!("{} is read here, not written", format.label()),
         });
     }
+    // A name says `.gz` and the bytes may say a tar: a tarball somebody renamed `backup.gz`
+    // opens as the tar it is, and has to be written as one. Taking the name's word here would
+    // write one file over the whole tree. So for the four names that could be either, the
+    // archive is opened and what it really is decides.
+    let format = if format.is_single() {
+        Archive::open(path, &Limits::unlimited(), cancel)?
+            .format()
+            .unwrap_or(format)
+    } else {
+        format
+    };
     let part = path.with_extension(format!("{}.part", format.extension()));
+    if format.is_single() {
+        return rebuild_single(path, &part, format, &plan, level, cancel, progress);
+    }
     let result = write_new(path, &part, format, &plan, level, cancel, progress)
         .and_then(|written| verify(&part, &plan, cancel).map(|_| written));
     match result {
@@ -216,6 +230,94 @@ pub fn rebuild_in(
     }];
     rebuild_in(cache, &outer, &put, level, cancel, progress)?;
     Ok(written)
+}
+
+/// A change to a single compressed stream, which holds one file and nothing else.
+///
+/// The one change that means something is new bytes for that file — `F4` on it, then save —
+/// and it is a recompression: the stream is written again beside the original, decoded back
+/// to check that every byte came out, and moved over it. Anything else asks the format for
+/// something it does not have: a second name, a directory, a rename (the entry's name *is* the
+/// file's, less the suffix, for three of the four), or taking the one file out, which is
+/// deleting the archive and is `F8` on the archive itself.
+fn rebuild_single(
+    path: &Path,
+    part: &Path,
+    format: Format,
+    plan: &Plan,
+    level: Level,
+    cancel: &CancelToken,
+    progress: &mut dyn FnMut(&str, u64),
+) -> Result<Written> {
+    let refused = |reason: String| ArcError::Refused {
+        path: path.display().to_string(),
+        reason,
+    };
+    let held = Archive::open(path, &Limits::unlimited(), cancel)?;
+    let inner = held
+        .entries()
+        .first()
+        .map(|e| e.path.clone())
+        .ok_or_else(|| refused("it holds nothing".into()))?;
+    if !plan.removed.is_empty() {
+        return Err(refused(format!(
+            "a {} holds one file; taking it out is deleting the archive",
+            format.label()
+        )));
+    }
+    if !plan.renamed.is_empty() || !plan.touched.is_empty() {
+        return Err(refused(format!(
+            "a {} keeps no name, permissions or time of its own to change",
+            format.label()
+        )));
+    }
+    let (target, source) = match plan.put.iter().next() {
+        Some((target, source)) if plan.put.len() == 1 => (target.clone(), source.clone()),
+        _ => return Err(crate::write::one_file_only(path, format)),
+    };
+    if target != inner {
+        return Err(crate::write::one_file_only(path, format));
+    }
+    let expected = std::fs::metadata(&source)
+        .map_err(|e| io_error(&source, e))?
+        .len();
+    let written = crate::write::write_single(
+        part,
+        format,
+        &source,
+        &inner,
+        Some(SystemTime::now()),
+        level,
+        cancel,
+        &mut |_, bytes| progress(&inner, bytes),
+    )
+    .and_then(|written| {
+        // Read back, all of it: a stream that does not decode to the bytes that went in is
+        // not allowed anywhere near the original.
+        let mut back = decoder(part, format)?;
+        let got = std::io::copy(&mut back, &mut std::io::sink()).map_err(|e| ArcError::Broken {
+            path: part.display().to_string(),
+            reason: e.to_string(),
+        })?;
+        if got != expected {
+            return Err(ArcError::Broken {
+                path: part.display().to_string(),
+                reason: format!("{got} bytes came back of the {expected} that went in"),
+            });
+        }
+        Ok(written)
+    });
+    match written {
+        Ok(mut written) => {
+            written.packed = std::fs::metadata(part).map(|m| m.len()).unwrap_or(0);
+            std::fs::rename(part, path).map_err(|e| io_error(path, e))?;
+            Ok(written)
+        }
+        Err(e) => {
+            let _ = std::fs::remove_file(part);
+            Err(e)
+        }
+    }
 }
 
 fn write_new(
@@ -503,11 +605,7 @@ fn rebuild_tar(
         ruzstd::encoding::compress(
             BufReader::new(source),
             BufWriter::new(target),
-            match level {
-                Level::Fast => ruzstd::encoding::CompressionLevel::Fastest,
-                Level::Normal => ruzstd::encoding::CompressionLevel::Default,
-                Level::Best => ruzstd::encoding::CompressionLevel::Better,
-            },
+            crate::write::zstd_level(level),
         );
         let _ = std::fs::remove_file(&plain);
     }
@@ -731,6 +829,164 @@ mod tests {
             .unwrap()
             .read(inner, &CancelToken::new())
             .unwrap()
+    }
+
+    /// A single stream holding one file, made the way the pack dialog makes one.
+    fn single(dir: &Path, format: Format) -> PathBuf {
+        let source = dir.join("notes.txt");
+        std::fs::write(&source, b"first version\n").unwrap();
+        let path = dir.join(format!("notes.txt.{}", format.extension()));
+        create(
+            &path,
+            format,
+            &[source],
+            Level::Fast,
+            false,
+            &CancelToken::new(),
+            &mut |_, _| {},
+        )
+        .expect("the stream");
+        path
+    }
+
+    const SINGLES: [Format; 4] = [Format::Gz, Format::Bz2, Format::Xz, Format::Zst];
+
+    /// `F4` on the entry, then save: the stream is written again with the new bytes, under
+    /// the name it had.
+    #[test]
+    fn saving_the_one_entry_of_a_single_stream_compresses_it_again() {
+        for format in SINGLES {
+            let dir = tempfile::tempdir().unwrap();
+            let path = single(dir.path(), format);
+            let edited = dir.path().join("edited");
+            std::fs::write(&edited, b"second version, longer than the first\n").unwrap();
+            let changes = [Change::Put {
+                inner: "/notes.txt".into(),
+                source: edited,
+            }];
+            rebuild(
+                &path,
+                &changes,
+                Level::Normal,
+                &CancelToken::new(),
+                &mut |_, _| {},
+            )
+            .unwrap_or_else(|e| panic!("{}: {e}", format.label()));
+            assert_eq!(
+                names(&path),
+                vec!["/notes.txt".to_string()],
+                "{}",
+                format.label()
+            );
+            assert_eq!(
+                read(&path, "/notes.txt"),
+                b"second version, longer than the first\n",
+                "{}",
+                format.label()
+            );
+        }
+    }
+
+    #[test]
+    fn a_single_stream_refuses_what_its_format_has_no_room_for() {
+        for format in SINGLES {
+            let dir = tempfile::tempdir().unwrap();
+            let path = single(dir.path(), format);
+            let before = std::fs::read(&path).unwrap();
+            let other = dir.path().join("other");
+            std::fs::write(&other, b"x").unwrap();
+            for change in [
+                Change::Put {
+                    inner: "/second.txt".into(),
+                    source: other.clone(),
+                },
+                Change::Remove {
+                    inner: "/notes.txt".into(),
+                },
+                Change::Rename {
+                    from: "/notes.txt".into(),
+                    to: "/renamed.txt".into(),
+                },
+                Change::Touch {
+                    inner: "/notes.txt".into(),
+                    mode: Some(0o600),
+                    mtime: None,
+                },
+            ] {
+                let e = rebuild(
+                    &path,
+                    std::slice::from_ref(&change),
+                    Level::Fast,
+                    &CancelToken::new(),
+                    &mut |_, _| {},
+                )
+                .unwrap_err();
+                assert!(
+                    matches!(e, ArcError::Refused { .. }),
+                    "{} {change:?}: {e}",
+                    format.label()
+                );
+                assert_eq!(std::fs::read(&path).unwrap(), before, "{}", format.label());
+            }
+        }
+    }
+
+    /// A tarball renamed `backup.gz` opens as the tar it is, and a change to it is a change to
+    /// that tar. Taking the name's word would have written one file over the whole tree.
+    #[test]
+    fn a_tarball_called_gz_is_rebuilt_as_the_tar_it_is() {
+        let dir = tempfile::tempdir().unwrap();
+        let tarball = archive(dir.path(), Format::TarGz);
+        let renamed = dir.path().join("backup.gz");
+        std::fs::rename(&tarball, &renamed).unwrap();
+        let before = names(&renamed);
+        assert!(before.len() > 1);
+        let edited = dir.path().join("edited");
+        std::fs::write(&edited, b"changed\n").unwrap();
+        let changes = [Change::Put {
+            inner: "/tree/readme.md".into(),
+            source: edited,
+        }];
+        rebuild(
+            &renamed,
+            &changes,
+            Level::Fast,
+            &CancelToken::new(),
+            &mut |_, _| {},
+        )
+        .unwrap();
+        assert_eq!(names(&renamed), before);
+        assert_eq!(read(&renamed, "/tree/readme.md"), b"changed\n");
+    }
+
+    /// zstd's encoder here implements its fastest level and no other, and panics on the rest;
+    /// a release build aborts on a panic. Every level the dialog offers has to come out whole.
+    #[test]
+    fn a_tar_zst_is_written_and_rebuilt_at_every_level() {
+        for level in [Level::Fast, Level::Normal, Level::Best] {
+            let dir = tempfile::tempdir().unwrap();
+            let tree = dir.path().join("tree");
+            std::fs::create_dir_all(&tree).unwrap();
+            std::fs::write(tree.join("a.txt"), b"a\n").unwrap();
+            let path = dir.path().join("t.tar.zst");
+            create(
+                &path,
+                Format::TarZst,
+                std::slice::from_ref(&tree),
+                level,
+                false,
+                &CancelToken::new(),
+                &mut |_, _| {},
+            )
+            .unwrap();
+            std::fs::write(tree.join("b.txt"), b"b\n").unwrap();
+            let changes = [Change::add(&tree.join("b.txt"), "/tree")];
+            rebuild(&path, &changes, level, &CancelToken::new(), &mut |_, _| {}).unwrap();
+            assert_eq!(
+                names(&path),
+                vec!["/tree/a.txt".to_string(), "/tree/b.txt".to_string()]
+            );
+        }
     }
 
     /// A zip at `path` holding `sources` as they are named on disk.
@@ -963,7 +1219,10 @@ mod tests {
 
     #[test]
     fn an_entry_is_replaced_in_every_format() {
-        for format in Format::writable_formats() {
+        for format in Format::writable_formats()
+            .into_iter()
+            .filter(|f| f.holds_many())
+        {
             let dir = tempfile::tempdir().unwrap();
             let path = archive(dir.path(), format);
             let new = dir.path().join("replacement");
@@ -1001,7 +1260,10 @@ mod tests {
 
     #[test]
     fn an_entry_and_a_whole_directory_can_be_taken_out() {
-        for format in Format::writable_formats() {
+        for format in Format::writable_formats()
+            .into_iter()
+            .filter(|f| f.holds_many())
+        {
             let dir = tempfile::tempdir().unwrap();
             let path = archive(dir.path(), format);
             rebuild(
@@ -1020,7 +1282,10 @@ mod tests {
 
     #[test]
     fn an_entry_keeps_its_bytes_under_a_new_name() {
-        for format in Format::writable_formats() {
+        for format in Format::writable_formats()
+            .into_iter()
+            .filter(|f| f.holds_many())
+        {
             let dir = tempfile::tempdir().unwrap();
             let path = archive(dir.path(), format);
             rebuild(
@@ -1050,7 +1315,10 @@ mod tests {
 
     #[test]
     fn a_file_is_added_where_it_was_asked_for() {
-        for format in Format::writable_formats() {
+        for format in Format::writable_formats()
+            .into_iter()
+            .filter(|f| f.holds_many())
+        {
             let dir = tempfile::tempdir().unwrap();
             let path = archive(dir.path(), format);
             let new = dir.path().join("extra.txt");
@@ -1077,7 +1345,10 @@ mod tests {
     /// archive exactly as it was.
     #[test]
     fn a_cancelled_rebuild_leaves_the_archive_alone() {
-        for format in Format::writable_formats() {
+        for format in Format::writable_formats()
+            .into_iter()
+            .filter(|f| f.holds_many())
+        {
             let dir = tempfile::tempdir().unwrap();
             let path = archive(dir.path(), format);
             let before = std::fs::read(&path).unwrap();

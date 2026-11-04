@@ -86,6 +86,29 @@ fn write_all(
     progress: &mut dyn FnMut(&Path, u64),
 ) -> Result<Written> {
     let items = collect(sources, cancel)?;
+    if format.is_single() {
+        // One file in, one file out: gzip's own contract. A folder or a second file has
+        // nowhere to go, and the format that holds them is the tar of the same codec.
+        let [item] = items.as_slice() else {
+            return Err(one_file_only(part, format));
+        };
+        if item.is_dir {
+            return Err(one_file_only(part, format));
+        }
+        let mtime = std::fs::metadata(&item.source)
+            .and_then(|m| m.modified())
+            .ok();
+        return write_single(
+            part,
+            format,
+            &item.source,
+            &item.inner,
+            mtime,
+            level,
+            cancel,
+            progress,
+        );
+    }
     if format == Format::Zip {
         return write_zip(part, &items, level, cancel, progress);
     }
@@ -93,6 +116,174 @@ fn write_all(
         return write_sevenz(part, &items, level, solid, cancel, progress);
     }
     write_tar(part, format, &items, level, cancel, progress)
+}
+
+/// Why a single stream refuses a folder or a second file, naming the format that takes them.
+pub(crate) fn one_file_only(path: &Path, format: Format) -> ArcError {
+    let tar = format.with_tar_inside().map(Format::label).unwrap_or("tar");
+    ArcError::Refused {
+        path: path.display().to_string(),
+        reason: format!(
+            "a {} holds one file; a folder or several files go in a {tar}",
+            format.label()
+        ),
+    }
+}
+
+/// One file compressed into one stream: what `gzip notes.txt` leaves behind.
+///
+/// gzip's header has room for the name the file had and the time it was last written, and
+/// both are filled in: it is what `gzip` itself does, and it is what lets the entry keep its
+/// name when the `.gz` is renamed. The other three keep nothing of the kind, and the reader
+/// names the entry by taking the suffix off.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn write_single(
+    part: &Path,
+    format: Format,
+    source: &Path,
+    name: &str,
+    mtime: Option<std::time::SystemTime>,
+    level: Level,
+    cancel: &CancelToken,
+    progress: &mut dyn FnMut(&Path, u64),
+) -> Result<Written> {
+    let file = BufWriter::new(File::create(part).map_err(|e| io_error(part, e))?);
+    let leaf = name.rsplit('/').next().unwrap_or(name);
+    let bytes = match format {
+        Format::Gz => {
+            let mut header = flate2::GzBuilder::new().filename(leaf.as_bytes());
+            if let Some(secs) = mtime
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .and_then(|d| u32::try_from(d.as_secs()).ok())
+            {
+                header = header.mtime(secs);
+            }
+            let mut enc = header.write(
+                file,
+                match level {
+                    Level::Fast => flate2::Compression::fast(),
+                    Level::Normal => flate2::Compression::default(),
+                    Level::Best => flate2::Compression::best(),
+                },
+            );
+            let bytes = pour_watched(source, &mut enc, cancel, progress)?;
+            enc.finish().map_err(|e| io_error(part, e))?;
+            bytes
+        }
+        Format::Bz2 | Format::Xz => {
+            let mut sink = Sink::new(part, format.with_tar_inside().expect("a codec"), level)?;
+            let bytes = pour_watched(source, &mut sink, cancel, progress)?;
+            sink.finish(part)?;
+            bytes
+        }
+        Format::Zst => {
+            // zstd's encoder here pulls from a reader and unwraps what the reader says, so a
+            // cancelled or failed read cannot be an error without taking the program down. It
+            // is an end of input instead, remembered, and looked at once the encoder is done.
+            let input = File::open(source).map_err(|e| io_error(source, e))?;
+            let mut watched = Watched {
+                inner: BufReader::new(input),
+                cancel,
+                progress,
+                source,
+                total: 0,
+                stopped: None,
+            };
+            ruzstd::encoding::compress(&mut watched, file, zstd_level(level));
+            match watched.stopped.take() {
+                Some(Stopped::Cancelled) => return Err(ArcError::Cancelled),
+                Some(Stopped::Failed(e)) => return Err(io_error(source, e)),
+                None => {}
+            }
+            watched.total
+        }
+        other => unreachable!("{} is not a single stream", other.label()),
+    };
+    Ok(Written {
+        files: 1,
+        dirs: 0,
+        bytes,
+        packed: 0,
+    })
+}
+
+/// The zstd level a [`Level`] means — which is one level whatever is asked.
+///
+/// The encoder here implements `Fastest` and `Uncompressed` and nothing else: `Default`,
+/// `Better` and `Best` are `unimplemented!()` inside it. Until 0.30.0 `Normal` and `Best` were
+/// passed through, and a release build aborts on a panic, so packing a `.tar.zst` at either
+/// level ended the program. Every level is `Fastest` now, which is still zstd and still
+/// smaller than the tar, and the pack dialog's level is for the other codecs.
+pub(crate) fn zstd_level(_level: Level) -> ruzstd::encoding::CompressionLevel {
+    ruzstd::encoding::CompressionLevel::Fastest
+}
+
+/// One file into an encoder, a block at a time, reporting each block and stopping at a
+/// cancellation — so a large file shows its progress rather than arriving all at once.
+fn pour_watched(
+    source: &Path,
+    to: &mut dyn Write,
+    cancel: &CancelToken,
+    progress: &mut dyn FnMut(&Path, u64),
+) -> Result<u64> {
+    let input = File::open(source).map_err(|e| io_error(source, e))?;
+    let mut watched = Watched {
+        inner: BufReader::new(input),
+        cancel,
+        progress,
+        source,
+        total: 0,
+        stopped: None,
+    };
+    io::copy(&mut watched, to).map_err(|e| ArcError::Io {
+        path: "the archive".to_string(),
+        source: e,
+    })?;
+    match watched.stopped.take() {
+        Some(Stopped::Cancelled) => Err(ArcError::Cancelled),
+        Some(Stopped::Failed(e)) => Err(io_error(source, e)),
+        None => Ok(watched.total),
+    }
+}
+
+/// Why a [`Watched`] read stopped early.
+enum Stopped {
+    Cancelled,
+    Failed(io::Error),
+}
+
+/// A reader that reports progress, and turns a cancellation or a failure into an end of
+/// input it remembers — for an encoder that cannot be handed an error.
+struct Watched<'a, R> {
+    inner: R,
+    cancel: &'a CancelToken,
+    progress: &'a mut dyn FnMut(&Path, u64),
+    source: &'a Path,
+    total: u64,
+    stopped: Option<Stopped>,
+}
+
+impl<R: Read> Read for Watched<'_, R> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        if self.stopped.is_some() {
+            return Ok(0);
+        }
+        if self.cancel.is_cancelled() {
+            self.stopped = Some(Stopped::Cancelled);
+            return Ok(0);
+        }
+        match self.inner.read(buf) {
+            Ok(read) => {
+                self.total += read as u64;
+                (self.progress)(self.source, self.total);
+                Ok(read)
+            }
+            Err(e) => {
+                self.stopped = Some(Stopped::Failed(e));
+                Ok(0)
+            }
+        }
+    }
 }
 
 /// One thing to put in the archive: where it is now, and the name it takes inside.
@@ -240,11 +431,7 @@ fn write_tar(
         ruzstd::encoding::compress(
             BufReader::new(source),
             BufWriter::new(target),
-            match level {
-                Level::Fast => ruzstd::encoding::CompressionLevel::Fastest,
-                Level::Normal => ruzstd::encoding::CompressionLevel::Default,
-                Level::Best => ruzstd::encoding::CompressionLevel::Better,
-            },
+            zstd_level(level),
         );
         let _ = std::fs::remove_file(&plain);
     }
@@ -558,6 +745,128 @@ mod tests {
         dir
     }
 
+    const SINGLES: [Format; 4] = [Format::Gz, Format::Bz2, Format::Xz, Format::Zst];
+
+    fn quiet(_: &Path, _: u64) {}
+
+    #[test]
+    fn one_file_goes_in_and_comes_out_again_in_each_single_stream() {
+        let dir = tree();
+        let source = dir.path().join("readme.md");
+        for format in SINGLES {
+            let path = dir.path().join(format!("readme.md.{}", format.extension()));
+            let written = create(
+                &path,
+                format,
+                std::slice::from_ref(&source),
+                Level::Normal,
+                false,
+                &CancelToken::new(),
+                &mut quiet,
+            )
+            .unwrap_or_else(|e| panic!("{}: {e}", format.label()));
+            assert_eq!((written.files, written.bytes), (1, 9), "{}", format.label());
+            let archive = Archive::open(&path, &Limits::default(), &CancelToken::new()).unwrap();
+            assert_eq!(archive.format(), Some(format));
+            assert_eq!(archive.entries().len(), 1, "{}", format.label());
+            assert_eq!(
+                archive.entries()[0].path,
+                "/readme.md",
+                "{}",
+                format.label()
+            );
+            assert_eq!(
+                archive.read("/readme.md", &CancelToken::new()).unwrap(),
+                b"# readme\n",
+                "{}",
+                format.label()
+            );
+        }
+    }
+
+    /// gzip keeps the name in its header, as `gzip` itself does, so the entry is still called
+    /// what the file was called after the `.gz` has been renamed.
+    #[test]
+    fn a_gz_keeps_the_name_of_the_file_it_holds() {
+        let dir = tree();
+        let path = dir.path().join("packed.gz");
+        create(
+            &path,
+            Format::Gz,
+            &[dir.path().join("src/main.rs")],
+            Level::Fast,
+            false,
+            &CancelToken::new(),
+            &mut quiet,
+        )
+        .unwrap();
+        let archive = Archive::open(&path, &Limits::default(), &CancelToken::new()).unwrap();
+        assert_eq!(archive.entries()[0].path, "/main.rs");
+        assert!(archive.entries()[0].mtime.is_some());
+    }
+
+    #[test]
+    fn a_folder_or_a_second_file_is_refused_naming_the_tar_that_takes_them() {
+        let dir = tree();
+        for format in SINGLES {
+            for sources in [
+                vec![dir.path().join("src")],
+                vec![dir.path().join("readme.md"), dir.path().join("src/main.rs")],
+            ] {
+                let path = dir.path().join(format!("out.{}", format.extension()));
+                let e = create(
+                    &path,
+                    format,
+                    &sources,
+                    Level::Fast,
+                    false,
+                    &CancelToken::new(),
+                    &mut quiet,
+                )
+                .unwrap_err();
+                let tar = format.with_tar_inside().unwrap().label();
+                assert!(e.to_string().contains(tar), "{}: {e}", format.label());
+                assert!(!path.exists(), "{}", format.label());
+                let leftovers: Vec<_> = std::fs::read_dir(dir.path())
+                    .unwrap()
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.file_name().to_string_lossy().ends_with(".part"))
+                    .collect();
+                assert!(leftovers.is_empty(), "{}", format.label());
+            }
+        }
+    }
+
+    /// zstd's encoder unwraps what its reader says, so a cancellation has to reach it as an
+    /// end of input. In a build that aborts on a panic, the other way would end the program.
+    #[test]
+    fn a_cancelled_single_stream_leaves_nothing_and_does_not_panic() {
+        let dir = tree();
+        let big = dir.path().join("big.bin");
+        std::fs::write(&big, vec![7u8; 4 * 1024 * 1024]).unwrap();
+        for format in SINGLES {
+            let path = dir.path().join(format!("big.bin.{}", format.extension()));
+            let cancel = CancelToken::new();
+            let mut seen = 0u64;
+            let e = create(
+                &path,
+                format,
+                std::slice::from_ref(&big),
+                Level::Fast,
+                false,
+                &cancel,
+                &mut |_, bytes| {
+                    seen = bytes;
+                    cancel.cancel();
+                },
+            )
+            .unwrap_err();
+            assert!(matches!(e, ArcError::Cancelled), "{}: {e}", format.label());
+            assert!(seen < 4 * 1024 * 1024, "{}", format.label());
+            assert!(!path.exists(), "{}", format.label());
+        }
+    }
+
     /// Solid means the files share a compressed stream, which is smaller; what matters here
     /// is that everything still comes out, because a block read wrongly gives rubble rather
     /// than an error.
@@ -602,7 +911,10 @@ mod tests {
     #[test]
     fn what_goes_in_comes_out_again_in_every_format() {
         let dir = tree();
-        for format in Format::writable_formats() {
+        for format in Format::writable_formats()
+            .into_iter()
+            .filter(|f| f.holds_many())
+        {
             let archive = dir.path().join(format!("out.{}", format.extension()));
             let sources = vec![dir.path().join("src"), dir.path().join("readme.md")];
             let mut seen = Vec::new();

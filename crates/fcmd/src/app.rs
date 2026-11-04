@@ -4015,7 +4015,7 @@ impl App {
                         let name = self.mode.hex().map(|e| e.name()).unwrap_or_default();
                         let msg = self.i18n.t_args(
                             "editor-saved",
-                            &[("name", name.into()), ("lines", (bytes as i64).into())],
+                            &[("name", name.into()), ("bytes", (bytes as i64).into())],
                         );
                         self.set_status(msg);
                     }
@@ -5480,6 +5480,19 @@ impl App {
             Some(e) if e.is_selectable() => vec![panel.path_of(e)],
             _ => Vec::new(),
         }
+    }
+
+    /// Is a directory among what [`App::job_sources`] would hand a job?
+    fn job_sources_hold_a_directory(&self) -> bool {
+        let panel = self.panel();
+        if !panel.selection.is_empty() {
+            return (0..panel.listing.len())
+                .filter_map(|row| panel.listing.row(row))
+                .any(|e| {
+                    e.is_selectable() && panel.selection.contains(e.id) && e.kind.is_dirlike()
+                });
+        }
+        panel.current().is_some_and(|e| e.kind.is_dirlike())
     }
 
     /// The names, or the whole paths, of what is selected onto the system clipboard — one per
@@ -10973,6 +10986,21 @@ impl App {
             let m = self.i18n.t_args(
                 "pack-format-read-only",
                 &[("format", format.label().into())],
+            );
+            self.set_error(m);
+            self.mode = Mode::Form(Box::new(form.clone()));
+            return;
+        }
+        // A `.gz` holds one file: say so here, with the dialog open, and name the tar that
+        // holds a folder or several — rather than a job that starts and fails.
+        if format.is_single() && (sources.len() != 1 || self.job_sources_hold_a_directory()) {
+            let tar = format.with_tar_inside().unwrap_or(fcmd_arc::Format::TarGz);
+            let m = self.i18n.t_args(
+                "pack-single-one-file",
+                &[
+                    ("format", format.label().into()),
+                    ("tar", tar.label().into()),
+                ],
             );
             self.set_error(m);
             self.mode = Mode::Form(Box::new(form.clone()));
@@ -23124,6 +23152,56 @@ mod tests {
             app.panel().sort.groups,
             "Shift+F11 did not turn the sort groups on"
         );
+    }
+
+    /// A `.gz` holds one file. A folder in the dialog is refused while it is still open, with
+    /// the tar that would take it named; one file starts a job, named `a.txt.gz` the way
+    /// `gzip` would name it.
+    #[test]
+    fn a_gz_is_packed_from_one_file_and_a_folder_is_sent_to_the_tar() {
+        let mut app = app();
+        app.last_pack = fcmd_arc::Format::Gz;
+        app.panels[0].cursor = 1; // docs, a directory
+        app.run(Command::FilePack);
+        app.requests.clear();
+        press(&mut app, "F10");
+        assert!(
+            matches!(app.mode, Mode::Form(_)),
+            "the dialog should stay open: {:?}",
+            app.mode
+        );
+        assert!(
+            !app.requests
+                .iter()
+                .any(|r| matches!(r, Request::Pack { .. })),
+            "a folder must not start a gz"
+        );
+        let said = app.status.clone();
+        assert!(said.contains("tar.gz"), "{said}");
+
+        let mut app = app_with_cursor_on_a_file();
+        app.last_pack = fcmd_arc::Format::Gz;
+        app.run(Command::FilePack);
+        app.requests.clear();
+        press(&mut app, "F10");
+        let (archive, format) = app
+            .requests
+            .iter()
+            .find_map(|r| match r {
+                Request::Pack {
+                    archive, format, ..
+                } => Some((archive.clone(), *format)),
+                _ => None,
+            })
+            .expect("one file starts a pack");
+        assert_eq!(format, fcmd_arc::Format::Gz);
+        assert!(archive.to_string().ends_with("a.txt.gz"), "{archive}");
+    }
+
+    fn app_with_cursor_on_a_file() -> App {
+        let mut app = app();
+        app.panels[0].cursor = 2; // a.txt
+        app
     }
 
     /// The archive dialog can be told to clear up after itself — but only if the archive was

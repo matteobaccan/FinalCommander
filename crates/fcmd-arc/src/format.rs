@@ -71,20 +71,13 @@ impl Format {
     /// and `dpkg-deb` do, and a `.deb` written without its `control.tar` would be a file that
     /// looks like a package and is not one. Reading them is what a commander is for.
     ///
-    /// The four single streams cannot either, for now: compressing one file into a `.gz` is a
-    /// useful thing to offer and a different piece of work from reading one, because every
-    /// dialog and every rebuild in this crate assumes a format that can hold a second entry.
+    /// `cpio` and `rpm` cannot either, for the same reasons: `rpmbuild` makes packages.
+    ///
+    /// The four single streams can, with the one rule their format has: one file in. Packing
+    /// a folder or two files into one is refused with the name of the tar that holds them, and
+    /// inside one the only change is new bytes for the entry it holds (`F4`, then save).
     pub fn writable(self) -> bool {
-        !matches!(
-            self,
-            Format::Ar
-                | Format::Cpio
-                | Format::Rpm
-                | Format::Gz
-                | Format::Bz2
-                | Format::Xz
-                | Format::Zst
-        )
+        !matches!(self, Format::Ar | Format::Cpio | Format::Rpm)
     }
 
     /// Is this a single compressed stream — one file in, one file out, no index?

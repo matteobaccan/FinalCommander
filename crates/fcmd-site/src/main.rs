@@ -607,6 +607,120 @@ mod tests {
         assert!(missing.is_empty(), "{}", missing.join("\n"));
     }
 
+    /// Every argument a message names is one its caller gives.
+    ///
+    /// Fluent prints a placeholder nobody filled as `{$bytes}`, literally, in the middle of the
+    /// status line — which is what saving in the hex editor said until 0.30.0, because the call
+    /// passed `lines` to a message that asks for `bytes`. Nothing fails when that happens, so
+    /// nothing noticed. This reads every `t_args("key", &[("name", …), …])` in the workspace
+    /// and the English catalogue, and asks that each `{ $name }` of the message is passed. An
+    /// argument passed and not used is allowed: a message may say less than it is told.
+    #[test]
+    fn every_placeholder_of_a_message_is_given_by_its_caller() {
+        let repo = default_repo();
+        let catalogue =
+            std::fs::read_to_string(repo.join("crates/fcmd-i18n/i18n/en/fc.ftl")).unwrap();
+        // Key to the placeholders it uses, a message running on over indented lines.
+        let mut wants: std::collections::HashMap<String, std::collections::BTreeSet<String>> =
+            Default::default();
+        let mut current: Option<String> = None;
+        for line in catalogue.lines() {
+            let continued = line.starts_with([' ', '\t']);
+            if !continued {
+                current = line
+                    .split_once('=')
+                    .map(|(k, _)| k.trim().to_string())
+                    .filter(|k| !k.is_empty() && !k.starts_with('#'));
+                if let Some(key) = &current {
+                    wants.entry(key.clone()).or_default();
+                }
+            }
+            let Some(key) = &current else { continue };
+            let mut rest = line;
+            while let Some(at) = rest.find("$") {
+                rest = &rest[at + 1..];
+                let name: String = rest
+                    .chars()
+                    .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+                    .collect();
+                if !name.is_empty() {
+                    wants.get_mut(key).expect("entered").insert(name);
+                }
+            }
+        }
+
+        let mut missing = Vec::new();
+        let mut calls = 0;
+        let mut stack = vec![repo.join("crates")];
+        while let Some(dir) = stack.pop() {
+            for entry in std::fs::read_dir(&dir).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    stack.push(path);
+                    continue;
+                }
+                if path.extension().and_then(|e| e.to_str()) != Some("rs") {
+                    continue;
+                }
+                let text = std::fs::read_to_string(&path).unwrap();
+                let mut from = 0;
+                while let Some(at) = text[from..].find("t_args(") {
+                    let start = from + at;
+                    from = start + 7;
+                    let rest = text[from..].trim_start();
+                    let Some(rest) = rest.strip_prefix('"') else {
+                        continue;
+                    };
+                    let Some(end) = rest.find('"') else { continue };
+                    let key = &rest[..end];
+                    let rest = &rest[end + 1..];
+                    let Some(open) = rest.find("&[") else {
+                        continue;
+                    };
+                    // The argument list, to its own closing bracket.
+                    let mut depth = 0;
+                    let mut close = None;
+                    for (i, c) in rest[open + 1..].char_indices() {
+                        match c {
+                            '[' => depth += 1,
+                            ']' => {
+                                depth -= 1;
+                                if depth == 0 {
+                                    close = Some(open + 1 + i);
+                                    break;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    let Some(close) = close else { continue };
+                    let args = &rest[open..close];
+                    // Each `(` followed, perhaps over a line break, by a quoted name.
+                    let given: std::collections::BTreeSet<String> = args
+                        .split('(')
+                        .skip(1)
+                        .filter_map(|piece| piece.trim_start().strip_prefix('"'))
+                        .filter_map(|piece| piece.split('"').next())
+                        .map(str::to_string)
+                        .collect();
+                    let Some(want) = wants.get(key) else {
+                        // A key built at run time, or one the catalogue test covers.
+                        continue;
+                    };
+                    calls += 1;
+                    let absent: Vec<_> = want.difference(&given).cloned().collect();
+                    if !absent.is_empty() {
+                        let line = text[..start].matches('\n').count() + 1;
+                        let shown = path.strip_prefix(&repo).unwrap_or(&path).display();
+                        missing.push(format!("{shown}:{line}: {key} is not given {absent:?}"));
+                    }
+                }
+            }
+        }
+        assert!(calls > 100, "found only {calls} calls");
+        assert!(missing.is_empty(), "{}", missing.join("\n"));
+    }
+
     /// Every row of the feature table says its state with one of the marks its legend
     /// defines. A row that invented its own (`✗` had crept in for a decision) reads as a
     /// fourth state to whoever counts them, and the table is what gets counted.
