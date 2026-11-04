@@ -153,11 +153,21 @@ impl Archive {
             .unwrap_or_default();
         let format =
             Format::of_bytes(&head[..read], &leaf).ok_or(ArcError::Unknown(name.clone()))?;
+        // A gzip magic says gzip and no more. `Format::of_bytes` has only the first bytes to
+        // go on, so it answers from the name and leaves the real question here, where the
+        // file is: decompress the front of the stream and look for the word a tar header
+        // carries 257 bytes in. A tarball somebody renamed `backup.gz` is still a tarball,
+        // which is the promise the zip and tar magics keep on their own.
+        let format = match format.with_tar_inside() {
+            Some(tar) if tar_inside(path, format) => tar,
+            _ => format,
+        };
 
         let entries = match format {
             Format::Zip => index_zip(path, &name, limits, cancel)?,
             Format::SevenZ => index_sevenz(path, &name, limits, cancel, key)?,
             Format::Ar => index_ar(path, &name, limits, cancel)?,
+            f if f.is_single() => index_single(path, &name, &leaf, format, limits, cancel)?,
             _ => index_tar(path, &name, format, limits, cancel)?,
         };
 
@@ -529,6 +539,12 @@ impl Archive {
                     }
                 }
             }
+            // A single compressed stream *is* the entry: there is no header to walk past and
+            // nothing to look for. Everything that came out is the file.
+            f if f.is_single() => {
+                let mut stream = decoder(&self.source, f)?;
+                copy(&mut stream, out, cancel, progress)
+            }
             // A compressed tar is one stream: the only way to the last entry is through all
             // of it. That is the format's doing, not ours, and it is why `seekable` says no.
             _ => {
@@ -658,7 +674,7 @@ fn copy(
 
 /// Read as much as fits, returning how much that was. `read` is allowed to stop early and a
 /// short archive is shorter than the buffer, so neither is an error.
-fn read_up_to(file: &mut File, buf: &mut [u8]) -> io::Result<usize> {
+fn read_up_to(file: &mut impl Read, buf: &mut [u8]) -> io::Result<usize> {
     let mut filled = 0;
     while filled < buf.len() {
         match file.read(&mut buf[filled..])? {
@@ -669,7 +685,8 @@ fn read_up_to(file: &mut File, buf: &mut [u8]) -> io::Result<usize> {
     Ok(filled)
 }
 
-/// The decompressor for a compressed tar, as a plain reader.
+/// The decompressor for a compressed stream, as a plain reader. Whether a tar comes out of
+/// it is the caller's business: the codec is the same either way.
 pub(crate) fn decoder(path: &Path, format: Format) -> Result<Box<dyn Read>> {
     let name = path.display().to_string();
     let file = File::open(path).map_err(|e| ArcError::Io {
@@ -679,15 +696,17 @@ pub(crate) fn decoder(path: &Path, format: Format) -> Result<Box<dyn Read>> {
     let file = BufReader::with_capacity(64 * 1024, file);
     Ok(match format {
         Format::Tar => Box::new(file),
-        Format::TarGz => Box::new(flate2::read::GzDecoder::new(file)),
-        Format::TarBz2 => Box::new(bzip2::read::BzDecoder::new(file)),
-        Format::TarXz => Box::new(lzma_rust2::XzReader::new(file, true)),
-        Format::TarZst => Box::new(ruzstd::decoding::StreamingDecoder::new(file).map_err(|e| {
-            ArcError::Broken {
-                path: name,
-                reason: e.to_string(),
-            }
-        })?),
+        Format::TarGz | Format::Gz => Box::new(flate2::read::GzDecoder::new(file)),
+        Format::TarBz2 | Format::Bz2 => Box::new(bzip2::read::BzDecoder::new(file)),
+        Format::TarXz | Format::Xz => Box::new(lzma_rust2::XzReader::new(file, true)),
+        Format::TarZst | Format::Zst => {
+            Box::new(ruzstd::decoding::StreamingDecoder::new(file).map_err(|e| {
+                ArcError::Broken {
+                    path: name,
+                    reason: e.to_string(),
+                }
+            })?)
+        }
         Format::Zip | Format::SevenZ | Format::Ar => {
             return Err(ArcError::Broken {
                 path: name,
@@ -719,6 +738,173 @@ pub(crate) fn normalise(path: &str) -> String {
 
 pub(crate) fn tar_path(path: &Path) -> String {
     normalise(&path.to_string_lossy())
+}
+
+/// Does a tar come out of this single compressed stream?
+///
+/// The first block of it, decompressed, with the word a tar header carries 257 bytes in. A
+/// stream that cannot be opened or read answers no: this is a question asked to improve an
+/// answer we already have, so it never turns into an error of its own.
+fn tar_inside(path: &Path, format: Format) -> bool {
+    let Ok(mut stream) = decoder(path, format) else {
+        return false;
+    };
+    let mut head = [0u8; 264];
+    let Ok(read) = read_up_to(&mut stream, &mut head) else {
+        return false;
+    };
+    read > 262 && &head[257..262] == b"ustar"
+}
+
+/// The index of a single compressed stream: one entry, which is the whole of it.
+///
+/// The size is counted rather than read off the file. gzip does keep the uncompressed length
+/// in its last four bytes, but modulo 2^32 and for the last member only, while the decoder
+/// here reads the first — so a file of several members would be listed with one member's
+/// bytes under another member's length. The other three keep no length at all. One pass
+/// through the decoder is the only answer that is right for all four, and it is a pass that
+/// is about to be made anyway: nothing opens a `.gz` except to look at what is inside it.
+fn index_single(
+    path: &Path,
+    name: &str,
+    leaf: &str,
+    format: Format,
+    limits: &Limits,
+    cancel: &CancelToken,
+) -> Result<Vec<ArcEntry>> {
+    let mut stream = decoder(path, format)?;
+    let mut buf = vec![0u8; 64 * 1024];
+    let mut size: u64 = 0;
+    loop {
+        if cancel.is_cancelled() {
+            return Err(ArcError::Cancelled);
+        }
+        match stream.read(&mut buf) {
+            Ok(0) => break,
+            Ok(read) => {
+                size += read as u64;
+                // The same ceiling `Archive::open_with` applies to every other format,
+                // applied while counting: a stream that does not end must not be read to the
+                // end of the disk to find out how long it is.
+                if size > limits.total_bytes {
+                    return Err(ArcError::Refused {
+                        path: name.to_string(),
+                        reason: format!(
+                            "it unpacks to more than the limit of {} bytes",
+                            limits.total_bytes
+                        ),
+                    });
+                }
+            }
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
+            Err(e) => {
+                return Err(ArcError::Broken {
+                    path: name.to_string(),
+                    reason: e.to_string(),
+                })
+            }
+        }
+    }
+    let (inner, mtime) = single_entry(path, leaf, format);
+    Ok(vec![ArcEntry {
+        path: normalise(&inner),
+        size,
+        packed: std::fs::metadata(path).ok().map(|m| m.len()),
+        mtime,
+        mode: None,
+        kind: EntryKind::File,
+        link_target: None,
+        at: None,
+    }])
+}
+
+/// What the one entry is called, and when it was last written.
+///
+/// gzip is the only one of the four that carries either. Its header has an optional name —
+/// the one the file had before it was compressed, which is better than anything that could be
+/// worked out from the outside — and a modification time. Everything else is named by taking
+/// the compression suffix off the file's own name.
+fn single_entry(path: &Path, leaf: &str, format: Format) -> (String, Option<SystemTime>) {
+    let stripped = without_suffix(leaf, format);
+    if format != Format::Gz {
+        return (stripped, None);
+    }
+    let (stored, mtime) = gzip_header(path);
+    (stored.unwrap_or(stripped), mtime)
+}
+
+/// The file's name without the suffix that says how it was compressed.
+///
+/// A name that does not say keeps its own: a row called exactly what the file is called is
+/// odd to look at, and it is still the truth, which inventing a suffix would not be.
+fn without_suffix(leaf: &str, format: Format) -> String {
+    let lower = leaf.to_ascii_lowercase();
+    for suffix in [".gz", ".bz2", ".bz", ".xz", ".zst", ".zstd"] {
+        if lower.ends_with(suffix) && lower.len() > suffix.len() {
+            return leaf[..leaf.len() - suffix.len()].to_string();
+        }
+    }
+    let _ = format;
+    leaf.to_string()
+}
+
+/// The optional name and the modification time out of a gzip header (RFC 1952 §2.3).
+///
+/// Anything unreadable gives up quietly and the caller falls back on the file's own name: a
+/// header field this does not understand is not a broken archive.
+fn gzip_header(path: &Path) -> (Option<String>, Option<SystemTime>) {
+    let Ok(file) = File::open(path) else {
+        return (None, None);
+    };
+    let mut reader = BufReader::new(file);
+    let mut head = [0u8; 10];
+    if reader.read_exact(&mut head).is_err() {
+        return (None, None);
+    }
+    let flags = head[3];
+    let stamp = u32::from_le_bytes([head[4], head[5], head[6], head[7]]);
+    // Zero means "no time available", which is what gzip writes when it compressed a pipe.
+    let mtime = (stamp != 0).then(|| SystemTime::UNIX_EPOCH + Duration::from_secs(stamp.into()));
+    if flags & 0x08 == 0 {
+        return (None, mtime);
+    }
+    // FEXTRA comes before the name and says its own length.
+    if flags & 0x04 != 0 {
+        let mut len = [0u8; 2];
+        if reader.read_exact(&mut len).is_err() {
+            return (None, mtime);
+        }
+        let extra = u64::from(u16::from_le_bytes(len));
+        if io::copy(&mut reader.by_ref().take(extra), &mut io::sink()).is_err() {
+            return (None, mtime);
+        }
+    }
+    let mut bytes = Vec::new();
+    for byte in reader.bytes().take(4096) {
+        match byte {
+            Ok(0) => break,
+            Ok(b) => bytes.push(b),
+            Err(_) => return (None, mtime),
+        }
+    }
+    (safe_leaf(&bytes), mtime)
+}
+
+/// A name that came out of a file, and only if it is a name.
+///
+/// gzip stores it as the bytes whatever filesystem wrote it used, so it is read leniently —
+/// and then anything that is not a plain leaf is refused. A `.gz` whose header says
+/// `../../etc/passwd` is the same attack a zip makes with its entry names; `normalise` would
+/// pin it at the root and the row would still be called `passwd`, which is a name somebody
+/// else chose. Refusing it leaves the file's own name, which is always there and always true.
+fn safe_leaf(bytes: &[u8]) -> Option<String> {
+    let name = String::from_utf8_lossy(bytes);
+    let bad = name.is_empty()
+        || name == "."
+        || name == ".."
+        || name.contains(['/', '\\'])
+        || name.chars().any(char::is_control);
+    (!bad).then(|| name.into_owned())
 }
 
 fn index_zip(
@@ -1441,6 +1627,40 @@ mod tests {
                 out.write_all(&ar_bytes(names)).unwrap();
             }
             Format::Zip | Format::SevenZ => unreachable!("handled above"),
+            f if f.is_single() => unreachable!("a {} holds one file: write_single", f.label()),
+            _ => unreachable!("no writer for {}", format.label()),
+        }
+    }
+
+    /// One compressed file, with no tar inside it: what `gzip notes.txt` leaves behind.
+    fn write_single(path: &Path, format: Format, bytes: &[u8]) {
+        let out = File::create(path).unwrap();
+        match format {
+            Format::Gz => {
+                let mut enc = flate2::write::GzEncoder::new(out, flate2::Compression::fast());
+                enc.write_all(bytes).unwrap();
+                enc.finish().unwrap();
+            }
+            Format::Bz2 => {
+                let mut enc = bzip2::write::BzEncoder::new(out, bzip2::Compression::fast());
+                enc.write_all(bytes).unwrap();
+                enc.finish().unwrap();
+            }
+            Format::Xz => {
+                let mut enc =
+                    lzma_rust2::XzWriter::new(out, lzma_rust2::XzOptions::with_preset(1)).unwrap();
+                enc.write_all(bytes).unwrap();
+                enc.finish().unwrap();
+            }
+            Format::Zst => {
+                let mut out = out;
+                let packed = ruzstd::encoding::compress_to_vec(
+                    bytes,
+                    ruzstd::encoding::CompressionLevel::Fastest,
+                );
+                out.write_all(&packed).unwrap();
+            }
+            other => unreachable!("{} is not a single stream", other.label()),
         }
     }
 
@@ -1451,7 +1671,8 @@ mod tests {
     #[test]
     fn every_format_lists_the_same_tree_and_reads_the_same_bytes() {
         let dir = tempfile::tempdir().unwrap();
-        for format in Format::ALL {
+        // The single streams have no tree to list: they get their own test below.
+        for format in Format::ALL.into_iter().filter(|f| f.holds_many()) {
             let path = dir.path().join(format!("tree.{}", format.extension()));
             write_archive(&path, format, &TREE);
             let archive = open(&path);
@@ -1663,12 +1884,140 @@ mod tests {
         assert!(!Arc::ptr_eq(&third, &fourth));
     }
 
+    // ── one compressed file, which is an archive of one entry ─────────────────────────────
+
+    #[test]
+    fn a_single_compressed_file_is_an_archive_of_one_entry() {
+        let dir = tempfile::tempdir().unwrap();
+        let bytes = b"the quick brown fox\n";
+        for format in Format::ALL.into_iter().filter(|f| f.is_single()) {
+            let path = dir.path().join(format!("notes.txt.{}", format.extension()));
+            write_single(&path, format, bytes);
+            let archive = open(&path);
+            assert_eq!(archive.format(), format, "{}", format.label());
+
+            // One row, named after the file without the suffix that says how it was packed.
+            let root: Vec<String> = archive
+                .list("/")
+                .iter()
+                .map(|e| e.name_str().into_owned())
+                .collect();
+            assert_eq!(root, ["notes.txt"], "{}", format.label());
+            assert!(!archive.is_dir("/notes.txt"), "{}", format.label());
+
+            let entry = archive.entry("/notes.txt").expect("the one entry");
+            assert_eq!(entry.size, bytes.len() as u64, "{}", format.label());
+            assert_eq!(entry.kind, EntryKind::File, "{}", format.label());
+
+            let out = archive
+                .read("/notes.txt", &CancelToken::new())
+                .expect("it reads");
+            assert_eq!(out, bytes, "{}", format.label());
+        }
+    }
+
+    #[test]
+    fn a_name_with_no_suffix_to_take_off_keeps_its_own() {
+        let dir = tempfile::tempdir().unwrap();
+        // No `.bz2` on the end, so there is nothing to strip and nothing to invent.
+        let path = dir.path().join("dump");
+        write_single(&path, Format::Bz2, b"x");
+        let archive = open(&path);
+        assert_eq!(archive.format(), Format::Bz2);
+        let root: Vec<String> = archive
+            .list("/")
+            .iter()
+            .map(|e| e.name_str().into_owned())
+            .collect();
+        assert_eq!(root, ["dump"]);
+    }
+
+    #[test]
+    fn a_tarball_under_a_bare_suffix_is_still_a_tarball() {
+        let dir = tempfile::tempdir().unwrap();
+        // `.gz` says gzip and nothing else; what comes out is a tar, and that wins.
+        let path = dir.path().join("backup.gz");
+        let tar = tar_bytes(&TREE);
+        let out = File::create(&path).unwrap();
+        let mut enc = flate2::write::GzEncoder::new(out, flate2::Compression::fast());
+        enc.write_all(&tar).unwrap();
+        enc.finish().unwrap();
+
+        let archive = open(&path);
+        assert_eq!(archive.format(), Format::TarGz, "the peek settles it");
+        let root: Vec<String> = archive
+            .list("/")
+            .iter()
+            .map(|e| e.name_str().into_owned())
+            .collect();
+        assert_eq!(root, ["readme.md", "src"]);
+    }
+
+    #[test]
+    fn gzip_carries_the_name_the_file_had_and_it_is_used() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("blob.gz");
+        let out = File::create(&path).unwrap();
+        let mut enc = flate2::GzBuilder::new()
+            .filename("report.csv")
+            .write(out, flate2::Compression::fast());
+        enc.write_all(b"a,b\n").unwrap();
+        enc.finish().unwrap();
+
+        let archive = open(&path);
+        let root: Vec<String> = archive
+            .list("/")
+            .iter()
+            .map(|e| e.name_str().into_owned())
+            .collect();
+        assert_eq!(root, ["report.csv"], "the stored name beats the file's");
+    }
+
+    #[test]
+    fn a_name_inside_a_gzip_that_is_a_path_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("notes.txt.gz");
+        let out = File::create(&path).unwrap();
+        let mut enc = flate2::GzBuilder::new()
+            .filename("../../etc/passwd")
+            .write(out, flate2::Compression::fast());
+        enc.write_all(b"x").unwrap();
+        enc.finish().unwrap();
+
+        let archive = open(&path);
+        let root: Vec<String> = archive
+            .list("/")
+            .iter()
+            .map(|e| e.name_str().into_owned())
+            .collect();
+        // Not `passwd` and not a path: a name that tried to be one is not used at all.
+        assert_eq!(root, ["notes.txt"]);
+        assert!(archive.entry("/passwd").is_none());
+    }
+
+    #[test]
+    fn a_single_stream_that_unpacks_past_the_limit_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("zeroes.gz");
+        write_single(&path, Format::Gz, &vec![0u8; 64 * 1024]);
+        let limits = Limits {
+            total_bytes: 1024,
+            ..Limits::default()
+        };
+        match Archive::open(&path, &limits, &CancelToken::new()) {
+            Err(ArcError::Refused { reason, .. }) => {
+                assert!(reason.contains("1024"), "{reason}")
+            }
+            other => panic!("it should be refused: {other:?}"),
+        }
+    }
+
     /// Testing an archive has to answer two questions: does every entry come out, and when
     /// one does not, which one and why. A corrupted zip answers the second.
     #[test]
     fn a_whole_archive_tests_whole_and_a_damaged_one_names_what_is_broken() {
         let dir = tempfile::tempdir().unwrap();
-        for format in Format::ALL {
+        for format in Format::ALL.into_iter().filter(|f| f.holds_many()) {
             let path = dir.path().join(format!("tree.{}", format.extension()));
             write_archive(&path, format, &TREE);
             let mut seen: Vec<String> = Vec::new();
@@ -1873,10 +2222,19 @@ mod tests {
             !Format::writable_formats().contains(&Format::Ar),
             "the dialog's list is the writable ones"
         );
-        assert!(
-            Format::writable_formats().len() + 1 == Format::ALL.len(),
+        assert_eq!(
+            Format::writable_formats().len(),
+            Format::ALL.into_iter().filter(|f| f.writable()).count(),
             "and it is every other one"
         );
+        for f in Format::ALL {
+            assert_eq!(
+                Format::writable_formats().contains(&f),
+                f.writable(),
+                "{}",
+                f.label()
+            );
+        }
         let dir = tempfile::tempdir().unwrap();
         let out = dir.path().join("nope.a");
         let source = dir.path().join("one.txt");

@@ -15,11 +15,23 @@ pub enum Format {
     /// The Unix archive: `.a`, and the outer layer of a `.deb`. Read only — see
     /// [`Format::writable`].
     Ar,
+    /// A single compressed stream: `notes.txt.gz` and nothing else in it.
+    ///
+    /// These four are the same codecs as the compressed tars above, without the tar: one
+    /// file went in, one file comes out, and there is no index, no name and no directory
+    /// anywhere in the format. A commander still has to let somebody *in* — the thing a
+    /// reader wants from a `.gz` is to look at what is inside it — so they are archives of
+    /// one entry, which is what FAR, Midnight Commander and Total Commander all present.
+    /// Read only for now: see [`Format::writable`] and [`Format::holds_many`].
+    Gz,
+    Bz2,
+    Xz,
+    Zst,
 }
 
 impl Format {
     /// Every format this crate knows, read or write.
-    pub const ALL: [Format; 8] = [
+    pub const ALL: [Format; 12] = [
         Format::Zip,
         Format::SevenZ,
         Format::Tar,
@@ -28,6 +40,10 @@ impl Format {
         Format::TarXz,
         Format::TarZst,
         Format::Ar,
+        Format::Gz,
+        Format::Bz2,
+        Format::Xz,
+        Format::Zst,
     ];
 
     /// The ones a dialog may offer to *create*.
@@ -45,8 +61,41 @@ impl Format {
     /// `ar` cannot, and deliberately: nothing makes a `.a` or a `.deb` by hand any more — `ar`
     /// and `dpkg-deb` do, and a `.deb` written without its `control.tar` would be a file that
     /// looks like a package and is not one. Reading them is what a commander is for.
+    ///
+    /// The four single streams cannot either, for now: compressing one file into a `.gz` is a
+    /// useful thing to offer and a different piece of work from reading one, because every
+    /// dialog and every rebuild in this crate assumes a format that can hold a second entry.
     pub fn writable(self) -> bool {
-        !matches!(self, Format::Ar)
+        !matches!(
+            self,
+            Format::Ar | Format::Gz | Format::Bz2 | Format::Xz | Format::Zst
+        )
+    }
+
+    /// Is this a single compressed stream — one file in, one file out, no index?
+    ///
+    /// The question every other part of the crate asks differently: there is no second entry
+    /// to add, no entry to delete that is not the whole file, and no directory at all.
+    pub fn is_single(self) -> bool {
+        matches!(self, Format::Gz | Format::Bz2 | Format::Xz | Format::Zst)
+    }
+
+    /// Can this format hold more than one file?
+    pub fn holds_many(self) -> bool {
+        !self.is_single()
+    }
+
+    /// The same codec with a tar inside it. `.gz` and `.tar.gz` are the same bytes at the
+    /// front; what differs is only whether a tar comes out, which is a question about the
+    /// contents and not about the name.
+    pub fn with_tar_inside(self) -> Option<Format> {
+        Some(match self {
+            Format::Gz => Format::TarGz,
+            Format::Bz2 => Format::TarBz2,
+            Format::Xz => Format::TarXz,
+            Format::Zst => Format::TarZst,
+            _ => return None,
+        })
     }
 
     /// What it is called in a dialog or a panel frame.
@@ -60,6 +109,10 @@ impl Format {
             Format::TarXz => "tar.xz",
             Format::TarZst => "tar.zst",
             Format::Ar => "ar",
+            Format::Gz => "gz",
+            Format::Bz2 => "bz2",
+            Format::Xz => "xz",
+            Format::Zst => "zst",
         }
     }
 
@@ -74,6 +127,10 @@ impl Format {
             Format::TarXz => "tar.xz",
             Format::TarZst => "tar.zst",
             Format::Ar => "a",
+            Format::Gz => "gz",
+            Format::Bz2 => "bz2",
+            Format::Xz => "xz",
+            Format::Zst => "zst",
         }
     }
 
@@ -117,7 +174,7 @@ impl Format {
     /// `Cr24` header in front of it, so it is not one.
     pub fn of_name(name: &str) -> Option<Format> {
         let lower = name.to_ascii_lowercase();
-        const BY_SUFFIX: [(&str, Format); 28] = [
+        const BY_SUFFIX: [(&str, Format); 34] = [
             (".tar.gz", Format::TarGz),
             (".tgz", Format::TarGz),
             (".tar.bz2", Format::TarBz2),
@@ -148,6 +205,14 @@ impl Format {
             (".deb", Format::Ar),
             (".udeb", Format::Ar),
             (".ddeb", Format::Ar),
+            // One compressed file, no tar. Last, so every `.tar.*` and `.t?z` above wins:
+            // the list is searched in order and `.tar.gz` ends with `.gz` as well.
+            (".gz", Format::Gz),
+            (".bz2", Format::Bz2),
+            (".bz", Format::Bz2),
+            (".xz", Format::Xz),
+            (".zst", Format::Zst),
+            (".zstd", Format::Zst),
         ];
         BY_SUFFIX
             .iter()
@@ -167,14 +232,19 @@ impl Format {
         if head.starts_with(b"PK\x03\x04") || head.starts_with(b"PK\x05\x06") {
             return Some(Format::Zip);
         }
+        // A compression magic says which codec, and nothing whatever about what is inside.
+        // The name is what distinguishes `src.tar.gz` from `notes.txt.gz`; when the name says
+        // neither, the single stream is the honest answer here, and `Archive::open_with`
+        // settles it properly by decompressing the first block and looking for a tar header —
+        // which it can do because it has the file, and this function has only its first bytes.
         if head.starts_with(&[0x1f, 0x8b]) {
-            return Some(Format::TarGz);
+            return Some(tarred(by_name, Format::Gz));
         }
         if head.starts_with(b"BZh") {
-            return Some(Format::TarBz2);
+            return Some(tarred(by_name, Format::Bz2));
         }
         if head.starts_with(&[0xfd, b'7', b'z', b'X', b'Z', 0x00]) {
-            return Some(Format::TarXz);
+            return Some(tarred(by_name, Format::Xz));
         }
         // 7z's own signature, tested after xz's: xz's starts with one byte and then the same
         // two letters, so the order of these two is what keeps them apart.
@@ -182,7 +252,7 @@ impl Format {
             return Some(Format::SevenZ);
         }
         if head.starts_with(&[0x28, 0xb5, 0x2f, 0xfd]) {
-            return Some(Format::TarZst);
+            return Some(tarred(by_name, Format::Zst));
         }
         if head.starts_with(b"!<arch>\n") {
             return Some(Format::Ar);
@@ -192,6 +262,15 @@ impl Format {
             return Some(Format::Tar);
         }
         by_name
+    }
+}
+
+/// Which of the two readings of a compression magic the name supports: the tar one if the
+/// name said so, the single stream otherwise.
+fn tarred(by_name: Option<Format>, single: Format) -> Format {
+    match (by_name, single.with_tar_inside()) {
+        (Some(named), Some(tar)) if named == tar => tar,
+        _ => single,
     }
 }
 
@@ -207,8 +286,30 @@ mod tests {
         assert_eq!(Format::of_name("app.jar"), Some(Format::Zip));
         assert_eq!(Format::of_name("backup.7Z"), Some(Format::SevenZ));
         assert_eq!(Format::of_name("notes.txt"), None);
-        // `.gz` on its own is a compressed file, not an archive of several.
-        assert_eq!(Format::of_name("notes.txt.gz"), None);
+        // `.gz` on its own is one compressed file, which is an archive of one entry.
+        assert_eq!(Format::of_name("notes.txt.gz"), Some(Format::Gz));
+        assert_eq!(Format::of_name("dump.sql.BZ2"), Some(Format::Bz2));
+        assert_eq!(Format::of_name("core.xz"), Some(Format::Xz));
+        assert_eq!(Format::of_name("blob.zstd"), Some(Format::Zst));
+        // And every tar suffix still wins over the bare one it ends with.
+        for (name, want) in [
+            ("src.tar.gz", Format::TarGz),
+            ("src.tgz", Format::TarGz),
+            ("src.tar.bz2", Format::TarBz2),
+            ("src.tar.xz", Format::TarXz),
+            ("src.tar.zst", Format::TarZst),
+        ] {
+            assert_eq!(Format::of_name(name), Some(want), "{name}");
+        }
+    }
+
+    #[test]
+    fn the_magic_names_the_codec_and_the_name_says_whether_a_tar_is_inside() {
+        let gz = [0x1f, 0x8b, 0x08, 0x00];
+        assert_eq!(Format::of_bytes(&gz, "src.tar.gz"), Some(Format::TarGz));
+        assert_eq!(Format::of_bytes(&gz, "notes.txt.gz"), Some(Format::Gz));
+        // A name that says nothing reads as the single stream here; the archive settles it.
+        assert_eq!(Format::of_bytes(&gz, "backup"), Some(Format::Gz));
     }
 
     #[test]
@@ -233,6 +334,28 @@ mod tests {
         let mut tar = vec![0u8; 512];
         tar[257..262].copy_from_slice(b"ustar");
         assert_eq!(Format::of_bytes(&tar, "whatever"), Some(Format::Tar));
+    }
+
+    #[test]
+    fn a_single_stream_holds_one_entry_and_the_rest_hold_many() {
+        for f in Format::ALL {
+            assert_eq!(
+                f.is_single(),
+                matches!(f, Format::Gz | Format::Bz2 | Format::Xz | Format::Zst),
+                "{}",
+                f.label()
+            );
+            assert_eq!(f.holds_many(), !f.is_single(), "{}", f.label());
+            // A single stream is never a tar, whatever codec it shares with one.
+            assert!(!(f.is_single() && f.is_tar()), "{}", f.label());
+            // Each one names the same codec with a tar in it, and the others name none.
+            assert_eq!(
+                f.with_tar_inside().is_some(),
+                f.is_single(),
+                "{}",
+                f.label()
+            );
+        }
     }
 
     #[test]

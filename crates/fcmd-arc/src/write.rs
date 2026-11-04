@@ -295,6 +295,12 @@ impl Sink {
             Format::Zip | Format::SevenZ | Format::Ar => {
                 unreachable!("a {} is not written through a tar", format.label())
             }
+            // A single compressed stream shares these codecs and is not written here: it has
+            // no tar to wrap, so it asks for the sink of the codec it shares.
+            f if f.is_single() => {
+                unreachable!("a {} holds one file and no tar", f.label())
+            }
+            _ => unreachable!("a {} is not written through a tar", format.label()),
         })
     }
 

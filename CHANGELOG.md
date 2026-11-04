@@ -8,6 +8,24 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **A `.gz` opens as an archive of one entry.** `notes.txt.gz`, `dump.sql.bz2`, `core.xz`,
+  `blob.zst`: `Enter` on any of them now goes inside and shows the one file it holds, named
+  as it was before it was compressed, and `F3` reads it from there. gzip stores that name and
+  the modification time in its header, and both are used when they are there — a name that
+  tried to be a path (`../../etc/passwd`) is refused rather than trimmed, and the file's own
+  name is used instead. The other three keep nothing of the kind, so the name comes from
+  taking the suffix off.
+
+  The size is counted by decompressing once, not read off the gzip trailer: that field is
+  modulo 2³² and describes the last member of a multi-member file while the decoder reads the
+  first, so it would list one member's bytes under another's length. The count stops at the
+  same unpacked-size ceiling every other format is held to.
+
+  A compression magic says which codec and nothing about what is inside, so `.tar.gz` is told
+  from `.gz` by the name — and a tarball somebody renamed `backup.gz` is still browsed as a
+  tarball, because the archive decompresses the first block and looks for a tar header before
+  deciding. Writing one is not here yet: these four are read-only for now, like `ar`.
+
 - **`--view`, `--edit` and `--diff`: three ways in that skip the panels.** `fcmd --view
   FILE` comes up on the viewer, `--edit FILE` on the editor, `--diff A B` on the two files
   side by side, and leaving that screen ends the run rather than dropping into a pair of
