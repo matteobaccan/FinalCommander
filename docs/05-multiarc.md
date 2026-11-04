@@ -231,3 +231,29 @@ reader, answers "can
 this program write it". With an external packer the question splits in two — can *we* write it,
 and is there a tool here that can — so the pack dialog's list becomes a property of the machine,
 and a format offered but unavailable has to say which program is missing rather than failing.
+
+## 8. What is built, and what is still a question
+
+`crates/fcmd-arc/src/ext.rs` is the half of this that can be built without deciding anything:
+
+| | |
+| --- | --- |
+| `Op` | the fifteen keys — MultiArc's fourteen commands and its `List` — with MultiArc's own spelling, so a table can be copied across with the keys left alone. `Tool::can` reads an absent key as "this tool cannot", which is §2's convention |
+| `fill` | the template language of §3 and §4: `%A %L %P %R %W %S %E<n>`, the `{ }` rule, `%%` for a literal `%`. The line is split into **argv** on spaces *while it is filled in*, so a value with a space in it stays one argument and nothing quotes anything — §7's "no shell", enforced by construction rather than by care |
+| the modifiers | `S`, `W` and `P` do what MultiArc says. `Q q M N * A` are read and discarded, with the reason for each written down next to them: five of the six are about building a command *line*, which there is not one of, and the sixth is about a code page we do not use. A table out of a `custom.ini` works unedited |
+| `Listing` / `Reader` | §5's recognition and the regex grammar with named captures. The patterns are compiled once, and a pattern with no `(?<name>…)` in it is refused before any program is run |
+| `Tool::claims` | `Extension`, `ID` with `IDPos`, and `IDOnly` |
+| `builtin_tools` | one table, for `7z` |
+
+The table shipped is `7z` and not `rar`, for three reasons: MultiArc itself sends `rpm`, `cpio`
+and `deb` through the user's `7z` (§6); one program answers most of row 4.1 at once — rar, cab,
+iso, rpm, cpio, lha, arj, msi, wim and more; and every switch in it was run against 7-Zip 23.01
+before it was written down, with the listing test reading the output that program really
+printed. A `rar` table is the next one and wants a machine with RARLAB's `rar` on it to be
+verified the same way, rather than written from memory of its manual.
+
+What is **not** built, because it is not a technical question: nothing runs yet. Wiring this to
+the panels means answering the four from §7 — what progress means, what `Esc` means, whether a
+change copies the archive first to keep SPEC 04 §4's atomicity, and whether running a program
+named in a configuration file needs anything said about it — and those are choices about how
+the program behaves, not about how to write it.

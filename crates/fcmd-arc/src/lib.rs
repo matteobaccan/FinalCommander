@@ -13,8 +13,14 @@
 //! A container that is not a file on this disk — one inside another archive, one on a server —
 //! is copied here first and read from the copy; `nest` is where that happens and what it
 //! costs.
+//!
+//! And one thing beside all that: `ext` drives an archiver that is already on the machine,
+//! from a table of command lines, for the formats this program does not implement and the
+//! operating system does. It is a port of FAR's MultiArc; `docs/05-multiarc.md` is its
+//! specification.
 
 mod archive;
+mod ext;
 mod format;
 mod limits;
 mod nest;
@@ -22,6 +28,7 @@ mod rebuild;
 mod write;
 
 pub use archive::{ArcEntry, Archive, Cache, Report};
+pub use ext::{builtin_tools, ExtError, Fill, Line, Listing, Magic, Op, Reader, Row, Tool};
 pub use format::Format;
 pub use limits::Limits;
 pub use nest::Fetch;

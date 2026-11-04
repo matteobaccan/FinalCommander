@@ -28,6 +28,11 @@ sevenz-rust2 = { version = "0.24.0", default-features = false, features = [
   "aes256",
 ] }
 fcmd-core = { workspace = true }
+# The listing grammar of `ext`: an external archiver prints a table and the table in the
+# configuration says how to read it, as a pattern with named captures — which is MultiArc's
+# own newer grammar and the only one worth copying (docs/05-multiarc.md §5). Already in the
+# tree under four other crates, so nothing new ships because of this.
+regex = "1"
 tar = { version = "0.4", default-features = false }
 thiserror = "2"
 zip = { version = "9", default-features = false, features = [

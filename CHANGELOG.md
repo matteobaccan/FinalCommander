@@ -8,6 +8,31 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **The table that drives an archiver already on the machine.** `crates/fcmd-arc/src/ext.rs`,
+  a port of FAR's MultiArc from the reading in `docs/05-multiarc.md`: fifteen named
+  operations with MultiArc's own key spelling, the template language with its typed holes
+  (`%A` the archive, `%L` the file of names, `%P %R %W %S`, `%E<n>` for the highest exit code
+  that counts as success), the `{ }` rule that keeps a part of the line only when a hole in it
+  came out with something, recognition by extension and magic bytes, and the listing grammar
+  as a pattern with named captures.
+
+  Two departures from MultiArc, both deliberate. A command line here is a template for an
+  **argv array**, split on spaces once while it is being filled in, so a value with a space
+  in it stays one argument and nothing quotes anything — this is the one place in the program
+  where a quoting bug would stop being cosmetic, so there is no quoting. And the older of
+  MultiArc's two listing grammars, the positional column masks, is not here: it fails silently
+  when a name overflows its column.
+
+  One table ships, for `7z`, and every switch in it was run against 7-Zip 23.01 before it was
+  written down — the listing test reads the output that program really printed, banner and
+  summary and all. It is the table MultiArc itself reaches for (`rpm`, `cpio` and `deb` all go
+  through the user's `7z`) and the widest single answer to the formats we do not read: rar,
+  cab, iso, rpm, cpio, lha, arj, msi, wim.
+
+  Nothing runs yet: `docs/05-multiarc.md` §8 says what is built and names the four questions —
+  progress, cancellation, atomicity, and what to say about running a program named in a
+  configuration file — that have to be answered before this is wired to the panels.
+
 - **A `.gz` opens as an archive of one entry.** `notes.txt.gz`, `dump.sql.bz2`, `core.xz`,
   `blob.zst`: `Enter` on any of them now goes inside and shows the one file it holds, named
   as it was before it was compressed, and `F3` reads it from there. gzip stores that name and

@@ -1314,7 +1314,7 @@ fn system_time(at: zip::DateTime) -> Option<SystemTime> {
 
 /// Days from the epoch to a civil date, by Howard Hinnant's algorithm — no calendar crate
 /// for one conversion.
-fn days_from_civil(year: i64, month: u32, day: u32) -> Option<i64> {
+pub(crate) fn days_from_civil(year: i64, month: u32, day: u32) -> Option<i64> {
     if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
         return None;
     }
