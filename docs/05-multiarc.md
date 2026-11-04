@@ -232,9 +232,9 @@ this program write it". With an external packer the question splits in two — c
 and is there a tool here that can — so the pack dialog's list becomes a property of the machine,
 and a format offered but unavailable has to say which program is missing rather than failing.
 
-## 8. What is built, and what is still a question
+## 8. What is built
 
-`crates/fcmd-arc/src/ext.rs` is the half of this that can be built without deciding anything:
+`crates/fcmd-arc/src/ext.rs`, the half of this that could be built before anything was decided:
 
 | | |
 | --- | --- |
@@ -252,8 +252,48 @@ before it was written down, with the listing test reading the output that progra
 printed. A `rar` table is the next one and wants a machine with RARLAB's `rar` on it to be
 verified the same way, rather than written from memory of its manual.
 
-What is **not** built, because it is not a technical question: nothing runs yet. Wiring this to
-the panels means answering the four from §7 — what progress means, what `Esc` means, whether a
-change copies the archive first to keep SPEC 04 §4's atomicity, and whether running a program
-named in a configuration file needs anything said about it — and those are choices about how
-the program behaves, not about how to write it.
+## 9. The decision that unblocks it: an external tool only ever reads
+
+Taken 4 November 2026, to be revisited when there is a reason to.
+
+> **A tool driven from a table may read an archive and extract from it. It may never create
+> one, add to one, delete from one, or change one in any way.**
+
+It is a renunciation, and worth stating as one: there will be no creating a `.rar` from the
+pack dialog, and no `F8` on an entry inside one. The pack dialog's list of formats stays the
+list of formats *this program* writes, which is what [`Format::writable`] already says, and
+nothing in it becomes a property of the machine.
+
+What it buys is that three of §7's four problems stop being problems:
+
+| | §7 said | under the rule |
+| --- | --- | --- |
+| **Atomicity** | a change would have to copy the whole archive to a temporary, let the tool work on the copy, and rename — one full copy per change | **gone.** Nothing is ever changed, so SPEC 04 §4 has nothing to protect |
+| **Progress** | a percentage per tool, parsed per tool, locale-dependent | **smaller.** Extraction is a copy out: the engine counts the bytes that land on the disk, which it already does, and the tool's own output goes to the job's log |
+| **Cancellation** | killing a packer halfway leaves whatever it had written *inside the archive* | **smaller.** Killing an extractor leaves half-written files *beside* it, which the job deletes — the same thing a cancelled copy already does |
+| **No shell** | a quoting bug in a line that writes the user's files | **still the rule**, and cheaper to keep: §8's `fill` builds argv, and the only names that ever reach a tool are in a list file |
+
+The fourth, saying that a program is being run, is a line in the status line naming the tool
+and not a dialog: a reader who pressed `Enter` on a `.rar` has asked for it to be opened, and
+the honest thing is to say *how* rather than to ask whether.
+
+And it settles the first format the two routes competed over. An `.iso` is a read-only disc
+image, so nothing about it argues for reading it in process: the three Rust crates for it are a
+work in progress abandoned in 2023, a subdirectory of somebody's hobby operating system, and
+one single-maintainer crate that would bring two further dependencies — against a `7z` that
+reads it today. **`iso` goes through the table**, and so do `rar`, `lha` and `arj`. What stays
+a candidate for being read in process is `cpio` (which needs no dependency at all — it is the
+`ar` reader again), `rpm` on top of it, and `cab`.
+
+## 10. What is still to build
+
+With §9 decided, what is left is work rather than questions:
+
+- a `Tool`'s `List` run and its output read into entries, presented the way `Archive` presents
+  a zip, so the panel, the search inside archives and `Ctrl+A` on an entry need nothing new;
+- `Extract` for one entry and for a selection, through the job engine;
+- `Test` on `Alt+F6`;
+- the message when a format is claimed by a table whose program is not installed, which has to
+  name the program — `Tool::found` answers it and seven languages have to say it;
+- `[[archiver]]` blocks in the configuration, so the shipped table is a default and not a fixed
+  list, which is MultiArc's own `custom_user.ini` rule.

@@ -6,6 +6,29 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **Decided: an archiver driven from a table only ever reads.** It may list an archive and
+  extract from it; it may never create one, add to one, delete from one or change it in any
+  way. `docs/05-multiarc.md` §9 is the decision and what it buys, and it is a renunciation
+  worth naming: there will be no creating a `.rar` from the pack dialog, whose list stays the
+  formats *this program* writes and never a property of the machine.
+
+  Three of the four problems that had kept the external route from being wired to the panels
+  stop being problems under it. Atomicity goes away entirely, because nothing is ever changed
+  and SPEC 04 §4 has nothing left to protect. Progress becomes the bytes landing on the disk,
+  which the job engine already counts. Cancellation becomes deleting half-written files beside
+  the archive, which a cancelled copy already does — rather than a packer killed with the
+  archive half rewritten.
+
+  It also settles the first format where reading it ourselves and asking a program competed
+  head to head. An `.iso` is a read-only disc image, so nothing about it argues for a reader of
+  our own, and the three Rust crates for one are a work in progress abandoned in 2023, a
+  subdirectory of somebody's hobby operating system, and a single-maintainer crate that would
+  bring two further dependencies. `iso` goes through the table, with `rar`, `lha` and `arj`.
+  What stays a candidate for being read in process is `cpio` — which needs no dependency at
+  all, being the `ar` reader again — `rpm` on top of it, and `cab`.
+
 ### Removed
 
 - **WebAssembly is no longer printed in process.** `wasmprinter` is out, and with it 1,319,536
