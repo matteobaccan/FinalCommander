@@ -292,7 +292,7 @@ impl Sink {
                 )
                 .map_err(|e| broken(path, e))?,
             ),
-            Format::Zip | Format::SevenZ | Format::Ar => {
+            Format::Zip | Format::SevenZ | Format::Ar | Format::Cpio | Format::Rpm => {
                 unreachable!("a {} is not written through a tar", format.label())
             }
             // A single compressed stream shares these codecs and is not written here: it has

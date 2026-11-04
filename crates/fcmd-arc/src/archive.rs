@@ -26,8 +26,9 @@ pub struct ArcEntry {
     pub kind: EntryKind,
     pub link_target: Option<String>,
     /// Where to find it again: the index for a zip, the byte offset for a plain tar. Neither
-    /// is meaningful for a compressed tar, which is read from the start every time.
-    at: Option<u64>,
+    /// is meaningful for a compressed tar, which is read from the start every time. An rpm
+    /// keeps the member's inode here instead, which is what finds a hard link's bytes.
+    pub(crate) at: Option<u64>,
 }
 
 /// What [`Archive::verify`] found: how much was read, and what did not come out whole.
@@ -175,6 +176,8 @@ impl Archive {
             Format::Zip => index_zip(path, &name, limits, cancel)?,
             Format::SevenZ => index_sevenz(path, &name, limits, cancel, key)?,
             Format::Ar => index_ar(path, &name, limits, cancel)?,
+            Format::Cpio => crate::cpio::index_file(path, &name, limits, cancel)?,
+            Format::Rpm => crate::cpio::index_rpm(path, &name, limits, cancel)?,
             f if f.is_single() => index_single(path, &name, &leaf, format, limits, cancel)?,
             _ => index_tar(path, &name, format, limits, cancel)?,
         };
@@ -584,6 +587,32 @@ impl Archive {
             outcome.map_err(|e| self.sevenz_error(e))?;
             return Ok(report);
         }
+        if self.format == Some(Format::Rpm) {
+            // One walk of the payload, for the reason a compressed tar gets one: reading the
+            // entries one at a time would decompress the payload once for every file in it.
+            let name = self.name();
+            crate::cpio::walk(
+                crate::cpio::rpm_stream(&self.source)?,
+                &name,
+                &Limits::unlimited(),
+                cancel,
+                |member, bytes| {
+                    if member.kind() != EntryKind::File || member.size == 0 {
+                        return Ok(true);
+                    }
+                    let path = normalise(&member.name);
+                    report.members += 1;
+                    progress(&path, report.bytes);
+                    match copy(bytes, &mut io::sink(), cancel, &mut |_| {}) {
+                        Ok(read) => report.bytes += read,
+                        Err(ArcError::Cancelled) => return Err(ArcError::Cancelled),
+                        Err(e) => report.bad.push((path, e.to_string())),
+                    }
+                    Ok(true)
+                },
+            )?;
+            return Ok(report);
+        }
         if self.format.is_some_and(|f| f.is_tar() && !f.seekable()) {
             let format = self.format.expect("just asked");
             let mut stream = tar::Archive::new(decoder(&self.source, format)?);
@@ -661,8 +690,25 @@ impl Archive {
                 let mut item = zip.by_index(index).map_err(|e| self.broken(e))?;
                 copy(&mut item, out, cancel, progress)
             }
-            Format::Tar | Format::Ar => {
-                // A plain tar and an `ar` both say where each entry's bytes start, and neither
+            Format::Rpm => {
+                // The payload is one compressed stream, walked up to the member: a compressed
+                // tar's case. The limits are the ones the index was built under, which this
+                // archive has already passed.
+                crate::cpio::rpm_entry(
+                    &self.source,
+                    &inner,
+                    entry.at,
+                    &Limits::unlimited(),
+                    cancel,
+                    |bytes| copy(bytes, out, cancel, progress),
+                )?
+                .ok_or_else(|| ArcError::NoEntry {
+                    path: self.name(),
+                    entry: inner.clone(),
+                })
+            }
+            Format::Tar | Format::Ar | Format::Cpio => {
+                // A plain tar, an `ar` and a `cpio` all say where each entry's bytes start, and neither
                 // compresses them, so one seek is enough.
                 let mut file = File::open(&self.source).map_err(|e| self.io(e))?;
                 let at = entry.at.ok_or_else(|| ArcError::Broken {
@@ -874,7 +920,7 @@ pub(crate) fn decoder(path: &Path, format: Format) -> Result<Box<dyn Read>> {
                 }
             })?)
         }
-        Format::Zip | Format::SevenZ | Format::Ar => {
+        Format::Zip | Format::SevenZ | Format::Ar | Format::Cpio | Format::Rpm => {
             return Err(ArcError::Broken {
                 path: name,
                 reason: format!("a {} is not a stream", format.label()),
@@ -1898,6 +1944,17 @@ mod tests {
             Format::Ar => {
                 let mut out = out;
                 out.write_all(&ar_bytes(names)).unwrap();
+            }
+            Format::Cpio | Format::Rpm => {
+                let members: Vec<(&str, u32, &[u8])> =
+                    names.iter().map(|(n, b)| (*n, 0o100644, *b)).collect();
+                let cpio = crate::cpio::tests::newc(&members);
+                let mut out = out;
+                if format == Format::Rpm {
+                    out.write_all(&crate::cpio::tests::rpm(&cpio)).unwrap();
+                } else {
+                    out.write_all(&cpio).unwrap();
+                }
             }
             Format::Zip | Format::SevenZ => unreachable!("handled above"),
             f if f.is_single() => unreachable!("a {} holds one file: write_single", f.label()),

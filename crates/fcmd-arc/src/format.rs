@@ -15,6 +15,13 @@ pub enum Format {
     /// The Unix archive: `.a`, and the outer layer of a `.deb`. Read only — see
     /// [`Format::writable`].
     Ar,
+    /// `cpio`, in its newc, crc and odc headers: an initramfs, and what an `rpm` carries.
+    /// Read only, like `ar`.
+    Cpio,
+    /// A Red Hat package: a header, and a compressed newc cpio of the files it installs.
+    /// Read only — `rpmbuild` makes them, and a package written without its header would be
+    /// a file that looks like one and is not.
+    Rpm,
     /// A single compressed stream: `notes.txt.gz` and nothing else in it.
     ///
     /// These four are the same codecs as the compressed tars above, without the tar: one
@@ -31,7 +38,7 @@ pub enum Format {
 
 impl Format {
     /// Every format this crate knows, read or write.
-    pub const ALL: [Format; 12] = [
+    pub const ALL: [Format; 14] = [
         Format::Zip,
         Format::SevenZ,
         Format::Tar,
@@ -40,6 +47,8 @@ impl Format {
         Format::TarXz,
         Format::TarZst,
         Format::Ar,
+        Format::Cpio,
+        Format::Rpm,
         Format::Gz,
         Format::Bz2,
         Format::Xz,
@@ -68,7 +77,13 @@ impl Format {
     pub fn writable(self) -> bool {
         !matches!(
             self,
-            Format::Ar | Format::Gz | Format::Bz2 | Format::Xz | Format::Zst
+            Format::Ar
+                | Format::Cpio
+                | Format::Rpm
+                | Format::Gz
+                | Format::Bz2
+                | Format::Xz
+                | Format::Zst
         )
     }
 
@@ -109,6 +124,8 @@ impl Format {
             Format::TarXz => "tar.xz",
             Format::TarZst => "tar.zst",
             Format::Ar => "ar",
+            Format::Cpio => "cpio",
+            Format::Rpm => "rpm",
             Format::Gz => "gz",
             Format::Bz2 => "bz2",
             Format::Xz => "xz",
@@ -127,6 +144,8 @@ impl Format {
             Format::TarXz => "tar.xz",
             Format::TarZst => "tar.zst",
             Format::Ar => "a",
+            Format::Cpio => "cpio",
+            Format::Rpm => "rpm",
             Format::Gz => "gz",
             Format::Bz2 => "bz2",
             Format::Xz => "xz",
@@ -152,9 +171,10 @@ impl Format {
     /// other hand, is a header read in one go — which is why listing a 7z is quick and reading
     /// the last file in one is not.
     /// An `ar` says it too, and more simply than a tar: a header of sixty ASCII bytes, the
-    /// member's bytes after it, no compression anywhere.
+    /// member's bytes after it, no compression anywhere. So does a `cpio`. An `rpm` does not:
+    /// its cpio is compressed, and is a compressed tar's case again.
     pub fn seekable(self) -> bool {
-        matches!(self, Format::Zip | Format::Tar | Format::Ar)
+        matches!(self, Format::Zip | Format::Tar | Format::Ar | Format::Cpio)
     }
 
     /// The format a *name* suggests. Longest suffix first, so `.tar.gz` is not read as `.gz`.
@@ -174,7 +194,7 @@ impl Format {
     /// `Cr24` header in front of it, so it is not one.
     pub fn of_name(name: &str) -> Option<Format> {
         let lower = name.to_ascii_lowercase();
-        const BY_SUFFIX: [(&str, Format); 34] = [
+        const BY_SUFFIX: [(&str, Format); 36] = [
             (".tar.gz", Format::TarGz),
             (".tgz", Format::TarGz),
             (".tar.bz2", Format::TarBz2),
@@ -205,6 +225,8 @@ impl Format {
             (".deb", Format::Ar),
             (".udeb", Format::Ar),
             (".ddeb", Format::Ar),
+            (".cpio", Format::Cpio),
+            (".rpm", Format::Rpm),
             // One compressed file, no tar. Last, so every `.tar.*` and `.t?z` above wins:
             // the list is searched in order and `.tar.gz` ends with `.gz` as well.
             (".gz", Format::Gz),
@@ -256,6 +278,9 @@ impl Format {
         }
         if head.starts_with(b"!<arch>\n") {
             return Some(Format::Ar);
+        }
+        if let Some(format) = crate::cpio::of_bytes(head) {
+            return Some(format);
         }
         // A tar has no magic at the start: the word `ustar` sits 257 bytes in.
         if head.len() > 262 && (&head[257..262] == b"ustar") {
@@ -363,7 +388,7 @@ mod tests {
         for f in Format::ALL {
             assert_eq!(
                 f.seekable(),
-                matches!(f, Format::Zip | Format::Tar | Format::Ar),
+                matches!(f, Format::Zip | Format::Tar | Format::Ar | Format::Cpio),
                 "{}",
                 f.label()
             );
