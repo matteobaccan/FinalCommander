@@ -734,7 +734,7 @@ fn last_error_as_service_error() -> super::ServiceError {
     }
 }
 
-/// Every socket, with the process that holds it (SPEC 02 §7c).
+/// Every socket, with the process that holds it (SPEC 02 §14).
 ///
 /// Windows answers this better than it answers anything else about another process: one call
 /// per protocol gives the whole table *and* the owning pid, with no handle to open and

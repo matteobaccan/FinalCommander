@@ -1,4 +1,4 @@
-//! The card `F3` shows for a row of the process list (SPEC 02 §7b).
+//! The card `F3` shows for a row of the process list (SPEC 02 §14).
 //!
 //! FAR's own process plugin answers `F3` with a page rather than a line: what the thing is,
 //! where it came from, who runs it, what it has spent, what it holds open, its whole command

@@ -1,4 +1,4 @@
-//! The filesystem watch behind `panel.auto_refresh` (SPEC 02 §1.25).
+//! The filesystem watch behind `panel.auto_refresh` (feature 1.25).
 //!
 //! A panel that was read ten minutes ago is showing ten minutes of history: a build that
 //! wrote into the directory, a download that finished, a sibling program that moved a file

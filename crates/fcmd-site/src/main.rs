@@ -431,6 +431,120 @@ fn read(repo: &Path, path: &str) -> Result<String, String> {
 mod tests {
     use super::*;
 
+    /// The number a section heading carries: `### 1.8 Structure pane` is `1.8`, and
+    /// `## 2b-quinquies. [[archiver]] blocks` is `2b-quinquies`. `None` for a heading that is
+    /// not numbered.
+    fn section_number(line: &str) -> Option<String> {
+        let rest = line.trim_start_matches('#');
+        if rest.len() == line.len() || !rest.starts_with(' ') || line.starts_with("#####") {
+            return None;
+        }
+        let token = rest.split_whitespace().next()?;
+        let token = token.trim_end_matches('.');
+        token
+            .chars()
+            .next()
+            .filter(char::is_ascii_digit)
+            .map(|_| token.to_string())
+    }
+
+    /// Every `SPEC NN §X` anywhere in the repository names a section that exists, and no spec
+    /// has two sections with one number.
+    ///
+    /// Written after an audit found forty-two of them pointing nowhere: sections planned and
+    /// never written (section 7b of spec 02, whose content went into §14), rows of the feature table
+    /// cited as if they were sections (spec 02 "section 1.6", which is row 1.6 and section 8), and
+    /// sections renumbered under the references to them. A reader following one landed
+    /// nowhere and could not tell whether the code or the spec had moved. It also found two
+    /// specs with one number used twice, which makes a correct reference ambiguous.
+    #[test]
+    fn every_spec_reference_names_a_section_that_exists() {
+        let repo = default_repo();
+        let mut sections: std::collections::BTreeMap<String, std::collections::BTreeSet<String>> =
+            Default::default();
+        let mut doubled = Vec::new();
+        for entry in std::fs::read_dir(repo.join("docs/spec")).expect("docs/spec") {
+            let path = entry.expect("an entry").path();
+            let name = path.file_name().unwrap().to_string_lossy().into_owned();
+            let Some(number) = name
+                .get(..2)
+                .filter(|n| n.chars().all(|c| c.is_ascii_digit()))
+            else {
+                continue;
+            };
+            let mut here = std::collections::BTreeSet::new();
+            for line in std::fs::read_to_string(&path).unwrap().lines() {
+                if let Some(section) = section_number(line) {
+                    if !here.insert(section.clone()) {
+                        doubled.push(format!("{name}: §{section} twice"));
+                    }
+                    // A reference to `§1` reaches `1.8`'s chapter as well.
+                    if let Some((chapter, _)) = section.split_once('.') {
+                        here.insert(chapter.to_string());
+                    }
+                }
+            }
+            sections.insert(number.to_string(), here);
+        }
+        assert!(sections.len() >= 10, "found only {:?}", sections.keys());
+        assert!(doubled.is_empty(), "{doubled:#?}");
+
+        let mut broken = Vec::new();
+        let mut stack = vec![repo.clone()];
+        while let Some(dir) = stack.pop() {
+            for entry in std::fs::read_dir(&dir).expect("a directory") {
+                let path = entry.expect("an entry").path();
+                let name = path.file_name().unwrap().to_string_lossy().into_owned();
+                if path.is_dir() {
+                    if !matches!(name.as_str(), "target" | ".git" | "node_modules") {
+                        stack.push(path);
+                    }
+                    continue;
+                }
+                if !(name.ends_with(".md") || name.ends_with(".rs") || name.ends_with(".toml")) {
+                    continue;
+                }
+                let Ok(text) = std::fs::read_to_string(&path) else {
+                    continue;
+                };
+                for (n, line) in text.lines().enumerate() {
+                    let mut rest = line;
+                    while let Some(at) = rest.find("SPEC ") {
+                        rest = &rest[at + 5..];
+                        let Some(number) = rest
+                            .get(..2)
+                            .filter(|d| d.chars().all(|c| c.is_ascii_digit()))
+                        else {
+                            continue;
+                        };
+                        let Some(after) = rest[2..].strip_prefix(" §") else {
+                            continue;
+                        };
+                        let section: String = after
+                            .chars()
+                            .take_while(|c| c.is_ascii_alphanumeric() || *c == '.' || *c == '-')
+                            .collect();
+                        let section = section.trim_end_matches(['.', '-']);
+                        if section.is_empty() {
+                            continue;
+                        }
+                        let known = sections.get(number).is_some_and(|s| s.contains(section));
+                        if !known {
+                            let shown = path.strip_prefix(&repo).unwrap_or(&path).display();
+                            broken.push(format!("{shown}:{}: SPEC {number} §{section}", n + 1));
+                        }
+                    }
+                }
+            }
+        }
+        assert!(
+            broken.is_empty(),
+            "{} references to sections that do not exist:\n{}",
+            broken.len(),
+            broken.join("\n")
+        );
+    }
+
     /// Build the whole site into a temporary directory, from this checkout.
     fn built() -> (tempfile::TempDir, PathBuf) {
         let dir = tempfile::tempdir().expect("a directory");

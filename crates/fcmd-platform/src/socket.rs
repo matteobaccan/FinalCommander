@@ -1,4 +1,4 @@
-//! What is listening and what is connected (SPEC 02 §7c).
+//! What is listening and what is connected (SPEC 02 §14).
 //!
 //! FAR has no socket panel of its own, but the question a file manager is asked next to "what
 //! is running" is "what has that port open", and the answer lives in the same place: a table

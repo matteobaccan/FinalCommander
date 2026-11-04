@@ -271,7 +271,7 @@ impl Server {
             return error_response(405, "MethodNotAllowed", "nothing to do with a bucket");
         }
         // Multipart: start, one part, complete, abort. Each is told apart by its query, as
-        // the service tells them apart (SPEC 04 §6b).
+        // the service tells them apart (SPEC 04 §8.3b).
         if method == "POST" && params.contains_key("uploads") {
             return self.start_upload(&bucket, &key);
         }

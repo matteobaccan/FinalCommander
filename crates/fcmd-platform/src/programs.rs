@@ -1,4 +1,4 @@
-//! What is installed on this machine (SPEC 02 §7d).
+//! What is installed on this machine (SPEC 02 §14).
 //!
 //! FAR has a plugin for this — `UnInstall` — and it earns its place for the same reason the
 //! process panel does: the list is somewhere the system keeps it, nobody remembers where, and

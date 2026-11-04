@@ -530,7 +530,7 @@ impl JobFs for LocalFs {
         on_bytes: &mut dyn FnMut(u64) -> bool,
     ) -> io::Result<u64> {
         let part = part_path(dst);
-        // The system's own routine, when `general.system_copy` asks for it (SPEC 03 §7b). It writes the
+        // The system's own routine, when `general.system_copy` asks for it (SPEC 03 §3b). It writes the
         // same temporary file this function would, so everything after it — the permissions,
         // the times, the rename into place — is unchanged; and when the platform declines it
         // answers `None` and the loop below does the work, which is why there is no second

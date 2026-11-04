@@ -47,7 +47,7 @@ pub enum Request {
     },
     /// What is open, with the counters as they are now.
     TunnelList,
-    /// Start, stop or restart a service (SPEC 02 §7d). A worker's job: a service manager
+    /// Start, stop or restart a service (SPEC 02 §14). A worker's job: a service manager
     /// takes seconds over it, and a panel that stopped answering for those seconds would be
     /// a panel somebody pressed the key in twice.
     ServiceControl {
@@ -832,7 +832,7 @@ pub enum PromptKind {
     },
     /// `Ctrl+G`: one command line, run once per selected file (SPEC 06 §5).
     ApplyCommand,
-    /// The command whose output becomes the panel's rows (SPEC 02 §7b).
+    /// The command whose output becomes the panel's rows (SPEC 02 §14).
     Panelize,
     /// The command whose output the viewer reads instead of the file (SPEC 05 §1).
     ViewerFilter,
@@ -1820,7 +1820,7 @@ pub struct App {
     pub themes: ThemeSet,
     pub theme: Theme,
     pub panels: [Panel; 2],
-    /// Each side's tabs (SPEC 02 §1.6). The tab that is on screen is `panels[side]`; the
+    /// Each side's tabs (SPEC 02 §8). The tab that is on screen is `panels[side]`; the
     /// others are parked in the row, so nothing that works on a panel has to know that tabs
     /// exist. A side always has at least one.
     pub tabs: [crate::tabs::Row; 2],
@@ -2116,7 +2116,7 @@ pub struct App {
     apply_total: usize,
     /// The shell command we are waiting for, if any, and the line that started it.
     shell: Option<(u64, String)>,
-    /// The panelize command we are waiting for, if any (SPEC 02 §7b).
+    /// The panelize command we are waiting for, if any (SPEC 02 §14).
     panelize: Option<u64>,
     /// The recode we are waiting for, if any (SPEC 03 §13).
     recode: Option<u64>,
@@ -8398,7 +8398,7 @@ impl App {
             | Command::FileMoveCurrent => {
                 // On the service list there is nothing to copy or move: `F5` starts the
                 // service under the cursor and `F6` restarts it, which is what the key bar
-                // says there (SPEC 02 §7d).
+                // says there (SPEC 02 §14).
                 if self.panel().temp_origin() == Some(":services") {
                     self.service_action(match cmd {
                         Command::FileCopy | Command::FileCopyCurrent => {
@@ -10023,7 +10023,7 @@ impl App {
         self.set_status(msg);
     }
 
-    /// Turn what a command printed into the panel's rows (SPEC 02 §7b).
+    /// Turn what a command printed into the panel's rows (SPEC 02 §14).
     ///
     /// One path per line, as the shell's own tools print them: `find`, `git ls-files`,
     /// `grep -l`. A relative one is relative to the panel, which is where the command ran. A
@@ -11712,7 +11712,7 @@ impl App {
         self.active = side;
     }
 
-    /// What the machine runs in the background, as a panel (SPEC 02 §7d).
+    /// What the machine runs in the background, as a panel (SPEC 02 §14).
     ///
     /// The row is the service: its name, what state it is in, and what it says about itself.
     /// `F3` is its card, and `F5`, `F6` and `F8` start, restart and stop it — the three
@@ -11919,7 +11919,7 @@ impl App {
         self.mode = Mode::Viewer(Box::new(viewer));
     }
 
-    /// What is listening and what is connected, as a panel (SPEC 02 §7c).
+    /// What is listening and what is connected, as a panel (SPEC 02 §14).
     ///
     /// The row is the socket, laid out in columns the way the drive dialog is — protocol,
     /// this end, the other end, the state, and who holds it — and `F3` on it opens the card
@@ -11990,7 +11990,7 @@ impl App {
         self.active = side;
     }
 
-    /// What is installed, as a panel (SPEC 02 §7d; FAR's `UnInstall` plugin).
+    /// What is installed, as a panel (SPEC 02 §14; FAR's `UnInstall` plugin).
     ///
     /// The *size* column holds what each program takes on disk, so `Ctrl+F6` sorts the list
     /// by size — which is the question that makes anybody open such a list. `F3` on a row is
@@ -14187,7 +14187,7 @@ impl App {
             .collect()
     }
 
-    /// What the command line writes to the left of what one types (SPEC 06 §2b).
+    /// What the command line writes to the left of what one types (SPEC 06 §7.0b).
     ///
     /// The format is the configuration's, the letters are FAR's, and `%GITBRANCH%` is the
     /// branch of the repository the panel's directory is in. The branch is looked up when the
@@ -18527,7 +18527,7 @@ impl App {
         self.mode = Mode::Pick(Box::new(pick));
     }
 
-    /// Put back the tabs a previous session had on this side (SPEC 02 §1.6).
+    /// Put back the tabs a previous session had on this side (SPEC 02 §8).
     ///
     /// Two rules, both of them about what a user asked for most recently. The directory this
     /// session was started in wins for the tab that is on screen, because that is what
@@ -20019,7 +20019,7 @@ mod tests {
         panic!("no field {want}");
     }
 
-    // ── the filesystem watch (SPEC 02 §1.25) ───────────────────────────────────────────────
+    // ── the filesystem watch (feature 1.25) ───────────────────────────────────────────────
 
     #[test]
     fn a_directory_that_changed_is_re_read_and_the_setting_takes_it_away() {
@@ -20057,7 +20057,7 @@ mod tests {
         assert!(app.requests.is_empty());
     }
 
-    // ── tabs (SPEC 02 §1.6) ─────────────────────────────────────────────────────────────────
+    // ── tabs (SPEC 02 §8) ─────────────────────────────────────────────────────────────────
 
     #[test]
     fn a_new_tab_opens_on_the_directory_under_the_cursor_and_the_other_one_waits() {
@@ -23262,7 +23262,7 @@ mod tests {
         let mut app = app();
         app.open_process_panel(0);
         // A platform whose process list we cannot read says so and leaves the panel alone —
-        // macOS and the BSDs keep it behind a `sysctl` we do not call (SPEC 02 §7b).
+        // macOS and the BSDs keep it behind a `sysctl` we do not call (SPEC 02 §14).
         if app.panels[0].temp_origin() != Some(":processes") {
             assert!(
                 !app.status.is_empty(),
@@ -30938,7 +30938,7 @@ abcdefghij
         let mut app = app();
         app.open_process_panel(0);
         if app.panels[0].temp_origin() != Some(":processes") {
-            return; // a platform whose process list we cannot read (SPEC 02 §7b)
+            return; // a platform whose process list we cannot read (SPEC 02 §14)
         }
         app.panels[0].cursor = 0;
         app.active = 0;

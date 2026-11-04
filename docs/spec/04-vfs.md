@@ -436,7 +436,7 @@ by appending the delimiter, and asking what one path *is* takes a request: a `HE
 answers makes it an object, and a `HEAD` that does not is followed by a one-key listing, since
 a prefix nothing lives under does not exist at all.
 
-### 8.3 Addressing, and the services that are not AWS
+### 8.4b Addressing, and the services that are not AWS
 
 AWS wants the bucket in front of the host (`logs.s3.eu-west-1.amazonaws.com`); MinIO, Ceph,
 Garage, a LocalStack in a container and an IP address want it at the front of the path. The
@@ -449,7 +449,7 @@ endpoint says which, and two cases override it:
 - a service that answers "this bucket is in another region" and names it is followed once, and
   the answer remembered for that bucket, rather than leaving someone to find the setting.
 
-### 8.4 TLS, and the certificate authority a company runs
+### 8.4c TLS, and the certificate authority a company runs
 
 `rustls`, so there is one TLS implementation on every platform and no OpenSSL to find or
 link — but the trust anchors come from the **machine's own store**, not from a root list

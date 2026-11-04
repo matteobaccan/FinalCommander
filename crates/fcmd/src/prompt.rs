@@ -1,4 +1,4 @@
-//! What the command line says to the left of what one types (SPEC 06 §2b).
+//! What the command line says to the left of what one types (SPEC 06 §7.0b).
 //!
 //! It was the panel's path and a `>`, which is what `cmd.exe` shows and what FAR shows by
 //! default. FAR lets it be written out — `$p$g` is that default, and the other letters put the

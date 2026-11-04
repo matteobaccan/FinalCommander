@@ -152,7 +152,7 @@ pub enum Command {
     PanelReread,
     PanelHiddenToggle,
     /// A new tab on this side, on the directory under the cursor if the cursor is on one and
-    /// otherwise on the one this tab is already showing (SPEC 02 §1.6).
+    /// otherwise on the one this tab is already showing (SPEC 02 §8).
     PanelTabNew,
     /// Close this tab. A side always has one, so the last one stays.
     PanelTabClose,
@@ -272,10 +272,10 @@ pub enum Command {
     /// Describe the file under the cursor: the line the directory's `descript.ion` keeps
     /// about it (FAR's `Ctrl+Z`).
     FileDescribe,
-    /// Put what is selected into the temporary panel on the other side (SPEC 02 §7b).
+    /// Put what is selected into the temporary panel on the other side (SPEC 02 §14).
     PanelTempAdd,
     /// Run a command and put the paths it printed into the panel (Midnight Commander's
-    /// external panelize, SPEC 02 §7b).
+    /// external panelize, SPEC 02 §14).
     PanelPanelize,
     /// Find out which keys this terminal delivers, and what each one does here (SPEC 06 §7).
     AppLearnKeys,

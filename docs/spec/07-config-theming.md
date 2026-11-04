@@ -117,7 +117,7 @@ Compiled-in defaults, each active only if present: `javap` (`*.class`), `ilspycm
 `fcmd.toml` wins over a default for the same mask. `{file}` is substituted; a rule that forgets
 it still gets the path appended.
 
-## 2b-ter. `[[archiver]]` blocks
+## 2b-quinquies. `[[archiver]]` blocks
 
 A program on the machine that reads a format this one does not (`docs/05-multiarc.md`). The
 language is FAR's MultiArc, so a table out of a `custom.ini` keeps its key names.

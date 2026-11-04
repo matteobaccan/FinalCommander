@@ -13,7 +13,7 @@ Notable changes, newest first. The format follows
   and `Enter` goes into the files it claims. It was the last thing Midnight Commander did that
   this did not: an mc user drops a shell script into `extfs` and has a new format the same day.
   The language is FAR's MultiArc, so a table copied out of a `custom.ini` keeps its key names.
-  SPEC 07 §2b-ter is the reference.
+  SPEC 07 §2b-quinquies is the reference.
 
   The blocks are read once at startup and installed into one table for the whole run, which
   every archive cache and the decision whether `Enter` goes into a file both read — a format a

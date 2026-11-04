@@ -539,7 +539,7 @@ impl Default for CompareCfg {
     }
 }
 
-/// `[cmdline]`: the command line itself (SPEC 06 §2b).
+/// `[cmdline]`: the command line itself (SPEC 06 §7.0b).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct CmdLineCfg {

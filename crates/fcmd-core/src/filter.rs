@@ -915,7 +915,7 @@ impl DateCondition {
     }
 
     /// An entry whose chosen timestamp is not known yet passes: the second metadata pass
-    /// (SPEC 02 §2.4) fills it in, and a filter must not hide files over a missing stat.
+    /// (SPEC 02 §2) fills it in, and a filter must not hide files over a missing stat.
     fn matches(&self, entry: &Entry, now: SystemTime) -> bool {
         match timestamp(entry, self.field) {
             Some(ts) => self.range.matches(ts, now),

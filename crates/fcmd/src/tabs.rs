@@ -1,4 +1,4 @@
-//! A row of tabs on one side (SPEC 02 §1.6).
+//! A row of tabs on one side (SPEC 02 §8).
 //!
 //! A tab *is* a panel. There is no tab object holding a panel beside a name and a lock,
 //! because everything a tab remembers — where it is, how it is sorted, what is selected,

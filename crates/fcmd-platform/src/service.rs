@@ -1,4 +1,4 @@
-//! What the machine runs in the background, and the three things one does to it (SPEC 02 §7d).
+//! What the machine runs in the background, and the three things one does to it (SPEC 02 §14).
 //!
 //! A file manager is where one already is when a service has to be looked at — the log is in
 //! a panel, the configuration file is in the other one — and FAR has had a services panel for

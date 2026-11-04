@@ -132,7 +132,7 @@ pub struct JobOptions {
     /// XFS and APFS means a reflink and on a network share means the server copies the file
     /// itself. Off by default: it is faster where it works, and where it does not work it is
     /// one more thing that can fail, so it is a setting rather than the default
-    /// (`general.system_copy`, SPEC 03 §7b).
+    /// (`general.system_copy`, SPEC 03 §3b).
     pub system_copy: bool,
     /// Plan and report, change nothing.
     pub dry_run: bool,

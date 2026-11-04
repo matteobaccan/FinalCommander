@@ -1,4 +1,4 @@
-//! What is running on this machine (SPEC 02 §7b).
+//! What is running on this machine (SPEC 02 §14).
 //!
 //! FAR has a process panel and it earns its place: when a file will not be deleted or a
 //! device will not unmount, what one wants is the list of what is running, sorted by what is

@@ -18,7 +18,7 @@ use crate::sign::{self, Credentials, Signable, Signer, EMPTY_SHA256};
 use crate::uri;
 use crate::xml::{self, BucketRow, Page};
 
-/// Above this, a file goes up in parts rather than as one `PUT` (SPEC 04 §6b).
+/// Above this, a file goes up in parts rather than as one `PUT` (SPEC 04 §8.3b).
 ///
 /// One `PUT` is the better answer while it works: one signature, one round trip, and nothing
 /// left behind if it fails. It stops working at five gigabytes, which is the service's own
@@ -245,7 +245,7 @@ impl Client {
     /// after a failure. `Esc` is answered before the body starts and by the request timeout
     /// after it.
     ///
-    /// A file over `SINGLE_PUT_MOST` goes up in parts instead (SPEC 04 §6b): the service
+    /// A file over `SINGLE_PUT_MOST` goes up in parts instead (SPEC 04 §8.3b): the service
     /// refuses a single `PUT` over five gigabytes outright, and long before that one request
     /// is an all-or-nothing bet on a long transfer. The parts are an implementation detail
     /// from here — the answer is the same number of bytes written.

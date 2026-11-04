@@ -196,7 +196,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         }
     };
 
-    // A side with more than one tab gives its top row to the tab bar (SPEC 02 §1.6). A bar
+    // A side with more than one tab gives its top row to the tab bar (SPEC 02 §8). A bar
     // that was always there would cost every panel a row of files to say that it has one
     // tab, so one tab draws nothing and the screen is what it always was.
     let mut areas = areas;

@@ -618,7 +618,7 @@ macros, the buffer list (§2.3) and the external editor (§2.4).
 | Big edits | search/replace across a whole file streams through the rope without materialising copies |
 | Macros | record/play keystroke macros, scoped to the editor, saved by name |
 
-### 2.5 Syntax highlighting
+### 2.2b Syntax highlighting
 
 `fcmd-syntax` is a scanner, not a parser, and deliberately: it knows how a language writes a
 comment, a string and a number, plus the words anyone would point at and call keywords. That

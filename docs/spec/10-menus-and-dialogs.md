@@ -112,7 +112,7 @@ Folder shortcuts (§4.4b) · Plugin commands (backlog), Screens list, Record mac
 list.
 
 *Task list* is the operating system's processes, as FAR's is — the panel the change-drive
-dialog opens (SPEC 02 §7b), with `F3` on a row showing that process's card. This program's own
+dialog opens (SPEC 02 §14), with `F3` on a row showing that process's card. This program's own
 screens are the *Screens list* above it, on `F12`.
 
 *Folder shortcuts* appears once, after the associations, where FAR puts it. It used to appear

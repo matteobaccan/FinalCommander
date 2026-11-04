@@ -1552,7 +1552,7 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                 }
                 // A command whose output is a list of paths rather than a screenful of
                 // text: it runs on the pool like any other, and what it printed comes back
-                // as lines (SPEC 02 §7b).
+                // as lines (SPEC 02 §14).
                 Request::Panelize { id, line, cwd } => {
                     let tx = tx.clone();
                     runtime.spawn_blocking(move || {
