@@ -6,6 +6,16 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **The site is published with every release.** It is generated from the repository's own
+  documents, so it could not drift from them — but it was published only by hand, and the
+  last time anybody did was 0.27.0: the site's changelog stopped there while the file it is
+  made from had reached 0.29.0, and its help, its feature table and its comparison with the
+  other commanders were as far behind. `tag.yml` now calls `pages.yml` once a release's
+  archives are up, built from the new tag, so the site describes exactly the version on the
+  download page. A push still never publishes, and the button in the Actions tab still does.
+
 ### Fixed
 
 - **The help knows what 0.28.0 and 0.29.0 brought.** Five features had shipped with a spec

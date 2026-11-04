@@ -132,16 +132,16 @@ bug. The loop is input-driven and keeps no timer: anything that must happen on i
    `SHA256SUMS`. The archives carry the project's name; the executable inside each is `fcmd`.
    No tag is pushed by hand.
 
-**GitHub Pages must not publish by itself.** `pages.yml` builds the site on every push and
-keeps it as the run's artifact; publishing happens only through `workflow_dispatch` with
-`publish: yes`, by hand, deliberately.
+**GitHub Pages publishes with a release, and otherwise only by hand.** `pages.yml` builds the
+site on every push and keeps it as the run's artifact; it publishes when `tag.yml` calls it
+after a release's archives are up — built from that tag, so the site describes the version one
+can download — or through `workflow_dispatch` with `publish: yes`. A push never publishes.
 
 ## Where the work is right now
 
 **0.29.0 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
 like every release before it. A push to `main` that touches `CHANGELOG.md` or `Cargo.toml`
-is what makes `tag.yml` fire. The site is published by hand, through `pages.yml`'s
-`workflow_dispatch`. `CHANGELOG.md` is the history, release by release; this section only
+is what makes `tag.yml` fire. The site is published with each release, from its tag. `CHANGELOG.md` is the history, release by release; this section only
 says where things stand.
 
 What the last few were about, newest first:

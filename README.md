@@ -308,11 +308,12 @@ crates/fcmd-site     the generator for the project's site: the repository's own 
 The last one is not part of the program — `fcmd` does not link it, and a release does not
 build it. It reads this file, the changelog, the commander survey, the help chapters in
 `docs/help/` and the screenshots in `docs/shots/`, and writes the static site published at
-<https://matteobaccan.github.io/FinalCommander/> — 38 pages, no framework, no fonts or
+<https://matteobaccan.github.io/FinalCommander/> — ninety-odd pages, no framework, no fonts or
 scripts fetched from anywhere, in the seven languages the interface speaks. `cargo run -p
 fcmd-site -- --out site` writes it locally, and the workflow builds it on every push and keeps
-it as the run's artifact. Nothing publishes by itself: a site on GitHub Pages is public to
-everyone, so it goes up only when somebody starts the workflow by hand and says so. The point
+it as the run's artifact. A push never publishes it: the site goes up with each release,
+built from the release's tag so that it describes the version one can download, or when
+somebody starts the workflow by hand and says so. The point
 of generating it is that a page cannot say something the document it came from does not: there
 is no second copy of the text to keep in step.
 

@@ -114,5 +114,5 @@ skips that check, which is the one thing it exists for.
 
 Run `release.yml` by hand from the Actions tab (`Run workflow`) to build the artifacts without
 publishing anything — useful after touching the workflow itself. The site is the same shape:
-`pages.yml` builds on every push and publishes only through `workflow_dispatch` with
-`publish: yes`.
+`pages.yml` builds on every push, and publishes when a release is cut — `tag.yml` calls it on
+the new tag once the archives are up — or through `workflow_dispatch` with `publish: yes`.
