@@ -4,6 +4,30 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
+## [Unreleased]
+
+### Added
+
+- **Renaming many files from one pattern** (`Ctrl+Shift+F6`, *Files → Rename from a pattern*),
+  the tool Total Commander users reach for every day and the largest gap left with it. Total
+  Commander's own language, so the masks people already type work: `[N]`, `[E]`, a part of
+  either (`[N1-3]`, `[N3-]`, `[N2,4]`), a counter (`[C]`, `[C10,5,3]`), the file's date and
+  time in any strftime spelling, the folder's name. Then a search with its replacement, plain
+  or as a regular expression with `$1`, and the case. A preview under the dialog follows every
+  key, with each file that cannot take its new name marked and put first: nothing left, not a
+  name a file can have, two files to one name, or the name of a file that is there and staying.
+
+  All or nothing. A plan with a problem in it starts nothing; names that trade places go
+  through temporary names, and only the files that need it take that detour; a rename that
+  fails halfway puts the ones already done back, so a folder is never left half in each scheme.
+  *Undo the last multi-rename* reverses it for as long as the program runs. Done through the
+  panel's own filesystem, so it works on a server as it does here, and refused inside an
+  archive, where `F6` renames one entry.
+
+  Driven in a terminal on the real binary: three photos renamed `holiday_[C]` with the preview
+  showing each new name as it was typed, and `1.txt` and `2.txt` swapped through the counter
+  with nothing left behind under a temporary name.
+
 ## [0.30.0] — 2026-11-04
 
 ### Added

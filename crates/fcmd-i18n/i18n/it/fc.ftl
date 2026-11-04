@@ -407,6 +407,8 @@ menu-edit-new = Modifica nuovo &file
 menu-copy = &Copia
 menu-rename = &Rinomina o sposta
 menu-link = Crea co&llegamento
+menu-multirename = Rinomina in &blocco…
+menu-multirename-undo = Annulla l'ultima rinomina multipla
 menu-mkdir = Cr&ea cartella
 menu-delete = El&imina
 menu-wipe = Cancella in mo&do sicuro
@@ -836,6 +838,46 @@ arc-writing-back = { $name } torna dentro l'archivio
 arc-move-out = per portare qualcosa fuori da un archivio, copialo con F5
 arc-add-files-only = uno per uno entrano solo i file; Shift+F1 ci mette una cartella intera
 
+rename-title = Rinomina più file
+rename-name = Nome
+rename-ext = Estensione
+rename-search = Cerca
+rename-replace = Sostituisci con
+rename-regex = Espressione regolare ($1 nella sostituzione)
+rename-case = Lettere
+rename-case-same = come sono
+rename-case-lower = minuscole
+rename-case-upper = MAIUSCOLE
+rename-case-title = Ogni Parola Maiuscola
+rename-case-sentence = Solo la prima lettera
+rename-counter = Contatore: inizio, passo, cifre
+rename-fields = [N] nome  [E] estensione  [N1-3] parte  [C] contatore  [d] [t] data, ora  [P] cartella
+rename-not-in-archive = più file si rinominano in una cartella, non dentro un archivio: lì F6 rinomina una voce
+rename-bad-counter = il contatore è fatto di tre numeri interi, inizio, passo, cifre: { $counter } non lo è
+rename-cannot = impossibile rinominare: { $why }
+rename-problem-empty = non resta nessun nome
+rename-problem-invalid = non è un nome che un file possa avere
+rename-problem-twice = anche un altro file prende questo nome
+rename-problem-exists = c'è già un file con questo nome
+rename-more = … e altri { $count }
+rename-blocked =
+    { $count ->
+        [one] un file non può prendere il nuovo nome: nessuno viene rinominato finché non può
+       *[other] { $count } file non possono prendere il nuovo nome: nessuno viene rinominato finché non possono
+    }
+rename-summary = cambiano { $count } su { $total }
+rename-nothing = nessun nome cambia
+rename-nothing-to-undo = non c'è nessuna rinomina multipla da annullare
+rename-done =
+    { $count ->
+        [one] un file rinominato · si annulla dal menu File
+       *[other] { $count } file rinominati · si annullano dal menu File
+    }
+rename-undone =
+    { $count ->
+        [one] rimesso un nome
+       *[other] rimessi { $count } nomi
+    }
 pack-title = Aggiungi all'archivio
 pack-name = Archivio
 pack-format = Formato

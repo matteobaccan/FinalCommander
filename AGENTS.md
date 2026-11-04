@@ -207,8 +207,7 @@ Everything here is unblocked; `docs/BACKLOG.md` has the reasons and the rest.
    of its manual.
 3. **`cab` read in process**, the last of the three `docs/05-multiarc.md` §9 kept as
    candidates; it is the one that wants a crate.
-4. **The multi-rename tool** (feature 3.11), the most used thing Total Commander has and this
-   has not.
+4. **The disk-usage view** (feature 7.3): sizes per folder, sorted, with bars.
 
 One rule that came out of that review and holds everywhere: **`Alt+<letter>` belongs to the
 quick search**, so nothing else may take it (`Ctrl+Shift+N/I/T` moved for this reason), and

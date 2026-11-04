@@ -123,7 +123,7 @@ Column `FC` = FinalCommander default (profile `far`, our baseline).
 | synchronise directories | — | — | Ctrl+Y | **Ctrl+Shift+Y** — Total Commander's `Ctrl+Y` is FAR's *clear the command line*, and `--check-keymap` is what said so |
 | pack / unpack | Shift+F1 / Shift+F2 | — | Alt+Shift+P / Alt+Shift+U | Shift+F1 / Shift+F2 |
 | test archive | — | — | Alt+Shift+E | Commands menu, no default key |
-| multi-rename | — | — | Shift+F2 | not built yet — `docs/BACKLOG.md` (and FAR's own `Ctrl+M` restores the previous selection, which is what it does here too, on `Ctrl+Shift+M`) |
+| multi-rename | — | — | Ctrl+M | **Ctrl+Shift+F6** — Total Commander's `Ctrl+M` reaches a terminal as `Enter`, and FAR's own `Ctrl+M` restores the previous selection, which it does here too, on `Ctrl+Shift+M` |
 | select group / unselect group | Gray + / Gray − | + / \ | Ctrl++ / Ctrl+− | + / − |
 | invert selection | Gray * | — | Alt+* | `*` (files), `Alt+*` (folders too, FAR's `Ctrl+Gray *`) |
 | select all / none | Shift+Gray + / Shift+Gray − | — | Alt++ / Alt+− | **Shift++ / Shift+−**, and `Ctrl+Shift+A` for *all* where a terminal does not report Shift with a printable key |

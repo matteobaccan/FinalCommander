@@ -315,6 +315,10 @@ pub enum Command {
     /// Put something about a panel on the command line: FAR's `Ctrl+Enter` family, as one
     /// command with a table behind it rather than eleven of them.
     CmdInsert(Insert, Which),
+    /// Rename the selected files from one pattern, with a preview (SPEC 03 §8).
+    FileMultiRename,
+    /// Put back the names the last multi-rename changed.
+    FileMultiRenameUndo,
     /// Put the selected files into a new archive (`Shift+F1`).
     FilePack,
     /// Take an archive apart, into a directory (`Shift+F2`).
@@ -641,6 +645,8 @@ impl Command {
             Command::CmdInsert(Insert::Unc, Which::Passive),
             Command::CmdInsert(Insert::Unc, Which::Left),
             Command::CmdInsert(Insert::Unc, Which::Right),
+            Command::FileMultiRename,
+            Command::FileMultiRenameUndo,
             Command::FilePack,
             Command::FileUnpack,
             Command::ArcCommands,
@@ -906,6 +912,8 @@ impl Command {
             Command::CmdInsert(what, which) => {
                 format!("cmd.insert.{}({})", what.as_str(), which.as_str())
             }
+            Command::FileMultiRename => "file.multirename".into(),
+            Command::FileMultiRenameUndo => "file.multirename.undo".into(),
             Command::FilePack => "file.pack".into(),
             Command::FileUnpack => "file.unpack".into(),
             Command::ArcCommands => "arc.commands".into(),
@@ -1157,6 +1165,8 @@ impl Command {
             ("tool.compare.contents", _) => Command::ToolCompareContents,
             ("tool.calculator", _) => Command::ToolCalculator,
             ("tool.terminal", _) => Command::ToolTerminal,
+            ("file.multirename", _) => Command::FileMultiRename,
+            ("file.multirename.undo", _) => Command::FileMultiRenameUndo,
             ("file.pack", _) => Command::FilePack,
             ("file.unpack", _) => Command::FileUnpack,
             ("arc.commands", _) => Command::ArcCommands,

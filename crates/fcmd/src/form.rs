@@ -267,6 +267,7 @@ impl Form {
             | FormKind::Find
             | FormKind::Replace
             | FormKind::Pack
+            | FormKind::MultiRename
             | FormKind::Unpack
             | FormKind::Attributes
             | FormKind::Copy
@@ -561,6 +562,7 @@ impl Form {
             FormKind::Find => "find-title",
             FormKind::Replace => "replace-title",
             FormKind::Pack => "pack-title",
+            FormKind::MultiRename => "rename-title",
             FormKind::Unpack => "unpack-title",
             FormKind::Attributes => "attr-title",
             FormKind::Copy => "copy-title",
@@ -1044,6 +1046,65 @@ impl Form {
             button: None,
             buttons: vec![i18n.t("btn-ok"), i18n.t("btn-cancel")],
         }
+    }
+
+    /// The multi-rename dialog (SPEC 03 §8): the masks, a search, the case and the counter,
+    /// and under them the preview, which [`Form::set_preview`] writes after every key.
+    pub fn multi_rename(opts: &fcmd_core::rename::Options, i18n: &I18n) -> Form {
+        use fcmd_core::rename::Case;
+        let t = |id: &str| i18n.t(id);
+        let case = match opts.case {
+            Case::Unchanged => "same",
+            Case::Lower => "lower",
+            Case::Upper => "upper",
+            Case::Title => "title",
+            Case::Sentence => "sentence",
+        };
+        let cases = [
+            ("same", t("rename-case-same")),
+            ("lower", t("rename-case-lower")),
+            ("upper", t("rename-case-upper")),
+            ("title", t("rename-case-title")),
+            ("sentence", t("rename-case-sentence")),
+        ];
+        let fields = vec![
+            Field::text("ren.name", t("rename-name"), opts.name.clone()),
+            Field::text("ren.ext", t("rename-ext"), opts.ext.clone()),
+            Field::text("ren.search", t("rename-search"), opts.search.clone()),
+            Field::text("ren.replace", t("rename-replace"), opts.replace.clone()),
+            Field::toggle("ren.regex", t("rename-regex"), opts.regex),
+            choice("ren.case", t("rename-case"), &cases, case),
+            Field::text(
+                "ren.counter",
+                t("rename-counter"),
+                format!(
+                    "{},{},{}",
+                    opts.counter_start, opts.counter_step, opts.counter_width
+                ),
+            ),
+            Field::Note(t("rename-fields")),
+            Field::Separator,
+        ];
+        Form {
+            pages: Vec::new(),
+            page: 0,
+            kind: FormKind::MultiRename,
+            title: t("rename-title"),
+            fields,
+            cursor: 0,
+            site: None,
+            button: None,
+            buttons: vec![i18n.t("btn-ok"), i18n.t("btn-cancel")],
+        }
+    }
+
+    /// Replace the lines under the dialog's last separator: the multi-rename preview, which
+    /// changes with every key and is not a row anybody can stand on.
+    pub fn set_preview(&mut self, lines: Vec<String>) {
+        if let Some(at) = self.fields.iter().rposition(|f| *f == Field::Separator) {
+            self.fields.truncate(at + 1);
+        }
+        self.fields.extend(lines.into_iter().map(Field::Note));
     }
 
     /// `F5` and `F6`: where it goes, and under what rules.

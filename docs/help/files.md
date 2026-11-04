@@ -53,6 +53,34 @@ whole file in one call, so `Esc` is answered when that call finishes rather than
 next few kilobytes, and that file's progress arrives in one piece. On Linux the copy is still
 made a piece at a time, so neither applies.
 
+# Renaming many files at once
+
+`Ctrl+Shift+F6` renames what is selected from one pattern — *Files → Rename from a pattern*.
+The dialog has a mask for the name and one for the extension, and under them a preview that
+follows every key: each file, the name it would get, and what is wrong where something is.
+
+    [N]        the name without its extension     [N1-3]  its characters 1 to 3
+    [N3]       its third character                [N3-]   from the third to the end
+    [N2,4]     four characters from the second    [E]     the extension, the same ways
+    [C]        a counter                          [C10,5,3]  from 10, by 5, three digits
+    [d] [t]    the file's date and time           [d:%Y-%m]  in any strftime spelling
+    [P]        the name of the folder             [[      a [ of its own
+
+So `[d]_[N]` puts each photo's date in front of its name, and `holiday_[C]` with the counter at
+`1,1,3` gives `holiday_001.jpg` onwards. The counter counts in the order the panel shows the
+files: sorted by date, it numbers them by date. *Search for* and *Replace with* then work on
+the new name, as plain text or, with the box ticked, as a regular expression where the
+replacement can say `$1`. *Letters* changes the case last.
+
+Nothing is renamed unless every file can be. A file that would end with no name, with a slash
+in it, with the same name as another row, or with the name of a file that is already there and
+is staying, is marked `✗` with the reason, first in the list, and `OK` leaves the dialog open
+until it is fixed. Names that trade places are fine — `1.txt` and `2.txt` swapped is done
+through a temporary name, which is never left behind — and if a rename fails halfway, the ones
+already done are put back, so the folder is either all in the new names or as it was.
+
+*Files → Undo the last multi-rename* puts the names back, for as long as the program runs.
+
 # Checksums
 
 *Checksums…* in the Files menu writes a list of digests for what is selected: SHA-256, SHA-1,

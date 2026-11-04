@@ -38,6 +38,7 @@ says what the decision stands on.
 | zstd's levels | `Shift+F1` | Every level writes zstd's fastest, because the encoder this uses implements no other: the normal and the best level are a choice for the other codecs only. |
 | `F7` inside an archive | — | No format stores a directory worth keeping, so this wants a decision about what an empty directory in an archive even is. |
 | An archive on a server | — | A progress bar while the copy comes down. Today a large one is simply a pause. |
+| Multi-rename | `Ctrl+Shift+F6` | An undo that survives a restart (SPEC 03 §8's journal), exporting a plan and reading one back, more than one search rule, transliteration, a dedup rule, and the `[X]` and `[=meta]` fields. |
 | 7z | `Shift+F1` | Writing an encrypted archive, split volumes, and the codecs only 7-Zip ZS writes (zstd, lz4, brotli). A zip encrypted with AES wants a feature of the `zip` crate we do not build, so it says what it is rather than asking. |
 
 ## Command line and history

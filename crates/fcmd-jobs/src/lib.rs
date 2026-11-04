@@ -15,6 +15,7 @@ pub mod attrs;
 pub mod fs;
 pub mod link;
 pub mod plan;
+pub mod rename;
 pub mod replace;
 pub mod run;
 pub mod spec;
@@ -26,6 +27,7 @@ pub use attrs::{set_attributes, Change, Mode};
 pub use fs::{free_name, part_path, replace_file, CopyHow, Facts, JobFs, LocalFs, PART_SUFFIX};
 pub use link::{create_link, LinkError, LinkKind};
 pub use plan::{plan, Plan, PlanError, Unit, UnitKind};
+pub use rename::{rename_all, RenameError};
 pub use replace::{
     replace_bytes, Matcher, ReplaceError, ReplaceOptions, ReplacePass, Replaced, PATTERN_FILE_LIMIT,
 };

@@ -208,6 +208,18 @@ The dialog shows a live before/after table with collisions marked in red; applyi
 rename plan that handles cycles (`a→b, b→a`) via temporary names, and the plan can be exported
 and re-imported. Undo restores the previous names from the journal.
 
+**What is built** (0.31.0, `fcmd_core::rename` and `fcmd_jobs::rename_all`): every field above
+but `[X]` and `[=meta]`, one search with its replacement (plain, or a regex with `$1`), the five
+case transforms, the counter with dialog-wide defaults that `[C10,2,3]` overrides, and a
+preview under the dialog's rows that follows every key, rows with a problem first. A problem is
+one of four: nothing left, not a name (a slash, a NUL, `.`, `..`), two rows to one name, or the
+name of a file that is there and is not itself being renamed away. A plan with any problem in
+it starts nothing. Only the files whose current name is another rename's target take the detour
+through a temporary name; a failure halfway undoes the renames already made, in reverse. Undo
+(*Files → Undo the last multi-rename*) is the last plan reversed, kept in memory: the journal
+and the export are still to come, and so are the ordered list of regex rules, transliteration
+and the dedup rule.
+
 ## 9. Checksums (shipped), split, combine
 
 **Checksums.** MD5, SHA-1, SHA-256 and CRC32 over what is selected, written as a list of

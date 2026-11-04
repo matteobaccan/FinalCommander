@@ -407,6 +407,8 @@ menu-edit-new = Редактировать новый &файл
 menu-copy = &Копировать
 menu-rename = Пер&еименовать или перенести
 menu-link = Создать ссы&лку
+menu-multirename = Переименовать по шаблону…
+menu-multirename-undo = Отменить последнее групповое переименование
 menu-mkdir = &Создать папку
 menu-delete = &Удалить
 menu-wipe = Уни&чтожить
@@ -836,6 +838,46 @@ arc-writing-back = { $name } возвращается в архив
 arc-move-out = чтобы достать что-то из архива, скопируйте это клавишей F5
 arc-add-files-only = по одному входят только файлы; Shift+F1 помещает внутрь целый каталог
 
+rename-title = Переименовать несколько
+rename-name = Имя
+rename-ext = Расширение
+rename-search = Найти
+rename-replace = Заменить на
+rename-regex = Регулярное выражение ($1 в замене)
+rename-case = Буквы
+rename-case-same = как есть
+rename-case-lower = строчные
+rename-case-upper = ПРОПИСНЫЕ
+rename-case-title = Каждое Слово С Прописной
+rename-case-sentence = Только первая буква
+rename-counter = Счётчик: начало, шаг, цифры
+rename-fields = [N] имя  [E] расширение  [N1-3] часть  [C] счётчик  [d] [t] дата, время  [P] папка
+rename-not-in-archive = несколько файлов переименовываются в папке, а не внутри архива: там F6 переименовывает один элемент
+rename-bad-counter = счётчик — это три целых числа: начало, шаг, цифры; { $counter } не подходит
+rename-cannot = нельзя переименовать: { $why }
+rename-problem-empty = от имени ничего не осталось
+rename-problem-invalid = такого имени у файла быть не может
+rename-problem-twice = другой файл тоже получает это имя
+rename-problem-exists = файл с таким именем уже есть
+rename-more = … и ещё { $count }
+rename-blocked =
+    { $count ->
+        [one] один файл не может получить новое имя: ничего не переименовывается, пока он не сможет
+       *[other] файлов, которые не могут получить новое имя: { $count }; ничего не переименовывается, пока они не смогут
+    }
+rename-summary = меняется { $count } из { $total }
+rename-nothing = ни одно имя не меняется
+rename-nothing-to-undo = нет группового переименования, которое можно отменить
+rename-done =
+    { $count ->
+        [one] переименован один файл · отменить можно в меню «Файлы»
+       *[other] переименовано файлов: { $count } · отменить можно в меню «Файлы»
+    }
+rename-undone =
+    { $count ->
+        [one] возвращено одно имя
+       *[other] возвращено имён: { $count }
+    }
 pack-title = Добавить в архив
 pack-name = Архив
 pack-format = Формат

@@ -230,6 +230,13 @@ pub enum Request {
         ctx: Box<fcmd_plug::host::Context>,
         timeout: Option<u64>,
     },
+    /// Rename files of one folder as a multi-rename planned it: all of them, or none
+    /// (`fcmd_jobs::rename_all`). `undo` says it is putting the last one back.
+    Rename {
+        dir: VPath,
+        plan: Vec<(String, String)>,
+        undo: bool,
+    },
     /// Create a link. Not a job: it is one syscall, with nothing to report progress on.
     Link {
         target: VPath,
@@ -573,6 +580,13 @@ pub enum Event {
         generation: u64,
         title: String,
         items: Vec<(VPath, Entry)>,
+    },
+    /// A multi-rename was done, or was not and the folder is as it was.
+    Renamed {
+        dir: VPath,
+        plan: Vec<(String, String)>,
+        undo: bool,
+        result: Result<usize, String>,
     },
     /// A link was created, or could not be.
     LinkDone {
@@ -2076,6 +2090,15 @@ pub struct App {
     pub last_pack_level: fcmd_arc::Level,
     /// Whether the last pack asked for solid blocks, so the dialog opens the way it was left.
     pub last_pack_solid: bool,
+    /// What the multi-rename dialog is about while it is open: the folder, the files in the
+    /// order the panel shows them, and every name already in that folder.
+    pub rename_dir: Option<VPath>,
+    pub rename_items: Vec<fcmd_core::rename::Item>,
+    pub rename_existing: std::collections::HashSet<String>,
+    /// The dialog's settings, so the next one opens the way the last was left.
+    pub last_rename: fcmd_core::rename::Options,
+    /// The last multi-rename done, for `file.multirename.undo`: the folder and its plan.
+    pub rename_undo: Option<(VPath, Vec<(String, String)>)>,
     /// The same for the replace dialog.
     pub last_replace: fcmd_jobs::ReplaceOptions,
     /// A replacement runs twice: once to count, and then, if the user says so, for real. This
@@ -2309,6 +2332,11 @@ impl App {
             last_pack: fcmd_arc::Format::Zip,
             last_pack_level: fcmd_arc::Level::Normal,
             last_pack_solid: false,
+            rename_dir: None,
+            rename_items: Vec::new(),
+            rename_existing: Default::default(),
+            last_rename: Default::default(),
+            rename_undo: None,
             last_replace: fcmd_jobs::ReplaceOptions::default(),
             pending_replace: None,
             carry: None,
@@ -2500,6 +2528,24 @@ impl App {
                         self.set_status(msg);
                     }
                 }
+            }
+            Event::Renamed {
+                dir,
+                plan,
+                undo,
+                result,
+            } => {
+                match result {
+                    Ok(count) => {
+                        self.rename_undo = if undo { None } else { Some((dir, plan)) };
+                        let key = if undo { "rename-undone" } else { "rename-done" };
+                        let msg = self.i18n.t_args(key, &[("count", (count as i64).into())]);
+                        self.set_status(msg);
+                    }
+                    Err(e) => self.set_error(e),
+                }
+                self.read_panel(0);
+                self.read_panel(1);
             }
             Event::LinkDone { link, error } => match error {
                 Some(e) => self.set_error(e),
@@ -3798,6 +3844,7 @@ impl App {
             Mode::Form(form) => {
                 self.mode = Mode::Form(form);
                 self.form_key(key);
+                self.refresh_rename_preview();
             }
             Mode::Pick(pick) => {
                 self.mode = Mode::Pick(pick);
@@ -7978,6 +8025,8 @@ impl App {
             Command::PanelInfo(side) => self.set_content(side, crate::panel::Content::Info),
             Command::PanelTree(side) => self.set_content(side, crate::panel::Content::Tree),
             Command::FilePack => self.open_pack_form(),
+            Command::FileMultiRename => self.open_rename_form(),
+            Command::FileMultiRenameUndo => self.undo_rename(),
             Command::FileUnpack => self.open_unpack_form(),
             Command::NetTunnel => self.ask_tunnel(),
             Command::NetTunnels => {
@@ -10376,6 +10425,215 @@ impl App {
     /// OK in the replace dialog: count first, always. The dry run and the write share the
     /// engine's one code path, so what the confirmation says is what the write will do.
     /// `Shift+F1`: the dialog for a new archive out of what is selected.
+    /// `Ctrl+Shift+F6`: rename what is selected from one pattern (SPEC 03 §8).
+    ///
+    /// The files are taken in the order the panel shows them, which is the order the counter
+    /// counts in: sorted by date, `[C]` numbers them by date, which is usually the point.
+    fn open_rename_form(&mut self) {
+        let panel = self.panel();
+        if panel.cwd.in_container() {
+            let m = self.i18n.t("rename-not-in-archive");
+            self.set_error(m);
+            return;
+        }
+        let dir = panel.cwd.clone();
+        let parent = dir.display_name();
+        let chosen: Vec<&Entry> = if panel.selection.is_empty() {
+            panel
+                .current()
+                .filter(|e| e.is_selectable())
+                .into_iter()
+                .collect()
+        } else {
+            (0..panel.listing.len())
+                .filter_map(|row| panel.listing.row(row))
+                .filter(|e| e.is_selectable() && panel.selection.contains(e.id))
+                .collect()
+        };
+        if chosen.is_empty() {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        }
+        let items: Vec<fcmd_core::rename::Item> = chosen
+            .iter()
+            .map(|e| fcmd_core::rename::Item {
+                name: e.name.to_string_lossy().into_owned(),
+                is_dir: e.kind.is_dirlike(),
+                mtime: e.mtime,
+                parent: parent.clone(),
+            })
+            .collect();
+        let existing = (0..panel.listing.len())
+            .filter_map(|row| panel.listing.row(row))
+            .filter(|e| e.is_selectable())
+            .map(|e| e.name.to_string_lossy().into_owned())
+            .collect();
+        self.rename_dir = Some(dir);
+        self.rename_items = items;
+        self.rename_existing = existing;
+        self.mode = Mode::Form(Box::new(Form::multi_rename(&self.last_rename, &self.i18n)));
+        self.refresh_rename_preview();
+    }
+
+    /// The dialog's rows, as options for the engine — or why they are not.
+    fn rename_options(&self, form: &Form) -> Result<fcmd_core::rename::Options, String> {
+        use fcmd_core::rename::{Case, Options};
+        let counter = form.text_value("ren.counter");
+        let numbers: Vec<&str> = counter.split(',').map(str::trim).collect();
+        let bad = || {
+            self.i18n
+                .t_args("rename-bad-counter", &[("counter", counter.clone().into())])
+        };
+        let number = |i: usize, default: i64| -> Result<i64, String> {
+            match numbers.get(i).copied() {
+                None | Some("") => Ok(default),
+                Some(n) => n.parse().map_err(|_| bad()),
+            }
+        };
+        Ok(Options {
+            name: form.text_value("ren.name"),
+            ext: form.text_value("ren.ext"),
+            search: form.text_value("ren.search"),
+            replace: form.text_value("ren.replace"),
+            regex: form.toggle_value("ren.regex"),
+            case: match form.choice_value("ren.case").as_str() {
+                "lower" => Case::Lower,
+                "upper" => Case::Upper,
+                "title" => Case::Title,
+                "sentence" => Case::Sentence,
+                _ => Case::Unchanged,
+            },
+            counter_start: number(0, 1)?,
+            counter_step: number(1, 1)?,
+            counter_width: usize::try_from(number(2, 1)?).map_err(|_| bad())?,
+        })
+    }
+
+    /// What the dialog would do, worked out from its rows as they are now.
+    fn rename_rows(&self, form: &Form) -> Result<Vec<fcmd_core::rename::Row>, String> {
+        let opts = self.rename_options(form)?;
+        fcmd_core::rename::preview(
+            &self.rename_items,
+            &opts,
+            &self.rename_existing,
+            &fcmd_ui::widgets::format_time,
+        )
+        .map_err(|e| e.to_string())
+    }
+
+    /// Write the preview under the dialog's rows: the first few renames, each with what is
+    /// wrong with it if anything is, and a line that counts them.
+    fn refresh_rename_preview(&mut self) {
+        use fcmd_core::rename::Problem;
+        let Mode::Form(form) = &self.mode else { return };
+        if form.kind != FormKind::MultiRename {
+            return;
+        }
+        const SHOWN: usize = 8;
+        let lines = match self.rename_rows(form) {
+            Err(e) => vec![self.i18n.t_args("rename-cannot", &[("why", e.into())])],
+            Ok(rows) => {
+                let mut lines = Vec::new();
+                // Rows with a problem first, so the one that stops the rename is on screen.
+                let mut order: Vec<&fcmd_core::rename::Row> = rows.iter().collect();
+                order.sort_by_key(|r| r.problem.is_none());
+                for row in order.iter().take(SHOWN) {
+                    let why = row.problem.as_ref().map(|p| match p {
+                        Problem::Empty => "rename-problem-empty",
+                        Problem::Invalid => "rename-problem-invalid",
+                        Problem::Twice => "rename-problem-twice",
+                        Problem::Exists => "rename-problem-exists",
+                    });
+                    let line = format!("{} → {}", row.old, row.new);
+                    lines.push(match why {
+                        Some(key) => format!("✗ {line}  ({})", self.i18n.t(key)),
+                        None if row.changes() => format!("  {line}"),
+                        None => format!("  {} =", row.old),
+                    });
+                }
+                if rows.len() > SHOWN {
+                    lines.push(self.i18n.t_args(
+                        "rename-more",
+                        &[("count", ((rows.len() - SHOWN) as i64).into())],
+                    ));
+                }
+                let changing = rows.iter().filter(|r| r.changes()).count();
+                let broken = rows.iter().filter(|r| r.problem.is_some()).count();
+                lines.push(if broken > 0 {
+                    self.i18n
+                        .t_args("rename-blocked", &[("count", (broken as i64).into())])
+                } else {
+                    self.i18n.t_args(
+                        "rename-summary",
+                        &[
+                            ("count", (changing as i64).into()),
+                            ("total", (rows.len() as i64).into()),
+                        ],
+                    )
+                });
+                lines
+            }
+        };
+        if let Mode::Form(form) = &mut self.mode {
+            form.set_preview(lines);
+        }
+    }
+
+    /// OK in the multi-rename dialog: rename every file, or say why not with the dialog open.
+    fn apply_rename_form(&mut self, form: &Form) {
+        let reopen = |app: &mut App, msg: String| {
+            app.set_error(msg);
+            app.mode = Mode::Form(Box::new(form.clone()));
+            app.refresh_rename_preview();
+        };
+        let rows = match self.rename_rows(form) {
+            Ok(rows) => rows,
+            Err(e) => {
+                let m = self.i18n.t_args("rename-cannot", &[("why", e.into())]);
+                return reopen(self, m);
+            }
+        };
+        if let Ok(opts) = self.rename_options(form) {
+            self.last_rename = opts;
+        }
+        let Some(plan) = fcmd_core::rename::plan(&rows) else {
+            let broken = rows.iter().filter(|r| r.problem.is_some()).count();
+            let m = self
+                .i18n
+                .t_args("rename-blocked", &[("count", (broken as i64).into())]);
+            return reopen(self, m);
+        };
+        if plan.is_empty() {
+            let m = self.i18n.t("rename-nothing");
+            self.set_status(m);
+            return;
+        }
+        let Some(dir) = self.rename_dir.clone() else {
+            return;
+        };
+        self.requests.push(Request::Rename {
+            dir,
+            plan,
+            undo: false,
+        });
+    }
+
+    /// `file.multirename.undo`: the last multi-rename, the other way round.
+    fn undo_rename(&mut self) {
+        let Some((dir, plan)) = self.rename_undo.clone() else {
+            let m = self.i18n.t("rename-nothing-to-undo");
+            self.set_error(m);
+            return;
+        };
+        let back = plan.into_iter().map(|(old, new)| (new, old)).collect();
+        self.requests.push(Request::Rename {
+            dir,
+            plan: back,
+            undo: true,
+        });
+    }
+
     fn open_pack_form(&mut self) {
         let sources = self.job_sources();
         if sources.is_empty() {
@@ -12749,6 +13007,10 @@ impl App {
         }
         if form.kind == FormKind::Pack {
             self.apply_pack_form(&form);
+            return;
+        }
+        if form.kind == FormKind::MultiRename {
+            self.apply_rename_form(&form);
             return;
         }
         if form.kind == FormKind::Unpack {
@@ -23152,6 +23414,121 @@ mod tests {
             app.panel().sort.groups,
             "Shift+F11 did not turn the sort groups on"
         );
+    }
+
+    fn rename_preview(app: &App) -> Vec<String> {
+        let Mode::Form(form) = &app.mode else {
+            panic!("no dialog: {:?}", app.mode)
+        };
+        assert_eq!(form.kind, FormKind::MultiRename);
+        form.fields
+            .iter()
+            .filter_map(|f| match f {
+                crate::form::Field::Note(n) => Some(n.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// The whole road: two files selected, a mask typed and the preview following each key,
+    /// OK starting one rename of both, the answer offering undo, and undo the same plan the
+    /// other way round.
+    #[test]
+    fn a_multi_rename_previews_renames_and_undoes() {
+        let mut app = app();
+        app.panels[0].cursor = 3; // b.rs
+        press(&mut app, "Ins");
+        press(&mut app, "Ins"); // and c.rs
+        press(&mut app, "Ctrl+Shift+F6");
+        assert!(rename_preview(&app).iter().any(|l| l.contains("b.rs =")));
+        // The caret is at the end of `[N]`: what is typed goes after it.
+        type_text(&mut app, "_old");
+        let preview = rename_preview(&app);
+        assert!(
+            preview.iter().any(|l| l.contains("b.rs → b_old.rs")),
+            "{preview:#?}"
+        );
+        assert!(
+            preview.iter().any(|l| l.contains("c.rs → c_old.rs")),
+            "{preview:#?}"
+        );
+
+        app.requests.clear();
+        press(&mut app, "F10");
+        let (dir, plan, undo) = app
+            .requests
+            .iter()
+            .find_map(|r| match r {
+                Request::Rename { dir, plan, undo } => Some((dir.clone(), plan.clone(), *undo)),
+                _ => None,
+            })
+            .expect("OK starts the rename");
+        assert!(!undo);
+        assert_eq!(
+            plan,
+            vec![
+                ("b.rs".to_string(), "b_old.rs".to_string()),
+                ("c.rs".to_string(), "c_old.rs".to_string())
+            ]
+        );
+        app.handle_event(Event::Renamed {
+            dir: dir.clone(),
+            plan: plan.clone(),
+            undo: false,
+            result: Ok(2),
+        });
+        assert!(app.status.contains('2'), "{}", app.status);
+
+        app.requests.clear();
+        app.run(Command::FileMultiRenameUndo);
+        let back = app
+            .requests
+            .iter()
+            .find_map(|r| match r {
+                Request::Rename {
+                    plan, undo: true, ..
+                } => Some(plan.clone()),
+                _ => None,
+            })
+            .expect("undo starts the reverse");
+        assert_eq!(
+            back,
+            vec![
+                ("b_old.rs".to_string(), "b.rs".to_string()),
+                ("c_old.rs".to_string(), "c.rs".to_string())
+            ]
+        );
+        app.handle_event(Event::Renamed {
+            dir,
+            plan: back,
+            undo: true,
+            result: Ok(2),
+        });
+        assert!(app.rename_undo.is_none(), "an undo is not itself undone");
+    }
+
+    /// Two files to one name: the preview says which, and OK leaves the dialog open with
+    /// nothing started — all or nothing.
+    #[test]
+    fn a_multi_rename_with_a_collision_starts_nothing() {
+        let mut app = app();
+        app.panels[0].cursor = 3;
+        press(&mut app, "Ins");
+        press(&mut app, "Ins");
+        press(&mut app, "Ctrl+Shift+F6");
+        for _ in 0..3 {
+            press(&mut app, "Backspace");
+        }
+        type_text(&mut app, "same");
+        let preview = rename_preview(&app);
+        assert!(preview.iter().any(|l| l.starts_with('✗')), "{preview:#?}");
+        app.requests.clear();
+        press(&mut app, "F10");
+        assert!(matches!(app.mode, Mode::Form(_)), "the dialog stays open");
+        assert!(!app
+            .requests
+            .iter()
+            .any(|r| matches!(r, Request::Rename { .. })));
     }
 
     /// A `.gz` holds one file. A folder in the dialog is refused while it is still open, with

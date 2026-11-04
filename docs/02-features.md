@@ -19,9 +19,10 @@ carries it any more: what it owned is a `✓`.
 
 Every `M2` row was read against the code again for 0.26.0, and thirty of the thirty-six were
 out of date: twelve because the work had been finished and nobody changed the character, and
-eighteen because most of it had and the cell now says what is left. Six still say `M2` and
-mean it — a stacked layout, the branch view, icons, the multi-rename tool, a disk-usage view,
-and opening the item in the desktop's own file manager.
+eighteen because most of it had and the cell now says what is left. Six still said `M2` and
+meant it; the multi-rename tool has gone since, in 0.31.0, and the five left are a stacked
+layout, the branch view, icons, a disk-usage view, and opening the item in the desktop's own
+file manager.
 
 Until 0.22.0 this column held a paragraph per row about what had shipped and in which
 version, which was a second changelog to keep in step with the first — and a tax on every
@@ -106,7 +107,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 3.8 | Conflict resolution: overwrite / skip / rename / append / newer-only / size-differs, "apply to all", per-conflict dialog | all | ✓ |
 | 3.9 | Verify after copy (hash compare), preserve mode/owner/times/xattrs, sparse files, reflink/`copy_file_range`/CoW, `FSCTL` server-side copy | TC/NEW | ~ verifying as part of the copy, the owner and extended attributes, sparse files |
 | 3.10 | Resume interrupted copy of large files | TC | M3 |
-| 3.11 | Multi-rename tool: patterns (`[N]`, `[E]`, counters, date, regex, case changes), live preview, undo | TC/KRU | M2 |
+| 3.11 | Multi-rename tool: patterns (`[N]`, `[E]`, counters, date, regex, case changes), live preview, undo | TC/KRU | ~ the undo lasts as long as the program runs, not across a restart; the plan cannot be exported, and transliteration, `[X]` (the clipboard) and plugin fields (`[=exif:…]`) are not there |
 | 3.12 | Split / combine files; checksum create & verify (`.md5`, `.sha1`, `.sha256`, `.sfv`) | TC/KRU | ~ splitting and combining |
 | 3.13 | Apply command to each selected file (`Ctrl+G` style), with `%`-macros | FAR | ✓ |
 | 3.14 | Compare directories (by name/size/date/content), synchronise directories with preview and one-way/two-way modes | TC/KRU | ~ a saved sync job and a written report |

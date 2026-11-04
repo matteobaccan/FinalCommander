@@ -407,6 +407,8 @@ menu-edit-new = Éditer &un nouveau fichier
 menu-copy = &Copier
 menu-rename = &Renommer ou déplacer
 menu-link = Créer un &lien
+menu-multirename = Renommer plusieurs…
+menu-multirename-undo = Annuler le dernier renommage multiple
 menu-mkdir = Créer un &dossier
 menu-delete = &Supprimer
 menu-wipe = &Effacer définitivement
@@ -836,6 +838,46 @@ arc-writing-back = { $name } retourne dans l'archive
 arc-move-out = pour sortir quelque chose d'une archive, copiez-le avec F5
 arc-add-files-only = un par un, seuls les fichiers entrent ; Shift+F1 y met un répertoire entier
 
+rename-title = Renommer plusieurs
+rename-name = Nom
+rename-ext = Extension
+rename-search = Rechercher
+rename-replace = Remplacer par
+rename-regex = Expression régulière ($1 dans le remplacement)
+rename-case = Lettres
+rename-case-same = telles quelles
+rename-case-lower = minuscules
+rename-case-upper = MAJUSCULES
+rename-case-title = Chaque Mot En Capitale
+rename-case-sentence = Première lettre seulement
+rename-counter = Compteur : début, pas, chiffres
+rename-fields = [N] nom  [E] extension  [N1-3] partie  [C] compteur  [d] [t] date, heure  [P] dossier
+rename-not-in-archive = plusieurs fichiers se renomment dans un dossier, pas dans une archive : là, F6 renomme une entrée
+rename-bad-counter = le compteur, ce sont trois entiers, début, pas, chiffres : { $counter } n'en est pas
+rename-cannot = impossible de renommer : { $why }
+rename-problem-empty = il ne reste aucun nom
+rename-problem-invalid = ce n'est pas un nom qu'un fichier peut avoir
+rename-problem-twice = un autre fichier prend aussi ce nom
+rename-problem-exists = un fichier de ce nom est déjà là
+rename-more = … et { $count } de plus
+rename-blocked =
+    { $count ->
+        [one] un fichier ne peut pas prendre son nouveau nom : rien n'est renommé tant qu'il ne le peut pas
+       *[other] { $count } fichiers ne peuvent pas prendre leur nouveau nom : rien n'est renommé tant qu'ils ne le peuvent pas
+    }
+rename-summary = { $count } sur { $total } changent
+rename-nothing = aucun nom ne change
+rename-nothing-to-undo = aucun renommage multiple à annuler
+rename-done =
+    { $count ->
+        [one] un fichier renommé · annulable depuis le menu Fichiers
+       *[other] { $count } fichiers renommés · annulables depuis le menu Fichiers
+    }
+rename-undone =
+    { $count ->
+        [one] un nom remis
+       *[other] { $count } noms remis
+    }
 pack-title = Ajouter à l'archive
 pack-name = Archive
 pack-format = Format

@@ -196,6 +196,8 @@ impl Command {
                 (Insert::Unc, _) => "put the full name in its network form on the command line",
             },
 
+            Command::FileMultiRename => "rename what is selected from one pattern, with a preview",
+            Command::FileMultiRenameUndo => "put back the names the last multi-rename changed",
             Command::FilePack => "put what is selected into a new archive",
             Command::FileUnpack => "take an archive apart",
             Command::ArcCommands => "what can be done with this archive",

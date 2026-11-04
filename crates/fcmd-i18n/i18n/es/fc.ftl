@@ -407,6 +407,8 @@ menu-edit-new = E&ditar un archivo nuevo
 menu-copy = &Copiar
 menu-rename = &Renombrar o mover
 menu-link = Crear en&lace
+menu-multirename = Renombrar se&gún un patrón…
+menu-multirename-undo = Deshacer el último renombrado múltiple
 menu-mkdir = Crear carpeta
 menu-delete = &Borrar
 menu-wipe = Borrar de forma seg&ura
@@ -836,6 +838,46 @@ arc-writing-back = { $name } vuelve dentro del archivo comprimido
 arc-move-out = para sacar algo de un archivo comprimido, cópialo con F5
 arc-add-files-only = de uno en uno solo entran archivos; Shift+F1 mete un directorio entero
 
+rename-title = Renombrar varios
+rename-name = Nombre
+rename-ext = Extensión
+rename-search = Buscar
+rename-replace = Reemplazar por
+rename-regex = Expresión regular ($1 en el reemplazo)
+rename-case = Letras
+rename-case-same = como están
+rename-case-lower = minúsculas
+rename-case-upper = MAYÚSCULAS
+rename-case-title = Cada Palabra Con Mayúscula
+rename-case-sentence = Solo la primera letra
+rename-counter = Contador: inicio, paso, cifras
+rename-fields = [N] nombre  [E] extensión  [N1-3] parte  [C] contador  [d] [t] fecha, hora  [P] carpeta
+rename-not-in-archive = varios archivos se renombran en una carpeta, no dentro de un archivo comprimido: allí F6 renombra una entrada
+rename-bad-counter = el contador son tres números enteros, inicio, paso, cifras: { $counter } no lo es
+rename-cannot = no se puede renombrar: { $why }
+rename-problem-empty = no queda ningún nombre
+rename-problem-invalid = no es un nombre que un archivo pueda tener
+rename-problem-twice = otro archivo también toma este nombre
+rename-problem-exists = ya hay un archivo con este nombre
+rename-more = … y { $count } más
+rename-blocked =
+    { $count ->
+        [one] un archivo no puede tomar su nuevo nombre: no se renombra nada hasta que pueda
+       *[other] { $count } archivos no pueden tomar su nuevo nombre: no se renombra nada hasta que puedan
+    }
+rename-summary = cambian { $count } de { $total }
+rename-nothing = ningún nombre cambia
+rename-nothing-to-undo = no hay ningún renombrado múltiple que deshacer
+rename-done =
+    { $count ->
+        [one] un archivo renombrado · se deshace desde el menú Archivos
+       *[other] { $count } archivos renombrados · se deshacen desde el menú Archivos
+    }
+rename-undone =
+    { $count ->
+        [one] un nombre devuelto
+       *[other] { $count } nombres devueltos
+    }
 pack-title = Añadir al archivo
 pack-name = Archivo
 pack-format = Formato

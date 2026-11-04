@@ -57,6 +57,35 @@ risposta quando quella chiamata finisce e non entro i prossimi kilobyte, e l'ava
 quel file arriva tutto insieme. Su Linux la copia è ancora fatta a pezzi, quindi là non vale
 né l'una né l'altra cosa.
 
+# Rinominare molti file in una volta
+
+`Ctrl+Shift+F6` rinomina ciò che è selezionato a partire da un modello — *File → Rinomina in
+blocco*. Il dialogo ha una maschera per il nome e una per l'estensione, e sotto un'anteprima che
+segue ogni tasto: ogni file, il nome che prenderebbe, e cosa non va dove qualcosa non va.
+
+    [N]        il nome senza estensione           [N1-3]  i suoi caratteri da 1 a 3
+    [N3]       il suo terzo carattere             [N3-]   dal terzo alla fine
+    [N2,4]     quattro caratteri dal secondo      [E]     l'estensione, negli stessi modi
+    [C]        un contatore                       [C10,5,3]  da 10, di 5 in 5, tre cifre
+    [d] [t]    data e ora del file                [d:%Y-%m]  in qualunque formato strftime
+    [P]        il nome della cartella             [[      una [ e basta
+
+Così `[d]_[N]` mette davanti al nome di ogni foto la sua data, e `vacanza_[C]` con il contatore a
+`1,1,3` dà `vacanza_001.jpg` e seguenti. Il contatore conta nell'ordine in cui il pannello
+mostra i file: ordinati per data, li numera per data. *Cerca* e *Sostituisci con* lavorano poi
+sul nome nuovo, come testo semplice oppure, con la casella spuntata, come espressione regolare
+in cui la sostituzione può dire `$1`. *Lettere* cambia maiuscole e minuscole per ultimo.
+
+Non si rinomina nulla se non si possono rinominare tutti. Un file che resterebbe senza nome, con
+una barra dentro, con lo stesso nome di un'altra riga o con il nome di un file che c'è già e
+resta, viene segnato con `✗` e il motivo, in cima all'elenco, e `OK` lascia il dialogo aperto
+finché non è sistemato. I nomi che si scambiano di posto vanno bene — `1.txt` e `2.txt`
+invertiti passano per un nome temporaneo, che non resta mai in giro — e se una rinomina fallisce
+a metà quelle già fatte vengono annullate, così la cartella è o tutta con i nomi nuovi o come
+era.
+
+*File → Annulla l'ultima rinomina multipla* rimette i nomi, finché il programma è aperto.
+
 # Le somme di controllo
 
 *Somme di controllo…* nel menu File scrive un elenco di impronte per quello che è selezionato:

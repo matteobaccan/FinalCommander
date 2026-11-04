@@ -16,6 +16,7 @@ pub mod filter;
 pub mod git;
 pub mod listing;
 pub mod longpath;
+pub mod rename;
 pub mod selection;
 pub mod size;
 pub mod sort;

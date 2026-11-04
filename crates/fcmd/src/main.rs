@@ -1661,6 +1661,24 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                         let _ = tx.send(Event::PluginDone { id, label, result });
                     });
                 }
+                Request::Rename { dir, plan, undo } => {
+                    let tx = tx.clone();
+                    let fs = ObjectFs::new(
+                        objects.clone(),
+                        RoutedFs::new(pool.clone(), runtime.handle().clone()),
+                        runtime.handle().clone(),
+                    );
+                    runtime.spawn_blocking(move || {
+                        let result = fcmd_jobs::rename_all(&fs, &dir, &plan, &CancelToken::new())
+                            .map_err(|e| e.to_string());
+                        let _ = tx.send(Event::Renamed {
+                            dir,
+                            plan,
+                            undo,
+                            result,
+                        });
+                    });
+                }
                 Request::Link { target, link, kind } => {
                     let tx = tx.clone();
                     let fs = ObjectFs::new(
@@ -5037,6 +5055,21 @@ dir_attr = "D"
                         fcmd_plug::host::run_command(&program, cwd.as_deref(), &ctx, timeout)
                             .map_err(|e| e.to_string());
                     app.handle_event(Event::PluginDone { id, label, result });
+                }
+                Request::Rename { dir, plan, undo } => {
+                    let result = fcmd_jobs::rename_all(
+                        &fcmd_jobs::LocalFs,
+                        &dir,
+                        &plan,
+                        &CancelToken::new(),
+                    )
+                    .map_err(|e| e.to_string());
+                    app.handle_event(Event::Renamed {
+                        dir,
+                        plan,
+                        undo,
+                        result,
+                    });
                 }
                 Request::Link { target, link, kind } => {
                     let error = fcmd_jobs::create_link(&fcmd_jobs::LocalFs, &target, &link, kind)

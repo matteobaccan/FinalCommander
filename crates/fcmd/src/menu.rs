@@ -29,6 +29,8 @@ pub enum FormKind {
     Replace,
     /// Put the selection into a new archive (SPEC 04 §4).
     Pack,
+    /// Rename many files from one pattern (SPEC 03 §8).
+    MultiRename,
     /// Take an archive apart.
     Unpack,
     /// What a file is, rather than what is in it (SPEC 10 §3.8).
@@ -354,6 +356,16 @@ pub fn menus() -> Vec<Menu> {
                 item("menu-copy", "F5", Action::Run(Command::FileCopy)),
                 item("menu-rename", "F6", Action::Run(Command::FileMove)),
                 item("menu-link", "Alt+F6", Action::Run(Command::FileLink)),
+                item(
+                    "menu-multirename",
+                    "Ctrl+Shift+F6",
+                    Action::Run(Command::FileMultiRename),
+                ),
+                item(
+                    "menu-multirename-undo",
+                    "",
+                    Action::Run(Command::FileMultiRenameUndo),
+                ),
                 item("menu-mkdir", "F7", Action::Run(Command::FileMkdir)),
                 item("menu-delete", "F8", Action::Run(Command::FileDelete)),
                 item(

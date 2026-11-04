@@ -415,6 +415,8 @@ menu-edit-new = Edit new &file
 menu-copy = &Copy
 menu-rename = &Rename or move
 menu-link = Create lin&k
+menu-multirename = Rename fr&om a pattern…
+menu-multirename-undo = Undo the last multi-rename
 menu-mkdir = &Make folder
 menu-delete = &Delete
 menu-wipe = &Wipe
@@ -844,6 +846,46 @@ arc-writing-back = Writing { $name } back into the archive
 arc-move-out = to take something out of an archive, copy it with F5
 arc-add-files-only = only files go in one at a time; Shift+F1 puts a whole directory in
 
+rename-title = Rename several
+rename-name = Name
+rename-ext = Extension
+rename-search = Search for
+rename-replace = Replace with
+rename-regex = Regular expression ($1 in the replacement)
+rename-case = Letters
+rename-case-same = as they are
+rename-case-lower = lower case
+rename-case-upper = UPPER CASE
+rename-case-title = Each Word Capitalised
+rename-case-sentence = First letter only
+rename-counter = Counter: start, step, digits
+rename-fields = [N] name  [E] extension  [N1-3] part  [C] counter  [d] [t] date, time  [P] folder
+rename-not-in-archive = several files are renamed in a folder, not inside an archive: F6 renames one entry there
+rename-bad-counter = the counter is three whole numbers, start, step, digits: { $counter } is not
+rename-cannot = cannot rename: { $why }
+rename-problem-empty = no name left
+rename-problem-invalid = not a name a file can have
+rename-problem-twice = another file gets this name too
+rename-problem-exists = a file of this name is already there
+rename-more = … and { $count } more
+rename-blocked =
+    { $count ->
+        [one] one file cannot take its new name: nothing is renamed until it can
+       *[other] { $count } files cannot take their new names: nothing is renamed until they can
+    }
+rename-summary = { $count } of { $total } change
+rename-nothing = no name changes
+rename-nothing-to-undo = there is no multi-rename to undo
+rename-done =
+    { $count ->
+        [one] one file renamed · undo it from the Files menu
+       *[other] { $count } files renamed · undo them from the Files menu
+    }
+rename-undone =
+    { $count ->
+        [one] one name put back
+       *[other] { $count } names put back
+    }
 pack-title = Add to archive
 pack-name = Archive
 pack-format = Format

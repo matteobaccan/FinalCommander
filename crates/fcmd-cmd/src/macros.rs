@@ -111,6 +111,7 @@ impl Macro {
                     || id.starts_with("file.copy")
                     || id.starts_with("file.move")
                     || id.starts_with("file.pack")
+                    || id.starts_with("file.multirename")
                     || id.starts_with("file.unpack")
                     || id.starts_with("editor.save")
                     || id.starts_with("cmd.run")

@@ -54,6 +54,12 @@ keys = ["F8", "Del"]
 cmd = "file.delete"
 
 [[bind]]
+# Total Commander's `Ctrl+M`, which a terminal delivers as `Enter`; FAR has none of its own.
+# `F6` is rename, and this is renaming many.
+keys = ["Ctrl+Shift+F6"]
+cmd = "file.multirename"
+
+[[bind]]
 keys = ["Shift+F1"]
 cmd = "file.pack"
 

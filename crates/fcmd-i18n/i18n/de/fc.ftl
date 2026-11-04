@@ -407,6 +407,8 @@ menu-edit-new = &Neue Datei bearbeiten
 menu-copy = &Kopieren
 menu-rename = Umbenennen ode&r verschieben
 menu-link = &Verknüpfung erstellen
+menu-multirename = Mehrere um&benennen…
+menu-multirename-undo = Letzte Mehrfach-Umbenennung rückgängig
 menu-mkdir = &Ordner erstellen
 menu-delete = &Löschen
 menu-wipe = &Sicher löschen
@@ -836,6 +838,46 @@ arc-writing-back = { $name } geht zurück in das Archiv
 arc-move-out = um etwas aus einem Archiv zu holen, kopiere es mit F5
 arc-add-files-only = einzeln kommen nur Dateien hinein; Shift+F1 legt ein ganzes Verzeichnis hinein
 
+rename-title = Mehrere umbenennen
+rename-name = Name
+rename-ext = Erweiterung
+rename-search = Suchen nach
+rename-replace = Ersetzen durch
+rename-regex = Regulärer Ausdruck ($1 im Ersatz)
+rename-case = Buchstaben
+rename-case-same = wie sie sind
+rename-case-lower = klein
+rename-case-upper = GROSS
+rename-case-title = Jedes Wort Groß
+rename-case-sentence = Nur der erste Buchstabe
+rename-counter = Zähler: Start, Schritt, Stellen
+rename-fields = [N] Name  [E] Erweiterung  [N1-3] Teil  [C] Zähler  [d] [t] Datum, Zeit  [P] Ordner
+rename-not-in-archive = mehrere Dateien werden in einem Ordner umbenannt, nicht in einem Archiv: dort benennt F6 einen Eintrag um
+rename-bad-counter = der Zähler sind drei ganze Zahlen, Start, Schritt, Stellen: { $counter } ist es nicht
+rename-cannot = kann nicht umbenennen: { $why }
+rename-problem-empty = kein Name übrig
+rename-problem-invalid = kein Name, den eine Datei haben kann
+rename-problem-twice = eine andere Datei bekommt diesen Namen auch
+rename-problem-exists = eine Datei dieses Namens ist schon da
+rename-more = … und { $count } weitere
+rename-blocked =
+    { $count ->
+        [one] eine Datei kann ihren neuen Namen nicht bekommen: nichts wird umbenannt, bis sie es kann
+       *[other] { $count } Dateien können ihre neuen Namen nicht bekommen: nichts wird umbenannt, bis sie es können
+    }
+rename-summary = { $count } von { $total } ändern sich
+rename-nothing = kein Name ändert sich
+rename-nothing-to-undo = es gibt keine Mehrfach-Umbenennung zum Rückgängigmachen
+rename-done =
+    { $count ->
+        [one] eine Datei umbenannt · rückgängig im Menü Dateien
+       *[other] { $count } Dateien umbenannt · rückgängig im Menü Dateien
+    }
+rename-undone =
+    { $count ->
+        [one] ein Name zurückgesetzt
+       *[other] { $count } Namen zurückgesetzt
+    }
 pack-title = Zum Archiv hinzufügen
 pack-name = Archiv
 pack-format = Format
