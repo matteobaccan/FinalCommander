@@ -34,8 +34,8 @@ says what the decision stands on.
 | The files themselves on the clipboard | `Ctrl+Shift+C`/`X` | No terminal can be asked to carry a file — `OSC 52` carries text. This is window-system work, and it is what `fcmd-platform` would be for. |
 | Descriptions | `Ctrl+Z` | Writing one *inside* an archive, which is a rebuild of the archive rather than a write to a file. |
 | Formats through a program on the machine | `Enter` on a `.rar`, `.iso`, `.cab`… | A selection extracted through the job engine, with the bar counting bytes as they land; `Test` on `Alt+F6`; a table for RARLAB's `rar`, verified on a machine that has it (`docs/05-multiarc.md` §10). Writing is not on this list: it is decided against (§9). |
-| A bare `.gz`, `.bz2`, `.xz`, `.zst` | `Shift+F1` | They read as an archive of one entry; packing one file into one is not there, so the pack dialog does not offer them. |
-| `cpio`, `rpm`, `cab` read here | `Enter` | Read through `7z` today. `cpio` needs no dependency — it is the `ar` reader again — and `rpm` is a header and a `cpio`; `cab` is the one that wants a crate (`docs/05-multiarc.md` §9). |
+| `cab` read here | `Enter` | Read through `7z` today, so not on a machine without it. `cpio` and `rpm` went the same way in 0.30.0; `cab` is the one of the three that wants a crate (`docs/05-multiarc.md` §9). |
+| zstd's levels | `Shift+F1` | Every level writes zstd's fastest, because the encoder this uses implements no other: the normal and the best level are a choice for the other codecs only. |
 | `F7` inside an archive | — | No format stores a directory worth keeping, so this wants a decision about what an empty directory in an archive even is. |
 | An archive on a server | — | A progress bar while the copy comes down. Today a large one is simply a pause. |
 | 7z | `Shift+F1` | Writing an encrypted archive, split volumes, and the codecs only 7-Zip ZS writes (zstd, lz4, brotli). A zip encrypted with AES wants a feature of the `zip` crate we do not build, so it says what it is rather than asking. |

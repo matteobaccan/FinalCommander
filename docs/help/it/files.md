@@ -185,11 +185,22 @@ apre come un archivio di una voce sola: `Enter` entra e mostra il file che conti
 che aveva prima di essere compresso, e `F3` lo legge. gzip conserva quel nome nella sua
 intestazione e, se c'è, viene usato; gli altri tre non conservano niente del genere, e il nome è
 quello del file senza il suffisso. Un `.tar.gz` resta un albero di cartelle, e così un tarball
-che qualcuno ha rinominato `backup.gz`: prima di decidere si guarda che cosa c'è dentro. Questi
-quattro formati qui si leggono e non si scrivono, per ora.
+che qualcuno ha rinominato `backup.gz`: prima di decidere si guarda che cosa c'è dentro.
+
+`Shift+F1` ne crea uno, da un file — scegli `gz`, `bz2`, `xz` o `zst`, oppure scrivi un nome che
+finisce così — e l'originale può sparire una volta scritto l'archivio, che è quello che fa
+`gzip`. Una cartella o un secondo file vengono rifiutati con il dialogo ancora aperto, perché il
+formato ha posto per uno solo; il dialogo dice quale tar li prenderebbe. Dentro uno di questi,
+`F4` sul file e un salvataggio lo riscrivono; nient'altro può cambiare, perché non c'è un secondo
+nome da dare né un'altra voce. Ogni livello di uno `zst` è il più veloce, che è l'unico che il
+compressore usato qui conosce.
+
+`Enter` apre anche un `.cpio` — un initramfs lo è — e un `.rpm`, come i file che il pacchetto
+installerebbe. Entrambi si leggono qui, quindi un rpm si apre anche su una macchina dove non c'è
+nient'altro; nessuno dei due si scrive, per la stessa ragione per cui non si scrive un `.deb`.
 
 I formati che questo programma non legge da sé — `.rar`, `.cab`, `.iso`, `.wim`, `.lha`, `.arj`,
-`.msi`, un `.rpm`, un `.cpio` — si aprono attraverso un programma già presente sulla macchina:
+`.msi` — si aprono attraverso un programma già presente sulla macchina:
 `7z`, in partenza. `Enter` entra esattamente come in uno zip, la cornice dice il formato, e il
 visualizzatore, la ricerca dentro gli archivi e `Ctrl+A` su una voce funzionano tutti. `F3` e
 `F5` su una voce lanciano di nuovo il programma, in una cartella temporanea che poi viene

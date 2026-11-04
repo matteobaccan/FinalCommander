@@ -285,6 +285,10 @@ reads it today. **`iso` goes through the table**, and so do `rar`, `lha` and `ar
 a candidate for being read in process is `cpio` (which needs no dependency at all — it is the
 `ar` reader again), `rpm` on top of it, and `cab`.
 
+The first two are read in process since 0.30.0 (`crates/fcmd-arc/src/cpio.rs`), so an rpm opens
+on a machine without `7z`, and this crate being asked first means the table is no longer
+reached for either. `cab` is what is left of the list.
+
 ## 10. Running it
 
 Built, with §9 decided:

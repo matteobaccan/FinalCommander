@@ -139,13 +139,17 @@ can download — or through `workflow_dispatch` with `publish: yes`. A push neve
 
 ## Where the work is right now
 
-**0.29.0 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
+**0.30.0 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
 like every release before it. A push to `main` that touches `CHANGELOG.md` or `Cargo.toml`
 is what makes `tag.yml` fire. The site is published with each release, from its tag. `CHANGELOG.md` is the history, release by release; this section only
 says where things stand.
 
 What the last few were about, newest first:
 
+- **0.30.0** — `cpio` and `rpm` read in process, so an rpm opens without `7z`; a bare `.gz`,
+  `.bz2`, `.xz` or `.zst` written from one file and rewritten on save; two old bugs, a
+  `.tar.zst` at the normal level ending the program and a placeholder the hex editor never
+  filled; and the site now published with each release, from its tag.
 - **0.29.0** — formats nobody here implements. `Enter` on a `.rar`, `.cab`, `.iso`, `.wim`
   and the rest goes in through a program already on the machine (7z, from a table in
   MultiArc's own language, `crates/fcmd-arc/src/ext.rs`), and `[[archiver]]` blocks in
@@ -197,14 +201,14 @@ files rather than guessing what its dialog says.
 
 Everything here is unblocked; `docs/BACKLOG.md` has the reasons and the rest.
 
-1. **Writing a bare `.gz`, `.bz2`, `.xz` or `.zst`**: they read as archives of one entry, and
-   packing one file into one is the half that is missing.
-2. **`cpio`, then `rpm` on it, then `cab`, read in process**: `docs/05-multiarc.md` §10.
-   `cpio` needs no dependency — it is the `ar` reader again.
-3. **A queue for jobs** (feature 3.7, SPEC 03 §5): a panel that lists them, reorders, pauses
+1. **A queue for jobs** (feature 3.7, SPEC 03 §5): a panel that lists them, reorders, pauses
    and resumes them, with one job per target device and the rest waiting.
-4. **A table for RARLAB's `rar`**, written on a machine that has it rather than from memory
+2. **A table for RARLAB's `rar`**, written on a machine that has it rather than from memory
    of its manual.
+3. **`cab` read in process**, the last of the three `docs/05-multiarc.md` §9 kept as
+   candidates; it is the one that wants a crate.
+4. **The multi-rename tool** (feature 3.11), the most used thing Total Commander has and this
+   has not.
 
 One rule that came out of that review and holds everywhere: **`Alt+<letter>` belongs to the
 quick search**, so nothing else may take it (`Ctrl+Shift+N/I/T` moved for this reason), and

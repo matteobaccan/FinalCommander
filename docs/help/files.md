@@ -177,11 +177,21 @@ opens as an archive of one entry: `Enter` goes in and shows the file it holds, n
 before it was compressed, and `F3` reads it. gzip keeps that name in its header and it is used
 when it is there; the other three keep nothing of the kind, so the name is the file's own with
 the suffix taken off. A `.tar.gz` is still a directory tree, and so is a tarball somebody
-renamed `backup.gz`: what is inside is looked at before deciding. These four are read here and
-not written yet.
+renamed `backup.gz`: what is inside is looked at before deciding.
+
+`Shift+F1` makes one, from one file — choose `gz`, `bz2`, `xz` or `zst`, or type a name that
+ends in one — and the original can go once it is written, which is what `gzip` does. A folder
+or a second file is refused while the dialog is still open, because the format has room for
+one; the dialog says which tar would take them. Inside one, `F4` on the file and a save write
+it again; nothing else can change, since there is no second name to give and no other entry.
+Every level of a `zst` is the fastest, which is the only one the compressor here has.
+
+`Enter` also opens a `.cpio` — an initramfs is one — and an `.rpm`, as the files the package
+would install. Both are read here, so an rpm opens on a machine with nothing else installed;
+neither is written, for the reason a `.deb` is not.
 
 The formats this program does not read itself — `.rar`, `.cab`, `.iso`, `.wim`, `.lha`, `.arj`,
-`.msi`, an `.rpm`, a `.cpio` — open through a program already on the machine: `7z`, by
+`.msi` — open through a program already on the machine: `7z`, by
 default. `Enter` goes in exactly as it does into a zip, the frame names the format, and the
 viewer, the search inside archives and `Ctrl+A` on an entry all work. `F3` and `F5` on an
 entry run the program again, into a temporary folder that is removed afterwards, and `Esc`

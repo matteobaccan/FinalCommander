@@ -4,7 +4,40 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
-## [Unreleased]
+## [0.30.0] — 2026-11-04
+
+### Added
+
+- **`cpio` and `rpm`, read here rather than through `7z`.** Both went through the `7z` table
+  in 0.29.0, which meant a machine without `7z` could not open an rpm at all. A `cpio` is read
+  in its newc, crc and odc headers — what an initramfs is and what every rpm carries — and the
+  old binary header is refused by name, because its byte order is part of the format and
+  guessing it is how an index shows a file of four gigabytes. A hard link is stored once, with
+  the last name of its group, so every name of the group gets that member's bytes: two names
+  for one file show two files, not a file and an empty one. A plain `cpio` is seekable like an
+  `ar`. An `rpm` is its lead, a signature header, the package header and a compressed newc
+  payload — gzip, bzip2, xz, zstd, the legacy lzma, or none — told by its magic rather than by
+  the header's tag, because the magic cannot be wrong about the bytes behind it. `Shift+F3`
+  walks the payload once rather than once per file. Both read only, like `ar`.
+
+  Verified against a real package and not only against bytes the tests make: the `gh` 2.40.0
+  rpm from its GitHub release, read here and by `7z` — the same 188 files, the same bytes for
+  the ones compared by SHA-256, and a test pass over 43,672,855 bytes with nothing broken; the
+  same again for the cpio `7z` took out of it, which `rpmbuild` wrote.
+
+- **A `.gz`, `.bz2`, `.xz` or `.zst` of one file.** `Shift+F1` makes them, which is what `gzip
+  notes.txt` does. A folder or a second file is refused while the dialog is still open, naming
+  the tar of the same codec that holds them, in the reader's language. gzip's header keeps the
+  file's name and time, as `gzip` itself does, so the entry is still called `notes.txt` after
+  the `.gz` is renamed. Inside one, the only change there is room for is new bytes for the
+  entry — `F4`, then save — which is a recompression read back whole before it goes over the
+  original; a second name, a rename, `Ctrl+A` or taking the entry out are refused by name. A
+  tarball renamed `backup.gz` opens as the tar it is, and a change to it is written as that
+  tar rather than as one file over the whole tree.
+
+  Driven in a terminal on the real binary: `Shift+F1` on a file and the system `gzip`
+  decompressing what came out, with the name in its header; then `Enter` into it, `F4`, a line
+  typed, `F2`, and `gzip -t` and `gzip -dc` on the result.
 
 ### Changed
 
@@ -18,6 +51,15 @@ Notable changes, newest first. The format follows
 
 ### Fixed
 
+- **Packing a `.tar.zst` at the normal or the best level ended the program.** The zstd encoder
+  used here implements its fastest level only — the others are `unimplemented!()` inside it —
+  and those two were passed straight through; a release build aborts on a panic. Every level is
+  the fastest now, which is still zstd, and the level in the dialog is a choice for the other
+  codecs. A test writes and rebuilds a `.tar.zst` at all three, and fails with the old mapping.
+- **Saving in the hex editor said `saved, {$bytes} bytes`**, braces and all: the call passed
+  `lines` to a message that asks for `bytes`. Nothing fails when that happens, so nothing had
+  noticed. A test now reads every `t_args` call in the workspace against the English catalogue
+  and refuses a placeholder its caller does not give.
 - **The help knows what 0.28.0 and 0.29.0 brought.** Five features had shipped with a spec
   and a changelog entry and no chapter in the help, in either language, which the house rule
   that a feature is not finished until the three agree does not allow: `--view`, `--edit` and
