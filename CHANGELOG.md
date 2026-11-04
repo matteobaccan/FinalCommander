@@ -21,6 +21,13 @@ Notable changes, newest first. The format follows
   no alternative text because the word next to it already says what it is. The same file is
   now the favicon: that had been `logo.svg`, which is the 880×236 banner — a browser asked for
   a tab icon and got a landscape.
+- **Link-time optimisation across the whole program, not one crate at a time.** The release
+  profile moves from `lto = "thin"` to `"fat"`: measured on this workspace the binary goes
+  from 19,913,216 to 18,011,056 bytes, 1.9 MB less, and the build from 3m38 to 5m11 with the
+  link step's peak memory going from 834 MB to 1.53 GB in one process. The build machines
+  have 7 GB, and the minute and a half is paid once per release on three machines that build
+  in parallel.
+
 
 ## [0.27.0] — 2026-10-31
 
