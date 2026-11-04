@@ -591,6 +591,7 @@ opt-editor-auto-indent = Einzug der Zeile darüber übernehmen
 opt-editor-whitespace = Leerzeichen und Tabulatoren zeigen
 opt-editor-cursor-after = Der Cursor landet hinter dem Gefundenen
 opt-editor-beyond-eol = Der Cursor darf über das Zeilenende hinaus
+opt-editor-trim-trailing = Leerzeichen am Zeilenende beim Speichern entfernen
 editor-not-a-character = diese Taste hat kein Zeichen zum Einfügen
 paste-one-line =
     { $count ->
@@ -694,6 +695,7 @@ hl-saved = Gruppe gilt · Optionen → Einstellungen speichern schreibt sie in d
 hl-removed = { $name } entfernt · Optionen → Einstellungen speichern schreibt es in die Datei
 hl-bad = { $name }: { $problem }
 editor-no-block = es ist nichts ausgewählt
+editor-no-bracket = hier ist keine Klammer, oder keine passt zu ihr
 editor-tabs-expanded = Tabulatoren in { $lines } Zeilen umgewandelt — das Speichern schreibt es
 site-protocol = Protokoll
 site-protocol-sftp = SFTP (über SSH)

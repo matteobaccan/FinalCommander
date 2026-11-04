@@ -66,6 +66,20 @@ elenca. La lunghezza la dice il dispositivo, perché non c'è niente da misurare
 la lettura è fatta a settori interi perché è tutto quello che un handle così accetta. Servono
 i diritti di amministratore, e se non ci sono lo dice.
 
+# Parentesi, righe unite, righe ordinate
+
+`Alt+B` salta alla parentesi che corrisponde a quella sotto il cursore, o a quella appena prima —
+`()`, `[]`, `{}` e `<>`, anche su più righe — e una seconda volta torna indietro; è il tasto di
+mcedit. Le parentesi dentro stringhe e commenti contano come le altre: questo è l'editor di un
+file manager, non di un linguaggio. `Alt+J` unisce la riga successiva a questa, con la sua
+indentazione ridotta a uno spazio. `Alt+Shift+S` ordina le righe del blocco, e niente fuori da
+lì; `Alt+Shift+T` toglie spazi e tabulazioni alla fine di ogni riga. Ognuna si annulla con un
+solo `Ctrl+Z`.
+
+**Togli gli spazi a fine riga al salvataggio**, nelle impostazioni dell'editor, fa l'ultima a
+ogni `F2`. È spenta per default, perché un salvataggio che cambia righe che nessuno ha toccato è
+una differenza che nessuno ha chiesto.
+
 # Tabulazioni, spazi e i tasti meno ovvi
 
 `F9 → Opzioni → Impostazioni dell'editor` ha le sei che contano. **Tabulazioni** è una scelta

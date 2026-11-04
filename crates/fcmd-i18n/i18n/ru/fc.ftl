@@ -591,6 +591,7 @@ opt-editor-auto-indent = Сохранять отступ предыдущей с
 opt-editor-whitespace = Показывать пробелы и табуляции
 opt-editor-cursor-after = Курсор встаёт после найденного
 opt-editor-beyond-eol = Курсор может выходить за конец строки
+opt-editor-trim-trailing = Убирать пробелы в конце строк при сохранении
 editor-not-a-character = у этой клавиши нет символа для вставки
 paste-one-line =
     { $count ->
@@ -694,6 +695,7 @@ hl-saved = группа действует · Параметры → Сохра�
 hl-removed = { $name } удалена · Параметры → Сохранить настройки запишет это в файл
 hl-bad = { $name }: { $problem }
 editor-no-block = ничего не выделено
+editor-no-bracket = здесь нет скобки, или ей ничего не соответствует
 editor-tabs-expanded = табуляции заменены в { $lines } строках — сохранение это запишет
 site-protocol = Протокол
 site-protocol-sftp = SFTP (поверх SSH)

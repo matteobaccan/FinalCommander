@@ -63,6 +63,19 @@ them. The length comes from the device itself, since there is nothing to measure
 and the reading is done in whole sectors because that is all such a handle accepts. It needs
 Administrator rights, and says so if it does not have them.
 
+# Brackets, joining and sorting
+
+`Alt+B` jumps to the bracket that matches the one under the cursor, or the one just before it —
+`()`, `[]`, `{}` and `<>`, across lines — and again jumps back; it is mcedit's key. Brackets in
+strings and comments count like any others: this is a file manager's editor, not one
+language's. `Alt+J` joins the next line to this one, its indent turned into one space.
+`Alt+Shift+S` sorts the lines of the block, and nothing outside it; `Alt+Shift+T` takes the
+spaces and tabs off the end of every line. Each is one `Ctrl+Z`.
+
+**Take trailing blanks off when saving**, in the editor settings, does the last one at every
+`F2`. It is off by default, because a save that changes lines nobody touched is a diff nobody
+asked for.
+
 # Tabs, whitespace and the odd key
 
 `F9 → Options → Editor settings` has the six that matter. **Tabs** is three choices and not a

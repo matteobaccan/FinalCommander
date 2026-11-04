@@ -512,6 +512,162 @@ impl Editor {
         Ok(())
     }
 
+    /// `Alt+B`: to the bracket that matches the one under the cursor, or the one just before
+    /// it — mcedit's key. `()`, `[]`, `{}` and `<>`, counted across lines. Brackets inside a
+    /// string or a comment count like any other, which is what a plain text editor can know;
+    /// it is the editor of a file manager, not of one language. `false` when there is no
+    /// bracket there or nothing matches it.
+    pub fn match_bracket(&mut self) -> bool {
+        const PAIRS: [(char, char); 4] = [('(', ')'), ('[', ']'), ('{', '}'), ('<', '>')];
+        let line: Vec<char> = self.buffer.line(self.cursor.line).chars().collect();
+        let at = self.cursor.col;
+        let (col, ch) = match line.get(at) {
+            Some(c) if PAIRS.iter().any(|(o, cl)| o == c || cl == c) => (at, *c),
+            _ => match at.checked_sub(1).and_then(|b| line.get(b).map(|c| (b, *c))) {
+                Some((b, c)) if PAIRS.iter().any(|(o, cl)| *o == c || *cl == c) => (b, c),
+                _ => return false,
+            },
+        };
+        let Some(&(open, close)) = PAIRS.iter().find(|(o, c)| *o == ch || *c == ch) else {
+            return false;
+        };
+        let forward = ch == open;
+        let mut depth = 0usize;
+        let mut pos = Position::new(self.cursor.line, col);
+        loop {
+            let text: Vec<char> = self.buffer.line(pos.line).chars().collect();
+            if let Some(&c) = text.get(pos.col) {
+                if c == ch {
+                    depth += 1;
+                } else if c == if forward { close } else { open } {
+                    depth -= 1;
+                    if depth == 0 {
+                        self.cursor = pos;
+                        return true;
+                    }
+                }
+            }
+            // One step along, over line ends.
+            if forward {
+                if pos.col + 1 < text.len() {
+                    pos.col += 1;
+                } else if pos.line + 1 < self.buffer.len() {
+                    pos = Position::new(pos.line + 1, 0);
+                } else {
+                    return false;
+                }
+            } else if pos.col > 0 {
+                pos.col -= 1;
+            } else if pos.line > 0 {
+                let above = self.buffer.line(pos.line - 1).chars().count();
+                pos = Position::new(pos.line - 1, above.saturating_sub(1));
+            } else {
+                return false;
+            }
+        }
+    }
+
+    /// `Alt+J`: the next line joins this one, its indent replaced by one space — none when
+    /// either side already ends or starts with nothing to separate.
+    pub fn join_line(&mut self) -> Result<bool, EditorError> {
+        let line = self.cursor.line;
+        if line + 1 >= self.buffer.len() {
+            return Ok(false);
+        }
+        let here = self.buffer.line(line).trim_end().to_string();
+        let next = self.buffer.line(line + 1);
+        let skipped = next.chars().take_while(|c| c.is_whitespace()).count();
+        let glue = if here.is_empty() || next.trim().is_empty() {
+            ""
+        } else {
+            " "
+        };
+        self.buffer.begin_group(self.cursor);
+        self.buffer.delete(Range::new(
+            Position::new(line, here.chars().count()),
+            Position::new(line + 1, skipped),
+        ))?;
+        let at = Position::new(line, here.chars().count());
+        self.buffer.insert(at, glue)?;
+        self.cursor = Position::new(line, here.chars().count() + glue.chars().count());
+        self.buffer.end_group(self.cursor);
+        Ok(true)
+    }
+
+    /// `Alt+Shift+S`: the lines of the block in order. Byte order of their text, which is
+    /// the one that sorts the same everywhere; the block's lines only, so nothing outside the
+    /// selection moves. One undo step.
+    pub fn sort_lines(&mut self) -> Result<bool, EditorError> {
+        let Some(block) = self.block else {
+            return Ok(false);
+        };
+        let (top, mut bottom, _, _) = block.columns();
+        // A stream block that ends at column 0 of a line has not taken anything of it.
+        if block.kind == BlockKind::Stream && bottom > top {
+            let end = if block.anchor.line > block.head.line {
+                block.anchor
+            } else {
+                block.head
+            };
+            if end.col == 0 {
+                bottom -= 1;
+            }
+        }
+        let mut lines: Vec<String> = (top..=bottom)
+            .map(|i| self.buffer.line(i).to_string())
+            .collect();
+        let before = lines.clone();
+        lines.sort();
+        if lines == before {
+            return Ok(true);
+        }
+        self.buffer.begin_group(self.cursor);
+        for (offset, text) in lines.iter().enumerate() {
+            if *text != before[offset] {
+                self.rewrite_line(top + offset, text)?;
+            }
+        }
+        self.buffer.end_group(self.cursor);
+        self.cursor = self.clamp(self.cursor);
+        Ok(true)
+    }
+
+    /// The spaces and tabs at the end of every line, gone. How many lines changed: zero is a
+    /// file that was clean, and leaves the undo history alone.
+    pub fn trim_trailing(&mut self) -> Result<usize, EditorError> {
+        let dirty: Vec<usize> = (0..self.buffer.len())
+            .filter(|&i| {
+                let l = self.buffer.line(i);
+                l.len() != l.trim_end_matches([' ', '\t']).len()
+            })
+            .collect();
+        if dirty.is_empty() {
+            return Ok(0);
+        }
+        self.buffer.begin_group(self.cursor);
+        for &i in &dirty {
+            let trimmed = self
+                .buffer
+                .line(i)
+                .trim_end_matches([' ', '\t'])
+                .to_string();
+            self.buffer.set_line(i, &trimmed)?;
+        }
+        self.buffer.end_group(self.cursor);
+        self.cursor = self.clamp(self.cursor);
+        Ok(dirty.len())
+    }
+
+    /// A line's text replaced inside whatever undo group is open — unlike `Buffer::set_line`,
+    /// which is a group of its own, so a change over many lines would be many undo steps.
+    fn rewrite_line(&mut self, index: usize, text: &str) -> Result<(), EditorError> {
+        let end = Position::new(index, self.buffer.line(index).chars().count());
+        self.buffer
+            .delete(Range::new(Position::new(index, 0), end))?;
+        self.buffer.insert(Position::new(index, 0), text)?;
+        Ok(())
+    }
+
     pub fn move_line(&mut self, down: bool) -> Result<(), EditorError> {
         let line = self.buffer.move_line(self.cursor.line, down)?;
         self.cursor = Position::new(line, self.cursor.col);
@@ -1052,6 +1208,67 @@ mod tests {
 
     fn editor(text: &str) -> Editor {
         Editor::new(Buffer::from_text(text), None)
+    }
+
+    #[test]
+    fn a_bracket_finds_its_match_across_lines_and_back() {
+        let mut e = editor("fn x(a: [u8; 2]) {\n    if (b) { c }\n}");
+        e.cursor = Position::new(0, 17); // the `{` that opens the body
+        assert!(e.match_bracket());
+        assert_eq!(e.cursor, Position::new(2, 0));
+        assert!(e.match_bracket(), "and back from the closing one");
+        assert_eq!(e.cursor, Position::new(0, 17));
+        // Just after a bracket counts too, which is where typing leaves the cursor.
+        e.cursor = Position::new(0, 16); // after `)`
+        assert!(e.match_bracket());
+        assert_eq!(e.cursor, Position::new(0, 4));
+        // The nested pair inside is skipped over, not taken.
+        e.cursor = Position::new(0, 8); // `[`
+        assert!(e.match_bracket());
+        assert_eq!(e.cursor, Position::new(0, 14));
+        e.cursor = Position::new(1, 1);
+        assert!(!e.match_bracket(), "no bracket here");
+        let mut open = editor("(never closed");
+        assert!(!open.match_bracket());
+    }
+
+    #[test]
+    fn joining_takes_the_indent_away_and_leaves_one_space() {
+        let mut e = editor("let x =\n        42;\nnext");
+        assert!(e.join_line().unwrap());
+        assert_eq!(e.buffer.line(0), "let x = 42;");
+        assert_eq!(e.cursor, Position::new(0, 8));
+        e.undo();
+        assert_eq!(e.buffer.line(1), "        42;", "one undo puts it back");
+        e.cursor = Position::new(2, 0);
+        assert!(!e.join_line().unwrap(), "nothing below the last line");
+    }
+
+    #[test]
+    fn sorting_orders_the_lines_of_the_block_and_nothing_else() {
+        let mut e = editor("keep\ncherry\napple\nbanana\nalso keep");
+        e.block = Some(Block {
+            anchor: Position::new(1, 0),
+            head: Position::new(4, 0),
+            kind: BlockKind::Stream,
+        });
+        assert!(e.sort_lines().unwrap());
+        assert_eq!(
+            e.buffer.lines(),
+            &["keep", "apple", "banana", "cherry", "also keep"]
+        );
+        e.undo();
+        assert_eq!(e.buffer.line(1), "cherry", "one undo for the whole sort");
+        e.block = None;
+        assert!(!e.sort_lines().unwrap(), "a sort needs a block");
+    }
+
+    #[test]
+    fn trailing_blanks_go_and_a_clean_file_is_left_alone() {
+        let mut e = editor("a  \nb\t\nc");
+        assert_eq!(e.trim_trailing().unwrap(), 2);
+        assert_eq!(e.buffer.lines(), &["a", "b", "c"]);
+        assert_eq!(e.trim_trailing().unwrap(), 0);
     }
 
     #[test]

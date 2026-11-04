@@ -591,6 +591,7 @@ opt-editor-auto-indent = Mantieni il rientro della riga sopra
 opt-editor-whitespace = Mostra spazi e tabulazioni
 opt-editor-cursor-after = Il cursore si ferma dopo il testo trovato
 opt-editor-beyond-eol = Il cursore può andare oltre la fine della riga
+opt-editor-trim-trailing = Togli gli spazi a fine riga al salvataggio
 editor-not-a-character = quel tasto non ha un carattere da inserire
 paste-one-line =
     { $count ->
@@ -694,6 +695,7 @@ hl-saved = gruppo attivo · Opzioni → Salva impostazioni per scriverlo nel fil
 hl-removed = { $name } eliminato · Opzioni → Salva impostazioni per scriverlo nel file
 hl-bad = { $name }: { $problem }
 editor-no-block = non c'è niente di selezionato
+editor-no-bracket = nessuna parentesi qui, o nessuna che le corrisponda
 editor-tabs-expanded = tabulazioni espanse su { $lines } righe — il salvataggio le scriverà
 site-protocol = Protocollo
 site-protocol-sftp = SFTP (su SSH)

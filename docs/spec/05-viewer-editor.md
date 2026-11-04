@@ -582,11 +582,13 @@ and outdent, delete / duplicate / move line, undo and redo grouped per command, 
 paste pads short lines), select all, plain search with wrap, replace once and replace all (the search engine
 is the viewer's, so regex and case-insensitive matching are already there, waiting for a dialog
 that offers them), go to line or `line:col`, bookmarks 0–9, smart home, and horizontal scrolling with tabs and wide
-characters counted in display columns.
+characters counted in display columns. Since 0.31.0, `Alt+B` to the matching bracket, `Alt+J`
+to join the next line, `Alt+Shift+S` to sort the block's lines and `Alt+Shift+T` (or
+`editor.trim_trailing` at every save) to take trailing blanks off — each one undo step.
 **Still to come**: the rope (today's buffer is a `Vec<String>` of lines — enough for the
 256 MiB open limit and far simpler to keep correct; it will be swapped for a rope when
 streaming edits of larger files land), typing-burst undo grouping, persistent-block mode, multi-caret, regex and
-capture-group replace, `.editorconfig`, sort/unique/reverse on lines,
+capture-group replace, `.editorconfig`, unique/reverse/number on lines,
 macros, the buffer list (§2.3) and the external editor (§2.4).
 
 ### 2.1 Buffer

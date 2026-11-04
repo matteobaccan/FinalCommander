@@ -591,6 +591,7 @@ opt-editor-auto-indent = Garder l’indentation de la ligne précédente
 opt-editor-whitespace = Montrer espaces et tabulations
 opt-editor-cursor-after = Le curseur se place après le texte trouvé
 opt-editor-beyond-eol = Le curseur peut dépasser la fin de la ligne
+opt-editor-trim-trailing = Retirer les blancs de fin de ligne à l'enregistrement
 editor-not-a-character = cette touche n’a aucun caractère à insérer
 paste-one-line =
     { $count ->
@@ -694,6 +695,7 @@ hl-saved = le groupe est actif · Options → Enregistrer les réglages l’écr
 hl-removed = { $name } supprimé · Options → Enregistrer les réglages l’écrit dans le fichier
 hl-bad = { $name }: { $problem }
 editor-no-block = rien n’est sélectionné
+editor-no-bracket = pas de parenthèse ici, ou aucune ne lui correspond
 editor-tabs-expanded = tabulations converties sur { $lines } lignes — l’enregistrement l’écrira
 site-protocol = Protocole
 site-protocol-sftp = SFTP (sur SSH)

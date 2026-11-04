@@ -320,6 +320,11 @@ impl Form {
                     t("opt-editor-beyond-eol"),
                     cfg.editor.beyond_eol,
                 ),
+                Field::toggle(
+                    "editor.trim_trailing",
+                    t("opt-editor-trim-trailing"),
+                    cfg.editor.trim_trailing,
+                ),
             ],
             FormKind::ViewerSettings => vec![
                 // The three rows of chrome, in the order they are drawn: the top line, the

@@ -599,6 +599,7 @@ opt-editor-auto-indent = Keep the indent of the line above
 opt-editor-whitespace = Show spaces and tabs
 opt-editor-cursor-after = The cursor lands after the text a search found
 opt-editor-beyond-eol = The cursor may go past the end of a line
+opt-editor-trim-trailing = Take trailing blanks off when saving
 editor-not-a-character = that key has no character to insert
 paste-one-line =
     { $count ->
@@ -702,6 +703,7 @@ hl-saved = the group is in force · Options → Save setup writes it to the file
 hl-removed = { $name } is gone · Options → Save setup writes it to the file
 hl-bad = { $name }: { $problem }
 editor-no-block = nothing is selected
+editor-no-bracket = no bracket here, or nothing matches it
 editor-tabs-expanded = tabs were expanded on { $lines } lines — the save will write that
 site-protocol = Protocol
 site-protocol-sftp = SFTP (over SSH)

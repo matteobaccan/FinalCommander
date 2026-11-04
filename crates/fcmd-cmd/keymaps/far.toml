@@ -1023,6 +1023,27 @@ scope = "editor"
 cmd = "editor.line.duplicate"
 
 [[bind]]
+# mcedit's key; FAR has none of its own.
+keys = ["Alt+B"]
+scope = "editor"
+cmd = "editor.bracket"
+
+[[bind]]
+keys = ["Alt+J"]
+scope = "editor"
+cmd = "editor.line.join"
+
+[[bind]]
+keys = ["Alt+Shift+S"]
+scope = "editor"
+cmd = "editor.lines.sort"
+
+[[bind]]
+keys = ["Alt+Shift+T"]
+scope = "editor"
+cmd = "editor.trim"
+
+[[bind]]
 keys = ["Alt+Up"]
 scope = "editor"
 cmd = "editor.line.up"

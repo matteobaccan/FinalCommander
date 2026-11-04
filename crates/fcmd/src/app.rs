@@ -15949,6 +15949,11 @@ impl App {
             return;
         };
         let name = editor.name();
+        // `editor.trim_trailing`: the blanks at the ends of lines go as the file is written,
+        // in one undo step, so a save that took them can be taken back.
+        if self.cfg.editor.trim_trailing {
+            let _ = editor.trim_trailing();
+        }
         match editor.save(force) {
             Ok(fcmd_edit::SaveOutcome::Saved { bytes, .. }) => {
                 if self.remote_edit.is_some() {
@@ -16141,6 +16146,22 @@ impl App {
                 Command::EditorDeleteLine => editor.delete_line().map_err(|e| e.to_string())?,
                 Command::EditorDuplicateLine => {
                     editor.duplicate_line().map_err(|e| e.to_string())?
+                }
+                Command::EditorMatchBracket => {
+                    if !editor.match_bracket() {
+                        return Err("editor-no-bracket".into());
+                    }
+                }
+                Command::EditorJoinLine => {
+                    editor.join_line().map_err(|e| e.to_string())?;
+                }
+                Command::EditorSortLines => {
+                    if !editor.sort_lines().map_err(|e| e.to_string())? {
+                        return Err("editor-no-block".into());
+                    }
+                }
+                Command::EditorTrimTrailing => {
+                    editor.trim_trailing().map_err(|e| e.to_string())?;
                 }
                 Command::EditorMoveLineUp => editor.move_line(false).map_err(|e| e.to_string())?,
                 Command::EditorMoveLineDown => editor.move_line(true).map_err(|e| e.to_string())?,

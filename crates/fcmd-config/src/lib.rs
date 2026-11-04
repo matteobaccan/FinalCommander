@@ -774,6 +774,9 @@ pub struct EditCfg {
     /// wants when lining up a column of numbers, or marking the same columns down a file. FAR
     /// has the same setting, off by default, and so is this.
     pub beyond_eol: bool,
+    /// Take the spaces and tabs off the end of every line when the file is saved. Off by
+    /// default: a save that changes lines nobody touched is a diff nobody asked for.
+    pub trim_trailing: bool,
 }
 
 impl Default for EditCfg {
@@ -785,6 +788,7 @@ impl Default for EditCfg {
             show_whitespace: false,
             cursor_after_match: false,
             beyond_eol: false,
+            trim_trailing: false,
         }
     }
 }
@@ -1720,6 +1724,7 @@ impl Config {
             "editor.show_whitespace" => self.editor.show_whitespace = parse_bool(value)?,
             "editor.cursor_after_match" => self.editor.cursor_after_match = parse_bool(value)?,
             "editor.beyond_eol" => self.editor.beyond_eol = parse_bool(value)?,
+            "editor.trim_trailing" => self.editor.trim_trailing = parse_bool(value)?,
             "viewer.key_bar" => self.viewer.key_bar = parse_bool(value)?,
             "viewer.status_line" => self.viewer.status_line = parse_bool(value)?,
             "viewer.scrollbar" => self.viewer.scrollbar = parse_bool(value)?,

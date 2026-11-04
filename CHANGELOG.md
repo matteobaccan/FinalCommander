@@ -29,6 +29,13 @@ Notable changes, newest first. The format follows
   showing each new name as it was typed, and `1.txt` and `2.txt` swapped through the counter
   with nothing left behind under a temporary name.
 
+- **The editor's small daily keys.** `Alt+B` to the bracket that matches the one at the cursor,
+  across lines and back again — mcedit's key. `Alt+J` joins the next line to this one, its
+  indent turned into one space. `Alt+Shift+S` sorts the lines of the block and nothing else;
+  `Alt+Shift+T` takes trailing spaces and tabs off every line, and *Take trailing blanks off
+  when saving* does it at every `F2`, off by default. Each is one `Ctrl+Z`: a sort over a
+  hundred lines that took a hundred undos would not be one change.
+
 ## [0.30.0] — 2026-11-04
 
 ### Added
