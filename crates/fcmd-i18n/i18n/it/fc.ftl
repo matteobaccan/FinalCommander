@@ -94,6 +94,8 @@ msg-bookmark-removed = { $path } rimossa
 msg-bookmark-known = quella cartella è già nell’elenco
 msg-dirsize = { $path }: { $bytes } in { $files } file
 msg-dirsize-many = misuro { $count } cartelle…
+usage-title = Occupazione del disco: { $path } · { $size }
+usage-not-here = l'occupazione si misura su un disco, non dentro un archivio o in un elenco di file trovati
 msg-dirsize-no-folder = qui non c'è nessuna cartella da misurare
 
 prompt-copy-to = Copia { $what } in:
@@ -434,6 +436,7 @@ menu-find-file = &Trova file
 menu-history = Cronolo&gia comandi
 menu-view-history = Cronologia viste e modif&iche
 menu-folders-history = Cr&onologia cartelle
+menu-usage = Occupazione del disco
 menu-bookmarks = Cartelle preferite
 menu-swap-panels = &Scambia i pannelli
 menu-sync-panel = &Allinea l'altro pannello

@@ -99,6 +99,8 @@ msg-bookmark-removed = { $path } given up
 msg-bookmark-known = that folder is already in the list
 msg-dirsize = { $path }: { $bytes } in { $files } files
 msg-dirsize-many = measuring { $count } folders…
+usage-title = Disk usage: { $path } · { $size }
+usage-not-here = the disk usage of a folder is measured on a disk, not inside an archive or a list of found files
 msg-dirsize-no-folder = there is no folder here to measure
 
 # Jobs: prompts, confirmations, progress, conflicts
@@ -442,6 +444,7 @@ menu-find-file = &Find file
 menu-history = Command &history
 menu-view-history = Vie&w and edit history
 menu-folders-history = F&olders history
+menu-usage = Dis&k usage
 menu-bookmarks = Folder shortcuts
 menu-swap-panels = &Swap panels
 menu-sync-panel = S&ync other panel

@@ -517,3 +517,21 @@ typing: the editor and a real terminal take the whole of it, newlines and all, w
 everything that is one line — the command line, a dialog row, a prompt — takes the first line
 and says how many more there were, because a command copied from a web page arrives with its
 newline still attached and running it before it can be read is exactly the accident to avoid.
+
+## 12. Disk usage
+
+`Alt+Shift+F3` (`panel.usage`, *Commands → Disk usage*) answers the question a full disk asks:
+what in this folder is taking the space. It opens a list over the panel with every entry of the
+folder, largest first, each with its size, a bar against the folder's total and its share of
+it. Every folder not yet measured is measured — the same asynchronous walk `F3` on one folder
+starts, one per folder — and the list fills in as the answers arrive, keeping the row the
+cursor is on; a folder still being walked says `…` rather than counting as empty. The sizes go
+into the panel too, as `F3`'s do, so sorting the panel by size afterwards agrees with the list.
+
+`Enter` on a folder goes into it, where `Alt+Shift+F3` asks the same question one level down;
+on a file it puts the panel's cursor there. The list filters as you type, like every other.
+Inside an archive and in a list of found files it is refused: the sizes there are what an index
+says, not what a disk holds.
+
+Still to come: a tree of the whole walk at once, rather than one level at a time, and the
+treemap some tools draw.

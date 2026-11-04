@@ -36,6 +36,15 @@ Notable changes, newest first. The format follows
   when saving* does it at every `F2`, off by default. Each is one `Ctrl+Z`: a sort over a
   hundred lines that took a hundred undos would not be one change.
 
+- **Where the space goes** (`Alt+Shift+F3`, *Commands → Disk usage*): the entries of a folder
+  by size, largest first, each with a bar against the folder's total and its share of it.
+  Every folder not yet measured is walked, with the same asynchronous walk `F3` starts on one,
+  and the list fills in as the answers arrive, keeping the row the cursor is on; a folder still
+  being walked says `…` rather than counting as empty. `Enter` goes into a folder, where the
+  same key asks the question one level down. The sizes go into the panel as `F3`'s do, so the
+  panel sorted by size agrees with the list. Krusader and Total Commander have this as a tool
+  of its own, FAR as a plugin; here it is one key on the panel.
+
 ## [0.30.0] — 2026-11-04
 
 ### Added

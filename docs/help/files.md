@@ -148,6 +148,15 @@ row. A row that takes a file out puts it in the wastebasket, the same as `F8` do
 
 Both folders have to be on this machine for now.
 
+# Where the space goes
+
+`Alt+Shift+F3` — *Commands → Disk usage* — lists what is in this folder by size, largest
+first, each with a bar against the folder's total and its share of it. Every folder in it is
+measured, and the list fills in as each answer arrives: one still being walked shows `…`
+rather than counting as empty. `Enter` on a folder goes into it, where the same key asks the
+same question one level down; on a file it puts the panel's cursor there. The sizes stay in
+the panel afterwards, so sorting it by size agrees with the list.
+
 # Finding things
 
 `Alt+F7` searches for files: a mask, a size, text inside them, and where to look. The results

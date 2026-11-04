@@ -113,6 +113,7 @@ impl Command {
             Command::PanelSortMenu => "choose the order from a list",
             Command::PanelDrive(_) => "the drives, mount points and open connections",
             Command::PanelHistory => "where this panel has been",
+            Command::PanelUsage => "what the space in this folder goes on, largest first",
             Command::PanelToggle(side) => match side {
                 Side::Left => "hide the left panel, or bring it back",
                 Side::Right => "hide the right panel, or bring it back",

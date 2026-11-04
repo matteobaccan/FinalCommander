@@ -200,6 +200,8 @@ pub enum Command {
     PanelDrive(Side),
     /// Where this panel has been.
     PanelHistory,
+    /// What the folder's space goes on: every entry by size, with a bar (SPEC 06 §12).
+    PanelUsage,
     /// `Ctrl+F1`/`Ctrl+F2`: hide one panel and give the screen to the other.
     PanelToggle(Side),
     /// `Ctrl+P`: hide the panel that does not have the focus, which is FAR's own key for
@@ -559,6 +561,7 @@ impl Command {
             Command::PanelDrive(Side::Left),
             Command::PanelDrive(Side::Right),
             Command::PanelHistory,
+            Command::PanelUsage,
             Command::NavUp,
             Command::NavDown,
             Command::NavPageUp,
@@ -839,6 +842,7 @@ impl Command {
             Command::PanelDrive(Side::Active) => "panel.drive".into(),
             Command::PanelDrive(side) => format!("panel.drive({})", side.as_str()),
             Command::PanelHistory => "panel.history".into(),
+            Command::PanelUsage => "panel.usage".into(),
             Command::NavUp => "nav.up".into(),
             Command::NavDown => "nav.down".into(),
             Command::NavPageUp => "nav.pageup".into(),
@@ -1067,6 +1071,7 @@ impl Command {
             ("panel.sort.menu", _) => Command::PanelSortMenu,
             ("panel.drive", a) => Command::PanelDrive(Side::parse(a.unwrap_or(""))?),
             ("panel.history", _) => Command::PanelHistory,
+            ("panel.usage", _) => Command::PanelUsage,
             ("panel.focus.toggle", _) => Command::PanelFocusToggle,
             ("panel.swap", _) => Command::PanelSwap,
             ("panel.reread", _) => Command::PanelReread,

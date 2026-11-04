@@ -1322,3 +1322,9 @@ cmd = "macro.list"
 keys = ["F11"]
 scope = "panel"
 cmd = "plugin.commands"
+
+[[bind]]
+# `F3` on a folder measures it; this measures every one in the panel and shows where the space
+# goes. Total Commander's is a separate tool, FAR's a plugin; neither has a key to take.
+keys = ["Alt+Shift+F3"]
+cmd = "panel.usage"

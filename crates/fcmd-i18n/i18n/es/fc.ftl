@@ -94,6 +94,8 @@ msg-bookmark-removed = { $path } quitada
 msg-bookmark-known = esa carpeta ya está en la lista
 msg-dirsize = { $path }: { $bytes } en { $files } archivos
 msg-dirsize-many = midiendo { $count } carpetas…
+usage-title = Uso del disco: { $path } · { $size }
+usage-not-here = el uso de una carpeta se mide en un disco, no dentro de un archivo comprimido ni en una lista de archivos encontrados
 msg-dirsize-no-folder = aquí no hay ninguna carpeta que medir
 
 prompt-copy-to = Copiar { $what } a:
@@ -434,6 +436,7 @@ menu-find-file = &Buscar archivo
 menu-history = &Historial de comandos
 menu-view-history = Historial de &vistas y ediciones
 menu-folders-history = Historial &de carpetas
+menu-usage = Uso del disco
 menu-bookmarks = Carpetas favoritas
 menu-swap-panels = I&ntercambiar los paneles
 menu-sync-panel = &Sincronizar el otro panel

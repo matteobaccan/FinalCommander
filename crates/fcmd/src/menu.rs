@@ -70,6 +70,8 @@ pub enum FormKind {
 /// The dialogs where one row is chosen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PickKind {
+    /// Where the space in a folder goes, largest first.
+    Usage,
     Languages,
     Themes,
     /// Drives, mount points and open connections.
@@ -466,6 +468,11 @@ pub fn menus() -> Vec<Menu> {
                     "menu-folders-history",
                     "Alt+F12",
                     Action::Run(Command::PanelHistory),
+                ),
+                item(
+                    "menu-usage",
+                    "Alt+Shift+F3",
+                    Action::Run(Command::PanelUsage),
                 ),
                 Entry::Separator,
                 item(

@@ -94,6 +94,8 @@ msg-bookmark-removed = 已移除 { $path }
 msg-bookmark-known = 该文件夹已在列表中
 msg-dirsize = { $path }：{ $bytes }，共 { $files } 个文件
 msg-dirsize-many = 正在统计 { $count } 个文件夹…
+usage-title = 磁盘占用：{ $path } · { $size }
+usage-not-here = 文件夹的占用只能在磁盘上测量，不能在压缩包内或搜索结果列表中测量
 msg-dirsize-no-folder = 这里没有可统计的文件夹
 
 prompt-copy-to = 复制 { $what } 到：
@@ -434,6 +436,7 @@ menu-find-file = 查找文件
 menu-history = 命令历史
 menu-view-history = 查看与编辑历史
 menu-folders-history = 文件夹历史
+menu-usage = 磁盘占用
 menu-bookmarks = 文件夹快捷方式
 menu-swap-panels = 交换面板
 menu-sync-panel = 同步另一面板

@@ -3215,6 +3215,26 @@ impl App {
                         p.resort();
                     }
                 }
+                // The disk-usage list fills in as the folders are measured, keeping the row
+                // the cursor is on.
+                if let Mode::Pick(pick) = &self.mode {
+                    if pick.kind == PickKind::Usage && pick.side == panel {
+                        let keep = pick.chosen().map(|r| r.value.clone());
+                        let filter = pick.filter.clone();
+                        self.open_pick(PickKind::Usage, panel);
+                        if let Mode::Pick(fresh) = &mut self.mode {
+                            fresh.filter = filter;
+                            fresh.refilter();
+                            if let Some(at) =
+                                keep.and_then(|v| fresh.rows.iter().position(|r| r.value == v))
+                            {
+                                fresh.cursor = at;
+                            }
+                        }
+                        // One folder measured is not news while the list is showing it.
+                        return;
+                    }
+                }
                 let msg = self.i18n.t_args(
                     "msg-dirsize",
                     &[
@@ -8244,6 +8264,7 @@ impl App {
             }
             Command::PanelSortMenu => self.open_pick(PickKind::SortModes, self.active),
             Command::PanelHistory => self.open_pick(PickKind::FoldersHistory, self.active),
+            Command::PanelUsage => self.open_usage(),
             Command::PanelDrive(side) => {
                 let side = match side {
                     Side::Left => 0,
@@ -10425,6 +10446,31 @@ impl App {
     /// OK in the replace dialog: count first, always. The dry run and the write share the
     /// engine's one code path, so what the confirmation says is what the write will do.
     /// `Shift+F1`: the dialog for a new archive out of what is selected.
+    /// `Alt+Shift+F3`: where the space in this folder goes (SPEC 06 §12). Every folder not yet
+    /// measured is measured, and the list fills in as the answers come back.
+    fn open_usage(&mut self) {
+        let side = self.active;
+        let panel = &self.panels[side];
+        if panel.cwd.in_container() || panel.temp.is_some() {
+            let m = self.i18n.t("usage-not-here");
+            self.set_error(m);
+            return;
+        }
+        let pending: Vec<VPath> = (0..panel.listing.len())
+            .filter_map(|r| panel.listing.row(r))
+            .filter(|e| {
+                e.kind.is_dirlike()
+                    && e.kind != fcmd_core::EntryKind::Parent
+                    && !e.flags.contains(fcmd_core::EntryFlags::MEASURED)
+            })
+            .map(|e| panel.path_of(e))
+            .collect();
+        for path in pending {
+            self.requests.push(Request::DirSize { panel: side, path });
+        }
+        self.open_pick(PickKind::Usage, side);
+    }
+
     /// `Ctrl+Shift+F6`: rename what is selected from one pattern (SPEC 03 §8).
     ///
     /// The files are taken in the order the panel shows them, which is the order the counter
@@ -14584,6 +14630,18 @@ impl App {
                 side,
             ),
             PickKind::Drives => self.drive_list(side),
+            PickKind::Usage => {
+                let panel = &self.panels[side];
+                let (rows, total) = usage_rows(panel);
+                let title = self.i18n.t_args(
+                    "usage-title",
+                    &[
+                        ("path", panel.cwd.to_string().into()),
+                        ("size", fcmd_core::format_size(total).into()),
+                    ],
+                );
+                Pick::new(kind, title, rows, side)
+            }
             PickKind::Bookmarks => Pick::new(
                 kind,
                 self.plain("menu-bookmarks"),
@@ -15219,6 +15277,26 @@ impl App {
             return;
         };
         match pick.kind {
+            PickKind::Usage => {
+                self.active = pick.side;
+                let panel = &mut self.panels[pick.side];
+                let found = (0..panel.listing.len()).find(|&r| {
+                    panel
+                        .listing
+                        .row(r)
+                        .is_some_and(|e| e.name_str() == row.value)
+                });
+                if let Some(at) = found {
+                    panel.cursor = at;
+                    let dir = panel.listing.row(at).is_some_and(|e| {
+                        e.kind.is_dirlike() && e.kind != fcmd_core::EntryKind::Parent
+                    });
+                    if dir {
+                        let target = panel.cwd.join(&row.value);
+                        self.goto(target);
+                    }
+                }
+            }
             PickKind::OpenWith => {
                 // The command goes the same road a typed line does: substitutions,
                 // `{ask:…}`, conditions and all.
@@ -20027,6 +20105,68 @@ fn literal_of(key: Key) -> Option<char> {
     }
 }
 
+/// The rows of the disk-usage list: every entry of the panel, largest first, with its size, a
+/// bar against the folder's total and its share of it. A folder still being measured says so
+/// rather than counting as empty, which is what its own size would make it look.
+fn usage_rows(panel: &Panel) -> (Vec<PickRow>, u64) {
+    use unicode_width::UnicodeWidthStr;
+    const NAME: usize = 28;
+    const BAR: usize = 20;
+    let mut items: Vec<(&Entry, Option<u64>)> = (0..panel.listing.len())
+        .filter_map(|r| panel.listing.row(r))
+        .filter(|e| e.kind != fcmd_core::EntryKind::Parent && e.is_selectable())
+        .map(|e| {
+            let size = if e.kind.is_dirlike() {
+                e.flags
+                    .contains(fcmd_core::EntryFlags::MEASURED)
+                    .then_some(e.size)
+            } else {
+                Some(e.size)
+            };
+            (e, size)
+        })
+        .collect();
+    items.sort_by(|a, b| {
+        b.1.unwrap_or(0)
+            .cmp(&a.1.unwrap_or(0))
+            .then_with(|| a.0.name_str().cmp(&b.0.name_str()))
+    });
+    let total: u64 = items.iter().filter_map(|(_, s)| *s).sum();
+    let rows = items
+        .into_iter()
+        .map(|(e, size)| {
+            let mut name = e.name_str().to_string();
+            if e.kind.is_dirlike() {
+                name.push('/');
+            }
+            while name.width() > NAME {
+                name.pop();
+            }
+            let pad = NAME.saturating_sub(name.width());
+            let label = match size {
+                Some(bytes) => {
+                    let share = if total == 0 {
+                        0.0
+                    } else {
+                        bytes as f64 / total as f64
+                    };
+                    let full = (share * BAR as f64).round() as usize;
+                    format!(
+                        "{name}{} {:>9}  {}{}  {:>5.1}%",
+                        " ".repeat(pad),
+                        fcmd_core::format_size(bytes),
+                        "█".repeat(full.min(BAR)),
+                        "░".repeat(BAR - full.min(BAR)),
+                        share * 100.0
+                    )
+                }
+                None => format!("{name}{} {:>9}", " ".repeat(pad), "…"),
+            };
+            PickRow::plain(label, e.name_str().to_string(), false)
+        })
+        .collect();
+    (rows, total)
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -23434,6 +23574,59 @@ mod tests {
         assert!(
             app.panel().sort.groups,
             "Shift+F11 did not turn the sort groups on"
+        );
+    }
+
+    /// The disk-usage list asks for every unmeasured folder, shows it as still to come, fills
+    /// it in when the size arrives — moving it to the top if it is the biggest — and `Enter`
+    /// on it goes in.
+    #[test]
+    fn disk_usage_measures_fills_in_and_goes_in() {
+        let mut app = app();
+        app.requests.clear();
+        press(&mut app, "Alt+Shift+F3");
+        let asked: Vec<String> = app
+            .requests
+            .iter()
+            .filter_map(|r| match r {
+                Request::DirSize { path, .. } => Some(path.display_name()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(asked, vec!["docs".to_string()]);
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("no list: {:?}", app.mode)
+        };
+        assert_eq!(pick.kind, PickKind::Usage);
+        let docs = pick.rows.iter().find(|r| r.value == "docs").unwrap();
+        assert!(docs.label.contains('…'), "{}", docs.label);
+        assert_eq!(pick.rows[0].value, "c.rs", "the largest file first");
+
+        app.handle_event(Event::DirSized {
+            panel: 0,
+            path: VPath::local("/home/mb/docs"),
+            bytes: 10_000,
+            files: 3,
+        });
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("the list closed: {:?}", app.mode)
+        };
+        assert_eq!(pick.rows[0].value, "docs", "{:#?}", pick.rows);
+        assert!(pick.rows[0].label.contains('█'), "{}", pick.rows[0].label);
+        assert!(pick.rows[0].label.contains('%'), "{}", pick.rows[0].label);
+        // The cursor stayed on the row it was on, `c.rs`, which is now second.
+        assert_eq!(pick.chosen().unwrap().value, "c.rs");
+
+        app.requests.clear();
+        press(&mut app, "Home");
+        press(&mut app, "Enter");
+        assert!(matches!(app.mode, Mode::Normal));
+        assert!(
+            app.requests
+                .iter()
+                .any(|r| matches!(r, Request::Read { path, .. } if path.display_name() == "docs")),
+            "Enter goes into the folder: {:?}",
+            app.requests
         );
     }
 

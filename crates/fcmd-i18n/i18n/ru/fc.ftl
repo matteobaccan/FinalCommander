@@ -94,6 +94,8 @@ msg-bookmark-removed = { $path } убрана
 msg-bookmark-known = эта папка уже в списке
 msg-dirsize = { $path }: { $bytes } в { $files } файлах
 msg-dirsize-many = измеряю { $count } папок…
+usage-title = Занятое место: { $path } · { $size }
+usage-not-here = занятое место измеряется на диске, а не внутри архива или в списке найденных файлов
 msg-dirsize-no-folder = здесь нечего измерять
 
 prompt-copy-to = Копировать { $what } в:
@@ -434,6 +436,7 @@ menu-find-file = &Найти файл
 menu-history = &История команд
 menu-view-history = Ис&тория просмотра и правки
 menu-folders-history = Ист&ория папок
+menu-usage = Занятое место
 menu-bookmarks = Закладки папок
 menu-swap-panels = По&менять панели
 menu-sync-panel = Синхронизировать другую &панель

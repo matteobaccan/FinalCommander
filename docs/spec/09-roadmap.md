@@ -76,7 +76,7 @@ viewer modes + regex/hex search · help system · session restore · `tc`/`nc` k
 `.deb`/`.rpm`/Homebrew/Scoop/AUR packages.
 
 **Where it stands** (read against `docs/02-features.md` for 0.29.0): almost all of it is in.
-Still open, with the row that tracks each — the disk-usage view (7.3), the job queue panel and
+Still open, with the row that tracks each — the job queue panel and
 the journal that resumes after a crash (3.7, 11.6), more than one file open in the editor (6.1),
 splitting and combining files (3.12), the selection kept by
 session restore (9.7), the `tc` and `nc` keymap profiles (only `far` and `mc` ship), and the

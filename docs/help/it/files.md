@@ -155,6 +155,16 @@ riga. Una riga che porta via un file lo mette nel cestino, come fa `F8`.
 
 Per ora le due cartelle devono essere entrambe su questa macchina.
 
+# Dove va lo spazio
+
+`Alt+Shift+F3` — *Comandi → Occupazione del disco* — elenca ciò che c'è in questa cartella per
+dimensione, dal più grande, ognuno con una barra rispetto al totale della cartella e la sua
+quota. Ogni cartella dentro viene misurata, e l'elenco si completa man mano che arrivano le
+risposte: una ancora in corso mostra `…` invece di contare come vuota. `Enter` su una cartella ci
+entra, e lì lo stesso tasto fa la stessa domanda un livello più giù; su un file porta lì il
+cursore del pannello. Le dimensioni restano poi nel pannello, così ordinarlo per dimensione dà
+lo stesso ordine dell'elenco.
+
 # Trovare le cose
 
 `Alt+F7` cerca i file: una maschera, una dimensione, il testo dentro di essi, e dove guardare. I

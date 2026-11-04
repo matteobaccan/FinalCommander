@@ -94,6 +94,8 @@ msg-bookmark-removed = { $path } entfernt
 msg-bookmark-known = dieser Ordner ist schon in der Liste
 msg-dirsize = { $path }: { $bytes } in { $files } Dateien
 msg-dirsize-many = { $count } Ordner werden gemessen …
+usage-title = Speicherbelegung: { $path } · { $size }
+usage-not-here = die Belegung eines Ordners wird auf einem Datenträger gemessen, nicht in einem Archiv oder einer Fundliste
 msg-dirsize-no-folder = hier gibt es keinen Ordner zu messen
 
 prompt-copy-to = { $what } kopieren nach:
@@ -434,6 +436,7 @@ menu-find-file = &Datei suchen
 menu-history = Befe&hlsverlauf
 menu-view-history = Verlauf von Ansich&t und Bearbeitung
 menu-folders-history = &Ordnerverlauf
+menu-usage = S&peicherbelegung
 menu-bookmarks = Ordner-Verknüpfungen
 menu-swap-panels = Fenster tau&schen
 menu-sync-panel = Anderes &Fenster abgleichen

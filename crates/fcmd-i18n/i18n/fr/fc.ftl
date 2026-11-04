@@ -94,6 +94,8 @@ msg-bookmark-removed = { $path } retiré
 msg-bookmark-known = ce dossier est déjà dans la liste
 msg-dirsize = { $path } : { $bytes } dans { $files } fichiers
 msg-dirsize-many = mesure de { $count } dossiers…
+usage-title = Occupation du disque : { $path } · { $size }
+usage-not-here = l'occupation d'un dossier se mesure sur un disque, pas dans une archive ni dans une liste de fichiers trouvés
 msg-dirsize-no-folder = il n'y a aucun dossier à mesurer ici
 
 prompt-copy-to = Copier { $what } vers :
@@ -434,6 +436,7 @@ menu-find-file = &Chercher un fichier
 menu-history = &Historique des commandes
 menu-view-history = Historique &des vues et éditions
 menu-folders-history = H&istorique des dossiers
+menu-usage = Occupation du dis&que
 menu-bookmarks = Dossiers favoris
 menu-swap-panels = &Échanger les panneaux
 menu-sync-panel = &Synchroniser l'autre panneau

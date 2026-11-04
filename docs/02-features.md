@@ -20,9 +20,9 @@ carries it any more: what it owned is a `✓`.
 Every `M2` row was read against the code again for 0.26.0, and thirty of the thirty-six were
 out of date: twelve because the work had been finished and nobody changed the character, and
 eighteen because most of it had and the cell now says what is left. Six still said `M2` and
-meant it; the multi-rename tool has gone since, in 0.31.0, and the five left are a stacked
-layout, the branch view, icons, a disk-usage view, and opening the item in the desktop's own
-file manager.
+meant it; the multi-rename tool and the disk-usage view have gone since, in 0.31.0, and the
+four left are a stacked layout, the branch view, icons, and opening the item in the desktop's
+own file manager.
 
 Until 0.22.0 this column held a paragraph per row about what had shipped and in which
 version, which was a second changelog to keep in step with the first — and a tax on every
@@ -223,7 +223,7 @@ something readable rather than only into instructions.
 | --- | --- | --- | --- |
 | 7.1 | Find files: mask, content (text/regex/hex), size/date/attr filters, archives included, encoding list, results panel, panelize results, "find folder" | FAR/TC | ~ dates and attributes in the dialog, code pages, saving a search |
 | 7.2 | Grep-like content search with result navigation and jump-to-match in the editor | NEW | ~ opening a hit at the line it was found on |
-| 7.3 | Disk usage / occupied space view (per-dir sizes, sortable, graphical bars) | KRU/TC | M2 |
+| 7.3 | Disk usage / occupied space view (per-dir sizes, sortable, graphical bars) | KRU/TC | ~ `Alt+Shift+F3`: one folder's entries largest first, with bars and shares, filled in as each folder is measured (SPEC 06 §12); one level at a time — a whole-tree view and a treemap are not there |
 | 7.4 | User menu (`F2`) with user-defined entries, submenus, hotkeys, per-directory menus | FAR/MC | ~ `FarMenu.ini`, separators, an editor for the entries, `Shift+F10` |
 | 7.5 | File associations by mask: view/edit/execute/alternative commands | FAR/MC | ✓ |
 | 7.6 | Command history, view/edit history, folder history — all searchable and persisted | FAR | ✓ |

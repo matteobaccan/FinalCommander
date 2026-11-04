@@ -118,7 +118,7 @@ Column `FC` = FinalCommander default (profile `far`, our baseline).
 | lock the tab to its directory | — | — | — | **Ctrl+Alt+K** |
 | name the tab | — | — | — | Left/Right menu |
 | find file | Alt+F7 | Alt+? | Ctrl+S | Alt+F7 |
-| disk usage | — | Ctrl+Space on a dir | Alt+Shift+S | `F3` on a directory computes its size; a report over a whole tree is on the backlog |
+| disk usage | — | Ctrl+Space on a dir | Alt+Shift+S | `F3` on a directory computes its size; **Alt+Shift+F3** shows every entry of the folder by size, with bars |
 | compare directories | Commands menu, no default key (marks what is missing or newer in the other panel; names, sizes and times only, no subfolders) | — | Alt+Shift+C | Commands menu, no default key, as in FAR |
 | synchronise directories | — | — | Ctrl+Y | **Ctrl+Shift+Y** — Total Commander's `Ctrl+Y` is FAR's *clear the command line*, and `--check-keymap` is what said so |
 | pack / unpack | Shift+F1 / Shift+F2 | — | Alt+Shift+P / Alt+Shift+U | Shift+F1 / Shift+F2 |
