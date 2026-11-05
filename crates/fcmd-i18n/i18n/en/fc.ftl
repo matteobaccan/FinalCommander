@@ -1379,3 +1379,9 @@ editor-lines-deleted = Lines taken out: { $count }
 
 ## The copy dialog's size policy (FAR #493).
 copy-conflict-size = overwrite when the size differs
+
+# Copy dialog: what an error does (FAR's issue #597)
+copy-on-error = If one cannot be copied
+copy-error-ask = Ask
+copy-error-skip = Skip it and go on
+copy-error-stop = Stop the copy

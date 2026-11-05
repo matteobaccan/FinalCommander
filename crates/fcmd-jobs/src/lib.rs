@@ -35,5 +35,7 @@ pub use replace::{
     replace_bytes, Matcher, ReplaceError, ReplaceOptions, ReplacePass, Replaced, PATTERN_FILE_LIMIT,
 };
 pub use run::{execute, Outcome, Progress, Reporter};
-pub use spec::{ConflictPolicy, Decision, JobKind, JobOptions, JobSpec, Phase, Preserve, Question};
+pub use spec::{
+    ConflictPolicy, Decision, ErrorPolicy, JobKind, JobOptions, JobSpec, Phase, Preserve, Question,
+};
 pub use sum::Algorithm;

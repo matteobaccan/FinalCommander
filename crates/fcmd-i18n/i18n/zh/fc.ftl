@@ -1345,3 +1345,9 @@ editor-lines-deleted = 已删除行数：{ $count }
 
 ## The copy dialog's size policy (FAR #493).
 copy-conflict-size = 大小不同时覆盖
+
+# Copy dialog: what an error does (FAR's issue #597)
+copy-on-error = 无法复制时
+copy-error-ask = 询问
+copy-error-skip = 跳过并继续
+copy-error-stop = 停止复制

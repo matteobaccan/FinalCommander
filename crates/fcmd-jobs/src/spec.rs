@@ -96,6 +96,18 @@ pub enum ConflictPolicy {
     Append,
 }
 
+/// What to do when a file cannot be copied, decided before the job starts (FAR's issue #597).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ErrorPolicy {
+    /// Stop and ask, once per error, with "skip all" among the answers (the default).
+    #[default]
+    Ask,
+    /// Note it and go on with the next file: the summary lists every one.
+    Skip,
+    /// Stop the job at the first error; what was done stays done.
+    Stop,
+}
+
 /// Which metadata to carry over. Mode is Unix-only and ignored elsewhere.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Preserve {
@@ -117,6 +129,8 @@ impl Default for Preserve {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JobOptions {
     pub on_conflict: ConflictPolicy,
+    /// What an error does to the rest of the job: ask, skip on, or stop.
+    pub on_error: ErrorPolicy,
     pub preserve: Preserve,
     /// Copy what a symlink points at instead of the link itself.
     pub follow_symlinks: bool,
@@ -187,6 +201,7 @@ impl Default for JobOptions {
     fn default() -> Self {
         JobOptions {
             on_conflict: ConflictPolicy::Ask,
+            on_error: ErrorPolicy::Ask,
             preserve: Preserve::default(),
             follow_symlinks: false,
             only_newer: false,

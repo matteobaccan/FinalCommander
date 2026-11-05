@@ -6,6 +6,12 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **What an error does, chosen before the copy.** A new row in the copy dialog — ask, skip it
+  and go on, or stop the copy — so a long copy left alone does not wait on its first
+  unreadable file. Every skipped file is in the summary. FAR's issue #597.
+
 ## [0.33.0] - 2026-11-05
 
 ### Added

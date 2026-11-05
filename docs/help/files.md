@@ -16,6 +16,9 @@ press `Enter`, and nothing below the first line applies:
 * **Only files newer than the ones there** is a box beside that choice rather than one of its
   values, and the two are not the same thing: the box holds even when the choice says
   overwrite, and even after you have answered "overwrite all" to a question.
+* **If one cannot be copied**: ask (the default), skip it and go on, or stop the copy. Chosen
+  before the copy starts, so a long one left alone does not wait all night on its first
+  unreadable file; every file skipped is listed in the summary.
 * **Only the names that match** takes a mask, so only what matches travels. It applies to
   files and never to directories, and a directory is only created once something under it has
   matched — so `*.rs` out of a source tree gives you the directories that have Rust in them

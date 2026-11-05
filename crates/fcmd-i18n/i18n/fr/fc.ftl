@@ -1369,3 +1369,9 @@ editor-lines-deleted = Lignes retirées : { $count }
 
 ## The copy dialog's size policy (FAR #493).
 copy-conflict-size = écraser si la taille diffère
+
+# Copy dialog: what an error does (FAR's issue #597)
+copy-on-error = Si un fichier ne peut être copié
+copy-error-ask = Demander
+copy-error-skip = L'ignorer et continuer
+copy-error-stop = Arrêter la copie

@@ -1155,6 +1155,8 @@ pub struct CopyChoices {
     pub follow_links: bool,
     pub verify: bool,
     pub filter: String,
+    /// What an error does: `ask`, `skip` or `stop`.
+    pub on_error: &'static str,
 }
 
 impl Default for CopyChoices {
@@ -1167,6 +1169,7 @@ impl Default for CopyChoices {
             follow_links: false,
             verify: false,
             filter: String::new(),
+            on_error: "ask",
         }
     }
 }
@@ -9619,6 +9622,7 @@ impl App {
                     self.last_copy.follow_links,
                     self.last_copy.verify,
                     &self.last_copy.filter,
+                    self.last_copy.on_error,
                     &self.i18n,
                 )));
             }
@@ -12746,8 +12750,18 @@ impl App {
             "append" => fcmd_jobs::ConflictPolicy::Append,
             _ => fcmd_jobs::ConflictPolicy::Ask,
         };
+        let on_error = match form.choice_value("copy.on_error").as_str() {
+            "skip" => "skip",
+            "stop" => "stop",
+            _ => "ask",
+        };
         let options = fcmd_jobs::JobOptions {
             on_conflict: policy,
+            on_error: match on_error {
+                "skip" => fcmd_jobs::ErrorPolicy::Skip,
+                "stop" => fcmd_jobs::ErrorPolicy::Stop,
+                _ => fcmd_jobs::ErrorPolicy::Ask,
+            },
             preserve: fcmd_jobs::Preserve {
                 mtime: form.toggle_value("copy.times"),
                 mode: form.toggle_value("copy.mode"),
@@ -12772,6 +12786,7 @@ impl App {
             follow_links: options.follow_symlinks,
             verify: options.verify,
             filter: typed,
+            on_error,
         };
 
         let kind = if moving { JobKind::Move } else { JobKind::Copy };
@@ -30706,6 +30721,12 @@ run = ["echo one", "echo two", "echo three"]
         set_toggle(&mut app, "copy.times");
         set_toggle(&mut app, "copy.verify");
         type_into(&mut app, "copy.filter", "*.txt");
+        {
+            let Mode::Form(form) = &mut app.mode else {
+                panic!("the dialog is open")
+            };
+            form.set_choice("copy.on_error", "stop");
+        }
         let out = absolute("fcmd-copy-out");
         {
             let Mode::Form(form) = &mut app.mode else {
@@ -30732,6 +30753,7 @@ run = ["echo one", "echo two", "echo three"]
         assert!(!spec.options.preserve.mtime, "the box was turned off");
         assert!(spec.options.preserve.mode, "and this one was left on");
         assert!(spec.options.verify, "every file read back");
+        assert_eq!(spec.options.on_error, fcmd_jobs::ErrorPolicy::Stop);
         let masks = spec.options.filter.as_ref().expect("a filter was typed");
         assert!(masks.matches_name("notes.txt"));
         assert!(!masks.matches_name("notes.rs"));
@@ -30744,6 +30766,7 @@ run = ["echo one", "echo two", "echo three"]
             panic!("the dialog reopens")
         };
         assert_eq!(form.text_value("copy.conflict"), "append");
+        assert_eq!(form.choice_value("copy.on_error"), "stop");
         assert!(form.toggle_value("copy.only_newer"));
         assert!(form.toggle_value("copy.verify"));
         assert_eq!(form.text_value("copy.filter"), "*.txt");

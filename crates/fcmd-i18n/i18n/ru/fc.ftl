@@ -1369,3 +1369,9 @@ editor-lines-deleted = Удалено строк: { $count }
 
 ## The copy dialog's size policy (FAR #493).
 copy-conflict-size = перезаписать, если размер другой
+
+# Copy dialog: what an error does (FAR's issue #597)
+copy-on-error = Если файл не копируется
+copy-error-ask = Спросить
+copy-error-skip = Пропустить и продолжить
+copy-error-stop = Остановить копирование

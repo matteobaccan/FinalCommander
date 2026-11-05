@@ -141,7 +141,7 @@ pub fn execute(
         overwrite_all: spec.options.on_conflict == ConflictPolicy::Overwrite,
         append_all: spec.options.on_conflict == ConflictPolicy::Append,
         skip_all: spec.options.on_conflict == ConflictPolicy::Skip,
-        skip_errors: false,
+        skip_errors: spec.options.on_error == crate::spec::ErrorPolicy::Skip,
         outcome: Outcome::default(),
         dir_meta: Vec::new(),
         kept: Vec::new(),
@@ -294,6 +294,12 @@ fn run_unit(
                 keep_source(state, unit);
                 if state.skip_errors {
                     state.progress.errors += 1;
+                    state.outcome.errors.push((unit.dst.clone(), error));
+                    return;
+                }
+                if spec.options.on_error == crate::spec::ErrorPolicy::Stop {
+                    state.progress.errors += 1;
+                    state.outcome.cancelled = true;
                     state.outcome.errors.push((unit.dst.clone(), error));
                     return;
                 }
@@ -1706,6 +1712,36 @@ mod tests {
         let out = run(&spec, &mut Scripted::new(vec![]));
         assert!(out.is_clean(), "{out:?}");
         assert!(dir.path().join("a/b/c").is_dir());
+    }
+
+    /// FAR's issue #597: what an error does is chosen before the copy, so a long one left
+    /// alone does not sit on the first question all night.
+    #[test]
+    fn an_error_policy_chosen_up_front_skips_or_stops_without_asking() {
+        for (policy, stops) in [
+            (crate::spec::ErrorPolicy::Skip, false),
+            (crate::spec::ErrorPolicy::Stop, true),
+        ] {
+            let dir = tree();
+            stdfs::write(dir.path().join("dst/src"), b"in the way").unwrap();
+            let spec = JobSpec::new(
+                JobKind::Copy,
+                vec![VPath::local(dir.path().join("src"))],
+                Some(VPath::local(dir.path().join("dst"))),
+            )
+            .with_options(JobOptions {
+                on_error: policy,
+                ..JobOptions::default()
+            });
+            let mut r = Scripted::new(vec![]);
+            let out = run(&spec, &mut r);
+            assert!(
+                !r.asked.iter().any(|q| matches!(q, Question::Error { .. })),
+                "{policy:?} asked"
+            );
+            assert!(!out.errors.is_empty(), "{policy:?} recorded nothing");
+            assert_eq!(out.cancelled, stops, "{policy:?}");
+        }
     }
 
     #[test]

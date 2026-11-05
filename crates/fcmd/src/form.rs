@@ -1195,9 +1195,15 @@ impl Form {
         follow_links: bool,
         verify: bool,
         filter: &str,
+        on_error: &str,
         i18n: &I18n,
     ) -> Form {
         let t = |id: &str| i18n.t(id);
+        let errors = [
+            ("ask", t("copy-error-ask")),
+            ("skip", t("copy-error-skip")),
+            ("stop", t("copy-error-stop")),
+        ];
         let policies = [
             ("ask", t("copy-conflict-ask")),
             ("overwrite", t("copy-conflict-overwrite")),
@@ -1223,6 +1229,10 @@ impl Form {
             // same: the box holds even when the policy says to overwrite, or when the user
             // has already answered "overwrite all" to a question.
             Field::toggle("copy.only_newer", t("copy-only-newer"), only_newer),
+            // One row that cycles rather than three more round boxes: the answer is chosen
+            // once, before the copy, so a long one left alone does not stop on the first
+            // file it cannot write (FAR's issue #597).
+            choice("copy.on_error", t("copy-on-error"), &errors, on_error),
             Field::Separator,
             Field::text("copy.filter", t("copy-filter"), filter.to_string()),
             Field::Separator,

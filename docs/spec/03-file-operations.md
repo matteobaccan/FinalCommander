@@ -61,6 +61,13 @@ source == target; target inside source (recursive copy guard); read-only/hidden/
 name invalid on the target FS (Windows reserved names, trailing dots/spaces, `:` in names,
 length limits, case-insensitive collision) → offered transliteration/truncation with preview.
 
+### 2b. What an error does (`JobOptions::on_error`)
+
+Chosen in the copy dialog before anything starts (FAR's issue #597): `ask` stops on each error
+with retry, skip, skip all and cancel; `skip` records it and goes on, as *skip all* would from
+the first; `stop` records it and ends the job there, keeping what was already done. The choice
+is remembered for the next dialog with the others.
+
 ## 3. Copy semantics
 
 | Aspect | Behaviour |

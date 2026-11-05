@@ -1370,3 +1370,9 @@ editor-lines-deleted = Righe tolte: { $count }
 
 ## The copy dialog's size policy (FAR #493).
 copy-conflict-size = sovrascrivi se la dimensione è diversa
+
+# Copy dialog: what an error does (FAR's issue #597)
+copy-on-error = Se uno non si può copiare
+copy-error-ask = Chiedi
+copy-error-skip = Saltalo e prosegui
+copy-error-stop = Ferma la copia

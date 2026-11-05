@@ -17,6 +17,9 @@ percorso, premi `Enter`, e niente sotto la prima riga si applica.
 * **Solo i file più nuovi di quelli che ci sono** è una casella accanto a quella scelta e non
   uno dei suoi valori, e le due cose non sono la stessa: la casella vale anche quando la scelta
   dice sovrascrivi, e anche dopo che hai risposto "sovrascrivi tutto" a una domanda.
+* **Se uno non si può copiare**: chiedi (il default), saltalo e prosegui, oppure ferma la
+  copia. Si sceglie prima di cominciare, così una copia lunga lasciata da sola non aspetta
+  tutta la notte sul primo file illeggibile; ogni file saltato è elencato nel riepilogo.
 * **Solo i nomi che corrispondono** prende una maschera, così viaggia solo quello che
   corrisponde. Vale per i file e mai per le cartelle, e una cartella viene creata solo quando
   qualcosa sotto di essa ha corrisposto — così `*.rs` tirato fuori da un albero di sorgenti ti
