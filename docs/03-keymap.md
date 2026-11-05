@@ -118,6 +118,7 @@ Column `FC` = FinalCommander default (profile `far`, our baseline).
 | next/prev tab | — | — | Alt+←/→ (tabs: Shift+←/→) | **Ctrl+Alt+N / Ctrl+Alt+P** |
 | move the tab to the other panel | — | — | — | **Ctrl+Alt+M** |
 | lock the tab to its directory | — | — | — | **Ctrl+Alt+K** |
+| list of the tabs, and their order | — | — | — | **Ctrl+Alt+A**; `Ctrl+↑/↓` inside it move a tab |
 | name the tab | — | — | — | Left/Right menu |
 | find file | Alt+F7 | Alt+? | Ctrl+S | Alt+F7 |
 | branch view (every file below, flat) | — | — | Ctrl+B | **Ctrl+Alt+B** — `Ctrl+B` is the key bar in FAR's grammar; the same key goes back |

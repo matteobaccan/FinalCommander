@@ -598,7 +598,9 @@ What the keys do:
 | `Ctrl+Alt+N` / `Ctrl+Alt+P` | the next tab, the previous one; the row is a ring |
 | `Ctrl+Alt+M` | hand this tab to the other side, which is a move: it leaves this one |
 | `Ctrl+Alt+K` | lock this tab to its directory, or let it move again |
-| Left/Right menu | the same six, and *Name this tab* |
+| `Ctrl+Alt+A` | every tab of this side as a list, numbered and with its path, the one on screen under the cursor: `Enter` or its digit goes to one, `Ctrl+↑/↓` move the one under the cursor along the row |
+| `panel.tab.shift(-1)` / `(1)` | the tab on screen one place left or right, for a keymap or a macro. No default key: `Ctrl+Alt+Shift+P/N` reach a program as `Ctrl+Alt+P/N` in a terminal that does not report Shift with a control letter, and would switch tabs instead of moving one |
+| Left/Right menu | the same, and *Name this tab* |
 
 A **locked** tab refuses to change directory, whichever way it is asked — `Enter`, the
 history, the tree driving it from the other side, a plugin, a connection opening on it — and

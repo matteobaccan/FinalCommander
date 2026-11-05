@@ -17,7 +17,6 @@ says what the decision stands on.
 
 | Item | Where | What is left |
 | --- | --- | --- |
-| Tabs per panel | `Ctrl+Alt+T`/`W`/`N`/`P`/`M`/`K` | Reordering a tab within its row, and a list of them to pick from. |
 | Columns from a plugin | `[[column_set]]` | Total Commander's content plugins: a column whose value a plugin computes (an EXIF date, a track's tags). The column grammar is there; a column API for plugins is SPEC 08's next tier. |
 | Panel filter | `Ctrl+Shift+I` | A dialog for the size, date and attribute conditions the filter grammar already has, and named filter sets to pick from (feature 1.15). |
 | Mounting from the drive list | `Alt+F1` | Mounting, unmounting and ejecting a drive from the dialog, MountMan's job (feature 2.4). |

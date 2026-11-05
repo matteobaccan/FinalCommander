@@ -165,6 +165,22 @@ impl Row {
         *tree = tab.tree;
     }
 
+    /// Swap two tabs' places in the row. Only the order changes: nothing is switched, and
+    /// the tab on screen stays on screen wherever it now is. `false` for a place that is not
+    /// in the row.
+    pub fn swap(&mut self, a: usize, b: usize) -> bool {
+        if a >= self.slots.len() || b >= self.slots.len() || a == b {
+            return false;
+        }
+        self.slots.swap(a, b);
+        if self.current == a {
+            self.current = b;
+        } else if self.current == b {
+            self.current = a;
+        }
+        true
+    }
+
     /// The tab after this one, wrapping. The row is a ring because the alternative is a key
     /// that stops working at the end of it.
     pub fn next(&self) -> usize {

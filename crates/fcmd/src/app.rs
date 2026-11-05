@@ -8207,6 +8207,16 @@ impl App {
                 self.tab_switch(to);
             }
             Command::PanelTabMove => self.tab_move(),
+            Command::PanelTabList => self.tab_list(0),
+            Command::PanelTabShift(by) => {
+                let side = self.active;
+                let at = self.tabs[side].current();
+                let to = at as isize + by as isize;
+                if to < 0 || !self.tabs[side].swap(at, to as usize) {
+                    let msg = self.i18n.t("msg-tab-end");
+                    self.set_status(msg);
+                }
+            }
             Command::PanelTabLock => {
                 let locked = !self.panel().locked;
                 self.panel_mut().locked = locked;
@@ -15693,6 +15703,8 @@ impl App {
             PickKind::OpenWith => return,
             // And `open_user_menu`, which reads the file and keeps the level stack.
             PickKind::UserMenu => return,
+            // And `tab_list`, which knows which side and which tab is on screen.
+            PickKind::Tabs => return,
             // And `open_settings`, which knows which row the list was left on.
             PickKind::Settings => return,
             PickKind::Languages => Pick::new(
@@ -15952,6 +15964,13 @@ impl App {
             {
                 self.menu_levels.pop();
                 self.show_user_menu_level();
+            }
+            KeyCode::Up | KeyCode::Down
+                if kind == PickKind::Tabs && key.mods.contains(Mods::CTRL) =>
+            {
+                let which = pick.cursor;
+                let by = if key.code == KeyCode::Up { -1 } else { 1 };
+                self.tab_list_shift(which, by);
             }
             KeyCode::Esc | KeyCode::F(10) if kind == PickKind::UserMenu => {
                 self.menu_levels.clear();
@@ -16471,6 +16490,11 @@ impl App {
             PickKind::UserMenu => {
                 if let Ok(which) = row.value.parse::<usize>() {
                     self.take_user_menu_row(which);
+                }
+            }
+            PickKind::Tabs => {
+                if let Ok(which) = row.value.parse::<usize>() {
+                    self.tab_switch(which);
                 }
             }
             PickKind::Plugins => {
@@ -20191,6 +20215,59 @@ impl App {
         }
     }
 
+    /// `Ctrl+Alt+A`: this side's tabs as a list, numbered as they are drawn, the one on
+    /// screen marked. The cursor starts on the tab on screen, moved by `nudge` — which is how
+    /// the list is redrawn after a `Ctrl+↑/↓` has moved a row, with the cursor on it.
+    fn tab_list(&mut self, nudge: isize) {
+        let side = self.active;
+        let row = &self.tabs[side];
+        let live = &self.panels[side];
+        let labels = row.labels(live);
+        let rows: Vec<PickRow> = labels
+            .iter()
+            .enumerate()
+            .map(|(i, label)| {
+                let path = row
+                    .panel(i, live)
+                    .map(|p| p.cwd.to_string())
+                    .unwrap_or_default();
+                // The bar's own mark for a locked tab, so the two say it the same way.
+                let lock = if row.panel(i, live).is_some_and(|p| p.locked) {
+                    "\u{25aa}"
+                } else {
+                    ""
+                };
+                let text = if *label == path {
+                    format!("{lock}{label}")
+                } else {
+                    format!("{lock}{label}  {path}")
+                };
+                let mut pick = PickRow::plain(text, i.to_string(), i == row.current());
+                if let Some(digit) = char::from_digit((i + 1) as u32, 10).filter(|_| i < 9) {
+                    pick = pick.with_key(digit);
+                }
+                pick
+            })
+            .collect();
+        let at = (row.current() as isize + nudge).clamp(0, rows.len() as isize - 1) as usize;
+        let title = self.i18n.t("tabs-title");
+        let mut pick = Pick::new(PickKind::Tabs, title, rows, side);
+        pick.cursor = at;
+        self.mode = Mode::Pick(Box::new(pick));
+    }
+
+    /// `Ctrl+↑/↓` in the list of tabs: the tab under the cursor changes places with its
+    /// neighbour, and the list is drawn again with the cursor still on it.
+    fn tab_list_shift(&mut self, which: usize, by: isize) {
+        let side = self.active;
+        let to = which as isize + by;
+        if to < 0 || !self.tabs[side].swap(which, to as usize) {
+            return;
+        }
+        let current = self.tabs[side].current() as isize;
+        self.tab_list(to - current);
+    }
+
     /// Hand this tab to the other side. The focus stays where it is, on the tab that took
     /// its place: moving a tab across is about where the directory should live, not about
     /// which panel one is working in.
@@ -21735,6 +21812,65 @@ mod tests {
         assert_eq!(app.panels[0].cwd, VPath::local("/home/mb"));
         press(&mut app, "Ctrl+Alt+P");
         assert_eq!(app.panels[0].cwd, VPath::local("/srv"));
+    }
+
+    /// `Ctrl+Alt+A` lists this side's tabs in their order, the one on screen under the
+    /// cursor; `Ctrl+↑/↓` there moves a tab along the row and the cursor goes with it; `Enter`
+    /// switches to the row taken. Moving changes the order only: the tab on screen stays so.
+    #[test]
+    fn the_list_of_tabs_picks_one_and_puts_them_in_order() {
+        let mut app = app();
+        press(&mut app, "Ctrl+Alt+T");
+        app.panels[0].go(VPath::local("/srv"), true);
+        press(&mut app, "Ctrl+Alt+T");
+        app.panels[0].go(VPath::local("/opt"), true);
+        let order = |app: &App| -> Vec<String> {
+            (0..app.tabs[0].len())
+                .filter_map(|i| app.tabs[0].panel(i, &app.panels[0]))
+                .map(|p| p.cwd.to_string())
+                .collect()
+        };
+        assert_eq!(order(&app), ["/home/mb", "/srv", "/opt"]);
+
+        press(&mut app, "Ctrl+Alt+A");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("no list: {}", app.status)
+        };
+        assert_eq!(pick.kind, PickKind::Tabs);
+        assert_eq!(pick.rows.len(), 3);
+        assert_eq!(pick.cursor, 2, "on the tab on screen");
+        assert!(
+            pick.rows[1].label.contains("/srv"),
+            "{}",
+            pick.rows[1].label
+        );
+
+        // `/opt` two places left, to the front of the row.
+        press(&mut app, "Ctrl+Up");
+        press(&mut app, "Ctrl+Up");
+        assert_eq!(order(&app), ["/opt", "/home/mb", "/srv"]);
+        assert_eq!(
+            app.panels[0].cwd,
+            VPath::local("/opt"),
+            "still the one on screen"
+        );
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("the list closed")
+        };
+        assert_eq!(pick.cursor, 0, "the cursor went with it");
+
+        // And the last row is a switch to `/srv`.
+        press(&mut app, "End");
+        press(&mut app, "Enter");
+        assert_eq!(app.panels[0].cwd, VPath::local("/srv"));
+
+        // The command form, for a keymap or a macro: one place, and no further than the end.
+        app.mode = Mode::Normal;
+        app.run(Command::PanelTabShift(1));
+        assert_eq!(order(&app), ["/opt", "/home/mb", "/srv"], "already last");
+        app.run(Command::PanelTabShift(-1));
+        assert_eq!(order(&app), ["/opt", "/srv", "/home/mb"]);
+        assert_eq!(app.tabs[0].current(), 1);
     }
 
     #[test]

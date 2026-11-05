@@ -265,6 +265,10 @@ che ci avevi lasciato.
 `Ctrl+Alt+M` consegna la linguetta all'altro pannello. È uno spostamento: la linguetta lascia
 questo lato.
 
+`Ctrl+Alt+A` elenca tutte le linguette del pannello, numerate, con dove si trova ciascuna.
+`Invio` o il numero porta a una di esse, e `Ctrl+↑` o `Ctrl+↓` sposta la linguetta sotto il
+cursore lungo la fila — solo l'ordine: quella su cui sei resta quella sullo schermo.
+
 `Ctrl+Alt+K` blocca una linguetta sulla sua cartella. Una linguetta bloccata non va da nessuna
 parte — non con `Enter`, non con la cronologia, non guidata dall'altro pannello — e lo dice
 quando glielo chiedi, invece di non fare niente. È marcata nella fila. L'unica cosa che la

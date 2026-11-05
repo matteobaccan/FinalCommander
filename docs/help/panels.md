@@ -252,6 +252,10 @@ you left in it.
 
 `Ctrl+Alt+M` hands the tab to the other panel. It is a move: the tab leaves this side.
 
+`Ctrl+Alt+A` lists every tab of the panel, numbered, with where each one is. `Enter` or the
+number goes to one, and `Ctrl+↑` or `Ctrl+↓` moves the tab under the cursor along the row —
+the order only: the tab you are on stays the one on screen.
+
 `Ctrl+Alt+K` locks a tab to its directory. A locked tab will not go anywhere — not with
 `Enter`, not with the history, not driven from the other panel — and says so when asked,
 rather than doing nothing. It is marked in the row. The one thing that unlocks it is the

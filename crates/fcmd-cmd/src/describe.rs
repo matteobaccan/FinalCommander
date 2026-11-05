@@ -59,6 +59,14 @@ impl Command {
             Command::PanelTabMove => "hand this tab to the other side",
             Command::PanelTabLock => "keep this tab on its directory, or let it move again",
             Command::PanelTabName => "give this tab a name",
+            Command::PanelTabList => "every tab of this side, to pick one and put them in order",
+            Command::PanelTabShift(by) => {
+                if by < 0 {
+                    "move this tab one place left"
+                } else {
+                    "move this tab one place right"
+                }
+            }
             Command::PanelViewSet(mode) => match mode {
                 ViewMode::Brief => "names only, three columns",
                 ViewMode::Medium => "names only, two columns",

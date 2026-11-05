@@ -479,6 +479,15 @@ keys = ["Ctrl+Alt+M"]
 scope = "panel"
 cmd = "panel.tab.move"
 
+# A for all of them. Moving a tab along its row is done in that list with `Ctrl+Up/Down`, and
+# `panel.tab.shift(-1)` / `(1)` have no key of their own: the obvious ones, `Ctrl+Alt+Shift+P`
+# and `N`, reach a program as `Ctrl+Alt+P` and `N` in a terminal that does not report Shift
+# with a control letter, and would switch tabs where they were meant to move one.
+[[bind]]
+keys = ["Ctrl+Alt+A"]
+scope = "panel"
+cmd = "panel.tab.list"
+
 # `Ctrl+Alt+K`, and not `L` for lock: that one locks the screen on most desktops.
 [[bind]]
 keys = ["Ctrl+Alt+K"]

@@ -164,6 +164,10 @@ pub enum Command {
     PanelTabLock,
     /// Give this tab a name, so the row says what it is for rather than where it is.
     PanelTabName,
+    /// Every tab of this side, to pick one from and to put in order (`Ctrl+↑/↓` in the list).
+    PanelTabList,
+    /// Move the tab on screen one place left or right in its row.
+    PanelTabShift(i8),
     PanelViewSet(ViewMode),
     /// Turn the quick view on or off. The panel it names shows the viewer for whatever the
     /// *other* panel's cursor is on (SPEC 02 §7).
@@ -561,6 +565,9 @@ impl Command {
             Command::PanelTabNext,
             Command::PanelTabPrev,
             Command::PanelTabMove,
+            Command::PanelTabList,
+            Command::PanelTabShift(-1),
+            Command::PanelTabShift(1),
             Command::PanelTabLock,
             Command::PanelTabName,
             Command::PanelSortReverse,
@@ -855,6 +862,8 @@ impl Command {
             Command::PanelTabMove => "panel.tab.move".into(),
             Command::PanelTabLock => "panel.tab.lock".into(),
             Command::PanelTabName => "panel.tab.name".into(),
+            Command::PanelTabList => "panel.tab.list".into(),
+            Command::PanelTabShift(by) => format!("panel.tab.shift({by})"),
             Command::PanelViewSet(v) => format!("panel.view.set({})", v.as_str()),
             Command::PanelSortBy(k) => format!("panel.sort.by({})", k.as_str()),
             Command::PanelSortReverse => "panel.sort.reverse".into(),
@@ -1124,6 +1133,8 @@ impl Command {
             ("panel.tab.move", _) => Command::PanelTabMove,
             ("panel.tab.lock", _) => Command::PanelTabLock,
             ("panel.tab.name", _) => Command::PanelTabName,
+            ("panel.tab.list", _) => Command::PanelTabList,
+            ("panel.tab.shift", Some(a)) => Command::PanelTabShift(a.trim().parse().ok()?),
             ("panel.view.set", Some(a)) => Command::PanelViewSet(ViewMode::parse(a)?),
             ("panel.sort.by", Some(a)) => Command::PanelSortBy(parse_sort_key(a)?),
             ("panel.sort.reverse", _) => Command::PanelSortReverse,

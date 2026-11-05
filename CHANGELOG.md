@@ -26,6 +26,10 @@ Notable changes, newest first. The format follows
   the group's heading; a group the conditions emptied takes its line with it. `Shift+F10`
   opens the menu on the row taken last, inside its submenu, ready for `Enter` — FAR's
   *select the last executed menu item*.
+- **A list of the tabs, and their order** (`Ctrl+Alt+A`, and in the Left and Right menus):
+  every tab of the panel, numbered, with its path and the one on screen under the cursor.
+  `Enter` or the number goes to one, `Ctrl+↑/↓` move the tab under the cursor along the row.
+  `panel.tab.shift(-1)` and `(1)` do the same for a keymap or a macro.
 
 ## [0.31.0] — 2026-11-05
 
