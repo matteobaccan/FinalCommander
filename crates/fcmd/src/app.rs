@@ -2296,6 +2296,8 @@ pub struct App {
     /// `fcmd_config::State::update_checked` and `update_offered`.
     pub update_checked: u64,
     pub update_offered: String,
+    /// `--no-save`: nothing is written back on the way out (FAR's issue #1046).
+    pub no_save: bool,
     /// The duplicate search: what the dialog was opened on, the last smallest size typed,
     /// whether the copies come back selected, and the token that stops a search running.
     dupes_roots: Option<(usize, Vec<VPath>)>,
@@ -2552,6 +2554,7 @@ impl App {
             rename_undo: None,
             update_checked: 0,
             update_offered: String::new(),
+            no_save: false,
             dupes_roots: None,
             last_dupes_min: "1".into(),
             dupes_select: true,

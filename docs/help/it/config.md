@@ -69,6 +69,12 @@ archivi e il changelog sono su quella pagina. Il programma lo chiede solo allora
 hai chiesto. Acceso, il controllo gira in background al massimo una volta al giorno, non dice
 niente se non c'è niente di nuovo o manca la rete, e propone ogni nuova versione una volta sola.
 
+# Una copia che non ricorda niente
+
+`fcmd --no-save` parte con le tue cronologie e i pannelli come al solito ma non scrive niente
+quando esce — per una seconda copia aperta per un lavoro veloce, che altrimenti, chiudendosi per
+ultima, sovrascriverebbe le cronologie della copia principale con le sue.
+
 # Cosa viene ricordato
 
 Fra una sessione e l'altra il programma tiene, nel suo file di stato accanto alle impostazioni:

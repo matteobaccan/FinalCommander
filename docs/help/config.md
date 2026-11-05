@@ -68,6 +68,12 @@ off, because the program opens no connection you did not ask for. With it on, th
 in the background at most once a day, says nothing when there is nothing new or no network,
 and offers each new release once.
 
+# A copy that remembers nothing
+
+`fcmd --no-save` starts with your histories and panels as usual but writes nothing back when it
+quits — for a second copy opened for a quick job, which would otherwise overwrite the main
+copy's histories with its own when it is the last to close.
+
 # What is remembered
 
 Between sessions the program keeps, in its state file beside the settings: the command lines

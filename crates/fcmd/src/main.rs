@@ -111,6 +111,14 @@ struct Cli {
     #[arg(short = 'P', long, value_name = "FILE")]
     printwd: Option<PathBuf>,
 
+    /// Read the histories and the panels' places, but write nothing back on the way out.
+    ///
+    /// For a second copy opened for a quick job beside the main one: without it, whichever
+    /// quits last writes the state file, and the main one's histories lose to the side job's.
+    /// FAR's issue #1046.
+    #[arg(long)]
+    no_save: bool,
+
     /// Print the shell function that makes the shell follow the panel, for this shell.
     ///
     /// Add `eval "$(fcmd --shell-init bash)"` to the shell's startup file — one line, and no
@@ -720,6 +728,7 @@ fn run(cli: Cli) -> Result<()> {
         app.start_on_diff(&absolute(left, &here), &absolute(right, &here))
             .map_err(anyhow::Error::msg)?;
     }
+    app.no_save = cli.no_save;
     interactive(app, cli.printwd.as_deref())
 }
 
@@ -1926,7 +1935,7 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
     // asked to. Off by default — a setting changed to see what it does should not become
     // permanent by quitting — and the panels' folders go into the state file below either
     // way, which is what brings the next start back where this one ended.
-    if app.cfg.ui.save_setup_on_exit {
+    if app.cfg.ui.save_setup_on_exit && !app.no_save {
         app.save_setup();
     }
     let state = fcmd_config::State {
@@ -1983,7 +1992,9 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
             })
             .collect(),
     };
-    if let Err(e) = state.save(&app.paths) {
+    if app.no_save {
+        // `--no-save`: this copy leaves the state file as it found it.
+    } else if let Err(e) = state.save(&app.paths) {
         eprintln!("fcmd: cannot write {}: {e}", app.paths.state_file.display());
     }
     // And where the shell should go, if somebody asked. An empty file is the answer when
