@@ -151,6 +151,23 @@ si verifica come qualunque altro elenco.
 
 `Esc` ferma una verifica lunga.
 
+# Dividere un file, e riunirlo
+
+*File → Dividi il file* taglia il file sotto il cursore in pezzi della dimensione che indichi —
+`700M`, `4G`, `1440K` — nella cartella dell'altro pannello: `film.mkv.001`, `film.mkv.002` e
+così via, l'ultimo più corto, e accanto a loro `film.mkv.crc`, che dice che cosa formano i
+pezzi. Sono i pezzi di Total Commander, quindi ciascuno dei due programmi riunisce quello che
+l'altro ha tagliato.
+
+*File → Unisci i file* su uno qualunque dei pezzi, o sul `.crc`, li rimette insieme nella
+cartella dell'altro pannello, da `.001` in su finché si susseguono, e controlla il risultato
+con il `.crc`: un pezzo mancante o rovinato viene segnalato e non lascia dietro un file fatto a
+metà. I pezzi senza `.crc` si uniscono lo stesso, e la riga di stato dice che non c'era niente
+con cui controllarli.
+
+In nessuno dei due casi viene sovrascritto qualcosa. `Esc` ferma una divisione o un'unione e
+toglie quello che aveva già scritto.
+
 # Cancellare, e il cestino
 
 `F8` consegna quello che hai scelto al cestino del sistema — lo stesso che mostra il file

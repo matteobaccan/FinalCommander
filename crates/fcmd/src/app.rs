@@ -97,6 +97,21 @@ pub enum Request {
         list: VPath,
         cancel: CancelToken,
     },
+    /// Cut `src` into pieces of `size` bytes in `out_dir` (SPEC 03 §9).
+    Split {
+        id: u64,
+        src: std::path::PathBuf,
+        out_dir: std::path::PathBuf,
+        size: u64,
+        cancel: CancelToken,
+    },
+    /// Join the pieces that go with `any` into `out_dir`.
+    Combine {
+        id: u64,
+        any: std::path::PathBuf,
+        out_dir: std::path::PathBuf,
+        cancel: CancelToken,
+    },
     /// Ask the terminal for a font a step larger, a step smaller, or the one it started with.
     /// Only the loop that owns the terminal can send it, so it travels as a request.
     Font {
@@ -479,6 +494,18 @@ pub enum Event {
         /// The lists that were written.
         written: Vec<VPath>,
         errors: Vec<(VPath, String)>,
+        cancelled: bool,
+    },
+    /// How far a split or a join has got, in bytes.
+    PiecesProgress {
+        id: u64,
+        done: u64,
+        total: u64,
+    },
+    /// A split or a join ended: what it made, or why it did not.
+    PiecesDone {
+        id: u64,
+        result: Result<PiecesMade, String>,
         cancelled: bool,
     },
     VerifyDone {
@@ -988,6 +1015,22 @@ fn split_targets(line: &str) -> Vec<String> {
         out.push(trimmed.to_string());
     }
     out
+}
+
+/// What a split or a join made, for the status line.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PiecesMade {
+    Split {
+        parts: usize,
+        /// The `.crc` written beside them, by name.
+        list: String,
+    },
+    Joined {
+        name: String,
+        bytes: u64,
+        parts: usize,
+        checked: bool,
+    },
 }
 
 /// What the copy dialog was last answered with. Not the job's options: this is what the
@@ -1930,6 +1973,9 @@ pub struct App {
     queued_jobs: std::collections::VecDeque<JobSpec>,
     /// Every job asked for, running, waiting or finished (SPEC 03 §5).
     pub queue: crate::queue::Queue,
+    /// The file the split dialog is about, and the piece size it was last answered with.
+    split_source: Option<VPath>,
+    last_split_size: String,
     /// The help page a search was started from, to go back to when it is dismissed, and the
     /// last thing looked for, which the next search offers again.
     help_back: Option<(crate::help::Chapter, usize, usize)>,
@@ -2272,6 +2318,8 @@ impl App {
             last_copy: CopyChoices::default(),
             queued_jobs: std::collections::VecDeque::new(),
             queue: Default::default(),
+            split_source: None,
+            last_split_size: "100M".to_string(),
             help_back: None,
             help_query: String::new(),
             pack_delete: None,
@@ -2925,6 +2973,30 @@ impl App {
                 }
                 self.sum = None;
                 self.finish_sums(&written, &errors, cancelled);
+            }
+            Event::PiecesProgress { id, done, total } => {
+                if self.sum.as_ref().map(|(running, _)| *running) != Some(id) {
+                    return;
+                }
+                let msg = self.i18n.t_args(
+                    "pieces-working",
+                    &[
+                        ("done", fcmd_core::format_size(done).into()),
+                        ("total", fcmd_core::format_size(total).into()),
+                    ],
+                );
+                self.set_status(msg);
+            }
+            Event::PiecesDone {
+                id,
+                result,
+                cancelled,
+            } => {
+                if self.sum.as_ref().map(|(running, _)| *running) != Some(id) {
+                    return;
+                }
+                self.sum = None;
+                self.pieces_done(result, cancelled);
             }
             Event::VerifyDone {
                 id,
@@ -6815,6 +6887,144 @@ impl App {
     }
 
     /// What the dialog asked for: hash these, with that, into there.
+    /// `Files → Split file`: the dialog, for the file under the cursor. Local files only,
+    /// like the checksums: the bytes are read and written here.
+    fn open_split_form(&mut self) {
+        let Some(path) = self.panel().current_path() else {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        };
+        let is_file = self
+            .panel()
+            .current()
+            .is_some_and(|e| e.kind == fcmd_core::EntryKind::File);
+        if !is_file || !path.is_local() || path.in_container() {
+            let m = self.i18n.t("split-local-file");
+            self.set_error(m);
+            return;
+        }
+        let what = self.sources_label(std::slice::from_ref(&path));
+        let target = self.panels[1 - self.active].cwd.to_string();
+        let size = self.last_split_size.clone();
+        self.split_source = Some(path);
+        self.mode = Mode::Form(Box::new(Form::split(what, target, size, &self.i18n)));
+    }
+
+    fn apply_split_form(&mut self, form: &Form) {
+        let Some(src) = self.split_source.take() else {
+            return;
+        };
+        let text = form.text_value("split.size").trim().to_string();
+        let size = match fcmd_core::filter::parse_size(&text) {
+            Ok(size) if size > 0 => size,
+            _ => {
+                let msg = self.i18n.t_args("split-bad-size", &[("size", text.into())]);
+                self.set_error(msg);
+                return;
+            }
+        };
+        self.last_split_size = text;
+        let out = self.resolve_path(form.text_value("split.target").trim());
+        if !out.is_local() || out.in_container() {
+            let m = self.i18n.t("split-local-file");
+            self.set_error(m);
+            return;
+        }
+        let id = self.next_job_id;
+        self.next_job_id += 1;
+        let cancel = CancelToken::new();
+        self.sum = Some((id, cancel.clone()));
+        self.requests.push(Request::Split {
+            id,
+            src: src.as_path().to_path_buf(),
+            out_dir: out.as_path().to_path_buf(),
+            size,
+            cancel,
+        });
+    }
+
+    /// `Files → Combine files`, on a piece or on the `.crc`: the file comes together in the
+    /// other panel's folder, as Total Commander puts it.
+    fn start_combine(&mut self) {
+        let Some(path) = self.panel().current_path() else {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        };
+        if !path.is_local() || path.in_container() {
+            let m = self.i18n.t("split-local-file");
+            self.set_error(m);
+            return;
+        }
+        if fcmd_jobs::split::pieces_of(path.as_path()).is_none() {
+            let m = self.i18n.t("combine-not-a-piece");
+            self.set_error(m);
+            return;
+        }
+        let out = self.panels[1 - self.active].cwd.clone();
+        if !out.is_local() || out.in_container() {
+            let m = self.i18n.t("split-local-file");
+            self.set_error(m);
+            return;
+        }
+        let id = self.next_job_id;
+        self.next_job_id += 1;
+        let cancel = CancelToken::new();
+        self.sum = Some((id, cancel.clone()));
+        self.requests.push(Request::Combine {
+            id,
+            any: path.as_path().to_path_buf(),
+            out_dir: out.as_path().to_path_buf(),
+            cancel,
+        });
+    }
+
+    fn pieces_done(&mut self, result: Result<PiecesMade, String>, cancelled: bool) {
+        if cancelled {
+            let m = self.i18n.t("pieces-cancelled");
+            self.set_status(m);
+            return;
+        }
+        match result {
+            Ok(PiecesMade::Split { parts, list }) => {
+                let msg = self.i18n.t_args(
+                    "split-done",
+                    &[("parts", (parts as i64).into()), ("list", list.into())],
+                );
+                self.set_status(msg);
+            }
+            Ok(PiecesMade::Joined {
+                name,
+                bytes,
+                parts,
+                checked,
+            }) => {
+                let msg = self.i18n.t_args(
+                    if checked {
+                        "combine-done-checked"
+                    } else {
+                        "combine-done-unchecked"
+                    },
+                    &[
+                        ("name", name.into()),
+                        ("parts", (parts as i64).into()),
+                        ("bytes", fcmd_core::format_size(bytes).into()),
+                    ],
+                );
+                self.set_status(msg);
+            }
+            Err(error) => {
+                let msg = self
+                    .i18n
+                    .t_args("pieces-failed", &[("error", error.into())]);
+                self.set_error(msg);
+            }
+        }
+        self.read_panel(0);
+        self.read_panel(1);
+    }
+
     /// `Files → Write again as…`: ask what these files should be written as (SPEC 03 §13).
     fn open_recode_form(&mut self) {
         let files = self.recode_sources();
@@ -8905,6 +9115,8 @@ impl App {
             Command::PanelTempAdd => self.add_to_temp_panel(),
             Command::FileChecksum => self.open_checksum_form(),
             Command::FileChecksumVerify => self.start_verify(),
+            Command::FileSplit => self.open_split_form(),
+            Command::FileCombine => self.start_combine(),
             Command::FileDelete | Command::FileDeleteCurrent | Command::FileDeleteForce => {
                 // On the stored connections there is no file to delete: `F8` forgets the
                 // session under the cursor, which is what the row is.
@@ -13679,6 +13891,10 @@ impl App {
         }
         if form.kind == FormKind::Checksum {
             self.apply_checksum_form(&form);
+            return;
+        }
+        if form.kind == FormKind::Split {
+            self.apply_split_form(&form);
             return;
         }
         if form.kind == FormKind::Recode {
@@ -30209,6 +30425,80 @@ abcdefghij
         let mut app = app_on_disk(dir);
         app.editor_size = (40, 6);
         app
+    }
+
+    /// `Files → Split file` asks where and how big, then hands the file to the worker; the
+    /// pieces it leaves are joined by `Files → Combine files` from any of them.
+    #[test]
+    fn a_file_is_split_from_the_menu_and_joined_from_a_piece() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("big.bin"), vec![5u8; 30_000]).unwrap();
+        let mut app = editing_app(dir.path());
+        press(&mut app, "Down"); // big.bin
+        app.run(Command::FileSplit);
+        {
+            let Mode::Form(form) = &mut app.mode else {
+                panic!("{:?}", app.mode)
+            };
+            assert_eq!(form.kind, FormKind::Split);
+            form.cursor = form
+                .fields
+                .iter()
+                .position(
+                    |f| matches!(f, crate::form::Field::Text { key, .. } if *key == "split.size"),
+                )
+                .unwrap();
+        }
+        clear_prompt(&mut app);
+        // In bytes: the test's typing helper sends letters lower case, and `10k` is decimal.
+        type_text(&mut app, "10240");
+        app.requests.clear();
+        app.apply_form();
+        let request = app
+            .take_requests()
+            .into_iter()
+            .find(|r| matches!(r, Request::Split { .. }))
+            .expect("the split was asked for");
+        let Request::Split {
+            id,
+            src,
+            out_dir,
+            size,
+            cancel,
+        } = request
+        else {
+            unreachable!()
+        };
+        assert_eq!(size, 10 * 1024);
+        assert_eq!(src, dir.path().join("big.bin"));
+        // The worker, run here, and what it says.
+        let pieces = fcmd_jobs::split::split(&src, &out_dir, size, &cancel, &mut |_| {}).unwrap();
+        app.handle_event(Event::PiecesDone {
+            id,
+            result: Ok(PiecesMade::Split {
+                parts: pieces.parts.len(),
+                list: "big.bin.crc".into(),
+            }),
+            cancelled: false,
+        });
+        assert!(app.status.contains('3'), "{}", app.status);
+        assert!(app.status.contains("big.bin.crc"), "{}", app.status);
+
+        // Combining from a piece asks for it; from a file that is not one it says so.
+        // A fresh look at the folder, with the pieces in it.
+        let mut app = editing_app(dir.path());
+        let at = app.panels[0].listing.row_of_name("big.bin.002").unwrap();
+        app.panels[0].cursor = at;
+        app.run(Command::FileCombine);
+        assert!(app
+            .take_requests()
+            .iter()
+            .any(|r| matches!(r, Request::Combine { .. })));
+        app.sum = None;
+        let at = app.panels[0].listing.row_of_name("big.bin").unwrap();
+        app.panels[0].cursor = at;
+        app.run(Command::FileCombine);
+        assert!(app.status_error, "{}", app.status);
     }
 
     #[test]

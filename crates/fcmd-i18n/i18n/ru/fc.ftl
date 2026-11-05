@@ -447,6 +447,8 @@ menu-delete = &Удалить
 menu-wipe = Уни&чтожить
 menu-checksum = Контрольные суммы…
 menu-checksum-verify = Проверить по списку
+menu-split = Разрезать файл…
+menu-combine = Собрать файлы
 menu-delete-permanent = Удалит&ь насовсем
 menu-archive-add = Доб&авить в архив
 menu-archive-extract = Распако&вать файлы
@@ -1250,3 +1252,18 @@ table-filtered = осталось строк: { $rows }
 table-unfiltered = снова все строки
 table-cut-sorted = из первых { $rows } строк — это всё, что было прочитано
 table-too-many = слишком много записей, чтобы сортировать или фильтровать здесь
+
+# Splitting and combining (SPEC 03 §9)
+split-title = Разрезать файл
+split-target = В:
+split-size = Каждая часть:
+split-size-hint = 1440K, 700M, 4G — последняя часть — остаток
+split-local-file = Разрезать и собирать можно файл на этой машине
+split-bad-size = «{ $size }» — не размер: напишите 700M или 4G
+combine-not-a-piece = Это не часть: части разрезанного файла оканчиваются на .001, .002, … или идут с .crc
+pieces-working = Разрезание или сборка: { $done } из { $total }
+pieces-cancelled = Остановлено, записанное удалено
+split-done = Записано частей: { $parts }, рядом { $list }
+combine-done-checked = { $name } собран из частей ({ $parts }), { $bytes }, совпадает со своим .crc
+combine-done-unchecked = { $name } собран из частей ({ $parts }), { $bytes } — .crc для проверки не было
+pieces-failed = Не сделано: { $error }

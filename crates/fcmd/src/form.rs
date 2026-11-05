@@ -272,6 +272,7 @@ impl Form {
             | FormKind::Attributes
             | FormKind::Copy
             | FormKind::Checksum
+            | FormKind::Split
             | FormKind::Recode
             | FormKind::Compare
             | FormKind::Drives
@@ -572,6 +573,7 @@ impl Form {
             FormKind::Attributes => "attr-title",
             FormKind::Copy => "copy-title",
             FormKind::Checksum => "sum-title",
+            FormKind::Split => "split-title",
             FormKind::Recode => "recode-title",
             FormKind::Compare => "cmp-title",
             FormKind::Drives => "drives-title",
@@ -1244,6 +1246,30 @@ impl Form {
     /// The name is offered rather than fixed because the two conventions disagree and both are
     /// right: a commander writes `project.sha256` beside the directory it is about, and a
     /// Linux release writes `SHA256SUMS`. Either is read by `sha256sum -c`.
+    /// `Files → Split file`: where the pieces go and how big each one is.
+    pub fn split(what: String, target: String, size: String, i18n: &I18n) -> Form {
+        let t = |id: &str| i18n.t(id);
+        let fields = vec![
+            Field::Note(what),
+            Field::text("split.target", t("split-target"), target),
+            // Total Commander's sizes are a list; ours is the size grammar of the filters, so
+            // `1440K`, `700M` and `4G` are all one row.
+            Field::text("split.size", t("split-size"), size),
+            Field::Note(t("split-size-hint")),
+        ];
+        Form {
+            pages: Vec::new(),
+            page: 0,
+            kind: FormKind::Split,
+            title: t("split-title"),
+            fields,
+            cursor: 2,
+            site: None,
+            button: None,
+            buttons: vec![i18n.t("btn-ok"), i18n.t("btn-cancel")],
+        }
+    }
+
     pub fn checksum(
         what: String,
         algorithm: fcmd_jobs::Algorithm,

@@ -274,7 +274,7 @@ through a temporary name; a failure halfway undoes the renames already made, in 
 `[last_rename]` so it outlives the session that did it — one step, not a history. The export,
 the ordered list of regex rules, transliteration and the dedup rule are still to come.
 
-## 9. Checksums (shipped), split, combine
+## 9. Checksums, split, combine (shipped)
 
 **Checksums.** MD5, SHA-1, SHA-256 and CRC32 over what is selected, written as a list of
 digests, and a list checked against the files beside it. The dialog asks three things: which
@@ -312,8 +312,28 @@ hash, whether one list holds them all or each file gets its own, and what the li
   the tree — the first three under the SSH client, the fourth under `zip` and `tar` — so this
   costs nothing to build.
 
-**Split and combine** are still to come: into volumes by size or count, with an optional
-self-recombining script; combine detects `.001`/`.part1`/`.zNN` series automatically.
+**Split and combine** (0.31.0, `file.split` and `file.combine`, *Files → Split file* and
+*Combine files*; `fcmd_jobs::split`). The pieces are **Total Commander's**, so a file cut here
+is joined there and the other way round: `name.001`, `name.002`, … — three digits, more only
+past 999 — and beside them `name.crc`, three `key=value` lines, `filename=`, `size=` and
+`crc32=` in upper-case hex, with CRLF ends as Total Commander writes them.
+
+- *Split* asks where the pieces go (the other panel, as a copy would) and how big each one is,
+  in the size grammar of the filters (`1440K`, `700M`, `4G`; upper case is binary, lower case
+  decimal); the last piece is what is left. A file no bigger than one piece is not split.
+  Nothing is written over: a piece or a `.crc` already there stops it before the first byte,
+  and a failure or `Esc` takes back the pieces written so far.
+- *Combine*, on any piece or on the `.crc`, joins `.001` upward for as long as the pieces
+  follow on, into the other panel's folder, under the name the `.crc` gives (kept to a name:
+  a path in it is dropped to its last part) or the pieces' own base name. The file is written
+  under a temporary name and appears only when it is whole and, where there is a `.crc`, its
+  size and CRC32 match: a missing or damaged piece is reported and leaves nothing behind.
+  Pieces without a `.crc` still join, and the summary says it could not check them.
+- Both run in the background with their progress in the status line, as the checksums do,
+  and `Esc` stops them. Local files only: the bytes are read and written here.
+
+Still to come: splitting by a count rather than a size, the self-joining script, and reading
+other series (`.part1.rar`, `.zNN`), which are archives' own and opened as archives.
 
 ## 10. Compare and synchronise
 

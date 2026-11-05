@@ -455,6 +455,8 @@ menu-delete = &Delete
 menu-wipe = &Wipe
 menu-checksum = Checks&ums…
 menu-checksum-verify = Check against a list
+menu-split = Split file…
+menu-combine = Combine files
 menu-delete-permanent = De&lete permanently
 menu-archive-add = Add &to archive
 menu-archive-extract = E&xtract files
@@ -1260,3 +1262,18 @@ table-filtered = { $rows } rows left
 table-unfiltered = every row again
 table-cut-sorted = of the first { $rows } rows, which is all that was read
 table-too-many = too many records to sort or filter here
+
+# Splitting and combining (SPEC 03 §9)
+split-title = Split file
+split-target = Into:
+split-size = Each piece:
+split-size-hint = 1440K, 700M, 4G — the last piece is what is left
+split-local-file = Splitting and combining work on a file on this machine
+split-bad-size = “{ $size }” is not a size: write it as 700M or 4G
+combine-not-a-piece = That is not a piece: a split file's pieces end in .001, .002, … or come with a .crc
+pieces-working = Splitting or joining: { $done } of { $total }
+pieces-cancelled = Stopped, and what was written is taken back
+split-done = { $parts } pieces written, and { $list } beside them
+combine-done-checked = { $name } joined from { $parts } pieces, { $bytes }, and it matches its .crc
+combine-done-unchecked = { $name } joined from { $parts } pieces, { $bytes } — there was no .crc to check it against
+pieces-failed = Not done: { $error }

@@ -19,6 +19,7 @@ pub mod rename;
 pub mod replace;
 pub mod run;
 pub mod spec;
+pub mod split;
 pub mod sum;
 pub mod sync;
 

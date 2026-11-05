@@ -290,6 +290,10 @@ pub enum Command {
     FileRecode,
     /// Check the files beside a list of digests against it.
     FileChecksumVerify,
+    /// Cut a file into pieces Total Commander can join, with a `.crc` beside them.
+    FileSplit,
+    /// Join the pieces a split left, checked against their `.crc`.
+    FileCombine,
     /// `Ctrl+G`: run a command line once per selected file (SPEC 06 §5).
     FileApply,
     /// `Alt+F6`: a hard link or a symbolic link.
@@ -612,6 +616,8 @@ impl Command {
             Command::FileChecksum,
             Command::FileRecode,
             Command::FileChecksumVerify,
+            Command::FileSplit,
+            Command::FileCombine,
             Command::FileApply,
             Command::FileLink,
             Command::FileWipe,
@@ -900,6 +906,8 @@ impl Command {
             Command::FileChecksum => "file.checksum.create".into(),
             Command::FileRecode => "file.recode".into(),
             Command::FileChecksumVerify => "file.checksum.verify".into(),
+            Command::FileSplit => "file.split".into(),
+            Command::FileCombine => "file.combine".into(),
             Command::FileApply => "file.apply".into(),
             Command::FileLink => "file.link".into(),
             Command::FileWipe => "file.wipe".into(),
@@ -1156,6 +1164,8 @@ impl Command {
             ("file.checksum.create", _) => Command::FileChecksum,
             ("file.recode", _) => Command::FileRecode,
             ("file.checksum.verify", _) => Command::FileChecksumVerify,
+            ("file.split", _) => Command::FileSplit,
+            ("file.combine", _) => Command::FileCombine,
             ("file.apply", _) => Command::FileApply,
             ("file.link", _) => Command::FileLink,
             ("file.wipe", _) => Command::FileWipe,

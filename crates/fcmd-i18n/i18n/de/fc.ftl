@@ -447,6 +447,8 @@ menu-delete = &Löschen
 menu-wipe = &Sicher löschen
 menu-checksum = &Prüfsummen…
 menu-checksum-verify = Gegen eine Liste prü&fen
+menu-split = Datei teilen…
+menu-combine = Dateien zusammenfügen
 menu-delete-permanent = Endg&ültig löschen
 menu-archive-add = Zum Archiv &hinzufügen
 menu-archive-extract = &Dateien entpacken
@@ -1250,3 +1252,18 @@ table-filtered = { $rows } Zeilen übrig
 table-unfiltered = wieder alle Zeilen
 table-cut-sorted = von den ersten { $rows } Zeilen, mehr wurde nicht gelesen
 table-too-many = zu viele Datensätze, um sie hier zu sortieren oder zu filtern
+
+# Splitting and combining (SPEC 03 §9)
+split-title = Datei teilen
+split-target = Nach:
+split-size = Jedes Stück:
+split-size-hint = 1440K, 700M, 4G — das letzte Stück ist der Rest
+split-local-file = Teilen und Zusammenfügen gehen mit einer Datei auf diesem Rechner
+split-bad-size = „{ $size }“ ist keine Größe: schreiben Sie 700M oder 4G
+combine-not-a-piece = Das ist kein Stück: die Stücke einer geteilten Datei enden auf .001, .002, … oder haben eine .crc
+pieces-working = Teilen oder Zusammenfügen: { $done } von { $total }
+pieces-cancelled = Angehalten, und das Geschriebene ist wieder entfernt
+split-done = { $parts } Stücke geschrieben, daneben { $list }
+combine-done-checked = { $name } aus { $parts } Stücken zusammengefügt, { $bytes }, passt zu seiner .crc
+combine-done-unchecked = { $name } aus { $parts } Stücken zusammengefügt, { $bytes } — keine .crc zum Prüfen
+pieces-failed = Nicht erledigt: { $error }

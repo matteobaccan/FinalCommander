@@ -144,6 +144,22 @@ sends you is checked the same way as any other list.
 
 `Esc` stops a long run.
 
+# Splitting a file, and joining it again
+
+*Files → Split file* cuts the file under the cursor into pieces of the size you give — `700M`,
+`4G`, `1440K` — in the other panel's folder: `film.mkv.001`, `film.mkv.002` and so on, the last
+one shorter, and beside them `film.mkv.crc`, which says what the pieces make. These are Total
+Commander's own pieces, so either program joins what the other cut.
+
+*Files → Combine files* on any of the pieces, or on the `.crc`, puts them back together in the
+other panel's folder, from `.001` up for as long as they follow on, and checks the result
+against the `.crc`: a missing or damaged piece is reported and leaves no half-made file behind.
+Pieces with no `.crc` still join, and the status line says there was nothing to check them
+against.
+
+Nothing is written over, either way. `Esc` stops a split or a join and takes back what it had
+written.
+
 # Deleting, and the wastebasket
 
 `F8` hands what you chose to the system's own wastebasket — the same one your desktop's file

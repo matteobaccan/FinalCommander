@@ -209,9 +209,7 @@ Everything here is unblocked; `docs/BACKLOG.md` has the reasons and the rest.
    of its manual.
 2. **`cab` read in process**, the last of the three `docs/05-multiarc.md` §9 kept as
    candidates; it is the one that wants a crate.
-3. **Splitting and combining files** (feature 3.12), the last of Total Commander's file tools
-   this has not got.
-4. **The job journal** (SPEC 03 §5, features 3.7 and 11.6): each job's planned units and
+3. **The job journal** (SPEC 03 §5, features 3.7 and 11.6): each job's planned units and
    completion marks on disk, so a copy interrupted by a crash can be reported and resumed.
    The queue itself is in (0.31.0).
 

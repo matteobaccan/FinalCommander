@@ -1331,6 +1331,25 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                     let tx = tx.clone();
                     runtime.spawn_blocking(move || run_verify(id, &list, cancel, tx));
                 }
+                Request::Split {
+                    id,
+                    src,
+                    out_dir,
+                    size,
+                    cancel,
+                } => {
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || run_split(id, &src, &out_dir, size, cancel, tx));
+                }
+                Request::Combine {
+                    id,
+                    any,
+                    out_dir,
+                    cancel,
+                } => {
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || run_combine(id, &any, &out_dir, cancel, tx));
+                }
                 // The only request the loop answers itself: the terminal is here, and asking
                 // it for a font is one write and no waiting.
                 Request::Font { by } => {
@@ -2722,6 +2741,92 @@ fn run_checksums(
 }
 
 /// Check the files beside a list of digests against it.
+/// Progress for a split or a join: a frame every few megabytes is plenty for a status line.
+fn pieces_reporter(id: u64, total: u64, tx: &mpsc::Sender<Event>) -> impl FnMut(u64) + '_ {
+    let mut done = 0u64;
+    let mut since = 0u64;
+    move |n| {
+        done += n;
+        since += n;
+        if since >= 4 << 20 {
+            since = 0;
+            let _ = tx.send(Event::PiecesProgress { id, done, total });
+        }
+    }
+}
+
+fn run_split(
+    id: u64,
+    src: &std::path::Path,
+    out_dir: &std::path::Path,
+    size: u64,
+    cancel: CancelToken,
+    tx: mpsc::Sender<Event>,
+) {
+    let total = std::fs::metadata(src).map(|m| m.len()).unwrap_or(0);
+    let result = fcmd_jobs::split::split(
+        src,
+        out_dir,
+        size,
+        &cancel,
+        &mut pieces_reporter(id, total, &tx),
+    );
+    let cancelled = matches!(&result, Err(e) if e.kind() == std::io::ErrorKind::Interrupted);
+    let result = result
+        .map(|p| app::PiecesMade::Split {
+            parts: p.parts.len(),
+            list: p
+                .crc_file
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+        })
+        .map_err(|e| e.to_string());
+    let _ = tx.send(Event::PiecesDone {
+        id,
+        result,
+        cancelled,
+    });
+}
+
+fn run_combine(
+    id: u64,
+    any: &std::path::Path,
+    out_dir: &std::path::Path,
+    cancel: CancelToken,
+    tx: mpsc::Sender<Event>,
+) {
+    let total = fcmd_jobs::split::pieces_of(any)
+        .map(|(_, parts)| {
+            parts
+                .iter()
+                .filter_map(|p| std::fs::metadata(p).ok())
+                .map(|m| m.len())
+                .sum()
+        })
+        .unwrap_or(0);
+    let result =
+        fcmd_jobs::split::combine(any, out_dir, &cancel, &mut pieces_reporter(id, total, &tx));
+    let cancelled = matches!(&result, Err(e) if e.kind() == std::io::ErrorKind::Interrupted);
+    let result = result
+        .map(|j| app::PiecesMade::Joined {
+            name: j
+                .path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+            bytes: j.bytes,
+            parts: j.parts,
+            checked: j.checked,
+        })
+        .map_err(|e| e.to_string());
+    let _ = tx.send(Event::PiecesDone {
+        id,
+        result,
+        cancelled,
+    });
+}
+
 fn run_verify(id: u64, list: &VPath, cancel: CancelToken, tx: mpsc::Sender<Event>) {
     let fs = fcmd_jobs::LocalFs;
     let text = match std::fs::read_to_string(list.os()) {
@@ -5169,6 +5274,31 @@ dir_attr = "D"
                 Request::Verify { id, list, cancel } => {
                     let (tx, rx) = mpsc::channel();
                     run_verify(id, &list, cancel, tx);
+                    while let Ok(event) = rx.try_recv() {
+                        app.handle_event(event);
+                    }
+                }
+                Request::Split {
+                    id,
+                    src,
+                    out_dir,
+                    size,
+                    cancel,
+                } => {
+                    let (tx, rx) = mpsc::channel();
+                    run_split(id, &src, &out_dir, size, cancel, tx);
+                    while let Ok(event) = rx.try_recv() {
+                        app.handle_event(event);
+                    }
+                }
+                Request::Combine {
+                    id,
+                    any,
+                    out_dir,
+                    cancel,
+                } => {
+                    let (tx, rx) = mpsc::channel();
+                    run_combine(id, &any, &out_dir, cancel, tx);
                     while let Ok(event) = rx.try_recv() {
                         app.handle_event(event);
                     }

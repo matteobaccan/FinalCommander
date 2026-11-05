@@ -447,6 +447,8 @@ menu-delete = El&imina
 menu-wipe = Cancella in mo&do sicuro
 menu-checksum = Chec&ksum…
 menu-checksum-verify = Verifica con &un elenco
+menu-split = Dividi il file…
+menu-combine = Unisci i file
 menu-delete-permanent = Elimina definitivamente
 menu-archive-add = A&ggiungi all'archivio
 menu-archive-extract = E&strai file
@@ -1251,3 +1253,18 @@ table-filtered = restano { $rows } righe
 table-unfiltered = tutte le righe di nuovo
 table-cut-sorted = delle prime { $rows } righe, che sono tutte quelle lette
 table-too-many = troppi record per ordinarli o filtrarli qui
+
+# Splitting and combining (SPEC 03 §9)
+split-title = Dividi il file
+split-target = In:
+split-size = Ogni pezzo:
+split-size-hint = 1440K, 700M, 4G — l'ultimo pezzo è quello che resta
+split-local-file = Dividere e unire funzionano su un file di questa macchina
+split-bad-size = «{ $size }» non è una dimensione: scrivila come 700M o 4G
+combine-not-a-piece = Non è un pezzo: i pezzi di un file diviso finiscono in .001, .002, … o hanno un .crc
+pieces-working = Divisione o unione: { $done } di { $total }
+pieces-cancelled = Fermato, e quello che era stato scritto è stato tolto
+split-done = { $parts } pezzi scritti, con { $list } accanto
+combine-done-checked = { $name } unito da { $parts } pezzi, { $bytes }, e corrisponde al suo .crc
+combine-done-unchecked = { $name } unito da { $parts } pezzi, { $bytes } — non c'era un .crc con cui controllarlo
+pieces-failed = Non fatto: { $error }

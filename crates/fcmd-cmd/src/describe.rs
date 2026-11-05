@@ -172,6 +172,8 @@ impl Command {
             Command::FileChecksum => "write a list of digests for what is selected",
             Command::FileRecode => "write these files with another code page or line ending",
             Command::FileChecksumVerify => "check the files beside a list of digests",
+            Command::FileSplit => "cut a file into pieces, with a .crc to join them by",
+            Command::FileCombine => "join a split file's pieces, checked against their .crc",
             Command::FileApply => "run a command over each selected file",
             Command::FileLink => "make a link",
             Command::FileWipe => "delete, overwriting the bytes first",

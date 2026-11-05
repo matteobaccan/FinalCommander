@@ -447,6 +447,8 @@ menu-delete = 删除
 menu-wipe = 安全擦除
 menu-checksum = 校验和…
 menu-checksum-verify = 按清单校验
+menu-split = 分割文件(&S)…
+menu-combine = 合并文件(&B)
 menu-delete-permanent = 永久删除
 menu-archive-add = 添加到压缩包
 menu-archive-extract = 解压文件
@@ -1226,3 +1228,18 @@ table-filtered = 剩下 { $rows } 行
 table-unfiltered = 恢复全部行
 table-cut-sorted = 仅前 { $rows } 行，这是已读取的全部
 table-too-many = 记录太多，无法在此排序或过滤
+
+# Splitting and combining (SPEC 03 §9)
+split-title = 分割文件
+split-target = 到：
+split-size = 每块大小：
+split-size-hint = 1440K、700M、4G — 最后一块是剩下的部分
+split-local-file = 分割和合并只能用于本机上的文件
+split-bad-size = “{ $size }”不是大小：请写成 700M 或 4G
+combine-not-a-piece = 这不是分块：分割文件的各块以 .001、.002…… 结尾，或附带 .crc
+pieces-working = 正在分割或合并：{ $done } / { $total }
+pieces-cancelled = 已停止，已写入的内容已删除
+split-done = 已写入 { $parts } 块，旁边是 { $list }
+combine-done-checked = { $name } 已由 { $parts } 块合并，{ $bytes }，与其 .crc 一致
+combine-done-unchecked = { $name } 已由 { $parts } 块合并，{ $bytes } — 没有 .crc 可供校验
+pieces-failed = 未完成：{ $error }

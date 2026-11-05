@@ -41,6 +41,8 @@ pub enum FormKind {
     Recode,
     /// Which hash, and where the list of digests goes (SPEC 03 §9).
     Checksum,
+    /// How big the pieces of a split are, and where they go (SPEC 03 §9).
+    Split,
     /// What counts as the same file when the two panels are compared (SPEC 03 §11).
     Compare,
     /// Which columns the change-drive dialog shows, and which drives (SPEC 10 §4.3).
@@ -405,6 +407,8 @@ pub fn menus() -> Vec<Menu> {
                     "",
                     Action::Run(Command::FileChecksumVerify),
                 ),
+                item("menu-split", "", Action::Run(Command::FileSplit)),
+                item("menu-combine", "", Action::Run(Command::FileCombine)),
                 Entry::Separator,
                 item(
                     "menu-attributes",

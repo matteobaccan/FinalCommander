@@ -447,6 +447,8 @@ menu-delete = &Supprimer
 menu-wipe = &Effacer définitivement
 menu-checksum = Sommes de co&ntrôle…
 menu-checksum-verify = Vérifier avec une liste
+menu-split = Découper le fichier…
+menu-combine = Réassembler les fichiers
 menu-delete-permanent = Suppri&mer définitivement
 menu-archive-add = &Ajouter à l'archive
 menu-archive-extract = Extraire les &fichiers
@@ -1250,3 +1252,18 @@ table-filtered = { $rows } lignes restantes
 table-unfiltered = toutes les lignes de nouveau
 table-cut-sorted = des { $rows } premières lignes, tout ce qui a été lu
 table-too-many = trop d'enregistrements pour les trier ou les filtrer ici
+
+# Splitting and combining (SPEC 03 §9)
+split-title = Découper le fichier
+split-target = Dans :
+split-size = Chaque morceau :
+split-size-hint = 1440K, 700M, 4G — le dernier morceau est ce qui reste
+split-local-file = Découper et réassembler marchent sur un fichier de cette machine
+split-bad-size = « { $size } » n'est pas une taille : écrivez 700M ou 4G
+combine-not-a-piece = Ce n'est pas un morceau : les morceaux d'un fichier découpé finissent par .001, .002, … ou ont un .crc
+pieces-working = Découpage ou réassemblage : { $done } sur { $total }
+pieces-cancelled = Arrêté, et ce qui avait été écrit est retiré
+split-done = { $parts } morceaux écrits, avec { $list } à côté
+combine-done-checked = { $name } réassemblé à partir de { $parts } morceaux, { $bytes }, conforme à son .crc
+combine-done-unchecked = { $name } réassemblé à partir de { $parts } morceaux, { $bytes } — pas de .crc pour le vérifier
+pieces-failed = Pas fait : { $error }

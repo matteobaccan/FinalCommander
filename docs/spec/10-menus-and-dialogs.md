@@ -100,7 +100,8 @@ in is SPEC 02 §3.
 View, Edit, Edit new file, Copy, Rename or move, Create link, Rename from a pattern
 (`Ctrl+Shift+F6`, SPEC 03 §8), Undo the last multi-rename, Make folder, Delete, Delete
 permanently, Wipe · Add to archive / Extract files / Archive commands / Test archive ·
-Checksums (§3.9), Write again as (SPEC 03 §13), Check against a list · File attributes (§3.8),
+Checksums (§3.9), Write again as (SPEC 03 §13), Check against a list, Split file, Combine files
+(SPEC 03 §9) · File attributes (§3.8),
 Apply command, Replace in files · Select group, Unselect group, Invert selection, Select by this
 extension, Unselect by this extension, Select all, Restore selection · Folder size.
 
