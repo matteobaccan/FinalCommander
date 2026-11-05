@@ -1548,6 +1548,30 @@ impl Form {
                 "drives-col-network",
                 cfg.show_network,
             ),
+            Field::Separator,
+            // One box per panel, so the list holds what this machine is used for.
+            Field::toggle("drives.panels.netbox", t("drive-netbox"), cfg.panels.netbox),
+            Field::toggle(
+                "drives.panels.processes",
+                t("drive-processes"),
+                cfg.panels.processes,
+            ),
+            Field::toggle(
+                "drives.panels.sockets",
+                t("drive-sockets"),
+                cfg.panels.sockets,
+            ),
+            Field::toggle(
+                "drives.panels.programs",
+                t("drive-programs"),
+                cfg.panels.programs,
+            ),
+            Field::toggle(
+                "drives.panels.services",
+                t("drive-services"),
+                cfg.panels.services,
+            ),
+            Field::toggle("drives.panels.temp", t("drive-temp"), cfg.panels.temp),
         ];
         Form {
             pages: Vec::new(),

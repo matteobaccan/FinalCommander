@@ -8136,6 +8136,9 @@ impl App {
                 ("drive-services", ":services"),
                 ("drive-temp", ":temp"),
             ] {
+                if !shown.panels.shows(value) {
+                    continue;
+                }
                 let on_it = origin.as_deref() == Some(value);
                 rows.push(keyed(self.plain(id), value.to_string(), on_it));
             }
@@ -14891,6 +14894,14 @@ impl App {
                 show_panels: on("drives.show_panels"),
                 show_optical: on("drives.show_optical"),
                 show_network: on("drives.show_network"),
+                panels: fcmd_config::PanelRows {
+                    netbox: on("drives.panels.netbox"),
+                    processes: on("drives.panels.processes"),
+                    sockets: on("drives.panels.sockets"),
+                    programs: on("drives.panels.programs"),
+                    services: on("drives.panels.services"),
+                    temp: on("drives.panels.temp"),
+                },
             };
             // Back to the list it was opened from, which is where one was going anyway.
             if let Some(side) = self.drive_side.take() {
@@ -33997,6 +34008,29 @@ abcdefghij
         let mut site = Site::parse_url("sftp://mb@host.example:22/srv").unwrap();
         site.id = "work".into();
         site
+    }
+
+    /// Each panel that is not a drive can be left out of `Alt+F1` on its own, so the list is
+    /// as short as the machine's use of it.
+    #[test]
+    fn a_panel_turned_off_is_not_in_the_drive_list() {
+        let mut app = app();
+        let values = |app: &App| -> Vec<String> {
+            app.drive_pick(0, Vec::new())
+                .rows
+                .iter()
+                .map(|r| r.value.clone())
+                .collect()
+        };
+        app.cfg.drives.panels.services = true;
+        assert!(values(&app).iter().any(|v| v == ":services"));
+        app.cfg.drives.panels.services = false;
+        let rows = values(&app);
+        assert!(!rows.iter().any(|v| v == ":services"), "{rows:?}");
+        assert!(rows.iter().any(|v| v == ":netbox"), "the others stay");
+        let mut cfg = fcmd_config::Config::default();
+        cfg.set("drives.panels.temp", "false").unwrap();
+        assert!(!cfg.drives.panels.temp);
     }
 
     /// `Ctrl+Ins` on a stored session copies its address, not the row's name: NetBox's

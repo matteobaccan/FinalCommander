@@ -8,7 +8,9 @@ the destination is already on screen.
 open the change-drive dialog for the left and right panel, over the panel it belongs to: a
 table of everything mounted — what each one is (disk, removable, optical, network, memory),
 what it is called, what it is formatted as, how big it is and how much is left. Which of
-those columns are drawn is yours to choose, with `F9` inside the dialog.
+those columns are drawn is yours to choose, with `F9` inside the dialog — and so is which of
+the panels that are not disks the list offers: a box for each (NetBox, processes, sockets,
+installed programs, services, the temporary panel), so the list holds only what you use.
 
 A drive the *other* panel is already on opens where that panel is, not at the top of the
 disk. Two panels on one disk is how one works on a disk — a tree on one side, a target on

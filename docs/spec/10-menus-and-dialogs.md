@@ -602,6 +602,13 @@ written to `[drives]` in the configuration rather than lasting only until the di
 | `Ctrl+7` | whether the panels that are not drives are listed |
 | `Ctrl+8` | whether optical drives are listed |
 | `Ctrl+9` | whether network shares are listed |
+
+Under the digits the same `F9` dialog has one box for each panel that is not a drive —
+NetBox, processes, sockets, installed programs, services, the temporary panel
+(`[drives.panels]`) — so the list holds what this machine is used for; `Ctrl+7` still hides
+them all at once. The defaults follow the system: installed programs and services start off on
+macOS, where they are the App Store's and launchd's business. A panel only one system has (the
+Windows registry, when it comes) is only ever offered there.
 | `Ctrl+R` | read the drives again, for a stick plugged in since it opened |
 
 The cursor stays on the row it was on across a switch — the row is what one is looking at, and a

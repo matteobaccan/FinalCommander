@@ -347,6 +347,16 @@ show_removable = true     # Ctrl+6  list removable drives at all
 show_panels = true        # Ctrl+7  list the panels that are not drives
 show_optical = true       # Ctrl+8  list optical drives at all
 show_network = true       # Ctrl+9  list network shares at all
+
+# Each panel that is not a drive, on its own: the defaults follow the system (installed
+# programs and services start off on macOS), and F9 in the dialog has a box for each.
+[drives.panels]
+netbox = true
+processes = true
+sockets = true
+programs = true
+services = true
+temp = true
 ```
 
 ## 2d. The keys the settings dialogs write (implemented today)

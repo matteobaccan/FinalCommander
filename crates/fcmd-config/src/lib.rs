@@ -661,6 +661,54 @@ pub struct DrivesCfg {
     pub show_optical: bool,
     /// `Ctrl+9`: list the network shares at all.
     pub show_network: bool,
+    /// Which of the panels that are not drives the list offers, one by one, so the list
+    /// holds what this machine is used for (`Ctrl+7` still hides them all at once).
+    pub panels: PanelRows,
+}
+
+/// `[drives.panels]`: each panel that is not a drive, on or off in `Alt+F1`.
+///
+/// The defaults follow the system: what a system has no use for starts off, so the list is
+/// short where it can be. Installed programs and services are Windows' and the Linux
+/// desktop's habit more than macOS's, where both are the App Store's and launchd's business.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct PanelRows {
+    pub netbox: bool,
+    pub processes: bool,
+    pub sockets: bool,
+    pub programs: bool,
+    pub services: bool,
+    pub temp: bool,
+}
+
+impl Default for PanelRows {
+    fn default() -> Self {
+        let mac = cfg!(target_os = "macos");
+        PanelRows {
+            netbox: true,
+            processes: true,
+            sockets: true,
+            programs: !mac,
+            services: !mac,
+            temp: true,
+        }
+    }
+}
+
+impl PanelRows {
+    /// Is the panel behind this change-drive value (`:netbox`, `:services`…) on?
+    pub fn shows(&self, value: &str) -> bool {
+        match value {
+            ":netbox" => self.netbox,
+            ":processes" => self.processes,
+            ":sockets" => self.sockets,
+            ":programs" => self.programs,
+            ":services" => self.services,
+            ":temp" => self.temp,
+            _ => true,
+        }
+    }
 }
 
 impl Default for DrivesCfg {
@@ -677,6 +725,7 @@ impl Default for DrivesCfg {
             show_panels: true,
             show_optical: true,
             show_network: true,
+            panels: PanelRows::default(),
         }
     }
 }
@@ -1967,6 +2016,12 @@ impl Config {
             "drives.show_panels" => self.drives.show_panels = parse_bool(value)?,
             "drives.show_optical" => self.drives.show_optical = parse_bool(value)?,
             "drives.show_network" => self.drives.show_network = parse_bool(value)?,
+            "drives.panels.netbox" => self.drives.panels.netbox = parse_bool(value)?,
+            "drives.panels.processes" => self.drives.panels.processes = parse_bool(value)?,
+            "drives.panels.sockets" => self.drives.panels.sockets = parse_bool(value)?,
+            "drives.panels.programs" => self.drives.panels.programs = parse_bool(value)?,
+            "drives.panels.services" => self.drives.panels.services = parse_bool(value)?,
+            "drives.panels.temp" => self.drives.panels.temp = parse_bool(value)?,
             other => return Err(format!("unknown setting `{other}`")),
         }
         Ok(())

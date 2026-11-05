@@ -9,7 +9,9 @@ pannelli più rapido di un albero: la destinazione è già sullo schermo.
 cui appartiene: una tabella di tutto quello che è montato — che cosa è ciascuno (disco,
 rimovibile, ottico, di rete, in memoria), come si chiama, con che filesystem è formattato,
 quanto è grande e quanto ne resta. Quali di queste colonne vengano disegnate lo scegli tu, con
-`F9` dentro il dialogo.
+`F9` dentro il dialogo — e anche quali pannelli che non sono dischi la lista propone: una
+casella per ciascuno (NetBox, processi, socket, programmi installati, servizi, pannello
+temporaneo), così la lista tiene solo quello che usi.
 
 Un disco su cui l'*altro* pannello è già aperto si apre dove sta quel pannello, non in cima
 al disco. Due pannelli su un disco solo è il modo in cui si lavora su un disco — un albero
