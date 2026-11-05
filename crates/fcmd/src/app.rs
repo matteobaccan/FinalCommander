@@ -42,6 +42,12 @@ pub enum Request {
         opts: fcmd_jobs::dupes::Options,
         cancel: CancelToken,
     },
+    /// Ask git about the repository `cwd` is in (SPEC 06 §15).
+    Git {
+        panel: usize,
+        cwd: std::path::PathBuf,
+        what: GitAsk,
+    },
     /// Ask which release is the latest (SPEC 11 §5). `manual` is the menu's command, which
     /// says what it found whatever it found; the daily check speaks only of a newer release.
     UpdateCheck {
@@ -429,6 +435,29 @@ pub struct RemoteStamp {
     pub mtime: Option<u32>,
 }
 
+/// What the git menu asks for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GitAsk {
+    Status,
+    Log,
+    Blame(std::path::PathBuf),
+    Branches,
+}
+
+/// What git answered.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GitOut {
+    /// The work tree's top, and each changed file with its two-letter status.
+    Status {
+        root: std::path::PathBuf,
+        files: Vec<(String, String)>,
+    },
+    /// Text for the viewer, already in a file.
+    Text(std::path::PathBuf),
+    /// Each branch, and whether it is the one checked out.
+    Branches(Vec<(String, bool)>),
+}
+
 /// What comes back.
 #[derive(Debug)]
 pub enum Event {
@@ -613,6 +642,11 @@ pub enum Event {
     DupesFound {
         panel: usize,
         found: fcmd_jobs::dupes::Found,
+    },
+    /// What git said: the changed files, a text to view, or the branches.
+    GitDone {
+        panel: usize,
+        result: Result<GitOut, String>,
     },
     /// A language model's answer, written into a Markdown file, or why there is none.
     AiDone {
@@ -2705,6 +2739,7 @@ impl App {
                 self.set_status(m);
             }
             Event::DupesFound { panel, found } => self.dupes_found(panel, found),
+            Event::GitDone { panel, result } => self.git_done(panel, result),
             Event::AiDone { result } => match result {
                 Ok(answer) => {
                     self.set_status(String::new());
@@ -9171,6 +9206,7 @@ impl App {
             Command::MacroRecord => self.toggle_recording(),
             Command::MacroList => self.open_macros(),
             Command::AppScreens => self.open_screens(),
+            Command::ToolGit => self.open_git(),
             Command::AppUpdateCheck => {
                 let m = self.i18n.t("update-checking");
                 self.set_status(m);
@@ -11047,6 +11083,103 @@ impl App {
             .parent()
             .map(|p| p.join("fcmd-ai"))
             .unwrap_or_else(|| std::path::PathBuf::from("fcmd-ai"))
+    }
+
+    /// The local folder the git menu works from: the panel's, when it is on this disk.
+    fn git_cwd(&self) -> Option<std::path::PathBuf> {
+        let cwd = &self.panel().cwd;
+        (cwd.is_local() && !cwd.in_container()).then(|| cwd.as_path().to_path_buf())
+    }
+
+    /// `Ctrl+Alt+G`: what git can say about the repository the panel is in (SPEC 06 §15).
+    fn open_git(&mut self) {
+        if self.git_cwd().is_none() {
+            let m = self.i18n.t("git-local-only");
+            self.set_error(m);
+            return;
+        }
+        let mut rows = vec![
+            PickRow::plain(self.i18n.t("git-status"), "status", false),
+            PickRow::plain(self.i18n.t("git-log"), "log", false),
+        ];
+        if let Some(entry) = self.panel().current() {
+            if entry.kind == fcmd_core::EntryKind::File {
+                rows.push(PickRow::plain(
+                    self.i18n.t_args(
+                        "git-blame",
+                        &[("name", entry.name_str().into_owned().into())],
+                    ),
+                    "blame",
+                    false,
+                ));
+            }
+        }
+        rows.push(PickRow::plain(
+            self.i18n.t("git-branches"),
+            "branches",
+            false,
+        ));
+        let title = self.i18n.t("git-title");
+        self.mode = Mode::Pick(Box::new(Pick::new(PickKind::Git, title, rows, self.active)));
+    }
+
+    fn git_done(&mut self, panel: usize, result: Result<GitOut, String>) {
+        match result {
+            Err(why) => {
+                let m = self.i18n.t_args("git-failed", &[("why", why.into())]);
+                self.set_error(m);
+            }
+            Ok(GitOut::Text(path)) => {
+                self.set_status(String::new());
+                let vpath = VPath::local(&path);
+                self.open_viewer_on(&path, vpath);
+            }
+            Ok(GitOut::Branches(branches)) => {
+                self.set_status(String::new());
+                let rows: Vec<PickRow> = branches
+                    .into_iter()
+                    .map(|(name, current)| PickRow::plain(name.clone(), name, current))
+                    .collect();
+                let title = self.i18n.t("git-branches");
+                self.mode = Mode::Pick(Box::new(Pick::new(
+                    PickKind::GitBranches,
+                    title,
+                    rows,
+                    self.active,
+                )));
+            }
+            Ok(GitOut::Status { root, files }) => {
+                if files.is_empty() {
+                    let m = self.i18n.t("git-clean");
+                    self.set_status(m);
+                    return;
+                }
+                let Some(p) = self.panels.get_mut(panel) else {
+                    return;
+                };
+                let items: Vec<(VPath, fcmd_core::Entry)> = files
+                    .iter()
+                    .enumerate()
+                    .map(|(at, (code, rel))| {
+                        let path = VPath::local(root.join(rel));
+                        let mut entry = Self::temp_entry(&path, at);
+                        // The status first, as `git status --short` writes it, so the panel
+                        // reads like the command and a sort by name groups the kinds.
+                        entry.name = format!("{code} {rel}").into();
+                        (path, entry)
+                    })
+                    .collect();
+                let count = items.len();
+                let title = self
+                    .i18n
+                    .t_args("git-status-title", &[("count", (count as i64).into())]);
+                let generation = p.generation + 1;
+                p.generation = generation;
+                p.set_temp(title, items, generation);
+                p.set_temp_origin(":git");
+                self.set_status(String::new());
+            }
+        }
     }
 
     /// `ai:` on the command line (SPEC 06 §14).
@@ -16269,6 +16402,8 @@ impl App {
             PickKind::Tabs => return,
             // And `open_filters`, which knows which filter the panel has on.
             PickKind::Filters => return,
+            // And `open_git`, which knows the repository; the branches come from the worker.
+            PickKind::Git | PickKind::GitBranches => return,
             // And `open_settings`, which knows which row the list was left on.
             PickKind::Settings => return,
             PickKind::Languages => Pick::new(
@@ -17209,6 +17344,35 @@ impl App {
             PickKind::Highlight => {
                 let at = row.value.parse::<usize>().unwrap_or(0);
                 self.open_highlight_form(Some(at));
+            }
+            PickKind::Git => {
+                let Some(cwd) = self.git_cwd() else { return };
+                let what = match row.value.as_str() {
+                    "status" => GitAsk::Status,
+                    "log" => GitAsk::Log,
+                    "branches" => GitAsk::Branches,
+                    "blame" => match self.panel().current_path() {
+                        Some(p) if p.is_local() && p.as_path().is_file() => {
+                            GitAsk::Blame(p.as_path().to_path_buf())
+                        }
+                        _ => return,
+                    },
+                    _ => return,
+                };
+                let m = self.i18n.t("git-running");
+                self.set_status(m);
+                self.requests.push(Request::Git {
+                    panel: self.active,
+                    cwd,
+                    what,
+                });
+            }
+            PickKind::GitBranches => {
+                // Switching is a change to the work tree, so it is put on the line to be read
+                // and run with `Enter`, never run from a list.
+                self.cmd.set(format!("git switch {}", row.value));
+                let m = self.i18n.t("git-switch-ready");
+                self.set_status(m);
             }
             PickKind::Filters => match row.value.parse::<usize>() {
                 Ok(at) => {
@@ -31956,6 +32120,56 @@ abcdefghij
         let mut app = app_on_disk(dir);
         app.editor_size = (40, 6);
         app
+    }
+
+    /// The git menu over a folder of this disk, and what changed coming back as a panel of
+    /// the real files, each row starting with its status.
+    #[test]
+    fn the_git_menu_asks_and_what_changed_is_a_panel() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), "x").unwrap();
+        let mut app = editing_app(dir.path());
+        app.run(Command::ToolGit);
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("the menu: {:?}", app.mode)
+        };
+        assert_eq!(pick.kind, PickKind::Git);
+        app.take_requests();
+        press(&mut app, "Enter"); // what changed
+        let asked = app.take_requests().into_iter().any(|r| {
+            matches!(
+                r,
+                Request::Git {
+                    what: GitAsk::Status,
+                    ..
+                }
+            )
+        });
+        assert!(asked);
+        app.handle_event(Event::GitDone {
+            panel: 0,
+            result: Ok(GitOut::Status {
+                root: dir.path().to_path_buf(),
+                files: vec![(" M".into(), "a.txt".into()), ("??".into(), "b.txt".into())],
+            }),
+        });
+        let p = &app.panels[0];
+        assert_eq!(p.temp_origin(), Some(":git"));
+        let names: Vec<String> = (0..p.listing.len())
+            .filter_map(|r| p.listing.row(r))
+            .map(|e| e.name_str().into_owned())
+            .collect();
+        assert!(names.contains(&" M a.txt".to_string()), "{names:?}");
+        app.handle_event(Event::GitDone {
+            panel: 0,
+            result: Ok(GitOut::Branches(vec![
+                ("main".into(), true),
+                ("dev".into(), false),
+            ])),
+        });
+        press(&mut app, "Down");
+        press(&mut app, "Enter");
+        assert_eq!(app.cmd.text, "git switch dev", "put on the line, not run");
     }
 
     /// `ai:` asks the first service; `ai:name:` another; files go only after a dialog that

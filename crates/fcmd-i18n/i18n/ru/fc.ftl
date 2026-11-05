@@ -1334,3 +1334,19 @@ ai-send-files = Файлов: { $count }, { $size } — будут отправ�
 ai-asking = Спрашиваю { $name }…
 ai-failed = ИИ не ответил: { $why }
 btn-send = Отправить
+
+## Git (SPEC 06 §15).
+menu-git = Git
+git-title = Git
+git-status = Что изменилось
+git-log = Журнал
+git-blame = Blame для { $name }
+git-branches = Ветки
+git-local-only = git работает с папкой на этом диске.
+git-running = Спрашиваю git…
+git-failed = git: { $why }
+git-clean = Ничего не изменилось.
+git-status-title = Изменено: { $count }
+git-switch-ready = Enter выполнит: git switch в командной строке.
+git-hint = Enter: выбрать · Esc: закрыть
+git-branches-hint = Enter: git switch в командную строку · Esc: закрыть

@@ -422,6 +422,16 @@ frecce e `Enter`, un valore si legge con `F3`, si copia fuori con `F5`, si trova
 `F3` e `F4` sul file stesso continuano a mostrare e modificare tutto il documento; niente dentro
 si può cambiare dal pannello.
 
+# Git
+
+`Ctrl+Alt+G` — *Comandi → Git* — in una cartella che sta in un repository git offre quattro
+cose. *Cosa è cambiato* trasforma il pannello nei file cambiati, ogni riga col suo stato come lo
+scrive `git status --short` (` M` modificato, `??` nuovo, `D ` cancellato e in stage, …), e sono
+i file veri, quindi `F3`, `F4` e `F5` ci lavorano. *Il log* e *Blame* del file sotto il cursore
+si aprono nel visualizzatore. *Branch* li elenca con quello attuale segnato; `Invio` mette
+`git switch` per quello sotto il cursore sulla riga di comando, da eseguire tu. Risponde il
+`git` installato sulla macchina.
+
 # Riscrivere un file di testo
 
 Il testo arriva da altrove: uno zip da una macchina Windows, un dump da un database, un file

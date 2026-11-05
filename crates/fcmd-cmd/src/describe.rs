@@ -234,6 +234,7 @@ impl Command {
             Command::ToolCompare => "compare the two panels, with the options dialog first",
             Command::ToolDuplicates => "find the files under this directory that are copies",
             Command::ToolTaskList => "the running processes, as a panel",
+            Command::ToolGit => "the repository: what changed, the log, blame, branches",
             Command::ToolGrab => "copy a piece of the screen as it stands",
             Command::ToolSyncDirs => "make the two directories hold the same thing",
             Command::ToolCompareContents => "compare them by what is in the files",

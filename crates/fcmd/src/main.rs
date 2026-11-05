@@ -1788,6 +1788,13 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                         let _ = tx.send(Event::AiDone { result });
                     });
                 }
+                Request::Git { panel, cwd, what } => {
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || {
+                        let result = run_git(&cwd, &what);
+                        let _ = tx.send(Event::GitDone { panel, result });
+                    });
+                }
                 Request::SqlQuery { db, sql } => {
                     let tx = tx.clone();
                     runtime.spawn_blocking(move || {
@@ -4056,6 +4063,98 @@ fn dirs_home() -> Option<std::path::PathBuf> {
         .filter(|p| !p.as_os_str().is_empty())
 }
 
+/// Run git in `cwd` and say what it said, its own error included when it failed.
+fn git(cwd: &std::path::Path, args: &[&str]) -> Result<String, String> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(cwd)
+        .args(args)
+        .stdin(std::process::Stdio::null())
+        .output()
+        .map_err(|e| format!("git: {e}"))?;
+    if !out.status.success() {
+        let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        return Err(if err.is_empty() {
+            format!("git {}: {}", args.join(" "), out.status)
+        } else {
+            err
+        });
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+/// What the git menu asked for (SPEC 06 §15). The texts go into this session's temporary
+/// folder and are removed with it.
+fn run_git(cwd: &std::path::Path, what: &app::GitAsk) -> Result<app::GitOut, String> {
+    use app::{GitAsk, GitOut};
+    let root = std::path::PathBuf::from(git(cwd, &["rev-parse", "--show-toplevel"])?.trim());
+    let text = |name: &str, body: String| -> Result<GitOut, String> {
+        let dir = std::env::temp_dir().join(format!("fcmd-sql-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        let path = dir.join(name);
+        std::fs::write(&path, body).map_err(|e| e.to_string())?;
+        Ok(GitOut::Text(path))
+    };
+    match what {
+        GitAsk::Status => {
+            let out = git(
+                &root,
+                &["status", "--porcelain=v1", "-z", "--untracked-files=all"],
+            )?;
+            let mut files = Vec::new();
+            let mut fields = out.split('\0').filter(|f| !f.is_empty());
+            while let Some(field) = fields.next() {
+                if field.len() < 4 {
+                    continue;
+                }
+                let (code, rel) = (&field[..2], &field[3..]);
+                // A rename is followed by the name it had, which the panel does not need.
+                if code.starts_with('R') || code.starts_with('C') {
+                    fields.next();
+                }
+                files.push((code.to_string(), rel.to_string()));
+            }
+            Ok(GitOut::Status { root, files })
+        }
+        GitAsk::Log => text(
+            "git-log.txt",
+            git(
+                &root,
+                &[
+                    "log",
+                    "-n",
+                    "500",
+                    "--date=short",
+                    "--format=%h %ad %<(16,trunc)%an %s",
+                ],
+            )?,
+        ),
+        GitAsk::Blame(file) => {
+            let name = file
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            let dir = file.parent().unwrap_or(cwd);
+            text(
+                &format!("blame-{name}.txt"),
+                git(dir, &["blame", "--date=short", "--", &name])?,
+            )
+        }
+        GitAsk::Branches => {
+            let out = git(&root, &["branch", "--format=%(HEAD)%(refname:short)"])?;
+            Ok(GitOut::Branches(
+                out.lines()
+                    .filter(|l| !l.is_empty())
+                    .map(|l| match l.strip_prefix('*') {
+                        Some(name) => (name.trim().to_string(), true),
+                        None => (l.trim().to_string(), false),
+                    })
+                    .collect(),
+            ))
+        }
+    }
+}
+
 /// The most of one attached file that is sent: a model's context is not a disk, and a file
 /// cut here says so in what is sent.
 const AI_FILE_LIMIT: usize = 256 * 1024;
@@ -5763,6 +5862,7 @@ dir_attr = "D"
                 | Request::UpdateCheck { .. }
                 | Request::Dupes { .. }
                 | Request::SqlQuery { .. }
+                | Request::Git { .. }
                 | Request::AiAsk { .. }
                 | Request::OpenUrl { .. }
                 | Request::Shell { .. }
@@ -5778,6 +5878,62 @@ dir_attr = "D"
     /// A key, by its name in the keymap.
     fn key(app: &mut App, k: &str) {
         app.handle_input(Input::Key(k.parse().unwrap()));
+    }
+
+    /// The git menu's three answers, from a real repository made here — which needs `git` on
+    /// the machine, as the menu itself does; without one the test has nothing to say.
+    #[test]
+    fn git_says_what_changed_the_log_and_the_branches() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let run = |args: &[&str]| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(root)
+                .args(args)
+                .output()
+        };
+        if run(&["init", "-q", "-b", "main"]).is_err() {
+            return;
+        }
+        run(&["config", "user.email", "t@example.com"]).unwrap();
+        run(&["config", "user.name", "T"]).unwrap();
+        std::fs::write(root.join("a.txt"), "one\n").unwrap();
+        run(&["add", "a.txt"]).unwrap();
+        run(&["commit", "-q", "-m", "first commit"]).unwrap();
+        run(&["branch", "other"]).unwrap();
+        std::fs::write(root.join("a.txt"), "two\n").unwrap();
+        std::fs::create_dir(root.join("sub")).unwrap();
+        std::fs::write(root.join("sub/new.txt"), "x").unwrap();
+        let sub = root.join("sub");
+        let Ok(app::GitOut::Status { files, .. }) = run_git(&sub, &app::GitAsk::Status) else {
+            panic!("a status")
+        };
+        assert_eq!(
+            files,
+            [
+                (" M".to_string(), "a.txt".to_string()),
+                ("??".to_string(), "sub/new.txt".to_string())
+            ]
+        );
+        let Ok(app::GitOut::Text(log)) = run_git(root, &app::GitAsk::Log) else {
+            panic!("a log")
+        };
+        assert!(std::fs::read_to_string(&log)
+            .unwrap()
+            .contains("first commit"));
+        let Ok(app::GitOut::Branches(b)) = run_git(root, &app::GitAsk::Branches) else {
+            panic!("branches")
+        };
+        assert_eq!(
+            b,
+            [("main".to_string(), true), ("other".to_string(), false)]
+        );
+        let elsewhere = tempfile::tempdir().unwrap();
+        assert!(
+            run_git(elsewhere.path(), &app::GitAsk::Status).is_err(),
+            "not a repository"
+        );
     }
 
     #[test]

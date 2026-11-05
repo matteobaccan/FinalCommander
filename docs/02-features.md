@@ -134,7 +134,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 4.6 | **Connection manager** (`Alt+N`): saved `[[site]]` list with groups, agent / key file / asked password, host-key verification with a trust-on-first-use prompt, one pooled connection per host, one jump host per site (`ssh -J`), explicit disconnect | TC/KRU | ~ the OS keyring, and a code page of its own |
 | 4.7 | **Transfers through the local operation engine**: copy and move up, down, between two servers and inside one, with progress, conflicts and cancellation; a `sftp://` URL in `Ctrl+L` connects | TC | ~ resuming an interrupted transfer, and a bandwidth limit for a server |
 | 4.8 | Temporary panel (collect unrelated files into a virtual panel and act on them) | FAR `tmppanel` | ✓ |
-| 4.9 | Special VFS: process list, services, registry (Windows), `/proc`-style views, package contents, git status/worktree view | FAR/far2l | ~ the registry, package contents, a git view |
+| 4.9 | Special VFS: process list, services, registry (Windows), `/proc`-style views, package contents, git status/worktree view | FAR/far2l | ~ the registry and package contents; git is `Ctrl+Alt+G` (what changed as a panel, the log, blame, branches — SPEC 06 §15) |
 | 4.10 | Trash as a browsable VFS | NEW | M3 |
 | 4.11 | VFS API available to plugins (so a plugin can add a scheme) | FAR/TC(WFX) | M3 |
 | 4.12 | SQLite databases: tables and views as CSV entries, `schema.sql`, and `sql:` queries opened in table mode, read only | FAR (SQLiteDB) | ✓ (SPEC 04 §4b) |

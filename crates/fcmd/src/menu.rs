@@ -100,6 +100,10 @@ pub enum PickKind {
     Highlight,
     /// The named filters (`Ctrl+Alt+S`, SPEC 02 §5): off, then every `[[filter]]`.
     Filters,
+    /// The git menu (`Ctrl+Alt+G`, SPEC 06 §15): status, log, blame, branches.
+    Git,
+    /// A repository's branches: `Enter` puts `git switch` for one on the command line.
+    GitBranches,
     /// The `[[sort_group]]` bands, in the order they cut the listing (SPEC 02 §4).
     SortGroups,
     /// The named mask lists every mask field can use as `<name>` (SPEC 02 §5b).
@@ -597,6 +601,7 @@ pub fn menus() -> Vec<Menu> {
                     "Ctrl+W",
                     Action::Run(Command::ToolTaskList),
                 ),
+                item("menu-git", "Ctrl+Alt+G", Action::Run(Command::ToolGit)),
             ],
         },
         Menu {

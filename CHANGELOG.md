@@ -15,6 +15,10 @@ Notable changes, newest first. The format follows
   how many, how big and the host before anything goes. The answer is a Markdown file in
   `fcmd-ai/` beside the settings, opened in the viewer; `ai:` alone opens that folder as a
   panel of everything asked so far.
+- **Git** (`Ctrl+Alt+G`, *Commands → Git*): what changed, as a panel of the real files with
+  their status in front as `git status --short` writes it; the log and the blame of the file
+  under the cursor in the viewer; the branches, where `Enter` puts `git switch` on the command
+  line for you to run. The machine's own `git` answers, and says what is wrong when it can't.
 - **A JSON file as a folder.** `Enter` on a `.json` goes inside it: objects and arrays are
   folders, an array's items `[0]`, `[1]`, …, and every other value a file — a string as its
   text — to read with `F3`, copy out with `F5` or search with `Alt+F7`. `F3` and `F4` on the

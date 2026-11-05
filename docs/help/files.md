@@ -400,6 +400,16 @@ deep configuration or an API's answer can be walked with the arrows and `Enter`,
 with `F3`, copied out with `F5`, found with `Alt+F7`. `F3` and `F4` on the file itself still
 view and edit the whole document; nothing inside can be changed from the panel.
 
+# Git
+
+`Ctrl+Alt+G` — *Commands → Git* — in a folder that is in a git repository offers four things.
+*What changed* turns the panel into the changed files, each row starting with its status as
+`git status --short` writes it (` M` modified, `??` new, `D ` deleted and staged, …), and they
+are the real files, so `F3`, `F4` and `F5` work on them. *The log* and *Blame* of the file
+under the cursor open in the viewer. *Branches* lists them with the current one marked;
+`Enter` puts `git switch` for the one under the cursor on the command line, for you to run.
+It is the `git` installed on the machine that answers.
+
 # Writing a text file again
 
 Text arrives from somewhere else: a zip off a Windows machine, a dump out of a database, a

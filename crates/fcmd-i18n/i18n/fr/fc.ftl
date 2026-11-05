@@ -1334,3 +1334,19 @@ ai-send-files = { $count } fichiers, { $size }, seront envoyés à { $host } ave
 ai-asking = Je demande à { $name }…
 ai-failed = L'IA n'a pas répondu : { $why }
 btn-send = Envoyer
+
+## Git (SPEC 06 §15).
+menu-git = Git
+git-title = Git
+git-status = Ce qui a changé
+git-log = Le journal
+git-blame = Blame de { $name }
+git-branches = Branches
+git-local-only = git travaille sur un dossier de ce disque.
+git-running = Je demande à git…
+git-failed = git : { $why }
+git-clean = Rien n'a changé.
+git-status-title = Modifiés : { $count }
+git-switch-ready = Entrée l'exécute : git switch, sur la ligne de commande.
+git-hint = Entrée : choisir · Échap : fermer
+git-branches-hint = Entrée : git switch sur la ligne de commande · Échap : fermer

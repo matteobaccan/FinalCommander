@@ -368,6 +368,8 @@ pub enum Command {
     /// The running processes as a panel — FAR's *Task list*, which is the operating system's
     /// processes and not this program's own screens (`F12` is those).
     ToolTaskList,
+    /// `Ctrl+Alt+G`: the git menu for the repository the panel is in (SPEC 06 §15).
+    ToolGit,
     /// The screen grabber: copy a piece of the screen as it stands (SPEC 06 §11b).
     ToolGrab,
     /// Make the two panels' directories hold the same thing: decide about every pair, show
@@ -710,6 +712,7 @@ impl Command {
             Command::ToolCompare,
             Command::ToolDuplicates,
             Command::ToolTaskList,
+            Command::ToolGit,
             Command::ToolGrab,
             Command::ToolSyncDirs,
             Command::ToolCompareContents,
@@ -997,6 +1000,7 @@ impl Command {
             Command::ToolCompare => "tool.compare".into(),
             Command::ToolDuplicates => "tool.duplicates".into(),
             Command::ToolTaskList => "tool.task.list".into(),
+            Command::ToolGit => "tool.git".into(),
             Command::ToolGrab => "tool.grab".into(),
             Command::ToolSyncDirs => "tool.sync.dirs".into(),
             Command::ToolCompareContents => "tool.compare.contents".into(),
@@ -1251,6 +1255,7 @@ impl Command {
             ("tool.compare", _) => Command::ToolCompare,
             ("tool.duplicates", _) => Command::ToolDuplicates,
             ("tool.task.list", _) => Command::ToolTaskList,
+            ("tool.git", _) => Command::ToolGit,
             ("tool.grab", _) => Command::ToolGrab,
             ("tool.sync.dirs", _) => Command::ToolSyncDirs,
             ("tool.compare.contents", _) => Command::ToolCompareContents,

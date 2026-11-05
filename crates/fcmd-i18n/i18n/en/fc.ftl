@@ -1344,3 +1344,19 @@ ai-send-files = { $count } files, { $size }, will be sent to { $host } with the 
 ai-asking = Asking { $name }…
 ai-failed = The AI did not answer: { $why }
 btn-send = Send
+
+## Git (SPEC 06 §15).
+menu-git = Git
+git-title = Git
+git-status = What changed
+git-log = The log
+git-blame = Blame { $name }
+git-branches = Branches
+git-local-only = git works on a folder on this disk.
+git-running = Asking git…
+git-failed = git: { $why }
+git-clean = Nothing has changed.
+git-status-title = Changed: { $count }
+git-switch-ready = Enter runs it: git switch, on the command line.
+git-hint = Enter: choose · Esc: close
+git-branches-hint = Enter: put git switch on the command line · Esc: close

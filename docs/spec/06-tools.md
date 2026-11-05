@@ -593,3 +593,20 @@ completions (and every server that speaks it), Anthropic's messages, Ollama's ch
   what was asked, each one a file to read again (`F3`), keep, copy or delete.
 * One request, one answer, on the worker; no streaming, no conversation state. A follow-up
   is a new question, with the earlier answer selected as a file if it is wanted.
+
+## 15. Git
+
+`Ctrl+Alt+G` (`tool.git`, *Commands → Git*) on a folder of this disk: a menu of what git can
+say about the repository the panel is in. It runs the `git` on the machine — no library, no
+second idea of what a repository is — on the worker, and shows git's own error when it fails
+(not a repository, no git installed).
+
+* **What changed**: `git status --porcelain -z`, untracked files included, as a temporary panel
+  (`:git`) of the real files, each row its two-letter status and its path from the top of the
+  work tree — `" M src/app.rs"`, `"?? notes.txt"` — so a sort by name groups the kinds and
+  `F3`, `F4`, `F5`, `F8` work on the files. A rename shows its new name.
+* **The log**: the last 500 commits, one line each — hash, date, author, subject — in the
+  viewer.
+* **Blame** of the file under the cursor, in the viewer.
+* **Branches**: a list with the one checked out marked. `Enter` puts `git switch <name>` on
+  the command line to be read and run; nothing that changes the work tree runs from a list.

@@ -1243,6 +1243,13 @@ keys = ["Ctrl+W"]
 scope = "panel"
 cmd = "tool.task.list"
 
+# The repository the panel is in: what changed as a panel, the log, blame of the file under
+# the cursor, the branches (SPEC 06 §15). FAR has this as plugins; `G` for git.
+[[bind]]
+keys = ["Ctrl+Alt+G"]
+scope = "panel"
+cmd = "tool.git"
+
 [[bind]]
 keys = ["Ctrl+Enter"]
 scope = "panel"

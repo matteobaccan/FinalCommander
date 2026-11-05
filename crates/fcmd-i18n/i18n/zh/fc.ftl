@@ -1310,3 +1310,19 @@ ai-send-files = { $count } 个文件，{ $size }，将随问题发送到 { $host
 ai-asking = 正在询问 { $name }…
 ai-failed = AI 没有回答：{ $why }
 btn-send = 发送
+
+## Git (SPEC 06 §15).
+menu-git = Git
+git-title = Git
+git-status = 有哪些改动
+git-log = 日志
+git-blame = { $name } 的 blame
+git-branches = 分支
+git-local-only = git 只能用于本机磁盘上的文件夹。
+git-running = 正在询问 git…
+git-failed = git：{ $why }
+git-clean = 没有任何改动。
+git-status-title = 已改动：{ $count }
+git-switch-ready = 按回车执行：命令行上的 git switch。
+git-hint = 回车：选择 · Esc：关闭
+git-branches-hint = 回车：把 git switch 放到命令行 · Esc：关闭
