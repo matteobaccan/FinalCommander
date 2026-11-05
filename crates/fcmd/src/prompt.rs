@@ -76,6 +76,9 @@ pub fn expand(format: &str, cwd: &VPath, branch: Option<&str>, pushed: usize) ->
             'f' => out.push(')'),
             'q' => out.push('='),
             's' => out.push(' '),
+            // A new line (FAR's #970): the prompt's lines before the last are drawn above the
+            // command line.
+            '_' => out.push('\n'),
             // The branch, with its own decoration, so one format reads properly in a
             // repository and out of it. `%GITBRANCH%` is the bare name for anybody who
             // wants to bracket it themselves.
@@ -182,6 +185,12 @@ pub fn branch_of(dir: &std::path::Path) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn dollar_underscore_is_a_new_line() {
+        let cwd = VPath::local("/srv/www");
+        assert_eq!(expand("$p$_$g", &cwd, None, 0), "/srv/www\n>");
+    }
+
     use super::*;
 
     #[test]

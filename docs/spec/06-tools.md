@@ -297,6 +297,7 @@ format, with FAR's own letters and two of our own:
 | `$g` `$l` `$a` `$b` `$c` `$f` `$q` `$s` | `>` `<` `&` `|` `(` `)` `=` and a space |
 | `$d` `$t` | the date and the time |
 | `$@` | `[admin]` when the session has more rights than usual |
+| `$_` | a new line: what comes before it goes on the rows above the command line, which the panels give up (at most three; FAR's #970) |
 | `$h` | a backspace, which takes a decoration back out when what it decorated was empty |
 | `$$` | a `$` |
 

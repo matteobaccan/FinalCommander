@@ -157,7 +157,16 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
     // the panels' own frame, which costs a row of files and saves pressing `F9` to see what
     // the menus are called. Off by default, as it is in FAR.
     let menu_h = u16::from(app.cfg.ui.menu_bar);
-    let chrome = keybar_h + status_h + cmd_h + menu_h;
+    // A prompt with `$_` in it is more than one line (FAR's #970): the lines before the last
+    // go on the rows above the command line, taken from the panels, at most three of them.
+    let prompt_full = if cmd_h == 1 {
+        app.prompt()
+    } else {
+        String::new()
+    };
+    let prompt_lines: Vec<&str> = prompt_full.split('\n').collect();
+    let prompt_extra = (prompt_lines.len().saturating_sub(1)).min(3) as u16;
+    let chrome = keybar_h + status_h + cmd_h + menu_h + prompt_extra;
     let full_h = h.saturating_sub(chrome).max(3);
     // `Ctrl+Up`/`Ctrl+Down` take rows off the panels and give them to the user screen, which
     // is how FAR lets you watch what a command printed without leaving the panels. Six rows
@@ -403,10 +412,19 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
     // The command line: the panel's path as the prompt, then what is being typed.
     let mut cursor = None;
     if cmd_h == 1 {
-        let y = menu_h + full_h;
+        let y = menu_h + full_h + prompt_extra;
         let style = Style::new(app.theme.color("cmdline.fg"), app.theme.color("cmdline.bg"));
+        let skip = prompt_lines.len() - 1 - prompt_extra as usize;
+        for (i, line) in prompt_lines[skip..prompt_lines.len() - 1]
+            .iter()
+            .enumerate()
+        {
+            let row = menu_h + full_h + i as u16;
+            buf.fill(Rect::new(0, row, w, 1), ' ', style);
+            buf.put_str(0, row, line, style, w);
+        }
         buf.fill(Rect::new(0, y, w, 1), ' ', style);
-        let prompt = app.prompt();
+        let prompt = prompt_lines.last().copied().unwrap_or("").to_string();
         let prompt = fcmd_ui::elide_middle(&prompt, (w / 2) as usize);
         let prompt_w = unicode_width::UnicodeWidthStr::width(prompt.as_str()) as u16;
         buf.put_str(0, y, &prompt, style, prompt_w);
@@ -514,7 +532,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         } else {
             app.status.clone()
         };
-        let row = Rect::new(0, menu_h + full_h + cmd_h, w, 1);
+        let row = Rect::new(0, menu_h + full_h + prompt_extra + cmd_h, w, 1);
         widgets::draw_status(buf, &app.theme, row, &text, app.status_error);
         // The corner: whether a macro is recording, and how many screens are behind the
         // panels. The recording light comes first because it is the one that matters while it
@@ -4625,6 +4643,22 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
         app.handle_input(Input::Key("Enter".parse().unwrap()));
         let prose = frame(&mut app, 80, 24);
         assert!(prose.contains("two-panel file manager"), "{prose}");
+    }
+
+    /// `$_` in the prompt puts what comes before it on the row above the command line, taken
+    /// from the panels (FAR's #970).
+    #[test]
+    fn a_prompt_with_a_new_line_takes_a_row_above_the_command_line() {
+        let mut app = app("commander", "en");
+        app.cfg.cmdline.prompt = "FIRSTLINE$_SECOND$g".into();
+        let out = frame(&mut app, 80, 24);
+        let rows: Vec<&str> = out.lines().collect();
+        let first = rows.iter().position(|r| r.starts_with("FIRSTLINE"));
+        let second = rows.iter().position(|r| r.starts_with("SECOND>"));
+        assert!(
+            matches!((first, second), (Some(a), Some(b)) if b == a + 1),
+            "{out}"
+        );
     }
 
     #[test]
