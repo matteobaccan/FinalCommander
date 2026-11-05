@@ -197,6 +197,7 @@ copy-filter = Solo i nomi che corrispondono
 copy-follow-links = Copia ciò a cui punta il link, non il link
 copy-keep-times = Conserva le date
 copy-keep-mode = Conserva i permessi
+copy-verify = Rileggi ogni file e confrontalo
 copy-several = { $count } destinazioni, una dopo l'altra
 
 # ── the terminal (SPEC 06 §4) ──────────────────────────────────────────────────────────
@@ -232,6 +233,8 @@ job-state-cancelled = annullato
 job-done = { $kind }: { $files } file, { $bytes }
 job-done-renamed = { $kind }: { $files } file spostati senza copiare
 job-done-skipped = , { $skipped } saltati
+job-done-verified = , { $verified } verificati
+job-done-unverified = , { $unverified } non rileggibili qui
 job-done-errors = , { $errors } errori
 job-cancelled = { $kind } annullata
 job-errors-title = Errori

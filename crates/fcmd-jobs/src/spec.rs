@@ -160,6 +160,10 @@ pub struct JobOptions {
     /// "put each where it was" — and it is an option rather than a kind of its own because
     /// everything else about the copy is the same copy.
     pub relative_to: Option<VPath>,
+    /// Read every copied file back and compare it with its source, by SHA-256, before the
+    /// copy counts as done — and before a move deletes the original. A copy that differs is
+    /// deleted and reported as an error. Off by default: it reads everything twice.
+    pub verify: bool,
 }
 
 impl JobOptions {
@@ -185,6 +189,7 @@ impl Default for JobOptions {
             filter: None,
             contents: false,
             relative_to: None,
+            verify: false,
         }
     }
 }

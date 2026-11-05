@@ -92,6 +92,10 @@ pub struct Outcome {
     pub cancelled: bool,
     /// Sources a Move finished with a plain rename, so no byte was copied.
     pub renamed: u64,
+    /// With [`crate::JobOptions::verify`]: files read back and found the same, and files
+    /// that could not be read back here (a server, a bucket) and so stand unverified.
+    pub verified: u64,
+    pub unverified: u64,
     /// For a [`JobKind::Replace`]: how many occurrences each file had, in the order the files
     /// were visited.
     ///
@@ -375,6 +379,37 @@ fn attempt(
                 fs.append_file(&src, &dst, spec.options.buffer, &mut tick)
             } else {
                 fs.copy_file(&src, &dst, spec.options.copy_how(), &mut tick)
+            };
+            // Read back and compared before anything else happens to it: a move must not
+            // delete a source whose copy is not the same bytes.
+            let copied = match copied {
+                Ok(bytes) if spec.options.verify && !append => {
+                    match verify_copy(fs, &src, &dst, spec.options.buffer, cancel) {
+                        Verdict::Same => {
+                            state.outcome.verified += 1;
+                            Ok(bytes)
+                        }
+                        Verdict::CannotTell => {
+                            state.outcome.unverified += 1;
+                            Ok(bytes)
+                        }
+                        Verdict::Cancelled => {
+                            let _ = fs.remove_file(&dst);
+                            Err(std::io::Error::new(
+                                std::io::ErrorKind::Interrupted,
+                                "cancelled",
+                            ))
+                        }
+                        Verdict::Differs => {
+                            let _ = fs.remove_file(&dst);
+                            return Attempt::Failed(
+                                "the copy read back differs from the source, and was removed"
+                                    .into(),
+                            );
+                        }
+                    }
+                }
+                other => other,
             };
             match copied {
                 Ok(bytes) => {
@@ -712,6 +747,42 @@ fn src_is_newer(fs: &dyn JobFs, src: &VPath, dst: &VPath) -> bool {
     ) {
         (Some(a), Some(b)) => a > b,
         _ => true,
+    }
+}
+
+/// What reading a copy back found.
+enum Verdict {
+    Same,
+    Differs,
+    /// One side cannot be read a chunk at a time here — a server, a bucket, an archive entry —
+    /// so the copy stands, counted as not verified rather than failed.
+    CannotTell,
+    Cancelled,
+}
+
+fn verify_copy(
+    fs: &dyn JobFs,
+    src: &VPath,
+    dst: &VPath,
+    buffer: usize,
+    cancel: &CancelToken,
+) -> Verdict {
+    let hash = |path: &VPath| {
+        crate::sum::digest(fs, path, crate::sum::Algorithm::Sha256, buffer, &mut |_| {
+            !cancel.is_cancelled()
+        })
+    };
+    match (hash(src), hash(dst)) {
+        (Ok(a), Ok(b)) if a == b => Verdict::Same,
+        (Ok(_), Ok(_)) => Verdict::Differs,
+        (Err(e), _) | (_, Err(e)) if e.kind() == std::io::ErrorKind::Interrupted => {
+            Verdict::Cancelled
+        }
+        (Err(e), _) | (_, Err(e)) if e.kind() == std::io::ErrorKind::Unsupported => {
+            Verdict::CannotTell
+        }
+        // A read that failed for another reason is a copy nobody can vouch for.
+        _ => Verdict::Differs,
     }
 }
 
@@ -1437,6 +1508,44 @@ mod tests {
             "no frame from inside the file: {:?}",
             frames.0
         );
+    }
+
+    /// With `verify` every copied file is read back and compared; a file the same is
+    /// counted, and reading two that differ says so.
+    #[test]
+    fn a_verified_copy_is_read_back_and_compared() {
+        let dir = tempfile::tempdir().unwrap();
+        for (name, body) in [("a.txt", "alpha"), ("b.txt", "beta")] {
+            stdfs::write(dir.path().join(name), body).unwrap();
+        }
+        let out_dir = dir.path().join("out");
+        stdfs::create_dir(&out_dir).unwrap();
+        let mut spec = JobSpec::new(
+            JobKind::Copy,
+            vec![
+                VPath::local(dir.path().join("a.txt")),
+                VPath::local(dir.path().join("b.txt")),
+            ],
+            Some(VPath::local(&out_dir)),
+        );
+        spec.options.verify = true;
+        let cancel = CancelToken::new();
+        let p = plan(&LocalFs, &spec, &cancel).unwrap();
+        let out = execute(&LocalFs, &spec, p, &mut Scripted::new(Vec::new()), &cancel);
+        assert!(out.errors.is_empty(), "{:?}", out.errors);
+        assert_eq!((out.verified, out.unverified), (2, 0));
+
+        // Two files that are not the same are a copy that differs.
+        let a = VPath::local(dir.path().join("a.txt"));
+        let b = VPath::local(dir.path().join("b.txt"));
+        assert!(matches!(
+            verify_copy(&LocalFs, &a, &b, 4096, &cancel),
+            Verdict::Differs
+        ));
+        assert!(matches!(
+            verify_copy(&LocalFs, &a, &a, 4096, &cancel),
+            Verdict::Same
+        ));
     }
 
     #[test]

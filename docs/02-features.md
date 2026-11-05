@@ -105,7 +105,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 3.6 | Extended attributes / ADS (NTFS streams), xattr on Linux/macOS, resource forks | FAR | M3 |
 | 3.7 | Operation engine: queue of jobs, parallel or serial, pause/resume/cancel, background with progress, speed/ETA, per-job log | TC/KRU/MTN2 | ~ a per-job log kept on disk |
 | 3.8 | Conflict resolution: overwrite / skip / rename / append / newer-only / size-differs, "apply to all", per-conflict dialog | all | ✓ |
-| 3.9 | Verify after copy (hash compare), preserve mode/owner/times/xattrs, sparse files, reflink/`copy_file_range`/CoW, `FSCTL` server-side copy | TC/NEW | ~ verifying as part of the copy, the owner and extended attributes, sparse files |
+| 3.9 | Verify after copy (hash compare), preserve mode/owner/times/xattrs, sparse files, reflink/`copy_file_range`/CoW, `FSCTL` server-side copy | TC/NEW | ~ the owner and extended attributes, sparse files; the read-back compare is local only |
 | 3.10 | Resume interrupted copy of large files | TC | M3 |
 | 3.11 | Multi-rename tool: patterns (`[N]`, `[E]`, counters, date, regex, case changes), live preview, undo | TC/KRU | ~ one step of undo, kept across a restart; the plan cannot be exported, and transliteration, `[X]` (the clipboard) and plugin fields (`[=exif:…]`) are not there |
 | 3.12 | Split / combine files; checksum create & verify (`.md5`, `.sha1`, `.sha256`, `.sfv`) | TC/KRU | ~ splitting and combining |

@@ -318,6 +318,23 @@ impl<F: JobFs> JobFs for ArcFs<F> {
         self.inner.wipe_file(path, buffer, on_bytes)
     }
 
+    /// Outside an archive the layer below reads it; an entry inside one is not read a chunk
+    /// at a time yet, and says so rather than handing over the archive's own bytes.
+    fn read_chunks(
+        &self,
+        path: &VPath,
+        buffer: usize,
+        on_chunk: &mut dyn FnMut(&[u8]) -> bool,
+    ) -> io::Result<u64> {
+        if path.in_container() {
+            return Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                format!("{path}: an entry inside an archive cannot be read a chunk at a time"),
+            ));
+        }
+        self.inner.read_chunks(path, buffer, on_chunk)
+    }
+
     fn replace_in_file(
         &self,
         path: &VPath,

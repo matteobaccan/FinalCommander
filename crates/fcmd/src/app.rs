@@ -998,6 +998,7 @@ pub struct CopyChoices {
     pub conflict: &'static str,
     pub only_newer: bool,
     pub follow_links: bool,
+    pub verify: bool,
     pub filter: String,
 }
 
@@ -1009,6 +1010,7 @@ impl Default for CopyChoices {
             conflict: "ask",
             only_newer: false,
             follow_links: false,
+            verify: false,
             filter: String::new(),
         }
     }
@@ -7680,6 +7682,18 @@ impl App {
                 &[("skipped", (outcome.skipped as i64).into())],
             ));
         }
+        if outcome.verified > 0 {
+            summary.push_str(&self.i18n.t_args(
+                "job-done-verified",
+                &[("verified", (outcome.verified as i64).into())],
+            ));
+        }
+        if outcome.unverified > 0 {
+            summary.push_str(&self.i18n.t_args(
+                "job-done-unverified",
+                &[("unverified", (outcome.unverified as i64).into())],
+            ));
+        }
         if !outcome.errors.is_empty() {
             summary.push_str(&self.i18n.t_args(
                 "job-done-errors",
@@ -8869,6 +8883,7 @@ impl App {
                     self.last_copy.conflict,
                     self.last_copy.only_newer,
                     self.last_copy.follow_links,
+                    self.last_copy.verify,
                     &self.last_copy.filter,
                     &self.i18n,
                 )));
@@ -11554,6 +11569,7 @@ impl App {
             },
             follow_symlinks: form.toggle_value("copy.follow_links"),
             only_newer: form.toggle_value("copy.only_newer"),
+            verify: form.toggle_value("copy.verify"),
             filter,
             ..fcmd_jobs::JobOptions::default()
         };
@@ -11568,6 +11584,7 @@ impl App {
             },
             only_newer: options.only_newer,
             follow_links: options.follow_symlinks,
+            verify: options.verify,
             filter: typed,
         };
 
@@ -28561,6 +28578,7 @@ run = ["echo one", "echo two", "echo three"]
         set_toggle(&mut app, "copy.only_newer");
         set_toggle(&mut app, "copy.follow_links");
         set_toggle(&mut app, "copy.times");
+        set_toggle(&mut app, "copy.verify");
         type_into(&mut app, "copy.filter", "*.txt");
         let out = absolute("fcmd-copy-out");
         {
@@ -28587,6 +28605,7 @@ run = ["echo one", "echo two", "echo three"]
         assert!(spec.options.follow_symlinks);
         assert!(!spec.options.preserve.mtime, "the box was turned off");
         assert!(spec.options.preserve.mode, "and this one was left on");
+        assert!(spec.options.verify, "every file read back");
         let masks = spec.options.filter.as_ref().expect("a filter was typed");
         assert!(masks.matches_name("notes.txt"));
         assert!(!masks.matches_name("notes.rs"));
@@ -28600,6 +28619,7 @@ run = ["echo one", "echo two", "echo three"]
         };
         assert_eq!(form.text_value("copy.conflict"), "append");
         assert!(form.toggle_value("copy.only_newer"));
+        assert!(form.toggle_value("copy.verify"));
         assert_eq!(form.text_value("copy.filter"), "*.txt");
     }
 

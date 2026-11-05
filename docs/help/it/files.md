@@ -24,6 +24,12 @@ percorso, premi `Enter`, e niente sotto la prima riga si applica.
   trasformasse i link in copie dei loro obiettivi duplicherebbe un albero la prima volta che ci
   provi.
 * **Conserva gli orari** e **Conserva i permessi** sono accesi.
+* **Rileggi ogni file e confrontalo** è spento. Acceso, ogni file viene riletto da entrambe le
+  parti dopo la copia e confrontato con SHA-256: una copia diversa viene tolta e segnalata, e
+  uno spostamento toglie l'originale solo dopo che la sua copia è risultata uguale. Il
+  riepilogo dice quanti sono stati verificati, e quanti non si potevano rileggere qui — un
+  server o un bucket — e restano quindi senza controllo. Legge tutto due volte, ed è per questo
+  che è una casella.
 
 Qualunque cosa rispondi è quello su cui si apre il dialogo successivo.
 

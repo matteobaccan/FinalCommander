@@ -274,6 +274,22 @@ impl<F: JobFs> JobFs for ObjectFs<F> {
         )))
     }
 
+    /// A file that is not in a bucket is the layer below's to read.
+    fn read_chunks(
+        &self,
+        path: &VPath,
+        buffer: usize,
+        on_chunk: &mut dyn FnMut(&[u8]) -> bool,
+    ) -> io::Result<u64> {
+        if mine(path) {
+            return Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                format!("{path}: an object cannot be read a chunk at a time yet"),
+            ));
+        }
+        self.inner.read_chunks(path, buffer, on_chunk)
+    }
+
     fn copy_file(
         &self,
         src: &VPath,

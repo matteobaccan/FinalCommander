@@ -203,6 +203,7 @@ copy-filter = Only the names that match
 copy-follow-links = Copy what a link points at, not the link
 copy-keep-times = Keep the times
 copy-keep-mode = Keep the permissions
+copy-verify = Read every file back and compare it
 copy-several = { $count } destinations, one after the other
 
 # ── the terminal (SPEC 06 §4) ──────────────────────────────────────────────────────────
@@ -238,6 +239,8 @@ job-state-cancelled = cancelled
 job-done = { $kind }: { $files } files, { $bytes }
 job-done-renamed = { $kind }: { $files } files moved without copying
 job-done-skipped = , { $skipped } skipped
+job-done-verified = , { $verified } verified
+job-done-unverified = , { $unverified } could not be read back here
 job-done-errors = , { $errors } errors
 job-cancelled = { $kind } cancelled
 job-errors-title = Errors

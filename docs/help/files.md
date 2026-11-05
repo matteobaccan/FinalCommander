@@ -22,6 +22,11 @@ press `Enter`, and nothing below the first line applies:
 * **Copy what a link points at, not the link** is off, and deliberately: a copy that turned
   links into copies of their targets would duplicate a tree the first time you tried it.
 * **Keep the times** and **Keep the permissions** are on.
+* **Read every file back and compare it** is off. On, each file is read again on both sides
+  after it is copied and compared by SHA-256: a copy that differs is removed and reported, and
+  a move takes the original away only after its copy compared the same. The summary says how
+  many were verified, and how many could not be read back here — a server or a bucket — and
+  so stand unchecked. It reads everything twice, which is why it is a box.
 
 Whatever you answer is what the next dialog opens on.
 

@@ -71,7 +71,7 @@ length limits, case-insensitive collision) → offered transliteration/truncatio
 | Metadata | mtime always; atime/btime, mode, owner/group, ACLs, xattrs/ADS, compression/encryption flags per option set (default: mtime+mode) |
 | Symlinks | copy as link (default), follow, or ask; relative links rewritten when the target moves inside the copied tree (option) |
 | Hard links | links inside one job preserved (inode map) when `preserve_hardlinks = true` |
-| Verify | optional read-back hash (blake3) or size+mtime check; mismatch → decision point |
+| Verify | **Shipped (0.31.0)** as *Read every file back and compare it* in the copy dialog (`JobOptions::verify`): after each file, both sides are read again and compared by SHA-256, the hash already in the tree for checksums, rather than blake3, which would be a dependency for one option. A copy that differs is removed and reported as that file's error; a move deletes its source only after its copy compared the same. A side that cannot be read a chunk at a time — a server, a bucket, an entry in an archive — leaves the copy standing and counted as *not verified*, which the summary says |
 | Interruption | partial target removed (default) or kept for resume; never left under the final name — write to `name.fcmd-part` then atomic rename |
 | Permissions | target dir not writable → decision point with an "elevate" action (SPEC 06 §7) |
 

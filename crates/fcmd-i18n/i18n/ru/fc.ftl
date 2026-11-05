@@ -197,6 +197,7 @@ copy-filter = Только подходящие имена
 copy-follow-links = Копировать то, на что указывает ссылка, а не ссылку
 copy-keep-times = Сохранять время
 copy-keep-mode = Сохранять права
+copy-verify = Перечитать каждый файл и сравнить
 copy-several = Назначений: { $count }, по очереди
 
 # ── the terminal (SPEC 06 §4) ──────────────────────────────────────────────────────────
@@ -232,6 +233,8 @@ job-state-cancelled = отменено
 job-done = { $kind }: файлов { $files }, { $bytes }
 job-done-renamed = { $kind }: { $files } файлов перенесено без копирования
 job-done-skipped = , пропущено { $skipped }
+job-done-verified = , проверено: { $verified }
+job-done-unverified = , не удалось перечитать здесь: { $unverified }
 job-done-errors = , ошибок { $errors }
 job-cancelled = { $kind } отменено
 job-errors-title = Ошибки

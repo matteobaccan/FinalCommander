@@ -1126,6 +1126,7 @@ impl Form {
         conflict: &str,
         only_newer: bool,
         follow_links: bool,
+        verify: bool,
         filter: &str,
         i18n: &I18n,
     ) -> Form {
@@ -1162,6 +1163,9 @@ impl Form {
             Field::toggle("copy.follow_links", t("copy-follow-links"), follow_links),
             Field::toggle("copy.times", t("copy-keep-times"), true),
             Field::toggle("copy.mode", t("copy-keep-mode"), true),
+            // Every file read back and compared before it counts — and before a move takes
+            // the original away. Off by default: it reads everything twice.
+            Field::toggle("copy.verify", t("copy-verify"), verify),
         ]);
         Form {
             pages: Vec::new(),

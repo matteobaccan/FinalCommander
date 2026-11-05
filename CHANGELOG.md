@@ -29,6 +29,13 @@ Notable changes, newest first. The format follows
   showing each new name as it was typed, and `1.txt` and `2.txt` swapped through the counter
   with nothing left behind under a temporary name.
 
+- **A copy that checks itself.** *Read every file back and compare it*, in the copy dialog,
+  reads each file again on both sides once it is copied and compares them by SHA-256. A copy
+  that differs is removed and reported as that file's error, and a move deletes its original
+  only after the copy compared the same. A side that cannot be read back here — a server, a
+  bucket — leaves the copy standing, counted as not verified, and the summary says how many
+  of each. The box is remembered like the others.
+
 - **Selecting by size, age, attributes and regular expressions.** The line `Gray +` and
   `Gray -` ask for is the filter's whole grammar now, not a list of globs: the masks with their
   groups, exclusions and `/regex/`, then `size:`, `age:` and `attr:` in the words of their own

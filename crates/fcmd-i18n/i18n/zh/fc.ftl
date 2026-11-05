@@ -197,6 +197,7 @@ copy-filter = 只要匹配的名字
 copy-follow-links = 复制链接指向的内容，而不是链接
 copy-keep-times = 保留时间
 copy-keep-mode = 保留权限
+copy-verify = 回读每个文件并比较
 copy-several = { $count } 个目标，依次进行
 
 # ── the terminal (SPEC 06 §4) ──────────────────────────────────────────────────────────
@@ -232,6 +233,8 @@ job-state-cancelled = 已取消
 job-done = { $kind }：{ $files } 个文件，{ $bytes }
 job-done-renamed = { $kind }：{ $files } 个文件已移动，未复制
 job-done-skipped = ，跳过 { $skipped }
+job-done-verified = , 已校验 { $verified } 个
+job-done-unverified = ，{ $unverified } 个无法在此回读
 job-done-errors = ，错误 { $errors }
 job-cancelled = { $kind }已取消
 job-errors-title = 错误
