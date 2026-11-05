@@ -319,6 +319,9 @@ impl Command {
             Command::EditorNumberLines => "number the lines of the block from 1",
             Command::EditorTrimTrailing => "take the blanks off the end of every line",
             Command::EditorComplete => "finish the word with another one in the file",
+            Command::EditorDeleteMatching => {
+                "take out the lines that match a pattern (or, with !, that don't)"
+            }
             Command::EditorCharMap => "a character to insert, from a list",
             Command::EditorMoveLineUp => "move this line up",
             Command::EditorMoveLineDown => "move this line down",

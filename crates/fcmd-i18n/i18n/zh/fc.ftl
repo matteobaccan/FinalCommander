@@ -1338,3 +1338,7 @@ net-url-copied = 已复制 { $url }
 ## The system log (SPEC 06 §16).
 menu-syslog = 系统日志
 syslog-reading = 正在读取系统日志…
+
+## Deleting lines by pattern (FAR #10).
+editor-prompt-delete-matching = 删除匹配的行（前面加 ! ：只保留匹配的行）
+editor-lines-deleted = 已删除行数：{ $count }

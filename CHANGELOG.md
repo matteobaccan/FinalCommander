@@ -28,6 +28,9 @@ Notable changes, newest first. The format follows
   their status in front as `git status --short` writes it; the log and the blame of the file
   under the cursor in the viewer; the branches, where `Enter` puts `git switch` on the command
   line for you to run. The machine's own `git` answers, and says what is wrong when it can't.
+- **Taking out the lines that match** (`Alt+Shift+D` in the editor): a regular expression,
+  and every matching line of the block or the file goes; `!` first keeps only those. One undo
+  step. vim's `:g/re/d` and `:v/re/d`, FAR's issue #10.
 - **A prompt on more than one line.** `$_` in `cmdline.prompt` is a new line: what comes
   before it is drawn on the rows above the command line, up to three, which the panels give
   up. FAR's issue #970.

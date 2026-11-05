@@ -1098,6 +1098,13 @@ keys = ["Alt+/"]
 scope = "editor"
 cmd = "editor.complete"
 
+# Every line matching a regular expression taken out, over the block or the whole file; `!`
+# in front keeps only those instead. vim's :g/re/d and :v/re/d, FAR's issue #10.
+[[bind]]
+keys = ["Alt+Shift+D"]
+scope = "editor"
+cmd = "editor.delete_matching"
+
 # FAR's Character Map: a list of the characters a keyboard does not have, filtered by typing
 # the character's name of a code (`U+00E9`), `Enter` to insert.
 [[bind]]

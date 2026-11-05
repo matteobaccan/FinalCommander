@@ -129,3 +129,10 @@ che avevi scritto. `Alt+Shift+C` elenca i caratteri che la tastiera non ha — a
 virgolette, valute, frecce, matematica, le linee delle cornici di FAR, il greco — ognuno col suo
 codice: scrivi `U+20AC` o una parte per restringere la lista, `Invio` per inserire, `Esc` per
 tornare indietro.
+
+# Togliere le righe che corrispondono
+
+`Alt+Shift+D` chiede un'espressione regolare e toglie ogni riga che le corrisponde — nel blocco
+se c'è, altrimenti in tutto il file. Comincia il pattern con `!` per tenere solo le righe che
+corrispondono e togliere le altre: `!ERROR` lascia gli errori di un log. Un solo `Ctrl+Z` le
+rimette tutte.

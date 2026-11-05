@@ -664,6 +664,13 @@ What they say wins over the settings for that file only:
   arrows, mathematics, box drawing and blocks, geometric shapes and Greek, each row the
   character and its `U+` code, filtered by typing either. `Enter` inserts at the cursor.
 
+### 2.2e Taking out lines by pattern
+
+`Alt+Shift+D` (`editor.delete_matching`): a regular expression, and every line of the block —
+or of the file, with no block — that matches it goes; a leading `!` inverts it, keeping only
+the matching lines (vim's `:g/re/d` and `:v/re/d`, FAR's issue #10). One undo step; a file
+left with nothing is one empty line; the status line says how many went.
+
 ### 2.2b Syntax highlighting
 
 `fcmd-syntax` is a scanner, not a parser, and deliberately: it knows how a language writes a

@@ -522,6 +522,8 @@ pub enum Command {
     EditorTrimTrailing,
     /// `Alt+/`: finish the word with another word of the file, again for the next one.
     EditorComplete,
+    /// `Alt+Shift+D`: take out the lines matching a pattern, or with `!` the ones that don't.
+    EditorDeleteMatching,
     /// `Alt+Shift+C`: a list of characters to insert, filtered by typing.
     EditorCharMap,
     EditorMoveLineUp,
@@ -808,6 +810,7 @@ impl Command {
             Command::EditorNumberLines,
             Command::EditorTrimTrailing,
             Command::EditorComplete,
+            Command::EditorDeleteMatching,
             Command::EditorCharMap,
             Command::EditorMoveLineUp,
             Command::EditorMoveLineDown,
@@ -1099,6 +1102,7 @@ impl Command {
             Command::EditorNumberLines => "editor.lines.number".into(),
             Command::EditorTrimTrailing => "editor.trim".into(),
             Command::EditorComplete => "editor.complete".into(),
+            Command::EditorDeleteMatching => "editor.delete_matching".into(),
             Command::EditorCharMap => "editor.charmap".into(),
             Command::EditorMoveLineUp => "editor.line.up".into(),
             Command::EditorMoveLineDown => "editor.line.down".into(),
@@ -1366,6 +1370,7 @@ impl Command {
             ("editor.lines.number", _) => Command::EditorNumberLines,
             ("editor.trim", _) => Command::EditorTrimTrailing,
             ("editor.complete", _) => Command::EditorComplete,
+            ("editor.delete_matching", _) => Command::EditorDeleteMatching,
             ("editor.charmap", _) => Command::EditorCharMap,
             ("editor.line.up", _) => Command::EditorMoveLineUp,
             ("editor.line.down", _) => Command::EditorMoveLineDown,

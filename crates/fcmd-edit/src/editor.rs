@@ -745,6 +745,41 @@ impl Editor {
         Ok(Some(gone))
     }
 
+    /// Take out every line that matches `pattern`, or with `keep` every line that does not —
+    /// vim's `:g/re/d` and `:v/re/d` (FAR's issue #10). Over the block when there is one, the
+    /// whole file otherwise; one undo step. A file left with nothing is one empty line.
+    pub fn delete_matching(&mut self, pattern: &Regex, keep: bool) -> Result<usize, EditorError> {
+        let (top, bottom) = self
+            .block_lines()
+            .unwrap_or((0, self.buffer.len().saturating_sub(1)));
+        let lines: Vec<String> = (top..=bottom)
+            .map(|i| self.buffer.line(i).to_string())
+            .collect();
+        let mut kept: Vec<String> = lines
+            .iter()
+            .filter(|l| pattern.is_match(l) == keep)
+            .cloned()
+            .collect();
+        let gone = lines.len() - kept.len();
+        if gone == 0 {
+            return Ok(0);
+        }
+        if kept.is_empty() {
+            kept.push(String::new());
+        }
+        self.replace_lines(top, bottom, &kept)?;
+        self.block = None;
+        let last = self.buffer.len().saturating_sub(1);
+        self.cursor = Position::new(top.min(last), 0);
+        Ok(gone)
+    }
+
+    /// [`Editor::delete_matching`] from the text of a pattern, which is what a prompt has.
+    pub fn delete_matching_text(&mut self, pattern: &str, keep: bool) -> Result<usize, String> {
+        let re = Regex::new(pattern).map_err(|e| e.to_string())?;
+        self.delete_matching(&re, keep).map_err(|e| e.to_string())
+    }
+
     /// `Alt+Shift+N`: a number in front of every line of the block, from 1, right-aligned to
     /// the widest so the text after them still lines up.
     pub fn number_lines(&mut self) -> Result<bool, EditorError> {
@@ -1385,6 +1420,23 @@ struct Completion {
 mod tests {
     use super::*;
     use crate::buffer::Eol;
+
+    #[test]
+    fn lines_matching_a_pattern_go_or_stay_in_one_undo() {
+        let mut e = editor("keep 1\ndrop a\nkeep 2\ndrop b");
+        let re = Regex::new("^drop").unwrap();
+        assert_eq!(e.delete_matching(&re, false).unwrap(), 2);
+        assert_eq!(e.buffer.len(), 2);
+        assert_eq!(e.buffer.line(1), "keep 2");
+        assert!(e.undo());
+        assert_eq!(e.buffer.len(), 4, "one undo puts them all back");
+        assert_eq!(
+            e.delete_matching(&re, true).unwrap(),
+            2,
+            "keep only what matches"
+        );
+        assert_eq!(e.buffer.line(0), "drop a");
+    }
 
     #[test]
     fn alt_slash_completes_with_the_nearest_word_and_cycles() {

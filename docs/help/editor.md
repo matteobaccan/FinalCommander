@@ -121,3 +121,10 @@ way, the nearest one first; press it again for the next one, and after the last 
 what you typed. `Alt+Shift+C` lists the characters a keyboard does not have — accents, dashes
 and quotes, currencies, arrows, mathematics, FAR's frame lines, Greek — each with its code:
 type `U+20AC` or part of it to narrow the list, `Enter` to insert, `Esc` to go back.
+
+# Taking out the lines that match
+
+`Alt+Shift+D` asks for a regular expression and takes out every line that matches it — in the
+block if there is one, in the whole file otherwise. Start the pattern with `!` to keep only the
+lines that match and take out the rest: `!ERROR` leaves the errors of a log. One `Ctrl+Z` puts
+them all back.

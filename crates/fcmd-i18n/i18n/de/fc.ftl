@@ -1362,3 +1362,7 @@ net-url-copied = Kopiert: { $url }
 ## The system log (SPEC 06 §16).
 menu-syslog = Systemprotokoll
 syslog-reading = Lese das Systemprotokoll…
+
+## Deleting lines by pattern (FAR #10).
+editor-prompt-delete-matching = Zeilen entfernen, die passen (! davor: nur diese behalten)
+editor-lines-deleted = Entfernte Zeilen: { $count }

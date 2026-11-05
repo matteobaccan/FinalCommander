@@ -976,6 +976,8 @@ pub enum PromptKind {
     EditorReplaceFrom,
     EditorReplaceWith,
     EditorGoto,
+    /// The pattern of the lines to take out (`!` first: the lines to keep).
+    EditorDeleteMatching,
     EditorSaveAs,
     /// Name for F7.
     Mkdir,
@@ -5871,6 +5873,31 @@ impl App {
                         self.set_status(msg);
                     }
                     Some(Err(e)) => self.set_error(e.to_string()),
+                    None => {}
+                }
+            }
+            PromptKind::EditorDeleteMatching => {
+                let text = prompt.text.clone();
+                self.restore_editor();
+                let (keep, pattern) = match text.strip_prefix('!') {
+                    Some(rest) => (true, rest.to_string()),
+                    None => (false, text),
+                };
+                if pattern.is_empty() {
+                    return;
+                }
+                let result = self
+                    .mode
+                    .editor_mut()
+                    .map(|e| e.delete_matching_text(&pattern, keep));
+                match result {
+                    Some(Ok(n)) => {
+                        let m = self
+                            .i18n
+                            .t_args("editor-lines-deleted", &[("count", (n as i64).into())]);
+                        self.set_status(m);
+                    }
+                    Some(Err(e)) => self.set_error(e),
                     None => {}
                 }
             }
@@ -18241,6 +18268,14 @@ impl App {
             }
             Command::EditorCharMap => {
                 self.open_char_map();
+                return;
+            }
+            Command::EditorDeleteMatching => {
+                self.editor_prompt(
+                    PromptKind::EditorDeleteMatching,
+                    "editor-prompt-delete-matching",
+                    String::new(),
+                );
                 return;
             }
             _ => {}
@@ -32233,6 +32268,25 @@ abcdefghij
         let mut app = app_on_disk(dir);
         app.editor_size = (40, 6);
         app
+    }
+
+    /// `Alt+Shift+D` asks for a pattern and takes out the lines that match; `!` first keeps
+    /// only those instead.
+    #[test]
+    fn alt_shift_d_takes_out_the_lines_that_match() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.log"), "ok 1\nerr x\nok 2\n").unwrap();
+        let mut app = editing_app(dir.path());
+        app.open_editor_on(&VPath::local(dir.path().join("a.log")));
+        press(&mut app, "Alt+Shift+D");
+        for c in "err".chars() {
+            press(&mut app, &c.to_string());
+        }
+        press(&mut app, "Enter");
+        let Mode::Editor(e) = &app.mode else {
+            panic!("the editor: {:?}", app.mode)
+        };
+        assert_eq!(e.buffer.line(1), "ok 2", "{}", app.status);
     }
 
     /// `Alt+Shift+C` lists characters over the editor; typing narrows by the code, `Enter`

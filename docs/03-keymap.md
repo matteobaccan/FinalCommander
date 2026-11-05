@@ -201,6 +201,7 @@ indistinguishable in a TTY — see §9.
 | go to line:col | Alt+F8 | Alt+L | Alt+F8, `:` |
 | complete the word from the file | — (EditorCompletion plugin) | — | **Alt+/**, again for the next word |
 | insert a character from a list | — (Character Map plugin) | — | **Alt+Shift+C** |
+| take out the lines matching a pattern (`!` keeps only those) | — | — | **Alt+Shift+D** — vim's `:g/re/d` / `:v/re/d`, FAR's issue #10 |
 | undo / redo | Alt+Backspace, Ctrl+Z / Ctrl+Shift+Z | Ctrl+U | Ctrl+Z / Ctrl+Y, Ctrl+Shift+Z |
 | select block | Shift+arrows, Ctrl+Shift+arrows | F3 marks | Shift+arrows |
 | **column (vertical) block** | Alt+arrows, Alt+Shift+arrows | — | Alt+Shift+arrows |
