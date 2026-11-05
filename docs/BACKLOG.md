@@ -48,6 +48,7 @@ says what the decision stands on.
 | Item | Where | What is left |
 | --- | --- | --- |
 | Pictures | `F3` on an image | The kitty, iTerm2 and sixel protocols for real pixels where the terminal has them; half blocks stay the fallback (feature 5.22). |
+| Video | `F3`, `Ctrl+Q` on a video | **Open question**, to be talked over with the author before any code. Today the viewer reads the container (`F11`: duration, resolution, codec, tracks) and decodes nothing, on purpose: the codecs carry patents, the complete libraries are LGPL/GPL, and no pure-Rust H.264/HEVC decoder is mature. The road that fits is the one `.rar` already takes — `ffmpeg` on the machine, run as a program and never linked — in two steps: (1) still frames drawn in half blocks like a picture, `PgUp`/`PgDn` to step through the film, with time, duration and codec on a line, and the quick view showing the frame at 10%; (2) playback at the terminal's size, 10–15 frames a second, `Space` to pause, no sound — a coloured preview rather than a film until the real-pixel protocols above are in. Without `ffmpeg`, the viewer says which program to install, as it does for `7z`. |
 | Following a branch | `Enter` on a `call` | The jumped-from stack shown on the screen, and a virtual address in `Alt+F8` (feature 5.16). |
 | More than one file in the editor | `F4` | Several files open at once, each a screen of its own today through `F12` (feature 6.1). |
 | Undo | `Ctrl+Z` | Grouping a burst of typing into one step, and a depth that can be set (feature 6.3). |
