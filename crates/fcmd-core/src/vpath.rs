@@ -23,6 +23,10 @@ pub enum Scheme {
     Dav,
     /// WebDAV over HTTPS, which is what any WebDAV server on the open internet speaks.
     Davs,
+    /// IMAP, read only: mailboxes as folders, messages as `.eml` files (port 143).
+    Imap,
+    /// IMAP over TLS from the first byte, port 993 — what mail providers offer.
+    Imaps,
 }
 
 impl Scheme {
@@ -35,6 +39,8 @@ impl Scheme {
             Scheme::Ftps => "ftps",
             Scheme::Dav => "dav",
             Scheme::Davs => "davs",
+            Scheme::Imap => "imap",
+            Scheme::Imaps => "imaps",
         }
     }
 
@@ -50,6 +56,8 @@ impl Scheme {
             // registered and what fits in a path.
             "dav" | "webdav" => Some(Scheme::Dav),
             "davs" | "webdavs" => Some(Scheme::Davs),
+            "imap" => Some(Scheme::Imap),
+            "imaps" => Some(Scheme::Imaps),
             _ => None,
         }
     }
@@ -68,7 +76,14 @@ impl Scheme {
             Scheme::Ftp | Scheme::Ftps => Some(21),
             Scheme::Dav => Some(80),
             Scheme::Davs => Some(443),
+            Scheme::Imap => Some(143),
+            Scheme::Imaps => Some(993),
         }
+    }
+
+    /// Is this one of the two IMAP spellings?
+    pub fn is_imap(self) -> bool {
+        matches!(self, Scheme::Imap | Scheme::Imaps)
     }
 
     /// Is this one of the two FTP spellings?
@@ -83,16 +98,18 @@ impl Scheme {
 
     /// Does the connection run over TLS? (For the two schemes where it is a choice.)
     pub fn is_tls(self) -> bool {
-        matches!(self, Scheme::Ftps | Scheme::Davs)
+        matches!(self, Scheme::Ftps | Scheme::Davs | Scheme::Imaps)
     }
 
     /// Every scheme a site can name, for the places that offer a choice.
-    pub const SITE_SCHEMES: [Scheme; 5] = [
+    pub const SITE_SCHEMES: [Scheme; 7] = [
         Scheme::Sftp,
         Scheme::Ftp,
         Scheme::Ftps,
         Scheme::Dav,
         Scheme::Davs,
+        Scheme::Imap,
+        Scheme::Imaps,
     ];
 }
 

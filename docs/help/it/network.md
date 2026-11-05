@@ -138,6 +138,17 @@ costruire un tunnel, e per loro la pagina del campo è grigia.
 
 Un salto solo, non una catena: `ssh -J a,b,c` è una lista, questo è un host.
 
+## La posta su un server (IMAP)
+
+`imap://io@host/` (porta 143) e `imaps://io@host/` (porta 993, TLS — quello che offrono i
+provider di posta) aprono un server di posta come pannello, in sola lettura. Le cartelle sono
+le caselle; dentro una, ogni messaggio è un file che porta il suo numero e il suo oggetto,
+`41 Riunione spostata.eml`, con la sua dimensione e l'ora di arrivo. `F3` ne legge uno, `F5`
+lo copia qui, e `Enter` sulla copia lo apre come fa il contenitore della posta — intestazioni,
+testo e allegati. Leggere un messaggio non lo segna come letto, e sul server non cambia mai
+niente: nessun messaggio viene cancellato, spostato o contrassegnato. La password viene chiesta
+alla connessione, come per FTP.
+
 ## I bucket
 
 Un servizio di object storage — S3 stesso, o MinIO, Ceph, R2, Wasabi, qualunque cosa parli lo

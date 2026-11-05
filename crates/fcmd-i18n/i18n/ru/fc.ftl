@@ -1393,3 +1393,7 @@ opt-remember-view = Каждая папка помнит свой вид и со
 
 # Session editor: a cap on a copy's speed to or from the site
 site-max-kbps = Ограничение скорости, КБ/с (пусто: нет)
+
+# Session editor: IMAP, read only
+site-protocol-imap = IMAP (почта, только чтение)
+site-protocol-imaps = IMAPS (почта через TLS, только чтение)

@@ -1393,3 +1393,7 @@ opt-remember-view = Chaque dossier garde sa vue et son tri
 
 # Session editor: a cap on a copy's speed to or from the site
 site-max-kbps = Limite de vitesse, Ko/s (vide : aucune)
+
+# Session editor: IMAP, read only
+site-protocol-imap = IMAP (courrier, lecture seule)
+site-protocol-imaps = IMAPS (courrier sur TLS, lecture seule)

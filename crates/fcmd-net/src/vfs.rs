@@ -90,6 +90,8 @@ pub fn caps_of(scheme: fcmd_core::Scheme) -> Caps {
             common | Caps::META_TIMES | Caps::META_MODE | Caps::CASE_SENSITIVE
         }
         fcmd_core::Scheme::Dav | fcmd_core::Scheme::Davs => common | Caps::CASE_SENSITIVE,
+        // A mailbox is read and nothing else: no copy into it, no delete, no rename.
+        fcmd_core::Scheme::Imap | fcmd_core::Scheme::Imaps => Caps::READ | Caps::CASE_SENSITIVE,
         // SFTP, and anything else that reaches the netbox.
         _ => {
             Caps::READ

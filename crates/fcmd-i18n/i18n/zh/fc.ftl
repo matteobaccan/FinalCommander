@@ -1369,3 +1369,7 @@ opt-remember-view = 每个文件夹记住自己的视图和排序
 
 # Session editor: a cap on a copy's speed to or from the site
 site-max-kbps = 速度限制，KB/s（空：不限）
+
+# Session editor: IMAP, read only
+site-protocol-imap = IMAP（邮件，只读）
+site-protocol-imaps = IMAPS（基于 TLS 的邮件，只读）

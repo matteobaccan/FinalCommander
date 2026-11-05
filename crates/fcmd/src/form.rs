@@ -659,6 +659,8 @@ impl Form {
                     ("ftps", t("site-protocol-ftps")),
                     ("dav", t("site-protocol-dav")),
                     ("davs", t("site-protocol-davs")),
+                    ("imap", t("site-protocol-imap")),
+                    ("imaps", t("site-protocol-imaps")),
                 ],
                 &scheme,
             ),

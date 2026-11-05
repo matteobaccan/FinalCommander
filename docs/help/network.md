@@ -134,6 +134,16 @@ the field is on is grey for them.
 
 One hop, not a chain: `ssh -J a,b,c` is a list, this is one host.
 
+## Mail on a server (IMAP)
+
+`imap://me@host/` (port 143) and `imaps://me@host/` (port 993, TLS — what mail providers
+offer) open a mailbox server as a panel, read only. The folders are the mailboxes; inside one,
+each message is a file named after its number and its subject, `41 Meeting moved.eml`, with
+its size and the time it arrived. `F3` reads one, `F5` copies it here, and `Enter` on the copy
+opens it as the mail container does — headers, text and attachments. Reading a message does
+not mark it as read, and nothing on the server is ever changed: no message is deleted, moved
+or flagged. The password is asked for when you connect, as for FTP.
+
 ## Buckets
 
 An object storage service — S3 itself, or MinIO, Ceph, R2, Wasabi, anything that speaks the

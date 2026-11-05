@@ -306,7 +306,7 @@ impl Site {
             .ok_or_else(|| NetError::Connect {
                 host: cfg.host.clone(),
                 detail: format!(
-                    "unknown scheme `{}` (sftp | ftp | ftps | webdav | webdavs)",
+                    "unknown scheme `{}` (sftp | ftp | ftps | webdav | webdavs | imap | imaps)",
                     cfg.scheme
                 ),
             })?;

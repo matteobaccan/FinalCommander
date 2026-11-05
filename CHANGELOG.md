@@ -6,6 +6,14 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Mail on a server, read only** (`imap://`, `imaps://`): the mailboxes are folders and each
+  message a file named after its number and subject, with its size and arrival time — `F3`
+  reads it, `F5` copies it, `Enter` on the copy opens it as a mail container. Reading does not
+  mark a message as read, and nothing on the server is ever changed. Also in the session
+  dialog's protocols. FARMail's idea, none of its code.
+
 ## [0.34.0] - 2026-11-05
 
 ### Added

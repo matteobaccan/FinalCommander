@@ -354,6 +354,17 @@ inside it — and both are disconnected, innermost first, when the panel disconn
 generalises (step 3 could itself be a jump), and until somebody has two bastions in a row it
 is a field to fill in rather than a list to edit.
 
+### 6.6 IMAP, read only (`imap://`, `imaps://`)
+
+`fcmd-net/src/imap`: `LOGIN`, `LIST`, `EXAMINE`, `UID FETCH`, `LOGOUT` by hand over one
+connection, a command at a time, literals read whole. Mailboxes are folders with the server's
+separator turned into `/`; a selectable mailbox lists its messages as `<uid> <subject>.eml`,
+the subject's encoded words decoded, sized by `RFC822.SIZE` and dated by `INTERNALDATE`. A
+message is fetched with `BODY.PEEK[]`, which leaves `\Seen` alone, and is refused over 256 MiB.
+`EXAMINE` rather than `SELECT`, and the provider's caps are `READ` only, so nothing a panel can
+ask for writes to the server. TLS is rustls with the machine's roots, the same as FTPS'.
+Tested against an in-process fake server (`imap/fake.rs`).
+
 ## 7. Performance rules
 
 - `list` must yield the first chunk in under 100 ms on a warm local directory; providers that
