@@ -1376,3 +1376,8 @@ copy-on-error = Se uno non si può copiare
 copy-error-ask = Chiedi
 copy-error-skip = Saltalo e prosegui
 copy-error-stop = Ferma la copia
+
+# Attributes dialog: the times copied from one file to another (FAR's issue #241)
+attr-times-copied = Orari copiati: Ctrl+Shift+V li mette nel dialogo di un altro file
+attr-times-none = Niente da incollare: prima Ctrl+Shift+C nel dialogo di un file
+attr-times-pasted = Orari incollati: OK li imposta

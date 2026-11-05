@@ -473,7 +473,8 @@ Below the boxes are the times — *Changed*, *Last read* and *Created* — as
 reads and writes them in that clock instead of this machine's, which is how a file here and
 its copy on a build server are compared. The three buttons under them fill the rows in without
 answering the dialog: *Original* puts back what the file carries, *Current* writes this moment,
-*Blank* empties them. On Unix a fourth time is shown and never offered — the moment the file's
+*Blank* empties them. `Ctrl+Shift+C` keeps the three as they stand and `Ctrl+Shift+V` puts
+them into the dialog of another file, to give it the first one's times. On Unix a fourth time is shown and never offered — the moment the file's
 own record changed, which no system has a call to set — and the creation time is shown
 everywhere and written only on Windows, the one platform with a call for it. With a folder among what is selected there is one more
 box: *and everything inside the folders*, which takes the whole change down the tree. The

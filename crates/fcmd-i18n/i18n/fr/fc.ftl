@@ -1375,3 +1375,8 @@ copy-on-error = Si un fichier ne peut être copié
 copy-error-ask = Demander
 copy-error-skip = L'ignorer et continuer
 copy-error-stop = Arrêter la copie
+
+# Attributes dialog: the times copied from one file to another (FAR's issue #241)
+attr-times-copied = Dates copiées : Ctrl+Maj+V les met dans la boîte d'un autre fichier
+attr-times-none = Rien de copié : d'abord Ctrl+Maj+C dans la boîte d'un fichier
+attr-times-pasted = Dates collées : OK les applique

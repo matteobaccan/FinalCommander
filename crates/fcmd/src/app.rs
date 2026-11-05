@@ -2092,6 +2092,8 @@ pub struct App {
     /// The times the file under the cursor carried when the dialog opened, so the dialog's
     /// `Original` button has something to put back.
     attr_times: crate::form::Times,
+    /// The three time rows of an attributes dialog, as `Ctrl+Shift+C` kept them.
+    times_clip: Option<[String; 3]>,
     /// The same, for the copy dialog.
     copy_sources: Vec<VPath>,
     /// What the copy dialog was last answered with, so the next one opens on it. FAR does
@@ -2465,6 +2467,7 @@ impl App {
             attr_seed_mode: None,
             services: Vec::new(),
             attr_times: Default::default(),
+            times_clip: None,
             copy_sources: Vec::new(),
             last_copy: CopyChoices::default(),
             queued_jobs: std::collections::VecDeque::new(),
@@ -14695,6 +14698,42 @@ impl App {
             self.open_dialog_help();
             return;
         }
+        // The attributes dialog's times travel together: `Ctrl+Shift+C` keeps the three rows
+        // as they stand, `Ctrl+Shift+V` puts them into the dialog of another file (FAR's
+        // issue #241). The system clipboard gets them too, one per line, for a note.
+        if form.kind == FormKind::Attributes
+            && key.mods.contains(Mods::CTRL)
+            && key.mods.contains(Mods::SHIFT)
+        {
+            match key.code {
+                KeyCode::Char('c' | 'C') => {
+                    let times = ATTR_TIME_ROWS.map(|k| form.text_value(k));
+                    let text = times.join("\n");
+                    self.times_clip = Some(times);
+                    self.copy_to_clipboard(&text);
+                    let m = self.i18n.t("attr-times-copied");
+                    self.set_status(m);
+                    return;
+                }
+                KeyCode::Char('v' | 'V') => {
+                    let Some(times) = self.times_clip.clone() else {
+                        let m = self.i18n.t("attr-times-none");
+                        self.set_error(m);
+                        return;
+                    };
+                    let Mode::Form(form) = &mut self.mode else {
+                        return;
+                    };
+                    for (key, text) in ATTR_TIME_ROWS.iter().zip(times) {
+                        form.set_text(key, text);
+                    }
+                    let m = self.i18n.t("attr-times-pasted");
+                    self.set_status(m);
+                    return;
+                }
+                _ => {}
+            }
+        }
         match key.code {
             KeyCode::Esc => {
                 self.mode = Mode::Normal;
@@ -22520,6 +22559,9 @@ fn usage_rows(panel: &Panel) -> (Vec<PickRow>, u64) {
         .collect();
     (rows, total)
 }
+/// The time rows of the attributes dialog that can be set, in the order they are copied.
+const ATTR_TIME_ROWS: [&str; 3] = ["attr.mtime", "attr.atime", "attr.btime"];
+
 /// How long `cd` waits to learn whether its target is a directory before going there anyway.
 const CD_PROBE_WAIT: std::time::Duration = std::time::Duration::from_millis(400);
 
@@ -25311,6 +25353,68 @@ mod tests {
         );
         press(&mut app, "Esc");
         assert!(app.mode.is_normal());
+    }
+
+    /// FAR's issue #241: the times of one file carried to another through the dialog,
+    /// all three at once.
+    #[test]
+    fn the_attributes_dialog_copies_times_from_one_file_to_another() {
+        let dir = tempfile::tempdir().unwrap();
+        let old = dir.path().join("old.txt");
+        let new = dir.path().join("new.txt");
+        std::fs::write(&old, b"x").unwrap();
+        std::fs::write(&new, b"y").unwrap();
+        let then =
+            std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000_000);
+        std::fs::File::options()
+            .write(true)
+            .open(&old)
+            .unwrap()
+            .set_modified(then)
+            .unwrap();
+
+        let mut app = app();
+        app.panels[app.active].cwd = VPath::local(dir.path());
+        let entries =
+            fcmd_vfs::local::list_blocking(&app.panels[app.active].cwd, &CancelToken::new())
+                .unwrap();
+        let (panel, generation) = (app.active, app.panels[app.active].generation);
+        app.handle_event(Event::Listed {
+            panel,
+            generation,
+            result: Ok(entries),
+        });
+        let on = |app: &mut App, name: &str| {
+            let row = app.panels[app.active].listing.row_of_name(name).unwrap();
+            app.panels[app.active].cursor_to(row);
+            press(app, "Ctrl+A");
+        };
+
+        on(&mut app, "new.txt");
+        press(&mut app, "Ctrl+Shift+V");
+        assert!(app.status_error, "nothing was copied yet: {}", app.status);
+        press(&mut app, "Esc");
+
+        on(&mut app, "old.txt");
+        let Mode::Form(form) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        let wanted = form.text_value("attr.mtime");
+        assert!(!wanted.is_empty());
+        press(&mut app, "Ctrl+Shift+C");
+        assert!(!app.status_error, "{}", app.status);
+        press(&mut app, "Esc");
+
+        on(&mut app, "new.txt");
+        let Mode::Form(form) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_ne!(form.text_value("attr.mtime"), wanted);
+        press(&mut app, "Ctrl+Shift+V");
+        let Mode::Form(form) = &app.mode else {
+            panic!("the dialog stays open")
+        };
+        assert_eq!(form.text_value("attr.mtime"), wanted, "the old file's time");
     }
 
     /// `Ctrl+A`: what a file is, and what the dialog then does about it.

@@ -1351,3 +1351,8 @@ copy-on-error = 无法复制时
 copy-error-ask = 询问
 copy-error-skip = 跳过并继续
 copy-error-stop = 停止复制
+
+# Attributes dialog: the times copied from one file to another (FAR's issue #241)
+attr-times-copied = 时间已复制：Ctrl+Shift+V 粘贴到另一个文件的对话框
+attr-times-none = 尚未复制：先在文件的对话框中按 Ctrl+Shift+C
+attr-times-pasted = 时间已粘贴：按确定应用

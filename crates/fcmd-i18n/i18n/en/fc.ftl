@@ -1385,3 +1385,8 @@ copy-on-error = If one cannot be copied
 copy-error-ask = Ask
 copy-error-skip = Skip it and go on
 copy-error-stop = Stop the copy
+
+# Attributes dialog: the times copied from one file to another (FAR's issue #241)
+attr-times-copied = Times copied: Ctrl+Shift+V puts them into another file's dialog
+attr-times-none = Nothing copied yet: Ctrl+Shift+C in a file's dialog first
+attr-times-pasted = Times pasted: OK sets them

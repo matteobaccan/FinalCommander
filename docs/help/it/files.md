@@ -496,7 +496,9 @@ Sotto le caselle stanno gli orari — *Cambiato*, *Ultima lettura* e *Creato* �
 viene impostato. *Orari in UTC* li legge e li scrive in quell'orologio invece che in quello di
 questa macchina, che è come si confronta un file qui con la sua copia su un server di
 compilazione. I tre pulsanti sotto riempiono le righe senza rispondere al dialogo: *Originale*
-rimette quello che il file ha, *Adesso* scrive questo momento, *Vuoto* le svuota. Su Unix c'è
+rimette quello che il file ha, *Adesso* scrive questo momento, *Vuoto* le svuota. `Ctrl+Shift+C` tiene
+le tre righe come sono e `Ctrl+Shift+V` le mette nel dialogo di un altro file, per dargli gli
+orari del primo. Su Unix c'è
 un quarto orario mostrato e mai offerto — il momento in cui è cambiato il record del file
 stesso, che nessun sistema ha una chiamata per impostare — e la data di creazione è mostrata
 ovunque e scritta solo su Windows, l'unica piattaforma che ha una chiamata per farlo. Con una cartella fra quello

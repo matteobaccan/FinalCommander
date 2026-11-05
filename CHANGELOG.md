@@ -11,6 +11,9 @@ Notable changes, newest first. The format follows
 - **What an error does, chosen before the copy.** A new row in the copy dialog — ask, skip it
   and go on, or stop the copy — so a long copy left alone does not wait on its first
   unreadable file. Every skipped file is in the summary. FAR's issue #597.
+- **One file's times onto another.** In the attributes dialog (`Ctrl+A`) `Ctrl+Shift+C` keeps
+  the modification, access and creation times as they stand, and `Ctrl+Shift+V` puts them into
+  another file's dialog for `OK` to set. FAR's issue #241.
 
 ### Fixed
 

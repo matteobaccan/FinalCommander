@@ -1375,3 +1375,8 @@ copy-on-error = Если файл не копируется
 copy-error-ask = Спросить
 copy-error-skip = Пропустить и продолжить
 copy-error-stop = Остановить копирование
+
+# Attributes dialog: the times copied from one file to another (FAR's issue #241)
+attr-times-copied = Время скопировано: Ctrl+Shift+V вставит его в диалог другого файла
+attr-times-none = Ещё ничего не скопировано: сначала Ctrl+Shift+C в диалоге файла
+attr-times-pasted = Время вставлено: OK применит его

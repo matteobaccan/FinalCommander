@@ -1375,3 +1375,8 @@ copy-on-error = Wenn eine nicht kopiert werden kann
 copy-error-ask = Fragen
 copy-error-skip = Überspringen und weiter
 copy-error-stop = Kopieren anhalten
+
+# Attributes dialog: the times copied from one file to another (FAR's issue #241)
+attr-times-copied = Zeiten kopiert: Strg+Umschalt+V fügt sie im Dialog einer anderen Datei ein
+attr-times-none = Noch nichts kopiert: zuerst Strg+Umschalt+C im Dialog einer Datei
+attr-times-pasted = Zeiten eingefügt: OK setzt sie
