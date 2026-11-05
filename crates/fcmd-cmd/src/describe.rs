@@ -236,6 +236,7 @@ impl Command {
             Command::ToolTaskList => "the running processes, as a panel",
             Command::ToolGit => "the repository: what changed, the log, blame, branches",
             Command::ToolSysLog => "the system log, the latest entries, in the viewer",
+            Command::ToolAi => "the AI services: add, change, remove, choose the one asked",
             Command::ToolGrab => "copy a piece of the screen as it stands",
             Command::ToolSyncDirs => "make the two directories hold the same thing",
             Command::ToolCompareContents => "compare them by what is in the files",

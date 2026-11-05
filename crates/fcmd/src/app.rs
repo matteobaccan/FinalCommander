@@ -59,6 +59,8 @@ pub enum Request {
     /// agreed to send with it, and the folder the answer is written into.
     AiAsk {
         service: fcmd_config::AiCfg,
+        /// A key typed in this session, when the service's variable does not hold one.
+        token: Option<String>,
         question: String,
         files: Vec<std::path::PathBuf>,
         dir: std::path::PathBuf,
@@ -978,6 +980,8 @@ pub enum PromptKind {
     EditorGoto,
     /// The pattern of the lines to take out (`!` first: the lines to keep).
     EditorDeleteMatching,
+    /// An AI service's key, typed because its variable holds none; kept for the session.
+    AiKey,
     /// The name to keep a recent replacement under (`Ins` in `Alt+Shift+F7`).
     ReplaceTemplateName,
     EditorSaveAs,
@@ -2177,6 +2181,12 @@ pub struct App {
     replace_from: Option<String>,
     /// The pair `Ins` in the replacements list is naming.
     replace_naming: Option<(String, String)>,
+    /// AI keys typed in this session, by service name. Never written anywhere.
+    ai_tokens: std::collections::HashMap<String, String>,
+    /// The question waiting for a key.
+    ai_pending: Option<(fcmd_config::AiCfg, String, Vec<std::path::PathBuf>)>,
+    /// Which service the AI dialog is changing; `None` is a new one.
+    ai_editing: Option<usize>,
     /// Size of the editor's text area, from the last frame.
     pub editor_size: (u16, u16),
     /// The decompilation we are waiting for, if any.
@@ -2515,6 +2525,9 @@ impl App {
             editor_parked: None,
             replace_from: None,
             replace_naming: None,
+            ai_tokens: std::collections::HashMap::new(),
+            ai_pending: None,
+            ai_editing: None,
             editor_size: (80, 20),
             decompile_id: None,
             sites,
@@ -5895,6 +5908,15 @@ impl App {
                 let from = self.replace_from.take().unwrap_or_default();
                 self.restore_editor();
                 self.run_editor_replace(&from, &with);
+            }
+            PromptKind::AiKey => {
+                let key = prompt.text.trim().to_string();
+                if let (false, Some((service, question, files))) =
+                    (key.is_empty(), self.ai_pending.take())
+                {
+                    self.ai_tokens.insert(service.name.clone(), key);
+                    self.ask_ai(service, question, files);
+                }
             }
             PromptKind::ReplaceTemplateName => {
                 let name = prompt.text.trim().to_string();
@@ -9329,6 +9351,7 @@ impl App {
             Command::MacroList => self.open_macros(),
             Command::AppScreens => self.open_screens(),
             Command::ToolGit => self.open_git(),
+            Command::ToolAi => self.open_ai_services(),
             Command::ToolSysLog => {
                 let m = self.i18n.t("syslog-reading");
                 self.set_status(m);
@@ -11560,12 +11583,103 @@ impl App {
             .t_args("ai-asking", &[("name", service.name.clone().into())]);
         self.set_status(m);
         let dir = self.ai_dir();
+        // A key nobody has given: asked once, as a password is, and kept for the session.
+        let from_env = !service.token_env.is_empty() && std::env::var(&service.token_env).is_ok();
+        let typed = self.ai_tokens.get(&service.name).cloned();
+        if service.api != "ollama" && !from_env && typed.is_none() {
+            let title = self
+                .i18n
+                .t_args("ai-key-prompt", &[("name", service.name.clone().into())]);
+            self.ai_pending = Some((service, question, files));
+            self.mode = Mode::Prompt(Prompt {
+                kind: PromptKind::AiKey,
+                title,
+                text: String::new(),
+                secret: true,
+                sources: Vec::new(),
+            });
+            return;
+        }
         self.requests.push(Request::AiAsk {
             service,
+            token: if from_env { None } else { typed },
             question,
             files,
             dir,
         });
+    }
+
+    /// `tool.ai`: the services, the one `ai:` asks first.
+    fn open_ai_services(&mut self) {
+        let rows: Vec<PickRow> = self
+            .cfg
+            .ais
+            .iter()
+            .enumerate()
+            .map(|(i, a)| {
+                let host = a
+                    .url
+                    .split("//")
+                    .nth(1)
+                    .and_then(|r| r.split('/').next())
+                    .unwrap_or(&a.url);
+                PickRow::plain(
+                    format!("{}   {} · {} · {host}", a.name, a.api, a.model),
+                    i.to_string(),
+                    i == 0,
+                )
+            })
+            .collect();
+        let title = self.i18n.t("ai-services-title");
+        self.mode = Mode::Pick(Box::new(Pick::new(
+            PickKind::AiServices,
+            title,
+            rows,
+            self.active,
+        )));
+    }
+
+    /// The dialog for one service: `None` is a new one.
+    fn open_ai_form(&mut self, at: Option<usize>) {
+        let cfg = at
+            .and_then(|i| self.cfg.ais.get(i).cloned())
+            .unwrap_or_else(|| fcmd_config::AiCfg {
+                api: "openai".into(),
+                url: "https://api.openai.com/v1/chat/completions".into(),
+                ..Default::default()
+            });
+        self.ai_editing = at;
+        self.mode = Mode::Form(Box::new(Form::ai_service(&cfg, &self.i18n)));
+    }
+
+    fn apply_ai_form(&mut self, form: &Form) {
+        let name = form.text_value("ai.name").trim().to_string();
+        let url = form.text_value("ai.url").trim().to_string();
+        if name.is_empty() || url.is_empty() {
+            let m = self.i18n.t("ai-service-incomplete");
+            self.set_error(m);
+            self.mode = Mode::Form(Box::new(form.clone()));
+            return;
+        }
+        let at = self.ai_editing.take();
+        let old = at
+            .and_then(|i| self.cfg.ais.get(i).cloned())
+            .unwrap_or_default();
+        let cfg = fcmd_config::AiCfg {
+            name,
+            url,
+            api: form.choice_value("ai.api"),
+            model: form.text_value("ai.model").trim().to_string(),
+            token_env: form.text_value("ai.token_env").trim().to_string(),
+            system: form.text_value("ai.system"),
+            ..old
+        };
+        match at.filter(|i| *i < self.cfg.ais.len()) {
+            Some(i) => self.cfg.ais[i] = cfg,
+            None => self.cfg.ais.push(cfg),
+        }
+        self.save_setup();
+        self.open_ai_services();
     }
 
     fn run_prefix(&mut self, prefix: Prefix) {
@@ -15157,6 +15271,10 @@ impl App {
             self.apply_dupes_form(&form);
             return;
         }
+        if form.kind == FormKind::AiService {
+            self.apply_ai_form(&form);
+            return;
+        }
         if form.kind == FormKind::Recode {
             self.apply_recode_form(&form);
             return;
@@ -16752,6 +16870,7 @@ impl App {
             PickKind::Git | PickKind::GitBranches => return,
             PickKind::CharMap => return,
             PickKind::ReplaceTemplates => return,
+            PickKind::AiServices => return,
             // And `open_settings`, which knows which row the list was left on.
             PickKind::Settings => return,
             PickKind::Languages => Pick::new(
@@ -17072,6 +17191,22 @@ impl App {
                 self.restore_editor();
             }
             // `Ins` keeps a recent pair under a name; `Del` forgets a named one.
+            KeyCode::Insert if kind == PickKind::AiServices => self.open_ai_form(None),
+            KeyCode::F(4) if kind == PickKind::AiServices => {
+                let at = pick.chosen().and_then(|r| r.value.parse::<usize>().ok());
+                if at.is_some() {
+                    self.open_ai_form(at);
+                }
+            }
+            KeyCode::Delete if kind == PickKind::AiServices => {
+                if let Some(at) = pick.chosen().and_then(|r| r.value.parse::<usize>().ok()) {
+                    if at < self.cfg.ais.len() {
+                        self.cfg.ais.remove(at);
+                        self.save_setup();
+                    }
+                }
+                self.open_ai_services();
+            }
             KeyCode::Insert if kind == PickKind::ReplaceTemplates => {
                 let Some(value) = pick.chosen().map(|r| r.value.clone()) else {
                     return;
@@ -17776,6 +17911,24 @@ impl App {
                     cwd,
                     what,
                 });
+            }
+            PickKind::AiServices => {
+                // The one chosen goes first, which is the one `ai:` asks.
+                if let Some(at) = row
+                    .value
+                    .parse::<usize>()
+                    .ok()
+                    .filter(|i| *i < self.cfg.ais.len())
+                {
+                    let chosen = self.cfg.ais.remove(at);
+                    let m = self.i18n.t_args(
+                        "ai-service-default",
+                        &[("name", chosen.name.clone().into())],
+                    );
+                    self.cfg.ais.insert(0, chosen);
+                    self.save_setup();
+                    self.set_status(m);
+                }
             }
             PickKind::ReplaceTemplates => {
                 self.restore_editor();
@@ -33030,6 +33183,62 @@ abcdefghij
         assert_eq!(e.buffer.line(0), "baz bar baz");
     }
 
+    /// The AI services are a list kept like the sessions: a new one through its dialog, the
+    /// one chosen becomes the one `ai:` asks, and a key nobody gave is asked for, not assumed.
+    #[test]
+    fn the_ai_services_are_a_list_and_a_missing_key_is_asked_for() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = app_on_disk(dir.path());
+        app.run(Command::ToolAi);
+        assert!(matches!(&app.mode, Mode::Pick(p) if p.kind == PickKind::AiServices));
+        for name in ["first", "second"] {
+            press(&mut app, "Ins");
+            let Mode::Form(form) = &mut app.mode else {
+                panic!("the dialog: {:?}", app.mode)
+            };
+            assert_eq!(form.kind, FormKind::AiService);
+            form.set_text("ai.name", name.to_string());
+            form.set_text("ai.token_env", "FCMD_TEST_NO_SUCH_KEY".to_string());
+            press(&mut app, "F10");
+        }
+        assert_eq!(app.cfg.ais.len(), 2);
+        let saved = std::fs::read_to_string(dir.path().join("fcmd.toml")).unwrap();
+        assert!(saved.contains("second"), "kept in the settings");
+
+        // The second, chosen, is the one `ai:` asks now.
+        let Mode::Pick(pick) = &mut app.mode else {
+            panic!("back to the list: {:?}", app.mode)
+        };
+        pick.cursor = 1;
+        press(&mut app, "Enter");
+        assert_eq!(app.cfg.ais[0].name, "second");
+
+        // No key in the variable: asked for, secretly, and then the question goes.
+        app.mode = Mode::Normal;
+        app.take_requests();
+        app.ai_line("hello".into());
+        let Mode::Prompt(mut prompt) = std::mem::replace(&mut app.mode, Mode::Normal) else {
+            panic!("the key is asked for: {:?}", app.mode)
+        };
+        assert!(prompt.secret && prompt.kind == PromptKind::AiKey);
+        prompt.text = "sk-typed".into();
+        app.prompt_accept(prompt);
+        let sent = app.take_requests().into_iter().find_map(|r| match r {
+            Request::AiAsk { token, .. } => Some(token),
+            _ => None,
+        });
+        assert_eq!(sent, Some(Some("sk-typed".to_string())));
+        // Asked once: the next question uses the key already given.
+        app.ai_line("again".into());
+        assert!(!matches!(app.mode, Mode::Prompt(_)));
+        assert!(
+            !saved.contains("sk-typed")
+                && !std::fs::read_to_string(dir.path().join("fcmd.toml"))
+                    .unwrap()
+                    .contains("sk-typed")
+        );
+    }
+
     /// A project's `.editorconfig` sets the indentation and the trailing blanks for the files
     /// under it, over the settings.
     #[test]
@@ -33154,6 +33363,9 @@ abcdefghij
             ..Default::default()
         };
         app.cfg.ais = vec![ai("first"), ai("local")];
+        // Keys typed earlier in the session, so the question goes without asking for one.
+        app.ai_tokens.insert("first".into(), "k".into());
+        app.ai_tokens.insert("local".into(), "k".into());
         app.take_requests();
         app.cmd.set("ai: local: why: really?");
         press(&mut app, "Enter");

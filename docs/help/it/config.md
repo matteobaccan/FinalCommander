@@ -48,6 +48,12 @@ model = "claude-sonnet-5-5"
 token_env = "ANTHROPIC_API_KEY"
 ```
 
+Non serve scriverli a mano: *Comandi → Servizi AI* li elenca come le sessioni di NetBox. `Ins`
+ne aggiunge uno con il suo dialogo (nome, protocollo, indirizzo, modello, variabile della
+chiave), `F4` lo modifica, `Canc` lo toglie, e `Enter` lo rende quello a cui chiede `ai:`. Se
+la variabile della chiave è vuota o non c'è, la chiave viene chiesta come una password la prima
+volta che serve e tenuta in memoria fino all'uscita: non viene mai scritta nel file.
+
 Il primo blocco è quello a cui chiede `ai:`; `ai: locale: domanda` chiede al blocco chiamato
 `locale`. La chiave non è mai scritta nel file: `token_env` dice in quale variabile d'ambiente
 si trova. `api = "openai"` va con ogni server che parla l'API chat di OpenAI, e `ollama` con un

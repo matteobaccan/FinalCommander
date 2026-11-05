@@ -47,6 +47,12 @@ model = "claude-sonnet-5-5"
 token_env = "ANTHROPIC_API_KEY"
 ```
 
+They need not be written by hand: *Commands → AI services* lists them as NetBox lists the
+sessions. `Ins` adds one through its dialog (name, protocol, address, model, the variable the
+key is in), `F4` changes it, `Del` removes it, and `Enter` makes it the one `ai:` asks. With no
+variable, or one that is not set, the key is asked for like a password the first time it is
+needed and kept in memory until you quit: it is never written to the file.
+
 The first block is the one `ai:` asks; `ai: local: question` asks the block called `local`.
 The key is never written in the file: `token_env` names the environment variable it is in.
 `api = "openai"` works with every server that speaks OpenAI's chat API, and `ollama` with a

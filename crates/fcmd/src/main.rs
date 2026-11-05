@@ -1797,13 +1797,14 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                 }
                 Request::AiAsk {
                     service,
+                    token,
                     question,
                     files,
                     dir,
                 } => {
                     let tx = tx.clone();
                     runtime.spawn(async move {
-                        let result = ask_ai(&service, &question, &files, &dir).await;
+                        let result = ask_ai(&service, token, &question, &files, &dir).await;
                         let _ = tx.send(Event::AiDone { result });
                     });
                 }
@@ -4254,16 +4255,17 @@ const AI_FILE_LIMIT: usize = 256 * 1024;
 /// Ask, and write the question and its answer into a Markdown file of their own.
 async fn ask_ai(
     cfg: &fcmd_config::AiCfg,
+    typed: Option<String>,
     question: &str,
     files: &[std::path::PathBuf],
     dir: &std::path::Path,
 ) -> Result<std::path::PathBuf, String> {
     use fcmd_net::ai::{Api, Attachment, Service};
     let api = Api::parse(&cfg.api).ok_or_else(|| format!("api = \"{}\"?", cfg.api))?;
-    let token = if cfg.token_env.is_empty() {
-        None
-    } else {
-        Some(std::env::var(&cfg.token_env).map_err(|_| format!("${} is not set", cfg.token_env))?)
+    // The variable first, when it holds a key; then the one typed in this session.
+    let token = match std::env::var(&cfg.token_env) {
+        Ok(key) if !cfg.token_env.is_empty() => Some(key),
+        _ => typed,
     };
     let service = Service {
         api,

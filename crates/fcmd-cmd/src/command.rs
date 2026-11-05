@@ -372,6 +372,8 @@ pub enum Command {
     ToolGit,
     /// The system's log, newest last, in the viewer (FAR's EventViewer, SPEC 06 §16).
     ToolSysLog,
+    /// The AI services as a list to keep: add, change, remove, choose the one `ai:` asks.
+    ToolAi,
     /// The screen grabber: copy a piece of the screen as it stands (SPEC 06 §11b).
     ToolGrab,
     /// Make the two panels' directories hold the same thing: decide about every pair, show
@@ -724,6 +726,7 @@ impl Command {
             Command::ToolTaskList,
             Command::ToolGit,
             Command::ToolSysLog,
+            Command::ToolAi,
             Command::ToolGrab,
             Command::ToolSyncDirs,
             Command::ToolCompareContents,
@@ -1017,6 +1020,7 @@ impl Command {
             Command::ToolTaskList => "tool.task.list".into(),
             Command::ToolGit => "tool.git".into(),
             Command::ToolSysLog => "tool.syslog".into(),
+            Command::ToolAi => "tool.ai".into(),
             Command::ToolGrab => "tool.grab".into(),
             Command::ToolSyncDirs => "tool.sync.dirs".into(),
             Command::ToolCompareContents => "tool.compare.contents".into(),
@@ -1277,6 +1281,7 @@ impl Command {
             ("tool.task.list", _) => Command::ToolTaskList,
             ("tool.git", _) => Command::ToolGit,
             ("tool.syslog", _) => Command::ToolSysLog,
+            ("tool.ai", _) => Command::ToolAi,
             ("tool.grab", _) => Command::ToolGrab,
             ("tool.sync.dirs", _) => Command::ToolSyncDirs,
             ("tool.compare.contents", _) => Command::ToolCompareContents,

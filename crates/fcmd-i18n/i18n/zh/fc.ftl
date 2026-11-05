@@ -1373,3 +1373,22 @@ site-max-kbps = 速度限制，KB/s（空：不限）
 # Session editor: IMAP, read only
 site-protocol-imap = IMAP（邮件，只读）
 site-protocol-imaps = IMAPS（基于 TLS 的邮件，只读）
+
+# The AI services as a list, like the sessions
+ai-services-title = AI 服务
+ai-services-hint = Enter：ai: 询问它 · Ins 新建 · F4 修改 · Del 删除 · Esc
+ai-service-title = AI 服务
+ai-field-name = 名称
+ai-field-api = 协议
+ai-field-url = 地址
+ai-field-model = 模型
+ai-field-token-env = 密钥所在变量
+ai-field-token-note = 留空：每次会话询问一次密钥，从不写入。
+ai-field-system = 预先告诉它的内容
+ai-service-incomplete = 服务需要名称和地址
+ai-service-default = ai: 现在询问 {$name}
+ai-key-prompt = {$name} 的密钥（保留到退出）
+ai-api-openai = OpenAI 及兼容
+ai-api-anthropic = Anthropic
+ai-api-ollama = Ollama（本机）
+menu-ai = AI 服务

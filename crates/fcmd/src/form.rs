@@ -274,6 +274,7 @@ impl Form {
             | FormKind::Checksum
             | FormKind::Split
             | FormKind::Dupes
+            | FormKind::AiService
             | FormKind::Recode
             | FormKind::Compare
             | FormKind::Drives
@@ -588,6 +589,7 @@ impl Form {
             FormKind::Checksum => "sum-title",
             FormKind::Split => "split-title",
             FormKind::Dupes => "dupes-title",
+            FormKind::AiService => "ai-service-title",
             FormKind::Recode => "recode-title",
             FormKind::Compare => "cmp-title",
             FormKind::Drives => "drives-title",
@@ -1379,6 +1381,41 @@ impl Form {
             site: None,
             button: None,
             buttons: vec![i18n.t("btn-search"), i18n.t("btn-cancel")],
+        }
+    }
+
+    /// One AI service, as the session dialog is one server: what it is called, which
+    /// protocol it speaks, where, which model, and where its key is.
+    pub fn ai_service(cfg: &fcmd_config::AiCfg, i18n: &I18n) -> Form {
+        let t = |id: &str| i18n.t(id);
+        let apis = [
+            ("openai", t("ai-api-openai")),
+            ("anthropic", t("ai-api-anthropic")),
+            ("ollama", t("ai-api-ollama")),
+        ];
+        let fields = vec![
+            Field::text("ai.name", t("ai-field-name"), cfg.name.clone()),
+            choice("ai.api", t("ai-field-api"), &apis, &cfg.api),
+            Field::text("ai.url", t("ai-field-url"), cfg.url.clone()),
+            Field::text("ai.model", t("ai-field-model"), cfg.model.clone()),
+            Field::text(
+                "ai.token_env",
+                t("ai-field-token-env"),
+                cfg.token_env.clone(),
+            ),
+            Field::Note(t("ai-field-token-note")),
+            Field::text("ai.system", t("ai-field-system"), cfg.system.clone()),
+        ];
+        Form {
+            pages: Vec::new(),
+            page: 0,
+            kind: FormKind::AiService,
+            title: t("ai-service-title"),
+            fields,
+            cursor: 0,
+            site: None,
+            button: None,
+            buttons: vec![i18n.t("btn-ok"), i18n.t("btn-cancel")],
         }
     }
 

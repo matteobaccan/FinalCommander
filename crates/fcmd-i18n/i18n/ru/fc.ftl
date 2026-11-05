@@ -1397,3 +1397,22 @@ site-max-kbps = Ограничение скорости, КБ/с (пусто: н
 # Session editor: IMAP, read only
 site-protocol-imap = IMAP (почта, только чтение)
 site-protocol-imaps = IMAPS (почта через TLS, только чтение)
+
+# The AI services as a list, like the sessions
+ai-services-title = Сервисы ИИ
+ai-services-hint = Enter: к нему обращается ai: · Ins новый · F4 изменить · Del удалить · Esc
+ai-service-title = Сервис ИИ
+ai-field-name = Имя
+ai-field-api = Протокол
+ai-field-url = Адрес
+ai-field-model = Модель
+ai-field-token-env = Ключ в переменной
+ai-field-token-note = Пусто: ключ спрашивается раз за сеанс и нигде не сохраняется.
+ai-field-system = Что сказать ему сначала
+ai-service-incomplete = Сервису нужны имя и адрес
+ai-service-default = ai: теперь спрашивает {$name}
+ai-key-prompt = Ключ для {$name} (хранится до выхода)
+ai-api-openai = OpenAI и совместимые
+ai-api-anthropic = Anthropic
+ai-api-ollama = Ollama (на этой машине)
+menu-ai = Сервисы ИИ

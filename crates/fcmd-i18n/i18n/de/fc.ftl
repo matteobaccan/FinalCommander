@@ -1397,3 +1397,22 @@ site-max-kbps = Geschwindigkeitsgrenze, KB/s (leer: keine)
 # Session editor: IMAP, read only
 site-protocol-imap = IMAP (Mail, nur lesen)
 site-protocol-imaps = IMAPS (Mail über TLS, nur lesen)
+
+# The AI services as a list, like the sessions
+ai-services-title = KI-Dienste
+ai-services-hint = Enter: der, den ai: fragt · Einfg neu · F4 ändern · Entf löschen · Esc
+ai-service-title = KI-Dienst
+ai-field-name = Name
+ai-field-api = Protokoll
+ai-field-url = Adresse
+ai-field-model = Modell
+ai-field-token-env = Schlüssel in Variable
+ai-field-token-note = Leer: der Schlüssel wird einmal pro Sitzung erfragt und nie gespeichert.
+ai-field-system = Was ihm zuerst gesagt wird
+ai-service-incomplete = Ein Dienst braucht Name und Adresse
+ai-service-default = ai: fragt jetzt {$name}
+ai-key-prompt = Der Schlüssel für {$name} (bis zum Beenden behalten)
+ai-api-openai = OpenAI und kompatible
+ai-api-anthropic = Anthropic
+ai-api-ollama = Ollama (auf diesem Rechner)
+menu-ai = KI-Dienste

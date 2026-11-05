@@ -45,6 +45,8 @@ pub enum FormKind {
     Split,
     /// Where to look for files with the same content (SPEC 06 §13).
     Dupes,
+    /// One AI service: name, protocol, address, model, where its key is.
+    AiService,
     /// What counts as the same file when the two panels are compared (SPEC 03 §11).
     Compare,
     /// Which columns the change-drive dialog shows, and which drives (SPEC 10 §4.3).
@@ -104,6 +106,8 @@ pub enum PickKind {
     Git,
     /// Characters to insert into the editor (`Alt+Shift+C`).
     CharMap,
+    /// The AI services (`tool.ai`): `Enter` makes one the default, `Ins`/`F4` edit, `Del`.
+    AiServices,
     /// The editor's replacements (`Alt+Shift+F7`): the named ones, then the recent pairs.
     ReplaceTemplates,
     /// A repository's branches: `Enter` puts `git switch` for one on the command line.
@@ -607,6 +611,7 @@ pub fn menus() -> Vec<Menu> {
                 ),
                 item("menu-git", "Ctrl+Alt+G", Action::Run(Command::ToolGit)),
                 item("menu-syslog", "", Action::Run(Command::ToolSysLog)),
+                item("menu-ai", "", Action::Run(Command::ToolAi)),
             ],
         },
         Menu {

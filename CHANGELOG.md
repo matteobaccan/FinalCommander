@@ -13,6 +13,10 @@ Notable changes, newest first. The format follows
   reads it, `F5` copies it, `Enter` on the copy opens it as a mail container. Reading does not
   mark a message as read, and nothing on the server is ever changed. Also in the session
   dialog's protocols. FARMail's idea, none of its code.
+- **The AI services as a list** (*Commands → AI services*), kept like the NetBox sessions: `Ins`
+  adds one through a dialog, `F4` changes it, `Del` removes it, `Enter` makes it the one `ai:`
+  asks. A key that is in no variable is asked for like a password the first time and kept
+  until you quit, never written to the file.
 - **Every drive keeps its folder.** Choosing a drive in `Alt+F1`/`Alt+F2` goes to the folder
   the other panel is in on it, or else to the last folder either panel was in there —
   `C:\pippo`, `D:\pluto`, back to `C:` is `C:\pippo` — and to the root only when there is
