@@ -85,7 +85,7 @@ A `√` marks the entry that describes the state the panel is in now — the cur
 | New tab · Close tab · Next · Previous · Move to the other panel | `panel.tab.new|close|next|prev|move` | |
 | Lock the tab to its directory | `panel.tab.lock` | `√` when locked |
 | Name this tab | `panel.tab.name` | |
-| All the tabs | `panel.tab.list` | `Ctrl+Alt+A` |
+| All the tabs | `panel.tab.list` | |
 | Sort modes | opens the sort list (§4.5) | |
 | Hidden and system files | `panel.hidden.toggle` | `√` when shown |
 | File filter | `panel.filter.quick` | |
