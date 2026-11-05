@@ -12732,6 +12732,7 @@ impl App {
         let policy = match conflict.as_str() {
             "overwrite" => fcmd_jobs::ConflictPolicy::Overwrite,
             "newer" => fcmd_jobs::ConflictPolicy::OverwriteIfNewer,
+            "size" => fcmd_jobs::ConflictPolicy::OverwriteIfSizeDiffers,
             "skip" => fcmd_jobs::ConflictPolicy::Skip,
             "rename" => fcmd_jobs::ConflictPolicy::Rename,
             "append" => fcmd_jobs::ConflictPolicy::Append,
@@ -12753,6 +12754,7 @@ impl App {
             conflict: match conflict.as_str() {
                 "overwrite" => "overwrite",
                 "newer" => "newer",
+                "size" => "size",
                 "skip" => "skip",
                 "rename" => "rename",
                 "append" => "append",

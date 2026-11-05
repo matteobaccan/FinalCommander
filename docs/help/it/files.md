@@ -11,7 +11,8 @@ con le risposte "tutti" e "nessuno" perché una copia lunga non sia mille domand
 Il dialogo di copia ha dentro più della destinazione, e tutto il resto è opzionale: scrivi un
 percorso, premi `Enter`, e niente sotto la prima riga si applica.
 
-* **Se è già là**: chiedi, sovrascrivi, sovrascrivi quando l'origine è più nuova, salta, dai
+* **Se è già là**: chiedi, sovrascrivi, sovrascrivi quando l'origine è più nuova, sovrascrivi
+  se la dimensione è diversa (il modo veloce di finire una copia interrotta), salta, dai
   alla copia un nome libero, oppure aggiungi alla fine.
 * **Solo i file più nuovi di quelli che ci sono** è una casella accanto a quella scelta e non
   uno dei suoi valori, e le due cose non sono la stessa: la casella vale anche quando la scelta

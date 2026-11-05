@@ -692,6 +692,17 @@ fn resolve_conflict(
         ConflictPolicy::Skip => return Conflict::Skip,
         ConflictPolicy::Rename => return Conflict::Proceed(free_name(fs, &unit.dst)),
         ConflictPolicy::Append => return Conflict::Append(unit.dst.clone()),
+        ConflictPolicy::OverwriteIfSizeDiffers => {
+            let differs = match (&src_facts, &dst_facts) {
+                (Some(a), Some(b)) => a.size != b.size,
+                _ => true,
+            };
+            return if differs {
+                Conflict::Proceed(unit.dst.clone())
+            } else {
+                Conflict::Skip
+            };
+        }
         ConflictPolicy::OverwriteIfNewer => {
             return if src_newer {
                 Conflict::Proceed(unit.dst.clone())
@@ -966,6 +977,39 @@ mod tests {
         let out = run(&spec, &mut Scripted::new(vec![]));
         assert_eq!(out.skipped, 1);
         assert_eq!(stdfs::read(&dst).unwrap(), b"newer");
+    }
+
+    #[test]
+    fn overwrite_if_the_size_differs_skips_the_ones_already_whole() {
+        let dir = tree();
+        // src/a.txt holds what tree() wrote; one destination is a cut-short copy, the other
+        // the same length.
+        let src = stdfs::read(dir.path().join("src/a.txt")).unwrap();
+        let dst = dir.path().join("dst/a.txt");
+        stdfs::write(&dst, &src[..src.len() / 2]).unwrap();
+        let spec = |path: &str| {
+            JobSpec::new(
+                JobKind::Copy,
+                vec![VPath::local(dir.path().join(path))],
+                Some(VPath::local(dir.path().join("dst"))),
+            )
+            .with_options(JobOptions {
+                on_conflict: ConflictPolicy::OverwriteIfSizeDiffers,
+                ..JobOptions::default()
+            })
+        };
+        let out = run(&spec("src/a.txt"), &mut Scripted::new(vec![]));
+        assert_eq!(out.skipped, 0);
+        assert_eq!(
+            stdfs::read(&dst).unwrap(),
+            src,
+            "the short copy is replaced"
+        );
+        let same: Vec<u8> = src.iter().map(|_| b'x').collect();
+        stdfs::write(&dst, &same).unwrap();
+        let out = run(&spec("src/a.txt"), &mut Scripted::new(vec![]));
+        assert_eq!(out.skipped, 1, "the same size is left alone");
+        assert_eq!(stdfs::read(&dst).unwrap(), same);
     }
 
     #[test]

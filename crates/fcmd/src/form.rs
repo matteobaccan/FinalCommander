@@ -1202,6 +1202,7 @@ impl Form {
             ("ask", t("copy-conflict-ask")),
             ("overwrite", t("copy-conflict-overwrite")),
             ("newer", t("copy-conflict-newer")),
+            ("size", t("copy-conflict-size")),
             ("skip", t("copy-conflict-skip")),
             ("rename", t("copy-conflict-rename")),
             ("append", t("copy-conflict-append")),

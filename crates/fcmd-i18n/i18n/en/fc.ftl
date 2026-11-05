@@ -1376,3 +1376,6 @@ syslog-reading = Reading the system log…
 ## Deleting lines by pattern (FAR #10).
 editor-prompt-delete-matching = Take out the lines matching (! first: keep only those)
 editor-lines-deleted = Lines taken out: { $count }
+
+## The copy dialog's size policy (FAR #493).
+copy-conflict-size = overwrite when the size differs

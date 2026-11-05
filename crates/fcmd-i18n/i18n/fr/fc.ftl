@@ -1366,3 +1366,6 @@ syslog-reading = Lecture du journal système…
 ## Deleting lines by pattern (FAR #10).
 editor-prompt-delete-matching = Retirer les lignes qui correspondent (! devant : ne garder qu'elles)
 editor-lines-deleted = Lignes retirées : { $count }
+
+## The copy dialog's size policy (FAR #493).
+copy-conflict-size = écraser si la taille diffère

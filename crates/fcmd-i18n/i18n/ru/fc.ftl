@@ -1366,3 +1366,6 @@ syslog-reading = Читаю системный журнал…
 ## Deleting lines by pattern (FAR #10).
 editor-prompt-delete-matching = Удалить совпадающие строки (! в начале: оставить только их)
 editor-lines-deleted = Удалено строк: { $count }
+
+## The copy dialog's size policy (FAR #493).
+copy-conflict-size = перезаписать, если размер другой

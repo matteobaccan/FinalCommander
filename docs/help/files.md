@@ -10,7 +10,8 @@ asks, with "all" and "none" answers so a long copy is not a thousand questions.
 The copy dialog has more in it than the destination, and all of it is optional — type a path,
 press `Enter`, and nothing below the first line applies:
 
-* **If it is already there**: ask, overwrite, overwrite when the source is newer, skip it,
+* **If it is already there**: ask, overwrite, overwrite when the source is newer, overwrite when the size differs
+  (the quick way to finish a copy that stopped), skip it,
   give the copy a free name, or add to the end of it.
 * **Only files newer than the ones there** is a box beside that choice rather than one of its
   values, and the two are not the same thing: the box holds even when the choice says

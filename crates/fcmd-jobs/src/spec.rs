@@ -82,6 +82,9 @@ pub enum ConflictPolicy {
     Overwrite,
     /// Overwrite only when the source is newer than the destination.
     OverwriteIfNewer,
+    /// Overwrite only when the two sizes differ, and skip a file whose size is the same —
+    /// the quick way to finish a copy that stopped part of the way (FAR's issue #493).
+    OverwriteIfSizeDiffers,
     Skip,
     /// Give the copy a free name (`name (2).txt`).
     Rename,

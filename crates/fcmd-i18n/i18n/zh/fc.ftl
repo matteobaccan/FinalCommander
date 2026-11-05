@@ -1342,3 +1342,6 @@ syslog-reading = 正在读取系统日志…
 ## Deleting lines by pattern (FAR #10).
 editor-prompt-delete-matching = 删除匹配的行（前面加 ! ：只保留匹配的行）
 editor-lines-deleted = 已删除行数：{ $count }
+
+## The copy dialog's size policy (FAR #493).
+copy-conflict-size = 大小不同时覆盖
