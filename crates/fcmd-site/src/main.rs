@@ -249,7 +249,11 @@ fn build(repo: &Path, out: &Path) -> Result<usize, String> {
                     path: format!("help/{name}{suffix}.html"),
                     title,
                     lang: &lang,
-                    body: document_in(&lang, title, &source, &published, 1, in_english),
+                    body: with_shots(
+                        file,
+                        &document_in(&lang, title, &source, &published, 1, in_english),
+                        1,
+                    ),
                     translations: LANGUAGES
                         .iter()
                         .map(|other| {
@@ -360,6 +364,53 @@ fn document_in(
     }
     body.push_str(&md::rewrite_links(&md::to_html(markdown), published, depth));
     body
+}
+
+/// The pictures that go into the help chapters on the site: which page, under which of its
+/// `#` chapters (counted from 0, so a translation with the same chapters gets the same
+/// pictures), the picture, and the key it shows, which is the caption in every language.
+///
+/// Only on the site. Inside the program `F1` is the same text drawn in the terminal, and a
+/// picture of the terminal there would be a picture of the screen one is already looking at.
+const HELP_SHOTS: &[(&str, usize, &str, &str)] = &[
+    ("panels.md", 0, "panels.svg", "Ctrl+1…0"),
+    ("panels.md", 0, "drives.svg", "Alt+F1"),
+    ("files.md", 0, "menu.svg", "F9"),
+    ("viewer.md", 0, "viewer.svg", "F3"),
+    ("viewer.md", 2, "picture.svg", "F3 · BMP"),
+    ("viewer.md", 5, "hex.svg", "F4"),
+    ("viewer.md", 5, "disasm.svg", "F5"),
+    ("editor.md", 0, "editor.svg", "F4"),
+    ("editor.md", 2, "hexedit.svg", "F4 · hex"),
+    ("network.md", 0, "s3.svg", "s3://"),
+    ("about.md", 0, "help.svg", "F1"),
+];
+
+/// `html` with the pictures of `file` put after the headings of their chapters.
+fn with_shots(file: &str, html: &str, depth: usize) -> String {
+    let up = "../".repeat(depth);
+    let mut out = String::with_capacity(html.len() + 512);
+    // The first heading is the page's own title, put there by `document_in`; the chapters
+    // are the ones after it.
+    let mut chapter: Option<usize> = None;
+    let mut rest = html;
+    while let Some(at) = rest.find("</h1>") {
+        let end = at + "</h1>".len();
+        out.push_str(&rest[..end]);
+        for (_, _, shot, caption) in HELP_SHOTS
+            .iter()
+            .filter(|(page, n, _, _)| *page == file && Some(*n) == chapter)
+        {
+            out.push_str(&format!(
+                "\n<figure class=\"shot\"><img src=\"{up}docs/shots/{shot}\" alt=\"{caption}\" \
+                 loading=\"lazy\"><figcaption>{caption}</figcaption></figure>"
+            ));
+        }
+        chapter = Some(chapter.map_or(0, |n| n + 1));
+        rest = &rest[end..];
+    }
+    out.push_str(rest);
+    out
 }
 
 /// A help chapter's source for one language: the translation if the repository has one, the
@@ -803,6 +854,29 @@ mod tests {
     /// The complaint this answers: the Italian menu used to link to the English help index,
     /// and the chapters said nothing about being in English — so a reader who switched
     /// language got a program that looked translated and a manual that was not.
+    /// The help chapters on the site have pictures under their headings, in every language,
+    /// and every picture they name is one the generator writes.
+    #[test]
+    fn the_help_chapters_show_the_screens_they_describe() {
+        let (_dir, out) = built();
+        let viewer = page_text(&out, "help/viewer.html");
+        let binaries = viewer.find("Binaries").expect("the chapter");
+        let disasm = viewer.find("docs/shots/disasm.svg").expect("the picture");
+        assert!(disasm > binaries, "the picture is under its chapter");
+        assert!(
+            viewer.contains(r#"src="../docs/shots/viewer.svg""#),
+            "{viewer}"
+        );
+        let italian = page_text(&out, "help/viewer.it.html");
+        assert!(italian.contains("docs/shots/disasm.svg"), "{italian}");
+        for (_, _, shot, _) in HELP_SHOTS {
+            assert!(
+                default_repo().join("docs/shots").join(shot).is_file(),
+                "{shot} is not in docs/shots"
+            );
+        }
+    }
+
     #[test]
     fn the_help_has_an_index_per_language_that_says_which_chapters_are_still_english() {
         let (_dir, out) = built();

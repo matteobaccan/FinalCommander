@@ -16,7 +16,6 @@ pub struct Text {
     pub tagline: &'static str,
     /// Three sentences: what it is, what it replaces, what it costs to try.
     pub pitch: &'static str,
-    pub nav_home: &'static str,
     pub nav_features: &'static str,
     pub nav_replaces: &'static str,
     pub nav_commanders: &'static str,
@@ -57,13 +56,12 @@ pub const LANGUAGES: [Text; 7] = [
                 with its assembler, the search across files and the editor that colours code. \
                 Copy it onto Linux, macOS or Windows and it is the same program with the same \
                 keys; `scp` it to a server and it works there too.",
-        nav_home: "Home",
         nav_features: "What works",
         nav_replaces: "What it replaces",
         nav_commanders: "The other commanders",
         nav_help: "Help",
         nav_changelog: "Changelog",
-        nav_download: "Download the latest version",
+        nav_download: "Download",
         nav_source: "Source",
         nav_menu: "Menu",
         in_english: "This page is one of the repository's own documents, and it is in English.",
@@ -88,13 +86,12 @@ pub const LANGUAGES: [Text; 7] = [
                 file e l'editor che colora il codice. Copialo su Linux, macOS o Windows ed è lo \
                 stesso programma con gli stessi tasti; mandalo con `scp` su un server e \
                 funziona anche lì.",
-        nav_home: "Home",
         nav_features: "Cosa funziona",
         nav_replaces: "Cosa sostituisce",
         nav_commanders: "Gli altri commander",
         nav_help: "Guida",
         nav_changelog: "Novità",
-        nav_download: "Scarica l'ultima versione",
+        nav_download: "Scarica",
         nav_source: "Codice",
         nav_menu: "Menu",
         in_english: "Questa pagina è un documento del repository, ed è in inglese.",
@@ -119,13 +116,12 @@ pub const LANGUAGES: [Text; 7] = [
                 die Suche über Dateien hinweg und den Editor, der Code einfärbt. Kopieren Sie \
                 sie auf Linux, macOS oder Windows: dasselbe Programm mit denselben Tasten — und \
                 per `scp` auf einen Server kopiert läuft sie auch dort.",
-        nav_home: "Start",
         nav_features: "Was läuft",
         nav_replaces: "Was sie ersetzt",
         nav_commanders: "Die anderen Commander",
         nav_help: "Hilfe",
         nav_changelog: "Änderungen",
-        nav_download: "Neueste Version herunterladen",
+        nav_download: "Download",
         nav_source: "Quellcode",
         nav_menu: "Menü",
         in_english: "Diese Seite ist ein Dokument des Repositorys und auf Englisch.",
@@ -150,13 +146,12 @@ pub const LANGUAGES: [Text; 7] = [
                 entre archivos y el editor que colorea el código. Cópialo en Linux, macOS o \
                 Windows y es el mismo programa con las mismas teclas; mándalo con `scp` a un \
                 servidor y también funciona allí.",
-        nav_home: "Inicio",
         nav_features: "Qué funciona",
         nav_replaces: "Qué sustituye",
         nav_commanders: "Los otros commander",
         nav_help: "Ayuda",
         nav_changelog: "Cambios",
-        nav_download: "Descargar la última versión",
+        nav_download: "Descargar",
         nav_source: "Código",
         nav_menu: "Menú",
         in_english: "Esta página es un documento del repositorio y está en inglés.",
@@ -181,13 +176,12 @@ pub const LANGUAGES: [Text; 7] = [
                 recherche à travers les fichiers et l'éditeur qui colore le code. Copiez-le sur \
                 Linux, macOS ou Windows : c'est le même programme avec les mêmes touches — et \
                 envoyé par `scp` sur un serveur, il y marche aussi.",
-        nav_home: "Accueil",
         nav_features: "Ce qui marche",
         nav_replaces: "Ce qu'il remplace",
         nav_commanders: "Les autres commander",
         nav_help: "Aide",
         nav_changelog: "Nouveautés",
-        nav_download: "Télécharger la dernière version",
+        nav_download: "Télécharger",
         nav_source: "Sources",
         nav_menu: "Menu",
         in_english: "Cette page est un document du dépôt, et elle est en anglais.",
@@ -212,13 +206,12 @@ pub const LANGUAGES: [Text; 7] = [
                 подсветкой кода. Скопируйте его на Linux, macOS или Windows — это та же \
                 программа с теми же клавишами; отправьте через `scp` на сервер, и там он тоже \
                 работает.",
-        nav_home: "Главная",
         nav_features: "Что работает",
         nav_replaces: "Что он заменяет",
         nav_commanders: "Другие командеры",
         nav_help: "Справка",
         nav_changelog: "Изменения",
-        nav_download: "Скачать последнюю версию",
+        nav_download: "Скачать",
         nav_source: "Исходники",
         nav_menu: "Меню",
         in_english: "Эта страница — документ из репозитория, и она на английском.",
@@ -239,13 +232,12 @@ pub const LANGUAGES: [Text; 7] = [
                 一个没有任何依赖的可执行文件里装着压缩工具、SFTP/FTP/WebDAV 客户端、S3 浏览器、能瞬间打开四十 GB \
                 日志的查看器、带汇编器的十六进制编辑器、跨文件搜索，以及会着色的代码编辑器。把它复制到 Linux、\
                 macOS 或 Windows 上，都是同一个程序、同一套按键；用 `scp` 送到服务器上，在那里同样能用。",
-        nav_home: "首页",
         nav_features: "已实现",
         nav_replaces: "它替代了什么",
         nav_commanders: "其他 commander",
         nav_help: "帮助",
         nav_changelog: "更新记录",
-        nav_download: "下载最新版本",
+        nav_download: "下载",
         nav_source: "源码",
         nav_menu: "菜单",
         in_english: "本页是仓库里的文档，内容为英文。",
@@ -278,7 +270,6 @@ mod tests {
                 ("name", text.name),
                 ("tagline", text.tagline),
                 ("pitch", text.pitch),
-                ("nav_home", text.nav_home),
                 ("nav_features", text.nav_features),
                 ("nav_replaces", text.nav_replaces),
                 ("nav_commanders", text.nav_commanders),

@@ -32,20 +32,22 @@ impl Page<'_> {
         let up = "../".repeat(self.depth());
         let lang = self.lang;
         let suffix = suffix_of(lang.code);
+        // No "home": the wordmark at the left of the bar is the way home, as on most sites, and
+        // a link that repeats it only pushes the others along.
         let nav = [
-            (lang.nav_home, format!("index{suffix}.html")),
             (lang.nav_features, format!("features{suffix}.html")),
             (lang.nav_replaces, format!("replaces{suffix}.html")),
+            (lang.nav_help, format!("help/index{suffix}.html")),
+            (lang.nav_commanders, format!("commanders{suffix}.html")),
+            (lang.nav_changelog, format!("changelog{suffix}.html")),
             // Out of the site and into the releases: that page is always the latest build,
             // where one of ours would name the archives of whichever version it was last
-            // generated from and go stale the day after a release.
+            // generated from and go stale the day after a release. Last before the source,
+            // which leaves the site the same way.
             (
                 lang.nav_download,
                 format!("{}/releases/latest", crate::md::REPO),
             ),
-            (lang.nav_help, format!("help/index{suffix}.html")),
-            (lang.nav_commanders, format!("commanders{suffix}.html")),
-            (lang.nav_changelog, format!("changelog{suffix}.html")),
         ];
         let mut links = String::new();
         for (label, target) in nav {
@@ -95,6 +97,7 @@ impl Page<'_> {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
 <title>{title} — FinalCommander</title>
 <meta name="description" content="{tagline}">
 <link rel="stylesheet" href="{up}style.css">
@@ -162,6 +165,7 @@ pub fn escape(text: &str) -> String {
 /// reader's system rather than by a switch nobody finds.
 pub const STYLE: &str = r#"/* FinalCommander's site: one file, no framework, no fetching. */
 :root {
+  color-scheme: dark light;
   --bg: #11131a;
   --fg: #d7dae0;
   --dim: #8b93a7;
@@ -289,6 +293,9 @@ figure { margin: 1.5rem 0; }
 figcaption { color: var(--dim); font-size: 0.9rem; }
 .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); gap: 1rem; }
 .shots figure { margin: 0; }
+/* A picture in a help chapter: the width of the text, never wider than the screen. */
+figure.shot img { display: block; width: 100%; max-width: 46rem; height: auto; border: 1px solid var(--frame); }
+figure.shot figcaption { color: var(--dim); font-size: 0.9rem; margin-top: 0.3rem; }
 .buttons { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 1.5rem 0; }
 .buttons a {
   display: inline-block;
@@ -439,6 +446,29 @@ mod tests {
             html.contains(r#"<a href="index.de.html" lang="de">"#),
             "{html}"
         );
+    }
+
+    /// The wordmark is the way home, so the bar has no second one; the download is the last
+    /// link of the site's own, before the source, and it is one word.
+    #[test]
+    fn the_navigation_has_no_home_and_ends_with_the_download() {
+        let html = page("features.html", "en").render();
+        let nav = &html[html.find("<nav>").unwrap()..html.find("</nav>").unwrap()];
+        assert!(!nav.contains(">Home<"), "{nav}");
+        assert!(
+            html.contains(r#"class="wordmark" href="index.html""#),
+            "{html}"
+        );
+        let labels: Vec<&str> = nav
+            .split("</a>")
+            .filter_map(|a| a.rsplit('>').next())
+            .filter(|l| !l.is_empty())
+            .collect();
+        assert_eq!(labels.last(), Some(&"Source"), "{labels:?}");
+        assert_eq!(labels[labels.len() - 2], "Download", "{labels:?}");
+        // And the browser's own parts — scrollbars, the form controls — follow the theme too.
+        assert!(html.contains(r#"<meta name="color-scheme" content="dark light">"#));
+        assert!(STYLE.contains("@media (prefers-color-scheme: light)"));
     }
 
     #[test]

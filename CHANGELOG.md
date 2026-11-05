@@ -71,6 +71,21 @@ Notable changes, newest first. The format follows
   and starting by itself when the first was done, and `F10` naming the paused job and, on
   *Quit*, stopping it and removing its partial file.
 
+### Changed
+
+- **The site.** The help chapters show the screens they describe — the viewer, the hex view
+  and the disassembler, a picture, the hex editor, the change-drive dialog, a bucket — each
+  under its own chapter and in every language, with the key as its caption; the pictures are
+  the same generated ones as the README's, so they cannot show an older program. The bar
+  lost *Home*, which the wordmark beside it already is, and *Download the latest version* is
+  *Download*, last before the source, the other link that leaves the site. The dark and the
+  light palette were already chosen by the system's setting; the page now says so to the
+  browser as well (`color-scheme`), so its scrollbars and controls follow.
+- **The screenshots** were behind the program: the menu had neither *Disk usage* nor *Jobs*,
+  and the picture called hex was the dump. They are regenerated, the hex view is of a real
+  program, and the disassembler, the hex editor, a picture in half blocks and `Alt+F1` have
+  pictures of their own, in the README and on the site.
+
 ### Fixed
 
 - **A large file's progress.** The engine counted the bytes of a file as it copied them but
