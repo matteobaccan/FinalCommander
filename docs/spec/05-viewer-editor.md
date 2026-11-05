@@ -671,6 +671,14 @@ or of the file, with no block — that matches it goes; a leading `!` inverts it
 the matching lines (vim's `:g/re/d` and `:v/re/d`, FAR's issue #10). One undo step; a file
 left with nothing is one empty line; the status line says how many went.
 
+### 2.2f Replacements kept and recent
+
+`Alt+Shift+F7` (`editor.replace.templates`, FAR's issue #282) lists the replacements kept by
+name — `[[editor.replace]]` blocks with `name`, `find` and `with` — and then the last thirty
+pairs `Ctrl+F7` ran, newest first, kept with the dialogs' field histories in the state file.
+`Enter` runs one on the file as `Ctrl+F7` would; `Ins` on any row asks for a name and writes it
+into the settings; `Del` on a kept one removes it.
+
 ### 2.2b Syntax highlighting
 
 `fcmd-syntax` is a scanner, not a parser, and deliberately: it knows how a language writes a

@@ -1112,6 +1112,13 @@ keys = ["Alt+Shift+C"]
 scope = "editor"
 cmd = "editor.charmap"
 
+# FAR's issue #282: a replacement that took a while to get right, kept under a name. The list
+# has the named ones first and then the recent pairs; `Ins` names a recent one.
+[[bind]]
+keys = ["Alt+Shift+F7"]
+scope = "editor"
+cmd = "editor.replace.templates"
+
 [[bind]]
 keys = ["Alt+Up"]
 scope = "editor"

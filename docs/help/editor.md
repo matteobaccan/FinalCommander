@@ -5,7 +5,10 @@ old one and renames it over the top — so an interrupted save never leaves half
 
 `F2` saves, `Shift+F2` saves under another name, `F7` opens the same search dialog the viewer
 has — text, hex or a regular expression, case, whole words, forwards or backwards — and
-`Ctrl+F7` replaces.
+`Ctrl+F7` replaces. Every replacement that ran is remembered, and `Alt+Shift+F7` lists them —
+the ones kept under a name first, then the recent ones — for `Enter` to run again without
+retyping a regular expression; `Ins` keeps a recent one under a name (it goes into
+`fcmd.toml` as an `[[editor.replace]]` block), `Del` forgets a kept one.
 `Ctrl+Z` and `Ctrl+Y` undo and redo. `F6` hands the file to the viewer at the same line.
 
 A column block is a rectangle rather than a run of lines, which is how a column of numbers is

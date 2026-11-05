@@ -6,7 +6,10 @@ mezzo file.
 
 `F2` salva, `Shift+F2` salva con un altro nome, `F7` apre lo stesso dialogo di ricerca che ha
 il visualizzatore — testo, esadecimale o espressione regolare, maiuscole, parole intere,
-avanti o indietro — e `Ctrl+F7` sostituisce.
+avanti o indietro — e `Ctrl+F7` sostituisce. Ogni sostituzione eseguita viene ricordata, e
+`Alt+Shift+F7` le elenca — prima quelle tenute con un nome, poi le recenti — perché `Enter` le
+esegua di nuovo senza riscrivere un'espressione regolare; `Ins` tiene una recente con un nome
+(finisce in `fcmd.toml` come blocco `[[editor.replace]]`), `Del` dimentica una tenuta.
 `Ctrl+Z` e `Ctrl+Y` annullano e rifanno. `F6` passa il file al visualizzatore alla stessa riga.
 
 Un blocco a colonne è un rettangolo invece di una sequenza di righe: è così che si sposta una

@@ -1390,3 +1390,10 @@ copy-error-stop = Stop the copy
 attr-times-copied = Times copied: Ctrl+Shift+V puts them into another file's dialog
 attr-times-none = Nothing copied yet: Ctrl+Shift+C in a file's dialog first
 attr-times-pasted = Times pasted: OK sets them
+
+# Editor: replacements kept by name and recent ones (FAR's issue #282)
+replace-tpl-title = Replacements
+replace-tpl-hint = Enter runs it · Ins keeps a recent one by name · Del forgets a kept one · Esc
+replace-tpl-name = Keep this replacement as
+replace-tpl-kept = Kept as {$name}
+replace-tpl-empty = No replacement yet: Ctrl+F7 first

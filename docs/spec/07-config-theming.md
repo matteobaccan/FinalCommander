@@ -75,6 +75,10 @@ trim_trailing = false
 keep_eol = true
 max_open_size = "256MiB"
 undo_depth = 10000
+# [[editor.replace]]              # a replacement kept by name, for Alt+Shift+F7
+# name = "trailing commas"
+# find = ",\\s*$"
+# with = ""
 
 [ui]
 theme = "commander"

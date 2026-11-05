@@ -104,6 +104,8 @@ pub enum PickKind {
     Git,
     /// Characters to insert into the editor (`Alt+Shift+C`).
     CharMap,
+    /// The editor's replacements (`Alt+Shift+F7`): the named ones, then the recent pairs.
+    ReplaceTemplates,
     /// A repository's branches: `Enter` puts `git switch` for one on the command line.
     GitBranches,
     /// The `[[sort_group]]` bands, in the order they cut the listing (SPEC 02 §4).

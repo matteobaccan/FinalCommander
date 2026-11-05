@@ -978,6 +978,8 @@ pub enum PromptKind {
     EditorGoto,
     /// The pattern of the lines to take out (`!` first: the lines to keep).
     EditorDeleteMatching,
+    /// The name to keep a recent replacement under (`Ins` in `Alt+Shift+F7`).
+    ReplaceTemplateName,
     EditorSaveAs,
     /// Name for F7.
     Mkdir,
@@ -2161,6 +2163,8 @@ pub struct App {
     editor_parked: Option<Box<Editor>>,
     /// The replacement text waiting for its second prompt.
     replace_from: Option<String>,
+    /// The pair `Ins` in the replacements list is naming.
+    replace_naming: Option<(String, String)>,
     /// Size of the editor's text area, from the last frame.
     pub editor_size: (u16, u16),
     /// The decompilation we are waiting for, if any.
@@ -2496,6 +2500,7 @@ impl App {
             viewer_under_prompt: None,
             editor_parked: None,
             replace_from: None,
+            replace_naming: None,
             editor_size: (80, 20),
             decompile_id: None,
             sites,
@@ -5873,17 +5878,24 @@ impl App {
                 let with = prompt.text.clone();
                 let from = self.replace_from.take().unwrap_or_default();
                 self.restore_editor();
-                let result = self.mode.editor_mut().map(|e| e.replace_all(&from, &with));
-                match result {
-                    Some(Ok(count)) => {
-                        let msg = self
-                            .i18n
-                            .t_args("editor-replaced", &[("count", (count as i64).into())]);
-                        self.set_status(msg);
-                    }
-                    Some(Err(e)) => self.set_error(e.to_string()),
-                    None => {}
+                self.run_editor_replace(&from, &with);
+            }
+            PromptKind::ReplaceTemplateName => {
+                let name = prompt.text.trim().to_string();
+                if let (false, Some((find, with))) = (name.is_empty(), self.replace_naming.take()) {
+                    self.cfg.editor.replace.retain(|t| t.name != name);
+                    self.cfg.editor.replace.push(fcmd_config::ReplaceTemplate {
+                        name: name.clone(),
+                        find,
+                        with,
+                    });
+                    self.save_setup();
+                    let m = self
+                        .i18n
+                        .t_args("replace-tpl-kept", &[("name", name.into())]);
+                    self.set_status(m);
                 }
+                self.open_replace_templates();
             }
             PromptKind::EditorDeleteMatching => {
                 let text = prompt.text.clone();
@@ -11190,6 +11202,97 @@ impl App {
         let title = self.i18n.t("charmap-title");
         self.mode = Mode::Pick(Box::new(Pick::new(
             PickKind::CharMap,
+            title,
+            rows,
+            self.active,
+        )));
+    }
+
+    /// Replace in the editor, and remember the pair for `Alt+Shift+F7` (FAR's issue #282).
+    fn run_editor_replace(&mut self, from: &str, with: &str) {
+        let result = self.mode.editor_mut().map(|e| e.replace_all(from, with));
+        match result {
+            Some(Ok(count)) => {
+                let line = format!("{from}{REPLACE_SEP}{with}");
+                let lines = self
+                    .field_history
+                    .entry(REPLACE_HISTORY.to_string())
+                    .or_default();
+                lines.retain(|l| *l != line);
+                lines.insert(0, line);
+                lines.truncate(30);
+                let msg = self
+                    .i18n
+                    .t_args("editor-replaced", &[("count", (count as i64).into())]);
+                self.set_status(msg);
+            }
+            Some(Err(e)) => self.set_error(e.to_string()),
+            None => {}
+        }
+    }
+
+    /// A row of the replacements list back into its pair: `t:3` is the fourth named one,
+    /// `r:0` the most recent.
+    fn replace_pair_of(&self, value: &str) -> Option<(String, String)> {
+        let (kind, at) = value.split_once(':')?;
+        let at: usize = at.parse().ok()?;
+        match kind {
+            "t" => self
+                .cfg
+                .editor
+                .replace
+                .get(at)
+                .map(|t| (t.find.clone(), t.with.clone())),
+            "r" => self
+                .field_history
+                .get(REPLACE_HISTORY)?
+                .get(at)?
+                .split_once(REPLACE_SEP)
+                .map(|(a, b)| (a.to_string(), b.to_string())),
+            _ => None,
+        }
+    }
+
+    /// `Alt+Shift+F7`: the replacements kept by name, then the ones used lately.
+    fn open_replace_templates(&mut self) {
+        let mut rows: Vec<PickRow> = self
+            .cfg
+            .editor
+            .replace
+            .iter()
+            .enumerate()
+            .map(|(i, t)| {
+                PickRow::plain(
+                    format!("{}   {} → {}", t.name, t.find, t.with),
+                    format!("t:{i}"),
+                    false,
+                )
+            })
+            .collect();
+        if let Some(lines) = self.field_history.get(REPLACE_HISTORY) {
+            rows.extend(lines.iter().enumerate().filter_map(|(i, l)| {
+                let (a, b) = l.split_once(REPLACE_SEP)?;
+                Some(PickRow::plain(
+                    format!("· {a} → {b}"),
+                    format!("r:{i}"),
+                    false,
+                ))
+            }));
+        }
+        if rows.is_empty() {
+            let m = self.i18n.t("replace-tpl-empty");
+            self.set_error(m);
+            if !matches!(self.mode, Mode::Editor(_)) {
+                self.restore_editor();
+            }
+            return;
+        }
+        if matches!(self.mode, Mode::Editor(_)) {
+            self.park_editor();
+        }
+        let title = self.i18n.t("replace-tpl-title");
+        self.mode = Mode::Pick(Box::new(Pick::new(
+            PickKind::ReplaceTemplates,
             title,
             rows,
             self.active,
@@ -16573,6 +16676,7 @@ impl App {
             // And `open_git`, which knows the repository; the branches come from the worker.
             PickKind::Git | PickKind::GitBranches => return,
             PickKind::CharMap => return,
+            PickKind::ReplaceTemplates => return,
             // And `open_settings`, which knows which row the list was left on.
             PickKind::Settings => return,
             PickKind::Languages => Pick::new(
@@ -16886,9 +16990,44 @@ impl App {
                     }
                 }
             }
-            KeyCode::Esc | KeyCode::F(10) if kind == PickKind::CharMap => {
+            KeyCode::Esc | KeyCode::F(10)
+                if kind == PickKind::CharMap || kind == PickKind::ReplaceTemplates =>
+            {
                 self.mode = Mode::Normal;
                 self.restore_editor();
+            }
+            // `Ins` keeps a recent pair under a name; `Del` forgets a named one.
+            KeyCode::Insert if kind == PickKind::ReplaceTemplates => {
+                let Some(value) = pick.chosen().map(|r| r.value.clone()) else {
+                    return;
+                };
+                let Some((find, with)) = self.replace_pair_of(&value) else {
+                    return;
+                };
+                self.replace_naming = Some((find, with));
+                let title = self.i18n.t("replace-tpl-name");
+                self.mode = Mode::Prompt(Prompt {
+                    kind: PromptKind::ReplaceTemplateName,
+                    title,
+                    text: String::new(),
+                    secret: false,
+                    sources: Vec::new(),
+                });
+            }
+            KeyCode::Delete if kind == PickKind::ReplaceTemplates => {
+                let Some(value) = pick.chosen().map(|r| r.value.clone()) else {
+                    return;
+                };
+                if let Some(at) = value
+                    .strip_prefix("t:")
+                    .and_then(|n| n.parse::<usize>().ok())
+                {
+                    if at < self.cfg.editor.replace.len() {
+                        self.cfg.editor.replace.remove(at);
+                        self.save_setup();
+                    }
+                }
+                self.open_replace_templates();
             }
             KeyCode::Esc | KeyCode::F(10) if kind == PickKind::HelpHits => {
                 self.mode = Mode::Normal;
@@ -17562,6 +17701,12 @@ impl App {
                     cwd,
                     what,
                 });
+            }
+            PickKind::ReplaceTemplates => {
+                self.restore_editor();
+                if let Some((find, with)) = self.replace_pair_of(&row.value) {
+                    self.run_editor_replace(&find, &with);
+                }
             }
             PickKind::CharMap => {
                 self.restore_editor();
@@ -18366,6 +18511,10 @@ impl App {
             }
             Command::EditorCharMap => {
                 self.open_char_map();
+                return;
+            }
+            Command::EditorReplaceTemplates => {
+                self.open_replace_templates();
                 return;
             }
             Command::EditorDeleteMatching => {
@@ -22561,6 +22710,11 @@ fn usage_rows(panel: &Panel) -> (Vec<PickRow>, u64) {
 }
 /// The time rows of the attributes dialog that can be set, in the order they are copied.
 const ATTR_TIME_ROWS: [&str; 3] = ["attr.mtime", "attr.atime", "attr.btime"];
+
+/// Where the editor's recent replacements are kept, among the dialogs' field histories, and
+/// what parts a pair in one line.
+const REPLACE_HISTORY: &str = "editor.replace";
+const REPLACE_SEP: char = '\u{1f}';
 
 /// How long `cd` waits to learn whether its target is a directory before going there anyway.
 const CD_PROBE_WAIT: std::time::Duration = std::time::Duration::from_millis(400);
@@ -32592,6 +32746,68 @@ abcdefghij
         press(&mut app, "Alt+Shift+C");
         press(&mut app, "Esc");
         assert!(matches!(app.mode, Mode::Editor(_)));
+    }
+
+    /// FAR's issue #282: a replacement is remembered when it runs, can be kept under a name,
+    /// and runs again from `Alt+Shift+F7` without being typed.
+    #[test]
+    fn a_replacement_is_remembered_kept_by_name_and_run_again() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), "foo bar foo\n").unwrap();
+        let mut app = editing_app(dir.path());
+        app.open_editor_on(&VPath::local(dir.path().join("a.txt")));
+        press(&mut app, "Alt+Shift+F7");
+        assert!(app.status_error, "nothing to offer yet: {}", app.status);
+        assert!(
+            matches!(app.mode, Mode::Editor(_)),
+            "and the editor is still there"
+        );
+
+        app.run_editor_replace("foo", "baz");
+        let Mode::Editor(e) = &app.mode else {
+            panic!("the editor")
+        };
+        assert_eq!(e.buffer.line(0), "baz bar baz");
+
+        // The recent pair, kept under a name with `Ins`.
+        press(&mut app, "Alt+Shift+F7");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("the list: {:?}", app.mode)
+        };
+        assert_eq!(pick.kind, PickKind::ReplaceTemplates);
+        assert!(
+            pick.rows[0].label.contains("foo → baz"),
+            "{:?}",
+            pick.rows[0].label
+        );
+        press(&mut app, "Ins");
+        let Mode::Prompt(mut prompt) = std::mem::replace(&mut app.mode, Mode::Normal) else {
+            panic!("the name is asked")
+        };
+        prompt.text = "rename foo".into();
+        app.prompt_accept(prompt);
+        assert_eq!(app.cfg.editor.replace.len(), 1);
+        assert_eq!(app.cfg.editor.replace[0].name, "rename foo");
+        let saved = std::fs::read_to_string(dir.path().join("fcmd.toml")).unwrap();
+        assert!(saved.contains("rename foo"), "the settings file has it");
+
+        // And it runs again from the list, named ones first.
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("back to the list: {:?}", app.mode)
+        };
+        assert!(pick.rows[0].label.starts_with("rename foo"));
+        press(&mut app, "Esc");
+        let Mode::Editor(e) = &mut app.mode else {
+            panic!("the editor back: {:?}", app.mode)
+        };
+        e.buffer.undo();
+        assert_eq!(e.buffer.line(0), "foo bar foo");
+        press(&mut app, "Alt+Shift+F7");
+        press(&mut app, "Enter");
+        let Mode::Editor(e) = &app.mode else {
+            panic!("the editor back: {:?}", app.mode)
+        };
+        assert_eq!(e.buffer.line(0), "baz bar baz");
     }
 
     /// A project's `.editorconfig` sets the indentation and the trailing blanks for the files

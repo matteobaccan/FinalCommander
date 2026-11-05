@@ -14,6 +14,9 @@ Notable changes, newest first. The format follows
 - **One file's times onto another.** In the attributes dialog (`Ctrl+A`) `Ctrl+Shift+C` keeps
   the modification, access and creation times as they stand, and `Ctrl+Shift+V` puts them into
   another file's dialog for `OK` to set. FAR's issue #241.
+- **Replacements kept and run again** in the editor: `Alt+Shift+F7` lists the replacements kept
+  under a name (`[[editor.replace]]`), then the recent ones `Ctrl+F7` ran, for `Enter` to run
+  again; `Ins` names a recent one, `Del` forgets a kept one. FAR's issue #282.
 
 ### Fixed
 

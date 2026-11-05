@@ -1381,3 +1381,10 @@ copy-error-stop = Ferma la copia
 attr-times-copied = Orari copiati: Ctrl+Shift+V li mette nel dialogo di un altro file
 attr-times-none = Niente da incollare: prima Ctrl+Shift+C nel dialogo di un file
 attr-times-pasted = Orari incollati: OK li imposta
+
+# Editor: replacements kept by name and recent ones (FAR's issue #282)
+replace-tpl-title = Sostituzioni
+replace-tpl-hint = Enter la esegue · Ins tiene una recente con un nome · Del dimentica una tenuta · Esc
+replace-tpl-name = Tieni questa sostituzione come
+replace-tpl-kept = Tenuta come {$name}
+replace-tpl-empty = Ancora nessuna sostituzione: prima Ctrl+F7

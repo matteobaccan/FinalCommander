@@ -844,6 +844,19 @@ pub struct EditCfg {
     /// Take the spaces and tabs off the end of every line when the file is saved. Off by
     /// default: a save that changes lines nobody touched is a diff nobody asked for.
     pub trim_trailing: bool,
+    /// Replacements kept under a name (`[[editor.replace]]`), offered by `Alt+Shift+F7`
+    /// before the recent ones (FAR's issue #282).
+    pub replace: Vec<ReplaceTemplate>,
+}
+
+/// One kept replacement: what to look for and what to put there, as the editor's `Ctrl+F7`
+/// would take them.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct ReplaceTemplate {
+    pub name: String,
+    pub find: String,
+    pub with: String,
 }
 
 impl Default for EditCfg {
@@ -856,6 +869,7 @@ impl Default for EditCfg {
             cursor_after_match: false,
             beyond_eol: false,
             trim_trailing: false,
+            replace: Vec::new(),
         }
     }
 }

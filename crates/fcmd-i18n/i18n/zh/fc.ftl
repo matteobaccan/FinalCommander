@@ -1356,3 +1356,10 @@ copy-error-stop = 停止复制
 attr-times-copied = 时间已复制：Ctrl+Shift+V 粘贴到另一个文件的对话框
 attr-times-none = 尚未复制：先在文件的对话框中按 Ctrl+Shift+C
 attr-times-pasted = 时间已粘贴：按确定应用
+
+# Editor: replacements kept by name and recent ones (FAR's issue #282)
+replace-tpl-title = 替换
+replace-tpl-hint = Enter 执行 · Ins 为最近的命名保存 · Del 删除已保存的 · Esc
+replace-tpl-name = 将此替换保存为
+replace-tpl-kept = 已保存为 {$name}
+replace-tpl-empty = 还没有替换：先按 Ctrl+F7

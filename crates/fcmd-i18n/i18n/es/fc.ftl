@@ -1380,3 +1380,10 @@ copy-error-stop = Detener la copia
 attr-times-copied = Horas copiadas: Ctrl+Mayús+V las pone en el diálogo de otro archivo
 attr-times-none = Nada copiado aún: primero Ctrl+Mayús+C en el diálogo de un archivo
 attr-times-pasted = Horas pegadas: Aceptar las aplica
+
+# Editor: replacements kept by name and recent ones (FAR's issue #282)
+replace-tpl-title = Reemplazos
+replace-tpl-hint = Intro lo ejecuta · Ins guarda uno reciente con nombre · Supr olvida uno guardado · Esc
+replace-tpl-name = Guardar este reemplazo como
+replace-tpl-kept = Guardado como {$name}
+replace-tpl-empty = Aún no hay reemplazos: primero Ctrl+F7

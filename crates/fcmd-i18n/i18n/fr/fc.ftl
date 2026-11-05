@@ -1380,3 +1380,10 @@ copy-error-stop = Arrêter la copie
 attr-times-copied = Dates copiées : Ctrl+Maj+V les met dans la boîte d'un autre fichier
 attr-times-none = Rien de copié : d'abord Ctrl+Maj+C dans la boîte d'un fichier
 attr-times-pasted = Dates collées : OK les applique
+
+# Editor: replacements kept by name and recent ones (FAR's issue #282)
+replace-tpl-title = Remplacements
+replace-tpl-hint = Entrée l'exécute · Inser garde un récent sous un nom · Suppr oublie un gardé · Échap
+replace-tpl-name = Garder ce remplacement sous le nom
+replace-tpl-kept = Gardé sous {$name}
+replace-tpl-empty = Aucun remplacement encore : d'abord Ctrl+F7

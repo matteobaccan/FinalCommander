@@ -1380,3 +1380,10 @@ copy-error-stop = Остановить копирование
 attr-times-copied = Время скопировано: Ctrl+Shift+V вставит его в диалог другого файла
 attr-times-none = Ещё ничего не скопировано: сначала Ctrl+Shift+C в диалоге файла
 attr-times-pasted = Время вставлено: OK применит его
+
+# Editor: replacements kept by name and recent ones (FAR's issue #282)
+replace-tpl-title = Замены
+replace-tpl-hint = Enter выполняет · Ins сохраняет недавнюю под именем · Del удаляет сохранённую · Esc
+replace-tpl-name = Сохранить замену как
+replace-tpl-kept = Сохранено как {$name}
+replace-tpl-empty = Замен ещё не было: сначала Ctrl+F7

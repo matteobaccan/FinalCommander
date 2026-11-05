@@ -323,6 +323,7 @@ impl Command {
                 "take out the lines that match a pattern (or, with !, that don't)"
             }
             Command::EditorCharMap => "a character to insert, from a list",
+            Command::EditorReplaceTemplates => "a kept or recent replacement, to run again",
             Command::EditorMoveLineUp => "move this line up",
             Command::EditorMoveLineDown => "move this line down",
             Command::EditorIndent => "indent the block",

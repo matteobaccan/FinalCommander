@@ -1380,3 +1380,10 @@ copy-error-stop = Kopieren anhalten
 attr-times-copied = Zeiten kopiert: Strg+Umschalt+V fügt sie im Dialog einer anderen Datei ein
 attr-times-none = Noch nichts kopiert: zuerst Strg+Umschalt+C im Dialog einer Datei
 attr-times-pasted = Zeiten eingefügt: OK setzt sie
+
+# Editor: replacements kept by name and recent ones (FAR's issue #282)
+replace-tpl-title = Ersetzungen
+replace-tpl-hint = Enter führt aus · Einfg behält eine letzte unter einem Namen · Entf vergisst eine behaltene · Esc
+replace-tpl-name = Diese Ersetzung behalten als
+replace-tpl-kept = Behalten als {$name}
+replace-tpl-empty = Noch keine Ersetzung: zuerst Strg+F7

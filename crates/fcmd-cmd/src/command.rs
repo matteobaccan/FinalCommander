@@ -526,6 +526,8 @@ pub enum Command {
     EditorDeleteMatching,
     /// `Alt+Shift+C`: a list of characters to insert, filtered by typing.
     EditorCharMap,
+    /// `Alt+Shift+F7`: the replacements kept by name and the recent ones, to run again.
+    EditorReplaceTemplates,
     EditorMoveLineUp,
     EditorMoveLineDown,
     EditorIndent,
@@ -812,6 +814,7 @@ impl Command {
             Command::EditorComplete,
             Command::EditorDeleteMatching,
             Command::EditorCharMap,
+            Command::EditorReplaceTemplates,
             Command::EditorMoveLineUp,
             Command::EditorMoveLineDown,
             Command::EditorIndent,
@@ -1104,6 +1107,7 @@ impl Command {
             Command::EditorComplete => "editor.complete".into(),
             Command::EditorDeleteMatching => "editor.delete_matching".into(),
             Command::EditorCharMap => "editor.charmap".into(),
+            Command::EditorReplaceTemplates => "editor.replace.templates".into(),
             Command::EditorMoveLineUp => "editor.line.up".into(),
             Command::EditorMoveLineDown => "editor.line.down".into(),
             Command::EditorIndent => "editor.indent".into(),
@@ -1372,6 +1376,7 @@ impl Command {
             ("editor.complete", _) => Command::EditorComplete,
             ("editor.delete_matching", _) => Command::EditorDeleteMatching,
             ("editor.charmap", _) => Command::EditorCharMap,
+            ("editor.replace.templates", _) => Command::EditorReplaceTemplates,
             ("editor.line.up", _) => Command::EditorMoveLineUp,
             ("editor.line.down", _) => Command::EditorMoveLineDown,
             ("editor.indent", _) => Command::EditorIndent,
