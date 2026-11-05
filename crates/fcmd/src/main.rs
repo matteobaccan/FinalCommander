@@ -1735,6 +1735,47 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                         let _ = tx.send(Event::LinkDone { link, error });
                     });
                 }
+                Request::Dupes {
+                    panel,
+                    roots,
+                    opts,
+                    cancel,
+                } => {
+                    let tx = tx.clone();
+                    let fs = ArcFs::new(
+                        archives.clone(),
+                        ObjectFs::new(
+                            objects.clone(),
+                            RoutedFs::new(pool.clone(), runtime.handle().clone()),
+                            runtime.handle().clone(),
+                        ),
+                    );
+                    runtime.spawn_blocking(move || {
+                        let mut last = std::time::Instant::now();
+                        let progress_tx = tx.clone();
+                        let found = fcmd_jobs::dupes::find(
+                            &fs,
+                            &roots,
+                            &opts,
+                            &cancel,
+                            &mut |pass, done, total| {
+                                // A few times a second is a progress line; every file is a
+                                // flood the interface would spend its time drawing.
+                                if last.elapsed() >= std::time::Duration::from_millis(200) {
+                                    last = std::time::Instant::now();
+                                    let _ = progress_tx.send(Event::DupesProgress {
+                                        pass,
+                                        done,
+                                        total,
+                                    });
+                                }
+                            },
+                        );
+                        if !cancel.is_cancelled() {
+                            let _ = tx.send(Event::DupesFound { panel, found });
+                        }
+                    });
+                }
                 Request::UpdateCheck { manual } => {
                     let tx = tx.clone();
                     runtime.spawn(async move {
@@ -5597,6 +5638,7 @@ dir_attr = "D"
                 }
                 Request::DirSize { .. }
                 | Request::UpdateCheck { .. }
+                | Request::Dupes { .. }
                 | Request::OpenUrl { .. }
                 | Request::Shell { .. }
                 | Request::Decompile { .. }

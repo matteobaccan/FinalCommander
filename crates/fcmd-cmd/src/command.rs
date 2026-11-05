@@ -303,6 +303,8 @@ pub enum Command {
     FileChecksumVerify,
     /// Cut a file into pieces Total Commander can join, with a `.crc` beside them.
     FileSplit,
+    /// Files with the same content, as a panel of groups (SPEC 06 §13).
+    FileDupes,
     /// Join the pieces a split left, checked against their `.crc`.
     FileCombine,
     /// `Ctrl+G`: run a command line once per selected file (SPEC 06 §5).
@@ -639,6 +641,7 @@ impl Command {
             Command::FileRecode,
             Command::FileChecksumVerify,
             Command::FileSplit,
+            Command::FileDupes,
             Command::FileCombine,
             Command::FileApply,
             Command::FileLink,
@@ -936,6 +939,7 @@ impl Command {
             Command::FileRecode => "file.recode".into(),
             Command::FileChecksumVerify => "file.checksum.verify".into(),
             Command::FileSplit => "file.split".into(),
+            Command::FileDupes => "file.dupes".into(),
             Command::FileCombine => "file.combine".into(),
             Command::FileApply => "file.apply".into(),
             Command::FileLink => "file.link".into(),
@@ -1201,6 +1205,7 @@ impl Command {
             ("file.recode", _) => Command::FileRecode,
             ("file.checksum.verify", _) => Command::FileChecksumVerify,
             ("file.split", _) => Command::FileSplit,
+            ("file.dupes", _) => Command::FileDupes,
             ("file.combine", _) => Command::FileCombine,
             ("file.apply", _) => Command::FileApply,
             ("file.link", _) => Command::FileLink,

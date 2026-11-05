@@ -1279,3 +1279,20 @@ update-available = FinalCommander { $version } 已发布（当前为 { $current 
 update-available-status = FinalCommander { $version } 已发布：选项 → 检查更新
 update-current = 这已是最新版本 { $version }。
 update-failed = 无法查询最新版本：{ $why }
+
+## Duplicate files (SPEC 06 §13).
+menu-dupes = 查找重复文件
+dupes-title = 重复文件
+dupes-recursive = 搜索子文件夹
+dupes-min-size = 最小文件
+dupes-min-size-hint = 按过滤器的写法填写大小：1、100K、5M。空文件从不比较。
+dupes-select = 选中除最旧之外的所有副本
+btn-search = 搜索
+dupes-not-here = 重复文件搜索从一个文件夹或所选内容开始。
+dupes-bad-size = 不是大小：{ $size }
+dupes-looking = 正在查找重复文件…
+dupes-progress = 重复：第 { $pass }/3 遍，{ $done }/{ $total }
+dupes-none = { $count } 个文件中没有重复。
+dupes-panel = 重复：{ $groups } 组
+dupes-done = { $groups } 组重复，副本占 { $size }。
+dupes-truncated = 提前停止：目前 { $groups } 组，副本占 { $size }。

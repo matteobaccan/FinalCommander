@@ -43,6 +43,8 @@ pub enum FormKind {
     Checksum,
     /// How big the pieces of a split are, and where they go (SPEC 03 §9).
     Split,
+    /// Where to look for files with the same content (SPEC 06 §13).
+    Dupes,
     /// What counts as the same file when the two panels are compared (SPEC 03 §11).
     Compare,
     /// Which columns the change-drive dialog shows, and which drives (SPEC 10 §4.3).
@@ -482,6 +484,7 @@ pub fn menus() -> Vec<Menu> {
             side: None,
             items: vec![
                 item("menu-find-file", "Alt+F7", Action::Run(Command::ToolFind)),
+                item("menu-dupes", "", Action::Run(Command::FileDupes)),
                 item("menu-history", "Alt+F8", Action::Run(Command::CmdHistory)),
                 item(
                     "menu-view-history",

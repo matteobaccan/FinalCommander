@@ -552,3 +552,23 @@ says, not what a disk holds.
 
 Still to come: a tree of the whole walk at once, rather than one level at a time, and the
 treemap some tools draw.
+
+## 13. Duplicate files
+
+FAR's FindDup and Total Commander's *Find duplicate files*, as one command,
+`file.dupes` (*Commands → Find duplicate files*). It looks under the panel's folder, or under
+what is selected; a file selected is compared as well as the folders.
+
+* **Three passes.** Size, then a SHA-256 of the first 64 KiB, then a SHA-256 of the whole
+  file, each over what the one before left standing, so most files are only `stat`ed and most
+  of the rest read for 64 KiB. Empty files are left out; links are never followed; a file
+  reached twice (a root given twice, a root inside another) is one file.
+* **The dialog**: subfolders or not, the smallest file that counts (the filters' size
+  grammar), and whether the copies come back selected.
+* **The answer** is a temporary panel (`:dupes`): the groups, the one wasting the most space
+  first, each row named `N path` so a sort by name keeps them in that order and a sort by size
+  keeps them together; the oldest file of a group first. With the copies selected, everything
+  but the oldest of each group is, so `F8` is the clean-up and goes to the wastebasket.
+* The walk is the jobs' filesystem, so a server, a bucket and an archive work as they do for
+  the branch view; it runs on the worker, the progress is the status line, and it stops at a
+  million files and says so.

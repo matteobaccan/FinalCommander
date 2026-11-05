@@ -216,6 +216,21 @@ rather than counting as empty. `Enter` on a folder goes into it, where the same 
 same question one level down; on a file it puts the panel's cursor there. The sizes stay in
 the panel afterwards, so sorting it by size agrees with the list.
 
+# Files that are the same
+
+*Commands → Find duplicate files* looks under the folder the panel is in — or under what is
+selected, folders and files alike — for files with the same content, whatever they are called.
+The dialog asks whether to look in subfolders, how small a file still counts (in the filters'
+size words: `100K`, `5M`; empty files are never compared), and whether to select the copies.
+
+The answer is a panel of groups, the group that wastes the most space first. Each row is the
+group's number and the file's path, so the groups stay together however the panel is sorted;
+the oldest file of each group comes first. With *Select every copy but the oldest* on, the
+rest are selected, and `F8` sends them to the wastebasket; `F3`, `F4`, `F5` and the rest work
+on the real files as in any list of results. The search compares sizes first, then the first
+64 KiB, then the whole file by SHA-256, so it reads little of what is not a copy; it runs in
+the background, its progress on the status line.
+
 # Finding things
 
 `Alt+F7` searches for files: a mask, a size, text inside them, and where to look. The results

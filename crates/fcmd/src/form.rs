@@ -273,6 +273,7 @@ impl Form {
             | FormKind::Copy
             | FormKind::Checksum
             | FormKind::Split
+            | FormKind::Dupes
             | FormKind::Recode
             | FormKind::Compare
             | FormKind::Drives
@@ -580,6 +581,7 @@ impl Form {
             FormKind::Copy => "copy-title",
             FormKind::Checksum => "sum-title",
             FormKind::Split => "split-title",
+            FormKind::Dupes => "dupes-title",
             FormKind::Recode => "recode-title",
             FormKind::Compare => "cmp-title",
             FormKind::Drives => "drives-title",
@@ -1329,6 +1331,30 @@ impl Form {
             site: None,
             button: None,
             buttons: vec![i18n.t("btn-ok"), i18n.t("btn-cancel")],
+        }
+    }
+
+    /// `Commands → Find duplicate files`: where, how small a file still counts, and whether
+    /// the copies come back selected (SPEC 06 §13).
+    pub fn dupes(what: String, min_size: String, i18n: &I18n) -> Form {
+        let t = |id: &str| i18n.t(id);
+        let fields = vec![
+            Field::Note(what),
+            Field::toggle("dupes.recursive", t("dupes-recursive"), true),
+            Field::text("dupes.min_size", t("dupes-min-size"), min_size),
+            Field::Note(t("dupes-min-size-hint")),
+            Field::toggle("dupes.select", t("dupes-select"), true),
+        ];
+        Form {
+            pages: Vec::new(),
+            page: 0,
+            kind: FormKind::Dupes,
+            title: t("dupes-title"),
+            fields,
+            cursor: 1,
+            site: None,
+            button: None,
+            buttons: vec![i18n.t("btn-search"), i18n.t("btn-cancel")],
         }
     }
 

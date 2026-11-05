@@ -1303,3 +1303,20 @@ update-available = Ha salido FinalCommander { $version } (esta es la { $current 
 update-available-status = Ha salido FinalCommander { $version }: Opciones → Buscar actualizaciones
 update-current = Esta es la última versión, la { $version }.
 update-failed = No se pudo preguntar por la última versión: { $why }
+
+## Duplicate files (SPEC 06 §13).
+menu-dupes = Buscar archivos duplicados
+dupes-title = Archivos duplicados
+dupes-recursive = Buscar en subcarpetas
+dupes-min-size = Archivo más pequeño
+dupes-min-size-hint = Un tamaño como lo escriben los filtros: 1, 100K, 5M. Los archivos vacíos nunca se comparan.
+dupes-select = Seleccionar todas las copias menos la más antigua
+btn-search = Buscar
+dupes-not-here = La búsqueda de duplicados parte de una carpeta o de lo seleccionado.
+dupes-bad-size = No es un tamaño: { $size }
+dupes-looking = Buscando archivos duplicados…
+dupes-progress = Duplicados: pasada { $pass } de 3, { $done }/{ $total }
+dupes-none = Ningún duplicado entre { $count } archivos.
+dupes-panel = Duplicados: { $groups } grupos
+dupes-done = { $groups } grupos de duplicados, { $size } en las copias.
+dupes-truncated = Detenida antes: { $groups } grupos por ahora, { $size } en las copias.

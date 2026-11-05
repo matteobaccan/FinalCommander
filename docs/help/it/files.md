@@ -227,6 +227,22 @@ entra, e lì lo stesso tasto fa la stessa domanda un livello più giù; su un fi
 cursore del pannello. Le dimensioni restano poi nel pannello, così ordinarlo per dimensione dà
 lo stesso ordine dell'elenco.
 
+# File uguali
+
+*Comandi → Trova file duplicati* cerca sotto la cartella del pannello — o sotto ciò che è
+selezionato, cartelle e file — i file con lo stesso contenuto, comunque si chiamino. Il dialogo
+chiede se cercare nelle sottocartelle, quanto piccolo può essere un file per contare (con le
+dimensioni dei filtri: `100K`, `5M`; i file vuoti non sono mai confrontati) e se selezionare le
+copie.
+
+La risposta è un pannello di gruppi, prima il gruppo che spreca più spazio. Ogni riga è il
+numero del gruppo e il percorso del file, così i gruppi restano insieme comunque sia ordinato il
+pannello; il file più vecchio di ogni gruppo viene per primo. Con *Seleziona tutte le copie
+tranne la più vecchia* attivo, le altre sono selezionate e `F8` le manda nel cestino; `F3`,
+`F4`, `F5` e il resto lavorano sui file veri come in ogni lista di risultati. La ricerca
+confronta prima le dimensioni, poi i primi 64 KiB, poi il file intero con SHA-256, quindi legge
+poco di ciò che non è una copia; gira in background, con l'avanzamento nella riga di stato.
+
 # Trovare le cose
 
 `Alt+F7` cerca i file: una maschera, una dimensione, il testo dentro di essi, e dove guardare. I

@@ -6,6 +6,14 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Duplicate files** (*Commands → Find duplicate files*), FAR's FindDup: under the panel's
+  folder or what is selected, by content whatever the names. Sizes first, then the first
+  64 KiB, then the whole file by SHA-256, so little is read of what is not a copy. The groups
+  come back as a panel, the most space wasted first and the oldest file of each first, with
+  every other copy selected for `F8`. In the background, through the jobs' filesystem.
+
 ## [0.32.0] — 2026-11-05
 
 ### Added

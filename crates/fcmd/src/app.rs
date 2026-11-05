@@ -35,6 +35,13 @@ pub enum Request {
         panel: usize,
         path: VPath,
     },
+    /// Look for files with the same content under `roots` (SPEC 06 §13).
+    Dupes {
+        panel: usize,
+        roots: Vec<VPath>,
+        opts: fcmd_jobs::dupes::Options,
+        cancel: CancelToken,
+    },
     /// Ask which release is the latest (SPEC 11 §5). `manual` is the menu's command, which
     /// says what it found whatever it found; the daily check speaks only of a newer release.
     UpdateCheck {
@@ -583,6 +590,17 @@ pub enum Event {
         files: u64,
     },
     /// The files a branch walk found.
+    /// How far the duplicate search has got: the pass, and how far into it.
+    DupesProgress {
+        pass: u8,
+        done: usize,
+        total: usize,
+    },
+    /// What the duplicate search found.
+    DupesFound {
+        panel: usize,
+        found: fcmd_jobs::dupes::Found,
+    },
     /// What the release check found: the latest release, or why there is no answer.
     UpdateChecked {
         manual: bool,
@@ -2208,6 +2226,12 @@ pub struct App {
     /// `fcmd_config::State::update_checked` and `update_offered`.
     pub update_checked: u64,
     pub update_offered: String,
+    /// The duplicate search: what the dialog was opened on, the last smallest size typed,
+    /// whether the copies come back selected, and the token that stops a search running.
+    dupes_roots: Option<(usize, Vec<VPath>)>,
+    last_dupes_min: String,
+    dupes_select: bool,
+    dupes_cancel: CancelToken,
     /// The same for the replace dialog.
     pub last_replace: fcmd_jobs::ReplaceOptions,
     /// A replacement runs twice: once to count, and then, if the user says so, for real. This
@@ -2458,6 +2482,10 @@ impl App {
             rename_undo: None,
             update_checked: 0,
             update_offered: String::new(),
+            dupes_roots: None,
+            last_dupes_min: "1".into(),
+            dupes_select: true,
+            dupes_cancel: CancelToken::new(),
             last_replace: fcmd_jobs::ReplaceOptions::default(),
             pending_replace: None,
             highlight,
@@ -2637,6 +2665,18 @@ impl App {
     pub fn handle_event(&mut self, event: Event) {
         match event {
             Event::UpdateChecked { manual, result } => self.on_update_checked(manual, result),
+            Event::DupesProgress { pass, done, total } => {
+                let m = self.i18n.t_args(
+                    "dupes-progress",
+                    &[
+                        ("pass", (pass as i64).into()),
+                        ("done", (done as i64).into()),
+                        ("total", (total as i64).into()),
+                    ],
+                );
+                self.set_status(m);
+            }
+            Event::DupesFound { panel, found } => self.dupes_found(panel, found),
             Event::PluginDone { id, label, result } => match result {
                 Ok(reply) => self.apply_plugin_reply(&label, reply),
                 Err(e) => {
@@ -7029,6 +7069,149 @@ impl App {
     /// What the dialog asked for: hash these, with that, into there.
     /// `Files → Split file`: the dialog, for the file under the cursor. Local files only,
     /// like the checksums: the bytes are read and written here.
+    /// `Commands → Find duplicate files`: the selected folders and files, or the folder the
+    /// panel is in when nothing is selected (SPEC 06 §13).
+    fn open_dupes_form(&mut self) {
+        let side = self.active;
+        let roots = if self.panels[side].selection.is_empty() {
+            vec![self.panels[side].cwd.clone()]
+        } else {
+            self.job_sources()
+        };
+        if self.panels[side].temp.is_some() && self.panels[side].selection.is_empty() {
+            let m = self.i18n.t("dupes-not-here");
+            self.set_error(m);
+            return;
+        }
+        let what = self.sources_label(&roots);
+        let min = self.last_dupes_min.clone();
+        self.dupes_roots = Some((side, roots));
+        self.mode = Mode::Form(Box::new(Form::dupes(what, min, &self.i18n)));
+    }
+
+    fn apply_dupes_form(&mut self, form: &Form) {
+        let Some((panel, roots)) = self.dupes_roots.take() else {
+            return;
+        };
+        let text = form.text_value("dupes.min_size").trim().to_string();
+        let min_size = if text.is_empty() {
+            1
+        } else {
+            match fcmd_core::filter::parse_size(&text) {
+                Ok(size) => size.max(1),
+                Err(_) => {
+                    let msg = self.i18n.t_args("dupes-bad-size", &[("size", text.into())]);
+                    self.set_error(msg);
+                    return;
+                }
+            }
+        };
+        self.last_dupes_min = text;
+        self.dupes_select = form.toggle_value("dupes.select");
+        self.dupes_cancel.cancel();
+        self.dupes_cancel = CancelToken::new();
+        let m = self.i18n.t("dupes-looking");
+        self.set_status(m);
+        self.requests.push(Request::Dupes {
+            panel,
+            roots,
+            opts: fcmd_jobs::dupes::Options {
+                min_size,
+                recursive: form.toggle_value("dupes.recursive"),
+                ..Default::default()
+            },
+            cancel: self.dupes_cancel.clone(),
+        });
+    }
+
+    /// The groups are back: the panel becomes a list of them, each row named by its group
+    /// number and its path, so any sort keeps a group together — by name the groups are in
+    /// the order the search gave (most space wasted first), by size the biggest files lead.
+    /// With *select the copies* on, every file but the oldest of each group is selected,
+    /// which is what `F8` then sends to the wastebasket.
+    fn dupes_found(&mut self, panel: usize, found: fcmd_jobs::dupes::Found) {
+        if panel >= self.panels.len() {
+            return;
+        }
+        if found.groups.is_empty() {
+            let m = self
+                .i18n
+                .t_args("dupes-none", &[("count", (found.scanned as i64).into())]);
+            self.set_status(m);
+            return;
+        }
+        let width = found.groups.len().to_string().len();
+        let mut items: Vec<(VPath, fcmd_core::Entry)> = Vec::new();
+        let mut extra: Vec<VPath> = Vec::new();
+        let mut wasted = 0u64;
+        for (n, group) in found.groups.iter().enumerate() {
+            wasted += group.wasted();
+            for (k, copy) in group.copies.iter().enumerate() {
+                let entry = fcmd_core::Entry {
+                    name: format!("{:0width$} {}", n + 1, copy.path).into(),
+                    kind: copy.facts.kind,
+                    size: copy.facts.size,
+                    mtime: copy.facts.mtime,
+                    btime: None,
+                    atime: None,
+                    flags: if copy.facts.readonly {
+                        fcmd_core::EntryFlags::READONLY
+                    } else {
+                        fcmd_core::EntryFlags::empty()
+                    },
+                    id: fcmd_core::EntryId::Name(items.len() as u64),
+                    link_target: None,
+                };
+                if k > 0 {
+                    extra.push(copy.path.clone());
+                }
+                items.push((copy.path.clone(), entry));
+            }
+        }
+        let groups = found.groups.len();
+        let title = self
+            .i18n
+            .t_args("dupes-panel", &[("groups", (groups as i64).into())]);
+        let generation = self.panels[panel].generation + 1;
+        let p = &mut self.panels[panel];
+        p.generation = generation;
+        p.set_temp(title, items, generation);
+        p.set_temp_origin(":dupes");
+        if self.dupes_select {
+            let ids: Vec<fcmd_core::EntryId> = p
+                .temp
+                .as_ref()
+                .map(|t| {
+                    t.paths
+                        .iter()
+                        .filter(|(_, path)| extra.contains(path))
+                        .map(|(id, _)| *id)
+                        .collect()
+                })
+                .unwrap_or_default();
+            for id in ids {
+                p.selection.set(id, true);
+            }
+        }
+        self.active = panel;
+        let msg = self.i18n.t_args(
+            if found.truncated {
+                "dupes-truncated"
+            } else {
+                "dupes-done"
+            },
+            &[
+                ("groups", (groups as i64).into()),
+                ("size", fcmd_core::size::format_size(wasted).into()),
+            ],
+        );
+        if found.truncated {
+            self.set_error(msg);
+        } else {
+            self.set_status(msg);
+        }
+    }
+
     fn open_split_form(&mut self) {
         let Some(path) = self.panel().current_path() else {
             let m = self.i18n.t("msg-nothing-to-do");
@@ -9299,6 +9482,7 @@ impl App {
             Command::FileChecksum => self.open_checksum_form(),
             Command::FileChecksumVerify => self.start_verify(),
             Command::FileSplit => self.open_split_form(),
+            Command::FileDupes => self.open_dupes_form(),
             Command::FileCombine => self.start_combine(),
             Command::FileDelete | Command::FileDeleteCurrent | Command::FileDeleteForce => {
                 // On the stored connections there is no file to delete: `F8` forgets the
@@ -14284,6 +14468,10 @@ impl App {
         }
         if form.kind == FormKind::Split {
             self.apply_split_form(&form);
+            return;
+        }
+        if form.kind == FormKind::Dupes {
+            self.apply_dupes_form(&form);
             return;
         }
         if form.kind == FormKind::Recode {
@@ -31558,6 +31746,59 @@ abcdefghij
         let mut app = app_on_disk(dir);
         app.editor_size = (40, 6);
         app
+    }
+
+    /// `Commands → Find duplicate files` on a folder: the dialog, the search in the worker,
+    /// and the panel of groups with every copy but the oldest selected for `F8`.
+    #[test]
+    fn duplicates_come_back_as_a_panel_with_the_copies_selected() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), "same bytes").unwrap();
+        std::fs::write(dir.path().join("b.txt"), "same bytes").unwrap();
+        std::fs::write(dir.path().join("c.txt"), "different").unwrap();
+        let old = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000);
+        let f = std::fs::File::options()
+            .write(true)
+            .open(dir.path().join("b.txt"))
+            .unwrap();
+        f.set_modified(old).unwrap();
+        drop(f);
+        let mut app = editing_app(dir.path());
+        app.run(Command::FileDupes);
+        assert!(matches!(&app.mode, Mode::Form(f) if f.kind == FormKind::Dupes));
+        press(&mut app, "Enter");
+        let Some(Request::Dupes {
+            panel,
+            roots,
+            opts,
+            cancel,
+        }) = app
+            .take_requests()
+            .into_iter()
+            .find(|r| matches!(r, Request::Dupes { .. }))
+        else {
+            panic!("no search was asked for")
+        };
+        assert_eq!(roots, [VPath::local(dir.path())]);
+        assert!(opts.recursive);
+        let found = fcmd_jobs::dupes::find(
+            &fcmd_jobs::LocalFs,
+            &roots,
+            &opts,
+            &cancel,
+            &mut |_, _, _| {},
+        );
+        app.handle_event(Event::DupesFound { panel, found });
+        let p = &app.panels[0];
+        assert_eq!(p.temp_origin(), Some(":dupes"));
+        assert_eq!(p.listing.len(), 2, "c.txt has no twin");
+        assert_eq!(p.selection.len(), 1, "every copy but the oldest");
+        let sources = app.job_sources();
+        assert_eq!(
+            sources,
+            [VPath::local(dir.path().join("a.txt"))],
+            "b.txt is older"
+        );
     }
 
     /// `Files → Split file` asks where and how big, then hands the file to the worker; the
