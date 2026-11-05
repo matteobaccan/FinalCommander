@@ -116,6 +116,12 @@ renderer draws the whole book. The help dialog paints those runs with inks of it
 (`help.heading.fg`, `help.code.fg`, `help.marker.fg`, `help.link.fg`, `help.frame.fg`): the
 syntax theme is written for a panel's dark background and a dialog is not one.
 
+`F7` inside the help searches **every chapter at once** — the written ones in the reader's
+language and the generated ones — for a word, in any case, and lists each line that holds it
+under its chapter's name; `Enter` opens that chapter at that line, and `Esc` goes back to the
+page the search started from. The chapters are searched as they are drawn, at the width of
+the dialog, so a line found is a line one can see.
+
 **The chapters are translated one at a time**, and the program is honest about which ones are.
 Each chapter's name is a message id in the seven catalogues, so an index is always in the
 reader's language; the prose of a chapter lives in `docs/help/<file>.md` in English and in

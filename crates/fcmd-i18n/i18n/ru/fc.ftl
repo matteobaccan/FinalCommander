@@ -62,9 +62,12 @@ prompt-filter = Маска или часть имени:
 prompt-search = Быстрый поиск:
 
 dialog-error = Ошибка
-dialog-help-hint = Esc — к содержанию · F1 закрывает · ↑↓ PgUp PgDn — прокрутка
+dialog-help-hint = Esc — к содержанию · F7 — поиск во всех главах · F1 закрывает · ↑↓ PgUp PgDn — прокрутка
 dialog-help-index = FinalCommander { $version } — Справка
-dialog-help-hint-index = Enter открывает главу · Esc закрывает
+dialog-help-hint-index = Enter открывает главу · F7 — поиск во всех главах · Esc закрывает
+help-search-prompt = Поиск в справке
+help-search-none = Ни одна строка справки не содержит «{ $query }»
+help-search-title = «{ $query }» в справке: строк { $count }
 
 msg-not-implemented = { $command } пока не реализовано в этой сборке
 msg-selected = отмечено элементов: { $count }

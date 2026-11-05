@@ -62,9 +62,12 @@ prompt-filter = 文件掩码或名称片段：
 prompt-search = 快速查找：
 
 dialog-error = 错误
-dialog-help-hint = Esc 返回目录 · F1 关闭 · ↑↓ PgUp PgDn 滚动
+dialog-help-hint = Esc 返回目录 · F7 搜索所有章节 · F1 关闭 · ↑↓ PgUp PgDn 滚动
 dialog-help-index = FinalCommander { $version } — 帮助
-dialog-help-hint-index = Enter 打开章节 · Esc 关闭
+dialog-help-hint-index = Enter 打开章节 · F7 搜索所有章节 · Esc 关闭
+help-search-prompt = 搜索帮助
+help-search-none = 帮助中没有包含“{ $query }”的行
+help-search-title = 帮助中的“{ $query }”：{ $count } 行
 
 msg-not-implemented = 此版本尚未实现 { $command }
 msg-selected = 已选择 { $count } 项

@@ -74,6 +74,8 @@ pub enum PickKind {
     Usage,
     /// The jobs: running, waiting and finished (SPEC 03 §5).
     Jobs,
+    /// The lines of the help that hold what `F7` looked for, every chapter at once.
+    HelpHits,
     Languages,
     Themes,
     /// Drives, mount points and open connections.

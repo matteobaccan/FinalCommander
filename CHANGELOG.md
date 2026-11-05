@@ -29,6 +29,12 @@ Notable changes, newest first. The format follows
   showing each new name as it was typed, and `1.txt` and `2.txt` swapped through the counter
   with nothing left behind under a temporary name.
 
+- **Searching the help** (`F7` inside `F1`): a word looked for in every chapter at once —
+  the written ones in the reader's language and the generated ones, the keys, the commands
+  and the settings — and every line that holds it listed under its chapter's name. `Enter`
+  opens the chapter at that line, `Esc` goes back to the page the search started from, and
+  the next search offers the last word again.
+
 - **Unique, reverse and number on a block.** `Alt+Shift+U` takes out every line of the block
   that repeats one above it, keeping the first of each where it was — so a block need not be
   sorted first, which `uniq` would want — and says how many went; `Alt+Shift+R` reverses the

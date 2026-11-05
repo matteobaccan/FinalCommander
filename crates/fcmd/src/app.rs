@@ -828,6 +828,8 @@ pub enum PromptKind {
     Filter,
     /// Query for the viewer's search.
     ViewerSearch,
+    /// A word to look for in every chapter of the help (`F7` inside `F1`).
+    HelpSearch,
     /// What the table's rows have to hold to stay on the screen (SPEC 05 §1.11).
     TableFilter,
     /// Offset or percentage for the viewer.
@@ -1924,6 +1926,10 @@ pub struct App {
     queued_jobs: std::collections::VecDeque<JobSpec>,
     /// Every job asked for, running, waiting or finished (SPEC 03 §5).
     pub queue: crate::queue::Queue,
+    /// The help page a search was started from, to go back to when it is dismissed, and the
+    /// last thing looked for, which the next search offers again.
+    help_back: Option<(crate::help::Chapter, usize, usize)>,
+    help_query: String,
     /// What to delete once the archive is written, when the dialog asked for it — or when
     /// `F6` put the files into the archive, which is a move and not a copy. It is held here
     /// rather than in the job because the delete only happens if the archive was written.
@@ -2258,6 +2264,8 @@ impl App {
             last_copy: CopyChoices::default(),
             queued_jobs: std::collections::VecDeque::new(),
             queue: Default::default(),
+            help_back: None,
+            help_query: String::new(),
             pack_delete: None,
             quit: false,
             alone: false,
@@ -4876,6 +4884,17 @@ impl App {
                 self.mode = Mode::Normal;
                 self.restore_front_screen();
             }
+            // Every chapter at once, the written ones and the generated ones: `F7` is the
+            // viewer's search key, and the help is read with the viewer's eyes.
+            KeyCode::F(7) => {
+                self.help_back = Some((chapter, scroll, at));
+                let title = self.i18n.t("help-search-prompt");
+                self.mode = Mode::Prompt(Prompt::new(
+                    PromptKind::HelpSearch,
+                    title,
+                    self.help_query.clone(),
+                ));
+            }
             // From the page about where you are, on to the chapter that explains it.
             KeyCode::Enter | KeyCode::Right => {
                 if let Chapter::Here(place) = chapter {
@@ -4916,6 +4935,10 @@ impl App {
                     self.panel_mut().cursor_to(origin);
                 }
                 self.mode = Mode::Normal;
+                if matches!(prompt.kind, PromptKind::HelpSearch) {
+                    self.help_return();
+                    return;
+                }
                 self.restore_viewer();
                 self.restore_editor();
                 // A question asked over the hex editor goes back to it when it is dismissed:
@@ -5001,6 +5024,10 @@ impl App {
 
     fn prompt_accept(&mut self, prompt: Prompt) {
         match prompt.kind {
+            PromptKind::HelpSearch => {
+                let query = prompt.text.trim().to_string();
+                self.help_search(&query);
+            }
             // `Ctrl+Z`: what the directory says about this file. An empty answer takes the
             // line away, which is how a description is removed — there is no other key for
             // it and `Ctrl+Z` on a described file showing the description is the dialog.
@@ -10712,6 +10739,63 @@ impl App {
     /// OK in the replace dialog: count first, always. The dry run and the write share the
     /// engine's one code path, so what the confirmation says is what the write will do.
     /// `Shift+F1`: the dialog for a new archive out of what is selected.
+    /// Back to the help page a search started from, or to its index.
+    fn help_return(&mut self) {
+        let (chapter, scroll, at) =
+            self.help_back
+                .take()
+                .unwrap_or((crate::help::Chapter::Index, 0, 0));
+        self.mode = Mode::Help {
+            chapter,
+            scroll,
+            at,
+        };
+    }
+
+    /// `F7` in the help: every line of every chapter that holds `query`, in any case, as a
+    /// list to pick one from. The chapters are searched as they are drawn — the generated
+    /// ones from the live keymap and settings too — so a line found is a line one can see.
+    fn help_search(&mut self, query: &str) {
+        if query.is_empty() {
+            self.help_return();
+            return;
+        }
+        self.help_query = query.to_string();
+        let needle = query.to_lowercase();
+        let width = self.help_width();
+        let mut rows = Vec::new();
+        for (at, (chapter, title)) in crate::help::chapters(&self.i18n).into_iter().enumerate() {
+            for (line, text) in self.help_lines(chapter, width).iter().enumerate() {
+                if text.to_lowercase().contains(&needle) {
+                    rows.push(PickRow {
+                        label: format!("{title}: {}", text.trim()),
+                        value: format!("{at}:{line}"),
+                        current: false,
+                        hotkey: None,
+                        separator: false,
+                    });
+                }
+            }
+        }
+        if rows.is_empty() {
+            let msg = self
+                .i18n
+                .t_args("help-search-none", &[("query", query.to_string().into())]);
+            self.help_return();
+            self.set_error(msg);
+            return;
+        }
+        let title = self.i18n.t_args(
+            "help-search-title",
+            &[
+                ("query", query.to_string().into()),
+                ("count", (rows.len() as i64).into()),
+            ],
+        );
+        let side = self.active;
+        self.mode = Mode::Pick(Box::new(Pick::new(PickKind::HelpHits, title, rows, side)));
+    }
+
     /// The rows of the queue, in its order: what each job is, where it is, how far it got.
     fn job_rows(&self) -> Vec<PickRow> {
         use crate::queue::JobState;
@@ -15050,6 +15134,8 @@ impl App {
                 side,
             ),
             PickKind::Drives => self.drive_list(side),
+            // Built by `help_search`, which knows what was looked for.
+            PickKind::HelpHits => return,
             PickKind::Jobs => {
                 let rows = self.job_rows();
                 let title = self.i18n.t_args(
@@ -15297,6 +15383,11 @@ impl App {
             }
             // And the same for the directory a row that names a file is being chosen from:
             // the row keeps whatever was typed into it.
+            // The list of what the help search found goes back to the page it started from.
+            KeyCode::Esc | KeyCode::F(10) if kind == PickKind::HelpHits => {
+                self.mode = Mode::Normal;
+                self.help_return();
+            }
             KeyCode::Esc | KeyCode::F(10) if kind == PickKind::Browse => {
                 match self.browse_for.take() {
                     Some((form, _)) => self.mode = Mode::Form(form),
@@ -15744,6 +15835,21 @@ impl App {
                     return;
                 };
                 self.job_enter(id, *pick);
+            }
+            PickKind::HelpHits => {
+                let mut parts = row.value.split(':').filter_map(|p| p.parse::<usize>().ok());
+                let (Some(at), Some(line)) = (parts.next(), parts.next()) else {
+                    return;
+                };
+                let chapters = crate::help::chapters(&self.i18n);
+                if let Some((chapter, _)) = chapters.get(at) {
+                    // The line found, with one line of what comes before it for context.
+                    self.mode = Mode::Help {
+                        chapter: *chapter,
+                        scroll: line.saturating_sub(1),
+                        at,
+                    };
+                }
             }
             PickKind::Usage => {
                 self.active = pick.side;
@@ -30766,6 +30872,64 @@ abcdefghij
         assert_eq!(lines(&app), ["pear", "fig", "apple", "end"]);
         press(&mut app, "Alt+Shift+N");
         assert_eq!(lines(&app), ["1 pear", "2 fig", "3 apple", "end"]);
+    }
+
+    /// `F7` in the help looks through every chapter, the written ones and the generated
+    /// ones, and `Enter` on a line opens its chapter there; `Esc` goes back to where it was.
+    #[test]
+    fn the_help_is_searched_across_its_chapters() {
+        let mut app = app();
+        press(&mut app, "F1");
+        press(&mut app, "Esc"); // from the page about the panels to the contents
+        press(&mut app, "F7");
+        assert!(matches!(app.mode, Mode::Prompt(_)), "{:?}", app.mode);
+        type_text(&mut app, "wastebasket");
+        press(&mut app, "Enter");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert_eq!(pick.kind, PickKind::HelpHits);
+        assert!(pick.rows.len() > 1, "{:?}", pick.rows);
+        // Every row names its chapter, and holds the word, in any case.
+        assert!(pick
+            .rows
+            .iter()
+            .all(|r| r.label.to_lowercase().contains("wastebasket")));
+        press(&mut app, "Enter");
+        let Mode::Help {
+            chapter, scroll, ..
+        } = app.mode
+        else {
+            panic!("{:?}", app.mode)
+        };
+        let lines = app.help_lines(chapter, app.help_width());
+        assert!(
+            lines[scroll..(scroll + 3).min(lines.len())]
+                .iter()
+                .any(|l| l.to_lowercase().contains("wastebasket")),
+            "the page opens at the line"
+        );
+
+        // The generated chapters are searched too: a command name is only in those.
+        press(&mut app, "F7");
+        clear_prompt(&mut app);
+        type_text(&mut app, "job.queue.show");
+        press(&mut app, "Enter");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("{:?}", app.mode)
+        };
+        assert!(!pick.rows.is_empty());
+        // `Esc` on the list goes back to the page the search was started from.
+        press(&mut app, "Esc");
+        assert!(matches!(app.mode, Mode::Help { .. }), "{:?}", app.mode);
+
+        // Nothing found says so, and stays in the help.
+        press(&mut app, "F7");
+        clear_prompt(&mut app);
+        type_text(&mut app, "zzqqxx-nowhere");
+        press(&mut app, "Enter");
+        assert!(matches!(app.mode, Mode::Help { .. }), "{:?}", app.mode);
+        assert!(app.status_error, "{}", app.status);
     }
 
     #[test]

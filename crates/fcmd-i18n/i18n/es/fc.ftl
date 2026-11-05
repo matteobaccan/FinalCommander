@@ -62,9 +62,12 @@ prompt-filter = Máscara o parte de un nombre:
 prompt-search = Búsqueda rápida:
 
 dialog-error = Error
-dialog-help-hint = Esc vuelve al índice · F1 cierra · ↑↓ PgArr PgAb para desplazar
+dialog-help-hint = Esc vuelve al índice · F7 busca en todos los capítulos · F1 cierra · ↑↓ PgArr PgAb para desplazar
 dialog-help-index = FinalCommander { $version } — Ayuda
-dialog-help-hint-index = Entrar abre un capítulo · Esc cierra
+dialog-help-hint-index = Entrar abre un capítulo · F7 busca en todos los capítulos · Esc cierra
+help-search-prompt = Buscar en la ayuda
+help-search-none = Ninguna línea de la ayuda contiene «{ $query }»
+help-search-title = «{ $query }» en la ayuda: { $count } líneas
 
 msg-not-implemented = { $command } aún no está implementado en esta versión
 msg-selected = { $count } elementos seleccionados

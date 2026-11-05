@@ -66,9 +66,12 @@ prompt-search = Quick search:
 
 # Dialogs
 dialog-error = Error
-dialog-help-hint = Esc goes back to the contents · F1 closes · ↑↓ PgUp PgDn to scroll
+dialog-help-hint = Esc goes back to the contents · F7 searches every chapter · F1 closes · ↑↓ PgUp PgDn to scroll
 dialog-help-index = FinalCommander { $version } — Help
-dialog-help-hint-index = Enter opens a chapter · Esc closes
+dialog-help-hint-index = Enter opens a chapter · F7 searches every chapter · Esc closes
+help-search-prompt = Search the help
+help-search-none = No line of the help holds “{ $query }”
+help-search-title = “{ $query }” in the help: { $count } lines
 
 # Status messages
 msg-not-implemented = { $command } is not implemented in this build yet

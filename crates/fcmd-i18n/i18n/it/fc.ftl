@@ -62,9 +62,12 @@ prompt-filter = Maschera o parte di un nome:
 prompt-search = Ricerca rapida:
 
 dialog-error = Errore
-dialog-help-hint = Esc torna all'indice · F1 chiude · ↑↓ PgSu PgGiù per scorrere
+dialog-help-hint = Esc torna all'indice · F7 cerca in tutti i capitoli · F1 chiude · ↑↓ PgSu PgGiù per scorrere
 dialog-help-index = FinalCommander { $version } — Guida
-dialog-help-hint-index = Invio apre un capitolo · Esc chiude
+dialog-help-hint-index = Invio apre un capitolo · F7 cerca in tutti i capitoli · Esc chiude
+help-search-prompt = Cerca nella guida
+help-search-none = Nessuna riga della guida contiene «{ $query }»
+help-search-title = «{ $query }» nella guida: { $count } righe
 
 msg-not-implemented = { $command } non è ancora implementato in questa build
 msg-selected = { $count } elementi selezionati
