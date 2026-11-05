@@ -5,9 +5,9 @@
 <h1 align="center">FinalCommander</h1>
 
 <p align="center">
-  <b>One file. Every system. Everything in it.</b><br>
-  The shape Norton Commander gave the terminal and the keys FAR kept — in a single executable
-  you copy onto a machine and use, on Linux, macOS and Windows alike.
+  <b>You wanted one commander for every operating system. The most complete there is. One that
+  talks to AI. With every plugin already inside.<br>
+  Now it exists. It is FinalCommander — and it is time to uninstall all the others.</b>
 </p>
 
 <p align="center">
@@ -26,14 +26,43 @@
 
 ## The argument, in one paragraph
 
-You already use a two-panel file manager. Around it you have also collected an archiver, an
-SFTP client, something for S3, a hex editor, a viewer that survives a four-gigabyte log, a
-grep-across-files tool, an editor that colours code — and a different set of all of those on
-the other operating system you work on. **FinalCommander is one binary with no dependencies
-that does all of it with the same keys on all three platforms.** No installer. No
-runtime. No DLLs, no asset directory, no plugin tree to assemble: the themes, the keymaps,
-seven interface languages, the whole help and the manual page are compiled into the file.
-`scp` it to a server and it works there too.
+You use a two-panel file manager — and around it an archiver, an SFTP client, something for
+S3, a hex editor, a viewer that survives a four-gigabyte log, a database browser, a mail
+reader, a git front end, a chat window for your AI, and a *different* set of all of them on
+the other operating system you work on. **FinalCommander is one binary that does all of it,
+with the same keys, on Linux, macOS and Windows.** No installer, no runtime, no DLLs, no
+plugin tree to assemble: themes, keymaps, seven languages, the whole help and the manual are
+inside the file. `scp` it to a server and it works there too.
+
+## Ten reasons to switch today
+
+1. **One program on every system.** Linux, macOS, Windows, and the server you only reach over
+   SSH: the same binary, the same keys, the same settings file. Learn it once.
+2. **Nothing to install.** One file. Copy it, run it. No package manager, no admin rights, no
+   GTK, no Qt, no .NET.
+3. **The plugins are already in it.** FAR's NetBox, MultiArc, FindDup, SQLiteDB, FarMail,
+   AdvCmpEx, the process list, the services, the uninstaller, the character map, the system
+   log, the calculator: built in, tested together, upgraded together. Nothing to hunt for,
+   nothing that breaks on the next release.
+4. **AI where your files are.** `ai: why does this fail?` with the log selected: the answer
+   opens in the viewer and stays in a folder of answers. OpenAI, Anthropic, any compatible
+   server, or Ollama on your own machine — and nothing leaves without a dialog saying what.
+5. **Every server is a panel.** SFTP (and SSH boxes with no SFTP at all), FTP, FTPS, WebDAV,
+   S3 and its clones, IMAP mailboxes, jump hosts, port tunnels, a speed limit per server.
+   `F5` between two servers is just a copy.
+6. **Every container is a folder.** zip, 7z, tar in all its compressions, deb, rpm, cpio, iso
+   and rar through the 7z you have, SQLite databases, JSON files, mbox and eml mail: `Enter`
+   goes inside, `F3` reads, `F5` copies out.
+7. **A viewer and an editor that do not give up.** A 40 GB log opens at once and follows its
+   own growth; hex, disassembly of x86, ARM, JVM and .NET; an editor with syntax colouring,
+   column blocks, `.editorconfig`, kept replacements and an atomic save.
+8. **Safe by default.** A copy resumes where it stopped and can verify itself by SHA-256; a
+   file too big for the target is refused before it starts; a share that does not answer does
+   not freeze the screen; the jobs queue per device.
+9. **FAR's keys, FAR's look.** If your fingers know FAR, they already know FinalCommander —
+   and Midnight Commander's keymap is one setting away.
+10. **Free, MIT, and moving fast.** A release almost every day, each one driven by what people
+    ask for in the issues.
 
 ## What the one file replaces
 
@@ -52,34 +81,35 @@ seven interface languages, the whole help and the manual page are compiled into 
 | A code editor | `F4` edits with undo, column blocks, an atomic save, and syntax colouring for twenty-five languages and markups |
 | A macro recorder | `Ctrl+.` records *commands*, not keystrokes, and a macro can run once or once for every selected file |
 | A calculator | `Alt+=`, in every base at once |
+| A chat window for your AI | `ai: question` on the command line, with the selected files attached after a dialog says what goes where; the answer opens in the viewer and is kept as Markdown |
+| A database browser | `Enter` on a SQLite file: every table is a CSV beside the schema, `sql: SELECT …` opens the rows as a table |
+| A mail reader | an `.mbox` or `.eml` is a folder of messages and attachments; `imaps://me@host/` is your mailbox, read only |
+| A git front end | `Ctrl+Alt+G`: what changed as a panel, the log and the blame in the viewer, the branches |
+| A duplicate finder | *Commands → Find duplicate files*: groups by content, every copy but the oldest selected for `F8` |
 
 Each of those is a key, not a plugin to go and find.
 
 ## Why not the one you already have
 
-Every orthodox commander is the same good idea, implemented once per operating system:
+Every orthodox commander is the same good idea, implemented once per operating system — and
+each one leaves you a gap to fill with something else:
 
-| | Platforms | Shipped as | Licence |
-| --- | --- | --- | --- |
-| **FAR Manager** | Windows | an installer and a plugin tree | BSD-3-Clause |
-| **far2l** | Linux, macOS | build it, or a distribution package | GPL-2.0 |
-| **Midnight Commander** | Unix | a distribution package | GPL-3.0 |
-| **Total Commander** | Windows | an installer, shareware | proprietary |
-| **Double Commander** | Linux, macOS, Windows | a GTK/Qt application | GPL-2.0 |
-| **Krusader** | Linux (KDE) | KDE libraries | GPL-2.0 |
-| **MTN2** | Windows, Linux | a folder, or a `.deb` | MPL-2.0 |
-| **FinalCommander** | **Linux, macOS, Windows** | **one file, copied** | **MIT** |
+| | Platforms | Shipped as | Servers built in | AI | Licence |
+| --- | --- | --- | --- | --- | --- |
+| **FAR Manager** | Windows | an installer and a plugin tree | with plugins | no | BSD-3-Clause |
+| **far2l** | Linux, macOS | build it, or a distribution package | with plugins | no | GPL-2.0 |
+| **Midnight Commander** | Unix | a distribution package | SFTP, FTP, shell | no | GPL-3.0 |
+| **Total Commander** | Windows | an installer, shareware | with plugins | no | proprietary |
+| **Double Commander** | Linux, macOS, Windows | a GTK/Qt application | with plugins | no | GPL-2.0 |
+| **Krusader** | Linux (KDE) | KDE libraries | through KIO | no | GPL-2.0 |
+| **MTN2** | Windows, Linux | a folder, or a `.deb` | some | no | MPL-2.0 |
+| **FinalCommander** | **Linux, macOS, Windows** | **one file, copied** | **SFTP, SSH shell, FTP/FTPS, WebDAV, S3, IMAP** | **yes** | **MIT** |
 
-Learn the keys once and they are the keys everywhere — including on the server you only ever
-reach over SSH, where a GTK application is not an option and installing a package may not be
-either.
-
-Credit where it is due: FAR with twenty years of plugins goes deeper on Windows than this does
-today, Midnight Commander is already on every Unix machine you will ever log into, Krusader's
-synchroniser has no equal here yet, and MTN2 — the closest thing to this in spirit — has a real
-console in it, which is the one thing a terminal program cannot borrow from a terminal. What
-none of them is, is the same program on all three systems, in one file, with nothing to
-install — and that is the hole this fills.
+If you are on FAR, you lose nothing of the keys and gain the other two systems. If you are on
+Midnight Commander, you gain archives, buckets, databases and a hex editor that are not a
+plugin away. If you are on Total Commander, you gain a terminal program you can take onto any
+server. Whoever you are, you uninstall the archiver, the SFTP client, the bucket browser, the
+hex editor and the database viewer you kept beside it.
 
 > **I do not need your code. I need your ideas.** Everything described above works today, so
 > the useful thing to send is not a patch but a *feature*: what you reach for in FAR, Midnight
