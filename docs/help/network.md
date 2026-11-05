@@ -14,6 +14,13 @@ and writing it back on save. The port follows the protocol when the URL does not
 SFTP, 21 for both spellings of FTP — and one server offering `ftp` and `ftps` on port 21 is two
 connections, not one.
 
+A password typed for a server is kept, once the connection has worked, in `fcmd-secrets.vault`
+— fcmd's own encrypted file beside the settings — and the next connection takes it from there;
+the first time, you choose the file's password (empty: not kept). That password is asked for
+when a secret is first needed, stays in memory while you work and is forgotten after five
+minutes without a key. A stored password the server refuses is asked for again rather than
+tried twice.
+
 A stored session can cap how fast a copy to or from it goes: *Speed limit* in its dialog
 (`max_kbps` in the `[[site]]` block), in kilobytes a second, so a big upload leaves the rest of
 the line usable. A copy between two capped servers goes at the slower of the two.

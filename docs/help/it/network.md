@@ -14,6 +14,13 @@ portandolo qui e riscrivendolo quando salvi. La porta segue il protocollo quando
 dice — 22 per SFTP, 21 per entrambe le grafie di FTP — e un server che offre `ftp` e `ftps`
 sulla porta 21 è due connessioni, non una.
 
+Una password digitata per un server viene conservata, quando la connessione è riuscita, in
+`fcmd-secrets.vault` — il file cifrato di fcmd accanto alle impostazioni — e la connessione
+successiva la prende da lì; la prima volta scegli la password del file (vuota: non si
+conserva). Quella password si chiede quando serve il primo segreto, resta in memoria mentre
+lavori e viene dimenticata dopo cinque minuti senza tasti. Una password conservata che il
+server rifiuta viene richiesta, non riprovata.
+
 Una sessione salvata può limitare la velocità di una copia da o verso di essa: *Limite di
 velocità* nel suo dialogo (`max_kbps` nel blocco `[[site]]`), in kilobyte al secondo, così un
 grosso caricamento lascia usabile il resto della linea. Una copia fra due server limitati va

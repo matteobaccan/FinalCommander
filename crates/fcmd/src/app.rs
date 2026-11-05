@@ -1104,6 +1104,14 @@ impl Prompt {
 /// Only the letter is folded. The rest of the path is the filesystem's business — on Windows
 /// it is usually case-insensitive and on Unix it is not — and `Path` already compares it
 /// component by component, so `/mnt/data` is not inside `/mnt/dat`.
+/// The secrets file's name for a server's password or a key's passphrase.
+fn vault_entry(site: &Site, kind: SecretKind) -> String {
+    match kind {
+        SecretKind::Password => format!("site:{}", site.key()),
+        SecretKind::Passphrase => format!("key:{}", site.key()),
+    }
+}
+
 /// How many folders the per-drive memory keeps: enough for every drive a machine has, with
 /// room for the ones that come and go.
 const DRIVE_DIRS_KEPT: usize = 64;
@@ -2205,6 +2213,13 @@ pub struct App {
     /// The connection we are in the middle of opening, kept so a password prompt or a
     /// host-key confirmation can resume it.
     pending_connect: Option<(usize, Box<Site>, Option<String>)>,
+    /// A connection waiting for the secrets file to open: its kind of secret.
+    vault_for_connect: Option<SecretKind>,
+    /// The secrets file's entry a connection tried, so a stored password that is refused is
+    /// asked for rather than tried again.
+    vault_tried: Option<String>,
+    /// A password typed for a connection, to keep in the secrets file once it worked.
+    secret_to_keep: Option<(String, String)>,
     /// What `Alt+F6` is making a link to, while its dialog is open.
     pending_link: Option<VPath>,
     /// The fetch we are waiting for, if any.
@@ -2536,6 +2551,9 @@ impl App {
             ai_tokens: std::collections::HashMap::new(),
             vault: None,
             vault_pending_key: None,
+            vault_for_connect: None,
+            vault_tried: None,
+            secret_to_keep: None,
             ai_pending: None,
             ai_editing: None,
             editor_size: (80, 20),
@@ -5644,15 +5662,20 @@ impl App {
                     ArcRetry::Entry(path, purpose) => self.fetch_remote(path, 0, purpose),
                 }
             }
-            PromptKind::NetSecret(_) => {
+            PromptKind::NetSecret(kind) => {
                 let secret = prompt.text.clone();
                 match self.pending_connect.take() {
-                    Some((panel, site, _)) => self.requests.push(Request::Connect {
-                        panel,
-                        site,
-                        secret: Some(secret),
-                        accept_host_key: false,
-                    }),
+                    Some((panel, site, _)) => {
+                        if !secret.is_empty() {
+                            self.secret_to_keep = Some((vault_entry(&site, kind), secret.clone()));
+                        }
+                        self.requests.push(Request::Connect {
+                            panel,
+                            site,
+                            secret: Some(secret),
+                            accept_host_key: false,
+                        })
+                    }
                     None => {
                         let m = self.i18n.t("net-nothing-pending");
                         self.set_status(m);
@@ -5984,10 +6007,21 @@ impl App {
                         self.vault = Some(v);
                         if let Some((service, question, files)) = self.ai_pending.take() {
                             self.ask_ai(service, question, files);
+                        } else if let (Some(kind), Some((panel, site, _))) =
+                            (self.vault_for_connect.take(), self.pending_connect.take())
+                        {
+                            self.connection_result(panel, site, ConnectOutcome::NeedsSecret(kind));
                         }
                     }
                     Err(e) => {
                         self.ai_pending = None;
+                        // A connection waiting on the file still gets its own question.
+                        if let (Some(kind), Some((panel, site, _))) =
+                            (self.vault_for_connect.take(), self.pending_connect.take())
+                        {
+                            self.vault_tried = Some(vault_entry(&site, kind));
+                            self.connection_result(panel, site, ConnectOutcome::NeedsSecret(kind));
+                        }
                         let m = self
                             .i18n
                             .t_args("vault-refused", &[("why", e.to_string().into())]);
@@ -10180,6 +10214,29 @@ impl App {
             ConnectOutcome::Open { start, connected } => {
                 self.connected = connected;
                 self.pending_connect = None;
+                self.vault_tried = None;
+                // A password that was typed and worked goes into the secrets file.
+                if let Some((entry, secret)) = self.secret_to_keep.take() {
+                    let no_file = !self.vault_path().exists();
+                    match self.vault.as_mut() {
+                        Some(v) => {
+                            v.set(&entry, &secret);
+                            self.save_vault();
+                        }
+                        None if no_file => {
+                            self.vault_pending_key = Some((entry, secret));
+                            let title = self.i18n.t("vault-new");
+                            self.mode = Mode::Prompt(Prompt {
+                                kind: PromptKind::VaultNew,
+                                title,
+                                text: String::new(),
+                                secret: true,
+                                sources: Vec::new(),
+                            });
+                        }
+                        None => {}
+                    }
+                }
                 let msg = self
                     .i18n
                     .t_args("net-connected", &[("host", site.authority().into())]);
@@ -10189,6 +10246,37 @@ impl App {
                 }
             }
             ConnectOutcome::NeedsSecret(kind) => {
+                let entry = vault_entry(&site, kind);
+                // The secrets file first: closed, its password; open, the stored secret —
+                // once, so a stored one the server refuses is asked for instead.
+                if self.vault.is_none() && self.vault_path().is_file() && self.vault_tried.is_none()
+                {
+                    self.pending_connect = Some((panel, site, None));
+                    self.vault_for_connect = Some(kind);
+                    let title = self.i18n.t("vault-password");
+                    self.mode = Mode::Prompt(Prompt {
+                        kind: PromptKind::VaultPassword,
+                        title,
+                        text: String::new(),
+                        secret: true,
+                        sources: Vec::new(),
+                    });
+                    return;
+                }
+                let stored = self.vault.as_mut().and_then(|v| v.get(&entry));
+                if let (Some(secret), false) =
+                    (stored, self.vault_tried.as_deref() == Some(entry.as_str()))
+                {
+                    self.vault_tried = Some(entry);
+                    self.requests.push(Request::Connect {
+                        panel,
+                        site,
+                        secret: Some(secret),
+                        accept_host_key: false,
+                    });
+                    return;
+                }
+                self.vault_tried = Some(entry);
                 let title = self.i18n.t_args(
                     match kind {
                         SecretKind::Password => "net-prompt-password",
@@ -35184,6 +35272,69 @@ abcdefghij
         let mut app = app();
         app.sites = vec![site()];
         app
+    }
+
+    /// A server's password typed once is kept in the secrets file once it worked; the next run
+    /// opens the file and connects with it; one the server refuses is asked for, not retried.
+    #[test]
+    fn a_session_password_is_kept_in_the_secrets_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = site();
+        s.auth = fcmd_net::Auth::Password;
+        let needs = |app: &mut App| {
+            app.handle_event(Event::Connected {
+                panel: 0,
+                site: Box::new(s.clone()),
+                outcome: ConnectOutcome::NeedsSecret(fcmd_net::SecretKind::Password),
+            });
+        };
+        let opened = |app: &mut App| {
+            app.handle_event(Event::Connected {
+                panel: 0,
+                site: Box::new(s.clone()),
+                outcome: ConnectOutcome::Open {
+                    start: s.start(),
+                    connected: vec![s.key()],
+                },
+            });
+        };
+        let answer = |app: &mut App, kind: PromptKind, text: &str| {
+            let Mode::Prompt(mut prompt) = std::mem::replace(&mut app.mode, Mode::Normal) else {
+                panic!("{kind:?} was not asked: {:?}", app.mode)
+            };
+            assert_eq!(prompt.kind, kind);
+            prompt.text = text.into();
+            app.prompt_accept(prompt);
+        };
+        let sent = |app: &mut App| {
+            app.take_requests().into_iter().find_map(|r| match r {
+                Request::Connect { secret, .. } => Some(secret),
+                _ => None,
+            })
+        };
+
+        let mut app = app_on_disk(dir.path());
+        needs(&mut app);
+        answer(
+            &mut app,
+            PromptKind::NetSecret(fcmd_net::SecretKind::Password),
+            "srv-pw",
+        );
+        assert_eq!(sent(&mut app), Some(Some("srv-pw".into())));
+        opened(&mut app);
+        answer(&mut app, PromptKind::VaultNew, "master");
+        assert!(app.vault_path().is_file());
+
+        // The next run.
+        let mut app = app_on_disk(dir.path());
+        needs(&mut app);
+        answer(&mut app, PromptKind::VaultPassword, "master");
+        assert_eq!(sent(&mut app), Some(Some("srv-pw".into())), "from the file");
+        // The server says no to it: asked for, not tried again.
+        needs(&mut app);
+        assert!(
+            matches!(&app.mode, Mode::Prompt(p) if p.kind == PromptKind::NetSecret(fcmd_net::SecretKind::Password))
+        );
     }
 
     /// An app whose left panel is already on the remote host.
