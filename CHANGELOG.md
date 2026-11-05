@@ -36,8 +36,8 @@ Notable changes, newest first. The format follows
   other panel's folder from being found.
 - **SSH servers without SFTP.** A router, a NAS or a board running dropbear with no SFTP
   behind it now opens anyway: when the server refuses SFTP the panel works through its shell
-  (`ls`, `cat`, `mkdir`, `mv`, `rm`, `chmod`, and POSIX `touch -t` for times, which GNU, BSD
-  and busybox all take), with the same keys as any other server.
+  (`ls`, `cat`, `mkdir`, `mv`, `rm`, `chmod`, and POSIX `touch -t` for times, written so GNU,
+  BSD and busybox all take them), with the same keys as any other server.
 
 ## [0.34.0] - 2026-11-05
 

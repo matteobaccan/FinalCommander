@@ -243,7 +243,7 @@ impl<E: Exec + 'static> RemoteFs for ShellFs<E> {
     async fn set_meta(&self, path: &str, mode: Option<u32>, mtime: Option<u32>) -> Result<()> {
         let q = sh_quote(path);
         if let Some(mode) = mode {
-            self.ok(path, format!("chmod {:o} -- {q}", mode & 0o7777))
+            self.ok(path, format!("chmod -- {:o} {q}", mode & 0o7777))
                 .await?;
         }
         if let Some(secs) = mtime {
