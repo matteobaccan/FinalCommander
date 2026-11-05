@@ -1337,10 +1337,13 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                     src,
                     out_dir,
                     size,
+                    count,
                     cancel,
                 } => {
                     let tx = tx.clone();
-                    runtime.spawn_blocking(move || run_split(id, &src, &out_dir, size, cancel, tx));
+                    runtime.spawn_blocking(move || {
+                        run_split(id, &src, &out_dir, size, count, cancel, tx)
+                    });
                 }
                 Request::Combine {
                     id,
@@ -2787,17 +2790,24 @@ fn run_split(
     src: &std::path::Path,
     out_dir: &std::path::Path,
     size: u64,
+    count: Option<u64>,
     cancel: CancelToken,
     tx: mpsc::Sender<Event>,
 ) {
     let total = std::fs::metadata(src).map(|m| m.len()).unwrap_or(0);
-    let result = fcmd_jobs::split::split(
-        src,
-        out_dir,
-        size,
-        &cancel,
-        &mut pieces_reporter(id, total, &tx),
-    );
+    let size = match count {
+        Some(count) => fcmd_jobs::split::size_for_count(total, count),
+        None => Ok(size),
+    };
+    let result = size.and_then(|size| {
+        fcmd_jobs::split::split(
+            src,
+            out_dir,
+            size,
+            &cancel,
+            &mut pieces_reporter(id, total, &tx),
+        )
+    });
     let cancelled = matches!(&result, Err(e) if e.kind() == std::io::ErrorKind::Interrupted);
     let result = result
         .map(|p| app::PiecesMade::Split {
@@ -5310,10 +5320,11 @@ dir_attr = "D"
                     src,
                     out_dir,
                     size,
+                    count,
                     cancel,
                 } => {
                     let (tx, rx) = mpsc::channel();
-                    run_split(id, &src, &out_dir, size, cancel, tx);
+                    run_split(id, &src, &out_dir, size, count, cancel, tx);
                     while let Ok(event) = rx.try_recv() {
                         app.handle_event(event);
                     }

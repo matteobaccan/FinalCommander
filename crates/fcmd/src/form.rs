@@ -1242,7 +1242,7 @@ impl Form {
     }
 
     /// `Files → Split file`: where the pieces go and how big each one is.
-    pub fn split(what: String, target: String, size: String, i18n: &I18n) -> Form {
+    pub fn split(what: String, target: String, size: String, count: String, i18n: &I18n) -> Form {
         let t = |id: &str| i18n.t(id);
         let fields = vec![
             Field::Note(what),
@@ -1251,6 +1251,10 @@ impl Form {
             // `1440K`, `700M` and `4G` are all one row.
             Field::text("split.size", t("split-size"), size),
             Field::Note(t("split-size-hint")),
+            // Double Commander's other way of asking: how many, rather than how big. Filled
+            // in, it decides, and the size row above is not read.
+            Field::text("split.count", t("split-count"), count),
+            Field::Note(t("split-count-hint")),
         ];
         Form {
             pages: Vec::new(),

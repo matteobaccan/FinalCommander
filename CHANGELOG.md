@@ -30,6 +30,9 @@ Notable changes, newest first. The format follows
   every tab of the panel, numbered, with its path and the one on screen under the cursor.
   `Enter` or the number goes to one, `Ctrl+↑/↓` move the tab under the cursor along the row.
   `panel.tab.shift(-1)` and `(1)` do the same for a keymap or a macro.
+- **Splitting into a number of pieces.** The split dialog has a *pieces* row under the size: a
+  number there decides, and the pieces are all one size with the last one shorter, as the
+  format wants. A count no single size can make is refused naming the nearest one that can.
 
 ## [0.31.0] — 2026-11-05
 

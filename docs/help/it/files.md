@@ -157,7 +157,10 @@ si verifica come qualunque altro elenco.
 `700M`, `4G`, `1440K` — nella cartella dell'altro pannello: `film.mkv.001`, `film.mkv.002` e
 così via, l'ultimo più corto, e accanto a loro `film.mkv.crc`, che dice che cosa formano i
 pezzi. Sono i pezzi di Total Commander, quindi ciascuno dei due programmi riunisce quello che
-l'altro ha tagliato.
+l'altro ha tagliato. Oppure di' quanti pezzi vuoi nella riga sotto: un numero lì decide, e i
+pezzi hanno tutti la stessa dimensione con l'ultimo più corto — un numero che nessuna
+dimensione unica può dare (dieci byte in sei) viene rifiutato indicando il più vicino che si
+può.
 
 *File → Unisci i file* su uno qualunque dei pezzi, o sul `.crc`, li rimette insieme nella
 cartella dell'altro pannello, da `.001` in su finché si susseguono, e controlla il risultato

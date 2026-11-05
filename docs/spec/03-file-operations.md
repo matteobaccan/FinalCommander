@@ -321,6 +321,11 @@ past 999 — and beside them `name.crc`, three `key=value` lines, `filename=`, `
 - *Split* asks where the pieces go (the other panel, as a copy would) and how big each one is,
   in the size grammar of the filters (`1440K`, `700M`, `4G`; upper case is binary, lower case
   decimal); the last piece is what is left. A file no bigger than one piece is not split.
+  Or how many: a number in the *pieces* row decides when it is there, and the size row is not
+  read. The worker, which is where the file's size is known, turns it into the one piece size
+  that makes exactly that many (`size_for_count`, `ceil(total / count)`); a count no single
+  size can make — ten bytes are four pieces or five, never six — is refused naming the nearest
+  one that can, rather than producing a different number of pieces from the one asked for.
   Nothing is written over: a piece or a `.crc` already there stops it before the first byte,
   and a failure or `Esc` takes back the pieces written so far.
 - *Combine*, on any piece or on the `.crc`, joins `.001` upward for as long as the pieces
@@ -332,7 +337,7 @@ past 999 — and beside them `name.crc`, three `key=value` lines, `filename=`, `
 - Both run in the background with their progress in the status line, as the checksums do,
   and `Esc` stops them. Local files only: the bytes are read and written here.
 
-Still to come: splitting by a count rather than a size, the self-joining script, and reading
+Still to come: the self-joining script, and reading
 other series (`.part1.rar`, `.zNN`), which are archives' own and opened as archives.
 
 ## 10. Compare and synchronise

@@ -53,6 +53,31 @@ pub fn part_name(name: &str, n: usize) -> String {
     format!("{name}.{n:03}")
 }
 
+/// The piece size that cuts `total` bytes into exactly `count` pieces, the way the format
+/// cuts: every piece the same size and the last one what is left. Not every count can be
+/// reached like that — ten bytes are four pieces of three or five of two, never six — and a
+/// count that cannot is refused naming the nearest that can, rather than quietly making a
+/// different number of pieces from the one asked for.
+pub fn size_for_count(total: u64, count: u64) -> io::Result<u64> {
+    let refuse = |why: String| io::Error::new(io::ErrorKind::InvalidInput, why);
+    if count < 2 {
+        return Err(refuse("a split makes two pieces or more".to_string()));
+    }
+    if total < count {
+        return Err(refuse(format!(
+            "a file of {total} bytes cannot be cut into {count} pieces"
+        )));
+    }
+    let size = total.div_ceil(count);
+    let made = total.div_ceil(size);
+    if made != count {
+        return Err(refuse(format!(
+            "{total} bytes cannot be cut into {count} pieces of one size; {made} pieces of {size} bytes is the nearest"
+        )));
+    }
+    Ok(size)
+}
+
 /// Split `src` into pieces of `size` bytes in `out_dir`, the last one shorter, and write the
 /// `.crc` beside them. Nothing is written over: a piece or a list that is already there stops
 /// it before anything is written, and a failure or a cancel takes back what was written.
@@ -290,6 +315,22 @@ pub fn combine(
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_count_of_pieces_is_a_size_when_one_size_can_make_it() {
+        // A 4 GB DVD image in five: four of 860 MiB-ish and what is left.
+        let total = 4_294_967_296u64;
+        let size = size_for_count(total, 5).unwrap();
+        assert_eq!(total.div_ceil(size), 5);
+        // Ten bytes are three pieces of four, four of three, five of two, ten of one.
+        assert_eq!(size_for_count(10, 4).unwrap(), 3);
+        assert_eq!(size_for_count(10, 5).unwrap(), 2);
+        let six = size_for_count(10, 6).unwrap_err().to_string();
+        assert!(six.contains("5 pieces of 2 bytes"), "{six}");
+        assert!(size_for_count(10, 1).is_err(), "one piece is not a split");
+        assert!(size_for_count(3, 4).is_err(), "more pieces than bytes");
+    }
+
     use super::*;
 
     fn body(len: usize) -> Vec<u8> {

@@ -103,12 +103,15 @@ pub enum Request {
         list: VPath,
         cancel: CancelToken,
     },
-    /// Cut `src` into pieces of `size` bytes in `out_dir` (SPEC 03 §9).
+    /// Cut `src` into pieces of `size` bytes in `out_dir` (SPEC 03 §9), or into `count`
+    /// pieces when one is given — a count needs the file's size, which is the worker's to
+    /// read and not the interface's.
     Split {
         id: u64,
         src: std::path::PathBuf,
         out_dir: std::path::PathBuf,
         size: u64,
+        count: Option<u64>,
         cancel: CancelToken,
     },
     /// Join the pieces that go with `any` into `out_dir`.
@@ -1995,6 +1998,8 @@ pub struct App {
     /// The file the split dialog is about, and the piece size it was last answered with.
     split_source: Option<VPath>,
     last_split_size: String,
+    /// What the *Pieces* row of the split dialog said last time: empty is "by size".
+    last_split_count: String,
     /// The help page a search was started from, to go back to when it is dismissed, and the
     /// last thing looked for, which the next search offers again.
     help_back: Option<(crate::help::Chapter, usize, usize)>,
@@ -2344,6 +2349,7 @@ impl App {
             branch_cancel: CancelToken::new(),
             split_source: None,
             last_split_size: "100M".to_string(),
+            last_split_count: String::new(),
             help_back: None,
             help_query: String::new(),
             pack_delete: None,
@@ -6943,24 +6949,47 @@ impl App {
         let what = self.sources_label(std::slice::from_ref(&path));
         let target = self.panels[1 - self.active].cwd.to_string();
         let size = self.last_split_size.clone();
+        let count = self.last_split_count.clone();
         self.split_source = Some(path);
-        self.mode = Mode::Form(Box::new(Form::split(what, target, size, &self.i18n)));
+        self.mode = Mode::Form(Box::new(Form::split(what, target, size, count, &self.i18n)));
     }
 
     fn apply_split_form(&mut self, form: &Form) {
         let Some(src) = self.split_source.take() else {
             return;
         };
+        // A count, when there is one, decides; the size row is then not read at all, so a
+        // size left over from last time cannot refuse a split that does not use it.
+        let counted = form.text_value("split.count").trim().to_string();
+        let count = if counted.is_empty() {
+            None
+        } else {
+            match counted.parse::<u64>() {
+                Ok(n) if n >= 2 => Some(n),
+                _ => {
+                    let msg = self
+                        .i18n
+                        .t_args("split-bad-count", &[("count", counted.into())]);
+                    self.set_error(msg);
+                    return;
+                }
+            }
+        };
         let text = form.text_value("split.size").trim().to_string();
-        let size = match fcmd_core::filter::parse_size(&text) {
-            Ok(size) if size > 0 => size,
-            _ => {
-                let msg = self.i18n.t_args("split-bad-size", &[("size", text.into())]);
-                self.set_error(msg);
-                return;
+        let size = if count.is_some() {
+            0
+        } else {
+            match fcmd_core::filter::parse_size(&text) {
+                Ok(size) if size > 0 => size,
+                _ => {
+                    let msg = self.i18n.t_args("split-bad-size", &[("size", text.into())]);
+                    self.set_error(msg);
+                    return;
+                }
             }
         };
         self.last_split_size = text;
+        self.last_split_count = counted;
         let out = self.resolve_path(form.text_value("split.target").trim());
         if !out.is_local() || out.in_container() {
             let m = self.i18n.t("split-local-file");
@@ -6976,6 +7005,7 @@ impl App {
             src: src.as_path().to_path_buf(),
             out_dir: out.as_path().to_path_buf(),
             size,
+            count,
             cancel,
         });
     }
@@ -31038,12 +31068,14 @@ abcdefghij
             src,
             out_dir,
             size,
+            count,
             cancel,
         } = request
         else {
             unreachable!()
         };
         assert_eq!(size, 10 * 1024);
+        assert_eq!(count, None, "by size: the pieces row was left empty");
         assert_eq!(src, dir.path().join("big.bin"));
         // The worker, run here, and what it says.
         let pieces = fcmd_jobs::split::split(&src, &out_dir, size, &cancel, &mut |_| {}).unwrap();
@@ -31072,6 +31104,59 @@ abcdefghij
         let at = app.panels[0].listing.row_of_name("big.bin").unwrap();
         app.panels[0].cursor = at;
         app.run(Command::FileCombine);
+        assert!(app.status_error, "{}", app.status);
+    }
+
+    /// The *pieces* row of the split dialog, filled in, decides: the request carries the
+    /// count for the worker to turn into a size, and a size row that says nonsense is not read.
+    /// A count that is not two or more is refused before anything is asked for.
+    #[test]
+    fn a_split_into_a_number_of_pieces_carries_the_count() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("big.bin"), vec![5u8; 30_000]).unwrap();
+        let ask = |count: &str| -> (App, Option<Request>) {
+            let mut app = editing_app(dir.path());
+            press(&mut app, "Down");
+            app.run(Command::FileSplit);
+            for (key, value) in [("split.size", "nonsense"), ("split.count", count)] {
+                let Mode::Form(form) = &mut app.mode else {
+                    panic!("{:?}", app.mode)
+                };
+                form.cursor = form
+                    .fields
+                    .iter()
+                    .position(|f| matches!(f, crate::form::Field::Text { key: k, .. } if *k == key))
+                    .unwrap();
+                clear_prompt(&mut app);
+                type_text(&mut app, value);
+            }
+            app.requests.clear();
+            app.apply_form();
+            let split = app
+                .take_requests()
+                .into_iter()
+                .find(|r| matches!(r, Request::Split { .. }));
+            (app, split)
+        };
+        let (_, split) = ask("4");
+        let Some(Request::Split {
+            count,
+            src,
+            out_dir,
+            cancel,
+            ..
+        }) = split
+        else {
+            panic!("no split was asked for")
+        };
+        assert_eq!(count, Some(4));
+        // What the worker makes of it: four pieces of the same size, the last one shorter.
+        let size = fcmd_jobs::split::size_for_count(30_000, 4).unwrap();
+        let pieces = fcmd_jobs::split::split(&src, &out_dir, size, &cancel, &mut |_| {}).unwrap();
+        assert_eq!(pieces.parts.len(), 4);
+
+        let (app, split) = ask("1");
+        assert!(split.is_none(), "one piece is not a split");
         assert!(app.status_error, "{}", app.status);
     }
 

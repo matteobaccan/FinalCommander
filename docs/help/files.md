@@ -149,7 +149,10 @@ sends you is checked the same way as any other list.
 *Files → Split file* cuts the file under the cursor into pieces of the size you give — `700M`,
 `4G`, `1440K` — in the other panel's folder: `film.mkv.001`, `film.mkv.002` and so on, the last
 one shorter, and beside them `film.mkv.crc`, which says what the pieces make. These are Total
-Commander's own pieces, so either program joins what the other cut.
+Commander's own pieces, so either program joins what the other cut. Or say how many pieces
+you want in the row under it: a number there decides, and the pieces are all one size with the
+last one shorter — a count no single size can make (ten bytes into six) is refused with the
+nearest one that can.
 
 *Files → Combine files* on any of the pieces, or on the `.crc`, puts them back together in the
 other panel's folder, from `.001` up for as long as they follow on, and checks the result
