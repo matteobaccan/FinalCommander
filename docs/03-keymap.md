@@ -119,6 +119,8 @@ Column `FC` = FinalCommander default (profile `far`, our baseline).
 | move the tab to the other panel | — | — | — | **Ctrl+Alt+M** |
 | lock the tab to its directory | — | — | — | **Ctrl+Alt+K** |
 | list of the tabs, and their order | — | — | — | **Ctrl+Alt+A**; `Ctrl+↑/↓` inside it move a tab |
+| filter the panel | — | — | — | **Ctrl+Shift+I**, live, masks and `size:` `age:` `attr:` `kind:` |
+| filters menu (named filters) | Ctrl+I | — | — | **Ctrl+Alt+S** — `Ctrl+I` reaches a program as `Tab` |
 | name the tab | — | — | — | Left/Right menu |
 | find file | Alt+F7 | Alt+? | Ctrl+S | Alt+F7 |
 | branch view (every file below, flat) | — | — | Ctrl+B | **Ctrl+Alt+B** — `Ctrl+B` is the key bar in FAR's grammar; the same key goes back |
@@ -361,7 +363,7 @@ Naming: `<area>.<object>.<verb>`.
 panel.focus.toggle          panel.swap                 panel.reread
 panel.view.set(brief|medium|full|wide|detail|custom:N)
 panel.sort.by(name|ext|size|mtime|ctime|atime|owner|none)   panel.sort.reverse
-panel.filter.quick          panel.filter.set            panel.hidden.toggle
+panel.filter.quick          panel.filter.menu           panel.hidden.toggle
 panel.tab.new|close|next|prev|move|lock|name     panel.layout.toggle
 nav.enter  nav.parent  nav.root  nav.history.back|forward  nav.bookmark.set(N)|go(N)  nav.bookmarks
 nav.goto.path  nav.goto.fuzzy  nav.drives  nav.other.sync

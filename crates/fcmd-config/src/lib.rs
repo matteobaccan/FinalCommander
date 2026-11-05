@@ -1395,6 +1395,58 @@ pub struct HighlightCfg {
     pub bg: String,
 }
 
+/// A named panel filter (SPEC 02 §5): the conditions of a `[[highlight]]` group without its
+/// colours, in the same spellings, because the two are one condition set.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct FilterCfg {
+    /// What the filters menu calls it.
+    pub name: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub mask: String,
+    /// `file`, `dir`, or empty for both.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub kind: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub size: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub age: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub date_field: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub attrs: String,
+}
+
+impl FilterCfg {
+    /// The block as the one line the filter bar and the selection keys take — so a saved
+    /// filter is parsed by the same code as a typed one, and putting it in the bar shows the
+    /// user exactly what it says.
+    pub fn line(&self) -> String {
+        let mut words: Vec<String> = Vec::new();
+        if !self.mask.trim().is_empty() {
+            words.push(self.mask.trim().to_string());
+        }
+        if !self.size.trim().is_empty() {
+            words.push(format!("size:{}", self.size.trim()));
+        }
+        if !self.age.trim().is_empty() {
+            let field = self.date_field.trim();
+            if field.is_empty() || field == "write" {
+                words.push(format!("age:{}", self.age.trim()));
+            } else {
+                words.push(format!("age:{field}:{}", self.age.trim()));
+            }
+        }
+        if !self.attrs.trim().is_empty() {
+            words.push(format!("attr:{}", self.attrs.trim()));
+        }
+        if !self.kind.trim().is_empty() {
+            words.push(format!("kind:{}", self.kind.trim()));
+        }
+        words.join(" ")
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AssocCfg {
     /// `*.md`, or an exact file name like `Makefile`.
@@ -1540,6 +1592,9 @@ pub struct Config {
     /// `[[highlight]]` blocks: the panel's own colours by condition (SPEC 02 §5).
     #[serde(rename = "highlight")]
     pub highlight: Vec<HighlightCfg>,
+    /// `[[filter]]` blocks: the named panel filters the filters menu offers (SPEC 02 §5).
+    #[serde(rename = "filter")]
+    pub filters: Vec<FilterCfg>,
     /// `[[sort_group]]` blocks: the bands the sort groups cut a listing into (SPEC 02 §4).
     #[serde(rename = "sort_group")]
     pub sort_groups: Vec<SortGroupCfg>,
@@ -1918,6 +1973,36 @@ fn parse_bool(v: &str) -> Result<bool, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A `[[filter]]` block reads the way a `[[highlight]]` one does, and turns into the one
+    /// line the filter bar takes — the date field spelled into `age:` only when it is not the
+    /// write time, which is what `age:` means on its own.
+    #[test]
+    fn a_named_filter_is_a_line_of_the_filter_grammar() {
+        let cfg: Config = toml::from_str(
+            r#"
+[[filter]]
+name = "Old logs"
+mask = "*.log"
+size = "1M-"
+age = ">=30"
+
+[[filter]]
+name = "New folders"
+kind = "dir"
+age = "<=1"
+date_field = "create"
+attrs = "-h"
+"#,
+        )
+        .expect("it reads");
+        assert_eq!(cfg.filters.len(), 2);
+        assert_eq!(cfg.filters[0].line(), "*.log size:1M- age:>=30");
+        assert_eq!(cfg.filters[1].line(), "age:create:<=1 attr:-h kind:dir");
+        // And back out, for Save setup.
+        let written = toml::to_string(&cfg).expect("it writes");
+        assert!(written.contains("[[filter]]"), "{written}");
+    }
 
     /// The settings browser is generated from the file, so every row it shows has to be a row
     /// `set` can take back — otherwise the browser would offer a setting nobody can change.

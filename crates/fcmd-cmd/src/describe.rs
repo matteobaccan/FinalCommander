@@ -119,6 +119,7 @@ impl Command {
             Command::PanelDirsFirst => "directories first, or mixed in with the files",
             Command::PanelSelectedFirst => "the selected files first, or in their own place",
             Command::PanelFilterQuick => "show only the names that match a mask",
+            Command::PanelFilterMenu => "the named filters, to put one on the panel or write one",
             Command::PanelCodePage => "read this panel's names in another code page",
             Command::PanelOtherSync => "send the other panel to this directory",
             Command::PanelSortMenu => "choose the order from a list",

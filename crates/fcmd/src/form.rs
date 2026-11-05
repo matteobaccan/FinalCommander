@@ -279,6 +279,7 @@ impl Form {
             | FormKind::Sync
             | FormKind::Link
             | FormKind::Highlight
+            | FormKind::FilterSet
             | FormKind::SortGroup
             | FormKind::MaskGroup
             | FormKind::Search => Vec::new(),
@@ -581,6 +582,7 @@ impl Form {
             FormKind::Search => "search-title",
             FormKind::Link => "link-title",
             FormKind::Highlight => "hl-new",
+            FormKind::FilterSet => "filter-new",
             FormKind::SortGroup => "sg-title",
             FormKind::MaskGroup => "mg-title",
             FormKind::EditorSettings => "menu-editor-settings",
@@ -868,6 +870,62 @@ impl Form {
             page: 0,
             kind: FormKind::Highlight,
             title: t(if group.is_some() { "hl-edit" } else { "hl-new" }),
+            fields,
+            cursor: 0,
+            site: None,
+            button: None,
+            buttons: vec![i18n.t("btn-ok"), i18n.t("btn-cancel")],
+        }
+    }
+
+    /// One named filter, or a new one: the highlight group's conditions in its own words,
+    /// without the inks — the two are one condition set (SPEC 02 §5).
+    pub fn filter_set(filter: Option<&fcmd_config::FilterCfg>, i18n: &I18n) -> Form {
+        let t = |id: &str| i18n.t(id);
+        let blank = fcmd_config::FilterCfg::default();
+        let f = filter.unwrap_or(&blank);
+        let fields = vec![
+            Field::text("fl.name", t("hl-name"), f.name.clone()),
+            Field::Note(t("filter-name-hint")),
+            Field::Separator,
+            Field::text("fl.mask", t("hl-mask"), f.mask.clone()),
+            choice(
+                "fl.kind",
+                t("hl-kind"),
+                &[
+                    ("", t("hl-kind-both")),
+                    ("file", t("hl-kind-file")),
+                    ("dir", t("hl-kind-dir")),
+                ],
+                &f.kind,
+            ),
+            Field::text("fl.size", t("hl-size"), f.size.clone()),
+            Field::text("fl.age", t("hl-age"), f.age.clone()),
+            choice(
+                "fl.date_field",
+                t("hl-date-field"),
+                &[
+                    ("write", t("col-modified")),
+                    ("create", t("col-created")),
+                    ("access", t("col-accessed")),
+                ],
+                if f.date_field.is_empty() {
+                    "write"
+                } else {
+                    &f.date_field
+                },
+            ),
+            Field::text("fl.attrs", t("hl-attrs"), f.attrs.clone()),
+        ];
+        Form {
+            pages: Vec::new(),
+            page: 0,
+            kind: FormKind::FilterSet,
+            title: t(if filter.is_some() {
+                "filter-edit"
+            } else {
+                "filter-new"
+            }),
             fields,
             cursor: 0,
             site: None,

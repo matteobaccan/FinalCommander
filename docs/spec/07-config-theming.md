@@ -226,6 +226,25 @@ fg = "red"
 A group with no condition is refused — it would paint every row — and one that does not parse
 is a warning on the startup screen rather than a reason to refuse to start.
 
+## 2b-sexies. `[[filter]]` blocks
+
+The named panel filters `Ctrl+Alt+S` lists (SPEC 02 §5): a `[[highlight]]` group's conditions
+in its own keys, without `fg` and `bg`. Each block is read as the one line the filter bar takes,
+so `size = "1M-"` is `size:1M-` and `date_field = "create"` with `age = "<=1"` is
+`age:create:<=1`.
+
+```toml
+[[filter]]
+name = "Old logs"
+mask = "*.log"
+size = "1M-"
+age = ">=30"
+
+[[filter]]
+name = "Folders only"
+kind = "dir"
+```
+
 ## 2c. `[net]` and `[[site]]`
 
 The netbox's settings and its site list (SPEC 04 §6). No secret ever appears here: a site says

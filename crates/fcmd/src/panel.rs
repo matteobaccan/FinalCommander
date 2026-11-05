@@ -103,7 +103,7 @@ pub struct Panel {
     /// What was typed in the filter bar, for the status line.
     pub filter: Option<String>,
     /// The same thing compiled. Both are set together, or neither is.
-    pub filter_set: Option<fcmd_core::filter::MaskSet>,
+    pub filter_set: Option<fcmd_core::filter::Filter>,
     pub history: Vec<VPath>,
     pub history_pos: usize,
     pub generation: u64,

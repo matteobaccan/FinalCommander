@@ -345,6 +345,13 @@ week, and `age:created:<=7` asks the creation time instead) and `attr:h` (hidden
 not read-only). So `*.log size:100M- age:>=30` selects the old big logs, and `size:1G-` alone
 selects everything over a gigabyte.
 
+`Ctrl+Shift+I` filters the panel with the same line, as you type it, and adds `kind:file` and
+`kind:dir`: `*.log size:100M-` shows only the big logs, `kind:dir` only the folders. An empty
+line takes the filter off. `Ctrl+Alt+S` is the menu of the filters you keep — `[[filter]]`
+blocks in the settings, in the words of the colour groups — where `Enter` puts one on, `Ins`
+writes a new one in a dialog, `F4` changes one and `Del` takes it out; a filter written there
+without a name is used once and not kept, and the first row takes the filter off.
+
 What is selected is what the next operation acts on. With nothing selected it is the row under
 the cursor — so `F5` on one file copies that file, and nobody has to select it first.
 

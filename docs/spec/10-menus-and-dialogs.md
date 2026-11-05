@@ -89,6 +89,7 @@ A `√` marks the entry that describes the state the panel is in now — the cur
 | Sort modes | opens the sort list (§4.5) | |
 | Hidden and system files | `panel.hidden.toggle` | `√` when shown |
 | File filter | `panel.filter.quick` | |
+| Named filters | `panel.filter.menu` | |
 | Panel on/off | — (backlog) | |
 | Re-read | `panel.reread` | |
 | Change drive | opens the drive list (§4.3) | |

@@ -179,6 +179,13 @@ cmd = "panel.other.sync"
 keys = ["Ctrl+Shift+I"]
 cmd = "panel.filter.quick"
 
+# FAR's filters menu is `Ctrl+I`, which a terminal sends as `Tab`; `Ctrl+Alt+I` arrives as
+# `Alt+Tab`, which a desktop takes first. S for the saved ones.
+[[bind]]
+keys = ["Ctrl+Alt+S"]
+scope = "panel"
+cmd = "panel.filter.menu"
+
 # FAR's own numbering, all ten of them: brief, medium, full, wide, detailed, descriptions,
 # long descriptions, owners, links, and the alternative full view with the sizes written out.
 [[bind]]

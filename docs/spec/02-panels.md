@@ -362,12 +362,22 @@ keys have no such condition, which is why they need a default at all.
 
 ## 5. Filters
 
-- **Quick filter bar** (`Ctrl+Shift+I`): live substring/glob, applied to the visible order
-  only. It was `Alt+I` and moved: `Alt+<letter>` is the quick search, and a binding always
-  wins over it, so that one key cost the letter `i` in every listing.
-- **Filter sets**: named rules combining masks (`*.rs,*.toml`), exclude masks, size range, age
-  range, attributes, and entry kind; stored in `filters.toml`, selectable from a menu,
-  lockable so a changed directory keeps the filter.
+- **Quick filter bar** (`Ctrl+Shift+I`): live, applied to the visible order only, and the
+  whole one-line grammar of *Selecting by a filter* below plus `kind:file` / `kind:dir` —
+  `*.log size:100M-` shows the big logs. A line that does not parse yet is half typed and
+  leaves the previous filter on. It was `Alt+I` and moved: `Alt+<letter>` is the quick
+  search, and a binding always wins over it, so that one key cost the letter `i` in every
+  listing.
+- **Filter sets** (shipped): named rules combining masks, exclude masks, size range, age
+  range on a chosen timestamp, attributes and entry kind — `[[filter]]` blocks in
+  `fcmd.toml`, in the same keys as a `[[highlight]]` group without its inks, rather than the
+  `filters.toml` first written here: one file holds the settings (SPEC 07 §1). A block is
+  turned into the one line the bar takes (`FilterCfg::line`), so a saved filter and a typed
+  one go through one parser and the bar shows what a saved one says. `Ctrl+Alt+S`
+  (`panel.filter.menu`; FAR's `Ctrl+I` reaches a program as `Tab`) lists *no filter* and then
+  the blocks, the one in force marked; `Enter` puts one on, `Ins` / `F4` open the dialog of the
+  conditions, `Del` takes a block out. A filter written in the dialog with no name is put on
+  and not kept. Still to come: locking a filter so a changed directory keeps it.
 - One filter object, three users. A filter is not a panel feature that find and copy happen to
   copy: it is one object the panel display, the find tool and the copy engine all take. FAR
   proves the shape (its filter dialog is reached from all three) and it halves the work.

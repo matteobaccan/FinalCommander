@@ -1921,6 +1921,8 @@ pub struct App {
     /// Which colour group the open dialog is editing, or `None` for a new one
     /// (SPEC 10 §3.11).
     pub highlight_at: Option<usize>,
+    /// Which `[[filter]]` the filter dialog is editing; `None` for a new one.
+    filter_at: Option<usize>,
     /// The band the sort-group dialog is editing, or where a new one goes.
     pub sort_group_at: Option<usize>,
     /// The walk filling the folder list, so a second `Alt+F10` does not start another and
@@ -2322,6 +2324,7 @@ impl App {
             form_offset: (0, 0),
             form_moving: false,
             highlight_at: None,
+            filter_at: None,
             sort_group_at: None,
             folder_scan: None,
             mask_group_at: None,
@@ -5132,12 +5135,14 @@ impl App {
                     panel.rebuild();
                     return;
                 }
-                if let Ok(masks) =
-                    fcmd_core::filter::MaskSet::parse_with(&text, &self.cfg.mask_groups(), false)
+                // The whole one-line grammar the selection keys take: `*.log size:100M-
+                // age:>=30 attr:-h kind:file`. A line that does not parse yet is half typed.
+                if let Ok(filter) =
+                    fcmd_core::filter::Filter::parse_line(&text, &self.cfg.mask_groups())
                 {
                     let panel = self.panel_mut();
                     panel.filter = Some(text);
-                    panel.filter_set = Some(masks);
+                    panel.filter_set = Some(filter);
                     panel.rebuild();
                 }
             }
@@ -8388,6 +8393,7 @@ impl App {
                     self.set_error(m);
                 }
             },
+            Command::PanelFilterMenu => self.open_filters(0),
             Command::PanelFilterQuick => {
                 let title = self.i18n.t("prompt-filter");
                 self.mode = Mode::Prompt(Prompt {
@@ -14081,6 +14087,10 @@ impl App {
             self.apply_highlight_form(&form);
             return;
         }
+        if form.kind == FormKind::FilterSet {
+            self.apply_filter_form(&form);
+            return;
+        }
         if form.kind == FormKind::SortGroup {
             self.apply_sort_group_form(&form);
             return;
@@ -15735,6 +15745,8 @@ impl App {
             PickKind::UserMenu => return,
             // And `tab_list`, which knows which side and which tab is on screen.
             PickKind::Tabs => return,
+            // And `open_filters`, which knows which filter the panel has on.
+            PickKind::Filters => return,
             // And `open_settings`, which knows which row the list was left on.
             PickKind::Settings => return,
             PickKind::Languages => Pick::new(
@@ -16141,6 +16153,24 @@ impl App {
             }
             // The groups are edited where they are read, like the hotlist: a list of
             // colours one cannot change from inside it would send the reader to the file.
+            KeyCode::F(4) if kind == PickKind::Filters => {
+                if let Some(at) = pick.chosen().and_then(|r| r.value.parse::<usize>().ok()) {
+                    self.open_filter_form(Some(at));
+                }
+            }
+            KeyCode::Insert if kind == PickKind::Filters => self.open_filter_form(None),
+            KeyCode::Delete if kind == PickKind::Filters => {
+                let (side, cursor) = (pick.side, pick.cursor);
+                if let Some(at) = pick.chosen().and_then(|r| r.value.parse::<usize>().ok()) {
+                    if at < self.cfg.filters.len() {
+                        let gone = self.cfg.filters.remove(at).name;
+                        let msg = self.i18n.t_args("filter-removed", &[("name", gone.into())]);
+                        self.active = side;
+                        self.open_filters(cursor as isize);
+                        self.set_status(msg);
+                    }
+                }
+            }
             KeyCode::F(4) if kind == PickKind::Highlight => {
                 let at = pick.cursor;
                 self.open_highlight_form(Some(at));
@@ -16658,6 +16688,14 @@ impl App {
                 let at = row.value.parse::<usize>().unwrap_or(0);
                 self.open_highlight_form(Some(at));
             }
+            PickKind::Filters => match row.value.parse::<usize>() {
+                Ok(at) => {
+                    if let Some(saved) = self.cfg.filters.get(at).cloned() {
+                        self.put_filter(saved.line(), Some(&saved.name));
+                    }
+                }
+                Err(_) => self.put_filter(String::new(), None),
+            },
             PickKind::SortGroups => {
                 let at = row.value.parse::<usize>().unwrap_or(0);
                 self.open_sort_group_form(Some(at));
@@ -19277,6 +19315,114 @@ impl App {
         self.mode = Mode::Pick(Box::new(pick));
     }
 
+    /// `Ctrl+Alt+S`: the named filters, after a row that takes the filter off. The one that is
+    /// on the panel now is marked: its line is what the panel's filter says.
+    fn open_filters(&mut self, cursor: isize) {
+        let on = self.panel().filter.clone().unwrap_or_default();
+        let mut rows = vec![PickRow::plain(
+            self.i18n.t("filter-off"),
+            "-",
+            on.is_empty(),
+        )];
+        if !self.cfg.filters.is_empty() {
+            rows.push(PickRow::rule());
+        }
+        for (i, saved) in self.cfg.filters.iter().enumerate() {
+            let line = saved.line();
+            let label = format!("{}  {}", saved.name, line);
+            rows.push(PickRow::plain(
+                label,
+                i.to_string(),
+                !on.is_empty() && on == line,
+            ));
+        }
+        let title = self.plain("menu-filter-sets");
+        let at = if cursor > 0 {
+            cursor as usize
+        } else {
+            rows.iter().position(|r| r.current).unwrap_or(0)
+        };
+        let mut pick = Pick::new(PickKind::Filters, title, rows, self.active);
+        pick.cursor = at.min(pick.rows.len().saturating_sub(1));
+        self.mode = Mode::Pick(Box::new(pick));
+    }
+
+    /// Put a filter line on the active panel — the same road the filter bar takes, so a
+    /// saved filter and a typed one cannot behave differently. An empty line takes it off.
+    fn put_filter(&mut self, line: String, name: Option<&str>) {
+        self.mode = Mode::Normal;
+        if line.trim().is_empty() {
+            let panel = self.panel_mut();
+            panel.filter = None;
+            panel.filter_set = None;
+            panel.rebuild();
+            let msg = self.i18n.t("filter-cleared");
+            self.set_status(msg);
+            return;
+        }
+        match fcmd_core::filter::Filter::parse_line(&line, &self.cfg.mask_groups()) {
+            Ok(filter) => {
+                let panel = self.panel_mut();
+                panel.filter = Some(line.clone());
+                panel.filter_set = Some(filter);
+                panel.rebuild();
+                let msg = self.i18n.t_args(
+                    "filter-applied",
+                    &[("name", name.unwrap_or(&line).to_string().into())],
+                );
+                self.set_status(msg);
+            }
+            Err(e) => self.set_error(format!("{}: {e}", name.unwrap_or(&line))),
+        }
+    }
+
+    /// The dialog for one named filter, or for a new one.
+    fn open_filter_form(&mut self, index: Option<usize>) {
+        let saved = index.and_then(|i| self.cfg.filters.get(i)).cloned();
+        self.filter_at = index;
+        self.mode = Mode::Form(Box::new(Form::filter_set(saved.as_ref(), &self.i18n)));
+    }
+
+    /// The filter dialog's `OK`: the conditions are checked by parsing them as the line they
+    /// make, then the filter goes on the panel. With a name it is kept among the named ones,
+    /// over the one being edited; without one it is used once and not kept.
+    fn apply_filter_form(&mut self, form: &Form) {
+        let made = fcmd_config::FilterCfg {
+            name: form.text_value("fl.name").trim().to_string(),
+            mask: form.text_value("fl.mask").trim().to_string(),
+            kind: form.choice_value("fl.kind").to_string(),
+            size: form.text_value("fl.size").trim().to_string(),
+            age: form.text_value("fl.age").trim().to_string(),
+            date_field: form.choice_value("fl.date_field").to_string(),
+            attrs: form.text_value("fl.attrs").trim().to_string(),
+        };
+        let at = self.filter_at.take();
+        let line = made.line();
+        if let Err(e) = fcmd_core::filter::Filter::parse_line(&line, &self.cfg.mask_groups()) {
+            let msg = self.i18n.t_args(
+                "hl-bad",
+                &[
+                    ("name", made.name.clone().into()),
+                    ("problem", e.to_string().into()),
+                ],
+            );
+            self.set_error(msg);
+            return;
+        }
+        if made.name.is_empty() {
+            self.put_filter(line, None);
+            return;
+        }
+        let name = made.name.clone();
+        match at.filter(|&i| i < self.cfg.filters.len()) {
+            Some(i) => self.cfg.filters[i] = made,
+            None => self.cfg.filters.push(made),
+        }
+        self.put_filter(line, Some(&name));
+        let msg = self.i18n.t_args("filter-saved", &[("name", name.into())]);
+        self.set_status(msg);
+    }
+
     /// The dialog for one colour group, or for a new one (`index` is `None`).
     pub fn open_highlight_form(&mut self, index: Option<usize>) {
         let group = index.and_then(|i| self.cfg.highlight.get(i)).cloned();
@@ -19984,7 +20130,7 @@ impl App {
             let Some(source) = panel.filter.clone() else {
                 continue;
             };
-            panel.filter_set = fcmd_core::filter::MaskSet::parse_with(&source, &groups, false).ok();
+            panel.filter_set = fcmd_core::filter::Filter::parse_line(&source, &groups).ok();
             panel.rebuild();
         }
     }
@@ -21297,6 +21443,7 @@ fn pick_edits_rows(kind: PickKind) -> bool {
     matches!(
         kind,
         PickKind::Highlight
+            | PickKind::Filters
             | PickKind::Codepages
             | PickKind::Settings
             | PickKind::MaskGroups
@@ -28738,6 +28885,97 @@ run = ["echo one", "echo two", "echo three"]
         assert_eq!(app.panel().listing.len(), 3);
         press(&mut app, "Enter");
         assert_eq!(app.panel().filter.as_deref(), Some("rs"));
+    }
+
+    /// The filter bar takes the selection keys' whole line, so a panel can be narrowed by
+    /// size, kind, age and attributes as well as by name.
+    #[test]
+    fn the_filter_bar_takes_sizes_and_kinds_as_well_as_masks() {
+        let names = |app: &App| -> Vec<String> {
+            (0..app.panel().listing.len())
+                .filter_map(|i| app.panel().listing.row(i))
+                .map(|e| e.name_str().into_owned())
+                .collect()
+        };
+        let mut app = app();
+        press(&mut app, "Ctrl+Shift+I");
+        type_text(&mut app, "size:150-");
+        assert_eq!(
+            names(&app),
+            ["..", "b.rs", "c.rs"],
+            "docs is 0, a.txt is 100"
+        );
+        clear_prompt(&mut app);
+        type_text(&mut app, "kind:dir");
+        assert_eq!(names(&app), ["..", "docs"]);
+        clear_prompt(&mut app);
+        type_text(&mut app, "*.rs size:-250");
+        press(&mut app, "Enter");
+        assert_eq!(names(&app), ["..", "b.rs"]);
+        assert_eq!(app.panel().filter.as_deref(), Some("*.rs size:-250"));
+    }
+
+    /// `Ctrl+Alt+S`: off, then the `[[filter]]` blocks. `Enter` puts one on the panel and
+    /// the list marks it next time; `Ins` writes a new one through the dialog, which with a
+    /// name is kept and put on at once; the first row takes the filter off.
+    #[test]
+    fn the_filters_menu_puts_a_saved_filter_on_and_writes_new_ones() {
+        let mut app = app();
+        app.cfg.filters.push(fcmd_config::FilterCfg {
+            name: "Big sources".into(),
+            mask: "*.rs".into(),
+            size: "250-".into(),
+            ..Default::default()
+        });
+        press(&mut app, "Ctrl+Alt+S");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("no list: {}", app.status)
+        };
+        assert_eq!(pick.kind, PickKind::Filters);
+        assert_eq!(
+            pick.cursor, 0,
+            "the panel has no filter, so `off` is the current one"
+        );
+        press(&mut app, "End");
+        press(&mut app, "Enter");
+        assert_eq!(app.panel().listing.len(), 2, "`..` and c.rs");
+        assert_eq!(app.panel().filter.as_deref(), Some("*.rs size:250-"));
+        press(&mut app, "Ctrl+Alt+S");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("no list")
+        };
+        assert!(
+            pick.rows[pick.cursor].current,
+            "the saved filter is the one marked"
+        );
+
+        // A new one, through the dialog.
+        press(&mut app, "Insert");
+        let set = |app: &mut App, key: &str, value: &str| {
+            let Mode::Form(form) = &mut app.mode else {
+                panic!("{:?}", app.mode)
+            };
+            form.cursor = form
+                .fields
+                .iter()
+                .position(|f| matches!(f, crate::form::Field::Text { key: k, .. } if *k == key))
+                .unwrap();
+            clear_prompt(app);
+            type_text(app, value);
+        };
+        set(&mut app, "fl.name", "text");
+        set(&mut app, "fl.mask", "*.txt");
+        app.apply_form();
+        assert_eq!(app.cfg.filters.len(), 2);
+        assert_eq!(app.cfg.filters[1].mask, "*.txt");
+        assert_eq!(app.panel().listing.len(), 2, "`..` and a.txt");
+
+        // And off again.
+        press(&mut app, "Ctrl+Alt+S");
+        press(&mut app, "Home");
+        press(&mut app, "Enter");
+        assert!(app.panel().filter.is_none());
+        assert_eq!(app.panel().listing.len(), 5);
     }
 
     #[test]

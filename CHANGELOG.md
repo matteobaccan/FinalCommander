@@ -33,6 +33,12 @@ Notable changes, newest first. The format follows
 - **Splitting into a number of pieces.** The split dialog has a *pieces* row under the size: a
   number there decides, and the pieces are all one size with the last one shorter, as the
   format wants. A count no single size can make is refused naming the nearest one that can.
+- **Filters by size, age, attributes and kind, and named ones** (`Ctrl+Shift+I`,
+  `Ctrl+Alt+S`). The filter bar takes the selection keys' whole line now, and `kind:file` or
+  `kind:dir`: `*.log size:100M-` shows the big logs, `kind:dir` the folders. `Ctrl+Alt+S`, and
+  *Named filters* in the Left and Right menus, list the filters kept as `[[filter]]` blocks —
+  a colour group's conditions without its colours — to put one on, write a new one in a
+  dialog, change one or take it out.
 
 ## [0.31.0] — 2026-11-05
 

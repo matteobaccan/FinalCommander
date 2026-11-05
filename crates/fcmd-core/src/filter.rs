@@ -53,6 +53,9 @@ pub enum FilterError {
     #[error("mask list: only one `|` is allowed, with the exclusions after it")]
     SecondPipe,
 
+    #[error("kind `{0}`: expected `file`, `dir` or `both`")]
+    BadKind(String),
+
     #[error("unknown mask group `<{0}>`")]
     UnknownGroup(String),
 
@@ -1174,8 +1177,9 @@ impl Filter {
 
     /// A filter typed on one line, for the selection keys (`+`, `-`): a mask list in the
     /// usual grammar, then any of `size:`, `age:` and `attr:`, each in the grammar of its own
-    /// field of the dialogs — `*.log size:100M- age:>=30 attr:-h`. Words that are not a
-    /// condition are the mask list, spaces and all; no mask list means every name.
+    /// field of the dialogs — `*.log size:100M- age:>=30 attr:-h` — and `kind:file` or
+    /// `kind:dir`. Words that are not a condition are the mask list, spaces and all; no mask
+    /// list means every name.
     ///
     /// `age:` reads the modification time; `age:created:<=7` names another of the four.
     pub fn parse_line(text: &str, groups: &Groups) -> Result<Self, FilterError> {
@@ -1196,6 +1200,9 @@ impl Filter {
                 filter.date = Some(DateCondition::new(field, DateRange::parse_age(range)?));
             } else if let Some(attrs) = word.strip_prefix("attr:") {
                 filter.attrs = AttrConditions::parse(attrs)?;
+            } else if let Some(kind) = word.strip_prefix("kind:") {
+                filter.kind = KindFilter::parse(kind)
+                    .ok_or_else(|| FilterError::BadKind(kind.to_string()))?;
             } else {
                 masks.push(word);
             }
@@ -2017,5 +2024,11 @@ mod tests {
         assert!(Filter::parse_line("age:created:<=7", &groups).is_ok());
         assert!(Filter::parse_line("age:soon:<=7", &groups).is_err());
         assert!(Filter::parse_line("size:lots", &groups).is_err());
+
+        // The kind, which a panel filter wants and a selection rarely does.
+        let f = Filter::parse_line("kind:dir", &groups).unwrap();
+        assert!(f.matches_at(&entry("src", EntryKind::Dir), now));
+        assert!(!f.matches_at(&file("a.rs", 1, 0), now));
+        assert!(Filter::parse_line("kind:sometimes", &groups).is_err());
     }
 }

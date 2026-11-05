@@ -89,13 +89,14 @@ impl Listing {
 
     /// Recompute the visible order and the totals.
     ///
-    /// `filter` is a mask set (a bare word still means "contains", so the quick filter bar
-    /// behaves as it always did); `None` means no filter.
+    /// `filter` is the panel's filter — a mask list (a bare word still means "contains", so
+    /// the quick filter bar behaves as it always did) and any of the size, age, attribute and
+    /// kind conditions; `None` means no filter.
     pub fn rebuild(
         &mut self,
         sort: Sort,
         show_hidden: bool,
-        filter: Option<&crate::filter::MaskSet>,
+        filter: Option<&crate::filter::Filter>,
         selection: &Selection,
         groups: &crate::sort::SortGroups,
     ) {
@@ -113,11 +114,14 @@ impl Listing {
         &mut self,
         sort: Sort,
         show_hidden: bool,
-        filter: Option<&crate::filter::MaskSet>,
+        filter: Option<&crate::filter::Filter>,
         selection: &Selection,
         groups: &crate::sort::SortGroups,
         side: Option<&SideLookup<'_>>,
     ) {
+        // One instant for the whole listing, so an age condition cannot judge the first row
+        // and the last one against two different todays.
+        let now = std::time::SystemTime::now();
         self.order.clear();
         self.order.reserve(self.entries.len());
         let mut totals = Totals::default();
@@ -136,8 +140,8 @@ impl Listing {
             if !show_hidden && e.flags.contains(EntryFlags::HIDDEN) {
                 continue;
             }
-            if let Some(masks) = filter {
-                if !masks.matches(e) {
+            if let Some(filter) = filter {
+                if !filter.matches_at(e, now) {
                     continue;
                 }
             }
@@ -271,7 +275,7 @@ mod tests {
         l.rebuild(
             Sort::default(),
             false,
-            Some(&masks),
+            Some(&crate::filter::Filter::from_masks(masks.clone())),
             &Selection::default(),
             &SortGroups::default(),
         );
@@ -375,7 +379,7 @@ mod scale {
         l.rebuild(
             Sort::default(),
             false,
-            Some(&masks),
+            Some(&crate::filter::Filter::from_masks(masks.clone())),
             &Selection::default(),
             &SortGroups::default(),
         );

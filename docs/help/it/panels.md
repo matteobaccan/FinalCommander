@@ -369,6 +369,13 @@ creazione) e `attr:h` (nascosti; `attr:-r` non in sola lettura). Così `*.log si
 seleziona i log vecchi e grossi, e `size:1G-` da solo seleziona tutto quello che supera un
 gigabyte.
 
+`Ctrl+Shift+I` filtra il pannello con la stessa riga, mentre la scrivi, e aggiunge `kind:file` e
+`kind:dir`: `*.log size:100M-` mostra solo i log grossi, `kind:dir` solo le cartelle. Una riga
+vuota toglie il filtro. `Ctrl+Alt+S` è il menu dei filtri che tieni — blocchi `[[filter]]` nelle
+impostazioni, con le parole dei gruppi di colore — dove `Invio` ne mette uno, `Ins` ne scrive
+uno nuovo in un dialogo, `F4` ne cambia uno e `Canc` lo toglie; un filtro scritto lì senza nome
+viene usato una volta e non resta, e la prima riga toglie il filtro.
+
 Quello che è selezionato è quello su cui agisce l'operazione successiva. Senza niente
 selezionato è la riga sotto il cursore — così `F5` su un file copia quel file, e nessuno deve
 selezionarlo prima.

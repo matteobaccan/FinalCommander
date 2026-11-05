@@ -55,6 +55,8 @@ pub enum FormKind {
     Search,
     /// One `[[highlight]]` group: its conditions and its two inks (SPEC 10 §3.11).
     Highlight,
+    /// One `[[filter]]`: a name and the conditions, the highlight group's without the inks.
+    FilterSet,
     /// One `[[sort_group]]` band: its name, its masks and which side it sits on (SPEC 02 §4).
     SortGroup,
     /// One `[[mask_group]]`: the name it answers to between angle brackets, and its masks.
@@ -94,6 +96,8 @@ pub enum PickKind {
     FileHistory,
     /// The `[[highlight]]` groups, in the order they are tried (SPEC 10 §3.11).
     Highlight,
+    /// The named filters (`Ctrl+Alt+S`, SPEC 02 §5): off, then every `[[filter]]`.
+    Filters,
     /// The `[[sort_group]]` bands, in the order they cut the listing (SPEC 02 §4).
     SortGroups,
     /// The named mask lists every mask field can use as `<name>` (SPEC 02 §5b).
@@ -327,6 +331,11 @@ fn panel_menu(title: &'static str, side: usize) -> Menu {
                 "menu-filter",
                 "Ctrl+Shift+I",
                 Action::Run(Command::PanelFilterQuick),
+            ),
+            item(
+                "menu-filter-sets",
+                "Ctrl+Alt+S",
+                Action::Run(Command::PanelFilterMenu),
             ),
             item("menu-panel-names", "", Action::Run(Command::PanelCodePage)),
             Entry::Separator,
