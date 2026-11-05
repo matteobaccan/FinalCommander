@@ -25927,7 +25927,7 @@ mod tests {
                     .then_some(i)
             })
             .collect();
-        assert_eq!(group.len(), 6, "the six answers FAR asks here");
+        assert_eq!(group.len(), 7, "FAR's six answers, and the size one (FAR #493)");
         let on = |form: &crate::form::Form| {
             form.fields
                 .iter()
@@ -25951,7 +25951,7 @@ mod tests {
             .map(|r| r.text.clone())
             .filter(|t| t.starts_with('('))
             .collect();
-        assert_eq!(drawn.len(), 6);
+        assert_eq!(drawn.len(), 7);
         assert_eq!(
             drawn.iter().filter(|t| t.starts_with("(•)")).count(),
             1,
