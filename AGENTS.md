@@ -178,13 +178,18 @@ Nothing needed to continue lives outside the repository; this section is the mem
 
 ## Where the work is right now
 
-**0.33.0 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
+**0.34.0 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
 like every release before it. A push to `main` that touches `CHANGELOG.md` or `Cargo.toml`
 is what makes `tag.yml` fire. The site is published with each release, from its tag. `CHANGELOG.md` is the history, release by release; this section only
 says where things stand.
 
 What the last few were about, newest first:
 
+- **0.34.0** — what an error does chosen before a copy (ask, skip, stop); `Shift+F` in the
+  viewer really following a growing file; one file's times onto another in `Ctrl+A`; editor
+  replacements kept by name and run again (`Alt+Shift+F7`); masks that look at the path
+  (`src/*.rs`, `*|*/node_modules/*`); a view and a sort per folder (`panel.remember_view`);
+  a speed limit per server (`max_kbps`).
 - **0.33.0** — new things to open as folders: SQLite databases (tables as CSV, `sql:` for a
   read-only query), JSON files, `.mbox` and `.eml` mail; duplicate files; asking an AI
   (`ai:`); a Git menu (`Ctrl+Alt+G`); the system log; `.editorconfig`, word completion,
