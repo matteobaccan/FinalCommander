@@ -1212,8 +1212,8 @@ fn draw_pick(
         for x in area.x + 1..area.right() - 1 {
             buf.set(x, y, '─', frame);
         }
-        buf.set(area.x, y, '├', frame);
-        buf.set(area.right() - 1, y, '┤', frame);
+        buf.set(area.x, y, '╟', frame);
+        buf.set(area.right() - 1, y, '╢', frame);
         // A rule with a name is the heading of the group under it, written into the line the
         // way FAR writes a titled separator: centred, with a space either side.
         if let Some(name) = pick
@@ -3216,13 +3216,14 @@ fn draw_learn_keys(app: &App, learn: &crate::app::LearnKeys, buf: &mut Buffer, s
     let style = app.theme.dialog();
     buf.fill(area, ' ', style);
     let title = app.i18n.t("learn-title");
-    buf.draw_frame(
+    buf.draw_bordered(
         area,
         Style::new(
             app.theme.color("dialog.frame"),
             app.theme.color("dialog.bg"),
         ),
         Some(&title),
+        fcmd_ui::Border::Double,
     );
     let inner = area.inner();
     // A dialog has no colour of its own for "not yet": the lit cell is drawn bold and
@@ -3315,13 +3316,14 @@ fn draw_help(
             &[("version", env!("CARGO_PKG_VERSION").into())],
         ),
     };
-    buf.draw_frame(
+    buf.draw_bordered(
         area,
         Style::new(
             app.theme.color("dialog.frame"),
             app.theme.color("dialog.bg"),
         ),
         Some(&title),
+        fcmd_ui::Border::Double,
     );
 
     let inner = area.inner();
@@ -3715,7 +3717,7 @@ mod tests {
 
         // The right panel is still whole: the two frames meet, so the box ended before it.
         assert!(
-            line.contains("┤├") || line.contains("╝╚"),
+            line.contains("╢╟") || line.contains("╝╚"),
             "the box ran into the other panel: {line}"
         );
     }
@@ -6183,7 +6185,7 @@ See the [docs](https://example.com/docs) for more.
         app.cfg.panel.status_line = true;
         app.handle_input(Input::Key("Down".parse().unwrap()));
         let with = frame(&mut app, 100, 28);
-        assert!(with.contains("├"), "no rule above the status row: {with}");
+        assert!(with.contains("╟"), "no rule above the status row: {with}");
         // The name is on its own row inside the panel, not only in the screen's status bar.
         let rows: Vec<&str> = with
             .lines()
@@ -6352,7 +6354,8 @@ See the [docs](https://example.com/docs) for more.
         assert!(out.contains("The destination exists"), "{out}");
         assert!(out.contains("/tmp/src") && out.contains("1.00 K"), "{out}");
         assert!(
-            out.contains("[ Overwrite ]") && out.contains("[ Cancel ]"),
+            // The default button in braces, as FAR marks it; the others in brackets.
+            out.contains("{ Overwrite }") && out.contains("[ Cancel ]"),
             "{out}"
         );
         assert!(out.contains("the source is newer"), "{out}");
@@ -6727,7 +6730,7 @@ third line
         press(&mut app, "F4");
         press(&mut app, "F7"); // search
 
-        let mut buf = Buffer::new(60, 10);
+        let mut buf = Buffer::new(80, 10);
         let cursor = draw(&mut app, &mut buf);
         let out = buf.to_text();
         assert!(cursor.is_some(), "the dialog has no cursor");

@@ -57,6 +57,13 @@ Notable changes, newest first. The format follows
   SPEC 07's own example had the same `[[bind]]` mistake. The manual page's bold had never shown:
   its hand-written part carried form feeds where `\fB` belonged.
 
+### Changed
+
+- **Dialogs drawn as FAR draws them.** A grey box with the double frame set inside its edge,
+  a rule across it above the buttons, the default button in braces (`{ Quit }`) and a shadow.
+  Menus, pick lists, the help and the learn-keys box have the double frame too, and the panel
+  status rule joins the frame with `╟╢`.
+
 ## [0.31.0] — 2026-11-05
 
 ### Added

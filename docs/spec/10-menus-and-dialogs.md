@@ -167,7 +167,13 @@ outlive yet.
 
 ## 3. Settings dialogs
 
-A dialog is a framed list of rows above a row of buttons. Row kinds:
+A dialog is a framed list of rows above a row of buttons. Every dialog — a question, a
+prompt, a form, a progress box — has FAR's look: a grey box with a double frame set three
+columns and one row inside its edge, the title on the top of the frame, a shadow under it, and
+a `╟───╢` rule across the frame above the buttons. The default button is shown in braces,
+`{ OK }`, the others in brackets, `[ Cancel ]`. On a screen too small for the margin the margin
+goes first, the rows last. Menus and pick lists have the same double frame on their edge, with
+`╟─╢` for the separators. Row kinds:
 
 * `[x] Label` — a boolean configuration key. `Space` or `Enter` flips it.
 * `Label: value ↓` — a key with a fixed set of values. `Space`/`→` take the next value,

@@ -274,11 +274,12 @@ fn draw_panel_status(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, statu
     }
     let frame = Style::new(theme.color("panel.frame"), theme.color("panel.bg"));
     let rule = area.bottom() - 3;
-    buf.set(area.x, rule, '├', frame);
+    // The panel's frame is double, so the rule meets it the way FAR's does: `╟───╢`.
+    buf.set(area.x, rule, '╟', frame);
     for x in area.x + 1..area.right() - 1 {
         buf.set(x, rule, '─', frame);
     }
-    buf.set(area.right() - 1, rule, '┤', frame);
+    buf.set(area.right() - 1, rule, '╢', frame);
     for x in column_rules(p, area.inner()) {
         buf.set(x, rule, '┴', frame);
     }
@@ -331,6 +332,77 @@ fn draw_scrollbar(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: R
 pub fn drop_shadow(buf: &mut Buffer, area: Rect) {
     buf.shadow(Rect::new(area.x + 2, area.bottom(), area.w, 1));
     buf.shadow(Rect::new(area.right(), area.y + 1, 2, area.h));
+}
+
+/// How far in from the edge of a dialog's grey box its double frame sits: FAR's own geometry,
+/// three columns and one row (`Dialog::Show`, the `DoubleBox` at `X1+3, Y1+1`).
+const BOX_PAD_X: u16 = 3;
+const BOX_PAD_Y: u16 = 1;
+
+/// Where a dialog whose frame holds `inner_w` columns and `inner_h` rows goes on `screen`: its
+/// outer size, and how much margin it keeps round the frame. The margin is the first thing to
+/// go when the screen is small — first the rows, then the columns — so a short terminal loses
+/// the grey and never a row of the dialog.
+#[derive(Debug, Clone, Copy)]
+struct BoxSize {
+    w: u16,
+    h: u16,
+    px: u16,
+    py: u16,
+}
+
+fn box_size(screen: Rect, inner_w: u16, inner_h: u16) -> BoxSize {
+    let framed_w = inner_w.saturating_add(2);
+    let framed_h = inner_h.saturating_add(2);
+    let px = if framed_w + 2 * BOX_PAD_X <= screen.w {
+        BOX_PAD_X
+    } else {
+        0
+    };
+    let py = if framed_h + 2 * BOX_PAD_Y <= screen.h {
+        BOX_PAD_Y
+    } else {
+        0
+    };
+    BoxSize {
+        w: (framed_w + 2 * px).min(screen.w),
+        h: (framed_h + 2 * py).min(screen.h),
+        px,
+        py,
+    }
+}
+
+/// A dialog as FAR draws one: the grey box, a double frame `px` columns and `py` rows inside it
+/// with the title in its top edge, and the shadow. Returns the frame — the content starts one
+/// column and one row inside it.
+fn dialog_box(buf: &mut Buffer, theme: &Theme, area: Rect, size: BoxSize, title: &str) -> Rect {
+    let style = theme.dialog();
+    let frame = Style::new(theme.color("dialog.frame"), theme.color("dialog.bg"));
+    buf.fill(area, ' ', style);
+    let inner = Rect::new(
+        area.x + size.px,
+        area.y + size.py,
+        area.w.saturating_sub(2 * size.px),
+        area.h.saturating_sub(2 * size.py),
+    );
+    let title = (!title.is_empty()).then_some(title);
+    buf.draw_bordered(inner, frame, title, crate::buffer::Border::Double);
+    drop_shadow(buf, area);
+    inner
+}
+
+/// The single rule across a dialog's double frame, joined to it: `╟───╢`. What FAR draws
+/// between a message and its buttons, and between the groups of a form.
+pub fn dialog_rule(buf: &mut Buffer, theme: &Theme, frame: Rect, y: u16) {
+    let ink = Style::new(theme.color("dialog.frame"), theme.color("dialog.bg"));
+    if frame.w < 2 {
+        return;
+    }
+    buf.set(frame.x, y, '╟', ink);
+    for x in frame.x + 1..frame.right() - 1 {
+        buf.set(x, y, '─', ink);
+    }
+    buf.set(frame.right() - 1, y, '╢', ink);
 }
 
 /// Centre a column title in its column, the way FAR does.
@@ -1432,8 +1504,23 @@ fn over_in(
         .max()
         .unwrap_or(20)
         .min(screen.w.saturating_sub(4) as usize);
-    let h = (lines.len() + usize::from(hint.is_some()) + 2).min(screen.h as usize) as u16;
-    let w = content_w as u16 + 4;
+    // A list in the menu's colours keeps its frame on its edge; a message is a dialog, and has
+    // FAR's box round it (`dialog_box`).
+    let size = if menu {
+        BoxSize {
+            w: content_w as u16 + 4,
+            h: (lines.len() + usize::from(hint.is_some()) + 2).min(screen.h as usize) as u16,
+            px: 0,
+            py: 0,
+        }
+    } else {
+        box_size(
+            screen,
+            (content_w as u16 + 2).min(screen.w.saturating_sub(2)),
+            lines.len() as u16 + u16::from(hint.is_some()),
+        )
+    };
+    let (w, h) = (size.w, size.h);
     let x = match over {
         // FAR's `PanelRect.left + 5`, kept on the screen: the dialog belongs to the panel,
         // and five columns in is where thirty years of `Alt+F1` have put it.
@@ -1460,25 +1547,42 @@ fn over_in(
             Style::new(theme.color("dialog.title"), theme.color("dialog.bg")),
         )
     };
-    buf.fill(area, ' ', style);
-    buf.draw_frame(area, frame, Some(title));
+    let inner = if menu {
+        // A list is FAR's menu: the double frame on its edge, no grey round it.
+        buf.fill(area, ' ', style);
+        buf.draw_bordered(area, frame, Some(title), crate::buffer::Border::Double);
+        area
+    } else {
+        dialog_box(buf, theme, area, size, title)
+    };
+    let text_w = inner.w.saturating_sub(4);
     for (i, line) in lines.iter().enumerate() {
-        if (i as u16) + 1 >= area.h.saturating_sub(1) {
+        if (i as u16) + 1 >= inner.h.saturating_sub(1) {
             break;
         }
-        buf.put_str(area.x + 2, area.y + 1 + i as u16, line, style, w - 4);
+        buf.put_str(inner.x + 2, inner.y + 1 + i as u16, line, style, text_w);
     }
     if let Some(h) = hint {
+        // Under the text, inside the frame, where FAR puts a dialog's one line of keys.
+        let hy = if menu {
+            inner.bottom() - 1
+        } else {
+            inner.bottom() - 2
+        };
         buf.put_str(
-            area.x + 2,
-            area.bottom() - 1,
-            &truncate_cols(h, (w - 4) as usize),
+            inner.x + 2,
+            hy,
+            &truncate_cols(h, text_w as usize),
             hint_ink,
-            w - 4,
+            text_w,
         );
     }
-    drop_shadow(buf, area);
-    area
+    if menu {
+        drop_shadow(buf, area);
+    }
+    // What the caller is given is the frame, so what it draws inside the dialog — a cursor
+    // bar, a mark — lines up with the text whichever kind of box this is.
+    inner
 }
 
 /// Centred single-line input box. Returns the cursor column.
@@ -1490,11 +1594,25 @@ pub fn draw_prompt(
     text: &str,
     cursor: usize,
 ) -> (Rect, u16, u16) {
-    let w = (screen.w * 2 / 3).clamp(20, screen.w.saturating_sub(4));
-    let h = 3;
+    // The field takes two thirds of the screen, in FAR's box: the double frame three columns
+    // in from the grey, with the title in its top edge.
+    let field_w = (screen.w * 2 / 3).clamp(16, screen.w.saturating_sub(6).max(16));
+    let size = box_size(screen, field_w + 2, 1);
+    let (w, h) = (size.w, size.h);
     let x = screen.x + (screen.w.saturating_sub(w)) / 2;
     let y = screen.y + (screen.h.saturating_sub(h)) / 2;
-    draw_prompt_at(buf, theme, Rect::new(x, y, w, h), title, text, cursor)
+    let area = Rect::new(x, y, w, h);
+    let frame = dialog_box(buf, theme, area, size, title);
+    let field = Rect::new(frame.x + 2, frame.y + 1, frame.w.saturating_sub(4), 1);
+    let input = Style::new(theme.color("dialog.edit.fg"), theme.color("dialog.edit.bg"));
+    buf.fill(field, ' ', input);
+    let shown = truncate_cols(text, field.w as usize);
+    buf.put_str(field.x, field.y, &shown, input, field.w);
+    (
+        area,
+        field.x + (cursor as u16).min(field.w.saturating_sub(1)),
+        field.y,
+    )
 }
 
 /// The same box, where the caller has already decided where it goes.
@@ -1579,21 +1697,18 @@ pub fn draw_progress(
     screen: Rect,
     view: &ProgressView<'_>,
 ) -> Rect {
-    let w = (screen.w * 3 / 4).clamp(30, screen.w.saturating_sub(4));
-    let h = 7 + u16::from(view.show_file_bar) + u16::from(!view.rates.is_empty());
-    let h = h.min(screen.h);
+    let inner_w = (screen.w * 3 / 4).clamp(28, screen.w.saturating_sub(2));
+    let inner_h = 5 + u16::from(view.show_file_bar) + u16::from(!view.rates.is_empty());
+    let size = box_size(screen, inner_w, inner_h);
+    let (w, h) = (size.w, size.h);
     let x = screen.x + (screen.w.saturating_sub(w)) / 2;
     let y = screen.y + (screen.h.saturating_sub(h)) / 2;
-    let area = Rect::new(x, y, w, h);
+    let outer = Rect::new(x, y, w, h);
 
     let style = theme.dialog();
     let accent = Style::new(theme.color("dialog.title"), theme.color("dialog.bg"));
-    buf.fill(area, ' ', style);
-    buf.draw_frame(
-        area,
-        Style::new(theme.color("dialog.frame"), theme.color("dialog.bg")),
-        Some(view.title),
-    );
+    // FAR's box, like every other dialog; the rest of this works inside the frame.
+    let area = dialog_box(buf, theme, outer, size, view.title);
 
     let inner = area.inner();
     let mut row = inner.y;
@@ -1648,8 +1763,7 @@ pub fn draw_progress(
         accent,
         inner.w,
     );
-    drop_shadow(buf, area);
-    area
+    outer
 }
 
 /// A row of buttons, the selected one highlighted. Returns the columns each button starts at,
@@ -1675,7 +1789,14 @@ pub fn draw_buttons(
     let mut starts = Vec::with_capacity(labels.len());
     for (i, label) in labels.iter().enumerate() {
         let style = if i == selected { active } else { normal };
-        let text = format!("[ {label} ]");
+        // The first button is the one `Enter` takes from anywhere in the dialog, and FAR says
+        // so with braces: `{ OK } [ Cancel ]`. The highlight is where the focus is; the braces
+        // stay on the default whichever button has it.
+        let text = if i == 0 {
+            format!("{{ {label} }}")
+        } else {
+            format!("[ {label} ]")
+        };
         let width = text.width() as u16;
         if x + width > area.right() {
             break;
@@ -1706,48 +1827,52 @@ pub fn draw_choice(
     buttons: &[String],
     selected: usize,
 ) -> Rect {
+    // A blank line at the end was the gap before the buttons; the rule is that gap now.
+    let mut lines = lines;
+    while lines.last().is_some_and(|l| l.trim().is_empty()) {
+        lines = &lines[..lines.len() - 1];
+    }
     let buttons_w = buttons_width(buttons);
     let content_w = lines
         .iter()
         .map(|l| l.width())
         .chain(std::iter::once(buttons_w))
-        .chain(std::iter::once(title.width() + 4))
+        .chain(std::iter::once(title.width() + 2))
         .max()
         .unwrap_or(24)
-        .min(screen.w.saturating_sub(4) as usize);
-    let w = content_w as u16 + 4;
-    let h = (lines.len() as u16 + 4).min(screen.h);
+        .min(screen.w.saturating_sub(4) as usize) as u16;
+    // The text, the rule, the buttons.
+    let size = box_size(screen, content_w + 2, lines.len() as u16 + 2);
+    let (w, h) = (size.w, size.h);
     let x = screen.x + (screen.w.saturating_sub(w)) / 2;
     let y = screen.y + (screen.h.saturating_sub(h)) / 2;
     let area = Rect::new(x, y, w, h);
+    let frame = dialog_box(buf, theme, area, size, title);
 
     let style = theme.dialog();
-    buf.fill(area, ' ', style);
-    buf.draw_frame(
-        area,
-        Style::new(theme.color("dialog.frame"), theme.color("dialog.bg")),
-        Some(title),
-    );
+    let text_w = frame.w.saturating_sub(4);
+    let last_text = frame.bottom().saturating_sub(3);
     for (i, line) in lines.iter().enumerate() {
-        if area.y + 1 + i as u16 >= area.bottom() - 2 {
+        let ly = frame.y + 1 + i as u16;
+        if ly >= last_text {
             break;
         }
         buf.put_str(
-            area.x + 2,
-            area.y + 1 + i as u16,
-            &truncate_cols(line, (w - 4) as usize),
+            frame.x + 2,
+            ly,
+            &truncate_cols(line, text_w as usize),
             style,
-            w - 4,
+            text_w,
         );
     }
+    dialog_rule(buf, theme, frame, frame.bottom().saturating_sub(3));
     draw_buttons(
         buf,
         theme,
-        Rect::new(area.x + 1, area.bottom() - 2, w - 2, 1),
+        Rect::new(frame.x + 1, frame.bottom() - 2, frame.w - 2, 1),
         buttons,
         selected,
     );
-    drop_shadow(buf, area);
     area
 }
 
@@ -2686,7 +2811,7 @@ mod tests {
         let out = buf.to_text();
         assert!(out.contains("The destination exists"), "{out}");
         assert!(
-            out.contains("[ Skip ]") && out.contains("[ Overwrite ]"),
+            out.contains("[ Skip ]") && out.contains("{ Overwrite }"),
             "{out}"
         );
 
@@ -2719,7 +2844,14 @@ mod tests {
         let bright = Style::new(theme.color("panel.fg"), theme.color("panel.bg"));
         buf.clear(bright);
         let screen = buf.area();
-        let area = draw_dialog(&mut buf, &theme, screen, "T", &["hello".into()], None);
+        let frame = draw_dialog(&mut buf, &theme, screen, "T", &["hello".into()], None);
+        // What comes back is the frame; the shadow belongs to the grey box round it.
+        let area = Rect::new(
+            frame.x - BOX_PAD_X,
+            frame.y - BOX_PAD_Y,
+            frame.w + 2 * BOX_PAD_X,
+            frame.h + 2 * BOX_PAD_Y,
+        );
         let under = buf
             .get(area.x + 2, area.bottom())
             .expect("a cell below the dialog");
@@ -3008,7 +3140,8 @@ pub fn draw_menu(
     );
     let keys_style = Style::new(theme.color("menu.hotkey.fg"), theme.color("menu.bg"));
     buf.fill(area, ' ', style);
-    buf.draw_frame(area, frame, None);
+    // FAR's dropdown: a double frame, and the rules between the groups joined to it.
+    buf.draw_bordered(area, frame, None, crate::buffer::Border::Double);
 
     for (i, row) in rows.iter().enumerate() {
         let y = area.y + 1 + i as u16;
@@ -3016,9 +3149,11 @@ pub fn draw_menu(
             break;
         }
         if row.separator {
+            buf.set(area.x, y, '╟', frame);
             for x in area.x + 1..area.right() - 1 {
                 buf.set(x, y, '─', frame);
             }
+            buf.set(area.right() - 1, y, '╢', frame);
             continue;
         }
         let on = i == selected;
@@ -3153,10 +3288,11 @@ pub fn draw_form(buf: &mut Buffer, theme: &Theme, screen: Rect, view: &FormView)
         .chain(std::iter::once(tabs_w))
         .max()
         .unwrap_or(20)
-        .min(screen.w.saturating_sub(4) as usize);
-    let w = content_w as u16 + 4;
-    let h = (rows.len() as u16 + 4 + tabs_h).min(screen.h);
-    // `first`, below, needs the row count that fits; the height is capped by the screen.
+        .min(screen.w.saturating_sub(4) as usize) as u16;
+    // The rows, the page row above them, and the rule and the buttons below.
+    let tail = if buttons.is_empty() { 0 } else { 2 };
+    let size = box_size(screen, content_w + 2, rows.len() as u16 + tabs_h + tail);
+    let (w, h) = (size.w, size.h);
     // Centred on what the dialog is *about*: the screen for a dialog about the program, the
     // panel for one about a panel — a drive list that opens over the other panel is a drive
     // list one has to check the title of.
@@ -3172,18 +3308,18 @@ pub fn draw_form(buf: &mut Buffer, theme: &Theme, screen: Rect, view: &FormView)
     let area = Rect::new(x.max(screen.x), y.max(screen.y), w, h);
 
     let style = theme.dialog();
-    let frame = Style::new(theme.color("dialog.frame"), theme.color("dialog.bg"));
+    let frame_ink = Style::new(theme.color("dialog.frame"), theme.color("dialog.bg"));
     let picked = Style::new(theme.color("cursor.fg"), theme.color("cursor.bg"));
-    buf.fill(area, ' ', style);
-    buf.draw_frame(area, frame, Some(title));
+    // What the caller is given back is the frame: the content is one column and one row in
+    // from it, which is what every caller's caret arithmetic already says.
+    let frame = dialog_box(buf, theme, area, size, title);
 
     // The pages along the top, under the title, in the order they were given. The one that is
     // open is drawn in the cursor's colours and a page that does not apply in the footer's,
     // which is this theme's word for "there, but not for you".
     if !tabs.is_empty() {
-        let ty = area.y + 1;
-        buf.fill(Rect::new(area.x + 1, ty, area.w - 2, 1), ' ', style);
-        let mut tx = area.x + 2;
+        let ty = frame.y + 1;
+        let mut tx = frame.x + 2;
         for (i, page) in tabs.iter().enumerate() {
             let ink = if i == tab {
                 picked
@@ -3194,7 +3330,7 @@ pub fn draw_form(buf: &mut Buffer, theme: &Theme, screen: Rect, view: &FormView)
             };
             let label = format!(" {} ", page.label);
             let width = label.width() as u16;
-            if tx + width > area.right() - 1 {
+            if tx + width > frame.right() - 1 {
                 break;
             }
             buf.put_str(tx, ty, &label, ink, width);
@@ -3206,7 +3342,7 @@ pub fn draw_form(buf: &mut Buffer, theme: &Theme, screen: Rect, view: &FormView)
     // dialog has twenty rows on Unix, and a terminal of twenty-four lines would otherwise put
     // the last of them — the times, and the box that says to go into the folders — below the
     // bottom of the screen, where no key could reach them.
-    let room = area.h.saturating_sub(4 + tabs_h) as usize;
+    let room = frame.h.saturating_sub(2 + tabs_h + tail) as usize;
     let first = if rows.len() <= room {
         0
     } else {
@@ -3215,22 +3351,11 @@ pub fn draw_form(buf: &mut Buffer, theme: &Theme, screen: Rect, view: &FormView)
         let want = selected.saturating_sub(1);
         want.min(rows.len() - room)
     };
-    if first > 0 {
-        // The frame says there is more above, in the place a scrollbar would be.
-        buf.set(area.right() - 1, area.y + 1 + tabs_h, '▲', frame);
-    }
-    if first + room < rows.len() {
-        buf.set(area.right() - 1, area.bottom() - 3, '▼', frame);
-    }
+    let top = frame.y + 1 + tabs_h;
     for (i, row) in rows.iter().enumerate().skip(first).take(room) {
-        let ry = area.y + 1 + tabs_h + (i - first) as u16;
-        if ry >= area.bottom() - 2 {
-            break;
-        }
+        let ry = top + (i - first) as u16;
         if row.separator {
-            for x in area.x + 1..area.right() - 1 {
-                buf.set(x, ry, '─', frame);
-            }
+            dialog_rule(buf, theme, frame, ry);
             continue;
         }
         let on = i == selected && button.is_none();
@@ -3249,22 +3374,31 @@ pub fn draw_form(buf: &mut Buffer, theme: &Theme, screen: Rect, view: &FormView)
             },
         );
         buf.fill(
-            Rect::new(area.x + 1, ry, area.w - 2, 1),
+            Rect::new(frame.x + 1, ry, frame.w - 2, 1),
             ' ',
             if on { picked } else { style },
         );
-        buf.put_str(area.x + 2, ry, &row.text, line, area.w - 4);
+        buf.put_str(frame.x + 2, ry, &row.text, line, frame.w - 4);
+    }
+
+    // The frame says there is more above or below, in the place a scrollbar would be. After
+    // the rows, so a rule on the first or the last of them cannot draw over it.
+    if first > 0 {
+        buf.set(frame.right() - 1, top, '▲', frame_ink);
+    }
+    if first + room < rows.len() && room > 0 {
+        buf.set(frame.right() - 1, top + room as u16 - 1, '▼', frame_ink);
     }
 
     if !buttons.is_empty() {
+        dialog_rule(buf, theme, frame, frame.bottom() - 3);
         draw_buttons(
             buf,
             theme,
-            Rect::new(area.x + 1, area.bottom() - 2, area.w - 2, 1),
+            Rect::new(frame.x + 1, frame.bottom() - 2, frame.w - 2, 1),
             buttons,
             button.unwrap_or(usize::MAX),
         );
     }
-    drop_shadow(buf, area);
-    area
+    frame
 }
