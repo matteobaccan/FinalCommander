@@ -283,7 +283,8 @@ The command line under the panels runs a command and keeps what it printed, whic
 want nine times in ten. With something typed on it, `↑` and `↓` walk back and forth through
 what was run before, as a shell does; on an empty line the arrows belong to the panel, as
 every shared key does. `Alt+F8` shows the whole history as a list — and so do `Alt+F11` for the files you have read
-or edited and `Alt+F12` for the folders this panel has been in. All three are lists you type
+or edited (where `Ctrl+F10` takes the panel to the file, cursor on it) and `Alt+F12` for the
+folders this panel has been in. All three are lists you type
 into — as every list in this program is: what you type narrows it, the frame says what it was,
 `Backspace` takes a letter back, and `Esc` clears the filter before a second one closes the
 list. Where the rows have keys of their own, as the drive dialog's letters do, those keys stay

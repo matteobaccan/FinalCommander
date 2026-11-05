@@ -299,7 +299,8 @@ La riga di comando sotto i pannelli esegue un comando e conserva quello che ha s
 quello che vuoi nove volte su dieci. Con qualcosa scritto sopra, `↑` e `↓` camminano avanti e
 indietro per quello che è stato eseguito prima, come fa una shell; su una riga vuota le frecce
 appartengono al pannello, come ogni tasto condiviso. `Alt+F8` mostra tutta la cronologia come
-elenco — e così fanno `Alt+F11` per i file che hai letto o modificato e `Alt+F12` per le
+elenco — e così fanno `Alt+F11` per i file che hai letto o modificato (dove `Ctrl+F10` porta il
+pannello al file, col cursore sopra) e `Alt+F12` per le
 cartelle in cui questo pannello è stato. Tutti e tre sono elenchi in cui si scrive — come
 ogni elenco di questo programma: quello che scrivi lo restringe, la cornice dice cosa hai
 scritto, `Backspace` toglie una lettera, e `Esc` pulisce il filtro prima che un secondo chiuda

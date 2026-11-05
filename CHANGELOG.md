@@ -28,6 +28,9 @@ Notable changes, newest first. The format follows
   their status in front as `git status --short` writes it; the log and the blame of the file
   under the cursor in the viewer; the branches, where `Enter` puts `git switch` on the command
   line for you to run. The machine's own `git` answers, and says what is wrong when it can't.
+- **From the file history to the file** (`Ctrl+F10` in `Alt+F11`): the panel goes to the
+  folder the file is in, with the cursor on it — the viewer's own key for the same thing.
+  FAR's issue #640.
 - **`fcmd --no-save`** reads the histories and the panels' places as usual and writes nothing
   back on the way out, for a second copy opened for a quick job beside the main one. FAR's
   issue #1046.

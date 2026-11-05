@@ -16804,6 +16804,29 @@ impl App {
             // And the same for the directory a row that names a file is being chosen from:
             // the row keeps whatever was typed into it.
             // The list of what the help search found goes back to the page it started from.
+            // `Ctrl+F10`, the viewer's own key for it: the panel goes to the folder the file
+            // is in, with the cursor on the file (FAR's issue #640).
+            KeyCode::F(10) if kind == PickKind::FileHistory && key.mods == Mods::CTRL => {
+                let chosen = pick.chosen().map(|r| r.value.clone());
+                if let Some(text) = chosen {
+                    self.mode = Mode::Normal;
+                    let path = VPath::parse(&text);
+                    match path.parent() {
+                        Some(folder) => {
+                            self.go_to_bookmark(&folder.to_string());
+                            let index = self.active;
+                            self.panels[index].want_cursor = Some(path.display_name());
+                        }
+                        None => {
+                            let m = self.i18n.t_args(
+                                "viewer-not-in-panel",
+                                &[("name", path.display_name().into())],
+                            );
+                            self.set_error(m);
+                        }
+                    }
+                }
+            }
             KeyCode::Esc | KeyCode::F(10) if kind == PickKind::CharMap => {
                 self.mode = Mode::Normal;
                 self.restore_editor();
@@ -32288,6 +32311,23 @@ abcdefghij
         let mut app = app_on_disk(dir);
         app.editor_size = (40, 6);
         app
+    }
+
+    /// `Ctrl+F10` on a row of the file history (`Alt+F11`) takes the panel to the file's
+    /// folder with the cursor on it (FAR's issue #640).
+    #[test]
+    fn ctrl_f10_in_the_file_history_goes_to_the_file() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("deep")).unwrap();
+        let file = dir.path().join("deep/notes.txt");
+        std::fs::write(&file, "x").unwrap();
+        let mut app = editing_app(dir.path());
+        app.file_history = vec![file.display().to_string()];
+        app.run(Command::CmdFileHistory);
+        press(&mut app, "Ctrl+F10");
+        assert!(matches!(app.mode, Mode::Normal), "{:?}", app.mode);
+        assert_eq!(app.panels[0].cwd, VPath::local(dir.path().join("deep")));
+        assert_eq!(app.panels[0].want_cursor.as_deref(), Some("notes.txt"));
     }
 
     /// `Alt+Shift+D` asks for a pattern and takes out the lines that match; `!` first keeps
