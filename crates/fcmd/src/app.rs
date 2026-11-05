@@ -19847,6 +19847,22 @@ impl App {
 
     /// How much room that reader has: the whole screen for the viewer, the panel's own box
     /// for the quick view, so a page is a page of what is actually on screen.
+    /// Is the viewer following a file as it grows (`Shift+F`)? The loop wakes once a second
+    /// while it is, and only then.
+    pub fn following(&self) -> bool {
+        matches!(&self.mode, Mode::Viewer(viewer) if viewer.follow)
+    }
+
+    /// One step of following: the new end of the file, if it has grown. Says whether the
+    /// screen changed.
+    pub fn follow_tick(&mut self) -> bool {
+        let (width, height) = self.viewer_size;
+        match &mut self.mode {
+            Mode::Viewer(viewer) => viewer.follow_tick(width, height),
+            _ => false,
+        }
+    }
+
     fn live_viewer_size(&self) -> (u16, u16) {
         if self.mode.viewer().is_some() {
             self.viewer_size
@@ -32358,6 +32374,34 @@ abcdefghij
         let mut app = app_on_disk(dir);
         app.editor_size = (40, 6);
         app
+    }
+
+    /// FAR's issue #57: `Shift+F` in the viewer follows a log as it is written. The loop
+    /// asks once a second while it is on, and the new lines come into view.
+    #[test]
+    fn the_viewer_follows_a_file_as_it_grows() {
+        let dir = tempfile::tempdir().unwrap();
+        let log = dir.path().join("app.log");
+        std::fs::write(&log, "one\n").unwrap();
+        let mut app = app();
+        app.viewer_size = (40, 1);
+        app.open_viewer_on(&log, VPath::local(&log));
+        assert!(!app.following(), "off until asked");
+        press(&mut app, "Shift+F");
+        assert!(app.following());
+        app.follow_tick();
+        {
+            use std::io::Write;
+            let mut f = std::fs::OpenOptions::new().append(true).open(&log).unwrap();
+            writeln!(f, "two").unwrap();
+        }
+        assert!(app.follow_tick(), "the new end came into view");
+        assert!(
+            !app.follow_tick(),
+            "and nothing moves while nothing is written"
+        );
+        press(&mut app, "Shift+F");
+        assert!(!app.following());
     }
 
     /// FAR's bug #1139: `cd` to a share that does not answer froze the program for minutes.

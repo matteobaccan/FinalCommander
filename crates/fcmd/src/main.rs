@@ -1886,24 +1886,36 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
         // program costs nothing while nobody is touching it. The clock is the one thing that
         // changes on its own, so when it is on the wait has a deadline — the moment the
         // minute turns — and the frame after it draws the new time (SPEC 10 §3.3).
-        let event = if app.cfg.ui.clock {
+        // The viewer following a growing file (`Shift+F`) is the other: it looks once a
+        // second, and only while it is on (FAR's issue #57).
+        let mut wait = None;
+        if app.cfg.ui.clock {
             let secs = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|d| 60 - d.as_secs() % 60)
                 .unwrap_or(60);
-            match rx.recv_timeout(std::time::Duration::from_secs(secs.max(1))) {
+            wait = Some(std::time::Duration::from_secs(secs.max(1)));
+        }
+        if app.following() {
+            let step = std::time::Duration::from_secs(1);
+            wait = Some(wait.map_or(step, |w: std::time::Duration| w.min(step)));
+        }
+        let event = match wait {
+            Some(wait) => match rx.recv_timeout(wait) {
                 Ok(event) => Some(event),
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => None,
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
-            }
-        } else {
-            match rx.recv() {
+            },
+            None => match rx.recv() {
                 Ok(event) => Some(event),
                 Err(_) => break,
-            }
+            },
         };
-        if let Some(event) = event {
-            app.handle_event(event);
+        match event {
+            Some(event) => app.handle_event(event),
+            None => {
+                app.follow_tick();
+            }
         }
         // Coalesce whatever else is already queued, then draw once.
         while let Ok(event) = rx.try_recv() {

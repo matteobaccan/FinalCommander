@@ -225,6 +225,9 @@ pub struct Viewer {
     pub col: usize,
     pub bytes_per_row: usize,
     pub follow: bool,
+    /// The length the last follow step saw: the view only moves when the file has grown, so
+    /// scrolling back while following is not undone every second.
+    follow_len: u64,
     pub bookmarks: [Option<u64>; 10],
     /// Is the key bar drawn below the content? FAR's `Ctrl+B`.
     ///
@@ -353,6 +356,7 @@ impl Viewer {
             col: 0,
             bytes_per_row: 16,
             follow: false,
+            follow_len: 0,
             bookmarks: [None; 10],
             show_key_bar: true,
             show_status_line: true,
@@ -2092,18 +2096,24 @@ impl Viewer {
 
     pub fn toggle_follow(&mut self) {
         self.follow = !self.follow;
+        // Turning it on goes to the end at the next step, whatever the length is now.
+        self.follow_len = 0;
     }
 
-    /// Called on a timer: if the file grew and we are following, show the new end.
+    /// Called on a timer: if the file grew and we are following, show the new end. A file
+    /// that has not grown leaves the view where the reader put it.
     pub fn follow_tick(&mut self, width: u16, height: u16) -> bool {
         if !self.follow {
             return false;
         }
         let len = self.source.len();
+        if len == self.follow_len && len != 0 {
+            return false;
+        }
+        self.follow_len = len;
         let last = self.top;
         self.to_end(width, height);
         self.history.pop(); // following is not a jump the user wants to undo
-        let _ = len;
         self.top != last
     }
 
@@ -2910,6 +2920,11 @@ mod tests {
         assert!(v.follow_tick(20, 1) || v.top > 0);
         let rows = texts(&mut v, 20, 1);
         assert_eq!(rows, vec!["line 2"]);
+        // Scrolled back while nothing was written, it stays where the reader put it.
+        v.scroll(-1, 20, 1);
+        let back = v.top;
+        assert!(!v.follow_tick(20, 1));
+        assert_eq!(v.top, back);
     }
 
     #[test]

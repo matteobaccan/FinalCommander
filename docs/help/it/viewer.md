@@ -20,6 +20,10 @@ se contano le maiuscole, se contano solo le parole intere — e poi *Trova succe
 precedente*, perché sono la stessa domanda fatta due volte. `Shift+F7` e `Alt+F7` la ripetono
 avanti e indietro senza richiedere niente. `F6` passa il file all'editor nello stesso punto.
 
+`Shift+F` segue il file mentre cresce, come `tail -f`: una volta al secondo il visualizzatore
+guarda, e quando è stato scritto qualcosa mostra la nuova fine. Se torni indietro a leggere ti
+lascia lì finché non arriva altro; `Shift+F` di nuovo lo ferma.
+
 Nel dump esadecimale le frecce decidono quanti byte tiene una riga, perché di lato in un dump
 non significa nient'altro: `→` la allarga e `←` la restringe, **otto byte per volta** — 8, 16,
 24, 32 e così via fino a 64 — perché otto è il gruppo fra cui il dump disegna già uno spazio,

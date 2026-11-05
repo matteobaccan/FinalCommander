@@ -17,6 +17,10 @@ bytes or a regular expression, whether case matters, whether only whole words co
 then *Find next* or *Find previous*, because they are the same question asked twice.
 `Shift+F7` and `Alt+F7` repeat it forwards and backwards without asking again. `F6` hands the file to the editor at the same place.
 
+`Shift+F` follows the file as it grows, the way `tail -f` does: once a second the viewer looks,
+and when something has been written it shows the new end. Scroll back to read and it leaves
+you there until more arrives; `Shift+F` again stops it.
+
 In the hex dump the arrows set how many bytes a row holds, since sideways means nothing else
 in a dump: `→` widens it and `←` narrows it, **eight bytes at a time** — 8, 16, 24, 32 and so
 on up to 64 — because eight is the group the dump already draws a gap between, so every press

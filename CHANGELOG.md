@@ -12,6 +12,13 @@ Notable changes, newest first. The format follows
   and go on, or stop the copy — so a long copy left alone does not wait on its first
   unreadable file. Every skipped file is in the summary. FAR's issue #597.
 
+### Fixed
+
+- **`Shift+F` in the viewer follows the file again.** The key turned following on and nothing
+  ever looked at the file afterwards; now the viewer checks once a second while it is on and
+  shows the new end when something was written, leaving you where you scrolled to while
+  nothing is. FAR's issue #57.
+
 ## [0.33.0] - 2026-11-05
 
 ### Added
