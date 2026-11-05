@@ -29770,6 +29770,8 @@ run = ["echo one", "echo two", "echo three"]
     #[test]
     fn the_installed_programs_panel_shows_cards_and_never_removes_anything() {
         let mut app = app();
+        // Off by default on macOS (`[drives.panels]`), so the test turns it on.
+        app.cfg.drives.panels.programs = true;
         app.run(Command::PanelDrive(fcmd_cmd::Side::Left));
         let Mode::Pick(pick) = &app.mode else {
             panic!("no dialog: {:?}", app.mode)

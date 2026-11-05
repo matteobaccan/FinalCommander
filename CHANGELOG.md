@@ -46,7 +46,8 @@ Notable changes, newest first. The format follows
 - **Each panel of `Alt+F1` on or off.** `F9` in the change-drive dialog has a box for every
   panel that is not a disk — NetBox, processes, sockets, installed programs, services, the
   temporary panel — so the list stays as short as the machine's use of it (`[drives.panels]`).
-  The defaults follow the system; `Ctrl+7` still hides them all at once.
+  The defaults follow the system — installed programs and services start off on macOS —
+  and `Ctrl+7` still hides them all at once.
 - **Taking out the lines that match** (`Alt+Shift+D` in the editor): a regular expression,
   and every matching line of the block or the file goes; `!` first keeps only those. One undo
   step. vim's `:g/re/d` and `:v/re/d`, FAR's issue #10.
