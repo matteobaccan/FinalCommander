@@ -9216,6 +9216,29 @@ impl App {
             Command::AppScreenPrev => self.cycle_screen(true),
             Command::CmdHistory => self.open_pick(PickKind::CommandHistory, self.active),
             Command::CmdFileHistory => self.open_pick(PickKind::FileHistory, self.active),
+            // On the stored connections a row is a session, and what it copies is its address:
+            // NetBox's *Generate URL*, `sftp://user@host:port/folder`, for a terminal, a
+            // script or a colleague. No password is ever in it.
+            Command::FileClipNames | Command::FileClipPaths
+                if self.panel().temp_origin() == Some(":netbox") =>
+            {
+                let name = self.panel().current().map(|e| e.name_str().into_owned());
+                let url = name
+                    .and_then(|n| self.sites.iter().find(|s| s.key() == n))
+                    .map(|s| s.url());
+                match url {
+                    Some(url) => {
+                        if self.copy_to_clipboard(&url) {
+                            let m = self.i18n.t_args("net-url-copied", &[("url", url.into())]);
+                            self.set_status(m);
+                        }
+                    }
+                    None => {
+                        let m = self.i18n.t("net-not-a-stored-session");
+                        self.set_error(m);
+                    }
+                }
+            }
             Command::FileClipNames => self.clip_sources(false),
             Command::FileClipPaths => self.clip_sources(true),
             // `Ctrl+Space`: ask the line what it could become, including the sources that
@@ -33886,6 +33909,30 @@ abcdefghij
         let mut site = Site::parse_url("sftp://mb@host.example:22/srv").unwrap();
         site.id = "work".into();
         site
+    }
+
+    /// `Ctrl+Ins` on a stored session copies its address, not the row's name: NetBox's
+    /// *Generate URL*.
+    #[test]
+    fn ctrl_ins_on_a_session_copies_its_url() {
+        let mut app = net_app();
+        app.open_sessions_panel(0);
+        let at = (0..app.panels[0].listing.len())
+            .find(|&r| {
+                app.panels[0]
+                    .listing
+                    .row(r)
+                    .is_some_and(|e| e.name_str() == site().key())
+            })
+            .expect("the session's row");
+        app.panels[0].cursor = at;
+        app.requests.clear();
+        app.run(Command::FileClipNames);
+        let copied = app.requests.iter().find_map(|r| match r {
+            Request::Clipboard { text } => Some(text.clone()),
+            _ => None,
+        });
+        assert_eq!(copied.as_deref(), Some("sftp://mb@host.example:22/srv"));
     }
 
     /// An app with one site in the list, nothing connected yet.

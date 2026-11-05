@@ -1356,3 +1356,6 @@ git-branches-hint = Invio: metti git switch sulla riga di comando · Esc: chiudi
 charmap-title = Caratteri
 charmap-hint = Scrivi per restringere (un carattere o il codice, U+00E9) · Invio: inserisci · Esc: indietro
 editor-no-completion = Nessun'altra parola del file comincia così.
+
+## A stored session's address, copied (NetBox's Generate URL).
+net-url-copied = Copiato { $url }

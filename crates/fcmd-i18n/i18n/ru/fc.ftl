@@ -1355,3 +1355,6 @@ git-branches-hint = Enter: git switch в командную строку · Esc:
 charmap-title = Символы
 charmap-hint = Печатайте для отбора (символ или код, U+00E9) · Enter: вставить · Esc: назад
 editor-no-completion = Ни одно другое слово файла так не начинается.
+
+## A stored session's address, copied (NetBox's Generate URL).
+net-url-copied = Скопировано: { $url }

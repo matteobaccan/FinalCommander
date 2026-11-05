@@ -1355,3 +1355,6 @@ git-branches-hint = Intro: git switch en la línea de órdenes · Esc: cerrar
 charmap-title = Caracteres
 charmap-hint = Escribe para filtrar (un carácter o su código, U+00E9) · Intro: insertar · Esc: volver
 editor-no-completion = Ninguna otra palabra del archivo empieza así.
+
+## A stored session's address, copied (NetBox's Generate URL).
+net-url-copied = Copiado { $url }

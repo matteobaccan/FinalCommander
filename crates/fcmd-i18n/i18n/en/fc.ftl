@@ -1365,3 +1365,6 @@ git-branches-hint = Enter: put git switch on the command line · Esc: close
 charmap-title = Characters
 charmap-hint = Type to narrow (a character or its code, U+00E9) · Enter: insert · Esc: back
 editor-no-completion = No other word in the file starts that way.
+
+## A stored session's address, copied (NetBox's Generate URL).
+net-url-copied = Copied { $url }

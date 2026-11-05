@@ -181,3 +181,9 @@ A few things are the nature of object storage rather than gaps:
   own refusal is what says so.
 * **A service configured without credentials reads and nothing more.** Its rows are marked
   read-only, and the keys that would write are not offered.
+
+# A session's address
+
+`Ctrl+Ins` on a stored session in the NetBox list copies its address — `sftp://user@host:22/folder`
+— to the clipboard, for a terminal, a script or a colleague: NetBox's *Generate URL*. The
+password is never in it. `Ctrl+L` with that address connects to it again.

@@ -189,3 +189,9 @@ Alcune cose sono la natura dell'object storage, non lacune:
   rifiuto del servizio stesso a dirlo.
 * **Un servizio configurato senza credenziali legge e nient'altro.** Le sue righe sono marcate
   in sola lettura, e i tasti che scriverebbero non vengono offerti.
+
+# L'indirizzo di una sessione
+
+`Ctrl+Ins` su una sessione salvata nella lista NetBox copia il suo indirizzo —
+`sftp://utente@host:22/cartella` — negli appunti, per un terminale, uno script o un collega: il
+*Generate URL* di NetBox. La password non c'è mai. `Ctrl+L` con quell'indirizzo ci si ricollega.

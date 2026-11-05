@@ -1355,3 +1355,6 @@ git-branches-hint = Enter: git switch in die Befehlszeile · Esc: schließen
 charmap-title = Zeichen
 charmap-hint = Tippen zum Eingrenzen (Zeichen oder Code, U+00E9) · Enter: einfügen · Esc: zurück
 editor-no-completion = Kein anderes Wort der Datei beginnt so.
+
+## A stored session's address, copied (NetBox's Generate URL).
+net-url-copied = Kopiert: { $url }

@@ -1331,3 +1331,6 @@ git-branches-hint = 回车：把 git switch 放到命令行 · Esc：关闭
 charmap-title = 字符
 charmap-hint = 输入以筛选（字符或代码，如 U+00E9）· 回车：插入 · Esc：返回
 editor-no-completion = 文件中没有其他以此开头的单词。
+
+## A stored session's address, copied (NetBox's Generate URL).
+net-url-copied = 已复制 { $url }
