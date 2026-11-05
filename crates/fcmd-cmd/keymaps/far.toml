@@ -12,6 +12,13 @@ cmd = "app.help"
 keys = ["F2"]
 cmd = "tool.usermenu"
 
+# FAR's "select the last executed menu item": the menu opens on that row, inside the submenu
+# it was in, and Enter runs it again. The panels only — the editor's Shift+F10 saves and quits.
+[[bind]]
+keys = ["Shift+F10"]
+scope = "panel"
+cmd = "tool.usermenu.last"
+
 [[bind]]
 keys = ["F3"]
 cmd = "file.view"

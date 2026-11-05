@@ -2207,6 +2207,10 @@ pub struct App {
     /// one is inside last, each with the title it is shown under. Kept as a stack so `Esc` in
     /// a submenu goes back to the menu it was opened from rather than out of the menu.
     menu_levels: Vec<(String, Vec<fcmd_config::usermenu::Entry>)>,
+    /// The labels down to the user-menu row taken last, submenus first, for `Shift+F10`.
+    /// Labels and not positions, because a condition shows and hides rows between one
+    /// opening and the next.
+    menu_last: Vec<String>,
     /// The lines of the chosen menu entry still to run, **unexpanded**: each one gets the
     /// substitutions and the questions a hand-typed line gets, at the moment it runs.
     menu_queue: Vec<String>,
@@ -2436,6 +2440,7 @@ impl App {
                 names
             },
             menu_levels: Vec::new(),
+            menu_last: Vec::new(),
             menu_queue: Vec::new(),
             apply_queue: Vec::new(),
             apply_total: 0,
@@ -9126,6 +9131,7 @@ impl App {
             }
             Command::FileAssoc => self.open_with_list(),
             Command::ToolUserMenu => self.open_user_menu(),
+            Command::ToolUserMenuLast => self.open_user_menu_on_last(),
             Command::ToolSyncDirs => self.open_sync_form(),
             Command::FileDescribe => self.open_describe(),
             Command::PanelTempAdd => self.add_to_temp_panel(),
@@ -10278,6 +10284,52 @@ impl App {
         self.show_user_menu_level();
     }
 
+    /// `Shift+F10`: the menu, walked down to the row taken last, with the cursor on it. It is
+    /// not run — FAR's key *selects* the item, and `Enter` is one press away. A row that is no
+    /// longer there (the file changed, or its condition hides it here) leaves the cursor on
+    /// the deepest level that was still found, and says so.
+    fn open_user_menu_on_last(&mut self) {
+        let path = self.menu_last.clone();
+        self.open_user_menu();
+        if path.is_empty() || !matches!(self.mode, Mode::Pick(_)) {
+            return;
+        }
+        let find = |app: &App, label: &str| {
+            app.menu_levels
+                .last()
+                .and_then(|(_, level)| level.iter().position(|e| !e.separator && e.label == *label))
+        };
+        let (last, submenus) = path.split_last().expect("not empty");
+        for label in submenus {
+            match find(self, label) {
+                Some(at)
+                    if self
+                        .menu_levels
+                        .last()
+                        .is_some_and(|(_, l)| l[at].is_submenu()) =>
+                {
+                    self.take_user_menu_row(at)
+                }
+                _ => {
+                    let msg = self.i18n.t("usermenu-last-gone");
+                    self.set_status(msg);
+                    return;
+                }
+            }
+        }
+        match find(self, last) {
+            Some(at) => {
+                if let Mode::Pick(pick) = &mut self.mode {
+                    pick.cursor = at;
+                }
+            }
+            None => {
+                let msg = self.i18n.t("usermenu-last-gone");
+                self.set_status(msg);
+            }
+        }
+    }
+
     /// The rows of one level, with the conditions applied. What a `when` may ask about is
     /// gathered here: the names in the panel, the one under the cursor, whether anything is
     /// selected, and whether this is a directory a shell could be pointed at.
@@ -10318,6 +10370,11 @@ impl App {
             .iter()
             .enumerate()
             .map(|(i, entry)| {
+                if entry.separator {
+                    let mut rule = PickRow::rule();
+                    rule.label = entry.label.clone();
+                    return rule;
+                }
                 let label = if entry.is_submenu() {
                     format!("{}  \u{25b8}", entry.label)
                 } else {
@@ -10361,6 +10418,16 @@ impl App {
             self.show_user_menu_level();
             return;
         }
+        if entry.separator {
+            return;
+        }
+        self.menu_last = self
+            .menu_levels
+            .iter()
+            .skip(1)
+            .map(|(title, _)| title.clone())
+            .chain(std::iter::once(entry.label.clone()))
+            .collect();
         self.menu_levels.clear();
         self.menu_queue = entry.run.clone();
         self.run_menu_next();
@@ -26226,6 +26293,74 @@ mod tests {
         };
         assert_eq!(pick.kind, PickKind::UserMenu);
         pick.rows.iter().map(|r| r.label.clone()).collect()
+    }
+
+    /// A separator is a rule in the list that the cursor does not stop on, and its name is
+    /// drawn into the line; `Shift+F10` opens the menu again inside the submenu the row was
+    /// in, with the cursor on it and nothing run until `Enter`.
+    #[test]
+    fn shift_f10_opens_the_menu_on_the_row_taken_last() {
+        let (mut app, dir) = app_with_menu(
+            r#"
+[[menu]]
+key = "w"
+label = "Count the lines"
+run = ["wc -l {file}"]
+
+[[menu]]
+separator = true
+label = "Version control"
+
+[[menu]]
+key = "g"
+label = "Git"
+submenu = [
+  { key = "s", label = "status", run = ["git status -sb"] },
+  { key = "l", label = "log", run = ["git log --oneline -40"] },
+]
+"#,
+        );
+        press(&mut app, "F2");
+        assert_eq!(
+            pick_labels(&app),
+            ["Count the lines", "Version control", "Git  \u{25b8}"]
+        );
+        let Mode::Pick(pick) = &app.mode else {
+            unreachable!()
+        };
+        assert!(pick.rows[1].separator, "the heading is a rule, not a row");
+        let mut buf = fcmd_ui::Buffer::new(80, 25);
+        crate::render::draw(&mut app, &mut buf);
+        let drawn = buf.to_text();
+        assert!(drawn.contains(" Version control "), "{drawn}");
+
+        press(&mut app, "g");
+        press(&mut app, "l");
+        assert_eq!(
+            shell_line(&mut app).as_deref(),
+            Some("git log --oneline -40")
+        );
+
+        app.mode = Mode::Normal;
+        press(&mut app, "Shift+F10");
+        assert_eq!(pick_labels(&app), ["status", "log"], "inside the submenu");
+        let Mode::Pick(pick) = &app.mode else {
+            unreachable!()
+        };
+        assert_eq!(pick.cursor, 1, "on the row taken last");
+        assert!(shell_line(&mut app).is_none(), "selected, not run");
+
+        // A row the file no longer has leaves the menu open and says why.
+        std::fs::write(
+            &app.paths.menu_file,
+            "[[menu]]\nlabel = \"Other\"\nrun = [\"true\"]\n",
+        )
+        .unwrap();
+        app.mode = Mode::Normal;
+        press(&mut app, "Shift+F10");
+        assert_eq!(pick_labels(&app), ["Other"]);
+        assert!(app.status.contains("not in this menu"), "{}", app.status);
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

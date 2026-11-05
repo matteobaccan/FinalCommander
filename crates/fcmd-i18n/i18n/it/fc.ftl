@@ -302,6 +302,7 @@ sync-same-directory = i due pannelli sono nella stessa directory
 # What to run for a kind of file (SPEC 06 §5)
 assoc-none = niente dice come aprire { $name }
 usermenu-empty = Nessun menu utente: scrivilo in { $path }
+usermenu-last-gone = la voce scelta l'ultima volta non è più in questo menu
 usermenu-bad-condition = Condizione non riconosciuta — { $problem }
 assoc-desktop = Passalo al sistema
 assoc-open-with = Apri { $name } con

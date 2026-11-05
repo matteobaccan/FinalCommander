@@ -21,6 +21,11 @@ Notable changes, newest first. The format follows
   file on the line the text was found on — on the byte, for a file that opens in hex — and `F3`
   now opens the viewer at the match rather than at the top. `F4` was not there at all, though
   the help said the results could be edited.
+- **The user menu's groups, and its last row** (`F2`). `separator = true` in `fcmd-menu.toml`
+  draws a line between two groups, with its `label`, if it has one, written into the line as
+  the group's heading; a group the conditions emptied takes its line with it. `Shift+F10`
+  opens the menu on the row taken last, inside its submenu, ready for `Enter` — FAR's
+  *select the last executed menu item*.
 
 ## [0.31.0] — 2026-11-05
 

@@ -302,6 +302,7 @@ sync-same-directory = 两个面板在同一目录
 # What to run for a kind of file (SPEC 06 §5)
 assoc-none = 没有定义如何打开 { $name }
 usermenu-empty = 还没有用户菜单：请写入 { $path }
+usermenu-last-gone = 上次选择的条目已不在此菜单中
 usermenu-bad-condition = 无法识别的条件 — { $problem }
 assoc-desktop = 交给系统打开
 assoc-open-with = 打开 { $name } 的方式

@@ -130,9 +130,23 @@ the status line — an entry that vanished over a typo in its own `when` would b
 work out.
 
 A submenu row says it is one (`▸`), and `Esc` inside it goes back to the menu it was opened
-from; the second `Esc` closes the menu. Still to come: reading FAR's `FarMenu.ini` as it
-stands, separators between groups, a dialog to edit the entries from inside the program, and
-FAR's `Shift+F10` for "the item I took last".
+from; the second `Esc` closes the menu.
+
+`separator = true` makes a row a rule between groups, FAR's `--`; a `label` on it is drawn
+into the rule as a heading, centred. A separator may carry nothing else (`run`, `submenu` and
+`key` are refused by name), and after the conditions are applied a rule only stands between
+rows that are shown — none at either end, and of two in a row the later one, which is the
+heading of what follows.
+
+`Shift+F10` (`tool.usermenu.last`, panels only — the editor's is save-and-quit) is FAR's
+"select the last executed menu item": the menu opens, walks down the submenus to the row run
+last and puts the cursor on it, without running it. The row is remembered by its labels and
+not its position, because the conditions move rows between one opening and the next; a row
+that is gone leaves the cursor on the deepest level still found and says so. It is kept for
+the session, not across restarts.
+
+Still to come: reading FAR's `FarMenu.ini` as it stands, and a dialog to edit the entries
+from inside the program.
 
 ## 5. File associations (`[[assoc]]`)
 

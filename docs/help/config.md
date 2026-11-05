@@ -290,6 +290,17 @@ after another and stop at the first failure.
 `file.is('*.rs')`, `panel.selected`, `panel.local` — with `!`, `&&` and `||` between them. A
 condition it cannot read leaves the row on screen and says why, rather than hiding it silently.
 
+A row with `separator = true` is a line between two groups instead, and a `label` on it is
+written into the line as the group's heading. A separator whose group the conditions emptied
+goes with it, so the menu never shows two lines in a row.
+
+    [[menu]]
+    separator = true
+    label = "Version control"
+
+`Shift+F10` opens the menu again on the row you took last — inside its submenu if it was in
+one — so running it once more is `Shift+F10` and `Enter`.
+
 A directory can carry its own `.fcmd-menu.toml`, and its rows come above the ones that are
 everywhere: the menu of the project you are in is the one you want while you are in it.
 

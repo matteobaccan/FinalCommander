@@ -39,7 +39,7 @@ Column `FC` = FinalCommander default (profile `far`, our baseline).
 | Shift+F6 | rename/move the item under the cursor | — | rename in place | move by queue | rename in place |
 | Shift+F8 | delete only the item under the cursor | — | delete permanently | — | delete under cursor |
 | Shift+F9 | save configuration | — | — | — | save configuration |
-| Shift+F10 | select the last used item of the user menu | — | — | view all files | the user menu is there (`F2`); remembering which row was taken last is not, so this stays unbound |
+| Shift+F10 | select the last used item of the user menu | — | — | view all files | **the same**: `F2` opens on the row taken last, inside its submenu, and `Enter` runs it |
 | Shift+F11 | sort groups on/off (named mask groups that sort ahead of or behind everything else — not the same as "directories first") | — | — | — | **sort groups on/off**, from the `[[sort_group]]` blocks (SPEC 02 §4); directories-first is a setting in the panel dialog, as it is in FAR |
 | Shift+F12 | selected files first | — | — | custom view | **selected files first on/off** |
 | Shift+Del | delete skipping trash | delete | delete permanently | delete permanently | **delete permanently**, past the wastebasket |

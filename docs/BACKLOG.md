@@ -87,7 +87,7 @@ says what the decision stands on.
 | A queue for jobs | `Alt+Shift+F5` | The queue, the lanes per device, background, pause, reordering and retries are in (0.31.0, SPEC 03 §5). Left: cloning a job, a bandwidth cap for a server's lane, and the on-disk journal that would let a copy resume after a crash (feature 3.7, 11.6). |
 | Disk usage | `Alt+Shift+F3` | A whole tree at once rather than one folder's level, and a treemap (SPEC 06 §12). |
 | Synchronise folders | `Ctrl+Shift+Y` | A saved pair of directories as a named job, and a written report. |
-| User menu | `F2` | Reading FAR's `FarMenu.ini` as it stands, separators between groups, a dialog to edit the entries, and `Shift+F10` for the row taken last. |
+| User menu | `F2` | Reading FAR's `FarMenu.ini` as it stands, and a dialog to edit the entries. |
 | File associations | Commands menu | Defaults read off the OS (xdg-mime, `LSCopyDefaultRoleHandler`, the registry), a dialog to edit the blocks, and `execute`/`extract`/`preview` entries. |
 | Two files side by side | `Ctrl+Shift+D` | A unified view, a file against the copy on disk, and the first differing offset of two binaries. |
 

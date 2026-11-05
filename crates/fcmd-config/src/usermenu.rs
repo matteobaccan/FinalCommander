@@ -42,6 +42,8 @@ pub struct Entry {
     /// still reachable with the arrows.
     #[serde(default)]
     pub key: Option<char>,
+    /// Required on a row, which `check` says by name; optional on a separator.
+    #[serde(default)]
     pub label: String,
     /// When this row is shown at all. `None` is always.
     #[serde(default)]
@@ -52,6 +54,10 @@ pub struct Entry {
     /// A nested menu instead of commands.
     #[serde(default)]
     pub submenu: Vec<Entry>,
+    /// A rule between two groups of rows rather than a row: FAR's `--`. The label, when it
+    /// has one, is written into the rule as a heading for the group under it.
+    #[serde(default)]
+    pub separator: bool,
 }
 
 impl Entry {
@@ -111,10 +117,23 @@ impl UserMenu {
     /// The rows to show, with the conditions applied. The error of a condition that cannot be
     /// understood is returned rather than swallowed, and the row is kept: an entry that
     /// vanished because of a typo in its own `when` would be impossible to debug.
+    ///
+    /// A rule only separates rows that are there: one at either end, or one that would sit
+    /// next to another because the group between them was all hidden, is dropped.
     pub fn visible(entries: &[Entry], facts: &Facts) -> (Vec<Entry>, Vec<String>) {
-        let mut rows = Vec::new();
+        let mut rows: Vec<Entry> = Vec::new();
         let mut problems = Vec::new();
         for entry in entries {
+            if entry.separator {
+                if rows.last().is_some_and(|last| last.separator) {
+                    // Two in a row: the later one is the heading of what follows.
+                    rows.pop();
+                }
+                if !rows.is_empty() {
+                    rows.push(entry.clone());
+                }
+                continue;
+            }
             match entry.when.as_deref() {
                 None => rows.push(entry.clone()),
                 Some(expr) => match holds(expr, facts) {
@@ -127,6 +146,9 @@ impl UserMenu {
                 },
             }
         }
+        if rows.last().is_some_and(|last| last.separator) {
+            rows.pop();
+        }
         (rows, problems)
     }
 }
@@ -134,6 +156,15 @@ impl UserMenu {
 /// Every entry has to do something, and cannot do both things.
 fn check(entries: &[Entry]) -> Result<(), String> {
     for entry in entries {
+        if entry.separator {
+            if !entry.run.is_empty() || !entry.submenu.is_empty() || entry.key.is_some() {
+                return Err(format!(
+                    "the separator `{}` has a `run`, a `submenu` or a `key`: a separator is only a line",
+                    entry.label
+                ));
+            }
+            continue;
+        }
         if entry.label.trim().is_empty() {
             return Err("a menu entry has no label".to_string());
         }
@@ -255,6 +286,67 @@ submenu = [
         assert!(git.is_submenu());
         assert_eq!(git.submenu.len(), 2);
         assert_eq!(git.submenu[0].label, "status");
+    }
+
+    /// A separator splits the menu into groups, and only where there are groups to split:
+    /// the one above a group that its conditions hid entirely is not drawn twice, and none is
+    /// left at either end.
+    #[test]
+    fn separators_only_stand_between_rows_that_are_shown() {
+        let menu = UserMenu::parse(
+            r#"
+[[menu]]
+separator = true
+label = "never at the top"
+
+[[menu]]
+label = "Edit notes"
+run = ["edit notes.md"]
+
+[[menu]]
+separator = true
+label = "Rust"
+
+[[menu]]
+label = "Build"
+when = "panel.has('Cargo.toml')"
+run = ["cargo build"]
+
+[[menu]]
+separator = true
+label = "Git"
+
+[[menu]]
+label = "status"
+run = ["git status -sb"]
+
+[[menu]]
+separator = true
+"#,
+        )
+        .expect("it parses");
+        let shown = |names: &[String]| -> Vec<String> {
+            let (rows, _) = UserMenu::visible(&menu.entries, &facts(names, None));
+            rows.iter()
+                .map(|r| {
+                    if r.separator {
+                        format!("-- {}", r.label)
+                    } else {
+                        r.label.clone()
+                    }
+                })
+                .collect()
+        };
+        assert_eq!(
+            shown(&["Cargo.toml".to_string()]),
+            ["Edit notes", "-- Rust", "Build", "-- Git", "status"]
+        );
+        // No Cargo.toml: the Rust group is empty, and its heading goes with it.
+        assert_eq!(shown(&[]), ["Edit notes", "-- Git", "status"]);
+
+        // A separator is a line and nothing else.
+        let wrong = UserMenu::parse("[[menu]]\nseparator = true\nrun = [\"ls\"]\n");
+        assert!(wrong.unwrap_err().contains("separator"));
     }
 
     #[test]

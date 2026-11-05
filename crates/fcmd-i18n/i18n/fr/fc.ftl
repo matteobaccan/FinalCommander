@@ -302,6 +302,7 @@ sync-same-directory = les deux panneaux sont dans le même répertoire
 # What to run for a kind of file (SPEC 06 §5)
 assoc-none = rien n’indique comment ouvrir { $name }
 usermenu-empty = Pas encore de menu utilisateur : écrivez-le dans { $path }
+usermenu-last-gone = l'entrée choisie la dernière fois n'est plus dans ce menu
 usermenu-bad-condition = Condition non comprise — { $problem }
 assoc-desktop = Le confier au bureau
 assoc-open-with = Ouvrir { $name } avec

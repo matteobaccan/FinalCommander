@@ -302,6 +302,7 @@ sync-same-directory = обе панели в одном каталоге
 # What to run for a kind of file (SPEC 06 §5)
 assoc-none = нигде не сказано, чем открыть { $name }
 usermenu-empty = Меню пользователя ещё нет: создайте его в { $path }
+usermenu-last-gone = пункта, выбранного в прошлый раз, больше нет в этом меню
 usermenu-bad-condition = Условие не распознано — { $problem }
 assoc-desktop = Передать системе
 assoc-open-with = Открыть { $name } с помощью

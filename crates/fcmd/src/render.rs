@@ -1213,6 +1213,27 @@ fn draw_pick(
         }
         buf.set(area.x, y, '├', frame);
         buf.set(area.right() - 1, y, '┤', frame);
+        // A rule with a name is the heading of the group under it, written into the line the
+        // way FAR writes a titled separator: centred, with a space either side.
+        if let Some(name) = pick
+            .rows
+            .get(start + i)
+            .map(|r| r.label.trim())
+            .filter(|l| !l.is_empty())
+        {
+            let room = (area.w as usize).saturating_sub(6);
+            let mut shown = String::new();
+            for c in name.chars() {
+                if unicode_width::UnicodeWidthStr::width(format!("{shown}{c}").as_str()) > room {
+                    break;
+                }
+                shown.push(c);
+            }
+            let text = format!(" {shown} ");
+            let width = unicode_width::UnicodeWidthStr::width(text.as_str()) as u16;
+            let x = area.x + (area.w.saturating_sub(width)) / 2;
+            buf.put_str(x, y, &text, frame, width);
+        }
     }
 
     // The key each row answers to, in the colour a menu gives a hotkey: in the drive dialog

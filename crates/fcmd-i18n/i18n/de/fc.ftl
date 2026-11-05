@@ -302,6 +302,7 @@ sync-same-directory = beide Fenster sind im gleichen Verzeichnis
 # What to run for a kind of file (SPEC 06 §5)
 assoc-none = nichts sagt, wie { $name } zu öffnen ist
 usermenu-empty = Noch kein Benutzermenü: schreibe es in { $path }
+usermenu-last-gone = der zuletzt gewählte Eintrag ist nicht mehr in diesem Menü
 usermenu-bad-condition = Bedingung nicht verstanden — { $problem }
 assoc-desktop = An den Desktop übergeben
 assoc-open-with = { $name } öffnen mit

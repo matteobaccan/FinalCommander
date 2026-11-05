@@ -303,6 +303,17 @@ parta tutto. Più righe vengono eseguite una dopo l'altra e si fermano al primo 
 condizione che non riesce a leggere lascia la riga sullo schermo e dice perché, invece di
 nasconderla in silenzio.
 
+Una riga con `separator = true` è invece una linea fra due gruppi, e un `label` su di essa
+viene scritto nella linea come titolo del gruppo. Un separatore il cui gruppo è stato svuotato
+dalle condizioni se ne va con esso, così il menu non mostra mai due linee di fila.
+
+    [[menu]]
+    separator = true
+    label = "Controllo versione"
+
+`Shift+F10` riapre il menu sulla voce che hai scelto l'ultima volta — dentro il suo sottomenu,
+se era in uno — così eseguirla di nuovo è `Shift+F10` e `Invio`.
+
 Una cartella può portarsi il suo `.fcmd-menu.toml`, e le sue righe stanno sopra quelle che
 valgono sempre: il menu del progetto in cui sei è quello che vuoi mentre ci sei dentro.
 

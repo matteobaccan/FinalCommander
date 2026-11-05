@@ -347,6 +347,8 @@ pub enum Command {
     /// The tunnels that are open, with what has gone through them.
     NetTunnels,
     ToolUserMenu,
+    /// The user menu again, with the cursor on the row taken last (FAR's `Shift+F10`).
+    ToolUserMenuLast,
     /// Compare the two panels by name, size and time, and select what differs.
     ToolCompareDirs,
     /// The same comparison, with the dialog of options in front of it: what makes a pair,
@@ -687,6 +689,7 @@ impl Command {
             Command::NetTunnel,
             Command::NetTunnels,
             Command::ToolUserMenu,
+            Command::ToolUserMenuLast,
             Command::ToolCompareDirs,
             Command::ToolCompare,
             Command::ToolDuplicates,
@@ -968,6 +971,7 @@ impl Command {
             Command::NetTunnel => "net.tunnel".into(),
             Command::NetTunnels => "net.tunnels".into(),
             Command::ToolUserMenu => "tool.usermenu".into(),
+            Command::ToolUserMenuLast => "tool.usermenu.last".into(),
             Command::ToolCompareDirs => "tool.compare.dirs".into(),
             Command::ToolCompare => "tool.compare".into(),
             Command::ToolDuplicates => "tool.duplicates".into(),
@@ -1235,6 +1239,7 @@ impl Command {
             ("net.tunnel", _) => Command::NetTunnel,
             ("net.tunnels", _) => Command::NetTunnels,
             ("tool.usermenu", _) => Command::ToolUserMenu,
+            ("tool.usermenu.last", _) => Command::ToolUserMenuLast,
             ("tool.find", _) => Command::ToolFind,
             ("tool.find.folder", _) => Command::ToolFindFolder,
             ("tool.replace", _) => Command::ToolReplace,

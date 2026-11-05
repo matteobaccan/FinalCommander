@@ -219,6 +219,7 @@ impl Command {
             Command::NetTunnel => "open a tunnel over the connection this panel is on",
             Command::NetTunnels => "the tunnels that are open",
             Command::ToolUserMenu => "your own menu of commands",
+            Command::ToolUserMenuLast => "your own menu, on the row you took last",
             Command::ToolCompareDirs => "compare the two panels by name, size and time",
             Command::ToolCompare => "compare the two panels, with the options dialog first",
             Command::ToolDuplicates => "find the files under this directory that are copies",
