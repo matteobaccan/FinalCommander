@@ -1038,6 +1038,22 @@ keys = ["Alt+Shift+S"]
 scope = "editor"
 cmd = "editor.lines.sort"
 
+# The rest of what `sort | uniq | tac | nl` does to a block, on the letters that say it.
+[[bind]]
+keys = ["Alt+Shift+U"]
+scope = "editor"
+cmd = "editor.lines.unique"
+
+[[bind]]
+keys = ["Alt+Shift+R"]
+scope = "editor"
+cmd = "editor.lines.reverse"
+
+[[bind]]
+keys = ["Alt+Shift+N"]
+scope = "editor"
+cmd = "editor.lines.number"
+
 [[bind]]
 keys = ["Alt+Shift+T"]
 scope = "editor"

@@ -719,6 +719,7 @@ hl-saved = Gruppe gilt · Optionen → Einstellungen speichern schreibt sie in d
 hl-removed = { $name } entfernt · Optionen → Einstellungen speichern schreibt es in die Datei
 hl-bad = { $name }: { $problem }
 editor-no-block = es ist nichts ausgewählt
+editor-unique = { $count } wiederholte Zeilen entfernt
 editor-no-bracket = hier ist keine Klammer, oder keine passt zu ihr
 editor-tabs-expanded = Tabulatoren in { $lines } Zeilen umgewandelt — das Speichern schreibt es
 site-protocol = Protokoll

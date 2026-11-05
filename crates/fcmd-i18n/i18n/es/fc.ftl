@@ -719,6 +719,7 @@ hl-saved = el grupo está activo · Opciones → Guardar ajustes lo escribe en e
 hl-removed = { $name } eliminado · Opciones → Guardar ajustes lo escribe en el archivo
 hl-bad = { $name }: { $problem }
 editor-no-block = no hay nada seleccionado
+editor-unique = { $count } líneas repetidas quitadas
 editor-no-bracket = no hay ningún paréntesis aquí, o ninguno le corresponde
 editor-tabs-expanded = tabulaciones expandidas en { $lines } líneas — al guardar se escribirá
 site-protocol = Protocolo

@@ -16667,6 +16667,8 @@ impl App {
             return;
         };
         let name = editor.name();
+        // How many lines `Alt+Shift+U` took out, for the status line once the closure is done.
+        let mut unique_gone: Option<usize> = None;
         let result: Result<(), String> = (|| {
             match cmd {
                 Command::EditorUndo => {
@@ -16704,6 +16706,22 @@ impl App {
                 Command::EditorSortLines => {
                     if !editor.sort_lines().map_err(|e| e.to_string())? {
                         return Err("editor-no-block".into());
+                    }
+                }
+                Command::EditorReverseLines => {
+                    if !editor.reverse_lines().map_err(|e| e.to_string())? {
+                        return Err("editor-no-block".into());
+                    }
+                }
+                Command::EditorNumberLines => {
+                    if !editor.number_lines().map_err(|e| e.to_string())? {
+                        return Err("editor-no-block".into());
+                    }
+                }
+                Command::EditorUniqueLines => {
+                    match editor.unique_lines().map_err(|e| e.to_string())? {
+                        None => return Err("editor-no-block".into()),
+                        Some(gone) => unique_gone = Some(gone),
                     }
                 }
                 Command::EditorTrimTrailing => {
@@ -16778,6 +16796,12 @@ impl App {
             Ok(())
         })();
 
+        if let Some(gone) = unique_gone {
+            message = Some(
+                self.i18n
+                    .t_args("editor-unique", &[("count", (gone as i64).into())]),
+            );
+        }
         match result {
             Ok(()) => {}
             // Message keys the editor hands back, resolved here where the catalogue lives.
@@ -30715,6 +30739,33 @@ abcdefghij
             app.mode.editor().unwrap().buffer.lines(),
             ["alpha", "beta", "gamma"]
         );
+    }
+
+    /// The four block-of-lines keys, through the keymap: sort, unique, reverse, number.
+    #[test]
+    fn the_line_keys_reshape_the_marked_lines() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("list.txt"),
+            b"pear\napple\npear\nfig\nend\n",
+        )
+        .unwrap();
+        let mut app = editing_app(dir.path());
+        press(&mut app, "Down");
+        press(&mut app, "F4");
+        for _ in 0..4 {
+            press(&mut app, "Shift+Down");
+        }
+        let lines = |app: &App| app.mode.editor().unwrap().buffer.lines().to_vec();
+        press(&mut app, "Alt+Shift+U");
+        assert_eq!(lines(&app), ["pear", "apple", "fig", "end"]);
+        assert!(app.status.contains('1'), "{}", app.status);
+        press(&mut app, "Alt+Shift+S");
+        assert_eq!(lines(&app), ["apple", "fig", "pear", "end"]);
+        press(&mut app, "Alt+Shift+R");
+        assert_eq!(lines(&app), ["pear", "fig", "apple", "end"]);
+        press(&mut app, "Alt+Shift+N");
+        assert_eq!(lines(&app), ["1 pear", "2 fig", "3 apple", "end"]);
     }
 
     #[test]

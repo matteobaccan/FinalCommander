@@ -719,6 +719,7 @@ hl-saved = gruppo attivo · Opzioni → Salva impostazioni per scriverlo nel fil
 hl-removed = { $name } eliminato · Opzioni → Salva impostazioni per scriverlo nel file
 hl-bad = { $name }: { $problem }
 editor-no-block = non c'è niente di selezionato
+editor-unique = { $count } righe ripetute tolte
 editor-no-bracket = nessuna parentesi qui, o nessuna che le corrisponda
 editor-tabs-expanded = tabulazioni espanse su { $lines } righe — il salvataggio le scriverà
 site-protocol = Protocollo

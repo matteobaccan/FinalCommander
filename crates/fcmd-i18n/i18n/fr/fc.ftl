@@ -719,6 +719,7 @@ hl-saved = le groupe est actif · Options → Enregistrer les réglages l’écr
 hl-removed = { $name } supprimé · Options → Enregistrer les réglages l’écrit dans le fichier
 hl-bad = { $name }: { $problem }
 editor-no-block = rien n’est sélectionné
+editor-unique = { $count } lignes répétées retirées
 editor-no-bracket = pas de parenthèse ici, ou aucune ne lui correspond
 editor-tabs-expanded = tabulations converties sur { $lines } lignes — l’enregistrement l’écrira
 site-protocol = Protocole

@@ -594,15 +594,11 @@ impl Editor {
         Ok(true)
     }
 
-    /// `Alt+Shift+S`: the lines of the block in order. Byte order of their text, which is
-    /// the one that sorts the same everywhere; the block's lines only, so nothing outside the
-    /// selection moves. One undo step.
-    pub fn sort_lines(&mut self) -> Result<bool, EditorError> {
-        let Some(block) = self.block else {
-            return Ok(false);
-        };
+    /// The lines a block covers, first and last. A stream block that ends at column 0 of a
+    /// line has not taken anything of that line, so it stops at the one before.
+    fn block_lines(&self) -> Option<(usize, usize)> {
+        let block = self.block?;
         let (top, mut bottom, _, _) = block.columns();
-        // A stream block that ends at column 0 of a line has not taken anything of it.
         if block.kind == BlockKind::Stream && bottom > top {
             let end = if block.anchor.line > block.head.line {
                 block.anchor
@@ -613,11 +609,75 @@ impl Editor {
                 bottom -= 1;
             }
         }
-        let mut lines: Vec<String> = (top..=bottom)
+        Some((top, bottom))
+    }
+
+    /// `Alt+Shift+S`: the lines of the block in order. Byte order of their text, which is
+    /// the one that sorts the same everywhere; the block's lines only, so nothing outside the
+    /// selection moves. One undo step.
+    pub fn sort_lines(&mut self) -> Result<bool, EditorError> {
+        self.reshape_lines(|lines| lines.sort())
+    }
+
+    /// `Alt+Shift+R`: the lines of the block in the opposite order.
+    pub fn reverse_lines(&mut self) -> Result<bool, EditorError> {
+        self.reshape_lines(|lines| lines.reverse())
+    }
+
+    /// `Alt+Shift+U`: every line of the block that is the same as one above it, gone — the
+    /// first of each stays where it was, which is `awk '!seen[$0]++'` rather than `uniq`, so a
+    /// block need not be sorted first. Returns how many lines went, or `None` with no block.
+    pub fn unique_lines(&mut self) -> Result<Option<usize>, EditorError> {
+        let Some((top, bottom)) = self.block_lines() else {
+            return Ok(None);
+        };
+        let mut seen = std::collections::HashSet::new();
+        let lines: Vec<String> = (top..=bottom)
             .map(|i| self.buffer.line(i).to_string())
             .collect();
-        let before = lines.clone();
-        lines.sort();
+        let kept: Vec<String> = lines
+            .iter()
+            .filter(|l| seen.insert(l.as_str()))
+            .cloned()
+            .collect();
+        let gone = lines.len() - kept.len();
+        if gone > 0 {
+            self.replace_lines(top, bottom, &kept)?;
+            // The block shrinks with what it covers, so a second press finds nothing to do.
+            self.block = Some(Block {
+                kind: BlockKind::Stream,
+                anchor: Position::new(top, 0),
+                head: Position::new(
+                    top + kept.len() - 1,
+                    self.buffer.line(top + kept.len() - 1).chars().count(),
+                ),
+            });
+        }
+        Ok(Some(gone))
+    }
+
+    /// `Alt+Shift+N`: a number in front of every line of the block, from 1, right-aligned to
+    /// the widest so the text after them still lines up.
+    pub fn number_lines(&mut self) -> Result<bool, EditorError> {
+        self.reshape_lines(|lines| {
+            let width = lines.len().to_string().len();
+            for (i, line) in lines.iter_mut().enumerate() {
+                *line = format!("{:>width$} {line}", i + 1);
+            }
+        })
+    }
+
+    /// The block's lines, rewritten by `f` and put back as one undo step; lines that come out
+    /// the same are not touched. `false` when there is no block.
+    fn reshape_lines(&mut self, f: impl FnOnce(&mut Vec<String>)) -> Result<bool, EditorError> {
+        let Some((top, bottom)) = self.block_lines() else {
+            return Ok(false);
+        };
+        let before: Vec<String> = (top..=bottom)
+            .map(|i| self.buffer.line(i).to_string())
+            .collect();
+        let mut lines = before.clone();
+        f(&mut lines);
         if lines == before {
             return Ok(true);
         }
@@ -630,6 +690,23 @@ impl Editor {
         self.buffer.end_group(self.cursor);
         self.cursor = self.clamp(self.cursor);
         Ok(true)
+    }
+
+    /// Lines `top..=bottom` replaced by `lines`, which may be fewer, as one undo step.
+    fn replace_lines(
+        &mut self,
+        top: usize,
+        bottom: usize,
+        lines: &[String],
+    ) -> Result<(), EditorError> {
+        self.buffer.begin_group(self.cursor);
+        let end = Position::new(bottom, self.buffer.line(bottom).chars().count());
+        self.buffer.delete(Range::new(Position::new(top, 0), end))?;
+        self.buffer
+            .insert(Position::new(top, 0), &lines.join("\n"))?;
+        self.cursor = self.clamp(Position::new(top, 0));
+        self.buffer.end_group(self.cursor);
+        Ok(())
     }
 
     /// The spaces and tabs at the end of every line, gone. How many lines changed: zero is a
@@ -1261,6 +1338,62 @@ mod tests {
         assert_eq!(e.buffer.line(1), "cherry", "one undo for the whole sort");
         e.block = None;
         assert!(!e.sort_lines().unwrap(), "a sort needs a block");
+    }
+
+    fn block_of(e: &mut Editor, top: usize, below: usize) {
+        e.block = Some(Block {
+            anchor: Position::new(top, 0),
+            head: Position::new(below, 0),
+            kind: BlockKind::Stream,
+        });
+    }
+
+    #[test]
+    fn unique_keeps_the_first_of_each_line_and_one_undo_brings_them_back() {
+        let mut e = editor("keep\nb\na\nb\nc\na\nalso keep");
+        block_of(&mut e, 1, 6);
+        assert_eq!(e.unique_lines().unwrap(), Some(2));
+        assert_eq!(e.buffer.lines(), &["keep", "b", "a", "c", "also keep"]);
+        // The block now covers what is left, so there is nothing more to take.
+        assert_eq!(e.unique_lines().unwrap(), Some(0));
+        e.undo();
+        assert_eq!(
+            e.buffer.lines(),
+            &["keep", "b", "a", "b", "c", "a", "also keep"]
+        );
+        e.block = None;
+        assert_eq!(e.unique_lines().unwrap(), None, "it needs a block");
+    }
+
+    #[test]
+    fn reverse_turns_the_block_upside_down() {
+        let mut e = editor("one\ntwo\nthree\nrest");
+        block_of(&mut e, 0, 3);
+        assert!(e.reverse_lines().unwrap());
+        assert_eq!(e.buffer.lines(), &["three", "two", "one", "rest"]);
+        e.undo();
+        assert_eq!(e.buffer.line(0), "one");
+    }
+
+    #[test]
+    fn numbers_line_up_however_many_lines_there_are() {
+        let text: Vec<String> = (0..10).map(|i| format!("line {i}")).collect();
+        let mut e = editor(&text.join("\n"));
+        block_of(&mut e, 0, 9);
+        // The last line is not in the block: it ends at column 0 of it.
+        assert!(e.number_lines().unwrap());
+        assert_eq!(e.buffer.line(0), "1 line 0");
+        assert_eq!(e.buffer.line(8), "9 line 8");
+        assert_eq!(e.buffer.line(9), "line 9");
+        let mut e = editor(&text.join("\n"));
+        e.block = Some(Block {
+            anchor: Position::new(0, 0),
+            head: Position::new(9, 6),
+            kind: BlockKind::Stream,
+        });
+        e.number_lines().unwrap();
+        assert_eq!(e.buffer.line(0), " 1 line 0", "padded to the width of 10");
+        assert_eq!(e.buffer.line(9), "10 line 9");
     }
 
     #[test]

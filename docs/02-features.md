@@ -215,7 +215,7 @@ something readable rather than only into instructions.
 | 6.11 | **Atomic save** (`name.fcmd-tmp` + rename, permissions carried over) and a save-as prompt | NEW | ✓ |
 | 6.12 | **External-change detection**: a file changed on disk is never overwritten without a confirmation; reload on demand | FAR | ~ a diff when the file changed underneath |
 | 6.13 | `Shift+F4` edits a new file, saved into the active panel's directory | FAR | ✓ |
-| 6.14 | Line editing: delete, duplicate, move up/down, delete to end of line, delete word left, auto-indent, smart home, tab expansion | FAR | ~ join (`Alt+J`) and sort (`Alt+Shift+S`) are there; unique, reverse and number are not |
+| 6.14 | Line editing: delete, duplicate, move up/down, delete to end of line, delete word left, auto-indent, smart home, tab expansion | FAR | ✓ and on a block: join (`Alt+J`), sort, unique, reverse and number (`Alt+Shift+S/U/R/N`) |
 
 ## 7. Tools & dialogs
 

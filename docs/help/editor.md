@@ -69,8 +69,11 @@ Administrator rights, and says so if it does not have them.
 `()`, `[]`, `{}` and `<>`, across lines — and again jumps back; it is mcedit's key. Brackets in
 strings and comments count like any others: this is a file manager's editor, not one
 language's. `Alt+J` joins the next line to this one, its indent turned into one space.
-`Alt+Shift+S` sorts the lines of the block, and nothing outside it; `Alt+Shift+T` takes the
-spaces and tabs off the end of every line. Each is one `Ctrl+Z`.
+`Alt+Shift+S` sorts the lines of the block, and nothing outside it; `Alt+Shift+U` takes out
+every line that repeats one above it — the first of each stays where it was, so the block does
+not have to be sorted first — and says how many went; `Alt+Shift+R` turns the block's lines
+upside down; `Alt+Shift+N` puts a number in front of each, from 1, lined up on the widest.
+`Alt+Shift+T` takes the spaces and tabs off the end of every line. Each is one `Ctrl+Z`.
 
 **Take trailing blanks off when saving**, in the editor settings, does the last one at every
 `F2`. It is off by default, because a save that changes lines nobody touched is a diff nobody

@@ -727,6 +727,7 @@ hl-saved = the group is in force · Options → Save setup writes it to the file
 hl-removed = { $name } is gone · Options → Save setup writes it to the file
 hl-bad = { $name }: { $problem }
 editor-no-block = nothing is selected
+editor-unique = { $count } repeated lines taken out
 editor-no-bracket = no bracket here, or nothing matches it
 editor-tabs-expanded = tabs were expanded on { $lines } lines — the save will write that
 site-protocol = Protocol

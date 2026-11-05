@@ -29,6 +29,12 @@ Notable changes, newest first. The format follows
   showing each new name as it was typed, and `1.txt` and `2.txt` swapped through the counter
   with nothing left behind under a temporary name.
 
+- **Unique, reverse and number on a block.** `Alt+Shift+U` takes out every line of the block
+  that repeats one above it, keeping the first of each where it was — so a block need not be
+  sorted first, which `uniq` would want — and says how many went; `Alt+Shift+R` reverses the
+  block's lines; `Alt+Shift+N` numbers them from 1, right-aligned to the widest so the text
+  after the numbers still lines up. Each is one undo step, as sort is.
+
 - **The editor's small daily keys.** `Alt+B` to the bracket that matches the one at the cursor,
   across lines and back again — mcedit's key. `Alt+J` joins the next line to this one, its
   indent turned into one space. `Alt+Shift+S` sorts the lines of the block and nothing else;

@@ -707,6 +707,7 @@ hl-saved = 分组已生效 · 选项 → 保存设置可写入文件
 hl-removed = { $name } 已删除 · 选项 → 保存设置可写入文件
 hl-bad = { $name }: { $problem }
 editor-no-block = 没有选中任何内容
+editor-unique = 已删除 { $count } 行重复内容
 editor-no-bracket = 这里没有括号，或者没有与之匹配的括号
 editor-tabs-expanded = 已在 { $lines } 行展开制表符 — 保存时会写入
 site-protocol = 协议

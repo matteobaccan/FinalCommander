@@ -73,8 +73,11 @@ i diritti di amministratore, e se non ci sono lo dice.
 mcedit. Le parentesi dentro stringhe e commenti contano come le altre: questo è l'editor di un
 file manager, non di un linguaggio. `Alt+J` unisce la riga successiva a questa, con la sua
 indentazione ridotta a uno spazio. `Alt+Shift+S` ordina le righe del blocco, e niente fuori da
-lì; `Alt+Shift+T` toglie spazi e tabulazioni alla fine di ogni riga. Ognuna si annulla con un
-solo `Ctrl+Z`.
+lì; `Alt+Shift+U` toglie ogni riga che ne ripete una sopra — la prima di ciascuna resta dov'era,
+quindi il blocco non va ordinato prima — e dice quante ne ha tolte; `Alt+Shift+R` capovolge le
+righe del blocco; `Alt+Shift+N` mette un numero davanti a ciascuna, da 1, allineato sul più
+largo. `Alt+Shift+T` toglie spazi e tabulazioni alla fine di ogni riga. Ognuna si annulla con
+un solo `Ctrl+Z`.
 
 **Togli gli spazi a fine riga al salvataggio**, nelle impostazioni dell'editor, fa l'ultima a
 ogni `F2`. È spenta per default, perché un salvataggio che cambia righe che nessuno ha toccato è
