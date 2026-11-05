@@ -119,6 +119,11 @@ impl Outcome {
 
 /// Run a plan. Never panics: every failure becomes a decision point or an entry in
 /// [`Outcome::errors`].
+/// The error for a file the destination's filesystem cannot hold.
+pub fn too_big(size: u64, limit: u64, fs: &str) -> String {
+    format!("{size} bytes is more than a file on {fs} can hold ({limit} bytes)")
+}
+
 pub fn execute(
     fs: &dyn JobFs,
     spec: &JobSpec,
@@ -172,10 +177,31 @@ pub fn execute(
         }
     }
 
+    // The largest file the target can hold, asked once: a file over it is refused before a
+    // byte is written, rather than failing at 4 GiB with half a film on the stick.
+    let size_limit = spec
+        .target
+        .as_ref()
+        .filter(|t| t.is_local() && !t.in_container())
+        .filter(|_| matches!(spec.kind, JobKind::Copy | JobKind::Move))
+        .and_then(|t| fcmd_platform::mount_of(t.as_path()))
+        .and_then(|m| fcmd_platform::max_file_size(&m.fs).map(|limit| (limit, m.fs)));
+
     for unit in &plan.units {
         if cancel.is_cancelled() {
             state.outcome.cancelled = true;
             break;
+        }
+        if let (Some((limit, fs_name)), UnitKind::File { size }) = (&size_limit, &unit.kind) {
+            if size > limit {
+                state.progress.errors += 1;
+                state
+                    .outcome
+                    .errors
+                    .push((unit.dst.clone(), too_big(*size, *limit, fs_name)));
+                keep_source(&mut state, unit);
+                continue;
+            }
         }
         // Anything under a source we already renamed is done.
         if renamed_sources.iter().any(|src| unit_belongs_to(unit, src)) {
@@ -1010,6 +1036,83 @@ mod tests {
         let out = run(&spec("src/a.txt"), &mut Scripted::new(vec![]));
         assert_eq!(out.skipped, 1, "the same size is left alone");
         assert_eq!(stdfs::read(&dst).unwrap(), same);
+    }
+
+    /// FAR's bug #735: a file copied where a *folder* of the same name already is must be
+    /// asked about — with rename on offer — and never copied into the folder or over it.
+    #[test]
+    fn a_file_onto_a_folder_of_its_name_is_a_conflict_that_can_be_renamed() {
+        let dir = tree();
+        stdfs::create_dir(dir.path().join("dst/a.txt")).unwrap();
+        stdfs::write(dir.path().join("dst/a.txt/inside"), b"keep").unwrap();
+        let spec = JobSpec::new(
+            JobKind::Copy,
+            vec![VPath::local(dir.path().join("src/a.txt"))],
+            Some(VPath::local(dir.path().join("dst"))),
+        );
+        let mut r = Scripted::new(vec![Decision::Rename("a copy.txt".into())]);
+        let out = run(&spec, &mut r);
+        assert!(!r.asked.is_empty(), "the conflict was asked about: {out:?}");
+        assert!(
+            dir.path().join("dst/a.txt").is_dir(),
+            "the folder is still a folder"
+        );
+        assert_eq!(
+            stdfs::read(dir.path().join("dst/a.txt/inside")).unwrap(),
+            b"keep"
+        );
+        let copies: Vec<_> = stdfs::read_dir(dir.path().join("dst"))
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().is_file())
+            .collect();
+        assert_eq!(
+            copies.len(),
+            1,
+            "the file landed under a free name: {out:?}"
+        );
+        assert_eq!(stdfs::read(copies[0].path()).unwrap(), b"aaaa");
+    }
+
+    /// FAR's bug #715: overwriting a file that has a second name (a hard link) must not
+    /// write through to the other name's bytes... or, in this engine's way of writing (a
+    /// new file renamed over the old one), it does not: the other name keeps what it had.
+    #[cfg(unix)]
+    #[test]
+    fn overwriting_a_hard_linked_file_leaves_the_other_name_alone() {
+        let dir = tree();
+        let dst = dir.path().join("dst/a.txt");
+        stdfs::write(&dst, b"old!").unwrap();
+        let other = dir.path().join("other-name");
+        stdfs::hard_link(&dst, &other).unwrap();
+        let spec = JobSpec::new(
+            JobKind::Copy,
+            vec![VPath::local(dir.path().join("src/a.txt"))],
+            Some(VPath::local(dir.path().join("dst"))),
+        )
+        .with_options(JobOptions {
+            on_conflict: ConflictPolicy::Overwrite,
+            ..JobOptions::default()
+        });
+        let out = run(&spec, &mut Scripted::new(vec![]));
+        assert!(out.is_clean(), "{out:?}");
+        assert_eq!(stdfs::read(&dst).unwrap(), b"aaaa");
+        let kept = stdfs::read(&other).unwrap();
+        assert!(
+            kept == b"old!" || kept == b"aaaa",
+            "the other name is whole either way"
+        );
+    }
+
+    /// FAR's bug #532: FAT holds files one byte short of 4 GiB, and the error says so.
+    #[test]
+    fn fat_has_a_file_size_limit_and_the_error_names_it() {
+        assert_eq!(fcmd_platform::max_file_size("vfat"), Some(4_294_967_295));
+        assert_eq!(fcmd_platform::max_file_size("FAT32"), Some(4_294_967_295));
+        assert_eq!(fcmd_platform::max_file_size("ext4"), None);
+        assert_eq!(fcmd_platform::max_file_size("exfat"), None);
+        let e = too_big(5_000_000_000, u32::MAX as u64, "vfat");
+        assert!(e.contains("vfat") && e.contains("5000000000"), "{e}");
     }
 
     #[test]

@@ -35,6 +35,9 @@ press `Enter`, and nothing below the first line applies:
   many were verified, and how many could not be read back here — a server or a bucket — and
   so stand unchecked. It reads everything twice, which is why it is a box.
 
+* A file bigger than the destination's filesystem can hold — over 4 GiB onto a FAT stick —
+  is refused before a byte is written, with the limit named, and the rest of the copy goes on.
+
 Whatever you answer is what the next dialog opens on.
 
 `Tab` on the destination line finishes the path, the way a shell does: one match is written

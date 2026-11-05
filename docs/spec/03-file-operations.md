@@ -73,6 +73,7 @@ length limits, case-insensitive collision) → offered transliteration/truncatio
 | Hard links | links inside one job preserved (inode map) when `preserve_hardlinks = true` |
 | Verify | **Shipped (0.31.0)** as *Read every file back and compare it* in the copy dialog (`JobOptions::verify`): after each file, both sides are read again and compared by SHA-256, the hash already in the tree for checksums, rather than blake3, which would be a dependency for one option. A copy that differs is removed and reported as that file's error; a move deletes its source only after its copy compared the same. A side that cannot be read a chunk at a time — a server, a bucket, an entry in an archive — leaves the copy standing and counted as *not verified*, which the summary says |
 | Interruption | never left under the final name — written to `name.fcmd-part`, then renamed into place. `Esc` removes the part; a failure or a crash leaves it, and the next copy of the same file goes on from it (§3c) |
+| Size limit | a file over the target filesystem's own limit (FAT: 4 GiB − 1) is refused before it is opened, as that file's error naming the limit and the filesystem, and the job goes on (FAR's issue #532). The filesystem is the one `mount_of` finds for the target |
 | Permissions | target dir not writable → decision point with an "elevate" action (SPEC 06 §7) |
 
 Move: same-filesystem → `rename`; otherwise copy+verify+delete, and the delete step only runs

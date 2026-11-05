@@ -125,6 +125,14 @@ Notable changes, newest first. The format follows
 - **`Enter` with the panels off** (`Ctrl+O`) acted on the hidden panel: an empty line went into
   the folder the cursor had been left on, or opened the file there, on a screen showing neither.
   It does nothing now, as in FAR; a command on the line runs as before (issue #29).
+- **`cd` to a share that does not answer** no longer holds the screen: the check that the
+  folder is there waits a moment, not as long as the network takes, and then the panel goes
+  there and reads it in the background like any other. FAR's issue #1139.
+- **A file too big for the destination** — over 4 GiB onto a FAT stick — is refused before the
+  copy starts, saying so and naming the limit, instead of failing at 4 GiB with a half-written
+  file. FAR's issue #532. A file copied onto a folder of its own name, and over one name of a
+  hard-linked file, now have tests of their own (FAR's #735 and #715): the first asks, the
+  second leaves the other name as it was.
 - **Where the files are, said right.** The help, in both languages, and the manual page listed
   files the program has never read — `config.toml`, `keymap.toml`, `session.toml`, `themes/`,
   `sites.toml` — so a binding written the way the help said did nothing. They now name the real

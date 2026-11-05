@@ -37,6 +37,9 @@ percorso, premi `Enter`, e niente sotto la prima riga si applica.
   riepilogo dice quanti sono stati verificati, e quanti non si potevano rileggere qui — un
   server o un bucket — e restano quindi senza controllo. Legge tutto due volte, ed è per questo
   che è una casella.
+* Un file più grande di quanto il filesystem di destinazione possa tenere — oltre 4 GiB su una
+  chiavetta FAT — viene rifiutato prima di scrivere un byte, con il limite nominato, e il resto
+  della copia prosegue.
 
 Qualunque cosa rispondi è quello su cui si apre il dialogo successivo.
 

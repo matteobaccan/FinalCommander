@@ -11073,7 +11073,12 @@ impl App {
             self.set_error(msg);
             return;
         };
-        if !target.is_dir() {
+        // A share that does not answer can hold `is_dir` for minutes (FAR's bug #1139), so
+        // the question is asked off this thread and only waited for briefly. No answer in
+        // time means "go there anyway": the read is the worker's, and the panel says so.
+        let probe = target.clone();
+        let answer = answers_within(move || probe.is_dir(), CD_PROBE_WAIT);
+        if answer == Some(false) {
             let msg = self.i18n.t_args(
                 "cmd-no-such-dir",
                 &[("path", target.display().to_string().into())],
@@ -22484,6 +22489,23 @@ fn usage_rows(panel: &Panel) -> (Vec<PickRow>, u64) {
         .collect();
     (rows, total)
 }
+/// How long `cd` waits to learn whether its target is a directory before going there anyway.
+const CD_PROBE_WAIT: std::time::Duration = std::time::Duration::from_millis(400);
+
+/// Run `probe` on a thread of its own and wait for it at most `wait`. `None` is "it did not
+/// answer in time"; the thread is left to finish on its own, which is all a stuck call to
+/// the filesystem allows.
+fn answers_within<F>(probe: F, wait: std::time::Duration) -> Option<bool>
+where
+    F: FnOnce() -> bool + Send + 'static,
+{
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = tx.send(probe());
+    });
+    rx.recv_timeout(wait).ok()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -32311,6 +32333,27 @@ abcdefghij
         let mut app = app_on_disk(dir);
         app.editor_size = (40, 6);
         app
+    }
+
+    /// FAR's bug #1139: `cd` to a share that does not answer froze the program for minutes.
+    /// The check `cd` makes before moving is waited for briefly, never for as long as the
+    /// filesystem takes.
+    #[test]
+    fn a_path_that_does_not_answer_does_not_hold_the_interface() {
+        let started = std::time::Instant::now();
+        let answer = answers_within(
+            || {
+                std::thread::sleep(std::time::Duration::from_secs(5));
+                true
+            },
+            std::time::Duration::from_millis(50),
+        );
+        assert_eq!(answer, None, "no answer in time is said as such");
+        assert!(started.elapsed() < std::time::Duration::from_secs(2));
+        assert_eq!(
+            answers_within(|| false, std::time::Duration::from_secs(5)),
+            Some(false)
+        );
     }
 
     /// `Ctrl+F10` on a row of the file history (`Alt+F11`) takes the panel to the file's

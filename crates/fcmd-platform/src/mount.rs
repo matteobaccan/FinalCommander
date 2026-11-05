@@ -49,6 +49,16 @@ impl Mount {
     }
 }
 
+/// The largest file a filesystem can hold, for the ones whose limit somebody runs into: FAT
+/// (and its `vfat`/`msdos` names) stops one byte short of 4 GiB, which is the wall a film
+/// copied to a USB stick hits half-way (FAR's issue #532). `None` is "no limit worth naming".
+pub fn max_file_size(fs: &str) -> Option<u64> {
+    match fs.to_ascii_lowercase().as_str() {
+        "vfat" | "msdos" | "fat" | "fat12" | "fat16" | "fat32" | "umsdos" => Some(u32::MAX as u64),
+        _ => None,
+    }
+}
+
 /// The mount a path is on, or `None` where this platform or this path will not say.
 pub fn mount_of(path: &Path) -> Option<Mount> {
     let real = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
