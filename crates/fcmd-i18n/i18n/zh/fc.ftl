@@ -471,6 +471,7 @@ menu-view-history = 查看与编辑历史
 menu-folders-history = 文件夹历史
 menu-usage = 磁盘占用
 menu-jobs = 任务队列(&J)
+menu-branch = 分支视图(&B)
 menu-bookmarks = 文件夹快捷方式
 menu-swap-panels = 交换面板
 menu-sync-panel = 同步另一面板
@@ -1243,3 +1244,10 @@ split-done = 已写入 { $parts } 块，旁边是 { $list }
 combine-done-checked = { $name } 已由 { $parts } 块合并，{ $bytes }，与其 .crc 一致
 combine-done-unchecked = { $name } 已由 { $parts } 块合并，{ $bytes } — 没有 .crc 可供校验
 pieces-failed = 未完成：{ $error }
+
+# The branch view (SPEC 02 §3d)
+branch-reading = 正在读取 { $path } 下的所有文件…
+branch-title = 分支：{ $path }
+branch-done = { $count } 个文件，来自下面的所有文件夹 · Ctrl+Alt+B 返回
+branch-truncated = { $count } 个文件，读取在此停止：分支太大，列表已无意义
+branch-not-here = 分支视图针对文件夹，而此面板是一个列表

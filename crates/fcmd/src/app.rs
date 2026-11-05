@@ -35,6 +35,12 @@ pub enum Request {
         panel: usize,
         path: VPath,
     },
+    /// Walk every file under `root` for the branch view (SPEC 02 §3d).
+    Branch {
+        panel: usize,
+        root: VPath,
+        cancel: CancelToken,
+    },
     /// Open a tunnel on the connection `authority` names.
     TunnelOpen {
         id: u64,
@@ -563,6 +569,12 @@ pub enum Event {
         path: VPath,
         bytes: u64,
         files: u64,
+    },
+    /// The files a branch walk found.
+    Branched {
+        panel: usize,
+        root: VPath,
+        branch: fcmd_jobs::branch::Branch,
     },
     /// Free space on the device a panel's directory is on, which the read reports separately
     /// because a listing is the same work whether or not the platform can answer this.
@@ -1973,6 +1985,8 @@ pub struct App {
     queued_jobs: std::collections::VecDeque<JobSpec>,
     /// Every job asked for, running, waiting or finished (SPEC 03 §5).
     pub queue: crate::queue::Queue,
+    /// Stops the branch walk that is running when another one is asked for.
+    branch_cancel: CancelToken,
     /// The file the split dialog is about, and the piece size it was last answered with.
     split_source: Option<VPath>,
     last_split_size: String,
@@ -2318,6 +2332,7 @@ impl App {
             last_copy: CopyChoices::default(),
             queued_jobs: std::collections::VecDeque::new(),
             queue: Default::default(),
+            branch_cancel: CancelToken::new(),
             split_source: None,
             last_split_size: "100M".to_string(),
             help_back: None,
@@ -3230,6 +3245,11 @@ impl App {
                 }
                 self.refresh_jobs_pick();
             }
+            Event::Branched {
+                panel,
+                root,
+                branch,
+            } => self.branch_arrived(panel, root, branch),
             Event::JobQuestion {
                 id,
                 question,
@@ -8799,6 +8819,7 @@ impl App {
             Command::PanelSortMenu => self.open_pick(PickKind::SortModes, self.active),
             Command::PanelHistory => self.open_pick(PickKind::FoldersHistory, self.active),
             Command::PanelUsage => self.open_usage(),
+            Command::PanelBranch => self.toggle_branch(),
             Command::JobQueue => self.open_pick(PickKind::Jobs, self.active),
             Command::ShellOutputSearch => {
                 if self.user_screen.is_empty() {
@@ -11221,6 +11242,94 @@ impl App {
                     self.show_job_errors(&outcome);
                 }
             }
+        }
+    }
+
+    /// The most files a branch view lists: past this a list is not something anyone reads,
+    /// and the walk stops and says so.
+    pub const BRANCH_LIMIT: usize = 100_000;
+
+    /// `Ctrl+Alt+B`: every file under this folder as one list, or, on such a list, back to
+    /// the folder (SPEC 02 §3d).
+    fn toggle_branch(&mut self) {
+        let side = self.active;
+        if self.panels[side].temp_origin() == Some(":branch") {
+            let cwd = self.panels[side].cwd.clone();
+            self.goto(cwd);
+            return;
+        }
+        if self.panels[side].temp.is_some() {
+            let m = self.i18n.t("branch-not-here");
+            self.set_error(m);
+            return;
+        }
+        let root = self.panels[side].cwd.clone();
+        self.branch_cancel.cancel();
+        self.branch_cancel = CancelToken::new();
+        let msg = self
+            .i18n
+            .t_args("branch-reading", &[("path", root.to_string().into())]);
+        self.set_status(msg);
+        self.requests.push(Request::Branch {
+            panel: side,
+            root,
+            cancel: self.branch_cancel.clone(),
+        });
+    }
+
+    /// The walk is back: the panel becomes the list, each row named by its path from the
+    /// folder down, and every operation works on the real files behind them.
+    fn branch_arrived(&mut self, panel: usize, root: VPath, branch: fcmd_jobs::branch::Branch) {
+        let Some(p) = self.panels.get(panel) else {
+            return;
+        };
+        // The panel moved on while the walk ran: the answer is about a folder nobody is in.
+        if p.cwd != root || p.temp.is_some() {
+            return;
+        }
+        let items: Vec<(VPath, fcmd_core::Entry)> = branch
+            .leaves
+            .iter()
+            .enumerate()
+            .map(|(at, leaf)| {
+                let entry = fcmd_core::Entry {
+                    name: leaf.relative.clone().into(),
+                    kind: leaf.facts.kind,
+                    size: leaf.facts.size,
+                    mtime: leaf.facts.mtime,
+                    btime: None,
+                    atime: None,
+                    flags: if leaf.facts.readonly {
+                        fcmd_core::EntryFlags::READONLY
+                    } else {
+                        fcmd_core::EntryFlags::empty()
+                    },
+                    id: fcmd_core::EntryId::Name(at as u64),
+                    link_target: None,
+                };
+                (leaf.path.clone(), entry)
+            })
+            .collect();
+        let count = items.len();
+        let title = self
+            .i18n
+            .t_args("branch-title", &[("path", root.to_string().into())]);
+        let generation = self.panels[panel].generation + 1;
+        self.panels[panel].generation = generation;
+        self.panels[panel].set_temp(title, items, generation);
+        self.panels[panel].set_temp_origin(":branch");
+        let msg = self.i18n.t_args(
+            if branch.truncated {
+                "branch-truncated"
+            } else {
+                "branch-done"
+            },
+            &[("count", (count as i64).into())],
+        );
+        if branch.truncated {
+            self.set_error(msg);
+        } else {
+            self.set_status(msg);
         }
     }
 
@@ -30499,6 +30608,62 @@ abcdefghij
         app.panels[0].cursor = at;
         app.run(Command::FileCombine);
         assert!(app.status_error, "{}", app.status);
+    }
+
+    /// `Ctrl+Alt+B` lists every file under the folder by its path from there, the rows stand
+    /// for the real files, and the same key goes back to the folder.
+    #[test]
+    fn the_branch_view_flattens_the_tree_and_goes_back() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("src/deep")).unwrap();
+        std::fs::write(dir.path().join("README"), "r").unwrap();
+        std::fs::write(dir.path().join("src/deep/x.rs"), "xx").unwrap();
+        let mut app = editing_app(dir.path());
+        app.requests.clear();
+        press(&mut app, "Ctrl+Alt+B");
+        let Some(Request::Branch {
+            panel,
+            root,
+            cancel,
+        }) = app
+            .take_requests()
+            .into_iter()
+            .find(|r| matches!(r, Request::Branch { .. }))
+        else {
+            panic!("the walk was asked for")
+        };
+        let branch = fcmd_jobs::branch::walk(&fcmd_jobs::LocalFs, &root, 100, &cancel);
+        app.handle_event(Event::Branched {
+            panel,
+            root: root.clone(),
+            branch,
+        });
+        let p = &app.panels[0];
+        assert_eq!(p.temp_origin(), Some(":branch"));
+        let names: Vec<String> = (0..p.listing.len())
+            .filter_map(|r| p.listing.row(r))
+            .map(|e| e.name_str().into_owned())
+            .collect();
+        assert!(names.contains(&"src/deep/x.rs".to_string()), "{names:?}");
+        let at = p.listing.row_of_name("src/deep/x.rs").unwrap();
+        app.panels[0].cursor = at;
+        assert_eq!(
+            app.panels[0].current_path(),
+            Some(VPath::local(dir.path().join("src/deep/x.rs"))),
+            "a row is the real file"
+        );
+        press(&mut app, "Ctrl+Alt+B");
+        assert!(app.panels[0].temp.is_none(), "back to the folder");
+        assert_eq!(app.panels[0].cwd, root);
+
+        // An answer for a folder the panel has left is not shown.
+        app.panels[0].go(VPath::local(dir.path().join("src")), true);
+        app.handle_event(Event::Branched {
+            panel: 0,
+            root,
+            branch: Default::default(),
+        });
+        assert!(app.panels[0].temp.is_none());
     }
 
     #[test]

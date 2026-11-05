@@ -202,6 +202,8 @@ pub enum Command {
     PanelHistory,
     /// What the folder's space goes on: every entry by size, with a bar (SPEC 06 §12).
     PanelUsage,
+    /// Every file under this folder as one list, and back (Total Commander's branch view).
+    PanelBranch,
     /// The jobs: running, queued, paused and finished (SPEC 03 §5).
     JobQueue,
     /// Find a line in what the commands printed, the user screen behind the panels.
@@ -573,6 +575,7 @@ impl Command {
             Command::PanelDrive(Side::Right),
             Command::PanelHistory,
             Command::PanelUsage,
+            Command::PanelBranch,
             Command::JobQueue,
             Command::ShellOutputSearch,
             Command::NavUp,
@@ -861,6 +864,7 @@ impl Command {
             Command::PanelDrive(side) => format!("panel.drive({})", side.as_str()),
             Command::PanelHistory => "panel.history".into(),
             Command::PanelUsage => "panel.usage".into(),
+            Command::PanelBranch => "panel.branch".into(),
             Command::JobQueue => "job.queue.show".into(),
             Command::ShellOutputSearch => "shell.output.search".into(),
             Command::NavUp => "nav.up".into(),
@@ -1097,6 +1101,7 @@ impl Command {
             ("panel.drive", a) => Command::PanelDrive(Side::parse(a.unwrap_or(""))?),
             ("panel.history", _) => Command::PanelHistory,
             ("panel.usage", _) => Command::PanelUsage,
+            ("panel.branch", _) => Command::PanelBranch,
             ("job.queue.show", _) => Command::JobQueue,
             ("shell.output.search", _) => Command::ShellOutputSearch,
             ("panel.focus.toggle", _) => Command::PanelFocusToggle,

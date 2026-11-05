@@ -479,6 +479,7 @@ menu-view-history = Vie&w and edit history
 menu-folders-history = F&olders history
 menu-usage = Dis&k usage
 menu-jobs = &Jobs
+menu-branch = Branch view
 menu-bookmarks = Folder shortcuts
 menu-swap-panels = &Swap panels
 menu-sync-panel = S&ync other panel
@@ -1277,3 +1278,10 @@ split-done = { $parts } pieces written, and { $list } beside them
 combine-done-checked = { $name } joined from { $parts } pieces, { $bytes }, and it matches its .crc
 combine-done-unchecked = { $name } joined from { $parts } pieces, { $bytes } — there was no .crc to check it against
 pieces-failed = Not done: { $error }
+
+# The branch view (SPEC 02 §3d)
+branch-reading = Reading every file under { $path }…
+branch-title = Branch: { $path }
+branch-done = { $count } files, from every folder below this one · Ctrl+Alt+B goes back
+branch-truncated = { $count } files, and the walk stopped there: the branch is bigger than a list can usefully be
+branch-not-here = The branch view is of a folder, and this panel is a list

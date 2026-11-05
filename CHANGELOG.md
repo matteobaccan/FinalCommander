@@ -29,6 +29,14 @@ Notable changes, newest first. The format follows
   showing each new name as it was typed, and `1.txt` and `2.txt` swapped through the counter
   with nothing left behind under a temporary name.
 
+- **The branch view** (`Ctrl+Alt+B`, *Commands → Branch view*): every file under the folder as
+  one flat list, each row named by its path from there — Total Commander's `Ctrl+B`, which is
+  FAR's key bar here. The rows are the real files, so viewing, editing, copying, deleting, the
+  selection and the sort work on them wherever they sit in the tree; the same key goes back to
+  the folder. The walk runs in the background through the jobs' filesystem, so it works on a
+  server, in a bucket and inside an archive, never follows a link, and stops at 100,000 files
+  and says so.
+
 - **Splitting a file, and joining it again** (*Files → Split file*, *Combine files*), in Total
   Commander's own pieces, so either program joins what the other cut: `name.001`, `name.002`,
   … and a `name.crc` with the name, the size and the CRC32. The piece size is written in the

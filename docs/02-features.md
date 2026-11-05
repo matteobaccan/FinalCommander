@@ -66,7 +66,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 1.15b | A column grammar for view modes: per column a property letter with modifiers (name with selection marks / no extension / right-aligned, extension, size / allocated size / stream size with grouping, decimal units, fractions, four date-and-time pairs with brief and month-name forms, attributes, description, owner with domain, hard-link count, stream count), widths absolute or automatic or a percentage, repeated groups giving newspaper stripes, and the same grammar for the panel status line and for search results | FAR | ✓ |
 | 1.15c | Per view mode: fullscreen, align file and folder extensions, folders uppercase, files lowercase, uppercase names shown lowercase | FAR | ✓ |
 | 1.16 | Hidden/system files toggle (`Ctrl+H`). A dotfile counts as hidden on every platform, and Windows adds the hidden and system attributes, so the key means the same thing everywhere | all | ✓ |
-| 1.17 | Branch view (flat recursive listing of the current tree) | TC | M2 |
+| 1.17 | Branch view (flat recursive listing of the current tree) | TC | ✓ `Ctrl+Alt+B` |
 | 1.18 | Panelize: fill a panel with the result of a search or an external command | MC | ✓ |
 | 1.19 | Directory sizes computed on demand (`Space`/`F3` on a dir) and in background | FAR/TC | ✓ |
 | 1.20 | Long-path support (`\\?\` on Windows, >260 chars), UNC paths | FAR/MTN2 | ✓ |

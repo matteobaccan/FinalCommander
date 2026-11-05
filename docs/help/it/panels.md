@@ -169,6 +169,13 @@ scegliere: un nome lì è già testo e non byte, e il menu lo dice. Su macOS di 
 niente da scegliere nemmeno lì — il sistema si rifiuta di creare un nome che non sia UTF-8
 valido — quindi questa è soprattutto una questione Linux.
 
+`Ctrl+Alt+B` è la vista a ramo: tutti i file sotto questa cartella, da tutte le cartelle che
+ha sotto, in una sola lista, ciascuno con il suo percorso da qui — `src/deep/x.rs`. Le righe sono
+i file veri, quindi `F3`, `F5`, `F8` e la selezione funzionano su di loro ovunque siano
+nell'albero, e l'ordinamento per nome tiene insieme i file di ogni cartella. Lo stesso tasto
+torna alla cartella. Funziona su un server, in un bucket e dentro un archivio, e si ferma a
+centomila file invece di costruire una lista che nessuno potrebbe leggere.
+
 # Cosa è un file
 
 Una cartella può tenere una riga su ciascuno dei suoi file, in un file di testo chiamato

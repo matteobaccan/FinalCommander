@@ -1346,6 +1346,13 @@ keys = ["Alt+Shift+F3"]
 cmd = "panel.usage"
 
 [[bind]]
+# Total Commander's branch view is `Ctrl+B`, which is FAR's key bar here; this is the next
+# key over, among the `Ctrl+Alt` ones the tabs use.
+keys = ["Ctrl+Alt+B"]
+scope = "panel"
+cmd = "panel.branch"
+
+[[bind]]
 # The jobs (SPEC 03 §5): next to `F5`, because what waits in it is mostly copies. Total
 # Commander opens its queue from the copy dialog; FAR has none.
 keys = ["Alt+Shift+F5"]

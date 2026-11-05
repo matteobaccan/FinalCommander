@@ -471,6 +471,7 @@ menu-view-history = Cronologia viste e modif&iche
 menu-folders-history = Cr&onologia cartelle
 menu-usage = Occupazione del disco
 menu-jobs = Coda dei &job
+menu-branch = &Vista a ramo
 menu-bookmarks = Cartelle preferite
 menu-swap-panels = &Scambia i pannelli
 menu-sync-panel = &Allinea l'altro pannello
@@ -1268,3 +1269,10 @@ split-done = { $parts } pezzi scritti, con { $list } accanto
 combine-done-checked = { $name } unito da { $parts } pezzi, { $bytes }, e corrisponde al suo .crc
 combine-done-unchecked = { $name } unito da { $parts } pezzi, { $bytes } — non c'era un .crc con cui controllarlo
 pieces-failed = Non fatto: { $error }
+
+# The branch view (SPEC 02 §3d)
+branch-reading = Lettura di tutti i file sotto { $path }…
+branch-title = Ramo: { $path }
+branch-done = { $count } file, da tutte le cartelle qui sotto · Ctrl+Alt+B torna indietro
+branch-truncated = { $count } file, e la lettura si è fermata lì: il ramo è più grande di quanto una lista possa servire
+branch-not-here = La vista a ramo è di una cartella, e questo pannello è una lista

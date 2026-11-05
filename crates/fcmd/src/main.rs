@@ -1719,6 +1719,32 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                         let _ = tx.send(Event::LinkDone { link, error });
                     });
                 }
+                Request::Branch {
+                    panel,
+                    root,
+                    cancel,
+                } => {
+                    let tx = tx.clone();
+                    let fs = ArcFs::new(
+                        archives.clone(),
+                        ObjectFs::new(
+                            objects.clone(),
+                            RoutedFs::new(pool.clone(), runtime.handle().clone()),
+                            runtime.handle().clone(),
+                        ),
+                    );
+                    runtime.spawn_blocking(move || {
+                        let branch =
+                            fcmd_jobs::branch::walk(&fs, &root, app::App::BRANCH_LIMIT, &cancel);
+                        if !cancel.is_cancelled() {
+                            let _ = tx.send(Event::Branched {
+                                panel,
+                                root,
+                                branch,
+                            });
+                        }
+                    });
+                }
                 Request::DirSize { panel, path } => {
                     let tx = tx.clone();
                     // A directory inside an archive has a size too, and it is what the
@@ -5497,6 +5523,19 @@ dir_attr = "D"
                         changed,
                         same,
                         failed,
+                    });
+                }
+                Request::Branch {
+                    panel,
+                    root,
+                    cancel,
+                } => {
+                    let branch =
+                        fcmd_jobs::branch::walk(&fcmd_jobs::LocalFs, &root, 100_000, &cancel);
+                    app.handle_event(Event::Branched {
+                        panel,
+                        root,
+                        branch,
                     });
                 }
                 Request::DirSize { .. }

@@ -471,6 +471,7 @@ menu-view-history = Ис&тория просмотра и правки
 menu-folders-history = Ист&ория папок
 menu-usage = Занятое место
 menu-jobs = О&чередь заданий
+menu-branch = Плоский вид ветви
 menu-bookmarks = Закладки папок
 menu-swap-panels = По&менять панели
 menu-sync-panel = Синхронизировать другую &панель
@@ -1267,3 +1268,10 @@ split-done = Записано частей: { $parts }, рядом { $list }
 combine-done-checked = { $name } собран из частей ({ $parts }), { $bytes }, совпадает со своим .crc
 combine-done-unchecked = { $name } собран из частей ({ $parts }), { $bytes } — .crc для проверки не было
 pieces-failed = Не сделано: { $error }
+
+# The branch view (SPEC 02 §3d)
+branch-reading = Чтение всех файлов в { $path }…
+branch-title = Ветвь: { $path }
+branch-done = Файлов: { $count }, из всех папок ниже · Ctrl+Alt+B — назад
+branch-truncated = Файлов: { $count }, и чтение остановилось: ветвь больше, чем может быть полезный список
+branch-not-here = Вид ветви строится для папки, а эта панель — список

@@ -483,6 +483,11 @@ pub fn menus() -> Vec<Menu> {
                     Action::Run(Command::PanelUsage),
                 ),
                 item("menu-jobs", "Alt+Shift+F5", Action::Run(Command::JobQueue)),
+                item(
+                    "menu-branch",
+                    "Ctrl+Alt+B",
+                    Action::Run(Command::PanelBranch),
+                ),
                 Entry::Separator,
                 item(
                     "menu-swap-panels",

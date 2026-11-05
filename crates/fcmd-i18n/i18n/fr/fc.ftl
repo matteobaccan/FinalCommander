@@ -471,6 +471,7 @@ menu-view-history = Historique &des vues et éditions
 menu-folders-history = H&istorique des dossiers
 menu-usage = Occupation du dis&que
 menu-jobs = Liste des tra&vaux
+menu-branch = Vue en arborescence plate
 menu-bookmarks = Dossiers favoris
 menu-swap-panels = &Échanger les panneaux
 menu-sync-panel = &Synchroniser l'autre panneau
@@ -1267,3 +1268,10 @@ split-done = { $parts } morceaux écrits, avec { $list } à côté
 combine-done-checked = { $name } réassemblé à partir de { $parts } morceaux, { $bytes }, conforme à son .crc
 combine-done-unchecked = { $name } réassemblé à partir de { $parts } morceaux, { $bytes } — pas de .crc pour le vérifier
 pieces-failed = Pas fait : { $error }
+
+# The branch view (SPEC 02 §3d)
+branch-reading = Lecture de tous les fichiers sous { $path }…
+branch-title = Branche : { $path }
+branch-done = { $count } fichiers, de tous les dossiers en dessous · Ctrl+Alt+B revient
+branch-truncated = { $count } fichiers, et la lecture s'est arrêtée là : la branche est plus grande qu'une liste utile
+branch-not-here = La vue en branche est celle d'un dossier, et ce panneau est une liste

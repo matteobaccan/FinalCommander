@@ -160,6 +160,13 @@ choose: a name there is already text rather than bytes, and the menu says so. On
 usually nothing to choose either — the system refuses to create a name that is not valid UTF-8
 in the first place — so this is mostly a Linux question.
 
+`Ctrl+Alt+B` is the branch view: every file under this folder, from all the folders below it,
+in one list, each named by its path from here — `src/deep/x.rs`. The rows are the files
+themselves, so `F3`, `F5`, `F8` and the selection work on them wherever they are in the tree,
+and sorting by name keeps each folder's files together. The same key goes back to the folder.
+It works on a server, in a bucket and inside an archive, and stops at a hundred thousand files
+rather than build a list nobody could read.
+
 # What a file is
 
 A directory can keep a line about each of its files, in a plain file called `descript.ion`

@@ -270,6 +270,25 @@ selected-totals bar adds it up (`Bytes: 69 082 073, files: 0, folders: 2`), and 
 size puts the measured tree where it belongs. A re-read drops it, because the figure was about
 the directory as it was.
 
+### 3d. The branch view (`panel.branch`, `Ctrl+Alt+B`, shipped 0.31.0)
+
+Total Commander's `Ctrl+B`: every file under the folder, as one flat list, each row named by
+its path from the folder down — `src/deep/x.rs` — with its own size and date. The key is
+`Ctrl+Alt+B` because `Ctrl+B` is FAR's key bar here, and it sits with the `Ctrl+Alt` keys the
+tabs use; *Commands → Branch view* is the same command. The same key on the list goes back to
+the folder.
+
+- The list is a temporary panel like a search's results (SPEC 06 §1): a row stands for the real
+  file behind it, so `F3`, `F4`, `F5`, `F6`, `F8`, the selection and the sort all act on the
+  files themselves, wherever in the tree they are. Sorting by name sorts by the whole path,
+  which keeps a folder's files together.
+- The walk is the jobs' filesystem (`fcmd_jobs::branch::walk`), so it works where a copy does:
+  a server, a bucket, inside an archive. It runs in the background; a panel that has moved to
+  another folder by the time it ends is left alone.
+- Folders are walked and not listed, links are listed and never followed (a link up the tree
+  cannot make the walk go round), a folder that cannot be read is skipped, and the walk stops at
+  100,000 files and says so: a list bigger than that is not one anybody reads.
+
 ## 4. Sorting
 
 Keys: name, ext, size, mtime, ctime, atime, btime, attrs, owner, descr, packed, type, none

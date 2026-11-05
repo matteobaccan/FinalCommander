@@ -471,6 +471,7 @@ menu-view-history = Verlauf von Ansich&t und Bearbeitung
 menu-folders-history = &Ordnerverlauf
 menu-usage = S&peicherbelegung
 menu-jobs = &Jobs
+menu-branch = Zweigansicht
 menu-bookmarks = Ordner-Verknüpfungen
 menu-swap-panels = Fenster tau&schen
 menu-sync-panel = Anderes &Fenster abgleichen
@@ -1267,3 +1268,10 @@ split-done = { $parts } Stücke geschrieben, daneben { $list }
 combine-done-checked = { $name } aus { $parts } Stücken zusammengefügt, { $bytes }, passt zu seiner .crc
 combine-done-unchecked = { $name } aus { $parts } Stücken zusammengefügt, { $bytes } — keine .crc zum Prüfen
 pieces-failed = Nicht erledigt: { $error }
+
+# The branch view (SPEC 02 §3d)
+branch-reading = Alle Dateien unter { $path } werden gelesen…
+branch-title = Zweig: { $path }
+branch-done = { $count } Dateien aus allen Ordnern darunter · Strg+Alt+B geht zurück
+branch-truncated = { $count } Dateien, und dort hat das Lesen aufgehört: der Zweig ist größer, als eine Liste sinnvoll sein kann
+branch-not-here = Die Zweigansicht ist die eines Ordners, und dieses Feld ist eine Liste
