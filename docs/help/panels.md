@@ -121,7 +121,10 @@ copy dialog the same `Alt+F10` fills the destination in.
 `Ctrl+F2` hide the left or the right one to give the other the whole screen, and `Ctrl+O`
 takes both off to show what the commands have printed. With the panels off everything else
 still works — the command line, the menus, the keys — and `PgUp` and `PgDn` turn pages through
-the output; `Ctrl+O` brings the panels back.
+the output; `Ctrl+O` brings the panels back. `Ctrl+Shift+F` finds text in that output: the
+newest line that has it is shown, marked, with the panels out of the way, and asking again for
+the same text goes on to the line before — the way to walk back through a build's errors. Past
+the oldest it starts again from the newest, and says so.
 
 The panels go off by themselves while a command runs, so what it prints can be watched
 arriving line by line rather than turning up all at once at the end, and they come back when

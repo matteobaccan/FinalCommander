@@ -97,6 +97,7 @@ Column `FC` = FinalCommander default (profile `far`, our baseline).
 | quick view panel | Ctrl+Q | Ctrl+x q | — | Ctrl+Q |
 | tree panel | Ctrl+T | — | — | Ctrl+T |
 | hide both panels | Ctrl+O | Ctrl+O | — | Ctrl+O |
+| find in the command output | — | — | — | **Ctrl+Shift+F**, MultiTotal Commander's key; the newest line first, again for the one before |
 | hide inactive panel | Ctrl+P | — | — | Ctrl+P (the focus stays where it is) |
 | panel height / width | Ctrl+↑/↓, Ctrl+←/→ | — | — | Ctrl+↑/↓, Ctrl+←/→ — `Ctrl+↑` brings the panels' bottom edge **up**, so they get shorter and the command output below them gets the rows |
 | toggle hidden files | Ctrl+H | Alt+. (Shift+Alt+H in some builds) | Alt+. | Ctrl+H |

@@ -204,6 +204,8 @@ pub enum Command {
     PanelUsage,
     /// The jobs: running, queued, paused and finished (SPEC 03 §5).
     JobQueue,
+    /// Find a line in what the commands printed, the user screen behind the panels.
+    ShellOutputSearch,
     /// `Ctrl+F1`/`Ctrl+F2`: hide one panel and give the screen to the other.
     PanelToggle(Side),
     /// `Ctrl+P`: hide the panel that does not have the focus, which is FAR's own key for
@@ -568,6 +570,7 @@ impl Command {
             Command::PanelHistory,
             Command::PanelUsage,
             Command::JobQueue,
+            Command::ShellOutputSearch,
             Command::NavUp,
             Command::NavDown,
             Command::NavPageUp,
@@ -853,6 +856,7 @@ impl Command {
             Command::PanelHistory => "panel.history".into(),
             Command::PanelUsage => "panel.usage".into(),
             Command::JobQueue => "job.queue.show".into(),
+            Command::ShellOutputSearch => "shell.output.search".into(),
             Command::NavUp => "nav.up".into(),
             Command::NavDown => "nav.down".into(),
             Command::NavPageUp => "nav.pageup".into(),
@@ -1086,6 +1090,7 @@ impl Command {
             ("panel.history", _) => Command::PanelHistory,
             ("panel.usage", _) => Command::PanelUsage,
             ("job.queue.show", _) => Command::JobQueue,
+            ("shell.output.search", _) => Command::ShellOutputSearch,
             ("panel.focus.toggle", _) => Command::PanelFocusToggle,
             ("panel.swap", _) => Command::PanelSwap,
             ("panel.reread", _) => Command::PanelReread,

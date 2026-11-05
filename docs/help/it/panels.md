@@ -129,7 +129,11 @@ destinazione.
 `Ctrl+F2` nascondono quello di sinistra o di destra per dare all'altro tutto lo schermo, e
 `Ctrl+O` li toglie entrambi per mostrare quello che hanno stampato i comandi. Con i pannelli
 spenti tutto il resto funziona ancora — la riga di comando, i menu, i tasti — e `PgSu` e
-`PgGiù` girano le pagine dell'output; `Ctrl+O` riporta i pannelli.
+`PgGiù` girano le pagine dell'output; `Ctrl+O` riporta i pannelli. `Ctrl+Shift+F` cerca un
+testo in quell'output: la riga più recente che lo contiene viene mostrata, evidenziata, con i
+pannelli tolti di mezzo, e chiedendo di nuovo lo stesso testo si passa a quella prima — il modo
+per risalire gli errori di una compilazione. Oltre la più vecchia ricomincia dalla più recente,
+e lo dice.
 
 I pannelli se ne vanno da sé mentre un comando gira, così quello che stampa si può guardare
 arrivare riga per riga invece di comparire tutto insieme alla fine, e tornano quando il comando

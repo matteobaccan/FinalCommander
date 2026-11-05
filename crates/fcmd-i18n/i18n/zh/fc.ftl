@@ -68,6 +68,11 @@ dialog-help-hint-index = Enter 打开章节 · F7 搜索所有章节 · Esc 关�
 help-search-prompt = 搜索帮助
 help-search-none = 帮助中没有包含“{ $query }”的行
 help-search-title = 帮助中的“{ $query }”：{ $count } 行
+output-search-prompt = 在输出中查找
+output-search-empty = 还没有任何输出
+output-search-found = 第 { $line } 行，共 { $lines } 行
+output-search-wrapped = 第 { $line } 行，共 { $lines } 行，已从最新处重新开始
+output-search-none = 输出中没有包含“{ $query }”的行
 
 msg-not-implemented = 此版本尚未实现 { $command }
 msg-selected = 已选择 { $count } 项

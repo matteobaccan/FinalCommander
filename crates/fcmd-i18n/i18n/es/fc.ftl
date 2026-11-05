@@ -68,6 +68,11 @@ dialog-help-hint-index = Entrar abre un capítulo · F7 busca en todos los capí
 help-search-prompt = Buscar en la ayuda
 help-search-none = Ninguna línea de la ayuda contiene «{ $query }»
 help-search-title = «{ $query }» en la ayuda: { $count } líneas
+output-search-prompt = Buscar en la salida
+output-search-empty = Todavía no se ha impreso nada
+output-search-found = Línea { $line } de { $lines }
+output-search-wrapped = Línea { $line } de { $lines }, otra vez desde la más reciente
+output-search-none = Ninguna línea de la salida contiene «{ $query }»
 
 msg-not-implemented = { $command } aún no está implementado en esta versión
 msg-selected = { $count } elementos seleccionados

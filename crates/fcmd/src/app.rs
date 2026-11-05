@@ -830,6 +830,8 @@ pub enum PromptKind {
     ViewerSearch,
     /// A word to look for in every chapter of the help (`F7` inside `F1`).
     HelpSearch,
+    /// Text to find in what the commands printed (`Ctrl+Shift+F`).
+    OutputSearch,
     /// What the table's rows have to hold to stay on the screen (SPEC 05 §1.11).
     TableFilter,
     /// Offset or percentage for the viewer.
@@ -2044,6 +2046,10 @@ pub struct App {
     /// How many lines back from the end of the user screen it is scrolled, for the pages
     /// `PgUp`/`PgDn` turn while the panels are off.
     pub user_scroll: usize,
+    /// The line of the user screen the last output search found, and what it was looking
+    /// for: the renderer marks that line, and asking again for the same text goes on to the
+    /// one before it.
+    pub output_hit: Option<(usize, String)>,
     /// What was searched for last, so `Alt+F7` opens on it rather than on an empty dialog.
     pub last_find: FindSpec,
     /// The tree panel's rows, per panel, and the directory cache behind them. The cache
@@ -2317,6 +2323,7 @@ impl App {
             hidden_by_view: false,
             panels_off: false,
             user_scroll: 0,
+            output_hit: None,
             last_find: FindSpec::default(),
             drag: None,
             hex_parked: None,
@@ -5027,6 +5034,10 @@ impl App {
             PromptKind::HelpSearch => {
                 let query = prompt.text.trim().to_string();
                 self.help_search(&query);
+            }
+            PromptKind::OutputSearch => {
+                let query = prompt.text.to_string();
+                self.output_search(&query);
             }
             // `Ctrl+Z`: what the directory says about this file. An empty answer takes the
             // line away, which is how a description is removed — there is no other key for
@@ -8558,6 +8569,20 @@ impl App {
             Command::PanelHistory => self.open_pick(PickKind::FoldersHistory, self.active),
             Command::PanelUsage => self.open_usage(),
             Command::JobQueue => self.open_pick(PickKind::Jobs, self.active),
+            Command::ShellOutputSearch => {
+                if self.user_screen.is_empty() {
+                    let m = self.i18n.t("output-search-empty");
+                    self.set_error(m);
+                    return;
+                }
+                let last = self
+                    .output_hit
+                    .as_ref()
+                    .map(|(_, q)| q.clone())
+                    .unwrap_or_default();
+                let title = self.i18n.t("output-search-prompt");
+                self.mode = Mode::Prompt(Prompt::new(PromptKind::OutputSearch, title, last));
+            }
             Command::PanelDrive(side) => {
                 let side = match side {
                     Side::Left => 0,
@@ -10739,6 +10764,61 @@ impl App {
     /// OK in the replace dialog: count first, always. The dry run and the write share the
     /// engine's one code path, so what the confirmation says is what the write will do.
     /// `Shift+F1`: the dialog for a new archive out of what is selected.
+    /// `Ctrl+Shift+F`: the newest line of the user screen that holds `query`, in any case —
+    /// or, asked for the same text again, the one before the last one found, which is how
+    /// one walks back through a build's errors. The panels go so the line can be seen, and
+    /// the screen is scrolled to put it at the bottom, where the newest output always is.
+    fn output_search(&mut self, query: &str) {
+        if query.is_empty() {
+            self.output_hit = None;
+            return;
+        }
+        let needle = query.to_lowercase();
+        let holds = |line: &String| line.to_lowercase().contains(&needle);
+        let before = match &self.output_hit {
+            Some((at, q)) if q == query => (*at).min(self.user_screen.len()),
+            _ => self.user_screen.len(),
+        };
+        let found = (0..before)
+            .rev()
+            .find(|&i| holds(&self.user_screen[i]))
+            .map(|i| (i, false))
+            // Past the oldest match it starts again from the newest, and says so.
+            .or_else(|| {
+                (0..self.user_screen.len())
+                    .rev()
+                    .find(|&i| holds(&self.user_screen[i]))
+                    .map(|i| (i, true))
+            });
+        match found {
+            Some((at, wrapped)) => {
+                self.output_hit = Some((at, query.to_string()));
+                self.panels_off = true;
+                self.user_scroll = self.user_screen.len() - 1 - at;
+                let id = if wrapped {
+                    "output-search-wrapped"
+                } else {
+                    "output-search-found"
+                };
+                let msg = self.i18n.t_args(
+                    id,
+                    &[
+                        ("line", ((at + 1) as i64).into()),
+                        ("lines", (self.user_screen.len() as i64).into()),
+                    ],
+                );
+                self.set_status(msg);
+            }
+            None => {
+                self.output_hit = None;
+                let msg = self
+                    .i18n
+                    .t_args("output-search-none", &[("query", query.to_string().into())]);
+                self.set_error(msg);
+            }
+        }
+    }
+
     /// Back to the help page a search started from, or to its index.
     fn help_return(&mut self) {
         let (chapter, scroll, at) =
@@ -13045,6 +13125,13 @@ impl App {
         if self.user_screen.len() > MAX_LINES {
             let drop = self.user_screen.len() - MAX_LINES;
             self.user_screen.drain(..drop);
+            // The line a search found has moved up with everything else, or gone.
+            if let Some((at, _)) = &mut self.output_hit {
+                match at.checked_sub(drop) {
+                    Some(now) => *at = now,
+                    None => self.output_hit = None,
+                }
+            }
         }
     }
 
@@ -30929,6 +31016,50 @@ abcdefghij
         type_text(&mut app, "zzqqxx-nowhere");
         press(&mut app, "Enter");
         assert!(matches!(app.mode, Mode::Help { .. }), "{:?}", app.mode);
+        assert!(app.status_error, "{}", app.status);
+    }
+
+    /// `Ctrl+Shift+F` finds the newest line of the output that holds the text, shows it with
+    /// the panels off, and the same text again walks back to the one before, then round.
+    #[test]
+    fn the_output_is_searched_from_the_newest_line_back() {
+        let mut app = app();
+        app.user_screen = vec![
+            "Compiling fcmd".into(),
+            "error: one".into(),
+            "warning: unused".into(),
+            "ERROR: two".into(),
+            "Finished".into(),
+        ];
+        let search = |app: &mut App, text: &str| {
+            press(app, "Ctrl+Shift+F");
+            assert!(matches!(app.mode, Mode::Prompt(_)), "{:?}", app.mode);
+            clear_prompt(app);
+            type_text(app, text);
+            press(app, "Enter");
+        };
+        search(&mut app, "error");
+        assert!(app.panels_off, "the output is shown");
+        assert_eq!(
+            app.output_hit.as_ref().map(|h| h.0),
+            Some(3),
+            "the newest, in any case"
+        );
+        assert_eq!(app.user_scroll, 1, "at the bottom of the screen");
+        search(&mut app, "error");
+        assert_eq!(
+            app.output_hit.as_ref().map(|h| h.0),
+            Some(1),
+            "then the one before"
+        );
+        search(&mut app, "error");
+        assert_eq!(
+            app.output_hit.as_ref().map(|h| h.0),
+            Some(3),
+            "and round again"
+        );
+        search(&mut app, "nowhere");
+        assert!(app.output_hit.is_none());
         assert!(app.status_error, "{}", app.status);
     }
 

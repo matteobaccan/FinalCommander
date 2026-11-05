@@ -29,6 +29,11 @@ Notable changes, newest first. The format follows
   showing each new name as it was typed, and `1.txt` and `2.txt` swapped through the counter
   with nothing left behind under a temporary name.
 
+- **Searching what the commands printed** (`Ctrl+Shift+F`). The newest line of the output
+  that holds the text, in any case, is shown with the panels off and marked the way the cursor
+  row is; asking again for the same text goes to the line before, so a build's errors can be
+  walked back one at a time, and past the oldest it goes round to the newest and says so.
+
 - **Searching the help** (`F7` inside `F1`): a word looked for in every chapter at once —
   the written ones in the reader's language and the generated ones, the keys, the commands
   and the settings — and every line that holds it listed under its chapter's name. `Enter`

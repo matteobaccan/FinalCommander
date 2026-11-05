@@ -384,9 +384,19 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             .saturating_sub(app.user_scroll)
             .max(rows.min(app.user_screen.len()));
         let start = end.saturating_sub(rows);
+        // The line an output search found is drawn the way the cursor row is, so the eye
+        // goes to it on a screen of a build's worth of text.
+        let hit = app.output_hit.as_ref().map(|(at, _)| *at);
+        let marked = Style::new(app.theme.color("cursor.fg"), app.theme.color("cursor.bg"));
         for (i, line) in app.user_screen[start..end].iter().enumerate() {
             let text = fcmd_ui::truncate_cols(line, w as usize);
-            buf.put_str(0, area.y + i as u16, &text, style, w);
+            let y = area.y + i as u16;
+            if hit == Some(start + i) {
+                buf.fill(Rect::new(0, y, w, 1), ' ', marked);
+                buf.put_str(0, y, &text, marked, w);
+            } else {
+                buf.put_str(0, y, &text, style, w);
+            }
         }
     }
 

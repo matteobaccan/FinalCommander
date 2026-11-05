@@ -68,6 +68,11 @@ dialog-help-hint-index = Eingabe öffnet ein Kapitel · F7 sucht in allen Kapite
 help-search-prompt = Hilfe durchsuchen
 help-search-none = Keine Zeile der Hilfe enthält „{ $query }“
 help-search-title = „{ $query }“ in der Hilfe: { $count } Zeilen
+output-search-prompt = In der Ausgabe suchen
+output-search-empty = Es wurde noch nichts ausgegeben
+output-search-found = Zeile { $line } von { $lines }
+output-search-wrapped = Zeile { $line } von { $lines }, wieder ab der neuesten
+output-search-none = Keine Zeile der Ausgabe enthält „{ $query }“
 
 msg-not-implemented = { $command } ist in dieser Version noch nicht umgesetzt
 msg-selected = { $count } Einträge ausgewählt

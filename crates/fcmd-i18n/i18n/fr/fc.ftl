@@ -68,6 +68,11 @@ dialog-help-hint-index = Entrée ouvre un chapitre · F7 cherche dans tous les c
 help-search-prompt = Chercher dans l'aide
 help-search-none = Aucune ligne de l'aide ne contient « { $query } »
 help-search-title = « { $query } » dans l'aide : { $count } lignes
+output-search-prompt = Chercher dans la sortie
+output-search-empty = Rien n'a encore été affiché
+output-search-found = Ligne { $line } sur { $lines }
+output-search-wrapped = Ligne { $line } sur { $lines }, de nouveau depuis la plus récente
+output-search-none = Aucune ligne de la sortie ne contient « { $query } »
 
 msg-not-implemented = { $command } n'est pas encore implémenté dans cette version
 msg-selected = { $count } éléments sélectionnés

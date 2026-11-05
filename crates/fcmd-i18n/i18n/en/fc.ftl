@@ -72,6 +72,11 @@ dialog-help-hint-index = Enter opens a chapter · F7 searches every chapter · E
 help-search-prompt = Search the help
 help-search-none = No line of the help holds “{ $query }”
 help-search-title = “{ $query }” in the help: { $count } lines
+output-search-prompt = Find in the output
+output-search-empty = Nothing has been printed yet
+output-search-found = Line { $line } of { $lines }
+output-search-wrapped = Line { $line } of { $lines }, from the newest again
+output-search-none = No line of the output holds “{ $query }”
 
 # Status messages
 msg-not-implemented = { $command } is not implemented in this build yet

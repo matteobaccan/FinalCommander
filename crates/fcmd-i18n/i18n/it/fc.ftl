@@ -68,6 +68,11 @@ dialog-help-hint-index = Invio apre un capitolo · F7 cerca in tutti i capitoli 
 help-search-prompt = Cerca nella guida
 help-search-none = Nessuna riga della guida contiene «{ $query }»
 help-search-title = «{ $query }» nella guida: { $count } righe
+output-search-prompt = Cerca nell'output
+output-search-empty = Non è stato ancora stampato niente
+output-search-found = Riga { $line } di { $lines }
+output-search-wrapped = Riga { $line } di { $lines }, di nuovo dalla più recente
+output-search-none = Nessuna riga dell'output contiene «{ $query }»
 
 msg-not-implemented = { $command } non è ancora implementato in questa build
 msg-selected = { $count } elementi selezionati

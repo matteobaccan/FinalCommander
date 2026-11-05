@@ -68,6 +68,11 @@ dialog-help-hint-index = Enter открывает главу · F7 — поис�
 help-search-prompt = Поиск в справке
 help-search-none = Ни одна строка справки не содержит «{ $query }»
 help-search-title = «{ $query }» в справке: строк { $count }
+output-search-prompt = Поиск в выводе
+output-search-empty = Пока ничего не выведено
+output-search-found = Строка { $line } из { $lines }
+output-search-wrapped = Строка { $line } из { $lines }, снова с самой новой
+output-search-none = Ни одна строка вывода не содержит «{ $query }»
 
 msg-not-implemented = { $command } пока не реализовано в этой сборке
 msg-selected = отмечено элементов: { $count }
