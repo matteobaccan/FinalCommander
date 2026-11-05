@@ -639,6 +639,20 @@ macros, the buffer list (§2.3) and the external editor (§2.4).
 | Big edits | search/replace across a whole file streams through the rope without materialising copies |
 | Macros | record/play keystroke macros, scoped to the editor, saved by name |
 
+### 2.2c `.editorconfig`
+
+The `.editorconfig` files from the file's folder up to the first with `root = true` are read
+when a local file opens in the editor (`fcmd-edit::editorconfig`), the nearer file and the
+later section winning, with the format's globs (`*`, `**`, `?`, `[…]`, `{a,b}`, `{1..3}`).
+What they say wins over the settings for that file only:
+
+* `indent_style` — spaces or tabs for what `Tab` types; `indent_size` / `tab_width` — the width.
+* `trim_trailing_whitespace` — over `editor.trim_trailing`, at every save.
+* `end_of_line` and `insert_final_newline` — for a new or empty file only. An existing file
+  keeps the endings it has, so opening one never turns into a change to every line.
+* `charset` is not applied: the code page is detected from the bytes (§2.1), and a file whose
+  bytes disagree with its `.editorconfig` is shown as it is.
+
 ### 2.2b Syntax highlighting
 
 `fcmd-syntax` is a scanner, not a parser, and deliberately: it knows how a language writes a

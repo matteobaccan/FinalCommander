@@ -15,6 +15,10 @@ Notable changes, newest first. The format follows
   how many, how big and the host before anything goes. The answer is a Markdown file in
   `fcmd-ai/` beside the settings, opened in the viewer; `ai:` alone opens that folder as a
   panel of everything asked so far.
+- **`.editorconfig` in the editor.** A project's own indentation — spaces or tabs, the width —
+  and its trailing-blanks rule win over the settings for the files under it; a new file also
+  takes its line ending and final newline. Nearer files and later sections win, as the format
+  says, and `root = true` stops the climb.
 - **Git** (`Ctrl+Alt+G`, *Commands → Git*): what changed, as a panel of the real files with
   their status in front as `git status --short` writes it; the log and the blame of the file
   under the cursor in the viewer; the branches, where `Enter` puts `git switch` on the command

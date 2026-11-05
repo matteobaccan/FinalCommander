@@ -89,6 +89,9 @@ pub struct Editor {
     /// which is what a text editor does; on, the columns past the end are somewhere to be,
     /// and the line is padded with spaces only when something is actually typed there.
     pub beyond_eol: bool,
+    /// What `.editorconfig` said about trailing blanks for this file, which wins over the
+    /// setting when it says anything (SPEC 05 §2.9).
+    pub trim_on_save: Option<bool>,
     /// The next key typed goes in as itself, whatever it means — `Ctrl+Q` armed it. It is how
     /// a control character, or a tab where tabs are expanded, gets into a file at all.
     pub literal_next: bool,
@@ -143,6 +146,7 @@ impl Editor {
             show_whitespace: false,
             cursor_after_match: false,
             beyond_eol: false,
+            trim_on_save: None,
             literal_next: false,
             bookmarks: [None; 10],
             clipboard: None,

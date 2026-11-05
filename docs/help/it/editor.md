@@ -112,3 +112,11 @@ tabulazione, perché è il tasto che si preme mentre si scrive.
 `Ctrl+Shift+Ins` aggiunge il blocco a quello che è già negli appunti invece di sostituirlo,
 così si possono raccogliere pezzi da qua e da là e incollarli in una volta. `Ctrl+N` e `Ctrl+E`
 mettono il cursore sulla prima e sull'ultima riga *dello schermo*, lasciando lo schermo dov'è.
+
+# Il `.editorconfig` di un progetto
+
+Quando un file che apri ha un `.editorconfig` sopra di sé, quello che dice su quel file vince
+sulle impostazioni: spazi o tabulazioni e quanto larghi (`indent_style`, `indent_size`,
+`tab_width`), e se togliere gli spazi in coda al salvataggio (`trim_trailing_whitespace`). Per
+un file nuovo anche il fine riga e l'a-capo finale (`end_of_line`, `insert_final_newline`); un
+file che esiste già tiene quelli che ha.

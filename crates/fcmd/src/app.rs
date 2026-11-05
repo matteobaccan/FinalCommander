@@ -17615,6 +17615,30 @@ impl App {
         editor.show_whitespace = cfg.show_whitespace;
         editor.cursor_after_match = cfg.cursor_after_match;
         editor.beyond_eol = cfg.beyond_eol;
+        // The project's own `.editorconfig` wins over the settings, for this file only
+        // (SPEC 05 §2.9). The line ending and the final newline are a new file's: an
+        // existing file keeps the ones it has, so opening one never rewrites every line.
+        if let Some(path) = editor.path.as_ref().filter(|p| p.is_local()) {
+            let props = fcmd_edit::editorconfig::resolve(path.as_path());
+            if let Some(spaces) = props.spaces {
+                editor.expand_tabs = spaces;
+            }
+            if let Some(width) = props.width() {
+                editor.tab_width = width.clamp(1, 16);
+            }
+            editor.trim_on_save = props.trim_trailing_whitespace;
+            if editor.buffer.is_empty() || !path.as_path().exists() {
+                match props.end_of_line.as_deref() {
+                    Some("crlf") => editor.buffer.eol = fcmd_edit::buffer::Eol::Crlf,
+                    Some("cr") => editor.buffer.eol = fcmd_edit::buffer::Eol::Cr,
+                    Some("lf") => editor.buffer.eol = fcmd_edit::buffer::Eol::Lf,
+                    _ => {}
+                }
+                if let Some(final_newline) = props.insert_final_newline {
+                    editor.buffer.final_newline = final_newline;
+                }
+            }
+        }
         if cfg.expand_on_open() {
             match editor.expand_all_tabs() {
                 Ok(0) => {}
@@ -17973,7 +17997,7 @@ impl App {
         let name = editor.name();
         // `editor.trim_trailing`: the blanks at the ends of lines go as the file is written,
         // in one undo step, so a save that took them can be taken back.
-        if self.cfg.editor.trim_trailing {
+        if editor.trim_on_save.unwrap_or(self.cfg.editor.trim_trailing) {
             let _ = editor.trim_trailing();
         }
         match editor.save(force) {
@@ -32120,6 +32144,40 @@ abcdefghij
         let mut app = app_on_disk(dir);
         app.editor_size = (40, 6);
         app
+    }
+
+    /// A project's `.editorconfig` sets the indentation and the trailing blanks for the files
+    /// under it, over the settings.
+    #[test]
+    fn an_editorconfig_tunes_the_editor_for_its_files() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join(".editorconfig"),
+            "root = true\n[*.py]\nindent_style = space\nindent_size = 3\ntrim_trailing_whitespace = true\n",
+        )
+        .unwrap();
+        std::fs::write(dir.path().join("a.py"), "x = 1\n").unwrap();
+        std::fs::write(dir.path().join("b.txt"), "x\n").unwrap();
+        let mut app = editing_app(dir.path());
+        app.cfg.editor.tab_width = 8;
+        app.open_editor_on(&VPath::local(dir.path().join("a.py")));
+        let Mode::Editor(e) = &app.mode else {
+            panic!("an editor")
+        };
+        assert_eq!(
+            (e.tab_width, e.expand_tabs, e.trim_on_save),
+            (3, true, Some(true))
+        );
+        app.mode = Mode::Normal;
+        app.open_editor_on(&VPath::local(dir.path().join("b.txt")));
+        let Mode::Editor(e) = &app.mode else {
+            panic!("an editor")
+        };
+        assert_eq!(
+            (e.tab_width, e.trim_on_save),
+            (8, None),
+            "not a .py: the settings"
+        );
     }
 
     /// The git menu over a folder of this disk, and what changed coming back as a panel of

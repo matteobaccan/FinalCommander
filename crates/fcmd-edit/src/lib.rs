@@ -7,6 +7,7 @@
 
 pub mod buffer;
 pub mod editor;
+pub mod editorconfig;
 pub mod hex;
 pub mod highlight;
 

@@ -218,6 +218,7 @@ something readable rather than only into instructions.
 | 6.12 | **External-change detection**: a file changed on disk is never overwritten without a confirmation; reload on demand | FAR | ~ a diff when the file changed underneath |
 | 6.13 | `Shift+F4` edits a new file, saved into the active panel's directory | FAR | ✓ |
 | 6.14 | Line editing: delete, duplicate, move up/down, delete to end of line, delete word left, auto-indent, smart home, tab expansion | FAR | ✓ and on a block: join (`Alt+J`), sort, unique, reverse and number (`Alt+Shift+S/U/R/N`) |
+| 6.15 | `.editorconfig`: indentation, width and trailing-blank trimming per project, line ending and final newline for new files | NEW (every modern editor) | ✓ (SPEC 05 §2.2c) |
 
 ## 7. Tools & dialogs
 

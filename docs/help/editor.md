@@ -105,3 +105,11 @@ writing.
 `Ctrl+Shift+Ins` adds the block to what is already on the clipboard instead of replacing it, so
 a few pieces can be gathered from here and there and pasted in one go. `Ctrl+N` and `Ctrl+E` put
 the cursor on the first and the last line *on the screen*, leaving the screen where it is.
+
+# A project's `.editorconfig`
+
+When a file you open has a `.editorconfig` above it, what it says about that file wins over
+the settings: spaces or tabs and how wide (`indent_style`, `indent_size`, `tab_width`), and
+whether trailing blanks go on saving (`trim_trailing_whitespace`). For a new file, its line
+ending and final newline as well (`end_of_line`, `insert_final_newline`); a file that already
+exists keeps the ones it has.
