@@ -3684,6 +3684,15 @@ mod tests {
         // A real program, small enough to read whole, and a picture: both drawn here.
         std::fs::write(work.join("square"), sample_elf()).expect("the sample program");
         std::fs::write(work.join("sunset.bmp"), sample_bmp(96, 52)).expect("the sample image");
+        // The same date on every run, so a picture with the panels behind it does not change
+        // with the clock.
+        for name in ["sort.rs", "square", "sunset.bmp"] {
+            std::fs::File::options()
+                .write(true)
+                .open(work.join(name))
+                .and_then(|f| f.set_modified(when(2).expect("a time")))
+                .expect("the date is set");
+        }
         let mut app = app_on_disk(&work);
         app.theme = Theme::builtin("far").expect("the far theme");
         app.cfg.panel.status_line = true;
@@ -3868,7 +3877,7 @@ mod tests {
                 let (r, g, bl) = if fy < horizon {
                     // The sea: dark, with the sun's light down the middle.
                     let glow = (1.0 - ((fx - w as f32 / 2.0).abs() / 14.0)).max(0.0)
-                        * (((fy as u32 + x / 3) % 3 != 0) as u8 as f32);
+                        * (!(fy as u32 + x / 3).is_multiple_of(3) as u8 as f32);
                     (
                         (20.0 + 200.0 * glow) as u8,
                         (40.0 + 120.0 * glow) as u8,
