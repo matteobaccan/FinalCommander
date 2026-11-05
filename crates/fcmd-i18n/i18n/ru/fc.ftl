@@ -1416,3 +1416,8 @@ ai-api-openai = OpenAI и совместимые
 ai-api-anthropic = Anthropic
 ai-api-ollama = Ollama (на этой машине)
 menu-ai = Сервисы ИИ
+
+# The secrets file
+vault-password = Пароль файла секретов fcmd
+vault-new = Хранить ключ в зашифрованном файле секретов fcmd: задайте пароль (пусто: только на этот сеанс)
+vault-refused = Файл секретов не открылся: {$why}

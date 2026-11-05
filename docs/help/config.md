@@ -6,6 +6,7 @@ Everything is a file you can read, diff and copy to another machine:
     fcmd-state.toml    what the program remembers: where the panels were, the histories
     fcmd-macros.toml   the macros you recorded
     fcmd-menu.toml     your own F2 menu
+    fcmd-secrets.vault your keys and passwords, encrypted with a password of your own
     fcmd-plugins/      plugins
 
 They sit side by side in the folder the platform keeps settings in — `~/.config` on Linux,
@@ -50,8 +51,13 @@ token_env = "ANTHROPIC_API_KEY"
 They need not be written by hand: *Commands → AI services* lists them as NetBox lists the
 sessions. `Ins` adds one through its dialog (name, protocol, address, model, the variable the
 key is in), `F4` changes it, `Del` removes it, and `Enter` makes it the one `ai:` asks. With no
-variable, or one that is not set, the key is asked for like a password the first time it is
-needed and kept in memory until you quit: it is never written to the file.
+variable, or one that is not set, the key is asked for the first time it is needed and kept in
+`fcmd-secrets.vault`, fcmd's own encrypted file beside the settings — so it travels with them
+to another machine. The first time, you choose that file's password (leave it empty to keep the
+key for this session only). Afterwards the password is asked for once, stays in memory while
+you work, and is forgotten after five minutes without a key pressed; the next secret needed
+asks for it again. The file is AES-256-GCM under a key derived from the password with
+PBKDF2-SHA256, and never holds anything in clear.
 
 The first block is the one `ai:` asks; `ai: local: question` asks the block called `local`.
 The key is never written in the file: `token_env` names the environment variable it is in.

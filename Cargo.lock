@@ -919,6 +919,8 @@ dependencies = [
  "fcmd-view",
  "nix 0.31.3",
  "notify",
+ "ring",
+ "serde_json",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",

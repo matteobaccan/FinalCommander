@@ -1392,3 +1392,8 @@ ai-api-openai = OpenAI 及兼容
 ai-api-anthropic = Anthropic
 ai-api-ollama = Ollama（本机）
 menu-ai = AI 服务
+
+# The secrets file
+vault-password = fcmd 密钥文件的密码
+vault-new = 将此密钥保存在 fcmd 的加密密钥文件中：设置其密码（留空：仅本次会话）
+vault-refused = 密钥文件未能打开：{$why}

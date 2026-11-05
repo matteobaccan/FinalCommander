@@ -980,8 +980,12 @@ pub enum PromptKind {
     EditorGoto,
     /// The pattern of the lines to take out (`!` first: the lines to keep).
     EditorDeleteMatching,
-    /// An AI service's key, typed because its variable holds none; kept for the session.
+    /// An AI service's key, typed because its variable holds none.
     AiKey,
+    /// The password of the secrets file, to open it.
+    VaultPassword,
+    /// A password for a new secrets file, to keep a key in; empty keeps it for this session.
+    VaultNew,
     /// The name to keep a recent replacement under (`Ins` in `Alt+Shift+F7`).
     ReplaceTemplateName,
     EditorSaveAs,
@@ -2181,8 +2185,12 @@ pub struct App {
     replace_from: Option<String>,
     /// The pair `Ins` in the replacements list is naming.
     replace_naming: Option<(String, String)>,
-    /// AI keys typed in this session, by service name. Never written anywhere.
+    /// AI keys typed in this session and not kept in the secrets file, by service name.
     ai_tokens: std::collections::HashMap<String, String>,
+    /// The secrets file, open, while its password is remembered (`vault.rs`).
+    pub vault: Option<crate::vault::Unlocked>,
+    /// A key typed and waiting for the secrets file to be created around it.
+    vault_pending_key: Option<(String, String)>,
     /// The question waiting for a key.
     ai_pending: Option<(fcmd_config::AiCfg, String, Vec<std::path::PathBuf>)>,
     /// Which service the AI dialog is changing; `None` is a new one.
@@ -2526,6 +2534,8 @@ impl App {
             replace_from: None,
             replace_naming: None,
             ai_tokens: std::collections::HashMap::new(),
+            vault: None,
+            vault_pending_key: None,
             ai_pending: None,
             ai_editing: None,
             editor_size: (80, 20),
@@ -2827,7 +2837,14 @@ impl App {
             // Every read from the kept shell wakes the interface, and this is where what it
             // printed is collected: the wake carries nothing itself.
             Event::Redraw => self.poll_subshell(),
-            Event::Input(input) => self.handle_input(input),
+            Event::Input(input) => {
+                // Five idle minutes forget the secrets file's password; a key keeps it.
+                self.forget_idle_vault();
+                if let Some(v) = self.vault.as_mut() {
+                    v.touch();
+                }
+                self.handle_input(input)
+            }
             Event::FindHit {
                 id,
                 path,
@@ -5911,11 +5928,71 @@ impl App {
             }
             PromptKind::AiKey => {
                 let key = prompt.text.trim().to_string();
-                if let (false, Some((service, question, files))) =
-                    (key.is_empty(), self.ai_pending.take())
-                {
-                    self.ai_tokens.insert(service.name.clone(), key);
+                let Some((service, question, files)) = self.ai_pending.take() else {
+                    return;
+                };
+                if key.is_empty() {
+                    return;
+                }
+                let name = format!("ai:{}", service.name);
+                match self.vault.as_mut() {
+                    // Kept in the secrets file, for this run and the next.
+                    Some(v) => {
+                        v.set(&name, &key);
+                        self.save_vault();
+                        self.ask_ai(service, question, files);
+                    }
+                    // No file yet: offer to make one around this key.
+                    None => {
+                        self.vault_pending_key = Some((name, key));
+                        self.ai_pending = Some((service, question, files));
+                        let title = self.i18n.t("vault-new");
+                        self.mode = Mode::Prompt(Prompt {
+                            kind: PromptKind::VaultNew,
+                            title,
+                            text: String::new(),
+                            secret: true,
+                            sources: Vec::new(),
+                        });
+                    }
+                }
+            }
+            PromptKind::VaultNew => {
+                let password = prompt.text.clone();
+                let Some((name, key)) = self.vault_pending_key.take() else {
+                    return;
+                };
+                if password.is_empty() {
+                    // Not kept: this session only.
+                    if let Some(service) = name.strip_prefix("ai:") {
+                        self.ai_tokens.insert(service.to_string(), key);
+                    }
+                } else {
+                    let mut v = crate::vault::Unlocked::create(&password);
+                    v.set(&name, &key);
+                    self.vault = Some(v);
+                    self.save_vault();
+                }
+                if let Some((service, question, files)) = self.ai_pending.take() {
                     self.ask_ai(service, question, files);
+                }
+            }
+            PromptKind::VaultPassword => {
+                let password = prompt.text.clone();
+                match crate::vault::Unlocked::open(&self.vault_path(), &password) {
+                    Ok(v) => {
+                        self.vault = Some(v);
+                        if let Some((service, question, files)) = self.ai_pending.take() {
+                            self.ask_ai(service, question, files);
+                        }
+                    }
+                    Err(e) => {
+                        self.ai_pending = None;
+                        let m = self
+                            .i18n
+                            .t_args("vault-refused", &[("why", e.to_string().into())]);
+                        self.set_error(m);
+                    }
                 }
             }
             PromptKind::ReplaceTemplateName => {
@@ -11585,8 +11662,30 @@ impl App {
         let dir = self.ai_dir();
         // A key nobody has given: asked once, as a password is, and kept for the session.
         let from_env = !service.token_env.is_empty() && std::env::var(&service.token_env).is_ok();
-        let typed = self.ai_tokens.get(&service.name).cloned();
-        if service.api != "ollama" && !from_env && typed.is_none() {
+        let needs_key = service.api != "ollama" && !from_env;
+        // The secrets file, when there is one and it is not open: its password first.
+        if needs_key
+            && self.vault.is_none()
+            && !self.ai_tokens.contains_key(&service.name)
+            && self.vault_path().is_file()
+        {
+            self.ai_pending = Some((service, question, files));
+            let title = self.i18n.t("vault-password");
+            self.mode = Mode::Prompt(Prompt {
+                kind: PromptKind::VaultPassword,
+                title,
+                text: String::new(),
+                secret: true,
+                sources: Vec::new(),
+            });
+            return;
+        }
+        let typed = self.ai_tokens.get(&service.name).cloned().or_else(|| {
+            self.vault
+                .as_mut()
+                .and_then(|v| v.get(&format!("ai:{}", service.name)))
+        });
+        if needs_key && typed.is_none() {
             let title = self
                 .i18n
                 .t_args("ai-key-prompt", &[("name", service.name.clone().into())]);
@@ -11607,6 +11706,43 @@ impl App {
             files,
             dir,
         });
+    }
+
+    /// `fcmd-secrets.vault`, beside the settings so it travels with them.
+    pub fn vault_path(&self) -> std::path::PathBuf {
+        self.paths
+            .config_file
+            .with_file_name(crate::vault::FILE_NAME)
+    }
+
+    fn save_vault(&mut self) {
+        let path = self.vault_path();
+        if let Some(v) = &self.vault {
+            if let Err(e) = v.save(&path) {
+                self.set_error(e.to_string());
+            }
+        }
+    }
+
+    /// Five minutes without a key and the secrets file's password is forgotten; the next
+    /// secret needed asks for it again. Called on every key, and when the loop's wait ends.
+    pub fn forget_idle_vault(&mut self) {
+        let now = std::time::Instant::now();
+        if self
+            .vault
+            .as_ref()
+            .is_some_and(|v| v.expired(now, crate::vault::IDLE))
+        {
+            self.vault = None;
+            self.ai_tokens.clear();
+        }
+    }
+
+    /// How long the loop may wait before the password has to be forgotten.
+    pub fn vault_wait(&self) -> Option<std::time::Duration> {
+        self.vault
+            .as_ref()
+            .map(|v| v.left(std::time::Instant::now(), crate::vault::IDLE))
     }
 
     /// `tool.ai`: the services, the one `ai:` asks first.
@@ -33183,6 +33319,71 @@ abcdefghij
         assert_eq!(e.buffer.line(0), "baz bar baz");
     }
 
+    /// A key typed once is kept in fcmd's own encrypted file; after a restart the file's
+    /// password opens it, and five minutes without a key forget that password again.
+    #[test]
+    fn an_ai_key_is_kept_in_the_secrets_file_and_its_password_forgotten_when_idle() {
+        let dir = tempfile::tempdir().unwrap();
+        let service = fcmd_config::AiCfg {
+            name: "claude".into(),
+            url: "https://api.example.com/v1/messages".into(),
+            api: "anthropic".into(),
+            model: "m".into(),
+            token_env: "FCMD_TEST_NO_SUCH_KEY".into(),
+            ..Default::default()
+        };
+        let answer = |app: &mut App, text: &str| {
+            let Mode::Prompt(mut prompt) = std::mem::replace(&mut app.mode, Mode::Normal) else {
+                panic!("a prompt: {:?}", app.mode)
+            };
+            assert!(prompt.secret, "{:?} is typed unseen", prompt.kind);
+            prompt.text = text.into();
+            app.prompt_accept(prompt);
+        };
+        let sent = |app: &mut App| {
+            app.take_requests().into_iter().find_map(|r| match r {
+                Request::AiAsk { token, .. } => Some(token),
+                _ => None,
+            })
+        };
+
+        let mut app = app_on_disk(dir.path());
+        app.cfg.ais = vec![service.clone()];
+        app.ai_line("hello".into());
+        answer(&mut app, "sk-ant-secret");
+        answer(&mut app, "master pw");
+        assert_eq!(sent(&mut app), Some(Some("sk-ant-secret".into())));
+        let file = app.vault_path();
+        let raw = std::fs::read(&file).expect("the secrets file was written");
+        assert!(
+            !raw.windows(10).any(|w| w == b"sk-ant-sec"),
+            "never in clear"
+        );
+
+        // A new run: the file's password, and the key comes out of it.
+        let mut app = app_on_disk(dir.path());
+        app.cfg.ais = vec![service.clone()];
+        app.ai_line("again".into());
+        answer(&mut app, "wrong");
+        assert!(app.status_error && app.vault.is_none(), "{}", app.status);
+        app.ai_line("again".into());
+        answer(&mut app, "master pw");
+        assert_eq!(sent(&mut app), Some(Some("sk-ant-secret".into())));
+
+        // Used again soon: no password asked.
+        app.ai_line("third".into());
+        assert_eq!(sent(&mut app), Some(Some("sk-ant-secret".into())));
+        // Five idle minutes, and it is forgotten.
+        app.vault.as_mut().unwrap().age(crate::vault::IDLE);
+        app.forget_idle_vault();
+        assert!(app.vault.is_none());
+        app.ai_line("fourth".into());
+        assert!(
+            matches!(&app.mode, Mode::Prompt(p) if p.kind == PromptKind::VaultPassword),
+            "asked for again"
+        );
+    }
+
     /// The AI services are a list kept like the sessions: a new one through its dialog, the
     /// one chosen becomes the one `ai:` asks, and a key nobody gave is asked for, not assumed.
     #[test]
@@ -33223,6 +33424,14 @@ abcdefghij
         assert!(prompt.secret && prompt.kind == PromptKind::AiKey);
         prompt.text = "sk-typed".into();
         app.prompt_accept(prompt);
+        // Offered a secrets file around it; left empty, the key is for this session only.
+        let Mode::Prompt(mut prompt) = std::mem::replace(&mut app.mode, Mode::Normal) else {
+            panic!("the secrets file is offered: {:?}", app.mode)
+        };
+        assert_eq!(prompt.kind, PromptKind::VaultNew);
+        prompt.text = String::new();
+        app.prompt_accept(prompt);
+        assert!(!app.vault_path().exists(), "nothing written when declined");
         let sent = app.take_requests().into_iter().find_map(|r| match r {
             Request::AiAsk { token, .. } => Some(token),
             _ => None,

@@ -23,6 +23,7 @@ mod render;
 mod tabs;
 mod termkeys;
 mod tree;
+mod vault;
 mod watch;
 
 use std::path::{Path, PathBuf};
@@ -1911,6 +1912,11 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
             let step = std::time::Duration::from_secs(1);
             wait = Some(wait.map_or(step, |w: std::time::Duration| w.min(step)));
         }
+        // The secrets file's password is forgotten on time, not only at the next key.
+        if let Some(left) = app.vault_wait() {
+            let left = left.max(std::time::Duration::from_secs(1));
+            wait = Some(wait.map_or(left, |w: std::time::Duration| w.min(left)));
+        }
         let event = match wait {
             Some(wait) => match rx.recv_timeout(wait) {
                 Ok(event) => Some(event),
@@ -1926,6 +1932,7 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
             Some(event) => app.handle_event(event),
             None => {
                 app.follow_tick();
+                app.forget_idle_vault();
             }
         }
         // Coalesce whatever else is already queued, then draw once.

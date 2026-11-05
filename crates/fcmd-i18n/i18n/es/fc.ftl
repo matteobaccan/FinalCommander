@@ -1416,3 +1416,8 @@ ai-api-openai = OpenAI y compatibles
 ai-api-anthropic = Anthropic
 ai-api-ollama = Ollama (en esta máquina)
 menu-ai = Servicios de IA
+
+# The secrets file
+vault-password = La contraseña del archivo de secretos de fcmd
+vault-new = Guardar esta clave en el archivo cifrado de secretos de fcmd: elige su contraseña (vacío: solo esta sesión)
+vault-refused = El archivo de secretos no se abrió: {$why}

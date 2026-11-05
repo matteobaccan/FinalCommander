@@ -6,6 +6,7 @@ Tutto è un file che puoi leggere, confrontare e copiare su un'altra macchina:
     fcmd-state.toml    quello che il programma ricorda: dov'erano i pannelli, le cronologie
     fcmd-macros.toml   le macro che hai registrato
     fcmd-menu.toml     il tuo menu di F2
+    fcmd-secrets.vault chiavi e password, cifrate con una password tua
     fcmd-plugins/      i plugin
 
 Stanno uno accanto all'altro nella cartella dove la piattaforma tiene le impostazioni —
@@ -51,8 +52,13 @@ token_env = "ANTHROPIC_API_KEY"
 Non serve scriverli a mano: *Comandi → Servizi AI* li elenca come le sessioni di NetBox. `Ins`
 ne aggiunge uno con il suo dialogo (nome, protocollo, indirizzo, modello, variabile della
 chiave), `F4` lo modifica, `Canc` lo toglie, e `Enter` lo rende quello a cui chiede `ai:`. Se
-la variabile della chiave è vuota o non c'è, la chiave viene chiesta come una password la prima
-volta che serve e tenuta in memoria fino all'uscita: non viene mai scritta nel file.
+la variabile della chiave è vuota o non c'è, la chiave viene chiesta la prima volta che serve e
+tenuta in `fcmd-secrets.vault`, il file cifrato di fcmd accanto alle impostazioni — così viaggia
+con loro su un'altra macchina. La prima volta scegli la password di quel file (vuota: la chiave
+resta solo per questa sessione). Dopo, la password si chiede una volta, resta in memoria mentre
+lavori, e viene dimenticata dopo cinque minuti senza toccare un tasto; il segreto successivo la
+richiede. Il file è AES-256-GCM con una chiave derivata dalla password con PBKDF2-SHA256, e non
+contiene mai niente in chiaro.
 
 Il primo blocco è quello a cui chiede `ai:`; `ai: locale: domanda` chiede al blocco chiamato
 `locale`. La chiave non è mai scritta nel file: `token_env` dice in quale variabile d'ambiente

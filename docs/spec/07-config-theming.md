@@ -8,6 +8,7 @@ help are compiled in, so the program is fully usable with nothing else on disk.
 | Path | What | Required? |
 | --- | --- | --- |
 | `fcmd.toml` | **all** user settings: options, `[[theme]]` blocks, `[[keymap]]` blocks, filters, associations, user menu, remote sites (no secrets), terminal key fixes | no |
+| `fcmd-secrets.vault` | keys and passwords: `FCMDVLT1`, salt, PBKDF2-HMAC-SHA256 rounds (600 000), nonce, then JSON sealed with AES-256-GCM (`crates/fcmd/src/vault.rs`). The password is kept in memory and forgotten after five minutes without a key | written when a secret is first kept |
 | `fcmd-state.toml` | remembered state beside it: histories, last session, panel paths, viewer positions | written only if there is something to remember |
 | `plugins/` | the **only** directory ever read: one file per plugin | no |
 

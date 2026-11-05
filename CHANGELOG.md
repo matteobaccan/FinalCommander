@@ -6,6 +6,14 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **fcmd's own secrets file.** An AI key no variable holds is kept in `fcmd-secrets.vault`
+  beside the settings — encrypted with AES-256-GCM under a password you choose the first time,
+  so it travels with the settings to another machine. The password is asked for once, kept in
+  memory while you work, and forgotten after five minutes without a key pressed; the next
+  secret needed asks for it again. Nothing in the file is ever in clear.
+
 ## [0.35.0] - 2026-11-05
 
 ### Added
