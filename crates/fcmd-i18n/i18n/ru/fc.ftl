@@ -1320,3 +1320,9 @@ dupes-none = Нет дубликатов среди { $count } файлов.
 dupes-panel = Дубликаты: групп { $groups }
 dupes-done = Групп дубликатов: { $groups }, в копиях { $size }.
 dupes-truncated = Остановлено: пока групп { $groups }, в копиях { $size }.
+
+## SQLite queries (SPEC 04 §4b).
+sql-empty = Напишите запрос после sql:, например sql: SELECT * FROM t
+sql-no-database = sql: нужна база SQLite: войдите в неё или поставьте на неё курсор.
+sql-running = Выполняю запрос…
+sql-failed = Запрос не выполнен: { $why }

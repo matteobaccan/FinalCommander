@@ -1296,3 +1296,9 @@ dupes-none = { $count } 个文件中没有重复。
 dupes-panel = 重复：{ $groups } 组
 dupes-done = { $groups } 组重复，副本占 { $size }。
 dupes-truncated = 提前停止：目前 { $groups } 组，副本占 { $size }。
+
+## SQLite queries (SPEC 04 §4b).
+sql-empty = 在 sql: 后写查询，例如 sql: SELECT * FROM t
+sql-no-database = sql: 需要一个 SQLite 数据库：进入数据库，或把光标放在数据库上。
+sql-running = 正在执行查询…
+sql-failed = 查询失败：{ $why }

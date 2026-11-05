@@ -26,6 +26,7 @@ mod format;
 mod limits;
 mod nest;
 mod rebuild;
+pub mod sqlite;
 mod write;
 
 pub use archive::{ArcEntry, Archive, Cache, Report};

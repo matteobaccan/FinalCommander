@@ -178,6 +178,7 @@ impl Archive {
             Format::Ar => index_ar(path, &name, limits, cancel)?,
             Format::Cpio => crate::cpio::index_file(path, &name, limits, cancel)?,
             Format::Rpm => crate::cpio::index_rpm(path, &name, limits, cancel)?,
+            Format::Sqlite => crate::sqlite::index(path, &name, limits, cancel)?,
             f if f.is_single() => index_single(path, &name, &leaf, format, limits, cancel)?,
             _ => index_tar(path, &name, format, limits, cancel)?,
         };
@@ -682,6 +683,11 @@ impl Archive {
             return self.copy_out_through_tool(&inner, entry.size, out, cancel, progress);
         };
         match format {
+            Format::Sqlite => {
+                let n = crate::sqlite::copy_out(&self.source, &self.name(), &inner, out, cancel)?;
+                progress(n);
+                Ok(n)
+            }
             Format::Zip => {
                 let file = File::open(&self.source).map_err(|e| self.io(e))?;
                 let mut zip =
@@ -920,7 +926,7 @@ pub(crate) fn decoder(path: &Path, format: Format) -> Result<Box<dyn Read>> {
                 }
             })?)
         }
-        Format::Zip | Format::SevenZ | Format::Ar | Format::Cpio | Format::Rpm => {
+        Format::Zip | Format::SevenZ | Format::Ar | Format::Cpio | Format::Rpm | Format::Sqlite => {
             return Err(ArcError::Broken {
                 path: name,
                 reason: format!("a {} is not a stream", format.label()),
@@ -2002,7 +2008,11 @@ mod tests {
     fn every_format_lists_the_same_tree_and_reads_the_same_bytes() {
         let dir = tempfile::tempdir().unwrap();
         // The single streams have no tree to list: they get their own test below.
-        for format in Format::ALL.into_iter().filter(|f| f.holds_many()) {
+        // A database holds tables, not a tree of files: `sqlite.rs` has its own tests.
+        for format in Format::ALL
+            .into_iter()
+            .filter(|f| f.holds_many() && *f != Format::Sqlite)
+        {
             let path = dir.path().join(format!("tree.{}", format.extension()));
             write_archive(&path, format, &TREE);
             let archive = open(&path);
@@ -2700,7 +2710,11 @@ mod tests {
     #[test]
     fn a_whole_archive_tests_whole_and_a_damaged_one_names_what_is_broken() {
         let dir = tempfile::tempdir().unwrap();
-        for format in Format::ALL.into_iter().filter(|f| f.holds_many()) {
+        // A database holds tables, not a tree of files: `sqlite.rs` has its own tests.
+        for format in Format::ALL
+            .into_iter()
+            .filter(|f| f.holds_many() && *f != Format::Sqlite)
+        {
             let path = dir.path().join(format!("tree.{}", format.extension()));
             write_archive(&path, format, &TREE);
             let mut seen: Vec<String> = Vec::new();

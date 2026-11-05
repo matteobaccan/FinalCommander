@@ -47,6 +47,11 @@ pub enum Request {
     UpdateCheck {
         manual: bool,
     },
+    /// Run a `sql:` query on a database, its rows written as CSV for the viewer.
+    SqlQuery {
+        db: std::path::PathBuf,
+        sql: String,
+    },
     /// Hand an address to the desktop's browser, detached: nothing to wait for, no output.
     OpenUrl {
         url: String,
@@ -600,6 +605,10 @@ pub enum Event {
     DupesFound {
         panel: usize,
         found: fcmd_jobs::dupes::Found,
+    },
+    /// A `sql:` query's rows, as a CSV file to view, or why there are none.
+    SqlDone {
+        result: Result<std::path::PathBuf, String>,
     },
     /// What the release check found: the latest release, or why there is no answer.
     UpdateChecked {
@@ -2677,6 +2686,17 @@ impl App {
                 self.set_status(m);
             }
             Event::DupesFound { panel, found } => self.dupes_found(panel, found),
+            Event::SqlDone { result } => match result {
+                Ok(csv) => {
+                    self.set_status(String::new());
+                    let vpath = VPath::local(&csv);
+                    self.open_viewer_on(&csv, vpath);
+                }
+                Err(why) => {
+                    let m = self.i18n.t_args("sql-failed", &[("why", why.into())]);
+                    self.set_error(m);
+                }
+            },
             Event::PluginDone { id, label, result } => match result {
                 Ok(reply) => self.apply_plugin_reply(&label, reply),
                 Err(e) => {
@@ -10963,8 +10983,44 @@ impl App {
         }
     }
 
+    /// The SQLite database a `sql:` line means: the one the panel is inside, or the one the
+    /// cursor is on. Only one on this disk — a database inside an archive or on a server is
+    /// read through the archive's copy, which a query has no business writing beside.
+    fn sql_database(&self) -> Option<std::path::PathBuf> {
+        let panel = self.panel();
+        let local_db = |p: &VPath| {
+            let os = p.os();
+            (p.is_local() && !p.in_container() && fcmd_arc::sqlite::is_database(&os))
+                .then(|| os.into_owned())
+        };
+        let mut at = panel.cwd.clone();
+        while at.in_container() {
+            let host = at.leave()?;
+            if let Some(db) = local_db(&host) {
+                return Some(db);
+            }
+            at = host;
+        }
+        panel.current_path().as_ref().and_then(local_db)
+    }
+
     fn run_prefix(&mut self, prefix: Prefix) {
         match prefix {
+            Prefix::Sql(sql) => {
+                if sql.trim().is_empty() {
+                    let m = self.i18n.t("sql-empty");
+                    self.set_error(m);
+                    return;
+                }
+                let Some(db) = self.sql_database() else {
+                    let m = self.i18n.t("sql-no-database");
+                    self.set_error(m);
+                    return;
+                };
+                let m = self.i18n.t("sql-running");
+                self.set_status(m);
+                self.requests.push(Request::SqlQuery { db, sql });
+            }
             Prefix::View(arg) => match self.resolve_argument(&arg) {
                 Some(path) if path.as_path().is_file() => {
                     let local = path.as_path().to_path_buf();
@@ -31746,6 +31802,32 @@ abcdefghij
         let mut app = app_on_disk(dir);
         app.editor_size = (40, 6);
         app
+    }
+
+    /// `sql:` on the command line asks the worker to query the database under the cursor;
+    /// with no database anywhere near, it says so instead of asking.
+    #[test]
+    fn a_sql_line_queries_the_database_under_the_cursor() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("t.db");
+        std::fs::write(&db, b"SQLite format 3\0 and the rest of a page").unwrap();
+        std::fs::write(dir.path().join("notes.txt"), "x").unwrap();
+        let mut app = editing_app(dir.path());
+        let at = app.panels[0].listing.row_of_name("notes.txt").unwrap();
+        app.panels[0].cursor = at;
+        app.cmd.set("sql: SELECT 1");
+        press(&mut app, "Enter");
+        assert!(app.status_error, "no database here: {}", app.status);
+        let at = app.panels[0].listing.row_of_name("t.db").unwrap();
+        app.panels[0].cursor = at;
+        app.take_requests();
+        app.cmd.set("sql: SELECT 1");
+        press(&mut app, "Enter");
+        let asked = app.take_requests().into_iter().find_map(|r| match r {
+            Request::SqlQuery { db, sql } => Some((db, sql)),
+            _ => None,
+        });
+        assert_eq!(asked, Some((db, "SELECT 1".to_string())));
     }
 
     /// `Commands → Find duplicate files` on a folder: the dialog, the search in the worker,

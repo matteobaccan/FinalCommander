@@ -40,6 +40,7 @@ Unicode-3.0, or MPL-2.0 at file level). The policy and the allow-list live in `d
 | `ring` (russh's crypto backend, chosen over `aws-lc-rs`) | Apache-2.0 AND ISC | ciphers, key exchange, signatures |
 | `ssh-key`, `ssh-encoding`, `ssh-cipher` | Apache-2.0 OR MIT | OpenSSH key and `known_hosts` formats |
 | `zip` | MIT | reading and writing zip archives |
+| `rusqlite`, `libsqlite3-sys` | MIT | SQLite databases as a container and the `sql:` queries; `bundled` compiles SQLite (public domain) into the binary, so nothing is installed |
 | `tar` | MIT OR Apache-2.0 | reading and writing the tar family |
 | `flate2` (with `miniz_oxide`) | MIT OR Apache-2.0 | gzip, in pure Rust — and inflate for a PDF's own tables in the structure pane |
 | `bzip2` (with `libbz2-rs-sys`) | MIT OR Apache-2.0 / **bzip2-1.0.6** | bzip2, in pure Rust |

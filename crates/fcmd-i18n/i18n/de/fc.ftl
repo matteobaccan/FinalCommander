@@ -1320,3 +1320,9 @@ dupes-none = Keine Duplikate unter { $count } Dateien.
 dupes-panel = Duplikate: { $groups } Gruppen
 dupes-done = { $groups } Gruppen von Duplikaten, { $size } in den Kopien.
 dupes-truncated = Vorzeitig beendet: bisher { $groups } Gruppen, { $size } in den Kopien.
+
+## SQLite queries (SPEC 04 §4b).
+sql-empty = Eine Abfrage nach sql: schreiben, etwa sql: SELECT * FROM t
+sql-no-database = sql: braucht eine SQLite-Datenbank: hineingehen oder den Cursor auf eine setzen.
+sql-running = Abfrage läuft…
+sql-failed = Die Abfrage ist fehlgeschlagen: { $why }

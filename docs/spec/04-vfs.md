@@ -159,6 +159,29 @@ where the code lives, not whether it is linked into the binary.
   container on a *server* is still read-only, and says so: the copy could be written, but
   nothing would then put it back where it came from.
 
+### 4b. An SQLite database as a container
+
+FAR's SQLiteDB plugin, as one more read-only container (`fcmd-arc::sqlite`, `Format::Sqlite`):
+
+* **Recognised** by the first sixteen bytes, `SQLite format 3\0`, and offered by name for
+  `.sqlite`, `.sqlite3`, `.db3` and `.s3db`. A `.db` is let in only when those bytes are
+  there, because many `.db` files are not SQLite.
+* **Entries.** Each table and view is `name.csv` (a `/` in the name becomes `_`), its bytes the
+  rows of `SELECT *` as RFC 4180 CSV with a header of the column names; NULL is an empty field,
+  a blob is `x'…'` as SQLite writes one. `schema.sql` holds the `CREATE` statements. The
+  sizes are the CSVs' real sizes, which costs one read of each table when the database is
+  opened. SQLite's own `sqlite_*` tables are left out.
+* **Never written.** The connection is `SQLITE_OPEN_READ_ONLY`; the container is not writable
+  (`Format::writable`), so `F6`, `F8` and `F7` inside it are refused like an `rpm`'s.
+* **Queries.** `sql:<statement>` on the command line runs on the database the panel is in, or
+  the one under the cursor, on the worker; the rows go to a CSV in a temporary folder of the
+  session's own (`fcmd-sql-<pid>`, removed on exit) and open in the viewer's table mode. The
+  read-only connection is what refuses a statement that writes — SQLite's own error, not a
+  list of words guessed safe here. Only a database on this disk: one inside an archive or on a
+  server is browsed through the cache's copy, and is not queried.
+* SQLite is compiled in (`rusqlite` with `bundled`), the one C library in `fcmd-arc`; the
+  release matrix compiles C already for `ring`.
+
 ## 5. Editing inside a VFS
 
 **Implemented today for `sftp`**: `F4` on a remote file fetches it into

@@ -143,9 +143,8 @@ way", and the reason is here so it does not have to be found again.
   grabber (`Alt+Ins`, SPEC 06 §11b), which copies a rectangle of *any* screen.
 * **A click outside an open dialog** does nothing, on purpose: it must not move a cursor
   nobody can see.
-* **Parquet and SQLite in table mode** — Parquet means a columnar stack larger than this
-  program; SQLite is several tables and a query language, which is a plugin with a panel of
-  its own.
+* **Parquet in table mode** — Parquet means a columnar stack larger than this program.
+  (SQLite, the other half of this line, is a container of its own since 0.33.0: SPEC 04 §4b.)
 * **Netware's NLM/DSK/LAN in the structure pane** — no living platform behind them.
 * **An image bot on the repository** — every picture is generated or the source of something
   generated, and `logo.svg` is animated and meant to be read as text in a pull request

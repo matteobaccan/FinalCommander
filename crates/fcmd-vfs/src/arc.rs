@@ -41,6 +41,15 @@ impl ArcVfs {
         if Format::of_path(path).is_some() {
             return true;
         }
+        // A `.db` is an SQLite database often enough to be worth one read of 16 bytes, and
+        // something else often enough that the name alone must not decide.
+        if path
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("db"))
+            && fcmd_arc::sqlite::is_database(path)
+        {
+            return true;
+        }
         path.file_name()
             .is_some_and(|name| fcmd_arc::claimed_by_a_tool(&name.to_string_lossy()))
     }

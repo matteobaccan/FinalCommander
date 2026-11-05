@@ -1320,3 +1320,9 @@ dupes-none = Aucun doublon parmi { $count } fichiers.
 dupes-panel = Doublons : { $groups } groupes
 dupes-done = { $groups } groupes de doublons, { $size } dans les copies.
 dupes-truncated = Arrêtée tôt : { $groups } groupes pour l'instant, { $size } dans les copies.
+
+## SQLite queries (SPEC 04 §4b).
+sql-empty = Écrire une requête après sql:, par exemple sql: SELECT * FROM t
+sql-no-database = sql: demande une base SQLite : entrez-y, ou placez le curseur sur une.
+sql-running = Requête en cours…
+sql-failed = La requête a échoué : { $why }

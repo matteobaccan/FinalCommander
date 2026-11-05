@@ -34,11 +34,14 @@ pub enum Format {
     Bz2,
     Xz,
     Zst,
+    /// An SQLite 3 database: its tables and views as CSV entries, and `schema.sql`. Read
+    /// only — the file is opened read-only and a container never writes it (`sqlite.rs`).
+    Sqlite,
 }
 
 impl Format {
     /// Every format this crate knows, read or write.
-    pub const ALL: [Format; 14] = [
+    pub const ALL: [Format; 15] = [
         Format::Zip,
         Format::SevenZ,
         Format::Tar,
@@ -53,6 +56,7 @@ impl Format {
         Format::Bz2,
         Format::Xz,
         Format::Zst,
+        Format::Sqlite,
     ];
 
     /// The ones a dialog may offer to *create*.
@@ -77,7 +81,10 @@ impl Format {
     /// a folder or two files into one is refused with the name of the tar that holds them, and
     /// inside one the only change is new bytes for the entry it holds (`F4`, then save).
     pub fn writable(self) -> bool {
-        !matches!(self, Format::Ar | Format::Cpio | Format::Rpm)
+        !matches!(
+            self,
+            Format::Ar | Format::Cpio | Format::Rpm | Format::Sqlite
+        )
     }
 
     /// Is this a single compressed stream — one file in, one file out, no index?
@@ -123,6 +130,7 @@ impl Format {
             Format::Bz2 => "bz2",
             Format::Xz => "xz",
             Format::Zst => "zst",
+            Format::Sqlite => "sqlite",
         }
     }
 
@@ -143,6 +151,7 @@ impl Format {
             Format::Bz2 => "bz2",
             Format::Xz => "xz",
             Format::Zst => "zst",
+            Format::Sqlite => "sqlite",
         }
     }
 
@@ -187,7 +196,7 @@ impl Format {
     /// `Cr24` header in front of it, so it is not one.
     pub fn of_name(name: &str) -> Option<Format> {
         let lower = name.to_ascii_lowercase();
-        const BY_SUFFIX: [(&str, Format); 36] = [
+        const BY_SUFFIX: [(&str, Format); 40] = [
             (".tar.gz", Format::TarGz),
             (".tgz", Format::TarGz),
             (".tar.bz2", Format::TarBz2),
@@ -220,6 +229,13 @@ impl Format {
             (".ddeb", Format::Ar),
             (".cpio", Format::Cpio),
             (".rpm", Format::Rpm),
+            // SQLite under the names it is given. `.db` is not here: half the `.db` files on
+            // a disk are not SQLite (`Thumbs.db`), so one is let in only when its first bytes
+            // say so — `ArcFs::looks_like_archive` asks `sqlite::is_database`.
+            (".sqlite", Format::Sqlite),
+            (".sqlite3", Format::Sqlite),
+            (".db3", Format::Sqlite),
+            (".s3db", Format::Sqlite),
             // One compressed file, no tar. Last, so every `.tar.*` and `.t?z` above wins:
             // the list is searched in order and `.tar.gz` ends with `.gz` as well.
             (".gz", Format::Gz),
@@ -268,6 +284,9 @@ impl Format {
         }
         if head.starts_with(&[0x28, 0xb5, 0x2f, 0xfd]) {
             return Some(tarred(by_name, Format::Zst));
+        }
+        if head.starts_with(crate::sqlite::MAGIC) {
+            return Some(Format::Sqlite);
         }
         if head.starts_with(b"!<arch>\n") {
             return Some(Format::Ar);

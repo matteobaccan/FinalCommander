@@ -137,6 +137,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 4.9 | Special VFS: process list, services, registry (Windows), `/proc`-style views, package contents, git status/worktree view | FAR/far2l | ~ the registry, package contents, a git view |
 | 4.10 | Trash as a browsable VFS | NEW | M3 |
 | 4.11 | VFS API available to plugins (so a plugin can add a scheme) | FAR/TC(WFX) | M3 |
+| 4.12 | SQLite databases: tables and views as CSV entries, `schema.sql`, and `sql:` queries opened in table mode, read only | FAR (SQLiteDB) | ✓ (SPEC 04 §4b) |
 
 ## 5. Viewer (`F3`)
 

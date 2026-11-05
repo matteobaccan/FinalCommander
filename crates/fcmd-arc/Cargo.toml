@@ -33,6 +33,13 @@ fcmd-core = { workspace = true }
 # own newer grammar and the only one worth copying (docs/05-multiarc.md §5). Already in the
 # tree under four other crates, so nothing new ships because of this.
 regex = "1"
+# SQLite databases as a container (`sqlite.rs`): tables as CSV entries, and the queries of
+# `sql:`. The one C library in this crate, on purpose: SQLite's file format can be read by
+# hand, but a query needs SQLite itself, and `bundled` compiles the amalgamation into the
+# binary, so it is still one file with nothing to install. The release matrix compiles C
+# already (`ring` under the SSH client, with `musl-gcc` for the static build). SQLite is in
+# the public domain; rusqlite and libsqlite3-sys are MIT.
+rusqlite = { version = "0.41", features = ["bundled"] }
 tar = { version = "0.4", default-features = false }
 thiserror = "2"
 zip = { version = "9", default-features = false, features = [

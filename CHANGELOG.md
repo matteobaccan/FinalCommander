@@ -8,6 +8,12 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **SQLite databases** open like an archive: `Enter` on a `.sqlite`, `.sqlite3`, `.db3` or a
+  `.db` that is one, and each table and view is a `.csv` of its rows beside a `schema.sql` —
+  `F3` shows a table in table mode, `F5` exports it, `Alt+F7` searches every table. `sql:` on
+  the command line runs a query on the database the panel is in or the one under the cursor
+  and opens the rows as a table. Read only: the database is never written, and SQLite itself
+  refuses a statement that would. FAR's SQLiteDB plugin; SQLite is compiled in.
 - **Duplicate files** (*Commands → Find duplicate files*), FAR's FindDup: under the panel's
   folder or what is selected, by content whatever the names. Sizes first, then the first
   64 KiB, then the whole file by SHA-256, so little is read of what is not a copy. The groups

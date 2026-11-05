@@ -399,6 +399,20 @@ conserva una cartella vuota che valga la pena di tenere. E non si può scrivere 
 archivio che sta su un *server*: anche quello si legge da una copia, e niente rimetterebbe
 indietro la copia.
 
+# Database SQLite
+
+`Enter` su un database SQLite — `.sqlite`, `.sqlite3`, `.db3`, `.s3db`, o un `.db` che lo è —
+ci entra come in un archivio. Ogni tabella e vista è un file col suo nome, `persone.csv`, i cui
+byte sono le righe in CSV, e `schema.sql` contiene le istruzioni che le hanno create. Quindi
+`F3` mostra una tabella nella modalità tabella del visualizzatore, con ordinamento e filtro; `F5`
+la scrive fuori come `.csv`; `Alt+F7` cerca un testo in tutte le tabelle insieme. Niente scrive
+nel database: è aperto in sola lettura.
+
+Una query tua è `sql:` sulla riga di comando, col cursore sul database o il pannello dentro:
+`sql: SELECT nome, count(*) FROM ordini GROUP BY nome`. Le righe si aprono nel visualizzatore
+come tabella. Un'istruzione che cambierebbe il database — `DELETE`, `UPDATE`, `DROP` — è
+rifiutata da SQLite stesso, perché il database è aperto in sola lettura.
+
 # Riscrivere un file di testo
 
 Il testo arriva da altrove: uno zip da una macchina Windows, un dump da un database, un file

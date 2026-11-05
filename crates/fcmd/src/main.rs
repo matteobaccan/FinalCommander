@@ -1776,6 +1776,13 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                         }
                     });
                 }
+                Request::SqlQuery { db, sql } => {
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || {
+                        let result = run_sql(&db, &sql);
+                        let _ = tx.send(Event::SqlDone { result });
+                    });
+                }
                 Request::UpdateCheck { manual } => {
                     let tx = tx.clone();
                     runtime.spawn(async move {
@@ -1877,6 +1884,10 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
     }
 
     term.restore();
+    // The rows the `sql:` queries left for the viewer are this session's and nobody else's.
+    let _ = std::fs::remove_dir_all(
+        std::env::temp_dir().join(format!("fcmd-sql-{}", std::process::id())),
+    );
 
     // What survives the session: the command history, and where the panels ended up. A failure
     // here is reported on the way out rather than swallowed — losing a history silently is how
@@ -4033,6 +4044,25 @@ fn dirs_home() -> Option<std::path::PathBuf> {
         .filter(|p| !p.as_os_str().is_empty())
 }
 
+/// A `sql:` query's rows as a CSV file in this session's own temporary folder, named after
+/// the database so the viewer's title says what was asked of what.
+fn run_sql(db: &std::path::Path, sql: &str) -> Result<std::path::PathBuf, String> {
+    static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(1);
+    let dir = std::env::temp_dir().join(format!("fcmd-sql-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let stem = db
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "query".into());
+    let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let out = dir.join(format!("{stem}-query{n}.csv"));
+    let mut file = std::io::BufWriter::new(std::fs::File::create(&out).map_err(|e| e.to_string())?);
+    fcmd_arc::sqlite::query(db, sql, &mut file, &fcmd_core::CancelToken::new())
+        .map_err(|e| e.to_string())?;
+    std::io::Write::flush(&mut file).map_err(|e| e.to_string())?;
+    Ok(out)
+}
+
 /// Hand an address to the desktop's opener and do not wait for it. `start` on Windows is a
 /// shell builtin, hence `cmd /c`, and its first quoted argument is a window title. A machine
 /// with no desktop (a server over SSH) fails quietly here; the dialog that offered the page
@@ -5639,6 +5669,7 @@ dir_attr = "D"
                 Request::DirSize { .. }
                 | Request::UpdateCheck { .. }
                 | Request::Dupes { .. }
+                | Request::SqlQuery { .. }
                 | Request::OpenUrl { .. }
                 | Request::Shell { .. }
                 | Request::Decompile { .. }
@@ -5653,6 +5684,33 @@ dir_attr = "D"
     /// A key, by its name in the keymap.
     fn key(app: &mut App, k: &str) {
         app.handle_input(Input::Key(k.parse().unwrap()));
+    }
+
+    #[test]
+    fn a_sql_query_comes_back_as_a_csv_named_after_the_database() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("shop.sqlite");
+        rusqlite_free_db(&db);
+        let out = run_sql(&db, "SELECT name FROM items ORDER BY name").unwrap();
+        assert!(out
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .starts_with("shop-query"));
+        assert_eq!(
+            std::fs::read_to_string(&out).unwrap(),
+            "name\napple\npear\n"
+        );
+        let _ = std::fs::remove_file(out);
+        assert!(run_sql(&db, "DROP TABLE items").is_err(), "read only");
+    }
+
+    /// A database made with the query path itself, so this test needs nothing but the crate.
+    fn rusqlite_free_db(path: &std::path::Path) {
+        fcmd_arc::sqlite::create_for_tests(
+            path,
+            "CREATE TABLE items (name TEXT); INSERT INTO items VALUES ('pear'), ('apple');",
+        );
     }
 
     #[test]

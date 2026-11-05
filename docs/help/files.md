@@ -378,6 +378,20 @@ What is not there: `F7` does not make a directory inside an archive — nothing 
 one worth keeping. Nor can an archive on a *server* be written into: that one is read from a
 copy as well, and nothing would put the copy back.
 
+# SQLite databases
+
+`Enter` on an SQLite database — `.sqlite`, `.sqlite3`, `.db3`, `.s3db`, or a `.db` that is one —
+goes inside it as it goes inside an archive. Each table and view is a file named after it,
+`people.csv`, whose bytes are its rows as CSV, and `schema.sql` holds the statements that made
+them. So `F3` shows a table in the viewer's table mode, with its sort and filter; `F5` writes
+it out as a `.csv`; `Alt+F7` looks for a text in every table at once. Nothing writes to the
+database: it is opened read-only.
+
+A query of your own is `sql:` on the command line, with the cursor on the database or the panel
+inside it: `sql: SELECT name, count(*) FROM orders GROUP BY name`. The rows open in the viewer
+as a table. A statement that would change the database — `DELETE`, `UPDATE`, `DROP` — is
+refused by SQLite itself, because the database is opened read-only.
+
 # Writing a text file again
 
 Text arrives from somewhere else: a zip off a Windows machine, a dump out of a database, a

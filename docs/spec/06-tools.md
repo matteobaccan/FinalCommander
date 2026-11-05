@@ -391,6 +391,7 @@ to reach the viewer, the editor and the clipboard from a command line or a macro
 | `clip:<file>` | put its contents on the clipboard (and `clip:` with no argument clears it) |
 | `link:<target> <name>` | create a link |
 | `run:<file><command>` | run a command and send its output to a file, the screen, or nowhere |
+| `sql:<statement>` | query the SQLite database the panel is in or the cursor is on, and view the rows as a table (SPEC 04 §4b) |
 
 Prefixes work wherever a command line does: the line itself, the user menu, associations,
 apply-command and macros.
