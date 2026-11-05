@@ -47,7 +47,6 @@ says what the decision stands on.
 
 | Item | Where | What is left |
 | --- | --- | --- |
-| Table mode | `F4` in the viewer | Sorting the rows by a column and filtering them (feature 5.18). |
 | Pictures | `F3` on an image | The kitty, iTerm2 and sixel protocols for real pixels where the terminal has them; half blocks stay the fallback (feature 5.22). |
 | Following a branch | `Enter` on a `call` | The jumped-from stack shown on the screen, and a virtual address in `Alt+F8` (feature 5.16). |
 | More than one file in the editor | `F4` | Several files open at once, each a screen of its own today through `F12` (feature 6.1). |

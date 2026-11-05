@@ -246,28 +246,22 @@ files rather than guessing what its dialog says.
 
 ## What is worth doing next, in rough order
 
-Agreed with the author after 0.31.0, and to be done in this order, each one finished before
-the next (the rows they close are in `docs/BACKLOG.md`):
+The eight agreed with the author after 0.31.0 are done and wait in `## [Unreleased]` of the
+changelog: `Ctrl+Alt+R` for the panels back to the middle, `Ctrl+F10` from the viewer to the
+file wherever it is, `F3`/`F4` on a search result at the match, the user menu's separators and
+`Shift+F10`, the list of tabs (`Ctrl+Alt+A`) and their order, splitting into a number of
+pieces, filters by size/age/attributes/kind with named `[[filter]]` sets (`Ctrl+Alt+S`). The
+eighth, sorting and filtering a table (`Ctrl+F3`, `Ctrl+F7` in table mode), turned out to have
+shipped already; only the backlog and the feature table still listed it.
 
-1. **The split back to the middle**: one key that puts the panels at 50% again (feature 1.3).
-2. **From the viewer to the panel**: leaving the viewer with the cursor on the file that was
-   being looked at (feature 9b.13).
-3. **A find result in the editor**: opening an `Alt+F7` hit at the line it was found on
-   (feature 7.2).
-4. **The user menu**: separators between groups, and `Shift+F10` for the entry taken last.
-5. **Tabs**: moving a tab within its row, and a list of the tabs to pick one from.
-6. **Splitting by a count of pieces** as well as by a size.
-7. **The panel filter dialog** (`Ctrl+Shift+I`): the size, date and attribute conditions the
-   filter grammar already has, as a dialog, and named filter sets to pick from (feature 1.15).
-8. **Table mode**: sorting the rows by a column and filtering them (feature 5.18).
-
-After those, the candidates the author was shown: search and replace with whole words and
-capture references (6.4), grouped undo (6.3), a unified diff and the first differing offset
-of two binaries, `when` conditions on macros (SPEC 08 §5), explicit end-of-line / BOM / code
-page conversion (6.6), a named synchronisation job; and larger, real pixels for pictures
+The candidates the author was shown next, none of them started: search and replace with whole
+words and capture references (6.4), grouped undo (6.3), a unified diff and the first differing
+offset of two binaries, `when` conditions on macros (SPEC 08 §5), explicit end-of-line / BOM /
+code page conversion (6.6), a named synchronisation job; and larger, real pixels for pictures
 (kitty, iTerm2, sixel), a diff before overwriting a file changed on disk (6.12), a whole-tree
 disk usage with a treemap. Also still open from before: a table for RARLAB's `rar`, `cab` read
-in process, and the job journal that lets a copy be resumed after a crash (3.7, 11.6).
+in process, and the job journal that lets a copy be resumed after a crash (3.7, 11.6). Ask
+the author which, and in what order, before starting.
 
 One rule that came out of that review and holds everywhere: **`Alt+<letter>` belongs to the
 quick search**, so nothing else may take it (`Ctrl+Shift+N/I/T` moved for this reason), and
