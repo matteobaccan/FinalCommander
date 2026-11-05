@@ -346,8 +346,16 @@ successivo la chiude.
 # Scegliere i file
 
 `Insert` seleziona la riga e va avanti. `Grigio +` e `Grigio -` selezionano e deselezionano per
-maschera; `Grigio *` inverte. `Ctrl+A` di una maschera, `Alt+lettere` per trovare un nome
-mentre scrivi.
+maschera; `Grigio *` inverte. `Alt+lettere` trova un nome mentre scrivi.
+
+La riga che chiede `Grigio +` prende più di una maschera. Prima le maschere, nella stessa
+grammatica del filtro — `*.rs,*.toml`, un gruppo come `<arc>`, `/^IMG_\d+/` per
+un'espressione regolare — e dopo di loro una qualunque di tre condizioni: `size:100M-` (da cento
+megabyte in su; `-4K` è fino a quattro kilobyte, `1M-1G` un intervallo), `age:>=30` (vecchi di
+trenta giorni e oltre; `age:<=7` è l'ultima settimana, e `age:created:<=7` guarda la data di
+creazione) e `attr:h` (nascosti; `attr:-r` non in sola lettura). Così `*.log size:100M- age:>=30`
+seleziona i log vecchi e grossi, e `size:1G-` da solo seleziona tutto quello che supera un
+gigabyte.
 
 Quello che è selezionato è quello su cui agisce l'operazione successiva. Senza niente
 selezionato è la riga sotto il cursore — così `F5` su un file copia quel file, e nessuno deve

@@ -1172,6 +1172,40 @@ impl Filter {
         }
     }
 
+    /// A filter typed on one line, for the selection keys (`+`, `-`): a mask list in the
+    /// usual grammar, then any of `size:`, `age:` and `attr:`, each in the grammar of its own
+    /// field of the dialogs — `*.log size:100M- age:>=30 attr:-h`. Words that are not a
+    /// condition are the mask list, spaces and all; no mask list means every name.
+    ///
+    /// `age:` reads the modification time; `age:created:<=7` names another of the four.
+    pub fn parse_line(text: &str, groups: &Groups) -> Result<Self, FilterError> {
+        let mut filter = Filter::default();
+        let mut masks: Vec<&str> = Vec::new();
+        for word in text.split_whitespace() {
+            if let Some(range) = word.strip_prefix("size:") {
+                filter.size = Some(SizeRange::parse(range)?);
+            } else if let Some(age) = word.strip_prefix("age:") {
+                let (field, range) = match age.split_once(':') {
+                    Some((field, range)) => (
+                        TimeField::parse(field)
+                            .ok_or_else(|| FilterError::BadDateRange(age.to_string()))?,
+                        range,
+                    ),
+                    None => (TimeField::Modified, age),
+                };
+                filter.date = Some(DateCondition::new(field, DateRange::parse_age(range)?));
+            } else if let Some(attrs) = word.strip_prefix("attr:") {
+                filter.attrs = AttrConditions::parse(attrs)?;
+            } else {
+                masks.push(word);
+            }
+        }
+        if !masks.is_empty() {
+            filter.masks = Some(MaskSet::parse_with(&masks.join(" "), groups, false)?);
+        }
+        Ok(filter)
+    }
+
     /// No condition is switched on, so this filter hides nothing.
     pub fn is_empty(&self) -> bool {
         self.masks.as_ref().is_none_or(MaskSet::is_empty)
@@ -1951,5 +1985,37 @@ mod tests {
         });
         assert_eq!(filter.describe(), "atime>=2023-11-14");
         assert_eq!(epoch_day(0), "1970-01-01");
+    }
+
+    #[test]
+    fn a_line_holds_masks_and_conditions_in_any_order() {
+        let groups = default_groups();
+        let now = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(100 * 86_400);
+        let file = |name: &str, size: u64, days_old: u64| {
+            let mut e = entry(name, EntryKind::File);
+            e.size = size;
+            e.mtime = Some(now - std::time::Duration::from_secs(days_old * 86_400));
+            e
+        };
+        let f = Filter::parse_line("*.log size:1M- age:>=30", &groups).unwrap();
+        assert!(f.matches_at(&file("old.log", 2 << 20, 40), now));
+        assert!(!f.matches_at(&file("new.log", 2 << 20, 3), now), "too new");
+        assert!(!f.matches_at(&file("small.log", 10, 40), now), "too small");
+        assert!(
+            !f.matches_at(&file("old.txt", 2 << 20, 40), now),
+            "not a log"
+        );
+
+        // Conditions alone are every name; a regex mask is a mask like any other.
+        let f = Filter::parse_line("size:-1K", &groups).unwrap();
+        assert!(f.matches_at(&file("a.bin", 10, 0), now));
+        let f = Filter::parse_line("/^IMG_\\d+/", &groups).unwrap();
+        assert!(f.matches_at(&file("IMG_0042.jpg", 1, 0), now));
+        assert!(!f.matches_at(&file("DSC_0042.jpg", 1, 0), now));
+
+        // A field named after `age:`, and a word that is not a condition is an error.
+        assert!(Filter::parse_line("age:created:<=7", &groups).is_ok());
+        assert!(Filter::parse_line("age:soon:<=7", &groups).is_err());
+        assert!(Filter::parse_line("size:lots", &groups).is_err());
     }
 }

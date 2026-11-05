@@ -5275,10 +5275,17 @@ impl App {
                 let on = prompt.kind == PromptKind::SelectMask;
                 let listing = self.panel().listing.clone();
                 let scope = self.mask_scope();
+                // The whole filter grammar on one line: the masks with their groups and
+                // `/regex/`, then `size:`, `age:` and `attr:` (SPEC 02 §5). A word the
+                // grammar does not take is said, rather than selecting nothing.
                 let result =
-                    self.panel_mut()
-                        .selection
-                        .apply_mask(&listing, &prompt.text, on, scope);
+                    fcmd_core::filter::Filter::parse_line(&prompt.text, &self.cfg.mask_groups())
+                        .map(|filter| {
+                            let now = std::time::SystemTime::now();
+                            self.panel_mut()
+                                .selection
+                                .apply_where(&listing, scope, on, |e| filter.matches_at(e, now))
+                        });
                 match result {
                     Ok(changed) => {
                         self.panel_mut().rebuild();
@@ -31061,6 +31068,43 @@ abcdefghij
         search(&mut app, "nowhere");
         assert!(app.output_hit.is_none());
         assert!(app.status_error, "{}", app.status);
+    }
+
+    /// `+` takes the whole filter grammar on one line: masks, a regex, and the size, age and
+    /// attribute conditions after them.
+    #[test]
+    fn selecting_by_size_and_by_regex_from_the_plus_key() {
+        let mut app = app();
+        let selected = |app: &App| -> Vec<String> {
+            let p = &app.panels[0];
+            let mut names: Vec<String> = (0..p.listing.len())
+                .filter_map(|r| p.listing.row(r))
+                .filter(|e| p.selection.contains(e.id))
+                .map(|e| e.name_str().into_owned())
+                .collect();
+            names.sort();
+            names
+        };
+        let plus = |app: &mut App, text: &str| {
+            app.run(Command::SelMaskAdd);
+            clear_prompt(app);
+            type_text(app, text);
+            press(app, "Enter");
+        };
+        plus(&mut app, "*.rs size:250-");
+        assert_eq!(selected(&app), ["c.rs"]);
+        app.run(Command::SelNone);
+        plus(&mut app, "/^[ab]\\./");
+        assert_eq!(selected(&app), ["a.txt", "b.rs"]);
+        // Conditions alone apply to every name.
+        app.run(Command::SelNone);
+        plus(&mut app, "size:-150");
+        assert_eq!(selected(&app), ["a.txt"]);
+        // A condition that does not parse says so and selects nothing.
+        app.run(Command::SelNone);
+        plus(&mut app, "size:lots");
+        assert!(app.status_error, "{}", app.status);
+        assert!(selected(&app).is_empty());
     }
 
     #[test]

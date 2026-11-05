@@ -323,7 +323,15 @@ When the program ends, its last screen stays up to be read, and the next key clo
 # Choosing files
 
 `Insert` selects the row and moves on. `Gray +` and `Gray -` select and unselect by a file
-mask; `Gray *` inverts. `Ctrl+A` of a mask, `Alt+letters` to find a name as you type.
+mask; `Gray *` inverts. `Alt+letters` finds a name as you type.
+
+The line `Gray +` asks for takes more than a mask. The masks come first, in the same grammar as
+the filter — `*.rs,*.toml`, a group like `<arc>`, `/^IMG_\d+/` for a regular expression — and
+after them any of three conditions: `size:100M-` (from a hundred megabytes up; `-4K` is up to
+four kilobytes, `1M-1G` a range), `age:>=30` (thirty days old and older; `age:<=7` is the last
+week, and `age:created:<=7` asks the creation time instead) and `attr:h` (hidden; `attr:-r` is
+not read-only). So `*.log size:100M- age:>=30` selects the old big logs, and `size:1G-` alone
+selects everything over a gigabyte.
 
 What is selected is what the next operation acts on. With nothing selected it is the row under
 the cursor — so `F5` on one file copies that file, and nobody has to select it first.

@@ -29,6 +29,12 @@ Notable changes, newest first. The format follows
   showing each new name as it was typed, and `1.txt` and `2.txt` swapped through the counter
   with nothing left behind under a temporary name.
 
+- **Selecting by size, age, attributes and regular expressions.** The line `Gray +` and
+  `Gray -` ask for is the filter's whole grammar now, not a list of globs: the masks with their
+  groups, exclusions and `/regex/`, then `size:`, `age:` and `attr:` in the words of their own
+  fields — `*.log size:100M- age:>=30` selects the old big logs, `size:1G-` everything over a
+  gigabyte. A word it does not take is said rather than selecting nothing quietly.
+
 - **Searching what the commands printed** (`Ctrl+Shift+F`). The newest line of the output
   that holds the text, in any case, is shown with the panels off and marked the way the cursor
   row is; asking again for the same text goes to the line before, so a build's errors can be

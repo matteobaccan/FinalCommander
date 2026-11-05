@@ -360,6 +360,15 @@ keys have no such condition, which is why they need a default at all.
   filter can be narrowed without being rewritten.
 - **Highlight groups** colour rows with the same condition set, which is the point of having
   one: what a filter can say, a group can say.
+- **Selecting by a filter** (`Gray +` / `Gray -`, shipped 0.31.0): the line the two keys ask
+  for is the same condition set written on one line, `Filter::parse_line` — the mask list in
+  its own grammar (groups, exclusions after `|`, `/regex/i`, a bare word meaning *contains*),
+  then any of `size:` (the size range), `age:` (days, on the write time, or
+  `age:created:<=7` on another of the four) and `attr:` (the attribute letters, `-` before
+  one it must not have): `*.log size:100M- age:>=30` selects the old big logs. With no mask
+  every name is a candidate. A word the grammar does not take is said in the status line and
+  selects nothing. Selecting from a list on the clipboard is the one predicate left out: a
+  terminal will not hand its clipboard back (SPEC 06 §11).
 
 ```toml
 [[highlight]]

@@ -87,7 +87,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 2.3 | Fuzzy "go to anywhere" (zoxide-style frecency + fuzzy path jump) | broot/NEW | M3 |
 | 2.4 | Drive/mount menu (`Alt+F1/F2`), MountMan-style mount/unmount, removable eject | FAR/KRU | ~ mounting, unmounting and ejecting |
 | 2.5 | Select/deselect: `Ins`, `Shift+arrows`, by mask (`+`/`-`/`*`), by extension, by name, same-name/different-size, invert, select all, restore previous selection | FAR/TC | ✓ |
-| 2.6 | Selection by regex, by size/date/attribute predicates, from clipboard list | FAR/KRU | M3 |
+| 2.6 | Selection by regex, by size/date/attribute predicates, from clipboard list | FAR/KRU | ~ from a list on the clipboard, which a terminal will not hand back |
 | 2.7 | Mark-and-act across directory changes (persistent selection set / "staging area") | NEW | M4 |
 | 2.8 | Sync panel paths (`=`), open current dir in the other panel, swap panels | all | ✓ |
 | 2.9 | Command line under the panels with history, completion, insert-current-name macros | FAR/MC | ✓ |

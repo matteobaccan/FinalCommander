@@ -28,6 +28,7 @@ says what the decision stands on.
 | Item | Where | What is left |
 | --- | --- | --- |
 | Sort criteria chains | sort modes list, `F4` | FAR's per-sort-mode chains with their own editor (`Ins`/`Del`/`F4`/`Ctrl+↑↓`), where the chain changes with the key rather than being one list. Ours is one chain of up to three keys for every mode. |
+| Selecting from a list | `Gray +` | The names of a list on the clipboard (feature 2.6). Wants the clipboard to be *readable*, which `OSC 52` is not in practice: terminals refuse the query. |
 
 ## Files
 
