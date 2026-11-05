@@ -33,6 +33,30 @@ what it does is gone at the next start. If you would rather it were not, *Save t
 exit* in *Options → Interface settings* (`ui.save_setup_on_exit`) writes the file on the way
 out as well. Where the panels were is a different file and comes back either way.
 
+# Asking an AI
+
+`ai: question` on the command line asks a language model and opens the answer in the viewer.
+The services are `[[ai]]` blocks in `fcmd.toml`:
+
+```toml
+[[ai]]
+name = "claude"
+url = "https://api.anthropic.com/v1/messages"
+api = "anthropic"            # openai, anthropic or ollama
+model = "claude-sonnet-5-5"
+token_env = "ANTHROPIC_API_KEY"
+```
+
+The first block is the one `ai:` asks; `ai: local: question` asks the block called `local`.
+The key is never written in the file: `token_env` names the environment variable it is in.
+`api = "openai"` works with every server that speaks OpenAI's chat API, and `ollama` with a
+model running on your own machine, which needs no key at all.
+
+Only the question is sent, unless files are **selected**: then a dialog says how many, how big,
+and to which host, and they go only if you press *Send*. Each answer is a Markdown file in the
+`fcmd-ai` folder beside the settings, and `ai:` with nothing after it opens that folder in the
+panel, so what you asked is there to read again.
+
 # Updates
 
 `Options → Check for updates` asks GitHub which release is the latest and, when it is newer

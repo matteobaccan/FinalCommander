@@ -1050,6 +1050,7 @@ dependencies = [
  "russh",
  "russh-sftp",
  "rustls-native-certs",
+ "serde_json",
  "suppaftp",
  "tempfile",
  "thiserror 2.0.21",

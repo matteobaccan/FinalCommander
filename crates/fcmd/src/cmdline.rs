@@ -349,6 +349,9 @@ pub enum Prefix {
     /// `sql:SELECT …` — a query on the SQLite database the panel is inside, or the one under
     /// the cursor, its rows opened in the viewer's table mode (SPEC 04 §4b).
     Sql(String),
+    /// `ai:question`, or `ai:name: question` for a service other than the first — ask a
+    /// language model, the answer opened in the viewer (SPEC 06 §14).
+    Ai(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -446,6 +449,7 @@ pub fn parse(line: &str) -> Parsed {
                 "goto" => return Parsed::Prefix(Prefix::Goto(rest)),
                 "whereis" => return Parsed::Prefix(Prefix::WhereIs(rest)),
                 "sql" => return Parsed::Prefix(Prefix::Sql(rest)),
+                "ai" => return Parsed::Prefix(Prefix::Ai(rest)),
                 "run" => {
                     let (into, command) = match rest.split_once('<') {
                         Some((file, cmd)) => {

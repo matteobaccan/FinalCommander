@@ -236,6 +236,7 @@ something readable rather than only into instructions.
 | 7.12 | Help system: context-sensitive `F1`, searchable, localised, offline | FAR/KRU | ✓ `F7` searches every chapter, written and generated |
 | 7.13 | Saved searches: a find-file query kept under a name and run again from a list, mask, text and conditions and all | TC/DC/KRU | M3 — each field of the find dialog has its own history (`Ctrl+↓`), which is not the same as the query as a whole |
 | 7.14 | Duplicate files: by size, then the first 64 KiB, then SHA-256; the groups as a panel with every copy but the oldest selected | FAR (FindDup)/TC | ✓ *Commands → Find duplicate files* (SPEC 06 §13) |
+| 7.15 | Asking a language model from the command line (`ai:`): OpenAI, Anthropic or Ollama, the token from an environment variable, files only after a dialog that names the host, answers kept as Markdown files | NEW | ✓ (SPEC 06 §14) |
 
 ## 8. Shell & terminal integration
 

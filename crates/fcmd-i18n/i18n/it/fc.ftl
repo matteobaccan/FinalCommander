@@ -1327,3 +1327,11 @@ sql-empty = Scrivi una query dopo sql:, per esempio sql: SELECT * FROM t
 sql-no-database = sql: vuole un database SQLite: entraci, o metti il cursore su uno.
 sql-running = Eseguo la query…
 sql-failed = La query non è riuscita: { $why }
+
+## Asking a language model (SPEC 06 §14).
+ai-none = Nessun servizio AI configurato: aggiungi un blocco [[ai]] a fcmd.toml (name, url, model, api, token_env).
+ai-title = Chiedi a un'AI
+ai-send-files = { $count } file, { $size }, saranno inviati a { $host } con la domanda.
+ai-asking = Chiedo a { $name }…
+ai-failed = L'AI non ha risposto: { $why }
+btn-send = Invia

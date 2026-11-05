@@ -1326,3 +1326,11 @@ sql-empty = Напишите запрос после sql:, например sql:
 sql-no-database = sql: нужна база SQLite: войдите в неё или поставьте на неё курсор.
 sql-running = Выполняю запрос…
 sql-failed = Запрос не выполнен: { $why }
+
+## Asking a language model (SPEC 06 §14).
+ai-none = Сервис ИИ не настроен: добавьте блок [[ai]] в fcmd.toml (name, url, model, api, token_env).
+ai-title = Спросить ИИ
+ai-send-files = Файлов: { $count }, { $size } — будут отправлены на { $host } вместе с вопросом.
+ai-asking = Спрашиваю { $name }…
+ai-failed = ИИ не ответил: { $why }
+btn-send = Отправить

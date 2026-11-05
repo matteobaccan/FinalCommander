@@ -34,6 +34,30 @@ contrario, *Salva le impostazioni all'uscita* in *Opzioni → Impostazioni dell'
 (`ui.save_setup_on_exit`) scrive il file anche quando esci. Dov'erano i pannelli è un altro
 file e torna in ogni caso.
 
+# Chiedere a un'AI
+
+`ai: domanda` sulla riga di comando chiede a un modello linguistico e apre la risposta nel
+visualizzatore. I servizi sono blocchi `[[ai]]` in `fcmd.toml`:
+
+```toml
+[[ai]]
+name = "claude"
+url = "https://api.anthropic.com/v1/messages"
+api = "anthropic"            # openai, anthropic oppure ollama
+model = "claude-sonnet-5-5"
+token_env = "ANTHROPIC_API_KEY"
+```
+
+Il primo blocco è quello a cui chiede `ai:`; `ai: locale: domanda` chiede al blocco chiamato
+`locale`. La chiave non è mai scritta nel file: `token_env` dice in quale variabile d'ambiente
+si trova. `api = "openai"` va con ogni server che parla l'API chat di OpenAI, e `ollama` con un
+modello che gira sulla tua macchina, che non vuole chiavi.
+
+Si invia solo la domanda, a meno che dei file siano **selezionati**: allora un dialogo dice
+quanti, quanto pesano e a quale host vanno, e partono solo se premi *Invia*. Ogni risposta è un
+file Markdown nella cartella `fcmd-ai` accanto alle impostazioni, e `ai:` senza niente dopo apre
+quella cartella nel pannello, così quello che hai chiesto resta lì da rileggere.
+
 # Aggiornamenti
 
 `Opzioni → Verifica aggiornamenti` chiede a GitHub qual è l'ultima versione e, se è più nuova

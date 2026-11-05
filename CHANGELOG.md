@@ -8,6 +8,13 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **Asking an AI** (`ai: question` on the command line). The services are `[[ai]]` blocks in
+  `fcmd.toml` — OpenAI's chat API and every server that speaks it, Anthropic's, or Ollama on
+  your own machine — with the key read from the environment variable `token_env` names, never
+  from the file. Only the question is sent unless files are selected, and then a dialog names
+  how many, how big and the host before anything goes. The answer is a Markdown file in
+  `fcmd-ai/` beside the settings, opened in the viewer; `ai:` alone opens that folder as a
+  panel of everything asked so far.
 - **SQLite databases** open like an archive: `Enter` on a `.sqlite`, `.sqlite3`, `.db3` or a
   `.db` that is one, and each table and view is a `.csv` of its rows beside a `schema.sql` —
   `F3` shows a table in table mode, `F5` exports it, `Alt+F7` searches every table. `sql:` on

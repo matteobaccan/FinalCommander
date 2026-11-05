@@ -391,6 +391,7 @@ to reach the viewer, the editor and the clipboard from a command line or a macro
 | `clip:<file>` | put its contents on the clipboard (and `clip:` with no argument clears it) |
 | `link:<target> <name>` | create a link |
 | `run:<file><command>` | run a command and send its output to a file, the screen, or nowhere |
+| `ai:[name:] <question>` | ask a language model; the answer opens in the viewer (§14) |
 | `sql:<statement>` | query the SQLite database the panel is in or the cursor is on, and view the rows as a table (SPEC 04 §4b) |
 
 Prefixes work wherever a command line does: the line itself, the user menu, associations,
@@ -573,3 +574,22 @@ what is selected; a file selected is compared as well as the folders.
 * The walk is the jobs' filesystem, so a server, a bucket and an archive work as they do for
   the branch view; it runs on the worker, the progress is the status line, and it stops at a
   million files and says so.
+
+## 14. Asking a language model
+
+`ai:<question>` on the command line asks the first `[[ai]]` service (SPEC 07 §2b2);
+`ai:<name>: <question>` asks the one of that name. Three wire formats: OpenAI's chat
+completions (and every server that speaks it), Anthropic's messages, Ollama's chat.
+
+* **Nothing leaves without being asked for.** Only the question goes, unless files are
+  *selected*: then a dialog says how many, how big and to which host, with *Cancel* lit, and
+  they go only on *Send*. The file under the cursor alone is never sent. Each file is sent as
+  text, cut at 256 KiB with a line saying so.
+* **The token** is read from the environment variable `token_env` names, at the moment of
+  asking; it is never in `fcmd.toml`, the state file or the answer.
+* **The answer** is a Markdown file in `fcmd-ai/` beside the settings — the question as its
+  heading, the service and model under it, then the answer — opened in the viewer, which
+  renders Markdown. `ai:` with no question opens that folder in the panel: the history of
+  what was asked, each one a file to read again (`F3`), keep, copy or delete.
+* One request, one answer, on the worker; no streaming, no conversation state. A follow-up
+  is a new question, with the earlier answer selected as a file if it is wanted.

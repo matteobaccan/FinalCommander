@@ -1399,6 +1399,35 @@ pub struct HighlightCfg {
 
 /// A named panel filter (SPEC 02 §5): the conditions of a `[[highlight]]` group without its
 /// colours, in the same spellings, because the two are one condition set.
+/// One `[[ai]]` block: where a language model answers, and how to ask it (SPEC 06 §14).
+///
+/// The token is never in this file: `token_env` names the environment variable that holds
+/// it, so the settings can be shared, committed or pasted into an issue without a secret in
+/// them. A local server (Ollama) needs none.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AiCfg {
+    pub name: String,
+    /// The endpoint itself: `https://api.openai.com/v1/chat/completions`,
+    /// `https://api.anthropic.com/v1/messages`, `http://localhost:11434/api/chat`.
+    pub url: String,
+    pub model: String,
+    /// `openai` (and every server that speaks its chat API), `anthropic` or `ollama`.
+    pub api: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub token_env: String,
+    /// What the model is told before the question, if anything.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub system: String,
+    /// The longest answer to ask for; 0 is the default of 4096.
+    #[serde(skip_serializing_if = "is_zero_u32")]
+    pub max_tokens: u32,
+}
+
+fn is_zero_u32(n: &u32) -> bool {
+    *n == 0
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct FilterCfg {
@@ -1597,6 +1626,10 @@ pub struct Config {
     /// `[[filter]]` blocks: the named panel filters the filters menu offers (SPEC 02 §5).
     #[serde(rename = "filter")]
     pub filters: Vec<FilterCfg>,
+    /// `[[ai]]` blocks: the language models `ai:` can ask (SPEC 06 §14). The first is the
+    /// one `ai:` asks; `ai:name:` asks another by its name.
+    #[serde(rename = "ai")]
+    pub ais: Vec<AiCfg>,
     /// `[[sort_group]]` blocks: the bands the sort groups cut a listing into (SPEC 02 §4).
     #[serde(rename = "sort_group")]
     pub sort_groups: Vec<SortGroupCfg>,

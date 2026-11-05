@@ -1776,6 +1776,18 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                         }
                     });
                 }
+                Request::AiAsk {
+                    service,
+                    question,
+                    files,
+                    dir,
+                } => {
+                    let tx = tx.clone();
+                    runtime.spawn(async move {
+                        let result = ask_ai(&service, &question, &files, &dir).await;
+                        let _ = tx.send(Event::AiDone { result });
+                    });
+                }
                 Request::SqlQuery { db, sql } => {
                     let tx = tx.clone();
                     runtime.spawn_blocking(move || {
@@ -4044,6 +4056,87 @@ fn dirs_home() -> Option<std::path::PathBuf> {
         .filter(|p| !p.as_os_str().is_empty())
 }
 
+/// The most of one attached file that is sent: a model's context is not a disk, and a file
+/// cut here says so in what is sent.
+const AI_FILE_LIMIT: usize = 256 * 1024;
+
+/// Ask, and write the question and its answer into a Markdown file of their own.
+async fn ask_ai(
+    cfg: &fcmd_config::AiCfg,
+    question: &str,
+    files: &[std::path::PathBuf],
+    dir: &std::path::Path,
+) -> Result<std::path::PathBuf, String> {
+    use fcmd_net::ai::{Api, Attachment, Service};
+    let api = Api::parse(&cfg.api).ok_or_else(|| format!("api = \"{}\"?", cfg.api))?;
+    let token = if cfg.token_env.is_empty() {
+        None
+    } else {
+        Some(std::env::var(&cfg.token_env).map_err(|_| format!("${} is not set", cfg.token_env))?)
+    };
+    let service = Service {
+        api,
+        url: cfg.url.clone(),
+        model: cfg.model.clone(),
+        token,
+        system: cfg.system.clone(),
+        max_tokens: cfg.max_tokens,
+    };
+    let mut attachments = Vec::new();
+    for f in files {
+        let bytes = std::fs::read(f).map_err(|e| format!("{}: {e}", f.display()))?;
+        let mut text =
+            String::from_utf8_lossy(&bytes[..bytes.len().min(AI_FILE_LIMIT)]).into_owned();
+        if bytes.len() > AI_FILE_LIMIT {
+            text.push_str("\n[… cut here: the file goes on]");
+        }
+        attachments.push(Attachment {
+            name: f
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+            text,
+        });
+    }
+    let answer = fcmd_net::ai::ask(&service, question, &attachments).await?;
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    let slug: String = question
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() {
+                c.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>()
+        .split('-')
+        .filter(|w| !w.is_empty())
+        .take(6)
+        .collect::<Vec<_>>()
+        .join("-");
+    let path = dir.join(format!("{stamp}-{slug}.md"));
+    let mut text = format!("# {}\n\n", question.trim());
+    if !attachments.is_empty() {
+        let names: Vec<&str> = attachments.iter().map(|a| a.name.as_str()).collect();
+        text.push_str(&format!(
+            "*{} · {} · {}*\n\n",
+            cfg.name,
+            cfg.model,
+            names.join(", ")
+        ));
+    } else {
+        text.push_str(&format!("*{} · {}*\n\n", cfg.name, cfg.model));
+    }
+    text.push_str(answer.trim());
+    text.push('\n');
+    std::fs::write(&path, text).map_err(|e| e.to_string())?;
+    Ok(path)
+}
+
 /// A `sql:` query's rows as a CSV file in this session's own temporary folder, named after
 /// the database so the viewer's title says what was asked of what.
 fn run_sql(db: &std::path::Path, sql: &str) -> Result<std::path::PathBuf, String> {
@@ -5670,6 +5763,7 @@ dir_attr = "D"
                 | Request::UpdateCheck { .. }
                 | Request::Dupes { .. }
                 | Request::SqlQuery { .. }
+                | Request::AiAsk { .. }
                 | Request::OpenUrl { .. }
                 | Request::Shell { .. }
                 | Request::Decompile { .. }

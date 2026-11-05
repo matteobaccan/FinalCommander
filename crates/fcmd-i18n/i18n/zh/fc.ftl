@@ -1302,3 +1302,11 @@ sql-empty = 在 sql: 后写查询，例如 sql: SELECT * FROM t
 sql-no-database = sql: 需要一个 SQLite 数据库：进入数据库，或把光标放在数据库上。
 sql-running = 正在执行查询…
 sql-failed = 查询失败：{ $why }
+
+## Asking a language model (SPEC 06 §14).
+ai-none = 尚未配置 AI 服务：在 fcmd.toml 中添加 [[ai]] 块（name、url、model、api、token_env）。
+ai-title = 询问 AI
+ai-send-files = { $count } 个文件，{ $size }，将随问题发送到 { $host }。
+ai-asking = 正在询问 { $name }…
+ai-failed = AI 没有回答：{ $why }
+btn-send = 发送

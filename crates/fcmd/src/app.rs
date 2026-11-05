@@ -47,6 +47,14 @@ pub enum Request {
     UpdateCheck {
         manual: bool,
     },
+    /// Ask a language model (SPEC 06 §14): the service, the question, the files the user
+    /// agreed to send with it, and the folder the answer is written into.
+    AiAsk {
+        service: fcmd_config::AiCfg,
+        question: String,
+        files: Vec<std::path::PathBuf>,
+        dir: std::path::PathBuf,
+    },
     /// Run a `sql:` query on a database, its rows written as CSV for the viewer.
     SqlQuery {
         db: std::path::PathBuf,
@@ -605,6 +613,10 @@ pub enum Event {
     DupesFound {
         panel: usize,
         found: fcmd_jobs::dupes::Found,
+    },
+    /// A language model's answer, written into a Markdown file, or why there is none.
+    AiDone {
+        result: Result<std::path::PathBuf, String>,
     },
     /// A `sql:` query's rows, as a CSV file to view, or why there are none.
     SqlDone {
@@ -1265,6 +1277,12 @@ pub enum ConfirmAction {
         side: usize,
         filter: String,
     },
+    /// Send these files with a question to a language model, having said so.
+    AskAi {
+        service: fcmd_config::AiCfg,
+        question: String,
+        files: Vec<std::path::PathBuf>,
+    },
     /// Open a release's page in the browser.
     OpenRelease { url: String },
     /// Open `known_hosts` where the key that changed is written, at that line.
@@ -1311,6 +1329,7 @@ impl ConfirmAction {
             ConfirmAction::AcceptHostKey { .. } => "btn-accept",
             ConfirmAction::OpenKnownHosts { .. } => "btn-open-file",
             ConfirmAction::OpenRelease { .. } => "btn-open-page",
+            ConfirmAction::AskAi { .. } => "btn-send",
         }
     }
 }
@@ -2686,6 +2705,17 @@ impl App {
                 self.set_status(m);
             }
             Event::DupesFound { panel, found } => self.dupes_found(panel, found),
+            Event::AiDone { result } => match result {
+                Ok(answer) => {
+                    self.set_status(String::new());
+                    let vpath = VPath::local(&answer);
+                    self.open_viewer_on(&answer, vpath);
+                }
+                Err(why) => {
+                    let m = self.i18n.t_args("ai-failed", &[("why", why.into())]);
+                    self.set_error(m);
+                }
+            },
             Event::SqlDone { result } => match result {
                 Ok(csv) => {
                     self.set_status(String::new());
@@ -4326,6 +4356,11 @@ impl App {
                             accept_host_key: true,
                         });
                     }
+                    ConfirmAction::AskAi {
+                        service,
+                        question,
+                        files,
+                    } => self.ask_ai(service, question, files),
                     ConfirmAction::OpenRelease { url } => {
                         self.requests.push(Request::OpenUrl { url });
                     }
@@ -11004,8 +11039,127 @@ impl App {
         panel.current_path().as_ref().and_then(local_db)
     }
 
+    /// Where the answers are kept: beside the settings, one Markdown file each, so the
+    /// folder is the conversation's history and `ai:` alone opens it as a panel.
+    pub fn ai_dir(&self) -> std::path::PathBuf {
+        self.paths
+            .config_file
+            .parent()
+            .map(|p| p.join("fcmd-ai"))
+            .unwrap_or_else(|| std::path::PathBuf::from("fcmd-ai"))
+    }
+
+    /// `ai:` on the command line (SPEC 06 §14).
+    fn ai_line(&mut self, text: String) {
+        if self.cfg.ais.is_empty() {
+            let m = self.i18n.t("ai-none");
+            self.set_error(m);
+            return;
+        }
+        // `ai:name: question` picks a service by its name; anything else is a question for
+        // the first one, colons and all.
+        let (service, question) = match text.split_once(':') {
+            Some((head, rest))
+                if self
+                    .cfg
+                    .ais
+                    .iter()
+                    .any(|a| a.name.eq_ignore_ascii_case(head.trim())) =>
+            {
+                let s = self
+                    .cfg
+                    .ais
+                    .iter()
+                    .find(|a| a.name.eq_ignore_ascii_case(head.trim()))
+                    .cloned()
+                    .expect("just found");
+                (s, rest.trim().to_string())
+            }
+            _ => (self.cfg.ais[0].clone(), text.trim().to_string()),
+        };
+        if question.is_empty() {
+            // The answers so far, as a panel: F3 reads one, F8 forgets it.
+            let dir = self.ai_dir();
+            let _ = std::fs::create_dir_all(&dir);
+            self.goto(VPath::local(&dir));
+            return;
+        }
+        // The files go only with a dialog that names them, their size and the host they are
+        // going to. Only what is selected, so nothing goes by accident from under the cursor.
+        let files: Vec<std::path::PathBuf> = if self.panel().selection.is_empty() {
+            Vec::new()
+        } else {
+            self.job_sources()
+                .into_iter()
+                .filter(|p| p.is_local() && !p.in_container() && p.as_path().is_file())
+                .map(|p| p.as_path().to_path_buf())
+                .collect()
+        };
+        if files.is_empty() {
+            self.ask_ai(service, question, files);
+            return;
+        }
+        let bytes: u64 = files
+            .iter()
+            .filter_map(|f| std::fs::metadata(f).ok())
+            .map(|m| m.len())
+            .sum();
+        let host = service
+            .url
+            .split("//")
+            .nth(1)
+            .and_then(|r| r.split('/').next())
+            .unwrap_or(&service.url)
+            .to_string();
+        let title = self.i18n.t("ai-title");
+        let mut lines = vec![self.i18n.t_args(
+            "ai-send-files",
+            &[
+                ("count", (files.len() as i64).into()),
+                ("size", fcmd_core::size::format_size(bytes).into()),
+                ("host", host.into()),
+            ],
+        )];
+        for f in files.iter().take(5) {
+            lines.push(format!("  {}", f.display()));
+        }
+        if files.len() > 5 {
+            lines.push("  …".into());
+        }
+        self.mode = Mode::Confirm(Confirm {
+            title,
+            lines,
+            action: ConfirmAction::AskAi {
+                service,
+                question,
+                files,
+            },
+            button: 1,
+        });
+    }
+
+    fn ask_ai(
+        &mut self,
+        service: fcmd_config::AiCfg,
+        question: String,
+        files: Vec<std::path::PathBuf>,
+    ) {
+        let m = self
+            .i18n
+            .t_args("ai-asking", &[("name", service.name.clone().into())]);
+        self.set_status(m);
+        let dir = self.ai_dir();
+        self.requests.push(Request::AiAsk {
+            service,
+            question,
+            files,
+            dir,
+        });
+    }
+
     fn run_prefix(&mut self, prefix: Prefix) {
         match prefix {
+            Prefix::Ai(text) => self.ai_line(text),
             Prefix::Sql(sql) => {
                 if sql.trim().is_empty() {
                     let m = self.i18n.t("sql-empty");
@@ -31802,6 +31956,58 @@ abcdefghij
         let mut app = app_on_disk(dir);
         app.editor_size = (40, 6);
         app
+    }
+
+    /// `ai:` asks the first service; `ai:name:` another; files go only after a dialog that
+    /// names them and the host; `ai:` alone opens the answers as a panel.
+    #[test]
+    fn an_ai_line_asks_and_files_wait_for_a_yes() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), "hello").unwrap();
+        let mut app = editing_app(dir.path());
+        app.cmd.set("ai: why?");
+        press(&mut app, "Enter");
+        assert!(app.status_error, "no service yet: {}", app.status);
+        let ai = |name: &str| fcmd_config::AiCfg {
+            name: name.into(),
+            url: "https://api.example.com/v1/chat/completions".into(),
+            model: "m".into(),
+            api: "openai".into(),
+            ..Default::default()
+        };
+        app.cfg.ais = vec![ai("first"), ai("local")];
+        app.take_requests();
+        app.cmd.set("ai: local: why: really?");
+        press(&mut app, "Enter");
+        let asked = app.take_requests().into_iter().find_map(|r| match r {
+            Request::AiAsk {
+                service,
+                question,
+                files,
+                ..
+            } => Some((service.name, question, files)),
+            _ => None,
+        });
+        assert_eq!(asked, Some(("local".into(), "why: really?".into(), vec![])));
+        // A selected file: a dialog first, naming the host, and nothing asked yet.
+        let at = app.panels[0].listing.row_of_name("a.txt").unwrap();
+        app.panels[0].cursor = at;
+        press(&mut app, "Insert");
+        app.cmd.set("ai: what is this?");
+        press(&mut app, "Enter");
+        let Mode::Confirm(c) = &app.mode else {
+            panic!("a dialog: {:?}", app.mode)
+        };
+        assert!(c.lines[0].contains("api.example.com"), "{:?}", c.lines);
+        assert!(!app
+            .take_requests()
+            .iter()
+            .any(|r| matches!(r, Request::AiAsk { .. })));
+        press(&mut app, "Esc");
+        assert!(!app
+            .take_requests()
+            .iter()
+            .any(|r| matches!(r, Request::AiAsk { .. })));
     }
 
     /// `sql:` on the command line asks the worker to query the database under the cursor;

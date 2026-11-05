@@ -245,6 +245,28 @@ name = "Folders only"
 kind = "dir"
 ```
 
+## 2b2. `[[ai]]`
+
+The language models `ai:` asks (SPEC 06 §14). The first block is the one `ai:` uses;
+`ai:<name>: question` picks another. The token is never written here: `token_env` names the
+environment variable holding it.
+
+```toml
+[[ai]]
+name = "claude"
+url = "https://api.anthropic.com/v1/messages"
+api = "anthropic"            # openai | anthropic | ollama
+model = "claude-sonnet-5-5"
+token_env = "ANTHROPIC_API_KEY"
+system = "Answer briefly, in the language of the question."
+
+[[ai]]
+name = "local"
+url = "http://localhost:11434/api/chat"
+api = "ollama"
+model = "llama3"
+```
+
 ## 2c. `[net]` and `[[site]]`
 
 The netbox's settings and its site list (SPEC 04 §6). No secret ever appears here: a site says
