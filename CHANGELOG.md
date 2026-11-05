@@ -29,6 +29,14 @@ Notable changes, newest first. The format follows
   showing each new name as it was typed, and `1.txt` and `2.txt` swapped through the counter
   with nothing left behind under a temporary name.
 
+- **The hex view and the disassembly in colour.** They were one colour from edge to edge. The
+  bytes are coloured by what they are — zeros dim, control bytes, the high half and `FF` each
+  their own — and the character column's letters by the string colour, so the code and the
+  strings in a binary are where the colour is. An instruction is its address, its dim bytes, a
+  mnemonic coloured by what it does to the flow (jumps, calls and returns stand out, `nop`
+  fades), then registers, numbers and `<symbols>` told apart. The colours are the theme's
+  syntax keys, so every theme has them, and `ui.syntax` turns them off with the rest.
+
 - **A copy that checks itself.** *Read every file back and compare it*, in the copy dialog,
   reads each file again on both sides once it is copied and compares them by SHA-256. A copy
   that differs is removed and reported as that file's error, and a move deletes its original

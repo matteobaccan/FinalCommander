@@ -164,7 +164,10 @@ colours it exactly.
 
 # Binaries
 
-`F5` disassembles. x86, x86-64 and AArch64 are decoded in the program itself; on another
+`F5` disassembles, in colour: jumps, calls and returns stand out from the rest, registers and
+numbers are told apart, and each function's name heads its code. The hex view is coloured by
+byte — zeros dim, so the code and the strings in a file are where the colour is. x86, x86-64
+and AArch64 are decoded in the program itself; on another
 architecture it asks `objdump`, and says so instead of guessing. AArch64 instructions are four
 bytes each, so a word nothing decodes is one `(bad)` line rather than four, and a branch is
 shown as the address it arrives at rather than as the displacement in the encoding. `Enter` on a `call` or a `jmp` follows it and

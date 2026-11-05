@@ -1332,6 +1332,192 @@ fn draw_job(app: &App, view: &crate::app::JobView, buf: &mut Buffer, screen: Rec
     );
 }
 
+/// The colour runs of a hex or a disassembly row, as `(start, end, theme key)` in bytes of
+/// `text`. Read off the text the viewer laid out, whose columns are fixed: an offset, then the
+/// bytes, then the characters between bars — or an address, the bytes, and the instruction.
+fn binary_runs(kind: fcmd_view::RowKind, text: &str) -> Vec<(usize, usize, &'static str)> {
+    use fcmd_view::RowKind;
+    let mut out = Vec::new();
+    match kind {
+        RowKind::Hex => {
+            let Some(first_space) = text.find(' ') else {
+                return out;
+            };
+            out.push((0, first_space, "syntax.type"));
+            let bar = text.find('|').unwrap_or(text.len());
+            // The bytes: each pair coloured by what kind of byte it is.
+            let mut i = first_space;
+            let bytes = text.as_bytes();
+            while i + 1 < bar {
+                if bytes[i].is_ascii_hexdigit() && bytes[i + 1].is_ascii_hexdigit() {
+                    let value = u8::from_str_radix(&text[i..i + 2], 16).unwrap_or(0);
+                    out.push((i, i + 2, byte_class(value)));
+                    i += 2;
+                } else {
+                    i += 1;
+                }
+            }
+            // The characters: what reads as text in the string colour, the dots dim.
+            if let Some(last) = text.rfind('|').filter(|&l| l > bar) {
+                out.push((bar, bar + 1, "syntax.comment"));
+                for (offset, ch) in text[bar + 1..last].char_indices() {
+                    let at = bar + 1 + offset;
+                    let key = if ch == '.' {
+                        "syntax.comment"
+                    } else {
+                        "syntax.string"
+                    };
+                    out.push((at, at + ch.len_utf8(), key));
+                }
+                out.push((last, last + 1, "syntax.comment"));
+            }
+        }
+        RowKind::Label => {
+            if let Some(space) = text.find(' ') {
+                out.push((0, space, "syntax.comment"));
+                out.push((space, text.len(), "syntax.function"));
+            }
+        }
+        RowKind::Code => {
+            // An address, a gap, the bytes, a wider gap, the instruction.
+            let Some(addr_end) = text.find(' ') else {
+                return out;
+            };
+            out.push((0, addr_end, "syntax.type"));
+            let rest = &text[addr_end..];
+            let lead = rest.len() - rest.trim_start().len();
+            let bytes_start = addr_end + lead;
+            let Some(gap) = text[bytes_start..].find("  ") else {
+                return out;
+            };
+            let bytes_end = bytes_start + gap;
+            out.push((bytes_start, bytes_end, "syntax.comment"));
+            let after = &text[bytes_end..];
+            let insn_start = bytes_end + (after.len() - after.trim_start().len());
+            let insn = &text[insn_start..];
+            let mnemonic_len = insn.find(' ').unwrap_or(insn.len());
+            let mnemonic = &insn[..mnemonic_len];
+            out.push((
+                insn_start,
+                insn_start + mnemonic_len,
+                mnemonic_class(mnemonic),
+            ));
+            operand_runs(text, insn_start + mnemonic_len, &mut out);
+        }
+        _ => {}
+    }
+    out
+}
+
+/// Zero, the padding most of a binary is, dim; the bytes that are letters and digits plain;
+/// control bytes and the high half in colours of their own; `FF` loud, because erased flash
+/// and sentinel values are what one goes looking for.
+fn byte_class(value: u8) -> &'static str {
+    match value {
+        0x00 => "syntax.comment",
+        0xFF => "syntax.keyword",
+        0x20..=0x7E => "syntax.text",
+        0x80..=0xFE => "syntax.preproc",
+        _ => "syntax.number",
+    }
+}
+
+/// What an instruction does to the flow, which is what the eye follows down a listing.
+fn mnemonic_class(mnemonic: &str) -> &'static str {
+    let m = mnemonic.to_ascii_lowercase();
+    let flow = m.starts_with('j')
+        || m.starts_with("call")
+        || m.starts_with("ret")
+        || m.starts_with("loop")
+        || matches!(
+            m.as_str(),
+            "b" | "bl"
+                | "blr"
+                | "br"
+                | "bx"
+                | "cbz"
+                | "cbnz"
+                | "tbz"
+                | "tbnz"
+                | "syscall"
+                | "sysenter"
+                | "int"
+                | "iret"
+                | "iretq"
+                | "leave"
+                | "hlt"
+                | "ud2"
+                | "svc"
+        )
+        || (m.len() <= 4 && m.starts_with("b."));
+    if flow {
+        "syntax.preproc"
+    } else if matches!(m.as_str(), "nop" | "int3" | "endbr64" | "endbr32") {
+        "syntax.comment"
+    } else if m.starts_with("push") || m.starts_with("pop") || m == "stp" || m == "ldp" {
+        "syntax.function"
+    } else {
+        "syntax.keyword"
+    }
+}
+
+/// The operands after the mnemonic: a `<symbol>` in the function colour, numbers in the
+/// number colour, the size words (`qword ptr`, `short`) dim, and registers in the string
+/// colour.
+fn operand_runs(text: &str, from: usize, out: &mut Vec<(usize, usize, &'static str)>) {
+    let bytes = text.as_bytes();
+    let mut i = from;
+    while i < text.len() {
+        let c = bytes[i];
+        if c == b'<' {
+            let end = text[i..].find('>').map(|e| i + e + 1).unwrap_or(text.len());
+            out.push((i, end, "syntax.function"));
+            i = end;
+        } else if c.is_ascii_alphanumeric() || c == b'_' || c == b'#' {
+            let start = i;
+            while i < text.len()
+                && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_' || bytes[i] == b'#')
+            {
+                i += 1;
+            }
+            let word = &text[start..i];
+            let number = word.starts_with('#')
+                || word.starts_with("0x")
+                || word.bytes().all(|b| b.is_ascii_digit())
+                || (word.ends_with('h')
+                    && word[..word.len() - 1]
+                        .bytes()
+                        .all(|b| b.is_ascii_hexdigit()));
+            let size = matches!(
+                word,
+                "ptr"
+                    | "byte"
+                    | "word"
+                    | "dword"
+                    | "qword"
+                    | "xmmword"
+                    | "ymmword"
+                    | "short"
+                    | "near"
+                    | "far"
+                    | "tbyte"
+            );
+            // Registers in the string colour: the type colour is the viewer's own cyan in
+            // FAR's palette, and a register that looks like the text around it is lost.
+            let key = if number {
+                "syntax.number"
+            } else if size {
+                "syntax.comment"
+            } else {
+                "syntax.string"
+            };
+            out.push((start, i, key));
+        } else {
+            i += 1;
+        }
+    }
+}
+
 /// The editor, full screen. Returns where the text cursor sits.
 /// The hex editor (SPEC 05 §2.5): offsets, bytes, and the same bytes as characters, with the
 /// ones that have changed in their own colour and the block behind them.
@@ -2265,6 +2451,23 @@ fn draw_viewer(app: &mut App, viewer: &mut fcmd_view::Viewer, buf: &mut Buffer) 
             let mut style = base.with_fg(app.theme.color(span.class.theme_key()));
             style.bold = span.bold;
             buf.put_str(x, y, text, style, body.w - x);
+        }
+        // The bytes and the instructions get colours of their own, from the same theme keys
+        // the source colouring uses, so every theme already has them: a page of hex in one
+        // colour is a page nobody can find a zero, a string or a jump in.
+        if app.cfg.ui.syntax && row.spans.is_empty() {
+            for (start, end, key) in binary_runs(row.kind, &row.text) {
+                let text = &row.text[start..end];
+                let x = row.text[..start]
+                    .chars()
+                    .filter_map(unicode_width::UnicodeWidthChar::width)
+                    .sum::<usize>() as u16;
+                if x < body.w && !text.is_empty() {
+                    let mut style = base.with_fg(app.theme.color(key));
+                    style.bold = key == "syntax.function" && row.kind == fcmd_view::RowKind::Label;
+                    buf.put_str(x, y, text, style, body.w - x);
+                }
+            }
         }
         if let Some(syntax) = syntax {
             let (spans, next) = syntax.line(&row.text, state);
@@ -4415,8 +4618,6 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
         assert_eq!(rows_without, rows_with + 1);
     }
 
-    /// The clock in the corner, on FAR's own spot: four characters over the frame, and the
-    /// panels not a row shorter for it.
     /// A job running in the background is counted in the top row, next to where the clock
     /// goes, so nobody forgets one is there (SPEC 03 §5).
     #[test]
@@ -4435,6 +4636,66 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
         assert!(top(&mut app).contains("⧗1"), "{}", top(&mut app));
     }
 
+    /// The colours of a hex row and of an instruction come from what each piece is.
+    #[test]
+    fn hex_and_disassembly_rows_are_coloured_by_what_their_pieces_are() {
+        use fcmd_view::RowKind;
+        let key_of = |runs: &[(usize, usize, &'static str)], text: &str, piece: &str| {
+            let at = text.find(piece).unwrap();
+            runs.iter()
+                .find(|(s, e, _)| *s <= at && at < *e)
+                .map(|(_, _, k)| *k)
+        };
+        let hex = "00000200  55 00 FF 0A 7D FC 8B 45  |U....}.E|";
+        let runs = binary_runs(RowKind::Hex, hex);
+        assert_eq!(key_of(&runs, hex, "00000200"), Some("syntax.type"));
+        assert_eq!(
+            key_of(&runs, hex, "00 FF"),
+            Some("syntax.comment"),
+            "zero is dim"
+        );
+        assert_eq!(key_of(&runs, hex, "FF"), Some("syntax.keyword"));
+        assert_eq!(
+            key_of(&runs, hex, "0A"),
+            Some("syntax.number"),
+            "a control byte"
+        );
+        assert_eq!(
+            key_of(&runs, hex, "FC"),
+            Some("syntax.preproc"),
+            "the high half"
+        );
+        assert_eq!(key_of(&runs, hex, "U."), Some("syntax.string"));
+
+        let code = "0000000000401010  E8 0C 00 00 00            call    0000000000401020h <helper>";
+        let runs = binary_runs(RowKind::Code, code);
+        assert_eq!(key_of(&runs, code, "0000000000401010"), Some("syntax.type"));
+        assert_eq!(key_of(&runs, code, "E8 0C"), Some("syntax.comment"));
+        assert_eq!(
+            key_of(&runs, code, "call"),
+            Some("syntax.preproc"),
+            "flow stands out"
+        );
+        assert_eq!(
+            key_of(&runs, code, "0000000000401020h"),
+            Some("syntax.number")
+        );
+        assert_eq!(key_of(&runs, code, "<helper>"), Some("syntax.function"));
+        let code = "0000000000401004  89 7D FC                  mov     dword ptr [rbp-4],edi";
+        let runs = binary_runs(RowKind::Code, code);
+        assert_eq!(key_of(&runs, code, "mov"), Some("syntax.keyword"));
+        assert_eq!(key_of(&runs, code, "dword"), Some("syntax.comment"));
+        assert_eq!(key_of(&runs, code, "rbp"), Some("syntax.string"));
+        assert_eq!(key_of(&runs, code, "edi"), Some("syntax.string"));
+        let label = "0000000000401000 <square>:";
+        let runs = binary_runs(RowKind::Label, label);
+        assert_eq!(key_of(&runs, label, "<square>"), Some("syntax.function"));
+        // A text row is the source colouring's business, not this.
+        assert!(binary_runs(RowKind::Text, "anything").is_empty());
+    }
+
+    /// The clock in the corner, on FAR's own spot: four characters over the frame, and the
+    /// panels not a row shorter for it.
     #[test]
     fn the_clock_sits_in_the_corner_without_costing_a_row() {
         let mut app = app("commander", "en");

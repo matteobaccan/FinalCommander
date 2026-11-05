@@ -199,6 +199,19 @@ views its output:
 Keys: `F5` disassemble, `F6` decompile. Both are refusable: the viewer never silently stays on
 the old content.
 
+**Colours (0.31.0).** The hex view and the disassembly are coloured from the theme's syntax
+keys, which every theme already defines, under `ui.syntax` like the source colouring. In hex:
+the offset in `syntax.type`; each byte by what it is — `00` in `syntax.comment`, the printable
+ones in `syntax.text`, control bytes in `syntax.number`, the high half in `syntax.preproc`,
+`FF` in `syntax.keyword` — and the character column's letters in `syntax.string` with its dots
+dim. In the disassembly: the address in `syntax.type`, the bytes dim, the mnemonic by what it
+does to the flow — jumps, calls, returns and traps in `syntax.preproc`, `nop` and its kin dim,
+`push`/`pop` in `syntax.function`, the rest in `syntax.keyword` — then registers in
+`syntax.string`, numbers in `syntax.number`, the size words (`qword ptr`, `short`) dim, and a
+`<symbol>` in `syntax.function`, which a label row carries in bold. The runs are read off the
+row's fixed columns (`binary_runs`), so a row the viewer lays out differently is simply left
+plain rather than coloured wrong.
+
 Nothing here circumvents a protection: it reads bytes the user can already read. What those
 bytes may be used for is the user's licence question, not the file manager's.
 
