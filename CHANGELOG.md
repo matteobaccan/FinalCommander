@@ -28,6 +28,11 @@ Notable changes, newest first. The format follows
   their status in front as `git status --short` writes it; the log and the blame of the file
   under the cursor in the viewer; the branches, where `Enter` puts `git switch` on the command
   line for you to run. The machine's own `git` answers, and says what is wrong when it can't.
+- **Mail files as folders.** `Enter` on an `.mbox` lists its messages, numbered and named
+  after their subject; `Enter` on one of them or on an `.eml` shows its headers, its text and
+  HTML in UTF-8, and each attachment decoded under its own name, to read with `F3` or save with
+  `F5`. Encoded words, quoted-printable, base64 and nested multiparts are read; nothing is
+  written. FARMail's and MailView's idea, none of their code.
 - **A JSON file as a folder.** `Enter` on a `.json` goes inside it: objects and arrays are
   folders, an array's items `[0]`, `[1]`, …, and every other value a file — a string as its
   text — to read with `F3`, copy out with `F5` or search with `Alt+F7`. `F3` and `F4` on the

@@ -139,6 +139,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 4.11 | VFS API available to plugins (so a plugin can add a scheme) | FAR/TC(WFX) | M3 |
 | 4.12 | SQLite databases: tables and views as CSV entries, `schema.sql`, and `sql:` queries opened in table mode, read only | FAR (SQLiteDB) | ✓ (SPEC 04 §4b) |
 | 4.13 | JSON documents as folders: objects and arrays as directories, values as files (strings as their text), read only | FarNet (JsonKit) | ✓ (SPEC 04 §4c) |
+| 4.14 | Mail as folders: an mbox as its messages, a message as its headers, text and decoded attachments; read only | FAR (FARMail/MailView) | ~ files on disk (SPEC 04 §4d); IMAP is the next step |
 
 ## 5. Viewer (`F3`)
 

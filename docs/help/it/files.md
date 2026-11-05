@@ -432,6 +432,14 @@ si aprono nel visualizzatore. *Branch* li elenca con quello attuale segnato; `In
 `git switch` per quello sotto il cursore sulla riga di comando, da eseguire tu. Risponde il
 `git` installato sulla macchina.
 
+# File di posta
+
+`Enter` su una casella di posta — un `.mbox` — elenca i messaggi come file, numerati
+nell'ordine in cui sono arrivati e chiamati col loro oggetto. `Enter` su uno di questi, o su un
+file `.eml`, apre il messaggio: `headers.txt` con chi l'ha mandato, a chi e quando,
+`message.txt` e `message.html` col testo, e ogni allegato col suo nome, già decodificato — `F3`
+lo legge, `F5` lo salva fuori. Nella casella non cambia niente.
+
 # Riscrivere un file di testo
 
 Il testo arriva da altrove: uno zip da una macchina Windows, un dump da un database, un file

@@ -25,6 +25,7 @@ mod ext;
 mod format;
 pub mod json;
 mod limits;
+pub mod mail;
 mod nest;
 mod rebuild;
 pub mod sqlite;

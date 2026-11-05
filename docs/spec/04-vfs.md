@@ -196,6 +196,21 @@ FarNet's JsonKit, as a container (`fcmd-arc::json`, `Format::Json`), offered for
   viewer's table mode (`jsonl`) or a query, not a tree. Broken JSON says the line and column.
 * `F3` and `F4` on the `.json` itself in the panel are unchanged; `Enter` is what goes in.
 
+### 4d. Mail: an mbox and a message as containers
+
+FARMail's and MailView's idea — their code is GPL and none of it is used (`fcmd-arc::mail`):
+
+* **An mbox** (`.mbox`, `.mbx`) is a folder of its messages, `0001 Subject.eml` in the order
+  they were appended, split at a `From ` line at the top or after a blank line; `>From `
+  quoting is undone (mboxrd), and the separating blank line is the mbox's, not the message's.
+* **A message** (`.eml`, or one of an mbox's, which the archive cache opens the same way) is a
+  folder of `headers.txt` (unfolded, RFC 2047 encoded words decoded), `message.txt` and
+  `message.html` (the first text and HTML parts, in UTF-8 whatever charset they were sent in),
+  and each attachment under its own name (`filename` or `name`, RFC 2231 included), decoded
+  from base64 or quoted-printable; a part with no name is `partN.<ext>`. Multiparts nest.
+* Read only, and a file over 512 MiB is refused. Reading mail from a server (IMAP) is the
+  next step; sending is not planned.
+
 ## 5. Editing inside a VFS
 
 **Implemented today for `sftp`**: `F4` on a remote file fetches it into

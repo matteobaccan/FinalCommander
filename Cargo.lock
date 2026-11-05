@@ -932,6 +932,7 @@ name = "fcmd-arc"
 version = "0.32.0"
 dependencies = [
  "bzip2",
+ "encoding_rs",
  "fcmd-core",
  "flate2",
  "lzma-rust2 0.23.0",

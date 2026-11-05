@@ -39,11 +39,15 @@ pub enum Format {
     Sqlite,
     /// A JSON document: objects and arrays as folders, values as files (`json.rs`). Read only.
     Json,
+    /// One mail message: headers, text and attachments as files (`mail.rs`). Read only.
+    Eml,
+    /// A mailbox: its messages as `.eml` entries (`mail.rs`). Read only.
+    Mbox,
 }
 
 impl Format {
     /// Every format this crate knows, read or write.
-    pub const ALL: [Format; 16] = [
+    pub const ALL: [Format; 18] = [
         Format::Zip,
         Format::SevenZ,
         Format::Tar,
@@ -60,6 +64,8 @@ impl Format {
         Format::Zst,
         Format::Sqlite,
         Format::Json,
+        Format::Eml,
+        Format::Mbox,
     ];
 
     /// The ones a dialog may offer to *create*.
@@ -86,7 +92,13 @@ impl Format {
     pub fn writable(self) -> bool {
         !matches!(
             self,
-            Format::Ar | Format::Cpio | Format::Rpm | Format::Sqlite | Format::Json
+            Format::Ar
+                | Format::Cpio
+                | Format::Rpm
+                | Format::Sqlite
+                | Format::Json
+                | Format::Eml
+                | Format::Mbox
         )
     }
 
@@ -135,6 +147,8 @@ impl Format {
             Format::Zst => "zst",
             Format::Sqlite => "sqlite",
             Format::Json => "json",
+            Format::Eml => "eml",
+            Format::Mbox => "mbox",
         }
     }
 
@@ -157,6 +171,8 @@ impl Format {
             Format::Zst => "zst",
             Format::Sqlite => "sqlite",
             Format::Json => "json",
+            Format::Eml => "eml",
+            Format::Mbox => "mbox",
         }
     }
 
@@ -201,7 +217,7 @@ impl Format {
     /// `Cr24` header in front of it, so it is not one.
     pub fn of_name(name: &str) -> Option<Format> {
         let lower = name.to_ascii_lowercase();
-        const BY_SUFFIX: [(&str, Format); 41] = [
+        const BY_SUFFIX: [(&str, Format); 44] = [
             (".tar.gz", Format::TarGz),
             (".tgz", Format::TarGz),
             (".tar.bz2", Format::TarBz2),
@@ -242,6 +258,9 @@ impl Format {
             (".db3", Format::Sqlite),
             (".s3db", Format::Sqlite),
             (".json", Format::Json),
+            (".eml", Format::Eml),
+            (".mbox", Format::Mbox),
+            (".mbx", Format::Mbox),
             // One compressed file, no tar. Last, so every `.tar.*` and `.t?z` above wins:
             // the list is searched in order and `.tar.gz` ends with `.gz` as well.
             (".gz", Format::Gz),

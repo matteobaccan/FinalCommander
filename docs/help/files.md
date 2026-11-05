@@ -410,6 +410,14 @@ under the cursor open in the viewer. *Branches* lists them with the current one 
 `Enter` puts `git switch` for the one under the cursor on the command line, for you to run.
 It is the `git` installed on the machine that answers.
 
+# Mail files
+
+`Enter` on a mailbox — an `.mbox` — lists its messages as files, numbered in the order they
+arrived and named after their subject. `Enter` on one of them, or on an `.eml` file, opens the
+message itself: `headers.txt` with who sent it, to whom and when, `message.txt` and
+`message.html` with the text, and each attachment under its own name, already decoded — `F3`
+reads it, `F5` saves it out. Nothing is changed in the mailbox.
+
 # Writing a text file again
 
 Text arrives from somewhere else: a zip off a Windows machine, a dump out of a database, a

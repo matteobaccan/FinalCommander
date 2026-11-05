@@ -180,6 +180,8 @@ impl Archive {
             Format::Rpm => crate::cpio::index_rpm(path, &name, limits, cancel)?,
             Format::Sqlite => crate::sqlite::index(path, &name, limits, cancel)?,
             Format::Json => crate::json::index(path, &name, limits, cancel)?,
+            Format::Eml => crate::mail::index_eml(path, &name, limits, cancel)?,
+            Format::Mbox => crate::mail::index_mbox(path, &name, limits, cancel)?,
             f if f.is_single() => index_single(path, &name, &leaf, format, limits, cancel)?,
             _ => index_tar(path, &name, format, limits, cancel)?,
         };
@@ -684,6 +686,17 @@ impl Archive {
             return self.copy_out_through_tool(&inner, entry.size, out, cancel, progress);
         };
         match format {
+            Format::Eml => {
+                let n = crate::mail::copy_out_eml(&self.source, &self.name(), &inner, out)?;
+                progress(n);
+                Ok(n)
+            }
+            Format::Mbox => {
+                let n =
+                    crate::mail::copy_out_mbox(&self.source, &self.name(), entry.at, &inner, out)?;
+                progress(n);
+                Ok(n)
+            }
             Format::Json => {
                 let n = crate::json::copy_out(&self.source, &self.name(), &inner, out)?;
                 progress(n);
@@ -938,7 +951,9 @@ pub(crate) fn decoder(path: &Path, format: Format) -> Result<Box<dyn Read>> {
         | Format::Cpio
         | Format::Rpm
         | Format::Sqlite
-        | Format::Json => {
+        | Format::Json
+        | Format::Eml
+        | Format::Mbox => {
             return Err(ArcError::Broken {
                 path: name,
                 reason: format!("a {} is not a stream", format.label()),
@@ -2021,10 +2036,13 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         // The single streams have no tree to list: they get their own test below.
         // A database holds tables, not a tree of files: `sqlite.rs` has its own tests.
-        for format in Format::ALL
-            .into_iter()
-            .filter(|f| f.holds_many() && !matches!(f, Format::Sqlite | Format::Json))
-        {
+        for format in Format::ALL.into_iter().filter(|f| {
+            f.holds_many()
+                && !matches!(
+                    f,
+                    Format::Sqlite | Format::Json | Format::Eml | Format::Mbox
+                )
+        }) {
             let path = dir.path().join(format!("tree.{}", format.extension()));
             write_archive(&path, format, &TREE);
             let archive = open(&path);
@@ -2723,10 +2741,13 @@ mod tests {
     fn a_whole_archive_tests_whole_and_a_damaged_one_names_what_is_broken() {
         let dir = tempfile::tempdir().unwrap();
         // A database holds tables, not a tree of files: `sqlite.rs` has its own tests.
-        for format in Format::ALL
-            .into_iter()
-            .filter(|f| f.holds_many() && !matches!(f, Format::Sqlite | Format::Json))
-        {
+        for format in Format::ALL.into_iter().filter(|f| {
+            f.holds_many()
+                && !matches!(
+                    f,
+                    Format::Sqlite | Format::Json | Format::Eml | Format::Mbox
+                )
+        }) {
             let path = dir.path().join(format!("tree.{}", format.extension()));
             write_archive(&path, format, &TREE);
             let mut seen: Vec<String> = Vec::new();
