@@ -121,7 +121,9 @@ copy dialog the same `Alt+F10` fills the destination in.
 `Ctrl+F2` hide the left or the right one to give the other the whole screen, and `Ctrl+O`
 takes both off to show what the commands have printed. With the panels off everything else
 still works — the command line, the menus, the keys — and `PgUp` and `PgDn` turn pages through
-the output; `Ctrl+O` brings the panels back. `Ctrl+Shift+F` finds text in that output: the
+the output; `Ctrl+O` brings the panels back. What needs a panel on the screen does not reach
+the hidden one: `Enter` on an empty line does nothing, as in FAR, rather than open whatever the
+cursor was left on. `Ctrl+Shift+F` finds text in that output: the
 newest line that has it is shown, marked, with the panels out of the way, and asking again for
 the same text goes on to the line before — the way to walk back through a build's errors. Past
 the oldest it starts again from the newest, and says so.
@@ -382,8 +384,10 @@ is the menu bar and a dialog's list. A click outside an open dialog does nothing
 
 `Ctrl+Ins` copies the names of what is selected — one per line — and `Alt+Shift+Ins` copies
 them with their whole paths. With something on the command line, `Ctrl+Ins` copies that line
-instead: the same rule as every other shared key, which belongs to the panel only while the
-line is empty.
+instead — or the part of it marked with `Shift` and the arrows: the same rule as every other
+shared key, which belongs to the panel only while the line is empty. `Ctrl+C` does the same as
+`Ctrl+Ins`, for the keyboards that have no `Ins`; while a command is running it is the
+interrupt instead, and only that.
 
 The copying is done by your terminal, through a request called `OSC 52`, and that is why it
 also works over `ssh`: the clipboard that fills is the one on the machine you are sitting at,

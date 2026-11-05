@@ -8050,6 +8050,16 @@ impl App {
     }
 
     fn normal_key(&mut self, key: Key) {
+        // While a command runs, `Ctrl+C` is its interrupt and nothing else, whether the panels
+        // are on or off: the copy the key also means here must never be what a user trying to
+        // stop a build gets instead.
+        if self.shell.is_some()
+            && key.mods == Mods::CTRL
+            && matches!(key.code, KeyCode::Char('c' | 'C'))
+        {
+            self.interrupt_subshell();
+            return;
+        }
         // With the panels off the screen is what the commands printed, so the keys that would
         // page through a listing page through that instead. Before the command line, which
         // does not use these two, and before the keymap, whose panel commands have nothing to
@@ -8072,6 +8082,13 @@ impl App {
         // The command line has no focus of its own: it takes the shared keys only while it has
         // something on it, which is FAR's rule and the reason typing never feels modal.
         if self.command_line_key(key) {
+            return;
+        }
+        // With the panels off, `Enter` on an empty line is not the panel's: there is no row on
+        // screen to act on, and entering a folder or opening a file nobody can see is a key that
+        // does something behind the user's back. FAR does nothing here either (issue #29). A
+        // line with a command on it was taken above, and runs as it always did.
+        if self.panels_off && key.code == KeyCode::Enter && key.mods == Mods::NONE {
             return;
         }
         // The quick view with the focus is a reader, so the reader's keys come first: `F4`
@@ -9978,6 +9995,15 @@ impl App {
             // names is what the key means on an empty line — because the text in front of
             // the cursor is what somebody looking at that line wants to keep.
             KeyCode::Insert if !empty && ctrl && !key.mods.contains(Mods::SHIFT) => {
+                self.run(Command::CmdClip);
+                true
+            }
+            // `Ctrl+C` is the same key for the keyboards that have no `Ins` (issue #29): the
+            // selection, or the whole line. Only while nothing runs — a running command's
+            // `Ctrl+C` is the interrupt, and that one is never taken from it.
+            KeyCode::Char('c' | 'C')
+                if !empty && ctrl && key.mods == Mods::CTRL && self.shell.is_none() =>
+            {
                 self.run(Command::CmdClip);
                 true
             }
@@ -28976,6 +29002,59 @@ run = ["echo one", "echo two", "echo three"]
         press(&mut app, "Enter");
         assert!(app.panel().filter.is_none());
         assert_eq!(app.panel().listing.len(), 5);
+    }
+
+    /// `Ctrl+C` is `Ctrl+Ins` for the keyboards that have no `Ins` (issue #29): the line, or
+    /// what is marked of it, when there is something on it; the names of what is selected when
+    /// there is not.
+    #[test]
+    fn ctrl_c_copies_the_command_line_and_on_an_empty_one_the_names() {
+        let clip = |a: &mut App| {
+            a.take_requests().into_iter().find_map(|r| match r {
+                Request::Clipboard { text } => Some(text),
+                _ => None,
+            })
+        };
+        let mut a = app();
+        type_text(&mut a, "ls -la");
+        a.requests.clear();
+        press(&mut a, "Ctrl+C");
+        assert_eq!(clip(&mut a).as_deref(), Some("ls -la"));
+        assert_eq!(a.cmd.text, "ls -la", "copied, not cut");
+
+        let mut a = app();
+        press(&mut a, "End");
+        a.requests.clear();
+        press(&mut a, "Ctrl+C");
+        assert_eq!(
+            clip(&mut a).as_deref(),
+            Some("c.rs"),
+            "the file under the cursor"
+        );
+    }
+
+    /// With the panels off, `Enter` on an empty line acts on nothing: there is no row on the
+    /// screen. A command on the line still runs (issue #29).
+    #[test]
+    fn enter_with_the_panels_off_does_not_act_on_the_hidden_panel() {
+        let mut a = app();
+        press(&mut a, "Down"); // the folder `docs`
+        press(&mut a, "Ctrl+O");
+        a.requests.clear();
+        press(&mut a, "Enter");
+        assert_eq!(
+            a.panel().cwd,
+            VPath::local("/home/mb"),
+            "it did not go into docs"
+        );
+        assert!(a.take_requests().is_empty(), "nothing was read or run");
+
+        type_text(&mut a, "ls");
+        press(&mut a, "Enter");
+        assert!(a
+            .take_requests()
+            .iter()
+            .any(|r| matches!(r, Request::Shell { line, .. } if line == "ls")));
     }
 
     #[test]

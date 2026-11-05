@@ -8,6 +8,9 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **`Ctrl+C` copies**, as `Ctrl+Ins` does, for the keyboards that have no `Ins`: the command
+  line or what is marked of it, and on an empty line the names of what is selected. While a
+  command runs it is the interrupt, whatever is on the screen (issue #29).
 - **The panels back as they started** (`Ctrl+Alt+R`): the line between them in the middle again
   and their full height back, in one key, after any number of `Ctrl+←/→/↑/↓`. FAR's keys for
   it are on the keypad's `Clear`, which does not reach a program through a terminal.
@@ -42,6 +45,9 @@ Notable changes, newest first. The format follows
 
 ### Fixed
 
+- **`Enter` with the panels off** (`Ctrl+O`) acted on the hidden panel: an empty line went into
+  the folder the cursor had been left on, or opened the file there, on a screen showing neither.
+  It does nothing now, as in FAR; a command on the line runs as before (issue #29).
 - **Where the files are, said right.** The help, in both languages, and the manual page listed
   files the program has never read — `config.toml`, `keymap.toml`, `session.toml`, `themes/`,
   `sites.toml` — so a binding written the way the help said did nothing. They now name the real

@@ -129,7 +129,9 @@ destinazione.
 `Ctrl+F2` nascondono quello di sinistra o di destra per dare all'altro tutto lo schermo, e
 `Ctrl+O` li toglie entrambi per mostrare quello che hanno stampato i comandi. Con i pannelli
 spenti tutto il resto funziona ancora — la riga di comando, i menu, i tasti — e `PgSu` e
-`PgGiù` girano le pagine dell'output; `Ctrl+O` riporta i pannelli. `Ctrl+Shift+F` cerca un
+`PgGiù` girano le pagine dell'output; `Ctrl+O` riporta i pannelli. Quello che ha bisogno di un
+pannello sullo schermo non arriva a quello nascosto: `Invio` sulla riga vuota non fa niente,
+come in FAR, invece di aprire quello su cui era rimasto il cursore. `Ctrl+Shift+F` cerca un
 testo in quell'output: la riga più recente che lo contiene viene mostrata, evidenziata, con i
 pannelli tolti di mezzo, e chiedendo di nuovo lo stesso testo si passa a quella prima — il modo
 per risalire gli errori di una compilazione. Oltre la più vecchia ricomincia dalla più recente,
@@ -409,9 +411,11 @@ niente.
 # Copiare e incollare testo
 
 `Ctrl+Ins` copia i nomi di quello che è selezionato — uno per riga — e `Alt+Shift+Ins` li copia
-con tutto il percorso. Con qualcosa sulla riga di comando, `Ctrl+Ins` copia invece quella riga:
-la stessa regola di ogni altro tasto condiviso, che appartiene al pannello solo mentre la riga è
-vuota.
+con tutto il percorso. Con qualcosa sulla riga di comando, `Ctrl+Ins` copia invece quella riga —
+o la parte segnata con `Shift` e le frecce: la stessa regola di ogni altro tasto condiviso, che
+appartiene al pannello solo mentre la riga è vuota. `Ctrl+C` fa lo stesso di `Ctrl+Ins`, per le
+tastiere che non hanno `Ins`; mentre un comando è in esecuzione è invece l'interruzione, e solo
+quella.
 
 La copia la fa il tuo terminale, attraverso una richiesta chiamata `OSC 52`, ed è per questo che
 funziona anche su `ssh`: gli appunti che si riempiono sono quelli della macchina davanti a cui

@@ -679,7 +679,7 @@ cmd = "panel.names.right"
 # On a command line with something on it `Ctrl+Ins` copies the line, which is the same rule as
 # every other shared key.
 [[bind]]
-keys = ["Ctrl+Ins"]
+keys = ["Ctrl+Ins", "Ctrl+C"]
 cmd = "file.clip.names"
 
 [[bind]]
