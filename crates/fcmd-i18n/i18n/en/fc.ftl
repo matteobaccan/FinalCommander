@@ -1266,8 +1266,8 @@ table-too-many = too many records to sort or filter here
 
 # Splitting and combining (SPEC 03 §9)
 split-title = Split file
-split-target = Into:
-split-size = Each piece:
+split-target = Into
+split-size = Each piece
 split-size-hint = 1440K, 700M, 4G — the last piece is what is left
 split-local-file = Splitting and combining work on a file on this machine
 split-bad-size = “{ $size }” is not a size: write it as 700M or 4G

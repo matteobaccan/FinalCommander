@@ -3973,6 +3973,94 @@ mod tests {
         write("picture", &shot(&mut app, 100, 30));
         press(&mut app, "Esc");
 
+        // ---- the branch view, and the split dialog over it ---------------------------------
+        let tree = work.parent().expect("a parent").join("tree");
+        for (path, len) in [
+            ("Cargo.toml", 1_431usize),
+            ("README.md", 8_212),
+            ("src/main.rs", 3_904),
+            ("src/app/panels.rs", 21_560),
+            ("src/app/queue.rs", 9_877),
+            ("docs/help/files.md", 26_331),
+            ("docs/shots/branch.svg", 61_440),
+            ("assets/logo.svg", 4_096),
+            ("release/fcmd-1.0.tar.gz", 7_506_272),
+        ] {
+            let at = tree.join(path);
+            std::fs::create_dir_all(at.parent().expect("a folder")).expect("the folder");
+            std::fs::write(&at, vec![b'x'; len]).expect("the file");
+            std::fs::File::options()
+                .write(true)
+                .open(&at)
+                .and_then(|f| f.set_modified(when((len % 9) as u64).expect("a time")))
+                .expect("the date is set");
+        }
+        // The folders' own dates too, which the right panel shows.
+        for dir in [
+            "src/app",
+            "src",
+            "docs/help",
+            "docs/shots",
+            "docs",
+            "assets",
+            "release",
+            "",
+        ] {
+            if let Ok(f) = std::fs::File::open(tree.join(dir)) {
+                let _ = f.set_modified(when(3).expect("a time"));
+            }
+        }
+        let mut tree_app = app_on_disk(&tree);
+        tree_app.theme = Theme::builtin("far").expect("the far theme");
+        tree_app.cfg.panel.status_line = true;
+        tree_app.requests.clear();
+        press(&mut tree_app, "Ctrl+Alt+B");
+        if let Some(crate::app::Request::Branch {
+            panel,
+            root,
+            cancel,
+        }) = tree_app
+            .take_requests()
+            .into_iter()
+            .find(|r| matches!(r, crate::app::Request::Branch { .. }))
+        {
+            let branch = fcmd_jobs::branch::walk(&fcmd_jobs::LocalFs, &root, 100, &cancel);
+            tree_app.handle_event(Event::Branched {
+                panel,
+                root,
+                branch,
+            });
+        }
+        // The panel title and the status line name the folder, which is a temporary
+        // directory that differs between runs: it is put back to a fixed one for the picture.
+        if let Some(list) = &mut tree_app.panels[0].temp {
+            list.title = "Branch: /home/mb/fcmd".to_string();
+        }
+        tree_app.panels[0].cursor = tree_app.panels[0]
+            .listing
+            .row_of_name("release/fcmd-1.0.tar.gz")
+            .unwrap_or(0);
+        // The other panel and the prompt show the same folder under its real name.
+        let shown = VPath::local("/home/mb/fcmd");
+        tree_app.panels[0].cwd = shown.clone();
+        tree_app.panels[1].cwd = shown;
+        write("branch", &shot(&mut tree_app, 100, 30));
+        tree_app.run(fcmd_cmd::Command::FileSplit);
+        if let Mode::Form(form) = &mut tree_app.mode {
+            for field in &mut form.fields {
+                if let crate::form::Field::Text { key, value, .. } = field {
+                    if *key == "split.target" {
+                        *value = "/media/mb/USB".to_string();
+                    }
+                    if *key == "split.size" {
+                        *value = "4G".to_string();
+                    }
+                }
+            }
+        }
+        write("split", &shot(&mut tree_app, 100, 30));
+        tree_app.mode = Mode::Normal;
+
         // ---- the help, which is half prose and half the live keymap -----------------------
         press(&mut app, "F1");
         write("help", &shot(&mut app, 100, 30));

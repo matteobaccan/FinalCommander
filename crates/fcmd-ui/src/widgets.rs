@@ -1670,7 +1670,7 @@ pub fn draw_buttons(
         theme.color("dialog.button.selected.bg"),
     )
     .bold();
-    let total: usize = labels.iter().map(|l| l.width() + 4).sum();
+    let total = buttons_width(labels);
     let mut x = area.x + (area.w as usize).saturating_sub(total) as u16 / 2;
     let mut starts = Vec::with_capacity(labels.len());
     for (i, label) in labels.iter().enumerate() {
@@ -1682,9 +1682,18 @@ pub fn draw_buttons(
         }
         starts.push(x);
         buf.put_str(x, area.y, &text, style, width);
-        x += width;
+        x += width + BUTTON_GAP;
     }
     starts
+}
+
+/// The blank column between two buttons, as in FAR: `[ OK ] [ Cancel ]`.
+const BUTTON_GAP: u16 = 1;
+
+/// The columns a row of buttons takes, the gaps between them included.
+fn buttons_width(labels: &[String]) -> usize {
+    let own: usize = labels.iter().map(|l| l.width() + 4).sum();
+    own + labels.len().saturating_sub(1) * BUTTON_GAP as usize
 }
 
 /// A dialog with message lines and a row of buttons (conflicts, errors, confirmations).
@@ -1697,7 +1706,7 @@ pub fn draw_choice(
     buttons: &[String],
     selected: usize,
 ) -> Rect {
-    let buttons_w: usize = buttons.iter().map(|l| l.width() + 4).sum();
+    let buttons_w = buttons_width(buttons);
     let content_w = lines
         .iter()
         .map(|l| l.width())
@@ -3135,7 +3144,7 @@ pub fn draw_form(buf: &mut Buffer, theme: &Theme, screen: Rect, view: &FormView)
     // The row of pages is as wide as the labels plus a space either side of each.
     let tabs_w: usize = tabs.iter().map(|t| t.label.width() + 2).sum();
     let tabs_h = u16::from(!tabs.is_empty());
-    let buttons_w: usize = buttons.iter().map(|b| b.width() + 4).sum();
+    let buttons_w = buttons_width(buttons);
     let content_w = rows
         .iter()
         .map(|r| r.text.width())

@@ -316,6 +316,8 @@ fn landing(lang: &Text) -> String {
         ("hexedit.svg", "F4 · hex"),
         ("picture.svg", "F3 · BMP"),
         ("drives.svg", "Alt+F1"),
+        ("branch.svg", "Ctrl+Alt+B"),
+        ("split.svg", ".001 · .002 · .crc"),
         ("editor.svg", "F4"),
         ("menu.svg", "F9"),
         ("s3.svg", "s3://"),
@@ -375,7 +377,9 @@ fn document_in(
 const HELP_SHOTS: &[(&str, usize, &str, &str)] = &[
     ("panels.md", 0, "panels.svg", "Ctrl+1…0"),
     ("panels.md", 0, "drives.svg", "Alt+F1"),
+    ("panels.md", 1, "branch.svg", "Ctrl+Alt+B"),
     ("files.md", 0, "menu.svg", "F9"),
+    ("files.md", 4, "split.svg", ".001 · .002 · .crc"),
     ("viewer.md", 0, "viewer.svg", "F3"),
     ("viewer.md", 2, "picture.svg", "F3 · BMP"),
     ("viewer.md", 5, "hex.svg", "F4"),

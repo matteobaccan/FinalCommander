@@ -151,6 +151,8 @@ Notable changes, newest first. The format follows
   told the screen only once the file was finished, so one big file sat on *planning…* with a
   per-file bar that never moved until the end. It reports every megabyte now, inside the file
   as between files, and the same for a wipe and a replacement.
+- **Buttons side by side.** A dialog with two or more buttons drew them touching, as
+  `[ OK ][ Cancel ]`; there is one blank column between them now, as in FAR.
 
 ## [0.30.0] — 2026-11-04
 

@@ -1256,8 +1256,8 @@ table-too-many = слишком много записей, чтобы сорти
 
 # Splitting and combining (SPEC 03 §9)
 split-title = Разрезать файл
-split-target = В:
-split-size = Каждая часть:
+split-target = В
+split-size = Каждая часть
 split-size-hint = 1440K, 700M, 4G — последняя часть — остаток
 split-local-file = Разрезать и собирать можно файл на этой машине
 split-bad-size = «{ $size }» — не размер: напишите 700M или 4G

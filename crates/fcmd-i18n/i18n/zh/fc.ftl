@@ -1232,8 +1232,8 @@ table-too-many = 记录太多，无法在此排序或过滤
 
 # Splitting and combining (SPEC 03 §9)
 split-title = 分割文件
-split-target = 到：
-split-size = 每块大小：
+split-target = 到
+split-size = 每块大小
 split-size-hint = 1440K、700M、4G — 最后一块是剩下的部分
 split-local-file = 分割和合并只能用于本机上的文件
 split-bad-size = “{ $size }”不是大小：请写成 700M 或 4G

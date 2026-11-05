@@ -1241,11 +1241,6 @@ impl Form {
         }
     }
 
-    /// What to hash, with what, and where the list goes (SPEC 03 §9).
-    ///
-    /// The name is offered rather than fixed because the two conventions disagree and both are
-    /// right: a commander writes `project.sha256` beside the directory it is about, and a
-    /// Linux release writes `SHA256SUMS`. Either is read by `sha256sum -c`.
     /// `Files → Split file`: where the pieces go and how big each one is.
     pub fn split(what: String, target: String, size: String, i18n: &I18n) -> Form {
         let t = |id: &str| i18n.t(id);
@@ -1270,6 +1265,11 @@ impl Form {
         }
     }
 
+    /// What to hash, with what, and where the list goes (SPEC 03 §9).
+    ///
+    /// The name is offered rather than fixed because the two conventions disagree and both are
+    /// right: a commander writes `project.sha256` beside the directory it is about, and a
+    /// Linux release writes `SHA256SUMS`. Either is read by `sha256sum -c`.
     pub fn checksum(
         what: String,
         algorithm: fcmd_jobs::Algorithm,

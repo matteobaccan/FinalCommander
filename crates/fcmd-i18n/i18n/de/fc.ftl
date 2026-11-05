@@ -1256,8 +1256,8 @@ table-too-many = zu viele Datensätze, um sie hier zu sortieren oder zu filtern
 
 # Splitting and combining (SPEC 03 §9)
 split-title = Datei teilen
-split-target = Nach:
-split-size = Jedes Stück:
+split-target = Nach
+split-size = Jedes Stück
 split-size-hint = 1440K, 700M, 4G — das letzte Stück ist der Rest
 split-local-file = Teilen und Zusammenfügen gehen mit einer Datei auf diesem Rechner
 split-bad-size = „{ $size }“ ist keine Größe: schreiben Sie 700M oder 4G

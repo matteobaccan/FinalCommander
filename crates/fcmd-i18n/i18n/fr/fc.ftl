@@ -1256,8 +1256,8 @@ table-too-many = trop d'enregistrements pour les trier ou les filtrer ici
 
 # Splitting and combining (SPEC 03 §9)
 split-title = Découper le fichier
-split-target = Dans :
-split-size = Chaque morceau :
+split-target = Dans
+split-size = Chaque morceau
 split-size-hint = 1440K, 700M, 4G — le dernier morceau est ce qui reste
 split-local-file = Découper et réassembler marchent sur un fichier de cette machine
 split-bad-size = « { $size } » n'est pas une taille : écrivez 700M ou 4G

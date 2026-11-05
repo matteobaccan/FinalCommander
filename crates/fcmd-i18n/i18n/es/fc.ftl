@@ -1256,8 +1256,8 @@ table-too-many = demasiados registros para ordenarlos o filtrarlos aquí
 
 # Splitting and combining (SPEC 03 §9)
 split-title = Dividir archivo
-split-target = En:
-split-size = Cada trozo:
+split-target = En
+split-size = Cada trozo
 split-size-hint = 1440K, 700M, 4G — el último trozo es lo que queda
 split-local-file = Dividir y unir funcionan con un archivo de esta máquina
 split-bad-size = «{ $size }» no es un tamaño: escríbalo como 700M o 4G
