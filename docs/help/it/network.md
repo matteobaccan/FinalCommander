@@ -138,6 +138,14 @@ costruire un tunnel, e per loro la pagina del campo è grigia.
 
 Un salto solo, non una catena: `ssh -J a,b,c` è una lista, questo è un host.
 
+## Un server con SSH ma senza SFTP
+
+Router, NAS e piccole schede spesso hanno un server SSH senza SFTP dietro. Una sessione
+`sftp://` (o `scp://`) verso uno di questi si apre comunque: quando il server rifiuta SFTP, il
+pannello lavora attraverso la sua shell — `ls` per elencare, `cat` per leggere e scrivere,
+`mkdir`, `mv`, `rm`, `chmod` per il resto — e i tasti sono gli stessi, solo più lenti su una
+cartella grande.
+
 ## La posta su un server (IMAP)
 
 `imap://io@host/` (porta 143) e `imaps://io@host/` (porta 993, TLS — quello che offrono i

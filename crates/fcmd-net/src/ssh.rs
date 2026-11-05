@@ -126,16 +126,32 @@ pub async fn connect(site: &Site, secret: Option<&str>, policy: &HostKeyPolicy) 
         .channel_open_session()
         .await
         .map_err(|e| russh_err(site, e))?;
-    channel
-        .request_subsystem(true, "sftp")
-        .await
-        .map_err(|e| russh_err(site, e))?;
-    let session = SftpSession::new(channel.into_stream())
-        .await
-        .map_err(|e| NetError::Connect {
+    let asked = channel.request_subsystem(true, "sftp").await;
+    let session = match asked {
+        Ok(()) => SftpSession::new(channel.into_stream()).await.ok(),
+        Err(_) => None,
+    };
+    // A server with SSH and no SFTP — a router, a NAS, dropbear on a board — still has a
+    // shell, and the shell is enough to browse and copy (`crate::shell`).
+    let Some(session) = session else {
+        let exec = SshExec {
+            handle,
+            keep_jump: through,
             host: site.host.clone(),
-            detail: format!("the SFTP subsystem did not start: {e}"),
-        })?;
+        };
+        // Only if there is a shell there to answer: otherwise the first error stands.
+        let probe = crate::shell::Exec::run(&exec, "echo fcmd").await;
+        if !matches!(&probe, Ok(out) if out.status == 0) {
+            return Err(NetError::Connect {
+                host: site.host.clone(),
+                detail: "the server has neither SFTP nor a shell to fall back on".into(),
+            });
+        }
+        return Ok(Remote::new(
+            site.clone(),
+            Arc::new(crate::shell::ShellFs::new(exec)),
+        ));
+    };
     Ok(Remote::new(
         site.clone(),
         Arc::new(SftpBackend {
@@ -588,6 +604,66 @@ impl RemoteFs for SftpBackend {
                 .disconnect(russh::Disconnect::ByApplication, "", "en")
                 .await;
         }
+        Ok(())
+    }
+}
+
+/// Commands on the far side of an SSH session, one channel each: what the shell backend
+/// runs on a server that has no SFTP.
+struct SshExec {
+    handle: Handle<Client>,
+    /// Kept alive for the same reason as [`SftpBackend::keep_jump`].
+    #[allow(dead_code)]
+    keep_jump: Option<Handle<Client>>,
+    host: String,
+}
+
+#[async_trait]
+impl crate::shell::Exec for SshExec {
+    async fn run(&self, command: &str) -> Result<crate::shell::Output> {
+        let mut channel = self
+            .handle
+            .channel_open_session()
+            .await
+            .map_err(|e| NetError::remote(&self.host, e))?;
+        channel
+            .exec(true, command)
+            .await
+            .map_err(|e| NetError::remote(&self.host, e))?;
+        let mut out = crate::shell::Output::default();
+        let mut stderr = Vec::new();
+        while let Some(msg) = channel.wait().await {
+            match msg {
+                russh::ChannelMsg::Data { data } => out.stdout.extend_from_slice(&data),
+                russh::ChannelMsg::ExtendedData { data, .. } => stderr.extend_from_slice(&data),
+                russh::ChannelMsg::ExitStatus { exit_status } => {
+                    out.status = i32::try_from(exit_status).unwrap_or(-1)
+                }
+                _ => {}
+            }
+        }
+        out.stderr = String::from_utf8_lossy(&stderr).into_owned();
+        Ok(out)
+    }
+
+    async fn write(&self, command: &str) -> Result<Writer> {
+        let channel = self
+            .handle
+            .channel_open_session()
+            .await
+            .map_err(|e| NetError::remote(&self.host, e))?;
+        channel
+            .exec(true, command)
+            .await
+            .map_err(|e| NetError::remote(&self.host, e))?;
+        Ok(Box::new(channel.into_stream()))
+    }
+
+    async fn close(&self) -> Result<()> {
+        let _ = self
+            .handle
+            .disconnect(russh::Disconnect::ByApplication, "", "en")
+            .await;
         Ok(())
     }
 }

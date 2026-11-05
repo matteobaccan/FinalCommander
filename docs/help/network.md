@@ -134,6 +134,13 @@ the field is on is grey for them.
 
 One hop, not a chain: `ssh -J a,b,c` is a list, this is one host.
 
+## A server with SSH but no SFTP
+
+Routers, NAS boxes and small boards often run an SSH server with no SFTP behind it. An
+`sftp://` (or `scp://`) session to one still opens: when the server refuses SFTP, the panel
+works through its shell instead — `ls` to list, `cat` to read and write, `mkdir`, `mv`, `rm`,
+`chmod` for the rest — and everything is the same keys as before, only slower on a big folder.
+
 ## Mail on a server (IMAP)
 
 `imap://me@host/` (port 143) and `imaps://me@host/` (port 993, TLS — what mail providers

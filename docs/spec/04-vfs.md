@@ -354,6 +354,15 @@ inside it — and both are disconnected, innermost first, when the panel disconn
 generalises (step 3 could itself be a jump), and until somebody has two bastions in a row it
 is a field to fill in rather than a list to edit.
 
+### 6.5b SSH without SFTP (`fcmd-net/src/shell.rs`)
+
+When `request_subsystem("sftp")` is refused or the SFTP session does not start, and `echo`
+answers on an exec channel, the site is served by `ShellFs`: one exec channel per command,
+words quoted for `sh`, `ls -la --time-style=+%s` with a plain `ls -la` fallback (busybox, BSD:
+no time then), `cat` to read and `cat >` to write, `mkdir`/`rm`/`rmdir`/`mv`/`ln -s`/`chmod`/
+`touch -d @` for the rest. The command layer is the `Exec` trait, tested against the local
+`sh`.
+
 ### 6.6 IMAP, read only (`imap://`, `imaps://`)
 
 `fcmd-net/src/imap`: `LOGIN`, `LIST`, `EXAMINE`, `UID FETCH`, `LOGOUT` by hand over one

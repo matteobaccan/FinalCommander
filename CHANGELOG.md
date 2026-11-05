@@ -13,6 +13,9 @@ Notable changes, newest first. The format follows
   reads it, `F5` copies it, `Enter` on the copy opens it as a mail container. Reading does not
   mark a message as read, and nothing on the server is ever changed. Also in the session
   dialog's protocols. FARMail's idea, none of its code.
+- **SSH servers without SFTP.** A router, a NAS or a board running dropbear with no SFTP
+  behind it now opens anyway: when the server refuses SFTP the panel works through its shell
+  (`ls`, `cat`, `mkdir`, `mv`, `rm`, `chmod`), with the same keys as any other server.
 
 ## [0.34.0] - 2026-11-05
 

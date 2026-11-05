@@ -14,6 +14,7 @@ pub mod memory;
 pub mod ops;
 pub mod pool;
 pub mod remote;
+pub mod shell;
 pub mod site;
 pub mod ssh;
 pub mod tunnel;
