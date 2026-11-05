@@ -40,6 +40,17 @@ Notable changes, newest first. The format follows
   a colour group's conditions without its colours — to put one on, write a new one in a
   dialog, change one or take it out.
 
+### Fixed
+
+- **Where the files are, said right.** The help, in both languages, and the manual page listed
+  files the program has never read — `config.toml`, `keymap.toml`, `session.toml`, `themes/`,
+  `sites.toml` — so a binding written the way the help said did nothing. They now name the real
+  ones, `fcmd.toml`, `fcmd-state.toml`, `fcmd-macros.toml`, `fcmd-menu.toml` and
+  `fcmd-plugins/`, side by side in the platform's settings folder, and show a keymap of your own
+  as the `[[keymap]]` block with `[[keymap.bind]]` it has to be, put in force by `ui.keymap`;
+  SPEC 07's own example had the same `[[bind]]` mistake. The manual page's bold had never shown:
+  its hand-written part carried form feeds where `\fB` belonged.
+
 ## [0.31.0] — 2026-11-05
 
 ### Added

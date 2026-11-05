@@ -21009,7 +21009,7 @@ impl App {
     fn help_commands(&self) -> Vec<String> {
         let mut lines = vec![
             "Every command, and the keys bound to it. One with no key is still a command:".into(),
-            "put it in keymap.toml, or type it on the command line.".into(),
+            "bind it in a [[keymap]] block of fcmd.toml, or type it on the command line.".into(),
             String::new(),
         ];
         let mut unbound = 0usize;

@@ -100,24 +100,28 @@ Directory for the left panel, and optionally for the right one
 v0.31.0
 .SH FILES
 .TP
-.I ~/.config/fcmd/config.toml
-The settings. B\-\-dump\-configR prints the effective ones. On macOS this is under
-.I ~/Library/Application Support/fcmd
+.I ~/.config/fcmd.toml
+The settings, and the blocks beside them: your keymap (\fB[[keymap]]\fR), themes
+(\fB[[theme]]\fR), servers (\fB[[site]]\fR, never a password), filters, colour and sort
+groups. \fB\-\-dump\-config\fR prints the effective settings and \fB\-\-paths\fR where
+every file below is. On macOS these files are under
+.I ~/Library/Application Support
 and on Windows under
-.I %APPDATA%\fcmd .
+.IR %APPDATA% ;
+an \fBfcmd.toml\fR beside the executable is used instead, with the others beside it.
 .TP
-.I ~/.config/fcmd/keymap.toml
-Your own key bindings, applied over the profile named by B\-\-keymapR.
+.I ~/.config/fcmd-state.toml
+What the program remembers: where the panels and tabs were, the histories, the positions
+in files.
 .TP
-.I ~/.config/fcmd/session.toml
-Where the panels were when the program last exited.
+.I ~/.config/fcmd-macros.toml
+The macros you recorded.
 .TP
-.I ~/.config/fcmd/themes/
-Colour schemes. A TOML file dropped in here is found at startup; B\-\-export\-themeR
-prints a built-in one to start from.
+.I ~/.config/fcmd-menu.toml
+The user menu \fBF2\fR opens; a directory may carry its own \fB.fcmd-menu.toml\fR.
 .TP
-.I ~/.config/fcmd/sites.toml
-Stored connections: the host, the user and the path, never a password.
+.I ~/.config/fcmd-plugins/
+Plugins, one file each.
 .SH KEYS
 .B F1
 help,
@@ -184,7 +188,7 @@ profile is Midnight Commander's. Every action is a named command,
 .B \-\-list\-commands
 prints them all, and
 .B \-\-check\-keymap
-says whether a keymap is sound. The help inside the program (BF1R) generates its key and
+says whether a keymap is sound. The help inside the program (\fBF1\fR) generates its key and
 command chapters from the keymap actually in force, so it cannot drift.
 .SH EXIT STATUS
 .TP

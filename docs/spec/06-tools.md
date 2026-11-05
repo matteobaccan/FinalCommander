@@ -466,7 +466,7 @@ and the keymap pages are generated from the live keymap (never hand-written).
 
 ## 10. Session & state
 
-`session.toml` holds panels, tabs, paths, view modes, sorts, filters, selection (optional),
+`fcmd-state.toml` holds panels, tabs, paths, view modes, sorts, filters, selection (optional),
 viewer/editor positions, and the job journal pointer. `--no-session` starts clean;
 `fcmd path1 path2` opens the two panels at those paths; `fcmd --goto file:line` opens the editor.
 

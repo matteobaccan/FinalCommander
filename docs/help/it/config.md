@@ -2,16 +2,18 @@
 
 Tutto è un file che puoi leggere, confrontare e copiare su un'altra macchina:
 
-    config.toml     le impostazioni
-    keymap.toml     le tue assegnazioni di tasti, sopra il profilo
-    session.toml    dov'erano i pannelli
-    themes/         gli schemi di colore
-    sites.toml      le connessioni salvate
+    fcmd.toml          le impostazioni — e i tuoi tasti, temi, server, filtri e colori
+    fcmd-state.toml    quello che il programma ricorda: dov'erano i pannelli, le cronologie
+    fcmd-macros.toml   le macro che hai registrato
+    fcmd-menu.toml     il tuo menu di F2
+    fcmd-plugins/      i plugin
 
-Stanno dove la piattaforma tiene queste cose — `~/.config/fcmd` su Linux, `Library/
-Application Support` su macOS, `%APPDATA%` su Windows. `fcmd --dump-config` stampa le
-impostazioni con cui il programma sta davvero girando, che è il modo più rapido di vedere come
-si chiama una chiave.
+Stanno uno accanto all'altro nella cartella dove la piattaforma tiene le impostazioni —
+`~/.config` su Linux, `~/Library/Application Support` su macOS, `%APPDATA%` su Windows —
+oppure accanto all'eseguibile, quando lì c'è un `fcmd.toml`, che è come una copia su una
+chiavetta USB si porta dietro tutto. `fcmd --paths` dice esattamente dove sta ciascuno su
+questa macchina, e `fcmd --dump-config` stampa le impostazioni con cui il programma sta davvero
+girando, che è il modo più rapido di vedere come si chiama una chiave.
 
 L'orologio nell'angolo in alto a destra è spento finché non lo chiedi, in `F9 → Opzioni →
 Impostazioni dell'interfaccia`: è l'unica cosa sullo schermo che cambia senza che nessuno prema
@@ -57,14 +59,27 @@ una riga il cui file non c'è più lo dice.
 # I tasti
 
 La mappatura dei tasti è un profilo più le tue modifiche. Ne arrivano due: `far`, che è quello
-per default, e `mc`. Una tua assegnazione è una riga in `keymap.toml`:
+per default, e `mc`. Le tue modifiche sono una mappatura tua dentro `fcmd.toml`, costruita su
+una delle due e nominata in `[ui]`:
 
-    [[bind]]
+    [ui]
+    keymap = "mia"
+
+    [[keymap]]
+    name = "mia"
+    inherit = "far"
+
+    [[keymap.bind]]
     keys = ["Ctrl+D"]
     scope = "panel"
     cmd = "file.delete"
 
-`scope` è dove vale — `global`, `panel`, `viewer`, `editor` o `dialog` — e `cmd` è uno dei nomi
+    [[keymap.unbind]]
+    keys = ["Ctrl+Q"]
+    scope = "global"
+
+Ogni `[[keymap.bind]]` aggiunge o sostituisce un'assegnazione, e `[[keymap.unbind]]` ne toglie
+una del profilo. `scope` è dove vale — `global`, `panel`, `viewer`, `editor` o `dialog` — e `cmd` è uno dei nomi
 nella pagina "Tutti i comandi" di questo aiuto. `fcmd --check-keymap` dice se una mappatura sta
 in piedi e nomina tutto quello che è assegnato due volte.
 
@@ -85,9 +100,10 @@ diversa.
 
 # I colori
 
-`Ctrl+Shift+T` passa da un tema all'altro; il menu li offre come elenco. Un tema è un file TOML
-di nomi di colore, e uno messo dentro `themes/` viene trovato all'avvio — non c'è niente da
-registrare e niente da ricompilare.
+`Ctrl+Shift+T` passa da un tema all'altro; il menu li offre come elenco. Sette arrivano col
+programma; uno tuo è un blocco `[[theme]]` di nomi di colore in `fcmd.toml`, oppure arriva con
+un plugin, e viene trovato all'avvio — non c'è niente da registrare e niente da ricompilare.
+`fcmd --list-themes` dice quali temi ci sono e da dove arriva ciascuno.
 
 Il tema per default è la tavolozza di FAR, presa dal suo codice e non da uno screenshot.
 

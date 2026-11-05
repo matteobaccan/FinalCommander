@@ -372,24 +372,33 @@ found out later. A test holds the two ends together: every row the list can show
 ## 3. Keymaps
 
 ```toml
-# a [[keymap]] block inside fcmd.toml
+# a [[keymap]] block inside fcmd.toml, put in force by name
+[ui]
+keymap = "mine"
+
 [[keymap]]
 name = "mine"
 inherit = "far"
 # scope: global | panel | viewer | editor | dialog | terminal
-[[bind]]
+[[keymap.bind]]
 keys = ["F5"]                    scope = "panel"   cmd = "file.copy"
-[[bind]]
+[[keymap.bind]]
 keys = ["Ctrl+Shift+P"]          scope = "global"  cmd = "app.palette"
-[[bind]]
+[[keymap.bind]]
 keys = ["F12", "5"]              scope = "panel"   cmd = "file.copy"        # chord fallback
-[[bind]]
+[[keymap.bind]]
 keys = ["Alt+1".."Alt+9"]        scope = "panel"   cmd = "nav.bookmark.go($1)"
-[[bind]]
+[[keymap.bind]]
 keys = ["Ctrl+G"]                scope = "panel"   cmd = "shell.apply_to_selection"
-[[unbind]]
+[[keymap.unbind]]
 keys = ["Ctrl+Q"]                scope = "global"
 ```
+
+Inside `fcmd.toml` the bindings are `[[keymap.bind]]` and `[[keymap.unbind]]`, tables of the
+keymap above them; a bare `[[bind]]` there would be a table of the file's own. The profiles
+shipped in `crates/fcmd-cmd/keymaps/` are files of their own, so theirs are plain `[[bind]]`.
+There is no separate `keymap.toml`: the help and the manual page once named one, and nothing
+ever read it.
 
 Rules: a command may have several bindings; a binding may carry arguments; conflicts are
 reported at load time with the file:line of both bindings; `fcmd --check-keymap` validates and

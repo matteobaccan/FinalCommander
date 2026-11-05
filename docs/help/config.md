@@ -2,15 +2,18 @@
 
 Everything is a file you can read, diff and copy to another machine:
 
-    config.toml     the settings
-    keymap.toml     your own bindings, over the profile
-    session.toml    where the panels were
-    themes/         colour schemes
-    sites.toml      stored connections
+    fcmd.toml          the settings — and your keys, themes, servers, filters and colours
+    fcmd-state.toml    what the program remembers: where the panels were, the histories
+    fcmd-macros.toml   the macros you recorded
+    fcmd-menu.toml     your own F2 menu
+    fcmd-plugins/      plugins
 
-They live where the platform keeps such things — `~/.config/fcmd` on Linux, `Library/
-Application Support` on macOS, `%APPDATA%` on Windows. `fcmd --dump-config` prints the settings
-the program is actually running with, which is the quickest way to see what a key is called.
+They sit side by side in the folder the platform keeps settings in — `~/.config` on Linux,
+`~/Library/Application Support` on macOS, `%APPDATA%` on Windows — or beside the executable,
+when an `fcmd.toml` is there, which is how a copy on a USB stick keeps everything with it.
+`fcmd --paths` says exactly where each one is on this machine, and `fcmd --dump-config` prints
+the settings the program is actually running with, which is the quickest way to see what a key
+is called.
 
 The clock in the top right corner is off until you ask for it, in `F9 → Options → Interface
 settings`: it is the only thing on the screen that changes with nobody pressing anything, so
@@ -52,14 +55,27 @@ twice. `Enter` on a row reads it, `F4` edits it, and a row whose file has gone s
 # Keys
 
 The keymap is a profile plus your changes. Two profiles ship: `far`, which is the default, and
-`mc`. A binding of your own is a line in `keymap.toml`:
+`mc`. Your changes are a keymap of your own in `fcmd.toml`, built on one of the two and named
+in `[ui]`:
 
-    [[bind]]
+    [ui]
+    keymap = "mine"
+
+    [[keymap]]
+    name = "mine"
+    inherit = "far"
+
+    [[keymap.bind]]
     keys = ["Ctrl+D"]
     scope = "panel"
     cmd = "file.delete"
 
-`scope` is where it applies — `global`, `panel`, `viewer`, `editor` or `dialog` — and `cmd` is
+    [[keymap.unbind]]
+    keys = ["Ctrl+Q"]
+    scope = "global"
+
+Each `[[keymap.bind]]` adds or replaces one binding, and `[[keymap.unbind]]` takes one of the
+profile's away. `scope` is where it applies — `global`, `panel`, `viewer`, `editor` or `dialog` — and `cmd` is
 one of the names on the "Commands" page of this help. `fcmd --check-keymap` says whether a
 keymap is sound and names anything bound twice.
 
@@ -79,9 +95,10 @@ table.
 
 # Colours
 
-`Ctrl+Shift+T` steps through the themes; the menu offers them as a list. A theme is a TOML file
-of colour names, and one dropped into `themes/` is found at startup — there is nothing to
-register and nothing to rebuild.
+`Ctrl+Shift+T` steps through the themes; the menu offers them as a list. Seven ship with the
+program; one of your own is a `[[theme]]` block of colour names in `fcmd.toml`, or comes with a
+plugin, and is found at startup — there is nothing to register and nothing to rebuild.
+`fcmd --list-themes` says which themes there are and where each came from.
 
 The default theme is FAR's own palette, taken from its source rather than from a screenshot.
 
