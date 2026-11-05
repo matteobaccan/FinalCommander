@@ -6,6 +6,8 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+## [0.33.0] - 2026-11-05
+
 ### Added
 
 - **Asking an AI** (`ai: question` on the command line). The services are `[[ai]]` blocks in

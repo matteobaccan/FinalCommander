@@ -178,13 +178,19 @@ Nothing needed to continue lives outside the repository; this section is the mem
 
 ## Where the work is right now
 
-**0.32.0 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
+**0.33.0 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
 like every release before it. A push to `main` that touches `CHANGELOG.md` or `Cargo.toml`
 is what makes `tag.yml` fire. The site is published with each release, from its tag. `CHANGELOG.md` is the history, release by release; this section only
 says where things stand.
 
 What the last few were about, newest first:
 
+- **0.33.0** — new things to open as folders: SQLite databases (tables as CSV, `sql:` for a
+  read-only query), JSON files, `.mbox` and `.eml` mail; duplicate files; asking an AI
+  (`ai:`); a Git menu (`Ctrl+Alt+G`); the system log; `.editorconfig`, word completion,
+  a character list and deleting matching lines in the editor; `[drives.panels]` to trim
+  `Alt+F1`; overwrite when the size differs; `--no-save`; and four of FAR's bugs with tests
+  of their own (#1139, #735, #715, #532).
 - **0.32.0** — dialogs, menus and lists drawn as FAR draws them (double frame inset in a grey
   box, a rule above the buttons, the default button in braces); a release check, as a menu
   command and an opt-in daily one; `Ctrl+C` copying and `Enter` with the panels off no longer
