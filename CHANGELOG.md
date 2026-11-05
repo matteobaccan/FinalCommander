@@ -6,6 +6,8 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+## [0.35.0] - 2026-11-05
+
 ### Added
 
 - **Mail on a server, read only** (`imap://`, `imaps://`): the mailboxes are folders and each

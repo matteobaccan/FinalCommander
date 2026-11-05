@@ -178,13 +178,17 @@ Nothing needed to continue lives outside the repository; this section is the mem
 
 ## Where the work is right now
 
-**0.34.0 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
+**0.35.0 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
 like every release before it. A push to `main` that touches `CHANGELOG.md` or `Cargo.toml`
 is what makes `tag.yml` fire. The site is published with each release, from its tag. `CHANGELOG.md` is the history, release by release; this section only
 says where things stand.
 
 What the last few were about, newest first:
 
+- **0.35.0** — IMAP mailboxes as read-only panels (`imap://`, `imaps://`); SSH servers without
+  SFTP served through their shell; the AI services as a list kept like the sessions, with a key
+  asked for once per session when no variable holds it; every drive keeping its current folder
+  as in DOS; a README that says why to switch.
 - **0.34.0** — what an error does chosen before a copy (ask, skip, stop); `Shift+F` in the
   viewer really following a growing file; one file's times onto another in `Ctrl+A`; editor
   replacements kept by name and run again (`Alt+Shift+F7`); masks that look at the path
