@@ -977,6 +977,10 @@ pub struct SiteCfg {
     pub keepalive_secs: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub compress: Option<bool>,
+    /// At most this many kilobytes a second for a copy to or from this site, so a big
+    /// transfer leaves the rest of the line usable. `None` or 0 is as fast as it goes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_kbps: Option<u64>,
     /// `ssh -J`: the one host this site is reached *through*, as `host`, `user@host` or
     /// `user@host:port`. SFTP only — it is an SSH tunnel, and FTP and WebDAV have nothing to
     /// build one out of.
@@ -999,6 +1003,7 @@ impl Default for SiteCfg {
             group: None,
             keepalive_secs: None,
             compress: None,
+            max_kbps: None,
             jump: None,
         }
     }

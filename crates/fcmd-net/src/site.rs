@@ -156,6 +156,8 @@ pub struct Site {
     pub group: Option<String>,
     pub keepalive: Option<Duration>,
     pub compress: bool,
+    /// The cap on a copy's speed to or from this site, in kilobytes a second.
+    pub max_kbps: Option<u64>,
     /// The host to reach this one *through*, where it cannot be reached directly (SPEC 04
     /// §6.3). `None` is the ordinary case: straight at the server.
     pub jump: Option<Jump>,
@@ -176,6 +178,7 @@ impl Site {
             group: None,
             keepalive: Some(Duration::from_secs(30)),
             compress: false,
+            max_kbps: None,
             jump: None,
         }
     }
@@ -340,6 +343,7 @@ impl Site {
             None => site.keepalive,
         };
         site.compress = cfg.compress.unwrap_or(false);
+        site.max_kbps = cfg.max_kbps.filter(|k| *k > 0);
         site.jump = match cfg.jump.as_deref().map(str::trim).filter(|j| !j.is_empty()) {
             None => None,
             // A jump host is an SSH tunnel and nothing else can carry one, so a `jump` on an

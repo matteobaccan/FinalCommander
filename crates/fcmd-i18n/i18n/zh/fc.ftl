@@ -1366,3 +1366,6 @@ replace-tpl-empty = 还没有替换：先按 Ctrl+F7
 
 # Panel settings: a view and a sort per folder (FAR's issue #389)
 opt-remember-view = 每个文件夹记住自己的视图和排序
+
+# Session editor: a cap on a copy's speed to or from the site
+site-max-kbps = 速度限制，KB/s（空：不限）

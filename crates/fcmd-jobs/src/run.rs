@@ -142,6 +142,7 @@ pub fn execute(
         append_all: spec.options.on_conflict == ConflictPolicy::Append,
         skip_all: spec.options.on_conflict == ConflictPolicy::Skip,
         skip_errors: spec.options.on_error == crate::spec::ErrorPolicy::Skip,
+        moved: 0,
         outcome: Outcome::default(),
         dir_meta: Vec::new(),
         kept: Vec::new(),
@@ -258,6 +259,19 @@ struct State {
     kept: Vec<VPath>,
     bytes_since_report: u64,
     started: Instant,
+    /// Bytes moved so far, for the rate limit: only what travelled, not what was skipped.
+    moved: u64,
+}
+
+/// How long to wait so that `moved` bytes in `elapsed` stay at `rate` bytes a second. Zero
+/// when the job is behind; never more than a second at a time, so `Esc` is still heard.
+pub fn throttle_wait(moved: u64, rate: u64, elapsed: std::time::Duration) -> std::time::Duration {
+    if rate == 0 {
+        return std::time::Duration::ZERO;
+    }
+    let due = std::time::Duration::from_secs_f64(moved as f64 / rate as f64);
+    due.saturating_sub(elapsed)
+        .min(std::time::Duration::from_secs(1))
 }
 
 fn unit_belongs_to(unit: &Unit, src: &VPath) -> bool {
@@ -392,10 +406,21 @@ fn attempt(
 
             state.progress.file_bytes_total = *size;
             state.progress.file_bytes_done = 0;
+            let max_rate = spec.options.max_rate;
             let mut tick = |n: u64| {
                 state.progress.bytes_done += n;
                 state.progress.file_bytes_done += n;
                 state.bytes_since_report += n;
+                state.moved += n;
+                if let Some(rate) = max_rate {
+                    loop {
+                        let wait = throttle_wait(state.moved, rate, state.started.elapsed());
+                        if wait.is_zero() || cancel.is_cancelled() {
+                            break;
+                        }
+                        std::thread::sleep(wait);
+                    }
+                }
                 // Inside the file too, and not only once it is done: one file of some
                 // gigabytes is otherwise minutes of a box that says "planning" and a per-file
                 // bar that never moves. The reporter keeps the frames down to what a screen
@@ -1712,6 +1737,52 @@ mod tests {
         let out = run(&spec, &mut Scripted::new(vec![]));
         assert!(out.is_clean(), "{out:?}");
         assert!(dir.path().join("a/b/c").is_dir());
+    }
+
+    #[test]
+    fn the_rate_limit_waits_only_when_ahead() {
+        use std::time::Duration;
+        assert_eq!(
+            throttle_wait(1_000, 1_000, Duration::from_secs(2)),
+            Duration::ZERO
+        );
+        assert_eq!(
+            throttle_wait(3_000, 1_000, Duration::from_secs(1)),
+            Duration::from_secs(1),
+            "two seconds ahead, but never more than one at a time"
+        );
+        let half = throttle_wait(1_500, 1_000, Duration::from_secs(1));
+        assert!(half > Duration::from_millis(450) && half <= Duration::from_millis(500));
+        assert_eq!(throttle_wait(10, 0, Duration::ZERO), Duration::ZERO);
+    }
+
+    #[test]
+    fn a_copy_with_a_rate_limit_takes_its_time() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("big.bin"), vec![7u8; 300 * 1024]).unwrap();
+        std::fs::create_dir(dir.path().join("out")).unwrap();
+        let spec = JobSpec::new(
+            JobKind::Copy,
+            vec![VPath::local(dir.path().join("big.bin"))],
+            Some(VPath::local(dir.path().join("out"))),
+        )
+        .with_options(JobOptions {
+            max_rate: Some(1024 * 1024),
+            buffer: 16 * 1024,
+            ..JobOptions::default()
+        });
+        let started = std::time::Instant::now();
+        let out = run(&spec, &mut Scripted::new(vec![]));
+        assert!(out.is_clean(), "{out:?}");
+        assert!(
+            started.elapsed() >= std::time::Duration::from_millis(200),
+            "300 KiB at 1 MiB/s is not instant: {:?}",
+            started.elapsed()
+        );
+        assert_eq!(
+            std::fs::read(dir.path().join("out/big.bin")).unwrap().len(),
+            300 * 1024
+        );
     }
 
     /// FAR's issue #597: what an error does is chosen before the copy, so a long one left

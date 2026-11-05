@@ -184,6 +184,10 @@ pub struct JobOptions {
     /// Go on with a copy a crash or an error interrupted, from the `.fcmd-part` file it
     /// left (SPEC 03 §3c). On by default: it only ever applies where such a file is there.
     pub resume: bool,
+    /// At most this many bytes a second, over the whole job: a copy to or from a server whose
+    /// site says `max_kbps`, so a big transfer does not take the whole line. `None` is as fast
+    /// as it goes.
+    pub max_rate: Option<u64>,
 }
 
 impl JobOptions {
@@ -213,6 +217,7 @@ impl Default for JobOptions {
             relative_to: None,
             verify: false,
             resume: true,
+            max_rate: None,
         }
     }
 }

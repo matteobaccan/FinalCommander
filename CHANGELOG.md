@@ -23,6 +23,9 @@ Notable changes, newest first. The format follows
 - **A view and a sort per folder**, if you want them: *Each folder keeps its own view and sort*
   in the panel settings (`panel.remember_view`, off by default) gives every folder back the
   view and the sort last chosen in it, and the others what the panel had. FAR's issue #389.
+- **A speed limit per server.** *Speed limit* in a stored session (`max_kbps`) caps a copy to
+  or from that server, in kilobytes a second, so a big upload does not take the whole line; a
+  copy between two capped servers goes at the slower one.
 
 ### Fixed
 

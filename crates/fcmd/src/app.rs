@@ -6312,6 +6312,22 @@ impl App {
         true
     }
 
+    /// The speed a copy between these sources and this destination may go at, in bytes a
+    /// second: the lowest `max_kbps` of the sites at either end, or `None` when no site there
+    /// has one.
+    fn transfer_cap(&self, sources: &[VPath], target: &str) -> Option<u64> {
+        let target = self.resolve_path(target.trim());
+        sources
+            .iter()
+            .chain(std::iter::once(&target))
+            .filter_map(|p| {
+                let key = Site::key_of(p)?;
+                self.sites.iter().find(|s| s.key() == key)?.max_kbps
+            })
+            .min()
+            .map(|kbps| kbps * 1024)
+    }
+
     /// Only the item under the cursor, which is what `Shift+F5`, `Shift+F6` and `Shift+F8`
     /// mean whatever is selected.
     fn cursor_source(&self) -> Vec<VPath> {
@@ -12889,6 +12905,11 @@ impl App {
             filter,
             ..fcmd_jobs::JobOptions::default()
         };
+        // The slowest cap of the servers at either end, when one has `max_kbps`.
+        let options = fcmd_jobs::JobOptions {
+            max_rate: self.transfer_cap(&sources, &raw),
+            ..options
+        };
         self.last_copy = CopyChoices {
             conflict: match conflict.as_str() {
                 "overwrite" => "overwrite",
@@ -15269,6 +15290,12 @@ impl App {
             group: empty_to_none(form.text_value("site.group")),
             keepalive_secs: keepalive,
             compress: Some(form.text_value("site.compress") == "true"),
+            max_kbps: form
+                .text_value("site.max_kbps")
+                .trim()
+                .parse::<u64>()
+                .ok()
+                .filter(|k| *k > 0),
             // A jump host is an SSH tunnel, and its row is on the page that goes grey for
             // every other protocol. Dropping it rather than storing it is what keeps a
             // session that was switched to FTP from being refused over a field the dialog
@@ -32700,6 +32727,27 @@ abcdefghij
         let mut app = app_on_disk(dir);
         app.editor_size = (40, 6);
         app
+    }
+
+    /// A site's `max_kbps` caps a copy to or from it, the slowest end winning.
+    #[test]
+    fn a_copy_to_or_from_a_capped_site_is_given_its_speed() {
+        let mut app = app();
+        let mut slow = Site::new("slow.example");
+        slow.user = "me".into();
+        slow.max_kbps = Some(200);
+        let mut fast = Site::new("fast.example");
+        fast.user = "me".into();
+        app.sites = vec![slow.clone(), fast.clone()];
+        let from_slow = vec![VPath::parse(&format!("{}/a.iso", slow.key()))];
+        assert_eq!(app.transfer_cap(&from_slow, "/tmp"), Some(200 * 1024));
+        let from_fast = vec![VPath::parse(&format!("{}/a.iso", fast.key()))];
+        assert_eq!(app.transfer_cap(&from_fast, "/tmp"), None);
+        assert_eq!(
+            app.transfer_cap(&from_fast, &format!("{}/in/", slow.key())),
+            Some(200 * 1024),
+            "the destination's cap counts too"
+        );
     }
 
     /// FAR's issue #389: with `panel.remember_view` on, a folder keeps the view and the

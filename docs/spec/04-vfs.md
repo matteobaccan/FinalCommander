@@ -253,6 +253,7 @@ charset = "utf-8"
 start_dir = "/srv"
 keepalive = "30s"
 compress = true
+max_kbps = 500              # a copy to or from it goes no faster (JobOptions::max_rate)
 ```
 
 Features: folder grouping, per-site keymap of a start action, host-key verification with a

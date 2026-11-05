@@ -703,6 +703,11 @@ impl Form {
                 t("site-compress"),
                 cfg.compress == Some(true),
             ),
+            Field::text(
+                "site.max_kbps",
+                t("site-max-kbps"),
+                cfg.max_kbps.map(|k| k.to_string()).unwrap_or_default(),
+            ),
             Field::Dim(t("site-env-eol")),
             Field::Dim(t("site-env-utf8")),
             // Directories
@@ -736,19 +741,19 @@ impl Form {
             Page {
                 label: t("site-page-environment"),
                 from: 8,
-                to: 12,
+                to: 13,
                 enabled: true,
             },
             Page {
                 label: t("site-page-directories"),
-                from: 12,
-                to: 14,
+                from: 13,
+                to: 15,
                 enabled: true,
             },
             Page {
                 label: t("site-page-sftp"),
-                from: 14,
-                to: 18,
+                from: 15,
+                to: 19,
                 enabled: sftp,
             },
         ];

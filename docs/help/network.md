@@ -14,6 +14,10 @@ and writing it back on save. The port follows the protocol when the URL does not
 SFTP, 21 for both spellings of FTP — and one server offering `ftp` and `ftps` on port 21 is two
 connections, not one.
 
+A stored session can cap how fast a copy to or from it goes: *Speed limit* in its dialog
+(`max_kbps` in the `[[site]]` block), in kilobytes a second, so a big upload leaves the rest of
+the line usable. A copy between two capped servers goes at the slower of the two.
+
 ## What FTP cannot do, and says so
 
 SFTP is a filesystem; FTP is a file *transfer* protocol, and the difference shows:

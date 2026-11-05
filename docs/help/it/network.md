@@ -14,6 +14,11 @@ portandolo qui e riscrivendolo quando salvi. La porta segue il protocollo quando
 dice — 22 per SFTP, 21 per entrambe le grafie di FTP — e un server che offre `ftp` e `ftps`
 sulla porta 21 è due connessioni, non una.
 
+Una sessione salvata può limitare la velocità di una copia da o verso di essa: *Limite di
+velocità* nel suo dialogo (`max_kbps` nel blocco `[[site]]`), in kilobyte al secondo, così un
+grosso caricamento lascia usabile il resto della linea. Una copia fra due server limitati va
+alla velocità del più lento.
+
 ## Cosa FTP non può fare, e lo dice
 
 SFTP è un filesystem; FTP è un protocollo di *trasferimento* di file, e la differenza si vede:

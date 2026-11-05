@@ -1390,3 +1390,6 @@ replace-tpl-empty = Aún no hay reemplazos: primero Ctrl+F7
 
 # Panel settings: a view and a sort per folder (FAR's issue #389)
 opt-remember-view = Cada carpeta conserva su vista y su orden
+
+# Session editor: a cap on a copy's speed to or from the site
+site-max-kbps = Límite de velocidad, KB/s (vacío: ninguno)
