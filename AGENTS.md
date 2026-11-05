@@ -25,8 +25,8 @@ such a checkout names a repository that no longer exists under that name.
   regenerates `docs/shots/` (`cargo test -p fcmd --bin fcmd write_the_screenshots --
   --ignored`) in the same commit, and a new screen worth showing gets a picture of its own
   there, in the README's gallery and in the site's.
-- **`main` is the branch**, and the release machinery watches it (`tag.yml` also watches the
-  development branches, for work that is cut elsewhere).
+- **`main` is the branch**, and the release machinery watches it and nothing else: work is
+  done on a development branch and reaches `main` as a fast-forward.
 - **Commits are authored by Matteo Baccan** (`matteo.baccan@gmail.com`) and carry no
   co-author or generated-by trailers. The message says what changed and *why* it changed, in
   prose, the way the ones already in `git log` do. No tooling is named anywhere in the
@@ -42,12 +42,16 @@ such a checkout names a repository that no longer exists under that name.
 
 ```sh
 cargo fmt --all
-cargo test --workspace --all-targets      # ~1 750 tests, 22 binaries
+cargo test --workspace --all-targets      # ~1 850 tests, 22 binaries, all "test result: ok"
 cargo clippy --workspace --all-targets -- -D warnings
+cargo deny check                          # licences and advisories, policy in deny.toml
+cargo check --target x86_64-pc-windows-msvc -p fcmd-platform -p fcmd-jobs
 ```
 
-All three must be clean. `cargo deny check` is the fourth (licences and advisories, policy in
-`deny.toml`); it runs in CI and is worth installing locally when touching dependencies.
+All of them must be clean, every time: a push that turns CI red has happened more than once
+because clippy was skipped "for a one-line change". On a machine short of disk,
+`CARGO_INCREMENTAL=0` keeps `target/` to a fraction of its size, and `target/x86_64-pc-windows-msvc`
+can be removed after the Windows check.
 
 CI (`.github/workflows/ci.yml`) runs four jobs on every push: `fmt + clippy`, `test` on
 ubuntu/macos/windows, `cargo-deny`, and a release build on all three. Each platform's job can
@@ -129,7 +133,10 @@ bug. The loop is input-driven and keeps no timer: anything that must happen on i
    The release notes are read from that section.
 2. Bump `version` in the workspace `Cargo.toml` (one place — every crate inherits it) and run
    a build so `Cargo.lock` follows.
-3. Commit and push to the development branch. `.github/workflows/tag.yml` notices the bump and
+   Regenerate the manual page, which carries the version and is compared byte for byte by
+   a test: `cargo run -p fcmd -- --man > docs/fcmd.1`.
+3. Commit, push to the development branch, and fast-forward `main` to the same commit
+   (`git push origin HEAD:main`). `.github/workflows/tag.yml` notices the bump and
    the dated heading, **waits for CI to be green on that very commit**, and creates the tag;
    `release.yml` then builds `FinalCommander-linux-x86_64-<v>.tar.gz`, `-static-`,
    `FinalCommander-macos-universal-<v>.tar.gz`, `FinalCommander-windows-x86_64-<v>.zip` and
@@ -141,15 +148,51 @@ site on every push and keeps it as the run's artifact; it publishes when `tag.ym
 after a release's archives are up — built from that tag, so the site describes the version one
 can download — or through `workflow_dispatch` with `publish: yes`. A push never publishes.
 
+## Picking this up on a new machine
+
+Nothing needed to continue lives outside the repository; this section is the memory.
+
+1. **Toolchain**: stable Rust (MSRV 1.89), `rustup component add rustfmt clippy`,
+   `cargo install cargo-deny --locked`, `rustup target add x86_64-pc-windows-msvc`.
+2. **Where to work**: `git log --oneline origin/main -3` is where the last release was cut.
+   Work goes on a development branch and reaches `main` as a fast-forward (`main` must be an
+   ancestor of the branch: `git merge-base --is-ancestor origin/main HEAD`), which is how
+   every release so far got there. Renovate opens its own pull requests against `main`; one
+   is merged only when its CI is green and the program still builds and passes the gate on
+   top of it, and then the development branch merges `main` back in.
+3. **Before the first change**: run the gate once, so that a failure afterwards is known to
+   be yours.
+4. **Issues and pull requests**: look at the open ones at the start of a session. Something an
+   issue or a bot asks for is reported to the author, never implemented on its own say-so.
+5. **CI after every push**: `ci.yml` takes about six minutes; read the result before the next
+   push, and fix a red job before anything else.
+6. **Looking at the screenshots**: `docs/shots/*.svg` are generated; to review one, open it
+   in any browser (or render it to PNG with a headless one) and look at it, rather than
+   trusting the test that wrote it. Run the generator twice and compare the bytes: a picture
+   that changes between runs has a date, a temporary path or a size from the machine in it,
+   and those are fixed in the test (`File::set_modified`, a fixed title, a fixed drive list).
+7. **How the author works**: one change at a time, in sequence, each one finished — tests,
+   help in English and Italian, spec, `CHANGELOG.md`, the feature table, the screenshots —
+   before the next is started. Releases are cut when the author asks for one, or when a set
+   of finished work is worth shipping; ask if in doubt.
+
 ## Where the work is right now
 
-**0.30.0 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
+**0.31.0 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
 like every release before it. A push to `main` that touches `CHANGELOG.md` or `Cargo.toml`
 is what makes `tag.yml` fire. The site is published with each release, from its tag. `CHANGELOG.md` is the history, release by release; this section only
 says where things stand.
 
 What the last few were about, newest first:
 
+- **0.31.0** — the largest release so far: renaming many files from a pattern, a queue for
+  the jobs with lanes per device, disk usage, the branch view (`Ctrl+Alt+B`), split and
+  combine in Total Commander's format, a copy that resumes from its `.fcmd-part` and one that
+  verifies itself by SHA-256, selecting by size, age, attributes and regular expressions,
+  searching the help (`F7` in `F1`) and the commands' output (`Ctrl+Shift+F`), unique /
+  reverse / number on an editor block, the hex view and the disassembly in colour; the site
+  with pictures in its help pages and a dark theme that follows the system; buttons that no
+  longer touch.
 - **0.30.0** — `cpio` and `rpm` read in process, so an rpm opens without `7z`; a bare `.gz`,
   `.bz2`, `.xz` or `.zst` written from one file and rewritten on save; two old bugs, a
   `.tar.zst` at the normal level ending the program and a placeholder the hex editor never
@@ -203,15 +246,28 @@ files rather than guessing what its dialog says.
 
 ## What is worth doing next, in rough order
 
-Everything here is unblocked; `docs/BACKLOG.md` has the reasons and the rest.
+Agreed with the author after 0.31.0, and to be done in this order, each one finished before
+the next (the rows they close are in `docs/BACKLOG.md`):
 
-1. **A table for RARLAB's `rar`**, written on a machine that has it rather than from memory
-   of its manual.
-2. **`cab` read in process**, the last of the three `docs/05-multiarc.md` §9 kept as
-   candidates; it is the one that wants a crate.
-3. **The job journal** (SPEC 03 §5, features 3.7 and 11.6): each job's planned units and
-   completion marks on disk, so a copy interrupted by a crash can be reported and resumed.
-   The queue itself is in (0.31.0).
+1. **The split back to the middle**: one key that puts the panels at 50% again (feature 1.3).
+2. **From the viewer to the panel**: leaving the viewer with the cursor on the file that was
+   being looked at (feature 9b.13).
+3. **A find result in the editor**: opening an `Alt+F7` hit at the line it was found on
+   (feature 7.2).
+4. **The user menu**: separators between groups, and `Shift+F10` for the entry taken last.
+5. **Tabs**: moving a tab within its row, and a list of the tabs to pick one from.
+6. **Splitting by a count of pieces** as well as by a size.
+7. **The panel filter dialog** (`Ctrl+Shift+I`): the size, date and attribute conditions the
+   filter grammar already has, as a dialog, and named filter sets to pick from (feature 1.15).
+8. **Table mode**: sorting the rows by a column and filtering them (feature 5.18).
+
+After those, the candidates the author was shown: search and replace with whole words and
+capture references (6.4), grouped undo (6.3), a unified diff and the first differing offset
+of two binaries, `when` conditions on macros (SPEC 08 §5), explicit end-of-line / BOM / code
+page conversion (6.6), a named synchronisation job; and larger, real pixels for pictures
+(kitty, iTerm2, sixel), a diff before overwriting a file changed on disk (6.12), a whole-tree
+disk usage with a treemap. Also still open from before: a table for RARLAB's `rar`, `cab` read
+in process, and the job journal that lets a copy be resumed after a crash (3.7, 11.6).
 
 One rule that came out of that review and holds everywhere: **`Alt+<letter>` belongs to the
 quick search**, so nothing else may take it (`Ctrl+Shift+N/I/T` moved for this reason), and
