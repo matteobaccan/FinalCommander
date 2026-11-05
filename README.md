@@ -102,8 +102,12 @@ They cannot show a version of the program that no longer exists.
 
 | | |
 | --- | --- |
-| <img src="docs/shots/viewer.svg" alt="The viewer on a Rust source file" width="420"> | <img src="docs/shots/hex.svg" alt="The same file in the hex view" width="420"> |
+| <img src="docs/shots/viewer.svg" alt="The viewer on a Rust source file" width="420"> | <img src="docs/shots/hex.svg" alt="A small x86-64 program in the viewer's hex view, at its code and its symbol names" width="420"> |
 | **The viewer** (`F3`), in FAR's own colours, with the syntax coloured. | **The hex view** (`F4` in the viewer): offsets, bytes, and the characters beside them. |
+| <img src="docs/shots/disasm.svg" alt="The same program disassembled, with its two functions named from the symbol table" width="420"> | <img src="docs/shots/hexedit.svg" alt="The hex editor with one byte changed and not yet saved" width="420"> |
+| **The disassembler** (`F5` in the viewer): x86-64 in process, each function under its own name, and a call showing where it goes. | **The hex editor** (`F4` on a binary, `Alt+H` in the editor): one byte of `helper` changed from 7 to 42, in its own colour until it is saved, with the old and new value at the bottom. |
+| <img src="docs/shots/picture.svg" alt="A sunset picture drawn with half blocks" width="420"> | <img src="docs/shots/drives.svg" alt="The change drive dialog over the panels" width="420"> |
+| **A picture** (`F3` on a BMP, PNG, JPEG or GIF): two pixels per character cell in half blocks, so it works in any terminal. | **Change drive** (`Alt+F1`): what each one is, its label, its filesystem, its size and what is free, and the plugin panels under them. |
 | <img src="docs/shots/editor.svg" alt="The editor with a marked block" width="420"> | <img src="docs/shots/menu.svg" alt="The Files menu pulled down over the panels" width="420"> |
 | **The editor** (`F4`): a marked block, and the language named in the title bar. | **The menus** (`F9`): each shortcut is read from the keymap in force, and what is not implemented yet is drawn dim and says so when chosen. |
 | <img src="docs/shots/s3.svg" alt="A panel on an S3 bucket" width="420"> | <img src="docs/shots/help.svg" alt="The help system" width="420"> |

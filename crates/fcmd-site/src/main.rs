@@ -308,6 +308,10 @@ fn landing(lang: &Text) -> String {
     for (file, caption) in [
         ("viewer.svg", "F3"),
         ("hex.svg", "F4"),
+        ("disasm.svg", "F5"),
+        ("hexedit.svg", "F4 · hex"),
+        ("picture.svg", "F3 · BMP"),
+        ("drives.svg", "Alt+F1"),
         ("editor.svg", "F4"),
         ("menu.svg", "F9"),
         ("s3.svg", "s3://"),

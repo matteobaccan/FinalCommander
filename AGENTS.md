@@ -21,6 +21,10 @@ such a checkout names a repository that no longer exists under that name.
   A feature is not finished until the spec, the help chapter and `CHANGELOG.md` agree with
   the code, and the row in `docs/02-features.md` carries the right state character — `✓`, or
   `~` with what is left. Prose about what shipped goes in the changelog, not in that table.
+  A change to anything a screenshot shows — a menu item, a help chapter, a dialog — also
+  regenerates `docs/shots/` (`cargo test -p fcmd --bin fcmd write_the_screenshots --
+  --ignored`) in the same commit, and a new screen worth showing gets a picture of its own
+  there, in the README's gallery and in the site's.
 - **`main` is the branch**, and the release machinery watches it (`tag.yml` also watches the
   development branches, for work that is cut elsewhere).
 - **Commits are authored by Matteo Baccan** (`matteo.baccan@gmail.com`) and carry no

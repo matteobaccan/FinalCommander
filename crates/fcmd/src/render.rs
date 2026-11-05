@@ -3615,6 +3615,63 @@ mod tests {
         write("menu", &shot(&mut app, 100, 30));
         press(&mut app, "Esc");
 
+        // ---- Alt+F1, with drives that are the same on every machine ------------------------
+        use crate::drives::{Drive, Kind};
+        let drive =
+            |path: &str, kind, label: &str, fs: &str, dev: &str, total: u64, free: u64| Drive {
+                path: path.into(),
+                kind,
+                label: (!label.is_empty()).then(|| label.into()),
+                fs: (!fs.is_empty()).then(|| fs.into()),
+                device: (!dev.is_empty()).then(|| dev.into()),
+                total: (total > 0).then_some(total),
+                free: (total > 0).then_some(free),
+            };
+        const G: u64 = 1 << 30;
+        let found = vec![
+            drive(
+                "/",
+                Kind::Fixed,
+                "system",
+                "ext4",
+                "/dev/nvme0n1p2",
+                476 * G,
+                211 * G,
+            ),
+            drive("/home/mb", Kind::Home, "", "", "", 0, 0),
+            drive(
+                "/boot/efi",
+                Kind::Fixed,
+                "EFI",
+                "vfat",
+                "/dev/nvme0n1p1",
+                G / 2,
+                G / 3,
+            ),
+            drive(
+                "/media/mb/USB",
+                Kind::Removable,
+                "USB",
+                "exfat",
+                "/dev/sda1",
+                58 * G,
+                41 * G,
+            ),
+            drive(
+                "/mnt/nas",
+                Kind::Network,
+                "",
+                "nfs4",
+                "nas:/volume1",
+                3725 * G,
+                1220 * G,
+            ),
+            drive("/tmp", Kind::Memory, "", "tmpfs", "tmpfs", 16 * G, 15 * G),
+        ];
+        app.mode = Mode::Pick(Box::new(app.drive_pick(0, found)));
+        write("drives", &shot(&mut app, 100, 30));
+        app.mode = Mode::Normal;
+
         // ---- an object storage panel, and a listing that says it is not all of it ----------
         let mut objects = app_with_objects(&when(0));
         write("s3", &shot(&mut objects, 100, 30));
@@ -3624,10 +3681,9 @@ mod tests {
         let _ = std::fs::remove_dir_all(work.parent().expect("a parent"));
         std::fs::create_dir_all(&work).expect("the working directory");
         std::fs::write(work.join("sort.rs"), SAMPLE_SOURCE).expect("the sample");
-        // A small ELF-looking file, for the hex view: the bytes are the point, not the format.
-        let mut bytes: Vec<u8> = b"\x7fELF\x02\x01\x01\x00".to_vec();
-        bytes.extend((0u8..=255).cycle().take(1016));
-        std::fs::write(work.join("binary"), &bytes).expect("the sample");
+        // A real program, small enough to read whole, and a picture: both drawn here.
+        std::fs::write(work.join("square"), sample_elf()).expect("the sample program");
+        std::fs::write(work.join("sunset.bmp"), sample_bmp(96, 52)).expect("the sample image");
         let mut app = app_on_disk(&work);
         app.theme = Theme::builtin("far").expect("the far theme");
         app.cfg.panel.status_line = true;
@@ -3641,8 +3697,6 @@ mod tests {
             press(&mut app, "Down");
         }
         write("viewer", &shot(&mut app, 100, 30));
-        press(&mut app, "F4"); // the viewer's hex mode
-        write("hex", &shot(&mut app, 100, 30));
         press(&mut app, "Esc");
 
         press(&mut app, "F4"); // the editor
@@ -3656,11 +3710,189 @@ mod tests {
         press(&mut app, "Esc");
         press(&mut app, "Esc");
 
+        // ---- a program: the bytes, the disassembly, and the bytes again to change ----------
+        app.panels[0].cursor = app.panels[0]
+            .listing
+            .row_of_name("square")
+            .expect("the program is in the listing");
+        press(&mut app, "F3");
+        while app
+            .mode
+            .viewer()
+            .is_some_and(|v| v.mode != fcmd_view::Mode::Hex)
+        {
+            press(&mut app, "F4");
+        }
+        // Down to the code, where the bytes are worth reading.
+        for _ in 0..30 {
+            press(&mut app, "Down");
+        }
+        write("hex", &shot(&mut app, 100, 30));
+        press(&mut app, "F5"); // the disassembler, from the entry point
+        write("disasm", &shot(&mut app, 100, 30));
+        press(&mut app, "Esc");
+        app.open_hex(&work.join("square"));
+        if let Some(editor) = app.mode.hex_mut() {
+            // `helper` returns 42 instead of 7: one byte changed and not saved yet, which is
+            // what the picture is for.
+            editor.top = 0x1C0;
+            editor.cursor = 0x221;
+            editor.set_byte(0x221, 0x2A);
+        }
+        write("hexedit", &shot(&mut app, 100, 30));
+        app.mode = Mode::Normal;
+
+        // ---- a picture, drawn in half blocks in any terminal -------------------------------
+        app.panels[0].cursor = app.panels[0]
+            .listing
+            .row_of_name("sunset.bmp")
+            .expect("the picture is in the listing");
+        press(&mut app, "F3");
+        write("picture", &shot(&mut app, 100, 30));
+        press(&mut app, "Esc");
+
         // ---- the help, which is half prose and half the live keymap -----------------------
         press(&mut app, "F1");
         write("help", &shot(&mut app, 100, 30));
 
         let _ = std::fs::remove_dir_all(work.parent().expect("a parent"));
+    }
+
+    /// A small x86-64 ELF with two functions and their symbols, for the hex view and the
+    /// disassembler: `square` squares its argument and adds what `helper` returns.
+    fn sample_elf() -> Vec<u8> {
+        let mut f = vec![0u8; 0x440];
+        f[..4].copy_from_slice(b"\x7fELF");
+        f[4] = 2; // ELF64
+        f[5] = 1; // little endian
+        f[6] = 1;
+        f[16..18].copy_from_slice(&2u16.to_le_bytes()); // EXEC
+        f[18..20].copy_from_slice(&0x3Eu16.to_le_bytes()); // x86-64
+        f[20..24].copy_from_slice(&1u32.to_le_bytes());
+        f[24..32].copy_from_slice(&0x401000u64.to_le_bytes()); // e_entry
+        f[32..40].copy_from_slice(&64u64.to_le_bytes()); // e_phoff
+        f[40..48].copy_from_slice(&0x300u64.to_le_bytes()); // e_shoff
+        f[52..54].copy_from_slice(&64u16.to_le_bytes()); // e_ehsize
+        f[54..56].copy_from_slice(&56u16.to_le_bytes()); // e_phentsize
+        f[56..58].copy_from_slice(&1u16.to_le_bytes()); // e_phnum
+        f[58..60].copy_from_slice(&64u16.to_le_bytes()); // e_shentsize
+        f[60..62].copy_from_slice(&5u16.to_le_bytes()); // e_shnum
+        f[62..64].copy_from_slice(&1u16.to_le_bytes()); // e_shstrndx
+                                                        // One PT_LOAD, read and execute, mapping the code at 0x401000.
+        let ph = 64;
+        f[ph..ph + 4].copy_from_slice(&1u32.to_le_bytes());
+        f[ph + 4..ph + 8].copy_from_slice(&5u32.to_le_bytes());
+        f[ph + 8..ph + 16].copy_from_slice(&0x200u64.to_le_bytes());
+        f[ph + 16..ph + 24].copy_from_slice(&0x401000u64.to_le_bytes());
+        f[ph + 24..ph + 32].copy_from_slice(&0x401000u64.to_le_bytes());
+        f[ph + 32..ph + 40].copy_from_slice(&0x40u64.to_le_bytes());
+        f[ph + 40..ph + 48].copy_from_slice(&0x40u64.to_le_bytes());
+        f[ph + 48..ph + 56].copy_from_slice(&0x1000u64.to_le_bytes());
+        // .text at 0x200: square(edi) = edi * edi + helper(), then helper() = 7.
+        let code: &[u8] = &[
+            0x55, // push rbp
+            0x48, 0x89, 0xE5, // mov rbp, rsp
+            0x89, 0x7D, 0xFC, // mov [rbp-4], edi
+            0x8B, 0x45, 0xFC, // mov eax, [rbp-4]
+            0x0F, 0xAF, 0xC0, // imul eax, eax
+            0x89, 0xC2, // mov edx, eax
+            0xE8, 0x0C, 0x00, 0x00, 0x00, // call helper
+            0x01, 0xD0, // add eax, edx
+            0x5D, // pop rbp
+            0xC3, // ret
+            0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, // padding to 0x20
+            0xB8, 0x07, 0x00, 0x00, 0x00, // helper: mov eax, 7
+            0x85, 0xFF, // test edi, edi
+            0x74, 0x02, // je +2
+            0xF7, 0xD8, // neg eax
+            0xC3, // ret
+        ];
+        f[0x200..0x200 + code.len()].copy_from_slice(code);
+        // The names: section names, then symbol names.
+        let shstr = b"\0.shstrtab\0.text\0.symtab\0.strtab\0";
+        f[0x260..0x260 + shstr.len()].copy_from_slice(shstr);
+        let strtab = b"\0square\0helper\0";
+        f[0x290..0x290 + strtab.len()].copy_from_slice(strtab);
+        // .symtab at 0x2a0: the null symbol, then the two functions.
+        let sym = |f: &mut Vec<u8>, at: usize, name: u32, value: u64, size: u64| {
+            f[at..at + 4].copy_from_slice(&name.to_le_bytes());
+            f[at + 4] = 0x12; // global function
+            f[at + 6..at + 8].copy_from_slice(&2u16.to_le_bytes()); // in .text
+            f[at + 8..at + 16].copy_from_slice(&value.to_le_bytes());
+            f[at + 16..at + 24].copy_from_slice(&size.to_le_bytes());
+        };
+        sym(&mut f, 0x2a0 + 24, 1, 0x401000, 0x18);
+        sym(&mut f, 0x2a0 + 48, 8, 0x401020, 0x0c);
+        let sh = |f: &mut Vec<u8>, i: usize, v: [u64; 8]| {
+            let at = 0x300 + i * 64;
+            f[at..at + 4].copy_from_slice(&(v[0] as u32).to_le_bytes());
+            f[at + 4..at + 8].copy_from_slice(&(v[1] as u32).to_le_bytes());
+            f[at + 8..at + 16].copy_from_slice(&v[2].to_le_bytes());
+            f[at + 16..at + 24].copy_from_slice(&v[3].to_le_bytes());
+            f[at + 24..at + 32].copy_from_slice(&v[4].to_le_bytes());
+            f[at + 32..at + 40].copy_from_slice(&v[5].to_le_bytes());
+            f[at + 40..at + 44].copy_from_slice(&(v[6] as u32).to_le_bytes());
+            f[at + 56..at + 64].copy_from_slice(&v[7].to_le_bytes());
+        };
+        // name, type, flags, addr, offset, size, link, entsize
+        sh(&mut f, 1, [1, 3, 0, 0, 0x260, shstr.len() as u64, 0, 0]);
+        sh(&mut f, 2, [11, 1, 6, 0x401000, 0x200, 0x40, 0, 0]);
+        sh(&mut f, 3, [17, 2, 0, 0, 0x2a0, 72, 4, 24]);
+        sh(&mut f, 4, [25, 3, 0, 0, 0x290, strtab.len() as u64, 0, 0]);
+        // sh_info of .symtab: the first global symbol.
+        f[0x300 + 3 * 64 + 44..0x300 + 3 * 64 + 48].copy_from_slice(&1u32.to_le_bytes());
+        f
+    }
+
+    /// A 24-bit BMP drawn here, so the picture needs no file and no encoder: a sky that goes
+    /// from deep blue to orange, a sun, and the sea under it.
+    fn sample_bmp(w: u32, h: u32) -> Vec<u8> {
+        let row = (w * 3).div_ceil(4) * 4;
+        let size = 54 + row * h;
+        let mut b = Vec::with_capacity(size as usize);
+        b.extend_from_slice(b"BM");
+        b.extend_from_slice(&size.to_le_bytes());
+        b.extend_from_slice(&0u32.to_le_bytes());
+        b.extend_from_slice(&54u32.to_le_bytes());
+        b.extend_from_slice(&40u32.to_le_bytes());
+        b.extend_from_slice(&(w as i32).to_le_bytes());
+        b.extend_from_slice(&(h as i32).to_le_bytes()); // bottom-up
+        b.extend_from_slice(&1u16.to_le_bytes());
+        b.extend_from_slice(&24u16.to_le_bytes());
+        b.extend_from_slice(&[0u8; 24]);
+        let horizon = h as f32 * 0.42;
+        for y in 0..h {
+            let fy = y as f32; // 0 is the bottom row
+            for x in 0..w {
+                let fx = x as f32;
+                let (r, g, bl) = if fy < horizon {
+                    // The sea: dark, with the sun's light down the middle.
+                    let glow = (1.0 - ((fx - w as f32 / 2.0).abs() / 14.0)).max(0.0)
+                        * (((fy as u32 + x / 3) % 3 != 0) as u8 as f32);
+                    (
+                        (20.0 + 200.0 * glow) as u8,
+                        (40.0 + 120.0 * glow) as u8,
+                        (90.0 + 40.0 * glow) as u8,
+                    )
+                } else {
+                    let t = (fy - horizon) / (h as f32 - horizon); // 0 at the horizon
+                    let sky = (
+                        (250.0 - 220.0 * t) as u8,
+                        (120.0 - 90.0 * t) as u8,
+                        (40.0 + 110.0 * t) as u8,
+                    );
+                    let (dx, dy) = (fx - w as f32 / 2.0, (fy - horizon - 6.0) * 1.0);
+                    if dx * dx + dy * dy < 110.0 {
+                        (255, 220, 80)
+                    } else {
+                        sky
+                    }
+                };
+                b.extend_from_slice(&[bl, g, r]);
+            }
+            b.extend(std::iter::repeat_n(0u8, (row - w * 3) as usize));
+        }
+        b
     }
 
     /// A panel on a bucket, with a listing the provider cut short — the one picture that shows

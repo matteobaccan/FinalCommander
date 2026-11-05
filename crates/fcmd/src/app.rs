@@ -7244,6 +7244,12 @@ impl App {
     /// it twice a day picks one. Ours are the open connections and the object stores that are
     /// configured.
     fn drive_list(&self, side: usize) -> Pick {
+        self.drive_pick(side, crate::drives::list())
+    }
+
+    /// The dialog for a list of drives the caller found: `drive_list` asks the system, and the
+    /// screenshots hand it fixed ones, so the picture is the same on every machine.
+    pub(crate) fn drive_pick(&self, side: usize, found: Vec<crate::drives::Drive>) -> Pick {
         /// `C:\` and `C:` are the letter `c`; a Unix mount point has no letter and gets none,
         /// because inventing one would make two rows answer to the same key.
         fn drive_letter(path: &str) -> Option<char> {
@@ -7251,11 +7257,10 @@ impl App {
             let letter = chars.next()?;
             (letter.is_ascii_alphabetic() && chars.next() == Some(':')).then_some(letter)
         }
-
         let shown = self.cfg.drives;
         // The kinds the settings say to list at all. FAR has the same three switches, and on
         // Windows they earn their keep: an empty CD drive asked for its label spins up.
-        let mounted: Vec<crate::drives::Drive> = crate::drives::list()
+        let mounted: Vec<crate::drives::Drive> = found
             .into_iter()
             .filter(|drive| match drive.kind {
                 crate::drives::Kind::Removable => shown.show_removable,
