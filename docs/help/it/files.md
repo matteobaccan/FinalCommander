@@ -23,7 +23,11 @@ percorso, premi `Enter`, e niente sotto la prima riga si applica.
 * **Solo i nomi che corrispondono** prende una maschera, così viaggia solo quello che
   corrisponde. Vale per i file e mai per le cartelle, e una cartella viene creata solo quando
   qualcosa sotto di essa ha corrisposto — così `*.rs` tirato fuori da un albero di sorgenti ti
-  dà le cartelle che hanno dentro del Rust e nessun'altra.
+  dà le cartelle che hanno dentro del Rust e nessun'altra. Una maschera con una `/` dentro
+  guarda dove sta un file invece del suo nome: `src/*.rs` prende il Rust sotto una cartella
+  `src`, e `*|*/node_modules/*` prende tutto tranne quello che sta in `node_modules` — una
+  cartella esclusa così non viene neppure letta. Lo stesso vale nel filtro della
+  sincronizzazione.
 * **Copia quello a cui punta un link, non il link** è spento, e deliberatamente: una copia che
   trasformasse i link in copie dei loro obiettivi duplicherebbe un albero la prima volta che ci
   provi.

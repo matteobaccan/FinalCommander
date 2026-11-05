@@ -22,7 +22,10 @@ press `Enter`, and nothing below the first line applies:
 * **Only the names that match** takes a mask, so only what matches travels. It applies to
   files and never to directories, and a directory is only created once something under it has
   matched — so `*.rs` out of a source tree gives you the directories that have Rust in them
-  and no others.
+  and no others. A mask with a `/` in it looks at where a file is rather than at its name:
+  `src/*.rs` takes the Rust under a `src` folder, and `*|*/node_modules/*` takes everything
+  but what is in `node_modules` — a folder left out that way is not even read. The same holds
+  in the synchronisation's filter.
 * **Copy what a link points at, not the link** is off, and deliberately: a copy that turned
   links into copies of their targets would duplicate a tree the first time you tried it.
 * **Keep the times** and **Keep the permissions** are on.

@@ -212,7 +212,7 @@ pub fn plan(fs: &dyn JobFs, spec: &JobSpec, cancel: &CancelToken) -> Result<Plan
                     });
                 }
                 plan.top_level.push((src.clone(), dst.clone()));
-                walk_copy(fs, src, &dst, spec, &mut plan, cancel)?;
+                walk_copy(fs, src, &dst, &src.display_name(), spec, &mut plan, cancel)?;
             }
 
             // A move deletes what it moved, children first, after everything is in place.
@@ -316,10 +316,14 @@ fn contents_of(
     Ok(out)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn walk_copy(
     fs: &dyn JobFs,
     src: &VPath,
     dst: &VPath,
+    // Where `src` is, from the name of what the user selected down: what a path mask in the
+    // filter is matched against (FAR's issue #58).
+    rel: &str,
     spec: &JobSpec,
     plan: &mut Plan,
     cancel: &CancelToken,
@@ -337,9 +341,15 @@ fn walk_copy(
 
     // A mask applies to files, never to directories: `*.rs` means the Rust files under a
     // tree, not the directories whose names happen to end in `.rs`.
-    let wanted = |name: &str| match &spec.options.filter {
-        Some(masks) => masks.matches_name(name),
+    let wanted = |_name: &str| match &spec.options.filter {
+        Some(masks) => masks.matches_path(rel),
         None => true,
+    };
+    // A directory a path mask leaves out is not walked at all: `|*/node_modules/*` should
+    // not read the forty thousand files it is there to skip.
+    let pruned = |rel: &str| match &spec.options.filter {
+        Some(masks) => masks.excludes_dir(rel),
+        None => false,
     };
 
     match facts.kind {
@@ -354,8 +364,20 @@ fn walk_copy(
                 path: src.clone(),
                 source,
             })?;
+            if pruned(rel) {
+                return Ok(());
+            }
             for (name, _) in children {
-                walk_copy(fs, &src.join(&name), &dst.join(&name), spec, plan, cancel)?;
+                let below = format!("{rel}/{}", name.to_string_lossy());
+                walk_copy(
+                    fs,
+                    &src.join(&name),
+                    &dst.join(&name),
+                    &below,
+                    spec,
+                    plan,
+                    cancel,
+                )?;
             }
             if plan.units.len() > at || spec.options.filter.is_none() {
                 plan.units.insert(
@@ -856,6 +878,51 @@ mod tests {
 
     /// A mask means only the matching files travel — and only the directories that have one
     /// of them somewhere under them.
+    /// FAR's issue #58: a mask with a `/` in it is about where a file is. A folder a path
+    /// mask after the `|` leaves out is not even read.
+    #[test]
+    fn a_path_mask_filters_by_where_a_file_is() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("proj");
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::create_dir_all(root.join("node_modules/left-pad")).unwrap();
+        std::fs::create_dir_all(root.join("tests")).unwrap();
+        std::fs::write(root.join("src/main.rs"), b"fn main() {}").unwrap();
+        std::fs::write(root.join("tests/it.rs"), b"#[test] fn t() {}").unwrap();
+        std::fs::write(root.join("node_modules/left-pad/index.js"), b"x").unwrap();
+        std::fs::write(root.join("readme.md"), b"x").unwrap();
+        let names = |mask: &str| -> Vec<String> {
+            let spec = JobSpec::new(
+                JobKind::Copy,
+                vec![VPath::local(&root)],
+                Some(VPath::local(dir.path().join("out"))),
+            )
+            .with_options(JobOptions {
+                filter: Some(fcmd_core::MaskSet::parse(mask).expect("a mask")),
+                ..JobOptions::default()
+            });
+            let plan = plan(&LocalFs, &spec, &CancelToken::new()).expect("it plans");
+            plan.units
+                .iter()
+                .filter(|u| matches!(u.kind, UnitKind::File { .. }))
+                .map(|u| u.dst.display_name())
+                .collect()
+        };
+        let only_src = names("src/*.rs");
+        assert_eq!(
+            only_src,
+            vec!["main.rs".to_string()],
+            "the Rust under src/ only"
+        );
+        let mut no_modules = names("*|*/node_modules/*");
+        no_modules.sort();
+        assert_eq!(no_modules, vec!["it.rs", "main.rs", "readme.md"]);
+        // And a name mask still means the name, at any depth.
+        let mut rust = names("*.rs");
+        rust.sort();
+        assert_eq!(rust, vec!["it.rs", "main.rs"]);
+    }
+
     #[test]
     fn a_filter_takes_the_matching_files_and_the_folders_that_hold_them() {
         let dir = tempfile::tempdir().unwrap();

@@ -61,6 +61,13 @@ source == target; target inside source (recursive copy guard); read-only/hidden/
 name invalid on the target FS (Windows reserved names, trailing dots/spaces, `:` in names,
 length limits, case-insensitive collision) → offered transliteration/truncation with preview.
 
+### 2c. Path masks in the filter
+
+A glob with a `/` (or `\`) in it is matched against the path from the selected item down,
+`/`-separated, or any tail of it that starts after a `/`; every other mask still matches the
+name (FAR's issue #58). A directory that a path mask after the `|` leaves out wholly is not
+read. The synchronisation's filter (§10a) works the same way on the path from the roots.
+
 ### 2b. What an error does (`JobOptions::on_error`)
 
 Chosen in the copy dialog before anything starts (FAR's issue #597): `ask` stops on each error

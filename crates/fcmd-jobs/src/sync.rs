@@ -206,11 +206,14 @@ fn walk(
         let dir = left.as_ref().or(right.as_ref()).is_some_and(Facts::is_dir);
         // A mask applies to files and never to directories, exactly as a copy's does: `*.rs`
         // means the Rust files in the tree, not the directories whose names end in `.rs`.
-        if !dir {
-            if let Some(filter) = &options.filter {
-                if !filter.matches_name(&name) {
-                    continue;
-                }
+        // A mask with a `/` in it looks at the path from the roots down (FAR's issue #58),
+        // and a folder one leaves out after the `|` is not walked.
+        if let Some(filter) = &options.filter {
+            if dir && filter.excludes_dir(&rel) {
+                continue;
+            }
+            if !dir && !filter.matches_path(&rel) {
+                continue;
             }
         }
         progress(&rel, out.len());

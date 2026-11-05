@@ -159,6 +159,36 @@ impl Mask {
         }
     }
 
+    /// A glob with a separator in it is about where a file is, not only what it is called:
+    /// `*/node_modules/*`, `src/*.rs` (FAR's issue #58).
+    fn is_path(&self) -> bool {
+        matches!(self, Mask::Glob(pattern) if pattern.contains(['/', '\\']))
+    }
+
+    /// Match against a path relative to what is being copied, `/`-separated. A path mask
+    /// matches the whole of it or any tail that starts after a `/`, so `.git/*` finds the
+    /// `.git` folder at any depth; any other mask matches the last part, the name.
+    fn matches_rel(&self, rel: &str, case_sensitive: bool) -> bool {
+        if !self.is_path() {
+            let name = rel.rsplit('/').next().unwrap_or(rel);
+            return self.matches(name, case_sensitive);
+        }
+        let Mask::Glob(pattern) = self else {
+            return false;
+        };
+        let pattern = pattern.replace('\\', "/");
+        let mut tail = rel;
+        loop {
+            if glob_match(&pattern, tail, case_sensitive) {
+                return true;
+            }
+            match tail.split_once('/') {
+                Some((_, rest)) => tail = rest,
+                None => return false,
+            }
+        }
+    }
+
     fn source(&self) -> String {
         match self {
             Mask::Glob(pattern) => pattern.clone(),
@@ -308,6 +338,39 @@ impl MaskSet {
 
     pub fn matches(&self, entry: &Entry) -> bool {
         self.matches_name(&entry.name_str())
+    }
+
+    /// Does any mask look at the path rather than the name?
+    pub fn has_path_masks(&self) -> bool {
+        self.include.iter().chain(&self.exclude).any(Mask::is_path)
+    }
+
+    /// Is everything under this folder left out by a path mask after the `|`? Then there is
+    /// no need to read it: `|*/node_modules/*` skips the folder, not forty thousand files.
+    pub fn excludes_dir(&self, rel: &str) -> bool {
+        let inside = format!("{}/\u{1}", rel.trim_start_matches('/'));
+        self.exclude
+            .iter()
+            .any(|m| m.is_path() && m.matches_rel(&inside, self.case_sensitive))
+    }
+
+    /// Match a path relative to what is being copied or packed, its parts joined by `/`:
+    /// the name masks look at the last part and the path masks at the path (FAR's issue
+    /// #58). Without a path mask this is [`MaskSet::matches_name`] on the last part.
+    pub fn matches_path(&self, rel: &str) -> bool {
+        let rel = rel.trim_start_matches('/');
+        if self
+            .exclude
+            .iter()
+            .any(|m| m.matches_rel(rel, self.case_sensitive))
+        {
+            return false;
+        }
+        self.include.is_empty()
+            || self
+                .include
+                .iter()
+                .any(|m| m.matches_rel(rel, self.case_sensitive))
     }
 
     /// The masks after group expansion, as text. The UI shows this when a group is involved
@@ -2030,5 +2093,27 @@ mod tests {
         assert!(f.matches_at(&entry("src", EntryKind::Dir), now));
         assert!(!f.matches_at(&file("a.rs", 1, 0), now));
         assert!(Filter::parse_line("kind:sometimes", &groups).is_err());
+    }
+
+    #[test]
+    fn a_mask_with_a_slash_looks_at_the_path() {
+        let masks = MaskSet::parse("*.rs|*/target/*,.git/*").unwrap();
+        assert!(masks.has_path_masks());
+        assert!(masks.matches_path("proj/src/main.rs"));
+        assert!(!masks.matches_path("proj/target/debug/build.rs"));
+        assert!(
+            !masks.matches_path("proj/.git/hooks/x.rs"),
+            "a tail after any `/`"
+        );
+        assert!(masks.excludes_dir("proj/target"));
+        assert!(!masks.excludes_dir("proj/src"));
+        // Without one, the last part is the name and nothing else changes.
+        let names = MaskSet::parse("*.rs").unwrap();
+        assert!(!names.has_path_masks());
+        assert!(names.matches_path("a/b/c.rs"));
+        assert!(!names.excludes_dir("a/b"));
+        // Backslashes, as Windows users type them, mean the same.
+        let windows = MaskSet::parse("src\\*.rs").unwrap();
+        assert!(windows.matches_path("proj/src/lib.rs"));
     }
 }

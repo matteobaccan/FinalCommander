@@ -17,6 +17,9 @@ Notable changes, newest first. The format follows
 - **Replacements kept and run again** in the editor: `Alt+Shift+F7` lists the replacements kept
   under a name (`[[editor.replace]]`), then the recent ones `Ctrl+F7` ran, for `Enter` to run
   again; `Ins` names a recent one, `Del` forgets a kept one. FAR's issue #282.
+- **Masks that look at the path.** In the copy dialog's and the synchronisation's filter a
+  mask with a `/` in it is matched against where a file is: `src/*.rs`, or `*|*/node_modules/*`
+  to take everything but that folder, which is then not even read. FAR's issue #58.
 
 ### Fixed
 
