@@ -9,7 +9,10 @@ search in the selected items only, use the predicate language (SPEC 02 §5) for 
 
 Execution: a parallel walker (`ignore`-crate-style, respecting `.gitignore` optionally) on the
 rayon pool with a bounded result channel; results stream into a list that is usable while the
-search runs. Actions on results: view, edit, go to the file in the panel, **panelize**
+search runs. Actions on results: view (`F3`) and edit (`F4`) — both where the text was
+found, when the search had text in it: the viewer at that offset, the editor on its line,
+the hex editor on its byte; the offset is the one the search reported with the hit and is kept
+beside the row — go to the file in the panel, **panelize**
 (turn the results into a panel — mc's feature), copy the list, run a job on the whole result
 set, save/load the search.
 

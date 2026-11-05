@@ -249,6 +249,7 @@ fn run_find(
                 id,
                 path: hit.path,
                 entry: Box::new(hit.entry),
+                offset: hit.offset,
             });
         }
         fcmd_find::Event::Scanning(dir) => {

@@ -227,9 +227,11 @@ lo stesso ordine dell'elenco.
 # Trovare le cose
 
 `Alt+F7` cerca i file: una maschera, una dimensione, il testo dentro di essi, e dove guardare. I
-risultati sono un elenco che puoi visualizzare, modificare o su cui saltare — e `F5` trasforma
-tutto il risultato in un pannello, così tutto quello che funziona su una cartella funziona su
-una ricerca.
+risultati sono un elenco che puoi visualizzare (`F3`), modificare (`F4`) o su cui saltare
+(`Invio`) — e `F5` trasforma tutto il risultato in un pannello, così tutto quello che funziona
+su una cartella funziona su una ricerca. Se hai cercato un testo, `F3` e `F4` aprono il file
+dove è stato trovato: il visualizzatore in quel punto, l'editor su quella riga (o su quel
+byte, per un file che si apre in esadecimale).
 
 **Dentro gli archivi** è una casella, e resta spenta finché non la spunti: spuntata, la ricerca
 entra in ogni `.zip`, `.7z` e `.tar.*` che incontra e guarda cosa c'è dentro — per nome, e per

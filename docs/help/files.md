@@ -216,8 +216,10 @@ the panel afterwards, so sorting it by size agrees with the list.
 # Finding things
 
 `Alt+F7` searches for files: a mask, a size, text inside them, and where to look. The results
-are a list you can view, edit or jump to — and `F5` turns the whole result into a panel, so
-anything that works on a directory works on a search.
+are a list you can view (`F3`), edit (`F4`) or jump to (`Enter`) — and `F5` turns the whole
+result into a panel, so anything that works on a directory works on a search. When you
+searched for text, `F3` and `F4` open the file where it was found: the viewer at that place,
+the editor on that line (or on that byte, for a file that opens in hex).
 
 **Inside archives** is a box, and it is off until you tick it: ticked, the search steps into
 every `.zip`, `.7z` and `.tar.*` it meets and looks at what is in them — by name, and by text

@@ -17,6 +17,10 @@ Notable changes, newest first. The format follows
   list, the history or `fcmd --view`, or a panel that moved on — takes the panel to the file's
   own folder, connecting first when it is on a server, with the cursor on the file. A row of
   a list or the branch view is found by its whole path.
+- **A search result opens where the text is.** `F4` on a row of the `Alt+F7` results edits the
+  file on the line the text was found on — on the byte, for a file that opens in hex — and `F3`
+  now opens the viewer at the match rather than at the top. `F4` was not there at all, though
+  the help said the results could be edited.
 
 ## [0.31.0] — 2026-11-05
 

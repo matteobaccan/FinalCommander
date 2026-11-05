@@ -596,6 +596,8 @@ pub enum Event {
         id: u64,
         path: VPath,
         entry: Box<Entry>,
+        /// Where the text was found, for `F3` and `F4` to open the file there.
+        offset: Option<u64>,
     },
     /// Where a search has got to, so the list can say it is still working.
     FindProgress {
@@ -1598,6 +1600,9 @@ pub struct FindView {
     /// What was asked for, for the frame.
     pub label: String,
     pub rows: Vec<(VPath, Entry)>,
+    /// Where in each row's file the text was found, beside `rows` and as long: `None` for a
+    /// search with no text in it, or one for text that is *not* there.
+    pub found_at: Vec<Option<u64>>,
     pub cursor: usize,
     pub top: usize,
     /// The directory being scanned right now, while it is running.
@@ -2542,10 +2547,16 @@ impl App {
             // printed is collected: the wake carries nothing itself.
             Event::Redraw => self.poll_subshell(),
             Event::Input(input) => self.handle_input(input),
-            Event::FindHit { id, path, entry } => {
+            Event::FindHit {
+                id,
+                path,
+                entry,
+                offset,
+            } => {
                 if let Some(view) = self.find_mut() {
                     if view.id == id {
                         view.rows.push((path, *entry));
+                        view.found_at.push(offset);
                     }
                 }
             }
@@ -12658,6 +12669,7 @@ impl App {
             id,
             label,
             rows: Vec::new(),
+            found_at: Vec::new(),
             cursor: 0,
             top: 0,
             scanning: None,
@@ -12724,6 +12736,7 @@ impl App {
             KeyCode::End => self.find_move(rows as isize),
             KeyCode::Enter => self.find_go_to(),
             KeyCode::F(3) => self.find_view_file(),
+            KeyCode::F(4) => self.find_edit_file(),
             KeyCode::F(5) => self.find_panelise(),
             _ => {}
         }
@@ -12766,13 +12779,22 @@ impl App {
         }
     }
 
-    /// `F3`: read the file without leaving the results.
-    fn find_view_file(&mut self) {
-        let chosen = match &self.mode {
-            Mode::Find(view) => view.rows.get(view.cursor).cloned(),
+    /// The row under the cursor of the results, and where its text was found.
+    fn find_chosen(&self) -> Option<(VPath, Entry, Option<u64>)> {
+        match &self.mode {
+            Mode::Find(view) => view.rows.get(view.cursor).map(|(path, entry)| {
+                let at = view.found_at.get(view.cursor).copied().flatten();
+                (path.clone(), entry.clone(), at)
+            }),
             _ => None,
+        }
+    }
+
+    /// `F3`: read the file without leaving the results, at the place the text was found.
+    fn find_view_file(&mut self) {
+        let Some((path, entry, at)) = self.find_chosen() else {
+            return;
         };
-        let Some((path, entry)) = chosen else { return };
         if entry.kind.is_dirlike() {
             return;
         }
@@ -12782,6 +12804,39 @@ impl App {
         }
         let local = path.as_path().to_path_buf();
         self.open_viewer_on(&local, path);
+        if let (Some(at), Some(viewer)) = (at, self.live_viewer_mut()) {
+            viewer.jump(at);
+        }
+    }
+
+    /// `F4`: edit the file, on the line the text was found on — or, for a file that opens
+    /// in hex, on the byte. A file on a server or in an archive opens as `F4` on the panel
+    /// opens it, where a save goes back to where it came from.
+    fn find_edit_file(&mut self) {
+        let Some((path, entry, at)) = self.find_chosen() else {
+            return;
+        };
+        if entry.kind.is_dirlike() {
+            return;
+        }
+        if path.is_remote() || path.in_container() {
+            self.fetch_remote(path, entry.size, Fetched::Edit);
+            return;
+        }
+        self.open_editor_on(&path);
+        let Some(at) = at else { return };
+        let rows = self.rows.saturating_sub(2);
+        match &mut self.mode {
+            Mode::Editor(editor) => {
+                let line = line_at_offset(editor, at);
+                editor.goto(&line.to_string());
+            }
+            Mode::Hex(hex) => {
+                hex.cursor = at.min(hex.len().saturating_sub(1));
+                hex.scroll_into_view(rows);
+            }
+            _ => {}
+        }
     }
 
     /// `F5`: put the results in the panel, which is what makes them worth something — every
@@ -22560,6 +22615,57 @@ mod tests {
         assert_eq!(app.panel().current().unwrap().name_str(), "found.txt");
     }
 
+    /// `F4` on a search result edits the file on the line the text was found on, and `F3`
+    /// reads it from there: the offset the search kept is the whole point of the row.
+    #[test]
+    fn a_search_result_opens_where_the_text_was_found() {
+        let dir = tempfile::tempdir().unwrap();
+        let text: String = (1..=40).map(|n| format!("line {n}\n")).collect();
+        let file = dir.path().join("notes.txt");
+        std::fs::write(&file, &text).unwrap();
+        let at = text.find("line 30").unwrap() as u64;
+        let mut app = app_on_disk(dir.path());
+        let entries =
+            fcmd_vfs::local::list_blocking(&VPath::local(dir.path()), &CancelToken::new())
+                .expect("the test directory");
+        let entry = entries
+            .into_iter()
+            .find(|e| e.name_str() == "notes.txt")
+            .expect("the file");
+        let results = |app: &mut App| {
+            app.mode = Mode::Find(Box::new(FindView {
+                id: 1,
+                label: "line 30".into(),
+                rows: vec![(VPath::local(&file), entry.clone())],
+                found_at: vec![Some(at)],
+                cursor: 0,
+                top: 0,
+                scanning: None,
+                files: 1,
+                dirs: 1,
+                done: true,
+                stopped: false,
+                elapsed: std::time::Duration::ZERO,
+                cancel: CancelToken::new(),
+                problems: Vec::new(),
+            }));
+        };
+
+        results(&mut app);
+        press(&mut app, "F4");
+        let editor = app.mode.editor().expect("the editor opened");
+        assert_eq!(editor.cursor.line, 29, "line 30, counted from one");
+
+        results(&mut app);
+        press(&mut app, "F3");
+        let viewer = app.mode.viewer().expect("the viewer opened");
+        assert!(
+            viewer.top > 0 && viewer.top <= at,
+            "the viewer starts at the match, not at the top: {}",
+            viewer.top
+        );
+    }
+
     // ── replace across files ────────────────────────────────────────────────────────────────
 
     #[test]
@@ -22907,6 +23013,7 @@ mod tests {
                 id,
                 path: VPath::local(format!("/home/mb/{name}")),
                 entry: Box::new(entry(name, fcmd_core::EntryKind::File, 10)),
+                offset: None,
             });
         }
         assert!(matches!(&app.mode, Mode::Find(v) if v.rows.len() == 2));
@@ -22940,6 +23047,7 @@ mod tests {
             id,
             path: VPath::local("/home/mb/deep/one.rs"),
             entry: Box::new(entry("one.rs", fcmd_core::EntryKind::File, 10)),
+            offset: None,
         });
         app.handle_event(Event::FindDone {
             id,
@@ -22973,6 +23081,7 @@ mod tests {
             id,
             path: VPath::local("/home/mb/deep/one.rs"),
             entry: Box::new(entry("one.rs", fcmd_core::EntryKind::File, 10)),
+            offset: None,
         });
         press(&mut app, "Enter");
         assert!(matches!(app.mode, Mode::Normal));

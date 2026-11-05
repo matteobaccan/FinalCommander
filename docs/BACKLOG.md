@@ -56,7 +56,6 @@ says what the decision stands on.
 | Search and replace | `F7`, `Ctrl+F7` | Whole word, capture references in the replacement, FAR's *preserve style*, and a list of every match (feature 6.4). |
 | Encodings | `Shift+F8` | Explicit commands to convert the end of line, the BOM and the code page (feature 6.6). |
 | A file changed underneath | `F2` | A diff of what changed on disk, before choosing to overwrite or reload (feature 6.12). |
-| Search results in the editor | `Alt+F7` | Opening a hit at the line it was found on (feature 7.2). |
 
 ## Command line and history
 
