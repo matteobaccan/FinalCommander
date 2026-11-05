@@ -693,8 +693,12 @@ every background screen that holds some, because the panels cannot otherwise kno
 └────────────────────────────────────────────────────────────────┘
 ```
 
-- Split: vertical (default) or horizontal; ratio draggable and settable (`Ctrl+←/→`), reset
-  with `Ctrl+Alt+=`.
+- Split: vertical (default) or horizontal; ratio draggable and settable (`Ctrl+←/→`); `Ctrl+Alt+R`
+  puts it back to 50% and the height back to full (`panel.layout.reset`). FAR's own keys are
+  `Ctrl+Clear` and `Ctrl+Alt+Clear`, the keypad's 5 with Num Lock off, which a terminal either
+  does not tell apart from `5` or sends as `CSI E`, a sequence the input layer does not read.
+  `Ctrl+Alt+=`, the key first written here, arrives as `Alt+=` in a terminal that has no code
+  for `Ctrl+=`, and `Alt+` is the quick search's.
 - Height: `Ctrl+↑` brings the panels' bottom edge **up** — shorter panels, and the rows they
   give up go to the user screen underneath (`06-tools.md` §7a); `Ctrl+↓` gives them back. The
   command is `panel.height(N)` and its sign is the panels' *height*, which is what the keys

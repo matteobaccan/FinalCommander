@@ -8280,6 +8280,11 @@ impl App {
                 let was = self.cfg.panel.split;
                 self.cfg.panel.split = (was as i32 + by as i32).clamp(10, 90) as u16;
             }
+            Command::PanelLayoutReset => {
+                let start = fcmd_config::PanelCfg::default();
+                self.cfg.panel.split = start.split;
+                self.cfg.panel.height_cut = start.height_cut;
+            }
             Command::PanelHeight(by) => {
                 let was = self.cfg.panel.height_cut as i32;
                 // The step is the panels' height and the setting is what they give up, so the
@@ -21743,6 +21748,22 @@ mod tests {
         press(&mut app, "Ctrl+Down");
         press(&mut app, "Ctrl+Down");
         assert_eq!(app.cfg.panel.height_cut, 0, "and no further");
+    }
+
+    /// `Ctrl+Alt+R` undoes every `Ctrl+arrow` at once: the line back in the middle and the
+    /// rows back to the panels, which is where a fresh configuration starts.
+    #[test]
+    fn one_key_puts_the_panels_back_as_they_started() {
+        let mut app = app();
+        for key in ["Ctrl+Left", "Ctrl+Left", "Ctrl+Left", "Ctrl+Up", "Ctrl+Up"] {
+            press(&mut app, key);
+        }
+        assert_eq!(app.cfg.panel.split, 47);
+        assert_eq!(app.cfg.panel.height_cut, 2);
+        press(&mut app, "Ctrl+Alt+R");
+        let start = fcmd_config::PanelCfg::default();
+        assert_eq!(app.cfg.panel.split, start.split);
+        assert_eq!(app.cfg.panel.height_cut, start.height_cut);
     }
 
     #[test]

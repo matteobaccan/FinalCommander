@@ -105,6 +105,9 @@ impl Command {
                     "give the panels a row back from the command output"
                 }
             }
+            Command::PanelLayoutReset => {
+                "put the line between the panels back in the middle, and their height back"
+            }
             Command::PanelDirsFirst => "directories first, or mixed in with the files",
             Command::PanelSelectedFirst => "the selected files first, or in their own place",
             Command::PanelFilterQuick => "show only the names that match a mask",

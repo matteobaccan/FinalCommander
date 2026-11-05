@@ -100,6 +100,7 @@ Column `FC` = FinalCommander default (profile `far`, our baseline).
 | find in the command output | — | — | — | **Ctrl+Shift+F**, MultiTotal Commander's key; the newest line first, again for the one before |
 | hide inactive panel | Ctrl+P | — | — | Ctrl+P (the focus stays where it is) |
 | panel height / width | Ctrl+↑/↓, Ctrl+←/→ | — | — | Ctrl+↑/↓, Ctrl+←/→ — `Ctrl+↑` brings the panels' bottom edge **up**, so they get shorter and the command output below them gets the rows |
+| panel width / height back to the default | Ctrl+Clear / Ctrl+Alt+Clear | — | — | **Ctrl+Alt+R**, both at once — the keypad's `Clear` does not reach a program through a terminal |
 | toggle hidden files | Ctrl+H | Alt+. (Shift+Alt+H in some builds) | Alt+. | Ctrl+H |
 | short/long names | Ctrl+N | Alt+T (cycle formats) | Alt+Shift+B/D | Ctrl+N |
 | key bar on/off | Ctrl+B | — | — | Ctrl+B |

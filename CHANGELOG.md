@@ -4,6 +4,14 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
+## [Unreleased]
+
+### Added
+
+- **The panels back as they started** (`Ctrl+Alt+R`): the line between them in the middle again
+  and their full height back, in one key, after any number of `Ctrl+←/→/↑/↓`. FAR's keys for
+  it are on the keypad's `Clear`, which does not reach a program through a terminal.
+
 ## [0.31.0] — 2026-11-05
 
 ### Added

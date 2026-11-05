@@ -212,6 +212,7 @@ watch has nothing to report.
 `Ctrl+←` and `Ctrl+→` move the line between the two panels. `Ctrl+↑` brings the panels' bottom
 edge up — they get shorter, and the rows they give up show the output of the last command,
 which is how you watch a build go by without leaving the panels; `Ctrl+↓` gives the rows back.
+`Ctrl+Alt+R` undoes the lot: the line back in the middle and the panels at their full height.
 Both are settings, so `Shift+F9` keeps them.
 
 `Ctrl++` and `Ctrl+−` ask the terminal for a larger or smaller font, and `Ctrl+Alt+0` for the

@@ -186,6 +186,9 @@ pub enum Command {
     /// The sign is the panels' *height*, which is what the keys read as — `Ctrl+Up` brings the
     /// bottom edge up, so the panels get shorter and the output below them gets longer.
     PanelHeight(i8),
+    /// The panels as they were before `Ctrl+←/→/↑/↓`: the line between them back in the middle
+    /// and their full height back — FAR's `Ctrl+Clear` and `Ctrl+Alt+Clear` in one key.
+    PanelLayoutReset,
     /// Directories before files, or mixed in with them (`Shift+F11`, FAR's `Group`).
     PanelDirsFirst,
     /// The selected files first in the order (`Shift+F12`, FAR's `SelUp`).
@@ -564,6 +567,7 @@ impl Command {
             Command::PanelSplit(1),
             Command::PanelHeight(-1),
             Command::PanelHeight(1),
+            Command::PanelLayoutReset,
             Command::PanelDirsFirst,
             Command::PanelSelectedFirst,
             Command::PanelFilterQuick,
@@ -854,6 +858,7 @@ impl Command {
             Command::PanelSortGroups => "panel.sort.groups".into(),
             Command::PanelSplit(by) => format!("panel.split({by})"),
             Command::PanelHeight(by) => format!("panel.height({by})"),
+            Command::PanelLayoutReset => "panel.layout.reset".into(),
             Command::PanelDirsFirst => "panel.dirs.first".into(),
             Command::PanelSelectedFirst => "panel.selected.first".into(),
             Command::PanelFilterQuick => "panel.filter.quick".into(),
@@ -1121,6 +1126,7 @@ impl Command {
             ("panel.sort.groups", _) => Command::PanelSortGroups,
             ("panel.split", Some(a)) => Command::PanelSplit(a.trim().parse().ok()?),
             ("panel.height", Some(a)) => Command::PanelHeight(a.trim().parse().ok()?),
+            ("panel.layout.reset", _) => Command::PanelLayoutReset,
             ("panel.dirs.first", _) => Command::PanelDirsFirst,
             ("panel.selected.first", _) => Command::PanelSelectedFirst,
             ("panel.filter.quick", _) => Command::PanelFilterQuick,

@@ -90,6 +90,15 @@ keys = ["Ctrl+Down"]
 scope = "panel"
 cmd = "panel.height(1)"
 
+# Both back to how they started. FAR's keys for it are `Ctrl+Clear` and `Ctrl+Alt+Clear`, the
+# keypad's 5 with Num Lock off, which a terminal does not tell apart from the 5 or sends as an
+# escape sequence the input layer cannot read; `Ctrl+Alt+=` would arrive as `Alt+=`, which is
+# the quick search's. R for reset, with the two modifiers every terminal can carry on a letter.
+[[bind]]
+keys = ["Ctrl+Alt+R"]
+scope = "panel"
+cmd = "panel.layout.reset"
+
 # Synchronise the two panels' directories. Total Commander's key for this is `Ctrl+Y`, which
 # is FAR's own "clear the command line" and stays that — so one modifier along, and
 # `--check-keymap` is what said so.

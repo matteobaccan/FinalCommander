@@ -47,7 +47,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | --- | --- | --- | --- |
 | 1.1 | Two equal panels, active/passive, `Tab` to switch | NC | ✓ |
 | 1.2 | Panel layouts: side-by-side and stacked (horizontal split) | KRU | M2 |
-| 1.3 | Resizable split, saved per session; restore defaults | FAR | ~ a key that puts the split back to the middle |
+| 1.3 | Resizable split, saved per session; restore defaults | FAR | ✓ `Ctrl+←/→/↑/↓`, the mouse on the rule, and `Ctrl+Alt+R` for both back to the defaults |
 | 1.4 | View modes: brief (multi-column names), medium, full (size/date), wide, detailed, owners, links, custom columns | FAR | ✓ |
 | 1.5 | User-definable column sets (which fields, widths, alignment, formats) | FAR/TC | ✓ |
 | 1.6 | Tabs per panel, named, persisted, lockable, duplicate/move-to-other-side | TC/MTN2 | ~ reordering a tab within its row |

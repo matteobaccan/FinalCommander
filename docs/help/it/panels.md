@@ -225,7 +225,8 @@ server, un archivio, e le volte in cui la sorveglianza non ha niente da riferire
 `Ctrl+←` e `Ctrl+→` spostano la linea fra i due pannelli. `Ctrl+↑` alza il bordo inferiore dei
 pannelli — diventano più corti, e le righe che cedono mostrano l'output dell'ultimo comando,
 che è come si guarda scorrere una compilazione senza lasciare i pannelli; `Ctrl+↓` restituisce
-le righe. Sono entrambe impostazioni, quindi `Shift+F9` le conserva.
+le righe. `Ctrl+Alt+R` rimette tutto com'era: la linea di nuovo a metà e i pannelli alti quanto
+lo schermo. Sono entrambe impostazioni, quindi `Shift+F9` le conserva.
 
 `Ctrl++` e `Ctrl+−` chiedono al terminale un font più grande o più piccolo, e `Ctrl+Alt+0`
 quello iniziale — `Ctrl+0` è la decima vista, come in FAR. Se poi succeda qualcosa è affare del
