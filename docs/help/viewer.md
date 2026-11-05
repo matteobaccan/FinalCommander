@@ -26,7 +26,9 @@ they nudge the whole dump along by a single byte, so a structure that does not b
 multiple of the row width can be read in line instead of diagonally.
 
 `Gray +` and `Gray -` step to the next and previous file of the panel without leaving the
-viewer, and `Ctrl+F10` makes the panel catch up with what you are reading.
+viewer, and `Ctrl+F10` goes back to the panels with the cursor on the file you are reading —
+in the folder the panel shows if it is there, and otherwise in the file's own folder, which is
+where a file opened from a search or from `fcmd --view` takes it.
 
 Three keys give the window to the file. `Ctrl+B` takes the key bar away, `Ctrl+Shift+B` the top
 line with the name and the position, and `Ctrl+S` puts a scrollbar down the right edge — each

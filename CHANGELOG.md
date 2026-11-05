@@ -11,6 +11,12 @@ Notable changes, newest first. The format follows
 - **The panels back as they started** (`Ctrl+Alt+R`): the line between them in the middle again
   and their full height back, in one key, after any number of `Ctrl+←/→/↑/↓`. FAR's keys for
   it are on the keypad's `Clear`, which does not reach a program through a terminal.
+- **From the viewer to the file in the panel** (`Ctrl+F10` in the viewer). It used to move the
+  cursor only when the file was in the folder the panel showed, and left the viewer open. It
+  closes the viewer now, as FAR's does, and a file that is elsewhere — opened from a search, a
+  list, the history or `fcmd --view`, or a panel that moved on — takes the panel to the file's
+  own folder, connecting first when it is on a server, with the cursor on the file. A row of
+  a list or the branch view is found by its whole path.
 
 ## [0.31.0] — 2026-11-05
 

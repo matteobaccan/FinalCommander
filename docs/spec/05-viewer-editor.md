@@ -120,7 +120,9 @@ week, which is why it is a setting and not a rule.
 
 Go to offset / line / percent (`Alt+F8`, `:`), bookmarks 0..9 (set `Ctrl+Shift+N`, go
 `Alt+N`), position undo (`Ctrl+Z`), next/previous file in the panel (`+`/`-`) keeping mode and
-encoding, "jump to this file in the panel" (`Ctrl+F10`), copy selection (`Ctrl+C`) including
+encoding, "jump to this file in the panel" (`Ctrl+F10`: the viewer closes and the cursor is on
+the file — in the panel's folder when a row there is that file by its whole path, otherwise
+in the file's own folder, read first), copy selection (`Ctrl+C`) including
 hex-mode byte ranges.
 
 ### 1.5b Chrome (`Ctrl+B`, `Ctrl+Shift+B`, `Ctrl+S`)

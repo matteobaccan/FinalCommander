@@ -289,7 +289,7 @@ Found by reading FAR's own help and configuration tables; the detail is in
 | 9b.10 | Internal shell commands that need no shell: `cls`, `cd`/`chdir` with a configurable `cd ~`, `chcp`, `set`, nestable `if [not] exist` / `if [not] defined`, `pushd`/`popd`/`clrd`, `title`, `exit` | FAR | ~ `title`, `chcp`, and the nestable `if` |
 | 9b.11 | Autocomplete with four separately switchable sources (filesystem, history, `PATH`, environment), each three-state, as a list or appended inline | FAR | ✓ |
 | 9b.12 | Screen grabber: select any region of the screen, stream or block, extend, move, append to the clipboard | FAR (`Alt+Ins`) | ~ a rectangle, marked from the cursor, copied whole; no stream mode, no appending to what is on the clipboard |
-| 9b.13 | Viewer ⇄ editor at the same position, jump to the open file in the panel, next/previous file of the panel from inside the viewer | FAR (`F6`, `Ctrl+F10`, `Gray ±`) | ~ jumping from the viewer to the file's row in the panel |
+| 9b.13 | Viewer ⇄ editor at the same position, jump to the open file in the panel, next/previous file of the panel from inside the viewer | FAR (`F6`, `Ctrl+F10`, `Gray ±`) | ✓ |
 | 9b.14 | Remember per file: position, code page, view mode, wrap mode, bookmarks | FAR | ✓ |
 | 9b.15 | Sorting collation as three settings — collation (ordinal/invariant/linguistic), digits-as-numbers, case sensitivity — rather than one "natural sort" flag | FAR | M3 |
 | 9b.16 | A searchable settings browser, because the setting count only grows (FAR: 311) | FAR (`far:config`) | ✓ the same feature as 9.8 |

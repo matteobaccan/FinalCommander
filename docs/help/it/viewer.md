@@ -30,7 +30,9 @@ byte, così una struttura che non comincia su un multiplo della larghezza di rig
 riga invece che in diagonale.
 
 `Grigio +` e `Grigio -` passano al file successivo e precedente del pannello senza uscire dal
-visualizzatore, e `Ctrl+F10` fa raggiungere al pannello quello che stai leggendo.
+visualizzatore, e `Ctrl+F10` torna ai pannelli col cursore sul file che stai leggendo — nella
+cartella che il pannello mostra se il file è lì, altrimenti nella cartella del file, che è dove
+porta un file aperto da una ricerca o da `fcmd --view`.
 
 Tre tasti danno la finestra al file. `Ctrl+B` toglie la barra dei tasti, `Ctrl+Shift+B` la riga
 in alto con il nome e la posizione, e `Ctrl+S` mette una barra di scorrimento sul bordo destro

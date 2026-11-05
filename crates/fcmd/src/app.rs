@@ -8886,28 +8886,7 @@ impl App {
             Command::ViewerDecompile if self.mode.viewer().is_some() => self.decompile(),
 
             Command::ViewerQuit => self.leave_screen(),
-            Command::ViewerToPanel if self.mode.viewer().is_some() => {
-                // `Ctrl+F10`: the panel catches up with what is being viewed, which is the
-                // point once `Gray +`/`Gray -` have walked away from where F3 was pressed.
-                let path = self.mode.viewer().map(|v| v.path.clone());
-                if let Some(path) = path {
-                    let name = path.display_name();
-                    let row = self.panel().listing.row_of_name(&name);
-                    match row {
-                        Some(row) => {
-                            self.panel_mut().cursor_to(row);
-                            let msg = self
-                                .i18n
-                                .t_args("viewer-in-panel", &[("name", name.into())]);
-                            self.set_status(msg);
-                        }
-                        None => {
-                            let m = self.i18n.t("viewer-not-in-panel");
-                            self.set_error(m);
-                        }
-                    }
-                }
-            }
+            Command::ViewerToPanel if self.mode.viewer().is_some() => self.viewer_to_panel(),
             Command::ViewerNextFile | Command::ViewerPrevFile if self.mode.viewer().is_some() => {
                 self.viewer_step_file(if cmd == Command::ViewerNextFile {
                     1
@@ -14941,6 +14920,56 @@ impl App {
     /// file — `--view`, `--edit`, `--diff` — there is nothing behind it that anybody asked
     /// for, so the run ends instead. Every exit from those screens goes through here, which
     /// is what keeps the two cases from drifting apart.
+    /// `Ctrl+F10` in the viewer: the panels, with the cursor on the file that was being read.
+    ///
+    /// The point is the file one has walked to with `Gray +` and `Gray -`, or arrived at from a
+    /// search, a list or the command line, rather than the one `F3` was pressed on. A row of the
+    /// panel that *is* that file wins — by its whole path, so a list, a search result and the
+    /// branch view, whose rows are not all in one folder, find it too. Otherwise the panel goes
+    /// to the file's folder, connecting first when that is on a server, and the cursor lands on
+    /// the file once the folder is read. The viewer closes, as FAR's does; started as
+    /// `fcmd --view`, the program stays, since the panels are what was asked for.
+    fn viewer_to_panel(&mut self) {
+        let Some(path) = self.mode.viewer().map(|v| v.path.clone()) else {
+            return;
+        };
+        let want = path.normalised();
+        let row = {
+            let panel = self.panel();
+            (0..panel.listing.len()).find(|&row| {
+                panel
+                    .listing
+                    .row(row)
+                    .is_some_and(|e| panel.path_of(e).normalised() == want)
+            })
+        };
+        self.alone = false;
+        self.mode = Mode::Normal;
+        let name = path.display_name();
+        let msg = self
+            .i18n
+            .t_args("viewer-in-panel", &[("name", name.clone().into())]);
+        match (row, path.parent()) {
+            (Some(row), _) => {
+                self.panel_mut().cursor_to(row);
+                self.scroll();
+            }
+            (None, Some(folder)) => {
+                self.go_to_bookmark(&folder.to_string());
+                let index = self.active;
+                self.panels[index].want_cursor = Some(name);
+            }
+            (None, None) => {
+                let m = self
+                    .i18n
+                    .t_args("viewer-not-in-panel", &[("name", name.into())]);
+                self.set_error(m);
+                return;
+            }
+        }
+        self.set_status(msg);
+    }
+
     fn leave_screen(&mut self) {
         self.mode = Mode::Normal;
         if self.alone {
@@ -22494,6 +22523,41 @@ mod tests {
         app.run(Command::ViewerToPanel);
         assert_eq!(app.panel().current().unwrap().name_str(), viewed);
         assert!(app.status.contains(&viewed), "{}", app.status);
+        assert!(
+            app.mode.viewer().is_none(),
+            "the panels are shown, as in FAR"
+        );
+    }
+
+    /// A file that is not in the folder the panel shows — opened from a search, or the panel
+    /// moved on while it was being read — takes the panel to its own folder, and the cursor
+    /// lands on it once that folder has been read.
+    #[test]
+    fn ctrl_f10_takes_the_panel_to_the_folder_of_a_file_it_is_not_showing() {
+        let dir = tempfile::tempdir().unwrap();
+        let deep = dir.path().join("deep");
+        std::fs::create_dir(&deep).unwrap();
+        std::fs::write(deep.join("a.txt"), b"a\n").unwrap();
+        std::fs::write(deep.join("found.txt"), b"found\n").unwrap();
+        let mut app = app_on_disk(dir.path());
+        let found = deep.join("found.txt");
+        app.open_viewer_on(&found, VPath::local(&found));
+        assert!(app.mode.viewer().is_some(), "the viewer opened");
+
+        app.run(Command::ViewerToPanel);
+        assert!(app.mode.viewer().is_none());
+        assert_eq!(app.panel().cwd, VPath::local(&deep));
+        assert_eq!(app.panel().want_cursor.as_deref(), Some("found.txt"));
+        // The folder arrives, and the cursor is put on the file in it.
+        let entries = fcmd_vfs::local::list_blocking(&VPath::local(&deep), &CancelToken::new())
+            .expect("the folder");
+        let generation = app.panels[app.active].generation;
+        app.handle_event(Event::Listed {
+            panel: app.active,
+            generation,
+            result: Ok(entries),
+        });
+        assert_eq!(app.panel().current().unwrap().name_str(), "found.txt");
     }
 
     // ── replace across files ────────────────────────────────────────────────────────────────

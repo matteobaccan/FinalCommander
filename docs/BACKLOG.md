@@ -51,7 +51,6 @@ says what the decision stands on.
 | Table mode | `F4` in the viewer | Sorting the rows by a column and filtering them (feature 5.18). |
 | Pictures | `F3` on an image | The kitty, iTerm2 and sixel protocols for real pixels where the terminal has them; half blocks stay the fallback (feature 5.22). |
 | Following a branch | `Enter` on a `call` | The jumped-from stack shown on the screen, and a virtual address in `Alt+F8` (feature 5.16). |
-| Viewer to panel | — | Jumping from the viewer to the file's row in the panel (feature 9b.13). |
 | More than one file in the editor | `F4` | Several files open at once, each a screen of its own today through `F12` (feature 6.1). |
 | Undo | `Ctrl+Z` | Grouping a burst of typing into one step, and a depth that can be set (feature 6.3). |
 | Search and replace | `F7`, `Ctrl+F7` | Whole word, capture references in the replacement, FAR's *preserve style*, and a list of every match (feature 6.4). |
