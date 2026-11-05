@@ -97,19 +97,22 @@ in is SPEC 02 §3.
 
 ### 2.2 Files
 
-View, Edit, Edit new file, Copy, Rename or move, Create link, Make folder, Delete, Delete
+View, Edit, Edit new file, Copy, Rename or move, Create link, Rename from a pattern
+(`Ctrl+Shift+F6`, SPEC 03 §8), Undo the last multi-rename, Make folder, Delete, Delete
 permanently, Wipe · Add to archive / Extract files / Archive commands / Test archive ·
-Checksums (§3.9), Check against a list · File attributes (§3.8), Apply command · Select group,
-Unselect group, Invert selection, Select all, Restore selection · Folder size.
+Checksums (§3.9), Write again as (SPEC 03 §13), Check against a list · File attributes (§3.8),
+Apply command, Replace in files · Select group, Unselect group, Invert selection, Select by this
+extension, Unselect by this extension, Select all, Restore selection · Folder size.
 
 ### 2.3 Commands
 
-Find file, Command history, View and edit history, Folders history (§4.4) · Swap panels, Sync
-other panel, Panels on/off, Compare folders, Synchronise folders, Open tunnel, Tunnels, Compare
-by content, View file differences (`Ctrl+Shift+D`, SPEC 05 §3), Compare with setup, Find
-duplicates, Calculator, Terminal · Connections, Disconnect · User menu, File associations,
-Folder shortcuts (§4.4b) · Plugin commands (backlog), Screens list, Record macro, Macros, Task
-list.
+Find file, Command history, View and edit history, Folders history (§4.4), Disk usage
+(`Alt+Shift+F3`, SPEC 06 §12), Jobs (`Alt+Shift+F5`, SPEC 03 §5) · Swap panels, Sync other
+panel, Panels on/off, Compare folders, Synchronise folders, Open a tunnel, Tunnels, Compare by
+content, Panelize a command's output, View through a command, Learn keys, View file
+differences (`Ctrl+Shift+D`, SPEC 05 §3), Compare with options, Find duplicates, Calculator,
+Terminal · Connections, Disconnect · User menu, File associations, Folder shortcuts (§4.4b) ·
+Plugin commands, Screens list, Record a macro, Macros, Task list.
 
 *Task list* is the operating system's processes, as FAR's is — the panel the change-drive
 dialog opens (SPEC 02 §14), with `F3` on a row showing that process's card. This program's own
@@ -300,6 +303,7 @@ The `[editor]` section, which this dialog is the front of:
 | Show spaces and tabs | `editor.show_whitespace` | A space is `·` and a tab is `→` followed by its padding, so trailing space and a mixed indent show |
 | The cursor lands after the text a search found | `editor.cursor_after_match` | The match is selected either way; this is where the cursor goes — the start is for reading, the end for typing over it |
 | The cursor may go past the end of a line | `editor.beyond_eol` | Off, the arrows stop at the last character and `Right` there goes to the next line. On, the columns past the text are somewhere to be, and real spaces appear only when something is typed there. FAR has the same setting, off by default |
+| Take trailing blanks off when saving | `editor.trim_trailing` | Off by default. On, every `F2` takes the spaces and tabs off the end of each line first, the same as `Alt+Shift+T` (SPEC 05 §2), as one undoable change |
 
 `all` is the one with a consequence: expanding what somebody else wrote is a diff nobody asked
 for, so it is not the default and the status line says how many lines it touched when it

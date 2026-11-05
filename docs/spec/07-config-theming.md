@@ -56,7 +56,7 @@ copy_buffer = "auto"
 preserve = ["mtime", "mode"]    # + atime, btime, owner, xattr, acl, hardlinks
 verify = false
 on_conflict = "ask"
-concurrency = { local = 1, remote = 4 }
+concurrency = { local = 1, remote = 4 }   # what the binary reads today is general.job_queue
 delete_to_trash = true
 wipe_passes = 1
 

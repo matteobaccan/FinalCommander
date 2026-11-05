@@ -19,6 +19,9 @@ says what the decision stands on.
 | --- | --- | --- |
 | Tabs per panel | `Ctrl+Alt+T`/`W`/`N`/`P`/`M`/`K` | Reordering a tab within its row, and a list of them to pick from. |
 | Columns from a plugin | `[[column_set]]` | Total Commander's content plugins: a column whose value a plugin computes (an EXIF date, a track's tags). The column grammar is there; a column API for plugins is SPEC 08's next tier. |
+| Split back to the middle | `Ctrl+←/→` | One key that puts the split at 50% again (feature 1.3); today it is stepped back by hand. |
+| Panel filter | `Ctrl+Shift+I` | A dialog for the size, date and attribute conditions the filter grammar already has, and named filter sets to pick from (feature 1.15). |
+| Mounting from the drive list | `Alt+F1` | Mounting, unmounting and ejecting a drive from the dialog, MountMan's job (feature 2.4). |
 
 ## Selection and sorting
 
@@ -41,11 +44,28 @@ says what the decision stands on.
 | Multi-rename | `Ctrl+Shift+F6` | More than one step of undo, exporting a plan and reading one back, more than one search rule, transliteration, a dedup rule, and the `[X]` and `[=meta]` fields. |
 | 7z | `Shift+F1` | Writing an encrypted archive, split volumes, and the codecs only 7-Zip ZS writes (zstd, lz4, brotli). A zip encrypted with AES wants a feature of the `zip` crate we do not build, so it says what it is rather than asking. |
 
+## Viewer and editor
+
+| Item | Where | What is left |
+| --- | --- | --- |
+| Table mode | `F4` in the viewer | Sorting the rows by a column and filtering them (feature 5.18). |
+| Pictures | `F3` on an image | The kitty, iTerm2 and sixel protocols for real pixels where the terminal has them; half blocks stay the fallback (feature 5.22). |
+| Following a branch | `Enter` on a `call` | The jumped-from stack shown on the screen, and a virtual address in `Alt+F8` (feature 5.16). |
+| Viewer to panel | — | Jumping from the viewer to the file's row in the panel (feature 9b.13). |
+| More than one file in the editor | `F4` | Several files open at once, each a screen of its own today through `F12` (feature 6.1). |
+| Undo | `Ctrl+Z` | Grouping a burst of typing into one step, and a depth that can be set (feature 6.3). |
+| Search and replace | `F7`, `Ctrl+F7` | Whole word, capture references in the replacement, FAR's *preserve style*, and a list of every match (feature 6.4). |
+| Encodings | `Shift+F8` | Explicit commands to convert the end of line, the BOM and the code page (feature 6.6). |
+| A file changed underneath | `F2` | A diff of what changed on disk, before choosing to overwrite or reload (feature 6.12). |
+| Search results in the editor | `Alt+F7` | Opening a hit at the line it was found on (feature 7.2). |
+
 ## Command line and history
 
 | Item | Where | What is left |
 | --- | --- | --- |
 | A terminal in a panel | Commands menu | One at a time. Several, as tabs of terminals, wants the pane to own a list rather than one child, which is the same shape the panel tabs already have. |
+| Command prefixes | command line | `clip:` and `link:` of FAR's `farcmds` (feature 9b.9). |
+| Internal commands | command line | `title`, `chcp` and the nestable `if` (feature 9b.10). |
 
 ## Histories and screens
 
@@ -83,6 +103,10 @@ says what the decision stands on.
 | Macro conditions | `Ctrl+.` | SPEC 08 §5. A condition is a named question the application already knows the answer to — is anything selected, is the cursor on a directory, is this panel a real directory or a list, is the command line empty, is this a server — so a `when` field holding a list of those needs no engine, no dependency and no language. What it does need is the *fall-through*, which is half of why FAR has it: a macro on `F5` conditioned on something being selected plays when something is, and when nothing is, `F5` copies as it always did. |
 | The Lua engine | SPEC 08 §2 | **Open question**, and not the same row as the conditions above. far2m's macros are Lua: a dependency to justify, an API surface to draw (what a script may ask and what it may do), and the question of what a script is allowed to do when a recorded macro is already not trusted. FAR's fourteen macro areas are also finer than our five scopes; worth splitting when something needs it. |
 | XLat | — | **Open question** on the key, which nothing has claimed. Transliterate a typed line between keyboard layouts, with tables, rules and flags. Niche outside Cyrillic keyboards, cheap once the tables exist. |
+| More keymap profiles | `--keymap` | `tc`, `nc` and `vi` beside `far` and `mc` (feature 9.2): each wants its conflicts with this program's own keys worked out before it is written. |
+| Text layout | everywhere | Combining marks and truncation that is safe for right-to-left text (feature 9.5). |
+| Session restore | state file | The selection, which is not kept across a restart (feature 9.7). |
+| Moving a dialog | mouse | Dragging a dialog by its frame (feature 9b.17). |
 
 ## Settings not yet in the configuration
 

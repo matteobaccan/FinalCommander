@@ -241,7 +241,8 @@ The dialog shows a live before/after table with collisions marked in red; applyi
 rename plan that handles cycles (`a→b, b→a`) via temporary names, and the plan can be exported
 and re-imported. Undo restores the previous names from the journal.
 
-**What is built** (0.31.0, `fcmd_core::rename` and `fcmd_jobs::rename_all`): every field above
+**What is built** (0.31.0, `file.multirename` on `Ctrl+Shift+F6` and *Files → Rename from a
+pattern*, with `fcmd_core::rename` and `fcmd_jobs::rename_all` behind it): every field above
 but `[X]` and `[=meta]`, one search with its replacement (plain, or a regex with `$1`), the five
 case transforms, the counter with dialog-wide defaults that `[C10,2,3]` overrides, and a
 preview under the dialog's rows that follows every key, rows with a problem first. A problem is
