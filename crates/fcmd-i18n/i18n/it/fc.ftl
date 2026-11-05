@@ -1351,3 +1351,8 @@ git-status-title = Cambiati: { $count }
 git-switch-ready = Invio lo esegue: git switch, sulla riga di comando.
 git-hint = Invio: scegli · Esc: chiudi
 git-branches-hint = Invio: metti git switch sulla riga di comando · Esc: chiudi
+
+## The editor's character list and word completion.
+charmap-title = Caratteri
+charmap-hint = Scrivi per restringere (un carattere o il codice, U+00E9) · Invio: inserisci · Esc: indietro
+editor-no-completion = Nessun'altra parola del file comincia così.

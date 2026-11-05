@@ -1360,3 +1360,8 @@ git-status-title = Changed: { $count }
 git-switch-ready = Enter runs it: git switch, on the command line.
 git-hint = Enter: choose · Esc: close
 git-branches-hint = Enter: put git switch on the command line · Esc: close
+
+## The editor's character list and word completion.
+charmap-title = Characters
+charmap-hint = Type to narrow (a character or its code, U+00E9) · Enter: insert · Esc: back
+editor-no-completion = No other word in the file starts that way.

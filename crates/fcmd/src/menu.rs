@@ -102,6 +102,8 @@ pub enum PickKind {
     Filters,
     /// The git menu (`Ctrl+Alt+G`, SPEC 06 §15): status, log, blame, branches.
     Git,
+    /// Characters to insert into the editor (`Alt+Shift+C`).
+    CharMap,
     /// A repository's branches: `Enter` puts `git switch` for one on the command line.
     GitBranches,
     /// The `[[sort_group]]` bands, in the order they cut the listing (SPEC 02 §4).

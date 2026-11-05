@@ -15,6 +15,11 @@ Notable changes, newest first. The format follows
   how many, how big and the host before anything goes. The answer is a Markdown file in
   `fcmd-ai/` beside the settings, opened in the viewer; `ai:` alone opens that folder as a
   panel of everything asked so far.
+- **Word completion and a character list in the editor.** `Alt+/` finishes the word before the
+  cursor with the nearest word of the file that starts the same way, and again for the next;
+  `Alt+Shift+C` lists accents, dashes, currencies, arrows, mathematics, frame lines and Greek
+  with their codes, narrowed by typing, `Enter` to insert. FAR's EditorCompletion and
+  Character Map.
 - **`.editorconfig` in the editor.** A project's own indentation — spaces or tabs, the width —
   and its trailing-blanks rule win over the settings for the files under it; a new file also
   takes its line ending and final newline. Nearer files and later sections win, as the format

@@ -1326,3 +1326,8 @@ git-status-title = 已改动：{ $count }
 git-switch-ready = 按回车执行：命令行上的 git switch。
 git-hint = 回车：选择 · Esc：关闭
 git-branches-hint = 回车：把 git switch 放到命令行 · Esc：关闭
+
+## The editor's character list and word completion.
+charmap-title = 字符
+charmap-hint = 输入以筛选（字符或代码，如 U+00E9）· 回车：插入 · Esc：返回
+editor-no-completion = 文件中没有其他以此开头的单词。

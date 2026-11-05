@@ -11085,6 +11085,37 @@ impl App {
             .unwrap_or_else(|| std::path::PathBuf::from("fcmd-ai"))
     }
 
+    /// `Alt+Shift+C` in the editor: the characters a keyboard does not have, each with its
+    /// code, so typing `U+20AC` or `€` or `arrow`'s glyph narrows the list.
+    fn open_char_map(&mut self) {
+        const RANGES: [(u32, u32); 9] = [
+            (0x00A0, 0x00FF), // Latin-1: accents, ©, °, ±, ½, ×, ÷
+            (0x2010, 0x2027), // dashes, quotes, bullets, …
+            (0x2030, 0x203A), // ‰, primes, ‹ ›
+            (0x20A0, 0x20BF), // currencies, €
+            (0x2190, 0x21FF), // arrows
+            (0x2200, 0x22FF), // mathematics
+            (0x2500, 0x259F), // box drawing and blocks: FAR's own frames
+            (0x25A0, 0x25FF), // geometric shapes
+            (0x0391, 0x03C9), // Greek
+        ];
+        let rows: Vec<PickRow> = RANGES
+            .iter()
+            .flat_map(|&(a, b)| a..=b)
+            .filter_map(char::from_u32)
+            .filter(|c| !c.is_control())
+            .map(|c| PickRow::plain(format!("{c}   U+{:04X}", c as u32), c.to_string(), false))
+            .collect();
+        self.park_editor();
+        let title = self.i18n.t("charmap-title");
+        self.mode = Mode::Pick(Box::new(Pick::new(
+            PickKind::CharMap,
+            title,
+            rows,
+            self.active,
+        )));
+    }
+
     /// The local folder the git menu works from: the panel's, when it is on this disk.
     fn git_cwd(&self) -> Option<std::path::PathBuf> {
         let cwd = &self.panel().cwd;
@@ -16404,6 +16435,7 @@ impl App {
             PickKind::Filters => return,
             // And `open_git`, which knows the repository; the branches come from the worker.
             PickKind::Git | PickKind::GitBranches => return,
+            PickKind::CharMap => return,
             // And `open_settings`, which knows which row the list was left on.
             PickKind::Settings => return,
             PickKind::Languages => Pick::new(
@@ -16694,6 +16726,10 @@ impl App {
             // And the same for the directory a row that names a file is being chosen from:
             // the row keeps whatever was typed into it.
             // The list of what the help search found goes back to the page it started from.
+            KeyCode::Esc | KeyCode::F(10) if kind == PickKind::CharMap => {
+                self.mode = Mode::Normal;
+                self.restore_editor();
+            }
             KeyCode::Esc | KeyCode::F(10) if kind == PickKind::HelpHits => {
                 self.mode = Mode::Normal;
                 self.help_return();
@@ -17366,6 +17402,15 @@ impl App {
                     cwd,
                     what,
                 });
+            }
+            PickKind::CharMap => {
+                self.restore_editor();
+                if let Some(editor) = self.mode.editor_mut() {
+                    if let Err(e) = editor.insert_text(&row.value) {
+                        let m = e.to_string();
+                        self.set_error(m);
+                    }
+                }
             }
             PickKind::GitBranches => {
                 // Switching is a change to the work tree, so it is put on the line to be read
@@ -18159,6 +18204,10 @@ impl App {
                 self.editor_prompt(PromptKind::EditorGoto, "editor-prompt-goto", String::new());
                 return;
             }
+            Command::EditorCharMap => {
+                self.open_char_map();
+                return;
+            }
             _ => {}
         }
 
@@ -18226,6 +18275,11 @@ impl App {
                 }
                 Command::EditorTrimTrailing => {
                     editor.trim_trailing().map_err(|e| e.to_string())?;
+                }
+                Command::EditorComplete => {
+                    if !editor.complete_word().map_err(|e| e.to_string())? {
+                        return Err("editor-no-completion".into());
+                    }
                 }
                 Command::EditorMoveLineUp => editor.move_line(false).map_err(|e| e.to_string())?,
                 Command::EditorMoveLineDown => editor.move_line(true).map_err(|e| e.to_string())?,
@@ -32144,6 +32198,35 @@ abcdefghij
         let mut app = app_on_disk(dir);
         app.editor_size = (40, 6);
         app
+    }
+
+    /// `Alt+Shift+C` lists characters over the editor; typing narrows by the code, `Enter`
+    /// inserts and gives the editor back, `Esc` gives it back untouched. `Alt+/` completes.
+    #[test]
+    fn the_character_list_inserts_into_the_editor_and_alt_slash_completes() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), "price\npr").unwrap();
+        let mut app = editing_app(dir.path());
+        app.open_editor_on(&VPath::local(dir.path().join("a.txt")));
+        press(&mut app, "Ctrl+End");
+        press(&mut app, "Alt+/");
+        let Mode::Editor(e) = &app.mode else {
+            panic!("the editor")
+        };
+        assert_eq!(e.buffer.line(1), "price");
+        press(&mut app, "Alt+Shift+C");
+        assert!(matches!(&app.mode, Mode::Pick(p) if p.kind == PickKind::CharMap));
+        for c in "20AC".chars() {
+            press(&mut app, &c.to_string());
+        }
+        press(&mut app, "Enter");
+        let Mode::Editor(e) = &app.mode else {
+            panic!("the editor back: {:?}", app.mode)
+        };
+        assert_eq!(e.buffer.line(1), "price€");
+        press(&mut app, "Alt+Shift+C");
+        press(&mut app, "Esc");
+        assert!(matches!(app.mode, Mode::Editor(_)));
     }
 
     /// A project's `.editorconfig` sets the indentation and the trailing blanks for the files

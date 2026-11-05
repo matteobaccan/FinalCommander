@@ -1091,6 +1091,20 @@ keys = ["Alt+Shift+T"]
 scope = "editor"
 cmd = "editor.trim"
 
+# The word before the cursor finished with another word of the file, the nearest first;
+# again for the next one. Emacs' key, and FAR's EditorCompletion without a dictionary.
+[[bind]]
+keys = ["Alt+/"]
+scope = "editor"
+cmd = "editor.complete"
+
+# FAR's Character Map: a list of the characters a keyboard does not have, filtered by typing
+# the character's name of a code (`U+00E9`), `Enter` to insert.
+[[bind]]
+keys = ["Alt+Shift+C"]
+scope = "editor"
+cmd = "editor.charmap"
+
 [[bind]]
 keys = ["Alt+Up"]
 scope = "editor"

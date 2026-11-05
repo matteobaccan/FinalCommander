@@ -211,7 +211,7 @@ something readable rather than only into instructions.
 | 6.5 | Go to `line` or `line:column`, bookmarks 0..9 | FAR | ✓ and `Alt+B` to the matching bracket |
 | 6.6 | Keep the original encoding, EOL, BOM and final newline on save | FAR | ~ explicit conversion commands |
 | 6.7 | Syntax highlighting (tree-sitter), bracket matching, auto-indent, tabs/spaces policy, trailing-space trim | MTN2/NEW | ~ colouring for 25 languages and markups by a scanner of our own rather than tree-sitter, auto-indent, the three tab policies of `editor.tabs`, bracket matching (`Alt+B`), trailing blanks taken off (`Alt+Shift+T`, or at every save with `editor.trim_trailing`) |
-| 6.8 | Insert file name / path / current date, character by code, macros | FAR | M3 |
+| 6.8 | Insert file name / path / current date, character by code, macros | FAR | ~ a character from a list filtered by its code (`Alt+Shift+C`); the name, path and date are not there yet |
 | 6.9 | External editor delegation (`$EDITOR`, per-type associations) | all | ✓ |
 | 6.10 | LSP-lite: completion/diagnostics for the open file (optional plugin) | NEW | M4 |
 | 6.11 | **Atomic save** (`name.fcmd-tmp` + rename, permissions carried over) and a save-as prompt | NEW | ✓ |
@@ -219,6 +219,7 @@ something readable rather than only into instructions.
 | 6.13 | `Shift+F4` edits a new file, saved into the active panel's directory | FAR | ✓ |
 | 6.14 | Line editing: delete, duplicate, move up/down, delete to end of line, delete word left, auto-indent, smart home, tab expansion | FAR | ✓ and on a block: join (`Alt+J`), sort, unique, reverse and number (`Alt+Shift+S/U/R/N`) |
 | 6.15 | `.editorconfig`: indentation, width and trailing-blank trimming per project, line ending and final newline for new files | NEW (every modern editor) | ✓ (SPEC 05 §2.2c) |
+| 6.16 | Word completion from the words of the file, nearest first, cycling (`Alt+/`) | FAR (EditorCompletion)/emacs | ✓ |
 
 ## 7. Tools & dialogs
 

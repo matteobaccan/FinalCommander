@@ -1350,3 +1350,8 @@ git-status-title = Geändert: { $count }
 git-switch-ready = Enter führt es aus: git switch, in der Befehlszeile.
 git-hint = Enter: wählen · Esc: schließen
 git-branches-hint = Enter: git switch in die Befehlszeile · Esc: schließen
+
+## The editor's character list and word completion.
+charmap-title = Zeichen
+charmap-hint = Tippen zum Eingrenzen (Zeichen oder Code, U+00E9) · Enter: einfügen · Esc: zurück
+editor-no-completion = Kein anderes Wort der Datei beginnt so.

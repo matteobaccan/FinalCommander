@@ -92,6 +92,9 @@ pub struct Editor {
     /// What `.editorconfig` said about trailing blanks for this file, which wins over the
     /// setting when it says anything (SPEC 05 §2.9).
     pub trim_on_save: Option<bool>,
+    /// The word completion in progress, so a second `Alt+/` offers the next word instead of
+    /// completing the completion.
+    completion: Option<Completion>,
     /// The next key typed goes in as itself, whatever it means — `Ctrl+Q` armed it. It is how
     /// a control character, or a tab where tabs are expanded, gets into a file at all.
     pub literal_next: bool,
@@ -147,6 +150,7 @@ impl Editor {
             cursor_after_match: false,
             beyond_eol: false,
             trim_on_save: None,
+            completion: None,
             literal_next: false,
             bookmarks: [None; 10],
             clipboard: None,
@@ -377,6 +381,87 @@ impl Editor {
         self.fill_to_cursor()?;
         self.cursor = self.buffer.insert(self.cursor, &ch.to_string())?;
         Ok(())
+    }
+
+    /// `Alt+/`: finish the word before the cursor with another word of the buffer that
+    /// starts the same way — the nearest one first, above or below — and, pressed again
+    /// straight away, the next one instead, then back to what was typed. Emacs' dabbrev and
+    /// FAR's EditorCompletion, without a dictionary: the words are the file's own.
+    pub fn complete_word(&mut self) -> Result<bool, EditorError> {
+        let is_word = |c: char| c.is_alphanumeric() || c == '_';
+        let line_text: Vec<char> = self.buffer.line(self.cursor.line).chars().collect();
+        // Still the same completion? Then the cursor sits right after what was put in.
+        let again = self.completion.as_ref().is_some_and(|c| {
+            c.line == self.cursor.line && c.start + c.shown.chars().count() == self.cursor.col
+        });
+        if !again {
+            let col = self.cursor.col.min(line_text.len());
+            let mut start = col;
+            while start > 0 && is_word(line_text[start - 1]) {
+                start -= 1;
+            }
+            if start == col {
+                return Ok(false);
+            }
+            let prefix: String = line_text[start..col].iter().collect();
+            let mut seen = std::collections::HashSet::new();
+            let mut candidates: Vec<String> = Vec::new();
+            let here = self.cursor.line;
+            let count = self.buffer.len();
+            // The nearest lines first: this one, then one above, one below, and so on out.
+            let mut order = vec![here];
+            for d in 1..count.max(1) {
+                if here >= d {
+                    order.push(here - d);
+                }
+                if here + d < count {
+                    order.push(here + d);
+                }
+            }
+            for l in order {
+                let text = self.buffer.line(l);
+                for word in text.split(|c: char| !is_word(c)) {
+                    if word.len() > prefix.len()
+                        && word.starts_with(prefix.as_str())
+                        && seen.insert(word.to_string())
+                    {
+                        candidates.push(word.to_string());
+                    }
+                }
+                if candidates.len() >= 200 {
+                    break;
+                }
+            }
+            if candidates.is_empty() {
+                return Ok(false);
+            }
+            self.completion = Some(Completion {
+                line: here,
+                start,
+                shown: prefix.clone(),
+                prefix,
+                candidates,
+                next: 0,
+            });
+        }
+        let c = self.completion.as_mut().expect("just set");
+        // The candidates, then the prefix as it was typed, then round again.
+        let pick = if c.next < c.candidates.len() {
+            c.candidates[c.next].clone()
+        } else {
+            c.prefix.clone()
+        };
+        c.next = (c.next + 1) % (c.candidates.len() + 1);
+        let range = Range {
+            start: Position::new(c.line, c.start),
+            end: Position::new(c.line, c.start + c.shown.chars().count()),
+        };
+        c.shown = pick.clone();
+        self.buffer.begin_group(self.cursor);
+        self.buffer.delete(range)?;
+        self.cursor = self.buffer.insert(range.start, &pick)?;
+        self.buffer.end_group(self.cursor);
+        Ok(true)
     }
 
     pub fn insert_text(&mut self, text: &str) -> Result<(), EditorError> {
@@ -1282,10 +1367,45 @@ fn temp_path(path: &Path) -> PathBuf {
     }
 }
 
+/// A word completion between two presses of `Alt+/`.
+#[derive(Debug, Clone)]
+struct Completion {
+    line: usize,
+    /// Where the word starts, in characters.
+    start: usize,
+    /// What was typed before the first press.
+    prefix: String,
+    /// What is in the buffer now, from `start`.
+    shown: String,
+    candidates: Vec<String>,
+    next: usize,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::buffer::Eol;
+
+    #[test]
+    fn alt_slash_completes_with_the_nearest_word_and_cycles() {
+        let mut e = editor("alphabet\nbeta\nal\nalpine almond\n");
+        e.cursor = Position::new(2, 2);
+        assert!(e.complete_word().unwrap());
+        // The nearest line with a word that fits: the one below, then two lines up.
+        assert_eq!(e.buffer.line(2), "alpine");
+        assert_eq!(e.cursor, Position::new(2, 6));
+        e.complete_word().unwrap();
+        assert_eq!(e.buffer.line(2), "almond");
+        e.complete_word().unwrap();
+        assert_eq!(e.buffer.line(2), "alphabet");
+        e.complete_word().unwrap();
+        assert_eq!(e.buffer.line(2), "al", "and back to what was typed");
+        e.cursor = Position::new(1, 4);
+        assert!(
+            !e.complete_word().unwrap(),
+            "beta: nothing longer starts like it"
+        );
+    }
 
     fn editor(text: &str) -> Editor {
         Editor::new(Buffer::from_text(text), None)

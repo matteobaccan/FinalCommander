@@ -113,3 +113,11 @@ the settings: spaces or tabs and how wide (`indent_style`, `indent_size`, `tab_w
 whether trailing blanks go on saving (`trim_trailing_whitespace`). For a new file, its line
 ending and final newline as well (`end_of_line`, `insert_final_newline`); a file that already
 exists keeps the ones it has.
+
+# Finishing a word, and characters you cannot type
+
+`Alt+/` finishes the word before the cursor with another word of the file that starts the same
+way, the nearest one first; press it again for the next one, and after the last you are back to
+what you typed. `Alt+Shift+C` lists the characters a keyboard does not have — accents, dashes
+and quotes, currencies, arrows, mathematics, FAR's frame lines, Greek — each with its code:
+type `U+20AC` or part of it to narrow the list, `Enter` to insert, `Esc` to go back.

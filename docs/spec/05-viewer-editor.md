@@ -653,6 +653,17 @@ What they say wins over the settings for that file only:
 * `charset` is not applied: the code page is detected from the bytes (§2.1), and a file whose
   bytes disagree with its `.editorconfig` is shown as it is.
 
+### 2.2d Completing a word, and the character list
+
+* `Alt+/` (`editor.complete`): the word before the cursor — letters, digits, `_` — finished with
+  a longer word of the buffer that starts with it, the nearest line first (this one, then one
+  above, one below, outwards), each word once. Pressed again with the cursor where the last one
+  left it, the next candidate replaces it; after the last, the prefix as typed comes back. One
+  undo step each. No dictionary: the file is the vocabulary.
+* `Alt+Shift+C` (`editor.charmap`): a list over the editor of Latin-1, punctuation, currencies,
+  arrows, mathematics, box drawing and blocks, geometric shapes and Greek, each row the
+  character and its `U+` code, filtered by typing either. `Enter` inserts at the cursor.
+
 ### 2.2b Syntax highlighting
 
 `fcmd-syntax` is a scanner, not a parser, and deliberately: it knows how a language writes a

@@ -199,6 +199,8 @@ indistinguishable in a TTY — see §9.
 | search / replace | F7 / Ctrl+F7 | F7 / F4 | F7 / Ctrl+F7 |
 | search next / previous | Shift+F7 / Alt+F7 | F17 (Shift+F7) | n / N, Shift+F7 |
 | go to line:col | Alt+F8 | Alt+L | Alt+F8, `:` |
+| complete the word from the file | — (EditorCompletion plugin) | — | **Alt+/**, again for the next word |
+| insert a character from a list | — (Character Map plugin) | — | **Alt+Shift+C** |
 | undo / redo | Alt+Backspace, Ctrl+Z / Ctrl+Shift+Z | Ctrl+U | Ctrl+Z / Ctrl+Y, Ctrl+Shift+Z |
 | select block | Shift+arrows, Ctrl+Shift+arrows | F3 marks | Shift+arrows |
 | **column (vertical) block** | Alt+arrows, Alt+Shift+arrows | — | Alt+Shift+arrows |

@@ -317,6 +317,8 @@ impl Command {
             Command::EditorReverseLines => "the lines of the block in the opposite order",
             Command::EditorNumberLines => "number the lines of the block from 1",
             Command::EditorTrimTrailing => "take the blanks off the end of every line",
+            Command::EditorComplete => "finish the word with another one in the file",
+            Command::EditorCharMap => "a character to insert, from a list",
             Command::EditorMoveLineUp => "move this line up",
             Command::EditorMoveLineDown => "move this line down",
             Command::EditorIndent => "indent the block",

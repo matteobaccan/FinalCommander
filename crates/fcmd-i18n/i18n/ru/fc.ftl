@@ -1350,3 +1350,8 @@ git-status-title = Изменено: { $count }
 git-switch-ready = Enter выполнит: git switch в командной строке.
 git-hint = Enter: выбрать · Esc: закрыть
 git-branches-hint = Enter: git switch в командную строку · Esc: закрыть
+
+## The editor's character list and word completion.
+charmap-title = Символы
+charmap-hint = Печатайте для отбора (символ или код, U+00E9) · Enter: вставить · Esc: назад
+editor-no-completion = Ни одно другое слово файла так не начинается.

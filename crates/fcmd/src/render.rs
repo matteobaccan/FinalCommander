@@ -1095,6 +1095,7 @@ fn draw_pick(
         crate::menu::PickKind::Highlight => "hl-hint",
         crate::menu::PickKind::Filters => "filter-hint",
         crate::menu::PickKind::Git => "git-hint",
+        crate::menu::PickKind::CharMap => "charmap-hint",
         crate::menu::PickKind::GitBranches => "git-branches-hint",
         crate::menu::PickKind::Jobs => "jobs-hint",
         // A history has three keys of its own, and a footer that does not name them is a

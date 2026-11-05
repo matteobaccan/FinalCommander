@@ -1350,3 +1350,8 @@ git-status-title = Modifiés : { $count }
 git-switch-ready = Entrée l'exécute : git switch, sur la ligne de commande.
 git-hint = Entrée : choisir · Échap : fermer
 git-branches-hint = Entrée : git switch sur la ligne de commande · Échap : fermer
+
+## The editor's character list and word completion.
+charmap-title = Caractères
+charmap-hint = Tapez pour filtrer (un caractère ou son code, U+00E9) · Entrée : insérer · Échap : retour
+editor-no-completion = Aucun autre mot du fichier ne commence ainsi.

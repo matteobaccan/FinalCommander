@@ -120,3 +120,12 @@ sulle impostazioni: spazi o tabulazioni e quanto larghi (`indent_style`, `indent
 `tab_width`), e se togliere gli spazi in coda al salvataggio (`trim_trailing_whitespace`). Per
 un file nuovo anche il fine riga e l'a-capo finale (`end_of_line`, `insert_final_newline`); un
 file che esiste già tiene quelli che ha.
+
+# Finire una parola, e i caratteri che non si possono digitare
+
+`Alt+/` finisce la parola prima del cursore con un'altra parola del file che comincia allo
+stesso modo, prima la più vicina; ripremilo per la successiva, e dopo l'ultima torni a quello
+che avevi scritto. `Alt+Shift+C` elenca i caratteri che la tastiera non ha — accenti, trattini e
+virgolette, valute, frecce, matematica, le linee delle cornici di FAR, il greco — ognuno col suo
+codice: scrivi `U+20AC` o una parte per restringere la lista, `Invio` per inserire, `Esc` per
+tornare indietro.
