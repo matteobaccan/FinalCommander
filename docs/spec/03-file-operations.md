@@ -72,12 +72,32 @@ length limits, case-insensitive collision) → offered transliteration/truncatio
 | Symlinks | copy as link (default), follow, or ask; relative links rewritten when the target moves inside the copied tree (option) |
 | Hard links | links inside one job preserved (inode map) when `preserve_hardlinks = true` |
 | Verify | **Shipped (0.31.0)** as *Read every file back and compare it* in the copy dialog (`JobOptions::verify`): after each file, both sides are read again and compared by SHA-256, the hash already in the tree for checksums, rather than blake3, which would be a dependency for one option. A copy that differs is removed and reported as that file's error; a move deletes its source only after its copy compared the same. A side that cannot be read a chunk at a time — a server, a bucket, an entry in an archive — leaves the copy standing and counted as *not verified*, which the summary says |
-| Interruption | partial target removed (default) or kept for resume; never left under the final name — write to `name.fcmd-part` then atomic rename |
+| Interruption | never left under the final name — written to `name.fcmd-part`, then renamed into place. `Esc` removes the part; a failure or a crash leaves it, and the next copy of the same file goes on from it (§3c) |
 | Permissions | target dir not writable → decision point with an "elevate" action (SPEC 06 §7) |
 
 Move: same-filesystem → `rename`; otherwise copy+verify+delete, and the delete step only runs
 after a successful verify. A cross-device Move that fails halfway leaves every file either at
 the source or fully at the target — never both-partial.
+
+### 3c. Going on with an interrupted copy (`JobOptions::resume`, shipped 0.31.0)
+
+A file is written as `name.fcmd-part` and renamed only when it is whole, so an interrupted copy
+leaves exactly one thing behind: the part. `Esc` is the user's own stop and takes it away. A
+failure — a read or a write that failed, a disk that filled — and a crash or a kill leave it,
+and the next copy of the same file to the same place **goes on from it**: the bytes already
+there are reported at once, the source is read from that offset, and the rest is appended.
+
+The part is trusted only when it is no longer than the source and its last 64 KiB (or all of
+it, when shorter) are the source's bytes at the same offset. A part left by another file of the
+same name, or by an older version of this one, fails that and is written over. Checking the end
+rather than every byte is what makes resuming cheap; *Read every file back and compare it*
+(the verify box) reads the whole file when that is wanted. On by default, because it only ever
+applies where a part is there; the system's copy routine (§3b) is not used for a file being
+continued, because it copies whole files. The queue's `F5` retry (§5) therefore goes on with a
+large file that failed rather than starting it again.
+
+Local files only for now: a server or a bucket copies through its own provider, which writes
+its own way (SFTP's resumable reads and FTP's `REST` are backlog lines of SPEC 04 §6).
 
 ### 3b. The system's own copy routine (`general.system_copy`, shipped 0.18.0)
 

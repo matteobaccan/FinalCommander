@@ -24,6 +24,12 @@ percorso, premi `Enter`, e niente sotto la prima riga si applica.
   trasformasse i link in copie dei loro obiettivi duplicherebbe un albero la prima volta che ci
   provi.
 * **Conserva gli orari** e **Conserva i permessi** sono accesi.
+* Una copia interrotta riprende da dove si era fermata. Un file viene scritto come
+  `nome.fcmd-part` finché non è completo; `Esc` lo toglie, ma un errore, un crash o il programma
+  chiuso a forza lo lasciano, e copiare di nuovo lo stesso file nello stesso posto continua da
+  lì — dopo aver controllato che i suoi ultimi byte siano quelli dell'origine, così un parziale
+  lasciato da un altro file viene riscritto. È anche quello che fa `F5` nella lista dei job per
+  un file grosso che ha fallito. Per ora solo file locali.
 * **Rileggi ogni file e confrontalo** è spento. Acceso, ogni file viene riletto da entrambe le
   parti dopo la copia e confrontato con SHA-256: una copia diversa viene tolta e segnalata, e
   uno spostamento toglie l'originale solo dopo che la sua copia è risultata uguale. Il

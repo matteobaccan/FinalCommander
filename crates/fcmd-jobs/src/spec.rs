@@ -164,6 +164,9 @@ pub struct JobOptions {
     /// copy counts as done — and before a move deletes the original. A copy that differs is
     /// deleted and reported as an error. Off by default: it reads everything twice.
     pub verify: bool,
+    /// Go on with a copy a crash or an error interrupted, from the `.fcmd-part` file it
+    /// left (SPEC 03 §3c). On by default: it only ever applies where such a file is there.
+    pub resume: bool,
 }
 
 impl JobOptions {
@@ -172,6 +175,7 @@ impl JobOptions {
         crate::fs::CopyHow {
             buffer: self.buffer,
             system: self.system_copy,
+            resume: self.resume,
         }
     }
 }
@@ -190,6 +194,7 @@ impl Default for JobOptions {
             contents: false,
             relative_to: None,
             verify: false,
+            resume: true,
         }
     }
 }

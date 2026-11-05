@@ -272,6 +272,10 @@ pub struct CopyHow {
     /// May the kernel make the copy (`copy_file_range`, `fcopyfile`, `CopyFileExW`)? Off by
     /// default, and only ever true for a local file: a provider moves its own bytes.
     pub system: bool,
+    /// May a copy that was interrupted go on from where it stopped? A `.fcmd-part` file left
+    /// at the destination by a crash or a failed copy is continued rather than written
+    /// again, when its last bytes are the source's at the same place (SPEC 03 §3c).
+    pub resume: bool,
 }
 
 impl CopyHow {
@@ -280,6 +284,7 @@ impl CopyHow {
         CopyHow {
             buffer,
             system: false,
+            resume: false,
         }
     }
 }
@@ -535,7 +540,8 @@ impl JobFs for LocalFs {
         // the times, the rename into place — is unchanged; and when the platform declines it
         // answers `None` and the loop below does the work, which is why there is no second
         // code path for "it did not work".
-        if how.system {
+        // A part to go on from is this loop's job: the kernel's routine copies whole files.
+        if how.system && !(how.resume && fs::metadata(part.os()).is_ok()) {
             let (from, to) = (src.os(), part.os());
             match fcmd_platform::system_copy(&from, &to, how.buffer, on_bytes) {
                 Ok(Some(total)) => {
@@ -553,9 +559,30 @@ impl JobFs for LocalFs {
             }
         }
         let mut reader = File::open(src.os())?;
-        let mut writer = File::create(part.os())?;
         let mut buf = vec![0u8; how.buffer.clamp(16 * 1024, 8 * 1024 * 1024)];
-        let mut total = 0u64;
+        // What an earlier, interrupted copy already wrote, when it can be trusted to be the
+        // start of this same source: then the copy goes on from there.
+        let resumed = if how.resume {
+            resumable(&mut reader, &part)?
+        } else {
+            0
+        };
+        let mut writer = if resumed > 0 {
+            File::options().append(true).open(part.os())?
+        } else {
+            File::create(part.os())?
+        };
+        let mut total = resumed;
+        if resumed > 0 && !on_bytes(resumed) {
+            return Err(io::Error::new(io::ErrorKind::Interrupted, "cancelled"));
+        }
+        // A failure that is not the user's `Esc` leaves the part where it is, so the next
+        // attempt goes on from it; with resuming off it is removed as it always was.
+        let give_up = |part: &VPath| {
+            if !how.resume {
+                let _ = fs::remove_file(part.os());
+            }
+        };
 
         loop {
             let read = match reader.read(&mut buf) {
@@ -564,13 +591,13 @@ impl JobFs for LocalFs {
                 Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
                 Err(e) => {
                     drop(writer);
-                    let _ = fs::remove_file(part.os());
+                    give_up(&part);
                     return Err(e);
                 }
             };
             if let Err(e) = writer.write_all(&buf[..read]) {
                 drop(writer);
-                let _ = fs::remove_file(part.os());
+                give_up(&part);
                 return Err(e);
             }
             total += read as u64;
@@ -780,6 +807,42 @@ impl JobFs for LocalFs {
 fn flush_and_sync(writer: &mut io::BufWriter<File>) -> io::Result<()> {
     writer.flush()?;
     writer.get_ref().sync_all()
+}
+
+/// How many bytes of `part` — what an interrupted copy left — this copy may keep, with
+/// `reader` positioned just after them. Zero means start again.
+///
+/// Kept only when the part is no longer than the source and its last 64 KiB (or all of it,
+/// when shorter) are the source's bytes at the same offset: a part left by a different file
+/// of the same name, or by an older version of this one, fails that and is written over. It
+/// is a check on the end and not on every byte, which is what makes resuming cheap; the
+/// copy's own verify (`JobOptions::verify`) reads the whole file when that is wanted.
+fn resumable(reader: &mut File, part: &VPath) -> io::Result<u64> {
+    use std::io::{Seek, SeekFrom};
+    const TAIL: u64 = 64 * 1024;
+    let Ok(meta) = fs::metadata(part.os()) else {
+        return Ok(0);
+    };
+    let have = meta.len();
+    let source = reader.metadata()?.len();
+    if have == 0 || have > source {
+        return Ok(0);
+    }
+    let from = have.saturating_sub(TAIL);
+    let len = (have - from) as usize;
+    let mut ours = vec![0u8; len];
+    let mut theirs = vec![0u8; len];
+    let mut written = File::open(part.os())?;
+    written.seek(SeekFrom::Start(from))?;
+    written.read_exact(&mut ours)?;
+    reader.seek(SeekFrom::Start(from))?;
+    reader.read_exact(&mut theirs)?;
+    if ours != theirs {
+        reader.seek(SeekFrom::Start(0))?;
+        return Ok(0);
+    }
+    // `reader` is now at `have`, exactly where the copy goes on.
+    Ok(have)
 }
 
 /// Clear the read-only bit, best effort. A file the user told us to delete or wipe has to go
@@ -1014,6 +1077,76 @@ mod tests {
         assert!(!file.exists(), "it is no longer where it was");
     }
 
+    fn resuming(buffer: usize) -> CopyHow {
+        CopyHow {
+            buffer,
+            system: false,
+            resume: true,
+        }
+    }
+
+    /// A part an interrupted copy left, whose end is the source's at the same place, is gone
+    /// on from: the bytes before it are not read again, and the file that arrives is whole.
+    #[test]
+    fn an_interrupted_copy_goes_on_from_the_part_it_left() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = VPath::local(dir.path().join("big.bin"));
+        let dst = VPath::local(dir.path().join("copy.bin"));
+        let body: Vec<u8> = (0..300_000u32).map(|i| (i % 251) as u8).collect();
+        fs::write(src.as_path(), &body).unwrap();
+        fs::write(part_path(&dst).as_path(), &body[..100_000]).unwrap();
+
+        let mut reports = Vec::new();
+        let total = LocalFs
+            .copy_file(&src, &dst, resuming(16 * 1024), &mut |n| {
+                reports.push(n);
+                true
+            })
+            .unwrap();
+        assert_eq!(total, 300_000);
+        assert_eq!(
+            reports[0], 100_000,
+            "what was already there is reported at once"
+        );
+        assert_eq!(reports.iter().sum::<u64>(), 300_000);
+        assert_eq!(fs::read(dst.as_path()).unwrap(), body);
+        assert!(!LocalFs.exists(&part_path(&dst)));
+    }
+
+    /// A part that is not this source's beginning — another file of the same name, an older
+    /// version — and one longer than the source are written over, not continued.
+    #[test]
+    fn a_part_that_is_not_this_files_start_is_written_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = VPath::local(dir.path().join("a.bin"));
+        let dst = VPath::local(dir.path().join("b.bin"));
+        let body: Vec<u8> = (0..200_000u32).map(|i| (i % 249) as u8).collect();
+        fs::write(src.as_path(), &body).unwrap();
+        for stale in [vec![9u8; 50_000], vec![1u8; 250_000]] {
+            fs::write(part_path(&dst).as_path(), &stale).unwrap();
+            let total = LocalFs
+                .copy_file(&src, &dst, resuming(16 * 1024), &mut |_| true)
+                .unwrap();
+            assert_eq!(total, 200_000);
+            assert_eq!(fs::read(dst.as_path()).unwrap(), body);
+            fs::remove_file(dst.as_path()).unwrap();
+        }
+    }
+
+    /// `Esc` is the user's own stop, so the part goes even with resuming on.
+    #[test]
+    fn a_cancel_still_takes_the_part_away() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = VPath::local(dir.path().join("a.bin"));
+        let dst = VPath::local(dir.path().join("b.bin"));
+        fs::write(src.as_path(), vec![3u8; 200_000]).unwrap();
+        let err = LocalFs
+            .copy_file(&src, &dst, resuming(16 * 1024), &mut |_| false)
+            .unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::Interrupted);
+        assert!(!LocalFs.exists(&part_path(&dst)));
+    }
+
     #[test]
     fn copy_reports_progress_and_never_leaves_a_partial_destination() {
         let dir = tempfile::tempdir().unwrap();
@@ -1054,6 +1187,7 @@ mod tests {
         let how = CopyHow {
             buffer: 32 * 1024,
             system: true,
+            resume: false,
         };
         let copied = LocalFs
             .copy_file(&src, &dst, how, &mut |n| {
@@ -1081,6 +1215,7 @@ mod tests {
         let how = CopyHow {
             buffer: 4096,
             system: true,
+            resume: false,
         };
         match LocalFs.copy_file(&src, &dst, how, &mut |_| false) {
             Err(e) => {

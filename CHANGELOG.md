@@ -29,6 +29,16 @@ Notable changes, newest first. The format follows
   showing each new name as it was typed, and `1.txt` and `2.txt` swapped through the counter
   with nothing left behind under a temporary name.
 
+- **An interrupted copy goes on where it stopped.** A file is written as `name.fcmd-part`
+  until it is whole; `Esc` still takes the part away, but a failure, a crash or a killed
+  program now leave it, and the next copy of the same file to the same place continues from
+  it instead of starting again — once its last 64 KiB have been found to be the source's at
+  the same offset, so a part some other file left is written over. The job list's `F5` retry
+  of a big file that failed therefore goes on from where it was. Local files for now.
+
+  Driven on the real binary: a 3 GB copy paused at 2.9 GB and the program killed, then the
+  same copy again, which finished in under a second with the file identical to its source.
+
 - **The hex view and the disassembly in colour.** They were one colour from edge to edge. The
   bytes are coloured by what they are — zeros dim, control bytes, the high half and `FF` each
   their own — and the character column's letters by the string colour, so the code and the
