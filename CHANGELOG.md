@@ -8,6 +8,10 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **Is there a newer release?** *Options → Check for updates* asks GitHub for the latest
+  release and, when it is newer, offers to open its page — the address is in the dialog too.
+  `general.update_check` (*Options → System settings*, off by default) asks once a day in the
+  background and offers each release once. Nothing is downloaded or installed.
 - **`Ctrl+C` copies**, as `Ctrl+Ins` does, for the keyboards that have no `Ins`: the command
   line or what is marked of it, and on an empty line the names of what is selected. While a
   command runs it is the interrupt, whatever is on the screen (issue #29).

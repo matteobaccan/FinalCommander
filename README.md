@@ -401,8 +401,9 @@ rules in [`docs/01-licensing.md`](docs/01-licensing.md).
 
 ## Non-goals
 
-No telemetry, no accounts, no cloud service, no bundled proprietary blobs, no GTK/Qt dependency
-in the core, and no attempt to be an Explorer/Finder replacement.
+No telemetry, no accounts, no cloud service, no connection you did not ask for (the release
+check is a menu command, or a setting that is off), no bundled proprietary blobs, no GTK/Qt
+dependency in the core, and no attempt to be an Explorer/Finder replacement.
 
 ## The pictures
 

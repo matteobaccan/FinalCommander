@@ -1292,3 +1292,14 @@ branch-title = Zweig: { $path }
 branch-done = { $count } Dateien aus allen Ordnern darunter · Strg+Alt+B geht zurück
 branch-truncated = { $count } Dateien, und dort hat das Lesen aufgehört: der Zweig ist größer, als eine Liste sinnvoll sein kann
 branch-not-here = Die Zweigansicht ist die eines Ordners, und dieses Feld ist eine Liste
+
+## The release check (SPEC 11 §5).
+menu-check-update = Nach Updates su&chen
+opt-update-check = Einmal am Tag nach einer neuen Version suchen
+btn-open-page = Seite öffnen
+update-checking = Frage GitHub nach der neuesten Version…
+update-title = Updates
+update-available = FinalCommander { $version } ist erschienen (dies ist { $current }).
+update-available-status = FinalCommander { $version } ist erschienen: Optionen → Nach Updates suchen
+update-current = Dies ist die neueste Version, { $version }.
+update-failed = Die neueste Version konnte nicht abgefragt werden: { $why }

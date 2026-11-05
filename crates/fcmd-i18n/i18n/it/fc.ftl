@@ -1293,3 +1293,14 @@ branch-title = Ramo: { $path }
 branch-done = { $count } file, da tutte le cartelle qui sotto · Ctrl+Alt+B torna indietro
 branch-truncated = { $count } file, e la lettura si è fermata lì: il ramo è più grande di quanto una lista possa servire
 branch-not-here = La vista a ramo è di una cartella, e questo pannello è una lista
+
+## The release check (SPEC 11 §5).
+menu-check-update = &Verifica aggiornamenti
+opt-update-check = Cerca una nuova versione una volta al giorno
+btn-open-page = Apri la pagina
+update-checking = Chiedo a GitHub l'ultima versione…
+update-title = Aggiornamenti
+update-available = È uscito FinalCommander { $version } (questo è il { $current }).
+update-available-status = È uscito FinalCommander { $version }: Opzioni → Verifica aggiornamenti
+update-current = Questa è l'ultima versione, la { $version }.
+update-failed = Impossibile chiedere l'ultima versione: { $why }

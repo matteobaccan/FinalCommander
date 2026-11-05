@@ -1292,3 +1292,14 @@ branch-title = Ветвь: { $path }
 branch-done = Файлов: { $count }, из всех папок ниже · Ctrl+Alt+B — назад
 branch-truncated = Файлов: { $count }, и чтение остановилось: ветвь больше, чем может быть полезный список
 branch-not-here = Вид ветви строится для папки, а эта панель — список
+
+## The release check (SPEC 11 §5).
+menu-check-update = Проверить о&бновления
+opt-update-check = Проверять новую версию раз в день
+btn-open-page = Открыть страницу
+update-checking = Запрашиваю у GitHub последнюю версию…
+update-title = Обновления
+update-available = Вышел FinalCommander { $version } (у вас { $current }).
+update-available-status = Вышел FinalCommander { $version }: Параметры → Проверить обновления
+update-current = Это последняя версия, { $version }.
+update-failed = Не удалось узнать последнюю версию: { $why }

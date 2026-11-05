@@ -333,6 +333,7 @@ impl Command {
             Command::MacroRecord => "start or stop recording a macro",
             Command::MacroList => "the macros that are recorded",
             Command::AppScreens => "everything that is open",
+            Command::AppUpdateCheck => "is there a newer release?",
             Command::AppScreenNext => "the next open screen",
             Command::AppScreenPrev => "the screen before",
         }

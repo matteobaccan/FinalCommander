@@ -35,6 +35,15 @@ pub enum Request {
         panel: usize,
         path: VPath,
     },
+    /// Ask which release is the latest (SPEC 11 §5). `manual` is the menu's command, which
+    /// says what it found whatever it found; the daily check speaks only of a newer release.
+    UpdateCheck {
+        manual: bool,
+    },
+    /// Hand an address to the desktop's browser, detached: nothing to wait for, no output.
+    OpenUrl {
+        url: String,
+    },
     /// Walk every file under `root` for the branch view (SPEC 02 §3d).
     Branch {
         panel: usize,
@@ -574,6 +583,11 @@ pub enum Event {
         files: u64,
     },
     /// The files a branch walk found.
+    /// What the release check found: the latest release, or why there is no answer.
+    UpdateChecked {
+        manual: bool,
+        result: Result<fcmd_net::update::Release, String>,
+    },
     Branched {
         panel: usize,
         root: VPath,
@@ -1224,6 +1238,8 @@ pub enum ConfirmAction {
         side: usize,
         filter: String,
     },
+    /// Open a release's page in the browser.
+    OpenRelease { url: String },
     /// Open `known_hosts` where the key that changed is written, at that line.
     ///
     /// Not "accept the new key": a key that is recorded and different is a rebuilt server or
@@ -1267,6 +1283,7 @@ impl ConfirmAction {
             },
             ConfirmAction::AcceptHostKey { .. } => "btn-accept",
             ConfirmAction::OpenKnownHosts { .. } => "btn-open-file",
+            ConfirmAction::OpenRelease { .. } => "btn-open-page",
         }
     }
 }
@@ -2187,6 +2204,10 @@ pub struct App {
     pub last_rename: fcmd_core::rename::Options,
     /// The last multi-rename done, for `file.multirename.undo`: the folder and its plan.
     pub rename_undo: Option<(VPath, Vec<(String, String)>)>,
+    /// The day the daily release check last asked, and the release it last offered: see
+    /// `fcmd_config::State::update_checked` and `update_offered`.
+    pub update_checked: u64,
+    pub update_offered: String,
     /// The same for the replace dialog.
     pub last_replace: fcmd_jobs::ReplaceOptions,
     /// A replacement runs twice: once to count, and then, if the user says so, for real. This
@@ -2435,6 +2456,8 @@ impl App {
             rename_existing: Default::default(),
             last_rename: Default::default(),
             rename_undo: None,
+            update_checked: 0,
+            update_offered: String::new(),
             last_replace: fcmd_jobs::ReplaceOptions::default(),
             pending_replace: None,
             highlight,
@@ -2545,8 +2568,75 @@ impl App {
         &self.paths.config_file
     }
 
+    /// The daily release check, if `general.update_check` asks for it and today has not
+    /// been asked yet. `today` is days since 1970; the caller has the clock.
+    pub fn daily_update_check(&mut self, today: u64) {
+        if self.cfg.general.update_check && self.update_checked != today {
+            self.update_checked = today;
+            self.requests.push(Request::UpdateCheck { manual: false });
+        }
+    }
+
+    /// What the release check found, said the way it was asked for.
+    fn on_update_checked(
+        &mut self,
+        manual: bool,
+        result: Result<fcmd_net::update::Release, String>,
+    ) {
+        let current = env!("CARGO_PKG_VERSION");
+        match result {
+            Ok(release) if fcmd_net::update::is_newer(&release.tag, current) => {
+                if !manual && release.tag == self.update_offered {
+                    return;
+                }
+                self.update_offered = release.tag.clone();
+                let version = release.tag.trim_start_matches('v').to_string();
+                // A dialog only over the panels: the daily check must not drop a question
+                // into the middle of an edit. Anywhere else it is one line, and the menu's
+                // command shows the dialog when there is time for it.
+                if !manual && !matches!(self.mode, Mode::Normal) {
+                    let m = self
+                        .i18n
+                        .t_args("update-available-status", &[("version", version.into())]);
+                    self.set_status(m);
+                    return;
+                }
+                let title = self.i18n.t("update-title");
+                let lines = vec![
+                    self.i18n.t_args(
+                        "update-available",
+                        &[("version", version.into()), ("current", current.into())],
+                    ),
+                    String::new(),
+                    release.url.clone(),
+                ];
+                self.mode = Mode::Confirm(Confirm {
+                    title,
+                    lines,
+                    action: ConfirmAction::OpenRelease { url: release.url },
+                    button: 0,
+                });
+            }
+            Ok(_) if manual => {
+                let title = self.i18n.t("update-title");
+                let line = self
+                    .i18n
+                    .t_args("update-current", &[("version", current.into())]);
+                self.show_message(title, vec![line]);
+            }
+            Ok(_) => {}
+            Err(why) if manual => {
+                let m = self.i18n.t_args("update-failed", &[("why", why.into())]);
+                self.set_error(m);
+            }
+            // The daily check is not worth an error: no network is a normal day.
+            Err(_) => {}
+        }
+    }
+
     pub fn handle_event(&mut self, event: Event) {
         match event {
+            Event::UpdateChecked { manual, result } => self.on_update_checked(manual, result),
             Event::PluginDone { id, label, result } => match result {
                 Ok(reply) => self.apply_plugin_reply(&label, reply),
                 Err(e) => {
@@ -4175,6 +4265,9 @@ impl App {
                             secret,
                             accept_host_key: true,
                         });
+                    }
+                    ConfirmAction::OpenRelease { url } => {
+                        self.requests.push(Request::OpenUrl { url });
                     }
                     ConfirmAction::OpenKnownHosts { path, line } => {
                         self.edit_path(&path);
@@ -8840,6 +8933,11 @@ impl App {
             Command::MacroRecord => self.toggle_recording(),
             Command::MacroList => self.open_macros(),
             Command::AppScreens => self.open_screens(),
+            Command::AppUpdateCheck => {
+                let m = self.i18n.t("update-checking");
+                self.set_status(m);
+                self.requests.push(Request::UpdateCheck { manual: true });
+            }
             Command::AppScreenNext => self.cycle_screen(false),
             Command::AppScreenPrev => self.cycle_screen(true),
             Command::CmdHistory => self.open_pick(PickKind::CommandHistory, self.active),
@@ -21897,6 +21995,120 @@ mod tests {
             result: Ok(entries),
         });
         app
+    }
+
+    fn release(tag: &str) -> fcmd_net::update::Release {
+        fcmd_net::update::Release {
+            tag: tag.into(),
+            url: format!("{}/tag/{tag}", fcmd_net::update::RELEASES),
+        }
+    }
+
+    fn update_requests(app: &App) -> Vec<bool> {
+        app.requests
+            .iter()
+            .filter_map(|r| match r {
+                Request::UpdateCheck { manual } => Some(*manual),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_daily_release_check_waits_to_be_turned_on_and_asks_once_a_day() {
+        let mut app = app();
+        app.requests.clear();
+        app.daily_update_check(20_000);
+        assert!(
+            update_requests(&app).is_empty(),
+            "off by default: no connection"
+        );
+        app.cfg.general.update_check = true;
+        app.daily_update_check(20_000);
+        app.daily_update_check(20_000);
+        assert_eq!(update_requests(&app), [false], "once on the same day");
+        app.daily_update_check(20_001);
+        assert_eq!(update_requests(&app), [false, false]);
+    }
+
+    #[test]
+    fn a_newer_release_is_offered_and_enter_opens_its_page() {
+        let mut app = app();
+        app.handle_event(Event::UpdateChecked {
+            manual: false,
+            result: Ok(release("v999.0.0")),
+        });
+        let Mode::Confirm(c) = &app.mode else {
+            panic!("a dialog: {:?}", app.mode)
+        };
+        assert!(
+            c.lines.iter().any(|l| l.contains("999.0.0")),
+            "{:?}",
+            c.lines
+        );
+        assert!(
+            c.lines.iter().any(|l| l.ends_with("/tag/v999.0.0")),
+            "the address, to copy"
+        );
+        app.requests.clear();
+        press(&mut app, "Enter");
+        assert!(matches!(app.mode, Mode::Normal));
+        assert!(app.requests.iter().any(|r| matches!(r,
+            Request::OpenUrl { url } if url.ends_with("/releases/tag/v999.0.0"))));
+    }
+
+    #[test]
+    fn the_daily_check_offers_a_release_once_and_the_menu_always() {
+        let mut app = app();
+        app.update_offered = "v999.0.0".into();
+        app.handle_event(Event::UpdateChecked {
+            manual: false,
+            result: Ok(release("v999.0.0")),
+        });
+        assert!(
+            matches!(app.mode, Mode::Normal),
+            "offered already: Later meant later"
+        );
+        app.handle_event(Event::UpdateChecked {
+            manual: true,
+            result: Ok(release("v999.0.0")),
+        });
+        assert!(matches!(app.mode, Mode::Confirm(_)), "asked for: shown");
+    }
+
+    #[test]
+    fn the_same_release_or_an_error_is_said_only_when_asked() {
+        let mut app = app();
+        let current = format!("v{}", env!("CARGO_PKG_VERSION"));
+        app.handle_event(Event::UpdateChecked {
+            manual: false,
+            result: Ok(release(&current)),
+        });
+        app.handle_event(Event::UpdateChecked {
+            manual: false,
+            result: Err("offline".into()),
+        });
+        assert!(matches!(app.mode, Mode::Normal));
+        assert!(!app.status.contains("offline"));
+        app.handle_event(Event::UpdateChecked {
+            manual: true,
+            result: Ok(release(&current)),
+        });
+        assert!(matches!(app.mode, Mode::Message { .. }), "{:?}", app.mode);
+        app.mode = Mode::Normal;
+        app.handle_event(Event::UpdateChecked {
+            manual: true,
+            result: Err("offline".into()),
+        });
+        assert!(app.status.contains("offline"));
+    }
+
+    #[test]
+    fn the_menu_command_asks_now() {
+        let mut app = app();
+        app.requests.clear();
+        app.run(Command::AppUpdateCheck);
+        assert_eq!(update_requests(&app), [true]);
     }
 
     fn press(app: &mut App, key: &str) {

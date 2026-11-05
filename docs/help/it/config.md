@@ -34,6 +34,17 @@ contrario, *Salva le impostazioni all'uscita* in *Opzioni → Impostazioni dell'
 (`ui.save_setup_on_exit`) scrive il file anche quando esci. Dov'erano i pannelli è un altro
 file e torna in ogni caso.
 
+# Aggiornamenti
+
+`Opzioni → Verifica aggiornamenti` chiede a GitHub qual è l'ultima versione e, se è più nuova
+di quella in uso, propone di aprirne la pagina nel browser; l'indirizzo della pagina è anche nel
+dialogo, da copiare su una macchina senza desktop. Non scarica e non installa niente: gli
+archivi e il changelog sono su quella pagina. Il programma lo chiede solo allora, a meno che
+*Cerca una nuova versione una volta al giorno* in *Opzioni → Impostazioni di sistema*
+(`general.update_check`) sia attivo; è spento, perché il programma non apre connessioni che non
+hai chiesto. Acceso, il controllo gira in background al massimo una volta al giorno, non dice
+niente se non c'è niente di nuovo o manca la rete, e propone ogni nuova versione una volta sola.
+
 # Cosa viene ricordato
 
 Fra una sessione e l'altra il programma tiene, nel suo file di stato accanto alle impostazioni:

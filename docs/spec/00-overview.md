@@ -31,7 +31,8 @@ and preview pipeline. Licensing basis: `docs/01-licensing.md`.
 - **G4 — Scriptable and extensible.** Every action is a named command; keys, menus, macros,
   Lua and plugins all drive the same vocabulary. A sandboxed WASM ABI so plugins outlive
   internal refactors.
-- **G5 — Honest and local.** No telemetry, no accounts, no background network traffic.
+- **G5 — Honest and local.** No telemetry, no accounts, no background network traffic the
+  user did not turn on (the release check of SPEC 11 §5 is a command, or a setting that is off).
   Config is human-readable TOML in a documented location; portable mode supported.
 - **G6 — One file.** The product is a **single executable**. Every resource it needs is
   compiled in: themes, keymap profiles, all seven language catalogues, the help. It runs with

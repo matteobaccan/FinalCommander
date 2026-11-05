@@ -34,9 +34,9 @@ Sections inside `fcmd.toml`: `[general]`, `[panel]`, `[operations]`, `[viewer]`,
 confirm = { delete = true, delete_nonempty = true, overwrite = true, exit = false,
             drag_drop = true, esc_closes_panel = false }
 portable = false
-# There is no `update_check`: a setting nobody reads is a setting that lies, and this one
-# was a promise wearing a setting's clothes. The program opens no connection the user did not
-# ask for; the only outbound code in the tree is the SFTP client behind `Alt+F1`.
+# Ask GitHub once a day whether a newer release is out (SPEC 11 §5). Off: the program opens
+# no connection the user did not ask for, and turning this on is the asking.
+update_check = false
 single_instance = false
 
 [panel]

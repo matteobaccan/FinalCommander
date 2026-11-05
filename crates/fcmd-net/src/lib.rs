@@ -15,6 +15,7 @@ pub mod remote;
 pub mod site;
 pub mod ssh;
 pub mod tunnel;
+pub mod update;
 pub mod vfs;
 
 pub use error::{NetError, Result, SecretKind};

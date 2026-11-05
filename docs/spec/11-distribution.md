@@ -206,10 +206,26 @@ the thing to avoid.
 
 ## 5. Version checking
 
-Not proposed, and written down so the question is settled rather than reopened: **the program
-does not phone home.** No version check, no update notice, no network traffic the user did not
-ask for. A package manager is the thing that knows about new versions, which is a further
-argument for §3.2 to §3.5 and not for a feature inside the binary.
+**The program does not phone home unless it is asked to.** A release is a GitHub release, so
+the question "is there a newer one?" has one place to be answered, and two ways to ask it:
+
+* **`Options → Check for updates`** (`app.update.check`) asks now and says what it found: a
+  newer release, offered with its page; the same one; or why there is no answer.
+* **`general.update_check`**, off by default, asks at most once a day, in the background, at
+  start. It is silent when there is nothing new or no network, offers each release once (the
+  tag it offered is kept in `fcmd-state.toml` as `update_offered`, the day it asked as
+  `update_checked`), and over a viewer or an editor it says so on the status line instead of
+  opening a dialog.
+
+The request is a `GET` of `…/releases/latest` without following the redirect: GitHub answers
+with the address of the latest release's page, `…/releases/tag/vX.Y.Z`, and the tag is read
+from it. No API, no token, no JSON, and nothing is sent but the request and the user agent
+(`fcmd/<version>`). The tag is compared with the binary's own version as three numbers.
+
+What the offer does is open the page in the desktop's browser (`xdg-open`, `open`, `start`), and
+the dialog shows the address as well, for a terminal with no desktop behind it. Nothing is
+downloaded and nothing replaces the binary: an executable that rewrites itself is a different
+trust question (§6), and a package manager, where there is one, is still the better updater.
 
 ## 6. Trust
 

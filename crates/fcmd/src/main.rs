@@ -679,6 +679,14 @@ fn run(cli: Cli) -> Result<()> {
         )
     });
     app.seen = state.seen;
+    app.update_checked = state.update_checked;
+    app.update_offered = state.update_offered;
+    // Only with `general.update_check` on, and only once a day (SPEC 11 §5).
+    app.daily_update_check(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs() / 86_400),
+    );
     app.field_history = state
         .field_history
         .into_iter()
@@ -1727,6 +1735,14 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                         let _ = tx.send(Event::LinkDone { link, error });
                     });
                 }
+                Request::UpdateCheck { manual } => {
+                    let tx = tx.clone();
+                    runtime.spawn(async move {
+                        let result = fcmd_net::update::latest().await;
+                        let _ = tx.send(Event::UpdateChecked { manual, result });
+                    });
+                }
+                Request::OpenUrl { url } => open_url(&url),
                 Request::Branch {
                     panel,
                     root,
@@ -1853,6 +1869,8 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
         // a state file nobody can open is worth keeping none of.
         tree: app.tree_cache.to_state(crate::app::TREE_CACHE_KEPT),
         history_marks: app.marks.to_state(),
+        update_checked: app.update_checked,
+        update_offered: app.update_offered.clone(),
         last_rename: app
             .rename_undo
             .as_ref()
@@ -3974,6 +3992,29 @@ fn dirs_home() -> Option<std::path::PathBuf> {
         .filter(|p| !p.as_os_str().is_empty())
 }
 
+/// Hand an address to the desktop's opener and do not wait for it. `start` on Windows is a
+/// shell builtin, hence `cmd /c`, and its first quoted argument is a window title. A machine
+/// with no desktop (a server over SSH) fails quietly here; the dialog that offered the page
+/// showed its address too, to be copied.
+fn open_url(url: &str) {
+    use std::process::{Command, Stdio};
+    let mut cmd = if cfg!(windows) {
+        let mut c = Command::new("cmd");
+        c.args(["/c", "start", ""]);
+        c
+    } else if cfg!(target_os = "macos") {
+        Command::new("open")
+    } else {
+        Command::new("xdg-open")
+    };
+    let _ = cmd
+        .arg(url)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -5555,6 +5596,8 @@ dir_attr = "D"
                     });
                 }
                 Request::DirSize { .. }
+                | Request::UpdateCheck { .. }
+                | Request::OpenUrl { .. }
                 | Request::Shell { .. }
                 | Request::Decompile { .. }
                 | Request::Connect { .. }

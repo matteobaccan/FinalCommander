@@ -627,6 +627,11 @@ pub fn menus() -> Vec<Menu> {
                 Entry::Separator,
                 item("menu-help", "F1", Action::Run(Command::AppHelp)),
                 item(
+                    "menu-check-update",
+                    "",
+                    Action::Run(Command::AppUpdateCheck),
+                ),
+                item(
                     "menu-save-setup",
                     "Shift+F9",
                     Action::Run(Command::AppSetupSave),

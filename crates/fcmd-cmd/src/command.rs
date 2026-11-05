@@ -492,6 +492,9 @@ pub enum Command {
     MacroList,
     /// `F12`: the viewers and editors left open, to step back into one (SPEC 02 §7).
     AppScreens,
+    /// Ask GitHub which release is the latest, and offer its page if it is newer than this
+    /// binary. Only when asked, or once a day with `general.update_check` on (SPEC 11 §5).
+    AppUpdateCheck,
     /// `Ctrl+Tab` / `Ctrl+Shift+Tab`: the next or previous screen, without the list.
     AppScreenNext,
     AppScreenPrev,
@@ -776,6 +779,7 @@ impl Command {
             Command::MacroRecord,
             Command::MacroList,
             Command::AppScreens,
+            Command::AppUpdateCheck,
             Command::AppScreenNext,
             Command::AppScreenPrev,
             Command::EditorCopy,
@@ -1061,6 +1065,7 @@ impl Command {
             Command::MacroRecord => "macro.record".into(),
             Command::MacroList => "macro.list".into(),
             Command::AppScreens => "app.screens".into(),
+            Command::AppUpdateCheck => "app.update.check".into(),
             Command::AppScreenNext => "app.screen.next".into(),
             Command::AppScreenPrev => "app.screen.prev".into(),
             Command::EditorCopy => "editor.copy".into(),
@@ -1322,6 +1327,7 @@ impl Command {
             ("macro.record", _) => Command::MacroRecord,
             ("macro.list", _) => Command::MacroList,
             ("app.screens", _) => Command::AppScreens,
+            ("app.update.check", _) => Command::AppUpdateCheck,
             ("app.screen.next", _) => Command::AppScreenNext,
             ("app.screen.prev", _) => Command::AppScreenPrev,
             ("editor.copy", _) => Command::EditorCopy,

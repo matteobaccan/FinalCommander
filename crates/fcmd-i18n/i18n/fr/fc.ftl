@@ -1292,3 +1292,14 @@ branch-title = Branche : { $path }
 branch-done = { $count } fichiers, de tous les dossiers en dessous · Ctrl+Alt+B revient
 branch-truncated = { $count } fichiers, et la lecture s'est arrêtée là : la branche est plus grande qu'une liste utile
 branch-not-here = La vue en branche est celle d'un dossier, et ce panneau est une liste
+
+## The release check (SPEC 11 §5).
+menu-check-update = Rec&hercher les mises à jour
+opt-update-check = Chercher une nouvelle version une fois par jour
+btn-open-page = Ouvrir la page
+update-checking = Demande de la dernière version à GitHub…
+update-title = Mises à jour
+update-available = FinalCommander { $version } est sorti (ceci est la { $current }).
+update-available-status = FinalCommander { $version } est sorti : Options → Rechercher les mises à jour
+update-current = C'est la dernière version, la { $version }.
+update-failed = Impossible de demander la dernière version : { $why }

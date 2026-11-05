@@ -1268,3 +1268,14 @@ branch-title = 分支：{ $path }
 branch-done = { $count } 个文件，来自下面的所有文件夹 · Ctrl+Alt+B 返回
 branch-truncated = { $count } 个文件，读取在此停止：分支太大，列表已无意义
 branch-not-here = 分支视图针对文件夹，而此面板是一个列表
+
+## The release check (SPEC 11 §5).
+menu-check-update = 检查更新
+opt-update-check = 每天检查一次新版本
+btn-open-page = 打开页面
+update-checking = 正在向 GitHub 查询最新版本…
+update-title = 更新
+update-available = FinalCommander { $version } 已发布（当前为 { $current }）。
+update-available-status = FinalCommander { $version } 已发布：选项 → 检查更新
+update-current = 这已是最新版本 { $version }。
+update-failed = 无法查询最新版本：{ $why }

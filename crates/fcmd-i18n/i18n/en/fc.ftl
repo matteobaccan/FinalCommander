@@ -1302,3 +1302,14 @@ branch-title = Branch: { $path }
 branch-done = { $count } files, from every folder below this one · Ctrl+Alt+B goes back
 branch-truncated = { $count } files, and the walk stopped there: the branch is bigger than a list can usefully be
 branch-not-here = The branch view is of a folder, and this panel is a list
+
+## The release check (SPEC 11 §5).
+menu-check-update = Chec&k for updates
+opt-update-check = Check for a new release once a day
+btn-open-page = Open the page
+update-checking = Asking GitHub for the latest release…
+update-title = Updates
+update-available = FinalCommander { $version } is out (this is { $current }).
+update-available-status = FinalCommander { $version } is out: Options → Check for updates
+update-current = This is the latest release, { $version }.
+update-failed = Could not ask for the latest release: { $why }

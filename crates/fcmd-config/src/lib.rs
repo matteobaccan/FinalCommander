@@ -182,6 +182,13 @@ pub struct General {
     /// later than one after the other would. `one` runs one job at a time whatever the
     /// devices; `off` starts every job at once.
     pub job_queue: JobQueue,
+    /// Ask GitHub, at most once a day and in the background, whether a newer release is out,
+    /// and offer its page when one is (SPEC 11 §5).
+    ///
+    /// Off by default, and that is the point: the program opens no connection the user did
+    /// not ask for (SPEC 00, G5), and turning this on is the asking. With it off the same
+    /// check is a command one runs — *Check for updates* in the Options menu.
+    pub update_check: bool,
 }
 
 /// How jobs share the machine: see [`General::job_queue`].
@@ -192,12 +199,6 @@ pub enum JobQueue {
     One,
     Off,
 }
-// There is no `update_check` here, and that is the point: a setting nobody reads is a setting
-// that lies, and this one was a promise wearing a setting's clothes. The promise is kept in
-// the code instead — the program opens no connection the user did not ask for, and the only
-// outbound code in the tree is the SFTP client behind `Alt+F1`. If a release check is ever
-// wanted it will be a command one runs, not a flag that phones home at startup.
-
 impl Default for General {
     fn default() -> Self {
         General {
@@ -208,6 +209,7 @@ impl Default for General {
             use_trash: true,
             system_copy: false,
             job_queue: JobQueue::Device,
+            update_check: false,
         }
     }
 }
@@ -1886,6 +1888,7 @@ impl Config {
             "general.confirm_delete" => self.general.confirm_delete = parse_bool(value)?,
             "general.use_trash" => self.general.use_trash = parse_bool(value)?,
             "general.system_copy" => self.general.system_copy = parse_bool(value)?,
+            "general.update_check" => self.general.update_check = parse_bool(value)?,
             "general.job_queue" => {
                 self.general.job_queue = match value {
                     "device" => JobQueue::Device,
@@ -2034,9 +2037,10 @@ attrs = "-h"
         assert_eq!(c.ui.keymap, "far");
         assert_eq!(c.panel.view, "full");
         assert!(c.panel.dirs_first);
-        // Nothing to assert about an update check: there is no such setting, on purpose.
-        // What there is to assert is that asking about an overwrite is on by default, which
-        // is the one of these three that costs data when it is wrong.
+        // No connection the user did not ask for: the release check waits to be turned on.
+        assert!(!c.general.update_check);
+        // Asking about an overwrite is on by default, which is the one of the confirmations
+        // that costs data when it is wrong.
         assert!(c.general.confirm_overwrite);
         assert_eq!(c.panel.quick_search, QuickSearch::Alt);
         // The viewer opens with the chrome it has always had and no scrollbar, as FAR does.
@@ -2186,6 +2190,8 @@ attrs = "-h"
                     to: "holiday_1.jpg".into(),
                 }],
             }),
+            update_checked: 20_000,
+            update_offered: "v0.32.0".into(),
         };
         state.save(&paths).unwrap();
         let (back, problem) = State::load(&paths);
@@ -2621,6 +2627,18 @@ pub struct State {
     /// is the step somebody who has just looked at a folder of wrong names wants back.
     #[serde(default)]
     pub last_rename: Option<RenameJournal>,
+    /// The day (days since 1970, UTC) `general.update_check` last asked for the latest
+    /// release, so it asks once a day however often the program is started.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub update_checked: u64,
+    /// The release the daily check last offered. It is offered once: *Later* means later,
+    /// and the next tag is the next offer. *Check for updates* in the menu shows it anyway.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub update_offered: String,
+}
+
+fn is_zero(n: &u64) -> bool {
+    *n == 0
 }
 
 /// A multi-rename as it was done: the folder, and each file's name before and after.

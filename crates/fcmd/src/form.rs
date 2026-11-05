@@ -395,6 +395,11 @@ impl Form {
                     t("opt-system-copy"),
                     cfg.general.system_copy,
                 ),
+                Field::toggle(
+                    "general.update_check",
+                    t("opt-update-check"),
+                    cfg.general.update_check,
+                ),
                 Field::Dim(t("opt-save-history")),
                 // How long a history line nobody has pinned is kept after its last use, which
                 // is FAR's own setting and the reason its default is ninety days.

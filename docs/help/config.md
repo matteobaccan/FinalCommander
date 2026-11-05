@@ -33,6 +33,17 @@ what it does is gone at the next start. If you would rather it were not, *Save t
 exit* in *Options → Interface settings* (`ui.save_setup_on_exit`) writes the file on the way
 out as well. Where the panels were is a different file and comes back either way.
 
+# Updates
+
+`Options → Check for updates` asks GitHub which release is the latest and, when it is newer
+than the one running, offers to open its page in the browser — the page's address is in the
+dialog too, to copy on a machine with no desktop. Nothing is downloaded or installed: the
+archives and the changelog are on that page. The program asks only then, unless *Check for a
+new release once a day* in *Options → System settings* (`general.update_check`) is on; it is
+off, because the program opens no connection you did not ask for. With it on, the check runs
+in the background at most once a day, says nothing when there is nothing new or no network,
+and offers each new release once.
+
 # What is remembered
 
 Between sessions the program keeps, in its state file beside the settings: the command lines

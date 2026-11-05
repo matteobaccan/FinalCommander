@@ -262,7 +262,7 @@ something readable rather than only into instructions.
 | 9.6 | Accessibility: no-colour mode, screen-reader-friendly output mode, configurable focus indication | NEW | M3 |
 | 9.7 | Session save/restore (tabs, paths, selections, viewer positions) | TC | ~ the selection, which is not kept |
 | 9.8 | Settings search ("where is that option?") | NEW | ✓ *Options → All settings*, a list of every setting that narrows as you type |
-| 9.9 | No telemetry, no network calls except explicit user actions; optional update check off by default | MTN2 | ✓ |
+| 9.9 | No telemetry, no network calls except explicit user actions; optional update check off by default | MTN2 | ✓ *Options → Check for updates*, and `general.update_check` once a day (SPEC 11 §5) |
 | 9.10 | Menu bar (`F9`) with FAR's five menus; every entry is a command from the vocabulary, the shortcut shown is read from the keymap in force, and an entry whose feature is missing is drawn dim and says so (SPEC 10 §2) | FAR | ✓ |
 | 9.14 | Screens (`F12`, `Ctrl+Tab`): a viewer or an editor one steps away from and comes back to, keeping its position and its unsaved changes, with the panels as screen zero of the ring and a count of what is behind them in the corner. `F10` from the panels names every background screen with unwritten changes (SPEC 02 §10) | FAR | ✓ |
 | 9.15 | Help (`F1`) as a book: written chapters compiled into the binary, and the keys, the commands and the settings generated from the keymap and configuration in force so they cannot drift. A manual page generated from the command line's own options, with a test that fails when the two disagree | FAR / Unix | ✓ |
