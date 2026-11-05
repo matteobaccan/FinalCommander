@@ -107,6 +107,28 @@ pub fn parse_ls(line: &str) -> Option<RemoteEntry> {
     })
 }
 
+/// `CCYYMMDDhhmm.SS` in UTC, the form POSIX `touch -t` takes.
+pub fn touch_stamp(secs: u32) -> String {
+    let secs = i64::from(secs);
+    let (days, rest) = (secs.div_euclid(86_400), secs.rem_euclid(86_400));
+    // Civil date from days since 1970, Howard Hinnant's algorithm.
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = yoe + era * 400 + i64::from(month <= 2);
+    format!(
+        "{year:04}{month:02}{day:02}{:02}{:02}.{:02}",
+        rest / 3600,
+        rest % 3600 / 60,
+        rest % 60
+    )
+}
+
 pub struct ShellFs<E: Exec> {
     exec: E,
 }
@@ -225,7 +247,12 @@ impl<E: Exec + 'static> RemoteFs for ShellFs<E> {
                 .await?;
         }
         if let Some(secs) = mtime {
-            self.ok(path, format!("touch -d @{secs} -- {q}")).await?;
+            // `-t` is POSIX — GNU, BSD and busybox all take it — where `-d @secs` is GNU.
+            self.ok(
+                path,
+                format!("TZ=UTC0 touch -t {} -- {q}", touch_stamp(secs)),
+            )
+            .await?;
         }
         Ok(())
     }
@@ -326,6 +353,8 @@ mod tests {
         assert_eq!(link.link_target.as_deref(), Some("v1.2.3"));
         assert!(parse_ls("total 12").is_none());
         assert_eq!(sh_quote("it's"), "'it'\\''s'");
+        assert_eq!(touch_stamp(0), "197001010000.00");
+        assert_eq!(touch_stamp(1_000_000_000), "200109090146.40");
     }
 
     #[cfg(unix)]
@@ -363,6 +392,9 @@ mod tests {
             .unwrap();
         let st = fs.stat(&moved, false).await.unwrap();
         assert_eq!(st.mode, Some(0o600));
+        if let Some(mtime) = st.mtime {
+            assert_eq!(mtime, 1_000_000_000, "the time was set");
+        }
         fs.remove_file(&moved).await.unwrap();
         fs.remove_dir(&odd).await.unwrap();
         assert!(fs.read_dir(&odd).await.is_err(), "and a failure says so");
