@@ -695,6 +695,7 @@ fn run(cli: Cli) -> Result<()> {
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| d.as_secs() / 86_400),
     );
+    app.drive_dirs = state.drive_dirs.clone();
     app.folder_views = state
         .folder_views
         .iter()
@@ -2003,6 +2004,7 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
             }
             app.seen.clone()
         },
+        drive_dirs: app.drive_dirs.clone(),
         folder_views: app
             .folder_views
             .iter()

@@ -4,6 +4,13 @@ Ogni pannello mostra una cartella. `Tab` passa dall'uno all'altro; la maggior pa
 operazioni va dal pannello che ha il cursore all'altro, ed è questo che rende un gestore a due
 pannelli più rapido di un albero: la destinazione è già sullo schermo.
 
+Ogni disco ha una sua cartella corrente, come in DOS: scegliere un disco in `Alt+F1` porta il
+pannello nella cartella dove l'altro pannello sta su quel disco, altrimenti nell'ultima
+cartella in cui uno dei due è stato lì — `C:\pippo`, poi `D:\pluto\paperino`, e di nuovo `C:`
+è ancora `C:\pippo` — e nella radice solo se non ce n'è nessuna o non esiste più. Scegliere il
+disco su cui il pannello è già vuol dire ancora la sua radice. Le cartelle si ricordano da
+un avvio all'altro.
+
 `Enter` entra in una cartella o esegue un file, `Backspace` oppure `..` risale. `Alt+F1` e
 `Alt+F2` aprono il dialogo dei dischi per il pannello sinistro e destro, sopra il pannello a
 cui appartiene: una tabella di tutto quello che è montato — che cosa è ciascuno (disco,

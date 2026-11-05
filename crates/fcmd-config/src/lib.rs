@@ -2283,6 +2283,7 @@ attrs = "-h"
                 key: "find.mask".into(),
                 lines: vec!["*.rs".into()],
             }],
+            drive_dirs: vec!["/mnt/d/src".into()],
             folder_views: vec![FolderView {
                 path: "/photos".into(),
                 view: "brief".into(),
@@ -2732,6 +2733,9 @@ pub struct State {
     /// The view and the sort each folder was given, with `panel.remember_view` on.
     #[serde(default)]
     pub folder_views: Vec<FolderView>,
+    /// The folders the panels were last in, newest first: each drive's current directory.
+    #[serde(default)]
+    pub drive_dirs: Vec<String>,
     /// What each history line has to say for itself: when it was last used, and whether it
     /// is pinned. The lines themselves are in the three lists above; this is the table
     /// beside them, and a line with no row here is simply one nobody has pinned and nobody

@@ -13,6 +13,11 @@ Notable changes, newest first. The format follows
   reads it, `F5` copies it, `Enter` on the copy opens it as a mail container. Reading does not
   mark a message as read, and nothing on the server is ever changed. Also in the session
   dialog's protocols. FARMail's idea, none of its code.
+- **Every drive keeps its folder.** Choosing a drive in `Alt+F1`/`Alt+F2` goes to the folder
+  the other panel is in on it, or else to the last folder either panel was in there —
+  `C:\pippo`, `D:\pluto`, back to `C:` is `C:\pippo` — and to the root only when there is
+  none; remembered across runs. A Windows path's letter case and its `\` no longer stop the
+  other panel's folder from being found.
 - **SSH servers without SFTP.** A router, a NAS or a board running dropbear with no SFTP
   behind it now opens anyway: when the server refuses SFTP the panel works through its shell
   (`ls`, `cat`, `mkdir`, `mv`, `rm`, `chmod`), with the same keys as any other server.

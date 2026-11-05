@@ -1096,15 +1096,22 @@ impl Prompt {
 /// Only the letter is folded. The rest of the path is the filesystem's business — on Windows
 /// it is usually case-insensitive and on Unix it is not — and `Path` already compares it
 /// component by component, so `/mnt/data` is not inside `/mnt/dat`.
-fn drive_letter_folded(path: &VPath) -> VPath {
-    let text = path.to_string();
-    let mut chars = text.chars();
-    match (chars.next(), chars.next()) {
-        (Some(letter), Some(':')) if letter.is_ascii_lowercase() => {
-            VPath::parse(&format!("{}{}", letter.to_ascii_uppercase(), &text[1..]))
-        }
-        _ => path.clone(),
-    }
+/// How many folders the per-drive memory keeps: enough for every drive a machine has, with
+/// room for the ones that come and go.
+const DRIVE_DIRS_KEPT: usize = 64;
+
+/// Is `dir` on the drive whose root is `root`? By text, with a Windows drive letter's case
+/// and the two separators folded, and by whole components: `/mnt/d` holds `/mnt/d/src` and
+/// not `/mnt/dd`, and `C:\` holds `c:\pippo`.
+fn on_drive(dir: &str, root: &str) -> bool {
+    let fold = |s: &str| {
+        let s = s.replace('\\', "/");
+        let windows = s.as_bytes().get(1) == Some(&b':');
+        let s = if windows { s.to_ascii_lowercase() } else { s };
+        s.trim_end_matches('/').to_string()
+    };
+    let (dir, root) = (fold(dir), fold(root));
+    !root.is_empty() && (dir == root || dir.starts_with(&format!("{root}/")))
 }
 
 fn split_targets(line: &str) -> Vec<String> {
@@ -2054,6 +2061,9 @@ pub struct App {
     pub field_history: std::collections::BTreeMap<String, Vec<String>>,
     /// The view, sort key and direction each folder was given (`panel.remember_view`).
     pub folder_views: std::collections::BTreeMap<String, (ViewMode, SortKey, bool)>,
+    /// The folders the panels were last in, newest first: the current directory of each
+    /// drive, as `drive_landing` reads it.
+    pub drive_dirs: Vec<String>,
     /// Where each file was left: newest first, capped at [`Self::SEEN_KEPT`] (SPEC 05 §1.12).
     pub seen: Vec<fcmd_config::SeenCfg>,
     /// The files that have been read or edited, oldest last — FAR's `Alt+F11`.
@@ -2461,6 +2471,7 @@ impl App {
             field_for: None,
             field_history: std::collections::BTreeMap::new(),
             folder_views: std::collections::BTreeMap::new(),
+            drive_dirs: Vec::new(),
             seen: Vec::new(),
             active: 0,
             mode: Mode::Normal,
@@ -2627,6 +2638,7 @@ impl App {
 
     fn read_panel(&mut self, index: usize) {
         self.apply_folder_look(index);
+        self.remember_drive_dir(index);
         let generation = self.panels[index].generation + 1;
         self.panels[index].generation = generation;
         self.panels[index].loading = true;
@@ -8233,15 +8245,8 @@ impl App {
                 false => Some(panel.cwd.clone()),
             }
         };
-        let on_this_drive =
-            |dir: &VPath| drive_letter_folded(dir).starts_with(&drive_letter_folded(&root_path));
+        let on_this_drive = |dir: &VPath| on_drive(&dir.to_string(), root);
 
-        let Some(theirs) = real_dir(&self.panels[1 - side]) else {
-            return keep();
-        };
-        if !on_this_drive(&theirs) {
-            return keep();
-        }
         // A panel already on this drive goes to the root, as it always did: choosing the
         // drive one is on is how one gets to the top of it in one keystroke, and a rule
         // that took that away to offer a directory one can already see on the other side
@@ -8249,7 +8254,39 @@ impl App {
         if real_dir(&self.panels[side]).is_some_and(|mine| on_this_drive(&mine)) {
             return keep();
         }
-        theirs.to_string()
+        if let Some(theirs) = real_dir(&self.panels[1 - side]).filter(|d| on_this_drive(d)) {
+            return theirs.to_string();
+        }
+        // Otherwise the last folder either panel was in on this drive, as DOS keeps a current
+        // directory per drive: from `C:\pippo` to `D:\pluto` and back to `C:` is `C:\pippo`
+        // again. A folder that is gone since — or a drive that does not answer — is the root.
+        let remembered = self.drive_dirs.iter().find(|d| on_drive(d, root)).cloned();
+        if let Some(dir) = remembered {
+            let probe = std::path::PathBuf::from(&dir);
+            if answers_within(move || probe.is_dir(), CD_PROBE_WAIT) == Some(true) {
+                return dir;
+            }
+        }
+        keep()
+    }
+
+    /// Note the folder a panel is showing as the last one on its drive (see `drive_landing`).
+    fn remember_drive_dir(&mut self, side: usize) {
+        let panel = &self.panels[side];
+        if panel.temp_origin().is_some() || !panel.cwd.is_local() {
+            return;
+        }
+        let dir = match panel.cwd.in_container() {
+            true => match VPath::local(panel.cwd.as_path()).parent() {
+                Some(p) => p,
+                None => return,
+            },
+            false => panel.cwd.clone(),
+        };
+        let text = dir.to_string();
+        self.drive_dirs.retain(|d| *d != text);
+        self.drive_dirs.insert(0, text);
+        self.drive_dirs.truncate(DRIVE_DIRS_KEPT);
     }
 
     /// `Shift+F3`: what can be done with the archive at hand, as a menu. MultiArc calls it
@@ -27553,6 +27590,41 @@ mod tests {
         );
     }
 
+    /// Each drive keeps the folder the panels were last in on it, as DOS does: from
+    /// `C:\pippo` to `D:\pluto\paperino` and back to `C:` is `C:\pippo` again.
+    #[test]
+    fn a_drive_remembers_the_last_folder_a_panel_was_in_on_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let c = dir.path().join("c");
+        let d = dir.path().join("d");
+        std::fs::create_dir_all(c.join("pippo")).unwrap();
+        std::fs::create_dir_all(d.join("pluto/paperino")).unwrap();
+        let (c_root, d_root) = (
+            c.to_string_lossy().into_owned(),
+            d.to_string_lossy().into_owned(),
+        );
+        let mut app = app_on_disk(dir.path());
+        app.goto(VPath::local(c.join("pippo")));
+        app.goto(VPath::local(d.join("pluto/paperino")));
+        // The other panel is on neither drive.
+        app.panels[1].cwd = VPath::parse("sftp://srv/");
+        assert_eq!(
+            app.drive_landing(0, &c_root),
+            c.join("pippo").to_string_lossy(),
+            "back to the folder this drive was left in"
+        );
+        // The drive the panel is on still means its root.
+        assert_eq!(app.drive_landing(0, &d_root), d_root);
+        // And a remembered folder that is gone is the root.
+        std::fs::remove_dir(c.join("pippo")).unwrap();
+        assert_eq!(app.drive_landing(0, &c_root), c_root);
+        // Windows spellings fold: `C:\` holds `c:\pippo`, `/mnt/d` does not hold `/mnt/dd`.
+        assert!(on_drive("c:\\pippo", "C:\\"));
+        assert!(on_drive("C:/pippo/x", "c:"));
+        assert!(!on_drive("/mnt/dd/src", "/mnt/d"));
+        assert!(on_drive("/mnt/d", "/mnt/d/"));
+    }
+
     /// Sending a panel to the drive the other one is already on lands it where that panel
     /// is, not at the top of the disk.
     #[test]
@@ -27669,20 +27741,12 @@ mod tests {
     /// while a path typed by hand keeps the case it was typed in.
     #[test]
     fn a_drive_letter_is_the_same_letter_in_either_case() {
-        assert_eq!(
-            drive_letter_folded(&VPath::parse("d:/work/src")).to_string(),
-            "D:/work/src"
-        );
-        assert_eq!(
-            drive_letter_folded(&VPath::parse("D:/work")).to_string(),
-            "D:/work"
-        );
-        // Only the drive letter. A Unix path that happens to start with a letter and a colon
-        // has no drive in it, and nothing else about any path is folded.
-        assert_eq!(
-            drive_letter_folded(&VPath::local("/mnt/Data")).to_string(),
-            "/mnt/Data"
-        );
+        assert!(on_drive("d:/work/src", "D:/"));
+        assert!(on_drive("D:\\work", "d:\\"));
+        // Only a drive letter's case folds. A Unix path keeps its case whatever it starts
+        // with.
+        assert!(!on_drive("/mnt/data/x", "/mnt/Data"));
+        assert!(on_drive("/mnt/Data/x", "/mnt/Data"));
     }
 
     /// `Shift+F3` on an archive: the menu names it, and what is on the menu is what we do.

@@ -4,6 +4,12 @@ Each panel shows one directory. `Tab` moves between them; most operations go fro
 with the cursor to the other one, which is what makes a two-panel manager faster than a tree:
 the destination is already on screen.
 
+Every drive keeps a current folder, as in DOS: choosing a drive in `Alt+F1` takes the panel
+to the folder the other panel is in on that drive, or else to the last folder either panel
+was in there — `C:\pippo`, over to `D:\pluto\paperino`, and back to `C:` is `C:\pippo`
+again — and to the root only when there is none or it is gone. Choosing the drive the panel
+is already on still means its root. The folders are remembered from one run to the next.
+
 `Enter` enters a directory or runs a file, `Backspace` or `..` climbs. `Alt+F1` and `Alt+F2`
 open the change-drive dialog for the left and right panel, over the panel it belongs to: a
 table of everything mounted — what each one is (disk, removable, optical, network, memory),
