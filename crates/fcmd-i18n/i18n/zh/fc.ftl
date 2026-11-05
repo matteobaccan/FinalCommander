@@ -1334,3 +1334,7 @@ editor-no-completion = 文件中没有其他以此开头的单词。
 
 ## A stored session's address, copied (NetBox's Generate URL).
 net-url-copied = 已复制 { $url }
+
+## The system log (SPEC 06 §16).
+menu-syslog = 系统日志
+syslog-reading = 正在读取系统日志…

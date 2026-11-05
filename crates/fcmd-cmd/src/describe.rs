@@ -235,6 +235,7 @@ impl Command {
             Command::ToolDuplicates => "find the files under this directory that are copies",
             Command::ToolTaskList => "the running processes, as a panel",
             Command::ToolGit => "the repository: what changed, the log, blame, branches",
+            Command::ToolSysLog => "the system log, the latest entries, in the viewer",
             Command::ToolGrab => "copy a piece of the screen as it stands",
             Command::ToolSyncDirs => "make the two directories hold the same thing",
             Command::ToolCompareContents => "compare them by what is in the files",

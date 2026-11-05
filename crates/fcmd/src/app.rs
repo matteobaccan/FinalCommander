@@ -48,6 +48,8 @@ pub enum Request {
         cwd: std::path::PathBuf,
         what: GitAsk,
     },
+    /// Read the latest entries of the system log into a file for the viewer (SPEC 06 §16).
+    SysLog,
     /// Ask which release is the latest (SPEC 11 §5). `manual` is the menu's command, which
     /// says what it found whatever it found; the daily check speaks only of a newer release.
     UpdateCheck {
@@ -642,6 +644,10 @@ pub enum Event {
     DupesFound {
         panel: usize,
         found: fcmd_jobs::dupes::Found,
+    },
+    /// A text for the viewer is ready, in a file, or why there is none.
+    TextReady {
+        result: Result<std::path::PathBuf, String>,
     },
     /// What git said: the changed files, a text to view, or the branches.
     GitDone {
@@ -2740,6 +2746,7 @@ impl App {
             }
             Event::DupesFound { panel, found } => self.dupes_found(panel, found),
             Event::GitDone { panel, result } => self.git_done(panel, result),
+            Event::TextReady { result } => self.git_done(self.active, result.map(GitOut::Text)),
             Event::AiDone { result } => match result {
                 Ok(answer) => {
                     self.set_status(String::new());
@@ -9207,6 +9214,11 @@ impl App {
             Command::MacroList => self.open_macros(),
             Command::AppScreens => self.open_screens(),
             Command::ToolGit => self.open_git(),
+            Command::ToolSysLog => {
+                let m = self.i18n.t("syslog-reading");
+                self.set_status(m);
+                self.requests.push(Request::SysLog);
+            }
             Command::AppUpdateCheck => {
                 let m = self.i18n.t("update-checking");
                 self.set_status(m);
@@ -32284,6 +32296,28 @@ abcdefghij
             (8, None),
             "not a .py: the settings"
         );
+    }
+
+    /// *Commands → System log* asks the worker, and the text it writes opens in the viewer.
+    #[test]
+    fn the_system_log_is_asked_for_and_opens_in_the_viewer() {
+        let dir = tempfile::tempdir().unwrap();
+        let log = dir.path().join("system.log");
+        std::fs::write(&log, "Nov 05 boot\n").unwrap();
+        let mut app = editing_app(dir.path());
+        app.take_requests();
+        app.run(Command::ToolSysLog);
+        assert!(app
+            .take_requests()
+            .iter()
+            .any(|r| matches!(r, Request::SysLog)));
+        app.handle_event(Event::TextReady { result: Ok(log) });
+        assert!(matches!(app.mode, Mode::Viewer(_)), "{:?}", app.mode);
+        app.mode = Mode::Normal;
+        app.handle_event(Event::TextReady {
+            result: Err("journalctl: not found".into()),
+        });
+        assert!(app.status_error && app.status.contains("journalctl"));
     }
 
     /// The git menu over a folder of this disk, and what changed coming back as a panel of

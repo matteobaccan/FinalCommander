@@ -610,3 +610,12 @@ second idea of what a repository is — on the worker, and shows git's own error
 * **Blame** of the file under the cursor, in the viewer.
 * **Branches**: a list with the one checked out marked. `Enter` puts `git switch <name>` on
   the command line to be read and run; nothing that changes the work tree runs from a list.
+
+## 16. The system log
+
+*Commands → System log* (`tool.syslog`), FAR's EventViewer: the latest entries of the
+system's own log in the viewer, read by the tool each system has for it — `journalctl -n 2000`
+on Linux, `log show --last 1h` on macOS, `wevtutil qe System /c:2000` on Windows — on the
+worker, into a file of the session's temporary folder. Without the rights to the system
+journal, what the tool says about that is what is shown. The viewer's search, filter and
+`Ctrl+F10` work on it as on any text; it is not a live tail.

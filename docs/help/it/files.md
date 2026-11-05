@@ -595,3 +595,9 @@ controllati per primi.
 **Apri con** — nel menu Comandi — elenca ogni blocco che corrisponde al file sotto il cursore,
 più il desktop, ed esegue quello scelto. È il modo di usare il comando `view` di un blocco senza
 riassegnare niente.
+
+# Il log di sistema
+
+*Comandi → Log di sistema* apre le ultime voci del log del sistema nel visualizzatore —
+`journalctl` su Linux, `log show` su macOS, il canale *System* del registro eventi di Windows —
+dove `F7` cerca e `Fine` è la riga più recente.

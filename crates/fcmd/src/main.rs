@@ -1788,6 +1788,14 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                         let _ = tx.send(Event::AiDone { result });
                     });
                 }
+                Request::SysLog => {
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || {
+                        let _ = tx.send(Event::TextReady {
+                            result: read_syslog(),
+                        });
+                    });
+                }
                 Request::Git { panel, cwd, what } => {
                     let tx = tx.clone();
                     runtime.spawn_blocking(move || {
@@ -4063,6 +4071,46 @@ fn dirs_home() -> Option<std::path::PathBuf> {
         .filter(|p| !p.as_os_str().is_empty())
 }
 
+/// The command each system reads its own log with: the latest entries, oldest first so the
+/// viewer's `End` is now. Run, never linked: each system has one tool that knows its log.
+fn syslog_command() -> (&'static str, &'static [&'static str]) {
+    if cfg!(windows) {
+        (
+            "wevtutil",
+            &["qe", "System", "/c:2000", "/rd:false", "/f:text"],
+        )
+    } else if cfg!(target_os = "macos") {
+        ("log", &["show", "--last", "1h", "--style", "syslog"])
+    } else {
+        (
+            "journalctl",
+            &["-n", "2000", "--no-pager", "-o", "short-iso"],
+        )
+    }
+}
+
+fn read_syslog() -> Result<std::path::PathBuf, String> {
+    let (program, args) = syslog_command();
+    let out = std::process::Command::new(program)
+        .args(args)
+        .stdin(std::process::Stdio::null())
+        .output()
+        .map_err(|e| format!("{program}: {e}"))?;
+    let mut text = out.stdout;
+    if text.is_empty() {
+        // journalctl without the rights to the system journal says so on stderr and exits 0.
+        text = out.stderr;
+    }
+    if text.is_empty() {
+        return Err(format!("{program}: {}", out.status));
+    }
+    let dir = std::env::temp_dir().join(format!("fcmd-sql-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let path = dir.join("system.log");
+    std::fs::write(&path, text).map_err(|e| e.to_string())?;
+    Ok(path)
+}
+
 /// Run git in `cwd` and say what it said, its own error included when it failed.
 fn git(cwd: &std::path::Path, args: &[&str]) -> Result<String, String> {
     let out = std::process::Command::new("git")
@@ -5863,6 +5911,7 @@ dir_attr = "D"
                 | Request::Dupes { .. }
                 | Request::SqlQuery { .. }
                 | Request::Git { .. }
+                | Request::SysLog
                 | Request::AiAsk { .. }
                 | Request::OpenUrl { .. }
                 | Request::Shell { .. }

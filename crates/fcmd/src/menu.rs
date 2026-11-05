@@ -604,6 +604,7 @@ pub fn menus() -> Vec<Menu> {
                     Action::Run(Command::ToolTaskList),
                 ),
                 item("menu-git", "Ctrl+Alt+G", Action::Run(Command::ToolGit)),
+                item("menu-syslog", "", Action::Run(Command::ToolSysLog)),
             ],
         },
         Menu {

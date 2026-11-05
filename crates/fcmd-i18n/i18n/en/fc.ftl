@@ -1368,3 +1368,7 @@ editor-no-completion = No other word in the file starts that way.
 
 ## A stored session's address, copied (NetBox's Generate URL).
 net-url-copied = Copied { $url }
+
+## The system log (SPEC 06 §16).
+menu-syslog = System log
+syslog-reading = Reading the system log…

@@ -1358,3 +1358,7 @@ editor-no-completion = Ни одно другое слово файла так �
 
 ## A stored session's address, copied (NetBox's Generate URL).
 net-url-copied = Скопировано: { $url }
+
+## The system log (SPEC 06 §16).
+menu-syslog = Системный журнал
+syslog-reading = Читаю системный журнал…

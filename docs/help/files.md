@@ -569,3 +569,9 @@ directory: an association for `*.zip` would stop that, so archives are checked f
 **Open with** — in the Commands menu — lists every block that matches the file under the
 cursor, plus the desktop, and runs the one chosen. It is the way to use the `view` command of
 a block without rebinding anything.
+
+# The system log
+
+*Commands → System log* opens the latest entries of the system's log in the viewer —
+`journalctl` on Linux, `log show` on macOS, the Windows event log's *System* channel — where
+`F7` searches it and `End` is the newest line.
