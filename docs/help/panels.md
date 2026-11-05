@@ -438,3 +438,9 @@ not on the screen, so it would be describing something that is not there. Most o
 are empty, because a dialog is answered with `Enter` and `Esc` — `F1` is this page, `F10` is
 `OK`, and `Ctrl` shows the key that moves it. `F1` leaves the dialog waiting behind the help, with everything you
 typed into it still there.
+
+# Names that are not what they look like
+
+A name with an invisible character that changes the direction of the text — the trick that
+makes `invoice‮fdp.exe` look like `invoiceexe.pdf` — shows that character as `�`, so a program
+cannot pass for a document.

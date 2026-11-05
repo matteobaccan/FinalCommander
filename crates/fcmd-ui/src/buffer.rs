@@ -217,6 +217,10 @@ impl Buffer {
             if ch == '\n' || ch == '\r' || ch == '\t' {
                 continue;
             }
+            // A bidirectional control is drawn as `�` rather than dropped: in a file name it
+            // is how `invoice\u{202E}fdp.exe` passes for a PDF, and a name that silently lost
+            // a character would hide that it ever had one (FAR's issue #871).
+            let ch = if is_bidi_control(ch) { '\u{FFFD}' } else { ch };
             let cw = ch.width().unwrap_or(0) as u16;
             if cw == 0 {
                 continue; // combining marks: not supported as separate cells in M1
@@ -371,8 +375,28 @@ impl Border {
 }
 
 /// Truncate to `cols` display columns, appending `…` when it does not fit.
+/// The characters that change the direction text is drawn in: the marks, embeddings,
+/// overrides and isolates of Unicode's bidirectional algorithm.
+/// The columns one character takes as `put_str` draws it: a bidirectional control is a `�`.
+pub fn cell_width(ch: char) -> usize {
+    if is_bidi_control(ch) {
+        1
+    } else {
+        ch.width().unwrap_or(0)
+    }
+}
+
+/// The columns a string takes as `put_str` draws it.
+pub fn str_cells(s: &str) -> usize {
+    s.chars().map(cell_width).sum()
+}
+
+pub fn is_bidi_control(ch: char) -> bool {
+    matches!(ch, '\u{200E}' | '\u{200F}' | '\u{061C}' | '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}')
+}
+
 pub fn truncate_cols(s: &str, cols: usize) -> String {
-    if s.width() <= cols {
+    if str_cells(s) <= cols {
         return s.to_string();
     }
     if cols == 0 {
@@ -381,7 +405,7 @@ pub fn truncate_cols(s: &str, cols: usize) -> String {
     let mut out = String::new();
     let mut used = 0usize;
     for ch in s.chars() {
-        let cw = ch.width().unwrap_or(0);
+        let cw = cell_width(ch);
         if used + cw > cols.saturating_sub(1) {
             break;
         }
@@ -394,7 +418,7 @@ pub fn truncate_cols(s: &str, cols: usize) -> String {
 
 /// Elide the middle of a path so both ends stay readable: `/home/mb/…/src/main.rs`.
 pub fn elide_middle(s: &str, cols: usize) -> String {
-    if s.width() <= cols || cols < 5 {
+    if str_cells(s) <= cols || cols < 5 {
         return truncate_cols(s, cols);
     }
     let keep = cols - 1;
@@ -404,7 +428,7 @@ pub fn elide_middle(s: &str, cols: usize) -> String {
     let mut head = String::new();
     let mut used = 0;
     for ch in s.chars() {
-        let cw = ch.width().unwrap_or(0);
+        let cw = cell_width(ch);
         if used + cw > head_cols {
             break;
         }
@@ -415,7 +439,7 @@ pub fn elide_middle(s: &str, cols: usize) -> String {
     let mut tail: Vec<char> = Vec::new();
     let mut used = 0;
     for ch in s.chars().rev() {
-        let cw = ch.width().unwrap_or(0);
+        let cw = cell_width(ch);
         if used + cw > tail_cols {
             break;
         }
@@ -428,6 +452,15 @@ pub fn elide_middle(s: &str, cols: usize) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_right_to_left_override_is_shown_and_not_obeyed() {
+        let mut b = Buffer::new(20, 1);
+        b.put_str(0, 0, "invoice\u{202E}fdp.exe", Style::default(), 20);
+        let text: String = b.to_text().lines().next().unwrap().trim_end().to_string();
+        assert_eq!(text, "invoice\u{FFFD}fdp.exe");
+    }
+
     use super::*;
 
     fn style() -> Style {

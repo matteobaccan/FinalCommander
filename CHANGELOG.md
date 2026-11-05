@@ -28,6 +28,10 @@ Notable changes, newest first. The format follows
   their status in front as `git status --short` writes it; the log and the blame of the file
   under the cursor in the viewer; the branches, where `Enter` puts `git switch` on the command
   line for you to run. The machine's own `git` answers, and says what is wrong when it can't.
+- **A file name's direction controls are shown.** A right-to-left override or another
+  bidirectional control in a name is drawn as `�` instead of vanishing, so
+  `invoice‮fdp.exe` reads as `invoice�fdp.exe` and cannot pass for a PDF. It never
+  reached the terminal; now it does not hide either. FAR's issue #871.
 - **Overwrite when the size differs**, a new choice for a file that is already there in the
   copy dialog: a file of another size is copied over, one of the same size left alone — the
   quick way to finish a copy that stopped half-way. FAR's issue #493.

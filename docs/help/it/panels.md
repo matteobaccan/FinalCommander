@@ -468,3 +468,9 @@ non sono sullo schermo, e descriverli sarebbe descrivere qualcosa che non c'è. 
 caselle sono vuote, perché a un dialogo si risponde con `Invio` ed `Esc` — `F1` è questa
 pagina, `F10` è `OK`, e `Ctrl` mostra il tasto che lo sposta. `F1` lascia il dialogo in attesa dietro l'aiuto, con tutto quello
 che è stato scritto dentro ancora al suo posto.
+
+# Nomi che non sono quello che sembrano
+
+Un nome con un carattere invisibile che cambia la direzione del testo — il trucco che fa
+sembrare `fattura‮fdp.exe` un `fatturaexe.pdf` — mostra quel carattere come `�`, così un
+programma non può passare per un documento.
