@@ -226,6 +226,12 @@ nome su cui stava. L'impostazione è `Aggiorna il pannello automaticamente` in
 `Opzioni → Impostazioni del pannello` (`panel.auto_refresh`); `Ctrl+R` c'è ancora per un
 server, un archivio, e le volte in cui la sorveglianza non ha niente da riferire.
 
+`Ogni cartella tiene la sua vista e il suo ordinamento`, nello stesso dialogo
+(`panel.remember_view`, spento di default), dà a ogni cartella la vista e l'ordinamento che vi
+hai scelto l'ultima volta: una cartella di foto può restare in `Brief` per data mentre le altre
+restano come sono. Una cartella che non hai mai cambiato mostra quello che il pannello aveva
+prima di entrare in una che tiene i suoi.
+
 `Ctrl+←` e `Ctrl+→` spostano la linea fra i due pannelli. `Ctrl+↑` alza il bordo inferiore dei
 pannelli — diventano più corti, e le righe che cedono mostrano l'output dell'ultimo comando,
 che è come si guarda scorrere una compilazione senza lasciare i pannelli; `Ctrl+↓` restituisce

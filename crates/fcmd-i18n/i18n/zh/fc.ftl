@@ -1363,3 +1363,6 @@ replace-tpl-hint = Enter 执行 · Ins 为最近的命名保存 · Del 删除已
 replace-tpl-name = 将此替换保存为
 replace-tpl-kept = 已保存为 {$name}
 replace-tpl-empty = 还没有替换：先按 Ctrl+F7
+
+# Panel settings: a view and a sort per folder (FAR's issue #389)
+opt-remember-view = 每个文件夹记住自己的视图和排序

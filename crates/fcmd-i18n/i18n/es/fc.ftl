@@ -1387,3 +1387,6 @@ replace-tpl-hint = Intro lo ejecuta · Ins guarda uno reciente con nombre · Sup
 replace-tpl-name = Guardar este reemplazo como
 replace-tpl-kept = Guardado como {$name}
 replace-tpl-empty = Aún no hay reemplazos: primero Ctrl+F7
+
+# Panel settings: a view and a sort per folder (FAR's issue #389)
+opt-remember-view = Cada carpeta conserva su vista y su orden

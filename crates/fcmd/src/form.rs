@@ -478,6 +478,12 @@ impl Form {
                     t("opt-auto-refresh"),
                     cfg.panel.auto_refresh,
                 ),
+                // FAR's issue #389: each folder keeps the view and the sort it was given.
+                Field::toggle(
+                    "panel.remember_view",
+                    t("opt-remember-view"),
+                    cfg.panel.remember_view,
+                ),
                 Field::Separator,
                 choice(
                     "panel.view",

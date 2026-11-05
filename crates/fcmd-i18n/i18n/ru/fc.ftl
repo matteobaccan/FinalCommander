@@ -1387,3 +1387,6 @@ replace-tpl-hint = Enter выполняет · Ins сохраняет недав
 replace-tpl-name = Сохранить замену как
 replace-tpl-kept = Сохранено как {$name}
 replace-tpl-empty = Замен ещё не было: сначала Ctrl+F7
+
+# Panel settings: a view and a sort per folder (FAR's issue #389)
+opt-remember-view = Каждая папка помнит свой вид и сортировку

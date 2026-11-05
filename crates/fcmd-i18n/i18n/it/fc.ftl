@@ -1388,3 +1388,6 @@ replace-tpl-hint = Enter la esegue · Ins tiene una recente con un nome · Del d
 replace-tpl-name = Tieni questa sostituzione come
 replace-tpl-kept = Tenuta come {$name}
 replace-tpl-empty = Ancora nessuna sostituzione: prima Ctrl+F7
+
+# Panel settings: a view and a sort per folder (FAR's issue #389)
+opt-remember-view = Ogni cartella tiene la sua vista e il suo ordinamento

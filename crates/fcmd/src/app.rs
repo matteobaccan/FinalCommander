@@ -2052,6 +2052,8 @@ pub struct App {
     pub field_for: Option<(Box<Form>, &'static str)>,
     /// What has been typed into each dialog field that keeps a history, newest first.
     pub field_history: std::collections::BTreeMap<String, Vec<String>>,
+    /// The view, sort key and direction each folder was given (`panel.remember_view`).
+    pub folder_views: std::collections::BTreeMap<String, (ViewMode, SortKey, bool)>,
     /// Where each file was left: newest first, capped at [`Self::SEEN_KEPT`] (SPEC 05 §1.12).
     pub seen: Vec<fcmd_config::SeenCfg>,
     /// The files that have been read or edited, oldest last — FAR's `Alt+F11`.
@@ -2458,6 +2460,7 @@ impl App {
             browse_for: None,
             field_for: None,
             field_history: std::collections::BTreeMap::new(),
+            folder_views: std::collections::BTreeMap::new(),
             seen: Vec::new(),
             active: 0,
             mode: Mode::Normal,
@@ -2623,6 +2626,7 @@ impl App {
     }
 
     fn read_panel(&mut self, index: usize) {
+        self.apply_folder_look(index);
         let generation = self.panels[index].generation + 1;
         self.panels[index].generation = generation;
         self.panels[index].loading = true;
@@ -8715,6 +8719,7 @@ impl App {
                 });
             }
             Command::PanelViewSet(view) => {
+                let before = self.look(self.active);
                 self.panel_mut().view = view;
                 self.panel_mut().top = 0;
                 self.scroll();
@@ -8731,10 +8736,12 @@ impl App {
                     .i18n
                     .t_args("msg-view", &[("mode", view.as_str().into())]);
                 self.set_status(msg);
+                self.remember_folder_look(active, before);
             }
             Command::PanelSortBy(key) => {
                 let allow = self.cfg.panel.allow_reverse_sort;
                 let side = self.active;
+                let before = self.look(side);
                 let panel = self.panel_mut();
                 panel.sort.toggle(key, allow);
                 let reverse = panel.sort.reverse;
@@ -8751,11 +8758,15 @@ impl App {
                     ],
                 );
                 self.set_status(msg);
+                self.remember_folder_look(side, before);
             }
             Command::PanelSortReverse => {
+                let side = self.active;
+                let before = self.look(side);
                 let panel = self.panel_mut();
                 panel.sort.reverse = !panel.sort.reverse;
                 panel.rebuild();
+                self.remember_folder_look(side, before);
             }
             // FAR's `Group`: the bands `[[sort_group]]` cuts the listing into, on or off.
             // Saying how many there are is the whole answer to "why did nothing move?",
@@ -17826,6 +17837,7 @@ impl App {
                     "unsorted" | "none" => SortKey::Unsorted,
                     _ => SortKey::Name,
                 };
+                let before = self.look(pick.side);
                 let panel = &mut self.panels[pick.side];
                 // Choosing the order that is already in force turns it round, the way FAR
                 // does it — unless the setting says reverse sorting is not wanted.
@@ -17842,7 +17854,58 @@ impl App {
                 }
                 let msg = self.i18n.t_args("sort-set", &[("name", name.into())]);
                 self.set_status(msg);
+                self.remember_folder_look(pick.side, before);
             }
+        }
+    }
+
+    /// With `panel.remember_view` on, the folder on this side keeps the view and the sort it
+    /// has now (FAR's issue #389). A list panel is not a folder and keeps nothing.
+    fn remember_folder_look(&mut self, side: usize, before: (ViewMode, SortKey, bool)) {
+        if !self.cfg.panel.remember_view || self.panels[side].temp.is_some() {
+            return;
+        }
+        let look = self.look(side);
+        let panel = &mut self.panels[side];
+        // The base is what the panel had before any folder of its own; the first change in a
+        // plain folder is the moment that folder stops being plain, and what it had until
+        // then is what the plain ones go on showing.
+        if panel.base_look.is_none() {
+            panel.base_look = Some(before);
+        }
+        self.folder_views.insert(panel.cwd.to_string(), look);
+    }
+
+    fn look(&self, side: usize) -> (ViewMode, SortKey, bool) {
+        let panel = &self.panels[side];
+        (panel.view, panel.sort.key, panel.sort.reverse)
+    }
+
+    /// Going into a folder: its own view and sort if it was given some, and otherwise the
+    /// ones the panel had before it went into any that was.
+    fn apply_folder_look(&mut self, side: usize) {
+        if !self.cfg.panel.remember_view || self.panels[side].temp.is_some() {
+            return;
+        }
+        let key = self.panels[side].cwd.to_string();
+        let panel = &mut self.panels[side];
+        let current = (panel.view, panel.sort.key, panel.sort.reverse);
+        let wanted = match self.folder_views.get(&key) {
+            Some(look) => {
+                if panel.base_look.is_none() {
+                    panel.base_look = Some(current);
+                }
+                *look
+            }
+            None => match panel.base_look.take() {
+                Some(base) => base,
+                None => return,
+            },
+        };
+        if wanted != current {
+            (panel.view, panel.sort.key, panel.sort.reverse) = wanted;
+            panel.top = 0;
+            panel.rebuild();
         }
     }
 
@@ -22248,6 +22311,11 @@ fn offset_at_line(editor: &Editor, line: usize) -> u64 {
         .take(line)
         .map(|l| editor.buffer.codepage.encode(l).len() as u64 + eol)
         .sum()
+}
+
+/// A sort key by the name the state file keeps it under.
+pub(crate) fn sort_key_named(s: &str) -> Option<SortKey> {
+    sort_key(s)
 }
 
 fn parse_sort(s: &str) -> SortKey {
@@ -32632,6 +32700,46 @@ abcdefghij
         let mut app = app_on_disk(dir);
         app.editor_size = (40, 6);
         app
+    }
+
+    /// FAR's issue #389: with `panel.remember_view` on, a folder keeps the view and the
+    /// sort it was given, and the folders never given one show what the panel had.
+    #[test]
+    fn a_folder_keeps_its_own_view_and_sort() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("photos")).unwrap();
+        std::fs::create_dir(dir.path().join("code")).unwrap();
+        let photos = VPath::local(dir.path().join("photos"));
+        let code = VPath::local(dir.path().join("code"));
+        let mut app = app_on_disk(dir.path());
+        let base = (app.panel().view, app.panel().sort.key);
+
+        // Off, which is the default: a change follows the panel everywhere.
+        app.goto(photos.clone());
+        app.run(Command::PanelViewSet(ViewMode::Brief));
+        app.goto(code.clone());
+        assert_eq!(app.panel().view, ViewMode::Brief);
+        assert!(app.folder_views.is_empty());
+        app.run(Command::PanelViewSet(base.0));
+
+        app.cfg.panel.remember_view = true;
+        app.goto(photos.clone());
+        app.run(Command::PanelViewSet(ViewMode::Brief));
+        app.run(Command::PanelSortBy(SortKey::MTime));
+        app.goto(code.clone());
+        assert_eq!(
+            (app.panel().view, app.panel().sort.key),
+            base,
+            "a folder never given a view shows what the panel had"
+        );
+        app.goto(photos.clone());
+        assert_eq!(
+            app.panel().view,
+            ViewMode::Brief,
+            "and the photos keep theirs"
+        );
+        assert_eq!(app.panel().sort.key, SortKey::MTime);
+        assert!(app.folder_views.contains_key(&photos.to_string()));
     }
 
     /// FAR's issue #57: `Shift+F` in the viewer follows a log as it is written. The loop

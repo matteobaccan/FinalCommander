@@ -213,6 +213,11 @@ setting is `Refresh the panel automatically` in `Options → Panel settings`
 (`panel.auto_refresh`); `Ctrl+R` is still there for a server, an archive, and the times a
 watch has nothing to report.
 
+`Each folder keeps its own view and sort`, in the same dialog (`panel.remember_view`, off by
+default), gives every folder the view and the sort you last chose in it: a folder of photos
+can stay in `Brief` by date while the rest stay as they are. A folder you never changed shows
+what the panel had before it went into one that keeps its own.
+
 `Ctrl+←` and `Ctrl+→` move the line between the two panels. `Ctrl+↑` brings the panels' bottom
 edge up — they get shorter, and the rows they give up show the output of the last command,
 which is how you watch a build go by without leaving the panels; `Ctrl+↓` gives the rows back.

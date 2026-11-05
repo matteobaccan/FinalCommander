@@ -345,6 +345,14 @@ middle of the object files is not what the mask was written for. And **`reverse`
 a band**: it turns the order round inside each one, because a band that swapped ends with it
 would make the list mean the opposite of what it says.
 
+### 4a. A view and a sort per folder (`panel.remember_view`)
+
+Off by default (FAR's issue #389). On, choosing a view (`Ctrl+1`…`Ctrl+0`) or a sort key or
+direction in a folder records `(view, key, reverse)` for that folder's path in the state file
+(`folder_views`). Going into a recorded folder applies its record; going into one with none
+puts back the look the panel had before it entered the first recorded one. A list panel keeps
+nothing.
+
 ### 4b. Selecting with a mask, and whether folders count
 
 The keys that name a mask — `+` and `-`, and the two that take the name under the cursor apart

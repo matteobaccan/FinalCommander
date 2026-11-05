@@ -1397,3 +1397,6 @@ replace-tpl-hint = Enter runs it · Ins keeps a recent one by name · Del forget
 replace-tpl-name = Keep this replacement as
 replace-tpl-kept = Kept as {$name}
 replace-tpl-empty = No replacement yet: Ctrl+F7 first
+
+# Panel settings: a view and a sort per folder (FAR's issue #389)
+opt-remember-view = Each folder keeps its own view and sort

@@ -1387,3 +1387,6 @@ replace-tpl-hint = Enter führt aus · Einfg behält eine letzte unter einem Nam
 replace-tpl-name = Diese Ersetzung behalten als
 replace-tpl-kept = Behalten als {$name}
 replace-tpl-empty = Noch keine Ersetzung: zuerst Strg+F7
+
+# Panel settings: a view and a sort per folder (FAR's issue #389)
+opt-remember-view = Jeder Ordner behält seine Ansicht und Sortierung

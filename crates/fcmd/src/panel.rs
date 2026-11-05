@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use fcmd_core::sort::SortGroups;
+use fcmd_core::SortKey;
 use fcmd_core::{Entry, EntryId, EntryKind, Listing, Selection, Sort, VPath, ViewMode};
 
 /// A panel made of a list somebody handed us rather than of a directory: find results,
@@ -83,6 +84,9 @@ pub struct Panel {
     /// applied; this is what they are.
     pub groups: Arc<SortGroups>,
     pub view: ViewMode,
+    /// The view and sort the panel had before it went into a folder that keeps its own
+    /// (`panel.remember_view`): what comes back on leaving for one that does not.
+    pub base_look: Option<(ViewMode, SortKey, bool)>,
     pub show_hidden: bool,
     /// Which code page the *names* in this panel are read as (SPEC 02 §6b).
     ///
@@ -164,6 +168,7 @@ impl Panel {
             descriptions: Default::default(),
             links: Default::default(),
             view,
+            base_look: None,
             show_hidden,
             name_page: None,
             real_paths: None,

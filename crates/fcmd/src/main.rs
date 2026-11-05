@@ -695,6 +695,15 @@ fn run(cli: Cli) -> Result<()> {
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| d.as_secs() / 86_400),
     );
+    app.folder_views = state
+        .folder_views
+        .iter()
+        .filter_map(|f| {
+            let view = fcmd_core::ViewMode::parse(&f.view)?;
+            let sort = crate::app::sort_key_named(&f.sort)?;
+            Some((f.path.clone(), (view, sort, f.reverse)))
+        })
+        .collect();
     app.field_history = state
         .field_history
         .into_iter()
@@ -1994,6 +2003,16 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
             }
             app.seen.clone()
         },
+        folder_views: app
+            .folder_views
+            .iter()
+            .map(|(path, (view, sort, reverse))| fcmd_config::FolderView {
+                path: path.clone(),
+                view: view.as_str().to_string(),
+                sort: sort.as_str().to_string(),
+                reverse: *reverse,
+            })
+            .collect(),
         field_history: app
             .field_history
             .iter()

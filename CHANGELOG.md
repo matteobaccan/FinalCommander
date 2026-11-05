@@ -20,6 +20,9 @@ Notable changes, newest first. The format follows
 - **Masks that look at the path.** In the copy dialog's and the synchronisation's filter a
   mask with a `/` in it is matched against where a file is: `src/*.rs`, or `*|*/node_modules/*`
   to take everything but that folder, which is then not even read. FAR's issue #58.
+- **A view and a sort per folder**, if you want them: *Each folder keeps its own view and sort*
+  in the panel settings (`panel.remember_view`, off by default) gives every folder back the
+  view and the sort last chosen in it, and the others what the panel had. FAR's issue #389.
 
 ### Fixed
 

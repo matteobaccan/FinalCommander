@@ -1387,3 +1387,6 @@ replace-tpl-hint = Entrée l'exécute · Inser garde un récent sous un nom · S
 replace-tpl-name = Garder ce remplacement sous le nom
 replace-tpl-kept = Gardé sous {$name}
 replace-tpl-empty = Aucun remplacement encore : d'abord Ctrl+F7
+
+# Panel settings: a view and a sort per folder (FAR's issue #389)
+opt-remember-view = Chaque dossier garde sa vue et son tri

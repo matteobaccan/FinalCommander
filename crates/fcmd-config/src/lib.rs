@@ -257,6 +257,10 @@ pub struct PanelCfg {
     pub scrollbar: bool,
     /// Free space on the device, in the bottom frame.
     pub free_space: bool,
+    /// Each folder keeps the view and the sort it was last given, and gets them back when the
+    /// panel goes there again; a folder never given one shows what the panel had before
+    /// (FAR's issue #389). Off by default: one view everywhere is what most people expect.
+    pub remember_view: bool,
     /// Re-read a local directory when something in it changes, without `Ctrl+R`. On by
     /// default: a panel that is showing a directory as it was ten minutes ago is lying.
     pub auto_refresh: bool,
@@ -299,6 +303,7 @@ impl Default for PanelCfg {
             status_line: true,
             scrollbar: true,
             free_space: true,
+            remember_view: false,
             auto_refresh: true,
             split: 50,
             height_cut: 0,
@@ -1980,6 +1985,7 @@ impl Config {
             "panel.scrollbar" => self.panel.scrollbar = parse_bool(value)?,
             "panel.free_space" => self.panel.free_space = parse_bool(value)?,
             "panel.auto_refresh" => self.panel.auto_refresh = parse_bool(value)?,
+            "panel.remember_view" => self.panel.remember_view = parse_bool(value)?,
             "general.confirm_exit" => self.general.confirm_exit = parse_bool(value)?,
             "general.confirm_delete" => self.general.confirm_delete = parse_bool(value)?,
             "general.use_trash" => self.general.use_trash = parse_bool(value)?,
@@ -2271,6 +2277,12 @@ attrs = "-h"
             field_history: vec![FieldHistory {
                 key: "find.mask".into(),
                 lines: vec!["*.rs".into()],
+            }],
+            folder_views: vec![FolderView {
+                path: "/photos".into(),
+                view: "brief".into(),
+                sort: "mtime".into(),
+                reverse: true,
             }],
             history_marks: vec![HistoryMark {
                 kind: "commands".into(),
@@ -2712,6 +2724,9 @@ pub struct State {
     /// What has been typed into the dialogs' own fields, newest first, one row per field.
     #[serde(default)]
     pub field_history: Vec<FieldHistory>,
+    /// The view and the sort each folder was given, with `panel.remember_view` on.
+    #[serde(default)]
+    pub folder_views: Vec<FolderView>,
     /// What each history line has to say for itself: when it was last used, and whether it
     /// is pinned. The lines themselves are in the three lists above; this is the table
     /// beside them, and a line with no row here is simply one nobody has pinned and nobody
@@ -2755,6 +2770,16 @@ pub struct RenameJournal {
 pub struct RenamedFile {
     pub from: String,
     pub to: String,
+}
+
+/// The view and the sort one folder was given (`panel.remember_view`, FAR's issue #389).
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FolderView {
+    pub path: String,
+    pub view: String,
+    pub sort: String,
+    #[serde(default)]
+    pub reverse: bool,
 }
 
 /// One dialog field's history, as the state file holds it.
