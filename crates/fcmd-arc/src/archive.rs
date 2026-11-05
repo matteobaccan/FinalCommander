@@ -179,6 +179,7 @@ impl Archive {
             Format::Cpio => crate::cpio::index_file(path, &name, limits, cancel)?,
             Format::Rpm => crate::cpio::index_rpm(path, &name, limits, cancel)?,
             Format::Sqlite => crate::sqlite::index(path, &name, limits, cancel)?,
+            Format::Json => crate::json::index(path, &name, limits, cancel)?,
             f if f.is_single() => index_single(path, &name, &leaf, format, limits, cancel)?,
             _ => index_tar(path, &name, format, limits, cancel)?,
         };
@@ -683,6 +684,11 @@ impl Archive {
             return self.copy_out_through_tool(&inner, entry.size, out, cancel, progress);
         };
         match format {
+            Format::Json => {
+                let n = crate::json::copy_out(&self.source, &self.name(), &inner, out)?;
+                progress(n);
+                Ok(n)
+            }
             Format::Sqlite => {
                 let n = crate::sqlite::copy_out(&self.source, &self.name(), &inner, out, cancel)?;
                 progress(n);
@@ -926,7 +932,13 @@ pub(crate) fn decoder(path: &Path, format: Format) -> Result<Box<dyn Read>> {
                 }
             })?)
         }
-        Format::Zip | Format::SevenZ | Format::Ar | Format::Cpio | Format::Rpm | Format::Sqlite => {
+        Format::Zip
+        | Format::SevenZ
+        | Format::Ar
+        | Format::Cpio
+        | Format::Rpm
+        | Format::Sqlite
+        | Format::Json => {
             return Err(ArcError::Broken {
                 path: name,
                 reason: format!("a {} is not a stream", format.label()),
@@ -2011,7 +2023,7 @@ mod tests {
         // A database holds tables, not a tree of files: `sqlite.rs` has its own tests.
         for format in Format::ALL
             .into_iter()
-            .filter(|f| f.holds_many() && *f != Format::Sqlite)
+            .filter(|f| f.holds_many() && !matches!(f, Format::Sqlite | Format::Json))
         {
             let path = dir.path().join(format!("tree.{}", format.extension()));
             write_archive(&path, format, &TREE);
@@ -2713,7 +2725,7 @@ mod tests {
         // A database holds tables, not a tree of files: `sqlite.rs` has its own tests.
         for format in Format::ALL
             .into_iter()
-            .filter(|f| f.holds_many() && *f != Format::Sqlite)
+            .filter(|f| f.holds_many() && !matches!(f, Format::Sqlite | Format::Json))
         {
             let path = dir.path().join(format!("tree.{}", format.extension()));
             write_archive(&path, format, &TREE);

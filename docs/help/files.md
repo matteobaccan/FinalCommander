@@ -392,6 +392,14 @@ inside it: `sql: SELECT name, count(*) FROM orders GROUP BY name`. The rows open
 as a table. A statement that would change the database — `DELETE`, `UPDATE`, `DROP` — is
 refused by SQLite itself, because the database is opened read-only.
 
+# A JSON file as a folder
+
+`Enter` on a `.json` file goes inside it: every object and array is a folder — an array's items
+are `[0]`, `[1]`, … — and every other value is a file holding it, a string as plain text. So a
+deep configuration or an API's answer can be walked with the arrows and `Enter`, a value read
+with `F3`, copied out with `F5`, found with `Alt+F7`. `F3` and `F4` on the file itself still
+view and edit the whole document; nothing inside can be changed from the panel.
+
 # Writing a text file again
 
 Text arrives from somewhere else: a zip off a Windows machine, a dump out of a database, a

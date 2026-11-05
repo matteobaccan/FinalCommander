@@ -413,6 +413,15 @@ Una query tua è `sql:` sulla riga di comando, col cursore sul database o il pan
 come tabella. Un'istruzione che cambierebbe il database — `DELETE`, `UPDATE`, `DROP` — è
 rifiutata da SQLite stesso, perché il database è aperto in sola lettura.
 
+# Un file JSON come cartella
+
+`Enter` su un file `.json` ci entra: ogni oggetto e array è una cartella — gli elementi di un
+array sono `[0]`, `[1]`, … — e ogni altro valore è un file che lo contiene, una stringa come
+testo semplice. Così una configurazione profonda o la risposta di un'API si percorre con le
+frecce e `Enter`, un valore si legge con `F3`, si copia fuori con `F5`, si trova con `Alt+F7`.
+`F3` e `F4` sul file stesso continuano a mostrare e modificare tutto il documento; niente dentro
+si può cambiare dal pannello.
+
 # Riscrivere un file di testo
 
 Il testo arriva da altrove: uno zip da una macchina Windows, un dump da un database, un file

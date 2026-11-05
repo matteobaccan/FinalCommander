@@ -938,6 +938,7 @@ dependencies = [
  "regex",
  "rusqlite",
  "ruzstd",
+ "serde_json",
  "sevenz-rust2",
  "tar",
  "tempfile",

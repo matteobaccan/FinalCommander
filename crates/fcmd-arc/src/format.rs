@@ -37,11 +37,13 @@ pub enum Format {
     /// An SQLite 3 database: its tables and views as CSV entries, and `schema.sql`. Read
     /// only — the file is opened read-only and a container never writes it (`sqlite.rs`).
     Sqlite,
+    /// A JSON document: objects and arrays as folders, values as files (`json.rs`). Read only.
+    Json,
 }
 
 impl Format {
     /// Every format this crate knows, read or write.
-    pub const ALL: [Format; 15] = [
+    pub const ALL: [Format; 16] = [
         Format::Zip,
         Format::SevenZ,
         Format::Tar,
@@ -57,6 +59,7 @@ impl Format {
         Format::Xz,
         Format::Zst,
         Format::Sqlite,
+        Format::Json,
     ];
 
     /// The ones a dialog may offer to *create*.
@@ -83,7 +86,7 @@ impl Format {
     pub fn writable(self) -> bool {
         !matches!(
             self,
-            Format::Ar | Format::Cpio | Format::Rpm | Format::Sqlite
+            Format::Ar | Format::Cpio | Format::Rpm | Format::Sqlite | Format::Json
         )
     }
 
@@ -131,6 +134,7 @@ impl Format {
             Format::Xz => "xz",
             Format::Zst => "zst",
             Format::Sqlite => "sqlite",
+            Format::Json => "json",
         }
     }
 
@@ -152,6 +156,7 @@ impl Format {
             Format::Xz => "xz",
             Format::Zst => "zst",
             Format::Sqlite => "sqlite",
+            Format::Json => "json",
         }
     }
 
@@ -196,7 +201,7 @@ impl Format {
     /// `Cr24` header in front of it, so it is not one.
     pub fn of_name(name: &str) -> Option<Format> {
         let lower = name.to_ascii_lowercase();
-        const BY_SUFFIX: [(&str, Format); 40] = [
+        const BY_SUFFIX: [(&str, Format); 41] = [
             (".tar.gz", Format::TarGz),
             (".tgz", Format::TarGz),
             (".tar.bz2", Format::TarBz2),
@@ -236,6 +241,7 @@ impl Format {
             (".sqlite3", Format::Sqlite),
             (".db3", Format::Sqlite),
             (".s3db", Format::Sqlite),
+            (".json", Format::Json),
             // One compressed file, no tar. Last, so every `.tar.*` and `.t?z` above wins:
             // the list is searched in order and `.tar.gz` ends with `.gz` as well.
             (".gz", Format::Gz),

@@ -182,6 +182,20 @@ FAR's SQLiteDB plugin, as one more read-only container (`fcmd-arc::sqlite`, `For
 * SQLite is compiled in (`rusqlite` with `bundled`), the one C library in `fcmd-arc`; the
   release matrix compiles C already for `ring`.
 
+### 4c. A JSON document as a container
+
+FarNet's JsonKit, as a container (`fcmd-arc::json`, `Format::Json`), offered for `.json`:
+
+* An object or an array is a folder; an object's keys are its entries' names (a `/` becomes
+  `_`, an empty key `(empty)`, two keys that would then collide get `~2`), an array's items are
+  `[0]`, `[1]`, …, in the document's own order.
+* A value that is not a container is a file. A string's bytes are the string itself, so a
+  value holding a script, a certificate or a path reads as what it is; a number, `true`,
+  `false` and `null` are their JSON. `F3`, `F5` and `Alt+F7` work on them as on any file.
+* Read only, and a document over 64 MiB is refused with a reason — that is data for the
+  viewer's table mode (`jsonl`) or a query, not a tree. Broken JSON says the line and column.
+* `F3` and `F4` on the `.json` itself in the panel are unchanged; `Enter` is what goes in.
+
 ## 5. Editing inside a VFS
 
 **Implemented today for `sftp`**: `F4` on a remote file fetches it into

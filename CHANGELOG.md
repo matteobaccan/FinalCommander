@@ -15,6 +15,10 @@ Notable changes, newest first. The format follows
   how many, how big and the host before anything goes. The answer is a Markdown file in
   `fcmd-ai/` beside the settings, opened in the viewer; `ai:` alone opens that folder as a
   panel of everything asked so far.
+- **A JSON file as a folder.** `Enter` on a `.json` goes inside it: objects and arrays are
+  folders, an array's items `[0]`, `[1]`, …, and every other value a file — a string as its
+  text — to read with `F3`, copy out with `F5` or search with `Alt+F7`. `F3` and `F4` on the
+  file itself are as they were. FarNet's JsonKit; read only.
 - **SQLite databases** open like an archive: `Enter` on a `.sqlite`, `.sqlite3`, `.db3` or a
   `.db` that is one, and each table and view is a `.csv` of its rows beside a `schema.sql` —
   `F3` shows a table in table mode, `F5` exports it, `Alt+F7` searches every table. `sql:` on

@@ -23,6 +23,7 @@ mod archive;
 mod cpio;
 mod ext;
 mod format;
+pub mod json;
 mod limits;
 mod nest;
 mod rebuild;

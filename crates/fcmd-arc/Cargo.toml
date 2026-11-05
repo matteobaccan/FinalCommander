@@ -39,6 +39,9 @@ regex = "1"
 # binary, so it is still one file with nothing to install. The release matrix compiles C
 # already (`ring` under the SSH client, with `musl-gcc` for the static build). SQLite is in
 # the public domain; rusqlite and libsqlite3-sys are MIT.
+# JSON documents as a container (`json.rs`). Already a direct dependency of fcmd-view and
+# fcmd-plug, with `preserve_order` there, so a document's keys keep their order here too.
+serde_json = "1.0.154"
 rusqlite = { version = "0.41", features = ["bundled"] }
 tar = { version = "0.4", default-features = false }
 thiserror = "2"
