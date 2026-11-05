@@ -6,6 +6,8 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+## [0.32.0] — 2026-11-05
+
 ### Added
 
 - **Is there a newer release?** *Options → Check for updates* asks GitHub for the latest

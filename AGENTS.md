@@ -178,13 +178,19 @@ Nothing needed to continue lives outside the repository; this section is the mem
 
 ## Where the work is right now
 
-**0.31.0 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
+**0.32.0 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
 like every release before it. A push to `main` that touches `CHANGELOG.md` or `Cargo.toml`
 is what makes `tag.yml` fire. The site is published with each release, from its tag. `CHANGELOG.md` is the history, release by release; this section only
 says where things stand.
 
 What the last few were about, newest first:
 
+- **0.32.0** — dialogs, menus and lists drawn as FAR draws them (double frame inset in a grey
+  box, a rule above the buttons, the default button in braces); a release check, as a menu
+  command and an opt-in daily one; `Ctrl+C` copying and `Enter` with the panels off no longer
+  acting on the hidden panel (issue #29); the help and the manual page naming the real files;
+  `Ctrl+Alt+R`, `Ctrl+F10` from the viewer, `F3`/`F4` at a search match, user menu separators
+  and `Shift+F10`, the tab list, splitting by count, and named filters.
 - **0.31.0** — the largest release so far: renaming many files from a pattern, a queue for
   the jobs with lanes per device, disk usage, the branch view (`Ctrl+Alt+B`), split and
   combine in Total Commander's format, a copy that resumes from its `.fcmd-part` and one that
@@ -246,13 +252,18 @@ files rather than guessing what its dialog says.
 
 ## What is worth doing next, in rough order
 
-The eight agreed with the author after 0.31.0 are done and wait in `## [Unreleased]` of the
-changelog: `Ctrl+Alt+R` for the panels back to the middle, `Ctrl+F10` from the viewer to the
-file wherever it is, `F3`/`F4` on a search result at the match, the user menu's separators and
-`Shift+F10`, the list of tabs (`Ctrl+Alt+A`) and their order, splitting into a number of
-pieces, filters by size/age/attributes/kind with named `[[filter]]` sets (`Ctrl+Alt+S`). The
-eighth, sorting and filtering a table (`Ctrl+F3`, `Ctrl+F7` in table mode), turned out to have
-shipped already; only the backlog and the feature table still listed it.
+After 0.32.0 the author agreed to **all** of the following, to be shipped in several
+releases, each cut after about four hours of work (what is half done at that point is closed
+or left out, and the next release picks it up): finding duplicate files; an SQLite panel
+(tables as folders, a table in table mode, `sql:` queries, export to CSV); an AI panel
+(`[[ai]]` blocks with URL, model, API style and a token read from an environment variable;
+`ai:` on the command line; the answer as a Markdown file in a panel; files attached only
+after a dialog says what is sent); a git panel (branches, log, status, blame); JSON as a
+panel; a disk-usage chart; reading mail (`.eml`/`mbox` in the viewer, then IMAP read-only as
+a panel, FarMail's idea — its code is GPL and is not used); SCP beside SFTP, a bandwidth cap
+per server, *Generate URL* for a session; `.editorconfig`, word completion and a character
+map in the editor; the Windows registry and the system log as panels. An issue a release
+closes is answered once the release is out.
 
 The candidates the author was shown next, none of them started: search and replace with whole
 words and capture references (6.4), grouped undo (6.3), a unified diff and the first differing
