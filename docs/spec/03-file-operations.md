@@ -216,7 +216,8 @@ run (its result is a question), packing and rewriting an archive, archive tests,
 
 **Still to come:**
 
-- Cloning a finished job into a new one, and a bandwidth cap for the lane of a server.
+- Cloning a finished job into a new one. (A server's speed limit is in since 0.34.0: `max_kbps`
+  on the session, SPEC 04 §6.)
 - **Journal**: each job writing an append-only record (`$STATE/jobs/<id>.jsonl`) with planned
   units and completion marks, so after a crash `fcmd` can report what had been done and offer
   to resume a Copy/Move.

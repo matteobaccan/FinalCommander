@@ -83,7 +83,7 @@ says what the decision stands on.
 | --- | --- | --- |
 | Find file | `Alt+F7` | From FAR's dialog: a sixth scope, one code page or a chosen set, fuzzy matching, alternate streams, the advanced page (a first-N-bytes limit, result columns in the column grammar), saving and loading a search, and a new search from the results. |
 | Checksums, split and combine | Files menu | Checksums, splits and joins of something that is not on this machine, which wait on `JobFs::read_chunks` beyond the local filesystem, and the self-joining script. |
-| A queue for jobs | `Alt+Shift+F5` | The queue, the lanes per device, background, pause, reordering and retries are in (0.31.0, SPEC 03 §5). Left: cloning a job, a bandwidth cap for a server's lane, and the on-disk journal that would let a copy resume after a crash (feature 3.7, 11.6). |
+| A queue for jobs | `Alt+Shift+F5` | The queue, the lanes per device, background, pause, reordering and retries are in (0.31.0, SPEC 03 §5). A server's speed limit came in 0.34.0 (`max_kbps`). Left: cloning a job, and the on-disk journal that would let a copy resume after a crash (feature 3.7, 11.6). |
 | Disk usage | `Alt+Shift+F3` | A whole tree at once rather than one folder's level, and a treemap (SPEC 06 §12). |
 | Synchronise folders | `Ctrl+Shift+Y` | A saved pair of directories as a named job, and a written report. |
 | User menu | `F2` | Reading FAR's `FarMenu.ini` as it stands, and a dialog to edit the entries. |
@@ -166,9 +166,11 @@ way", and the reason is here so it does not have to be found again.
   locale; the title shows the path and the version.
 * **`Ctrl+F12`** opens the sort list, which is FAR's own behaviour; reversing moved to
   `Ctrl+Shift+F12`.
-* **`fish://`** — a filesystem over a plain ssh shell, mc's answer for a host without sftp.
-  `sftp://` covers the hosts people meet, and the protocol is shell snippets echoed into a
-  remote shell and `ls` output parsed back in an unknown locale (feature 4.5d).
+* **`fish://` as a scheme of its own** — mc's filesystem over a plain ssh shell. The need
+  behind it is met another way since 0.35.0: an `sftp://` session whose server refuses the
+  SFTP subsystem falls back to the shell by itself (SPEC 04 §6.5b): POSIX commands, and `ls`
+  read under `LC_ALL=C` so its output has one locale. A second scheme would be a second name
+  for the same sessions (feature 4.5d).
 * **Printing WebAssembly in process** — `wasmprinter` was 7.3% of the binary for one
   feature. `Shift+F6` on a `.wasm` runs `wasm2wat` like any other `[[decompile]]` rule.
 * **Writing an archive through a program on the machine** — a table may list and extract,
