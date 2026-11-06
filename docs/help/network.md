@@ -44,7 +44,8 @@ SFTP is a filesystem; FTP is a file *transfer* protocol, and the difference show
 
 A transfer opens a connection of its own and logs in again, which is what graphical FTP clients
 do and what keeps a listing from waiting behind a download. A password is therefore kept in
-memory while the connection is open — it is never written anywhere — and a user called
+memory while the connection is open — and in the encrypted secrets file once it has worked,
+never anywhere in clear — and a user called
 `anonymous` or `ftp` is not asked for one at all.
 
 FTPS is explicit TLS: the connection starts in the clear and is secured with `AUTH TLS` before
@@ -80,7 +81,7 @@ over TLS), locking, and the quota properties.
 
 A host key the program has never seen stops and shows it before anything is sent, and records
 it only if you say so. A password is asked for when it is needed, never echoed and never
-written anywhere.
+written in clear: once it has worked, it goes into the encrypted secrets file.
 
 A host key that is **recorded and different** is refused, and nothing here will accept it: a
 server somebody rebuilt and somebody sitting in the middle look exactly alike from this end.

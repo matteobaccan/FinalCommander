@@ -61,8 +61,8 @@ richiede. Il file è AES-256-GCM con una chiave derivata dalla password con PBKD
 contiene mai niente in chiaro.
 
 Il primo blocco è quello a cui chiede `ai:`; `ai: locale: domanda` chiede al blocco chiamato
-`locale`. La chiave non è mai scritta nel file: `token_env` dice in quale variabile d'ambiente
-si trova. `api = "openai"` va con ogni server che parla l'API chat di OpenAI, e `ollama` con un
+`locale`. La chiave non è mai scritta in `fcmd.toml`: `token_env` dice in quale variabile
+d'ambiente si trova, e se non ce n'è nessuna finisce nel file dei segreti descritto sopra. `api = "openai"` va con ogni server che parla l'API chat di OpenAI, e `ollama` con un
 modello che gira sulla tua macchina, che non vuole chiavi.
 
 Si invia solo la domanda, a meno che dei file siano **selezionati**: allora un dialogo dice
@@ -435,7 +435,7 @@ solo. Riceve dove sono i pannelli e cosa è selezionato, nell'ambiente e come JS
 input, e risponde una riga alla volta: un messaggio, una cartella in cui andare, file da
 selezionare, o un comando di fcmd da eseguire — niente che un tasto non possa fare. Un comando
 che rinomina o sovrascrive file lo dichiara nel manifest, e fcmd chiede prima di eseguirlo. In
-`examples/plugins/` ce ne sono una ventina di esempio, dai file duplicati alla conversione dei
+`examples/plugins/` ce ne sono ventuno di esempio, dai file duplicati alla conversione dei
 fine riga.
 
 *Opzioni → Configurazione dei plugin* elenca tutti i plugin trovati: `✓` per uno attivo, `·`

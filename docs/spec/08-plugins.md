@@ -73,7 +73,7 @@ Both are checked at load for leaving the plugin's folder; only the one this syst
 has to exist, so a plugin written for both loads on either. `examples/plugins/` has four
 worked examples, one per action, and the one that ships a program for each system.
 
-**What they are for.** `examples/plugins/` is fifteen plugins rather than a demonstration,
+**What they are for.** `examples/plugins/` is twenty-one plugins rather than a demonstration,
 because the argument for this tier is what it can already replace: FAR's FileCase and ProcList,
 Total Commander's checksum tools, its packer plugins for the formats our archive stack does not
 read, its "Open with", its clipboard keys, FAR's line-ending converter and find-duplicates. The

@@ -46,8 +46,8 @@ SFTP è un filesystem; FTP è un protocollo di *trasferimento* di file, e la dif
 
 Un trasferimento apre una connessione tutta sua e fa di nuovo il login, che è quello che fanno
 i client FTP grafici e quello che evita che un elenco resti in attesa dietro a uno scaricamento.
-Una password è quindi tenuta in memoria mentre la connessione è aperta — non viene scritta in
-nessun posto — e a un utente chiamato `anonymous` o `ftp` non viene chiesta affatto.
+Una password è quindi tenuta in memoria mentre la connessione è aperta — e nel file cifrato dei
+segreti quando ha funzionato, mai in chiaro da nessuna parte — e a un utente chiamato `anonymous` o `ftp` non viene chiesta affatto.
 
 FTPS è TLS esplicito: la connessione parte in chiaro e viene protetta con `AUTH TLS` prima che
 la password parta, e anche le connessioni dati sono protette. Il certificato è verificato
@@ -84,7 +84,8 @@ tutti i server su TLS), il locking e le proprietà di quota.
 
 Una host key che il programma non ha mai visto lo fa fermare e la mostra prima che venga
 mandato qualcosa, e la registra solo se glielo dici. Una password viene chiesta quando serve,
-non viene mai mostrata e non viene mai scritta da nessuna parte.
+non viene mai mostrata e non viene mai scritta in chiaro: se funziona, va nel file cifrato dei
+segreti.
 
 Una host key **registrata e diversa** viene rifiutata, e qui niente la accetta: un server che
 qualcuno ha rifatto e qualcuno che si è messo in mezzo, da questa parte, sono identici. Il

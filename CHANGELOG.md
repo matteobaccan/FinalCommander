@@ -4,7 +4,7 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
-## [Unreleased]
+## [0.37.0] - 2026-11-06
 
 ### Changed
 
@@ -14,7 +14,16 @@ Notable changes, newest first. The format follows
   archives are read in process and which go through a `7z` on the machine, the servers it
   speaks to and the panels that are not folders, and gains a table of the keys that matter
   most for people coming from FAR, Total Commander and Midnight Commander. The feature table,
-  the roadmap and the specs lose the sentences a later release had made untrue.
+  the roadmap and the specs lose the sentences a later release had made untrue: what SPEC 03,
+  04 and 05 still called "to come" and had shipped, FAR's plugins answered as "planned" that
+  are built in, the help saying a password or an AI key is never written anywhere now that the
+  secrets file keeps them encrypted, and the count of the example plugins. CONTRIBUTING gives
+  the whole gate CI runs, and the licensing notes say a `.rar` goes through a `7z` on the
+  machine rather than through UnRAR's code.
+- **The landscape and the backlog after a survey of the others.** Directory Opus 13 and two of
+  its plugins, TheFile.Ninja, superfile and the feature columns of Wikipedia's comparison of
+  file managers, reduced in `docs/BACKLOG.md` to what they do and this program does not; the
+  survey gains Directory Opus 13 in full, TheFile.Ninja, ZTreeWin, WinSCP and Tabbles.
 
 ### Fixed
 

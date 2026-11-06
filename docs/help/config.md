@@ -60,7 +60,8 @@ asks for it again. The file is AES-256-GCM under a key derived from the password
 PBKDF2-SHA256, and never holds anything in clear.
 
 The first block is the one `ai:` asks; `ai: local: question` asks the block called `local`.
-The key is never written in the file: `token_env` names the environment variable it is in.
+The key is never written in `fcmd.toml`: `token_env` names the environment variable it is in,
+and with none, it goes into the secrets file described above.
 `api = "openai"` works with every server that speaks OpenAI's chat API, and `ollama` with a
 model running on your own machine, which needs no key at all.
 
@@ -422,7 +423,7 @@ alone. It is told where the panels are and what is selected, in the environment 
 its input, and answers one line at a time: a message, a folder to go to, files to select, or a
 command of fcmd's own to run — nothing a key could not do. A command that renames or writes
 over files says so in its manifest, and fcmd asks before running it. `examples/plugins/` has
-two dozen worked ones, from finding duplicates to converting line endings.
+twenty-one worked ones, from finding duplicates to converting line endings.
 
 *Options → Plugins configuration* lists every plugin found: `✓` for one that is on, `·` for
 one that is off, and `!` for one that did not load. `Enter` turns the one under the cursor on

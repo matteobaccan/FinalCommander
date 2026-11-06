@@ -104,7 +104,7 @@ key→action pairs**. No documentation text is copied.
 | Component | Licence | Note |
 | --- | --- | --- |
 | 7-Zip / `7z.dll`, `sevenz-rust2` | LGPL-2.1 (7-Zip), MIT/Apache (Rust crates) | LGPL dynamic use is fine; prefer pure-Rust crates |
-| UnRAR source | **non-free**: free to use, but forbids using the source to re-create the RAR *compression* algorithm | read-only RAR support via the official unrar lib or `unrar` crate; keep it an optional feature with its own notice |
+| UnRAR source | **non-free**: free to use, but forbids using the source to re-create the RAR *compression* algorithm | not linked at all: a `.rar` is read through a `7z` already on the machine, run as a program from a MultiArc table (`docs/05-multiarc.md`), so nothing of UnRAR's is in the binary |
 | `libarchive` | BSD-2 | fine |
 | `russh` / `ssh2` (SFTP) | Apache-2.0 / LGPL-2.1+ | prefer `russh` (Apache-2.0) |
 | `wasmtime` (plugins) | Apache-2.0 WITH LLVM-exception | fine |

@@ -55,12 +55,18 @@ The minimum Rust version is **1.89** (`russh`, the netbox's SSH library, needs i
 what CI uses.
 
 ```sh
-cargo test --workspace          # everything, including the render snapshots
-cargo clippy --all-targets -- -D warnings
 cargo fmt --all
-cargo run -- /etc /tmp          # two panels, left and right
-cargo test -p fcmd-net          # includes an SSH server started in the test process
+cargo test --workspace --all-targets          # everything, including the render snapshots
+cargo clippy --workspace --all-targets -- -D warnings
+cargo deny check                              # licences, advisories, sources
+cargo check --target x86_64-pc-windows-msvc -p fcmd-platform   # the Windows-only code, from Linux
+cargo run -- /etc /tmp                        # two panels, left and right
+cargo test -p fcmd-net                        # includes an SSH server started in the test process
 ```
+
+That is the whole gate CI runs on Linux, macOS and Windows; a change is ready when all of it
+is green here. The Windows check needs only `rustup target add x86_64-pc-windows-msvc`: the
+crates that compile C (the bundled SQLite) are left out of it, and CI builds them on Windows.
 
 Useful non-interactive modes while developing:
 
@@ -69,7 +75,7 @@ cargo run -- --check-keymap     # validate and print the resolved bindings
 cargo run -- --list-commands    # the command vocabulary
 cargo run -- --list-themes      # built-in + external themes, with their source
 cargo run -- --export-theme tron    # a [[theme]] block to paste into fcmd.toml
-cargo run -- --paths                # config file, state file, plugins directory
+cargo run -- --paths                # every file it reads or writes, and the plugins folder
 cargo run -- --dump-config      # the effective configuration
 ```
 

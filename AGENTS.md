@@ -178,13 +178,17 @@ Nothing needed to continue lives outside the repository; this section is the mem
 
 ## Where the work is right now
 
-**0.36.0 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
+**0.37.0 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
 like every release before it. A push to `main` that touches `CHANGELOG.md` or `Cargo.toml`
 is what makes `tag.yml` fire. The site is published with each release, from its tag. `CHANGELOG.md` is the history, release by release; this section only
 says where things stand.
 
 What the last few were about, newest first:
 
+- **0.37.0** — the documentation read again against the program, and nothing else: README,
+  help, specs, `docs/`, CONTRIBUTING; a key table for people coming from FAR, Total Commander
+  and mc; `fcmd --paths` naming the secrets file; the survey of November 2026 in the landscape
+  and its gaps in the backlog.
 - **0.36.0** — fcmd's own encrypted secrets file for AI keys and server passwords, its
   password forgotten after five idle minutes; a panel of the external programs fcmd runs, with
   an install through the package manager and the product's site when that fails; *Options →
@@ -282,7 +286,8 @@ superfile, Wikipedia's comparison; the gaps are a section of `docs/BACKLOG.md`):
 - **0.38.0** — table mode improved (a header row detected rather than assumed, `^` as a
   delimiter, `Ctrl+C` on the selected rows); **git taken much further**: the branches and
   switching between them, what is to commit and what is staged, staging and unstaging, commit,
-  push, pull, a diff, a file's own log; **metadata as far as it goes**, executables included
+  push, pull, a diff, a file's own log — **all of it in a panel**, the author was explicit
+  about that, not on the command line; **metadata as far as it goes**, executables included
   (PE version resources and signatures, Mach-O and ELF notes, and the media and document
   readers); and **a study, not code, of what the AI could do next**, for the author to choose
   from.
