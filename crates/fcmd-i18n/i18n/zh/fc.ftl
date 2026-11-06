@@ -1412,6 +1412,7 @@ vault-refused = 密钥文件未能打开：{$why}
 
 # 外部程序
 drive-tools = 外部程序
+drive-git = Git
 tools-found = 已找到
 tools-missing = 未安装
 tools-summary = 找到 { $found } / { $total } 个外部程序；F3 说明各自用途，F4 安装缺失的程序
@@ -1487,6 +1488,10 @@ key-git-commit = 提交
 key-git-history = 历史
 key-git-show = 查看
 key-git-log = 日志
+key-git-changes = 更改
+key-git-pull = 拉取
+key-git-push = 推送
+key-git-branches = 分支
 
 undo-title = 撤销
 btn-undo = 撤销

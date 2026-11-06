@@ -48,6 +48,13 @@ pub enum Request {
         cwd: std::path::PathBuf,
         what: GitAsk,
     },
+    /// The same question for the quick view beside a git panel: the answer is text for the
+    /// quick view, keyed by the row it is about.
+    GitQuick {
+        key: VPath,
+        cwd: std::path::PathBuf,
+        what: GitAsk,
+    },
     /// Read the latest entries of the system log into a file for the viewer (SPEC 06 §16).
     SysLog,
     /// Ask which release is the latest (SPEC 11 §5). `manual` is the menu's command, which
@@ -595,6 +602,11 @@ pub enum Event {
         panel: usize,
         generation: u64,
         owners: std::collections::HashMap<String, (String, String)>,
+    },
+    /// What the quick view beside a git panel shows for the row `key`.
+    GitQuick {
+        key: VPath,
+        result: Result<String, String>,
     },
     /// The git column's answer: a status per name, empty outside a repository.
     GitColumn {
@@ -3430,6 +3442,29 @@ impl App {
                 self.panels[panel].owners = owners;
                 if self.panels[panel].sort.asks(SortKey::Owner) {
                     self.panels[panel].resort();
+                }
+            }
+            Event::GitQuick { key, result } => {
+                // The cursor may have moved on while git was answering.
+                if self.quick_of.as_ref() != Some(&key) {
+                    return;
+                }
+                match result {
+                    Ok(text) => {
+                        let shown = VPath::local(key.display_name());
+                        let source = fcmd_view::BytesSource::new(text.into_bytes());
+                        let mut viewer = Viewer::new(Box::new(source), shown);
+                        self.tune_viewer(&mut viewer);
+                        viewer.show_key_bar = false;
+                        viewer.show_status_line = false;
+                        viewer.show_scrollbar = false;
+                        self.quick = Some(Box::new(viewer));
+                        self.quick_why = None;
+                    }
+                    Err(why) => {
+                        self.quick = None;
+                        self.quick_why = Some(why);
+                    }
                 }
             }
             Event::GitColumn {
@@ -8622,6 +8657,15 @@ impl App {
                 let on_it = origin.as_deref() == Some(value);
                 rows.push(keyed(self.plain(id), value.to_string(), on_it));
             }
+            // Git, where there is a repository to ask: the panel's folder is in one.
+            if self.panels[side].git.is_some()
+                || self.panels[side]
+                    .temp_origin()
+                    .is_some_and(|o| o.starts_with(":git"))
+            {
+                let on_it = origin.as_deref().is_some_and(|o| o.starts_with(":git"));
+                rows.push(keyed(self.plain("drive-git"), ":gitlog".to_string(), on_it));
+            }
         }
         Pick::new(
             PickKind::Drives,
@@ -9099,6 +9143,9 @@ impl App {
         }
         if cmd == Command::GitCommitDraft {
             self.git_commit_draft();
+            return;
+        }
+        if self.mode.is_normal() && self.live_viewer().is_none() && self.git_list_key(cmd) {
             return;
         }
         // While the viewer is open, movement and its own toggles belong to it, not the panel
@@ -12043,8 +12090,50 @@ impl App {
 
     /// The local folder the git menu works from: the panel's, when it is on this disk.
     fn git_cwd(&self) -> Option<std::path::PathBuf> {
-        let cwd = &self.panel().cwd;
+        self.git_cwd_of(self.active)
+    }
+
+    fn git_cwd_of(&self, panel: usize) -> Option<std::path::PathBuf> {
+        let cwd = &self.panels.get(panel)?.cwd;
         (cwd.is_local() && !cwd.in_container()).then(|| cwd.as_path().to_path_buf())
+    }
+
+    /// What the quick view asks git about the row under the cursor of a log or a branches
+    /// panel: the commit, with its patch, or the branch's log.
+    fn git_quick_question(&self, panel: usize) -> Option<GitAsk> {
+        match self.panels.get(panel)?.temp_origin() {
+            Some(":gitlog") => self.git_commit_on(panel).map(|c| GitAsk::Show(c.hash)),
+            Some(":gitbranches") => self.git_branch_on(panel).map(|(b, _)| GitAsk::Log {
+                file: None,
+                rev: Some(b),
+            }),
+            _ => None,
+        }
+    }
+
+    /// `F4`…`F8` in the log and the branches panels: the rest of git, a key each — what
+    /// changed, pull, push, commit, and the other of the two lists.
+    fn git_list_key(&mut self, cmd: Command) -> bool {
+        let origin = self.panel().temp_origin();
+        if !matches!(origin, Some(":gitlog") | Some(":gitbranches")) {
+            return false;
+        }
+        let in_log = origin == Some(":gitlog");
+        match cmd {
+            Command::FileEdit => self.git_ask(GitAsk::Status),
+            Command::FileCopy | Command::FileCopyCurrent => self.git_ask(GitAsk::Pull),
+            Command::FileMove | Command::FileMoveCurrent => self.git_ask(GitAsk::Push),
+            Command::FileMkdir => self.ask_commit_message(),
+            Command::FileDelete | Command::FileDeleteCurrent if in_log => {
+                self.git_ask(GitAsk::Branches)
+            }
+            Command::FileDelete | Command::FileDeleteCurrent => self.git_ask(GitAsk::Log {
+                file: None,
+                rev: None,
+            }),
+            _ => return false,
+        }
+        true
     }
 
     /// `Ctrl+Alt+G`, and `F2` in a git panel: everything the git panel does, as one menu
@@ -12214,13 +12303,17 @@ impl App {
 
     /// The row of the log panel under the cursor: its commit.
     fn git_commit_at_cursor(&self) -> Option<GitCommit> {
-        if self.panel().temp_origin() != Some(":gitlog") {
+        self.git_commit_on(self.active)
+    }
+
+    /// The commit under the cursor of the log panel on this side.
+    fn git_commit_on(&self, panel: usize) -> Option<GitCommit> {
+        let p = self.panels.get(panel)?;
+        if p.temp_origin() != Some(":gitlog") {
             return None;
         }
-        let entry = self.panel().current()?;
-        let at = self
-            .panel()
-            .path_of(entry)
+        let at = p
+            .path_of(p.current()?)
             .display_name()
             .parse::<usize>()
             .ok()?;
@@ -12230,13 +12323,17 @@ impl App {
     /// The row of the branches panel under the cursor: the branch, and whether it is the one
     /// checked out.
     fn git_branch_at_cursor(&self) -> Option<(String, bool)> {
-        if self.panel().temp_origin() != Some(":gitbranches") {
+        self.git_branch_on(self.active)
+    }
+
+    /// The branch under the cursor of the branches panel on this side.
+    fn git_branch_on(&self, panel: usize) -> Option<(String, bool)> {
+        let p = self.panels.get(panel)?;
+        if p.temp_origin() != Some(":gitbranches") {
             return None;
         }
-        let entry = self.panel().current()?;
-        let at = self
-            .panel()
-            .path_of(entry)
+        let at = p
+            .path_of(p.current()?)
             .display_name()
             .parse::<usize>()
             .ok()?;
@@ -19630,6 +19727,14 @@ impl App {
                     ":programs" => self.open_programs_panel(pick.side),
                     ":services" => self.open_services_panel(pick.side),
                     ":tools" => self.open_tools_panel(pick.side),
+                    // The log of the repository the panel is in, on that panel.
+                    ":gitlog" => {
+                        self.active = pick.side;
+                        self.git_ask(GitAsk::Log {
+                            file: None,
+                            rev: None,
+                        });
+                    }
                     ":temp" => self.open_temp_panel(pick.side),
                     // A drive row is where the panel *goes*, and where it goes is not always
                     // the root of it: see `drive_landing`. A bookmark and a line of history
@@ -22153,6 +22258,28 @@ impl App {
         // A row of a process, socket or programs list is not a file and has no bytes: what
         // belongs beside it is its card, which is the page `F3` opens over there (SPEC 02
         // §7b). It is built here and read like any other page.
+        // A commit or a branch of the git panels is git's to tell: asked on a worker, and
+        // shown here when the answer comes back for the row still under the cursor.
+        if let Some(what) = self.git_quick_question(panel) {
+            match self.git_cwd_of(panel) {
+                Some(cwd) => {
+                    self.quick = None;
+                    self.quick_why = Some(self.i18n.t("git-running"));
+                    self.quick_of = Some(path.clone());
+                    self.requests.push(Request::GitQuick {
+                        key: path,
+                        cwd,
+                        what,
+                    });
+                }
+                None => {
+                    self.quick = None;
+                    self.quick_of = None;
+                    self.quick_why = Some(self.i18n.t("git-local-only"));
+                }
+            }
+            return;
+        }
         if let Some(text) = self.quick_card(panel, &entry) {
             let shown = VPath::local(entry.name_str().into_owned());
             let source = fcmd_view::BytesSource::new(text.into_bytes());
@@ -23816,11 +23943,11 @@ impl App {
                 (1u8, "key-help"),
                 (2, "key-git"),
                 (3, "key-git-show"),
-                (4, ""),
-                (5, ""),
-                (6, ""),
-                (7, ""),
-                (8, ""),
+                (4, "key-git-changes"),
+                (5, "key-git-pull"),
+                (6, "key-git-push"),
+                (7, "key-git-commit"),
+                (8, "key-git-branches"),
                 (9, "key-pulldown"),
                 (10, "key-quit"),
                 (11, "key-plugins"),
@@ -23830,11 +23957,11 @@ impl App {
                 (1u8, "key-help"),
                 (2, "key-git"),
                 (3, "key-git-log"),
-                (4, ""),
-                (5, ""),
-                (6, ""),
-                (7, ""),
-                (8, ""),
+                (4, "key-git-changes"),
+                (5, "key-git-pull"),
+                (6, "key-git-push"),
+                (7, "key-git-commit"),
+                (8, "key-git-log"),
                 (9, "key-pulldown"),
                 (10, "key-quit"),
                 (11, "key-plugins"),
@@ -35515,6 +35642,86 @@ abcdefghij
     /// is the diff, `F7` commits after asking the message, `F8` is the file's log; the log is
     /// a panel whose `Enter` shows a commit; the branches are a panel whose `Enter` switches
     /// after asking; and `Ctrl+R` asks git again rather than reading the rows as files.
+    /// `Alt+F1` offers Git only where there is a repository, and on it opens the log; the
+    /// log's function keys are the rest of git; and the quick view beside the log shows the
+    /// commit under the cursor, asked of git on a worker.
+    #[test]
+    fn git_is_a_drive_row_in_a_repository_and_the_log_drives_the_rest() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = editing_app(dir.path());
+        let has_git = |app: &App| app.drive_list(0).rows.iter().any(|r| r.value == ":gitlog");
+        app.panels[0].git = None;
+        assert!(!has_git(&app), "no repository, no row");
+        app.panels[0].git = Some(fcmd_core::git::Repo {
+            root: dir.path().to_path_buf(),
+            git_dir: dir.path().join(".git"),
+            branch: Some("main".into()),
+            head: None,
+            state: None,
+            index: None,
+        });
+        assert!(has_git(&app));
+
+        let asked = |app: &mut App| -> Vec<GitAsk> {
+            app.take_requests()
+                .into_iter()
+                .filter_map(|r| match r {
+                    Request::Git { what, .. } => Some(what),
+                    _ => None,
+                })
+                .collect()
+        };
+        app.take_requests();
+        app.git_view = Some(GitAsk::Log {
+            file: None,
+            rev: None,
+        });
+        app.handle_event(Event::GitDone {
+            panel: 0,
+            result: Ok(GitOut::Log(vec![GitCommit {
+                hash: "abc1234".into(),
+                date: "2026-11-06".into(),
+                author: "M".into(),
+                subject: "first".into(),
+            }])),
+        });
+        assert_eq!(app.panels[0].temp_origin(), Some(":gitlog"));
+        app.panels[0].cursor = 0;
+        app.take_requests();
+        press(&mut app, "F4");
+        assert_eq!(asked(&mut app), vec![GitAsk::Status]);
+        press(&mut app, "F5");
+        assert_eq!(asked(&mut app), vec![GitAsk::Pull]);
+        press(&mut app, "F6");
+        assert_eq!(asked(&mut app), vec![GitAsk::Push]);
+        press(&mut app, "F8");
+        assert_eq!(asked(&mut app), vec![GitAsk::Branches]);
+        press(&mut app, "F7");
+        assert!(matches!(&app.mode, Mode::Prompt(p) if p.kind == PromptKind::GitCommit));
+        app.mode = Mode::Normal;
+
+        // The quick view asks for the commit, and shows what comes back for that row.
+        app.take_requests();
+        app.quick_of = None;
+        app.quick_view_for(0);
+        let key = app
+            .take_requests()
+            .into_iter()
+            .find_map(|r| match r {
+                Request::GitQuick { key, what, .. } => {
+                    assert_eq!(what, GitAsk::Show("abc1234".into()));
+                    Some(key)
+                }
+                _ => None,
+            })
+            .expect("asked git for the commit");
+        app.handle_event(Event::GitQuick {
+            key,
+            result: Ok("commit abc1234\n\n    first\n".into()),
+        });
+        assert!(app.quick.is_some(), "{:?}", app.quick_why);
+    }
+
     #[test]
     fn the_git_panels_stage_commit_show_and_switch() {
         let dir = tempfile::tempdir().unwrap();
@@ -35614,9 +35821,9 @@ abcdefghij
         app.panels[0].cursor = 0;
         press(&mut app, "Enter");
         assert_eq!(asked(&mut app), vec![GitAsk::Show("bbb2222".into())]);
-        // A commit is not a file to copy.
+        // `F5` on the log is a pull, not a copy of a commit.
         press(&mut app, "F5");
-        assert!(app.status_error);
+        assert_eq!(asked(&mut app), vec![GitAsk::Pull]);
 
         // The branches are a panel; `Enter` on another asks, and yes switches.
         app.handle_event(Event::GitDone {

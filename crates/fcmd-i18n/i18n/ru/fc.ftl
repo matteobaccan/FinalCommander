@@ -1441,6 +1441,7 @@ vault-refused = Файл секретов не открылся: {$why}
 
 # Внешние программы
 drive-tools = Внешние программы
+drive-git = Git
 tools-found = найдена
 tools-missing = не установлена
 tools-summary = найдено внешних программ: { $found } из { $total }; F3 — для чего каждая, F4 — установить недостающую
@@ -1516,6 +1517,10 @@ key-git-commit = Коммит
 key-git-history = История
 key-git-show = Показ
 key-git-log = Журнал
+key-git-changes = Измен.
+key-git-pull = Pull
+key-git-push = Push
+key-git-branches = Ветки
 
 undo-title = Отмена
 btn-undo = Отменить

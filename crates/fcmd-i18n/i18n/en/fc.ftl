@@ -1450,6 +1450,7 @@ vault-refused = The secrets file did not open: {$why}
 
 # The programs from elsewhere
 drive-tools = External programs
+drive-git = Git
 tools-found = found
 tools-missing = not installed
 tools-summary = { $found } of { $total } external programs found; F3 says what each is for, F4 installs a missing one
@@ -1525,6 +1526,10 @@ key-git-commit = Commit
 key-git-history = History
 key-git-show = Show
 key-git-log = Log
+key-git-changes = Changes
+key-git-pull = Pull
+key-git-push = Push
+key-git-branches = Branch
 
 undo-title = Undo
 btn-undo = Undo

@@ -27,6 +27,12 @@ Notable changes, newest first. The format follows
   `.ods` or `.odp` shows its title, author, who saved it last, the dates, the revision, the
   pages, words or slides, the company and the program that wrote it.
 
+- **Git from `Alt+F1` / `Alt+F2`, and the rest of git from the log.** The change-drive dialog
+  has a *Git* row when the panel's folder is in a repository, and it opens the log. In the log
+  and the branches panels `F4` is what changed, `F5` pull, `F6` push, `F7` commit and `F8` the
+  other list. `Ctrl+Q` beside the log shows the commit under the cursor, and beside the
+  branches that branch's log.
+
 ### Changed
 
 - **`trash` 5.3.0** (from Renovate's pull request #28, with the Linux backend and the deletion

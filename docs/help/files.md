@@ -431,6 +431,9 @@ view and edit the whole document; nothing inside can be changed from the panel.
 
 # Git
 
+`Alt+F1` / `Alt+F2` have a **Git** row, below the other panels, when the panel's folder is in a
+git repository — and only then. Choosing it opens the repository's log on that panel.
+
 `Ctrl+Alt+G` — *Commands → Git* — in a folder that is in a git repository opens the git menu,
 and everything in it is a panel you work in with the function keys. It is the `git` installed
 on the machine that answers.
@@ -458,6 +461,19 @@ and `F3` is that branch's log. **The log** is a panel of commits, newest first �
 author, subject — and `Enter` or `F3` on one shows it whole, with its patch, in the viewer; the
 log of one file comes from `F8` in *what changed* or from the menu. **Blame** of the file under
 the cursor opens in the viewer.
+
+From the log and the branches panels the rest of git is a function key away:
+
+| Key | In the log and the branches |
+| --- | --- |
+| `F3` | the commit with its patch (log), or the branch's log (branches) |
+| `F4` | what changed |
+| `F5` | pull |
+| `F6` | push |
+| `F7` | commit what is staged, after asking for the message |
+| `F8` | the branches (from the log), or the log (from the branches) |
+
+`Ctrl+Q` beside either shows the same thing as `F3`, for the row under the cursor, as you move.
 
 **Pull** and **push** run in the background and the status line says what git said at the
 end. They never stop to ask for a password on this screen: one that needs it fails and says so

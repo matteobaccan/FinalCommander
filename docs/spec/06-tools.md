@@ -637,6 +637,13 @@ with an origin of its own and a key bar that says what its keys do there:
   panel is unsorted), one row each — hash, date, author, subject — of the repository, a branch,
   or one file (`--follow`). `Enter` or `F3` shows a commit with `git show --stat --patch`.
 
+In the log and the branches panels (0.39.0) `F4` is what changed, `F5` pull, `F6` push, `F7`
+commit, and `F8` the other of the two lists; the quick view beside either asks git on a worker
+(`Request::GitQuick`) for what `F3` would show — the commit with its patch, the branch's log —
+and shows the answer only if it is still for the row under the cursor. `Alt+F1`/`Alt+F2` list
+**Git** among the panels when the panel's folder is in a repository (the place worker found a
+`Repo` for it), and choosing it opens the log on that side.
+
 `Blame` opens in the viewer. **Pull** and **push** run in the background with
 `GIT_TERMINAL_PROMPT=0` and, unless one is set, `GIT_SSH_COMMAND="ssh -o BatchMode=yes"`, so
 a credential git would ask for fails with git's message instead of a prompt on the screen fcmd

@@ -1952,6 +1952,24 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                         let _ = tx.send(Event::GitDone { panel, result });
                     });
                 }
+                Request::GitQuick { key, cwd, what } => {
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || {
+                        let result = run_git(&cwd, &what).and_then(|out| match out {
+                            app::GitOut::Text(file) => {
+                                std::fs::read_to_string(&file).map_err(|e| e.to_string())
+                            }
+                            app::GitOut::Log(commits) => Ok(commits
+                                .iter()
+                                .map(|c| {
+                                    format!("{}  {}  {}  {}\n", c.hash, c.date, c.author, c.subject)
+                                })
+                                .collect()),
+                            _ => Ok(String::new()),
+                        });
+                        let _ = tx.send(Event::GitQuick { key, result });
+                    });
+                }
                 Request::SqlQuery { db, sql } => {
                     let tx = tx.clone();
                     runtime.spawn_blocking(move || {
@@ -6567,6 +6585,7 @@ dir_attr = "D"
                 | Request::Dupes { .. }
                 | Request::SqlQuery { .. }
                 | Request::Git { .. }
+                | Request::GitQuick { .. }
                 | Request::SysLog
                 | Request::AiAsk { .. }
                 | Request::Undo { .. }

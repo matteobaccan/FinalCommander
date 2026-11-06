@@ -453,6 +453,10 @@ si può cambiare dal pannello.
 
 # Git
 
+`Alt+F1` / `Alt+F2` hanno una riga **Git**, sotto gli altri pannelli, quando la cartella del
+pannello sta in un repository git — e solo allora. Sceglierla apre il log del repository su quel
+pannello.
+
 `Ctrl+Alt+G` — *Comandi → Git* — in una cartella che sta in un repository git apre il menu di
 git, e tutto quello che c'è dentro è un pannello in cui lavori con i tasti funzione. Risponde il
 `git` installato sulla macchina.
@@ -481,6 +485,20 @@ e `F3` è il log di quel branch. **Il log** è un pannello di commit, dal più r
 data, autore, oggetto — e `Invio` o `F3` su uno lo mostra intero, con la sua patch, nel
 visualizzatore; il log di un solo file viene da `F8` in *cosa è cambiato* o dal menu. **Blame**
 del file sotto il cursore si apre nel visualizzatore.
+
+Dai pannelli del log e dei branch il resto di git è a un tasto funzione:
+
+| Tasto | Nel log e nei branch |
+| --- | --- |
+| `F3` | il commit con la sua patch (log), o il log del branch (branch) |
+| `F4` | cosa è cambiato |
+| `F5` | pull |
+| `F6` | push |
+| `F7` | committa quello che è in staging, dopo aver chiesto il messaggio |
+| `F8` | i branch (dal log), o il log (dai branch) |
+
+`Ctrl+Q` accanto a uno dei due mostra la stessa cosa di `F3`, per la riga sotto il cursore, mentre
+ti sposti.
 
 **Pull** e **push** girano in sottofondo e la riga di stato dice cosa ha detto git alla fine.
 Non si fermano mai a chiedere una password su questo schermo: uno che ne ha bisogno fallisce e
