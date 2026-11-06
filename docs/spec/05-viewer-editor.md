@@ -12,9 +12,10 @@ tool (§1.6).
 Also implemented: the **editor** (`F4`, `Shift+F4` for a new file) — see the note under §2.
 Also implemented: **syntax highlighting** in both (§2.5), for the languages and markups
 `fcmd-syntax` knows, off with `ui.syntax = false`.
-**Still to come**: the "all matches" list (§1.4), the preview pipeline (§1.7), filtered view
-(§1.10), next/previous file in the panel, Python bytecode and non-x86
-decoding in process, and the diff viewer (§3).
+Since then the filtered view (§1.10), the next and previous file of the panel from inside the
+viewer, AArch64 decoding in process and the side-by-side diff (§3) have shipped.
+**Still to come**: the "all matches" list (§1.4), the preview pipeline (§1.7), and Python
+bytecode and the other architectures decoded in process.
 
 ## 1. Viewer (`F3`)
 

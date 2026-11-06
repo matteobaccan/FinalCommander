@@ -285,16 +285,16 @@ What FAR ships as **plugins**, and what it tells us about scope:
 
 | Plugin | What it is | Our answer |
 | --- | --- | --- |
-| `arclite` | archives through the 7-Zip engine | planned (SPEC 04 §4) |
-| `multiarc` | archives through external archivers | planned |
-| `ftp` | FTP/FTPS client as a panel | planned (SPEC 04 §6) |
+| `arclite` | archives through the 7-Zip engine | ✅ answered in process for zip, 7z, the tar family, `ar`/`.deb`, `cpio`, `rpm` and single-file compressions (SPEC 04 §4), written for zip, 7z and tar |
+| `multiarc` | archives through external archivers | ✅ since 0.29.0: MultiArc's own table language, a shipped `7z` table and `[[archiver]]` blocks of one's own, reading only (`docs/05-multiarc.md`) |
+| `ftp` | FTP/FTPS client as a panel | ✅ FTP and FTPS, beside SFTP, SCP, WebDAV, S3 and IMAP (SPEC 04 §6) |
 | `network` | network browser | ⊘ |
-| `tmppanel` | a panel made of an arbitrary file list | needed for find-panelize |
-| `proclist` | the process list as a panel | an idea, not a need |
+| `tmppanel` | a panel made of an arbitrary file list | ✅ the temporary panel, and the find and panelize results land in one |
+| `proclist` | the process list as a panel | ✅ processes, sockets, services and the installed programs, each with a card on `F3` |
 | `compare` | folder compare with contents and subfolders | ✅ shipped, with the dialog, the subfolders, and a side-by-side diff of two files beside it (`Ctrl+Shift+D`), which FAR has in no plugin of its own |
 | `emenu` | the OS context menu | ⊘ |
-| `farcmds` | the command prefixes above | wanted, cheap |
-| `luamacro` | the Lua macro engine | planned (SPEC 08) |
+| `farcmds` | the command prefixes above | ✅ mostly: `view:`, `edit:`, `goto:` and the rest; `clip:` and `link:` are on the backlog |
+| `luamacro` | the Lua macro engine | an open question (SPEC 08 §2, the backlog); macros of our own since 0.1.0 |
 | `align`, `autowrap`, `brackets`, `drawline`, `editcase`, `filecase`, `samefolder`, `hlfviewer`, `macroview` | small editor and panel helpers | the kind of thing our plugin API should make easy |
 
 The lesson is architectural, not feature-by-feature: FAR's core is a panel engine, a dialog

@@ -9,9 +9,10 @@ same-filesystem rename fast path), recursive delete, nested mkdir, the conflict 
 `…All` answers, error decision points (retry / skip / skip all / cancel), progress with a
 per-file and a total bar, cancellation, metadata preservation (mtime, Unix mode), symlinks
 copied as links, write-to-`.fcmd-part`-then-rename, the guards in §2, and a dry-run mode.
-**Still to come**: the job queue and journal (§5), verification and
-resume (§3), attribute dialogs (§7), multi-rename (§8), split and combine (§9), and
-synchronise (§10).
+Since then the queue (§5, 0.31.0), verification and resume (§3), the attribute dialog (§7),
+multi-rename (§8), split and combine (§9) and synchronisation (§10) have shipped.
+**Still to come**: the journal that lets a job resume after a crash (§5), and what each
+section's own *still to come* lists.
 
 ## 1. Job model
 

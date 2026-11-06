@@ -21,9 +21,10 @@ transactional unit: the archive is streamed into a `.part` file beside it with t
 applied, the result is read back and verified, and only then does it replace the original.
 `F4` edits an entry and saves it back, `F6` renames or moves one inside the archive, `F8`
 takes entries out, and `F5`/`F6` into an archive put files in.
-**Still to come**: `temp`, `trash`, the other network schemes, nesting and archives over a
-remote filesystem (§4 — both want the container copied to a temporary file first), `watch`,
-and `copy_within` as a server-side operation.
+Since then the temporary panel, nesting (an archive inside an archive), archives on a server
+(copied to a temporary file first, §4), and FTP, FTPS, WebDAV, S3, SCP, a shell-only SSH and
+IMAP beside SFTP (§6) have shipped. **Still to come**: `trash` as a browsable provider, `watch`
+for a provider that is not the local disk, and `copy_within` as a server-side operation.
 
 ## 1. The trait
 
@@ -268,8 +269,10 @@ with groups and a connected marker, `auth = "agent" | "key:<path>" | "ask"`, one
 connection per `user@host:port` shared by both panels and every job, host-key verification
 with the fingerprint shown before anything is recorded, a changed host key refused outright,
 the password or key passphrase asked for in a masked prompt and kept only for the
-connection attempt, and one jump host per site (§6.3). **Not yet**: the OS keyring (so a password is asked for every connection),
-chains of more than one jump host, automatic reconnect, and `charset`.
+connection attempt, and one jump host per site (§6.3). Since 0.36.0 a password that worked can
+be kept in fcmd's own encrypted secrets file (`fcmd-secrets.vault`, SPEC 07) and is taken from
+there the next time; the OS keyring is not used, so the secrets travel with the settings.
+**Not yet**: chains of more than one jump host, automatic reconnect, and `charset`.
 
 ### 6c. The host key, and the two cases that are not the same case
 
