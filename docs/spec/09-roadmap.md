@@ -48,6 +48,8 @@ later items goes first. Sizes are honest estimates of focused work, not of calen
 | --- | --- | --- | --- | --- |
 | ~~**0.0.8**~~ | The hex editor (the Hiew track) | **Shipped.** Hex mode of the editor with a patch list and an atomic save, block operations (`F3` marks, `F12` operates), the assembler for the instructions a patcher types, a calculator, search by instruction pattern, and raw devices on Linux and macOS. SPEC 05 §2.5–§2.9. What was left out on purpose: a keyed cipher over a block and devices on Windows, both on the backlog with their reasons. Memory operands in the assembler came later, in 0.18.0. | A release of its own | Deliberately in the editor, not the viewer: the viewer's read-only contract is what lets it seek through 40 GB |
 | ~~**0.1.0**~~ | Macros, plugins, and the screens | **Shipped.** The macro engine (record, assign to a key, two play modes, a list), the screens (`F12`, `Ctrl+Tab`) with the background counter, plugin commands (`F11`) run as processes with a JSON protocol, the help as a book whose reference chapters are generated from the live keymap, and the manual page generated from the command line's own options. What is left for the plugin tiers above: a plugin that *adds* a column, a preview or a filesystem, and one that is asked a question rather than told to run. | The macro engine was the large one | Macros need everything else to be a command first, which is why they were last rather than first |
+| **0.37.0** | The documentation, all of it | README, help (en + it), site, manual page, specs and the documents under `docs/`, read against the program: every key and every setting named is checked against the keymaps and `fcmd-config`, the sentences an older release made true are rewritten, and the README gains a key table for people coming from FAR, Total Commander and mc | A release of its own, no features | Thirty-six releases of features left sentences behind them; the survey of November 2026 is where the next ones come from |
+| **0.38.0** | Git, table mode, metadata | Git beyond the panel it has: branches and switching, what is to commit and what is staged, stage/unstage, commit, push, pull, a diff, a file's log. Table mode: a header row detected, `^`, copying the selected rows. Metadata as far as each format goes, executables included. A written study of what the AI could do next | A release, larger than most | Asked for by the author after the survey; the rest of the survey's gaps are in `docs/BACKLOG.md` |
 
 0.0.7 was a fix release for a hang in 0.0.6's tree panel, which is why the Hiew track is
 0.0.8 rather than 0.0.7.
@@ -75,12 +77,12 @@ PTY subshell with cwd sync · user menu · associations · histories with pinnin
 viewer modes + regex/hex search · help system · session restore · `tc`/`nc` keymap profiles ·
 `.deb`/`.rpm`/Homebrew/Scoop/AUR packages.
 
-**Where it stands** (read against `docs/02-features.md` for 0.29.0): almost all of it is in.
-Still open, with the row that tracks each — the job queue panel and
-the journal that resumes after a crash (3.7, 11.6), more than one file open in the editor (6.1),
-splitting and combining files (3.12), the selection kept by
-session restore (9.7), the `tc` and `nc` keymap profiles (only `far` and `mc` ship), and the
-packages.
+**Where it stands** (read against `docs/02-features.md` for 0.37.0): almost all of it is in.
+Still open, with the row that tracks each — the journal that lets a copy resume after a crash
+(3.7, 11.6; the queue itself shipped in 0.31.0), more than one file open in the editor (6.1),
+the selection kept by session restore (9.7), the `tc` and `nc` keymap profiles (only `far` and
+`mc` ship), a stacked layout (1.2), icons (1.22), opening the item in the desktop's own file
+manager (8.8), and the packages.
 
 ## M3 — Commander parity and beyond the terminal's usual limits
 

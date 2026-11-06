@@ -11904,9 +11904,7 @@ impl App {
 
     /// `fcmd-secrets.vault`, beside the settings so it travels with them.
     pub fn vault_path(&self) -> std::path::PathBuf {
-        self.paths
-            .config_file
-            .with_file_name(crate::vault::FILE_NAME)
+        self.paths.secrets_file()
     }
 
     fn save_vault(&mut self) {

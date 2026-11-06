@@ -20,8 +20,6 @@ use ring::aead::{Aad, LessSafeKey, Nonce, UnboundKey, AES_256_GCM};
 use ring::rand::{SecureRandom, SystemRandom};
 
 const MAGIC: &[u8; 8] = b"FCMDVLT1";
-/// Beside `fcmd.toml`.
-pub const FILE_NAME: &str = "fcmd-secrets.vault";
 /// OWASP's figure for PBKDF2-HMAC-SHA256: slow enough to make guessing expensive, a fraction
 /// of a second for the one person who knows the password.
 pub const ROUNDS: u32 = 600_000;

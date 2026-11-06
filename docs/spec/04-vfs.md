@@ -208,8 +208,8 @@ FARMail's and MailView's idea — their code is GPL and none of it is used (`fcm
   `message.html` (the first text and HTML parts, in UTF-8 whatever charset they were sent in),
   and each attachment under its own name (`filename` or `name`, RFC 2231 included), decoded
   from base64 or quoted-printable; a part with no name is `partN.<ext>`. Multiparts nest.
-* Read only, and a file over 512 MiB is refused. Reading mail from a server (IMAP) is the
-  next step; sending is not planned.
+* Read only, and a file over 512 MiB is refused. Mail on a server is read through IMAP
+  (§6.6); sending is not planned.
 
 ## 5. Editing inside a VFS
 

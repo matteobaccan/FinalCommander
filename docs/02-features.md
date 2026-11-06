@@ -7,7 +7,7 @@ Milestones: **M1** = usable daily driver (MVP), **M2** = feature parity with mc 
 **M3** = parity with FAR/TC, **M4** = beyond (new ideas). M1 closed long ago, so no row
 carries it any more: what it owned is a `✓`.
 
-**How to read the `State` column**, as of 0.26.0:
+**How to read the `State` column**, as of 0.37.0:
 
 | | |
 | --- | --- |
@@ -20,9 +20,10 @@ carries it any more: what it owned is a `✓`.
 Every `M2` row was read against the code again for 0.26.0, and thirty of the thirty-six were
 out of date: twelve because the work had been finished and nobody changed the character, and
 eighteen because most of it had and the cell now says what is left. Six still said `M2` and
-meant it; the multi-rename tool and the disk-usage view have gone since, in 0.31.0, and the
-four left are a stacked layout, the branch view, icons, and opening the item in the desktop's
-own file manager.
+meant it; the multi-rename tool, the disk-usage view and the branch view have gone since, in
+0.31.0, and the three left are a stacked layout, icons, and opening the item in the desktop's
+own file manager. Read again for 0.37.0 against the survey of November 2026, whose gaps are in
+`docs/BACKLOG.md`.
 
 Until 0.22.0 this column held a paragraph per row about what had shipped and in which
 version, which was a second changelog to keep in step with the first — and a tax on every
@@ -139,7 +140,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 4.11 | VFS API available to plugins (so a plugin can add a scheme) | FAR/TC(WFX) | M3 |
 | 4.12 | SQLite databases: tables and views as CSV entries, `schema.sql`, and `sql:` queries opened in table mode, read only | FAR (SQLiteDB) | ✓ (SPEC 04 §4b) |
 | 4.13 | JSON documents as folders: objects and arrays as directories, values as files (strings as their text), read only | FarNet (JsonKit) | ✓ (SPEC 04 §4c) |
-| 4.14 | Mail as folders: an mbox as its messages, a message as its headers, text and decoded attachments; read only | FAR (FARMail/MailView) | ~ files on disk (SPEC 04 §4d); IMAP is the next step |
+| 4.14 | Mail as folders: an mbox as its messages, a message as its headers, text and decoded attachments; read only | FAR (FARMail/MailView) | ✓ files on disk (SPEC 04 §4d), and `imap://`/`imaps://` mailboxes read only since 0.35.0 (SPEC 04 §6.6) |
 
 ## 5. Viewer (`F3`)
 

@@ -162,7 +162,7 @@ one directory down.
 
 ```sh
 # Linux, for example
-tar xzf FinalCommander-linux-x86_64-0.29.0.tar.gz
+tar xzf FinalCommander-linux-x86_64-*.tar.gz
 sudo install -m755 fcmd /usr/local/bin/fcmd
 fcmd --version
 ```
@@ -190,9 +190,12 @@ From source, with Rust 1.89 or newer:
 cargo install --git https://github.com/matteobaccan/FinalCommander fcmd
 ```
 
-Everything the program keeps on disk is optional and amounts to three things: one settings
-file (`fcmd.toml`, which also holds your themes and keymaps), one state file beside it, and
-one `plugins/` directory — the only directory it ever reads. Delete them and nothing breaks.
+Everything the program keeps on disk is optional and sits in one folder, which `fcmd --paths`
+names: the settings (`fcmd.toml`, which also holds your themes and keymaps), the state beside
+them (`fcmd-state.toml`: histories, tabs, where each drive was), your macros and your `F2` menu
+if you make them, `fcmd-secrets.vault` — AI keys and server passwords, encrypted under a
+password of your own — and `fcmd-plugins/`. Copy the folder and the whole setup moves with it;
+delete it and nothing breaks.
 
 ## Try it
 
@@ -245,8 +248,9 @@ every key on the screen you are looking at does.
   **processes** (`F3` on one is its card: command line, memory, threads, parent, the user it
   runs as), the **sockets** that are listening or connected with the process behind each one,
   the **programs installed** on the machine (`F3` for the card, and its uninstall command put
-  on the command line for you to read before you run it), and a temporary panel of files
-  gathered by hand from anywhere.
+  on the command line for you to read before you run it), the **services**, the **external
+  programs** fcmd runs (found or not, with their version, installed with `F4`), and a temporary
+  panel of files gathered by hand from anywhere.
 - **Comparison**: the two panels side by side by name, size and time, or by what is actually in
   the files — with "the same but for the line endings", a first-N-kilobyte fragment for big
   files, and the whole thing recursive through the subdirectories, the differences coming back
@@ -263,16 +267,23 @@ every key on the screen you are looking at does.
   and syntax colouring for Rust, C, C++, Java, C#, JavaScript, TypeScript, PHP, Python, Ruby,
   Go, shell, SQL, HTML, XML, CSS, Markdown, JSON, TOML, YAML, INI, Make, Dockerfile, Lua and
   Perl. On a binary it is a hex editor instead, with a patch list and an assembler.
-- **Archives**: zip, 7z and the tar family (plain, gzip, bzip2, xz, zstd), all with pure-Rust
-  decoders — nothing shells out, and no `7z.dll`. `Enter` opens one as a panel, `F3` reads an
-  entry, `F5` copies out through the same job engine as any other copy.
-- **Servers and buckets**: SFTP, FTP, FTPS and WebDAV panels and transfers, a session editor,
-  host-key checking against `known_hosts`, port forwarding, and `s3://` panels with the credentials read
-  from the environment or `~/.aws/credentials` — never written into the configuration file.
+- **Archives**: zip (and the packages that are zips — `.jar`, `.apk`, `.docx`…), 7z, the tar
+  family (plain, gzip, bzip2, xz, zstd), `ar` and `.deb`, `cpio` and `rpm`, and a single `.gz`
+  or `.xz`, read in process by pure-Rust decoders, with no `7z.dll`. `Enter` opens one as a
+  panel, `F3` reads an entry, `F5` copies out through the same job engine as any other copy,
+  and zip, 7z and the tar family are written to as well. `rar`, `iso`, `cab`, `msi`, `wim`,
+  `dmg` and the rest open through a `7z` already on the machine, if there is one — *External
+  programs* in `Alt+F1` says which of those programs are there and installs the missing ones.
+- **Servers and buckets**: SFTP (and SSH servers with no SFTP, through their shell), SCP, FTP,
+  FTPS and WebDAV panels and transfers, IMAP mailboxes read only, a session editor, host-key
+  checking against `known_hosts`, a jump host, port forwarding, a speed limit per server, and
+  `s3://` panels with the credentials read from the environment or `~/.aws/credentials`.
+  Passwords are kept, if you want, in the encrypted secrets file — never in the configuration.
 - **The program itself**: seven themes, seven interface languages switchable while it runs, two
-  keymap profiles (FAR and mc) and your own on top, macros, the screens list (`F12`), plugin
-  commands (`F11`), a help system whose key pages are generated from the keymap in force, and a
-  manual page.
+  keymap profiles (FAR and mc) and your own on top, macros, the screens list (`F12`), a terminal
+  of its own (`Ctrl+Alt+E`), plugins (`F11` for their commands, *Options → Plugins
+  configuration* to turn them on and off), questions to an AI service of your choice, a help
+  system whose key pages are generated from the keymap in force, and a manual page.
 
 Non-interactive modes, for CI and for scripts:
 
@@ -289,11 +300,33 @@ fcmd --list-plugins     # what is in the plugins directory
 
 ## Coming from another commander
 
-`ui.keymap = "far"` is the default and `"mc"` ships beside it; a keymap of your own is a TOML
-file of `keys = [...]` / `cmd = "..."` lines, and `fcmd --check-keymap` tells you whether it
-resolves before you rely on it. Every action in the program is a named command —
-`fcmd --list-commands` prints all of them — so anything you can reach with a key you can also
-put in a menu, a macro or a plugin.
+The keys are FAR's by default (`ui.keymap = "far"`), and `"mc"` ships beside it: FAR's keys
+plus the mc habits fingers reach for first — `Alt+?` to find, `Alt+.` for hidden files,
+`Alt+O` for the other panel, `Alt+C` to type a path. The ones that matter most, side by side,
+with fcmd's in the default profile:
+
+| To | FAR | Total Commander | Midnight Commander | fcmd |
+| --- | --- | --- | --- | --- |
+| Copy, move, make a folder, delete | `F5` `F6` `F7` `F8` | `F5` `F6` `F7` `F8` | `F5` `F6` `F7` `F8` | `F5` `F6` `F7` `F8` |
+| View, edit | `F3` `F4` | `F3` `F4` | `F3` `F4` | `F3` `F4` |
+| Find files | `Alt+F7` | `Alt+F7` | `Alt+?` | `Alt+F7` |
+| Change drive, left and right | `Alt+F1` `Alt+F2` | `Alt+F1` `Alt+F2` | — | `Alt+F1` `Alt+F2` |
+| Swap the panels | `Ctrl+U` | `Ctrl+U` | `Ctrl+U` | `Ctrl+U` |
+| Re-read the panel | `Ctrl+R` | `Ctrl+R` | `Ctrl+R` | `Ctrl+R` |
+| Quick view | `Ctrl+Q` | `Ctrl+Q` | `Ctrl+X q` | `Ctrl+Q` |
+| The panels off, the output on | `Ctrl+O` | — | `Ctrl+O` | `Ctrl+O` |
+| Folder shortcuts: set, go, the list | `Ctrl+Shift+0..9`, `RightCtrl+0..9` | `Ctrl+D` | `Ctrl+\` | `Ctrl+Shift+0..9`, `Alt+0..9`, `Ctrl+D` |
+| Multi-rename | (plugin) | `Ctrl+M` | — | `Ctrl+Shift+F6` |
+| A new tab | — | `Ctrl+T` | — | `Ctrl+Alt+T` |
+| Branch view (every file under here) | — | `Ctrl+B` | — | `Ctrl+Alt+B` |
+| Pack, unpack | `Shift+F1` `Shift+F2` | `Alt+F5` `Alt+F9` | — | `Shift+F1` `Shift+F2` |
+| User menu, main menu | `F2` `F9` | — | `F2` `F9` | `F2` `F9` |
+
+Where they part from FAR it is for a reason the help gives, usually that a terminal delivers the
+key as something else. A keymap of your own is a TOML file of `keys = [...]` / `cmd = "..."`
+lines on top of either profile, and `fcmd --check-keymap` says whether it resolves before you
+rely on it. Every action in the program is a named command — `fcmd --list-commands` prints all
+of them — so anything a key reaches, a menu, a macro or a plugin can reach too.
 
 ## Why the command is `fcmd`
 

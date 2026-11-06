@@ -272,6 +272,23 @@ files rather than guessing what its dialog says.
 
 ## What is worth doing next, in rough order
 
+**Agreed on 6 November 2026, after the survey of the others** (Directory Opus, TheFile.Ninja,
+superfile, Wikipedia's comparison; the gaps are a section of `docs/BACKLOG.md`):
+
+- **0.37.0** — a review of all the documentation: README, the help in both languages, the
+  site, the manual page, the specs, `docs/00`–`05`, BACKLOG, CONTRIBUTING, THIRD-PARTY, this
+  file; every key and setting named checked against the keymaps and `fcmd-config`; a key table
+  for people coming from FAR, Total Commander and mc in the README.
+- **0.38.0** — table mode improved (a header row detected rather than assumed, `^` as a
+  delimiter, `Ctrl+C` on the selected rows); **git taken much further**: the branches and
+  switching between them, what is to commit and what is staged, staging and unstaging, commit,
+  push, pull, a diff, a file's own log; **metadata as far as it goes**, executables included
+  (PE version resources and signatures, Mach-O and ELF notes, and the media and document
+  readers); and **a study, not code, of what the AI could do next**, for the author to choose
+  from.
+- Everything else from the survey stays in the backlog for later.
+
+
 After 0.32.0 the author agreed to **all** of the following, to be shipped in several
 releases, each cut after about four hours of work (what is half done at that point is closed
 or left out, and the next release picks it up): finding duplicate files; an SQLite panel

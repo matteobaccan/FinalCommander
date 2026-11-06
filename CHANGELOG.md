@@ -4,6 +4,23 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
+## [Unreleased]
+
+### Changed
+
+- **The documentation read again against the program.** Every key the help names is checked
+  against the keymaps and every setting against the configuration; the README says what the
+  program keeps on disk (the secrets file and the plugins folder by their real names), which
+  archives are read in process and which go through a `7z` on the machine, the servers it
+  speaks to and the panels that are not folders, and gains a table of the keys that matter
+  most for people coming from FAR, Total Commander and Midnight Commander. The feature table,
+  the roadmap and the specs lose the sentences a later release had made untrue.
+
+### Fixed
+
+- **`fcmd --paths` names the secrets file** (`fcmd-secrets.vault`), which the help said it
+  did.
+
 ## [0.36.0] - 2026-11-06
 
 ### Added

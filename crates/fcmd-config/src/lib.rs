@@ -37,6 +37,9 @@ pub enum ConfigError {
     },
 }
 
+/// The encrypted secrets file's name (the `fcmd` crate's `vault` reads and writes it).
+pub const SECRETS_FILE_NAME: &str = "fcmd-secrets.vault";
+
 /// Where this run reads and writes. Three paths, no trees.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Paths {
@@ -111,10 +114,16 @@ impl Paths {
         }
     }
 
+    /// `fcmd-secrets.vault`, beside the settings: the encrypted file of keys and passwords,
+    /// which travels with them.
+    pub fn secrets_file(&self) -> PathBuf {
+        self.config_file.with_file_name(SECRETS_FILE_NAME)
+    }
+
     /// Human-readable summary for `fcmd --paths`: the first question anyone asks.
     pub fn describe(&self) -> String {
         format!(
-            "config   {}{}\nstate    {}\nmacros   {}{}\nmenu     {}{}\nplugins  {}{}\n",
+            "config   {}{}\nstate    {}\nmacros   {}{}\nmenu     {}{}\nsecrets  {}{}\nplugins  {}{}\n",
             self.config_file.display(),
             if self.config_file.exists() {
                 ""
@@ -133,6 +142,12 @@ impl Paths {
                 ""
             } else {
                 "   (not present; F2 says so and where to put it)"
+            },
+            self.secrets_file().display(),
+            if self.secrets_file().exists() {
+                "   (encrypted; opened with its own password)"
+            } else {
+                "   (not present; made the first time a key is kept)"
             },
             self.plugins_dir.display(),
             if self.plugins_dir.is_dir() {
