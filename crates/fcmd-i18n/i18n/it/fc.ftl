@@ -1516,3 +1516,29 @@ key-git-commit = Commit
 key-git-history = Storia
 key-git-show = Mostra
 key-git-log = Log
+
+undo-title = Annulla
+btn-undo = Annulla
+menu-undo = Annulla l'ultima operazione
+undo-nothing = niente da annullare: nessuna copia, spostamento, cancellazione nel cestino o nuova cartella da quando il programma è partito
+undo-copy =
+    { $count ->
+        [one] Manda nel cestino il file creato dalla copia:
+       *[other] Manda nel cestino i { $count } file creati dalla copia:
+    }
+undo-move =
+    { $count ->
+        [one] Rimetti il file dov'era:
+       *[other] Rimetti i { $count } file dov'erano:
+    }
+undo-trash =
+    { $count ->
+        [one] Recupera il file dal cestino:
+       *[other] Recupera i { $count } file dal cestino:
+    }
+undo-mkdir = Togli la nuova cartella, se è ancora vuota:
+undo-done =
+    { $count ->
+        [one] un nome di nuovo dov'era
+       *[other] { $count } nomi di nuovo dov'erano
+    }

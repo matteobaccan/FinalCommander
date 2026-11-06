@@ -1515,3 +1515,29 @@ key-git-commit = Commit
 key-git-history = Verlauf
 key-git-show = Zeigen
 key-git-log = Log
+
+undo-title = Rückgängig
+btn-undo = Rückgängig
+menu-undo = Letzten Vorgang rückgängig
+undo-nothing = nichts rückgängig zu machen: kein Kopieren, Verschieben, Löschen in den Papierkorb oder neuer Ordner seit dem Start
+undo-copy =
+    { $count ->
+        [one] Die kopierte Datei in den Papierkorb legen:
+       *[other] Die { $count } kopierten Dateien in den Papierkorb legen:
+    }
+undo-move =
+    { $count ->
+        [one] Die Datei zurückverschieben:
+       *[other] Die { $count } Dateien zurückverschieben:
+    }
+undo-trash =
+    { $count ->
+        [one] Die Datei aus dem Papierkorb zurückholen:
+       *[other] Die { $count } Dateien aus dem Papierkorb zurückholen:
+    }
+undo-mkdir = Den neuen Ordner entfernen, wenn er noch leer ist:
+undo-done =
+    { $count ->
+        [one] ein Name wieder an seinem Platz
+       *[other] { $count } Namen wieder an ihrem Platz
+    }

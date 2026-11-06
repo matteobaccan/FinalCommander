@@ -1525,3 +1525,29 @@ key-git-commit = Commit
 key-git-history = History
 key-git-show = Show
 key-git-log = Log
+
+undo-title = Undo
+btn-undo = Undo
+menu-undo = Undo last operation
+undo-nothing = nothing to undo: no copy, move, delete to the wastebasket or new folder since the program started
+undo-copy =
+    { $count ->
+        [one] Send the file the copy made to the wastebasket:
+       *[other] Send the { $count } files the copy made to the wastebasket:
+    }
+undo-move =
+    { $count ->
+        [one] Move the file back where it was:
+       *[other] Move the { $count } files back where they were:
+    }
+undo-trash =
+    { $count ->
+        [one] Put the file back from the wastebasket:
+       *[other] Put the { $count } files back from the wastebasket:
+    }
+undo-mkdir = Remove the new folder, if it is still empty:
+undo-done =
+    { $count ->
+        [one] one name back where it was
+       *[other] { $count } names back where they were
+    }

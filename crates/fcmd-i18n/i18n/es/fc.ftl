@@ -1515,3 +1515,29 @@ key-git-commit = Commit
 key-git-history = Historia
 key-git-show = Ver
 key-git-log = Log
+
+undo-title = Deshacer
+btn-undo = Deshacer
+menu-undo = Deshacer la última operación
+undo-nothing = nada que deshacer: ninguna copia, movimiento, borrado a la papelera ni carpeta nueva desde que empezó el programa
+undo-copy =
+    { $count ->
+        [one] Mandar a la papelera el archivo que hizo la copia:
+       *[other] Mandar a la papelera los { $count } archivos que hizo la copia:
+    }
+undo-move =
+    { $count ->
+        [one] Devolver el archivo a su sitio:
+       *[other] Devolver los { $count } archivos a su sitio:
+    }
+undo-trash =
+    { $count ->
+        [one] Recuperar el archivo de la papelera:
+       *[other] Recuperar los { $count } archivos de la papelera:
+    }
+undo-mkdir = Quitar la carpeta nueva, si sigue vacía:
+undo-done =
+    { $count ->
+        [one] un nombre de vuelta en su sitio
+       *[other] { $count } nombres de vuelta en su sitio
+    }

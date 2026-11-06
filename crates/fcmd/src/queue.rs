@@ -47,6 +47,8 @@ pub struct Job {
     /// What it will do to the descriptions, worked out when it was asked for: by the time it
     /// ends the panels may be somewhere else.
     pub carry: Option<Carry>,
+    /// How to undo it, worked out when it was asked for, and kept once it ends well.
+    pub undo: Option<crate::undo::Undo>,
     /// The jobs that follow this one: the next destinations of a copy to several places, the
     /// rest of a synchronisation. They start when this ends well and are dropped when it does
     /// not.
@@ -67,6 +69,7 @@ impl Job {
             question: None,
             outcome: None,
             carry: None,
+            undo: None,
             then: VecDeque::new(),
         }
     }

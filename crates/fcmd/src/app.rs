@@ -70,6 +70,10 @@ pub enum Request {
         token: Option<String>,
         dir: std::path::PathBuf,
     },
+    /// Undo what is not a job: names back from the wastebasket, an empty folder removed.
+    Undo {
+        undo: crate::undo::Undo,
+    },
     /// Run a `sql:` query on a database, its rows written as CSV for the viewer.
     SqlQuery {
         db: std::path::PathBuf,
@@ -757,6 +761,10 @@ pub enum Event {
     GitDone {
         panel: usize,
         result: Result<GitOut, String>,
+    },
+    /// An undo that was not a job: how many names came back, or why none did.
+    UndoDone {
+        result: Result<usize, String>,
     },
     /// A language model's answer, written into a Markdown file, or why there is none.
     AiDone {
@@ -1459,6 +1467,8 @@ pub enum ConfirmAction {
     },
     /// Send these files with a question to a language model, having said so.
     AskAi { query: Box<AiQuery> },
+    /// Undo the last file operation, having said what that does.
+    Undo,
     /// Open a release's page in the browser.
     OpenRelease { url: String },
     /// Install a program from elsewhere with this line, in a terminal (the `:tools` panel).
@@ -1512,6 +1522,7 @@ impl ConfirmAction {
             ConfirmAction::InstallTool { .. } => "btn-install",
             ConfirmAction::GitSwitch { .. } => "btn-switch",
             ConfirmAction::AskAi { .. } => "btn-send",
+            ConfirmAction::Undo => "btn-undo",
         }
     }
 }
@@ -2361,6 +2372,10 @@ pub struct App {
     ai_pending: Option<AiQuery>,
     /// The last answer of this session, which `ai+` follows up.
     ai_last: Option<PathBuf>,
+    /// What the last file operations did, newest last, for `Ctrl+Alt+Z`.
+    pub undo_stack: Vec<crate::undo::Undo>,
+    /// Set while the jobs of an undo are queued, so they are not themselves remembered.
+    undoing: bool,
     /// Which service the AI dialog is changing; `None` is a new one.
     ai_editing: Option<usize>,
     /// Size of the editor's text area, from the last frame.
@@ -2731,6 +2746,8 @@ impl App {
             secret_to_keep: None,
             ai_pending: None,
             ai_last: None,
+            undo_stack: Vec::new(),
+            undoing: false,
             ai_editing: None,
             editor_size: (80, 20),
             decompile_id: None,
@@ -3031,6 +3048,19 @@ impl App {
             Event::DupesFound { panel, found } => self.dupes_found(panel, found),
             Event::GitDone { panel, result } => self.git_done(panel, result),
             Event::TextReady { result } => self.git_done(self.active, result.map(GitOut::Text)),
+            Event::UndoDone { result } => {
+                match result {
+                    Ok(n) => {
+                        let m = self
+                            .i18n
+                            .t_args("undo-done", &[("count", (n as i64).into())]);
+                        self.set_status(m);
+                    }
+                    Err(why) => self.set_error(why),
+                }
+                self.read_panel(0);
+                self.read_panel(1);
+            }
             Event::AiDone { result } => match result {
                 Ok(answer) => self.ai_done(answer),
                 Err(why) => {
@@ -4701,6 +4731,7 @@ impl App {
                         });
                     }
                     ConfirmAction::AskAi { query } => self.ask_ai(*query),
+                    ConfirmAction::Undo => self.run_undo(),
                     ConfirmAction::OpenRelease { url } => {
                         self.requests.push(Request::OpenUrl { url });
                     }
@@ -6893,6 +6924,11 @@ impl App {
         // What this will do to the descriptions, worked out now: the sources and the target
         // are here, and by the time it ends the panels may be somewhere else.
         job.carry = self.carry_for(&job.spec);
+        // How to take it back, worked out while the destinations are still as they were —
+        // unless it is itself an undo, which is not undone again.
+        if !self.undoing {
+            job.undo = crate::undo::Undo::plan(&job.spec);
+        }
         job.then = std::mem::take(&mut self.queued_jobs);
         let busy = self.queue.lane_busy(&job.lane, self.cfg.general.job_queue);
         let kind = job.kind;
@@ -8761,9 +8797,13 @@ impl App {
             job.paused = false;
             job.question = None;
             job.outcome = Some(outcome.clone());
-            (job.carry.take(), std::mem::take(&mut job.then))
+            (
+                job.carry.take(),
+                std::mem::take(&mut job.then),
+                job.undo.take(),
+            )
         });
-        let Some((carry, mut then)) = from_queue else {
+        let Some((carry, mut then, undo)) = from_queue else {
             // One of the jobs that are not in the queue — a pack, an archive test — which
             // are only ever shown.
             if let Mode::Job(view) = &self.mode {
@@ -8779,6 +8819,14 @@ impl App {
             self.mode = Mode::Normal;
         }
         self.queue.prune();
+        // Only what ended well can be taken back: a copy that stopped halfway made files the
+        // plan cannot name, and putting back half a move is a second mess on top of the first.
+        if let Some(undo) = undo.filter(|_| !outcome.cancelled && outcome.errors.is_empty()) {
+            self.undo_stack.push(undo);
+            if self.undo_stack.len() > crate::undo::KEEP {
+                self.undo_stack.remove(0);
+            }
+        }
         self.job_summary(kind, &outcome, shown);
         // The descriptions follow what the job moved, copied or deleted — but only what it
         // really did: a job that was cancelled or that failed outright must not leave a line
@@ -9594,6 +9642,7 @@ impl App {
             Command::FilePack => self.open_pack_form(),
             Command::FileMultiRename => self.open_rename_form(),
             Command::FileMultiRenameUndo => self.undo_rename(),
+            Command::FileUndo => self.ask_undo(),
             Command::FileUnpack => self.open_unpack_form(),
             Command::NetTunnel => self.ask_tunnel(),
             Command::NetTunnels => {
@@ -13841,6 +13890,56 @@ impl App {
     }
 
     /// `file.multirename.undo`: the last multi-rename, the other way round.
+    /// `Ctrl+Alt+Z`: say what undoing the last operation will do, and wait for a yes.
+    fn ask_undo(&mut self) {
+        let Some(undo) = self.undo_stack.last() else {
+            let m = self.i18n.t("undo-nothing");
+            self.set_error(m);
+            return;
+        };
+        let id = match undo {
+            crate::undo::Undo::Copy { .. } => "undo-copy",
+            crate::undo::Undo::Move { .. } => "undo-move",
+            crate::undo::Undo::Trash { .. } => "undo-trash",
+            crate::undo::Undo::Mkdir { .. } => "undo-mkdir",
+        };
+        let mut lines = vec![self
+            .i18n
+            .t_args(id, &[("count", (undo.count() as i64).into())])];
+        let names = undo.names();
+        for n in names.iter().take(5) {
+            lines.push(format!("  {n}"));
+        }
+        if names.len() > 5 {
+            lines.push("  …".into());
+        }
+        let title = self.i18n.t("undo-title");
+        self.mode = Mode::Confirm(Confirm {
+            title,
+            lines,
+            action: ConfirmAction::Undo,
+            button: 0,
+        });
+    }
+
+    /// Undo it: the opposite jobs through the queue, or the wastebasket and the empty folder
+    /// on a worker.
+    fn run_undo(&mut self) {
+        let Some(undo) = self.undo_stack.pop() else {
+            return;
+        };
+        let jobs = undo.jobs();
+        if jobs.is_empty() {
+            self.requests.push(Request::Undo { undo });
+            return;
+        }
+        self.undoing = true;
+        for spec in jobs {
+            self.enqueue(spec, false);
+        }
+        self.undoing = false;
+    }
+
     fn undo_rename(&mut self) {
         let Some((dir, plan)) = self.rename_undo.clone() else {
             let m = self.i18n.t("rename-nothing-to-undo");
@@ -26412,6 +26511,70 @@ mod tests {
         });
         assert!(matches!(app.mode, Mode::Normal), "{:?}", app.mode);
         assert!(!app.status.is_empty());
+    }
+
+    /// A copy that ended well can be taken back: `Ctrl+Alt+Z` says what that does, and on a
+    /// yes the files it made go to the wastebasket through the queue. A copy that failed, or
+    /// the undo itself, is not remembered.
+    #[test]
+    fn a_finished_copy_is_undone_through_the_wastebasket() {
+        let dir = tempfile::tempdir().unwrap();
+        let (src, dst) = (dir.path().join("src"), dir.path().join("dst"));
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::create_dir_all(&dst).unwrap();
+        std::fs::write(src.join("a.txt"), "a").unwrap();
+        let mut app = app_on_disk(&src);
+        app.take_requests();
+        press(&mut app, "Ctrl+Alt+Z");
+        assert!(app.status_error, "nothing to undo yet: {}", app.status);
+        app.mode = Mode::Normal;
+
+        app.start_job(JobSpec::new(
+            JobKind::Copy,
+            vec![VPath::local(src.join("a.txt"))],
+            Some(VPath::local(&dst)),
+        ));
+        let id = app
+            .take_requests()
+            .into_iter()
+            .find_map(|r| match r {
+                Request::Job { id, .. } => Some(id),
+                _ => None,
+            })
+            .expect("the copy");
+        app.handle_event(Event::JobDone {
+            id,
+            kind: JobKind::Copy,
+            outcome: fcmd_jobs::Outcome {
+                files: 1,
+                ..Default::default()
+            },
+        });
+        assert_eq!(app.undo_stack.len(), 1);
+        app.mode = Mode::Normal;
+        press(&mut app, "Ctrl+Alt+Z");
+        let Mode::Confirm(c) = &app.mode else {
+            panic!("a dialog first: {:?}", app.mode)
+        };
+        assert!(c.lines.iter().any(|l| l.contains("a.txt")), "{:?}", c.lines);
+        press(&mut app, "Enter");
+        let undo = app.take_requests().into_iter().find_map(|r| match r {
+            Request::Job { id, spec, .. } => Some((id, spec)),
+            _ => None,
+        });
+        let (undo_id, spec) = undo.expect("the undo is a job");
+        assert_eq!(spec.kind, JobKind::Trash);
+        assert_eq!(spec.sources, vec![VPath::local(dst.join("a.txt"))]);
+        assert!(app.undo_stack.is_empty());
+        app.handle_event(Event::JobDone {
+            id: undo_id,
+            kind: JobKind::Trash,
+            outcome: Default::default(),
+        });
+        assert!(
+            app.undo_stack.is_empty(),
+            "an undo is not itself remembered"
+        );
     }
 
     #[test]

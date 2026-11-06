@@ -1472,3 +1472,10 @@ cmd = "ai.explain"
 keys = ["Shift+F7"]
 scope = "panel"
 cmd = "git.commit.draft"
+
+# Undo the last file operation (SPEC 03 §14). FAR has none; `Ctrl+Z` in a panel is the
+# description, as it is there, so the undo takes `Alt` with it as well.
+[[bind]]
+keys = ["Ctrl+Alt+Z"]
+scope = "panel"
+cmd = "file.undo"

@@ -193,6 +193,24 @@ of its own — the error says which key deletes it instead.
 honest about what that is worth on an SSD, on a copy-on-write filesystem and with snapshots
 about.
 
+# Taking an operation back
+
+`Ctrl+Alt+Z` — *Files → Undo last operation* — undoes the last copy, move, delete to the
+wastebasket or new folder, after a dialog that says what it is about to do and to which files.
+Up to twenty are remembered, the newest first, while the program runs:
+
+| What was done | How it is undone |
+| --- | --- |
+| a copy | what it made goes to the **wastebasket** — nothing is deleted outright; a file the copy wrote over cannot be given back, so it is left alone |
+| a move or a rename with `F6` | each name goes back where it was, through the queue, asking as any move does if something is in the way |
+| a delete to the wastebasket | the names come back from it, where the system lets a program do that (Linux and Windows; on macOS the Finder's *Put Back* does it) |
+| a new folder (`F7`) | it is removed, if it is still empty |
+
+Only what ended well is remembered: a job that was stopped or that ended with errors cannot be
+taken back from here. Neither can anything on a server, in a bucket or inside an archive, nor a
+real delete (`Shift+Del`), which is what that key is for. The multi-rename has its own undo,
+*Files → Undo multi-rename*, kept across a restart.
+
 # Keeping two folders the same
 
 `Ctrl+Shift+Y` synchronises the two panels' directories. It happens in three steps, and the

@@ -344,6 +344,8 @@ pub enum Command {
     FileMultiRename,
     /// Put back the names the last multi-rename changed.
     FileMultiRenameUndo,
+    /// Undo the last copy, move, delete to the wastebasket or new folder.
+    FileUndo,
     /// Put the selected files into a new archive (`Shift+F1`).
     FilePack,
     /// Take an archive apart, into a directory (`Shift+F2`).
@@ -727,6 +729,7 @@ impl Command {
             Command::CmdInsert(Insert::Unc, Which::Right),
             Command::FileMultiRename,
             Command::FileMultiRenameUndo,
+            Command::FileUndo,
             Command::FilePack,
             Command::FileUnpack,
             Command::ArcCommands,
@@ -1029,6 +1032,7 @@ impl Command {
             }
             Command::FileMultiRename => "file.multirename".into(),
             Command::FileMultiRenameUndo => "file.multirename.undo".into(),
+            Command::FileUndo => "file.undo".into(),
             Command::FilePack => "file.pack".into(),
             Command::FileUnpack => "file.unpack".into(),
             Command::ArcCommands => "arc.commands".into(),
@@ -1321,6 +1325,7 @@ impl Command {
             ("tool.terminal", _) => Command::ToolTerminal,
             ("file.multirename", _) => Command::FileMultiRename,
             ("file.multirename.undo", _) => Command::FileMultiRenameUndo,
+            ("file.undo", _) => Command::FileUndo,
             ("file.pack", _) => Command::FilePack,
             ("file.unpack", _) => Command::FileUnpack,
             ("arc.commands", _) => Command::ArcCommands,

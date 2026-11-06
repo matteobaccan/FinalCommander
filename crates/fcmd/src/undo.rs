@@ -1,0 +1,286 @@
+//! Undoing what a file operation did (SPEC 03 §14, 0.39.0).
+//!
+//! The engine copies, moves and deletes; it does not say afterwards which names it made. So
+//! what an operation will do is worked out when it is queued, from the same rule the planner
+//! follows — a target that is a folder, or several sources, means *into* it; one source and a
+//! target that is not a folder means *as* it — and kept only if the job ends with nothing
+//! cancelled and no error. Undoing is then the opposite operation, sent through the same
+//! queue as any other, so it asks the same questions on a conflict and can be watched and
+//! stopped:
+//!
+//! * a **copy** is undone by sending what it made to the wastebasket — never by deleting it,
+//!   because a copy that wrote over an existing file cannot give that file back, and those
+//!   destinations are left out of the undo rather than thrown away;
+//! * a **move** or a rename by moving each name back where it was;
+//! * a **delete to the wastebasket** by putting the names back from it, where the system lets
+//!   a program do that;
+//! * a **new folder** by removing it, if it is still empty.
+//!
+//! Local files only: a server, a bucket or an archive has no wastebasket to fall back on, and
+//! an undo that might lose data there is worse than none.
+
+use std::path::{Path, PathBuf};
+
+use fcmd_core::VPath;
+use fcmd_jobs::{JobKind, JobSpec};
+
+/// One thing that can be undone.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Undo {
+    /// The files and folders a copy made, to be sent to the wastebasket.
+    Copy { made: Vec<PathBuf> },
+    /// `(where it was, where it is now)`, for each name a move took.
+    Move { pairs: Vec<(PathBuf, PathBuf)> },
+    /// What was sent to the wastebasket, by the path it had.
+    Trash { paths: Vec<PathBuf> },
+    /// A folder `F7` made.
+    Mkdir { dir: PathBuf },
+}
+
+/// How many operations are remembered. An undo is for what one just did, not for last week.
+pub const KEEP: usize = 20;
+
+impl Undo {
+    /// What an operation will do, worked out before it runs — `None` for one that cannot be
+    /// undone from here (another kind, anything not on this disk, an extraction).
+    pub fn plan(spec: &JobSpec) -> Option<Undo> {
+        let local = |p: &VPath| p.is_local() && !p.in_container();
+        // `F7` names the folder it makes as the target and has no sources.
+        if spec.kind == JobKind::Mkdir {
+            let dir = spec
+                .target
+                .as_ref()
+                .filter(|t| local(t))?
+                .as_path()
+                .to_path_buf();
+            return (!dir.exists()).then_some(Undo::Mkdir { dir });
+        }
+        if spec.sources.is_empty() || !spec.sources.iter().all(local) {
+            return None;
+        }
+        match spec.kind {
+            JobKind::Copy | JobKind::Move => {
+                let target = spec.target.as_ref().filter(|t| local(t))?;
+                if spec.options.contents || spec.options.relative_to.is_some() {
+                    return None;
+                }
+                let target = target.as_path().to_path_buf();
+                let into = target.is_dir() || spec.sources.len() > 1;
+                let pairs: Vec<(PathBuf, PathBuf)> = spec
+                    .sources
+                    .iter()
+                    .filter_map(|s| {
+                        let src = s.as_path().to_path_buf();
+                        let dst = if into {
+                            target.join(src.file_name()?)
+                        } else {
+                            target.clone()
+                        };
+                        Some((src, dst))
+                    })
+                    .collect();
+                if spec.kind == JobKind::Copy {
+                    // A destination that is there already is one the copy may write over;
+                    // sending it to the wastebasket would throw away what was there before.
+                    let made: Vec<PathBuf> = pairs
+                        .into_iter()
+                        .filter(|(_, dst)| !dst.exists())
+                        .map(|(_, dst)| dst)
+                        .collect();
+                    (!made.is_empty()).then_some(Undo::Copy { made })
+                } else {
+                    let pairs: Vec<_> = pairs.into_iter().filter(|(_, d)| !d.exists()).collect();
+                    (!pairs.is_empty()).then_some(Undo::Move { pairs })
+                }
+            }
+            JobKind::Trash => Some(Undo::Trash {
+                paths: spec
+                    .sources
+                    .iter()
+                    .map(|s| s.as_path().to_path_buf())
+                    .collect(),
+            }),
+            _ => None,
+        }
+    }
+
+    /// How many names it touches, for the dialog that asks first.
+    pub fn count(&self) -> usize {
+        match self {
+            Undo::Copy { made } => made.len(),
+            Undo::Move { pairs } => pairs.len(),
+            Undo::Trash { paths } => paths.len(),
+            Undo::Mkdir { .. } => 1,
+        }
+    }
+
+    /// The names, for the dialog: what will move, or be thrown away, or come back.
+    pub fn names(&self) -> Vec<String> {
+        match self {
+            Undo::Copy { made } => made.iter().map(|p| p.display().to_string()).collect(),
+            Undo::Move { pairs } => pairs
+                .iter()
+                .map(|(from, to)| format!("{} → {}", to.display(), from.display()))
+                .collect(),
+            Undo::Trash { paths } => paths.iter().map(|p| p.display().to_string()).collect(),
+            Undo::Mkdir { dir } => vec![dir.display().to_string()],
+        }
+    }
+
+    /// The jobs that undo a copy or a move, for the queue. A move back whose names did not
+    /// change goes as one job into the folder they came from; one that renamed goes as a job
+    /// per name. Empty for the two kinds that are not jobs.
+    pub fn jobs(&self) -> Vec<JobSpec> {
+        match self {
+            Undo::Copy { made } => vec![JobSpec::new(
+                JobKind::Trash,
+                made.iter().map(VPath::local).collect(),
+                None,
+            )],
+            Undo::Move { pairs } => {
+                let mut out: Vec<JobSpec> = Vec::new();
+                let mut by_dir: Vec<(PathBuf, Vec<VPath>)> = Vec::new();
+                for (from, to) in pairs {
+                    let same_name = from.file_name() == to.file_name();
+                    match (same_name, from.parent()) {
+                        (true, Some(dir)) => match by_dir.iter_mut().find(|(d, _)| d == dir) {
+                            Some((_, list)) => list.push(VPath::local(to)),
+                            None => by_dir.push((dir.to_path_buf(), vec![VPath::local(to)])),
+                        },
+                        _ => out.push(JobSpec::new(
+                            JobKind::Move,
+                            vec![VPath::local(to)],
+                            Some(VPath::local(from)),
+                        )),
+                    }
+                }
+                for (dir, sources) in by_dir {
+                    out.push(JobSpec::new(
+                        JobKind::Move,
+                        sources,
+                        Some(VPath::local(&dir)),
+                    ));
+                }
+                out
+            }
+            Undo::Trash { .. } | Undo::Mkdir { .. } => Vec::new(),
+        }
+    }
+}
+
+/// Undo the two kinds that are not jobs, on a worker: the wastebasket gives its names back,
+/// and an empty folder goes. Returns how many came back or went.
+pub fn run(undo: &Undo) -> Result<usize, String> {
+    match undo {
+        Undo::Trash { paths } => fcmd_jobs::fs::restore_from_trash(paths),
+        Undo::Mkdir { dir } => remove_if_empty(dir).map(|()| 1),
+        Undo::Copy { .. } | Undo::Move { .. } => Ok(0),
+    }
+}
+
+fn remove_if_empty(dir: &Path) -> Result<(), String> {
+    let mut entries = std::fs::read_dir(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    if entries.next().is_some() {
+        return Err(format!(
+            "{} is not empty any more, so it stays",
+            dir.display()
+        ));
+    }
+    std::fs::remove_dir(dir).map_err(|e| format!("{}: {e}", dir.display()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_copy_into_a_folder_is_undone_by_throwing_away_only_what_it_made() {
+        let dir = tempfile::tempdir().unwrap();
+        let (src, dst) = (dir.path().join("src"), dir.path().join("dst"));
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::create_dir_all(&dst).unwrap();
+        std::fs::write(src.join("a.txt"), "a").unwrap();
+        std::fs::write(src.join("b.txt"), "b").unwrap();
+        // `b.txt` is already there: the copy may write over it, and the undo leaves it be.
+        std::fs::write(dst.join("b.txt"), "old").unwrap();
+        let spec = JobSpec::new(
+            JobKind::Copy,
+            vec![
+                VPath::local(src.join("a.txt")),
+                VPath::local(src.join("b.txt")),
+            ],
+            Some(VPath::local(&dst)),
+        );
+        let undo = Undo::plan(&spec).expect("a copy can be undone");
+        assert_eq!(
+            undo,
+            Undo::Copy {
+                made: vec![dst.join("a.txt")]
+            }
+        );
+        let jobs = undo.jobs();
+        assert_eq!(jobs.len(), 1);
+        assert_eq!(jobs[0].kind, JobKind::Trash);
+    }
+
+    #[test]
+    fn a_move_goes_back_in_one_job_and_a_rename_in_one_of_its_own() {
+        let dir = tempfile::tempdir().unwrap();
+        let (src, dst) = (dir.path().join("src"), dir.path().join("dst"));
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::create_dir_all(&dst).unwrap();
+        for n in ["a", "b"] {
+            std::fs::write(src.join(n), n).unwrap();
+        }
+        let spec = JobSpec::new(
+            JobKind::Move,
+            vec![VPath::local(src.join("a")), VPath::local(src.join("b"))],
+            Some(VPath::local(&dst)),
+        );
+        let undo = Undo::plan(&spec).unwrap();
+        let jobs = undo.jobs();
+        assert_eq!(jobs.len(), 1);
+        assert_eq!(jobs[0].sources.len(), 2);
+        assert_eq!(jobs[0].target, Some(VPath::local(&src)));
+
+        // One file moved under another name is put back under its own.
+        let spec = JobSpec::new(
+            JobKind::Move,
+            vec![VPath::local(src.join("a"))],
+            Some(VPath::local(dir.path().join("renamed"))),
+        );
+        let undo = Undo::plan(&spec).unwrap();
+        assert_eq!(undo.count(), 1);
+        let jobs = undo.jobs();
+        assert_eq!(jobs[0].target, Some(VPath::local(src.join("a"))));
+    }
+
+    #[test]
+    fn a_new_folder_goes_only_while_it_is_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        let made = dir.path().join("new");
+        let spec = JobSpec::new(JobKind::Mkdir, vec![], Some(VPath::local(&made)));
+        let undo = Undo::plan(&spec).unwrap();
+        std::fs::create_dir(&made).unwrap();
+        std::fs::write(made.join("x"), "x").unwrap();
+        assert!(run(&undo).is_err());
+        assert!(made.exists());
+        std::fs::remove_file(made.join("x")).unwrap();
+        assert_eq!(run(&undo), Ok(1));
+        assert!(!made.exists());
+    }
+
+    #[test]
+    fn what_is_not_on_this_disk_is_not_undone() {
+        let spec = JobSpec::new(
+            JobKind::Delete,
+            vec![VPath::local(std::env::temp_dir().join("x"))],
+            None,
+        );
+        assert_eq!(
+            Undo::plan(&spec),
+            None,
+            "a real delete has nothing to come back from"
+        );
+    }
+}

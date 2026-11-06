@@ -541,3 +541,24 @@ change its modification time and tell every backup in the house that it had chan
 itself goes to a file beside the original and is renamed over it, so an interruption leaves the
 original whole, and the original's mode is carried across, because a script that was executable
 has to stay executable.
+
+## 14. Undoing an operation (`file.undo`, 0.39.0)
+
+`Ctrl+Alt+Z` (*Files → Undo last operation*) takes back the newest of up to twenty remembered
+operations, after a dialog naming what it will do and the first five names. The engine does
+not report which names it made, so the undo is **worked out when the job is queued**, with the
+planner's own rule (a target that is a folder, or more than one source, means *into*; else
+*as*), and **kept only if the job ends uncancelled and without an error**. Jobs queued by an
+undo are not remembered themselves.
+
+| Operation | Undo |
+| --- | --- |
+| Copy | a `Trash` job of the destinations that did not exist when the copy was queued; one that did is left out, because the copy may have written over it and the wastebasket would then hold the only copy of neither |
+| Move / rename | `Move` jobs back: one into each original folder for the names that kept their name, one per name for those that changed it; only for destinations that did not exist when queued |
+| Trash | restored on a worker through the system's wastebasket (`trash::os_limited`: freedesktop and Windows), the newest item for each original path, and only where nothing is in its place; on macOS an error says to use the Finder |
+| Mkdir | the folder removed on a worker if it is still empty, refused if not |
+
+Local files only (not a server, a bucket or an archive), no extraction (`contents`) and no
+relative copy (`relative_to`). A real delete and a wipe have nothing to come back from and are
+not offered. The multi-rename keeps its own undo (§8), which survives a restart; this one is
+held in memory.

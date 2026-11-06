@@ -975,6 +975,60 @@ fn with_created(times: fs::FileTimes, btime: Option<SystemTime>) -> fs::FileTime
     times
 }
 
+/// Put back from the system's wastebasket what was sent there from these paths: the most
+/// recent item for each, and only where nothing is in its place now (SPEC 03 §14, 0.39.0).
+///
+/// Returns how many came back. The freedesktop trash and the Windows recycle bin can be
+/// listed and restored from; the macOS one cannot be from outside the Finder, so there it is
+/// an error that says so rather than a quiet nothing.
+pub fn restore_from_trash(paths: &[std::path::PathBuf]) -> Result<usize, String> {
+    #[cfg(any(
+        target_os = "windows",
+        all(
+            unix,
+            not(target_os = "macos"),
+            not(target_os = "ios"),
+            not(target_os = "android")
+        )
+    ))]
+    {
+        let items = ::trash::os_limited::list().map_err(|e| e.to_string())?;
+        let mut chosen: Vec<::trash::TrashItem> = Vec::new();
+        for path in paths {
+            if path.exists() {
+                continue;
+            }
+            // The same name may have been thrown away more than once: the last one is the
+            // one this program put there.
+            if let Some(item) = items
+                .iter()
+                .filter(|i| i.original_path() == *path)
+                .max_by_key(|i| i.time_deleted)
+            {
+                chosen.push(item.clone());
+            }
+        }
+        let n = chosen.len();
+        if n > 0 {
+            ::trash::os_limited::restore_all(chosen).map_err(|e| e.to_string())?;
+        }
+        Ok(n)
+    }
+    #[cfg(not(any(
+        target_os = "windows",
+        all(
+            unix,
+            not(target_os = "macos"),
+            not(target_os = "ios"),
+            not(target_os = "android")
+        )
+    )))]
+    {
+        let _ = paths;
+        Err("this system's trash can only be emptied back from its own file manager".into())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

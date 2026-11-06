@@ -201,6 +201,24 @@ una propria cartella di cestino — l'errore dice quale tasto lo cancella invece
 `Alt+Del` è il terzo: sovrascrive i byte prima di scollegare il file. Il suo dialogo è onesto su
 quanto valga la cosa su un SSD, su un filesystem copy-on-write e con gli snapshot in giro.
 
+# Tornare indietro da un'operazione
+
+`Ctrl+Alt+Z` — *File → Annulla l'ultima operazione* — annulla l'ultima copia, spostamento,
+cancellazione nel cestino o nuova cartella, dopo un dialogo che dice cosa sta per fare e su quali
+file. Se ne ricordano fino a venti, dalla più recente, finché il programma è aperto:
+
+| Cosa è stato fatto | Come si annulla |
+| --- | --- |
+| una copia | quello che ha creato va nel **cestino** — niente viene cancellato davvero; un file che la copia ha sovrascritto non si può ridare, quindi resta com'è |
+| uno spostamento o una rinomina con `F6` | ogni nome torna dov'era, attraverso la coda, chiedendo come fa ogni spostamento se c'è qualcosa in mezzo |
+| una cancellazione nel cestino | i nomi tornano dal cestino, dove il sistema lascia farlo a un programma (Linux e Windows; su macOS lo fa *Ripristina* del Finder) |
+| una nuova cartella (`F7`) | viene tolta, se è ancora vuota |
+
+Si ricorda solo quello che è finito bene: un job fermato o finito con errori non si può annullare
+da qui. Nemmeno quello che sta su un server, in un bucket o dentro un archivio, né una
+cancellazione vera (`Shift+Canc`), che è a questo che serve quel tasto. La rinomina multipla ha
+il suo annulla, *File → Annulla rinomina multipla*, che resta anche dopo un riavvio.
+
 # Tenere due cartelle uguali
 
 `Ctrl+Shift+Y` sincronizza le cartelle dei due pannelli. Succede in tre passi, e quello di mezzo

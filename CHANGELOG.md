@@ -19,6 +19,10 @@ Notable changes, newest first. The format follows
   stands in its repository — changed, staged, new, ignored, and a folder with changes inside —
   read with one `git status` per folder, only while something on screen asks for it. *Sort by
   git status* puts the changed files first.
+- **Undo for file operations.** `Ctrl+Alt+Z` (*Files → Undo last operation*) takes back the
+  last copy — what it made goes to the wastebasket — move or rename, delete to the wastebasket
+  and new folder, after a dialog that says what it will do. The last twenty that ended well are
+  remembered while the program runs.
 
 ## [0.38.0] - 2026-11-06
 

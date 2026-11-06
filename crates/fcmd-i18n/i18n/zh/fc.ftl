@@ -1487,3 +1487,13 @@ key-git-commit = 提交
 key-git-history = 历史
 key-git-show = 查看
 key-git-log = 日志
+
+undo-title = 撤销
+btn-undo = 撤销
+menu-undo = 撤销上一个操作
+undo-nothing = 没有可撤销的：程序启动以来没有复制、移动、删除到回收站或新建文件夹
+undo-copy = 把复制产生的 { $count } 个文件送进回收站：
+undo-move = 把 { $count } 个文件移回原处：
+undo-trash = 从回收站恢复 { $count } 个文件：
+undo-mkdir = 如果新文件夹仍为空，则删除它：
+undo-done = { $count } 个名称已回到原处

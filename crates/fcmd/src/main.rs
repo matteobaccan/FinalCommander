@@ -24,6 +24,7 @@ mod tabs;
 mod termkeys;
 mod tools;
 mod tree;
+mod undo;
 mod vault;
 mod watch;
 
@@ -1927,6 +1928,13 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                     runtime.spawn(async move {
                         let result = ask_ai(&query, token, &dir).await;
                         let _ = tx.send(Event::AiDone { result });
+                    });
+                }
+                Request::Undo { undo } => {
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || {
+                        let result = undo::run(&undo);
+                        let _ = tx.send(Event::UndoDone { result });
                     });
                 }
                 Request::SysLog => {
@@ -6561,6 +6569,7 @@ dir_attr = "D"
                 | Request::Git { .. }
                 | Request::SysLog
                 | Request::AiAsk { .. }
+                | Request::Undo { .. }
                 | Request::OpenUrl { .. }
                 | Request::Shell { .. }
                 | Request::Decompile { .. }

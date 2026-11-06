@@ -1515,3 +1515,29 @@ key-git-commit = Commit
 key-git-history = Histoire
 key-git-show = Voir
 key-git-log = Journal
+
+undo-title = Annuler
+btn-undo = Annuler
+menu-undo = Annuler la dernière opération
+undo-nothing = rien à annuler : aucune copie, déplacement, suppression vers la corbeille ni nouveau dossier depuis le lancement
+undo-copy =
+    { $count ->
+        [one] Envoyer à la corbeille le fichier créé par la copie :
+       *[other] Envoyer à la corbeille les { $count } fichiers créés par la copie :
+    }
+undo-move =
+    { $count ->
+        [one] Remettre le fichier à sa place :
+       *[other] Remettre les { $count } fichiers à leur place :
+    }
+undo-trash =
+    { $count ->
+        [one] Récupérer le fichier dans la corbeille :
+       *[other] Récupérer les { $count } fichiers dans la corbeille :
+    }
+undo-mkdir = Retirer le nouveau dossier, s'il est encore vide :
+undo-done =
+    { $count ->
+        [one] un nom de retour à sa place
+       *[other] { $count } noms de retour à leur place
+    }

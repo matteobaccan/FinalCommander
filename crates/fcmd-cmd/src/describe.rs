@@ -223,6 +223,9 @@ impl Command {
 
             Command::FileMultiRename => "rename what is selected from one pattern, with a preview",
             Command::FileMultiRenameUndo => "put back the names the last multi-rename changed",
+            Command::FileUndo => {
+                "undo the last copy, move, delete to the wastebasket or new folder"
+            }
             Command::FilePack => "put what is selected into a new archive",
             Command::FileUnpack => "take an archive apart",
             Command::ArcCommands => "what can be done with this archive",

@@ -407,6 +407,7 @@ pub fn menus() -> Vec<Menu> {
                     "",
                     Action::Run(Command::FileMultiRenameUndo),
                 ),
+                item("menu-undo", "Ctrl+Alt+Z", Action::Run(Command::FileUndo)),
                 item("menu-mkdir", "F7", Action::Run(Command::FileMkdir)),
                 item("menu-delete", "F8", Action::Run(Command::FileDelete)),
                 item(

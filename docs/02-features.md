@@ -115,7 +115,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 3.15 | Compare files by content (internal diff viewer, side-by-side, word-level) | MC/KRU | ~ a unified view, two binaries byte by byte |
 | 3.16 | Change encoding / line endings in bulk (CRLF↔LF, codepage recode) | MC | ✓ |
 | 3.17 | File descriptions/comments (`descript.ion`, `files.bbs`) | FAR | ✓ |
-| 3.18 | Undo for destructive operations where the FS allows (trash-based) | NEW | M3 |
+| 3.18 | Undo for destructive operations where the FS allows (trash-based) | NEW | ✓ `Ctrl+Alt+Z` undoes the last copy (to the wastebasket), move, delete to the wastebasket and new folder, the last twenty remembered (SPEC 03 §14) |
 | 3.19 | Elevated operations (UAC / `sudo` / `pkexec` helper) for privileged paths | FAR/KRU | M3 |
 
 ## 4. VFS: archives, remote, special
