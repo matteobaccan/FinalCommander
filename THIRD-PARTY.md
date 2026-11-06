@@ -54,7 +54,7 @@ Unicode-3.0, or MPL-2.0 at file level). The policy and the allow-list live in `d
 | `futures-util` | MIT OR Apache-2.0 | a WebDAV response body's errors made into `io::Error` as it streams |
 | `portable-pty` | MIT | the pseudo-terminal: `openpty` on Unix, ConPTY on Windows |
 | `vte` | Apache-2.0 OR MIT | recognising the escape sequences a program writes to a terminal |
-| `trash` (with `urlencoding`, `scopeguard`, `once_cell`; `objc2-foundation` on macOS) | MIT | handing a file to the system's own wastebasket: the XDG trash spec, `NSFileManager`, `IFileOperation` |
+| `trash` (with `urlencoding`, `scopeguard`, `once_cell`, `chrono`; `objc2-foundation` on macOS) | MIT | handing a file to the system's own wastebasket — the XDG trash spec, `NSFileManager`, `IFileOperation` — and, for the undo, listing it and restoring from it on Linux and Windows |
 | `md5`, `sha1`, `sha2` | MIT OR Apache-2.0 | three of the four hashes the checksum dialog offers (all three were already in the tree under the SSH client) |
 | `crc32fast` | MIT OR Apache-2.0 | the fourth: CRC32, which is what a `.sfv` list holds (already in the tree under `zip` and `tar`) |
 | `image` | MIT OR Apache-2.0 | decoding PNG, JPEG, GIF and BMP for the viewer's picture mode; built with `default-features = false`, so it is those four formats and nothing else |

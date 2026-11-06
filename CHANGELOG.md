@@ -27,6 +27,13 @@ Notable changes, newest first. The format follows
   `.ods` or `.odp` shows its title, author, who saved it last, the dates, the revision, the
   pages, words or slides, the company and the program that wrote it.
 
+### Changed
+
+- **`trash` 5.3.0** (from Renovate's pull request #28, with the Linux backend and the deletion
+  times now asked for by name): on Windows the wastebasket is listed under each file's real
+  name, extension included, which the undo's restore depends on; on Linux encoded paths in
+  `.trashinfo` records are read correctly.
+
 ## [0.38.0] - 2026-11-06
 
 ### Added
