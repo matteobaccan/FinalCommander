@@ -1632,6 +1632,7 @@ impl Form {
                 t("drive-services"),
                 cfg.panels.services,
             ),
+            Field::toggle("drives.panels.tools", t("drive-tools"), cfg.panels.tools),
             Field::toggle("drives.panels.temp", t("drive-temp"), cfg.panels.temp),
         ];
         Form {

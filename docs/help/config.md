@@ -80,6 +80,41 @@ off, because the program opens no connection you did not ask for. With it on, th
 in the background at most once a day, says nothing when there is nothing new or no network,
 and offers each new release once.
 
+# Programs from elsewhere
+
+Most of what fcmd does it does itself — zip, the tar family, 7z, `ar` and `.deb`, `cpio` and
+`rpm` are read in process, SSH, FTP, WebDAV, S3 and IMAP are spoken in process, and the viewer
+disassembles x86 and AArch64 on its own. For a few things it runs a program that is already on
+the machine instead, never linked into it. `Alt+F1` → *External programs* lists every one of
+them, ticked when it is on the `PATH` and crossed when it is not, with the version it says it
+is and what fcmd asks it for. `F3` on a row is its card: where it is, what it is for, and,
+when it is missing, how to get it and its website. `F4` installs it: it shows the line it will
+run — `winget` on Windows, `brew` on macOS, `apt`, `dnf`, `pacman` or `apk` elsewhere,
+whichever this machine has — and, once you say yes, runs it in a terminal of its own, so that
+`sudo` can ask for your password and `winget` for its agreements. `Ctrl+Alt+E` goes back to the
+panels and `Ctrl+R` in the panel looks again. If the install fails, the terminal says where the
+product's own download page is; where no package manager here is known to have the program,
+`F4` offers to open that page instead. A package name is only used where it is certain — a
+wrong one is worse than none.
+
+Why each one is a program and not part of fcmd:
+
+| Program | For | Why it is not built in |
+| --- | --- | --- |
+| `7z` | archives fcmd does not read itself: rar, cab, iso, lha, arj, msi, wim, dmg… | RAR's unpacking code comes under its own licence, not an open one, and the rest are dozens of formats one program already reads well. A table drives it (`[[archiver]]`, *Formats of your own*), and it is only ever asked to list and extract |
+| `git` | the Git panel (`Ctrl+Alt+G`) and the branch in the prompt | what a repository holds is what `git` says it holds; a second implementation inside fcmd could disagree with the first |
+| `javap`, `ilspycmd`, `python3`, `wasm2wat`, `objdump`, `retdec-decompiler` | `Shift+F6` in the viewer, through the `[[decompile]]` rules | each is a specialist's project for one kind of code; fcmd disassembles machine code itself and leaves decompiling to them |
+| `ffmpeg` | video frames in the viewer — coming: nothing runs it yet | video codecs carry patents, the libraries that decode them are LGPL or GPL, and no pure-Rust decoder is ready; `F11` already reads a video's container without it |
+| `xdg-open` / `open` | opening a link in the browser | which browser is the desktop's choice, not fcmd's |
+| `journalctl` / `log` / `wevtutil` | *Commands → System log* | each system has one tool that knows its log |
+| `systemctl` / `launchctl` | the services panel | the service manager is the only thing that can start and stop a service |
+
+A program counts as installed when it is on the `PATH`, by the same rule a shell uses, and
+nowhere else. 7-Zip's Windows installer, for one, puts `7z.exe` in *Program Files* without
+adding it to the `PATH`: the panel then says it is missing, and adding that folder to the
+`PATH` is the fix. *External programs* in the `F9` dialog of `Alt+F1`
+(`drives.panels.tools`) takes the row away; `Ctrl+7` there hides every panel row at once.
+
 # A copy that remembers nothing
 
 `fcmd --no-save` starts with your histories and panels as usual but writes nothing back when it

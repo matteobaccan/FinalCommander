@@ -361,6 +361,7 @@ processes = true
 sockets = true
 programs = true
 services = true
+tools = true             # the programs fcmd runs, found or not
 temp = true
 ```
 

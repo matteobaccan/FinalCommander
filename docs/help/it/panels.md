@@ -17,8 +17,8 @@ cui appartiene: una tabella di tutto quello che è montato — che cosa è ciasc
 rimovibile, ottico, di rete, in memoria), come si chiama, con che filesystem è formattato,
 quanto è grande e quanto ne resta. Quali di queste colonne vengano disegnate lo scegli tu, con
 `F9` dentro il dialogo — e anche quali pannelli che non sono dischi la lista propone: una
-casella per ciascuno (NetBox, processi, socket, programmi installati, servizi, pannello
-temporaneo), così la lista tiene solo quello che usi.
+casella per ciascuno (NetBox, processi, socket, programmi installati, servizi, programmi
+esterni, pannello temporaneo), così la lista tiene solo quello che usi.
 
 Un disco su cui l'*altro* pannello è già aperto si apre dove sta quel pannello, non in cima
 al disco. Due pannelli su un disco solo è il modo in cui si lavora su un disco — un albero
@@ -48,6 +48,11 @@ Sotto una riga di separazione, su `Ctrl+1`…`Ctrl+9`, stanno le cose che non so
 * i **programmi installati** sulla macchina, con versione ed editore: `F3` è la scheda, e
   scegliendone uno il suo comando di disinstallazione finisce sulla riga di comando, non
   eseguito, perché tu lo legga prima di premere `Enter`;
+* i **programmi esterni** che fcmd esegue invece di fare il lavoro da sé — `7z`, `git`, i
+  decompilatori, `ffmpeg` — ognuno con la spunta o la croce a seconda che sia installato, e la
+  sua versione: `F3` è la scheda e `F4` installa uno che manca, dopo aver mostrato la riga che
+  eseguirà. *Programmi esterni* nel capitolo della configurazione dice perché
+  ognuno è un programma a parte;
 * un **pannello temporaneo**, che è un elenco e non una cartella: `Ctrl+Shift+Ins` ci aggiunge
   quello che è selezionato da qualunque posto, e i file dentro possono venire da una dozzina di
   cartelle diverse.

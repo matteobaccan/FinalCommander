@@ -8,6 +8,16 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **A panel of the programs from elsewhere.** `Alt+F1` → *External programs* lists every
+  program fcmd runs rather than doing the work itself — `7z` and any `[[archiver]]` of your
+  own, `git`, the decompilers of the `[[decompile]]` rules, `ffmpeg` for the video frames to
+  come, and the system's own log, services and browser opener — each ticked or crossed by
+  whether it is on the `PATH`, with the version it reports and what it is used for. `F3` is
+  its card; `F4` installs a missing one — `winget` on Windows, `brew` on macOS, `apt`, `dnf`,
+  `pacman` or `apk` elsewhere — after showing the line, in a terminal where `sudo` can ask
+  for its password, and when that fails or no package manager has it, points to the
+  product's own download page. The help's *Programs from elsewhere* says why each of them is
+  a program and not part of fcmd.
 - **fcmd's own secrets file.** An AI key no variable holds is kept in `fcmd-secrets.vault`
   beside the settings — encrypted with AES-256-GCM under a password you choose the first time,
   so it travels with the settings to another machine. The password is asked for once, kept in

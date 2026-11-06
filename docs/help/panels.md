@@ -16,7 +16,7 @@ table of everything mounted — what each one is (disk, removable, optical, netw
 what it is called, what it is formatted as, how big it is and how much is left. Which of
 those columns are drawn is yours to choose, with `F9` inside the dialog — and so is which of
 the panels that are not disks the list offers: a box for each (NetBox, processes, sockets,
-installed programs, services, the temporary panel), so the list holds only what you use.
+installed programs, services, external programs, the temporary panel), so the list holds only what you use.
 
 A drive the *other* panel is already on opens where that panel is, not at the top of the
 disk. Two panels on one disk is how one works on a disk — a tree on one side, a target on
@@ -45,6 +45,9 @@ Under a rule, on `Ctrl+1` to `Ctrl+9`, are the things that are not filesystems:
 * the **programs installed** on the machine, with their version and publisher: `F3` is the
   card, and choosing one puts its own uninstall command on the command line, unrun, for you
   to read before pressing `Enter`;
+* the **external programs** fcmd runs instead of doing the work itself — `7z`, `git`, the
+  decompilers, `ffmpeg` — each ticked or crossed by whether it is installed, with its version:
+  `F3` is the card and `F4` installs a missing one, after showing the line it will run. *Programs from elsewhere* in the configuration chapter says why each is a program;
 * a **temporary panel**, which is a list rather than a directory: `Ctrl+Shift+Ins` adds what
   is selected to it from anywhere, and the files in it can come from a dozen directories at
   once.

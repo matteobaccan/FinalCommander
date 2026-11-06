@@ -1018,6 +1018,32 @@ person at the keyboard to read before pressing `Enter`. **Nothing here uninstall
 itself**: a list that removes a program on a keypress is a list one removes a program from by
 accident.
 
+**External programs** (`:tools`). Every program on the machine that fcmd hands work to rather
+than doing it itself, one row each: a tick or a cross, the program, the first line it prints
+when asked its version, and what it is asked for. The list is not written down twice — the
+archivers are the MultiArc tables the panels already open archives with (an `[[archiver]]`
+block of one's own included), the decompilers are the `[[decompile]]` rules, and the rest are
+the few programs the code runs by name: `git`, the system's log, its services and its opener,
+and `ffmpeg` for the video frames that are coming. Found means on the `PATH`, by the shell's
+rule (`fcmd_arc::which`), and nothing cleverer: what the panel says is what every other part
+of the program will find. Finding is instant and done when the panel opens; the versions are
+asked off the UI thread, all at once, each given three seconds (`tools::VERSION_WAIT`), and
+filled in as they answer — a panel re-opened meanwhile ignores the late answer by its
+generation.
+
+`F3` is the card: where the program is, its version, what it is for and, when it is missing,
+how to get it and its site (`tools::homepage`, the product's own download page). `F4`
+**installs it, after asking**: the question shows the exact line — `winget install --exact
+--id …` on Windows, `brew` on macOS, `apt`, `dnf`, `pacman` or `apk` elsewhere, whichever the
+machine has, and only where the package name is certain (`dnf` installs by the file a package
+provides, so it needs no table). Yes starts a terminal (`Mode::Term`, a real PTY) and types the
+line into it followed by `|| echo` the site, so that `sudo` can ask for a password, `winget`
+for its agreements, and a failure ends on where to download the program; the panels are one
+`Ctrl+Alt+E` away and `Ctrl+R` there probes again (a re-read of `:tools` is a probe, never a
+stat of its rows). With no line to run, `F4` offers to open the site instead. Nothing installs
+without that question. The reasons each is a program and not part of fcmd
+are in the help (*Programs from elsewhere*), where the person who is missing one will look.
+
 **Temporary panel.** A panel that holds paths rather than a directory, so what is in it can
 come from anywhere — several directories, two drives, a search — and `F5` out of it copies the
 real files. It opens empty from the dialog; `Ctrl+Shift+Ins` puts what is selected in the

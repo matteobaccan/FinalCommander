@@ -684,6 +684,8 @@ pub struct PanelRows {
     pub sockets: bool,
     pub programs: bool,
     pub services: bool,
+    /// The programs from elsewhere: what fcmd runs, found or not (`:tools`).
+    pub tools: bool,
     pub temp: bool,
 }
 
@@ -696,6 +698,7 @@ impl Default for PanelRows {
             sockets: true,
             programs: !mac,
             services: !mac,
+            tools: true,
             temp: true,
         }
     }
@@ -710,6 +713,7 @@ impl PanelRows {
             ":sockets" => self.sockets,
             ":programs" => self.programs,
             ":services" => self.services,
+            ":tools" => self.tools,
             ":temp" => self.temp,
             _ => true,
         }
@@ -2046,6 +2050,7 @@ impl Config {
             "drives.panels.sockets" => self.drives.panels.sockets = parse_bool(value)?,
             "drives.panels.programs" => self.drives.panels.programs = parse_bool(value)?,
             "drives.panels.services" => self.drives.panels.services = parse_bool(value)?,
+            "drives.panels.tools" => self.drives.panels.tools = parse_bool(value)?,
             "drives.panels.temp" => self.drives.panels.temp = parse_bool(value)?,
             other => return Err(format!("unknown setting `{other}`")),
         }

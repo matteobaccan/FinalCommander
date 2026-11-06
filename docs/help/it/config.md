@@ -81,6 +81,41 @@ archivi e il changelog sono su quella pagina. Il programma lo chiede solo allora
 hai chiesto. Acceso, il controllo gira in background al massimo una volta al giorno, non dice
 niente se non c'è niente di nuovo o manca la rete, e propone ogni nuova versione una volta sola.
 
+# Programmi esterni
+
+Quasi tutto fcmd lo fa da sé: zip, la famiglia tar, 7z, `ar` e `.deb`, `cpio` e `rpm` li legge
+in processo, SSH, FTP, WebDAV, S3 e IMAP li parla in processo, e il visualizzatore disassembla
+x86 e AArch64 per conto suo. Per poche cose invece esegue un programma già presente sulla
+macchina, mai collegato dentro di sé. `Alt+F1` → *Programmi esterni* li elenca tutti, con la
+spunta se sono nel `PATH` e la croce se non ci sono, la versione che dichiarano e cosa fcmd
+chiede loro. `F3` su una riga è la sua scheda: dov'è, a cosa serve e, se manca, come
+procurarselo, con il suo sito. `F4` lo installa: mostra la riga che eseguirà — `winget` su
+Windows, `brew` su macOS, `apt`, `dnf`, `pacman` o `apk` altrove, quello che c'è su questa
+macchina — e, quando dici sì, la esegue in un terminale suo, così `sudo` può chiederti la
+password e `winget` l'accettazione dei suoi termini. `Ctrl+Alt+E` torna ai pannelli e `Ctrl+R`
+nel pannello controlla di nuovo. Se l'installazione non riesce, il terminale dice dov'è la
+pagina di download del prodotto; dove nessun gestore di pacchetti di questa macchina risulta
+avere il programma, `F4` propone di aprire quella pagina. Un nome di pacchetto si usa solo dove
+è sicuro: uno sbagliato è peggio di nessuno.
+
+Perché ognuno è un programma a parte e non è dentro fcmd:
+
+| Programma | Serve per | Perché non è integrato |
+| --- | --- | --- |
+| `7z` | gli archivi che fcmd non legge da sé: rar, cab, iso, lha, arj, msi, wim, dmg… | il codice che spacchetta RAR ha una licenza sua, non aperta, e gli altri sono decine di formati che un programma legge già bene. Lo guida una tabella (`[[archiver]]`, *Formati tuoi*) e gli si chiede soltanto di elencare ed estrarre |
+| `git` | il pannello Git (`Ctrl+Alt+G`) e il ramo nel prompt | cosa contiene un repository è quello che dice `git`; una seconda implementazione dentro fcmd potrebbe non essere d'accordo con la prima |
+| `javap`, `ilspycmd`, `python3`, `wasm2wat`, `objdump`, `retdec-decompiler` | `Shift+F6` nel visualizzatore, tramite le regole `[[decompile]]` | ognuno è il lavoro di uno specialista per un tipo di codice; fcmd disassembla da sé il codice macchina e lascia a loro la decompilazione |
+| `ffmpeg` | i fotogrammi dei video nel visualizzatore — in arrivo: per ora nessuno lo esegue | i codec video sono coperti da brevetti, le librerie che li decodificano sono LGPL o GPL e non c'è ancora un decoder pronto in Rust puro; `F11` legge già il contenitore di un video senza di lui |
+| `xdg-open` / `open` | aprire un link nel browser | quale browser è una scelta del desktop, non di fcmd |
+| `journalctl` / `log` / `wevtutil` | *Comandi → Log di sistema* | ogni sistema ha un solo strumento che conosce il suo log |
+| `systemctl` / `launchctl` | il pannello dei servizi | solo il gestore dei servizi può avviare e fermare un servizio |
+
+Un programma conta come installato quando è nel `PATH`, con la stessa regola della shell, e da
+nessun'altra parte. L'installatore di 7-Zip per Windows, per esempio, mette `7z.exe` in
+*Programmi* senza aggiungerlo al `PATH`: il pannello allora lo dà per mancante, e la soluzione
+è aggiungere quella cartella al `PATH`. *Programmi esterni* nel dialogo `F9` di `Alt+F1`
+(`drives.panels.tools`) toglie la riga; `Ctrl+7` lì nasconde tutte le righe dei pannelli.
+
 # Una copia che non ricorda niente
 
 `fcmd --no-save` parte con le tue cronologie e i pannelli come al solito ma non scrive niente

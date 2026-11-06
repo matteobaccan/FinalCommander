@@ -55,6 +55,13 @@ pub enum Request {
     UpdateCheck {
         manual: bool,
     },
+    /// Ask the programs from elsewhere their versions (the `:tools` panel). Each ask is the
+    /// row's index, where the program is, and the arguments that make it say.
+    ToolVersions {
+        side: usize,
+        generation: u64,
+        asks: Vec<(usize, std::path::PathBuf, Vec<String>)>,
+    },
     /// Ask a language model (SPEC 06 §14): the service, the question, the files the user
     /// agreed to send with it, and the folder the answer is written into.
     AiAsk {
@@ -668,6 +675,12 @@ pub enum Event {
     UpdateChecked {
         manual: bool,
         result: Result<fcmd_net::update::Release, String>,
+    },
+    /// What the programs from elsewhere said their versions were, row by row.
+    ToolVersions {
+        side: usize,
+        generation: u64,
+        versions: Vec<(usize, Option<String>)>,
     },
     Branched {
         panel: usize,
@@ -1355,6 +1368,8 @@ pub enum ConfirmAction {
     },
     /// Open a release's page in the browser.
     OpenRelease { url: String },
+    /// Install a program from elsewhere with this line, in a terminal (the `:tools` panel).
+    InstallTool { program: String, command: String },
     /// Open `known_hosts` where the key that changed is written, at that line.
     ///
     /// Not "accept the new key": a key that is recorded and different is a rebuilt server or
@@ -1399,6 +1414,7 @@ impl ConfirmAction {
             ConfirmAction::AcceptHostKey { .. } => "btn-accept",
             ConfirmAction::OpenKnownHosts { .. } => "btn-open-file",
             ConfirmAction::OpenRelease { .. } => "btn-open-page",
+            ConfirmAction::InstallTool { .. } => "btn-install",
             ConfirmAction::AskAi { .. } => "btn-send",
         }
     }
@@ -2263,6 +2279,8 @@ pub struct App {
     /// What the installed-programs panel was built from, so a row can be looked up again:
     /// the panel holds rows of text, and the card wants the whole of what was read.
     programs: Vec<fcmd_platform::Program>,
+    /// The programs from elsewhere, as the panel of them last found them (`:tools`).
+    tools: Vec<crate::tools::Tool>,
     /// What the commands that have run printed, for `Ctrl+O`. Capped.
     pub user_screen: Vec<String>,
     /// Which panel is hidden, if either: `Ctrl+F1` and `Ctrl+F2` give the screen to one.
@@ -2583,6 +2601,7 @@ impl App {
             cmd: CmdLine::new(),
             branch_at: None,
             programs: Vec::new(),
+            tools: Vec::new(),
             user_screen: Vec::new(),
             shell_screen: false,
             hidden: None,
@@ -2683,6 +2702,13 @@ impl App {
         let generation = self.panels[index].generation + 1;
         self.panels[index].generation = generation;
         self.panels[index].loading = true;
+        // The programs from elsewhere are not files: re-reading that list is looking for
+        // them again, which is what `Ctrl+R` there is for after installing one.
+        if self.panels[index].temp_origin() == Some(":tools") {
+            self.panels[index].loading = false;
+            self.probe_tools(index);
+            return;
+        }
         // A list panel is not a directory: re-reading it means asking again about the files it
         // holds, which is what keeps results honest after a delete or a move.
         if let Some(title) = self.panels[index].temp.as_ref().map(|t| t.title.clone()) {
@@ -2806,6 +2832,11 @@ impl App {
     pub fn handle_event(&mut self, event: Event) {
         match event {
             Event::UpdateChecked { manual, result } => self.on_update_checked(manual, result),
+            Event::ToolVersions {
+                side,
+                generation,
+                versions,
+            } => self.on_tool_versions(side, generation, versions),
             Event::DupesProgress { pass, done, total } => {
                 let m = self.i18n.t_args(
                     "dupes-progress",
@@ -4485,6 +4516,9 @@ impl App {
                     } => self.ask_ai(service, question, files),
                     ConfirmAction::OpenRelease { url } => {
                         self.requests.push(Request::OpenUrl { url });
+                    }
+                    ConfirmAction::InstallTool { program, command } => {
+                        self.run_install(program, command)
                     }
                     ConfirmAction::OpenKnownHosts { path, line } => {
                         self.edit_path(&path);
@@ -8320,6 +8354,7 @@ impl App {
                 ("drive-sockets", ":sockets"),
                 ("drive-programs", ":programs"),
                 ("drive-services", ":services"),
+                ("drive-tools", ":tools"),
                 ("drive-temp", ":temp"),
             ] {
                 if !shown.panels.shows(value) {
@@ -9879,7 +9914,7 @@ impl App {
                 // that would do it by accident, so the key says what it cannot do instead.
                 if matches!(
                     self.panel().temp_origin(),
-                    Some(":processes") | Some(":sockets") | Some(":programs")
+                    Some(":processes") | Some(":sockets") | Some(":programs") | Some(":tools")
                 ) {
                     let m = self.i18n.t("temp-not-a-file");
                     self.set_error(m);
@@ -9919,6 +9954,11 @@ impl App {
         // And on the list of what is installed it is that program's card.
         if self.panel().temp_origin() == Some(":programs") {
             self.open_program_card();
+            return;
+        }
+        // And on the programs from elsewhere it is what fcmd knows about that one.
+        if self.panel().temp_origin() == Some(":tools") {
+            self.open_tool_card();
             return;
         }
         // On the service list it is that service's card, for the same reason.
@@ -14795,6 +14835,331 @@ impl App {
         self.set_status(m);
     }
 
+    /// The programs from elsewhere (`:tools` in `Alt+F1`): every program fcmd hands work to,
+    /// whether it is on this machine, and what it is asked for. Finding them is instant and
+    /// done here; their versions are asked off this thread and filled in when they answer.
+    fn open_tools_panel(&mut self, side: usize) {
+        self.probe_tools(side);
+        self.active = side;
+    }
+
+    /// Find every program again and ask their versions: the panel's opening and its re-read.
+    fn probe_tools(&mut self, side: usize) {
+        let mut tools = crate::tools::catalogue(&self.cfg.decompile);
+        crate::tools::locate(&mut tools);
+        let asks: Vec<(usize, std::path::PathBuf, Vec<String>)> = tools
+            .iter()
+            .enumerate()
+            .filter_map(|(i, t)| Some((i, t.found.clone()?, t.version_args.clone()?)))
+            .collect();
+        let found = tools.iter().filter(|t| t.found.is_some()).count();
+        let total = tools.len();
+        self.tools = tools;
+        let generation = self.panels[side].generation + 1;
+        self.panels[side].generation = generation;
+        self.fill_tools_panel(side, generation);
+        if !asks.is_empty() {
+            self.requests.push(Request::ToolVersions {
+                side,
+                generation,
+                asks,
+            });
+        }
+        let m = self.i18n.t_args(
+            "tools-summary",
+            &[
+                ("found", (found as i64).into()),
+                ("total", (total as i64).into()),
+            ],
+        );
+        self.set_status(m);
+    }
+
+    /// The rows of that panel from what `self.tools` holds now, the cursor left where it was.
+    fn fill_tools_panel(&mut self, side: usize, generation: u64) {
+        use fcmd_core::{Entry, EntryId, EntryKind};
+        let state = |t: &crate::tools::Tool| -> String {
+            match (&t.found, &t.version) {
+                (None, _) => self.plain("tools-missing"),
+                (Some(_), Some(v)) => v.clone(),
+                (Some(_), None) => self.plain("tools-found"),
+            }
+        };
+        let states: Vec<String> = self.tools.iter().map(state).collect();
+        let name_w = self
+            .tools
+            .iter()
+            .map(|t| unicode_width::UnicodeWidthStr::width(t.program.as_str()))
+            .max()
+            .unwrap_or(0);
+        let mark_w = 1;
+        let items: Vec<(VPath, Entry)> = self
+            .tools
+            .iter()
+            .zip(&states)
+            .enumerate()
+            .map(|(i, (t, state))| {
+                // A tick or a cross first, so the missing ones are seen without reading.
+                let mark = if t.found.is_some() { "✓" } else { "✗" };
+                let label = format!(
+                    "{mark:<mark_w$} {:<name_w$}  {}  — {}",
+                    t.program,
+                    state,
+                    self.tool_use(t)
+                );
+                let entry = Entry {
+                    name: label.into(),
+                    kind: EntryKind::File,
+                    size: 0,
+                    mtime: None,
+                    btime: None,
+                    atime: None,
+                    flags: fcmd_core::EntryFlags::empty(),
+                    id: EntryId::Name(i as u64),
+                    link_target: None,
+                };
+                (VPath::local(format!("/{i}")), entry)
+            })
+            .collect();
+        // The cursor stays on the program it was on, wherever the sort puts that row now.
+        let was = (self.panels[side].temp_origin() == Some(":tools"))
+            .then(|| self.tool_row_index(side, self.panels[side].cursor))
+            .flatten();
+        let title = self.plain("drive-tools");
+        self.panels[side].set_temp(title, items, generation);
+        self.panels[side].set_temp_origin(":tools");
+        if let Some(was) = was {
+            if let Some(row) = (0..self.panels[side].listing.len())
+                .find(|&row| self.tool_row_index(side, row) == Some(was))
+            {
+                self.panels[side].cursor = row;
+            }
+        }
+    }
+
+    /// Which program a row of the `:tools` panel on this side stands for.
+    fn tool_row_index(&self, side: usize, row: usize) -> Option<usize> {
+        let entry = self.panels[side].listing.row(row)?;
+        self.panels[side]
+            .path_of(entry)
+            .display_name()
+            .parse::<usize>()
+            .ok()
+    }
+
+    /// What a program from elsewhere is asked for, in a line.
+    fn tool_use(&self, t: &crate::tools::Tool) -> String {
+        let what = t.what.join(" ");
+        self.i18n.t_args(t.uses.id(), &[("what", what.into())])
+    }
+
+    fn on_tool_versions(
+        &mut self,
+        side: usize,
+        generation: u64,
+        versions: Vec<(usize, Option<String>)>,
+    ) {
+        // The panel may have gone elsewhere, or been opened again, while they answered.
+        if side >= self.panels.len()
+            || self.panels[side].generation != generation
+            || self.panels[side].temp_origin() != Some(":tools")
+        {
+            return;
+        }
+        for (i, version) in versions {
+            if let Some(t) = self.tools.get_mut(i) {
+                t.version = version;
+            }
+        }
+        self.fill_tools_panel(side, generation);
+    }
+
+    /// Which program from elsewhere a row of that panel is about.
+    fn tool_at_cursor(&self) -> Option<&crate::tools::Tool> {
+        if self.panel().temp_origin() != Some(":tools") {
+            return None;
+        }
+        let entry = self.panel().current()?;
+        let at = self
+            .panel()
+            .path_of(entry)
+            .display_name()
+            .parse::<usize>()
+            .ok()?;
+        self.tools.get(at)
+    }
+
+    /// `F3` on a row of that panel: where the program is, what it said, what it is for, and
+    /// how to get it when it is not here.
+    fn open_tool_card(&mut self) {
+        let Some(tool) = self.tool_at_cursor().cloned() else {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        };
+        let lines = self.tool_card(&tool);
+        self.mode = Mode::Message {
+            title: self.i18n.t("tools-card"),
+            lines,
+        };
+    }
+
+    fn tool_card(&self, tool: &crate::tools::Tool) -> Vec<String> {
+        let mut rows: Vec<(String, String)> = vec![
+            (self.i18n.t("tools-card-program"), tool.program.clone()),
+            (
+                self.i18n.t("tools-card-where"),
+                match &tool.found {
+                    Some(path) => path.display().to_string(),
+                    None => self.i18n.t("tools-missing"),
+                },
+            ),
+        ];
+        if let Some(version) = &tool.version {
+            rows.push((self.i18n.t("tools-card-version"), version.clone()));
+        }
+        rows.push((self.i18n.t("tools-card-for"), self.tool_use(tool)));
+        if tool.found.is_none() {
+            let how = crate::tools::install_command(&tool.program, crate::tools::manager())
+                .unwrap_or_else(|| {
+                    self.i18n.t_args(
+                        "tools-install-any",
+                        &[("name", tool.program.clone().into())],
+                    )
+                });
+            rows.push((self.i18n.t("tools-card-install"), how));
+            if let Some(url) = crate::tools::homepage(&tool.program) {
+                rows.push((self.i18n.t("tools-card-site"), url.to_string()));
+            }
+        }
+        let width = rows
+            .iter()
+            .map(|(label, _)| unicode_width::UnicodeWidthStr::width(label.as_str()))
+            .max()
+            .unwrap_or(0);
+        let mut lines: Vec<String> = rows
+            .iter()
+            .map(|(label, value)| format!("{label:<width$}  {value}"))
+            .collect();
+        lines.push(String::new());
+        lines.push(self.i18n.t("tools-card-why"));
+        lines
+    }
+
+    /// `F4` on a row of that panel: install the program with the system's package manager —
+    /// `winget` on Windows, `brew` on macOS, `apt`, `dnf`, `pacman` or `apk` elsewhere — in a
+    /// terminal of its own, after saying which line will run. Where there is no line to run,
+    /// or the one that ran fails, the product's own site is where to get it.
+    fn install_tool_at_cursor(&mut self) {
+        let Some(tool) = self.tool_at_cursor().cloned() else {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        };
+        if tool.found.is_some() {
+            let m = self
+                .i18n
+                .t_args("tools-already", &[("name", tool.program.into())]);
+            self.set_status(m);
+            return;
+        }
+        let site = crate::tools::homepage(&tool.program);
+        let Some(command) = crate::tools::install_command(&tool.program, crate::tools::manager())
+        else {
+            // Nothing this machine can install it with: the product's page, after asking.
+            match site {
+                Some(url) => {
+                    self.mode = Mode::Confirm(Confirm {
+                        title: self.i18n.t("tools-card"),
+                        lines: vec![
+                            self.i18n
+                                .t_args("tools-no-package", &[("name", tool.program.into())]),
+                            String::new(),
+                            url.to_string(),
+                        ],
+                        action: ConfirmAction::OpenRelease {
+                            url: url.to_string(),
+                        },
+                        button: 0,
+                    });
+                }
+                None => {
+                    let m = self
+                        .i18n
+                        .t_args("tools-install-any", &[("name", tool.program.into())]);
+                    self.set_error(m);
+                }
+            }
+            return;
+        };
+        let mut lines = vec![
+            self.i18n.t_args(
+                "tools-install-ask",
+                &[("name", tool.program.clone().into())],
+            ),
+            String::new(),
+            command.clone(),
+            String::new(),
+            self.i18n.t("tools-install-how"),
+        ];
+        if let Some(url) = site {
+            lines.push(
+                self.i18n
+                    .t_args("tools-install-else", &[("url", url.into())]),
+            );
+        }
+        self.mode = Mode::Confirm(Confirm {
+            title: self.i18n.t("tools-card"),
+            lines,
+            action: ConfirmAction::InstallTool {
+                program: tool.program,
+                command,
+            },
+            button: 0,
+        });
+    }
+
+    /// The answer was yes: a terminal, and the line typed into it, so that `sudo` can ask
+    /// for its password and `winget` for its agreements where the person can answer. When
+    /// the line fails, the terminal says where the product's page is.
+    fn run_install(&mut self, program: String, command: String) {
+        self.start_terminal();
+        let Mode::Term(term) = &mut self.mode else {
+            // The terminal did not start, and has said why.
+            return;
+        };
+        let line = match crate::tools::homepage(&program) {
+            Some(url) => {
+                let said = self.i18n.t_args(
+                    "tools-install-failed",
+                    &[("name", program.clone().into()), ("url", url.into())],
+                );
+                // `||` is understood by every shell the terminal starts: sh, bash, zsh, fish,
+                // PowerShell 7 and cmd. Quoted for the Unix ones; cmd prints quotes as they
+                // are, so there the words go bare and carry nothing a shell would read.
+                if cfg!(windows) {
+                    let bare: String = said
+                        .chars()
+                        .filter(|c| !matches!(c, '&' | '|' | '<' | '>' | '^' | '%' | '"'))
+                        .collect();
+                    format!("{command} || echo {bare}")
+                } else {
+                    format!("{command} || echo {}", fcmd_term::quote(&said))
+                }
+            }
+            None => command,
+        };
+        let sent = term.send(format!("{line}\r").as_bytes());
+        if let Err(e) = sent {
+            self.set_error(e.to_string());
+            return;
+        }
+        let m = self
+            .i18n
+            .t_args("tools-installing", &[("name", program.into())]);
+        self.set_status(m);
+    }
+
     /// An empty panel to put files in by hand (FAR's temporary panel).
     ///
     /// It holds paths rather than a directory, so what goes in it can come from anywhere —
@@ -15474,6 +15839,7 @@ impl App {
                     sockets: on("drives.panels.sockets"),
                     programs: on("drives.panels.programs"),
                     services: on("drives.panels.services"),
+                    tools: on("drives.panels.tools"),
                     temp: on("drives.panels.temp"),
                 },
             };
@@ -18089,6 +18455,7 @@ impl App {
                     ":sockets" => self.open_socket_panel(pick.side),
                     ":programs" => self.open_programs_panel(pick.side),
                     ":services" => self.open_services_panel(pick.side),
+                    ":tools" => self.open_tools_panel(pick.side),
                     ":temp" => self.open_temp_panel(pick.side),
                     // A drive row is where the panel *goes*, and where it goes is not always
                     // the root of it: see `drive_landing`. A bookmark and a line of history
@@ -18515,6 +18882,11 @@ impl App {
         // command that would remove the program on the command line, unrun.
         if self.panel().temp_origin() == Some(":programs") {
             self.put_uninstall_on_the_command_line();
+            return;
+        }
+        // On the programs from elsewhere it installs the one under the cursor, after asking.
+        if self.panel().temp_origin() == Some(":tools") {
+            self.install_tool_at_cursor();
             return;
         }
         // And on the stored connections it is the session under the cursor, which is what
@@ -20579,6 +20951,10 @@ impl App {
             ":programs" => {
                 let program = self.programs.get(at.parse::<usize>().ok()?)?;
                 Some(self.program_card(program).join("\n"))
+            }
+            ":tools" => {
+                let tool = self.tools.get(at.parse::<usize>().ok()?)?;
+                Some(self.tool_card(tool).join("\n"))
             }
             ":services" => {
                 let service = self.services.iter().find(|s| s.id == at)?;
@@ -30638,6 +31014,103 @@ run = ["echo one", "echo two", "echo three"]
         }
         assert!(app.mode.is_normal(), "F4 opened {:?}", app.mode);
         assert_eq!(app.panels[0].temp_origin(), Some(":programs"));
+    }
+
+    /// The programs from elsewhere: every one the code runs is a row, the versions arrive
+    /// later and fill the rows in, a late answer to a panel opened again is dropped, and `F4`
+    /// asks before it installs anything.
+    #[test]
+    fn the_external_programs_panel_lists_what_fcmd_runs_and_asks_before_installing() {
+        let mut app = app();
+        app.run(Command::PanelDrive(fcmd_cmd::Side::Left));
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("no dialog: {:?}", app.mode)
+        };
+        let at = pick
+            .rows
+            .iter()
+            .position(|r| r.value == ":tools")
+            .expect("the external programs are offered");
+        let key = pick.rows[at].hotkey.expect("it is numbered");
+        app.requests.clear();
+        press(&mut app, &key.to_string());
+        assert_eq!(app.panels[0].temp_origin(), Some(":tools"));
+        assert_eq!(app.panels[0].listing.len(), app.tools.len());
+        for program in ["7z", "git", "ffmpeg"] {
+            assert!(
+                app.tools.iter().any(|t| t.program == program),
+                "{program} is not listed"
+            );
+        }
+        assert!(!app.status.is_empty(), "the summary is said");
+
+        // Pretend one program was found and answers, through the event the loop sends.
+        let generation = app.panels[0].generation;
+        app.tools[0].found = Some(std::path::PathBuf::from("/opt/x/7z"));
+        app.handle_event(Event::ToolVersions {
+            side: 0,
+            generation,
+            versions: vec![(0, Some("7-Zip 99.01".into()))],
+        });
+        let shown = (0..app.panels[0].listing.len())
+            .filter_map(|r| app.panels[0].listing.row(r))
+            .any(|e| e.name_str().contains("7-Zip 99.01"));
+        assert!(shown, "the version is in its row");
+        // An answer meant for an earlier opening of the panel changes nothing.
+        app.handle_event(Event::ToolVersions {
+            side: 0,
+            generation: generation - 1,
+            versions: vec![(0, Some("stale".into()))],
+        });
+        assert_eq!(app.tools[0].version.as_deref(), Some("7-Zip 99.01"));
+
+        // `F3` on it is its card. The rows are sorted, so the cursor goes to its row.
+        let row_of = |app: &App, tool: usize| {
+            (0..app.panels[0].listing.len())
+                .find(|&r| app.tool_row_index(0, r) == Some(tool))
+                .expect("every program has a row")
+        };
+        app.panels[0].cursor = row_of(&app, 0);
+        press(&mut app, "F3");
+        let Mode::Message { lines, .. } = &app.mode else {
+            panic!("no card: {:?}", app.mode)
+        };
+        let card = lines.join("\n");
+        assert!(
+            card.contains("/opt/x/7z") && card.contains("7-Zip 99.01"),
+            "{card}"
+        );
+        press(&mut app, "Esc");
+
+        // A missing one with a known site: `F4` asks, and `Esc` leaves everything as it was.
+        app.tools[0].found = None;
+        app.fill_tools_panel(0, app.panels[0].generation);
+        app.panels[0].cursor = row_of(&app, 0);
+        press(&mut app, "F4");
+        let Mode::Confirm(confirm) = &app.mode else {
+            panic!("F4 did not ask: {:?}", app.mode)
+        };
+        let said = confirm.lines.join("\n");
+        assert!(
+            said.contains("7-zip.org") || said.contains("7z"),
+            "the question names what will happen: {said}"
+        );
+        assert!(matches!(
+            confirm.action,
+            ConfirmAction::InstallTool { .. } | ConfirmAction::OpenRelease { .. }
+        ));
+        press(&mut app, "Esc");
+        assert!(app.mode.is_normal(), "Esc left {:?}", app.mode);
+        assert_eq!(app.panels[0].temp_origin(), Some(":tools"));
+        // `Ctrl+R` looks again instead of reading the rows as files.
+        let before = app.panels[0].generation;
+        app.run(Command::PanelReread);
+        assert_eq!(app.panels[0].temp_origin(), Some(":tools"));
+        assert!(app.panels[0].generation > before);
+        assert_eq!(app.panels[0].listing.len(), app.tools.len());
+        // And the delete key has nothing to delete here.
+        press(&mut app, "F8");
+        assert!(app.mode.is_normal(), "F8 opened {:?}", app.mode);
     }
 
     #[test]

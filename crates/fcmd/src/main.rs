@@ -22,6 +22,7 @@ mod queue;
 mod render;
 mod tabs;
 mod termkeys;
+mod tools;
 mod tree;
 mod vault;
 mod watch;
@@ -1836,6 +1837,32 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                     runtime.spawn(async move {
                         let result = fcmd_net::update::latest().await;
                         let _ = tx.send(Event::UpdateChecked { manual, result });
+                    });
+                }
+                Request::ToolVersions {
+                    side,
+                    generation,
+                    asks,
+                } => {
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || {
+                        // All at once: the slowest decides how long the column waits, not
+                        // the sum of them.
+                        let handles: Vec<_> = asks
+                            .into_iter()
+                            .map(|(i, path, args)| {
+                                std::thread::spawn(move || {
+                                    let v = tools::version_of(&path, &args, tools::VERSION_WAIT);
+                                    (i, v)
+                                })
+                            })
+                            .collect();
+                        let versions = handles.into_iter().filter_map(|h| h.join().ok()).collect();
+                        let _ = tx.send(Event::ToolVersions {
+                            side,
+                            generation,
+                            versions,
+                        });
                     });
                 }
                 Request::OpenUrl { url } => open_url(&url),
@@ -5961,6 +5988,7 @@ dir_attr = "D"
                 }
                 Request::DirSize { .. }
                 | Request::UpdateCheck { .. }
+                | Request::ToolVersions { .. }
                 | Request::Dupes { .. }
                 | Request::SqlQuery { .. }
                 | Request::Git { .. }
