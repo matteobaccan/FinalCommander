@@ -365,6 +365,12 @@ tools = true             # the programs fcmd runs, found or not
 temp = true
 ```
 
+```toml
+# The plugins found that are turned off, by id (Options → Plugins configuration, SPEC 08 §1c).
+[plugins]
+disabled = ["git-here"]
+```
+
 ## 2d. The keys the settings dialogs write (implemented today)
 
 §2 above is the shape the configuration is heading for; what the binary reads today is flat and

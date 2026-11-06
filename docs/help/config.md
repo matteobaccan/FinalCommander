@@ -409,6 +409,31 @@ one — so running it once more is `Shift+F10` and `Enter`.
 A directory can carry its own `.fcmd-menu.toml`, and its rows come above the ones that are
 everywhere: the menu of the project you are in is the one you want while you are in it.
 
+# Plugins
+
+A plugin is a folder in `fcmd-plugins/`, beside the settings (`fcmd --paths` says where), with
+a `plugin.toml` in it. It is found at startup: nothing to register, nothing to build. It can
+bring **data** — themes, keymaps, `[[assoc]]` blocks, `[[decompile]]` rules, `[[mask-group]]`
+lists, all in the same words `fcmd.toml` uses — and **commands**: a `[[command]]` names a
+program in the plugin's folder, and `F11` lists the commands for the screen you are on.
+
+A command runs as a program of its own, never inside fcmd, so a plugin that crashes crashes
+alone. It is told where the panels are and what is selected, in the environment and as JSON on
+its input, and answers one line at a time: a message, a folder to go to, files to select, or a
+command of fcmd's own to run — nothing a key could not do. A command that renames or writes
+over files says so in its manifest, and fcmd asks before running it. `examples/plugins/` has
+two dozen worked ones, from finding duplicates to converting line endings.
+
+*Options → Plugins configuration* lists every plugin found: `✓` for one that is on, `·` for
+one that is off, and `!` for one that did not load. `Enter` turns the one under the cursor on
+or off and writes it down at once (`[plugins] disabled` in `fcmd.toml`); its commands come and
+go from `F11` straight away, while the rest of what it brings — themes, keys, associations,
+decompilers, mask groups — is read at startup and changes at the next one. `F3` is its card:
+who wrote it, where it lives, what it brings, its commands, and anything said about it while
+loading — for one that did not load, why. Its own settings are its own files: `F3` names the
+folder, and the plugin's `plugin.toml` is what to edit. `fcmd --list-plugins` prints what was
+found, and what did not load, without starting the interface.
+
 # Formats of your own
 
 An `[[archiver]]` block in `fcmd.toml` teaches the panels a format nothing shipped reads: it

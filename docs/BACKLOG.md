@@ -111,7 +111,6 @@ says what the decision stands on.
 | --- | --- | --- |
 | Volumes with no mount point | `Ctrl+H` | Wants `FindFirstVolumeW`. The drive list shows what the platform can tell us otherwise. |
 | The wastebasket as a panel | — | Browsing it, and putting something back from inside the program. |
-| Plugins configuration | Options menu | SPEC 08: there is nothing to configure until plugins load from disk. |
 
 ## Netbox
 

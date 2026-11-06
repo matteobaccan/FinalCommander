@@ -90,6 +90,29 @@ preview, a sorter or a filesystem, and one that is asked a question rather than 
 Those need the host to call into the plugin repeatedly, which is where an interpreter or a WASM
 instance earns its keep.
 
+### 1c. Turning plugins on and off (0.36.0)
+
+*Options → Plugins configuration* (`opt.plugins`) lists what the discovery found at startup:
+every plugin that loaded, on or off, and every one that did not, with the discovery's own
+message as the reason. `Enter` flips one and writes `[plugins] disabled = ["id", …]` to the
+configuration at once. A plugin that is off is still loaded and still listed — that is what
+lets it be turned on again from the same list — but nothing it brings is used: its themes,
+keymaps, `[[assoc]]`, `[[decompile]]` and `[[mask-group]]` blocks are not applied at startup,
+and its commands are left out of `F11`. The commands are the one part that changes without a
+restart, because `F11` is built when it is opened; the data blocks are folded in at startup,
+and the status line says which of the two a change touched.
+
+The data blocks are read with the configuration's own types and kept apart from what the file
+holds (`Config::plugin_decompile`, `plugin_assocs`, `plugin_mask_groups`, never serialised), so
+saving the setup never copies a plugin's rules into `fcmd.toml`. The configuration's own blocks
+come first: a `[[decompile]]` rule or an `[[assoc]]` of the user's wins over a plugin's for the
+same file, and a `[[mask_group]]` of the same name replaces the plugin's. When two plugins
+claim one command id, one that is on is preferred over one that is off.
+
+`F3` is the plugin's card — id, name, version, author, description, folder, state, what it
+declares, its commands and everything said while loading it. A plugin's *own* settings are
+not this dialog's business: they are files in its folder, which the card names.
+
 ## 2. Lua (M3)
 
 `mlua` (Lua 5.4), one VM, scripts in `scripts/`, loaded at startup and hot-reloadable.

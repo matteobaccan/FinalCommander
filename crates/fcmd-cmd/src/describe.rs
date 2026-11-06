@@ -37,6 +37,7 @@ impl Command {
             Command::OptInterface => "the interface settings",
             Command::OptHighlight => "the colour groups, as a list",
             Command::OptSortGroups => "the sort groups, as a list",
+            Command::OptPlugins => "the plugins found: what each brings, turn one on or off",
             Command::OptMaskGroups => "the named mask groups, as a list",
             Command::OptCodepages => "the code pages, and which ones F8 walks",
             Command::OptSettings => "every setting, as a list one types into",

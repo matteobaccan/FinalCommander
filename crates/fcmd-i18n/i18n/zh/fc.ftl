@@ -1427,3 +1427,26 @@ tools-install-else = 如果失败：{ $url }
 tools-install-failed = fcmd: { $name } 未安装。请从 { $url } 下载
 tools-installing = 正在终端中安装 { $name }：Ctrl+Alt+E 返回面板，在那里按 Ctrl+R 重新检查
 btn-install = 安装
+
+# 插件配置
+plugins-config-title = 插件
+plugins-config-hint = Enter：启用或停用 · F3 查看说明与内容 · Esc
+plugins-broken = 未加载 — F3 说明原因
+plugins-cannot-toggle = 未能加载的插件无法启用：F3 说明问题所在
+plugins-on = { $id } 已启用：其命令已出现在 F11 中
+plugins-on-restart = { $id } 已启用：其命令已出现在 F11 中，其余内容在下次启动时生效
+plugins-off = { $id } 已停用：其命令已从 F11 移除
+plugins-off-restart = { $id } 已停用：其命令已从 F11 移除，其余内容在下次启动时移除
+plugins-state-on = 已启用
+plugins-state-off = 已停用
+plugins-card-id = Id
+plugins-card-name = 名称
+plugins-card-version = 版本
+plugins-card-author = 作者
+plugins-card-about = 说明
+plugins-card-dir = 文件夹
+plugins-card-state = 状态
+plugins-card-brings = 包含
+plugins-card-commands = 命令 (F11)：
+plugins-card-notes = 加载时的提示：
+plugins-none = 未找到插件 · 插件位于 { $dir }，每个一个文件夹，内含 plugin.toml

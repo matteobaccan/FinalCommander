@@ -1965,6 +1965,52 @@ impl Mode {
 
 /// Everything the application is started with. Grouping it keeps `App::new` honest and makes
 /// the test setup read like the real startup path.
+/// One plugin as *Options → Plugins configuration* shows it: who it is, where it lives,
+/// what it brings, and what was said about it while loading (SPEC 08 §1c).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PluginRow {
+    /// Its id, which is also its folder's name; empty for one that did not load.
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub author: String,
+    pub description: String,
+    pub dir: std::path::PathBuf,
+    /// What it declares: the manifest's section and how many blocks of it.
+    pub provides: Vec<(&'static str, usize)>,
+    /// What was said while loading it, or why it did not load.
+    pub notes: Vec<String>,
+    /// Did it load at all? One that did not cannot be turned on or off.
+    pub loaded: bool,
+}
+
+impl PluginRow {
+    /// A plugin that did not load, from the discovery's message: `path/plugin.toml: why`.
+    pub fn broken(problem: &str) -> PluginRow {
+        let (path, _) = problem.split_once(": ").unwrap_or((problem, ""));
+        let path = std::path::PathBuf::from(path);
+        let dir = if path.file_name().is_some_and(|n| n == "plugin.toml") {
+            path.parent().map(|p| p.to_path_buf()).unwrap_or(path)
+        } else {
+            path
+        };
+        PluginRow {
+            id: String::new(),
+            name: dir
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+            version: String::new(),
+            author: String::new(),
+            description: String::new(),
+            dir,
+            provides: Vec::new(),
+            notes: vec![problem.to_string()],
+            loaded: false,
+        }
+    }
+}
+
 /// A command a plugin provides, with everything needed to run it resolved (SPEC 08 §1).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PluginCommand {
@@ -2279,6 +2325,8 @@ pub struct App {
     /// What the installed-programs panel was built from, so a row can be looked up again:
     /// the panel holds rows of text, and the card wants the whole of what was read.
     programs: Vec<fcmd_platform::Program>,
+    /// The plugins found at startup, on and off and broken (*Options → Plugins configuration*).
+    pub plugins: Vec<PluginRow>,
     /// The programs from elsewhere, as the panel of them last found them (`:tools`).
     tools: Vec<crate::tools::Tool>,
     /// What the commands that have run printed, for `Ctrl+O`. Capped.
@@ -2602,6 +2650,7 @@ impl App {
             branch_at: None,
             programs: Vec::new(),
             tools: Vec::new(),
+            plugins: Vec::new(),
             user_screen: Vec::new(),
             shell_screen: false,
             hidden: None,
@@ -6964,7 +7013,7 @@ impl App {
     /// a user puts the narrow rule above the broad one and the order on the page is the order
     /// of the decision.
     fn assoc_for(&self, name: &str) -> Option<&fcmd_config::AssocCfg> {
-        self.cfg.assocs.iter().find(|a| a.matches(name))
+        self.cfg.all_assocs().find(|a| a.matches(name))
     }
 
     /// What `Enter` does to a file that is neither a directory nor an archive.
@@ -7020,7 +7069,7 @@ impl App {
         };
         let name = entry.name_str().into_owned();
         let mut rows: Vec<PickRow> = Vec::new();
-        for assoc in self.cfg.assocs.iter().filter(|a| a.matches(&name)) {
+        for assoc in self.cfg.all_assocs().filter(|a| a.matches(&name)) {
             for cmd in [&assoc.open, &assoc.view, &assoc.edit] {
                 if !cmd.trim().is_empty() && !rows.iter().any(|r| r.value == *cmd) {
                     rows.push(PickRow::plain(
@@ -9576,6 +9625,7 @@ impl App {
             Command::OptInterface => self.open_form(FormKind::Interface),
             Command::OptHighlight => self.open_pick(PickKind::Highlight, self.active),
             Command::OptSortGroups => self.open_pick(PickKind::SortGroups, self.active),
+            Command::OptPlugins => self.open_plugins_config(None),
             Command::OptMaskGroups => self.open_pick(PickKind::MaskGroups, self.active),
             // The same list as the viewer's `Shift+F8`. With no file open there is no page to
             // read one in, so what it is for here is the marking and the naming — which is
@@ -14845,7 +14895,17 @@ impl App {
 
     /// Find every program again and ask their versions: the panel's opening and its re-read.
     fn probe_tools(&mut self, side: usize) {
-        let mut tools = crate::tools::catalogue(&self.cfg.decompile);
+        // The rules in the order the viewer asks them: the configuration's, the plugins', the
+        // shipped ones.
+        let rules: Vec<fcmd_config::DecompileRule> = self
+            .cfg
+            .decompile
+            .iter()
+            .chain(&self.cfg.plugin_decompile)
+            .cloned()
+            .chain(fcmd_config::default_decompile_rules())
+            .collect();
+        let mut tools = crate::tools::catalogue(&rules);
         crate::tools::locate(&mut tools);
         let asks: Vec<(usize, std::path::PathBuf, Vec<String>)> = tools
             .iter()
@@ -16274,6 +16334,8 @@ impl App {
             .iter()
             .enumerate()
             .filter(|(_, c)| c.scope == scope || c.scope == fcmd_cmd::Scope::Global)
+            // A plugin turned off in *Options → Plugins configuration* offers nothing.
+            .filter(|(_, c)| self.cfg.plugins.is_on(&c.plugin))
             .map(|(i, c)| PickRow {
                 label: format!("{:<40} {}", c.label, c.plugin),
                 value: i.to_string(),
@@ -16294,6 +16356,165 @@ impl App {
         }
         let title = self.i18n.t("plugin-list-title");
         self.mode = Mode::Pick(Box::new(Pick::new(PickKind::Plugins, title, rows, 0)));
+    }
+
+    /// *Options → Plugins configuration*: every plugin found at startup — on, off, or one
+    /// that did not load and why. `Enter` turns the one under the cursor on or off, `F3` is
+    /// its card. `at` is the row to put the cursor on when the list is drawn again.
+    fn open_plugins_config(&mut self, at: Option<usize>) {
+        if self.plugins.is_empty() {
+            let m = self.i18n.t_args(
+                "plugins-none",
+                &[("dir", self.paths.plugins_dir.display().to_string().into())],
+            );
+            self.set_status(m);
+            return;
+        }
+        let id_w = self
+            .plugins
+            .iter()
+            .map(|p| unicode_width::UnicodeWidthStr::width(p.id.as_str()).max(p.name.len().min(24)))
+            .max()
+            .unwrap_or(0);
+        let rows: Vec<PickRow> = self
+            .plugins
+            .iter()
+            .enumerate()
+            .map(|(i, p)| {
+                let (mark, what) = if !p.loaded {
+                    ("!", self.i18n.t("plugins-broken"))
+                } else {
+                    let mark = if self.cfg.plugins.is_on(&p.id) {
+                        "✓"
+                    } else {
+                        "·"
+                    };
+                    let what = p
+                        .provides
+                        .iter()
+                        .map(|(section, n)| format!("{n} {section}"))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    (mark, what)
+                };
+                let who = if p.loaded { &p.id } else { &p.name };
+                let label = if p.name.is_empty() || !p.loaded {
+                    format!("{mark} {who:<id_w$}  {what}")
+                } else {
+                    format!("{mark} {who:<id_w$}  {} — {what}", p.name)
+                };
+                PickRow::plain(label, i.to_string(), at == Some(i))
+            })
+            .collect();
+        let title = self.i18n.t("plugins-config-title");
+        self.mode = Mode::Pick(Box::new(Pick::new(
+            PickKind::PluginsConfig,
+            title,
+            rows,
+            self.active,
+        )));
+    }
+
+    /// `Enter` on a plugin: on becomes off and off becomes on, written to `[plugins] disabled`
+    /// at once. Its commands come and go from `F11` straight away; what it brings into the
+    /// rest of the program — themes, keys, associations, decompilers, mask groups — is read at
+    /// startup, and the status line says so.
+    fn toggle_plugin(&mut self, at: usize) {
+        let Some(row) = self.plugins.get(at).cloned() else {
+            return;
+        };
+        if !row.loaded {
+            let m = self.i18n.t("plugins-cannot-toggle");
+            self.set_error(m);
+            self.open_plugins_config(Some(at));
+            return;
+        }
+        let now_on = !self.cfg.plugins.is_on(&row.id);
+        if now_on {
+            self.cfg.plugins.disabled.retain(|d| d != &row.id);
+        } else {
+            self.cfg.plugins.disabled.push(row.id.clone());
+            self.cfg.plugins.disabled.sort();
+        }
+        self.save_setup();
+        self.open_plugins_config(Some(at));
+        let data = row
+            .provides
+            .iter()
+            .any(|(section, _)| *section != "command");
+        let m = self.i18n.t_args(
+            match (now_on, data) {
+                (true, false) => "plugins-on",
+                (true, true) => "plugins-on-restart",
+                (false, false) => "plugins-off",
+                (false, true) => "plugins-off-restart",
+            },
+            &[("id", row.id.into())],
+        );
+        self.set_status(m);
+    }
+
+    /// `F3` on a plugin: who wrote it, where it lives, what it brings, what was said.
+    fn open_plugin_card(&mut self, at: usize) {
+        let Some(p) = self.plugins.get(at).cloned() else {
+            return;
+        };
+        let mut rows: Vec<(String, String)> = Vec::new();
+        let mut say = |id: &str, value: String| {
+            if !value.trim().is_empty() {
+                rows.push((self.i18n.t(id), value));
+            }
+        };
+        say("plugins-card-id", p.id.clone());
+        say("plugins-card-name", p.name.clone());
+        say("plugins-card-version", p.version.clone());
+        say("plugins-card-author", p.author.clone());
+        say("plugins-card-about", p.description.clone());
+        say("plugins-card-dir", p.dir.display().to_string());
+        let state = if !p.loaded {
+            "plugins-broken"
+        } else if self.cfg.plugins.is_on(&p.id) {
+            "plugins-state-on"
+        } else {
+            "plugins-state-off"
+        };
+        say("plugins-card-state", self.i18n.t(state));
+        let brings = p
+            .provides
+            .iter()
+            .map(|(section, n)| format!("{n} × [[{section}]]"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        say("plugins-card-brings", brings);
+        let commands: Vec<String> = self
+            .plugin_commands
+            .iter()
+            .filter(|c| c.plugin == p.id)
+            .map(|c| format!("{} ({})", c.label, c.id))
+            .collect();
+        let width = rows
+            .iter()
+            .map(|(label, _)| unicode_width::UnicodeWidthStr::width(label.as_str()))
+            .max()
+            .unwrap_or(0);
+        let mut lines: Vec<String> = rows
+            .iter()
+            .map(|(label, value)| format!("{label:<width$}  {value}"))
+            .collect();
+        if !commands.is_empty() {
+            lines.push(String::new());
+            lines.push(self.i18n.t("plugins-card-commands"));
+            lines.extend(commands.into_iter().map(|c| format!("  {c}")));
+        }
+        if !p.notes.is_empty() {
+            lines.push(String::new());
+            lines.push(self.i18n.t("plugins-card-notes"));
+            lines.extend(p.notes.iter().map(|n| format!("  {n}")));
+        }
+        self.mode = Mode::Message {
+            title: self.i18n.t("plugins-config-title"),
+            lines,
+        };
     }
 
     /// Ask where the tunnel goes.
@@ -17461,6 +17682,7 @@ impl App {
             PickKind::CharMap => return,
             PickKind::ReplaceTemplates => return,
             PickKind::AiServices => return,
+            PickKind::PluginsConfig => return,
             // And `open_settings`, which knows which row the list was left on.
             PickKind::Settings => return,
             PickKind::Languages => Pick::new(
@@ -17781,6 +18003,12 @@ impl App {
                 self.restore_editor();
             }
             // `Ins` keeps a recent pair under a name; `Del` forgets a named one.
+            // A plugin's card: everything it said about itself and everything said about it.
+            KeyCode::F(3) if kind == PickKind::PluginsConfig => {
+                if let Some(at) = pick.chosen().and_then(|r| r.value.parse::<usize>().ok()) {
+                    self.open_plugin_card(at);
+                }
+            }
             KeyCode::Insert if kind == PickKind::AiServices => self.open_ai_form(None),
             KeyCode::F(4) if kind == PickKind::AiServices => {
                 let at = pick.chosen().and_then(|r| r.value.parse::<usize>().ok());
@@ -18352,6 +18580,11 @@ impl App {
             PickKind::Plugins => {
                 if let Ok(i) = row.value.parse::<usize>() {
                     self.run_plugin_command(i);
+                }
+            }
+            PickKind::PluginsConfig => {
+                if let Ok(i) = row.value.parse::<usize>() {
+                    self.toggle_plugin(i);
                 }
             }
             PickKind::Tunnels => {
@@ -26257,18 +26490,85 @@ mod tests {
         assert_eq!(app.active, 1);
     }
 
+    /// *Options → Plugins configuration*: the plugins found, `Enter` turns one off and on
+    /// again — written to the configuration, and its commands leaving and coming back to `F11`
+    /// at once — and `F3` is its card. One that did not load is listed and cannot be turned on.
     #[test]
-    fn an_entry_with_no_feature_behind_it_says_so_instead_of_pretending() {
+    fn the_plugins_configuration_turns_a_plugin_off_and_on() {
         let mut app = app();
-        // Configuring the plugins is still to come — there is nothing to configure until
-        // plugins load from disk. Options is the fourth menu.
+        app.plugins = vec![
+            PluginRow {
+                id: "demo".into(),
+                name: "Demo".into(),
+                version: "1.0".into(),
+                author: "Someone".into(),
+                description: "Does a thing".into(),
+                dir: std::path::PathBuf::from("/plugins/demo"),
+                provides: vec![("command", 1)],
+                notes: Vec::new(),
+                loaded: true,
+            },
+            PluginRow::broken("/plugins/bad/plugin.toml: [plugin] has no id"),
+        ];
+        app.plugin_commands = vec![PluginCommand {
+            plugin: "demo".into(),
+            id: "user.demo.go".into(),
+            label: "Demo: go".into(),
+            scope: fcmd_cmd::Scope::Panel,
+            program: std::path::PathBuf::from("/plugins/demo/go.sh"),
+            needs: Vec::new(),
+            timeout: None,
+            confirm: None,
+        }];
+        // From the menu, as a list.
         open(&mut app, 3, "menu-plugins-config");
+        let Mode::Pick(pick) = &app.mode else {
+            panic!("no list: {:?}", app.mode)
+        };
+        assert_eq!(pick.kind, PickKind::PluginsConfig);
+        assert_eq!(pick.rows.len(), 2);
+        assert!(pick.rows[0].label.contains("demo") && pick.rows[0].label.contains('✓'));
+        assert!(pick.rows[1].label.contains("bad"), "{}", pick.rows[1].label);
+
+        // `F3` is the card.
+        press(&mut app, "F3");
+        let Mode::Message { lines, .. } = &app.mode else {
+            panic!("no card: {:?}", app.mode)
+        };
+        let card = lines.join("\n");
         assert!(
-            app.status.contains("settings.plugins"),
-            "a missing feature must say so instead of doing nothing quietly: `{}`",
-            app.status
+            card.contains("Someone") && card.contains("Demo: go"),
+            "{card}"
         );
-        assert!(app.mode.is_normal());
+        press(&mut app, "Esc");
+
+        // `Enter` turns it off: written down, and gone from `F11`.
+        app.run(Command::OptPlugins);
+        press(&mut app, "Enter");
+        assert_eq!(app.cfg.plugins.disabled, vec!["demo".to_string()]);
+        assert!(!app.status.is_empty());
+        press(&mut app, "Esc");
+        app.run(Command::PluginCommands);
+        assert!(
+            !matches!(&app.mode, Mode::Pick(p) if p.kind == PickKind::Plugins),
+            "a plugin turned off still offers its commands"
+        );
+        // And on again.
+        app.mode = Mode::Normal;
+        app.run(Command::OptPlugins);
+        press(&mut app, "Enter");
+        assert!(app.cfg.plugins.disabled.is_empty());
+        press(&mut app, "Esc");
+        app.run(Command::PluginCommands);
+        assert!(matches!(&app.mode, Mode::Pick(p) if p.kind == PickKind::Plugins));
+        app.mode = Mode::Normal;
+
+        // The one that did not load cannot be turned on.
+        app.run(Command::OptPlugins);
+        press(&mut app, "Down");
+        press(&mut app, "Enter");
+        assert!(app.status_error, "{}", app.status);
+        assert!(app.cfg.plugins.disabled.is_empty());
     }
 
     /// The settings browser: every key, the value it is at, and the three keys that change
@@ -31036,7 +31336,7 @@ run = ["echo one", "echo two", "echo three"]
         press(&mut app, &key.to_string());
         assert_eq!(app.panels[0].temp_origin(), Some(":tools"));
         assert_eq!(app.panels[0].listing.len(), app.tools.len());
-        for program in ["7z", "git", "ffmpeg"] {
+        for program in ["7z", "git", "ffmpeg", "javap", "objdump"] {
             assert!(
                 app.tools.iter().any(|t| t.program == program),
                 "{program} is not listed"

@@ -44,7 +44,8 @@ use fcmd_ui::{Buffer, Theme, ThemeSet};
 use fcmd_vfs::Vfs;
 
 use crate::app::{
-    App, ConnectOutcome, Event, PluginCommand, RemoteStamp, Request, Startup, UploadError,
+    App, ConnectOutcome, Event, PluginCommand, PluginRow, RemoteStamp, Request, Startup,
+    UploadError,
 };
 
 #[derive(Debug, Parser)]
@@ -539,7 +540,13 @@ fn run(cli: Cli) -> Result<()> {
     let themes = ThemeSet::builtin_only().with_tables(&origin, &cfg.themes);
     // Plugins are read before the theme and the keymap are chosen, so a plugin can supply
     // either one.
-    let (themes, plugin_keymaps, plugin_commands) = load_plugins(&paths, themes, &mut warnings);
+    let loaded = load_plugins(&paths, themes, &mut warnings, &cfg.plugins);
+    let (themes, plugin_keymaps, plugin_commands) =
+        (loaded.themes, loaded.keymaps, loaded.commands);
+    let plugin_rows = loaded.rows;
+    cfg.plugin_decompile = loaded.decompile;
+    cfg.plugin_assocs = loaded.assocs;
+    cfg.plugin_mask_groups = loaded.mask_groups;
     warnings.extend(themes.load_errors.clone());
     let keymap = load_keymap(&cfg, &origin, &plugin_keymaps)?;
 
@@ -676,6 +683,7 @@ fn run(cli: Cli) -> Result<()> {
         sort_groups,
         column_sets,
     });
+    app.plugins = plugin_rows;
     app.cmd.load_history(state.command_history);
     app.file_history = state.file_history;
     // What the histories say about themselves: which lines are pinned, and when each was
@@ -914,46 +922,127 @@ fn list_plugins(paths: &Paths) {
     }
 }
 
+/// What the plugins bring, folded into what the program already loads, and the list
+/// *Options → Plugins configuration* shows.
+struct LoadedPlugins {
+    themes: ThemeSet,
+    keymaps: Vec<(String, toml::Table)>,
+    commands: Vec<PluginCommand>,
+    rows: Vec<PluginRow>,
+    decompile: Vec<fcmd_config::DecompileRule>,
+    assocs: Vec<fcmd_config::AssocCfg>,
+    mask_groups: Vec<fcmd_config::MaskGroupCfg>,
+}
+
 /// Everything the plugins declare, folded into what the program already loads. A plugin that
-/// does not load is a warning on the startup screen, never a reason not to start.
+/// does not load is a warning on the startup screen, never a reason not to start; a plugin
+/// turned off (`[plugins] disabled`) is listed and brings nothing, except that its commands
+/// are kept aside so turning it on again shows them in `F11` without a restart.
 fn load_plugins(
     paths: &Paths,
     themes: ThemeSet,
     warnings: &mut Vec<String>,
-) -> (ThemeSet, Vec<(String, toml::Table)>, Vec<PluginCommand>) {
+    switches: &fcmd_config::PluginsCfg,
+) -> LoadedPlugins {
     let found = fcmd_plug::discover(&paths.plugins_dir);
     warnings.extend(found.problems.iter().cloned());
     warnings.extend(found.warnings.iter().cloned());
-    let mut themes = themes;
-    let mut keymaps = Vec::new();
-    let mut commands: Vec<PluginCommand> = Vec::new();
-    for plugin in &found.plugins {
+    let mut out = LoadedPlugins {
+        themes,
+        keymaps: Vec::new(),
+        commands: Vec::new(),
+        rows: Vec::new(),
+        decompile: Vec::new(),
+        assocs: Vec::new(),
+        mask_groups: Vec::new(),
+    };
+    // The ones that are on first, so that a command id two plugins claim goes to one that is
+    // on rather than to one that is not.
+    let mut order: Vec<&fcmd_plug::Plugin> = found.plugins.iter().collect();
+    order.sort_by_key(|p| !switches.is_on(p.id()));
+    for plugin in order {
+        let on = switches.is_on(plugin.id());
+        let mut notes: Vec<String> = Vec::new();
         if !plugin.supports(env!("CARGO_PKG_VERSION")) {
-            warnings.push(format!(
+            let note = format!(
                 "{}: declares fcmd {} and this is {} — loaded anyway, it may not fit",
                 plugin.id(),
                 plugin.manifest.plugin.fcmd,
                 env!("CARGO_PKG_VERSION")
-            ));
+            );
+            if on {
+                warnings.push(note.clone());
+            }
+            notes.push(note);
         }
-        let theme_tables = plugin.tables(fcmd_plug::ItemKind::Theme);
-        if !theme_tables.is_empty() {
-            themes = themes.with_plugin_tables(plugin.id(), &theme_tables);
+        let mut provides: Vec<(&'static str, usize)> = Vec::new();
+        for kind in fcmd_plug::ItemKind::all() {
+            let n = plugin.tables(*kind).len();
+            if n > 0 {
+                provides.push((kind.section(), n));
+            }
         }
-        for table in plugin.tables(fcmd_plug::ItemKind::Keymap) {
-            keymaps.push((plugin.origin(), table));
+        if on {
+            let theme_tables = plugin.tables(fcmd_plug::ItemKind::Theme);
+            if !theme_tables.is_empty() {
+                out.themes = out.themes.with_plugin_tables(plugin.id(), &theme_tables);
+            }
+            for table in plugin.tables(fcmd_plug::ItemKind::Keymap) {
+                out.keymaps.push((plugin.origin(), table));
+            }
+            // The data blocks, read with the parsers the configuration's own use: a block
+            // that does not read is named, and the rest of the plugin still loads.
+            // A macro rather than a generic function, so that this crate needs no `serde` of
+            // its own just to name the bound.
+            macro_rules! take {
+                ($kind:expr, $ty:ty, $into:expr) => {
+                    for table in plugin.tables($kind) {
+                        match toml::Value::Table(table).try_into::<$ty>() {
+                            Ok(block) => $into.push(block),
+                            Err(e) => notes.push(format!(
+                                "{}: a [[{}]] block does not read: {e}",
+                                plugin.id(),
+                                $kind.section()
+                            )),
+                        }
+                    }
+                };
+            }
+            let before = notes.len();
+            take!(
+                fcmd_plug::ItemKind::Decompile,
+                fcmd_config::DecompileRule,
+                out.decompile
+            );
+            take!(
+                fcmd_plug::ItemKind::Assoc,
+                fcmd_config::AssocCfg,
+                out.assocs
+            );
+            take!(
+                fcmd_plug::ItemKind::MaskGroup,
+                fcmd_config::MaskGroupCfg,
+                out.mask_groups
+            );
+            warnings.extend(notes[before..].iter().cloned());
         }
         // The commands it provides, with the program resolved. A name already taken is a
         // warning and the first one wins: two plugins answering to one id would make which of
         // them ran a matter of directory order.
+        let mut commands = 0;
         for (declared, program) in plugin.commands() {
-            if let Some(first) = commands.iter().find(|c| c.id == declared.id) {
-                warnings.push(format!(
+            commands += 1;
+            if let Some(first) = out.commands.iter().find(|c| c.id == declared.id) {
+                let note = format!(
                     "{}: command `{}` is already provided by {} — the second one is ignored",
                     plugin.id(),
                     declared.id,
                     first.plugin
-                ));
+                );
+                if on {
+                    warnings.push(note.clone());
+                }
+                notes.push(note);
                 continue;
             }
             let scope = declared
@@ -961,7 +1050,7 @@ fn load_plugins(
                 .as_deref()
                 .and_then(FcmdScope::parse)
                 .unwrap_or(FcmdScope::Panel);
-            commands.push(PluginCommand {
+            out.commands.push(PluginCommand {
                 plugin: plugin.id().to_string(),
                 id: declared.id.clone(),
                 label: declared.label.clone(),
@@ -972,8 +1061,29 @@ fn load_plugins(
                 confirm: declared.confirm.clone(),
             });
         }
+        if commands > 0 {
+            provides.push(("command", commands));
+        }
+        let meta = &plugin.manifest.plugin;
+        out.rows.push(PluginRow {
+            id: plugin.id().to_string(),
+            name: meta.name.clone(),
+            version: meta.version.clone(),
+            author: meta.author.clone(),
+            description: meta.description.clone(),
+            dir: plugin.dir.clone(),
+            provides,
+            notes,
+            loaded: true,
+        });
     }
-    (themes, keymaps, commands)
+    // The ones that did not load, so the list says why instead of leaving them out.
+    for problem in &found.problems {
+        out.rows.push(PluginRow::broken(problem));
+    }
+    out.rows
+        .sort_by(|a, b| (!a.loaded, &a.id).cmp(&(!b.loaded, &b.id)));
+    out
 }
 
 fn command_ids() -> Vec<String> {
@@ -4900,7 +5010,13 @@ timeout = 10
         // Loaded the way the binary loads it.
         let paths = Paths::discover(Some(&left.join("fcmd.toml")), Some(&plugins));
         let mut warnings = Vec::new();
-        let (_, _, commands) = load_plugins(&paths, ThemeSet::builtin_only(), &mut warnings);
+        let commands = load_plugins(
+            &paths,
+            ThemeSet::builtin_only(),
+            &mut warnings,
+            &Default::default(),
+        )
+        .commands;
         assert!(warnings.is_empty(), "{warnings:?}");
         assert_eq!(commands.len(), 1);
         assert_eq!(commands[0].id, "user.demo.look");
@@ -4975,7 +5091,13 @@ timeout = 10
             .unwrap();
             let paths = Paths::discover(Some(&root.path().join("fcmd.toml")), Some(&plugins));
             let mut warnings = Vec::new();
-            let (_, _, commands) = load_plugins(&paths, ThemeSet::builtin_only(), &mut warnings);
+            let commands = load_plugins(
+                &paths,
+                ThemeSet::builtin_only(),
+                &mut warnings,
+                &Default::default(),
+            )
+            .commands;
             (commands.len(), warnings)
         };
 
@@ -5024,7 +5146,13 @@ timeout = 10
         assert!(root.is_dir(), "examples/plugins is missing");
         let paths = Paths::discover(Some(&root.join("fcmd.toml")), Some(&root));
         let mut warnings = Vec::new();
-        let (_, _, commands) = load_plugins(&paths, ThemeSet::builtin_only(), &mut warnings);
+        let commands = load_plugins(
+            &paths,
+            ThemeSet::builtin_only(),
+            &mut warnings,
+            &Default::default(),
+        )
+        .commands;
         assert!(warnings.is_empty(), "{warnings:?}");
 
         // Every folder under examples/plugins is a plugin, and every one of them has to have
@@ -5084,6 +5212,73 @@ timeout = 10
                 );
             }
         }
+    }
+
+    /// What a plugin brings besides commands — a decompiler, an association, a mask group —
+    /// is used, and nothing a plugin turned off brings is; it is still listed, so it can be
+    /// turned on again.
+    #[test]
+    fn a_plugin_s_data_blocks_are_used_and_one_turned_off_brings_nothing() {
+        let root = tempfile::tempdir().unwrap();
+        let plugins = root.path().join("plugins");
+        let dir = plugins.join("extras");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("plugin.toml"),
+            r#"[plugin]
+id = "extras"
+name = "Extras"
+
+[[decompile]]
+name = "lua"
+match = "*.luac"
+cmd = "luac -l {file}"
+
+[[assoc]]
+match = "*.ipynb"
+view = "jupyter nbconvert --to markdown --stdout {file}"
+
+[[mask-group]]
+name = "notebooks"
+mask = "*.ipynb"
+"#,
+        )
+        .unwrap();
+        let paths = Paths::discover(Some(&root.path().join("fcmd.toml")), Some(&plugins));
+        let mut warnings = Vec::new();
+        let on = load_plugins(
+            &paths,
+            ThemeSet::builtin_only(),
+            &mut warnings,
+            &Default::default(),
+        );
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(on.decompile.len(), 1);
+        assert_eq!(on.decompile[0].mask, "*.luac");
+        assert_eq!(on.assocs.len(), 1);
+        assert_eq!(on.mask_groups.len(), 1);
+        assert_eq!(on.rows.len(), 1);
+        assert!(on.rows[0].loaded);
+        assert!(on.rows[0].provides.contains(&("decompile", 1)));
+
+        // Through the configuration, the way the program asks.
+        let mut cfg = Config {
+            plugin_assocs: on.assocs.clone(),
+            plugin_mask_groups: on.mask_groups.clone(),
+            ..Config::default()
+        };
+        assert!(cfg.all_assocs().any(|a| a.matches("talk.ipynb")));
+        assert!(cfg.mask_groups().get("notebooks").is_some());
+        cfg.plugin_assocs.clear();
+        assert!(!cfg.all_assocs().any(|a| a.matches("talk.ipynb")));
+
+        // Turned off: listed, and nothing it brings is taken.
+        let switches = fcmd_config::PluginsCfg {
+            disabled: vec!["extras".into()],
+        };
+        let off = load_plugins(&paths, ThemeSet::builtin_only(), &mut warnings, &switches);
+        assert!(off.decompile.is_empty() && off.assocs.is_empty() && off.mask_groups.is_empty());
+        assert_eq!(off.rows.len(), 1, "a plugin turned off is still listed");
     }
 
     /// Every shell script under `examples/plugins` parses. `sh -n` is cheap and catches the

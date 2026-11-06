@@ -131,6 +131,8 @@ pub enum Command {
     OptHighlight,
     /// The `[[sort_group]]` bands as a list, with a dialog per band (SPEC 02 §4).
     OptSortGroups,
+    /// Options → Plugins configuration: the plugins found, on and off (SPEC 08 §1c).
+    OptPlugins,
     OptMaskGroups,
     /// The code pages as a list: which ones `F8` walks, and what to call each (SPEC 05 §1.12).
     /// The same list the viewer's `Shift+F8` opens — from here it is the favourites one edits
@@ -570,6 +572,7 @@ impl Command {
             Command::OptInterface,
             Command::OptHighlight,
             Command::OptSortGroups,
+            Command::OptPlugins,
             Command::OptMaskGroups,
             Command::OptCodepages,
             Command::OptSettings,
@@ -875,6 +878,7 @@ impl Command {
             Command::OptInterface => "opt.interface".into(),
             Command::OptHighlight => "opt.highlight".into(),
             Command::OptSortGroups => "opt.sort.groups".into(),
+            Command::OptPlugins => "opt.plugins".into(),
             Command::OptMaskGroups => "opt.mask.groups".into(),
             Command::OptCodepages => "opt.codepages".into(),
             Command::OptSettings => "opt.settings".into(),
@@ -1149,6 +1153,7 @@ impl Command {
             ("opt.interface", _) => Command::OptInterface,
             ("opt.highlight", _) => Command::OptHighlight,
             ("opt.sort.groups", _) => Command::OptSortGroups,
+            ("opt.plugins", _) => Command::OptPlugins,
             ("opt.mask.groups", _) => Command::OptMaskGroups,
             ("opt.codepages", _) => Command::OptCodepages,
             ("opt.settings", _) => Command::OptSettings,

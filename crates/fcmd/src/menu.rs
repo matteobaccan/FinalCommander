@@ -14,7 +14,10 @@ use fcmd_core::ViewMode;
 pub enum Action {
     /// Run a command from the vocabulary.
     Run(Command),
-    /// In the menu for completeness; reports "not implemented" with this name.
+    /// In the menu for completeness; reports "not implemented" with this name. No entry
+    /// waits on a feature today — the last one was *Plugins configuration* — and the variant
+    /// stays for the next entry that is drawn before it works.
+    #[allow(dead_code)]
     Todo(&'static str),
 }
 
@@ -108,6 +111,8 @@ pub enum PickKind {
     CharMap,
     /// The AI services (`tool.ai`): `Enter` makes one the default, `Ins`/`F4` edit, `Del`.
     AiServices,
+    /// Options → Plugins configuration: every plugin found, on, off or broken.
+    PluginsConfig,
     /// The editor's replacements (`Alt+Shift+F7`): the named ones, then the recent pairs.
     ReplaceTemplates,
     /// A repository's branches: `Enter` puts `git switch` for one on the command line.
@@ -641,7 +646,7 @@ pub fn menus() -> Vec<Menu> {
                 item("menu-codepages", "", Action::Run(Command::OptCodepages)),
                 item("menu-highlighting", "", Action::Run(Command::OptHighlight)),
                 item("menu-sort-groups", "", Action::Run(Command::OptSortGroups)),
-                item("menu-plugins-config", "", Action::Todo("settings.plugins")),
+                item("menu-plugins-config", "", Action::Run(Command::OptPlugins)),
                 Entry::Separator,
                 item("menu-help", "F1", Action::Run(Command::AppHelp)),
                 item(

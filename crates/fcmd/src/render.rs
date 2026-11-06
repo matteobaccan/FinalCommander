@@ -1115,6 +1115,7 @@ fn draw_pick(
         crate::menu::PickKind::Git => "git-hint",
         crate::menu::PickKind::CharMap => "charmap-hint",
         crate::menu::PickKind::AiServices => "ai-services-hint",
+        crate::menu::PickKind::PluginsConfig => "plugins-config-hint",
         crate::menu::PickKind::ReplaceTemplates => "replace-tpl-hint",
         crate::menu::PickKind::GitBranches => "git-branches-hint",
         crate::menu::PickKind::Jobs => "jobs-hint",

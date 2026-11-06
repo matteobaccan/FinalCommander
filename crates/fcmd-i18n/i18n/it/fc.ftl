@@ -1452,3 +1452,26 @@ tools-install-else = Se non riesce: { $url }
 tools-install-failed = fcmd: { $name } non è stato installato. Scaricalo da { $url }
 tools-installing = installazione di { $name } in un terminale: Ctrl+Alt+E torna ai pannelli, Ctrl+R lì controlla di nuovo
 btn-install = Installa
+
+# Configurazione dei plugin
+plugins-config-title = Plugin
+plugins-config-hint = Invio: attiva o disattiva · F3 cos'è e cosa porta · Esc
+plugins-broken = non caricato — F3 dice perché
+plugins-cannot-toggle = un plugin che non si è caricato non si può attivare: F3 dice cosa non va
+plugins-on = { $id } è attivo: i suoi comandi sono già in F11
+plugins-on-restart = { $id } è attivo: i suoi comandi sono già in F11, il resto che porta dal prossimo avvio
+plugins-off = { $id } è disattivato: i suoi comandi sono usciti da F11
+plugins-off-restart = { $id } è disattivato: i suoi comandi sono usciti da F11, il resto che porta va via al prossimo avvio
+plugins-state-on = attivo
+plugins-state-off = disattivato
+plugins-card-id = Id
+plugins-card-name = Nome
+plugins-card-version = Versione
+plugins-card-author = Autore
+plugins-card-about = Descrizione
+plugins-card-dir = Cartella
+plugins-card-state = Stato
+plugins-card-brings = Porta
+plugins-card-commands = Comandi (F11):
+plugins-card-notes = Detto durante il caricamento:
+plugins-none = nessun plugin trovato · stanno in { $dir }, una cartella ciascuno con un plugin.toml

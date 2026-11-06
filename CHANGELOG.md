@@ -8,6 +8,11 @@ Notable changes, newest first. The format follows
 
 ### Added
 
+- **Options → Plugins configuration.** The menu entry did nothing; now it lists every plugin
+  found — on, off, or one that did not load and why. `Enter` turns one on or off (written to
+  `[plugins] disabled`), and its commands come and go from `F11` at once; `F3` is its card,
+  with its folder, what it brings, its commands and anything said while loading. The help has
+  a chapter on plugins it did not have.
 - **A panel of the programs from elsewhere.** `Alt+F1` → *External programs* lists every
   program fcmd runs rather than doing the work itself — `7z` and any `[[archiver]]` of your
   own, `git`, the decompilers of the `[[decompile]]` rules, `ffmpeg` for the video frames to
@@ -25,6 +30,13 @@ Notable changes, newest first. The format follows
   secret needed asks for it again. Nothing in the file is ever in clear. Servers' passwords go
   there too, once a connection with one has worked, and the next connection takes it from the
   file; one the server refuses is asked for, not tried again.
+
+### Fixed
+
+- **What a plugin brings, all of it.** A plugin's `[[assoc]]`, `[[decompile]]` and
+  `[[mask-group]]` blocks were read and then not used: only themes, keymaps and commands
+  were. Now they apply too, after the configuration's own blocks, and are never written into
+  `fcmd.toml` when the setup is saved.
 
 ## [0.35.0] - 2026-11-05
 

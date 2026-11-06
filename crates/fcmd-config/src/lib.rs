@@ -1017,6 +1017,22 @@ fn default_scheme() -> String {
     "sftp".to_string()
 }
 
+/// `[plugins]`: the plugins found that are turned off, by id. A plugin turned off is still
+/// listed in *Options → Plugins configuration*, so it can be turned on again; nothing it
+/// brings is used.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct PluginsCfg {
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub disabled: Vec<String>,
+}
+
+impl PluginsCfg {
+    pub fn is_on(&self, id: &str) -> bool {
+        !self.disabled.iter().any(|d| d == id)
+    }
+}
+
 /// A `[[decompile]]` rule: an external tool that turns a compiled file into readable text.
 ///
 /// FinalCommander disassembles x86 and AArch64 code itself; real decompilation is a research
@@ -1720,6 +1736,19 @@ pub struct Config {
     /// (SPEC 05 §1.12).
     #[serde(rename = "codepage")]
     pub codepages: Vec<CodepageCfg>,
+    /// `[plugins]`: which of the plugins found are turned off (SPEC 08 §1c).
+    pub plugins: PluginsCfg,
+    /// The `[[decompile]]` rules the loaded plugins bring, asked after the configuration's
+    /// own. Not part of the file: a plugin's rules live in the plugin, and saving the setup
+    /// must not copy them into `fcmd.toml`.
+    #[serde(skip)]
+    pub plugin_decompile: Vec<DecompileRule>,
+    /// The `[[assoc]]` blocks the loaded plugins bring, after the configuration's own.
+    #[serde(skip)]
+    pub plugin_assocs: Vec<AssocCfg>,
+    /// The `[[mask-group]]` blocks the loaded plugins bring, under the configuration's own.
+    #[serde(skip)]
+    pub plugin_mask_groups: Vec<MaskGroupCfg>,
     /// Anything we did not recognise, kept so `--dump-config` can show it and warn.
     #[serde(flatten, skip_serializing)]
     pub unknown: BTreeMap<String, toml::Value>,
@@ -1735,7 +1764,8 @@ impl Config {
     /// something unhelpful about a line nobody is looking at.
     pub fn mask_groups(&self) -> fcmd_core::filter::Groups {
         let mut groups = fcmd_core::filter::default_groups();
-        for block in &self.mask_groups {
+        // A plugin's groups first, so one of the configuration's own of the same name wins.
+        for block in self.plugin_mask_groups.iter().chain(&self.mask_groups) {
             let (name, mask) = (block.name.trim(), block.mask.trim());
             if name.is_empty() || mask.is_empty() {
                 continue;
@@ -1803,9 +1833,15 @@ impl Config {
     pub fn decompiler_for(&self, name: &str) -> Option<DecompileRule> {
         self.decompile
             .iter()
+            .chain(&self.plugin_decompile)
             .cloned()
             .chain(default_decompile_rules())
             .find(|rule| rule.matches(name) && command_exists(rule.program()))
+    }
+
+    /// Every `[[assoc]]` block in force: the configuration's own, then the plugins'.
+    pub fn all_assocs(&self) -> impl Iterator<Item = &AssocCfg> {
+        self.assocs.iter().chain(&self.plugin_assocs)
     }
 
     /// The effective configuration as TOML (`fcmd --dump-config`).

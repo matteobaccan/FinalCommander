@@ -1451,3 +1451,26 @@ tools-install-else = Если не получится: { $url }
 tools-install-failed = fcmd: { $name } не установлена. Скачайте с { $url }
 tools-installing = установка { $name } в терминале: Ctrl+Alt+E возвращает к панелям, Ctrl+R там проверяет снова
 btn-install = Установить
+
+# Настройка плагинов
+plugins-config-title = Плагины
+plugins-config-hint = Enter: включить или выключить · F3 что это и что даёт · Esc
+plugins-broken = не загружен — F3 скажет почему
+plugins-cannot-toggle = плагин, который не загрузился, включить нельзя: F3 скажет, что с ним
+plugins-on = { $id } включён: его команды уже в F11
+plugins-on-restart = { $id } включён: его команды уже в F11, остальное — со следующего запуска
+plugins-off = { $id } выключен: его команды убраны из F11
+plugins-off-restart = { $id } выключен: его команды убраны из F11, остальное уйдёт при следующем запуске
+plugins-state-on = включён
+plugins-state-off = выключен
+plugins-card-id = Id
+plugins-card-name = Название
+plugins-card-version = Версия
+plugins-card-author = Автор
+plugins-card-about = Описание
+plugins-card-dir = Папка
+plugins-card-state = Состояние
+plugins-card-brings = Даёт
+plugins-card-commands = Команды (F11):
+plugins-card-notes = Сообщено при загрузке:
+plugins-none = плагины не найдены · они лежат в { $dir }, каждый в своей папке с plugin.toml

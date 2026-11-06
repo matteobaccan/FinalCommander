@@ -421,6 +421,33 @@ se era in uno — così eseguirla di nuovo è `Shift+F10` e `Invio`.
 Una cartella può portarsi il suo `.fcmd-menu.toml`, e le sue righe stanno sopra quelle che
 valgono sempre: il menu del progetto in cui sei è quello che vuoi mentre ci sei dentro.
 
+# Plugin
+
+Un plugin è una cartella dentro `fcmd-plugins/`, accanto alle impostazioni (`fcmd --paths` dice
+dove), con dentro un `plugin.toml`. Viene trovato all'avvio: niente da registrare, niente da
+compilare. Può portare **dati** — temi, keymap, blocchi `[[assoc]]`, regole `[[decompile]]`,
+liste `[[mask-group]]`, con le stesse parole di `fcmd.toml` — e **comandi**: un `[[command]]`
+nomina un programma nella cartella del plugin, e `F11` elenca i comandi per lo schermo in cui
+sei.
+
+Un comando gira come programma a sé, mai dentro fcmd, così un plugin che va in crash ci va da
+solo. Riceve dove sono i pannelli e cosa è selezionato, nell'ambiente e come JSON sul suo
+input, e risponde una riga alla volta: un messaggio, una cartella in cui andare, file da
+selezionare, o un comando di fcmd da eseguire — niente che un tasto non possa fare. Un comando
+che rinomina o sovrascrive file lo dichiara nel manifest, e fcmd chiede prima di eseguirlo. In
+`examples/plugins/` ce ne sono una ventina di esempio, dai file duplicati alla conversione dei
+fine riga.
+
+*Opzioni → Configurazione dei plugin* elenca tutti i plugin trovati: `✓` per uno attivo, `·`
+per uno disattivato e `!` per uno che non si è caricato. `Invio` attiva o disattiva quello
+sotto il cursore e lo scrive subito (`[plugins] disabled` in `fcmd.toml`); i suoi comandi
+entrano ed escono da `F11` immediatamente, mentre il resto di quello che porta — temi, tasti,
+associazioni, decompilatori, gruppi di maschere — si legge all'avvio e cambia al prossimo. `F3`
+è la sua scheda: chi l'ha scritto, dove sta, cosa porta, i suoi comandi e quello che è stato
+detto mentre si caricava — per uno che non si è caricato, il perché. Le sue impostazioni sono
+file suoi: `F3` dice la cartella, e il `plugin.toml` del plugin è quello da modificare. `fcmd
+--list-plugins` stampa cosa è stato trovato, e cosa non si è caricato, senza aprire l'interfaccia.
+
 # Formati tuoi
 
 Un blocco `[[archiver]]` in `fcmd.toml` insegna ai pannelli un formato che nulla di ciò che è
