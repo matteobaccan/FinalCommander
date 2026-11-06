@@ -1267,6 +1267,14 @@ table-filtered = quedan { $rows } filas
 table-unfiltered = todas las filas otra vez
 table-cut-sorted = de las primeras { $rows } filas, que es todo lo leído
 table-too-many = demasiados registros para ordenarlos o filtrarlos aquí
+table-copied =
+    { $rows ->
+        [one] una fila en el portapapeles
+       *[other] { $rows } filas en el portapapeles
+    }
+table-headed = la primera línea es la cabecera
+table-not-headed = la primera línea son datos: las columnas se llaman por su número
+table-named-fields = este formato nombra sus propios campos: no hay cabecera que adivinar
 
 # Splitting and combining (SPEC 03 §9)
 split-title = Dividir archivo

@@ -152,7 +152,6 @@ cannot be, kept so the question is not asked again.
 | Thumbnail view | Wikipedia, Opus | A panel view of pictures instead of names | Real pixels first |
 | Export or print a listing | Opus, Wikipedia | A folder's listing written out as text, CSV or HTML, or printed | Panelize goes the other way |
 | Tab labels from the path | TabLabelizer | A tab named after its shortened full path, with a maximum length and aliases | Today the folder's name, or one given by hand |
-| Table mode: header, `^`, copy | CSV viewer | Detecting whether the first row is a header; `^` as a delimiter; `Ctrl+C` copying the selected rows | The first row is always the header today |
 | Cut and paste of files | superfile, Explorer | `Ctrl+X`/`Ctrl+C` on files, `Ctrl+V` in another folder, inside the program | Not the system clipboard (*The files themselves on the clipboard* above) |
 | Frecency jump | superfile (zoxide), broot | A list ordered by how often and how lately a folder was used, typed into | Feature 2.3 |
 | More than two panels | superfile, DOS Navigator | Splitting into a third and fourth panel | M4 |

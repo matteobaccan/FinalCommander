@@ -1267,6 +1267,14 @@ table-filtered = { $rows } lignes restantes
 table-unfiltered = toutes les lignes de nouveau
 table-cut-sorted = des { $rows } premières lignes, tout ce qui a été lu
 table-too-many = trop d'enregistrements pour les trier ou les filtrer ici
+table-copied =
+    { $rows ->
+        [one] une ligne dans le presse-papiers
+       *[other] { $rows } lignes dans le presse-papiers
+    }
+table-headed = la première ligne est l'en-tête
+table-not-headed = la première ligne est une donnée : les colonnes portent leur numéro
+table-named-fields = ce format nomme lui-même ses champs : pas d'en-tête à deviner
 
 # Splitting and combining (SPEC 03 §9)
 split-title = Découper le fichier

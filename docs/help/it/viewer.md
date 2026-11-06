@@ -124,7 +124,17 @@ perché come si apre un file deve essere prevedibile.
 `←` e `→` spostano la finestra di lato su una tabella più larga dello schermo, e si fermano
 dove finisce l'ultima colonna invece di continuare nel vuoto. `Ctrl+←` e `Ctrl+→` saltano una
 colonna intera per volta — una tabella ha un'unità per andare di lato che un muro di testo non
-ha. `Home` e `End` vanno alla prima e all'ultima schermata di righe.
+ha. `↑` e `↓` spostano un cursore da una riga all'altra, e le righe scorrono sotto di lui
+quando arriva al bordo della finestra; `Home` e `End` vanno alla prima e all'ultima riga.
+
+Le righe si marcano come i file in un pannello: `Ins` o `Shift+↓` marca la riga sotto il
+cursore e scende, `Shift+↑` sale, e lo stesso tasto su una riga marcata toglie il segno.
+`Ctrl+C` (o `Ctrl+Ins`) mette negli appunti le righe marcate — quella sotto il cursore quando
+non ce n'è nessuna — con l'intestazione in testa e le celle separate da tabulazioni, che è quello
+che un foglio di calcolo incolla nelle sue celle; una cella che contiene una tabulazione, un a
+capo o una virgoletta viene messa tra virgolette, così l'incolla si divide negli stessi punti.
+Le righe tengono il segno attraverso un ordinamento o un filtro, e si copiano nell'ordine in cui
+le vedi.
 
 `Ctrl+F3` ordina le righe per la colonna dove ti trovi: una volta in salita, un'altra in
 discesa, la terza torna all'ordine che hanno nel file. `Ctrl+F7` chiede che cosa deve contenere
@@ -138,9 +148,17 @@ modalità. Modificare una cella non c'è di proposito: un visualizzatore che scr
 e quello sta in `F4`.
 
 La riga di stato dice come è stato letto il file, quale separatore è stato *indovinato* — una
-virgola, un punto e virgola, una tabulazione o una barra, quello che ha dato una tabella — e
-quante righe e colonne ci sono: è così che capisci a prima vista che l'ipotesi era giusta. Un
-`.tsv` non viene indovinato. Per JSON Lines le colonne sono le chiavi dei primi duecento
+virgola, un punto e virgola, una tabulazione, una barra o un accento circonflesso (`^`), quello
+che ha dato una tabella — e quante righe e colonne ci sono: è così che capisci a prima vista che
+l'ipotesi era giusta. Un `.tsv` non viene indovinato.
+
+Anche se la prima riga è un'**intestazione** viene indovinato, da quello che c'è sotto: una
+parola sopra una colonna di numeri, o sopra una colonna di codici tutti della stessa lunghezza, è
+un'intestazione; un numero sopra numeri, o un valore che ricompare più in basso, è un dato. Un
+file senza intestazione mostra le colonne come `#1`, `#2`… e la riga di stato dice `no heading`.
+Quando l'ipotesi è sbagliata `Ctrl+H` la rovescia — l'intestazione diventa la prima riga, o la
+prima riga l'intestazione. JSON Lines e dBase danno un nome ai loro campi, quindi lì non c'è
+niente da rovesciare. Per JSON Lines le colonne sono le chiavi dei primi duecento
 record, nell'ordine in cui stanno nel file; un record con una chiave comparsa più tardi la
 mostra in un'ultima colonna chiamata `…` invece di perderla, e una riga che non è un oggetto
 viene contata in fondo alla riga di stato invece di essere mostrata come una riga di cose senza

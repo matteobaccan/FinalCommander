@@ -283,6 +283,18 @@ pub struct Viewer {
     /// Which row of the table is on the first row of the screen. The table's own position:
     /// `top` carries the byte offset of that record, for the search and the bookmarks.
     pub table_row: usize,
+    /// The row the cursor is on, counted in the view's rows like `table_row`: what `Ins` and
+    /// `Shift` with an arrow mark, and what `Ctrl+C` copies when nothing is marked.
+    pub table_cursor: usize,
+    /// How many rows of records the window last had room for, so that moving the cursor
+    /// knows when the window has to follow it.
+    table_page: usize,
+    /// The records marked for copying, by record number, so a sort or a filter does not
+    /// move a mark onto another record.
+    table_marked: std::collections::BTreeSet<usize>,
+    /// Whether the first line of delimited text is the heading, when the reader has said so
+    /// (`Ctrl+H`); `None` while it is guessed.
+    table_header: Option<bool>,
     /// Cursor and scroll inside the pane, and whether the keys go to it.
     pub struct_cursor: usize,
     struct_top: usize,
@@ -373,6 +385,10 @@ impl Viewer {
             table: None,
             memo: None,
             table_row: 0,
+            table_cursor: 0,
+            table_page: 20,
+            table_marked: Default::default(),
+            table_header: None,
             struct_cursor: 0,
             struct_top: 0,
             struct_focus: false,
@@ -947,6 +963,7 @@ impl Viewer {
         let did = table.cycle_sort(&mut **source, memo.as_deref_mut(), col);
         if did != crate::table::Sorted::TooMany {
             self.table_row = 0;
+            self.table_cursor = 0;
             self.top = self.table.as_ref().map(|t| t.offset(0)).unwrap_or(0);
         }
         Some((col, did))
@@ -965,6 +982,7 @@ impl Viewer {
         let did = table.set_filter(&mut **source, memo.as_deref_mut(), needle);
         if did {
             self.table_row = 0;
+            self.table_cursor = 0;
             self.top = self.table.as_ref().map(|t| t.offset(0)).unwrap_or(0);
         }
         Some(did)
@@ -995,6 +1013,7 @@ impl Viewer {
         // A table's position is which row is at the top, and nothing else moves it: leaving
         // that where it was is what made `Home` look as if it had done nothing.
         self.table_row = 0;
+        self.table_cursor = 0;
     }
 
     /// The last screenful, so `End` shows the end of the file rather than an empty screen.
@@ -1008,6 +1027,7 @@ impl Viewer {
             // Two of the window's rows are the heading and its rule.
             let body = (height as usize).saturating_sub(2).max(1);
             self.table_row = rows.saturating_sub(body);
+            self.table_cursor = rows.saturating_sub(1);
             self.top = self
                 .table
                 .as_ref()
@@ -1163,8 +1183,9 @@ impl Viewer {
         let len = whole.min(TABLE_LIMIT) as usize;
         let bytes = self.source.read_vec(0, len).unwrap_or_default();
         let text = self.codepage.decode(&bytes);
-        let mut table = crate::table::Table::of(&name, &text)
-            .unwrap_or_else(|| crate::table::Table::separated(&text, None));
+        let header = self.table_header;
+        let mut table = crate::table::Table::of_with(&name, &text, header)
+            .unwrap_or_else(|| crate::table::Table::separated_with(&text, None, header));
         table.cut = whole > TABLE_LIMIT;
         self.table = Some(table);
     }
@@ -1188,7 +1209,8 @@ impl Viewer {
         table.row_at(offset)
     }
 
-    /// Scrolling a table is scrolling its rows, and `top` follows so that a search, a
+    /// Moving in a table moves the cursor, a row at a time or a page, and the window follows
+    /// it when it would leave the screen; `top` follows the window so that a search, a
     /// bookmark and `Ctrl+Z` keep meaning what they mean everywhere else.
     fn scroll_table(&mut self, delta: i64) {
         self.parse_table();
@@ -1199,9 +1221,121 @@ impl Viewer {
             return;
         }
         let last = table.len() as i64 - 1;
-        let next = (self.table_row as i64 + delta).clamp(0, last) as usize;
-        self.table_row = next;
-        self.top = table.offset(next);
+        let page = self.table_page.max(1);
+        let cursor = (self.table_cursor as i64 + delta).clamp(0, last) as usize;
+        self.table_cursor = cursor;
+        if cursor < self.table_row {
+            self.table_row = cursor;
+        } else if cursor >= self.table_row + page {
+            self.table_row = cursor + 1 - page;
+        }
+        self.top = table.offset(self.table_row);
+    }
+
+    /// `Ins`, `Shift+↑` and `Shift+↓` in a table: mark the row under the cursor, or take the
+    /// mark off it, and move on by `step` — the way the same keys select files in a panel.
+    /// `None` outside a table; otherwise how many rows are marked now.
+    pub fn table_mark(&mut self, step: i64) -> Option<usize> {
+        if self.mode != Mode::Table {
+            return None;
+        }
+        self.parse_table();
+        let rec = self.table.as_ref()?.record_of(self.table_cursor)?;
+        if !self.table_marked.remove(&rec) {
+            self.table_marked.insert(rec);
+        }
+        if step != 0 {
+            self.scroll_table(step);
+        }
+        Some(self.table_marked.len())
+    }
+
+    /// For the screen: is row `i` of the window (the heading and its rule are rows 0 and 1)
+    /// the cursor's, and is it marked?
+    pub fn table_row_state(&self, i: usize) -> (bool, bool) {
+        let Some(table) = self.table.as_ref().filter(|_| self.mode == Mode::Table) else {
+            return (false, false);
+        };
+        let Some(row) = i.checked_sub(2).map(|r| r + self.table_row) else {
+            return (false, false);
+        };
+        if row >= table.len() {
+            return (false, false);
+        }
+        let marked = table
+            .record_of(row)
+            .is_some_and(|rec| self.table_marked.contains(&rec));
+        (row == self.table_cursor, marked)
+    }
+
+    /// `Ctrl+C` in a table: the marked rows, or the cursor's when none is marked, as text a
+    /// spreadsheet takes — one line per row, the cells separated by tabs, the heading first
+    /// when the table has one. A cell holding a tab, a newline or a quote is quoted, so the
+    /// paste comes apart into the same cells. `None` outside a table; otherwise the text and
+    /// how many rows are in it.
+    pub fn table_copy(&mut self) -> Option<(String, usize)> {
+        if self.mode != Mode::Table {
+            return None;
+        }
+        self.parse_table();
+        let (table, source, memo) = (&self.table, &mut self.source, &mut self.memo);
+        let table = table.as_ref()?;
+        let rows: Vec<usize> = if self.table_marked.is_empty() {
+            (self.table_cursor < table.len())
+                .then_some(self.table_cursor)
+                .into_iter()
+                .collect()
+        } else {
+            // In the order the view shows them, which after a sort is the order one sees.
+            (0..table.len())
+                .filter(|r| {
+                    table
+                        .record_of(*r)
+                        .is_some_and(|rec| self.table_marked.contains(&rec))
+                })
+                .collect()
+        };
+        let quote = |cell: &str| -> String {
+            if cell.contains(['\t', '\n', '\r', '"']) {
+                format!("\"{}\"", cell.replace('"', "\"\""))
+            } else {
+                cell.to_string()
+            }
+        };
+        let mut out = String::new();
+        if table.headed {
+            let head: Vec<String> = table.columns.iter().map(|c| quote(c)).collect();
+            out.push_str(&head.join("\t"));
+            out.push('\n');
+        }
+        for &row in &rows {
+            let cells = table.cells(&mut **source, memo.as_deref_mut(), row);
+            let cells: Vec<String> = cells.iter().map(|c| quote(c)).collect();
+            out.push_str(&cells.join("\t"));
+            out.push('\n');
+        }
+        Some((out, rows.len()))
+    }
+
+    /// `Ctrl+H` in a table of delimited text: the first line is the heading, or it is data —
+    /// the other way round from what was guessed. `None` where there is nothing to decide (not
+    /// a table, or a format that names its fields); otherwise whether there is a heading now.
+    pub fn table_toggle_header(&mut self) -> Option<bool> {
+        if self.mode != Mode::Table {
+            return None;
+        }
+        self.parse_table();
+        let table = self.table.as_ref()?;
+        table.separator?;
+        let headed = !table.headed;
+        self.table_header = Some(headed);
+        self.table = None;
+        self.table_marked.clear();
+        self.table_row = 0;
+        self.table_cursor = 0;
+        self.parse_table();
+        self.top = self.table.as_ref().map(|t| t.offset(0)).unwrap_or(0);
+        Some(headed)
     }
 
     /// The rows of a table: the heading and its rule first, and they stay there — a table
@@ -1209,6 +1343,15 @@ impl Viewer {
     /// many records as the window has room for.
     fn rows_table(&mut self, width: u16, height: u16) -> Vec<Row> {
         self.parse_table();
+        // The cursor stays on the screen whatever moved the window — a search, `Alt+F8`, a
+        // sort — so it is put back inside it here, where the window's height is known.
+        let page = (height as usize).saturating_sub(2).max(1);
+        self.table_page = page;
+        let rows = self.table.as_ref().map(|t| t.len()).unwrap_or(0);
+        let last_on_screen = (self.table_row + page).min(rows).saturating_sub(1);
+        self.table_cursor = self
+            .table_cursor
+            .clamp(self.table_row, last_on_screen.max(self.table_row));
         let (col, from) = (self.col, self.table_row);
         let pattern = self.pattern.is_some();
         // Two fields, borrowed apart: the table says what to draw and the source is where a
@@ -1304,6 +1447,7 @@ impl Viewer {
         }
         self.set_mode(Mode::Table);
         self.table_row = 0;
+        self.table_cursor = 0;
         self.col = 0;
         true
     }
@@ -1325,6 +1469,12 @@ impl Viewer {
             note.push_str(&format!(" `{shown}`"));
         }
         note.push_str(&format!(" · {} × {}", table.len(), table.fields()));
+        if !table.headed {
+            note.push_str(" · no heading");
+        }
+        if !self.table_marked.is_empty() {
+            note.push_str(&format!(" · {} marked", self.table_marked.len()));
+        }
         // What the view is doing to the records, which a reader has to be able to see: a
         // table sorted by a column one cannot see sorted is a table one mistrusts.
         if let Some((col, reverse)) = table.sorted_by() {
@@ -2442,6 +2592,54 @@ mod tests {
     }
 
     #[test]
+    fn table_rows_are_marked_copied_and_the_heading_turned_round() {
+        let mut v = table_viewer("people.csv", "name,age\nmb,51\nada,36\nlee,8\n");
+        assert!(v.as_table());
+        let _ = texts(&mut v, 40, 6);
+        // Nothing marked: the cursor's row, under the heading.
+        assert_eq!(v.table_copy(), Some(("name\tage\nmb\t51\n".into(), 1)));
+        // `Ins` marks and moves on; `Shift+↑` takes a mark off going back.
+        assert_eq!(v.table_mark(1), Some(1));
+        assert_eq!(v.table_mark(1), Some(2));
+        assert_eq!(v.table_row_state(2), (false, true));
+        assert_eq!(v.table_row_state(4), (true, false));
+        assert_eq!(
+            v.table_copy(),
+            Some(("name\tage\nmb\t51\nada\t36\n".into(), 2))
+        );
+        let note = v.status().table.expect("a note");
+        assert!(note.contains("2 marked"), "{note}");
+
+        // The heading guessed right, and `Ctrl+H` says it is data after all.
+        assert_eq!(v.table_toggle_header(), Some(false));
+        assert_eq!(v.table_rows(), 4);
+        let rows = texts(&mut v, 40, 6);
+        assert!(rows[0].starts_with("#1"), "{:?}", rows[0]);
+        assert!(rows[2].starts_with("name"), "{:?}", rows[2]);
+        let note = v.status().table.expect("a note");
+        assert!(note.contains("no heading"), "{note}");
+        assert_eq!(v.table_copy(), Some(("name\tage\n".into(), 1)));
+        assert_eq!(v.table_toggle_header(), Some(true));
+        assert_eq!(v.table_rows(), 3);
+
+        // A cell that would split the paste is quoted.
+        let mut v = table_viewer("q.csv", "a,b\n\"x\ty\",\"say \"\"hi\"\"\"\n");
+        assert!(v.as_table());
+        let _ = texts(&mut v, 40, 6);
+        assert_eq!(
+            v.table_copy(),
+            Some(("a\tb\n\"x\ty\"\t\"say \"\"hi\"\"\"\n".into(), 1))
+        );
+    }
+
+    #[test]
+    fn a_jsonl_table_has_no_heading_to_turn_round() {
+        let mut v = table_viewer("log.jsonl", "{\"a\":1,\"b\":2}\n{\"a\":3,\"b\":4}\n");
+        assert!(v.as_table());
+        assert_eq!(v.table_toggle_header(), None);
+    }
+
+    #[test]
     fn a_csv_reads_as_a_table_with_a_heading_that_stays_put() {
         let mut v = table_viewer("people.csv", "name,age\nmb,51\nada,36\nlee,8\n");
         assert!(v.reads_table());
@@ -2455,9 +2653,14 @@ mod tests {
         assert_eq!(rows[2], "mb   │ 51 ");
         assert_eq!(rows[4], "lee  │ 8  ");
 
-        // Scrolling moves the rows under a heading that stays where it is.
-        v.scroll(1, 40, 5);
-        let rows = texts(&mut v, 40, 5);
+        // Moving moves the cursor, and once the cursor reaches the bottom of the window the
+        // rows move under a heading that stays where it is.
+        let _ = texts(&mut v, 40, 4);
+        v.scroll(1, 40, 4);
+        assert_eq!((v.table_row, v.table_cursor), (0, 1));
+        v.scroll(1, 40, 4);
+        assert_eq!((v.table_row, v.table_cursor), (1, 2));
+        let rows = texts(&mut v, 40, 4);
         assert_eq!(rows[0], "name │ age");
         assert_eq!(rows[2], "ada  │ 36 ");
         // And `top` follows the record, so a bookmark or a search means the same thing here.

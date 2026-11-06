@@ -17,6 +17,19 @@ Notable changes, newest first. The format follows
   newest first, and `Enter` shows one with its patch. Pull and push run in the background and
   never stop for a password: one that needs it fails with git's message.
 
+- **Table mode: a cursor, marked rows and a copy.** `↑`/`↓` move a cursor over the rows;
+  `Ins` and `Shift+↓`/`Shift+↑` mark rows as in a panel, and `Ctrl+C` (or `Ctrl+Ins`) puts the
+  marked rows — or the cursor's — on the clipboard as tab-separated text with the heading
+  first, ready to paste into a spreadsheet.
+- **Table mode: the heading is guessed.** Whether the first line of a CSV is a heading or
+  data is worked out from what is under it, a table without one has columns `#1`, `#2`…, and
+  `Ctrl+H` turns the guess round. `^` joins the delimiters that are guessed.
+
+### Fixed
+
+- **`Shift+F3` and `Alt+B` in the viewer** — to a table and back, and base64 — never reached
+  the viewer and answered that they were not implemented.
+
 ### Removed
 
 - The branch picker that put `git switch` on the command line: the branches panel replaces it.

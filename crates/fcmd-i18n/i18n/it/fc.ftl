@@ -1268,6 +1268,14 @@ table-filtered = restano { $rows } righe
 table-unfiltered = tutte le righe di nuovo
 table-cut-sorted = delle prime { $rows } righe, che sono tutte quelle lette
 table-too-many = troppi record per ordinarli o filtrarli qui
+table-copied =
+    { $rows ->
+        [one] una riga negli appunti
+       *[other] { $rows } righe negli appunti
+    }
+table-headed = la prima riga è l'intestazione
+table-not-headed = la prima riga è un dato: le colonne si chiamano col loro numero
+table-named-fields = questo formato dà un nome ai suoi campi: non c'è intestazione da indovinare
 
 # Splitting and combining (SPEC 03 §9)
 split-title = Dividi il file

@@ -2473,9 +2473,30 @@ fn draw_viewer(app: &mut App, viewer: &mut fcmd_view::Viewer, buf: &mut Buffer) 
         .then(|| fcmd_syntax::of_name(&viewer.path.display_name()))
         .flatten();
     let mut state = fcmd_syntax::State::default();
+    // In a table the row under the cursor is drawn as a panel draws its cursor, and a marked
+    // row in the colour a panel marks a file with: the same two things, said the same way.
+    let table = viewer.mode == fcmd_view::Mode::Table;
+    let cursor_bg = app.theme.color("panel.cursor.bg");
+    let cursor_fg = app.theme.color("panel.cursor.fg");
+    let marked_fg = app.theme.color("selected.fg");
     for (i, row) in rows.iter().enumerate() {
         let y = body.y + i as u16;
-        buf.put_str(0, y, &row.text, base, body.w);
+        let (on_cursor, marked) = if table {
+            viewer.table_row_state(i)
+        } else {
+            (false, false)
+        };
+        let mut style = base;
+        if on_cursor {
+            style = Style::new(cursor_fg, cursor_bg);
+        }
+        if marked {
+            style = style.with_fg(marked_fg);
+        }
+        if on_cursor || marked {
+            buf.put_str(0, y, &" ".repeat(body.w as usize), style, body.w);
+        }
+        buf.put_str(0, y, &row.text, style, body.w);
         // A rendered row carries its own runs: the Markdown view decided what a heading, a
         // bullet and a table's frame are when it laid the line out, and re-scanning the text
         // it produced would only guess at it again.

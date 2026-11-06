@@ -1267,6 +1267,15 @@ table-filtered = осталось строк: { $rows }
 table-unfiltered = снова все строки
 table-cut-sorted = из первых { $rows } строк — это всё, что было прочитано
 table-too-many = слишком много записей, чтобы сортировать или фильтровать здесь
+table-copied =
+    { $rows ->
+        [one] { $rows } строка в буфере обмена
+        [few] { $rows } строки в буфере обмена
+       *[other] { $rows } строк в буфере обмена
+    }
+table-headed = первая строка — заголовок
+table-not-headed = первая строка — данные: столбцы называются по номеру
+table-named-fields = этот формат сам называет свои поля: угадывать заголовок не нужно
 
 # Splitting and combining (SPEC 03 §9)
 split-title = Разрезать файл

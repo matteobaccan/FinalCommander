@@ -1243,6 +1243,10 @@ table-filtered = 剩下 { $rows } 行
 table-unfiltered = 恢复全部行
 table-cut-sorted = 仅前 { $rows } 行，这是已读取的全部
 table-too-many = 记录太多，无法在此排序或过滤
+table-copied = 已复制 { $rows } 行到剪贴板
+table-headed = 第一行是表头
+table-not-headed = 第一行是数据：列按编号命名
+table-named-fields = 此格式自带字段名：无需猜测表头
 
 # Splitting and combining (SPEC 03 §9)
 split-title = 分割文件

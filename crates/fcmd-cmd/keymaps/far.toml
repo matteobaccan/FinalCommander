@@ -760,6 +760,29 @@ keys = ["Ctrl+F7"]
 scope = "viewer"
 cmd = "viewer.table.filter"
 
+# Rows of a table marked the way files are in a panel — `Ins`, or `Shift` with an arrow — and
+# copied with the keys that copy everywhere else. `Ctrl+H` turns the guess about the heading
+# round: in a panel it shows what is hidden, here it shows the line the heading hid.
+[[bind]]
+keys = ["Ins", "Shift+Down"]
+scope = "viewer"
+cmd = "viewer.table.mark"
+
+[[bind]]
+keys = ["Shift+Up"]
+scope = "viewer"
+cmd = "viewer.table.mark.up"
+
+[[bind]]
+keys = ["Ctrl+C", "Ctrl+Ins"]
+scope = "viewer"
+cmd = "viewer.table.copy"
+
+[[bind]]
+keys = ["Ctrl+H"]
+scope = "viewer"
+cmd = "viewer.table.header"
+
 [[bind]]
 keys = ["Shift+F4"]
 scope = "viewer"

@@ -9883,6 +9883,62 @@ impl App {
                 }
                 self.set_status(msg);
             }
+            // `Ins` and `Shift` with an arrow mark rows of a table the way they mark files
+            // in a panel, and `Ctrl+C` copies what is marked — or the cursor's row — as
+            // tab-separated text a spreadsheet takes (SPEC 05 §1.11).
+            Command::ViewerTableMark | Command::ViewerTableMarkUp
+                if self.mode.viewer().is_some() =>
+            {
+                let step = if cmd == Command::ViewerTableMarkUp {
+                    -1
+                } else {
+                    1
+                };
+                if self
+                    .live_viewer_mut()
+                    .and_then(|v| v.table_mark(step))
+                    .is_none()
+                {
+                    let m = self.i18n.t("viewer-not-table");
+                    self.set_error(m);
+                }
+            }
+            Command::ViewerTableCopy if self.mode.viewer().is_some() => {
+                let Some((text, rows)) = self.live_viewer_mut().and_then(|v| v.table_copy()) else {
+                    let m = self.i18n.t("viewer-not-table");
+                    self.set_error(m);
+                    return;
+                };
+                if rows > 0 && self.copy_to_clipboard(&text) {
+                    let m = self
+                        .i18n
+                        .t_args("table-copied", &[("rows", (rows as i64).into())]);
+                    self.set_status(m);
+                }
+            }
+            Command::ViewerTableHeader if self.mode.viewer().is_some() => {
+                match self
+                    .live_viewer_mut()
+                    .map(|v| (v.mode, v.table_toggle_header()))
+                {
+                    Some((_, Some(headed))) => {
+                        let m = self.i18n.t(if headed {
+                            "table-headed"
+                        } else {
+                            "table-not-headed"
+                        });
+                        self.set_status(m);
+                    }
+                    Some((fcmd_view::Mode::Table, None)) => {
+                        let m = self.i18n.t("table-named-fields");
+                        self.set_error(m);
+                    }
+                    _ => {
+                        let m = self.i18n.t("viewer-not-table");
+                        self.set_error(m);
+                    }
+                }
+            }
             Command::ViewerTableFilter if self.mode.viewer().is_some() => {
                 let title = self.i18n.t("table-prompt-filter");
                 let now = self
@@ -23858,6 +23914,8 @@ fn is_viewer_movement(cmd: Command) -> bool {
             | Command::ViewerWrap
             | Command::ViewerHex
             | Command::ViewerMarkdown
+            | Command::ViewerTable
+            | Command::ViewerBase64
             | Command::ViewerFollowBranch
             | Command::ViewerBack
             | Command::ViewerStructure
@@ -38298,6 +38356,49 @@ abcdefghij
     /// `Ctrl+F3` sorts the table by the column the view is on and says so, `Ctrl+F7` keeps
     /// only the rows that hold what is typed, and neither writes a byte.
     #[test]
+    fn table_rows_marked_in_the_viewer_go_onto_the_clipboard() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("people.csv");
+        std::fs::write(&path, "name,town\nzoe,Torino\nadam,Asti\nmia,Trento\n").unwrap();
+        let mut app = app();
+        app.view_path(&path.display().to_string());
+        // A `.csv` opens as a table by itself.
+        press(&mut app, "Ins");
+        press(&mut app, "Shift+Down");
+        let _ = app.take_requests();
+        press(&mut app, "Ctrl+C");
+        let copied: Vec<String> = app
+            .take_requests()
+            .into_iter()
+            .filter_map(|r| match r {
+                Request::Clipboard { text } => Some(text),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            copied,
+            vec!["name\ttown\nzoe\tTorino\nadam\tAsti\n".to_string()]
+        );
+        assert!(app.status.contains('2'), "{}", app.status);
+
+        // `Ctrl+H`: the first line is data after all, and the status line says so.
+        press(&mut app, "Ctrl+H");
+        assert_eq!(app.status, app.i18n.t("table-not-headed"));
+        let rows = app.live_viewer_mut().map(|v| v.table_rows());
+        assert_eq!(rows, Some(4));
+
+        // Outside a table the keys say there is no table rather than doing nothing.
+        // `Shift+F3` goes back to the source — which it did not, until this test pressed it:
+        // the key never reached the viewer.
+        press(&mut app, "Shift+F3");
+        let mode = app.live_viewer_mut().map(|v| v.mode);
+        assert_eq!(mode, Some(fcmd_view::Mode::Text));
+        press(&mut app, "Ctrl+C");
+        assert!(app.status_error, "{}", app.status);
+        assert_eq!(app.status, app.i18n.t("viewer-not-table"));
+    }
+
+    #[test]
     fn the_table_sorts_and_filters_without_touching_the_file() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("people.csv");
@@ -38307,7 +38408,7 @@ abcdefghij
 
         let mut app = app();
         app.view_path(&path.display().to_string());
-        app.run(Command::ViewerTable);
+        // A `.csv` opens as a table by itself.
         let Some(viewer) = app.live_viewer_mut() else {
             panic!("the viewer is open")
         };

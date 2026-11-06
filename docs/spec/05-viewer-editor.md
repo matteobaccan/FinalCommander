@@ -487,6 +487,23 @@ loud as well. Both walk every record to read the key out of it, so above `MAX_VI
 (200 000) they refuse and say so rather than reading a million records for a keystroke: a table
 that large is one to query rather than to sort in a viewer.
 
+**A cursor, marks and a copy (0.38.0).** `↑`/`↓` move a cursor over the rows and the window
+follows it; `Ins` and `Shift+↓`/`Shift+↑` mark the cursor's row and move on, as in a panel, and
+`Ctrl+C`/`Ctrl+Ins` put the marked rows — or the cursor's — on the clipboard as tab-separated
+text with the heading first, the form a spreadsheet pastes into cells, quoting a cell that holds
+a tab, a newline or a quote. Marks are kept by record number, so a sort or a filter does not
+move them onto other records, and the copy follows the order on screen.
+
+**The heading is guessed, not assumed (0.38.0).** For delimited text the first record is a
+heading unless what is under it says otherwise: per column, where every cell below is a number a
+first cell that is one votes for data and one that is not votes for a heading; where the cells
+below share one length a first cell of another length votes for a heading; an empty first cell,
+or one whose value recurs below, votes for data. No vote either way is a heading, which is what
+nearly every export writes. Without one the columns are `#1`, `#2`… and the note says `no
+heading`; `Ctrl+H` turns the guess round and reparses. JSON Lines and dBase name their fields
+and have nothing to turn. The delimiters guessed are `,` `;` tab `|` and `^`, in that order on
+a tie.
+
 **Editing a cell stays out**, and that is the decision rather than a gap: a viewer that writes
 is an editor, and `F4` and the hex pane are where writing lives. Writing a cell back would also
 be three jobs rather than one — a line rewritten for CSV, fixed-length records and a memo file

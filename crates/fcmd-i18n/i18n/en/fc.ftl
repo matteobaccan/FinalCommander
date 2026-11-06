@@ -1277,6 +1277,14 @@ table-filtered = { $rows } rows left
 table-unfiltered = every row again
 table-cut-sorted = of the first { $rows } rows, which is all that was read
 table-too-many = too many records to sort or filter here
+table-copied =
+    { $rows ->
+        [one] one row on the clipboard
+       *[other] { $rows } rows on the clipboard
+    }
+table-headed = the first line is the heading
+table-not-headed = the first line is data: the columns are called by their number
+table-named-fields = this format names its own fields: there is no heading to guess
 
 # Splitting and combining (SPEC 03 §9)
 split-title = Split file

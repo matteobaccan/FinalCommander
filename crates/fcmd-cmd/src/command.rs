@@ -420,6 +420,14 @@ pub enum Command {
     ViewerTableSort,
     /// Keep only the table's rows that hold what is typed.
     ViewerTableFilter,
+    /// Mark the table row under the cursor, or take the mark off, and move down.
+    ViewerTableMark,
+    /// The same, moving up.
+    ViewerTableMarkUp,
+    /// The marked rows of the table, or the cursor's, onto the clipboard.
+    ViewerTableCopy,
+    /// The first line of delimited text is the heading, or it is data.
+    ViewerTableHeader,
     ViewerModeNext,
     ViewerSearch,
     ViewerSearchNext,
@@ -751,6 +759,10 @@ impl Command {
             Command::ViewerBase64,
             Command::ViewerTableSort,
             Command::ViewerTableFilter,
+            Command::ViewerTableMark,
+            Command::ViewerTableMarkUp,
+            Command::ViewerTableCopy,
+            Command::ViewerTableHeader,
             Command::ViewerModeNext,
             Command::ViewerSearch,
             Command::ViewerSearchNext,
@@ -1045,6 +1057,10 @@ impl Command {
             Command::ViewerTable => "viewer.table".into(),
             Command::ViewerBase64 => "viewer.base64".into(),
             Command::ViewerTableSort => "viewer.table.sort".into(),
+            Command::ViewerTableMark => "viewer.table.mark".into(),
+            Command::ViewerTableMarkUp => "viewer.table.mark.up".into(),
+            Command::ViewerTableCopy => "viewer.table.copy".into(),
+            Command::ViewerTableHeader => "viewer.table.header".into(),
             Command::ViewerTableFilter => "viewer.table.filter".into(),
             Command::ViewerModeNext => "viewer.mode.next".into(),
             Command::ViewerSearch => "viewer.search".into(),
@@ -1316,6 +1332,10 @@ impl Command {
             ("viewer.table", _) => Command::ViewerTable,
             ("viewer.base64", _) => Command::ViewerBase64,
             ("viewer.table.sort", _) => Command::ViewerTableSort,
+            ("viewer.table.mark", _) => Command::ViewerTableMark,
+            ("viewer.table.mark.up", _) => Command::ViewerTableMarkUp,
+            ("viewer.table.copy", _) => Command::ViewerTableCopy,
+            ("viewer.table.header", _) => Command::ViewerTableHeader,
             ("viewer.table.filter", _) => Command::ViewerTableFilter,
             ("viewer.mode.next", _) => Command::ViewerModeNext,
             ("viewer.search", _) => Command::ViewerSearch,

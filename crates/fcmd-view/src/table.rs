@@ -63,6 +63,12 @@ pub struct Table {
     /// Lines that were not records: a JSONL line that is not an object, a CSV row with more
     /// fields than the header. Counted rather than announced one at a time.
     pub skipped: usize,
+    /// The first line is the heading. Always so for a format that names its fields (JSON
+    /// Lines, dBase); for delimited text it is *guessed*, because an export without a heading
+    /// is as common as one with, and a guess the reader can turn round with one key.
+    pub headed: bool,
+    /// The delimiter the text was split on, guessed or not; `None` for a format that has none.
+    pub separator: Option<char>,
     /// The rows as the *view* shows them: one record index per visible row, and `None` while
     /// the view is the file's own order, so a table of a million records costs no index at
     /// all until somebody sorts or filters it (SPEC 05 §1.11).
@@ -122,6 +128,8 @@ impl Table {
             delimiter: None,
             cut,
             skipped: 0,
+            headed: true,
+            separator: None,
             order: None,
             sort: None,
             filter: None,
@@ -136,12 +144,17 @@ impl Table {
     /// Read a table out of text, by what the name says it is. `None` for a name that says
     /// nothing we can read.
     pub fn of(name: &str, text: &str) -> Option<Table> {
+        Table::of_with(name, text, None)
+    }
+
+    /// [`Table::of`], with the heading of delimited text decided rather than guessed.
+    pub fn of_with(name: &str, text: &str, header: Option<bool>) -> Option<Table> {
         let name = name.to_ascii_lowercase();
         if name.ends_with(".csv") {
-            return Some(Table::separated(text, None));
+            return Some(Table::separated_with(text, None, header));
         }
         if name.ends_with(".tsv") || name.ends_with(".tab") {
-            return Some(Table::separated(text, Some('\t')));
+            return Some(Table::separated_with(text, Some('\t'), header));
         }
         if name.ends_with(".jsonl") || name.ends_with(".ndjson") {
             return Some(Table::json_lines(text));
@@ -158,12 +171,21 @@ impl Table {
             .any(|ext| name.ends_with(ext))
     }
 
-    /// Delimiter-separated text, RFC 4180 quoting. `delimiter` is `None` to guess.
+    /// Delimiter-separated text, RFC 4180 quoting. `delimiter` is `None` to guess; whether
+    /// the first line is a heading is guessed too (see [`Table::separated_with`]).
     pub fn separated(text: &str, delimiter: Option<char>) -> Table {
+        Table::separated_with(text, delimiter, None)
+    }
+
+    /// Delimiter-separated text, with the heading decided rather than guessed when `header`
+    /// is `Some`. Without one the columns are called by their number and the first line is a
+    /// record like the others.
+    pub fn separated_with(text: &str, delimiter: Option<char>, header: Option<bool>) -> Table {
         let guessed = delimiter.is_none();
         let delimiter = delimiter.unwrap_or_else(|| sniff(text));
         let mut records = parse_separated(text, delimiter);
-        let header = if records.is_empty() {
+        let headed = header.unwrap_or_else(|| has_header(&records));
+        let header = if records.is_empty() || !headed {
             Vec::new()
         } else {
             records.remove(0).cells
@@ -177,6 +199,8 @@ impl Table {
             delimiter: guessed.then_some(delimiter),
             cut: false,
             skipped: 0,
+            headed,
+            separator: Some(delimiter),
             order: None,
             sort: None,
             filter: None,
@@ -261,6 +285,8 @@ impl Table {
             delimiter: None,
             cut: false,
             skipped,
+            headed: true,
+            separator: None,
             order: None,
             sort: None,
             filter: None,
@@ -359,7 +385,7 @@ impl Table {
 
     /// Which record a view row is, following whatever the view has been sorted or filtered
     /// to. The two are the same number until something sorts or filters.
-    fn record_of(&self, row: usize) -> Option<usize> {
+    pub fn record_of(&self, row: usize) -> Option<usize> {
         match &self.order {
             Some(order) => order.get(row).copied(),
             None => (row < self.records_len()).then_some(row),
@@ -746,7 +772,7 @@ fn truncate(cell: &str, width: usize) -> String {
 /// winner is the one that gives the same non-zero count on the most lines, because that is
 /// what a table *is*. Ties go to the order below, which is the order they are common in.
 fn sniff(text: &str) -> char {
-    const CANDIDATES: [char; 4] = [',', ';', '\t', '|'];
+    const CANDIDATES: [char; 5] = [',', ';', '\t', '|', '^'];
     let sample: String = text.chars().take(64 * 1024).collect();
     let mut best = (0usize, ',');
     for candidate in CANDIDATES {
@@ -768,6 +794,56 @@ fn sniff(text: &str) -> char {
         }
     }
     best.1
+}
+
+/// Is the first record a heading, or the first row of data?
+///
+/// A heading is words over the data, so the test is the columns whose data has a shape a
+/// word would break: where every cell below reads as a number, a first cell that is not one
+/// votes for a heading and a first cell that is one votes against; where the cells below all
+/// have one length (codes, dates, flags), a first cell of another length votes for it. A
+/// first line that repeats a value found under it is data. With no vote either way the first
+/// line is the heading, which is what nearly every export writes and what this mode always
+/// assumed.
+fn has_header(records: &[Row]) -> bool {
+    let Some((first, rest)) = records.split_first() else {
+        return true;
+    };
+    let rest: Vec<&Row> = rest.iter().take(HEADER_RECORDS).collect();
+    if rest.is_empty() {
+        return true;
+    }
+    // An empty cell in the first line is a column nobody named, which a heading rarely has
+    // and data often does.
+    let mut votes = 0i32;
+    for (c, head) in first.cells.iter().enumerate() {
+        let below: Vec<&str> = rest
+            .iter()
+            .filter_map(|r| r.cells.get(c).map(String::as_str))
+            .filter(|s| !s.trim().is_empty())
+            .collect();
+        if below.is_empty() {
+            continue;
+        }
+        let head = head.trim();
+        if head.is_empty() {
+            votes -= 1;
+            continue;
+        }
+        if below.contains(&head) {
+            votes -= 1;
+            continue;
+        }
+        if below.iter().all(|s| as_number(s).is_some()) {
+            votes += if as_number(head).is_some() { -1 } else { 1 };
+            continue;
+        }
+        let len = below[0].chars().count();
+        if below.len() > 1 && below.iter().all(|s| s.chars().count() == len) {
+            votes += if head.chars().count() == len { -1 } else { 1 };
+        }
+    }
+    votes >= 0
 }
 
 /// Records out of delimiter-separated text, RFC 4180: a field may be quoted with `"`, a
@@ -1269,6 +1345,41 @@ impl Charset {
 
 #[cfg(test)]
 pub(crate) mod tests {
+
+    #[test]
+    fn the_heading_is_guessed_from_what_is_under_it() {
+        // Words over numbers: a heading.
+        let t = Table::separated("name,size\na,10\nb,2000\n", None);
+        assert!(t.headed);
+        assert_eq!(t.columns, vec!["name", "size"]);
+        // Numbers over numbers: data, and the columns are called by their number.
+        let t = Table::separated("1,10\n2,20\n3,30\n", None);
+        assert!(!t.headed);
+        assert_eq!(t.columns, vec!["#1", "#2"]);
+        assert_eq!(t.len(), 3);
+        // Codes of one length under a longer word: a heading.
+        let t = Table::separated("country;code\nItaly;IT\nFrance;FR\n", None);
+        assert!(t.headed);
+        // A first line whose value turns up again below is data.
+        let t = Table::separated("red,apple\nred,cherry\ngreen,pear\n", None);
+        assert!(!t.headed);
+        // Text over text with nothing to go by: the heading every export writes.
+        let t = Table::separated("first,last\nAda,Lovelace\nAlan,Turing\n", None);
+        assert!(t.headed);
+        // And told rather than guessed.
+        let t = Table::separated_with("1,10\n2,20\n", None, Some(true));
+        assert!(t.headed);
+        assert_eq!(t.columns, vec!["1", "10"]);
+    }
+
+    #[test]
+    fn a_caret_is_a_delimiter() {
+        let t = Table::separated("name^size\na^10\nb^20\n", None);
+        assert_eq!(t.delimiter, Some('^'));
+        assert_eq!(t.separator, Some('^'));
+        assert_eq!(t.columns, vec!["name", "size"]);
+    }
+
     use super::*;
 
     /// A source with nothing in it: the text formats never read from it, and the tests that

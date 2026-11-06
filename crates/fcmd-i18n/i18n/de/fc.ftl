@@ -1267,6 +1267,14 @@ table-filtered = { $rows } Zeilen übrig
 table-unfiltered = wieder alle Zeilen
 table-cut-sorted = von den ersten { $rows } Zeilen, mehr wurde nicht gelesen
 table-too-many = zu viele Datensätze, um sie hier zu sortieren oder zu filtern
+table-copied =
+    { $rows ->
+        [one] eine Zeile in der Zwischenablage
+       *[other] { $rows } Zeilen in der Zwischenablage
+    }
+table-headed = die erste Zeile ist die Überschrift
+table-not-headed = die erste Zeile sind Daten: die Spalten heißen nach ihrer Nummer
+table-named-fields = dieses Format benennt seine Felder selbst: es gibt keine Überschrift zu raten
 
 # Splitting and combining (SPEC 03 §9)
 split-title = Datei teilen

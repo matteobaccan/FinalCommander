@@ -117,8 +117,17 @@ be predictable.
 
 `←` and `→` move the window sideways across a table wider than the screen, and stop where the
 last column ends rather than scrolling on into nothing. `Ctrl+←` and `Ctrl+→` jump a whole
-column at a time — a table has a unit for sideways that a wall of text has not. `Home` and
-`End` go to the first and the last screenful of rows.
+column at a time — a table has a unit for sideways that a wall of text has not. `↑` and `↓`
+move a cursor from row to row, and the rows scroll under it once it reaches the edge of the
+window; `Home` and `End` go to the first and the last row.
+
+Rows are marked the way files are in a panel: `Ins` or `Shift+↓` marks the row under the cursor
+and moves down, `Shift+↑` moves up, and the same key on a marked row takes the mark off.
+`Ctrl+C` (or `Ctrl+Ins`) puts the marked rows on the clipboard — the row under the cursor when
+none is marked — with the heading first, the cells separated by tabs, which is what a
+spreadsheet pastes into its own cells; a cell holding a tab, a line break or a quote is quoted
+so the paste comes apart in the same places. The rows keep their marks through a sort or a
+filter, and are copied in the order you see them.
 
 `Ctrl+F3` sorts the rows by the column you are on: once up, again down, a third time back to
 the order the file has them in. `Ctrl+F7` asks what a row has to hold and keeps only those
@@ -131,8 +140,16 @@ million records for one keystroke is not what this mode is for. Changing a cell 
 purpose: a viewer that writes is an editor, and `F4` is where that lives.
 
 The status line says what the file was read as, which delimiter was *guessed* — a comma, a
-semicolon, a tab or a bar, whichever gave a table — and how many rows and columns there are:
-that is how you can tell at a glance that the guess was right. A `.tsv` is not guessed at. For
+semicolon, a tab, a bar or a caret (`^`), whichever gave a table — and how many rows and
+columns there are: that is how you can tell at a glance that the guess was right. A `.tsv` is
+not guessed at.
+
+Whether the first line is a **heading** is guessed too, from what is under it: a word over a
+column of numbers, or over a column of codes that all have one length, is a heading; a number
+over numbers, or a value that turns up again further down, is data. A file with no heading
+shows its columns as `#1`, `#2`… and the status line says `no heading`. When the guess is
+wrong, `Ctrl+H` turns it round — the heading becomes the first row, or the first row the
+heading. JSON Lines and dBase name their own fields, so there is nothing for it to turn. For
 JSON Lines the columns are the keys of the first two hundred records, in the order they are
 written in the file; a record with a key that turned up later shows it in a last column called
 `…` rather than losing it, and a line that is not an object is counted at the end of the status
