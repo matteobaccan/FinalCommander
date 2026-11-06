@@ -597,20 +597,33 @@ completions (and every server that speaks it), Anthropic's messages, Ollama's ch
 
 ## 15. Git
 
-`Ctrl+Alt+G` (`tool.git`, *Commands → Git*) on a folder of this disk: a menu of what git can
-say about the repository the panel is in. It runs the `git` on the machine — no library, no
-second idea of what a repository is — on the worker, and shows git's own error when it fails
-(not a repository, no git installed).
+`Ctrl+Alt+G` (`tool.git`, *Commands → Git*) on a folder of this disk, and `F2` inside any of
+the git panels: a menu of what git can do with the repository the panel is in. It runs the
+`git` on the machine — no library, no second idea of what a repository is — on the worker,
+and shows git's own error when it fails (not a repository, no git installed, a switch over
+uncommitted work). Everything it shows is a **panel**, three of them, each a temporary panel
+with an origin of its own and a key bar that says what its keys do there:
 
-* **What changed**: `git status --porcelain -z`, untracked files included, as a temporary panel
-  (`:git`) of the real files, each row its two-letter status and its path from the top of the
-  work tree — `" M src/app.rs"`, `"?? notes.txt"` — so a sort by name groups the kinds and
-  `F3`, `F4`, `F5`, `F8` work on the files. A rename shows its new name.
-* **The log**: the last 500 commits, one line each — hash, date, author, subject — in the
-  viewer.
-* **Blame** of the file under the cursor, in the viewer.
-* **Branches**: a list with the one checked out marked. `Enter` puts `git switch <name>` on
-  the command line to be read and run; nothing that changes the work tree runs from a list.
+* **What changed** (`:git`): `git status --porcelain -z`, untracked files included, as the real
+  files, each row its two-letter status and its path from the top of the work tree —
+  `"M  src/app.rs"`, `" M notes.md"`, `"?? new.txt"` — the left letter the index (staged), the
+  right the work tree; the title counts both. `F3` is the diff (`git diff`, or `--cached` when
+  only the index differs; an untracked or newly added file is read instead), `F4` edits, `F5`
+  stages (`git add --`), `F6` unstages (`git restore --staged --`), both on the selection or
+  the row, `F7` commits after a prompt for the message (`git commit -m`, an empty message
+  refused before git is asked), `F8` is the file's log.
+* **Branches** (`:gitbranches`): the local branches, the current one marked. `Enter` on another
+  asks and then runs `git switch`; `F3` is that branch's log.
+* **The log** (`:gitlog`): up to a thousand commits, newest first and kept in git's order (the
+  panel is unsorted), one row each — hash, date, author, subject — of the repository, a branch,
+  or one file (`--follow`). `Enter` or `F3` shows a commit with `git show --stat --patch`.
+
+`Blame` opens in the viewer. **Pull** and **push** run in the background with
+`GIT_TERMINAL_PROMPT=0` and, unless one is set, `GIT_SSH_COMMAND="ssh -o BatchMode=yes"`, so
+a credential git would ask for fails with git's message instead of a prompt on the screen fcmd
+draws on; the status line carries the last line git said. Anything that changes the
+repository — stage, unstage, commit, switch, pull — asks git for the panel's view again, and
+`Ctrl+R` does the same rather than re-reading the rows as files.
 
 ## 16. The system log
 

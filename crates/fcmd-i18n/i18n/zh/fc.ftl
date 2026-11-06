@@ -1322,10 +1322,8 @@ git-local-only = git 只能用于本机磁盘上的文件夹。
 git-running = 正在询问 git…
 git-failed = git：{ $why }
 git-clean = 没有任何改动。
-git-status-title = 已改动：{ $count }
-git-switch-ready = 按回车执行：命令行上的 git switch。
+git-status-title = 已改动：已暂存 { $staged }，未暂存 { $unstaged }
 git-hint = 回车：选择 · Esc：关闭
-git-branches-hint = 回车：把 git switch 放到命令行 · Esc：关闭
 
 ## The editor's character list and word completion.
 charmap-title = 字符
@@ -1450,3 +1448,28 @@ plugins-card-brings = 包含
 plugins-card-commands = 命令 (F11)：
 plugins-card-notes = 加载时的提示：
 plugins-none = 未找到插件 · 插件位于 { $dir }，每个一个文件夹，内含 plugin.toml
+
+# The git panel
+git-file-log = { $name } 的日志
+git-commit = 提交已暂存的内容…
+git-pull = 拉取
+git-push = 推送
+git-pushing = 正在推送…
+git-pulling = 正在拉取…
+git-commit-prompt = 提交说明
+git-commit-empty = 提交需要一条说明。
+git-already-on = { $branch } 是当前分支。
+git-switch-ask = 切换到 { $branch }？两个分支不同的文件会在磁盘上改变。
+git-done = git：{ $said }
+git-branches-title = 分支：{ $count }
+git-log-title = 日志：{ $count }
+git-log-of-title = { $of } 的日志：{ $count }
+btn-switch = 切换
+key-git = Git
+key-git-diff = 差异
+key-git-stage = 暂存
+key-git-unstage = 取消暂存
+key-git-commit = 提交
+key-git-history = 历史
+key-git-show = 查看
+key-git-log = 日志

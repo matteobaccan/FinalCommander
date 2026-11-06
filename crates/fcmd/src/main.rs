@@ -4302,13 +4302,21 @@ fn read_syslog() -> Result<std::path::PathBuf, String> {
 
 /// Run git in `cwd` and say what it said, its own error included when it failed.
 fn git(cwd: &std::path::Path, args: &[&str]) -> Result<String, String> {
-    let out = std::process::Command::new("git")
+    let mut command = std::process::Command::new("git");
+    command
         .arg("-C")
         .arg(cwd)
         .args(args)
         .stdin(std::process::Stdio::null())
-        .output()
-        .map_err(|e| format!("git: {e}"))?;
+        // Never a question on the terminal fcmd is drawing on: a push or a pull that needs a
+        // password fails and says so, and the help says to run it in the terminal instead.
+        // `ssh` asks on `/dev/tty` whatever stdin is, so it is told not to ask at all —
+        // unless whoever runs fcmd has set their own ssh command, which is theirs to keep.
+        .env("GIT_TERMINAL_PROMPT", "0");
+    if std::env::var_os("GIT_SSH_COMMAND").is_none() {
+        command.env("GIT_SSH_COMMAND", "ssh -o BatchMode=yes");
+    }
+    let out = command.output().map_err(|e| format!("git: {e}"))?;
     if !out.status.success() {
         let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
         return Err(if err.is_empty() {
@@ -4318,6 +4326,24 @@ fn git(cwd: &std::path::Path, args: &[&str]) -> Result<String, String> {
         });
     }
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+/// The first line of what git said that has something on it.
+fn first_line_of(text: &str) -> String {
+    text.lines()
+        .map(str::trim)
+        .find(|l| !l.is_empty())
+        .unwrap_or("")
+        .to_string()
+}
+
+/// The last such line: where `git push` and `git pull` say what happened in the end.
+fn last_line_of(text: &str) -> String {
+    text.lines()
+        .map(str::trim)
+        .rfind(|l| !l.is_empty())
+        .unwrap_or("")
+        .to_string()
 }
 
 /// What the git menu asked for (SPEC 06 §15). The texts go into this session's temporary
@@ -4353,19 +4379,110 @@ fn run_git(cwd: &std::path::Path, what: &app::GitAsk) -> Result<app::GitOut, Str
             }
             Ok(GitOut::Status { root, files })
         }
-        GitAsk::Log => text(
-            "git-log.txt",
+        GitAsk::Log { file, rev } => {
+            // One commit per record, its fields apart: a subject may hold anything but the
+            // unit separator.
+            let mut args: Vec<String> = vec![
+                "log".into(),
+                "-n".into(),
+                "1000".into(),
+                "--date=short".into(),
+                "--format=%h%x1f%ad%x1f%an%x1f%s".into(),
+            ];
+            if let Some(rev) = rev {
+                args.push(rev.clone());
+            }
+            if let Some(file) = file {
+                args.push("--follow".into());
+                args.push("--".into());
+                args.push(file.display().to_string());
+            }
+            let args: Vec<&str> = args.iter().map(String::as_str).collect();
+            let out = git(&root, &args)?;
+            Ok(GitOut::Log(
+                out.lines()
+                    .filter_map(|line| {
+                        let mut f = line.splitn(4, '\u{1f}');
+                        Some(app::GitCommit {
+                            hash: f.next()?.to_string(),
+                            date: f.next()?.to_string(),
+                            author: f.next()?.to_string(),
+                            subject: f.next().unwrap_or("").to_string(),
+                        })
+                    })
+                    .collect(),
+            ))
+        }
+        GitAsk::Show(hash) => text(
+            &format!("commit-{hash}.diff"),
             git(
                 &root,
-                &[
-                    "log",
-                    "-n",
-                    "500",
-                    "--date=short",
-                    "--format=%h %ad %<(16,trunc)%an %s",
-                ],
+                &["show", "--stat", "--patch", "--format=fuller", hash],
             )?,
         ),
+        GitAsk::Diff { file, staged } => {
+            let name = file
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            let path = file.display().to_string();
+            let mut args = vec!["diff"];
+            if *staged {
+                args.push("--cached");
+            }
+            args.push("--");
+            args.push(&path);
+            let body = git(&root, &args)?;
+            if body.trim().is_empty() {
+                return Err(format!("{name}: no difference to show"));
+            }
+            text(&format!("{name}.diff"), body)
+        }
+        GitAsk::Stage(files) | GitAsk::Unstage(files) => {
+            let mut args: Vec<String> = match what {
+                GitAsk::Stage(_) => vec!["add".into(), "--".into()],
+                _ => vec!["restore".into(), "--staged".into(), "--".into()],
+            };
+            args.extend(files.iter().map(|f| f.display().to_string()));
+            let args: Vec<&str> = args.iter().map(String::as_str).collect();
+            git(&root, &args)?;
+            Ok(GitOut::Done(files.len().to_string()))
+        }
+        GitAsk::Commit(message) => {
+            let out = git(&root, &["commit", "-m", message])?;
+            Ok(GitOut::Done(first_line_of(&out)))
+        }
+        GitAsk::Push | GitAsk::Pull => {
+            let verb = if matches!(what, GitAsk::Push) {
+                "push"
+            } else {
+                "pull"
+            };
+            let out = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&root)
+                .arg(verb)
+                .stdin(std::process::Stdio::null())
+                .env("GIT_TERMINAL_PROMPT", "0")
+                .envs(
+                    std::env::var_os("GIT_SSH_COMMAND")
+                        .is_none()
+                        .then_some(("GIT_SSH_COMMAND", "ssh -o BatchMode=yes")),
+                )
+                .output()
+                .map_err(|e| format!("git: {e}"))?;
+            // Both streams: git writes its progress and its summary to stderr.
+            let mut said = String::from_utf8_lossy(&out.stdout).into_owned();
+            said.push_str(&String::from_utf8_lossy(&out.stderr));
+            if !out.status.success() {
+                return Err(last_line_of(&said));
+            }
+            Ok(GitOut::Done(last_line_of(&said)))
+        }
+        GitAsk::Switch(branch) => {
+            git(&root, &["switch", branch])?;
+            Ok(GitOut::Done(branch.clone()))
+        }
         GitAsk::Blame(file) => {
             let name = file
                 .file_name()
@@ -6241,12 +6358,13 @@ dir_attr = "D"
                 ("??".to_string(), "sub/new.txt".to_string())
             ]
         );
-        let Ok(app::GitOut::Text(log)) = run_git(root, &app::GitAsk::Log) else {
+        let log = |file: Option<std::path::PathBuf>| app::GitAsk::Log { file, rev: None };
+        let Ok(app::GitOut::Log(commits)) = run_git(root, &log(None)) else {
             panic!("a log")
         };
-        assert!(std::fs::read_to_string(&log)
-            .unwrap()
-            .contains("first commit"));
+        assert_eq!(commits.len(), 1);
+        assert_eq!(commits[0].subject, "first commit");
+        assert_eq!(commits[0].author, "T");
         let Ok(app::GitOut::Branches(b)) = run_git(root, &app::GitAsk::Branches) else {
             panic!("branches")
         };
@@ -6254,6 +6372,66 @@ dir_attr = "D"
             b,
             [("main".to_string(), true), ("other".to_string(), false)]
         );
+
+        // What changed in a file, staged and not.
+        let a = root.join("a.txt");
+        let diff = |staged| app::GitAsk::Diff {
+            file: a.clone(),
+            staged,
+        };
+        let Ok(app::GitOut::Text(d)) = run_git(root, &diff(false)) else {
+            panic!("a diff")
+        };
+        assert!(std::fs::read_to_string(&d).unwrap().contains("+two"));
+        assert!(run_git(root, &diff(true)).is_err(), "nothing staged yet");
+        run_git(root, &app::GitAsk::Stage(vec![a.clone()])).unwrap();
+        let Ok(app::GitOut::Status { files, .. }) = run_git(root, &app::GitAsk::Status) else {
+            panic!("a status")
+        };
+        assert!(
+            files.contains(&("M ".to_string(), "a.txt".to_string())),
+            "{files:?}"
+        );
+        assert!(run_git(root, &diff(true)).is_ok(), "staged now");
+        run_git(root, &app::GitAsk::Unstage(vec![a.clone()])).unwrap();
+        let Ok(app::GitOut::Status { files, .. }) = run_git(root, &app::GitAsk::Status) else {
+            panic!("a status")
+        };
+        assert!(
+            files.contains(&(" M".to_string(), "a.txt".to_string())),
+            "{files:?}"
+        );
+
+        // A commit, the file's own log, and the commit itself.
+        run_git(root, &app::GitAsk::Stage(vec![a.clone()])).unwrap();
+        let Ok(app::GitOut::Done(said)) =
+            run_git(root, &app::GitAsk::Commit("second commit".into()))
+        else {
+            panic!("a commit")
+        };
+        assert!(said.contains("second commit"), "{said}");
+        let Ok(app::GitOut::Log(commits)) = run_git(root, &log(Some(a.clone()))) else {
+            panic!("a file's log")
+        };
+        assert_eq!(commits.len(), 2);
+        assert_eq!(commits[0].subject, "second commit", "newest first");
+        let Ok(app::GitOut::Text(shown)) =
+            run_git(root, &app::GitAsk::Show(commits[0].hash.clone()))
+        else {
+            panic!("a commit shown")
+        };
+        assert!(std::fs::read_to_string(&shown).unwrap().contains("+two"));
+
+        // And switching: the file goes back to what the other branch has.
+        let _ = std::fs::remove_dir_all(root.join("sub"));
+        run_git(root, &app::GitAsk::Switch("other".into())).unwrap();
+        assert_eq!(std::fs::read_to_string(&a).unwrap(), "one\n");
+        let Ok(app::GitOut::Branches(b)) = run_git(root, &app::GitAsk::Branches) else {
+            panic!("branches")
+        };
+        assert!(b.contains(&("other".to_string(), true)));
+        // A push with nowhere to go fails and says so, rather than waiting for a password.
+        assert!(run_git(root, &app::GitAsk::Push).is_err());
         let elsewhere = tempfile::tempdir().unwrap();
         assert!(
             run_git(elsewhere.path(), &app::GitAsk::Status).is_err(),

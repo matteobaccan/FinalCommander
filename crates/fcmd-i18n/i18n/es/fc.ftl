@@ -1346,10 +1346,8 @@ git-local-only = git trabaja con una carpeta de este disco.
 git-running = Preguntando a git…
 git-failed = git: { $why }
 git-clean = No ha cambiado nada.
-git-status-title = Cambiados: { $count }
-git-switch-ready = Intro lo ejecuta: git switch, en la línea de órdenes.
+git-status-title = Cambiados: { $staged } preparados, { $unstaged } no
 git-hint = Intro: elegir · Esc: cerrar
-git-branches-hint = Intro: git switch en la línea de órdenes · Esc: cerrar
 
 ## The editor's character list and word completion.
 charmap-title = Caracteres
@@ -1474,3 +1472,28 @@ plugins-card-brings = Trae
 plugins-card-commands = Órdenes (F11):
 plugins-card-notes = Dicho al cargar:
 plugins-none = no se encontraron plugins · van en { $dir }, una carpeta cada uno con un plugin.toml
+
+# The git panel
+git-file-log = El log de { $name }
+git-commit = Hacer commit de lo preparado…
+git-pull = Pull
+git-push = Push
+git-pushing = Haciendo push…
+git-pulling = Haciendo pull…
+git-commit-prompt = El mensaje del commit
+git-commit-empty = Un commit necesita un mensaje.
+git-already-on = { $branch } es la rama en la que estás.
+git-switch-ask = ¿Cambiar a { $branch }? Los archivos en que las dos ramas difieren cambian en el disco.
+git-done = git: { $said }
+git-branches-title = Ramas: { $count }
+git-log-title = Log: { $count }
+git-log-of-title = Log de { $of }: { $count }
+btn-switch = Cambiar
+key-git = Git
+key-git-diff = Diff
+key-git-stage = Stage
+key-git-unstage = Unstage
+key-git-commit = Commit
+key-git-history = Historia
+key-git-show = Ver
+key-git-log = Log

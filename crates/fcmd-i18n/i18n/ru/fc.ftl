@@ -1346,10 +1346,8 @@ git-local-only = git работает с папкой на этом диске.
 git-running = Спрашиваю git…
 git-failed = git: { $why }
 git-clean = Ничего не изменилось.
-git-status-title = Изменено: { $count }
-git-switch-ready = Enter выполнит: git switch в командной строке.
+git-status-title = Изменено: { $staged } в индексе, { $unstaged } нет
 git-hint = Enter: выбрать · Esc: закрыть
-git-branches-hint = Enter: git switch в командную строку · Esc: закрыть
 
 ## The editor's character list and word completion.
 charmap-title = Символы
@@ -1474,3 +1472,28 @@ plugins-card-brings = Даёт
 plugins-card-commands = Команды (F11):
 plugins-card-notes = Сообщено при загрузке:
 plugins-none = плагины не найдены · они лежат в { $dir }, каждый в своей папке с plugin.toml
+
+# The git panel
+git-file-log = Журнал { $name }
+git-commit = Закоммитить подготовленное…
+git-pull = Pull
+git-push = Push
+git-pushing = Push…
+git-pulling = Pull…
+git-commit-prompt = Сообщение коммита
+git-commit-empty = Коммиту нужно сообщение.
+git-already-on = { $branch } — текущая ветка.
+git-switch-ask = Перейти на { $branch }? Файлы, в которых ветки расходятся, изменятся на диске.
+git-done = git: { $said }
+git-branches-title = Ветки: { $count }
+git-log-title = Журнал: { $count }
+git-log-of-title = Журнал { $of }: { $count }
+btn-switch = Перейти
+key-git = Git
+key-git-diff = Разн
+key-git-stage = Индекс
+key-git-unstage = Убрать
+key-git-commit = Коммит
+key-git-history = История
+key-git-show = Показ
+key-git-log = Журнал

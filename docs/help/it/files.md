@@ -435,13 +435,40 @@ si può cambiare dal pannello.
 
 # Git
 
-`Ctrl+Alt+G` — *Comandi → Git* — in una cartella che sta in un repository git offre quattro
-cose. *Cosa è cambiato* trasforma il pannello nei file cambiati, ogni riga col suo stato come lo
-scrive `git status --short` (` M` modificato, `??` nuovo, `D ` cancellato e in stage, …), e sono
-i file veri, quindi `F3`, `F4` e `F5` ci lavorano. *Il log* e *Blame* del file sotto il cursore
-si aprono nel visualizzatore. *Branch* li elenca con quello attuale segnato; `Invio` mette
-`git switch` per quello sotto il cursore sulla riga di comando, da eseguire tu. Risponde il
+`Ctrl+Alt+G` — *Comandi → Git* — in una cartella che sta in un repository git apre il menu di
+git, e tutto quello che c'è dentro è un pannello in cui lavori con i tasti funzione. Risponde il
 `git` installato sulla macchina.
+
+**Cosa è cambiato** trasforma il pannello nei file cambiati, ogni riga col suo stato come lo
+scrive `git status --short`: la **lettera di sinistra è quello che è in staging**, quella di
+destra quello che è cambiato e non è in staging (`M ` in staging, ` M` non ancora, `MM`
+entrambi, `??` nuovo, `D ` cancellato). Il titolo li conta tutti e due. Sono i file veri, e i
+tasti sono quelli che mostra la barra:
+
+| Tasto | In *cosa è cambiato* |
+| --- | --- |
+| `F3` | cosa è cambiato nel file — nella copia di lavoro, o quello che è in staging quando c'è solo quello; un file nuovo si vede com'è |
+| `F4` | modifica il file |
+| `F5` | mette in staging i file selezionati, o quello sotto il cursore (`git add`) |
+| `F6` | li toglie dallo staging (`git restore --staged`) |
+| `F7` | committa quello che è in staging, dopo aver chiesto il messaggio |
+| `F8` | il log del file, ogni commit che l'ha toccato |
+| `F2` | il menu di git: gli altri pannelli, blame, pull e push |
+| `Ctrl+R` | richiede a git |
+
+**Branch** è un pannello dei branch locali con quello attuale segnato `*`. `Invio` su un altro
+ci passa, dopo aver chiesto — i file su cui i due branch non sono d'accordo cambiano su disco —
+e `F3` è il log di quel branch. **Il log** è un pannello di commit, dal più recente — hash,
+data, autore, oggetto — e `Invio` o `F3` su uno lo mostra intero, con la sua patch, nel
+visualizzatore; il log di un solo file viene da `F8` in *cosa è cambiato* o dal menu. **Blame**
+del file sotto il cursore si apre nel visualizzatore.
+
+**Pull** e **push** girano in sottofondo e la riga di stato dice cosa ha detto git alla fine.
+Non si fermano mai a chiedere una password su questo schermo: uno che ne ha bisogno fallisce e
+lo dice — eseguilo una volta nel terminale (`Ctrl+Alt+E`), o dai a git un credential helper o
+un agent ssh, e da lì in poi funziona anche da qui. Quello che git rifiuta — un cambio di branch
+sopra modifiche non committate, un commit senza niente in staging — è il messaggio di git stesso
+sulla riga di stato.
 
 # File di posta
 

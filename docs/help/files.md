@@ -413,13 +413,38 @@ view and edit the whole document; nothing inside can be changed from the panel.
 
 # Git
 
-`Ctrl+Alt+G` — *Commands → Git* — in a folder that is in a git repository offers four things.
-*What changed* turns the panel into the changed files, each row starting with its status as
-`git status --short` writes it (` M` modified, `??` new, `D ` deleted and staged, …), and they
-are the real files, so `F3`, `F4` and `F5` work on them. *The log* and *Blame* of the file
-under the cursor open in the viewer. *Branches* lists them with the current one marked;
-`Enter` puts `git switch` for the one under the cursor on the command line, for you to run.
-It is the `git` installed on the machine that answers.
+`Ctrl+Alt+G` — *Commands → Git* — in a folder that is in a git repository opens the git menu,
+and everything in it is a panel you work in with the function keys. It is the `git` installed
+on the machine that answers.
+
+**What changed** turns the panel into the changed files, each row starting with its status as
+`git status --short` writes it: the **left letter is what is staged**, the right one what is
+changed and not staged (`M ` staged, ` M` not yet, `MM` both, `??` new, `D ` deleted). The
+title counts both. They are the real files, and the keys are the ones the bar shows:
+
+| Key | In *what changed* |
+| --- | --- |
+| `F3` | what changed in the file — in the work tree, or what is staged when only that; a new file is shown as it is |
+| `F4` | edit the file |
+| `F5` | stage the selected files, or the one under the cursor (`git add`) |
+| `F6` | unstage them (`git restore --staged`) |
+| `F7` | commit what is staged, after asking for the message |
+| `F8` | the file's own log, every commit that touched it |
+| `F2` | the git menu: the other panels, blame, pull and push |
+| `Ctrl+R` | ask git again |
+
+**Branches** is a panel of the local branches with the current one marked `*`. `Enter` on
+another switches to it, after asking — the files the two branches disagree on change on disk —
+and `F3` is that branch's log. **The log** is a panel of commits, newest first — hash, date,
+author, subject — and `Enter` or `F3` on one shows it whole, with its patch, in the viewer; the
+log of one file comes from `F8` in *what changed* or from the menu. **Blame** of the file under
+the cursor opens in the viewer.
+
+**Pull** and **push** run in the background and the status line says what git said at the
+end. They never stop to ask for a password on this screen: one that needs it fails and says so
+— run it once in the terminal (`Ctrl+Alt+E`), or give git a credential helper or an ssh agent,
+and from then on it works from here. Anything git refuses — a switch over uncommitted changes,
+a commit with nothing staged — is git's own message on the status line.
 
 # Mail files
 

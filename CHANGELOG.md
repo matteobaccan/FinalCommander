@@ -4,6 +4,23 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
+## [Unreleased]
+
+### Added
+
+- **Git in panels.** `Ctrl+Alt+G` opens a menu — what changed, branches, the log, the log of a
+  file, blame, commit, pull, push — and what it shows are panels you work in. *What changed*
+  lists the changed files with their two-letter status (staged on the left, not staged on the
+  right): `F3` shows the diff, `F4` edits, `F5` stages and `F6` unstages the selection, `F7`
+  commits after asking for the message, `F8` is the file's log. *Branches* lists the local
+  branches; `Enter` switches after asking, `F3` is that branch's log. *The log* lists commits
+  newest first, and `Enter` shows one with its patch. Pull and push run in the background and
+  never stop for a password: one that needs it fails with git's message.
+
+### Removed
+
+- The branch picker that put `git switch` on the command line: the branches panel replaces it.
+
 ## [0.37.0] - 2026-11-06
 
 ### Changed

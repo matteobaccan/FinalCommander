@@ -1346,10 +1346,8 @@ git-local-only = git travaille sur un dossier de ce disque.
 git-running = Je demande à git…
 git-failed = git : { $why }
 git-clean = Rien n'a changé.
-git-status-title = Modifiés : { $count }
-git-switch-ready = Entrée l'exécute : git switch, sur la ligne de commande.
+git-status-title = Modifiés : { $staged } indexés, { $unstaged } non
 git-hint = Entrée : choisir · Échap : fermer
-git-branches-hint = Entrée : git switch sur la ligne de commande · Échap : fermer
 
 ## The editor's character list and word completion.
 charmap-title = Caractères
@@ -1474,3 +1472,28 @@ plugins-card-brings = Apporte
 plugins-card-commands = Commandes (F11) :
 plugins-card-notes = Signalé au chargement :
 plugins-none = aucun plugin trouvé · ils se trouvent dans { $dir }, un dossier chacun avec un plugin.toml
+
+# The git panel
+git-file-log = Le journal de { $name }
+git-commit = Valider ce qui est indexé…
+git-pull = Pull
+git-push = Push
+git-pushing = Push en cours…
+git-pulling = Pull en cours…
+git-commit-prompt = Le message du commit
+git-commit-empty = Un commit demande un message.
+git-already-on = { $branch } est la branche courante.
+git-switch-ask = Passer à { $branch } ? Les fichiers sur lesquels les deux branches diffèrent changent sur le disque.
+git-done = git : { $said }
+git-branches-title = Branches : { $count }
+git-log-title = Journal : { $count }
+git-log-of-title = Journal de { $of } : { $count }
+btn-switch = Changer
+key-git = Git
+key-git-diff = Diff
+key-git-stage = Indexer
+key-git-unstage = Désindex
+key-git-commit = Commit
+key-git-history = Histoire
+key-git-show = Voir
+key-git-log = Journal

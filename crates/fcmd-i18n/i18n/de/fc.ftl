@@ -1346,10 +1346,8 @@ git-local-only = git arbeitet mit einem Ordner auf dieser Platte.
 git-running = Frage git…
 git-failed = git: { $why }
 git-clean = Nichts geändert.
-git-status-title = Geändert: { $count }
-git-switch-ready = Enter führt es aus: git switch, in der Befehlszeile.
+git-status-title = Geändert: { $staged } bereitgestellt, { $unstaged } nicht
 git-hint = Enter: wählen · Esc: schließen
-git-branches-hint = Enter: git switch in die Befehlszeile · Esc: schließen
 
 ## The editor's character list and word completion.
 charmap-title = Zeichen
@@ -1474,3 +1472,28 @@ plugins-card-brings = Bringt
 plugins-card-commands = Befehle (F11):
 plugins-card-notes = Beim Laden gemeldet:
 plugins-none = keine Plugins gefunden · sie liegen in { $dir }, je ein Ordner mit plugin.toml
+
+# The git panel
+git-file-log = Das Log von { $name }
+git-commit = Bereitgestelltes committen…
+git-pull = Pull
+git-push = Push
+git-pushing = Push läuft…
+git-pulling = Pull läuft…
+git-commit-prompt = Die Commit-Nachricht
+git-commit-empty = Ein Commit braucht eine Nachricht.
+git-already-on = { $branch } ist der aktuelle Branch.
+git-switch-ask = Zu { $branch } wechseln? Die Dateien, in denen sich die Branches unterscheiden, ändern sich auf der Platte.
+git-done = git: { $said }
+git-branches-title = Branches: { $count }
+git-log-title = Log: { $count }
+git-log-of-title = Log von { $of }: { $count }
+btn-switch = Wechseln
+key-git = Git
+key-git-diff = Diff
+key-git-stage = Stage
+key-git-unstage = Unstage
+key-git-commit = Commit
+key-git-history = Verlauf
+key-git-show = Zeigen
+key-git-log = Log

@@ -1356,10 +1356,8 @@ git-local-only = git works on a folder on this disk.
 git-running = Asking git…
 git-failed = git: { $why }
 git-clean = Nothing has changed.
-git-status-title = Changed: { $count }
-git-switch-ready = Enter runs it: git switch, on the command line.
+git-status-title = Changed: { $staged } staged, { $unstaged } not
 git-hint = Enter: choose · Esc: close
-git-branches-hint = Enter: put git switch on the command line · Esc: close
 
 ## The editor's character list and word completion.
 charmap-title = Characters
@@ -1484,3 +1482,28 @@ plugins-card-brings = Brings
 plugins-card-commands = Commands (F11):
 plugins-card-notes = Said while loading:
 plugins-none = no plugins found · they live in { $dir }, one folder each with a plugin.toml
+
+# The git panel
+git-file-log = The log of { $name }
+git-commit = Commit what is staged…
+git-pull = Pull
+git-push = Push
+git-pushing = Pushing…
+git-pulling = Pulling…
+git-commit-prompt = The commit message
+git-commit-empty = A commit wants a message.
+git-already-on = { $branch } is the branch you are on.
+git-switch-ask = Switch to { $branch }? The files the two branches disagree on change on disk.
+git-done = git: { $said }
+git-branches-title = Branches: { $count }
+git-log-title = Log: { $count }
+git-log-of-title = Log of { $of }: { $count }
+btn-switch = Switch
+key-git = Git
+key-git-diff = Diff
+key-git-stage = Stage
+key-git-unstage = Unstage
+key-git-commit = Commit
+key-git-history = History
+key-git-show = Show
+key-git-log = Log
