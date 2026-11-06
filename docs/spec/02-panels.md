@@ -163,7 +163,11 @@ columns = [
 ```
 
 Column types: `name`, `ext`, `size`, `allocated`, `mtime`, `btime`, `atime`, `attrs`, `owner`,
-`group`, `links`, `descr` — the same fields the built-in modes draw, and a set that asks for
+`group`, `links`, `descr`, `git` — the same fields the built-in modes draw, plus (0.39.0) where
+the row stands in its git repository: a file's own two letters from `git status
+--porcelain=v1 -z --ignored=matching -- .`, read once per listing on a thread of its own, and
+for a directory `M` when anything under it is changed, `??` when all of it is new, `!!` when it
+is ignored; the same map is the `git` sort key, changed before clean. A set that asks for
 one of the four a listing does not carry (the owner, the group, the link count, the
 description) puts the same worker to work as the view that shows it, with a row the answer has
 not reached yet drawn blank.

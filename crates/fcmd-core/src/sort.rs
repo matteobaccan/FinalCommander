@@ -17,6 +17,9 @@ pub enum SortKey {
     /// with the ones that have nothing to say.
     Descr,
     Owner,
+    /// Where the file stands in its git repository, from the same worker the `git` column
+    /// asks: the changed and the new before the clean (0.39.0).
+    Git,
     Unsorted,
 }
 
@@ -30,6 +33,7 @@ pub enum SortKey {
 pub struct Side<'a> {
     pub descr: &'a str,
     pub owner: &'a str,
+    pub git: &'a str,
 }
 
 impl SortKey {
@@ -43,6 +47,7 @@ impl SortKey {
             SortKey::ATime => "atime",
             SortKey::Descr => "descr",
             SortKey::Owner => "owner",
+            SortKey::Git => "git",
             SortKey::Unsorted => "none",
         }
     }
@@ -200,9 +205,10 @@ impl Sort {
     /// the answer is yes: a lookup per row for a field nobody is sorting by is a lookup for
     /// nothing.
     pub fn needs_side(&self) -> bool {
-        matches!(self.key, SortKey::Descr | SortKey::Owner)
+        matches!(self.key, SortKey::Descr | SortKey::Owner | SortKey::Git)
             || self.asks(SortKey::Descr)
             || self.asks(SortKey::Owner)
+            || self.asks(SortKey::Git)
     }
 
     /// Is this key the one being sorted by, or one of the tie-breakers after it?
@@ -302,6 +308,7 @@ impl Sort {
             // those three and then the rest, which is what the key is for.
             SortKey::Descr => self.cmp_side(sa.descr, sb.descr),
             SortKey::Owner => self.cmp_side(sa.owner, sb.owner),
+            SortKey::Git => self.cmp_side(sa.git, sb.git),
             SortKey::Unsorted => Ordering::Equal,
         }
     }

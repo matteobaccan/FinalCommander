@@ -276,6 +276,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         "col-group",
         "col-descr",
         "col-links",
+        "col-git",
     ]
     .map(|id| app.i18n.t(id));
     let titles = widgets::ColumnTitles {
@@ -292,6 +293,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         group: &titles[10],
         descr: &titles[11],
         links: &titles[12],
+        git: &titles[13],
     };
     for (i, area) in areas.iter().enumerate() {
         // The special kinds have no rows, so they draw themselves inside the same frame and
@@ -351,6 +353,7 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             owners: &panel.owners,
             descriptions: &panel.descriptions,
             links: &panel.links,
+            git: &panel.git_status,
             // The user's own columns for this view, if they wrote a set on its digit
             // (SPEC 02 §3a); without one the built-in mode draws, as it always has.
             columns: crate::colset::for_slot(&app.column_sets, panel.view.slot()),

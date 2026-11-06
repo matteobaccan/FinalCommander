@@ -141,7 +141,6 @@ cannot be, kept so the question is not asked again.
 | Tags, labels, ratings | Opus, File Ninja, Tabbles | Free tags, coloured labels, star ratings and status icons on files, as columns, filters and sort keys | Where they live is the question: a sidecar like `descript.ion`, xattrs, or our own database |
 | Undo of file operations | Opus, File Ninja, Wikipedia | Undo (and redo) a copy, move, rename or delete: a history of what was done, reversed | Today only the last multi-rename is undone |
 | Saved searches as folders | File Ninja, Opus, Wikipedia | A search kept under a name, re-run when opened: a "smart folder" that stays current | Same as *Find file → saving and loading a search* above, made a panel |
-| Git status column | File Ninja | Modified, untracked, ignored per row, sortable | The Git panel exists (`Ctrl+Alt+G`); this is a column of the ordinary panel |
 | Indexed search | Opus, File Ninja | Asking an index — Everything and Windows Search, Spotlight (`mdfind`), `plocate` — instead of walking | A source for `Alt+F7`, run as a program |
 | Search on metadata | Wikipedia | EXIF, ID3, document properties as search conditions | Needs the readers the viewer's `F11` already has |
 | Boolean and fuzzy search | Wikipedia | Nested and/or/not over conditions; approximate name matching | The fuzzy half is under *Find file* above |

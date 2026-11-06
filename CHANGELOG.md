@@ -15,6 +15,10 @@ Notable changes, newest first. The format follows
   is. `Shift+F7` in a repository drafts a commit message from the staged diff and opens the
   commit prompt with it. Everything that sends text says what and to which host first, and the
   status line says what each answer cost in tokens.
+- **A git column and a git sort.** `type = "git"` in a `[[column_set]]` shows where each row
+  stands in its repository — changed, staged, new, ignored, and a folder with changes inside —
+  read with one `git status` per folder, only while something on screen asks for it. *Sort by
+  git status* puts the changed files first.
 
 ## [0.38.0] - 2026-11-06
 

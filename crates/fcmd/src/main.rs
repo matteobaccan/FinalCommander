@@ -1526,6 +1526,21 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                         });
                     });
                 }
+                Request::GitColumn {
+                    panel,
+                    generation,
+                    dir,
+                } => {
+                    let tx = tx.clone();
+                    std::thread::spawn(move || {
+                        let status = git_column(&dir);
+                        let _ = tx.send(Event::GitColumn {
+                            panel,
+                            generation,
+                            status,
+                        });
+                    });
+                }
                 Request::Links {
                     panel,
                     generation,
@@ -4322,6 +4337,86 @@ fn git(cwd: &std::path::Path, args: &[&str]) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
+/// Where each name of one directory stands in its repository, for the `git` column: what
+/// `git status --short` writes for a file of this directory, and for a directory what is
+/// under it — `M` when anything there is changed or staged, `??` when all of it is new, `!!`
+/// when it is ignored. Empty outside a repository, or with no git on the machine.
+fn git_column(dir: &std::path::Path) -> std::collections::HashMap<String, String> {
+    let mut out = std::collections::HashMap::new();
+    let Ok(prefix) = git(dir, &["rev-parse", "--show-prefix"]) else {
+        return out;
+    };
+    let prefix = prefix.trim().to_string();
+    let Ok(status) = git(
+        dir,
+        &[
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--ignored=matching",
+            "--",
+            ".",
+        ],
+    ) else {
+        return out;
+    };
+    git_column_from(&prefix, &status, &mut out);
+    out
+}
+
+/// The parsing half of [`git_column`]: `prefix` is where the directory sits in the work tree
+/// (`src/`, or empty at its top), `status` what `git status --porcelain=v1 -z` printed.
+fn git_column_from(
+    prefix: &str,
+    status: &str,
+    out: &mut std::collections::HashMap<String, String>,
+) {
+    let mut fields = status.split('\0');
+    while let Some(rec) = fields.next() {
+        if rec.len() < 4 {
+            continue;
+        }
+        let code = &rec[..2];
+        // A rename's record is followed by the name it had, which says nothing here.
+        if code.starts_with('R') || code.starts_with('C') {
+            let _ = fields.next();
+        }
+        let path = &rec[3..];
+        let Some(rest) = path.strip_prefix(prefix) else {
+            continue;
+        };
+        let (name, inside) = match rest.split_once('/') {
+            Some((head, tail)) => (head, !tail.is_empty()),
+            None => (rest.trim_end_matches('/'), rest.ends_with('/')),
+        };
+        if name.is_empty() {
+            continue;
+        }
+        let shown = if inside || rest.ends_with('/') {
+            match code {
+                "??" => "??",
+                "!!" => "!!",
+                _ => "M",
+            }
+            .to_string()
+        } else {
+            code.trim_end().to_string()
+        };
+        // A directory with something changed in it says so even if the first record under
+        // it was a new file.
+        match out.get(name).map(String::as_str) {
+            Some("M") => {}
+            Some(_) if shown == "M" => {
+                out.insert(name.to_string(), shown);
+            }
+            Some(_) => {}
+            None => {
+                out.insert(name.to_string(), shown);
+            }
+        }
+    }
+}
+
 /// The first line of what git said that has something on it.
 fn first_line_of(text: &str) -> String {
     text.lines()
@@ -4742,6 +4837,71 @@ mod tests {
         }
         // Whole lines, never half of one.
         assert!(printed.ends_with('\n'), "{printed:?}");
+    }
+
+    /// The git column reads one directory's share of `git status`: a file's own code, and
+    /// for a directory what is under it.
+    #[test]
+    fn the_git_column_says_where_each_name_stands() {
+        let status = " M src/app.rs\0?? src/new.rs\0A  src/sub/x.rs\0?? src/fresh/\0!! src/target/\0R  src/b.rs\0src/a.rs\0 M README.md\0";
+        let mut out = std::collections::HashMap::new();
+        git_column_from("src/", status, &mut out);
+        assert_eq!(out.get("app.rs").map(String::as_str), Some(" M"));
+        assert_eq!(out.get("new.rs").map(String::as_str), Some("??"));
+        assert_eq!(out.get("sub").map(String::as_str), Some("M"));
+        assert_eq!(out.get("fresh").map(String::as_str), Some("??"));
+        assert_eq!(out.get("target").map(String::as_str), Some("!!"));
+        assert_eq!(out.get("b.rs").map(String::as_str), Some("R"));
+        // Not this directory's, and the old name of a rename is not a row either.
+        assert!(!out.contains_key("README.md"));
+        assert!(!out.contains_key("a.rs"));
+    }
+
+    /// And against a real repository, where there is a git to ask.
+    #[test]
+    fn the_git_column_asks_the_real_git() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let run = |args: &[&str]| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(root)
+                .args(args)
+                .output()
+        };
+        if run(&["init", "-q"]).is_err() {
+            return;
+        }
+        std::fs::write(root.join("kept.txt"), "a").unwrap();
+        std::fs::write(root.join(".gitignore"), "*.log\n").unwrap();
+        run(&[
+            "-c",
+            "user.email=t@example.com",
+            "-c",
+            "user.name=T",
+            "add",
+            ".",
+        ])
+        .unwrap();
+        run(&[
+            "-c",
+            "user.email=t@example.com",
+            "-c",
+            "user.name=T",
+            "commit",
+            "-q",
+            "-m",
+            "x",
+        ])
+        .unwrap();
+        std::fs::write(root.join("kept.txt"), "b").unwrap();
+        std::fs::write(root.join("new.txt"), "n").unwrap();
+        std::fs::write(root.join("run.log"), "l").unwrap();
+        let out = git_column(root);
+        assert_eq!(out.get("kept.txt").map(String::as_str), Some(" M"));
+        assert_eq!(out.get("new.txt").map(String::as_str), Some("??"));
+        assert_eq!(out.get("run.log").map(String::as_str), Some("!!"));
+        assert!(!out.contains_key(".gitignore"));
     }
 
     /// A thread's file gives its turns back: the first question under `# `, each follow-up
@@ -6187,7 +6347,8 @@ dir_attr = "D"
                 Request::Font { .. }
                 | Request::Mouse { .. }
                 | Request::Clipboard { .. }
-                | Request::Owners { .. } => {}
+                | Request::Owners { .. }
+                | Request::GitColumn { .. } => {}
                 Request::SyncPlan {
                     id,
                     left,

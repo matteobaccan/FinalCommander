@@ -39,7 +39,7 @@ pub struct Listing {
 /// How the two fields that live beside the listing are looked up, per entry: the description
 /// and the owner, in that order. A closure rather than the maps themselves, because what
 /// holds them is the panel and what sorts is the listing.
-pub type SideLookup<'a> = dyn Fn(&Entry) -> (String, String) + 'a;
+pub type SideLookup<'a> = dyn Fn(&Entry) -> (String, String, String) + 'a;
 
 impl Listing {
     pub fn new(entries: Vec<Entry>, generation: u64) -> Self {
@@ -169,13 +169,13 @@ impl Listing {
         // The side fields, per entry, where a key asks for them. One pass over the rows that
         // are actually on screen, so a directory nobody is sorting by description costs
         // nothing at all.
-        let sides: Vec<(String, String)> = match side.filter(|_| sort.needs_side()) {
+        let sides: Vec<(String, String, String)> = match side.filter(|_| sort.needs_side()) {
             Some(lookup) => entries.iter().map(lookup).collect(),
             None => Vec::new(),
         };
         let side_of = |i: usize| -> crate::sort::Side<'_> {
             match sides.get(i) {
-                Some((descr, owner)) => crate::sort::Side { descr, owner },
+                Some((descr, owner, git)) => crate::sort::Side { descr, owner, git },
                 None => crate::sort::Side::default(),
             }
         };

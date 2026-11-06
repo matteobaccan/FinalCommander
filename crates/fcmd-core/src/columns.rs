@@ -48,11 +48,15 @@ pub enum ColumnKind {
     Links,
     /// What the directory's own `descript.ion` says about it.
     Descr,
+    /// Where the file stands in the git repository the directory is in — `M`, `A`, `??`,
+    /// `!!` as `git status --short` writes them — and, for a directory, whether anything
+    /// under it is changed (SPEC 02 §3, 0.39.0).
+    Git,
 }
 
 impl ColumnKind {
     /// Every kind, in the order the documentation lists them.
-    pub const ALL: [ColumnKind; 12] = [
+    pub const ALL: [ColumnKind; 13] = [
         ColumnKind::Name,
         ColumnKind::Ext,
         ColumnKind::Size,
@@ -65,6 +69,7 @@ impl ColumnKind {
         ColumnKind::Group,
         ColumnKind::Links,
         ColumnKind::Descr,
+        ColumnKind::Git,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -81,6 +86,7 @@ impl ColumnKind {
             ColumnKind::Group => "group",
             ColumnKind::Links => "links",
             ColumnKind::Descr => "descr",
+            ColumnKind::Git => "git",
         }
     }
 
@@ -99,6 +105,7 @@ impl ColumnKind {
             "group" => Some(ColumnKind::Group),
             "links" => Some(ColumnKind::Links),
             "descr" | "description" | "diz" => Some(ColumnKind::Descr),
+            "git" | "vcs" => Some(ColumnKind::Git),
             _ => None,
         }
     }
@@ -115,6 +122,7 @@ impl ColumnKind {
             ColumnKind::Attrs => 5,
             ColumnKind::Owner | ColumnKind::Group => 12,
             ColumnKind::Links => 4,
+            ColumnKind::Git => 2,
         }
     }
 
@@ -131,7 +139,11 @@ impl ColumnKind {
     pub fn is_fetched(self) -> bool {
         matches!(
             self,
-            ColumnKind::Owner | ColumnKind::Group | ColumnKind::Links | ColumnKind::Descr
+            ColumnKind::Owner
+                | ColumnKind::Group
+                | ColumnKind::Links
+                | ColumnKind::Descr
+                | ColumnKind::Git
         )
     }
 }
@@ -738,7 +750,8 @@ mod tests {
                 ColumnKind::Owner,
                 ColumnKind::Group,
                 ColumnKind::Links,
-                ColumnKind::Descr
+                ColumnKind::Descr,
+                ColumnKind::Git
             ]
         );
     }

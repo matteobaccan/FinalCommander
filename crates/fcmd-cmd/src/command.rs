@@ -871,6 +871,7 @@ impl Command {
             SortKey::ATime,
             SortKey::Descr,
             SortKey::Owner,
+            SortKey::Git,
             SortKey::Unsorted,
         ] {
             out.push(Command::PanelSortBy(k));
@@ -1462,6 +1463,7 @@ fn parse_sort_key(s: &str) -> Option<SortKey> {
         "atime" | "accessed" | "access" => Some(SortKey::ATime),
         "descr" | "description" | "diz" => Some(SortKey::Descr),
         "owner" => Some(SortKey::Owner),
+        "git" | "vcs" => Some(SortKey::Git),
         "none" | "unsorted" => Some(SortKey::Unsorted),
         _ => None,
     }

@@ -29,6 +29,7 @@ pub struct ColumnTitles<'a> {
     pub group: &'a str,
     pub descr: &'a str,
     pub links: &'a str,
+    pub git: &'a str,
 }
 
 /// Everything the panel widget needs to know. The panel owns no state of its own.
@@ -82,6 +83,9 @@ pub struct PanelRender<'a> {
     /// How many names each file has, counted by a worker while the links view is on screen
     /// (SPEC 02 §3). Empty everywhere else.
     pub links: &'a std::collections::HashMap<String, u64>,
+    /// Where each row stands in its git repository, by name — `M`, `??`, `!!` — read by a
+    /// worker while a column set that shows it, or a sort that asks for it, is on screen.
+    pub git: &'a std::collections::HashMap<String, String>,
     /// The user's own columns for this view, where they wrote a `[[column_set]]` for its
     /// digit (SPEC 02 §3a). Without one the built-in mode draws, which is what every panel
     /// did before the setting existed.
@@ -474,6 +478,7 @@ fn draw_column_titles(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inne
                     Col::Attr => p.titles.attr,
                     Col::Descr => p.titles.descr,
                     Col::Links => p.titles.links,
+                    Col::Git => p.titles.git,
                 };
                 centre(buf, x, y, cell.w, title, style);
                 x += cell.w + 1;
@@ -689,6 +694,7 @@ enum Col {
     Attr,
     Descr,
     Links,
+    Git,
 }
 
 impl Cols {
@@ -791,6 +797,7 @@ fn col_of(kind: fcmd_core::ColumnKind) -> Col {
         K::Group => Col::Group,
         K::Links => Col::Links,
         K::Descr => Col::Descr,
+        K::Git => Col::Git,
     }
 }
 
@@ -1013,6 +1020,14 @@ fn draw_full(buf: &mut Buffer, theme: &Theme, p: &PanelRender<'_>, inner: Rect, 
                         .map(|n| n.to_string())
                         .unwrap_or_default();
                     put_right(buf, x, y, w, &text, style);
+                }
+                Col::Git => {
+                    let text = (e.kind != EntryKind::Parent)
+                        .then(|| p.git.get(e.name_str().as_ref()))
+                        .flatten()
+                        .cloned()
+                        .unwrap_or_default();
+                    buf.put_str(x, y, &truncate_cols(&text, w as usize), style, w);
                 }
                 Col::Descr => {
                     // `..` is the directory one came from, not a file of this one: whatever
@@ -1913,6 +1928,7 @@ mod tests {
             group: "Group",
             descr: "Description",
             links: "Lnk",
+            git: "Git",
         }
     }
 
@@ -1980,6 +1996,7 @@ mod tests {
             owners: &std::collections::HashMap::new(),
             descriptions: &Default::default(),
             links: &std::collections::HashMap::new(),
+            git: &std::collections::HashMap::new(),
             columns: None,
             up_label: "Up",
             folder_label: "Folder",
@@ -2058,6 +2075,7 @@ mod tests {
             owners,
             descriptions: &Default::default(),
             links: &std::collections::HashMap::new(),
+            git: &std::collections::HashMap::new(),
             columns: None,
             up_label: "Up",
             folder_label: "Folder",
@@ -2136,6 +2154,7 @@ mod tests {
                 owners: &std::collections::HashMap::new(),
                 descriptions: &Default::default(),
                 links: &links,
+                git: &std::collections::HashMap::new(),
                 columns: None,
                 up_label: "Up",
                 folder_label: "Folder",
@@ -2217,6 +2236,7 @@ mod tests {
                 owners: &std::collections::HashMap::new(),
                 descriptions: &descriptions,
                 links: &std::collections::HashMap::new(),
+                git: &std::collections::HashMap::new(),
                 columns: None,
                 up_label: "Up",
                 folder_label: "Folder",
@@ -2322,6 +2342,7 @@ mod tests {
             owners: &std::collections::HashMap::new(),
             descriptions: &Default::default(),
             links: &std::collections::HashMap::new(),
+            git: &std::collections::HashMap::new(),
             columns: None,
             up_label: "Up",
             folder_label: "Folder",
@@ -2483,6 +2504,7 @@ mod tests {
             owners: &std::collections::HashMap::new(),
             descriptions: &Default::default(),
             links: &std::collections::HashMap::new(),
+            git: &std::collections::HashMap::new(),
             columns: None,
             up_label: "Up",
             folder_label: "Folder",
@@ -2524,6 +2546,7 @@ mod tests {
                 owners: &std::collections::HashMap::new(),
                 descriptions: &Default::default(),
                 links: &std::collections::HashMap::new(),
+                git: &std::collections::HashMap::new(),
                 columns: None,
                 up_label: "Up",
                 folder_label: "Folder",
@@ -2572,6 +2595,7 @@ mod tests {
             owners: &std::collections::HashMap::new(),
             descriptions: &Default::default(),
             links: &std::collections::HashMap::new(),
+            git: &std::collections::HashMap::new(),
             columns: None,
             up_label: "Up",
             folder_label: "Folder",
@@ -2711,6 +2735,7 @@ mod tests {
             owners: &std::collections::HashMap::new(),
             descriptions: &Default::default(),
             links: &std::collections::HashMap::new(),
+            git: &std::collections::HashMap::new(),
             columns: None,
             up_label: "Up",
             folder_label: "Folder",
@@ -2912,6 +2937,7 @@ mod tests {
             owners: &std::collections::HashMap::new(),
             descriptions: &Default::default(),
             links: &std::collections::HashMap::new(),
+            git: &std::collections::HashMap::new(),
             columns: None,
             up_label: "Up",
             folder_label: "Folder",

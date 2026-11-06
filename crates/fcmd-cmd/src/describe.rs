@@ -92,6 +92,7 @@ impl Command {
                 SortKey::ATime => "sort by when it was last read",
                 SortKey::Descr => "sort by what descript.ion says about each file",
                 SortKey::Owner => "sort by who the file belongs to",
+                SortKey::Git => "sort by where the file stands in git: changed first",
                 SortKey::Unsorted => "leave the order as the filesystem gives it",
             },
             Command::FileDescribe => "write what this file is, in the directory's descript.ion",

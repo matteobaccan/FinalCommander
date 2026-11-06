@@ -259,7 +259,11 @@ columns = [
 ```
 
 The types are `name`, `ext`, `size`, `allocated`, `mtime`, `btime`, `atime`, `attrs`, `owner`,
-`group`, `links` and `descr` — the same fields the built-in modes draw. A width is a number of
+`group`, `links`, `descr` and `git` — the same fields the built-in modes draw, and `git`, which
+says where each row stands in its git repository: `M` or ` M` changed (staged on the left, not
+yet on the right), `A` added, `??` new, `!!` ignored, and for a folder `M` when anything inside
+it is changed. `{ type = "git", width = 2 }` beside the name is the column File Ninja calls git
+status; *sort by git status* in `Ctrl+F12` puts the changed files first. A width is a number of
 columns, a percentage of the panel, `*` to take whatever is left, or `0` for the column's own
 natural width, which for a name or a description means "what is left over" because neither has
 a width of its own. `align` is `left` or `right` where the column's own habit is not what you

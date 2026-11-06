@@ -152,6 +152,8 @@ pub struct Panel {
     /// How many names each file has, counted by a worker while the links view is on screen
     /// (SPEC 02 §3). Empty everywhere else, as the owners are.
     pub links: std::collections::HashMap<String, u64>,
+    /// Where each row stands in its git repository, by name (the `git` column and sort key).
+    pub git_status: std::collections::HashMap<String, String>,
 }
 
 impl Panel {
@@ -167,6 +169,7 @@ impl Panel {
             groups: Arc::new(SortGroups::default()),
             descriptions: Default::default(),
             links: Default::default(),
+            git_status: Default::default(),
             view,
             base_look: None,
             show_hidden,
@@ -209,8 +212,12 @@ impl Panel {
         // are small — one entry per row of one directory — and this happens only for the two
         // keys that ask (SPEC 02 §4).
         if self.sort.needs_side() {
-            let (descriptions, owners) = (self.descriptions.clone(), self.owners.clone());
-            let side = move |e: &fcmd_core::Entry| -> (String, String) {
+            let (descriptions, owners, git) = (
+                self.descriptions.clone(),
+                self.owners.clone(),
+                self.git_status.clone(),
+            );
+            let side = move |e: &fcmd_core::Entry| -> (String, String, String) {
                 let name = e.name_str();
                 (
                     descriptions.get(&name).unwrap_or("").to_string(),
@@ -218,6 +225,7 @@ impl Panel {
                         .get(name.as_ref())
                         .map(|(user, _)| user.clone())
                         .unwrap_or_default(),
+                    git.get(name.as_ref()).cloned().unwrap_or_default(),
                 )
             };
             self.listing.rebuild_with(

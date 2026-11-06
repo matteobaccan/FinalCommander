@@ -264,7 +264,12 @@ columns = [
 ```
 
 I tipi sono `name`, `ext`, `size`, `allocated`, `mtime`, `btime`, `atime`, `attrs`, `owner`,
-`group`, `links` e `descr` — gli stessi campi che disegnano le viste predefinite. Una larghezza
+`group`, `links`, `descr` e `git` — gli stessi campi che disegnano le viste predefinite, e `git`,
+che dice a che punto è ogni riga nel suo repository git: `M` o ` M` modificato (in staging a
+sinistra, non ancora a destra), `A` aggiunto, `??` nuovo, `!!` ignorato, e per una cartella `M`
+quando qualcosa dentro è cambiato. `{ type = "git", width = 2 }` accanto al nome è la colonna
+che File Ninja chiama stato git; *ordina per stato git* in `Ctrl+F12` mette prima i file
+cambiati. Una larghezza
 è un numero di colonne, una percentuale del pannello, `*` per prendere quello che resta, oppure
 `0` per la larghezza naturale della colonna, che per un nome o una descrizione vuol dire
 "quello che resta" perché nessuno dei due ha una larghezza propria. `align` è `left` o `right`

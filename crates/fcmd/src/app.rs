@@ -189,6 +189,13 @@ pub enum Request {
         dir: VPath,
         names: Vec<String>,
     },
+    /// Where each row of a directory stands in its git repository, for the `git` column and
+    /// sort key: one `git status` for the directory, on a thread of its own.
+    GitColumn {
+        panel: usize,
+        generation: u64,
+        dir: PathBuf,
+    },
     /// How many names each file of one directory has, for the links view. A lookup per file
     /// — on Windows the file has to be opened — so it happens in a worker and only while
     /// that view is the one on screen (SPEC 02 §3).
@@ -584,6 +591,12 @@ pub enum Event {
         panel: usize,
         generation: u64,
         owners: std::collections::HashMap<String, (String, String)>,
+    },
+    /// The git column's answer: a status per name, empty outside a repository.
+    GitColumn {
+        panel: usize,
+        generation: u64,
+        status: std::collections::HashMap<String, String>,
     },
     /// How many names each file of one directory has (SPEC 02 §3). Late, as the owners are.
     Links {
@@ -3299,6 +3312,8 @@ impl App {
                         // screen, and otherwise left empty, which costs nothing.
                         self.panels[panel].owners.clear();
                         self.ask_for_owners(panel);
+                        self.panels[panel].git_status.clear();
+                        self.ask_for_git_column(panel);
                         self.panels[panel].links.clear();
                         self.ask_for_links(panel);
                         self.panels[panel].descriptions = Default::default();
@@ -3384,6 +3399,19 @@ impl App {
                 }
                 self.panels[panel].owners = owners;
                 if self.panels[panel].sort.asks(SortKey::Owner) {
+                    self.panels[panel].resort();
+                }
+            }
+            Event::GitColumn {
+                panel,
+                generation,
+                status,
+            } => {
+                if panel >= self.panels.len() || self.panels[panel].generation != generation {
+                    return;
+                }
+                self.panels[panel].git_status = status;
+                if self.panels[panel].sort.asks(SortKey::Git) {
                     self.panels[panel].resort();
                 }
             }
@@ -6647,6 +6675,28 @@ impl App {
         });
     }
 
+    /// Ask where each row stands in git, when a column set shows it or the sort asks for it:
+    /// a local directory only, and only once per listing.
+    fn ask_for_git_column(&mut self, panel: usize) {
+        if panel >= self.panels.len() {
+            return;
+        }
+        let wanted = self.view_asks(panel, fcmd_core::ColumnKind::Git);
+        let p = &self.panels[panel];
+        if (!wanted && !p.sort.asks(SortKey::Git))
+            || p.temp.is_some()
+            || !p.cwd.is_local()
+            || p.cwd.in_container()
+        {
+            return;
+        }
+        self.requests.push(Request::GitColumn {
+            panel,
+            generation: p.generation,
+            dir: p.cwd.as_path().to_path_buf(),
+        });
+    }
+
     /// Put text on the system clipboard, through the terminal. Returns whether the request
     /// went out, so that the caller only says what it copied when something was copied.
     fn copy_to_clipboard(&mut self, text: &str) -> bool {
@@ -9142,6 +9192,7 @@ impl App {
                 // are not looking at.
                 let active = self.active;
                 self.ask_for_owners(active);
+                self.ask_for_git_column(active);
                 self.ask_for_links(active);
                 self.ask_for_descriptions(active);
                 let msg = self
@@ -9162,6 +9213,7 @@ impl App {
                 // that show it do, and the answer sorts the panel again when it lands.
                 self.ask_for_descriptions(side);
                 self.ask_for_owners(side);
+                self.ask_for_git_column(side);
                 let msg = self.i18n.t_args(
                     "msg-sort",
                     &[
@@ -18654,6 +18706,7 @@ impl App {
                     (SortKey::ATime, "sort-atime"),
                     (SortKey::Descr, "sort-descr"),
                     (SortKey::Owner, "sort-owner"),
+                    (SortKey::Git, "sort-git"),
                     (SortKey::Unsorted, "sort-none"),
                 ];
                 Pick::new(
@@ -19632,6 +19685,7 @@ impl App {
                     "ext" => SortKey::Ext,
                     "descr" => SortKey::Descr,
                     "owner" => SortKey::Owner,
+                    "git" => SortKey::Git,
                     "size" => SortKey::Size,
                     "mtime" => SortKey::MTime,
                     "btime" => SortKey::BTime,
@@ -24234,6 +24288,7 @@ fn sort_key(s: &str) -> Option<SortKey> {
         "atime" | "accessed" => SortKey::ATime,
         "descr" | "description" | "diz" => SortKey::Descr,
         "owner" => SortKey::Owner,
+        "git" | "vcs" => SortKey::Git,
         "none" | "unsorted" => SortKey::Unsorted,
         _ => return None,
     })
@@ -35576,6 +35631,47 @@ abcdefghij
         };
         assert_eq!(p.kind, PromptKind::GitCommit);
         assert_eq!(p.text, "Add the git column");
+    }
+
+    /// The git column costs a `git status` only when something on screen asks for it: a
+    /// sort by it, or a column set that shows it — and its answer sorts the panel again.
+    #[test]
+    fn the_git_column_is_asked_for_only_when_shown_or_sorted_by() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), "a").unwrap();
+        std::fs::write(dir.path().join("b.txt"), "b").unwrap();
+        let mut app = editing_app(dir.path());
+        app.take_requests();
+        app.ask_for_git_column(0);
+        assert!(app
+            .take_requests()
+            .iter()
+            .all(|r| !matches!(r, Request::GitColumn { .. })));
+        app.run(Command::PanelSortBy(SortKey::Git));
+        let asked = app
+            .take_requests()
+            .into_iter()
+            .any(|r| matches!(r, Request::GitColumn { panel: 0, .. }));
+        assert!(asked);
+        // `b.txt` is changed, so it comes before the clean `a.txt`.
+        let generation = app.panels[0].generation;
+        app.handle_event(Event::GitColumn {
+            panel: 0,
+            generation,
+            status: [("b.txt".to_string(), " M".to_string())]
+                .into_iter()
+                .collect(),
+        });
+        let names: Vec<String> = (0..app.panels[0].listing.len())
+            .filter_map(|r| app.panels[0].listing.row(r))
+            .filter(|e| e.kind != fcmd_core::EntryKind::Parent)
+            .map(|e| e.name_str().into_owned())
+            .collect();
+        assert_eq!(
+            names.first().map(String::as_str),
+            Some("b.txt"),
+            "{names:?}"
+        );
     }
 
     /// `Ctrl+Alt+X` in the viewer sends nothing until a dialog has said what goes and where;
