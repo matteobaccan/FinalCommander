@@ -15,6 +15,7 @@ pub mod markdown;
 pub mod media;
 mod meta;
 pub mod nav;
+mod office;
 pub mod pdf;
 pub mod picture;
 pub mod search;

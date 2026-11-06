@@ -234,6 +234,9 @@ The same key answers for the files that are not programs:
   taken, exposure, aperture, ISO — and **where it was taken**, on a row of its own, because
   that is the thing in a photo people most often do not know they are sending; a PNG's text
   and time;
+- **an office document** — `.docx`, `.xlsx`, `.pptx`, `.odt`, `.ods`, `.odp`: the title, the
+  author and who saved it last, when it was made and changed, how many revisions, pages, words
+  or slides, the company and the program that wrote it;
 - **music** — MP3, FLAC, Ogg Vorbis, Opus: the title, the artist, the album, the year, the
   track, the genre, whether there is a cover, and for FLAC and Ogg the stream and its length.
 

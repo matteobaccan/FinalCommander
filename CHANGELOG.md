@@ -23,6 +23,9 @@ Notable changes, newest first. The format follows
   last copy — what it made goes to the wastebasket — move or rename, delete to the wastebasket
   and new folder, after a dialog that says what it will do. The last twenty that ended well are
   remembered while the program runs.
+- **Office documents in the structure pane.** `F11` on a `.docx`, `.xlsx`, `.pptx`, `.odt`,
+  `.ods` or `.odp` shows its title, author, who saved it last, the dates, the revision, the
+  pages, words or slides, the company and the program that wrote it.
 
 ## [0.38.0] - 2026-11-06
 

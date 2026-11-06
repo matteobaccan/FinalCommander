@@ -334,6 +334,10 @@ pub fn read(src: &mut dyn Bytes) -> Option<Structure> {
     if let Some(s) = crate::pdf::read(src, &head, len) {
         return Some(s);
     }
+    // An office document is a zip with its properties in a small XML part of it.
+    if let Some(s) = crate::office::read(src, &head, len) {
+        return Some(s);
+    }
     // And the files whose structure is a few tags in front of a picture or a sound: what the
     // camera, the encoder or whoever tagged the album wrote down.
     if let Some(s) = crate::tags::read(src, &head, len) {
@@ -3830,20 +3834,19 @@ mod tests {
         );
     }
 
-    /// Any PE named by `FCMD_PE_SAMPLE`, printed: a way to look at a real Windows file
-    /// without checking one into the tree.
+    /// Any file named by `FCMD_SAMPLE`, its structure printed: a way to look at a real file
+    /// of any kind without checking one into the tree.
     #[test]
-    fn a_pe_sample_when_one_is_named() {
-        let Ok(path) = std::env::var("FCMD_PE_SAMPLE") else {
+    fn a_sample_when_one_is_named() {
+        let Ok(path) = std::env::var("FCMD_SAMPLE") else {
             return;
         };
         let file = std::fs::File::open(path).unwrap();
         let mut src = FileBytes(file);
-        let s = read(&mut src).expect("a PE");
+        let s = read(&mut src).expect("something this pane reads");
+        eprintln!("{}", s.summary);
         for r in &s.rows {
-            if r.kind != RowKind::Entry {
-                eprintln!("{:<24} {}", r.label, r.value);
-            }
+            eprintln!("{:<24} {}", r.label, r.value);
         }
     }
 

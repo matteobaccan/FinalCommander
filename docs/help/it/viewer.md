@@ -247,6 +247,9 @@ Lo stesso tasto risponde anche per i file che non sono programmi:
   quando è stata scattata, esposizione, diaframma, ISO — e **dove è stata scattata**, su una
   riga a sé, perché è la cosa di una foto che più spesso non si sa di stare mandando; il testo
   e la data di un PNG;
+- **un documento d'ufficio** — `.docx`, `.xlsx`, `.pptx`, `.odt`, `.ods`, `.odp`: titolo,
+  autore e chi l'ha salvato per ultimo, quando è stato creato e modificato, quante revisioni,
+  pagine, parole o diapositive, l'azienda e il programma che l'ha scritto;
 - **la musica** — MP3, FLAC, Ogg Vorbis, Opus: titolo, artista, album, anno, traccia, genere,
   se c'è una copertina, e per FLAC e Ogg il flusso e la durata.
 
