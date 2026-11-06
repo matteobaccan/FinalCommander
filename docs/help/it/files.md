@@ -452,6 +452,7 @@ tasti sono quelli che mostra la barra:
 | `F5` | mette in staging i file selezionati, o quello sotto il cursore (`git add`) |
 | `F6` | li toglie dallo staging (`git restore --staged`) |
 | `F7` | committa quello che è in staging, dopo aver chiesto il messaggio |
+| `Shift+F7` | lo stesso, con un messaggio che l'AI ha scritto dal diff in staging (vedi *Chiedere a un'AI*) |
 | `F8` | il log del file, ogni commit che l'ha toccato |
 | `F2` | il menu di git: gli altri pannelli, blame, pull e push |
 | `Ctrl+R` | richiede a git |

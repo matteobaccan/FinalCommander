@@ -3,7 +3,9 @@
 //! Three wire formats cover the services people run: OpenAI's chat completions (which most
 //! servers and proxies also speak — LM Studio, vLLM, OpenRouter, Azure's), Anthropic's
 //! messages, and Ollama's chat on a local machine. One request, one answer, no streaming:
-//! the answer is a document that goes into a file and the viewer, not a chat window.
+//! the answer is a document that goes into a file and the viewer, not a chat window. A
+//! follow-up sends the earlier turns of its thread again, because none of the three keeps a
+//! conversation on its side.
 //!
 //! Nothing is sent unless the user typed `ai:` and, for files, said yes to a dialog that
 //! named them and the host they were going to.
@@ -60,9 +62,52 @@ pub fn user_text(question: &str, files: &[Attachment]) -> String {
     text
 }
 
+/// One earlier turn of a thread: what was asked and what came back.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Turn {
+    pub question: String,
+    pub answer: String,
+}
+
+/// What came back: the answer, and what it cost as the service counts it — `None` where the
+/// reply does not say.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Reply {
+    pub text: String,
+    pub tokens_in: Option<u64>,
+    pub tokens_out: Option<u64>,
+}
+
+/// The tokens a reply says it used, read where each service puts them.
+pub fn usage(api: Api, reply: &Value) -> (Option<u64>, Option<u64>) {
+    let n = |p: &str| reply.pointer(p).and_then(Value::as_u64);
+    match api {
+        Api::Anthropic => (n("/usage/input_tokens"), n("/usage/output_tokens")),
+        Api::OpenAi => (n("/usage/prompt_tokens"), n("/usage/completion_tokens")),
+        Api::Ollama => (n("/prompt_eval_count"), n("/eval_count")),
+    }
+}
+
 /// The body of the request, in the service's own shape.
 pub fn body(service: &Service, question: &str, files: &[Attachment]) -> Value {
+    body_with(service, &[], question, files)
+}
+
+/// The body with the earlier turns of a thread in front of the new question, as the
+/// alternating user and assistant messages every one of the three formats reads.
+pub fn body_with(
+    service: &Service,
+    earlier: &[Turn],
+    question: &str,
+    files: &[Attachment],
+) -> Value {
     let user = user_text(question, files);
+    let mut turns = Vec::new();
+    for t in earlier {
+        turns.push(json!({"role": "user", "content": t.question}));
+        turns.push(json!({"role": "assistant", "content": t.answer}));
+    }
+    turns.push(json!({"role": "user", "content": user}));
     let max = if service.max_tokens == 0 {
         4096
     } else {
@@ -73,7 +118,7 @@ pub fn body(service: &Service, question: &str, files: &[Attachment]) -> Value {
             let mut body = json!({
                 "model": service.model,
                 "max_tokens": max,
-                "messages": [{"role": "user", "content": user}],
+                "messages": turns,
             });
             if !service.system.is_empty() {
                 body["system"] = json!(service.system);
@@ -85,7 +130,7 @@ pub fn body(service: &Service, question: &str, files: &[Attachment]) -> Value {
             if !service.system.is_empty() {
                 messages.push(json!({"role": "system", "content": service.system}));
             }
-            messages.push(json!({"role": "user", "content": user}));
+            messages.extend(turns);
             let mut body = json!({"model": service.model, "messages": messages});
             if service.api == Api::Ollama {
                 body["stream"] = json!(false);
@@ -145,6 +190,18 @@ pub async fn ask(
     question: &str,
     files: &[Attachment],
 ) -> Result<String, String> {
+    ask_thread(service, &[], question, files)
+        .await
+        .map(|r| r.text)
+}
+
+/// Ask with the earlier turns of a thread, and say what it cost.
+pub async fn ask_thread(
+    service: &Service,
+    earlier: &[Turn],
+    question: &str,
+    files: &[Attachment],
+) -> Result<Reply, String> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(300))
         .user_agent(concat!("fcmd/", env!("CARGO_PKG_VERSION")))
@@ -153,7 +210,7 @@ pub async fn ask(
     let mut request = client
         .post(&service.url)
         .header(reqwest::header::CONTENT_TYPE, "application/json")
-        .body(body(service, question, files).to_string());
+        .body(body_with(service, earlier, question, files).to_string());
     if let Some(token) = &service.token {
         request = match service.api {
             Api::Anthropic => request
@@ -169,8 +226,13 @@ pub async fn ask(
     let text = response.text().await.map_err(|e| e.to_string())?;
     let reply: Value =
         serde_json::from_str(&text).map_err(|_| format!("HTTP {status}: {}", short(&text)))?;
+    let (tokens_in, tokens_out) = usage(service.api, &reply);
     match answer(service.api, &reply) {
-        Ok(a) => Ok(a),
+        Ok(text) => Ok(Reply {
+            text,
+            tokens_in,
+            tokens_out,
+        }),
         Err(e) if !status.is_success() => Err(format!("HTTP {status}: {e}")),
         Err(e) => Err(e),
     }
@@ -226,6 +288,33 @@ mod tests {
         assert!(answer(Api::OpenAi, &json!({})).is_err());
         assert_eq!(Api::parse("Claude"), Some(Api::Anthropic));
         assert_eq!(Api::parse("nope"), None);
+    }
+
+    #[test]
+    fn a_thread_sends_its_earlier_turns_and_the_cost_is_read() {
+        let earlier = [Turn {
+            question: "first?".into(),
+            answer: "one".into(),
+        }];
+        let b = body_with(&service(Api::Anthropic), &earlier, "and then?", &[]);
+        let m = b["messages"].as_array().unwrap();
+        assert_eq!(m.len(), 3);
+        assert_eq!(m[0]["content"], "first?");
+        assert_eq!(m[1]["role"], "assistant");
+        assert_eq!(m[2]["content"], "and then?");
+        let b = body_with(&service(Api::OpenAi), &earlier, "and then?", &[]);
+        assert_eq!(
+            b["messages"].as_array().unwrap().len(),
+            4,
+            "the system prompt first"
+        );
+        let r = json!({"usage": {"input_tokens": 12, "output_tokens": 30}});
+        assert_eq!(usage(Api::Anthropic, &r), (Some(12), Some(30)));
+        let r = json!({"usage": {"prompt_tokens": 5, "completion_tokens": 7}});
+        assert_eq!(usage(Api::OpenAi, &r), (Some(5), Some(7)));
+        let r = json!({"prompt_eval_count": 3, "eval_count": 4});
+        assert_eq!(usage(Api::Ollama, &r), (Some(3), Some(4)));
+        assert_eq!(usage(Api::Ollama, &json!({})), (None, None));
     }
 
     /// A whole round trip against a server on this machine that answers as Ollama does, and

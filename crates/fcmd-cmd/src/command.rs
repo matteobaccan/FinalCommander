@@ -372,6 +372,10 @@ pub enum Command {
     ToolTaskList,
     /// `Ctrl+Alt+G`: the git menu for the repository the panel is in (SPEC 06 §15).
     ToolGit,
+    /// A commit message drafted by the language model from what is staged.
+    GitCommitDraft,
+    /// Ask the language model what the marked block, or the screen, is.
+    AiExplain,
     /// The system's log, newest last, in the viewer (FAR's EventViewer, SPEC 06 §16).
     ToolSysLog,
     /// The AI services as a list to keep: add, change, remove, choose the one `ai:` asks.
@@ -736,6 +740,8 @@ impl Command {
             Command::ToolDuplicates,
             Command::ToolTaskList,
             Command::ToolGit,
+            Command::GitCommitDraft,
+            Command::AiExplain,
             Command::ToolSysLog,
             Command::ToolAi,
             Command::ToolGrab,
@@ -1035,6 +1041,8 @@ impl Command {
             Command::ToolDuplicates => "tool.duplicates".into(),
             Command::ToolTaskList => "tool.task.list".into(),
             Command::ToolGit => "tool.git".into(),
+            Command::GitCommitDraft => "git.commit.draft".into(),
+            Command::AiExplain => "ai.explain".into(),
             Command::ToolSysLog => "tool.syslog".into(),
             Command::ToolAi => "tool.ai".into(),
             Command::ToolGrab => "tool.grab".into(),
@@ -1301,6 +1309,8 @@ impl Command {
             ("tool.duplicates", _) => Command::ToolDuplicates,
             ("tool.task.list", _) => Command::ToolTaskList,
             ("tool.git", _) => Command::ToolGit,
+            ("git.commit.draft", _) => Command::GitCommitDraft,
+            ("ai.explain", _) => Command::AiExplain,
             ("tool.syslog", _) => Command::ToolSysLog,
             ("tool.ai", _) => Command::ToolAi,
             ("tool.grab", _) => Command::ToolGrab,

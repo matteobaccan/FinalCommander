@@ -1339,6 +1339,14 @@ sql-failed = Запрос не выполнен: { $why }
 ## Asking a language model (SPEC 06 §14).
 ai-none = Сервис ИИ не настроен: добавьте блок [[ai]] в fcmd.toml (name, url, model, api, token_env).
 ai-title = Спросить ИИ
+ai-no-thread = нечего продолжать: сначала спросите через `ai:` или поставьте курсор на ответ в папке ответов
+ai-nothing-to-explain = здесь нечего объяснять: откройте файл в просмотрщике или редакторе
+ai-explain-question = Что это, из { $name }? Объясни кратко.
+ai-tokens = токенов: { $in } на входе, { $out } на выходе
+ai-command-ready = команда в строке — прочитайте её, прежде чем нажать Enter
+ai-commit-question = Напиши сообщение коммита для подготовленных изменений.
+ai-staged-diff = подготовленный diff
+ai-send-diff = Подготовленный diff уходит на { $host }
 ai-send-files = Файлов: { $count }, { $size } — будут отправлены на { $host } вместе с вопросом.
 ai-asking = Спрашиваю { $name }…
 ai-failed = ИИ не ответил: { $why }

@@ -1907,16 +1907,10 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                         }
                     });
                 }
-                Request::AiAsk {
-                    service,
-                    token,
-                    question,
-                    files,
-                    dir,
-                } => {
+                Request::AiAsk { query, token, dir } => {
                     let tx = tx.clone();
                     runtime.spawn(async move {
-                        let result = ask_ai(&service, token, &question, &files, &dir).await;
+                        let result = ask_ai(&query, token, &dir).await;
                         let _ = tx.send(Event::AiDone { result });
                     });
                 }
@@ -4513,47 +4507,149 @@ fn run_git(cwd: &std::path::Path, what: &app::GitAsk) -> Result<app::GitOut, Str
 /// cut here says so in what is sent.
 const AI_FILE_LIMIT: usize = 256 * 1024;
 
-/// Ask, and write the question and its answer into a Markdown file of their own.
+/// The turns of a thread out of its answer file: the first question is the `# ` heading,
+/// each follow-up a `## ` heading after a rule, and the answer is what follows the line under
+/// each heading that names the service.
+fn ai_turns(text: &str) -> Vec<fcmd_net::ai::Turn> {
+    let mut turns = Vec::new();
+    for (i, part) in text.split("\n---\n\n").enumerate() {
+        let part = part.trim_start();
+        let heading = if i == 0 { "# " } else { "## " };
+        let Some(rest) = part.strip_prefix(heading) else {
+            continue;
+        };
+        let (question, body) = rest.split_once('\n').unwrap_or((rest, ""));
+        let body = body.trim_start();
+        // The line in italics under the heading is ours, not the model's.
+        let answer = match body.strip_prefix('*') {
+            Some(after) => after.split_once("*\n").map_or("", |(_, a)| a),
+            None => body,
+        };
+        turns.push(fcmd_net::ai::Turn {
+            question: question.trim().to_string(),
+            answer: answer.trim().to_string(),
+        });
+    }
+    turns
+}
+
+/// The diff of what is staged, which is what a commit message is asked for.
+fn staged_diff(root: &std::path::Path) -> Result<String, String> {
+    let diff = git(root, &["diff", "--cached", "--stat", "--patch"])?;
+    if diff.trim().is_empty() {
+        return Err("nothing is staged".into());
+    }
+    Ok(diff)
+}
+
+/// Ask, and write the question and its answer into a Markdown file of their own — or, for a
+/// follow-up, onto the end of the thread's file.
 async fn ask_ai(
-    cfg: &fcmd_config::AiCfg,
+    query: &app::AiQuery,
     typed: Option<String>,
-    question: &str,
-    files: &[std::path::PathBuf],
     dir: &std::path::Path,
-) -> Result<std::path::PathBuf, String> {
+) -> Result<app::AiAnswer, String> {
     use fcmd_net::ai::{Api, Attachment, Service};
+    let cfg = &query.service;
     let api = Api::parse(&cfg.api).ok_or_else(|| format!("api = \"{}\"?", cfg.api))?;
     // The variable first, when it holds a key; then the one typed in this session.
     let token = match std::env::var(&cfg.token_env) {
         Ok(key) if !cfg.token_env.is_empty() => Some(key),
         _ => typed,
     };
+    // A use that wants its answer in a shape says so before the service's own instruction.
+    let system = match (query.instruction.is_empty(), cfg.system.is_empty()) {
+        (true, _) => cfg.system.clone(),
+        (false, true) => query.instruction.clone(),
+        (false, false) => format!("{}\n\n{}", query.instruction, cfg.system),
+    };
     let service = Service {
         api,
         url: cfg.url.clone(),
         model: cfg.model.clone(),
         token,
-        system: cfg.system.clone(),
+        system,
         max_tokens: cfg.max_tokens,
     };
     let mut attachments = Vec::new();
-    for f in files {
+    for f in &query.files {
         let bytes = std::fs::read(f).map_err(|e| format!("{}: {e}", f.display()))?;
-        let mut text =
-            String::from_utf8_lossy(&bytes[..bytes.len().min(AI_FILE_LIMIT)]).into_owned();
-        if bytes.len() > AI_FILE_LIMIT {
-            text.push_str("\n[… cut here: the file goes on]");
-        }
         attachments.push(Attachment {
             name: f
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_default(),
-            text,
+            text: capped(&bytes),
         });
     }
-    let answer = fcmd_net::ai::ask(&service, question, &attachments).await?;
+    for (name, text) in &query.inline {
+        attachments.push(Attachment {
+            name: name.clone(),
+            text: capped(text.as_bytes()),
+        });
+    }
+    if let app::AiUse::Commit { root } = &query.purpose {
+        attachments.push(Attachment {
+            name: "staged.diff".into(),
+            text: capped(staged_diff(root)?.as_bytes()),
+        });
+    }
+    let earlier = match &query.thread {
+        Some(file) => ai_turns(&std::fs::read_to_string(file).map_err(|e| e.to_string())?),
+        None => Vec::new(),
+    };
+    let reply = fcmd_net::ai::ask_thread(&service, &earlier, &query.question, &attachments).await?;
     std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    let names: Vec<&str> = attachments.iter().map(|a| a.name.as_str()).collect();
+    let mut meta = format!("*{} · {}", cfg.name, cfg.model);
+    if !names.is_empty() {
+        meta.push_str(&format!(" · {}", names.join(", ")));
+    }
+    if let (Some(i), Some(o)) = (reply.tokens_in, reply.tokens_out) {
+        meta.push_str(&format!(" · {i} + {o} tokens"));
+    }
+    meta.push('*');
+    let path = match &query.thread {
+        Some(file) => {
+            let mut text = std::fs::read_to_string(file).map_err(|e| e.to_string())?;
+            text.push_str(&format!(
+                "\n---\n\n## {}\n\n{meta}\n\n{}\n",
+                query.question.trim(),
+                reply.text.trim()
+            ));
+            std::fs::write(file, text).map_err(|e| e.to_string())?;
+            file.clone()
+        }
+        None => {
+            let path = dir.join(ai_file_name(&query.question));
+            let text = format!(
+                "# {}\n\n{meta}\n\n{}\n",
+                query.question.trim(),
+                reply.text.trim()
+            );
+            std::fs::write(&path, text).map_err(|e| e.to_string())?;
+            path
+        }
+    };
+    Ok(app::AiAnswer {
+        file: path,
+        text: reply.text,
+        purpose: query.purpose.clone(),
+        tokens: (reply.tokens_in, reply.tokens_out),
+    })
+}
+
+/// At most [`AI_FILE_LIMIT`] of a file, as text, saying so where it was cut.
+fn capped(bytes: &[u8]) -> String {
+    let mut text = String::from_utf8_lossy(&bytes[..bytes.len().min(AI_FILE_LIMIT)]).into_owned();
+    if bytes.len() > AI_FILE_LIMIT {
+        text.push_str("\n[… cut here: the file goes on]");
+    }
+    text
+}
+
+/// `<seconds>-<the first six words>.md`, so the answers sort by when and read by what.
+fn ai_file_name(question: &str) -> String {
     let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_secs());
@@ -4572,23 +4668,7 @@ async fn ask_ai(
         .take(6)
         .collect::<Vec<_>>()
         .join("-");
-    let path = dir.join(format!("{stamp}-{slug}.md"));
-    let mut text = format!("# {}\n\n", question.trim());
-    if !attachments.is_empty() {
-        let names: Vec<&str> = attachments.iter().map(|a| a.name.as_str()).collect();
-        text.push_str(&format!(
-            "*{} · {} · {}*\n\n",
-            cfg.name,
-            cfg.model,
-            names.join(", ")
-        ));
-    } else {
-        text.push_str(&format!("*{} · {}*\n\n", cfg.name, cfg.model));
-    }
-    text.push_str(answer.trim());
-    text.push('\n');
-    std::fs::write(&path, text).map_err(|e| e.to_string())?;
-    Ok(path)
+    format!("{stamp}-{slug}.md")
 }
 
 /// A `sql:` query's rows as a CSV file in this session's own temporary folder, named after
@@ -4662,6 +4742,20 @@ mod tests {
         }
         // Whole lines, never half of one.
         assert!(printed.ends_with('\n'), "{printed:?}");
+    }
+
+    /// A thread's file gives its turns back: the first question under `# `, each follow-up
+    /// under `## ` after a rule, and the line naming the service left out of the answers.
+    #[test]
+    fn an_answer_file_reads_back_as_the_turns_of_its_thread() {
+        let text = "# why?\n\n*local · m · 3 + 4 tokens*\n\nbecause\n\n---\n\n## and then?\n\n*local · m*\n\nthen this\n";
+        let turns = ai_turns(text);
+        assert_eq!(turns.len(), 2);
+        assert_eq!(turns[0].question, "why?");
+        assert_eq!(turns[0].answer, "because");
+        assert_eq!(turns[1].question, "and then?");
+        assert_eq!(turns[1].answer, "then this");
+        assert!(ai_turns("no heading at all").is_empty());
     }
 
     /// FAR's two settings for the side file: which names it may be under, and whether a

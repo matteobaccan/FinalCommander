@@ -68,7 +68,20 @@ modello che gira sulla tua macchina, che non vuole chiavi.
 Si invia solo la domanda, a meno che dei file siano **selezionati**: allora un dialogo dice
 quanti, quanto pesano e a quale host vanno, e partono solo se premi *Invia*. Ogni risposta è un
 file Markdown nella cartella `fcmd-ai` accanto alle impostazioni, e `ai:` senza niente dopo apre
-quella cartella nel pannello, così quello che hai chiesto resta lì da rileggere.
+quella cartella nel pannello, così quello che hai chiesto resta lì da rileggere. La riga di
+stato dice quanto è costata la risposta, nei token contati dal servizio, e lo dice anche il file
+della risposta.
+
+Altri tre modi di chiedere:
+
+| Cosa scrivi o premi | Cosa fa |
+| --- | --- |
+| `ai+ domanda` | fa una **domanda di seguito** nella stessa conversazione: domande e risposte precedenti vengono rimandate (nessun servizio tiene la conversazione), e la nuova risposta si aggiunge allo stesso file. La conversazione è l'ultima risposta di questa sessione, o quella sotto il cursore nella cartella `fcmd-ai` |
+| `ai! cosa fare` | chiede **un comando** per la tua shell e il tuo sistema, e lo mette sulla riga di comando — **senza eseguirlo**: leggilo, cambialo, e premi `Invio` tu |
+| `Ctrl+Alt+X` nel visualizzatore o nell'editor | chiede **che cos'è questo**: il blocco marcato nell'editor, o quello che c'è sullo schermo, parte con il nome del file — dopo un dialogo che dice quanto e a quale host |
+| `Shift+F7` in un repository | scrive una **bozza del messaggio di commit** dal diff in staging — dopo lo stesso dialogo — e apre il prompt del commit con quella, da leggere e cambiare prima che si committi qualcosa |
+
+Una domanda al modello non è un comando: `!` e gli altri metasimboli non vengono espansi.
 
 # Aggiornamenti
 

@@ -352,6 +352,11 @@ pub enum Prefix {
     /// `ai:question`, or `ai:name: question` for a service other than the first — ask a
     /// language model, the answer opened in the viewer (SPEC 06 §14).
     Ai(String),
+    /// `ai+ question` — a follow-up in the thread of the last answer, or of the one under the
+    /// cursor in the answers' folder.
+    AiFollow(String),
+    /// `ai! what to do` — one shell command, put on the command line and not run.
+    AiCommand(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -435,6 +440,20 @@ pub fn parse(line: &str) -> Parsed {
     let trimmed = line.trim();
     if trimmed.is_empty() {
         return Parsed::Empty;
+    }
+
+    // `ai+` and `ai!` are the two prefixes that are not a word and a colon: what follows the
+    // mark, with or without a colon, is the question.
+    let lower = trimmed.to_ascii_lowercase();
+    for (mark, follow) in [("ai+", true), ("ai!", false)] {
+        if let Some(rest) = lower.strip_prefix(mark).map(|_| &trimmed[mark.len()..]) {
+            let rest = rest.strip_prefix(':').unwrap_or(rest).trim().to_string();
+            return Parsed::Prefix(if follow {
+                Prefix::AiFollow(rest)
+            } else {
+                Prefix::AiCommand(rest)
+            });
+        }
     }
 
     // A prefix binds tighter than anything else, and `view:` must not be confused with a
@@ -560,6 +579,22 @@ pub fn resolve_cd(
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn the_two_ai_marks_are_prefixes_with_or_without_a_colon() {
+        assert_eq!(
+            parse("ai+ and in French?"),
+            Parsed::Prefix(Prefix::AiFollow("and in French?".into()))
+        );
+        assert_eq!(
+            parse("AI!: list the ten largest files"),
+            Parsed::Prefix(Prefix::AiCommand("list the ten largest files".into()))
+        );
+        assert_eq!(parse("ai: why"), Parsed::Prefix(Prefix::Ai("why".into())));
+        // A word that only starts the same way is still a command for the shell.
+        assert_eq!(parse("aix"), Parsed::Shell("aix".into()));
+    }
+
     use super::*;
 
     fn line(text: &str) -> CmdLine {

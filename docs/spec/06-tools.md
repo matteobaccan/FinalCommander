@@ -592,8 +592,27 @@ completions (and every server that speaks it), Anthropic's messages, Ollama's ch
   heading, the service and model under it, then the answer — opened in the viewer, which
   renders Markdown. `ai:` with no question opens that folder in the panel: the history of
   what was asked, each one a file to read again (`F3`), keep, copy or delete.
-* One request, one answer, on the worker; no streaming, no conversation state. A follow-up
-  is a new question, with the earlier answer selected as a file if it is wanted.
+* One request, one answer, on the worker; no streaming. **What it cost** is read from the
+  reply where each format puts it (`usage.input_tokens`/`output_tokens`, `usage.prompt_tokens`/
+  `completion_tokens`, Ollama's `prompt_eval_count`/`eval_count`) and said on the status line
+  and in the answer file's second line.
+* **`ai+ question`** (0.39.0) is a follow-up: the thread is the last answer of the session, or
+  the answer file under the cursor in `fcmd-ai/`; its turns are read back from the file — the
+  first question under `# `, each follow-up under `## ` after a `---` rule, the italic line
+  under each heading left out — and sent again as alternating user and assistant messages, and
+  the new turn is appended to the same file.
+* **`ai! what to do`** (0.39.0) asks, with an instruction in front of the service's own, for
+  exactly one command line for the shell fcmd runs and the OS it is on; the first line of the
+  answer that says anything, with fences, backticks, quotes and a `$ ` taken off, is put on the
+  command line and **not run**.
+* **`Ctrl+Alt+X`** (`ai.explain`, viewer and editor) sends the marked block — in the editor —
+  or the rows on the screen, named after the file, after the same dialog files get.
+* **`Shift+F7`** (`git.commit.draft`, panels) asks, after a dialog naming the staged diff and
+  the host, for a one-line commit message from `git diff --cached --stat --patch` (run on the
+  worker, capped like a file); the answer opens the commit prompt, which commits only on
+  `Enter`.
+* A line that starts with `ai:`, `ai+` or `ai!` is not expanded: FAR's metasymbols would turn
+  the `!` of `ai!` into a file name.
 
 ## 15. Git
 

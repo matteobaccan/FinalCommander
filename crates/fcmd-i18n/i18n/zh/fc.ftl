@@ -1310,6 +1310,14 @@ sql-failed = 查询失败：{ $why }
 ## Asking a language model (SPEC 06 §14).
 ai-none = 尚未配置 AI 服务：在 fcmd.toml 中添加 [[ai]] 块（name、url、model、api、token_env）。
 ai-title = 询问 AI
+ai-no-thread = 没有可继续的回答：先用 `ai:` 提问，或在回答文件夹中把光标放在某个回答上
+ai-nothing-to-explain = 这里没有可解释的内容：请在查看器或编辑器中打开文件
+ai-explain-question = 这是什么（来自 { $name }）？请简要解释。
+ai-tokens = 输入 { $in } 个令牌，输出 { $out } 个
+ai-command-ready = 命令已在命令行上——按回车前请先阅读
+ai-commit-question = 为已暂存的更改写一条提交信息。
+ai-staged-diff = 已暂存的差异
+ai-send-diff = 已暂存的差异将发送到 { $host }
 ai-send-files = { $count } 个文件，{ $size }，将随问题发送到 { $host }。
 ai-asking = 正在询问 { $name }…
 ai-failed = AI 没有回答：{ $why }

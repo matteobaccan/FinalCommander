@@ -65,11 +65,9 @@ pub enum Request {
     /// Ask a language model (SPEC 06 §14): the service, the question, the files the user
     /// agreed to send with it, and the folder the answer is written into.
     AiAsk {
-        service: fcmd_config::AiCfg,
+        query: AiQuery,
         /// A key typed in this session, when the service's variable does not hold one.
         token: Option<String>,
-        question: String,
-        files: Vec<std::path::PathBuf>,
         dir: std::path::PathBuf,
     },
     /// Run a `sql:` query on a database, its rows written as CSV for the viewer.
@@ -472,6 +470,60 @@ pub enum GitAsk {
     Switch(String),
 }
 
+/// What a question to a language model is for, which decides where its answer goes
+/// (SPEC 06 §14): read in the viewer, put on the command line, or offered as a commit message.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AiUse {
+    /// `ai:` and `ai+`: an answer to read.
+    Answer,
+    /// `ai!`: one shell command, put on the command line and never run.
+    Command,
+    /// A message for what is staged in the repository at `root`, offered in the commit prompt.
+    Commit { root: PathBuf },
+}
+
+/// Everything one question carries until it is sent: the service, the words, the files and
+/// the text that go with it, the thread it continues and what the answer is for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AiQuery {
+    pub service: fcmd_config::AiCfg,
+    pub question: String,
+    pub files: Vec<PathBuf>,
+    /// Text sent as if it were a file — a block from the viewer or the editor — by name.
+    pub inline: Vec<(String, String)>,
+    /// The answer file this question follows up, whose turns are sent again and which the
+    /// answer is added to.
+    pub thread: Option<PathBuf>,
+    pub purpose: AiUse,
+    /// A sentence of instruction sent before the question, for the uses that want the answer
+    /// in a shape the program can use.
+    pub instruction: String,
+}
+
+impl AiQuery {
+    pub fn new(service: fcmd_config::AiCfg, question: String) -> AiQuery {
+        AiQuery {
+            service,
+            question,
+            files: Vec::new(),
+            inline: Vec::new(),
+            thread: None,
+            purpose: AiUse::Answer,
+            instruction: String::new(),
+        }
+    }
+}
+
+/// What came back: the file it was written into, the answer itself, what it was for and what
+/// it cost.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AiAnswer {
+    pub file: PathBuf,
+    pub text: String,
+    pub purpose: AiUse,
+    pub tokens: (Option<u64>, Option<u64>),
+}
+
 /// One row of the log panel.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GitCommit {
@@ -695,7 +747,7 @@ pub enum Event {
     },
     /// A language model's answer, written into a Markdown file, or why there is none.
     AiDone {
-        result: Result<std::path::PathBuf, String>,
+        result: Result<AiAnswer, String>,
     },
     /// A `sql:` query's rows, as a CSV file to view, or why there are none.
     SqlDone {
@@ -1393,11 +1445,7 @@ pub enum ConfirmAction {
         filter: String,
     },
     /// Send these files with a question to a language model, having said so.
-    AskAi {
-        service: fcmd_config::AiCfg,
-        question: String,
-        files: Vec<std::path::PathBuf>,
-    },
+    AskAi { query: Box<AiQuery> },
     /// Open a release's page in the browser.
     OpenRelease { url: String },
     /// Install a program from elsewhere with this line, in a terminal (the `:tools` panel).
@@ -2297,7 +2345,9 @@ pub struct App {
     /// A key typed and waiting for the secrets file to be created around it.
     vault_pending_key: Option<(String, String)>,
     /// The question waiting for a key.
-    ai_pending: Option<(fcmd_config::AiCfg, String, Vec<std::path::PathBuf>)>,
+    ai_pending: Option<AiQuery>,
+    /// The last answer of this session, which `ai+` follows up.
+    ai_last: Option<PathBuf>,
     /// Which service the AI dialog is changing; `None` is a new one.
     ai_editing: Option<usize>,
     /// Size of the editor's text area, from the last frame.
@@ -2667,6 +2717,7 @@ impl App {
             vault_tried: None,
             secret_to_keep: None,
             ai_pending: None,
+            ai_last: None,
             ai_editing: None,
             editor_size: (80, 20),
             decompile_id: None,
@@ -2968,11 +3019,7 @@ impl App {
             Event::GitDone { panel, result } => self.git_done(panel, result),
             Event::TextReady { result } => self.git_done(self.active, result.map(GitOut::Text)),
             Event::AiDone { result } => match result {
-                Ok(answer) => {
-                    self.set_status(String::new());
-                    let vpath = VPath::local(&answer);
-                    self.open_viewer_on(&answer, vpath);
-                }
+                Ok(answer) => self.ai_done(answer),
                 Err(why) => {
                     let m = self.i18n.t_args("ai-failed", &[("why", why.into())]);
                     self.set_error(m);
@@ -4625,11 +4672,7 @@ impl App {
                             accept_host_key: true,
                         });
                     }
-                    ConfirmAction::AskAi {
-                        service,
-                        question,
-                        files,
-                    } => self.ask_ai(service, question, files),
+                    ConfirmAction::AskAi { query } => self.ask_ai(*query),
                     ConfirmAction::OpenRelease { url } => {
                         self.requests.push(Request::OpenUrl { url });
                     }
@@ -6115,24 +6158,24 @@ impl App {
             }
             PromptKind::AiKey => {
                 let key = prompt.text.trim().to_string();
-                let Some((service, question, files)) = self.ai_pending.take() else {
+                let Some(query) = self.ai_pending.take() else {
                     return;
                 };
                 if key.is_empty() {
                     return;
                 }
-                let name = format!("ai:{}", service.name);
+                let name = format!("ai:{}", query.service.name);
                 match self.vault.as_mut() {
                     // Kept in the secrets file, for this run and the next.
                     Some(v) => {
                         v.set(&name, &key);
                         self.save_vault();
-                        self.ask_ai(service, question, files);
+                        self.ask_ai(query);
                     }
                     // No file yet: offer to make one around this key.
                     None => {
                         self.vault_pending_key = Some((name, key));
-                        self.ai_pending = Some((service, question, files));
+                        self.ai_pending = Some(query);
                         let title = self.i18n.t("vault-new");
                         self.mode = Mode::Prompt(Prompt {
                             kind: PromptKind::VaultNew,
@@ -6160,8 +6203,8 @@ impl App {
                     self.vault = Some(v);
                     self.save_vault();
                 }
-                if let Some((service, question, files)) = self.ai_pending.take() {
-                    self.ask_ai(service, question, files);
+                if let Some(query) = self.ai_pending.take() {
+                    self.ask_ai(query);
                 }
             }
             PromptKind::VaultPassword => {
@@ -6169,8 +6212,8 @@ impl App {
                 match crate::vault::Unlocked::open(&self.vault_path(), &password) {
                     Ok(v) => {
                         self.vault = Some(v);
-                        if let Some((service, question, files)) = self.ai_pending.take() {
-                            self.ask_ai(service, question, files);
+                        if let Some(query) = self.ai_pending.take() {
+                            self.ask_ai(query);
                         } else if let (Some(kind), Some((panel, site, _))) =
                             (self.vault_for_connect.take(), self.pending_connect.take())
                         {
@@ -8950,6 +8993,16 @@ impl App {
                 }
             }
         }
+        // The two that ask the language model about what is in front of the user, wherever
+        // that is: the viewer, the editor, or the panel of a repository.
+        if cmd == Command::AiExplain {
+            self.ai_explain_here();
+            return;
+        }
+        if cmd == Command::GitCommitDraft {
+            self.git_commit_draft();
+            return;
+        }
         // While the viewer is open, movement and its own toggles belong to it, not the panel
         // — and the quick view with the focus is a viewer, so they belong to it as well.
         if self.live_viewer().is_some() && is_viewer_movement(cmd) {
@@ -11274,6 +11327,15 @@ impl App {
     /// Run a line that has already been remembered: substitutions, then conditions, then
     /// whatever kind of command it turns out to be.
     fn run_line(&mut self, line: &str) {
+        // A question to a language model is words, not a command: FAR's metasymbols would
+        // turn the `!` of `ai!` — and of any question asked with feeling — into a file name.
+        if let Parsed::Prefix(
+            prefix @ (Prefix::Ai(_) | Prefix::AiFollow(_) | Prefix::AiCommand(_)),
+        ) = cmdline::parse(line)
+        {
+            self.run_prefix(prefix);
+            return;
+        }
         let ctx = self.expand_context();
         let list_file = if expand::wants_list_file(line) {
             match self.write_list_file(&ctx.selection) {
@@ -12283,32 +12345,35 @@ impl App {
 
     /// `ai:` on the command line (SPEC 06 §14).
     fn ai_line(&mut self, text: String) {
+        self.ai_line_for(text, '\0');
+    }
+
+    /// The service a line names, and the question that is left: `name: question` picks a
+    /// service by its name, anything else is a question for the first one, colons and all.
+    fn ai_service(&self, text: &str) -> (fcmd_config::AiCfg, String) {
+        match text.split_once(':') {
+            Some((head, rest)) => match self
+                .cfg
+                .ais
+                .iter()
+                .find(|a| a.name.eq_ignore_ascii_case(head.trim()))
+            {
+                Some(s) => (s.clone(), rest.trim().to_string()),
+                None => (self.cfg.ais[0].clone(), text.trim().to_string()),
+            },
+            None => (self.cfg.ais[0].clone(), text.trim().to_string()),
+        }
+    }
+
+    /// `ai:`, `ai+` (a follow-up in the same thread) and `ai!` (words to a command). `kind` is
+    /// the character after `ai`, or NUL for the plain `ai:`.
+    fn ai_line_for(&mut self, text: String, kind: char) {
         if self.cfg.ais.is_empty() {
             let m = self.i18n.t("ai-none");
             self.set_error(m);
             return;
         }
-        // `ai:name: question` picks a service by its name; anything else is a question for
-        // the first one, colons and all.
-        let (service, question) = match text.split_once(':') {
-            Some((head, rest))
-                if self
-                    .cfg
-                    .ais
-                    .iter()
-                    .any(|a| a.name.eq_ignore_ascii_case(head.trim())) =>
-            {
-                let s = self
-                    .cfg
-                    .ais
-                    .iter()
-                    .find(|a| a.name.eq_ignore_ascii_case(head.trim()))
-                    .cloned()
-                    .expect("just found");
-                (s, rest.trim().to_string())
-            }
-            _ => (self.cfg.ais[0].clone(), text.trim().to_string()),
-        };
+        let (service, question) = self.ai_service(&text);
         if question.is_empty() {
             // The answers so far, as a panel: F3 reads one, F8 forgets it.
             let dir = self.ai_dir();
@@ -12316,66 +12381,191 @@ impl App {
             self.goto(VPath::local(&dir));
             return;
         }
+        let mut query = AiQuery::new(service, question);
+        match kind {
+            '!' => {
+                // One line, for the shell this program runs commands with, on this system:
+                // it goes on the command line, where Enter is still the user's to press.
+                query.purpose = AiUse::Command;
+                query.instruction = format!(
+                    "Reply with exactly one command line for {} on {}, which does what is asked. \
+                     No explanation, no code fence, nothing else.",
+                    std::path::Path::new(&self.shell_program())
+                        .file_stem()
+                        .map(|s| s.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| "sh".into()),
+                    std::env::consts::OS
+                );
+                self.ask_ai(query);
+                return;
+            }
+            '+' => match self.ai_thread() {
+                Some(file) => query.thread = Some(file),
+                None => {
+                    let m = self.i18n.t("ai-no-thread");
+                    self.set_error(m);
+                    return;
+                }
+            },
+            _ => {}
+        }
         // The files go only with a dialog that names them, their size and the host they are
         // going to. Only what is selected, so nothing goes by accident from under the cursor.
-        let files: Vec<std::path::PathBuf> = if self.panel().selection.is_empty() {
-            Vec::new()
-        } else {
-            self.job_sources()
+        if !self.panel().selection.is_empty() {
+            query.files = self
+                .job_sources()
                 .into_iter()
                 .filter(|p| p.is_local() && !p.in_container() && p.as_path().is_file())
                 .map(|p| p.as_path().to_path_buf())
-                .collect()
-        };
-        if files.is_empty() {
-            self.ask_ai(service, question, files);
+                .collect();
+        }
+        if query.files.is_empty() {
+            self.ask_ai(query);
             return;
         }
-        let bytes: u64 = files
+        let bytes: u64 = query
+            .files
             .iter()
             .filter_map(|f| std::fs::metadata(f).ok())
             .map(|m| m.len())
             .sum();
-        let host = service
+        let names: Vec<String> = query
+            .files
+            .iter()
+            .map(|f| f.display().to_string())
+            .collect();
+        self.confirm_ai_send(query, names, Some(bytes));
+    }
+
+    /// The answer a follow-up continues: the answer file under the cursor when the panel is
+    /// showing the answers, otherwise the last one of this session.
+    fn ai_thread(&self) -> Option<PathBuf> {
+        let dir = self.ai_dir();
+        let p = self.panel();
+        if p.cwd.is_local() && p.cwd.as_path() == dir {
+            if let Some(e) = p.current() {
+                if e.name.to_string_lossy().ends_with(".md") {
+                    return Some(dir.join(&e.name));
+                }
+            }
+        }
+        self.ai_last.clone().filter(|f| f.is_file())
+    }
+
+    /// Say what is about to go and to where, before it goes: the names, how much and the host.
+    /// `bytes` is `None` for what cannot be measured before it is made, the staged diff.
+    fn confirm_ai_send(&mut self, query: AiQuery, names: Vec<String>, bytes: Option<u64>) {
+        let host = query
+            .service
             .url
             .split("//")
             .nth(1)
             .and_then(|r| r.split('/').next())
-            .unwrap_or(&service.url)
+            .unwrap_or(&query.service.url)
             .to_string();
         let title = self.i18n.t("ai-title");
-        let mut lines = vec![self.i18n.t_args(
-            "ai-send-files",
-            &[
-                ("count", (files.len() as i64).into()),
-                ("size", fcmd_core::size::format_size(bytes).into()),
-                ("host", host.into()),
-            ],
-        )];
-        for f in files.iter().take(5) {
-            lines.push(format!("  {}", f.display()));
+        let head = match bytes {
+            Some(bytes) => self.i18n.t_args(
+                "ai-send-files",
+                &[
+                    ("count", (names.len() as i64).into()),
+                    ("size", fcmd_core::size::format_size(bytes).into()),
+                    ("host", host.into()),
+                ],
+            ),
+            None => self.i18n.t_args("ai-send-diff", &[("host", host.into())]),
+        };
+        let mut lines = vec![head];
+        for n in names.iter().take(5) {
+            lines.push(format!("  {n}"));
         }
-        if files.len() > 5 {
+        if names.len() > 5 {
             lines.push("  …".into());
         }
         self.mode = Mode::Confirm(Confirm {
             title,
             lines,
             action: ConfirmAction::AskAi {
-                service,
-                question,
-                files,
+                query: Box::new(query),
             },
             button: 1,
         });
     }
 
-    fn ask_ai(
-        &mut self,
-        service: fcmd_config::AiCfg,
-        question: String,
-        files: Vec<std::path::PathBuf>,
-    ) {
+    /// `Ctrl+Alt+X` in the viewer and the editor: ask what the marked block — or, with none,
+    /// what is on the screen — is, having said how much of it goes and where.
+    pub(crate) fn ai_explain(&mut self, name: String, text: String) {
+        if self.cfg.ais.is_empty() {
+            let m = self.i18n.t("ai-none");
+            self.set_error(m);
+            return;
+        }
+        if text.trim().is_empty() {
+            let m = self.i18n.t("ai-nothing-to-explain");
+            self.set_error(m);
+            return;
+        }
+        let question = self
+            .i18n
+            .t_args("ai-explain-question", &[("name", name.clone().into())]);
+        let mut query = AiQuery::new(self.cfg.ais[0].clone(), question);
+        let bytes = text.len() as u64;
+        query.inline = vec![(name.clone(), text)];
+        self.confirm_ai_send(query, vec![name], Some(bytes));
+    }
+
+    /// What `Ctrl+Alt+X` asks about: in the editor the marked block, or the lines on the
+    /// screen; in the viewer what it shows.
+    fn ai_explain_here(&mut self) {
+        let (cols, rows) = self.editor_size;
+        if let Some(editor) = self.mode.editor_mut() {
+            let name = editor.name();
+            let text = editor.block_text().unwrap_or_else(|| {
+                let lines = editor.buffer.lines();
+                let from = editor.top.min(lines.len());
+                let to = (from + rows.max(1) as usize).min(lines.len());
+                lines[from..to].join("\n")
+            });
+            let _ = cols;
+            self.ai_explain(name, text);
+            return;
+        }
+        let (w, h) = self.live_viewer_size();
+        if let Some(viewer) = self.live_viewer_mut() {
+            let name = viewer.path.display_name();
+            let text: Vec<String> = viewer.rows(w, h).into_iter().map(|r| r.text).collect();
+            self.ai_explain(name, text.join("\n"));
+            return;
+        }
+        let m = self.i18n.t("ai-nothing-to-explain");
+        self.set_error(m);
+    }
+
+    /// `Shift+F7` in a repository: a message drafted from what is staged, after a dialog
+    /// says the staged diff is what goes and to which host.
+    fn git_commit_draft(&mut self) {
+        let Some(root) = self.git_cwd() else {
+            let m = self.i18n.t("git-local-only");
+            self.set_error(m);
+            return;
+        };
+        if self.cfg.ais.is_empty() {
+            let m = self.i18n.t("ai-none");
+            self.set_error(m);
+            return;
+        }
+        let question = self.i18n.t("ai-commit-question");
+        let mut query = AiQuery::new(self.cfg.ais[0].clone(), question);
+        query.instruction = "Reply with one commit message for the staged diff: a subject line \
+            of at most 72 characters in the imperative mood, nothing else."
+            .into();
+        query.purpose = AiUse::Commit { root };
+        let what = self.i18n.t("ai-staged-diff");
+        self.confirm_ai_send(query, vec![what], None);
+    }
+
+    fn ask_ai(&mut self, query: AiQuery) {
+        let service = &query.service;
         let m = self
             .i18n
             .t_args("ai-asking", &[("name", service.name.clone().into())]);
@@ -12390,7 +12580,7 @@ impl App {
             && !self.ai_tokens.contains_key(&service.name)
             && self.vault_path().is_file()
         {
-            self.ai_pending = Some((service, question, files));
+            self.ai_pending = Some(query);
             let title = self.i18n.t("vault-password");
             self.mode = Mode::Prompt(Prompt {
                 kind: PromptKind::VaultPassword,
@@ -12401,16 +12591,15 @@ impl App {
             });
             return;
         }
-        let typed = self.ai_tokens.get(&service.name).cloned().or_else(|| {
+        let name = service.name.clone();
+        let typed = self.ai_tokens.get(&name).cloned().or_else(|| {
             self.vault
                 .as_mut()
-                .and_then(|v| v.get(&format!("ai:{}", service.name)))
+                .and_then(|v| v.get(&format!("ai:{name}")))
         });
         if needs_key && typed.is_none() {
-            let title = self
-                .i18n
-                .t_args("ai-key-prompt", &[("name", service.name.clone().into())]);
-            self.ai_pending = Some((service, question, files));
+            let title = self.i18n.t_args("ai-key-prompt", &[("name", name.into())]);
+            self.ai_pending = Some(query);
             self.mode = Mode::Prompt(Prompt {
                 kind: PromptKind::AiKey,
                 title,
@@ -12421,12 +12610,51 @@ impl App {
             return;
         }
         self.requests.push(Request::AiAsk {
-            service,
+            query,
             token: if from_env { None } else { typed },
-            question,
-            files,
             dir,
         });
+    }
+
+    /// An answer is back: read it, put it on the command line, or offer it as a commit
+    /// message — and say on the status line what it cost.
+    fn ai_done(&mut self, answer: AiAnswer) {
+        let cost = match answer.tokens {
+            (Some(i), Some(o)) => self.i18n.t_args(
+                "ai-tokens",
+                &[("in", (i as i64).into()), ("out", (o as i64).into())],
+            ),
+            _ => String::new(),
+        };
+        match answer.purpose {
+            AiUse::Answer => {
+                self.ai_last = Some(answer.file.clone());
+                let vpath = VPath::local(&answer.file);
+                self.open_viewer_on(&answer.file, vpath);
+                self.set_status(cost);
+            }
+            AiUse::Command => {
+                let line = ai_command_line(&answer.text);
+                self.cmd.set(line);
+                let m = self.i18n.t("ai-command-ready");
+                self.set_status(if cost.is_empty() {
+                    m
+                } else {
+                    format!("{m}  {cost}")
+                });
+            }
+            AiUse::Commit { .. } => {
+                let title = self.i18n.t("git-commit-prompt");
+                self.mode = Mode::Prompt(Prompt {
+                    kind: PromptKind::GitCommit,
+                    title,
+                    text: ai_command_line(&answer.text),
+                    secret: false,
+                    sources: Vec::new(),
+                });
+                self.set_status(cost);
+            }
+        }
     }
 
     /// `fcmd-secrets.vault`, beside the settings so it travels with them.
@@ -12540,6 +12768,8 @@ impl App {
     fn run_prefix(&mut self, prefix: Prefix) {
         match prefix {
             Prefix::Ai(text) => self.ai_line(text),
+            Prefix::AiFollow(text) => self.ai_line_for(text, '+'),
+            Prefix::AiCommand(text) => self.ai_line_for(text, '!'),
             Prefix::Sql(sql) => {
                 if sql.trim().is_empty() {
                     let m = self.i18n.t("sql-empty");
@@ -23902,6 +24132,25 @@ fn is_editor_command(cmd: Command) -> bool {
 }
 
 /// Commands the viewer handles itself when it is open.
+/// The one line a model was asked for, out of what it answered: a code fence and the quotes
+/// or backticks some models put around a command anyway are taken off, and only the first
+/// line that says anything is kept — whatever else came back stays in the answer file.
+fn ai_command_line(answer: &str) -> String {
+    answer
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with("```"))
+        .map(|l| {
+            l.trim_start_matches("$ ")
+                .trim_matches('`')
+                .trim_matches('"')
+                .trim()
+                .to_string()
+        })
+        .find(|l| !l.is_empty())
+        .unwrap_or_default()
+}
+
 fn is_viewer_movement(cmd: Command) -> bool {
     matches!(
         cmd,
@@ -35209,12 +35458,7 @@ abcdefghij
         app.cmd.set("ai: local: why: really?");
         press(&mut app, "Enter");
         let asked = app.take_requests().into_iter().find_map(|r| match r {
-            Request::AiAsk {
-                service,
-                question,
-                files,
-                ..
-            } => Some((service.name, question, files)),
+            Request::AiAsk { query, .. } => Some((query.service.name, query.question, query.files)),
             _ => None,
         });
         assert_eq!(asked, Some(("local".into(), "why: really?".into(), vec![])));
@@ -35237,6 +35481,159 @@ abcdefghij
             .take_requests()
             .iter()
             .any(|r| matches!(r, Request::AiAsk { .. })));
+    }
+
+    /// `ai!` asks for one command in a shape the program can use and puts the answer on the
+    /// command line, not run; `ai+` follows up the last answer, and with none says so; an
+    /// answer for a commit opens the commit prompt with it.
+    #[test]
+    fn ai_marks_ask_for_a_command_a_follow_up_and_a_commit_message() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = editing_app(dir.path());
+        app.cfg.ais = vec![fcmd_config::AiCfg {
+            name: "local".into(),
+            url: "http://127.0.0.1:11434/api/chat".into(),
+            model: "m".into(),
+            api: "ollama".into(),
+            ..Default::default()
+        }];
+        app.take_requests();
+        app.cmd.set("ai! list the ten largest files here");
+        press(&mut app, "Enter");
+        let query = app
+            .take_requests()
+            .into_iter()
+            .find_map(|r| match r {
+                Request::AiAsk { query, .. } => Some(query),
+                _ => None,
+            })
+            .expect("asked");
+        assert_eq!(query.purpose, AiUse::Command);
+        assert!(
+            query.instruction.contains("one command line"),
+            "{}",
+            query.instruction
+        );
+        assert_eq!(query.question, "list the ten largest files here");
+
+        // The answer goes on the line, fences and all taken off, and nothing is run.
+        app.handle_event(Event::AiDone {
+            result: Ok(AiAnswer {
+                file: dir.path().join("a.md"),
+                text: "```sh\nls -S | head -10\n```".into(),
+                purpose: AiUse::Command,
+                tokens: (Some(10), Some(5)),
+            }),
+        });
+        assert_eq!(app.cmd.text, "ls -S | head -10");
+        assert!(app.status.contains("10"), "{}", app.status);
+        assert!(app
+            .take_requests()
+            .iter()
+            .all(|r| !matches!(r, Request::Shell { .. })));
+
+        // No answer yet in this session: a follow-up has nothing to follow.
+        app.cmd.set("ai+ and the smallest?");
+        press(&mut app, "Enter");
+        assert!(app.status_error, "{}", app.status);
+        // After one, it continues that one's thread.
+        let answer = dir.path().join("1-why.md");
+        std::fs::write(&answer, "# why?\n\n*local · m*\n\nbecause\n").unwrap();
+        app.handle_event(Event::AiDone {
+            result: Ok(AiAnswer {
+                file: answer.clone(),
+                text: "because".into(),
+                purpose: AiUse::Answer,
+                tokens: (None, None),
+            }),
+        });
+        app.mode = Mode::Normal;
+        app.cmd.set("ai+ and the smallest?");
+        press(&mut app, "Enter");
+        let query = app
+            .take_requests()
+            .into_iter()
+            .find_map(|r| match r {
+                Request::AiAsk { query, .. } => Some(query),
+                _ => None,
+            })
+            .expect("asked again");
+        assert_eq!(query.thread, Some(answer));
+
+        // A drafted commit message lands in the commit prompt, to be read and changed.
+        app.handle_event(Event::AiDone {
+            result: Ok(AiAnswer {
+                file: dir.path().join("c.md"),
+                text: "Add the git column".into(),
+                purpose: AiUse::Commit {
+                    root: dir.path().to_path_buf(),
+                },
+                tokens: (None, None),
+            }),
+        });
+        let Mode::Prompt(p) = &app.mode else {
+            panic!("the commit prompt: {:?}", app.mode)
+        };
+        assert_eq!(p.kind, PromptKind::GitCommit);
+        assert_eq!(p.text, "Add the git column");
+    }
+
+    /// `Ctrl+Alt+X` in the viewer sends nothing until a dialog has said what goes and where;
+    /// `Shift+F7` in a panel does the same for the staged diff.
+    #[test]
+    fn explaining_and_drafting_a_commit_ask_before_anything_goes() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("notes.txt");
+        std::fs::write(&file, "fn main() {}\n").unwrap();
+        let mut app = editing_app(dir.path());
+        app.cfg.ais = vec![fcmd_config::AiCfg {
+            name: "local".into(),
+            url: "http://127.0.0.1:11434/api/chat".into(),
+            model: "m".into(),
+            api: "ollama".into(),
+            ..Default::default()
+        }];
+        app.view_path(&file.display().to_string());
+        app.take_requests();
+        press(&mut app, "Ctrl+Alt+X");
+        let Mode::Confirm(c) = &app.mode else {
+            panic!("a dialog first: {:?}", app.mode)
+        };
+        assert!(
+            c.lines.iter().any(|l| l.contains("notes.txt")),
+            "{:?}",
+            c.lines
+        );
+        assert!(c.lines[0].contains("127.0.0.1"), "{:?}", c.lines);
+        assert!(app
+            .take_requests()
+            .iter()
+            .all(|r| !matches!(r, Request::AiAsk { .. })));
+        // *Cancel* is the button lit; the user moves to *Send*.
+        if let Mode::Confirm(c) = &mut app.mode {
+            c.button = 0;
+        }
+        press(&mut app, "Enter");
+        let query = app
+            .take_requests()
+            .into_iter()
+            .find_map(|r| match r {
+                Request::AiAsk { query, .. } => Some(query),
+                _ => None,
+            })
+            .expect("sent on yes");
+        assert_eq!(query.inline[0].0, "notes.txt");
+        assert!(query.inline[0].1.contains("fn main"));
+    }
+
+    #[test]
+    fn a_model_s_command_is_read_out_of_what_it_wrapped_it_in() {
+        assert_eq!(ai_command_line("`du -sh *`"), "du -sh *");
+        assert_eq!(
+            ai_command_line("\n$ find . -name '*.rs'\n\nThis finds…"),
+            "find . -name '*.rs'"
+        );
+        assert_eq!(ai_command_line("```\n```"), "");
     }
 
     /// `sql:` on the command line asks the worker to query the database under the cursor;

@@ -1338,6 +1338,14 @@ sql-failed = Die Abfrage ist fehlgeschlagen: { $why }
 ## Asking a language model (SPEC 06 §14).
 ai-none = Kein KI-Dienst eingerichtet: einen [[ai]]-Block in fcmd.toml anlegen (name, url, model, api, token_env).
 ai-title = Eine KI fragen
+ai-no-thread = keine Antwort zum Fortsetzen: zuerst mit `ai:` fragen oder den Cursor im Antwortordner auf eine setzen
+ai-nothing-to-explain = hier gibt es nichts zu erklären: eine Datei im Betrachter oder Editor öffnen
+ai-explain-question = Was ist das, aus { $name }? Kurz erklären.
+ai-tokens = { $in } Tokens hinein, { $out } heraus
+ai-command-ready = der Befehl steht in der Zeile — vor Enter lesen
+ai-commit-question = Schreibe eine Commit-Nachricht für die vorgemerkten Änderungen.
+ai-staged-diff = der vorgemerkte Diff
+ai-send-diff = Der vorgemerkte Diff geht an { $host }
 ai-send-files = { $count } Dateien, { $size }, werden mit der Frage an { $host } gesendet.
 ai-asking = Frage { $name }…
 ai-failed = Die KI hat nicht geantwortet: { $why }

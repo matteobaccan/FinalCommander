@@ -429,6 +429,7 @@ title counts both. They are the real files, and the keys are the ones the bar sh
 | `F5` | stage the selected files, or the one under the cursor (`git add`) |
 | `F6` | unstage them (`git restore --staged`) |
 | `F7` | commit what is staged, after asking for the message |
+| `Shift+F7` | the same, with a message the AI drafted from the staged diff (see *Asking an AI*) |
 | `F8` | the file's own log, every commit that touched it |
 | `F2` | the git menu: the other panels, blame, pull and push |
 | `Ctrl+R` | ask git again |

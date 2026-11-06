@@ -1453,3 +1453,22 @@ cmd = "job.queue.show"
 # search shows it too, at the line it found.
 keys = ["Ctrl+Shift+F"]
 cmd = "shell.output.search"
+
+# The language model where it reads what you are reading (SPEC 06 §14): `Ctrl+Alt+X` asks what
+# the marked block — or the screen — is, after a dialog says how much goes and where. And
+# `Shift+F7`, beside `F7` that commits, commits with a message drafted from the staged diff,
+# which is put in the prompt to be read and changed before anything is committed.
+[[bind]]
+keys = ["Ctrl+Alt+X"]
+scope = "viewer"
+cmd = "ai.explain"
+
+[[bind]]
+keys = ["Ctrl+Alt+X"]
+scope = "editor"
+cmd = "ai.explain"
+
+[[bind]]
+keys = ["Shift+F7"]
+scope = "panel"
+cmd = "git.commit.draft"

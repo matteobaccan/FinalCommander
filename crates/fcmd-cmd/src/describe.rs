@@ -236,6 +236,8 @@ impl Command {
             Command::ToolDuplicates => "find the files under this directory that are copies",
             Command::ToolTaskList => "the running processes, as a panel",
             Command::ToolGit => "the repository: what changed, the log, blame, branches",
+            Command::GitCommitDraft => "commit what is staged, with a message the model drafted",
+            Command::AiExplain => "ask the model what the marked block, or the screen, is",
             Command::ToolSysLog => "the system log, the latest entries, in the viewer",
             Command::ToolAi => "the AI services: add, change, remove, choose the one asked",
             Command::ToolGrab => "copy a piece of the screen as it stands",

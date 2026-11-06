@@ -4,6 +4,18 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
+## [Unreleased]
+
+### Added
+
+- **More ways to ask the AI.** `ai+ question` follows up the last answer (or the one under the
+  cursor among the answers), sending the earlier turns again and adding the new one to the same
+  file. `ai! what to do` asks for one command for your shell and puts it on the command line,
+  not run. `Ctrl+Alt+X` in the viewer and the editor asks what the marked block, or the screen,
+  is. `Shift+F7` in a repository drafts a commit message from the staged diff and opens the
+  commit prompt with it. Everything that sends text says what and to which host first, and the
+  status line says what each answer cost in tokens.
+
 ## [0.38.0] - 2026-11-06
 
 ### Added

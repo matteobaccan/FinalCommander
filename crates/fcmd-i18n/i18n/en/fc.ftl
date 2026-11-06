@@ -1348,6 +1348,14 @@ sql-failed = The query failed: { $why }
 ## Asking a language model (SPEC 06 §14).
 ai-none = No AI service is set up: add an [[ai]] block to fcmd.toml (name, url, model, api, token_env).
 ai-title = Ask an AI
+ai-no-thread = no answer to follow up: ask with `ai:` first, or put the cursor on one in the answers' folder
+ai-nothing-to-explain = nothing to explain here: open a file in the viewer or the editor
+ai-explain-question = What is this, from { $name }? Explain it briefly.
+ai-tokens = { $in } tokens in, { $out } out
+ai-command-ready = the command is on the line — read it before pressing Enter
+ai-commit-question = Write a commit message for the staged changes.
+ai-staged-diff = the staged diff
+ai-send-diff = The staged diff goes to { $host }
 ai-send-files = { $count } files, { $size }, will be sent to { $host } with the question.
 ai-asking = Asking { $name }…
 ai-failed = The AI did not answer: { $why }
