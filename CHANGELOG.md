@@ -33,6 +33,9 @@ Notable changes, newest first. The format follows
 
 ### Fixed
 
+- **`F7` lands on the folder it made**, as FAR's does: once it exists, the panel's cursor is
+  on it — on `a` for `a/b/c`, the part the panel shows — instead of where it was before.
+  Mauro Botta's issue #29.
 - **What a plugin brings, all of it.** A plugin's `[[assoc]]`, `[[decompile]]` and
   `[[mask-group]]` blocks were read and then not used: only themes, keymaps and commands
   were. Now they apply too, after the configuration's own blocks, and are never written into

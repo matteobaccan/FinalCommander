@@ -1,7 +1,8 @@
 # Copying, moving, making, deleting
 
 `F5` copies, `F6` moves or renames, `F7` makes a directory, `F8` deletes. The destination of a
-copy or a move is the other panel, and the dialog says so before anything happens.
+copy or a move is the other panel, and the dialog says so before anything happens. After `F7`
+the cursor is on the new folder, ready for `Enter`.
 
 Every one of them is a job: it runs in the background with a progress bar, `Esc` stops it, and
 what it has already done stays done. A conflict — a file that is already there — stops and

@@ -2,7 +2,7 @@
 
 `F5` copia, `F6` sposta o rinomina, `F7` crea una cartella, `F8` cancella. La destinazione di
 una copia o di uno spostamento è l'altro pannello, e il dialogo lo dice prima che accada
-qualcosa.
+qualcosa. Dopo `F7` il cursore è sulla cartella nuova, pronto per `Invio`.
 
 Ognuna di queste è un lavoro: gira in sottofondo con una barra di avanzamento, `Esc` la ferma, e
 quello che ha già fatto resta fatto. Un conflitto — un file che è già là — si ferma e chiede,

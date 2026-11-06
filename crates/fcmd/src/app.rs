@@ -2325,6 +2325,9 @@ pub struct App {
     /// What the installed-programs panel was built from, so a row can be looked up again:
     /// the panel holds rows of text, and the card wants the whole of what was read.
     programs: Vec<fcmd_platform::Program>,
+    /// The folder `F7` is making, as the panel and the row name to put the cursor on when
+    /// the job ends.
+    mkdir_cursor: Option<(usize, String)>,
     /// The plugins found at startup, on and off and broken (*Options → Plugins configuration*).
     pub plugins: Vec<PluginRow>,
     /// The programs from elsewhere, as the panel of them last found them (`:tools`).
@@ -2651,6 +2654,7 @@ impl App {
             programs: Vec::new(),
             tools: Vec::new(),
             plugins: Vec::new(),
+            mkdir_cursor: None,
             user_screen: Vec::new(),
             shell_screen: false,
             hidden: None,
@@ -5905,6 +5909,10 @@ impl App {
                     return;
                 }
                 let target = self.resolve_path(raw);
+                // The cursor goes to the new folder once it exists, as FAR's does: what one
+                // does after making a folder is go into it. For `a/b/c` that is `a`, the part
+                // this panel shows; for a path somewhere else entirely, nothing moves.
+                self.mkdir_cursor = self.row_in_panel(self.active, &target);
                 self.start_job(JobSpec::new(JobKind::Mkdir, vec![], Some(target)));
             }
             PromptKind::TabName => {
@@ -8571,6 +8579,14 @@ impl App {
     }
 
     fn job_done(&mut self, id: u64, kind: JobKind, outcome: Outcome) {
+        // A folder made with `F7`: the re-read below lands on it, if it was made.
+        if kind == JobKind::Mkdir {
+            if let Some((side, name)) = self.mkdir_cursor.take() {
+                if outcome.errors.is_empty() && !outcome.cancelled {
+                    self.panels[side].want_cursor = Some(name);
+                }
+            }
+        }
         let shown = matches!(&self.mode, Mode::Job(view) if view.id == id);
         // A job of the queue keeps its row, now with what it did; what it was carrying
         // forward comes out of it here.
@@ -15104,6 +15120,24 @@ impl App {
         lines.push(String::new());
         lines.push(self.i18n.t("tools-card-why"));
         lines
+    }
+
+    /// The row of this panel's directory that a path lies under: `new` for `cwd/new`, and
+    /// `a` for `cwd/a/b/c`. `None` for a path outside the directory the panel shows.
+    fn row_in_panel(&self, side: usize, path: &VPath) -> Option<(usize, String)> {
+        let cwd = self.panels[side].cwd.normalised();
+        let mut at = path.normalised();
+        for _ in 0..256 {
+            let parent = at.parent()?.normalised();
+            if parent == cwd {
+                return Some((side, at.display_name()));
+            }
+            if parent == at {
+                return None;
+            }
+            at = parent;
+        }
+        None
     }
 
     /// `F4` on a row of that panel: install the program with the system's package manager —
@@ -31314,6 +31348,44 @@ run = ["echo one", "echo two", "echo three"]
         }
         assert!(app.mode.is_normal(), "F4 opened {:?}", app.mode);
         assert_eq!(app.panels[0].temp_origin(), Some(":programs"));
+    }
+
+    /// `F7`: once the folder is made, the panel's cursor is on it — and on the first part
+    /// of a path of several, which is the row the panel shows.
+    #[test]
+    fn f7_puts_the_cursor_on_the_new_folder() {
+        let mut app = app();
+        press(&mut app, "F7");
+        for c in ["n", "e", "w", "/", "d", "e", "e", "p"] {
+            press(&mut app, c);
+        }
+        press(&mut app, "Enter");
+        let (id, _) = job_request(&mut app);
+        app.handle_event(Event::JobDone {
+            id,
+            kind: JobKind::Mkdir,
+            outcome: fcmd_jobs::Outcome {
+                dirs: 2,
+                ..Default::default()
+            },
+        });
+        let generation = app.panels[0].generation;
+        app.handle_event(Event::Listed {
+            panel: 0,
+            generation,
+            result: Ok(vec![
+                Entry::parent_entry(),
+                entry("docs", EntryKind::Dir, 0),
+                entry("new", EntryKind::Dir, 0),
+                entry("zzz.txt", EntryKind::File, 1),
+            ]),
+        });
+        let on = app.panels[0]
+            .current()
+            .expect("a row")
+            .name_str()
+            .to_string();
+        assert_eq!(on, "new");
     }
 
     /// The programs from elsewhere: every one the code runs is a row, the versions arrive
