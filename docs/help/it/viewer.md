@@ -217,6 +217,24 @@ byte grezzi accanto al significato, le sezioni, gli import e gli export, e i sim
 danno il nome alle funzioni nel disassemblato. `Enter` su una posizione prende i byte che stanno
 lì.
 
+Dice anche quello che il programma dice di sé:
+
+- **un programma Windows** (PE): la risorsa di versione — versione del file e del prodotto,
+  azienda, descrizione, copyright, nome originale — il livello di esecuzione che chiede il suo
+  manifest (se avviarlo fa comparire il prompt UAC), le mitigazioni che attiva (ASLR, DEP,
+  Control Flow Guard), il PDB in cui sono finite le informazioni di debug, e se è **firmato** e
+  da chi;
+- **un programma Linux** (ELF): il build id, il kernel più vecchio su cui gira, i compilatori
+  che l'hanno prodotto, il file in cui sono state separate le informazioni di debug, un build
+  id di Go o il pacchetto da cui viene;
+- **un programma macOS** (Mach-O): l'UUID, il macOS o iOS più vecchio su cui gira e l'SDK, gli
+  strumenti, la versione di ogni libreria, e la **firma del codice** — identificativo, team, ad
+  hoc o no, hardened runtime.
+
+Una firma viene letta e **non verificata**: il pannello nomina i certificati, e lo dice. Se una
+firma è valida dipende dalla macchina che dovrà fidarsene, quindi quel controllo è lasciato
+agli strumenti del sistema.
+
 Lo stesso tasto risponde anche per i file che non sono programmi:
 
 - **un video o un suono** — MP4, MOV, M4A, MKV, WebM, AVI, WAV: quanto dura, le tracce, il
@@ -224,7 +242,13 @@ Lo stesso tasto risponde anche per i file che non sono programmi:
   i chunk del contenitore come righe su cui `Enter` salta;
 - **un PDF**: la versione, quante pagine, il formato della prima, il titolo, l'autore e il
   produttore, se è cifrato e cosa permette allora, quante volte è stato salvato da quando è
-  stato scritto — e le pagine stesse, ogni riga che porta al suo oggetto.
+  stato scritto — e le pagine stesse, ogni riga che porta al suo oggetto;
+- **una foto** — JPEG, PNG, GIF: le dimensioni, e per un JPEG l'EXIF — fotocamera, obiettivo,
+  quando è stata scattata, esposizione, diaframma, ISO — e **dove è stata scattata**, su una
+  riga a sé, perché è la cosa di una foto che più spesso non si sa di stare mandando; il testo
+  e la data di un PNG;
+- **la musica** — MP3, FLAC, Ogg Vorbis, Opus: titolo, artista, album, anno, traccia, genere,
+  se c'è una copertina, e per FLAC e Ogg il flusso e la durata.
 
 Nessuno dei due mostra un'immagine del file: per un fotogramma di un video o una pagina di PDF
 resa come immagine si prepara una regola `[[decompile]]` (`ffprobe`, `pdftotext`) e si preme

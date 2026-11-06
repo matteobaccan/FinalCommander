@@ -334,6 +334,11 @@ pub fn read(src: &mut dyn Bytes) -> Option<Structure> {
     if let Some(s) = crate::pdf::read(src, &head, len) {
         return Some(s);
     }
+    // And the files whose structure is a few tags in front of a picture or a sound: what the
+    // camera, the encoder or whoever tagged the album wrote down.
+    if let Some(s) = crate::tags::read(src, &head, len) {
+        return Some(s);
+    }
     None
 }
 
@@ -716,6 +721,26 @@ fn elf(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
                 notes.push(Row::field("build id", String::new(), id));
             }
         }
+    }
+    // The other notes — the ABI the file was built for, a Go build id, the package it came
+    // from — and the compilers that signed `.comment`, and where the debug information went.
+    for s in sections
+        .iter()
+        .filter(|s| s.name.starts_with(".note") && s.name != ".note.gnu.build-id")
+    {
+        if let Some(data) = elf_data(src, s, len, 64 * 1024) {
+            notes.extend(crate::meta::elf_note_rows(&data));
+        }
+    }
+    if let Some(data) =
+        elf_find(&sections, ".gnu_debuglink").and_then(|s| elf_data(src, s, len, 4096))
+    {
+        notes.extend(crate::meta::elf_debuglink(&data));
+    }
+    if let Some(data) =
+        elf_find(&sections, ".comment").and_then(|s| elf_data(src, s, len, 16 * 1024))
+    {
+        notes.extend(crate::meta::elf_comment(&data));
     }
     if !notes.is_empty() {
         rows.push(Row::group("Of note"));
@@ -1272,6 +1297,49 @@ fn pe(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
             format!("{subsystem:04X}"),
             pe_subsystem(subsystem),
         ));
+        // The versions the image was linked with and needs, its checksum and the
+        // mitigations it opts into: the fields a release check and a security review read.
+        let opt = &nt.get(24..).unwrap_or(&[]);
+        let w16 = |at: usize| {
+            opt.get(at..at + 2)
+                .map(|b| u16::from_le_bytes([b[0], b[1]]))
+                .unwrap_or(0)
+        };
+        let (linker_major, linker_minor) = (
+            opt.get(2).copied().unwrap_or(0),
+            opt.get(3).copied().unwrap_or(0),
+        );
+        rows.push(Row::field(
+            "LinkerVersion",
+            format!("{linker_major:02X}{linker_minor:02X}"),
+            format!("{linker_major}.{linker_minor}"),
+        ));
+        rows.push(Row::field(
+            "OperatingSystemVersion",
+            format!("{:04X}{:04X}", w16(40), w16(42)),
+            format!("{}.{}", w16(40), w16(42)),
+        ));
+        rows.push(Row::field(
+            "SubsystemVersion",
+            format!("{:04X}{:04X}", w16(48), w16(50)),
+            format!("{}.{}", w16(48), w16(50)),
+        ));
+        let checksum = u32::from(w16(64)) | (u32::from(w16(66)) << 16);
+        rows.push(Row::field(
+            "CheckSum",
+            format!("{checksum:08X}"),
+            if checksum == 0 {
+                "not set".to_string()
+            } else {
+                format!("{checksum:08X}")
+            },
+        ));
+        let dll = w16(70);
+        rows.push(Row::field(
+            "DllCharacteristics",
+            format!("{dll:04X}"),
+            crate::meta::dll_characteristics(dll),
+        ));
         // The data directories are the index to everything else in the image. They sit at the
         // end of the optional header, whose two shapes put them in different places.
         let dd_base = if plus { 112u64 } else { 96 };
@@ -1363,6 +1431,10 @@ fn pe(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
         None => summary,
     };
 
+    // What the image says about itself: its version resource and manifest, where its debug
+    // information went, and who signed it.
+    rows.extend(pe_about(src, &pe_sections, &dirs, len, kind != "object"));
+
     // Imports and exports — SPEC 05 §1.8. An image with neither is unusual but legal, and a
     // directory that points nowhere simply contributes no rows.
     let (import_rva, _) = pe_dir(&dirs, 1);
@@ -1388,6 +1460,86 @@ fn pe(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
         clr,
         truncated,
     }
+}
+
+/// The version resource, the manifest, the debug directory and the certificate table, each
+/// a group of rows when the image has it. `image` is false for an object file, which has no
+/// signature to be missing.
+fn pe_about(
+    src: &mut dyn Bytes,
+    sections: &[PeSection],
+    dirs: &[u8],
+    len: u64,
+    image: bool,
+) -> Vec<Row> {
+    const MAX_RESOURCES: u32 = 16 << 20;
+    const MAX_LEAF: u32 = 1 << 20;
+    let mut rows = Vec::new();
+    let (res_rva, res_size) = pe_dir(dirs, 2);
+    if res_rva != 0 && res_size != 0 {
+        let rsrc = pe_bytes(
+            src,
+            sections,
+            res_rva,
+            res_size.min(MAX_RESOURCES) as usize,
+            len,
+        );
+        if let Some((rva, size)) = crate::meta::pe_resource(&rsrc, 16) {
+            let data = pe_bytes(src, sections, rva, size.min(MAX_LEAF) as usize, len);
+            let version = crate::meta::pe_version(&data);
+            if !version.is_empty() {
+                rows.push(Row::group("Version"));
+                rows.extend(version);
+            }
+        }
+        if let Some((rva, size)) = crate::meta::pe_resource(&rsrc, 24) {
+            let data = pe_bytes(src, sections, rva, size.min(MAX_LEAF) as usize, len);
+            let manifest = crate::meta::pe_manifest(&data);
+            if !manifest.is_empty() {
+                rows.push(Row::group("Manifest"));
+                rows.extend(manifest);
+            }
+        }
+    }
+    let (dbg_rva, dbg_size) = pe_dir(dirs, 6);
+    if dbg_rva != 0 && dbg_size != 0 {
+        let dir = pe_bytes(src, sections, dbg_rva, dbg_size.min(28 * 64) as usize, len);
+        let mut debug = Vec::new();
+        for (kind, at, size) in crate::meta::debug_entries(&dir) {
+            match kind {
+                2 if (at as u64) < len => {
+                    let record = src.at(at as u64, size.min(4096) as usize);
+                    debug.extend(crate::meta::codeview(&record));
+                }
+                16 => debug.push(Row::field("reproducible", String::new(), "yes")),
+                _ => {}
+            }
+        }
+        if !debug.is_empty() {
+            rows.push(Row::group("Debug"));
+            rows.extend(debug);
+        }
+    }
+    // The certificate table's "RVA" is a file offset: it is not loaded with the image.
+    let (cert_at, cert_size) = pe_dir(dirs, 4);
+    if image {
+        rows.push(Row::group("Signature"));
+        if cert_at != 0 && cert_size != 0 && (cert_at as u64) < len {
+            let table = src.at(cert_at as u64, cert_size.min(MAX_LEAF) as usize);
+            let certs = crate::meta::pe_certificates(&table);
+            if certs.is_empty() {
+                rows.push(Row::field("certificate", String::new(), "unreadable"));
+            }
+            rows.extend(certs);
+        } else {
+            rows.push(Row::field(
+                "certificate",
+                String::new(),
+                "none — not signed",
+            ));
+        }
+    }
+    rows
 }
 
 /// A section, reduced to what mapping an RVA needs.
@@ -2672,6 +2824,10 @@ fn macho(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
     // the load command that asked for it, which is where `Enter` goes.
     let mut dylibs: Vec<(String, bool, Option<u64>)> = Vec::new();
     let mut symtab: Option<(u64, u32, u64, u32)> = None;
+    // What the commands say about the build — its UUID, the platform and SDK, the tools —
+    // gathered while they are walked and shown together after them.
+    let mut about: Vec<Row> = Vec::new();
+    let mut signature: Option<(u64, u32)> = None;
     rows.push(Row::group("Load commands"));
     for _ in 0..ncmds.min(MAX_ENTRIES as u32) {
         if at + 8 > table.len() {
@@ -2723,16 +2879,141 @@ fn macho(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
                     if cmd != 0x0D {
                         dylibs.push((name.clone(), weak, in_file(start + at as u64, len)));
                     }
+                    // The versions are what a "library not loaded" or a "symbol not found"
+                    // comes down to: the one this was linked against, and the oldest it
+                    // accepts.
+                    let word = |at: usize| {
+                        u32::from_le_bytes([body[at], body[at + 1], body[at + 2], body[at + 3]])
+                    };
+                    let (current, compat) = (word(16), word(20));
                     rows.push(Row::entry(
                         match cmd {
                             0x0D => "  id",
                             0x8000_0018 => "  weak dylib",
                             _ => "  dylib",
                         },
-                        name,
+                        format!(
+                            "{name}  {} (compatible {})",
+                            crate::meta::dylib_version(current),
+                            crate::meta::dylib_version(compat)
+                        ),
                         None,
                     ));
                 }
+            }
+            // LC_UUID: the build's identity, which is what a crash report and a dSYM match on.
+            0x1B if body.len() >= 24 => {
+                let u = &body[8..24];
+                let hex: String = u.iter().map(|b| format!("{b:02X}")).collect();
+                let uuid = format!(
+                    "{}-{}-{}-{}-{}",
+                    &hex[0..8],
+                    &hex[8..12],
+                    &hex[12..16],
+                    &hex[16..20],
+                    &hex[20..32]
+                );
+                about.push(Row::field("UUID", String::new(), uuid.clone()));
+                rows.push(Row::entry("  LC_UUID", uuid, None));
+            }
+            // LC_BUILD_VERSION: the platform, the oldest OS it runs on, the SDK it was built
+            // against and the tools that built it.
+            0x32 if body.len() >= 24 => {
+                let mut s = Cur::new(body);
+                s.seek(8);
+                let platform = crate::meta::macho_platform(s.u32());
+                let minos = crate::meta::macho_version(s.u32());
+                let sdk = crate::meta::macho_version(s.u32());
+                let ntools = s.u32().min(16) as usize;
+                about.push(Row::field(
+                    "platform",
+                    String::new(),
+                    format!("{platform} {minos} or later, SDK {sdk}"),
+                ));
+                for i in 0..ntools {
+                    let at = 24 + i * 8;
+                    if at + 8 > body.len() {
+                        break;
+                    }
+                    let mut s = Cur::new(&body[at..at + 8]);
+                    let tool = match s.u32() {
+                        1 => "clang",
+                        2 => "swift",
+                        3 => "ld",
+                        4 => "lld",
+                        _ => "tool",
+                    };
+                    about.push(Row::field(
+                        "built with",
+                        String::new(),
+                        format!("{tool} {}", crate::meta::macho_version(s.u32())),
+                    ));
+                }
+                rows.push(Row::entry(
+                    format!("  {}", macho_cmd(cmd)),
+                    format!("{platform} {minos}"),
+                    None,
+                ));
+            }
+            // The older form of the same: LC_VERSION_MIN_MACOSX, _IPHONEOS, _TVOS, _WATCHOS.
+            0x24 | 0x25 | 0x2F | 0x30 if body.len() >= 16 => {
+                let mut s = Cur::new(body);
+                s.seek(8);
+                let platform = match cmd {
+                    0x24 => "macOS",
+                    0x25 => "iOS",
+                    0x2F => "tvOS",
+                    _ => "watchOS",
+                };
+                let minos = crate::meta::macho_version(s.u32());
+                let sdk = crate::meta::macho_version(s.u32());
+                about.push(Row::field(
+                    "platform",
+                    String::new(),
+                    format!("{platform} {minos} or later, SDK {sdk}"),
+                ));
+                rows.push(Row::entry(
+                    format!("  LC_VERSION_MIN ({platform})"),
+                    minos,
+                    None,
+                ));
+            }
+            // LC_SOURCE_VERSION: the version of the sources, as the project numbered them.
+            0x2A if body.len() >= 16 => {
+                let mut s = Cur::new(body);
+                s.seek(8);
+                let v = crate::meta::source_version(s.u64());
+                about.push(Row::field("source version", String::new(), v.clone()));
+                rows.push(Row::entry("  LC_SOURCE_VERSION", v, None));
+            }
+            // LC_RPATH: a directory `@rpath` is looked up in.
+            0x8000_001C if body.len() >= 12 => {
+                let off = u32::from_le_bytes([body[8], body[9], body[10], body[11]]) as usize;
+                let path = str_at(body, off);
+                rows.push(Row::entry("  LC_RPATH", path, None));
+            }
+            // LC_ENCRYPTION_INFO(_64): an App Store binary whose text is still encrypted
+            // cannot be disassembled, and the pane should say so before the disassembler does.
+            0x21 | 0x2C if body.len() >= 20 => {
+                let id = u32::from_le_bytes([body[16], body[17], body[18], body[19]]);
+                let said = if id != 0 {
+                    "encrypted"
+                } else {
+                    "not encrypted"
+                };
+                about.push(Row::field("encryption", String::new(), said));
+                rows.push(Row::entry(format!("  {}", macho_cmd(cmd)), said, None));
+            }
+            // LC_CODE_SIGNATURE: where the signature is. What is in it is read below.
+            0x1D if body.len() >= 16 => {
+                let off = u32::from_le_bytes([body[8], body[9], body[10], body[11]]) as u64;
+                let size = u32::from_le_bytes([body[12], body[13], body[14], body[15]]);
+                signature = Some((off, size));
+                rows.push(Row::entry(
+                    "  LC_CODE_SIGNATURE",
+                    format!("{off:08X}  {}", size_cell(size as u64)),
+                    in_file(off, len),
+                ));
             }
             // LC_SYMTAB says where the symbol table and its names are.
             2 => {
@@ -2766,6 +3047,25 @@ fn macho(src: &mut dyn Bytes, head: &[u8], len: u64) -> Structure {
             format!("{} more commands not shown", ncmds as usize - shown),
             None,
         ));
+    }
+    if !about.is_empty() {
+        rows.push(Row::group("Build"));
+        rows.extend(about);
+    }
+    // Only an executable or a library is signed; an object file has nothing to be missing.
+    if matches!(filetype, 2 | 6 | 7 | 8 | 0xB) {
+        rows.push(Row::group("Signature"));
+        match signature.filter(|(off, _)| *off < len) {
+            Some((off, size)) => {
+                let blob = src.at(off, (size as usize).min(1 << 20));
+                let sig = crate::meta::code_signature(&blob);
+                if sig.is_empty() {
+                    rows.push(Row::field("signature", String::new(), "unreadable"));
+                }
+                rows.extend(sig);
+            }
+            None => rows.push(Row::field("signature", String::new(), "none — not signed")),
+        }
     }
     maps.sort_by_key(|m| m.address);
 
@@ -3495,6 +3795,55 @@ mod tests {
 
         fn len(&mut self) -> u64 {
             self.0.metadata().map(|m| m.len()).unwrap_or(0)
+        }
+    }
+
+    /// A real ELF from the system says what it was built for and by whom — where the system
+    /// has one to read; the notes are what a distribution's toolchain writes, not ours.
+    #[test]
+    fn a_system_binary_says_what_it_was_built_for() {
+        let Some(path) = ["/bin/ls", "/usr/bin/ls"]
+            .iter()
+            .map(std::path::Path::new)
+            .find(|p| p.exists())
+        else {
+            return;
+        };
+        let file = std::fs::File::open(path).unwrap();
+        let mut src = FileBytes(file);
+        let Some(s) = read(&mut src) else {
+            return;
+        };
+        if s.format != "ELF" {
+            return;
+        }
+        for r in &s.rows {
+            if r.kind == RowKind::Field {
+                eprintln!("{:<20} {}", r.label, r.value);
+            }
+        }
+        assert!(
+            s.rows
+                .iter()
+                .any(|r| r.label == "build id" || r.label == "built by" || r.label == "ABI"),
+            "a distribution's ls carries at least one note"
+        );
+    }
+
+    /// Any PE named by `FCMD_PE_SAMPLE`, printed: a way to look at a real Windows file
+    /// without checking one into the tree.
+    #[test]
+    fn a_pe_sample_when_one_is_named() {
+        let Ok(path) = std::env::var("FCMD_PE_SAMPLE") else {
+            return;
+        };
+        let file = std::fs::File::open(path).unwrap();
+        let mut src = FileBytes(file);
+        let s = read(&mut src).expect("a PE");
+        for r in &s.rows {
+            if r.kind != RowKind::Entry {
+                eprintln!("{:<24} {}", r.label, r.value);
+            }
         }
     }
 

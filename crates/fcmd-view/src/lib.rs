@@ -13,6 +13,7 @@ pub mod il;
 pub mod jvm;
 pub mod markdown;
 pub mod media;
+mod meta;
 pub mod nav;
 pub mod pdf;
 pub mod picture;
@@ -20,6 +21,7 @@ pub mod search;
 pub mod source;
 pub mod structure;
 pub mod table;
+mod tags;
 pub mod view;
 
 pub use asm::{assemble, AsmError, Assembled};

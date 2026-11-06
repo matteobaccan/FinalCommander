@@ -205,6 +205,23 @@ LE and LX, and the TE that UEFI firmware is made of — each header field with t
 raw bytes beside the meaning, the sections, the imports and exports, and the symbols — which
 then name the functions in the disassembly. `Enter` on an offset takes the bytes there.
 
+It also says what the program says about itself:
+
+- **a Windows program** (PE): the version resource — file and product version, company,
+  description, copyright, original name — the execution level its manifest asks for (whether
+  starting it raises a UAC prompt), the mitigations it opts into (ASLR, DEP, Control Flow
+  Guard), the PDB its debug information went to, and whether it is **signed** and by whom;
+- **a Linux program** (ELF): the build id, the oldest kernel it runs on, the compilers that
+  built it, the file its debug information was split into, a Go build id or the package it
+  came from;
+- **a macOS program** (Mach-O): the UUID, the oldest macOS or iOS it runs on and the SDK, the
+  tools, each library's version, and the **code signature** — identifier, team, ad-hoc or not,
+  hardened runtime.
+
+A signature is read and **not verified**: the pane names the certificates, and says so. Whether
+a signature is valid depends on the machine that will trust it, so that check is left to the
+system's own tools.
+
 The same key answers for the files that are not programs:
 
 - **a video or a sound** — MP4, MOV, M4A, MKV, WebM, AVI, WAV: how long it is, the tracks, the
@@ -212,7 +229,13 @@ The same key answers for the files that are not programs:
   chunks of the container as rows `Enter` follows;
 - **a PDF**: the version, how many pages, the paper of the first one, the title, the author and
   the producer, whether it is encrypted and what it then allows, how many times it has been
-  saved since it was written — and the pages themselves, each row going to its object.
+  saved since it was written — and the pages themselves, each row going to its object;
+- **a photo** — JPEG, PNG, GIF: the size, and for a JPEG the EXIF — camera, lens, when it was
+  taken, exposure, aperture, ISO — and **where it was taken**, on a row of its own, because
+  that is the thing in a photo people most often do not know they are sending; a PNG's text
+  and time;
+- **music** — MP3, FLAC, Ogg Vorbis, Opus: the title, the artist, the album, the year, the
+  track, the genre, whether there is a cover, and for FLAC and Ogg the stream and its length.
 
 Neither shows a picture of the file: for a frame of a video or a page of a PDF rendered as an
 image, set up a `[[decompile]]` rule (`ffprobe`, `pdftotext`) and press `Shift+F6`.

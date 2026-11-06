@@ -235,7 +235,17 @@ between them, and `Enter` on a row takes the other pane to that offset. That is 
 | Header | the format's own header, field by field: name, raw bytes, and the decoded meaning (`e_machine 003E x86-64`) |
 | Sections / segments | name, file offset, virtual address, size, flags, with the one the cursor is in marked |
 | Imports / exports | library and symbol, with the file offset of the entry |
-| Strings of note | the interpreter (`/lib64/ld-linux-x86-64.so.2`), the `rpath`, the SONAME, the build id |
+| Strings of note | the interpreter (`/lib64/ld-linux-x86-64.so.2`), the `rpath`, the SONAME, the build id; since 0.38.0 also the ABI note (`Linux 3.2.0 or later`), a Go build id, the systemd package note, the `.gnu_debuglink` file and CRC, and the compilers `.comment` names |
+| PE: about the image (0.38.0) | the linker, OS and subsystem versions, the checksum, `DllCharacteristics` as mitigations (ASLR, DEP, CFG…); **Version** — `VS_FIXEDFILEINFO` and every `StringFileInfo` string (company, description, product, copyright, original name) and the translations; **Manifest** — the requested execution level and DPI awareness; **Debug** — the CodeView PDB path, GUID and age, a reproducible-build entry; **Signature** — each `WIN_CERTIFICATE`, the names its certificates carry and the signing time, or that the image is not signed |
+| Mach-O: about the build (0.38.0) | the UUID, the platform with the oldest OS and the SDK (`LC_BUILD_VERSION` or the older `LC_VERSION_MIN_*`), the tools, the source version, whether the text is encrypted, each dylib's current and compatible version, the `LC_RPATH` entries; **Signature** — the CodeDirectory's identifier, team, flags (ad-hoc, hardened runtime) and hash, the entitlements' size, and the CMS certificates' names, or that it is not signed |
+| Pictures and sound (0.38.0) | JPEG: size, encoding, density, comment and EXIF — camera, lens, date taken, exposure, aperture, ISO, focal length, orientation, and the GPS position as its own row; PNG: size, colour, density, time, `tEXt`/`iTXt` text, embedded EXIF, animation; GIF: size; MP3: ID3v2.2–2.4 (title, artist, album, year, track, genre, comment, cover) or ID3v1; FLAC: the stream, its length and the Vorbis comments; Ogg Vorbis and Opus: the stream and the comments |
+
+A signature is **read, not verified**: the rows name the certificates and say "not verified",
+because checking a chain needs the trust store of the machine that will run the file, and a
+pane that said "valid" from here would be saying something it does not know. Every reader of
+these parts takes a bounded slice — 16 MB of resources, 1 MB of a version block, a signature
+or a certificate table, 512 kB of the start of a picture or a sound — and stops at the first
+length that does not fit.
 
 Rules it follows:
 

@@ -25,6 +25,19 @@ Notable changes, newest first. The format follows
   data is worked out from what is under it, a table without one has columns `#1`, `#2`…, and
   `Ctrl+H` turns the guess round. `^` joins the delimiters that are guessed.
 
+- **What a program says about itself, in the structure pane (`F11`).** A Windows program shows
+  its version resource (versions, company, description, copyright, original name), the
+  execution level its manifest asks for, the mitigations it opts into (ASLR, DEP, Control Flow
+  Guard), its linker and OS versions and checksum, the PDB its debug information went to, and
+  whether it is signed and the names on its certificates. A Linux program adds the ABI note, a
+  Go build id, the package note, the debug link and the compilers that built it. A macOS
+  program shows its UUID, platform, oldest OS and SDK, the build tools, the source version,
+  each library's version, the rpaths, encryption, and its code signature — identifier, team,
+  ad-hoc or not, hardened runtime, certificates. Signatures are read, never claimed valid.
+- **Photos and music in the structure pane.** JPEG (size, EXIF: camera, lens, date, exposure,
+  aperture, ISO, focal length, orientation and the GPS position), PNG (size, colour, text, time,
+  EXIF), GIF, MP3 (ID3v2 and ID3v1), FLAC and Ogg Vorbis/Opus (the stream and the comments).
+
 ### Fixed
 
 - **`Shift+F3` and `Alt+B` in the viewer** — to a table and back, and base64 — never reached
