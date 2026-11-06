@@ -178,13 +178,20 @@ Nothing needed to continue lives outside the repository; this section is the mem
 
 ## Where the work is right now
 
-**0.37.0 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
+**0.38.0 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
 like every release before it. A push to `main` that touches `CHANGELOG.md` or `Cargo.toml`
 is what makes `tag.yml` fire. The site is published with each release, from its tag. `CHANGELOG.md` is the history, release by release; this section only
 says where things stand.
 
 What the last few were about, newest first:
 
+- **0.38.0** — git all in panels (what changed with stage/unstage/diff/commit, branches and
+  switching, the log of the repository or a file, pull and push that never prompt); table
+  mode with a row cursor, marked rows copied as TSV, the heading guessed and `Ctrl+H`, `^` as a
+  delimiter; the structure pane reading a PE's version, manifest, mitigations, PDB and
+  signature, ELF notes, a Mach-O's build and code signature, and EXIF/PNG/ID3/FLAC/Ogg tags;
+  `docs/06-ai-study.md` for the author to choose the next AI work from; `Shift+F3`/`Alt+B`
+  reaching the viewer again.
 - **0.37.0** — the documentation read again against the program, and nothing else: README,
   help, specs, `docs/`, CONTRIBUTING; a key table for people coming from FAR, Total Commander
   and mc; `fcmd --paths` naming the secrets file; the survey of November 2026 in the landscape

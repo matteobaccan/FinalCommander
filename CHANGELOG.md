@@ -4,7 +4,7 @@ Notable changes, newest first. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [semantic versioning](https://semver.org/), which before 1.0 means anything may still move.
 
-## [Unreleased]
+## [0.38.0] - 2026-11-06
 
 ### Added
 
@@ -37,6 +37,11 @@ Notable changes, newest first. The format follows
 - **Photos and music in the structure pane.** JPEG (size, EXIF: camera, lens, date, exposure,
   aperture, ISO, focal length, orientation and the GPS position), PNG (size, colour, text, time,
   EXIF), GIF, MP3 (ID3v2 and ID3v1), FLAC and Ogg Vorbis/Opus (the stream and the comments).
+
+- **A study of what the AI could do next** (`docs/06-ai-study.md`): the ideas — follow-ups,
+  streaming, cost, redaction, explaining what is on the screen, turning words into a command, a
+  search, a rename or a commit message — each with what it sends, where it lands and its size,
+  and a recommendation for the author to choose from. No code.
 
 ### Fixed
 

@@ -147,6 +147,7 @@ cannot be, kept so the question is not asked again.
 | Boolean and fuzzy search | Wikipedia | Nested and/or/not over conditions; approximate name matching | The fuzzy half is under *Find file* above |
 | Metadata panel | superfile, Opus | A side panel showing a file's metadata (EXIF and the like, `exiftool` where present) as the cursor moves | `F11` shows it in the viewer today |
 | Editing metadata | Opus | Writing EXIF/ID3/document fields | Read-only today |
+| What the AI could do next | — | Follow-ups, streaming, cost, words to a command, a commit message, explain this, rename and rewrite proposals, and the larger ideas | The study is `docs/06-ai-study.md`; the author chooses from it |
 | Office document properties | Opus, Wikipedia | Title, author, dates and counts of a `.docx`, `.xlsx`, `.pptx`, `.odt` (their `docProps/core.xml`, `meta.xml`) in `F11` | They are zip files: the viewer has no zip reader of its own yet, the archive crate has |
 | Verifying a signature | — | Saying whether an Authenticode or a Mach-O signature is valid, not only who it names | Needs the machine's trust store and the hash of the image; 0.38.0 reads and names, and says "not verified" |
 | HEIC/HEIF and TIFF/RAW EXIF | Opus | The EXIF of a phone's HEIC and a camera's raw file | The TIFF reader is there; HEIF keeps EXIF in an `iloc` item |

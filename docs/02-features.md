@@ -7,7 +7,7 @@ Milestones: **M1** = usable daily driver (MVP), **M2** = feature parity with mc 
 **M3** = parity with FAR/TC, **M4** = beyond (new ideas). M1 closed long ago, so no row
 carries it any more: what it owned is a `✓`.
 
-**How to read the `State` column**, as of 0.37.0:
+**How to read the `State` column**, as of 0.38.0:
 
 | | |
 | --- | --- |
@@ -135,7 +135,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 4.6 | **Connection manager** (`Alt+N`): saved `[[site]]` list with groups, agent / key file / asked password, host-key verification with a trust-on-first-use prompt, one pooled connection per host, one jump host per site (`ssh -J`), explicit disconnect | TC/KRU | ~ the OS keyring, and a code page of its own |
 | 4.7 | **Transfers through the local operation engine**: copy and move up, down, between two servers and inside one, with progress, conflicts and cancellation; a `sftp://` URL in `Ctrl+L` connects | TC | ~ resuming an interrupted transfer; a speed limit per server (`max_kbps`) since 0.34.0 |
 | 4.8 | Temporary panel (collect unrelated files into a virtual panel and act on them) | FAR `tmppanel` | ✓ |
-| 4.9 | Special VFS: process list, services, registry (Windows), `/proc`-style views, package contents, git status/worktree view | FAR/far2l | ~ the registry and package contents; the system log is *Commands → System log* (SPEC 06 §16); git is `Ctrl+Alt+G` (what changed as a panel, the log, blame, branches — SPEC 06 §15) |
+| 4.9 | Special VFS: process list, services, registry (Windows), `/proc`-style views, package contents, git status/worktree view | FAR/far2l | ~ the registry and package contents; the system log is *Commands → System log* (SPEC 06 §16); git is `Ctrl+Alt+G`, all of it panels: what changed with stage, unstage, diff and commit, the branches and switching, the log of the repository or of a file, pull and push (SPEC 06 §15) |
 | 4.10 | Trash as a browsable VFS | NEW | M3 |
 | 4.11 | VFS API available to plugins (so a plugin can add a scheme) | FAR/TC(WFX) | M3 |
 | 4.12 | SQLite databases: tables and views as CSV entries, `schema.sql`, and `sql:` queries opened in table mode, read only | FAR (SQLiteDB) | ✓ (SPEC 04 §4b) |
@@ -155,7 +155,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 5.7 | Syntax highlighting in the viewer; Markdown rendering; tabs expansion | MTN2 | ✓ |
 | 5.8 | Previews: images (sixel/kitty/iterm protocols), video thumbnails, PDF, archives, media metadata, office/JSON/CSV pretty print — pluggable pipeline with timeouts | YAZI | M3 |
 | 5.9 | Filtered view: pipe the file through a command and view the output | MC | ✓ |
-| 5.18 | **Table mode**: one viewer mode for the tabular formats — a header row, aligned columns, horizontal scroll — with CSV/TSV, JSONL/NDJSON and DBF behind it | NEW (MTN2 has none either) | ✓ `Ctrl+F3` sorts by the column the view is on, `Ctrl+F7` keeps the rows that hold a text |
+| 5.18 | **Table mode**: one viewer mode for the tabular formats — a header row, aligned columns, horizontal scroll — with CSV/TSV, JSONL/NDJSON and DBF behind it | NEW (MTN2 has none either) | ✓ `Ctrl+F3` sorts by the column the view is on, `Ctrl+F7` keeps the rows that hold a text; a row cursor, `Ins` marks rows and `Ctrl+C` copies them as tab-separated text; the heading is guessed and `Ctrl+H` turns the guess round |
 | 5.21 | **Base64 decoded in the viewer** (`Alt+B`): the bare payload, PEM armour or a `data:` URI, shown as text or in the hex pane depending on what came out | NEW | ✓ |
 | 5.22 | **Pictures in the viewer**: `F3` on a PNG, JPEG, GIF or BMP draws it in half blocks, in any terminal; `F4` goes on to the bytes | TC/KRU (lister plugins) | ~ the kitty/iTerm2/sixel protocols |
 | 5.19 | **DBF**: dBase III/IV and FoxPro tables in table mode — the typed header, fixed-length records read at an offset so a 2 GB table opens at once, the deleted flag, and the memo files beside it (`.dbt`, `.fpt`) | NEW | ✓ |
@@ -164,7 +164,7 @@ Origin: `FAR`, `TC`, `KRU` (Krusader), `MC`, `DC` (Double Commander), `MTN2`, `Y
 | 5.12 | **Decompilation** (`Shift+F6`): `[[decompile]]` rules call installed tools (javap, ilspycmd, python -m dis, wasm2wat, objdump, retdec) and the output is viewed as text; a rule is used only when its program is on the `PATH`, and a format with no tool says so | NEW | ✓ |
 | 5.13 | **JVM bytecode and .NET IL in process**: class files listed javap-style with the constant pool resolved; managed PEs listed ildasm-style with metadata-resolved tokens and `#US` string literals | NEW | ✓ |
 | 5.14 | Still external: Python bytecode, aarch64/riscv decoding, .NET signatures and generics | NEW | M3 |
-| 5.15 | **Structure pane** (`F11`): what the file is and where anything inside it is — format, architecture, kind, entry point, the header field by field, sections and segments, imports and exports, the interpreter and build id; `Tab` moves the focus, `Enter` takes the hex or disassembly pane to that offset. Read through a seeking reader, so a section table at the end of a 3 GB file costs two seeks | NEW | ✓ |
+| 5.15 | **Structure pane** (`F11`): what the file is and where anything inside it is — format, architecture, kind, entry point, the header field by field, sections and segments, imports and exports, the interpreter and build id — and since 0.38.0 what the program says about itself: a PE's version resource, manifest, mitigations, PDB and signature, ELF notes, a Mach-O's UUID, platform and code signature, and the tags of photos and music (EXIF, PNG text, ID3, FLAC, Ogg); `Tab` moves the focus, `Enter` takes the hex or disassembly pane to that offset. Read through a seeking reader, so a section table at the end of a 3 GB file costs two seeks | NEW | ✓ |
 | 5.16 | Following a branch in the disassembly (`Enter` on a `call`/`jmp`, `Backspace` back, the jumped-from stack on screen), and `Alt+F8` taking a virtual address as well as an offset | NEW | ~ the jumped-from stack on the screen, and a virtual address in the goto |
 | 5.17 | Raw devices: a block device or a partition opened as a file, size from an `ioctl`, read-only unless told otherwise | NEW | ✓ |
 | 5.23 | Next/previous file in panel without leaving the viewer (`+`/`-`) | FAR | ✓ |
