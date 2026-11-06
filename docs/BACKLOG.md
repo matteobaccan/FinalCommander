@@ -127,6 +127,50 @@ says what the decision stands on.
 | --- | --- | --- |
 | `reqwest` 0.13 | `fcmd-net`, `fcmd-s3` | A version bump that is not one. 0.13 renamed the TLS features — `rustls-tls-native-roots` no longer exists — and its `rustls` feature brings `aws-lc-rs`, the backend this workspace already refuses for its OpenSSL licence and the C toolchain it wants (`THIRD-PARTY.md` says why, under `russh`). The honest port is `rustls-no-provider` in both crates plus installing the `ring` provider as the process default before the first request, which changes how the program sets up TLS and wants a real server to test against rather than only the in-process fake. 0.12 is maintained and carries no advisory, so there is no hurry; `renovate.json` holds the version back and says the same thing. |
 
+## What the others do and we do not (survey of November 2026)
+
+Read from Directory Opus 13 (its home page's feature list), two Directory Opus plugins by
+PolarGoose (TabLabelizer, CSV viewer), TheFile.Ninja (public beta), superfile (its README and the
+docs in its repository), and the feature columns of Wikipedia's *Comparison of file managers*.
+Only what we do **not** do is here; a row that repeats a gap already listed above says so and
+points to it rather than being a second copy. *Out of scope* marks what a program in a terminal
+cannot be, kept so the question is not asked again.
+
+| Item | Seen in | What it is | Note |
+| --- | --- | --- | --- |
+| Tags, labels, ratings | Opus, File Ninja, Tabbles | Free tags, coloured labels, star ratings and status icons on files, as columns, filters and sort keys | Where they live is the question: a sidecar like `descript.ion`, xattrs, or our own database |
+| Undo of file operations | Opus, File Ninja, Wikipedia | Undo (and redo) a copy, move, rename or delete: a history of what was done, reversed | Today only the last multi-rename is undone |
+| Saved searches as folders | File Ninja, Opus, Wikipedia | A search kept under a name, re-run when opened: a "smart folder" that stays current | Same as *Find file → saving and loading a search* above, made a panel |
+| Git status column | File Ninja | Modified, untracked, ignored per row, sortable | The Git panel exists (`Ctrl+Alt+G`); this is a column of the ordinary panel |
+| Indexed search | Opus, File Ninja | Asking an index — Everything and Windows Search, Spotlight (`mdfind`), `plocate` — instead of walking | A source for `Alt+F7`, run as a program |
+| Search on metadata | Wikipedia | EXIF, ID3, document properties as search conditions | Needs the readers the viewer's `F11` already has |
+| Boolean and fuzzy search | Wikipedia | Nested and/or/not over conditions; approximate name matching | The fuzzy half is under *Find file* above |
+| Metadata panel | superfile, Opus | A side panel showing a file's metadata (EXIF and the like, `exiftool` where present) as the cursor moves | `F11` shows it in the viewer today |
+| Editing metadata | Opus | Writing EXIF/ID3/document fields | Read-only today |
+| Image conversion | Opus | Converting and resizing images from the panel | Through a program on the machine, as `7z` is |
+| Photo marking, slideshow | Opus, Wikipedia | Step through pictures full screen and mark the keepers | Real pixels first: *Pictures* above |
+| Thumbnail view | Wikipedia, Opus | A panel view of pictures instead of names | Real pixels first |
+| Export or print a listing | Opus, Wikipedia | A folder's listing written out as text, CSV or HTML, or printed | Panelize goes the other way |
+| Tab labels from the path | TabLabelizer | A tab named after its shortened full path, with a maximum length and aliases | Today the folder's name, or one given by hand |
+| Table mode: header, `^`, copy | CSV viewer | Detecting whether the first row is a header; `^` as a delimiter; `Ctrl+C` copying the selected rows | The first row is always the header today |
+| Cut and paste of files | superfile, Explorer | `Ctrl+X`/`Ctrl+C` on files, `Ctrl+V` in another folder, inside the program | Not the system clipboard (*The files themselves on the clipboard* above) |
+| Frecency jump | superfile (zoxide), broot | A list ordered by how often and how lately a folder was used, typed into | Feature 2.3 |
+| More than two panels | superfile, DOS Navigator | Splitting into a third and fourth panel | M4 |
+| Sidebar | superfile, Opus | Pinned folders and drives in a column beside the panels | The hotlist and `Alt+F1` hold the same things |
+| `vi` keys | superfile, vifm | A keymap profile | *More keymap profiles* above |
+| Scripting with dialogs | Opus, File Ninja | A script that draws its own dialogs, over a large API | *The Lua engine* above |
+| AI writing the automation | File Ninja | Describing a task and getting a script back to read, dry-run and keep | Our AI answers questions; this writes a plugin |
+| Scheduler | File Ninja | Jobs on a cron schedule, catching up on missed runs | |
+| Versioned backup | File Ninja | Content-addressed snapshots of folders, browsed and restored like folders | |
+| Watch and act | File Ninja | Running something when a folder changes | The watcher refreshes panels; it triggers nothing |
+| Peer-to-peer transfer | File Ninja | Magic Wormhole: send a file to another machine with a code | |
+| SMB, NFS, AFP | Wikipedia, far2l | Native clients instead of the system's mounts | |
+| Encrypting a file | Wikipedia | One file encrypted under a password, not an archive | The vault's cipher is in the tree |
+| Renaming a busy file | Wikipedia | Windows: a rename or delete done at the next boot | |
+| Pasting the clipboard as a file | Wikipedia | Text or a picture on the clipboard written to a new file | Wants a readable clipboard |
+| ACL editor | Wikipedia | Access-control lists, not only the mode bits | Feature list M3 |
+| Explorer replacement, floating toolbars, global hotkeys | Opus | Taking over the desktop's file windows; keys that work outside the program | Out of scope: a terminal program |
+
 ## Settled, so that nobody proposes them again
 
 Decisions, not gaps. Each of these was asked and answered; the answer is no, or it is "another

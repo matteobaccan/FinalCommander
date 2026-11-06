@@ -1,4 +1,4 @@
-# The commander landscape (survey, Oct 2026)
+# The commander landscape (survey, Oct 2026; updated Nov 2026)
 
 Why this file: before specifying FinalCommander we catalogued what already exists, what each
 project is written in, how it is licensed, and which of its ideas are worth taking. "Commander"
@@ -24,7 +24,11 @@ Legend for *Take*: ✅ idea we want, 🟡 maybe, ❌ deliberately not.
 | **FAR Manager** (`FarGroup/FarManager`) | C++ | **BSD-3-Clause** | The reference implementation for us: panels, plugin API, internal viewer/editor, macros (Lua), dialogs API, huge plugin ecosystem | ✅ primary model |
 | **Total Commander** | Delphi | proprietary shareware | Tabs, multi-rename, synchronise dirs, FTP, packer/WFX/WLX/WCX plugin ABIs, branch view | ✅ features, keymap profile; ❌ no code/resources |
 | **MTN2** (`Laex/MTN2`) | Delphi (FireMonkey/Skia) | **MPL-2.0** | Modern DN/FAR tribute: TUI grid drawn on a GPU canvas, ConPTY console, tabs, SFTP, archives as folders, **native + WebAssembly plugins**, JSON keymap/themes, Linux TUI + SDL2 builds | ✅ wasm plugins, keymap/theme files, real PTY; ❌ the GPU/SDL window — we stay strictly terminal |
-| Directory Opus | C++ | proprietary | The heavyweight; scripting, metadata, FAYT | 🟡 ideas |
+| Directory Opus 13 | C++ | proprietary, Windows x64 | The heavyweight: tabs, dual trees, queued copies, batch rename, labels/ratings/tags, metadata editing, image conversion, indexed search (Everything, Windows Search), JScript/VBScript with scripted dialogs, a plugin ecosystem (e.g. PolarGoose's TabLabelizer and CSV viewer) | 🟡 ideas — gaps in BACKLOG |
+| TheFile.Ninja | (closed) | proprietary, freemium, public beta 2026 | "The file workspace you can program": dual pane, Everything search with saved Smart Folders, Lua with 400+ APIs, cron scheduler, versioned backup, watchers, AI that writes inspectable Lua, git status columns, Magic Wormhole | 🟡 the closest to where we aim — gaps in BACKLOG |
+| ZTreeWin (XTree's heir) | — | proprietary | The tree-and-file-list school of XTree Gold: logged trees, branch views, tagging across the tree | 🟡 branch/tag-across-tree ideas |
+| WinSCP | C++ | GPL-3.0 | The Windows reference for SFTP/SCP/FTP/WebDAV/S3, with a commander interface and synchronisation | ✅ behavioural reference for the network side |
+| Tabbles | — | proprietary | A file manager built on tags rather than folders | 🟡 tags |
 | Multi Commander / FreeCommander / Unreal Commander / WinNc / SpeedCommander / Altap Salamander | mixed | freeware or proprietary | TC-alikes | 🟡 |
 | Nomad.NET, xplorer², One Commander, XYplorer, Q-Dir | mixed | proprietary/freeware | | ❌ |
 | Explorer++, Files | C++ / C# | GPL-3 / MIT | not orthodox (Explorer-like) | ❌ |
@@ -55,7 +59,7 @@ Legend for *Take*: ✅ idea we want, 🟡 maybe, ❌ deliberately not.
 | **yazi** | Rust | MIT | The current state of the art in Rust TUI FM: async I/O, Lua plugins (`ya pkg`), image/video/PDF previews, multi-tab, SFTP VFS | ✅ async engine + preview pipeline, ✅ plugin packaging |
 | **broot** | Rust | MIT | tree + fuzzy navigation | ✅ fuzzy "goto" |
 | **xplr** | Rust | MIT | programmable explorer, Lua config | ✅ config model |
-| **superfile** | Go | MIT | polished UI | 🟡 visual polish |
+| **superfile** | Go | MIT | polished UI; several panels side by side, zoxide jump, metadata panel (`exiftool`), image preview, Ctrl+C/X/V on files | 🟡 visual polish — gaps in BACKLOG |
 | **termscp** | Rust | MIT | remote transfer TUI (SFTP/SCP/FTP/S3/SMB) | ✅ remote backends |
 | **Cloud Commander** | JS | MIT (unverified) | dual-pane in the browser | 🟡 future web UI |
 
