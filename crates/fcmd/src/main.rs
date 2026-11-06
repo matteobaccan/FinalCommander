@@ -6340,6 +6340,9 @@ dir_attr = "D"
         }
         run(&["config", "user.email", "t@example.com"]).unwrap();
         run(&["config", "user.name", "T"]).unwrap();
+        // Git for Windows checks files out with CRLF by default, and the switch below writes
+        // the file again: the bytes compared are the ones committed only with that off.
+        run(&["config", "core.autocrlf", "false"]).unwrap();
         std::fs::write(root.join("a.txt"), "one\n").unwrap();
         run(&["add", "a.txt"]).unwrap();
         run(&["commit", "-q", "-m", "first commit"]).unwrap();

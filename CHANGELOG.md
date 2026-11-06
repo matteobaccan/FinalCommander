@@ -45,6 +45,8 @@ Notable changes, newest first. The format follows
 
 ### Fixed
 
+- **The git test on Windows** sets `core.autocrlf` off in its own repository, so Git for
+  Windows' line endings no longer stop the release.
 - **`Shift+F3` and `Alt+B` in the viewer** — to a table and back, and base64 — never reached
   the viewer and answered that they were not implemented.
 
