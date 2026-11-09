@@ -4477,7 +4477,10 @@ fn last_line_of(text: &str) -> String {
 /// folder and are removed with it.
 fn run_git(cwd: &std::path::Path, what: &app::GitAsk) -> Result<app::GitOut, String> {
     use app::{GitAsk, GitOut};
-    let root = std::path::PathBuf::from(git(cwd, &["rev-parse", "--show-toplevel"])?.trim());
+    // git names the top with `/` on Windows as well (`D:/repo`), and a path half in one
+    // separator and half in the other is one the wastebasket there refuses.
+    let top = git(cwd, &["rev-parse", "--show-toplevel"])?;
+    let root = std::path::PathBuf::from(top.trim().replace('/', std::path::MAIN_SEPARATOR_STR));
     let text = |name: &str, body: String| -> Result<GitOut, String> {
         let dir = std::env::temp_dir().join(format!("fcmd-sql-{}", std::process::id()));
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;

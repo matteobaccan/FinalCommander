@@ -356,7 +356,13 @@ impl JobFs for LocalFs {
         // `.trashinfo` beside it records where it was), `NSFileManager` on macOS and
         // `IFileOperation` on Windows, each of which is what that desktop's own file manager
         // shows and restores from.
-        ::trash::delete(path.os()).map_err(|e| match e {
+        // Windows' shell takes `\` only: a path that reached here with `/` in it (git names
+        // its files that way) is said the way the shell wants it.
+        #[cfg(windows)]
+        let os = PathBuf::from(path.os().to_string_lossy().replace('/', "\\"));
+        #[cfg(not(windows))]
+        let os = path.os().to_path_buf();
+        ::trash::delete(&os).map_err(|e| match e {
             // The wastebasket cannot take it: on Linux a path on a device with no trash
             // directory, on any system one the desktop refuses. It is not a bug and it is
             // not a missing file — the caller offers to delete it outright instead.
