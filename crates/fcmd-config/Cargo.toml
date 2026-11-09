@@ -9,7 +9,6 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
-dirs = "7.0.0"
 fcmd-arc = { workspace = true }
 fcmd-term = { workspace = true }
 fcmd-core = { workspace = true }

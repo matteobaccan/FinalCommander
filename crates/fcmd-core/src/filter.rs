@@ -633,7 +633,7 @@ fn same(a: char, b: char, case_sensitive: bool) -> bool {
 ///
 /// Backtracking goes to the last `*` only, so a hostile mask costs O(name × mask) and can
 /// never hang. An unterminated `[` is a literal bracket, as the shells have it.
-fn glob_match(pattern: &str, name: &str, case_sensitive: bool) -> bool {
+pub(crate) fn glob_match(pattern: &str, name: &str, case_sensitive: bool) -> bool {
     let p: Vec<char> = pattern.chars().collect();
     let n: Vec<char> = name.chars().collect();
     let mut pi = 0usize;

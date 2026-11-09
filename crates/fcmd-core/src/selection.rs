@@ -1,7 +1,5 @@
 use std::collections::HashSet;
 
-use globset::{Glob, GlobSetBuilder};
-
 use crate::entry::{Entry, EntryId, EntryKind};
 use crate::listing::Listing;
 
@@ -93,28 +91,31 @@ impl Selection {
         }
     }
 
-    /// Apply a comma-separated mask list (`*.rs,*.toml`) to the visible rows.
+    /// Apply a comma-separated mask list (`*.rs,*.toml`) to the visible rows, without regard to
+    /// case. A word without `*`, `?` or `[` means "contains", like the commanders have it.
     ///
-    /// Returns the number of entries whose state changed. An invalid pattern is an error, not
-    /// a silent no-op — the UI shows it.
+    /// Returns the number of entries whose state changed. The matcher is the one the filters
+    /// use (`filter::glob_match`), which takes any text as a mask — an unclosed `[` is a
+    /// literal bracket — so there is no pattern that can fail.
     pub fn apply_mask(
         &mut self,
         listing: &Listing,
         masks: &str,
         on: bool,
         scope: MaskScope,
-    ) -> Result<usize, globset::Error> {
-        let mut builder = GlobSetBuilder::new();
-        for raw in masks.split(',').map(str::trim).filter(|s| !s.is_empty()) {
-            let pattern = if raw.contains('*') || raw.contains('?') || raw.contains('[') {
-                raw.to_string()
-            } else {
-                // A bare word means "contains", like the commanders do.
-                format!("*{raw}*")
-            };
-            builder.add(Glob::new(&pattern).or_else(|_| Glob::new(&globset::escape(raw)))?);
-        }
-        let set = builder.build()?;
+    ) -> usize {
+        let patterns: Vec<String> = masks
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|raw| {
+                if raw.contains(['*', '?', '[']) {
+                    raw.to_string()
+                } else {
+                    format!("*{raw}*")
+                }
+            })
+            .collect();
 
         self.remember();
         let mut changed = 0;
@@ -127,13 +128,15 @@ impl Selection {
                 continue;
             }
             let name = e.name_str();
-            let hit = set.is_match(name.as_ref()) || set.is_match(name.to_lowercase().as_str());
+            let hit = patterns
+                .iter()
+                .any(|p| crate::filter::glob_match(p, name.as_ref(), false));
             if hit && self.contains(e.id) != on {
                 self.set(e.id, on);
                 changed += 1;
             }
         }
-        Ok(changed)
+        changed
     }
 
     /// Select or deselect exactly the rows a predicate picks, remembering what was selected
@@ -203,9 +206,7 @@ mod tests {
     fn mask_selects_matching_files_only() {
         let l = listing();
         let mut s = Selection::default();
-        let n = s
-            .apply_mask(&l, "*.rs", true, MaskScope::FilesOnly)
-            .unwrap();
+        let n = s.apply_mask(&l, "*.rs", true, MaskScope::FilesOnly);
         assert_eq!(n, 2);
         assert_eq!(s.len(), 2);
     }
@@ -214,8 +215,7 @@ mod tests {
     fn bare_word_mask_means_contains() {
         let l = listing();
         let mut s = Selection::default();
-        s.apply_mask(&l, "cargo", true, MaskScope::FilesOnly)
-            .unwrap();
+        s.apply_mask(&l, "cargo", true, MaskScope::FilesOnly);
         assert_eq!(s.len(), 1);
     }
 
@@ -233,8 +233,7 @@ mod tests {
     fn invert_and_restore() {
         let l = listing();
         let mut s = Selection::default();
-        s.apply_mask(&l, "*.rs", true, MaskScope::FilesOnly)
-            .unwrap();
+        s.apply_mask(&l, "*.rs", true, MaskScope::FilesOnly);
         s.invert(&l, MaskScope::FilesAndDirs);
         assert_eq!(s.len(), 2); // Cargo.toml + src
         s.restore_previous();

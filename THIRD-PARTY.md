@@ -24,7 +24,6 @@ Unicode-3.0, or MPL-2.0 at file level). The policy and the allow-list live in `d
 | `clap` | MIT OR Apache-2.0 | the command line |
 | `serde`, `toml` | MIT OR Apache-2.0 | configuration, keymaps and themes |
 | `fluent-bundle`, `unic-langid` | Apache-2.0 OR MIT | localisation catalogues |
-| `globset` | Unlicense OR MIT | selection masks (`*.rs,*.toml`) |
 | `unicode-width` | MIT OR Apache-2.0 | correct double-width (CJK) layout |
 | `object` | MIT OR Apache-2.0 | reading ELF/PE/Mach-O structure for the disassembler |
 | `iced-x86` | MIT | x86 and x86-64 instruction decoding |
@@ -32,7 +31,6 @@ Unicode-3.0, or MPL-2.0 at file level). The policy and the allow-list live in `d
 | `encoding_rs` | (MIT OR Apache-2.0) AND BSD-3-Clause | legacy code pages in the viewer |
 | `regex`, `memchr` | MIT OR Apache-2.0 / Unlicense OR MIT | search in the viewer |
 | `thiserror`, `anyhow` | MIT OR Apache-2.0 | error types |
-| `dirs` (and `option-ext`, MPL-2.0) | MIT OR Apache-2.0 | per-OS configuration directories |
 | `async-trait` | MIT OR Apache-2.0 | the `Vfs` trait |
 | `russh`, `russh-sftp` | Apache-2.0 | SSH and SFTP in the netbox |
 | `suppaftp` | Apache-2.0 OR MIT | FTP and FTPS in the netbox (it carries `chrono`, MIT OR Apache-2.0, for the `MDTM` reply it parses itself) |

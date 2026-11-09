@@ -76,7 +76,7 @@ impl Paths {
             Some(explicit) => (explicit.to_path_buf(), false),
             None if portable_config.exists() => (portable_config, true),
             None => (
-                dirs::config_dir()
+                config_dir(|k| std::env::var_os(k))
                     .unwrap_or_else(|| PathBuf::from("."))
                     .join(CONFIG_FILE_NAME),
                 false,
@@ -1026,6 +1026,25 @@ impl Default for SiteCfg {
             jump: None,
         }
     }
+}
+
+/// The folder the system keeps a user's configuration in, worked out from the environment the
+/// way each system documents it: `%APPDATA%` on Windows, `~/Library/Application Support` on
+/// macOS, and elsewhere `$XDG_CONFIG_HOME` when it is an absolute path, else `~/.config`.
+/// `None` when the variables it needs are not there. The lookup is a parameter so a test can
+/// hand it an environment of its own.
+fn config_dir(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> Option<PathBuf> {
+    let abs = |v: std::ffi::OsString| Some(PathBuf::from(v)).filter(|p| p.is_absolute());
+    if cfg!(windows) {
+        return var("APPDATA").and_then(abs);
+    }
+    let home = var("HOME").and_then(abs);
+    if cfg!(target_os = "macos") {
+        return home.map(|h| h.join("Library").join("Application Support"));
+    }
+    var("XDG_CONFIG_HOME")
+        .and_then(abs)
+        .or_else(|| home.map(|h| h.join(".config")))
 }
 
 fn default_scheme() -> String {
@@ -2139,6 +2158,52 @@ fn parse_bool(v: &str) -> Result<bool, String> {
         "true" | "yes" | "on" | "1" => Ok(true),
         "false" | "no" | "off" | "0" => Ok(false),
         other => Err(format!("expected a boolean, got `{other}`")),
+    }
+}
+
+#[cfg(test)]
+mod config_dir_tests {
+    use super::*;
+    use std::ffi::OsString;
+
+    fn env<'a>(pairs: &'a [(&'a str, &'a str)]) -> impl Fn(&str) -> Option<OsString> + 'a {
+        move |k| {
+            pairs
+                .iter()
+                .find(|(n, _)| *n == k)
+                .map(|(_, v)| OsString::from(v))
+        }
+    }
+
+    #[test]
+    #[cfg(all(unix, not(target_os = "macos")))]
+    fn xdg_wins_when_it_is_absolute_and_home_dot_config_otherwise() {
+        let e = [("HOME", "/home/u"), ("XDG_CONFIG_HOME", "/cfg")];
+        assert_eq!(config_dir(env(&e)), Some(PathBuf::from("/cfg")));
+        let e = [("HOME", "/home/u"), ("XDG_CONFIG_HOME", "relative")];
+        assert_eq!(config_dir(env(&e)), Some(PathBuf::from("/home/u/.config")));
+        assert_eq!(config_dir(env(&[])), None);
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn macos_uses_application_support() {
+        let e = [("HOME", "/Users/u"), ("XDG_CONFIG_HOME", "/cfg")];
+        assert_eq!(
+            config_dir(env(&e)),
+            Some(PathBuf::from("/Users/u/Library/Application Support"))
+        );
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn windows_uses_appdata() {
+        let e = [("APPDATA", r"C:\Users\u\AppData\Roaming")];
+        assert_eq!(
+            config_dir(env(&e)),
+            Some(PathBuf::from(r"C:\Users\u\AppData\Roaming"))
+        );
+        assert_eq!(config_dir(env(&[])), None);
     }
 }
 

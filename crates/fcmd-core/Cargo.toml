@@ -9,7 +9,6 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
-globset = "0.4"
 regex = "1"
 serde = { version = "1.0.229", features = ["derive"] }
 thiserror = "2"
