@@ -691,9 +691,17 @@ mod tests {
         assert_eq!(
             imp::command_line(
                 "a b",
-                &["c".into(), "".into(), r#"x"y"#.into(), r"d\".into()]
+                &[
+                    "c".into(),
+                    "".into(),
+                    r#"x"y"#.into(),
+                    r"d\".into(),
+                    r"e f\".into()
+                ]
             ),
-            r#""a b" c "" "x\"y" "d\\""#
+            // A backslash is literal unless quotes follow it: `d\` goes as it is, and inside
+            // the quotes that `e f\` needs the trailing one is doubled so the quote still closes.
+            r#""a b" c "" "x\"y" d\ "e f\\""#
         );
     }
 
