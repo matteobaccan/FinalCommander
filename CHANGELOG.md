@@ -65,6 +65,8 @@ Notable changes, newest first. The format follows
 
 ### Fixed
 
+- **`Esc` after a quick search** closes the box and leaves the cursor on the row it found, as
+  in FAR; it used to take the cursor back to where the search began.
 - **What changed after a copy into the repository.** `F5` from the other panel into the folder
   that *What changed* shows copied the file and left the panel as it was; every job now ends
   with git asked again, so the new file is there.

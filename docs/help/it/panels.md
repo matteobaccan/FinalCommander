@@ -381,7 +381,7 @@ successivo la chiude.
 # Scegliere i file
 
 `Insert` seleziona la riga e va avanti. `Grigio +` e `Grigio -` selezionano e deselezionano per
-maschera; `Grigio *` inverte. `Alt+lettere` trova un nome mentre scrivi.
+maschera; `Grigio *` inverte. `Alt+lettere` trova un nome mentre scrivi; `Esc` chiude il riquadro e lascia il cursore sul nome trovato.
 
 La riga che chiede `Grigio +` prende più di una maschera. Prima le maschere, nella stessa
 grammatica del filtro — `*.rs,*.toml`, un gruppo come `<arc>`, `/^IMG_\d+/` per

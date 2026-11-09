@@ -5769,9 +5769,9 @@ impl App {
             // The page about dialogs, with the question waiting behind it.
             KeyCode::F(1) if key.mods == Mods::NONE => self.open_dialog_help(),
             KeyCode::Esc => {
-                if let PromptKind::QuickSearch { origin } = prompt.kind {
-                    self.panel_mut().cursor_to(origin);
-                }
+                // A quick search is closed by `Esc` and nothing else: the cursor stays on the
+                // row it found, as in FAR. Going back to where the search started would throw
+                // away the one thing the search was for.
                 self.mode = Mode::Normal;
                 if matches!(prompt.kind, PromptKind::HelpSearch) {
                     self.help_return();
@@ -5791,8 +5791,7 @@ impl App {
             // The search has done its work by then — the row is found and under the cursor —
             // and what the arrow means next is what it means everywhere else, so the first
             // press closes the search and the one after it moves. Nothing is restored: the
-            // row the search found is where the user wanted to be, which is the difference
-            // between this and `Esc`.
+            // row the search found is where the user wanted to be.
             KeyCode::Up
             | KeyCode::Down
             | KeyCode::Left
@@ -33098,13 +33097,13 @@ run = ["echo one", "echo two", "echo three"]
     }
 
     #[test]
-    fn quick_search_jumps_and_esc_restores_the_cursor() {
+    fn quick_search_jumps_and_esc_leaves_the_cursor_on_what_it_found() {
         let mut app = app();
         app.cfg.panel.quick_search = QuickSearch::Plain;
         press(&mut app, "d"); // docs
         assert_eq!(app.panel().cursor, 1);
         press(&mut app, "Esc");
-        assert_eq!(app.panel().cursor, 0);
+        assert_eq!(app.panel().cursor, 1, "Esc closes the box and nothing else");
         assert!(matches!(app.mode, Mode::Normal));
     }
 
