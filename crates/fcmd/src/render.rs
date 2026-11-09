@@ -4256,6 +4256,93 @@ mod tests {
         write("split", &shot(&mut tree_app, 100, 30));
         tree_app.mode = Mode::Normal;
 
+        // ---- git in a panel: what changed, in words, staged apart from not staged ---------
+        let mut git_app = self::app("far", "en");
+        git_app.cfg.panel.status_line = true;
+        // The files are there, with sizes and dates, as in a repository on disk.
+        let changed: [(&str, &str, usize); 7] = [
+            ("M ", "src/app.rs", 41_208),
+            ("A ", "src/live.rs", 3_912),
+            ("MM", "src/ai.rs", 18_770),
+            (" M", "docs/config.md", 9_431),
+            (" M", "CHANGELOG.md", 28_604),
+            ("??", "shots/git.svg", 61_002),
+            ("??", "shots/ai.svg", 58_310),
+        ];
+        for (_, path, len) in changed {
+            let at = work.join(path);
+            std::fs::create_dir_all(at.parent().expect("a folder")).expect("the folder");
+            std::fs::write(&at, vec![b'x'; len]).expect("the file");
+            std::fs::File::options()
+                .write(true)
+                .open(&at)
+                .and_then(|f| f.set_modified(when((len % 5) as u64).expect("a time")))
+                .expect("the date is set");
+        }
+        let mut files: Vec<(String, String)> = changed
+            .iter()
+            .map(|(code, path, _)| (code.to_string(), path.to_string()))
+            .collect();
+        files.insert(5, (" D".into(), "docs/old-notes.md".into()));
+        git_app.handle_event(Event::GitDone {
+            panel: 0,
+            result: Ok(crate::app::GitOut::Status {
+                root: work.clone(),
+                files,
+            }),
+        });
+        git_app.active = 0;
+        write("git", &shot(&mut git_app, 140, 30));
+
+        // ---- the side-by-side diff, the lines that differ painted whole --------------------
+        let before = b"fn ask(service: &Service) -> Result<String, String> {\n    let client = client()?;\n    let reply = client.post(&service.url).send()?;\n    let text = reply.text()?;\n    answer(service.api, &text)\n}\n";
+        let after = b"fn ask(service: &Service) -> Result<String, String> {\n    let client = client()?;\n    let url = endpoint(service.api, &service.url);\n    let reply = client.post(&url).send()?;\n    let text = reply.text()?;\n    // Any shape: a server picked as Ollama may answer the OpenAI way.\n    answer(service.api, &text)\n}\n";
+        git_app.mode = Mode::Diff(Box::new(fcmd_view::Diff::new(
+            "ai.rs (last commit)".into(),
+            before,
+            "ai.rs (on disk)".into(),
+            after,
+            fcmd_core::diff::Ignore::default(),
+        )));
+        write("diff", &shot(&mut git_app, 100, 30));
+        git_app.mode = Mode::Normal;
+
+        // ---- the AI panel: the conversation itself, as it goes ---------------------------
+        let thread = work.join("ai-why-a-panel.md");
+        std::fs::write(
+            &thread,
+            "# Why is the conversation a panel?\n\n*local · qwen3:32b · 412 + 236 tokens*\n\n\
+             Because a file manager already has the two things a conversation needs:\n\n\
+             - **a place to read** — the panel, with the viewer's Markdown;\n\
+             - **a place to pick from** — the other panel, where `F5` puts files into the context.\n\n\
+             ---\n\n## And the files I add?\n\n*local · qwen3:32b · lib.rs · 812 + 406 tokens*\n\n\
+             They go with every question until `F8` takes them out. `lib.rs` declares the\n\
+             modules of the crate; `sort.rs` is where the panel decides its order.\n",
+        )
+        .expect("the conversation");
+        let mut ai_app = self::app("far", "en");
+        ai_app.cfg.ais = vec![fcmd_config::AiCfg {
+            name: "local".into(),
+            url: "http://localhost:11434/api/chat".into(),
+            model: "qwen3:32b".into(),
+            api: "ollama".into(),
+            ..Default::default()
+        }];
+        ai_app.open_ai_panel(1);
+        ai_app.panels[1].cursor = 0;
+        ai_app.ai_logged_in("local\nhttp://localhost:11434/api/tags\n200\n18\n3\ntrue\n32768");
+        ai_app.handle_event(Event::AiDone {
+            result: Ok(crate::app::AiAnswer {
+                file: thread,
+                text: String::new(),
+                purpose: crate::app::AiUse::Answer,
+                tokens: (Some(812), Some(406)),
+                model: "qwen3:32b".into(),
+            }),
+        });
+        ai_app.mode = Mode::Normal;
+        write("ai", &shot(&mut ai_app, 100, 30));
+
         // ---- the help, which is half prose and half the live keymap -----------------------
         press(&mut app, "F1");
         write("help", &shot(&mut app, 100, 30));

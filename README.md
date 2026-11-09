@@ -144,6 +144,32 @@ They cannot show a version of the program that no longer exists.
 | **The editor** (`F4`): a marked block, and the language named in the title bar. | **The menus** (`F9`): each shortcut is read from the keymap in force, and what is not implemented yet is drawn dim and says so when chosen. |
 | <img src="docs/shots/s3.svg" alt="A panel on an S3 bucket" width="420"> | <img src="docs/shots/help.svg" alt="The help system" width="420"> |
 | **A bucket as a panel** (`s3://logs/2024/08/`): the folders are common prefixes the service computes, and the footer says when the listing is not all of it. | **The help** (`F1`): the keys of the screen you are on, each with what it does, generated from the keymap in force. |
+| <img src="docs/shots/git.svg" alt="The git panel: what changed, staged apart from not staged, each row saying in words what happened to the file" width="420"> | <img src="docs/shots/ai.svg" alt="The AI panel: a conversation rendered as Markdown, the questions on the right, the model and the context window on the frame" width="420"> |
+| **Git in a panel** (`Alt+F1` → *Git*): what changed, staged apart from not staged, in words; `F5` stages, `F6` unstages, `F7` commits, `F8` discards, `F3` is the side-by-side diff. | **The AI panel** (`Alt+F1` → *AI*): the conversation itself, in Markdown, questions on the right and answers as they are written; the frame names the model and how full its context window is. |
+| <img src="docs/shots/diff.svg" alt="The side-by-side diff with the removed line painted red and the added lines painted green" width="420"> | |
+| **The side-by-side diff** (`Ctrl+Shift+D`, or `F3` in the git panel): a line that went is painted red, a line that came green, and the part of a changed line that differs is marked. | |
+
+## Git and AI, each in a panel
+
+**Git.** `Alt+F1` / `Alt+F2` has a *Git* row whenever the panel's folder is in a repository.
+It opens *what changed*: every file with its part spelled out — staged, not staged,
+untracked, conflict — and what happened to it, a file staged and then changed again being a
+row in each part. `F5` stages, `F6` unstages, `F7` commits, `F8` discards after asking (back
+to the index, back to the last commit, or to the wastebasket for a file git does not know),
+and `F3` shows the two versions side by side, the lines that went painted red and the ones
+that came painted green. `Ctrl+Q` beside it is the diff of the row under the cursor. The
+`F2` menu turns the list into a tree of folders, and from there the log and the branches are
+panels too: `F4` on a commit is what it changed, `F5` pulls, `F6` pushes.
+
+**AI.** The same dialog has an *AI* row: your services — OpenAI, Anthropic, Ollama, or any
+server that speaks one of them, local or remote — as a panel. `Enter` logs in by asking the
+service for its models, which proves the address and the key without spending a token, and
+says how it answered. From then on the panel is the **conversation**: what you type on the
+command line is the next question, `F5` in the other panel puts files into its context, and
+the panel shows it all as it happens, rendered as Markdown — the questions on the right, the
+answer on the left as the model writes it, a turning wheel and the seconds while it thinks.
+The frame names the model that answered and how full its context window is. Nothing is sent
+without a dialog saying which files and to which host.
 
 ## Install
 

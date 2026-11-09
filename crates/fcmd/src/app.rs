@@ -13505,7 +13505,7 @@ impl App {
 
     /// `Alt+F1` / `Alt+F2` → AI: the services as a panel. `Enter` logs in to one, `F4`
     /// edits it, `F7` (or `Shift+F4`) adds one, `F8` removes it.
-    fn open_ai_panel(&mut self, side: usize) {
+    pub(crate) fn open_ai_panel(&mut self, side: usize) {
         use fcmd_core::{Entry, EntryId, EntryKind};
         let items: Vec<(VPath, Entry)> = self
             .cfg
@@ -13595,7 +13595,7 @@ impl App {
     }
 
     /// The service answered the login: say how, and open the conversation on that side.
-    fn ai_logged_in(&mut self, report: &str) {
+    pub(crate) fn ai_logged_in(&mut self, report: &str) {
         let side = self.ai_probing.take().unwrap_or(self.active);
         let mut fields = report.lines();
         let mut next = || fields.next().unwrap_or("").to_string();
