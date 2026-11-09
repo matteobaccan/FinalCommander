@@ -31,8 +31,7 @@ use crate::transcript::Transcript;
 /// A shell that stays, and what it has printed.
 pub struct Shell {
     writer: Box<dyn Write + Send>,
-    master: Box<dyn portable_pty::MasterPty + Send>,
-    child: Box<dyn portable_pty::Child + Send + Sync>,
+    pty: fcmd_platform::pty::Pty,
     out: Arc<Mutex<Transcript>>,
     gone: Arc<AtomicBool>,
     /// A command line written before the shell had reached its first prompt, waiting for it.
@@ -70,8 +69,7 @@ impl Shell {
         let pty::Open {
             writer,
             mut reader,
-            master,
-            child,
+            pty,
             head,
         } = pty::open(program, cwd, cols, rows)?;
 
@@ -104,8 +102,7 @@ impl Shell {
 
         let mut shell = Shell {
             writer,
-            master,
-            child,
+            pty,
             out,
             gone,
             waiting: None,
@@ -193,20 +190,12 @@ impl Shell {
 
     /// Tell the shell how wide the screen is, so what it prints wraps where it is shown.
     pub fn resize(&mut self, cols: u16, rows: u16) -> Result<(), TermError> {
-        self.master
-            .resize(portable_pty::PtySize {
-                rows: rows.max(1),
-                cols: cols.max(1),
-                pixel_width: 0,
-                pixel_height: 0,
-            })
-            .map_err(|e| TermError::Spawn(e.to_string()))
+        Ok(self.pty.resize(cols, rows)?)
     }
 
     /// Stop it. A shell nobody is reading has no business still running.
     pub fn kill(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+        self.pty.kill();
     }
 }
 

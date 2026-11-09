@@ -15,7 +15,7 @@ use std::io::{Read, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-use portable_pty::{CommandBuilder, PtySize};
+use fcmd_platform::pty::Pty;
 
 use crate::screen::Screen;
 
@@ -34,9 +34,8 @@ pub struct Terminal {
     screen: Arc<Mutex<Screen>>,
     /// The writing end, for the keys.
     writer: Box<dyn Write + Send>,
-    /// The handle that resizes the pair, which tells the program (`SIGWINCH`).
-    master: Box<dyn portable_pty::MasterPty + Send>,
-    child: Box<dyn portable_pty::Child + Send + Sync>,
+    /// The pair and the program on it: resizing it tells the program (`SIGWINCH`).
+    pty: Pty,
     /// Set by the reader thread when the other end closes: the program has gone.
     finished: Arc<AtomicBool>,
     /// What this terminal is called in a list of screens: the shell, or the title it set.
@@ -73,8 +72,7 @@ impl Terminal {
         let Open {
             writer,
             mut reader,
-            master,
-            child,
+            pty,
             head,
         } = open(program, cwd, cols, rows)?;
 
@@ -114,8 +112,7 @@ impl Terminal {
         Ok(Terminal {
             screen,
             writer,
-            master,
-            child,
+            pty,
             finished,
             name: head,
         })
@@ -134,10 +131,7 @@ impl Terminal {
 
     /// The exit status, once there is one.
     pub fn status(&mut self) -> Option<u32> {
-        match self.child.try_wait() {
-            Ok(Some(status)) => Some(status.exit_code()),
-            _ => None,
-        }
+        self.pty.try_wait().ok().flatten()
     }
 
     /// Send bytes to the program, as if they had been typed.
@@ -150,14 +144,7 @@ impl Terminal {
     /// A new size, for the screen and for the program — which is told, so a full-screen
     /// program redraws itself rather than staying the shape of the old window.
     pub fn resize(&mut self, cols: u16, rows: u16) -> Result<(), TermError> {
-        self.master
-            .resize(PtySize {
-                rows: rows.max(1),
-                cols: cols.max(1),
-                pixel_width: 0,
-                pixel_height: 0,
-            })
-            .map_err(|e| TermError::Spawn(e.to_string()))?;
+        self.pty.resize(cols, rows)?;
         self.with_screen(|screen| screen.resize(cols, rows));
         Ok(())
     }
@@ -165,8 +152,7 @@ impl Terminal {
     /// Stop the program. A terminal whose screen is closed must not leave a shell running
     /// with nothing reading it.
     pub fn kill(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+        self.pty.kill();
     }
 }
 
@@ -180,8 +166,7 @@ impl Drop for Terminal {
 pub(crate) struct Open {
     pub writer: Box<dyn Write + Send>,
     pub reader: Box<dyn Read + Send>,
-    pub master: Box<dyn portable_pty::MasterPty + Send>,
-    pub child: Box<dyn portable_pty::Child + Send + Sync>,
+    pub pty: Pty,
     /// The program, as it was named: what to call this in a list.
     pub head: String,
 }
@@ -200,48 +185,16 @@ pub(crate) fn open(
     let Some((head, tail)) = parts.split_first() else {
         return Err(TermError::Spawn("no program to run".into()));
     };
-    let pair = portable_pty::native_pty_system()
-        .openpty(PtySize {
-            rows: rows.max(1),
-            cols: cols.max(1),
-            pixel_width: 0,
-            pixel_height: 0,
-        })
-        .map_err(|e| TermError::Spawn(e.to_string()))?;
-
-    let mut command = CommandBuilder::new(head);
-    command.args(tail);
-    if let Some(cwd) = cwd {
-        command.cwd(cwd);
-    }
     // What the program is told it is talking to. `xterm-256color` is what every terminal in
     // use claims and what every program has a table for; claiming something rarer would mean
     // programs falling back to no colour at all.
-    command.env("TERM", "xterm-256color");
-    command.env("COLORTERM", "truecolor");
-
-    let child = pair
-        .slave
-        .spawn_command(command)
-        .map_err(|e| TermError::Spawn(e.to_string()))?;
-    // The slave end is held by the child now. Dropping ours is what lets a read of the master
-    // end report end-of-file when the child exits — without it the read would block for ever
-    // on a terminal nobody is writing to.
-    drop(pair.slave);
-
-    let writer = pair
-        .master
-        .take_writer()
-        .map_err(|e| TermError::Spawn(e.to_string()))?;
-    let reader = pair
-        .master
-        .try_clone_reader()
-        .map_err(|e| TermError::Spawn(e.to_string()))?;
+    let env = [("TERM", "xterm-256color"), ("COLORTERM", "truecolor")];
+    let spawned = fcmd_platform::pty::spawn(head, tail, cwd, &env, cols, rows)
+        .map_err(|e| TermError::Spawn(format!("{head}: {e}")))?;
     Ok(Open {
-        writer,
-        reader,
-        master: pair.master,
-        child,
+        writer: Box::new(spawned.writer),
+        reader: Box::new(spawned.reader),
+        pty: spawned.pty,
         head: head.clone(),
     })
 }

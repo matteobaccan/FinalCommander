@@ -16,6 +16,7 @@ pub mod device;
 mod mount;
 pub mod process;
 mod programs;
+pub mod pty;
 pub mod service;
 mod socket;
 #[cfg(unix)]

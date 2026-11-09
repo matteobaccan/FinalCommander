@@ -13,7 +13,7 @@ fcmd-ui = { workspace = true }
 # The pseudo-terminal itself: `openpty` on Unix, ConPTY on Windows, one API over both. It
 # binds to the system's own libraries rather than compiling any C, so the binary stays one
 # file that cross-compiles.
-portable-pty = "0.9"
+fcmd-platform = { workspace = true }
 # The escape-sequence parser, from Alacritty: a state machine that calls back for each
 # action. Parsing VT by hand is a well-known way to get it subtly wrong for years.
 vte = "0.15"

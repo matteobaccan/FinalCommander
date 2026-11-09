@@ -14,7 +14,7 @@ authors.workspace = true
 # wrappers for the owner of a file. Already in the tree for the terminal.
 # `zerocopy` is `copy_file_range`, the in-kernel copy of `copy.rs`.
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.31.3", features = ["fs", "user", "zerocopy"] }
+nix = { version = "0.31.3", features = ["fs", "user", "zerocopy", "term"] }
 
 # How much memory the machine has, which on macOS is a `sysctl` and nothing else.
 [target.'cfg(target_os = "macos")'.dependencies]
@@ -52,4 +52,10 @@ windows-sys = { version = "0.61", features = [
   # Which login session a process belongs to, which Windows counts as a Terminal Services
   # question even on a machine nobody logs into twice.
   "Win32_System_RemoteDesktop",
+  # The terminal pane on Windows: ConPTY (`CreatePseudoConsole`, looked up at run time so an
+  # old Windows still starts), the two pipes either side of it, and the process attribute
+  # that attaches a program to it.
+  "Win32_System_Console",
+  "Win32_System_Pipes",
+  "Win32_System_LibraryLoader",
 ] }
