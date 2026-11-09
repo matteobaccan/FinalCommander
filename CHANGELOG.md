@@ -6,6 +6,18 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+## [0.39.1] - 2026-11-09
+
+### Fixed
+
+- **OpenAI's newer models answered `HTTP 400`.** The reasoning models and GPT-5 refuse
+  `max_tokens` (*Use 'max_completion_tokens' instead*). OpenAI is now sent
+  `max_completion_tokens`, the servers that speak its protocol keep `max_tokens`, and a
+  service that refuses the name it was sent and names the other is asked again with it, once,
+  and remembered for the session. The same is done for the two other refusals those models
+  give: the `system` role (asked again with `developer`) and streaming for an organisation that
+  is not verified (asked again for the whole answer).
+
 ## [0.39.0] - 2026-11-09
 
 ### Added
