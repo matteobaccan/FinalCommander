@@ -55,8 +55,8 @@ Notable changes, newest first. The format follows
   named for what they are (last commit, staged, on disk), and the lines removed and added
   counted in its foot.
 
-- **The AI conversation as it goes.** Once logged in, the other panel shows the conversation
-  like a quick view: the question sent, the answer as the model writes it — answers are now
+- **The AI conversation as it goes.** Once logged in, the AI panel shows the conversation
+  itself, like a quick view, with the files of the context at the top: the question sent, the answer as the model writes it — answers are now
   streamed, in OpenAI's, Anthropic's and Ollama's shapes, and a server that does not stream is
   read whole — and a turning wheel with the seconds while it is still coming.
 - **Ending a process.** `F8` or `Del` on the process list ends the process under the cursor,
@@ -102,6 +102,10 @@ Notable changes, newest first. The format follows
 - **A question out to the AI looked like nothing happening.** The status line's corner now
   shows the service and the seconds it has been thinking, with a turning wheel, until the
   answer or the error is back.
+- **Deleting to the wastebasket answered "there is no wastebasket here"** for every file: the
+  archive and the object-store layers every job goes through did not pass the request on, so
+  it met the default refusal. Both pass it on now, and an archive or a bucket still says it
+  has none.
 - **Discarding a new file in the git panel on Windows** said there was no wastebasket: git
   names the repository's top with `/`, and the wastebasket refuses a path with both
   separators. The path is now said with `\` only.

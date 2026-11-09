@@ -313,6 +313,12 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
             }
             fcmd_panel::Content::Files => {}
         }
+        // The AI conversation is read, not walked: the panel is the conversation itself, as
+        // it goes, the way the quick view shows a file.
+        if app.panels[i].temp_origin() == Some(":aichat") && app.ai_session.is_some() {
+            draw_ai_chat(app, i, *area, buf);
+            continue;
+        }
         let panel = &app.panels[i];
         // A list panel says what it is a list of; a directory panel says where it is.
         let path = match &panel.temp {
@@ -2093,6 +2099,37 @@ fn draw_quick_view(app: &mut App, index: usize, area: Rect, buf: &mut Buffer) {
         foot,
         nw + 2,
     );
+}
+
+/// The AI conversation in its own panel: the session's title on the frame, the
+/// conversation below it as the quick view would show it, the newest at the foot.
+fn draw_ai_chat(app: &mut App, index: usize, area: Rect, buf: &mut Buffer) {
+    if area.w < 8 || area.h < 3 {
+        return;
+    }
+    let title = app.panels[index]
+        .temp
+        .as_ref()
+        .map(|t| t.title.clone())
+        .unwrap_or_default();
+    let inner = widgets::draw_pane(buf, &app.theme, area, &title, index == app.active);
+    let base = app.theme.panel();
+    app.quick_size = (inner.w.saturating_sub(1), inner.h);
+    app.ai_live_view(index);
+    let Some(viewer) = app.quick.as_mut() else {
+        return;
+    };
+    let rows = viewer.rows(inner.w.saturating_sub(1), inner.h);
+    for (n, row) in rows.iter().enumerate() {
+        let text = fcmd_ui::truncate_cols(&row.text, inner.w.saturating_sub(1) as usize);
+        buf.put_str(
+            inner.x + 1,
+            inner.y + n as u16,
+            &text,
+            base,
+            inner.w.saturating_sub(1),
+        );
+    }
 }
 
 /// The tree panel (`Ctrl+T`): the directories under this panel's root, as far as they have

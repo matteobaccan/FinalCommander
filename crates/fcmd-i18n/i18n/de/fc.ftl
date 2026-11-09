@@ -1386,6 +1386,7 @@ ai-send-diff = Der vorgemerkte Diff geht an { $host }
 ai-send-files = { $count } Dateien, { $size }, werden mit der Frage an { $host } gesendet.
 ai-asking = Frage { $name }…
 ai-busy = { $name } denkt nach… { $secs } s
+ai-conversation-new = Ein neues Gespräch: die nächste Frage beginnt es.
 ai-live-empty = Eine Frage in die Befehlszeile schreiben: sie geht an { $name }, und das Gespräch erscheint hier.
 ai-failed = Die KI hat nicht geantwortet: { $why }
 btn-send = Senden

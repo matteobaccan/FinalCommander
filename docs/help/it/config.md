@@ -42,18 +42,17 @@ dei tuoi servizi. `F7` ne aggiunge uno, `F4` lo modifica, `F8` lo toglie. `Invio
 fcmd chiede al servizio l'elenco dei suoi modelli, che prova indirizzo e chiave senza chiedere
 niente al modello, e la riga di stato dice cosa è tornato (`HTTP 200 in 120 ms, 12 modelli`), o
 perché non è andata (un server che non è acceso, una chiave sbagliata). Da lì il pannello è la
-**conversazione**, e l'altro pannello la mostra man mano, come una quick view: la domanda
-inviata, la risposta mentre il modello la scrive e, finché sta ancora arrivando, una rotellina
-che gira con i secondi di attesa. `Ctrl+Q` lì restituisce i file, per scegliere cosa va nel
-contesto; `Ctrl+R` sulla conversazione la ricostruisce e la lascia una conversazione:
+**conversazione**, mostrata lì dentro man mano, come una quick view: in cima i file del
+contesto, poi la domanda inviata, la risposta mentre il modello la scrive e, finché sta ancora
+arrivando, una rotellina che gira con i secondi di attesa. Le frecce e `PagSu`/`PagGiù` la
+fanno scorrere; `Ctrl+R` la ricostruisce e la lascia una conversazione:
 
 * quello che scrivi sulla riga di comando sotto di lui va all'AI, come seguito della stessa
   conversazione — senza prefissi;
 * `F5` nell'altro pannello mette i file selezionati lì nel **contesto**, e partono con ogni
   domanda da quel momento — prima della prima domanda che li porta, un dialogo dice quali file,
   quanto pesano e a quale host vanno;
-* il pannello mostra i file del contesto e la conversazione stessa: `F3` o `Ctrl+Q` la leggono,
-  `F8` toglie un file dal contesto (sulla riga della conversazione ne comincia una nuova).
+* `F8` toglie i file dal contesto; se non ce ne sono più, comincia una nuova conversazione.
 
 Il resto del capitolo è la stessa cosa dalla riga di comando.
 

@@ -1387,6 +1387,7 @@ ai-send-diff = Il diff in staging va a { $host }
 ai-send-files = { $count } file, { $size }, saranno inviati a { $host } con la domanda.
 ai-asking = Chiedo a { $name }…
 ai-busy = { $name } sta pensando… { $secs }s
+ai-conversation-new = Nuova conversazione: la prossima domanda la apre.
 ai-live-empty = Scrivi una domanda sulla riga di comando: va a { $name }, e la conversazione si vede qui man mano.
 ai-failed = L'AI non ha risposto: { $why }
 btn-send = Invia

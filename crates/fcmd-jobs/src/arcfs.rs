@@ -178,6 +178,15 @@ impl<F: JobFs> JobFs for ArcFs<F> {
         self.inner.remove_file(path)
     }
 
+    /// Outside an archive the wastebasket is the one under this layer's: a method this
+    /// wrapper did not pass on would be the trait's refusal for every file in the program.
+    fn trash(&self, path: &VPath) -> io::Result<()> {
+        if path.in_container() {
+            return Err(read_only(path));
+        }
+        self.inner.trash(path)
+    }
+
     fn remove_dir(&self, path: &VPath) -> io::Result<()> {
         if path.in_container() {
             return Err(read_only(path));
@@ -385,6 +394,26 @@ mod tests {
 
     fn fs() -> ArcFs<LocalFs> {
         ArcFs::new(Arc::new(Cache::new(Limits::default())), LocalFs)
+    }
+
+    /// The program's jobs all go through this layer, so a file outside an archive must reach
+    /// the system's wastebasket under it; for a while it got the trait's refusal instead,
+    /// "there is no wastebasket here", on every `F8`.
+    #[test]
+    fn the_wastebasket_is_reached_through_the_archive_layer() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("rubbish.txt");
+        std::fs::write(&file, b"out").unwrap();
+        fs().trash(&VPath::local(&file))
+            .expect("the wastebasket took it");
+        assert!(!file.exists());
+        let zip = dir.path().join("a.zip");
+        zip_of(&zip);
+        let inside = VPath::local(&zip).enter("/readme.md");
+        assert!(
+            fs().trash(&inside).is_err(),
+            "an archive has no wastebasket"
+        );
     }
 
     #[test]

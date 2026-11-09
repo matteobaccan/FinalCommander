@@ -206,6 +206,18 @@ impl<F: JobFs> JobFs for ObjectFs<F> {
         })
     }
 
+    /// A bucket has no wastebasket; everything else goes on to the layer under this one,
+    /// which for a local file is the system's own.
+    fn trash(&self, path: &VPath) -> io::Result<()> {
+        if !mine(path) {
+            return self.inner.trash(path);
+        }
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            format!("{path}: there is no wastebasket in an object store"),
+        ))
+    }
+
     fn remove_file(&self, path: &VPath) -> io::Result<()> {
         if !mine(path) {
             return self.inner.remove_file(path);
@@ -393,6 +405,24 @@ mod tests {
         ]);
         let fs = ObjectFs::new(Arc::new(vfs), LocalFs, Handle::current());
         (fake, fs)
+    }
+
+    /// A local file goes through the object-store layer to the system's wastebasket, and a
+    /// key in a bucket is told there is none.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn the_wastebasket_is_reached_through_the_object_layer() {
+        let (_fake, fs) = setup().await;
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("rubbish.txt");
+        std::fs::write(&file, b"out").unwrap();
+        let local = VPath::local(&file);
+        tokio::task::spawn_blocking(move || {
+            fs.trash(&local).expect("the wastebasket took it");
+            assert!(fs.trash(&VPath::parse("s3://logs/notes/one.txt")).is_err());
+        })
+        .await
+        .unwrap();
+        assert!(!file.exists());
     }
 
     #[tokio::test(flavor = "multi_thread")]

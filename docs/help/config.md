@@ -41,18 +41,17 @@ your services. `F7` adds one, `F4` changes it, `F8` removes it. `Enter` logs in 
 service for its list of models, which proves the address and the key without asking the model
 anything, and the status line says what came back (`HTTP 200 in 120 ms, 12 models`), or why it
 failed (a server that is not running, a wrong key). Then the panel is the **conversation**,
-and the other panel shows it as it goes, like a quick view: the question you sent, the answer as
-the model writes it, and while it is still coming a turning wheel with the seconds it has been
-thinking. `Ctrl+Q` there gives the files back, to pick what goes into the context; `Ctrl+R` on
-the conversation builds it again and keeps it a conversation:
+shown in it as it goes, like a quick view: the files of the context at the top, the question
+you sent, the answer as the model writes it, and while it is still coming a turning wheel with
+the seconds it has been thinking. The arrows and `PgUp`/`PgDn` scroll it; `Ctrl+R` builds it
+again and keeps it a conversation:
 
 * whatever you type on the command line under it goes to the AI, as the next turn of the same
   conversation — no prefix needed;
 * `F5` in the other panel puts the files selected there into the **context**, and they go with
   every question from then on — before the first one that carries them, a dialog says which
   files, how big and to which host;
-* the panel shows the files of the context and the conversation itself: `F3` or `Ctrl+Q` reads
-  it, `F8` takes a file out of the context (on the conversation row, it starts a new one).
+* `F8` takes the files out of the context; with none left, it starts a new conversation.
 
 The rest of this chapter is the same thing from the command line.
 

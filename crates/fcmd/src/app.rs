@@ -2512,7 +2512,7 @@ pub struct App {
     /// Which service the AI dialog is changing; `None` is a new one.
     ai_editing: Option<usize>,
     /// The conversation the AI panel holds, once a service has been logged in to.
-    ai_session: Option<AiSession>,
+    pub(crate) ai_session: Option<AiSession>,
     /// The side a login was asked from, while its answer is on its way.
     ai_probing: Option<usize>,
     /// A question on its way: to which service, and since when. Drawn in the status line's
@@ -13623,14 +13623,8 @@ impl App {
         });
         self.active = side;
         self.show_ai_session();
-        // The other panel is the conversation as it goes, read like a quick view: what was
-        // asked, what came back and, while it is out, the wait. `Ctrl+Q` there gives the
-        // files back, to pick what goes into the context.
-        let other = 1 - side;
-        if self.panels[other].content == crate::panel::Content::Files {
-            self.panels[other].content = crate::panel::Content::QuickView;
-            self.trees[other] = None;
-        }
+        // The panel itself is the conversation as it goes, read like a quick view; the other
+        // panel stays the files, to pick what goes into the context with `F5`.
         self.quick_of = None;
         self.set_status(m);
     }
@@ -13683,7 +13677,7 @@ impl App {
     /// what is in the file so far, then the question on its way and the wait, with a wheel
     /// and the seconds, until the answer is written. Built again only when something in it
     /// changed. Returns false for any other panel.
-    fn ai_live_view(&mut self, panel: usize) -> bool {
+    pub(crate) fn ai_live_view(&mut self, panel: usize) -> bool {
         if self.panels[panel].temp_origin() != Some(":aichat") {
             return false;
         }
@@ -13697,10 +13691,12 @@ impl App {
             .map_or(0, |m| m.len());
         let secs = self.ai_busy.as_ref().map(|(_, t)| t.elapsed().as_secs());
         let key = VPath::local(format!(
-            ":ai-live:{len}:{:?}:{:?}:{}",
+            ":ai-live:{len}:{:?}:{:?}:{}:{}:{:?}",
             session.asking,
             secs,
-            self.ai_streamed.len()
+            self.ai_streamed.len(),
+            session.files.len(),
+            self.quick_size
         ));
         if self.quick_of.as_ref() == Some(&key) {
             return true;
@@ -13715,6 +13711,14 @@ impl App {
                 "ai-live-empty",
                 &[("name", session.service.name.clone().into())],
             );
+        }
+        // What goes with every question, said at the top, where the context belongs.
+        if !session.files.is_empty() {
+            let mut head = format!("> {}\n", self.i18n.t("ai-row-context"));
+            for f in &session.files {
+                head.push_str(&format!("> - {}\n", f.display()));
+            }
+            text = format!("{head}\n{text}");
         }
         if let (Some(question), Some(secs)) = (&session.asking, secs) {
             let wheel = ['◐', '◓', '◑', '◒'][(secs % 4) as usize];
@@ -13748,7 +13752,8 @@ impl App {
         viewer.show_key_bar = false;
         viewer.show_status_line = false;
         // The newest is at the foot, and the foot is what is read.
-        viewer.to_end(80, self.rows.max(1) as u16);
+        let (w, h) = (self.quick_size.0.max(1), self.quick_size.1.max(1));
+        viewer.to_end(w, h);
         self.quick = Some(Box::new(viewer));
         self.quick_of = Some(key);
         self.quick_why = None;
@@ -13787,21 +13792,21 @@ impl App {
 
     /// `F8` in the conversation: the file under the cursor leaves the context.
     fn ai_forget_at_cursor(&mut self) {
-        let Some(path) = self.panel().current_path() else {
-            return;
-        };
-        let file = path.as_path().to_path_buf();
+        // The panel shows the conversation, not rows to stand on: `F8` takes the files out of
+        // the context, and with none left it starts a new conversation.
         let Some(session) = self.ai_session.as_mut() else {
             return;
         };
-        if session.thread.as_ref() == Some(&file) {
-            // The conversation itself: forgetting it starts a new one.
-            session.thread = None;
+        let id = if !session.files.is_empty() {
+            session.files.clear();
+            "ai-context-removed"
         } else {
-            session.files.retain(|f| f != &file);
-        }
+            session.thread = None;
+            "ai-conversation-new"
+        };
         self.show_ai_session();
-        let m = self.i18n.t("ai-context-removed");
+        self.quick_of = None;
+        let m = self.i18n.t(id);
         self.set_status(m);
     }
 
@@ -23135,7 +23140,8 @@ impl App {
     /// would move a cursor that is not there — never runs.
     fn special_panel_key(&mut self, cmd: Command) -> bool {
         use crate::panel::Content;
-        if self.panels[self.active].content == Content::Files {
+        let chat = self.panels[self.active].temp_origin() == Some(":aichat");
+        if self.panels[self.active].content == Content::Files && !chat {
             return false;
         }
         if self.panels[self.active].content == Content::Tree {
@@ -36411,7 +36417,7 @@ abcdefghij
         assert!(app.ai_session.as_ref().unwrap().files.is_empty());
     }
 
-    /// Beside the conversation the other panel shows it as it goes: the question on its way,
+    /// The conversation panel shows the conversation itself as it goes: the question on its way,
     /// the answer as it is written and the wait; and `Ctrl+R` keeps the panel a conversation,
     /// so what is typed still goes to the model.
     #[test]
@@ -36439,8 +36445,8 @@ abcdefghij
         });
         assert_eq!(
             app.panels[0].content,
-            crate::panel::Content::QuickView,
-            "the other panel shows the conversation"
+            crate::panel::Content::Files,
+            "the other panel stays the files, for the context"
         );
         let shown = |app: &mut App| {
             let mut buf = fcmd_ui::Buffer::new(120, 30);
