@@ -48,6 +48,15 @@ separators, `Home`/`End` jump to the first and last entry, `Enter` chooses, `Esc
 close, and a letter runs the entry that claims it. With the bar lit and nothing pulled down a
 letter belongs to the titles instead, which is why they wear one: `F` is the files menu.
 
+**The dropdown** hangs right under the bar, its top frame on the row below it, with no empty
+row between. In a window shorter than the menu it is as tall as the screen and scrolls with the
+cursor, with `▲` and `▼` on its right frame where there is more above or below.
+
+**Dialog rows.** In every dialog `Alt+↓` on a row of choices lists the choices to pick from,
+and `Ctrl+A` on a text row selects the whole value: what is typed or pasted next replaces it,
+`Del`/`Backspace` clear it, `Ctrl+C`/`Ctrl+Ins` copy it, `Ctrl+X` cuts it, and any move lets it
+go. The selected value is drawn in the editor's selection colours.
+
 **The letters.** A label carries its own letter, marked in the catalogue with `&` before it —
 `&Brief`, `File own&ers` — and the dropdown draws that letter highlighted, on the row one is
 standing on as well. The five titles on the bar are marked the same way, in the bar's own

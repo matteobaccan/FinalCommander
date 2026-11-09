@@ -1301,6 +1301,10 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                         });
                     });
                 }
+                Request::KillProcess { side, pid, name } => {
+                    let result = fcmd_platform::kill(pid);
+                    let _ = tx.send(Event::ProcessKilled { side, name, result });
+                }
                 Request::ServiceControl { side, id, action } => {
                     let tx = tx.clone();
                     // Off the loop: a service manager takes seconds over a restart, and the
@@ -2222,6 +2226,11 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
             eprintln!("fcmd: cannot write {}: {e}", file.display());
         }
     }
+    // A command started from the command line runs on a worker that waits for it to end, and
+    // dropping the runtime waits for every such worker. A program opened that way and still
+    // open — an editor, a GUI, a server — would keep fcmd from ever exiting after `F10`. The
+    // runtime is let go instead: the program goes on by itself, and fcmd ends.
+    runtime.shutdown_background();
     Ok(())
 }
 
@@ -6595,6 +6604,14 @@ dir_attr = "D"
                 }
                 // The one request a test serves for real: it runs no program unless there
                 // is a service manager, and on a machine without one it answers at once.
+                // Never for real in a test: a pid there is made up.
+                Request::KillProcess { side, name, .. } => {
+                    app.handle_event(Event::ProcessKilled {
+                        side,
+                        name,
+                        result: Ok(()),
+                    });
+                }
                 Request::ServiceControl { side, id, action } => {
                     let result = fcmd_platform::control(&id, action);
                     app.handle_event(Event::ServiceControlled {

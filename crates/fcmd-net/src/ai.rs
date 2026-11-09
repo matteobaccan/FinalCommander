@@ -208,7 +208,7 @@ pub async fn ask_thread(
         .build()
         .map_err(|e| e.to_string())?;
     let mut request = client
-        .post(&service.url)
+        .post(endpoint(service.api, &service.url))
         .header(reqwest::header::CONTENT_TYPE, "application/json")
         .body(body_with(service, earlier, question, files).to_string());
     if let Some(token) = &service.token {
@@ -241,8 +241,43 @@ pub async fn ask_thread(
 /// Where a service lists its models — the cheapest question that proves the address, the
 /// key and the protocol are right without asking the model anything: `…/models` beside an
 /// OpenAI or Anthropic endpoint, `…/api/tags` beside Ollama's chat.
+/// The address a question is posted to. A list of models pasted in place of the endpoint
+/// (`/api/tags`, `/v1/models`) is taken back to the endpoint beside it, and a bare
+/// `scheme://host[:port]` gets the protocol's usual path.
+pub fn endpoint(api: Api, url: &str) -> String {
+    let mut url = url.trim().trim_end_matches('/').to_string();
+    for tail in ["/api/tags", "/models"] {
+        if let Some(base) = url.strip_suffix(tail) {
+            url = base.trim_end_matches('/').to_string();
+        }
+    }
+    let path = match api {
+        Api::OpenAi => "/chat/completions",
+        Api::Anthropic => "/messages",
+        Api::Ollama => "/api/chat",
+    };
+    let bare = url
+        .split_once("://")
+        .map_or(url.as_str(), |(_, rest)| rest)
+        .split_once('/')
+        .is_none();
+    if bare {
+        let v1 = if api == Api::Ollama { "" } else { "/v1" };
+        return format!("{url}{v1}{path}");
+    }
+    // `/v1` alone, as some servers document it.
+    if url.ends_with("/v1") || (url.ends_with("/api") && api == Api::Ollama) {
+        return match api {
+            Api::Ollama => format!("{}{path}", url.trim_end_matches("/api")),
+            _ => format!("{url}{path}"),
+        };
+    }
+    url
+}
+
 pub fn models_url(api: Api, url: &str) -> String {
-    let url = url.trim_end_matches('/');
+    let url = endpoint(api, url);
+    let url = url.as_str();
     let cut = |suffix: &str| url.strip_suffix(suffix).map(str::to_string);
     match api {
         Api::OpenAi => cut("/chat/completions")
@@ -252,9 +287,12 @@ pub fn models_url(api: Api, url: &str) -> String {
         Api::Anthropic => cut("/messages")
             .map(|base| format!("{base}/models"))
             .unwrap_or_else(|| format!("{url}/models")),
+        // Ollama speaks OpenAI's API too, under `/v1`: an address of that shape is asked the
+        // OpenAI way.
         Api::Ollama => cut("/api/chat")
             .or_else(|| cut("/api/generate"))
             .map(|base| format!("{base}/api/tags"))
+            .or_else(|| cut("/v1/chat/completions").map(|base| format!("{base}/v1/models")))
             .unwrap_or_else(|| format!("{url}/api/tags")),
     }
 }
@@ -360,6 +398,33 @@ mod tests {
         assert_eq!(
             models_url(Api::Ollama, "http://localhost:11434/api/chat"),
             "http://localhost:11434/api/tags"
+        );
+        // What the login reports must be the endpoint's own list, whatever was pasted.
+        assert_eq!(
+            models_url(
+                Api::Ollama,
+                "http://localhost:8080/v1/chat/completions/api/tags"
+            ),
+            "http://localhost:8080/v1/models"
+        );
+        assert_eq!(
+            endpoint(
+                Api::Ollama,
+                "http://localhost:8080/v1/chat/completions/api/tags"
+            ),
+            "http://localhost:8080/v1/chat/completions"
+        );
+        assert_eq!(
+            endpoint(Api::OpenAi, "http://localhost:8080/v1/models"),
+            "http://localhost:8080/v1/chat/completions"
+        );
+        assert_eq!(
+            endpoint(Api::Ollama, "http://localhost:11434"),
+            "http://localhost:11434/api/chat"
+        );
+        assert_eq!(
+            endpoint(Api::OpenAi, "https://api.openai.com/v1"),
+            "https://api.openai.com/v1/chat/completions"
         );
         let openai = json!({"data": [{"id": "gpt-x"}, {"id": "gpt-y"}]});
         assert_eq!(model_names(&openai), ["gpt-x", "gpt-y"]);

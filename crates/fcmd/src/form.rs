@@ -36,6 +36,9 @@ pub enum Field {
         caret: usize,
         /// Shown instead of the characters, for a secret.
         secret: bool,
+        /// `Ctrl+A`: the whole value is selected, and what is typed or pasted next takes its
+        /// place.
+        all: bool,
     },
     /// `(•) Label`: one row of a group of which exactly one is chosen (SPEC 10 §3).
     ///
@@ -89,6 +92,7 @@ impl Field {
             caret: value.chars().count(),
             value,
             secret: false,
+            all: false,
         }
     }
 
@@ -2074,9 +2078,20 @@ impl Form {
                     if let Some(at) = options.iter().position(|(v, _)| v == value) {
                         *chosen = at;
                     }
-                    return;
+                    break;
                 }
             }
+        }
+        self.after_choice(want);
+    }
+
+    /// What a dialog does when one of its choices changes: the AI service's address follows
+    /// its protocol, so the row below it never shows an address for the protocol before.
+    fn after_choice(&mut self, key: &str) {
+        if self.kind == FormKind::AiService && key == "ai.api" {
+            let api = self.text_value("ai.api");
+            let url = self.text_value("ai.url");
+            self.set_text("ai.url", ai_url_for(&api, &url));
         }
     }
 
@@ -2105,9 +2120,16 @@ impl Form {
 
     /// Typing into the row under the cursor. Returns false if the row takes no text.
     pub fn type_char(&mut self, c: char) -> bool {
-        let Some(Field::Text { value, caret, .. }) = self.fields.get_mut(self.cursor) else {
+        let Some(Field::Text {
+            value, caret, all, ..
+        }) = self.fields.get_mut(self.cursor)
+        else {
             return false;
         };
+        if std::mem::take(all) {
+            value.clear();
+            *caret = 0;
+        }
         let at = value
             .char_indices()
             .nth(*caret)
@@ -2124,9 +2146,16 @@ impl Form {
     ///
     /// Returns what was dropped, so the caller can say that there was more.
     pub fn insert_str(&mut self, text: &str) -> usize {
-        let Some(Field::Text { value, caret, .. }) = self.fields.get_mut(self.cursor) else {
+        let Some(Field::Text {
+            value, caret, all, ..
+        }) = self.fields.get_mut(self.cursor)
+        else {
             return 0;
         };
+        if std::mem::take(all) {
+            value.clear();
+            *caret = 0;
+        }
         let first = text.lines().next().unwrap_or_default();
         let dropped = text
             .lines()
@@ -2147,9 +2176,19 @@ impl Form {
 
     /// `Backspace`, `Del`, `←`, `→`, `Home`, `End` inside a text row.
     pub fn edit_text(&mut self, what: TextEdit) -> bool {
-        let Some(Field::Text { value, caret, .. }) = self.fields.get_mut(self.cursor) else {
+        let Some(Field::Text {
+            value, caret, all, ..
+        }) = self.fields.get_mut(self.cursor)
+        else {
             return false;
         };
+        // A selected line goes as a whole under `Backspace` or `Del`; any move just drops
+        // the selection.
+        if std::mem::take(all) && matches!(what, TextEdit::Backspace | TextEdit::Delete) {
+            value.clear();
+            *caret = 0;
+            return true;
+        }
         let len = value.chars().count();
         match what {
             TextEdit::Backspace if *caret > 0 => {
@@ -2176,6 +2215,39 @@ impl Form {
             _ => {}
         }
         true
+    }
+
+    /// `Ctrl+A` on a text row: select the whole value, the caret at its end. Returns false
+    /// if the row takes no text.
+    pub fn select_all(&mut self) -> bool {
+        let Some(Field::Text {
+            value, caret, all, ..
+        }) = self.fields.get_mut(self.cursor)
+        else {
+            return false;
+        };
+        *all = !value.is_empty();
+        *caret = value.chars().count();
+        // One row selected at a time: the others let go.
+        let at = self.cursor;
+        for (i, f) in self.fields.iter_mut().enumerate() {
+            if let Field::Text { all, .. } = f {
+                if i != at {
+                    *all = false;
+                }
+            }
+        }
+        true
+    }
+
+    /// The selected value of the row under the cursor, if `Ctrl+A` selected one.
+    pub fn selected_text(&self) -> Option<&str> {
+        match self.fields.get(self.cursor) {
+            Some(Field::Text {
+                value, all: true, ..
+            }) => Some(value),
+            _ => None,
+        }
     }
 
     /// Where the caret sits in the dialog: the row, and the column inside the row's text.
@@ -2208,6 +2280,21 @@ impl Form {
     /// Is the cursor on a row that takes typing?
     pub fn on_text(&self) -> bool {
         matches!(self.fields.get(self.cursor), Some(Field::Text { .. }))
+    }
+
+    /// The row of choices the cursor is on: its key, its label, its values with their labels
+    /// and which is chosen — what `Alt+↓` lists.
+    #[allow(clippy::type_complexity)]
+    pub fn choice_at_cursor(&self) -> Option<(&'static str, String, Vec<(String, String)>, usize)> {
+        match self.fields.get(self.cursor) {
+            Some(Field::Choice {
+                key,
+                label,
+                options,
+                chosen,
+            }) => Some((key, label.clone(), options.clone(), *chosen)),
+            _ => None,
+        }
     }
 
     /// The key and the label of the text row the cursor is on, for the field's own history.
@@ -2340,15 +2427,19 @@ impl Form {
                     label,
                     value,
                     secret,
+                    all,
                     ..
-                } => FormRow::new(format!(
-                    "{label}: {}",
-                    if *secret {
-                        "*".repeat(value.chars().count())
-                    } else {
-                        value.clone()
-                    }
-                )),
+                } => FormRow {
+                    marked: all.then(|| label.chars().count() + 2),
+                    ..FormRow::new(format!(
+                        "{label}: {}",
+                        if *secret {
+                            "*".repeat(value.chars().count())
+                        } else {
+                            value.clone()
+                        }
+                    ))
+                },
                 Field::Choice {
                     label,
                     options,
@@ -2455,7 +2546,10 @@ impl Form {
                 }
             }
             Some(Field::Choice {
-                options, chosen, ..
+                key,
+                options,
+                chosen,
+                ..
             }) => {
                 if options.is_empty() {
                     return;
@@ -2465,6 +2559,8 @@ impl Form {
                 } else {
                     (*chosen + options.len() - 1) % options.len()
                 };
+                let key = *key;
+                self.after_choice(key);
             }
             _ => {}
         }
@@ -2754,6 +2850,103 @@ impl Pick {
         self.rows
             .iter()
             .position(|r| r.hotkey.map(|k| k.to_ascii_lowercase()) == Some(typed))
+    }
+}
+
+/// The address an AI service gets for a protocol: the protocol's own path on the host and
+/// port the row already names, or the protocol's usual address when the row is empty or
+/// still names another protocol's usual host. A host typed without a scheme gets `http` on
+/// this machine and `https` anywhere else.
+pub fn ai_url_for(api: &str, url: &str) -> String {
+    const USUAL: [(&str, &str, &str); 3] = [
+        ("openai", "https://api.openai.com", "/v1/chat/completions"),
+        ("anthropic", "https://api.anthropic.com", "/v1/messages"),
+        ("ollama", "http://localhost:11434", "/api/chat"),
+    ];
+    let (_, host, path) = USUAL
+        .iter()
+        .find(|(a, _, _)| *a == api)
+        .copied()
+        .unwrap_or(USUAL[0]);
+    match ai_origin(url) {
+        Some(origin) if !USUAL.iter().any(|(_, h, _)| *h == origin) => format!("{origin}{path}"),
+        _ => format!("{host}{path}"),
+    }
+}
+
+/// `scheme://host[:port]` of an address, the scheme added when it is missing.
+fn ai_origin(url: &str) -> Option<String> {
+    let url = url.trim();
+    if url.is_empty() {
+        return None;
+    }
+    let (scheme, rest) = match url.split_once("://") {
+        Some((s, r)) => (Some(s.to_string()), r),
+        None => (None, url),
+    };
+    let host = rest.split('/').next().unwrap_or("");
+    if host.is_empty() {
+        return None;
+    }
+    let scheme = scheme.unwrap_or_else(|| ai_scheme_for(host).to_string());
+    Some(format!("{scheme}://{host}"))
+}
+
+/// `http` for this machine, `https` for anywhere else.
+pub fn ai_scheme_for(host: &str) -> &'static str {
+    let name = host
+        .rsplit_once(':')
+        .filter(|(h, port)| !h.is_empty() && port.chars().all(|c| c.is_ascii_digit()))
+        .map_or(host, |(h, _)| h)
+        .trim_matches(['[', ']']);
+    if matches!(name, "localhost" | "127.0.0.1" | "::1" | "0.0.0.0") {
+        "http"
+    } else {
+        "https"
+    }
+}
+
+/// An address as typed, with the scheme added when it has none.
+pub fn ai_with_scheme(url: &str) -> String {
+    let url = url.trim();
+    if url.is_empty() || url.contains("://") {
+        return url.to_string();
+    }
+    let host = url.split('/').next().unwrap_or(url);
+    format!("{}://{url}", ai_scheme_for(host))
+}
+
+#[cfg(test)]
+mod ai_url_tests {
+    use super::*;
+
+    #[test]
+    fn the_address_follows_the_protocol_and_keeps_its_host() {
+        assert_eq!(ai_url_for("ollama", ""), "http://localhost:11434/api/chat");
+        assert_eq!(
+            ai_url_for("anthropic", "https://api.openai.com/v1/chat/completions"),
+            "https://api.anthropic.com/v1/messages"
+        );
+        assert_eq!(
+            ai_url_for("ollama", "http://localhost:8080/v1/chat/completions"),
+            "http://localhost:8080/api/chat"
+        );
+        assert_eq!(
+            ai_url_for("openai", "localhost:8080"),
+            "http://localhost:8080/v1/chat/completions"
+        );
+        assert_eq!(
+            ai_url_for("openai", "gpu.example.com"),
+            "https://gpu.example.com/v1/chat/completions"
+        );
+        assert_eq!(
+            ai_with_scheme("127.0.0.1:11434/api/chat"),
+            "http://127.0.0.1:11434/api/chat"
+        );
+        assert_eq!(
+            ai_with_scheme("llm.example.com/v1"),
+            "https://llm.example.com/v1"
+        );
     }
 }
 

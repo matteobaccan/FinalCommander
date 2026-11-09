@@ -116,6 +116,12 @@ pub enum Request {
         id: String,
         action: fcmd_platform::ServiceAction,
     },
+    /// End a process of the process list, which has been asked about.
+    KillProcess {
+        side: usize,
+        pid: u32,
+        name: String,
+    },
     /// Read both sides of every pair and say which differ. The pairs are already matched by
     /// name: this is the reading, which is the part that takes time.
     /// Walk both trees and say what differs between them (SPEC 03 §11b). The pairing is by
@@ -676,6 +682,12 @@ pub enum Event {
         id: String,
         action: fcmd_platform::ServiceAction,
         result: Result<(), fcmd_platform::ServiceError>,
+    },
+    /// A process was ended — or the system said why not.
+    ProcessKilled {
+        side: usize,
+        name: String,
+        result: Result<(), String>,
     },
     /// A plugin's command has finished: what it asked for, or why it could not.
     PluginDone {
@@ -1545,6 +1557,8 @@ pub enum ConfirmAction {
         ask: Box<GitAsk>,
         trash: Vec<std::path::PathBuf>,
     },
+    /// End this process of the process list.
+    KillProcess { pid: u32, name: String },
     /// Leave the editor, losing unsaved changes.
     DiscardEdits,
     /// The same, for the hex editor: its buffer is bytes, not lines.
@@ -1635,6 +1649,7 @@ impl ConfirmAction {
             ConfirmAction::AskAi { .. } => "btn-send",
             ConfirmAction::Undo => "btn-undo",
             ConfirmAction::GitDiscard { .. } => "btn-discard",
+            ConfirmAction::KillProcess { .. } => "btn-kill",
         }
     }
 }
@@ -4107,6 +4122,27 @@ impl App {
                 self.panels[panel].message = Some(msg.clone());
                 self.set_status(msg);
             }
+            Event::ProcessKilled { side, name, result } => match result {
+                Ok(()) => {
+                    let msg = self.i18n.t_args("proc-killed", &[("name", name.into())]);
+                    self.set_status(msg);
+                    // The list was a snapshot with it in; it is read again without it.
+                    if self.panels[side].temp_origin() == Some(":processes") {
+                        let was = self.panels[side].cursor;
+                        let active = self.active;
+                        self.open_process_panel(side);
+                        self.panels[side].cursor_to(was);
+                        self.active = active;
+                    }
+                }
+                Err(why) => {
+                    let msg = self.i18n.t_args(
+                        "proc-kill-failed",
+                        &[("name", name.into()), ("why", why.into())],
+                    );
+                    self.set_error(msg);
+                }
+            },
             Event::ServiceControlled {
                 side,
                 id,
@@ -4883,6 +4919,17 @@ impl App {
                     }
                     ConfirmAction::AskAi { query } => self.ask_ai(*query),
                     ConfirmAction::Undo => self.run_undo(),
+                    ConfirmAction::KillProcess { pid, name } => {
+                        let msg = self
+                            .i18n
+                            .t_args("proc-killing", &[("name", name.clone().into())]);
+                        self.set_status(msg);
+                        self.requests.push(Request::KillProcess {
+                            side: self.active,
+                            pid,
+                            name,
+                        });
+                    }
                     ConfirmAction::GitDiscard { ask, trash } => {
                         if let GitAsk::Discard {
                             worktree,
@@ -10530,6 +10577,12 @@ impl App {
                     self.remove_ai_service_at_cursor();
                     return;
                 }
+                // On the process list `F8` and `Del` end the process under the cursor, after
+                // asking, as FAR's process list does.
+                if self.panel().temp_origin() == Some(":processes") {
+                    self.ask_kill_process();
+                    return;
+                }
                 if self.panel().temp_origin() == Some(":aichat") {
                     self.ai_forget_at_cursor();
                     return;
@@ -13349,6 +13402,34 @@ impl App {
             .map(|v| v.left(std::time::Instant::now(), crate::vault::IDLE))
     }
 
+    /// The question before a process is ended: its name and its number, *Cancel* lit.
+    fn ask_kill_process(&mut self) {
+        let Some(entry) = self.panel().current().cloned() else {
+            return;
+        };
+        // The pid is where the row's path ends, as `F3` reads it: the row's id is the panel's.
+        let Ok(pid) = self.panel().path_of(&entry).display_name().parse::<u32>() else {
+            return;
+        };
+        let name = entry
+            .name_str()
+            .split("  [")
+            .next()
+            .unwrap_or_default()
+            .to_string();
+        let title = self.i18n.t("proc-kill-title");
+        let lines = vec![self.i18n.t_args(
+            "proc-kill-ask",
+            &[("name", name.clone().into()), ("pid", (pid as i64).into())],
+        )];
+        self.mode = Mode::Confirm(Confirm {
+            title,
+            lines,
+            action: ConfirmAction::KillProcess { pid, name },
+            button: 1,
+        });
+    }
+
     /// `Alt+F1` / `Alt+F2` → AI: the services as a panel. `Enter` logs in to one, `F4`
     /// edits it, `F7` (or `Shift+F4`) adds one, `F8` removes it.
     fn open_ai_panel(&mut self, side: usize) {
@@ -13662,7 +13743,15 @@ impl App {
 
     fn apply_ai_form(&mut self, form: &Form) {
         let name = form.text_value("ai.name").trim().to_string();
-        let url = form.text_value("ai.url").trim().to_string();
+        // An address typed without a scheme gets the one it means: `http` here, `https` away.
+        let mut url = crate::form::ai_with_scheme(&form.text_value("ai.url"));
+        // A list of models pasted for the address, or a bare host, is stored as the endpoint
+        // it stands for, so what the form shows is what is called.
+        if let Some(api) = fcmd_net::ai::Api::parse(&form.choice_value("ai.api")) {
+            if !url.is_empty() {
+                url = fcmd_net::ai::endpoint(api, &url);
+            }
+        }
         if name.is_empty() || url.is_empty() {
             let m = self.i18n.t("ai-service-incomplete");
             self.set_error(m);
@@ -16172,9 +16261,8 @@ impl App {
     /// beside it, and the *size* column is the memory it has resident — which means `Ctrl+F6`
     /// sorts the list by memory, which is what anybody opening it came to see.
     ///
-    /// Nothing here kills anything. A file manager that could end a process from a listing
-    /// by the same key that deletes a file is a file manager one presses `F8` in by accident
-    /// once; ending one is a backlog line with a confirmation of its own.
+    /// `F8` or `Del` ends the process under the cursor, as in FAR — always after a question
+    /// with *Cancel* lit, because the key is the one that deletes a file everywhere else.
     fn open_process_panel(&mut self, side: usize) {
         use fcmd_core::{Entry, EntryId, EntryKind};
 
@@ -16194,7 +16282,9 @@ impl App {
                     // The memory, in the column that already knows how to show a number of
                     // bytes and already has a key that sorts by it.
                     size: p.memory,
-                    mtime: None,
+                    // When it started, in the date and time columns: FAR's status line says
+                    // the same, and a sort by date is then a sort by age.
+                    mtime: p.started,
                     btime: None,
                     atime: None,
                     flags: fcmd_core::EntryFlags::empty(),
@@ -17467,6 +17557,48 @@ impl App {
             // `Ctrl+↓` on a field that keeps one: what has been typed into *this* row before,
             // as a list. FAR's own key, and FAR's own idea — a mask or a destination is
             // typed again far more often than it is typed anew.
+            // `Ctrl+A` selects the whole line of a text row, in every dialog: what is typed
+            // or pasted next replaces it, `Del` clears it, and `Ctrl+C`/`Ctrl+Ins` copies it.
+            KeyCode::Char('a') | KeyCode::Char('A') if text && key.mods.contains(Mods::CTRL) => {
+                form.select_all();
+            }
+            KeyCode::Char('c') | KeyCode::Char('C') | KeyCode::Insert
+                if text && key.mods.contains(Mods::CTRL) =>
+            {
+                if let Some(line) = form.selected_text().map(str::to_string) {
+                    self.copy_to_clipboard(&line);
+                }
+            }
+            KeyCode::Char('x') | KeyCode::Char('X') if text && key.mods.contains(Mods::CTRL) => {
+                if let Some(line) = form.selected_text().map(str::to_string) {
+                    form.edit_text(TextEdit::Delete);
+                    self.copy_to_clipboard(&line);
+                }
+            }
+            // `Alt+↓` on a row of choices lists them all, in every dialog: the arrows step
+            // through them one at a time, and a long list is quicker read than stepped.
+            KeyCode::Down if key.mods.contains(Mods::ALT) => {
+                let Some((key, label, options, chosen)) = form.choice_at_cursor() else {
+                    return;
+                };
+                let Mode::Form(form) = std::mem::replace(&mut self.mode, Mode::Normal) else {
+                    return;
+                };
+                let rows: Vec<PickRow> = options
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, (value, shown))| PickRow::plain(shown, value, i == chosen))
+                    .collect();
+                self.field_for = Some((form, key));
+                let mut pick = Pick::new(
+                    PickKind::FieldChoice,
+                    fcmd_ui::mnemonic(&label).0,
+                    rows,
+                    self.active,
+                );
+                pick.cursor = chosen;
+                self.mode = Mode::Pick(Box::new(pick));
+            }
             KeyCode::Down if key.mods.contains(Mods::CTRL) => {
                 let asked = form.text_at_cursor();
                 let Some((key, label)) = asked.filter(|(k, _)| field_keeps_history(k)) else {
@@ -19418,7 +19550,7 @@ impl App {
             PickKind::HexBlock => return,
             // Built by `open_field_history`, which knows which field asked and holds the
             // dialog while the list is on the screen.
-            PickKind::FieldHistory => return,
+            PickKind::FieldHistory | PickKind::FieldChoice => return,
             // And by `open_file_browser`, which knows the directory and holds the dialog.
             PickKind::Browse => return,
             // Built by `open_codepages`, which knows which page the reader is on.
@@ -19733,7 +19865,9 @@ impl App {
             }
             // A field's history was opened from a dialog and over it: closing it puts the
             // dialog back, with what was typed in the field untouched.
-            KeyCode::Esc | KeyCode::F(10) if kind == PickKind::FieldHistory => {
+            KeyCode::Esc | KeyCode::F(10)
+                if kind == PickKind::FieldHistory || kind == PickKind::FieldChoice =>
+            {
                 match self.field_for.take() {
                     Some((form, _)) => self.mode = Mode::Form(form),
                     None => self.mode = Mode::Normal,
@@ -20583,6 +20717,12 @@ impl App {
             PickKind::FieldHistory => {
                 if let Some((mut form, key)) = self.field_for.take() {
                     form.set_text(key, row.value.clone());
+                    self.mode = Mode::Form(form);
+                }
+            }
+            PickKind::FieldChoice => {
+                if let Some((mut form, key)) = self.field_for.take() {
+                    form.set_choice(key, &row.value);
                     self.mode = Mode::Form(form);
                 }
             }
@@ -30011,6 +30151,47 @@ mod tests {
         );
     }
 
+    /// `F8` on the process list ends the process under the cursor — after a question whose
+    /// lit button is *Cancel*, and with the list read again once it is gone.
+    #[test]
+    fn f8_on_the_process_list_ends_the_process_after_asking() {
+        let mut app = app();
+        app.open_process_panel(0);
+        if app.panels[0].temp_origin() != Some(":processes") {
+            return;
+        }
+        app.panels[0].cursor = 0;
+        let row = app.panels[0].current().unwrap().clone();
+        let pid: u32 = app.panels[0]
+            .path_of(&row)
+            .display_name()
+            .parse()
+            .expect("a process row ends in its pid");
+        app.take_requests();
+        press(&mut app, "F8");
+        let Mode::Confirm(c) = &app.mode else {
+            panic!("a question first: {:?}", app.mode)
+        };
+        assert_eq!(c.button, 1, "Cancel is lit");
+        assert!(c.lines[0].contains(&pid.to_string()), "{:?}", c.lines);
+        press(&mut app, "Esc");
+        assert!(app.take_requests().is_empty(), "nothing on Esc");
+        press(&mut app, "Delete");
+        press(&mut app, "Left");
+        press(&mut app, "Enter");
+        let asked = app.take_requests().into_iter().find_map(|r| match r {
+            Request::KillProcess { pid, .. } => Some(pid),
+            _ => None,
+        });
+        assert_eq!(asked, Some(pid));
+        app.handle_event(Event::ProcessKilled {
+            side: 0,
+            name: "x".into(),
+            result: Err("Access is denied".into()),
+        });
+        assert!(app.status_error && app.status.contains("Access is denied"));
+    }
+
     /// `F3` on the process list is the process, not a file: the card says what the system
     /// will say about it, and it says it on every platform — the pid comes off the row and
     /// the answers come from the system there and then.
@@ -36384,6 +36565,74 @@ abcdefghij
         assert!(
             matches!(&app.mode, Mode::Prompt(p) if p.kind == PromptKind::VaultPassword),
             "asked for again"
+        );
+    }
+
+    /// In the AI service dialog the address follows the protocol, `Alt+↓` lists the
+    /// protocols, and `Ctrl+A` selects a whole line so typing replaces it.
+    #[test]
+    fn the_ai_address_follows_the_protocol_and_ctrl_a_selects_a_line() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = app_on_disk(dir.path());
+        app.run(Command::ToolAi);
+        press(&mut app, "Ins");
+        let at = |app: &App, want: &str| {
+            let Mode::Form(form) = &app.mode else {
+                panic!("the dialog: {:?}", app.mode)
+            };
+            form.fields
+                .iter()
+                .position(|f| match f {
+                    crate::form::Field::Text { key, .. }
+                    | crate::form::Field::Choice { key, .. } => *key == want,
+                    _ => false,
+                })
+                .unwrap()
+        };
+        let api = at(&app, "ai.api");
+        let Mode::Form(form) = &mut app.mode else {
+            unreachable!()
+        };
+        form.set_text("ai.url", "http://localhost:8080/v1/chat/completions".into());
+        form.cursor = api;
+        press(&mut app, "Alt+Down");
+        let Mode::Pick(pick) = &mut app.mode else {
+            panic!("the protocols are listed: {:?}", app.mode)
+        };
+        assert_eq!(pick.kind, PickKind::FieldChoice);
+        pick.cursor = pick.rows.iter().position(|r| r.value == "ollama").unwrap();
+        press(&mut app, "Enter");
+        let Mode::Form(form) = &mut app.mode else {
+            panic!("back in the dialog: {:?}", app.mode)
+        };
+        assert_eq!(form.choice_value("ai.api"), "ollama");
+        assert_eq!(form.text_value("ai.url"), "http://localhost:8080/api/chat");
+
+        let url = at(&app, "ai.url");
+        let Mode::Form(form) = &mut app.mode else {
+            unreachable!()
+        };
+        form.cursor = url;
+        press(&mut app, "Ctrl+A");
+        let Mode::Form(form) = &app.mode else {
+            unreachable!()
+        };
+        assert_eq!(form.selected_text(), Some("http://localhost:8080/api/chat"));
+        press(&mut app, "Ctrl+C");
+        assert!(app
+            .take_requests()
+            .iter()
+            .any(|r| matches!(r, Request::Clipboard { text } if text.ends_with("/api/chat"))));
+        for c in "h:1".chars() {
+            press(&mut app, &c.to_string());
+        }
+        let Mode::Form(form) = &app.mode else {
+            unreachable!()
+        };
+        assert_eq!(
+            form.text_value("ai.url"),
+            "h:1",
+            "typing replaced the selected line"
         );
     }
 

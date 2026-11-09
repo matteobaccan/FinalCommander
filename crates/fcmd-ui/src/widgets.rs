@@ -3141,7 +3141,7 @@ pub fn draw_menu(
     at: u16,
     rows: &[MenuRow],
     selected: usize,
-) -> Rect {
+) -> (Rect, usize) {
     let label_w = rows
         .iter()
         .map(|r| mnemonic(&r.label).0.width())
@@ -3151,10 +3151,18 @@ pub fn draw_menu(
     // mark + label + gap + keys, inside a frame with one column of padding.
     let inner = 2 + label_w + if keys_w > 0 { keys_w + 2 } else { 0 };
     let w = (inner as u16 + 4).min(screen.w);
-    let h = (rows.len() as u16 + 2).min(screen.h.saturating_sub(1));
+    // The frame hangs right under the bar, with no row between, and as tall as the screen
+    // allows: a menu longer than the window scrolls with the cursor instead of losing its
+    // last items below the edge.
+    let h = (rows.len() as u16 + 2).min(screen.h);
     let x = at.min(screen.right().saturating_sub(w));
-    let y = screen.y + 1;
-    let area = Rect::new(x, y, w, h);
+    let area = Rect::new(x, screen.y, w, h);
+    let room = h.saturating_sub(2) as usize;
+    let first = if rows.len() <= room || room == 0 {
+        0
+    } else {
+        (selected + 1).saturating_sub(room).min(rows.len() - room)
+    };
 
     // A menu has its own colours, not the dialog ones: in FAR the dropdowns are cyan with
     // yellow shortcuts while dialogs are grey.
@@ -3169,11 +3177,8 @@ pub fn draw_menu(
     // FAR's dropdown: a double frame, and the rules between the groups joined to it.
     buf.draw_bordered(area, frame, None, crate::buffer::Border::Double);
 
-    for (i, row) in rows.iter().enumerate() {
-        let y = area.y + 1 + i as u16;
-        if y >= area.bottom() - 1 {
-            break;
-        }
+    for (i, row) in rows.iter().enumerate().skip(first).take(room) {
+        let y = area.y + 1 + (i - first) as u16;
         if row.separator {
             buf.set(area.x, y, '╟', frame);
             for x in area.x + 1..area.right() - 1 {
@@ -3233,7 +3238,14 @@ pub fn draw_menu(
         }
     }
     drop_shadow(buf, area);
-    area
+    // More above or below, on the frame where a scrollbar would be.
+    if first > 0 {
+        buf.set(area.right() - 1, area.y + 1, '▲', frame);
+    }
+    if first + room < rows.len() && room > 0 {
+        buf.set(area.right() - 1, area.y + room as u16, '▼', frame);
+    }
+    (area, first)
 }
 
 // ── forms: the settings dialogs (SPEC 10) ──────────────────────────────────────────────────
@@ -3245,6 +3257,9 @@ pub struct FormRow {
     pub separator: bool,
     /// Drawn dim: shown for completeness, not settable yet.
     pub dim: bool,
+    /// From which character of `text` to its end the row is selected (`Ctrl+A` in a text
+    /// field), drawn in the editor's selection colours.
+    pub marked: Option<usize>,
 }
 
 impl FormRow {
@@ -3405,6 +3420,17 @@ pub fn draw_form(buf: &mut Buffer, theme: &Theme, screen: Rect, view: &FormView)
             if on { picked } else { style },
         );
         buf.put_str(frame.x + 2, ry, &row.text, line, frame.w - 4);
+        if let Some(from) = row.marked.filter(|_| on) {
+            let before: String = row.text.chars().take(from).collect();
+            let tail: String = row.text.chars().skip(from).collect();
+            let x = frame.x + 2 + before.width() as u16;
+            let room = (frame.x + frame.w - 2).saturating_sub(x);
+            let ink = Style::new(
+                theme.color("editor.selected.fg"),
+                theme.color("editor.selected.bg"),
+            );
+            buf.put_str(x, ry, &tail, ink, room);
+        }
     }
 
     // The frame says there is more above or below, in the place a scrollbar would be. After

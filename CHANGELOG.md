@@ -55,8 +55,22 @@ Notable changes, newest first. The format follows
   named for what they are (last commit, staged, on disk), and the lines removed and added
   counted in its foot.
 
+- **Ending a process.** `F8` or `Del` on the process list ends the process under the cursor,
+  after asking (the cancel button is the lit one), and the list is read again.
+- **A process list and card as full as FAR's.** The list has each process's start time; the
+  card adds priority, session, uptime, CPU times, handle count, the peak and private memory,
+  virtual size and its peak, the paged and non-paged pools, the swap peak, and the count of
+  reads, writes and other input and output. On Windows these come from the kernel's own table,
+  so the system's processes are no longer listed with 0 B.
+- **`Alt+↓` on a row of choices**, in every dialog, lists the choices to pick from.
+- **`Ctrl+A` in a dialog's text row** selects the whole line: typing or pasting replaces it,
+  `Del` clears it, `Ctrl+C`/`Ctrl+Ins` copies it and `Ctrl+X` cuts it.
+
 ### Changed
 
+- **The AI service's address follows its protocol.** Changing the protocol in the dialog
+  rewrites the address for it, keeping the host; an address with no scheme gets `http` on this
+  machine and `https` elsewhere, and a bare host gets the protocol's path.
 - **`trash` 5.3.0** (from Renovate's pull request #28, with the Linux backend and the deletion
   times now asked for by name): on Windows the wastebasket is listed under each file's real
   name, extension included, which the undo's restore depends on; on Linux encoded paths in
@@ -70,6 +84,14 @@ Notable changes, newest first. The format follows
 
 ### Fixed
 
+- **`F10` with a program still running** from the command line left fcmd waiting for it; fcmd
+  now exits and the program goes on.
+- **The AI login asked a different address from the one configured.** An address holding a
+  list of models (`…/api/tags`) had the list's path added again, and an Ollama protocol on an
+  OpenAI-style address asked `/v1/chat/completions/api/tags`. The address is now read back to
+  its endpoint before anything is called, and stored that way.
+- **Menus in a short window.** A dropdown taller than the window scrolls with the cursor,
+  with `▲`/`▼` on its frame, and it hangs right under the bar, with no empty row between.
 - **`Esc` after a quick search** closes the box and leaves the cursor on the row it found, as
   in FAR; it used to take the cursor back to where the search began.
 - **What changed after a copy into the repository.** `F5` from the other panel into the folder

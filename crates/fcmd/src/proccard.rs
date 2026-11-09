@@ -136,6 +136,36 @@ pub fn card(details: &Details, i18n: &I18n, now: SystemTime) -> String {
     }
     sections.push(cost);
 
+    // The rest of what the system counts, in the order FAR's card has it: peaks beside the
+    // figures above, the address space, the kernel's pools, and the I/O by operation.
+    let mut more: Vec<(String, String)> = Vec::new();
+    let sizes = [
+        ("proc-card-memory-peak", details.memory_peak),
+        ("proc-card-private-resident", details.private_resident),
+        ("proc-card-swap-peak", details.swap_peak),
+        ("proc-card-virtual", details.virtual_size),
+        ("proc-card-virtual-peak", details.virtual_peak),
+        ("proc-card-paged-pool", details.paged_pool),
+        ("proc-card-nonpaged-pool", details.nonpaged_pool),
+        ("proc-card-io-other", details.io_other),
+    ];
+    for (id, value) in sizes {
+        if value > 0 {
+            say(&mut more, id, fcmd_core::format_size(value));
+        }
+    }
+    let counts = [
+        ("proc-card-io-read-ops", details.io_read_ops),
+        ("proc-card-io-write-ops", details.io_write_ops),
+        ("proc-card-io-other-ops", details.io_other_ops),
+    ];
+    for (id, value) in counts {
+        if value > 0 {
+            say(&mut more, id, group_digits(value));
+        }
+    }
+    sections.push(more);
+
     // Where it came from and where it is.
     let mut where_: Vec<(String, String)> = Vec::new();
     if let Some(exe) = &details.exe {
@@ -249,6 +279,8 @@ mod tests {
             cpu_user: Some(Duration::from_millis(1_250)),
             cpu_kernel: Some(Duration::from_millis(300)),
             io_read: 3 * 1024 * 1024,
+            virtual_size: 2 * 1024 * 1024 * 1024,
+            io_read_ops: 2_470,
             bits: 64,
             exe: Some("/usr/bin/fcmd".into()),
             cwd: Some("/home/mb".into()),
@@ -287,6 +319,8 @@ mod tests {
         }
         // The two lists are under headings of their own, in the reader's language.
         assert!(text.contains(&i18n.t("proc-card-env")), "{text}");
+        assert!(text.contains(&i18n.t("proc-card-virtual")), "{text}");
+        assert!(text.contains(&i18n.t("proc-card-io-read-ops")), "{text}");
         assert!(text.contains(&i18n.t("proc-card-modules")), "{text}");
     }
 

@@ -33,9 +33,12 @@ Under a rule, on `Ctrl+1` to `Ctrl+9`, are the things that are not filesystems:
   connect when chosen;
 * the **processes** running on the machine, as a panel — also `Ctrl+W`, and *Task list* in the
   Commands menu, which is what that key means in FAR: `F3` on one is its card, which is a
-  page — what it is, whose it is, what it has taken and spent, its command line, its whole
-  environment and every library it has loaded. Nothing here ends a process: the key that
-  deletes a file says so rather than doing it;
+  page — what it is, whose it is, its priority and session, when it started and for how long,
+  what it has taken and spent (CPU times, handles, every memory counter, reads, writes and the
+  rest of its input and output), its command line, its whole environment and every library it
+  has loaded. On Windows the list and the card are read from the kernel's own table, so the
+  system's processes have their memory too. `F8` or `Del` ends the process under the cursor,
+  after asking, with the cancel button lit;
 * the **services** the machine runs in the background, with the state of each: `F3` is its
   card, `F5` starts it, `F6` restarts it and `F8` stops it — the last two ask first. An
   action the system refuses is reported as needing root; this program will not ask for root
@@ -441,7 +444,9 @@ out of the first row is the way out. `Enter` answers the dialog wherever the cur
 is `OK` from anywhere, and `Esc` throws it away.
 
 A row that names a path completes on `Tab`, as a shell does, and `Ctrl+↓` opens what has been
-typed into that row before. `Alt+F10` on such a row opens something to pick it from: the folder
+typed into that row before. `Alt+↓` on a row of choices lists all of them to pick from.
+`Ctrl+A` selects the whole line of a text row: what you type or paste next replaces it, `Del`
+clears it, `Ctrl+C` or `Ctrl+Ins` copies it and `Ctrl+X` cuts it. `Alt+F10` on such a row opens something to pick it from: the folder
 tree for a row that wants a folder — a copy's destination, an extraction's folder — and the
 directory itself for a row that wants a file, such as a connection's key file. In that list
 `Enter` on a directory goes into it and `Enter` on a file is the answer; `Esc` leaves the row

@@ -1076,13 +1076,13 @@ fn draw_menus(
         .collect();
     let at = starts.get(menu).copied().unwrap_or(0);
     let below = Rect::new(screen.x, 1, screen.w, screen.h.saturating_sub(1));
-    let area = widgets::draw_menu(buf, &app.theme, below, at, &rows, item);
+    let (area, first) = widgets::draw_menu(buf, &app.theme, below, at, &rows, item);
     let shown = area.h.saturating_sub(2);
     let list = (shown > 0).then(|| ListArea {
         area: Rect::new(area.x + 1, area.y + 1, area.w.saturating_sub(2), shown),
-        // A dropdown is not windowed: it is as tall as it needs to be, so the first row
-        // shown is the first item.
-        top: 0,
+        // A dropdown is as tall as it needs to be when the screen has the room, and scrolls
+        // with the cursor when it does not.
+        top: first,
         len: rows.len(),
     });
     (starts, list)
@@ -5028,6 +5028,53 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
             "{:?}",
             app.mode
         );
+    }
+
+    /// The dropdown hangs right under the bar, and a menu taller than the window scrolls
+    /// with the cursor: its last item can be reached and seen.
+    #[test]
+    fn a_menu_taller_than_the_window_scrolls_and_sits_under_the_bar() {
+        let mut app = app("far", "en");
+        let items = crate::menu::menus()[2].items.len();
+        app.mode = crate::app::Mode::Menu {
+            menu: 2,
+            item: 0,
+            open: true,
+        };
+        let mut buf = Buffer::new(80, 12);
+        draw(&mut app, &mut buf);
+        let line = |buf: &Buffer, y: u16| -> String {
+            (0..80)
+                .filter_map(|x| buf.get(x, y))
+                .map(|c| c.ch)
+                .collect()
+        };
+        assert!(line(&buf, 1).contains('╔'), "no gap: {}", line(&buf, 1));
+        let last = (0..items)
+            .rev()
+            .find(|i| {
+                matches!(
+                    crate::menu::menus()[2].items[*i],
+                    crate::menu::Entry::Item(_)
+                )
+            })
+            .unwrap();
+        let crate::menu::Entry::Item(item) = &crate::menu::menus()[2].items[last] else {
+            unreachable!()
+        };
+        let label = fcmd_ui::mnemonic(&app.i18n.t(item.label)).0;
+        let screen = |buf: &Buffer| (0..12).map(|y| line(buf, y)).collect::<Vec<_>>().join("\n");
+        assert!(!screen(&buf).contains(&label), "{}", screen(&buf));
+        assert!(screen(&buf).contains('▼'), "{}", screen(&buf));
+        app.mode = crate::app::Mode::Menu {
+            menu: 2,
+            item: last,
+            open: true,
+        };
+        let mut buf = Buffer::new(80, 12);
+        draw(&mut app, &mut buf);
+        assert!(screen(&buf).contains(&label), "{}", screen(&buf));
+        assert!(screen(&buf).contains('▲'), "{}", screen(&buf));
     }
 
     #[test]

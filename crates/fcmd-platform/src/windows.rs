@@ -152,6 +152,9 @@ pub fn processes() -> Vec<super::Process> {
         return Vec::new();
     }
     let mut out = Vec::new();
+    // The kernel's own list gives the resident size and the start of every process, ours or
+    // not; asking each process in turn is the fallback where it will not answer.
+    let nt = nt_processes().unwrap_or_default();
     let mut entry: PROCESSENTRY32W = unsafe { std::mem::zeroed() };
     entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
     // SAFETY: `entry` is a whole, zeroed structure whose `dwSize` says how big it is, which
@@ -163,12 +166,17 @@ pub fn processes() -> Vec<super::Process> {
             let end = raw.iter().position(|c| *c == 0).unwrap_or(raw.len());
             String::from_utf16_lossy(&raw[..end])
         };
+        let known = nt.get(&entry.th32ProcessID);
         out.push(super::Process {
             pid: entry.th32ProcessID,
             name,
-            memory: memory_of(entry.th32ProcessID),
+            memory: known
+                .map(|k| k.resident)
+                .filter(|m| *m > 0)
+                .unwrap_or_else(|| memory_of(entry.th32ProcessID)),
             threads: entry.cntThreads,
             bits: 0,
+            started: known.and_then(|k| k.started),
         });
         // SAFETY: as above; the snapshot is still open.
         ok = unsafe { Process32NextW(snapshot, &mut entry) };
@@ -176,6 +184,26 @@ pub fn processes() -> Vec<super::Process> {
     // SAFETY: the handle came from `CreateToolhelp32Snapshot` and is closed exactly once.
     unsafe { CloseHandle(snapshot) };
     out
+}
+
+/// End a process, as Task Manager's *End task* does.
+#[cfg(windows)]
+pub fn kill(pid: u32) -> Result<(), String> {
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::Threading::{OpenProcess, TerminateProcess, PROCESS_TERMINATE};
+    // SAFETY: no pointer of ours is passed; the result is a handle or null.
+    let handle = unsafe { OpenProcess(PROCESS_TERMINATE, 0, pid) };
+    if handle.is_null() {
+        return Err(std::io::Error::last_os_error().to_string());
+    }
+    // SAFETY: the handle is open with the right to end the process, and is closed once.
+    let done = unsafe { TerminateProcess(handle, 1) };
+    let error = std::io::Error::last_os_error();
+    unsafe { CloseHandle(handle) };
+    if done == 0 {
+        return Err(error.to_string());
+    }
+    Ok(())
 }
 
 /// What one process has resident, or zero when it will not say.
@@ -279,6 +307,40 @@ pub fn details(pid: u32) -> Option<super::Details> {
     unsafe { CloseHandle(snapshot) };
     let mut out = out?;
 
+    // The kernel's counters, which it gives for every process without our opening it: what
+    // FAR's card shows for a service as well as for a program of ours. What the process
+    // itself answers below, when we may ask it, is written over them.
+    let base_priority = nt_processes()
+        .and_then(|mut all| all.remove(&pid))
+        .map(|k| {
+            out.threads = k.threads.max(out.threads);
+            out.started = k.started;
+            out.cpu_user = Some(k.user);
+            out.cpu_kernel = Some(k.kernel);
+            out.handles = k.handles;
+            out.session = Some(k.session);
+            out.memory = k.resident;
+            out.memory_peak = k.resident_peak;
+            out.virtual_size = k.virtual_size;
+            out.virtual_peak = k.virtual_peak;
+            out.paged_pool = k.paged_pool;
+            out.nonpaged_pool = k.nonpaged_pool;
+            out.mapped = k.pagefile;
+            out.swap = k.pagefile;
+            out.swap_peak = k.pagefile_peak;
+            out.private = k.private;
+            out.private_resident = k.private_resident;
+            out.faults = k.faults;
+            out.io_read = k.read_bytes;
+            out.io_write = k.write_bytes;
+            out.io_other = k.other_bytes;
+            out.io_read_ops = k.read_ops;
+            out.io_write_ops = k.write_ops;
+            out.io_other_ops = k.other_ops;
+            out.priority = Some(k.base_priority.to_string());
+            k.base_priority
+        });
+
     // SAFETY: no pointer of ours is passed; the result is a handle or null.
     let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
     if handle.is_null() {
@@ -377,7 +439,10 @@ pub fn details(pid: u32) -> Option<super::Details> {
     // SAFETY: the handle is open; the call takes nothing else.
     let class = unsafe { GetPriorityClass(handle) };
     if class != 0 {
-        out.priority = Some(priority_name(class).to_string());
+        out.priority = Some(match base_priority {
+            Some(base) => format!("{} ({base})", priority_name(class)),
+            None => priority_name(class).to_string(),
+        });
     }
 
     // Which login session it belongs to: service or desktop, and whose desktop.
@@ -1332,4 +1397,177 @@ unsafe fn from_wide(ptr: *const u16) -> String {
     // SAFETY: `len` characters were just walked, so the slice is inside the string.
     let slice = unsafe { std::slice::from_raw_parts(ptr, len) };
     String::from_utf16_lossy(slice)
+}
+/// What the kernel keeps about one process, read for every process at once.
+#[cfg(windows)]
+#[derive(Debug, Clone, Default)]
+struct NtProcess {
+    threads: u32,
+    started: Option<std::time::SystemTime>,
+    user: std::time::Duration,
+    kernel: std::time::Duration,
+    base_priority: i32,
+    handles: u32,
+    session: u32,
+    virtual_peak: u64,
+    virtual_size: u64,
+    faults: u64,
+    resident_peak: u64,
+    resident: u64,
+    paged_pool: u64,
+    nonpaged_pool: u64,
+    pagefile: u64,
+    pagefile_peak: u64,
+    private: u64,
+    private_resident: u64,
+    read_ops: u64,
+    write_ops: u64,
+    other_ops: u64,
+    read_bytes: u64,
+    write_bytes: u64,
+    other_bytes: u64,
+}
+
+/// `SYSTEM_PROCESS_INFORMATION`, as the kernel lays it out (the part before the threads).
+#[cfg(windows)]
+#[repr(C)]
+#[allow(dead_code)]
+struct SystemProcessInformation {
+    next_entry_offset: u32,
+    number_of_threads: u32,
+    working_set_private_size: i64,
+    hard_fault_count: u32,
+    number_of_threads_high_watermark: u32,
+    cycle_time: u64,
+    create_time: i64,
+    user_time: i64,
+    kernel_time: i64,
+    image_name_length: u16,
+    image_name_maximum_length: u16,
+    image_name_buffer: *mut u16,
+    base_priority: i32,
+    unique_process_id: usize,
+    inherited_from_unique_process_id: usize,
+    handle_count: u32,
+    session_id: u32,
+    unique_process_key: usize,
+    peak_virtual_size: usize,
+    virtual_size: usize,
+    page_fault_count: u32,
+    peak_working_set_size: usize,
+    working_set_size: usize,
+    quota_peak_paged_pool_usage: usize,
+    quota_paged_pool_usage: usize,
+    quota_peak_non_paged_pool_usage: usize,
+    quota_non_paged_pool_usage: usize,
+    pagefile_usage: usize,
+    peak_pagefile_usage: usize,
+    private_page_count: usize,
+    read_operation_count: i64,
+    write_operation_count: i64,
+    other_operation_count: i64,
+    read_transfer_count: i64,
+    write_transfer_count: i64,
+    other_transfer_count: i64,
+}
+
+/// Every process the kernel knows, with the counters FAR's process list shows, read in one
+/// call that needs no right over any of them — which is why a service running as SYSTEM has
+/// its memory and its times here when opening it is refused. `None` if the call is not
+/// there or will not answer.
+#[cfg(windows)]
+fn nt_processes() -> Option<std::collections::HashMap<u32, NtProcess>> {
+    use windows_sys::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress};
+    type Query = unsafe extern "system" fn(u32, *mut core::ffi::c_void, u32, *mut u32) -> i32;
+    const SYSTEM_PROCESS_INFORMATION: u32 = 5;
+    const STATUS_INFO_LENGTH_MISMATCH: i32 = 0xC000_0004_u32 as i32;
+
+    let ntdll: Vec<u16> = "ntdll.dll\0".encode_utf16().collect();
+    // SAFETY: ntdll is loaded in every process; the name is NUL-terminated; the address is
+    // turned into the signature the function has had since Windows NT.
+    let query: Query = unsafe {
+        let module = GetModuleHandleW(ntdll.as_ptr());
+        if module.is_null() {
+            return None;
+        }
+        let address = GetProcAddress(module, c"NtQuerySystemInformation".as_ptr().cast())?;
+        std::mem::transmute::<unsafe extern "system" fn() -> isize, Query>(address)
+    };
+    // `u64` so the buffer is aligned for the structure; it grows until the list fits.
+    let mut buffer: Vec<u64> = vec![0; 64 * 1024];
+    let mut status = STATUS_INFO_LENGTH_MISMATCH;
+    for _ in 0..8 {
+        let mut needed = 0u32;
+        let bytes = (buffer.len() * 8) as u32;
+        // SAFETY: the buffer is `bytes` long and writable; `needed` is one `u32`.
+        status = unsafe {
+            query(
+                SYSTEM_PROCESS_INFORMATION,
+                buffer.as_mut_ptr().cast(),
+                bytes,
+                &mut needed,
+            )
+        };
+        if status != STATUS_INFO_LENGTH_MISMATCH {
+            break;
+        }
+        let want = (needed as usize).max(bytes as usize * 2) / 8 + 1024;
+        buffer = vec![0; want];
+    }
+    if status < 0 {
+        return None;
+    }
+    let base = buffer.as_ptr().cast::<u8>();
+    let end = buffer.len() * 8;
+    let mut out = std::collections::HashMap::new();
+    let mut offset = 0usize;
+    let span = |t: i64| std::time::Duration::from_nanos((t.max(0) as u64) * 100);
+    loop {
+        if offset + std::mem::size_of::<SystemProcessInformation>() > end {
+            break;
+        }
+        // SAFETY: the entry lies inside the buffer the kernel filled, at an offset the kernel
+        // gave; it is read unaligned so no assumption is made about the offset.
+        let p = unsafe {
+            std::ptr::read_unaligned(base.add(offset).cast::<SystemProcessInformation>())
+        };
+        let created = windows_sys::Win32::Foundation::FILETIME {
+            dwLowDateTime: p.create_time as u32,
+            dwHighDateTime: (p.create_time as u64 >> 32) as u32,
+        };
+        out.insert(
+            p.unique_process_id as u32,
+            NtProcess {
+                threads: p.number_of_threads,
+                started: (p.create_time > 0).then(|| file_time(created)).flatten(),
+                user: span(p.user_time),
+                kernel: span(p.kernel_time),
+                base_priority: p.base_priority,
+                handles: p.handle_count,
+                session: p.session_id,
+                virtual_peak: p.peak_virtual_size as u64,
+                virtual_size: p.virtual_size as u64,
+                faults: u64::from(p.page_fault_count),
+                resident_peak: p.peak_working_set_size as u64,
+                resident: p.working_set_size as u64,
+                paged_pool: p.quota_paged_pool_usage as u64,
+                nonpaged_pool: p.quota_non_paged_pool_usage as u64,
+                pagefile: p.pagefile_usage as u64,
+                pagefile_peak: p.peak_pagefile_usage as u64,
+                private: p.private_page_count as u64,
+                private_resident: p.working_set_private_size.max(0) as u64,
+                read_ops: p.read_operation_count.max(0) as u64,
+                write_ops: p.write_operation_count.max(0) as u64,
+                other_ops: p.other_operation_count.max(0) as u64,
+                read_bytes: p.read_transfer_count.max(0) as u64,
+                write_bytes: p.write_transfer_count.max(0) as u64,
+                other_bytes: p.other_transfer_count.max(0) as u64,
+            },
+        );
+        if p.next_entry_offset == 0 {
+            break;
+        }
+        offset += p.next_entry_offset as usize;
+    }
+    Some(out)
 }

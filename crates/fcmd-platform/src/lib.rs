@@ -28,7 +28,7 @@ mod windows;
 pub use copy::{have_system_copy, system_copy};
 pub use device::{geometry, is_device_path, Geometry};
 pub use mount::{max_file_size, mount_of, Mount};
-pub use process::{details, processes, Details, Process};
+pub use process::{details, kill, processes, Details, Process};
 pub use programs::{programs, Program};
 pub use service::{control, services, Service, ServiceAction, ServiceError, ServiceState};
 pub use socket::{sockets, Socket};

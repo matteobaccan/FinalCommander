@@ -23,6 +23,8 @@ pub struct Process {
     pub threads: u32,
     /// 32 or 64, for the bitness column, or zero where nothing would say.
     pub bits: u8,
+    /// When it started, where the system says without being asked about it in particular.
+    pub started: Option<std::time::SystemTime>,
 }
 
 /// Everything running, as far as this user is allowed to see.
@@ -98,6 +100,40 @@ fn linux() -> Vec<Process> {
 
 #[cfg(test)]
 mod tests {
+    // Windows: the kernel's list gives our own process its numbers without opening it.
+    #[test]
+    #[cfg(windows)]
+    fn windows_counts_our_own_process_from_the_kernel() {
+        let me = std::process::id();
+        let listed = super::processes();
+        let row = listed
+            .iter()
+            .find(|p| p.pid == me)
+            .expect("we are in the list");
+        assert!(row.memory > 0, "{row:?}");
+        assert!(row.started.is_some(), "{row:?}");
+        let card = super::details(me).expect("our own card");
+        assert!(card.handles > 0, "{card:?}");
+        assert!(card.virtual_size >= card.memory, "{card:?}");
+        assert!(card.memory_peak >= card.memory, "{card:?}");
+        assert!(
+            card.started.is_some() && card.cpu_user.is_some(),
+            "{card:?}"
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn a_process_of_ours_can_be_ended() {
+        let mut child = std::process::Command::new("sleep")
+            .arg("1000")
+            .spawn()
+            .unwrap();
+        super::kill(child.id()).expect("ours to end");
+        let status = child.wait().unwrap();
+        assert!(!status.success());
+    }
+
     // The only test here is Linux's: `/proc` is the one list this crate reads without a
     // call, so it is the one that can be checked against the machine running the tests.
     #[cfg(target_os = "linux")]
@@ -195,6 +231,22 @@ pub struct Details {
     /// Bytes read and written, as the system has counted them.
     pub io_read: u64,
     pub io_write: u64,
+    /// The rest of what Windows counts for every process, the figures FAR's card shows: the
+    /// highest the resident set has been, the address space reserved and its peak, the two
+    /// kernel pools, the paging file's peak, the resident part that is its own, the I/O that
+    /// is neither a read nor a write, and how many operations of each kind. Zero where the
+    /// system keeps no such count.
+    pub memory_peak: u64,
+    pub virtual_size: u64,
+    pub virtual_peak: u64,
+    pub paged_pool: u64,
+    pub nonpaged_pool: u64,
+    pub swap_peak: u64,
+    pub private_resident: u64,
+    pub io_other: u64,
+    pub io_read_ops: u64,
+    pub io_write_ops: u64,
+    pub io_other_ops: u64,
     /// The version and the description the executable carries, where it carries them: a
     /// Windows binary has both in its resources, and an ELF has neither.
     pub version: Option<String>,
@@ -204,6 +256,28 @@ pub struct Details {
     pub env: Vec<(String, String)>,
     /// Every library it has loaded, by path.
     pub modules: Vec<String>,
+}
+
+/// End a process: `SIGTERM` on a Unix, the polite request a program can tidy up after, and
+/// `TerminateProcess` on Windows, which has no such thing. The answer is the system's refusal
+/// in its own words when it refuses — somebody else's process, a protected one.
+pub fn kill(pid: u32) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        use nix::sys::signal::{kill, Signal};
+        use nix::unistd::Pid;
+        let pid = i32::try_from(pid).map_err(|e| e.to_string())?;
+        kill(Pid::from_raw(pid), Signal::SIGTERM).map_err(|e| e.desc().to_string())
+    }
+    #[cfg(windows)]
+    {
+        super::windows::kill(pid)
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = pid;
+        Err("no way to end a process on this system".into())
+    }
 }
 
 /// One process, in as much detail as this platform and this user's rights allow.

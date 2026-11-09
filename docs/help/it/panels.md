@@ -36,9 +36,12 @@ Sotto una riga di separazione, su `Ctrl+1`…`Ctrl+9`, stanno le cose che non so
   collegano quando li scegli;
 * i **processi** in esecuzione sulla macchina, come pannello — anche `Ctrl+W`, ed *Elenco
   attività* nel menu Comandi, che è quello che quel tasto vuol dire in FAR: `F3` su uno è la
-  sua scheda, che è una pagina — cos'è, di chi è, cosa ha preso e speso, la riga di comando, tutto il suo
-  ambiente e ogni libreria che ha caricato. Qui niente termina un processo: il tasto che
-  cancella un file lo dice invece di farlo;
+  sua scheda, che è una pagina — cos'è, di chi è, la priorità e la sessione, quando è partito e
+  da quanto, cosa ha preso e speso (tempi di CPU, handle, tutti i contatori di memoria, letture,
+  scritture e il resto del suo input e output), la riga di comando, tutto il suo ambiente e ogni
+  libreria che ha caricato. Su Windows lista e scheda si leggono dalla tabella del kernel, così
+  anche i processi di sistema hanno la loro memoria. `F8` o `Canc` termina il processo sotto il
+  cursore, dopo aver chiesto, con il pulsante Annulla acceso;
 * i **servizi** che la macchina esegue in sottofondo, con lo stato di ciascuno: `F3` è la sua
   scheda, `F5` lo avvia, `F6` lo riavvia e `F8` lo ferma — gli ultimi due chiedono prima.
   Un'azione che il sistema rifiuta viene riferita come «serve root»; questo programma non
@@ -475,7 +478,9 @@ che esce dalla prima riga è la via d'uscita. `Invio` risponde al dialogo da dov
 cursore, `F10` è `OK` da qualunque punto, `Esc` butta via tutto.
 
 Una riga che nomina un percorso si completa con `Tab`, come in una shell, e `Ctrl+↓` apre quel
-che è già stato scritto in quella riga. `Alt+F10` su una riga così apre da dove scegliere:
+che è già stato scritto in quella riga. `Alt+↓` su una riga di scelte le elenca tutte per
+sceglierne una. `Ctrl+A` seleziona l'intera riga di un campo di testo: quel che scrivi o incolli
+dopo la sostituisce, `Canc` la svuota, `Ctrl+C` o `Ctrl+Ins` la copia e `Ctrl+X` la taglia. `Alt+F10` su una riga così apre da dove scegliere:
 l'albero delle cartelle per una riga che vuole una cartella — la destinazione di una copia, la
 cartella di un'estrazione — e la cartella stessa per una riga che vuole un file, come il file
 di chiave di una connessione. In quell'elenco `Invio` su una cartella ci entra e `Invio` su un
