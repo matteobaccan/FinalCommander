@@ -42,9 +42,11 @@ dei tuoi servizi. `F7` ne aggiunge uno, `F4` lo modifica, `F8` lo toglie. `Invio
 fcmd chiede al servizio l'elenco dei suoi modelli, che prova indirizzo e chiave senza chiedere
 niente al modello, e la riga di stato dice cosa è tornato (`HTTP 200 in 120 ms, 12 modelli`), o
 perché non è andata (un server che non è acceso, una chiave sbagliata). Da lì il pannello è la
-**conversazione**, mostrata lì dentro man mano, come una quick view: in cima i file del
-contesto, poi la domanda inviata, la risposta mentre il modello la scrive e, finché sta ancora
-arrivando, una rotellina che gira con i secondi di attesa. Le frecce e `PagSu`/`PagGiù` la
+**conversazione**, mostrata lì dentro man mano, in Markdown: in cima i file del contesto, ogni
+domanda a destra, ogni risposta a sinistra mentre il modello la scrive e, finché sta ancora
+arrivando, una rotellina che gira con i secondi di attesa. La cornice dice il modello che ha
+risposto e quanto è piena la sua context window (`ctx 1.5k/32.8k (4%)`; la dimensione compare
+quando il server la dichiara al login). La risposta resta nel pannello; non apre un viewer. Le frecce e `PagSu`/`PagGiù` la
 fanno scorrere; `Ctrl+R` la ricostruisce e la lascia una conversazione:
 
 * quello che scrivi sulla riga di comando sotto di lui va all'AI, come seguito della stessa

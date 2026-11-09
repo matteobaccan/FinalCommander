@@ -56,8 +56,12 @@ Notable changes, newest first. The format follows
   counted in its foot.
 
 - **The AI conversation as it goes.** Once logged in, the AI panel shows the conversation
-  itself, like a quick view, with the files of the context at the top: the question sent, the answer as the model writes it — answers are now
-  streamed, in OpenAI's, Anthropic's and Ollama's shapes, and a server that does not stream is
+  itself, rendered as Markdown, the files of the context at the top, the questions on the
+  right and the answers on the left; its frame names the model that answered and how full the
+  context window is (`ctx 1.5k/32.8k (4%)`, the size read at the login from llama.cpp, LM
+  Studio, vLLM, OpenRouter or Ollama's model card). An answer no longer opens a viewer over
+  the whole screen. The conversation shows the question sent, the answer as the model writes
+  it — answers are now streamed, in OpenAI's, Anthropic's and Ollama's shapes, and a server that does not stream is
   read whole — and a turning wheel with the seconds while it is still coming.
 - **The side-by-side diff paints the lines that differ**, the whole line: red under what went,
   green under what came, beside the `-` and `+` signs. Every theme has the three new colours

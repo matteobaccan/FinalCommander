@@ -41,9 +41,11 @@ your services. `F7` adds one, `F4` changes it, `F8` removes it. `Enter` logs in 
 service for its list of models, which proves the address and the key without asking the model
 anything, and the status line says what came back (`HTTP 200 in 120 ms, 12 models`), or why it
 failed (a server that is not running, a wrong key). Then the panel is the **conversation**,
-shown in it as it goes, like a quick view: the files of the context at the top, the question
-you sent, the answer as the model writes it, and while it is still coming a turning wheel with
-the seconds it has been thinking. The arrows and `PgUp`/`PgDn` scroll it; `Ctrl+R` builds it
+shown in it as it goes, rendered as Markdown: the files of the context at the top, each
+question on the right, each answer on the left as the model writes it, and while it is still
+coming a turning wheel with the seconds it has been thinking. The frame names the model that
+answered and how full its context window is (`ctx 1.5k/32.8k (4%)`; the size is shown when
+the server says it at the login). An answer stays in the panel; it never opens a viewer. The arrows and `PgUp`/`PgDn` scroll it; `Ctrl+R` builds it
 again and keeps it a conversation:
 
 * whatever you type on the command line under it goes to the AI, as the next turn of the same

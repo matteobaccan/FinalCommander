@@ -591,6 +591,12 @@ pub struct AiSession {
     pub sent: Vec<PathBuf>,
     /// The question on its way, shown under the conversation until the answer replaces it.
     pub asking: Option<String>,
+    /// How many tokens the model can hold, when the service says (from the login).
+    pub context_max: Option<u64>,
+    /// How many the conversation took at the last answer: what was sent and what came back.
+    pub context_used: Option<u64>,
+    /// The model that answered last, as the service names it.
+    pub model_used: Option<String>,
 }
 
 /// Everything one question carries until it is sent: the service, the words, the files and
@@ -633,6 +639,8 @@ pub struct AiAnswer {
     pub text: String,
     pub purpose: AiUse,
     pub tokens: (Option<u64>, Option<u64>),
+    /// The model that answered, as the service names it, when the reply says.
+    pub model: String,
 }
 
 /// One row of the log panel.
@@ -13374,19 +13382,31 @@ impl App {
             AiUse::Answer => {
                 self.ai_last = Some(answer.file.clone());
                 // The answer of a conversation in a panel: the conversation is that file now,
-                // what was sent is what was in the context, and the panel shows both.
+                // what was sent is what was in the context, and the panel shows both — there,
+                // in the panel, not in a viewer over the whole screen.
+                let mut in_panel = false;
                 if let Some(session) = self.ai_session.as_mut() {
                     if session.thread.is_none() || session.thread.as_ref() == Some(&answer.file) {
                         session.thread = Some(answer.file.clone());
                         session.sent = session.files.clone();
+                        if let (Some(i), Some(o)) = answer.tokens {
+                            session.context_used = Some(i + o);
+                        }
+                        if !answer.model.is_empty() {
+                            session.model_used = Some(answer.model.clone());
+                        }
                         let side = session.side;
                         if self.panels[side].temp_origin() == Some(":aichat") {
+                            in_panel = true;
                             self.show_ai_session();
+                            self.quick_of = None;
                         }
                     }
                 }
-                let vpath = VPath::local(&answer.file);
-                self.open_viewer_on(&answer.file, vpath);
+                if !in_panel {
+                    let vpath = VPath::local(&answer.file);
+                    self.open_viewer_on(&answer.file, vpath);
+                }
                 self.set_status(cost);
             }
             AiUse::Command => {
@@ -13581,6 +13601,7 @@ impl App {
         let mut next = || fields.next().unwrap_or("").to_string();
         let (name, url, status, millis, models, has_model) =
             (next(), next(), next(), next(), next(), next());
+        let context_max = next().parse::<u64>().ok();
         let Some(service) = self.cfg.ais.iter().find(|a| a.name == name).cloned() else {
             return;
         };
@@ -13610,6 +13631,7 @@ impl App {
             Some(mut s) => {
                 s.side = side;
                 s.service = service;
+                s.context_max = context_max.or(s.context_max);
                 s
             }
             None => AiSession {
@@ -13619,6 +13641,9 @@ impl App {
                 thread: None,
                 sent: Vec::new(),
                 asking: None,
+                context_max,
+                context_used: None,
+                model_used: None,
             },
         });
         self.active = side;
@@ -13656,14 +13681,42 @@ impl App {
             entry.name = format!("{}  {name}", pad(&conv)).into();
             items.push((path, entry));
         }
-        let title = self.i18n.t_args(
+        // The model that answered, else the one configured, else a dash: a title with a hole
+        // in it reads as a fault.
+        let model = session
+            .model_used
+            .clone()
+            .filter(|m| !m.is_empty())
+            .or_else(|| Some(session.service.model.clone()).filter(|m| !m.is_empty()))
+            .unwrap_or_else(|| "—".into());
+        let mut title = self.i18n.t_args(
             "ai-session-title",
             &[
                 ("name", session.service.name.clone().into()),
-                ("model", session.service.model.clone().into()),
+                ("model", model.into()),
                 ("files", (session.files.len() as i64).into()),
             ],
         );
+        // And how full the context window is: what the conversation took at the last answer,
+        // out of what the model holds when the service said.
+        let short = |n: u64| {
+            if n >= 1000 {
+                format!("{:.1}k", n as f64 / 1000.0)
+            } else {
+                n.to_string()
+            }
+        };
+        match (session.context_used, session.context_max) {
+            (Some(u), Some(m)) => title.push_str(&format!(
+                " · ctx {}/{} ({}%)",
+                short(u),
+                short(m),
+                u * 100 / m.max(1)
+            )),
+            (Some(u), None) => title.push_str(&format!(" · ctx {}", short(u))),
+            (None, Some(m)) => title.push_str(&format!(" · ctx 0/{}", short(m))),
+            (None, None) => {}
+        }
         let side = session.side;
         let generation = self.panels[side].generation + 1;
         self.panels[side].generation = generation;
@@ -13752,6 +13805,8 @@ impl App {
         viewer.show_key_bar = false;
         viewer.show_status_line = false;
         // The newest is at the foot, and the foot is what is read.
+        // Read as Markdown, as the conversation file is written: headings, lists, code.
+        viewer.as_markdown();
         let (w, h) = (self.quick_size.0.max(1), self.quick_size.1.max(1));
         viewer.to_end(w, h);
         self.quick = Some(Box::new(viewer));
@@ -36344,6 +36399,7 @@ abcdefghij
                 text: "local\nhttp://localhost:11434/api/tags\n200\n12\n3\ntrue".into(),
                 purpose: AiUse::Probe,
                 tokens: (None, None),
+                model: String::new(),
             }),
         });
         assert_eq!(app.panels[1].temp_origin(), Some(":aichat"));
@@ -36387,6 +36443,7 @@ abcdefghij
                 text: "alpha".into(),
                 purpose: AiUse::Answer,
                 tokens: (None, None),
+                model: String::new(),
             }),
         });
         app.mode = Mode::Normal;
@@ -36438,9 +36495,10 @@ abcdefghij
         app.handle_event(Event::AiDone {
             result: Ok(AiAnswer {
                 file: PathBuf::new(),
-                text: "local\nhttp://localhost:11434/api/tags\n200\n12\n3\ntrue".into(),
+                text: "local\nhttp://localhost:11434/api/tags\n200\n12\n3\ntrue\n32768".into(),
                 purpose: AiUse::Probe,
                 tokens: (None, None),
+                model: String::new(),
             }),
         });
         assert_eq!(
@@ -36503,12 +36561,32 @@ abcdefghij
                 file: answer,
                 text: "Because the sky is blue.".into(),
                 purpose: AiUse::Answer,
-                tokens: (None, None),
+                tokens: (Some(1200), Some(300)),
+                model: "qwen3".into(),
             }),
         });
+        assert!(
+            !matches!(app.mode, Mode::Viewer(_)),
+            "the answer stays in the panel, not over the whole screen"
+        );
+        // The title says the model that answered and how full the context window is.
+        let title = app.panels[1].temp.as_ref().unwrap().title.clone();
+        assert!(title.contains("qwen3"), "{title}");
+        assert!(title.contains("ctx 1.5k/32.8k (4%)"), "{title}");
         let out = shown(&mut app);
         assert!(out.contains("Because the sky is blue."), "{out}");
         assert!(!out.contains("is thinking"), "{out}");
+        // The question sits on the right of its panel, the answer on the left.
+        let line_of = |needle: &str| {
+            out.lines()
+                .find(|l| l.contains(needle))
+                .map(|l| l.to_string())
+                .unwrap()
+        };
+        let q = line_of("why?");
+        let a = line_of("Because the sky");
+        let col = |l: &str, n: &str| l.find(n).unwrap();
+        assert!(col(&q, "why?") > col(&a, "Because"), "{q}\n{a}");
     }
 
     /// A site's `max_kbps` caps a copy to or from it, the slowest end winning.
@@ -37534,6 +37612,7 @@ abcdefghij
                 text: "```sh\nls -S | head -10\n```".into(),
                 purpose: AiUse::Command,
                 tokens: (Some(10), Some(5)),
+                model: String::new(),
             }),
         });
         assert_eq!(app.cmd.text, "ls -S | head -10");
@@ -37556,6 +37635,7 @@ abcdefghij
                 text: "because".into(),
                 purpose: AiUse::Answer,
                 tokens: (None, None),
+                model: String::new(),
             }),
         });
         app.mode = Mode::Normal;
@@ -37580,6 +37660,7 @@ abcdefghij
                     root: dir.path().to_path_buf(),
                 },
                 tokens: (None, None),
+                model: String::new(),
             }),
         });
         let Mode::Prompt(p) = &app.mode else {

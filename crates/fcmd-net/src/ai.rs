@@ -76,6 +76,8 @@ pub struct Reply {
     pub text: String,
     pub tokens_in: Option<u64>,
     pub tokens_out: Option<u64>,
+    /// The model that answered, as the reply names it.
+    pub model: Option<String>,
 }
 
 /// The tokens a reply says it used, read where each service puts them.
@@ -249,6 +251,10 @@ pub async fn ask_thread(
             text,
             tokens_in,
             tokens_out,
+            model: reply
+                .get("model")
+                .and_then(Value::as_str)
+                .map(str::to_string),
         }),
         Err(e) if !status.is_success() => Err(format!("HTTP {status}: {e}")),
         Err(e) => Err(e),
@@ -301,6 +307,7 @@ pub struct Stream {
     pub tokens_in: Option<u64>,
     pub tokens_out: Option<u64>,
     pub error: Option<String>,
+    pub model: Option<String>,
 }
 
 impl Stream {
@@ -335,6 +342,12 @@ impl Stream {
         if self.text.is_empty() && added.is_empty() && self.error.is_none() {
             if let Ok(reply) = serde_json::from_slice::<Value>(&self.whole) {
                 let (i, o) = usage(api, &reply);
+                if self.model.is_none() {
+                    self.model = reply
+                        .get("model")
+                        .and_then(Value::as_str)
+                        .map(str::to_string);
+                }
                 self.tokens_in = self.tokens_in.or(i);
                 self.tokens_out = self.tokens_out.or(o);
                 match answer(api, &reply) {
@@ -367,6 +380,13 @@ impl Stream {
                     .unwrap_or_else(|| error.to_string()),
             );
             return None;
+        }
+        if self.model.is_none() {
+            self.model = v
+                .pointer("/model")
+                .or_else(|| v.pointer("/message/model"))
+                .and_then(Value::as_str)
+                .map(str::to_string);
         }
         let n = |p: &str| v.pointer(p).and_then(Value::as_u64);
         for (i, o) in [
@@ -454,6 +474,7 @@ pub async fn ask_streaming(
         text: stream.text,
         tokens_in: stream.tokens_in,
         tokens_out: stream.tokens_out,
+        model: stream.model,
     })
 }
 
@@ -503,6 +524,51 @@ pub fn model_names(reply: &Value) -> Vec<String> {
     .unwrap_or_default()
 }
 
+/// The context window of a model, out of a list of models: the one named, or the only one
+/// when the list has one, and the first of the names servers use for it.
+pub fn context_of(list: &Value, model: &str) -> Option<u64> {
+    let items = list
+        .get("data")
+        .or_else(|| list.get("models"))
+        .and_then(Value::as_array)?;
+    let named = |m: &&Value| {
+        ["id", "name", "model"]
+            .iter()
+            .any(|k| m.get(*k).and_then(Value::as_str) == Some(model))
+    };
+    let item = items
+        .iter()
+        .find(named)
+        .or_else(|| (items.len() == 1).then(|| &items[0]))?;
+    fn find(v: &Value) -> Option<u64> {
+        const KEYS: [&str; 7] = [
+            "context_length",
+            "max_context_length",
+            "context_window",
+            "max_model_len",
+            "n_ctx",
+            "n_ctx_train",
+            "max_input_tokens",
+        ];
+        let obj = v.as_object()?;
+        for k in KEYS {
+            if let Some(n) = obj.get(k).and_then(Value::as_u64) {
+                return Some(n);
+            }
+        }
+        // Ollama's `model_info` names it after the family: `llama.context_length`.
+        if let Some(n) = obj
+            .iter()
+            .find(|(k, _)| k.ends_with(".context_length"))
+            .and_then(|(_, v)| v.as_u64())
+        {
+            return Some(n);
+        }
+        obj.values().find_map(find)
+    }
+    find(item)
+}
+
 /// What a probe of a service found: how it answered, how long it took, how many models it
 /// lists and whether the one configured is among them.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -512,6 +578,9 @@ pub struct Probe {
     pub millis: u128,
     pub models: usize,
     pub has_model: bool,
+    /// How many tokens the model can hold, when the list says: llama.cpp, LM Studio, vLLM
+    /// and OpenRouter put it beside each model, each under a name of its own.
+    pub context: Option<u64>,
 }
 
 /// Knock on the service: one `GET` of its list of models, with the key it will be asked with.
@@ -542,11 +611,31 @@ pub async fn probe(service: &Service) -> Result<Probe, String> {
     if !status.is_success() {
         return Err(format!("{url}: HTTP {status}: {}", short(&text)));
     }
-    let names = serde_json::from_str::<Value>(&text)
-        .map(|v| model_names(&v))
-        .unwrap_or_default();
+    let list = serde_json::from_str::<Value>(&text).unwrap_or(Value::Null);
+    let names = model_names(&list);
     let has_model = service.model.is_empty() || names.iter().any(|n| n == &service.model);
+    let mut context = context_of(&list, &service.model);
+    // Ollama's list does not say; the model's own card does, one more question away.
+    if context.is_none() && service.api == Api::Ollama && !service.model.is_empty() {
+        let show = endpoint(service.api, &service.url).replace("/api/chat", "/api/show");
+        if let Ok(reply) = client
+            .post(&show)
+            .header(reqwest::header::CONTENT_TYPE, "application/json")
+            .body(json!({"model": service.model}).to_string())
+            .send()
+            .await
+        {
+            if let Ok(card) = serde_json::from_str::<Value>(&reply.text().await.unwrap_or_default())
+            {
+                context = card
+                    .get("model_info")
+                    .map(|info| json!({"models": [info]}))
+                    .and_then(|l| context_of(&l, "\u{0}"));
+            }
+        }
+    }
     Ok(Probe {
+        context,
         url,
         status: status.as_u16(),
         millis,
@@ -618,6 +707,19 @@ mod tests {
             "usage": {"prompt_tokens": 2, "completion_tokens": 3}});
         assert_eq!(answer(Api::Ollama, &openai_reply).unwrap(), "ciao");
         assert_eq!(usage(Api::Ollama, &openai_reply), (Some(2), Some(3)));
+        // The context window, wherever the server puts it.
+        let llama = json!({"data": [{"id": "qwen", "meta": {"n_ctx_train": 32768}}]});
+        assert_eq!(context_of(&llama, "qwen"), Some(32768));
+        let studio = json!({"data": [{"id": "a"}, {"id": "b", "max_context_length": 8192}]});
+        assert_eq!(context_of(&studio, "b"), Some(8192));
+        assert_eq!(
+            context_of(&studio, "c"),
+            None,
+            "not the only one, not named"
+        );
+        let card =
+            json!({"models": [{"general.architecture": "llama", "llama.context_length": 131072}]});
+        assert_eq!(context_of(&card, "x"), Some(131072));
         let ollama = json!({"models": [{"name": "llama3:8b"}]});
         assert_eq!(model_names(&ollama), ["llama3:8b"]);
     }

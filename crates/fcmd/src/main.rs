@@ -4800,11 +4800,18 @@ async fn ask_ai(
         return Ok(app::AiAnswer {
             file: std::path::PathBuf::new(),
             text: format!(
-                "{}\n{}\n{}\n{}\n{}\n{}",
-                cfg.name, probe.url, probe.status, probe.millis, probe.models, probe.has_model
+                "{}\n{}\n{}\n{}\n{}\n{}\n{}",
+                cfg.name,
+                probe.url,
+                probe.status,
+                probe.millis,
+                probe.models,
+                probe.has_model,
+                probe.context.map(|n| n.to_string()).unwrap_or_default()
             ),
             purpose: app::AiUse::Probe,
             tokens: (None, None),
+            model: String::new(),
         });
     }
     let mut attachments = Vec::new();
@@ -4840,7 +4847,13 @@ async fn ask_ai(
             .await?;
     std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     let names: Vec<&str> = attachments.iter().map(|a| a.name.as_str()).collect();
-    let mut meta = format!("*{} · {}", cfg.name, cfg.model);
+    // The model that answered, as the service names it; the one configured when it does not.
+    let model = reply
+        .model
+        .clone()
+        .filter(|m| !m.is_empty())
+        .unwrap_or_else(|| cfg.model.clone());
+    let mut meta = format!("*{} · {model}", cfg.name);
     if !names.is_empty() {
         meta.push_str(&format!(" · {}", names.join(", ")));
     }
@@ -4875,6 +4888,7 @@ async fn ask_ai(
         text: reply.text,
         purpose: query.purpose.clone(),
         tokens: (reply.tokens_in, reply.tokens_out),
+        model: reply.model.clone().unwrap_or_default(),
     })
 }
 

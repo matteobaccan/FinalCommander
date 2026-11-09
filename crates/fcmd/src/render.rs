@@ -2119,16 +2119,44 @@ fn draw_ai_chat(app: &mut App, index: usize, area: Rect, buf: &mut Buffer) {
     let Some(viewer) = app.quick.as_mut() else {
         return;
     };
-    let rows = viewer.rows(inner.w.saturating_sub(1), inner.h);
+    let width = inner.w.saturating_sub(1);
+    let rows = viewer.rows(width, inner.h);
     for (n, row) in rows.iter().enumerate() {
-        let text = fcmd_ui::truncate_cols(&row.text, inner.w.saturating_sub(1) as usize);
-        buf.put_str(
-            inner.x + 1,
-            inner.y + n as u16,
-            &text,
-            base,
-            inner.w.saturating_sub(1),
-        );
+        let y = inner.y + n as u16;
+        // A question is a heading in the conversation file, and it goes to the right, as in
+        // every chat; the answers stay on the left, where text is read from.
+        let question = row
+            .spans
+            .first()
+            .is_some_and(|s| s.class == fcmd_view::markdown::Class::Heading);
+        let text_w = unicode_width::UnicodeWidthStr::width(row.text.trim_end()) as u16;
+        let shift = if question {
+            width.saturating_sub(text_w)
+        } else {
+            0
+        };
+        let x0 = inner.x + 1 + shift;
+        let width = width - shift;
+        buf.put_str(x0, y, &row.text, base, width);
+        // The Markdown view's own runs: headings, bullets, code and quotes in their colours.
+        for span in &row.spans {
+            let Some(text) = row.text.get(span.start..span.end) else {
+                continue;
+            };
+            if text.is_empty() {
+                continue;
+            }
+            let x = row.text[..span.start]
+                .chars()
+                .filter_map(unicode_width::UnicodeWidthChar::width)
+                .sum::<usize>() as u16;
+            if x >= width {
+                continue;
+            }
+            let mut style = base.with_fg(app.theme.color(span.class.theme_key()));
+            style.bold = span.bold;
+            buf.put_str(x0 + x, y, text, style, width - x);
+        }
     }
 }
 
