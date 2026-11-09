@@ -178,13 +178,15 @@ Nothing needed to continue lives outside the repository; this section is the mem
 
 ## Where the work is right now
 
-**0.39.2 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
+**0.39.3 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
 like every release before it. A push to `main` that touches `CHANGELOG.md` or `Cargo.toml`
 is what makes `tag.yml` fire. The site is published with each release, from its tag. `CHANGELOG.md` is the history, release by release; this section only
 says where things stand.
 
 What the last few were about, newest first:
 
+- **0.39.3** — `Shift+↓`/`Shift+↑` select in the panels (Mauro's #38); a process's peak memory
+  never below its current one (the Windows CI of 0.39.2).
 - **0.39.2** — Pascal and Delphi coloured: two block comments, keywords in any case,
   `{$…}` directives.
 - **0.39.1** — OpenAI's newer models: `max_completion_tokens`, the `developer` role and an

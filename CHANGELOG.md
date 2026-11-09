@@ -6,6 +6,21 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+## [0.39.3] - 2026-11-09
+
+### Added
+
+- **`Shift+↓` and `Shift+↑` select in the panels**, as in FAR: the first selects the row and
+  goes down, as `Ins` does, the second selects and goes up (`sel.toggle.up`), for the
+  keyboards that have no `Ins` (issue #38).
+
+### Fixed
+
+- **A process's peak memory below its memory now.** The card read the kernel's counters and
+  then the process's own a moment later, and a process that grew in between showed a peak
+  lower than its current size (it also failed the Windows test of 0.39.2's CI). A peak is now
+  never below what it is the peak of — resident, virtual and swap.
+
 ## [0.39.2] - 2026-11-09
 
 ### Added
