@@ -6,6 +6,8 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+## [0.39.0] - 2026-11-09
+
 ### Added
 
 - **More ways to ask the AI.** `ai+ question` follows up the last answer (or the one under the

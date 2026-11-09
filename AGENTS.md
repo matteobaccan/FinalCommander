@@ -178,12 +178,21 @@ Nothing needed to continue lives outside the repository; this section is the mem
 
 ## Where the work is right now
 
-**0.38.0 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
+**0.39.0 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
 like every release before it. A push to `main` that touches `CHANGELOG.md` or `Cargo.toml`
 is what makes `tag.yml` fire. The site is published with each release, from its tag. `CHANGELOG.md` is the history, release by release; this section only
 says where things stand.
 
 What the last few were about, newest first:
+
+- **0.39.0** — git and AI each in a panel from `Alt+F1`/`Alt+F2`: what changed in words,
+  staged apart from not staged, `F8` discard, the side-by-side diff with the lines painted
+  red and green; the AI services as a panel, a login that asks for the models, and the
+  conversation in the panel itself, streamed, rendered as Markdown, questions right and
+  answers left, the model and the context window on the frame. Also: `ai+`, `ai!`, the commit
+  draft, the git column, undo for file operations, Office properties in `F11`, ending a
+  process from the list with the kernel's own counters on Windows, the wastebasket reached
+  through every job layer, `Ctrl+A`/`Alt+↓` in dialogs, scrolling menus, and fewer crates.
 
 - **0.38.0** — git all in panels (what changed with stage/unstage/diff/commit, branches and
   switching, the log of the repository or a file, pull and push that never prompt); table
