@@ -275,8 +275,8 @@ cambia. *Confronta per contenuto* risponde a quali di cento coppie sono diverse;
 risponde a cosa, in una coppia, è diverso.
 
 Il file di sinistra è il *prima* e quello di destra il *dopo*, e la schermata si legge come un
-diff: quello che c'è solo a sinistra è rosso con un `-` accanto al numero, quello che porta la
-destra è verde con un `+`, e una riga cambiata è tutte e due le cose — rossa a sinistra, verde
+diff: quello che c'è solo a sinistra ha la riga intera su fondo rosso con un `-` accanto al
+numero, quello che porta la destra la ha su fondo verde con un `+`, e una riga cambiata è tutte e due le cose — rossa a sinistra, verde
 a destra — con dentro segnata la parte che è davvero cambiata, così l'occhio va al carattere
 che conta. Ogni colonna porta i propri numeri di riga, e una riga che esiste da un solo lato ha
 il numero da quel lato e niente di fronte. Il piede dice quale differenza di quante è sullo

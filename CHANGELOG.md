@@ -59,6 +59,9 @@ Notable changes, newest first. The format follows
   itself, like a quick view, with the files of the context at the top: the question sent, the answer as the model writes it — answers are now
   streamed, in OpenAI's, Anthropic's and Ollama's shapes, and a server that does not stream is
   read whole — and a turning wheel with the seconds while it is still coming.
+- **The side-by-side diff paints the lines that differ**, the whole line: red under what went,
+  green under what came, beside the `-` and `+` signs. Every theme has the three new colours
+  (`diff.line.fg`, `diff.removed.bg`, `diff.added.bg`).
 - **Ending a process.** `F8` or `Del` on the process list ends the process under the cursor,
   after asking (the cancel button is the lit one), and the list is read again.
 - **A process list and card as full as FAR's.** The list has each process's start time; the

@@ -171,6 +171,11 @@ const DEFAULTS: &[(&str, Color)] = &[
     // `git diff --color` and every review tool draw them.
     ("syntax.added", Color::Ansi(10)),
     ("syntax.removed", Color::Ansi(9)),
+    // The side-by-side diff paints the whole of a line that differs, not only its sign: red
+    // under what went, green under what came, with ink that reads on both.
+    ("diff.line.fg", Color::Ansi(15)),
+    ("diff.removed.bg", Color::Ansi(1)),
+    ("diff.added.bg", Color::Ansi(2)),
     ("syntax.text", Color::Default),
     ("cmdline.fg", Color::Default),
     ("cmdline.bg", Color::Default),

@@ -262,8 +262,8 @@ content* answers which of a hundred pairs differ; this answers what, in one pair
 different.
 
 The left file is the *before* and the right one the *after*, and the screen reads like a
-diff: what only the left side has is red with a `-` beside its number, what the right side
-brings is green with a `+`, and a line that changed is both — red on the left, green on the
+diff: what only the left side has is painted on red, the whole line, with a `-` beside its
+number, what the right side brings is painted on green with a `+`, and a line that changed is both — red on the left, green on the
 right — with the part that actually changed marked inside it, so the eye goes to the one
 character that matters. Each column carries its own line numbers, and a line that exists on one
 side only has a number on that side and nothing opposite it. The foot says which difference of

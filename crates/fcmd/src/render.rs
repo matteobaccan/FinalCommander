@@ -2860,11 +2860,16 @@ fn draw_diff(app: &App, view: &fcmd_view::Diff, buf: &mut Buffer, screen: Rect) 
     // A diff's own two colours, the ones a `.diff` has in the viewer: what the left side has
     // and the right does not is red, what the right side brings is green. A changed line is
     // both — red on the left, green on the right — with the part that differs marked.
+    // The whole line is painted, not only its sign, so a change is seen from across the
+    // room; the sign stays for a screen without colour and for a copy of the text.
     let removed = Style::new(
-        app.theme.color("syntax.removed"),
-        app.theme.color("panel.bg"),
+        app.theme.color("diff.line.fg"),
+        app.theme.color("diff.removed.bg"),
     );
-    let added = Style::new(app.theme.color("syntax.added"), app.theme.color("panel.bg"));
+    let added = Style::new(
+        app.theme.color("diff.line.fg"),
+        app.theme.color("diff.added.bg"),
+    );
     let inner_mark = Style::new(
         app.theme.color("selected.fg"),
         app.theme.color("selected.bg"),
@@ -2932,6 +2937,9 @@ fn draw_diff(app: &App, view: &fcmd_view::Diff, buf: &mut Buffer, screen: Rect) 
             buf.put_str(x + 5, y, &format!("{sign} "), sign_style, 2);
             let from = view.col.min(text.len());
             let shown: String = text[from..].chars().take(text_w).collect();
+            if sign != ' ' {
+                buf.fill(Rect::new(x + number_w, y, text_w as u16, 1), ' ', style);
+            }
             buf.put_str(x + number_w, y, &shown, style, text_w as u16);
             // The part that differs, over the top of what was just drawn: the eye goes
             // there, which is the whole point of a word diff.
@@ -5458,6 +5466,54 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
                 fcmd_cmd::Mods::NONE,
             )));
         }
+    }
+
+    /// A line that differs is painted whole in the side-by-side diff: red under what went,
+    /// green under what came, as well as its `-` or `+`.
+    #[test]
+    fn the_diff_paints_the_lines_that_differ() {
+        let mut app = app("far", "en");
+        let view = fcmd_view::Diff::new(
+            "a.txt".into(),
+            b"same\ngone\n",
+            "b.txt".into(),
+            b"same\ncame\nnew\n",
+            fcmd_core::diff::Ignore::default(),
+        );
+        app.mode = crate::app::Mode::Diff(Box::new(view));
+        let buf = frame_buf(&mut app, 80, 20);
+        let removed = app.theme.color("diff.removed.bg");
+        let added = app.theme.color("diff.added.bg");
+        let find = |word: &str| {
+            (0..20u16)
+                .find_map(|y| {
+                    let line: String = (0..80)
+                        .filter_map(|x| buf.get(x, y))
+                        .map(|c| c.ch)
+                        .collect();
+                    line.find(word)
+                        .map(|x| (line[..x].chars().count() as u16, y))
+                })
+                .unwrap_or_else(|| panic!("{word} is not on screen"))
+        };
+        let (x, y) = find("new");
+        assert_eq!(
+            buf.get(x, y).unwrap().style.bg,
+            added,
+            "an added line is green"
+        );
+        assert_eq!(
+            buf.get(x + 10, y).unwrap().style.bg,
+            added,
+            "the whole line, not only the text"
+        );
+        let (x, y) = find("same");
+        assert_ne!(
+            buf.get(x, y).unwrap().style.bg,
+            removed,
+            "a line in both is plain"
+        );
+        assert_ne!(buf.get(x, y).unwrap().style.bg, added);
     }
 
     fn frame_buf(app: &mut App, w: u16, h: u16) -> Buffer {
