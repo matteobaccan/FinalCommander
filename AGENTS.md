@@ -178,13 +178,16 @@ Nothing needed to continue lives outside the repository; this section is the mem
 
 ## Where the work is right now
 
-**0.39.3 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
+**0.39.4 is the version in `main`**, tagged and released with four archives and `SHA256SUMS`
 like every release before it. A push to `main` that touches `CHANGELOG.md` or `Cargo.toml`
 is what makes `tag.yml` fire. The site is published with each release, from its tag. `CHANGELOG.md` is the history, release by release; this section only
 says where things stand.
 
 What the last few were about, newest first:
 
+- **0.39.4** — Delphi only: binary forms (`TPF0`) as text, forms coloured, the *Delphi* part
+  of `F11` (producer, packages, units, forms that open as text), `.dproj` & co. coloured, and
+  the `<delphi>` group of IDE leftovers.
 - **0.39.3** — `Shift+↓`/`Shift+↑` select in the panels (Mauro's #38); a process's peak memory
   never below its current one (the Windows CI of 0.39.2).
 - **0.39.2** — Pascal and Delphi coloured: two block comments, keywords in any case,

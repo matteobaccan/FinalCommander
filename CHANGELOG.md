@@ -6,6 +6,21 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+## [0.39.4] - 2026-11-09
+
+### Added
+
+- **Delphi forms read as Delphi shows them.** A `.dfm`, `.fmx`, `.lfm` or `.xfm` saved as text
+  is coloured; one saved in binary (`TPF0`) opens in the viewer on the text *View as Text*
+  would show — objects nested, `inherited` and `inline`, properties, sets, lists, collections
+  and binary data — with `F4` to the bytes.
+- **Delphi programs in `F11`.** An `.exe`, `.dll` or `.bpl` built with Delphi or C++Builder
+  has a *Delphi* part: the producer, the packages it needs, its units, and every form inside
+  it by name and class; `Enter` on a form opens it as text.
+- **Delphi projects:** `.dproj`, `.groupproj`, `.cbproj` coloured as XML, `.dof` and `.dsk` as
+  INI, and the group `<delphi>` (`*.~*`, `__history`, `__recovery`, `*.dcu`, `*.identcache`,
+  `*.local`…) drawn dim as temporary files are and selected at once with `Gray +` `<delphi>`.
+
 ## [0.39.3] - 2026-11-09
 
 ### Added
