@@ -790,6 +790,7 @@ viewer-structure-hint = ↑↓ строка · Enter — перейти · Tab �
 viewer-structure-hint-tab = Tab передаёт клавиши сюда
 viewer-no-structure = нечего разбирать: панель не знает этот формат
 viewer-no-target = эта строка никуда в файле не указывает
+viewer-form-opened = Форма в виде текста, как её показывает Delphi. F4 возвращает к байтам.
 viewer-went-to = переход на { $offset }
 viewer-in-panel = панель на { $name }
 viewer-not-in-panel = { $name } нет в этой панели

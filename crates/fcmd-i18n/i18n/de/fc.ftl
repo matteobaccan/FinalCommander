@@ -790,6 +790,7 @@ viewer-structure-hint = ↑↓ Zeile · Eingabe springen · Tab Inhalt · F11 sc
 viewer-structure-hint-tab = Tab bringt die Tasten hierher
 viewer-no-structure = nichts zu entschlüsseln: dieses Format kennt das Fenster nicht
 viewer-no-target = diese Zeile zeigt auf keine Stelle der Datei
+viewer-form-opened = Das Formular, als der Text, den Delphi dafür zeigt. F4 führt zu den Bytes zurück.
 viewer-went-to = gesprungen zu { $offset }
 viewer-in-panel = das Panel steht auf { $name }
 viewer-not-in-panel = { $name } ist nicht in diesem Panel

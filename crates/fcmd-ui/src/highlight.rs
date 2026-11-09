@@ -103,7 +103,7 @@ impl Highlight {
             rules: Vec::new(),
             exec: compile("<exec>"),
             arc: compile("<arc>"),
-            temp: compile("<temp>"),
+            temp: compile("<temp>,<delphi>"),
         }
     }
 

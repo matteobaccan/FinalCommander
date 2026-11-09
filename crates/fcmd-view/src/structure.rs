@@ -1504,6 +1504,7 @@ fn pe_about(
                 rows.extend(manifest);
             }
         }
+        rows.extend(delphi_rows(src, sections, &rsrc, len));
     }
     let (dbg_rva, dbg_size) = pe_dir(dirs, 6);
     if dbg_rva != 0 && dbg_size != 0 {
@@ -1541,6 +1542,70 @@ fn pe_about(
                 String::new(),
                 "none — not signed",
             ));
+        }
+    }
+    rows
+}
+
+/// A program Delphi or C++Builder built: its `RCDATA` says so. `DVCLAL` is the licence stamp
+/// every VCL program carries, `PACKAGEINFO` lists the units and packages, and each form is a
+/// named resource in the binary form format, whose row `Enter` opens as text.
+fn delphi_rows(src: &mut dyn Bytes, sections: &[PeSection], rsrc: &[u8], len: u64) -> Vec<Row> {
+    const MAX_INFO: u32 = 4 << 20;
+    let rcdata = crate::meta::pe_resources(rsrc, 10);
+    let stamped = rcdata
+        .iter()
+        .any(|(n, ..)| n.eq_ignore_ascii_case("DVCLAL") || n.eq_ignore_ascii_case("PACKAGEINFO"));
+    let mut forms = Vec::new();
+    for (name, rva, size) in &rcdata {
+        let head = pe_bytes(src, sections, *rva, (*size).min(64 * 1024) as usize, len);
+        if crate::dfm::is_binary_form(&head) {
+            let class = crate::dfm::class_name(&head).unwrap_or_default();
+            forms.push(Row::entry(
+                format!("form {name}"),
+                class,
+                pe_offset(sections, *rva, len),
+            ));
+        }
+    }
+    if !stamped && forms.is_empty() {
+        return Vec::new();
+    }
+    let mut rows = vec![Row::group("Delphi")];
+    let info = rcdata
+        .iter()
+        .find(|(n, ..)| n.eq_ignore_ascii_case("PACKAGEINFO"))
+        .and_then(|(_, rva, size)| {
+            let data = pe_bytes(src, sections, *rva, (*size).min(MAX_INFO) as usize, len);
+            crate::meta::package_info(&data)
+        });
+    match &info {
+        Some(info) => rows.push(Row::field("built with", String::new(), info.producer)),
+        None => rows.push(Row::field(
+            "built with",
+            String::new(),
+            "Delphi or C++Builder",
+        )),
+    }
+    if let Some(info) = &info {
+        if !info.requires.is_empty() {
+            rows.push(Row::field(
+                "packages",
+                String::new(),
+                info.requires.join(", "),
+            ));
+        }
+        rows.push(Row::field(
+            "units",
+            String::new(),
+            info.units.len().to_string(),
+        ));
+    }
+    rows.push(Row::field("forms", String::new(), forms.len().to_string()));
+    rows.extend(forms);
+    if let Some(info) = info {
+        for unit in info.units.into_iter().take(2_000) {
+            rows.push(Row::field("unit", String::new(), unit));
         }
     }
     rows

@@ -5778,6 +5778,11 @@ impl App {
         // `Enter` on a row that points nowhere says so instead of moving the file silently.
         if let Some(target) = target {
             match target {
+                // A Delphi form inside the program: read as the text Delphi shows for it.
+                Some(offset) if self.live_viewer_mut().is_some_and(|v| v.form_at(offset)) => {
+                    let msg = self.i18n.t("viewer-form-opened");
+                    self.set_status(msg);
+                }
                 Some(offset) => {
                     let (width, height) = self.live_viewer_size();
                     if let Some(viewer) = self.live_viewer_mut() {
@@ -38385,8 +38390,8 @@ abcdefghij
             panic!("{:?}", app.mode)
         };
         assert_eq!(pick.kind, crate::menu::PickKind::MaskGroups);
-        // The three that are there without being written down.
-        assert_eq!(pick.rows.len(), 3, "{:?}", pick.rows);
+        // The four that are there without being written down: FAR's three and `<delphi>`.
+        assert_eq!(pick.rows.len(), 4, "{:?}", pick.rows);
         assert!(pick.rows.iter().any(|r| r.value == "arc"));
 
         // `Ins` writes a new one, and it is in force at once.

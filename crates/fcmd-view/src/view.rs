@@ -200,6 +200,8 @@ pub const PICTURE_LIMIT: u64 = 256 * 1024 * 1024;
 /// or a `data:` URI with room to spare, and a file larger than that is not one somebody is
 /// reading by eye.
 pub const BASE64_LIMIT: u64 = 32 * 1024 * 1024;
+/// The largest binary form turned into text; a form is a few hundred kilobytes at most.
+const DFM_LIMIT: u64 = 16 * 1024 * 1024;
 
 /// Under this much payload a file is not called base64: a handful of letters is not something
 /// somebody encoded, and offering to decode every short text file would make the key look
@@ -355,7 +357,8 @@ impl Viewer {
         let picture = crate::picture::is_picture(&head);
         let base_mode = if binary { Mode::Dump } else { Mode::Text };
         let mode = if picture { Mode::Image } else { base_mode };
-        Viewer {
+        let form = crate::dfm::is_binary_form(&head);
+        let mut viewer = Viewer {
             source,
             path,
             mode,
@@ -399,6 +402,51 @@ impl Viewer {
             query: None,
             last_match: None,
             history: Vec::new(),
+        };
+        // A Delphi form saved in binary opens as the text Delphi shows for it: that is what
+        // somebody pressing `F3` on a `.dfm` came to read. `F4` goes back to the bytes.
+        if form {
+            viewer.as_form_text();
+        }
+        viewer
+    }
+
+    /// A binary Delphi form (`TPF0`) shown as its text. Returns false when the file is not one,
+    /// or cannot be read whole, and leaves the viewer as it was.
+    pub fn as_form_text(&mut self) -> bool {
+        if self.derived.is_some() || self.source.len() > DFM_LIMIT {
+            return false;
+        }
+        let len = self.source.len() as usize;
+        let Ok(bytes) = self.source.read_vec(0, len) else {
+            return false;
+        };
+        match crate::dfm::to_text(&bytes) {
+            Ok(text) => {
+                self.show_derived("form", text);
+                true
+            }
+            Err(_) => false,
+        }
+    }
+
+    /// A form inside a program, at its file offset: shown as its text, as if it were its own
+    /// `.dfm`. False when the bytes there are not a form.
+    pub fn form_at(&mut self, offset: u64) -> bool {
+        let len = self.source.len();
+        if offset >= len {
+            return false;
+        }
+        let want = (len - offset).min(DFM_LIMIT) as usize;
+        let Ok(bytes) = self.source.read_vec(offset, want) else {
+            return false;
+        };
+        match crate::dfm::to_text(&bytes) {
+            Ok(text) => {
+                self.show_derived("form", text);
+                true
+            }
+            Err(_) => false,
         }
     }
 

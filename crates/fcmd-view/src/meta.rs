@@ -104,6 +104,105 @@ pub(crate) fn pe_resource(rsrc: &[u8], kind: u32) -> Option<(u32, u32)> {
     Some((le32(rsrc, leaf)?, le32(rsrc, leaf + 4)?))
 }
 
+/// Every resource of a type, by name: the name (`#12` for a numbered one), and the RVA and
+/// size of its first language's data. Delphi keeps its forms and its package information as
+/// named `RCDATA`, which is why this reads names where [`pe_resource`] skips them.
+pub(crate) fn pe_resources(rsrc: &[u8], kind: u32) -> Vec<(String, u32, u32)> {
+    let root_named = le16(rsrc, 12).unwrap_or(0) as usize;
+    let root_ids = le16(rsrc, 14).unwrap_or(0) as usize;
+    let Some(dir) = (0..(root_named + root_ids).min(4096)).find_map(|i| {
+        let at = 16 + i * 8;
+        let id = le32(rsrc, at)?;
+        let off = le32(rsrc, at + 4)?;
+        (id == kind && off & 0x8000_0000 != 0).then_some((off & 0x7FFF_FFFF) as usize)
+    }) else {
+        return Vec::new();
+    };
+    let named = le16(rsrc, dir + 12).unwrap_or(0) as usize;
+    let ids = le16(rsrc, dir + 14).unwrap_or(0) as usize;
+    let mut out = Vec::new();
+    for i in 0..(named + ids).min(4096) {
+        let at = dir + 16 + i * 8;
+        let (Some(name), Some(mut off)) = (le32(rsrc, at), le32(rsrc, at + 4)) else {
+            break;
+        };
+        let label = if name & 0x8000_0000 != 0 {
+            let s = (name & 0x7FFF_FFFF) as usize;
+            let n = le16(rsrc, s).unwrap_or(0) as usize;
+            let units: Vec<u16> = (0..n.min(256))
+                .filter_map(|k| le16(rsrc, s + 2 + k * 2))
+                .collect();
+            String::from_utf16_lossy(&units)
+        } else {
+            format!("#{name}")
+        };
+        // The language level: the first one.
+        if off & 0x8000_0000 != 0 {
+            let lang = (off & 0x7FFF_FFFF) as usize;
+            let count = le16(rsrc, lang + 12).unwrap_or(0) as usize
+                + le16(rsrc, lang + 14).unwrap_or(0) as usize;
+            if count == 0 {
+                continue;
+            }
+            let Some(leaf) = le32(rsrc, lang + 16 + 4) else {
+                continue;
+            };
+            off = leaf;
+        }
+        if off & 0x8000_0000 != 0 {
+            continue;
+        }
+        let leaf = off as usize;
+        if let (Some(rva), Some(size)) = (le32(rsrc, leaf), le32(rsrc, leaf + 4)) {
+            out.push((label, rva, size));
+        }
+    }
+    out
+}
+
+/// What Delphi's `PACKAGEINFO` resource says: which compiler made the module, the packages it
+/// needs and the units it is made of.
+pub(crate) struct PackageInfo {
+    pub producer: &'static str,
+    pub requires: Vec<String>,
+    pub units: Vec<String>,
+}
+
+/// `PACKAGEINFO`, as `GetPackageInfo` reads it: flags, the required packages (a hash byte and
+/// a name each) and the contained units (a flags byte, a hash byte and a name each).
+pub(crate) fn package_info(b: &[u8]) -> Option<PackageInfo> {
+    let flags = le32(b, 0)?;
+    let producer = match (flags >> 26) & 3 {
+        3 => "Delphi",
+        2 => "C++Builder",
+        1 => "unknown",
+        _ => "Delphi 3 or older",
+    };
+    let mut at = 4;
+    let names = |at: &mut usize, skip: usize| -> Option<Vec<String>> {
+        let count = le32(b, *at)? as usize;
+        *at += 4;
+        let mut v = Vec::new();
+        for _ in 0..count.min(10_000) {
+            *at += skip;
+            let s = cstr(b, *at);
+            *at += s.len() + 1;
+            if *at > b.len() {
+                return None;
+            }
+            v.push(s);
+        }
+        Some(v)
+    };
+    let requires = names(&mut at, 1)?;
+    let units = names(&mut at, 2)?;
+    Some(PackageInfo {
+        producer,
+        requires,
+        units,
+    })
+}
+
 /// One block of a version resource: its key, where its value is and how long, where its
 /// children start and where it ends.
 struct Block {
@@ -864,6 +963,56 @@ mod tests {
         // Garbage is nothing, not a panic.
         assert!(pe_version(&root[..10]).is_empty());
         assert!(pe_version(&[0xFF; 64]).is_empty());
+    }
+
+    /// Delphi's `RCDATA` is named: a form is found by its name, and `PACKAGEINFO` says the
+    /// producer, the packages and the units.
+    #[test]
+    fn delphi_resources_are_read_by_name_and_the_package_info_by_its_layout() {
+        let mut r = vec![0u8; 200];
+        let w16 =
+            |r: &mut Vec<u8>, at: usize, v: u16| r[at..at + 2].copy_from_slice(&v.to_le_bytes());
+        let w32 =
+            |r: &mut Vec<u8>, at: usize, v: u32| r[at..at + 4].copy_from_slice(&v.to_le_bytes());
+        // Root: one numbered entry, RCDATA (10), to the directory at 24.
+        w16(&mut r, 14, 1);
+        w32(&mut r, 16, 10);
+        w32(&mut r, 20, 0x8000_0000 | 24);
+        // Names: one named entry, its string at 100, its languages at 48.
+        w16(&mut r, 24 + 12, 1);
+        w32(&mut r, 24 + 16, 0x8000_0000 | 100);
+        w32(&mut r, 24 + 20, 0x8000_0000 | 48);
+        // Languages: one, to the leaf at 72.
+        w16(&mut r, 48 + 14, 1);
+        w32(&mut r, 48 + 16, 0x409);
+        w32(&mut r, 48 + 20, 72);
+        w32(&mut r, 72, 0x5000);
+        w32(&mut r, 76, 1234);
+        w16(&mut r, 100, 6);
+        for (i, u) in "TFORM1".encode_utf16().enumerate() {
+            w16(&mut r, 102 + i * 2, u);
+        }
+        assert_eq!(
+            pe_resources(&r, 10),
+            vec![("TFORM1".to_string(), 0x5000, 1234)]
+        );
+        assert!(pe_resources(&r, 16).is_empty());
+
+        let mut p = Vec::new();
+        p.extend_from_slice(&(3u32 << 26).to_le_bytes());
+        p.extend_from_slice(&1u32.to_le_bytes());
+        p.push(0x11);
+        p.extend_from_slice(b"rtl\0");
+        p.extend_from_slice(&2u32.to_le_bytes());
+        p.extend_from_slice(&[0, 0x22]);
+        p.extend_from_slice(b"Unit1\0");
+        p.extend_from_slice(&[0, 0x33]);
+        p.extend_from_slice(b"System.SysUtils\0");
+        let info = package_info(&p).unwrap();
+        assert_eq!(info.producer, "Delphi");
+        assert_eq!(info.requires, ["rtl"]);
+        assert_eq!(info.units, ["Unit1", "System.SysUtils"]);
+        assert!(package_info(&p[..p.len() - 4]).is_none(), "cut short");
     }
 
     #[test]

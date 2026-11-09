@@ -299,3 +299,26 @@ scrolling for a difference that is not there.
 Both files have to be on this disk and under 16 MiB: the whole of each is read into memory to
 line them up, so a file on a server or inside an archive says so by name rather than fetching
 a copy you did not ask for.
+
+# Delphi
+
+Delphi's own files are read the way Delphi shows them.
+
+**Forms.** A `.dfm`, `.fmx`, `.lfm` or `.xfm` saved as text is coloured — `object`, `end`,
+the properties, the strings, the binary data in `{ … }`. One saved in **binary**, which starts
+with `TPF0` and which older projects keep, opens on the text Delphi's *View as Text* would
+show: the objects nested, `inherited` and `inline` where they are, every property `Name =
+value`, sets in `[ … ]`, lists in `( … )`, collections in `< … >` and binary data as hex. `F4`
+goes to the bytes, and back.
+
+**Programs.** `F11` on an `.exe`, `.dll` or `.bpl` built with Delphi or C++Builder has a
+*Delphi* part: which of the two built it, the packages it needs, how many units it holds and
+their names, and every form inside it by name and class. `Enter` on a form opens it as text,
+as if it were its own `.dfm`.
+
+**Sources and projects.** `.pas`, `.dpr`, `.dpk`, `.lpr`, `.pp` and `.inc` are coloured as
+Pascal; `.dproj`, `.groupproj` and `.cbproj` as XML; `.dof` and `.dsk` as INI.
+
+**What the IDE leaves behind.** The group `<delphi>` — `*.~*`, `__history`, `__recovery`,
+`*.dcu`, `*.identcache`, `*.local`, `*.dsk` and the rest — is drawn dim, as temporary files
+are, and `Gray +` with `<delphi>` selects it all for `F8`.

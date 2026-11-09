@@ -7,6 +7,7 @@
 pub mod asm;
 pub mod base64;
 pub mod decode;
+pub mod dfm;
 pub mod diff;
 pub mod disasm;
 pub mod il;

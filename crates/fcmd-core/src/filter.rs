@@ -123,7 +123,7 @@ impl Groups {
     }
 }
 
-/// The three groups FAR ships with. They are data, not policy: a caller is free to replace
+/// The three groups FAR ships with, and `<delphi>`. They are data, not policy: a caller is free to replace
 /// them wholesale before parsing.
 pub fn default_groups() -> Groups {
     let mut groups = Groups::new();
@@ -135,6 +135,14 @@ pub fn default_groups() -> Groups {
     groups.insert(
         "temp",
         "*.tmp,*.temp,*.bak,*.old,*.orig,*.rej,*.swp,*.swo,*~,.#*,*.$$$",
+    );
+    // What Delphi and Lazarus leave beside a project: the editor's backups (`*.~pas`), the
+    // `__history` and `__recovery` folders, compiled units and the IDE's caches. Coloured as
+    // temporary, and `Gray +` with `<delphi>` selects them all for `F8`.
+    groups.insert(
+        "delphi",
+        "*.~*,__history,__recovery,*.dcu,*.ppu,*.identcache,*.local,*.dsk,*.stat,*.rsm,\
+         *.drc,*.dsm,*.tvsconfig,*.compiled,*.bak",
     );
     groups.insert(
         "exec",
@@ -1593,6 +1601,19 @@ mod tests {
 
     #[test]
     fn a_group_expands_to_its_mask_list() {
+        // Delphi's leftovers, by the group a selection or a colour names.
+        let delphi = masks("<delphi>");
+        for name in [
+            "Unit1.~pas",
+            "Unit1.dcu",
+            "__history",
+            "Project1.identcache",
+            "Main.~dfm",
+        ] {
+            assert!(delphi.matches_name(name), "{name}");
+        }
+        assert!(!delphi.matches_name("Unit1.pas"));
+        assert!(!delphi.matches_name("Main.dfm"));
         let set = masks("<arc>|*.rar");
         assert!(set.matches_name("sources.zip"));
         assert!(!set.matches_name("sources.rar"));
@@ -1610,7 +1631,8 @@ mod tests {
     #[test]
     fn the_predefined_groups_cover_archives_temporaries_and_executables() {
         let groups = default_groups();
-        assert_eq!(groups.len(), 3);
+        // FAR's three, and Delphi's leftovers.
+        assert_eq!(groups.len(), 4);
         assert!(masks("<arc>").matches_name("x.7z"));
         assert!(masks("<temp>").matches_name("x.tmp"));
         assert!(masks("<exec>").matches_name("install.sh"));
