@@ -190,7 +190,8 @@ beside them — FAR's habit, and 4DOS's before that. `Ctrl+Z` writes one: the di
 what the directory already says about the file under the cursor, and an empty answer takes the
 line away. `Ctrl+6` shows the names with their descriptions, `Ctrl+7` adds the size and the
 time, the information panel (`Ctrl+L`) spells out the one under the cursor, and the panel's
-own status line shows it beside the size and the date.
+own status line shows it beside the size and the date. That line gives the size whole, in
+bytes, as FAR's does; the column above it says it short.
 
 The file travels with the directory, which is the point of it: a folder copied to a memory
 stick takes its descriptions along. And a description follows its file: `F5` writes one at the

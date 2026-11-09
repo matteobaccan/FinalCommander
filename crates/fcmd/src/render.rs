@@ -2639,10 +2639,12 @@ fn status_hint(app: &App) -> String {
 fn cursor_line(app: &App, panel: &crate::panel::Panel) -> String {
     match panel.current() {
         Some(e) => {
+            // The exact size, in bytes, as FAR's status line has it: the column above already
+            // says it short, and this line is where the whole number is read.
             let size = if e.kind.is_dirlike() {
                 String::new()
             } else {
-                format!("  {}", fcmd_core::format_size(e.size))
+                format!("  {}", e.size)
             };
             let time = e
                 .mtime
@@ -4458,7 +4460,10 @@ pub fn natural_cmp_bytes(a: &[u8], b: &[u8], case_sensitive: bool) -> Ordering {
         app.handle_input(Input::Key("Down".parse().unwrap()));
         app.handle_input(Input::Key("Down".parse().unwrap()));
         let out = frame(&mut app, 80, 24);
-        assert!(out.contains("Cargo.toml  412 B"), "{out}");
+        assert!(
+            out.contains("Cargo.toml  412  "),
+            "the size in bytes: {out}"
+        );
     }
 
     /// The plugin list with every example plugin loaded: twenty-four commands in a list that

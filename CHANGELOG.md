@@ -68,6 +68,8 @@ Notable changes, newest first. The format follows
 
 ### Changed
 
+- **The panel's status line gives the size in bytes**, whole, as FAR's does (`AGENTS.md  22858
+  2026-11-09 08:39`); the size column keeps the short form.
 - **The AI service's address follows its protocol.** Changing the protocol in the dialog
   rewrites the address for it, keeping the host; an address with no scheme gets `http` on this
   machine and `https` elsewhere, and a bare host gets the protocol's path.
@@ -96,6 +98,9 @@ Notable changes, newest first. The format follows
 - **A question out to the AI looked like nothing happening.** The status line's corner now
   shows the service and the seconds it has been thinking, with a turning wheel, until the
   answer or the error is back.
+- **Discarding a new file in the git panel on Windows** said there was no wastebasket: git
+  names the repository's top with `/`, and the wastebasket refuses a path with both
+  separators. The path is now said with `\` only.
 - **Menus in a short window.** A dropdown taller than the window scrolls with the cursor,
   with `▲`/`▼` on its frame, and it hangs right under the bar, with no empty row between.
 - **`Esc` after a quick search** closes the box and leaves the cursor on the row it found, as

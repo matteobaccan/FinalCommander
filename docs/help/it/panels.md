@@ -203,7 +203,8 @@ una: il dialogo si apre su quello che la cartella già dice del file sotto il cu
 risposta vuota porta via la riga. `Ctrl+6` mostra i nomi con le loro descrizioni, `Ctrl+7`
 aggiunge la dimensione e l'orario, il pannello informativo (`Ctrl+L`) riporta per esteso quella
 del file sotto il cursore, e la riga di stato del pannello la mostra accanto alla dimensione e
-alla data.
+alla data. Quella riga dà la dimensione intera, in byte, come quella di FAR; la colonna sopra
+la dice in breve.
 
 Il file viaggia con la cartella, che è il punto di tutto: una cartella copiata su una chiavetta
 si porta dietro le descrizioni. E una descrizione segue il suo file: `F5` ne scrive una anche
