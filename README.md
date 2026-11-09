@@ -291,8 +291,8 @@ every key on the screen you are looking at does.
   the bytes as instructions.
 - **Editor** (`F4`): undo over the session, column blocks, search and replace, an atomic save,
   and syntax colouring for Rust, C, C++, Java, C#, JavaScript, TypeScript, PHP, Python, Ruby,
-  Go, shell, SQL, HTML, XML, CSS, Markdown, JSON, TOML, YAML, INI, Make, Dockerfile, Lua and
-  Perl. On a binary it is a hex editor instead, with a patch list and an assembler.
+  Go, shell, SQL, HTML, XML, CSS, Markdown, JSON, TOML, YAML, INI, Make, Dockerfile, Lua,
+  Perl, Pascal and Delphi. On a binary it is a hex editor instead, with a patch list and an assembler.
 - **Archives**: zip (and the packages that are zips — `.jar`, `.apk`, `.docx`…), 7z, the tar
   family (plain, gzip, bzip2, xz, zstd), `ar` and `.deb`, `cpio` and `rpm`, and a single `.gz`
   or `.xz`, read in process by pure-Rust decoders, with no `7z.dll`. `Enter` opens one as a

@@ -19,7 +19,7 @@ colonna di numeri senza toccare quello che le sta accanto.
 
 Un file il cui nome dice cos'è — Rust, C, C++, Java, C#, JavaScript, TypeScript, PHP, Python,
 Ruby, Go, shell, SQL, HTML, XML, CSS, Markdown, JSON, TOML, YAML, INI, Make, Dockerfile, Lua,
-Perl — viene colorato mentre lo leggi, e la riga di stato nomina il linguaggio, così vedi
+Perl, Pascal e Delphi — viene colorato mentre lo leggi, e la riga di stato nomina il linguaggio, così vedi
 subito quando un file viene letto come qualcosa che non intendevi. I colori vengono dal tema,
 quindi lo seguono. `ui.syntax = false` in `fcmd.toml` li spegne.
 

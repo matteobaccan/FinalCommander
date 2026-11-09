@@ -92,6 +92,8 @@ pub enum Carry {
     None,
     /// Inside `/* … */`, `<!-- … -->`, `=begin … =end`.
     Block,
+    /// Inside the language's second kind of block comment: Pascal's `(* … *)`.
+    AltBlock,
     /// Inside a string that is allowed to span lines, with the quote that will end it.
     Str(char),
     /// Inside a Markdown fence, or a here-document.
@@ -133,7 +135,7 @@ impl Syntax {
 
         // A line that begins inside something started earlier: finish that first.
         match state.carry {
-            Carry::Block => {
+            Carry::Block | Carry::AltBlock => {
                 let (end, done) = self.close_block(text, 0, &mut state);
                 spans.push(Span {
                     start: 0,
@@ -183,6 +185,36 @@ impl Syntax {
                     class: Class::Comment,
                 });
                 return (spans, state);
+            }
+
+            // Pascal's `{$IFDEF DEBUG}` is a compiler directive written like a comment.
+            if self.case_insensitive && rest.starts_with("{$") {
+                let end = rest.find('}').map_or(text.len(), |e| i + e + 1);
+                spans.push(Span {
+                    start: i,
+                    end,
+                    class: Class::Preproc,
+                });
+                i = end;
+                continue;
+            }
+
+            if let Some((open, _)) = self.alt_block_comment {
+                if rest.starts_with(open) {
+                    state.carry = Carry::AltBlock;
+                    state.depth = 1;
+                    let (end, done) = self.close_block(text, i + open.len(), &mut state);
+                    spans.push(Span {
+                        start: i,
+                        end,
+                        class: Class::Comment,
+                    });
+                    if !done {
+                        return (spans, state);
+                    }
+                    i = end;
+                    continue;
+                }
             }
 
             if let Some((open, _)) = self.block_comment {
@@ -249,6 +281,13 @@ impl Syntax {
             if is_word_start(ch) {
                 let end = scan_word(text, i);
                 let word = &text[i..end];
+                let lower;
+                let word = if self.case_insensitive {
+                    lower = word.to_ascii_lowercase();
+                    lower.as_str()
+                } else {
+                    word
+                };
                 let class = if self.keywords.contains(&word) {
                     Some(Class::Keyword)
                 } else if self.types.contains(&word) {
@@ -276,10 +315,16 @@ impl Syntax {
 
     /// Where the block comment that is open ends, and whether it ended at all.
     fn close_block(&self, text: &str, from: usize, state: &mut State) -> (usize, bool) {
-        let Some((open, close)) = self.block_comment else {
+        let pair = if state.carry == Carry::AltBlock {
+            self.alt_block_comment
+        } else {
+            self.block_comment
+        };
+        let Some((open, close)) = pair else {
             state.carry = Carry::None;
             return (text.len(), true);
         };
+        let carry = state.carry;
         let bytes = text.as_bytes();
         let mut i = from;
         while i < bytes.len() {
@@ -299,7 +344,11 @@ impl Syntax {
             }
             i = step(text, i);
         }
-        state.carry = Carry::Block;
+        state.carry = if carry == Carry::AltBlock {
+            Carry::AltBlock
+        } else {
+            Carry::Block
+        };
         if state.depth == 0 {
             state.depth = 1;
         }
@@ -816,6 +865,52 @@ mod tests {
 
     /// Rust nests block comments and C does not, which is a real difference and the one
     /// place where getting it wrong colours the rest of a file.
+    #[test]
+    fn pascal_has_two_block_comments_directives_and_words_in_any_case() {
+        let pas = tables::of_name("unit1.PAS").expect("Pascal");
+        assert_eq!(pas.name, "Pascal");
+        let classes = |line: &str, state: State| {
+            let (spans, state) = pas.line(line, state);
+            let text: Vec<(String, Class)> = spans
+                .iter()
+                .map(|s| (line[s.start..s.end].to_string(), s.class))
+                .collect();
+            (text, state)
+        };
+        let (spans, _) = classes("BEGIN WriteLn('it''s'); end;", State::default());
+        assert!(
+            spans.contains(&("BEGIN".into(), Class::Keyword)),
+            "{spans:?}"
+        );
+        assert!(spans.contains(&("end".into(), Class::Keyword)), "{spans:?}");
+        assert!(
+            spans.iter().any(|(t, c)| t == "'it'" && *c == Class::Str),
+            "{spans:?}"
+        );
+        let (spans, _) = classes("{$IFDEF DEBUG} x := 1; // done", State::default());
+        assert_eq!(spans[0], ("{$IFDEF DEBUG}".into(), Class::Preproc));
+        assert_eq!(spans.last().unwrap(), &("// done".into(), Class::Comment));
+        // `(* … *)` carried over a line, closed by `*)` and not by `}`.
+        let (spans, state) = classes("x := 2; (* a } still", State::default());
+        assert_eq!(
+            spans.last().unwrap(),
+            &("(* a } still".into(), Class::Comment)
+        );
+        assert_eq!(state.carry, Carry::AltBlock);
+        let (spans, state) = classes("comment *) var", state);
+        assert_eq!(spans[0], ("comment *)".into(), Class::Comment));
+        assert!(spans.contains(&("var".into(), Class::Keyword)));
+        assert_eq!(state.carry, Carry::None);
+        // `{ … }` across lines, closed by `}`.
+        let (_, state) = classes("{ a (* b", State::default());
+        assert_eq!(state.carry, Carry::Block);
+        let (spans, _) = classes("c } Integer", state);
+        assert!(
+            spans.contains(&("Integer".into(), Class::Type)),
+            "{spans:?}"
+        );
+    }
+
     #[test]
     fn rust_nests_block_comments_and_c_does_not() {
         let rust = of_name("main.rs").unwrap();
