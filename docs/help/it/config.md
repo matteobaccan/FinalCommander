@@ -70,6 +70,13 @@ model = "claude-sonnet-5-5"
 token_env = "ANTHROPIC_API_KEY"
 ```
 
+I modelli più recenti di OpenAI — quelli di ragionamento e GPT-5 — vogliono una richiesta
+un po' diversa: `max_completion_tokens` al posto di `max_tokens`, a volte il ruolo `developer`
+al posto di `system`, e una risposta non in streaming finché l'organizzazione non è
+verificata. fcmd manda a OpenAI il nome nuovo fin dall'inizio, e quando un servizio rifiuta una
+di queste cose e dice cosa vuole al suo posto, richiede nel modo indicato e se lo ricorda per
+la sessione.
+
 Non serve scriverli a mano: *Comandi → Servizi AI* li elenca come le sessioni di NetBox. `Ins`
 ne aggiunge uno con il suo dialogo (nome, protocollo, indirizzo, modello, variabile della
 chiave) — cambiare protocollo riscrive l'indirizzo per quel protocollo, sullo stesso host, e

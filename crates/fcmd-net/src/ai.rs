@@ -140,18 +140,111 @@ pub fn body_with(
         Api::OpenAi | Api::Ollama => {
             let mut messages = Vec::new();
             if !service.system.is_empty() {
-                messages.push(json!({"role": "system", "content": service.system}));
+                let role = if quirks(service).developer {
+                    "developer"
+                } else {
+                    "system"
+                };
+                messages.push(json!({"role": role, "content": service.system}));
             }
             messages.extend(turns);
             let mut body = json!({"model": service.model, "messages": messages});
             if service.api == Api::Ollama {
                 body["stream"] = json!(false);
             } else {
-                body["max_tokens"] = json!(max);
+                body[limit_key(service)] = json!(max);
             }
             body
         }
     }
+}
+
+/// What a service turned out to want that its protocol's usual request does not say: learnt
+/// from its own refusals, once each, and kept for the rest of the session.
+///
+/// OpenAI's newer models are where these come from. The reasoning ones — o1 and on, and
+/// GPT-5 — refuse `max_tokens` and want `max_completion_tokens`; some of them refuse the
+/// `system` role and want `developer`; and an organisation that is not verified may not
+/// stream them. The servers that speak OpenAI's protocol (llama.cpp, vLLM, LM Studio,
+/// OpenRouter, …) mostly know only the old names, so the guess starts from the host and a
+/// refusal corrects it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Quirks {
+    /// `max_completion_tokens` rather than `max_tokens`.
+    pub completion_tokens: bool,
+    /// The instructions under the `developer` role rather than `system`.
+    pub developer: bool,
+    /// The answer asked for whole, not streamed.
+    pub no_stream: bool,
+}
+
+fn quirk_map() -> &'static std::sync::Mutex<std::collections::HashMap<String, Quirks>> {
+    static MAP: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, Quirks>>> =
+        std::sync::OnceLock::new();
+    MAP.get_or_init(Default::default)
+}
+
+/// What is known about this service: what it said, or the guess from its host.
+pub fn quirks(service: &Service) -> Quirks {
+    if let Some(q) = quirk_map()
+        .lock()
+        .ok()
+        .and_then(|m| m.get(&service.url).copied())
+    {
+        return q;
+    }
+    let host = service
+        .url
+        .split("//")
+        .nth(1)
+        .unwrap_or(&service.url)
+        .split(['/', ':'])
+        .next()
+        .unwrap_or("");
+    Quirks {
+        completion_tokens: service.api == Api::OpenAi && host == "api.openai.com",
+        ..Quirks::default()
+    }
+}
+
+/// The name the answer's length limit goes under, for an OpenAI-style service.
+pub fn limit_key(service: &Service) -> &'static str {
+    if quirks(service).completion_tokens {
+        "max_completion_tokens"
+    } else {
+        "max_tokens"
+    }
+}
+
+/// A `400` that says what the service wants instead: learn it, and say whether there was
+/// anything to learn, so the caller asks again. Each lesson is learnt once, so a service that
+/// refuses everything is asked at most once per kind of refusal.
+pub fn learn_from_refusal(service: &Service, why: &str) -> bool {
+    if service.api != Api::OpenAi {
+        return false;
+    }
+    let mut q = quirks(service);
+    let before = q;
+    let says =
+        |word: &str| why.contains(&format!("'{word}'")) || why.contains(&format!("\"{word}\""));
+    // "Unsupported parameter: 'max_tokens' … Use 'max_completion_tokens' instead", or the
+    // other way round from a server that knows only the old name.
+    if says(limit_key(service)) || why.contains("max_completion_tokens") && !q.completion_tokens {
+        q.completion_tokens = !q.completion_tokens;
+    } else if says("system") || why.contains("developer") && !q.developer {
+        // "'messages[0].role' does not support 'system' with this model."
+        q.developer = true;
+    } else if (says("stream") || why.contains("stream")) && !q.no_stream {
+        // "Your organization must be verified to stream this model."
+        q.no_stream = true;
+    }
+    if q == before {
+        return false;
+    }
+    if let Ok(mut m) = quirk_map().lock() {
+        m.insert(service.url.clone(), q);
+    }
+    true
 }
 
 /// The answer's text out of the service's reply, or what the service said went wrong.
@@ -424,32 +517,44 @@ pub async fn ask_streaming(
         .user_agent(concat!("fcmd/", env!("CARGO_PKG_VERSION")))
         .build()
         .map_err(|e| e.to_string())?;
-    let mut body = body_with(service, earlier, question, files);
-    body["stream"] = json!(true);
-    let mut request = client
-        .post(endpoint(service.api, &service.url))
-        .header(reqwest::header::CONTENT_TYPE, "application/json")
-        .body(body.to_string());
-    if let Some(token) = &service.token {
-        request = match service.api {
-            Api::Anthropic => request
-                .header("x-api-key", token)
-                .header("anthropic-version", "2023-06-01"),
-            Api::OpenAi | Api::Ollama => request.bearer_auth(token),
-        };
-    } else if service.api == Api::Anthropic {
-        request = request.header("anthropic-version", "2023-06-01");
-    }
-    let mut response = request.send().await.map_err(|e| e.to_string())?;
-    let status = response.status();
-    if !status.is_success() {
+    // Asked again when the service refused something it then named — the length limit's
+    // name, the `system` role, streaming — once per lesson; see [`learn_from_refusal`].
+    let mut tries = 0;
+    let mut response = loop {
+        tries += 1;
+        let mut body = body_with(service, earlier, question, files);
+        if !quirks(service).no_stream {
+            body["stream"] = json!(true);
+        }
+        let mut request = client
+            .post(endpoint(service.api, &service.url))
+            .header(reqwest::header::CONTENT_TYPE, "application/json")
+            .body(body.to_string());
+        if let Some(token) = &service.token {
+            request = match service.api {
+                Api::Anthropic => request
+                    .header("x-api-key", token)
+                    .header("anthropic-version", "2023-06-01"),
+                Api::OpenAi | Api::Ollama => request.bearer_auth(token),
+            };
+        } else if service.api == Api::Anthropic {
+            request = request.header("anthropic-version", "2023-06-01");
+        }
+        let response = request.send().await.map_err(|e| e.to_string())?;
+        let status = response.status();
+        if status.is_success() {
+            break response;
+        }
         let text = response.text().await.unwrap_or_default();
         let why = serde_json::from_str::<Value>(&text)
             .ok()
             .and_then(|v| answer(service.api, &v).err())
             .unwrap_or_else(|| short(&text));
+        if tries <= 3 && status.as_u16() == 400 && learn_from_refusal(service, &why) {
+            continue;
+        }
         return Err(format!("HTTP {status}: {why}"));
-    }
+    };
     let mut stream = Stream::default();
     while let Some(chunk) = response.chunk().await.map_err(|e| e.to_string())? {
         let added = stream.feed(&chunk);
@@ -889,6 +994,97 @@ mod tests {
         assert_eq!(pieces, ["Hel", "lo"]);
         let request = server.join().unwrap();
         assert!(request.contains("\"stream\":true"), "{request}");
+    }
+
+    /// OpenAI's newer models refuse `max_tokens`: OpenAI itself is sent `max_completion_tokens`,
+    /// another server the old name, and a server that refuses the name it got is asked again
+    /// once with the other, and remembered.
+    #[tokio::test]
+    async fn the_length_limit_goes_under_the_name_the_service_wants() {
+        use std::io::{Read, Write};
+        let mut openai = service(Api::OpenAi);
+        openai.url = "https://api.openai.com/v1/chat/completions".into();
+        assert!(body(&openai, "q", &[])
+            .get("max_completion_tokens")
+            .is_some());
+        assert!(body(&openai, "q", &[]).get("max_tokens").is_none());
+        let mut local = service(Api::OpenAi);
+        local.url = "http://localhost:8080/v1/chat/completions".into();
+        assert!(body(&local, "q", &[]).get("max_tokens").is_some());
+
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = std::thread::spawn(move || {
+            let mut seen = Vec::new();
+            for _ in 0..2 {
+                let (mut sock, _) = listener.accept().unwrap();
+                let mut got = Vec::new();
+                let mut buf = [0u8; 4096];
+                loop {
+                    let n = sock.read(&mut buf).unwrap();
+                    got.extend_from_slice(&buf[..n]);
+                    let text = String::from_utf8_lossy(&got);
+                    if let Some(end) = text.find("\r\n\r\n") {
+                        let len = text[..end]
+                            .lines()
+                            .find_map(|l| {
+                                l.to_ascii_lowercase()
+                                    .strip_prefix("content-length:")
+                                    .map(|v| v.trim().parse::<usize>().unwrap())
+                            })
+                            .unwrap_or(0);
+                        if got.len() >= end + 4 + len {
+                            break;
+                        }
+                    }
+                }
+                let request = String::from_utf8_lossy(&got).into_owned();
+                if request.contains("\"max_tokens\"") {
+                    let body = r#"{"error":{"message":"Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.","type":"invalid_request_error"}}"#;
+                    write!(sock, "HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", body.len(), body).unwrap();
+                } else {
+                    write!(sock, "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\ndata: {{\"choices\":[{{\"delta\":{{\"content\":\"ok\"}}}}]}}\n\ndata: [DONE]\n\n").unwrap();
+                }
+                seen.push(request);
+            }
+            seen
+        });
+        let mut s = service(Api::OpenAi);
+        s.url = format!("http://127.0.0.1:{port}/v1/chat/completions");
+        let reply = ask_streaming(&s, &[], "hi", &[], |_| {}).await.unwrap();
+        assert_eq!(reply.text, "ok");
+        let seen = server.join().unwrap();
+        assert!(seen[0].contains("\"max_tokens\""), "the old name first");
+        assert!(
+            seen[1].contains("\"max_completion_tokens\""),
+            "then the one it asked for"
+        );
+        assert_eq!(limit_key(&s), "max_completion_tokens", "and remembered");
+
+        // The other two lessons OpenAI's newer models teach, learnt from their own words.
+        let mut o1 = service(Api::OpenAi);
+        o1.url = "https://example.invalid/o1/v1/chat/completions".into();
+        assert!(learn_from_refusal(
+            &o1,
+            "Unsupported value: 'messages[0].role' does not support 'system' with this model."
+        ));
+        assert_eq!(body(&o1, "q", &[])["messages"][0]["role"], "developer");
+        assert!(learn_from_refusal(
+            &o1,
+            "Your organization must be verified to stream this model."
+        ));
+        assert!(quirks(&o1).no_stream);
+        assert!(
+            !learn_from_refusal(
+                &o1,
+                "Your organization must be verified to stream this model."
+            ),
+            "each lesson once"
+        );
+        assert!(
+            !learn_from_refusal(&o1, "Invalid API key"),
+            "nothing to learn"
+        );
     }
 
     /// A whole round trip against a server on this machine that answers as Ollama does, and

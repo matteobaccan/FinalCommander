@@ -69,6 +69,12 @@ model = "claude-sonnet-5-5"
 token_env = "ANTHROPIC_API_KEY"
 ```
 
+OpenAI's newer models — the reasoning ones and GPT-5 — want a request shaped a little
+differently: `max_completion_tokens` rather than `max_tokens`, sometimes the `developer` role
+rather than `system`, and an answer not streamed until the organisation is verified. fcmd
+sends OpenAI the new name from the start, and when any service refuses one of these and says
+what it wants instead, asks again the way it said and remembers it for the session.
+
 They need not be written by hand: *Commands → AI services* lists them as NetBox lists the
 sessions. `Ins` adds one through its dialog (name, protocol, address, model, the variable the
 key is in) — changing the protocol rewrites the address for it, on the same host, and an
