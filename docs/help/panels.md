@@ -357,7 +357,8 @@ When the program ends, its last screen stays up to be read, and the next key clo
 
 # Choosing files
 
-`Insert` selects the row and moves on. `Gray +` and `Gray -` select and unselect by a file
+`Insert` selects the row and moves on; `Shift+↓` does the same, and `Shift+↑` selects and moves
+up, for the keyboards that have no `Insert`. `Gray +` and `Gray -` select and unselect by a file
 mask; `Gray *` inverts. `Alt+letters` finds a name as you type; `Esc` closes the box and leaves the cursor on the name it found.
 
 The line `Gray +` asks for takes more than a mask. The masks come first, in the same grammar as

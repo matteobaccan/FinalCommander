@@ -371,7 +371,7 @@ panel.filter.quick          panel.filter.menu           panel.hidden.toggle
 panel.tab.new|close|next|prev|move|lock|name     panel.layout.toggle
 nav.enter  nav.parent  nav.root  nav.history.back|forward  nav.bookmark.set(N)|go(N)  nav.bookmarks
 nav.goto.path  nav.goto.fuzzy  nav.drives  nav.other.sync
-sel.toggle  sel.all  sel.none  sel.invert  sel.mask(+|-)  sel.ext  sel.restore
+sel.toggle  sel.toggle.up  sel.all  sel.none  sel.invert  sel.mask(+|-)  sel.ext  sel.restore
 file.view  file.view.internal  file.edit  file.edit.internal  file.edit.new
 file.copy  file.move  file.rename.inplace  file.mkdir  file.mkfile
 file.delete(trash|permanent|wipe)  file.link(hard|sym|rel)  file.attrs

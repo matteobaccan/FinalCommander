@@ -515,8 +515,13 @@ cmd = "nav.right"
 
 # ---------------------------------------------------------------- selection
 [[bind]]
-keys = ["Ins"]
+keys = ["Ins", "Shift+Down"]
 cmd = "sel.toggle"
+
+# `Shift` with the arrows marks a run, as in FAR, for the keyboards that have no `Ins`.
+[[bind]]
+keys = ["Shift+Up"]
+cmd = "sel.toggle.up"
 
 # FAR's own: Shift with the grey keys selects or clears everything. `Ctrl+Shift+A` is kept
 # for `sel.all` because `Ctrl+A` is the attributes dialog, as it is in FAR, and because a

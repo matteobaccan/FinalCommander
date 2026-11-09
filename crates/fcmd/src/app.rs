@@ -9775,15 +9775,18 @@ impl App {
                 });
             }
 
-            Command::SelToggle => {
+            Command::SelToggle | Command::SelToggleUp => {
+                // `Ins` and `Shift+↓` select and go down, `Shift+↑` selects and goes up: on a
+                // keyboard with no `Ins`, the arrows with `Shift` are how a run is marked.
+                let step = if cmd == Command::SelToggleUp { -1 } else { 1 };
                 if let Some(e) = self.panel().current() {
                     if e.is_selectable() {
                         let id = e.id;
                         self.panel_mut().selection.toggle(id);
                         self.panel_mut().rebuild();
-                        self.move_cursor(1);
                     }
                 }
+                self.move_cursor(step);
             }
             Command::SelAll => {
                 let listing = self.panel().listing.clone();
@@ -33829,6 +33832,35 @@ run = ["echo one", "echo two", "echo three"]
         // And the delete key has nothing to delete here.
         press(&mut app, "F8");
         assert!(app.mode.is_normal(), "F8 opened {:?}", app.mode);
+    }
+
+    /// A keyboard with no `Ins` marks a run with `Shift` and the arrows, as FAR does:
+    /// `Shift+↓` selects and goes down, `Shift+↑` selects and goes up.
+    #[test]
+    fn shift_with_the_arrows_marks_files_as_ins_does() {
+        let mut app = app();
+        let len = app.panels[0].listing.len();
+        assert!(len >= 4, "a listing to walk");
+        app.panels[0].cursor = 1;
+        press(&mut app, "Shift+Down");
+        press(&mut app, "Shift+Down");
+        assert_eq!(app.panels[0].cursor, 3);
+        assert_eq!(
+            app.panels[0].selection.len(),
+            2,
+            "two rows marked going down"
+        );
+        press(&mut app, "Shift+Up");
+        assert_eq!(app.panels[0].cursor, 2);
+        assert_eq!(
+            app.panels[0].selection.len(),
+            3,
+            "and the third on the way up"
+        );
+        // Over a marked row again, it is unmarked: the same toggle as `Ins`.
+        press(&mut app, "Shift+Up");
+        assert_eq!(app.panels[0].selection.len(), 2);
+        assert_eq!(app.panels[0].cursor, 1);
     }
 
     #[test]

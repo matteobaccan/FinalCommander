@@ -251,6 +251,8 @@ pub enum Command {
     NavBookmarks,
 
     SelToggle,
+    /// Select the row and move up: `Shift+↑`, the other half of `Shift+↓`.
+    SelToggleUp,
     SelAll,
     SelNone,
     SelInvert,
@@ -646,6 +648,7 @@ impl Command {
             Command::NavGotoPath,
             Command::NavBookmarks,
             Command::SelToggle,
+            Command::SelToggleUp,
             Command::SelAll,
             Command::SelNone,
             Command::SelInvert,
@@ -960,6 +963,7 @@ impl Command {
             Command::NavBookmarkGo(n) => format!("nav.bookmark.go({n})"),
             Command::NavBookmarks => "nav.bookmarks".into(),
             Command::SelToggle => "sel.toggle".into(),
+            Command::SelToggleUp => "sel.toggle.up".into(),
             Command::SelAll => "sel.all".into(),
             Command::SelNone => "sel.none".into(),
             Command::SelInvert => "sel.invert".into(),
@@ -1241,6 +1245,7 @@ impl Command {
             ("nav.bookmark.go", Some(a)) => Command::NavBookmarkGo(parse_digit(a)?),
             ("nav.bookmarks", _) => Command::NavBookmarks,
             ("sel.toggle", _) => Command::SelToggle,
+            ("sel.toggle.up", _) => Command::SelToggleUp,
             ("sel.all", _) => Command::SelAll,
             ("sel.none", _) => Command::SelNone,
             ("sel.invert", _) => Command::SelInvert,

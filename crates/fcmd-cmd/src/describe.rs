@@ -159,6 +159,7 @@ impl Command {
             Command::NavGotoPath => "type a path to go to",
 
             Command::SelToggle => "select this row, and move on",
+            Command::SelToggleUp => "select this row, and move up",
             Command::SelAll => "select everything",
             Command::SelNone => "select nothing",
             Command::SelInvert => "select what is not selected, and vice versa",

@@ -283,14 +283,25 @@ pub fn kill(pid: u32) -> Result<(), String> {
 /// One process, in as much detail as this platform and this user's rights allow.
 ///
 /// `None` means there is no such process, or nothing on this platform can be asked.
+/// A peak is never below what it is the peak of. The counters come in two readings — the
+/// kernel's table for every process, then the process's own answer a moment later — and a
+/// process that grew in between would show a peak lower than now.
+#[cfg(any(target_os = "linux", windows))]
+fn peaks_hold(mut d: Details) -> Details {
+    d.memory_peak = d.memory_peak.max(d.memory);
+    d.virtual_peak = d.virtual_peak.max(d.virtual_size);
+    d.swap_peak = d.swap_peak.max(d.swap);
+    d
+}
+
 pub fn details(pid: u32) -> Option<Details> {
     #[cfg(target_os = "linux")]
     {
-        linux_details(pid)
+        linux_details(pid).map(peaks_hold)
     }
     #[cfg(windows)]
     {
-        super::windows::details(pid)
+        super::windows::details(pid).map(peaks_hold)
     }
     #[cfg(not(any(target_os = "linux", windows)))]
     {
