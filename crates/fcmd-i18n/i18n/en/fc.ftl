@@ -1396,6 +1396,7 @@ ai-send-diff = The staged diff goes to { $host }
 ai-send-files = { $count } files, { $size }, will be sent to { $host } with the question.
 ai-asking = Asking { $name }…
 ai-busy = { $name } is thinking… { $secs }s
+ai-live-empty = Type a question on the command line: it goes to { $name }, and the conversation shows here as it goes.
 ai-failed = The AI did not answer: { $why }
 btn-send = Send
 

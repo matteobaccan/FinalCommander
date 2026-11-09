@@ -1384,6 +1384,7 @@ ai-send-diff = Подготовленный diff уходит на { $host }
 ai-send-files = Файлов: { $count }, { $size } — будут отправлены на { $host } вместе с вопросом.
 ai-asking = Спрашиваю { $name }…
 ai-busy = { $name } думает… { $secs } с
+ai-live-empty = Напишите вопрос в командной строке: он уйдёт к { $name }, а разговор появится здесь.
 ai-failed = ИИ не ответил: { $why }
 btn-send = Отправить
 

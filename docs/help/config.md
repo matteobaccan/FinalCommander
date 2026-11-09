@@ -40,7 +40,11 @@ The easiest way is the **AI** row of `Alt+F1` / `Alt+F2`: it turns the panel int
 your services. `F7` adds one, `F4` changes it, `F8` removes it. `Enter` logs in — fcmd asks the
 service for its list of models, which proves the address and the key without asking the model
 anything, and the status line says what came back (`HTTP 200 in 120 ms, 12 models`), or why it
-failed (a server that is not running, a wrong key). Then the panel is the **conversation**:
+failed (a server that is not running, a wrong key). Then the panel is the **conversation**,
+and the other panel shows it as it goes, like a quick view: the question you sent, the answer as
+the model writes it, and while it is still coming a turning wheel with the seconds it has been
+thinking. `Ctrl+Q` there gives the files back, to pick what goes into the context; `Ctrl+R` on
+the conversation builds it again and keeps it a conversation:
 
 * whatever you type on the command line under it goes to the AI, as the next turn of the same
   conversation — no prefix needed;

@@ -1355,6 +1355,7 @@ ai-send-diff = 已暂存的差异将发送到 { $host }
 ai-send-files = { $count } 个文件，{ $size }，将随问题发送到 { $host }。
 ai-asking = 正在询问 { $name }…
 ai-busy = { $name } 正在思考… { $secs } 秒
+ai-live-empty = 在命令行输入问题：它会发给 { $name }，对话会显示在这里。
 ai-failed = AI 没有回答：{ $why }
 btn-send = 发送
 

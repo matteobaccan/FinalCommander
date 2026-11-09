@@ -1386,6 +1386,7 @@ ai-send-diff = El diff preparado va a { $host }
 ai-send-files = { $count } archivos, { $size }, se enviarán a { $host } con la pregunta.
 ai-asking = Preguntando a { $name }…
 ai-busy = { $name } está pensando… { $secs } s
+ai-live-empty = Escribe una pregunta en la línea de órdenes: va a { $name }, y la conversación se ve aquí.
 ai-failed = La IA no respondió: { $why }
 btn-send = Enviar
 

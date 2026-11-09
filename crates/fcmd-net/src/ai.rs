@@ -255,9 +255,6 @@ pub async fn ask_thread(
     }
 }
 
-/// Where a service lists its models — the cheapest question that proves the address, the
-/// key and the protocol are right without asking the model anything: `…/models` beside an
-/// OpenAI or Anthropic endpoint, `…/api/tags` beside Ollama's chat.
 /// The address a question is posted to. A list of models pasted in place of the endpoint
 /// (`/api/tags`, `/v1/models`) is taken back to the endpoint beside it, and a bare
 /// `scheme://host[:port]` gets the protocol's usual path.
@@ -292,6 +289,177 @@ pub fn endpoint(api: Api, url: &str) -> String {
     url
 }
 
+/// An answer read as it is written: the bytes of a streamed reply go in as they come, and
+/// what each of them adds to the text comes out. It reads the three shapes a stream comes in
+/// — OpenAI's and Anthropic's server-sent events, Ollama's lines of JSON — and, for a server
+/// that ignored the request to stream, the whole reply once it is all there.
+#[derive(Debug, Default)]
+pub struct Stream {
+    pending: Vec<u8>,
+    whole: Vec<u8>,
+    pub text: String,
+    pub tokens_in: Option<u64>,
+    pub tokens_out: Option<u64>,
+    pub error: Option<String>,
+}
+
+impl Stream {
+    /// Bytes as they arrive; returns the text they add, which may be nothing yet.
+    pub fn feed(&mut self, bytes: &[u8]) -> String {
+        if self.whole.len() < 4 << 20 {
+            self.whole.extend_from_slice(bytes);
+        }
+        self.pending.extend_from_slice(bytes);
+        let mut added = String::new();
+        while let Some(at) = self.pending.iter().position(|b| *b == b'\n') {
+            let line: Vec<u8> = self.pending.drain(..=at).collect();
+            let line = String::from_utf8_lossy(&line).into_owned();
+            if let Some(piece) = self.line(&line) {
+                added.push_str(&piece);
+            }
+        }
+        self.text.push_str(&added);
+        added
+    }
+
+    /// The end of the reply: a last line with no newline after it, or a reply that was
+    /// never streamed at all, read whole.
+    pub fn finish(&mut self, api: Api) -> String {
+        let rest = std::mem::take(&mut self.pending);
+        let mut added = String::new();
+        if !rest.is_empty() {
+            if let Some(piece) = self.line(&String::from_utf8_lossy(&rest)) {
+                added.push_str(&piece);
+            }
+        }
+        if self.text.is_empty() && added.is_empty() && self.error.is_none() {
+            if let Ok(reply) = serde_json::from_slice::<Value>(&self.whole) {
+                let (i, o) = usage(api, &reply);
+                self.tokens_in = self.tokens_in.or(i);
+                self.tokens_out = self.tokens_out.or(o);
+                match answer(api, &reply) {
+                    Ok(text) => added = text,
+                    Err(e) => self.error = Some(e),
+                }
+            }
+        }
+        self.text.push_str(&added);
+        added
+    }
+
+    fn line(&mut self, line: &str) -> Option<String> {
+        let line = line.trim();
+        let data = line.strip_prefix("data:").map(str::trim).unwrap_or(line);
+        if data.is_empty()
+            || data == "[DONE]"
+            || line.starts_with("event:")
+            || line.starts_with(':')
+        {
+            return None;
+        }
+        let v: Value = serde_json::from_str(data).ok()?;
+        if let Some(error) = v.get("error") {
+            self.error = Some(
+                error
+                    .get("message")
+                    .and_then(Value::as_str)
+                    .map(str::to_string)
+                    .unwrap_or_else(|| error.to_string()),
+            );
+            return None;
+        }
+        let n = |p: &str| v.pointer(p).and_then(Value::as_u64);
+        for (i, o) in [
+            (n("/usage/prompt_tokens"), n("/usage/completion_tokens")),
+            (n("/prompt_eval_count"), n("/eval_count")),
+            (
+                n("/message/usage/input_tokens"),
+                n("/message/usage/output_tokens"),
+            ),
+            (n("/usage/input_tokens"), n("/usage/output_tokens")),
+        ] {
+            self.tokens_in = i.or(self.tokens_in);
+            self.tokens_out = o.or(self.tokens_out);
+        }
+        let s = |p: &str| v.pointer(p).and_then(Value::as_str).map(str::to_string);
+        s("/choices/0/delta/content")
+            .or_else(|| s("/delta/text"))
+            .or_else(|| s("/message/content"))
+            .or_else(|| s("/choices/0/message/content"))
+            .filter(|t| !t.is_empty())
+    }
+}
+
+/// Ask with the earlier turns, the answer read as it is written: `on_text` is called with
+/// each piece as it arrives, so it can be shown while the rest is still coming.
+pub async fn ask_streaming(
+    service: &Service,
+    earlier: &[Turn],
+    question: &str,
+    files: &[Attachment],
+    mut on_text: impl FnMut(&str) + Send,
+) -> Result<Reply, String> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(600))
+        .user_agent(concat!("fcmd/", env!("CARGO_PKG_VERSION")))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let mut body = body_with(service, earlier, question, files);
+    body["stream"] = json!(true);
+    let mut request = client
+        .post(endpoint(service.api, &service.url))
+        .header(reqwest::header::CONTENT_TYPE, "application/json")
+        .body(body.to_string());
+    if let Some(token) = &service.token {
+        request = match service.api {
+            Api::Anthropic => request
+                .header("x-api-key", token)
+                .header("anthropic-version", "2023-06-01"),
+            Api::OpenAi | Api::Ollama => request.bearer_auth(token),
+        };
+    } else if service.api == Api::Anthropic {
+        request = request.header("anthropic-version", "2023-06-01");
+    }
+    let mut response = request.send().await.map_err(|e| e.to_string())?;
+    let status = response.status();
+    if !status.is_success() {
+        let text = response.text().await.unwrap_or_default();
+        let why = serde_json::from_str::<Value>(&text)
+            .ok()
+            .and_then(|v| answer(service.api, &v).err())
+            .unwrap_or_else(|| short(&text));
+        return Err(format!("HTTP {status}: {why}"));
+    }
+    let mut stream = Stream::default();
+    while let Some(chunk) = response.chunk().await.map_err(|e| e.to_string())? {
+        let added = stream.feed(&chunk);
+        if !added.is_empty() {
+            on_text(&added);
+        }
+    }
+    let added = stream.finish(service.api);
+    if !added.is_empty() {
+        on_text(&added);
+    }
+    if let Some(e) = stream.error {
+        return Err(e);
+    }
+    if stream.text.is_empty() {
+        return Err(format!(
+            "no answer in the reply: {}",
+            short(&String::from_utf8_lossy(&stream.whole))
+        ));
+    }
+    Ok(Reply {
+        text: stream.text,
+        tokens_in: stream.tokens_in,
+        tokens_out: stream.tokens_out,
+    })
+}
+
+/// Where a service lists its models — the cheapest question that proves the address, the
+/// key and the protocol are right without asking the model anything: `…/models` beside an
+/// OpenAI or Anthropic endpoint, `…/api/tags` beside Ollama's chat.
 pub fn models_url(api: Api, url: &str) -> String {
     let url = endpoint(api, url);
     let url = url.as_str();
@@ -455,6 +623,51 @@ mod tests {
     }
 
     #[test]
+    fn a_streamed_answer_is_read_as_it_comes_in_each_shape() {
+        // OpenAI's events, cut in the middle of a line and of a character.
+        let sse = "data: {\"choices\":[{\"delta\":{\"content\":\"Ciao\"}}]}\n\ndata: {\"choices\":[{\"delta\":{\"content\":\" è\"}}]}\n\ndata: {\"choices\":[],\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":2}}\n\ndata: [DONE]\n\n";
+        let bytes = sse.as_bytes();
+        let cut = sse.find('è').unwrap() + 1;
+        let mut s = Stream::default();
+        let first = s.feed(&bytes[..20]);
+        assert_eq!(first, "");
+        s.feed(&bytes[20..cut]);
+        s.feed(&bytes[cut..]);
+        s.finish(Api::OpenAi);
+        assert_eq!(s.text, "Ciao è");
+        assert_eq!((s.tokens_in, s.tokens_out), (Some(3), Some(2)));
+
+        // Ollama's lines of JSON, the last without its newline.
+        let mut s = Stream::default();
+        s.feed(b"{\"message\":{\"content\":\"a\"},\"done\":false}\n");
+        s.feed(b"{\"message\":{\"content\":\"b\"},\"done\":true,\"prompt_eval_count\":5,\"eval_count\":6}");
+        s.finish(Api::Ollama);
+        assert_eq!(s.text, "ab");
+        assert_eq!((s.tokens_in, s.tokens_out), (Some(5), Some(6)));
+
+        // Anthropic's events.
+        let mut s = Stream::default();
+        s.feed(b"event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":7}}}\n\n");
+        s.feed(b"event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"hi\"}}\n\n");
+        s.feed(b"data: {\"type\":\"message_delta\",\"usage\":{\"output_tokens\":1}}\n\n");
+        s.finish(Api::Anthropic);
+        assert_eq!(s.text, "hi");
+        assert_eq!((s.tokens_in, s.tokens_out), (Some(7), Some(1)));
+
+        // A server that did not stream: the whole reply, read at the end.
+        let mut s = Stream::default();
+        s.feed(b"{\n  \"choices\": [{\"message\": {\"content\": \"whole\"}}]\n}");
+        s.finish(Api::OpenAi);
+        assert_eq!(s.text, "whole");
+
+        // An error said in the stream is the error.
+        let mut s = Stream::default();
+        s.feed(b"data: {\"error\":{\"message\":\"no model\"}}\n");
+        s.finish(Api::OpenAi);
+        assert_eq!(s.error.as_deref(), Some("no model"));
+    }
+
+    #[test]
     fn each_api_gets_its_own_body() {
         let files = [Attachment {
             name: "a.rs".into(),
@@ -516,6 +729,64 @@ mod tests {
         let r = json!({"prompt_eval_count": 3, "eval_count": 4});
         assert_eq!(usage(Api::Ollama, &r), (Some(3), Some(4)));
         assert_eq!(usage(Api::Ollama, &json!({})), (None, None));
+    }
+
+    /// A streamed answer over a real socket: the pieces reach the caller one by one, before
+    /// the reply is over, and the whole is what they add up to.
+    #[tokio::test]
+    async fn a_streamed_answer_arrives_in_pieces() {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = std::thread::spawn(move || {
+            let (mut sock, _) = listener.accept().unwrap();
+            let mut got = Vec::new();
+            let mut buf = [0u8; 4096];
+            loop {
+                let n = sock.read(&mut buf).unwrap();
+                got.extend_from_slice(&buf[..n]);
+                let text = String::from_utf8_lossy(&got);
+                if let Some(end) = text.find("\r\n\r\n") {
+                    let len = text[..end]
+                        .lines()
+                        .find_map(|l| {
+                            l.to_ascii_lowercase()
+                                .strip_prefix("content-length:")
+                                .map(|v| v.trim().parse::<usize>().unwrap())
+                        })
+                        .unwrap_or(0);
+                    if got.len() >= end + 4 + len {
+                        break;
+                    }
+                }
+            }
+            write!(
+                sock,
+                "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n"
+            )
+            .unwrap();
+            for piece in ["Hel", "lo"] {
+                write!(
+                    sock,
+                    "data: {{\"choices\":[{{\"delta\":{{\"content\":\"{piece}\"}}}}]}}\n\n"
+                )
+                .unwrap();
+                sock.flush().unwrap();
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            write!(sock, "data: [DONE]\n\n").unwrap();
+            String::from_utf8_lossy(&got).into_owned()
+        });
+        let mut s = service(Api::OpenAi);
+        s.url = format!("http://127.0.0.1:{port}/v1/chat/completions");
+        let mut pieces = Vec::new();
+        let reply = ask_streaming(&s, &[], "hi?", &[], |p| pieces.push(p.to_string()))
+            .await
+            .unwrap();
+        assert_eq!(reply.text, "Hello");
+        assert_eq!(pieces, ["Hel", "lo"]);
+        let request = server.join().unwrap();
+        assert!(request.contains("\"stream\":true"), "{request}");
     }
 
     /// A whole round trip against a server on this machine that answers as Ollama does, and

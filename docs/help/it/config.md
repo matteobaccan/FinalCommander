@@ -42,7 +42,10 @@ dei tuoi servizi. `F7` ne aggiunge uno, `F4` lo modifica, `F8` lo toglie. `Invio
 fcmd chiede al servizio l'elenco dei suoi modelli, che prova indirizzo e chiave senza chiedere
 niente al modello, e la riga di stato dice cosa è tornato (`HTTP 200 in 120 ms, 12 modelli`), o
 perché non è andata (un server che non è acceso, una chiave sbagliata). Da lì il pannello è la
-**conversazione**:
+**conversazione**, e l'altro pannello la mostra man mano, come una quick view: la domanda
+inviata, la risposta mentre il modello la scrive e, finché sta ancora arrivando, una rotellina
+che gira con i secondi di attesa. `Ctrl+Q` lì restituisce i file, per scegliere cosa va nel
+contesto; `Ctrl+R` sulla conversazione la ricostruisce e la lascia una conversazione:
 
 * quello che scrivi sulla riga di comando sotto di lui va all'AI, come seguito della stessa
   conversazione — senza prefissi;

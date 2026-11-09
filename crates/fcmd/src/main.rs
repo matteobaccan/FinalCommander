@@ -1930,7 +1930,13 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                 Request::AiAsk { query, token, dir } => {
                     let tx = tx.clone();
                     runtime.spawn(async move {
-                        let result = ask_ai(&query, token, &dir).await;
+                        let pieces = tx.clone();
+                        let progress = move |piece: &str| {
+                            let _ = pieces.send(Event::AiPartial {
+                                text: piece.to_string(),
+                            });
+                        };
+                        let result = ask_ai(&query, token, &dir, progress).await;
                         let _ = tx.send(Event::AiDone { result });
                     });
                 }
@@ -4763,6 +4769,7 @@ async fn ask_ai(
     query: &app::AiQuery,
     typed: Option<String>,
     dir: &std::path::Path,
+    progress: impl FnMut(&str) + Send,
 ) -> Result<app::AiAnswer, String> {
     use fcmd_net::ai::{Api, Attachment, Service};
     let cfg = &query.service;
@@ -4827,7 +4834,10 @@ async fn ask_ai(
         Some(file) => ai_turns(&std::fs::read_to_string(file).map_err(|e| e.to_string())?),
         None => Vec::new(),
     };
-    let reply = fcmd_net::ai::ask_thread(&service, &earlier, &query.question, &attachments).await?;
+    // Read as it is written, each piece handed on to be shown while the rest comes.
+    let reply =
+        fcmd_net::ai::ask_streaming(&service, &earlier, &query.question, &attachments, progress)
+            .await?;
     std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     let names: Vec<&str> = attachments.iter().map(|a| a.name.as_str()).collect();
     let mut meta = format!("*{} · {}", cfg.name, cfg.model);

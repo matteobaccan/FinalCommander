@@ -589,6 +589,8 @@ pub struct AiSession {
     pub files: Vec<PathBuf>,
     pub thread: Option<PathBuf>,
     pub sent: Vec<PathBuf>,
+    /// The question on its way, shown under the conversation until the answer replaces it.
+    pub asking: Option<String>,
 }
 
 /// Everything one question carries until it is sent: the service, the words, the files and
@@ -886,6 +888,10 @@ pub enum Event {
     /// A language model's answer, written into a Markdown file, or why there is none.
     AiDone {
         result: Result<AiAnswer, String>,
+    },
+    /// A piece of an answer still being written, to show while the rest comes.
+    AiPartial {
+        text: String,
     },
     /// A `sql:` query's rows, as a CSV file to view, or why there are none.
     SqlDone {
@@ -2512,6 +2518,8 @@ pub struct App {
     /// A question on its way: to which service, and since when. Drawn in the status line's
     /// corner with the seconds going by, so a slow model looks busy rather than dead.
     pub ai_busy: Option<(String, std::time::Instant)>,
+    /// What has come of the answer so far, while it is still being written.
+    pub ai_streamed: String,
     /// Size of the editor's text area, from the last frame.
     pub editor_size: (u16, u16),
     /// The decompilation we are waiting for, if any.
@@ -2893,6 +2901,7 @@ impl App {
             ai_session: None,
             ai_probing: None,
             ai_busy: None,
+            ai_streamed: String::new(),
             editor_size: (80, 20),
             decompile_id: None,
             sites,
@@ -3035,6 +3044,19 @@ impl App {
         if self.panels[index].temp_origin() == Some(":tools") {
             self.panels[index].loading = false;
             self.probe_tools(index);
+            return;
+        }
+        // The AI panels are built from the settings and the conversation, not from files:
+        // re-reading one builds it again, and the command line still goes to the model.
+        if self.panels[index].temp_origin() == Some(":ai") {
+            self.panels[index].loading = false;
+            self.open_ai_panel(index);
+            return;
+        }
+        if self.panels[index].temp_origin() == Some(":aichat") && self.ai_session.is_some() {
+            self.panels[index].loading = false;
+            self.show_ai_session();
+            self.quick_of = None;
             return;
         }
         // The git panel is git's answer, not a list of files to look at again: re-reading it
@@ -3208,8 +3230,17 @@ impl App {
                 self.read_panel(0);
                 self.read_panel(1);
             }
+            Event::AiPartial { text } => {
+                if self.ai_busy.is_some() {
+                    self.ai_streamed.push_str(&text);
+                }
+            }
             Event::AiDone { result } => {
                 self.ai_busy = None;
+                self.ai_streamed.clear();
+                if let Some(s) = self.ai_session.as_mut() {
+                    s.asking = None;
+                }
                 match result {
                     Ok(answer) => self.ai_done(answer),
                     Err(why) => {
@@ -3314,7 +3345,13 @@ impl App {
                     if generation >= p.generation {
                         p.generation = generation;
                         let count = items.len();
+                        // A list read again is the same list: where it came from still holds,
+                        // and with it the keys and the command line that go with it.
+                        let origin = p.temp_origin().map(str::to_string);
                         p.set_temp(title, items, generation);
+                        if let Some(origin) = origin {
+                            p.set_temp_origin(origin);
+                        }
                         let msg = self
                             .i18n
                             .t_args("panel-list-count", &[("count", (count as i64).into())]);
@@ -13314,6 +13351,7 @@ impl App {
             return;
         }
         self.ai_busy = Some((service.name.clone(), std::time::Instant::now()));
+        self.ai_streamed.clear();
         self.requests.push(Request::AiAsk {
             query,
             token: if from_env { None } else { typed },
@@ -13580,10 +13618,20 @@ impl App {
                 files: Vec::new(),
                 thread: None,
                 sent: Vec::new(),
+                asking: None,
             },
         });
         self.active = side;
         self.show_ai_session();
+        // The other panel is the conversation as it goes, read like a quick view: what was
+        // asked, what came back and, while it is out, the wait. `Ctrl+Q` there gives the
+        // files back, to pick what goes into the context.
+        let other = 1 - side;
+        if self.panels[other].content == crate::panel::Content::Files {
+            self.panels[other].content = crate::panel::Content::QuickView;
+            self.trees[other] = None;
+        }
+        self.quick_of = None;
         self.set_status(m);
     }
 
@@ -13629,6 +13677,82 @@ impl App {
         self.panels[side].set_temp_origin(":aichat");
         self.panels[side].sort.key = fcmd_core::SortKey::Unsorted;
         self.panels[side].rebuild();
+    }
+
+    /// Beside the conversation panel the quick view is the conversation itself, as it goes:
+    /// what is in the file so far, then the question on its way and the wait, with a wheel
+    /// and the seconds, until the answer is written. Built again only when something in it
+    /// changed. Returns false for any other panel.
+    fn ai_live_view(&mut self, panel: usize) -> bool {
+        if self.panels[panel].temp_origin() != Some(":aichat") {
+            return false;
+        }
+        let Some(session) = self.ai_session.clone() else {
+            return false;
+        };
+        let len = session
+            .thread
+            .as_ref()
+            .and_then(|t| std::fs::metadata(t).ok())
+            .map_or(0, |m| m.len());
+        let secs = self.ai_busy.as_ref().map(|(_, t)| t.elapsed().as_secs());
+        let key = VPath::local(format!(
+            ":ai-live:{len}:{:?}:{:?}:{}",
+            session.asking,
+            secs,
+            self.ai_streamed.len()
+        ));
+        if self.quick_of.as_ref() == Some(&key) {
+            return true;
+        }
+        let mut text = session
+            .thread
+            .as_ref()
+            .and_then(|t| std::fs::read_to_string(t).ok())
+            .unwrap_or_default();
+        if text.trim().is_empty() && session.asking.is_none() {
+            text = self.i18n.t_args(
+                "ai-live-empty",
+                &[("name", session.service.name.clone().into())],
+            );
+        }
+        if let (Some(question), Some(secs)) = (&session.asking, secs) {
+            let wheel = ['◐', '◓', '◑', '◒'][(secs % 4) as usize];
+            // What has come so far, and the wheel still turning after it: the answer is
+            // read as it is written, and the wait shows until it is finished.
+            let so_far = self.ai_streamed.trim_end();
+            let wait = self.i18n.t_args(
+                "ai-busy",
+                &[
+                    ("name", session.service.name.clone().into()),
+                    ("secs", (secs as i64).into()),
+                ],
+            );
+            // The same shape the conversation file is written in, so the answer, when it
+            // comes, lands where the wait was.
+            let body = if so_far.is_empty() {
+                format!("{wheel} {wait}")
+            } else {
+                format!("{so_far}\n\n{wheel} {wait}")
+            };
+            if text.trim().is_empty() {
+                text = format!("# {question}\n\n{body}\n");
+            } else {
+                text.push_str(&format!("\n---\n\n## {question}\n\n{body}\n"));
+            }
+        }
+        let shown = VPath::local("conversation.md");
+        let source = fcmd_view::BytesSource::new(text.into_bytes());
+        let mut viewer = Viewer::new(Box::new(source), shown);
+        self.tune_viewer(&mut viewer);
+        viewer.show_key_bar = false;
+        viewer.show_status_line = false;
+        // The newest is at the foot, and the foot is what is read.
+        viewer.to_end(80, self.rows.max(1) as u16);
+        self.quick = Some(Box::new(viewer));
+        self.quick_of = Some(key);
+        self.quick_why = None;
+        true
     }
 
     /// `F5` onto the conversation: the files selected (or under the cursor) in this panel go
@@ -13687,6 +13811,9 @@ impl App {
         let Some(session) = self.ai_session.clone() else {
             return;
         };
+        if let Some(s) = self.ai_session.as_mut() {
+            s.asking = Some(text.clone());
+        }
         let mut query = AiQuery::new(session.service.clone(), text);
         query.thread = session.thread.clone().filter(|t| t.is_file());
         query.files = session
@@ -23143,6 +23270,9 @@ impl App {
     /// Point the quick view at whatever `panel` has under its cursor, opening a reader when
     /// that has changed and leaving it alone when it has not.
     pub fn quick_view_for(&mut self, panel: usize) {
+        if self.ai_live_view(panel) {
+            return;
+        }
         let Some(entry) = self.panels[panel].current().cloned() else {
             self.quick = None;
             self.quick_of = None;
@@ -36279,6 +36409,100 @@ abcdefghij
         app.panels[1].cursor = 0;
         press(&mut app, "F8");
         assert!(app.ai_session.as_ref().unwrap().files.is_empty());
+    }
+
+    /// Beside the conversation the other panel shows it as it goes: the question on its way,
+    /// the answer as it is written and the wait; and `Ctrl+R` keeps the panel a conversation,
+    /// so what is typed still goes to the model.
+    #[test]
+    fn the_conversation_is_shown_as_it_comes_and_survives_a_reread() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = editing_app(dir.path());
+        app.cfg.ais = vec![fcmd_config::AiCfg {
+            name: "local".into(),
+            url: "http://localhost:11434/api/chat".into(),
+            model: "llama3".into(),
+            api: "ollama".into(),
+            ..Default::default()
+        }];
+        app.open_ai_panel(1);
+        app.panels[1].cursor = 0;
+        press(&mut app, "Enter");
+        app.take_requests();
+        app.handle_event(Event::AiDone {
+            result: Ok(AiAnswer {
+                file: PathBuf::new(),
+                text: "local\nhttp://localhost:11434/api/tags\n200\n12\n3\ntrue".into(),
+                purpose: AiUse::Probe,
+                tokens: (None, None),
+            }),
+        });
+        assert_eq!(
+            app.panels[0].content,
+            crate::panel::Content::QuickView,
+            "the other panel shows the conversation"
+        );
+        let shown = |app: &mut App| {
+            let mut buf = fcmd_ui::Buffer::new(120, 30);
+            crate::render::draw(app, &mut buf);
+            (0..30)
+                .map(|y| {
+                    (0..120)
+                        .filter_map(|x| buf.get(x, y))
+                        .map(|c| c.ch)
+                        .collect::<String>()
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+        assert!(
+            shown(&mut app).contains("Type a question"),
+            "{}",
+            shown(&mut app)
+        );
+
+        // `Ctrl+R` builds the conversation again rather than reading it as files.
+        app.active = 1;
+        app.run(Command::PanelReread);
+        assert_eq!(app.panels[1].temp_origin(), Some(":aichat"));
+        app.cmd.set("why?");
+        press(&mut app, "Enter");
+        assert!(
+            app.take_requests()
+                .iter()
+                .any(|r| matches!(r, Request::AiAsk { query, .. } if query.question == "why?")),
+            "still a question to the model"
+        );
+
+        // While it is out: the question and the wait; then the answer as it is written.
+        let out = shown(&mut app);
+        assert!(
+            out.contains("why?") && out.contains("local is thinking"),
+            "{out}"
+        );
+        app.handle_event(Event::AiPartial {
+            text: "Because the sky".into(),
+        });
+        let out = shown(&mut app);
+        assert!(out.contains("Because the sky"), "{out}");
+        assert!(out.contains("local is thinking"), "the wait goes on: {out}");
+        let answer = dir.path().join("answer.md");
+        std::fs::write(
+            &answer,
+            "# why?\n\n*local · llama3*\n\nBecause the sky is blue.\n",
+        )
+        .unwrap();
+        app.handle_event(Event::AiDone {
+            result: Ok(AiAnswer {
+                file: answer,
+                text: "Because the sky is blue.".into(),
+                purpose: AiUse::Answer,
+                tokens: (None, None),
+            }),
+        });
+        let out = shown(&mut app);
+        assert!(out.contains("Because the sky is blue."), "{out}");
+        assert!(!out.contains("is thinking"), "{out}");
     }
 
     /// A site's `max_kbps` caps a copy to or from it, the slowest end winning.

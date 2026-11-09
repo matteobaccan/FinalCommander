@@ -55,6 +55,10 @@ Notable changes, newest first. The format follows
   named for what they are (last commit, staged, on disk), and the lines removed and added
   counted in its foot.
 
+- **The AI conversation as it goes.** Once logged in, the other panel shows the conversation
+  like a quick view: the question sent, the answer as the model writes it — answers are now
+  streamed, in OpenAI's, Anthropic's and Ollama's shapes, and a server that does not stream is
+  read whole — and a turning wheel with the seconds while it is still coming.
 - **Ending a process.** `F8` or `Del` on the process list ends the process under the cursor,
   after asking (the cancel button is the lit one), and the list is read again.
 - **A process list and card as full as FAR's.** The list has each process's start time; the
@@ -101,6 +105,9 @@ Notable changes, newest first. The format follows
 - **Discarding a new file in the git panel on Windows** said there was no wastebasket: git
   names the repository's top with `/`, and the wastebasket refuses a path with both
   separators. The path is now said with `\` only.
+- **`Ctrl+R` on the AI conversation** read it again as a list of files, and the command line
+  went back to the shell; it now builds the conversation again, and any list read again keeps
+  where it came from.
 - **Menus in a short window.** A dropdown taller than the window scrolls with the cursor,
   with `▲`/`▼` on its frame, and it hangs right under the bar, with no empty row between.
 - **`Esc` after a quick search** closes the box and leaves the cursor on the row it found, as
