@@ -1036,6 +1036,10 @@ key-screens = Schermi
 key-site-edit = ModSes
 key-site-new = NuovSes
 key-site-forget = CancSes
+key-ai-edit = Modif
+key-ai-new = Nuovo
+key-ai-remove = Togli
+key-ai-forget = Togli
 hex-needs-a-file = questo buffer non ha un file da cui leggere i byte
 hex-save-first = salva prima: i due editor non possono tenersi le modifiche a vicenda
 
@@ -1345,6 +1349,20 @@ ai-no-thread = nessuna risposta da continuare: chiedi prima con `ai:`, o metti i
 ai-nothing-to-explain = niente da spiegare qui: apri un file nel visualizzatore o nell'editor
 ai-explain-question = Che cos'è questo, da { $name }? Spiegalo in breve.
 ai-tokens = { $in } token in entrata, { $out } in uscita
+ai-none-panel = Ancora nessun servizio AI — F7 ne aggiunge uno
+ai-service-removed = { $name } tolto
+ai-probing = Login su { $name } a { $host }…
+ai-probe-ok = { $host } ha risposto HTTP { $status } in { $ms } ms, { $models } modelli — scrivi una domanda e premi Invio
+ai-probe-no-model = (il modello { $model } non è tra questi)
+ai-row-context = contesto
+ai-row-conversation = conversazione
+ai-session-title = AI: { $name } · { $model } — { $files } file nel contesto
+ai-context-added = { $count ->
+        [one] Un file
+       *[other] { $count } file
+    } nel contesto
+ai-context-nothing = Niente da aggiungere: nel contesto vanno solo file su questo disco
+ai-context-removed = Tolto dal contesto
 ai-command-ready = il comando è sulla riga — leggilo prima di premere Invio
 ai-commit-question = Scrivi un messaggio di commit per le modifiche in staging.
 ai-staged-diff = il diff in staging
@@ -1467,6 +1485,7 @@ vault-refused = Il file dei segreti non si è aperto: {$why}
 
 # I programmi esterni
 drive-tools = Programmi esterni
+drive-ai = AI
 drive-git = Git
 tools-found = trovato
 tools-missing = non installato

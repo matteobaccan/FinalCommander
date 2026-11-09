@@ -1036,6 +1036,10 @@ key-screens = Schirme
 key-site-edit = SitzBrb
 key-site-new = SitzNeu
 key-site-forget = SitzLös
+key-ai-edit = Ändern
+key-ai-new = Neu
+key-ai-remove = Entf
+key-ai-forget = Entf
 hex-needs-a-file = dieser Puffer hat keine Datei, aus der Bytes kämen
 hex-save-first = zuerst speichern: die beiden Editoren können einander keine ungespeicherten Änderungen übergeben
 
@@ -1344,6 +1348,20 @@ ai-no-thread = keine Antwort zum Fortsetzen: zuerst mit `ai:` fragen oder den Cu
 ai-nothing-to-explain = hier gibt es nichts zu erklären: eine Datei im Betrachter oder Editor öffnen
 ai-explain-question = Was ist das, aus { $name }? Kurz erklären.
 ai-tokens = { $in } Tokens hinein, { $out } heraus
+ai-none-panel = Noch kein KI-Dienst — F7 fügt einen hinzu
+ai-service-removed = { $name } entfernt
+ai-probing = Anmeldung bei { $name } auf { $host }…
+ai-probe-ok = { $host } antwortete HTTP { $status } in { $ms } ms, { $models } Modelle — Frage eingeben und Enter drücken
+ai-probe-no-model = (das Modell { $model } ist nicht dabei)
+ai-row-context = Kontext
+ai-row-conversation = Gespräch
+ai-session-title = KI: { $name } · { $model } — { $files } Dateien im Kontext
+ai-context-added = { $count ->
+        [one] Eine Datei
+       *[other] { $count } Dateien
+    } im Kontext
+ai-context-nothing = Nichts hinzuzufügen: nur Dateien auf dieser Platte kommen in den Kontext
+ai-context-removed = Aus dem Kontext
 ai-command-ready = der Befehl steht in der Zeile — vor Enter lesen
 ai-commit-question = Schreibe eine Commit-Nachricht für die vorgemerkten Änderungen.
 ai-staged-diff = der vorgemerkte Diff
@@ -1466,6 +1484,7 @@ vault-refused = Die Geheimnisdatei ließ sich nicht öffnen: {$why}
 
 # Externe Programme
 drive-tools = Externe Programme
+drive-ai = KI
 drive-git = Git
 tools-found = gefunden
 tools-missing = nicht installiert

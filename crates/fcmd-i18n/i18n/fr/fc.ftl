@@ -1036,6 +1036,10 @@ key-screens = Écrans
 key-site-edit = ModSess
 key-site-new = NouvSes
 key-site-forget = SuprSes
+key-ai-edit = Modif
+key-ai-new = Nouveau
+key-ai-remove = Retirer
+key-ai-forget = Retirer
 hex-needs-a-file = ce tampon n'a pas de fichier d'où lire des octets
 hex-save-first = enregistrez d'abord : les deux éditeurs ne peuvent pas se passer les modifications
 
@@ -1344,6 +1348,20 @@ ai-no-thread = aucune réponse à poursuivre : demandez d'abord avec `ai:`, ou p
 ai-nothing-to-explain = rien à expliquer ici : ouvrez un fichier dans la visionneuse ou l'éditeur
 ai-explain-question = Qu'est-ce que c'est, dans { $name } ? Explique-le brièvement.
 ai-tokens = { $in } jetons en entrée, { $out } en sortie
+ai-none-panel = Aucun service d’IA — F7 en ajoute un
+ai-service-removed = { $name } retiré
+ai-probing = Connexion à { $name } sur { $host }…
+ai-probe-ok = { $host } a répondu HTTP { $status } en { $ms } ms, { $models } modèles — tapez une question et Entrée
+ai-probe-no-model = (le modèle { $model } n’y est pas)
+ai-row-context = contexte
+ai-row-conversation = conversation
+ai-session-title = IA : { $name } · { $model } — { $files } fichiers en contexte
+ai-context-added = { $count ->
+        [one] Un fichier
+       *[other] { $count } fichiers
+    } en contexte
+ai-context-nothing = Rien à ajouter : seuls les fichiers de ce disque vont dans le contexte
+ai-context-removed = Retiré du contexte
 ai-command-ready = la commande est sur la ligne — lisez-la avant d'appuyer sur Entrée
 ai-commit-question = Écris un message de commit pour les modifications indexées.
 ai-staged-diff = le diff indexé
@@ -1466,6 +1484,7 @@ vault-refused = Le fichier de secrets ne s'est pas ouvert : {$why}
 
 # Programmes externes
 drive-tools = Programmes externes
+drive-ai = IA
 drive-git = Git
 tools-found = trouvé
 tools-missing = non installé

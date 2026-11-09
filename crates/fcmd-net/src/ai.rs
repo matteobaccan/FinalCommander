@@ -238,6 +238,100 @@ pub async fn ask_thread(
     }
 }
 
+/// Where a service lists its models — the cheapest question that proves the address, the
+/// key and the protocol are right without asking the model anything: `…/models` beside an
+/// OpenAI or Anthropic endpoint, `…/api/tags` beside Ollama's chat.
+pub fn models_url(api: Api, url: &str) -> String {
+    let url = url.trim_end_matches('/');
+    let cut = |suffix: &str| url.strip_suffix(suffix).map(str::to_string);
+    match api {
+        Api::OpenAi => cut("/chat/completions")
+            .or_else(|| cut("/completions"))
+            .map(|base| format!("{base}/models"))
+            .unwrap_or_else(|| format!("{url}/models")),
+        Api::Anthropic => cut("/messages")
+            .map(|base| format!("{base}/models"))
+            .unwrap_or_else(|| format!("{url}/models")),
+        Api::Ollama => cut("/api/chat")
+            .or_else(|| cut("/api/generate"))
+            .map(|base| format!("{base}/api/tags"))
+            .unwrap_or_else(|| format!("{url}/api/tags")),
+    }
+}
+
+/// The models a list names, from any of the three shapes (`data[].id`, `models[].name`).
+pub fn model_names(reply: &Value) -> Vec<String> {
+    let list = reply
+        .get("data")
+        .or_else(|| reply.get("models"))
+        .and_then(Value::as_array);
+    list.map(|items| {
+        items
+            .iter()
+            .filter_map(|m| {
+                m.get("id")
+                    .or_else(|| m.get("name"))
+                    .or_else(|| m.get("model"))
+                    .and_then(Value::as_str)
+                    .map(str::to_string)
+            })
+            .collect()
+    })
+    .unwrap_or_default()
+}
+
+/// What a probe of a service found: how it answered, how long it took, how many models it
+/// lists and whether the one configured is among them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Probe {
+    pub url: String,
+    pub status: u16,
+    pub millis: u128,
+    pub models: usize,
+    pub has_model: bool,
+}
+
+/// Knock on the service: one `GET` of its list of models, with the key it will be asked with.
+/// Nothing is sent but the key, and nothing is generated, so it costs nothing.
+pub async fn probe(service: &Service) -> Result<Probe, String> {
+    let url = models_url(service.api, &service.url);
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .user_agent(concat!("fcmd/", env!("CARGO_PKG_VERSION")))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let mut request = client.get(&url);
+    if let Some(token) = &service.token {
+        request = match service.api {
+            Api::Anthropic => request
+                .header("x-api-key", token)
+                .header("anthropic-version", "2023-06-01"),
+            Api::OpenAi | Api::Ollama => request.bearer_auth(token),
+        };
+    } else if service.api == Api::Anthropic {
+        request = request.header("anthropic-version", "2023-06-01");
+    }
+    let started = std::time::Instant::now();
+    let response = request.send().await.map_err(|e| format!("{url}: {e}"))?;
+    let status = response.status();
+    let text = response.text().await.unwrap_or_default();
+    let millis = started.elapsed().as_millis();
+    if !status.is_success() {
+        return Err(format!("{url}: HTTP {status}: {}", short(&text)));
+    }
+    let names = serde_json::from_str::<Value>(&text)
+        .map(|v| model_names(&v))
+        .unwrap_or_default();
+    let has_model = service.model.is_empty() || names.iter().any(|n| n == &service.model);
+    Ok(Probe {
+        url,
+        status: status.as_u16(),
+        millis,
+        models: names.len(),
+        has_model,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -251,6 +345,26 @@ mod tests {
             system: "be brief".into(),
             max_tokens: 0,
         }
+    }
+
+    #[test]
+    fn the_list_of_models_is_beside_the_endpoint() {
+        assert_eq!(
+            models_url(Api::OpenAi, "https://api.openai.com/v1/chat/completions"),
+            "https://api.openai.com/v1/models"
+        );
+        assert_eq!(
+            models_url(Api::Anthropic, "https://api.anthropic.com/v1/messages"),
+            "https://api.anthropic.com/v1/models"
+        );
+        assert_eq!(
+            models_url(Api::Ollama, "http://localhost:11434/api/chat"),
+            "http://localhost:11434/api/tags"
+        );
+        let openai = json!({"data": [{"id": "gpt-x"}, {"id": "gpt-y"}]});
+        assert_eq!(model_names(&openai), ["gpt-x", "gpt-y"]);
+        let ollama = json!({"models": [{"name": "llama3:8b"}]});
+        assert_eq!(model_names(&ollama), ["llama3:8b"]);
     }
 
     #[test]

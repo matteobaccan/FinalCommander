@@ -39,6 +39,11 @@ Notable changes, newest first. The format follows
   file, or the last commit against the index), and `Ctrl+Q` beside the panel shows the diff of
   the row rather than the whole file. *Show what changed as a tree* in the `F2` menu groups
   the rows by folder, and a folder row stages, unstages or diffs all of it.
+- **An AI panel.** `Alt+F1` / `Alt+F2` → *AI* lists the services as a panel (`F7` adds,
+  `F4` edits, `F8` removes). `Enter` logs in by asking the service for its models, and says how
+  it answered; then the panel is the conversation: what is typed on the command line under it
+  is the next question, `F5` from the other panel puts files into its context, `F8` takes them
+  out, and the conversation itself is a row to read.
 - **Throwing a change away.** `F8` in what changed discards the changes of the selected rows,
   after asking: back to the index for what is not staged, back to the last commit for what is,
   out of the index for a file new there, and to the wastebasket for a file git does not know.

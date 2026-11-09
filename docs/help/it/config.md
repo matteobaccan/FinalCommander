@@ -37,6 +37,23 @@ file e torna in ogni caso.
 
 # Chiedere a un'AI
 
+Il modo più semplice è la riga **AI** di `Alt+F1` / `Alt+F2`: trasforma il pannello nella lista
+dei tuoi servizi. `F7` ne aggiunge uno, `F4` lo modifica, `F8` lo toglie. `Invio` fa il login —
+fcmd chiede al servizio l'elenco dei suoi modelli, che prova indirizzo e chiave senza chiedere
+niente al modello, e la riga di stato dice cosa è tornato (`HTTP 200 in 120 ms, 12 modelli`), o
+perché non è andata (un server che non è acceso, una chiave sbagliata). Da lì il pannello è la
+**conversazione**:
+
+* quello che scrivi sulla riga di comando sotto di lui va all'AI, come seguito della stessa
+  conversazione — senza prefissi;
+* `F5` nell'altro pannello mette i file selezionati lì nel **contesto**, e partono con ogni
+  domanda da quel momento — prima della prima domanda che li porta, un dialogo dice quali file,
+  quanto pesano e a quale host vanno;
+* il pannello mostra i file del contesto e la conversazione stessa: `F3` o `Ctrl+Q` la leggono,
+  `F8` toglie un file dal contesto (sulla riga della conversazione ne comincia una nuova).
+
+Il resto del capitolo è la stessa cosa dalla riga di comando.
+
 `ai: domanda` sulla riga di comando chiede a un modello linguistico e apre la risposta nel
 visualizzatore. I servizi sono blocchi `[[ai]]` in `fcmd.toml`:
 

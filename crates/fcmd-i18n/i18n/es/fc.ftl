@@ -1036,6 +1036,10 @@ key-screens = Pantallas
 key-site-edit = EditSes
 key-site-new = NuevSes
 key-site-forget = BorrSes
+key-ai-edit = Editar
+key-ai-new = Nuevo
+key-ai-remove = Quitar
+key-ai-forget = Quitar
 hex-needs-a-file = este búfer no tiene un archivo del que leer bytes
 hex-save-first = guarda primero: los dos editores no pueden pasarse los cambios sin guardar
 
@@ -1344,6 +1348,20 @@ ai-no-thread = no hay respuesta que continuar: pregunta antes con `ai:`, o pon e
 ai-nothing-to-explain = nada que explicar aquí: abre un archivo en el visor o en el editor
 ai-explain-question = ¿Qué es esto, de { $name }? Explícalo brevemente.
 ai-tokens = { $in } tokens de entrada, { $out } de salida
+ai-none-panel = Aún no hay servicios de IA — F7 añade uno
+ai-service-removed = { $name } quitado
+ai-probing = Conectando con { $name } en { $host }…
+ai-probe-ok = { $host } respondió HTTP { $status } en { $ms } ms, { $models } modelos — escribe una pregunta y pulsa Intro
+ai-probe-no-model = (el modelo { $model } no está entre ellos)
+ai-row-context = contexto
+ai-row-conversation = conversación
+ai-session-title = IA: { $name } · { $model } — { $files } archivos en contexto
+ai-context-added = { $count ->
+        [one] Un archivo
+       *[other] { $count } archivos
+    } en el contexto
+ai-context-nothing = Nada que añadir: al contexto solo van archivos de este disco
+ai-context-removed = Fuera del contexto
 ai-command-ready = la orden está en la línea — léela antes de pulsar Intro
 ai-commit-question = Escribe un mensaje de commit para los cambios preparados.
 ai-staged-diff = el diff preparado
@@ -1466,6 +1484,7 @@ vault-refused = El archivo de secretos no se abrió: {$why}
 
 # Programas externos
 drive-tools = Programas externos
+drive-ai = IA
 drive-git = Git
 tools-found = encontrado
 tools-missing = no instalado

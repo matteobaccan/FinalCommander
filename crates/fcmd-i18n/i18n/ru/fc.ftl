@@ -1036,6 +1036,10 @@ key-screens = Экраны
 key-site-edit = Правка
 key-site-new = Новая
 key-site-forget = Удалить
+key-ai-edit = Правка
+key-ai-new = Новый
+key-ai-remove = Убрать
+key-ai-forget = Убрать
 hex-needs-a-file = у этого буфера нет файла, откуда читать байты
 hex-save-first = сначала сохраните: редакторы не могут передать друг другу несохранённые правки
 
@@ -1345,6 +1349,17 @@ ai-no-thread = нечего продолжать: сначала спросит�
 ai-nothing-to-explain = здесь нечего объяснять: откройте файл в просмотрщике или редакторе
 ai-explain-question = Что это, из { $name }? Объясни кратко.
 ai-tokens = токенов: { $in } на входе, { $out } на выходе
+ai-none-panel = Сервисов ИИ пока нет — F7 добавляет
+ai-service-removed = { $name } удалён
+ai-probing = Вход в { $name } на { $host }…
+ai-probe-ok = { $host } ответил HTTP { $status } за { $ms } мс, моделей: { $models } — введите вопрос и нажмите Enter
+ai-probe-no-model = (модели { $model } среди них нет)
+ai-row-context = контекст
+ai-row-conversation = разговор
+ai-session-title = ИИ: { $name } · { $model } — файлов в контексте: { $files }
+ai-context-added = Файлов в контексте: { $count }
+ai-context-nothing = Нечего добавить: в контекст попадают только файлы с этого диска
+ai-context-removed = Убрано из контекста
 ai-command-ready = команда в строке — прочитайте её, прежде чем нажать Enter
 ai-commit-question = Напиши сообщение коммита для подготовленных изменений.
 ai-staged-diff = подготовленный diff
@@ -1469,6 +1484,7 @@ vault-refused = Файл секретов не открылся: {$why}
 
 # Внешние программы
 drive-tools = Внешние программы
+drive-ai = ИИ
 drive-git = Git
 tools-found = найдена
 tools-missing = не установлена

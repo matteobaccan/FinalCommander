@@ -568,6 +568,21 @@ pub enum AiUse {
     Command,
     /// A message for what is staged in the repository at `root`, offered in the commit prompt.
     Commit { root: PathBuf },
+    /// No question: a knock on the service, to see that the address, the key and the protocol
+    /// are right before a session is opened on it.
+    Probe,
+}
+
+/// A conversation with one service, in a panel (the AI row of `Alt+F1` / `Alt+F2`): the files
+/// that go with every question, the file the conversation is written into, and which files
+/// were last sent — so the dialog that names them comes back only when they change.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AiSession {
+    pub service: fcmd_config::AiCfg,
+    pub side: usize,
+    pub files: Vec<PathBuf>,
+    pub thread: Option<PathBuf>,
+    pub sent: Vec<PathBuf>,
 }
 
 /// Everything one question carries until it is sent: the service, the words, the files and
@@ -2475,6 +2490,10 @@ pub struct App {
     undoing: bool,
     /// Which service the AI dialog is changing; `None` is a new one.
     ai_editing: Option<usize>,
+    /// The conversation the AI panel holds, once a service has been logged in to.
+    ai_session: Option<AiSession>,
+    /// The side a login was asked from, while its answer is on its way.
+    ai_probing: Option<usize>,
     /// Size of the editor's text area, from the last frame.
     pub editor_size: (u16, u16),
     /// The decompilation we are waiting for, if any.
@@ -2853,6 +2872,8 @@ impl App {
             undo_stack: Vec::new(),
             undoing: false,
             ai_editing: None,
+            ai_session: None,
+            ai_probing: None,
             editor_size: (80, 20),
             decompile_id: None,
             sites,
@@ -8762,6 +8783,7 @@ impl App {
                 ("drive-programs", ":programs"),
                 ("drive-services", ":services"),
                 ("drive-tools", ":tools"),
+                ("drive-ai", ":ai"),
                 ("drive-temp", ":temp"),
             ] {
                 if !shown.panels.shows(value) {
@@ -9587,6 +9609,9 @@ impl App {
             }
             // A commit and a branch are not files: `Enter` reads the one and switches to the
             // other.
+            Command::NavEnter if self.panel().temp_origin() == Some(":ai") => {
+                self.ai_login_at_cursor();
+            }
             Command::NavEnter if self.panel().temp_origin() == Some(":gitlog") => {
                 if let Some(c) = self.git_commit_at_cursor() {
                     self.git_ask(GitAsk::Show(c.hash));
@@ -10344,6 +10369,14 @@ impl App {
                 // On the service list there is nothing to copy or move: `F5` starts the
                 // service under the cursor and `F6` restarts it, which is what the key bar
                 // says there (SPEC 02 §14).
+                // Copying onto a conversation with an AI puts the files in its context: they go
+                // with every question from then on, and nothing is copied anywhere.
+                if matches!(cmd, Command::FileCopy | Command::FileCopyCurrent)
+                    && self.other().temp_origin() == Some(":aichat")
+                {
+                    self.ai_add_context();
+                    return;
+                }
                 // In the git panel `F5` stages and `F6` unstages: the files a commit takes.
                 if self.panel().temp_origin() == Some(":git") {
                     let files =
@@ -10445,6 +10478,9 @@ impl App {
             Command::FileMkdir if self.panel().temp_origin() == Some(":git") => {
                 self.ask_commit_message()
             }
+            Command::FileMkdir if self.panel().temp_origin() == Some(":ai") => {
+                self.open_ai_form(None)
+            }
             Command::FileMkdir => {
                 let title = self.i18n.t("prompt-mkdir");
                 self.mode = Mode::Prompt(Prompt {
@@ -10486,6 +10522,16 @@ impl App {
                 // next to what changed in it — never a delete.
                 if self.panel().temp_origin() == Some(":git") {
                     self.ask_git_discard();
+                    return;
+                }
+                // On the AI services `F8` removes the service under the cursor; in a session
+                // it takes the file under the cursor out of the context — never off the disk.
+                if self.panel().temp_origin() == Some(":ai") {
+                    self.remove_ai_service_at_cursor();
+                    return;
+                }
+                if self.panel().temp_origin() == Some(":aichat") {
+                    self.ai_forget_at_cursor();
                     return;
                 }
                 // And on the service list `F8` stops the service under the cursor, having
@@ -11602,6 +11648,19 @@ impl App {
     /// Run a line that has already been remembered: substitutions, then conditions, then
     /// whatever kind of command it turns out to be.
     fn run_line(&mut self, line: &str) {
+        // Under a conversation with an AI the command line is the conversation: what is typed
+        // goes to the service, with the files of the context, as the next turn. `ai:` and the
+        // other prefixes still mean what they mean.
+        if self.panel().temp_origin() == Some(":aichat")
+            && self.ai_session.is_some()
+            && !matches!(
+                cmdline::parse(line),
+                Parsed::Prefix(Prefix::Ai(_) | Prefix::AiFollow(_) | Prefix::AiCommand(_))
+            )
+        {
+            self.ai_session_ask(line.to_string());
+            return;
+        }
         // A question to a language model is words, not a command: FAR's metasymbols would
         // turn the `!` of `ai!` — and of any question asked with feeling — into a file name.
         if let Parsed::Prefix(
@@ -13212,8 +13271,21 @@ impl App {
             _ => String::new(),
         };
         match answer.purpose {
+            AiUse::Probe => self.ai_logged_in(&answer.text),
             AiUse::Answer => {
                 self.ai_last = Some(answer.file.clone());
+                // The answer of a conversation in a panel: the conversation is that file now,
+                // what was sent is what was in the context, and the panel shows both.
+                if let Some(session) = self.ai_session.as_mut() {
+                    if session.thread.is_none() || session.thread.as_ref() == Some(&answer.file) {
+                        session.thread = Some(answer.file.clone());
+                        session.sent = session.files.clone();
+                        let side = session.side;
+                        if self.panels[side].temp_origin() == Some(":aichat") {
+                            self.show_ai_session();
+                        }
+                    }
+                }
                 let vpath = VPath::local(&answer.file);
                 self.open_viewer_on(&answer.file, vpath);
                 self.set_status(cost);
@@ -13275,6 +13347,274 @@ impl App {
         self.vault
             .as_ref()
             .map(|v| v.left(std::time::Instant::now(), crate::vault::IDLE))
+    }
+
+    /// `Alt+F1` / `Alt+F2` → AI: the services as a panel. `Enter` logs in to one, `F4`
+    /// edits it, `F7` (or `Shift+F4`) adds one, `F8` removes it.
+    fn open_ai_panel(&mut self, side: usize) {
+        use fcmd_core::{Entry, EntryId, EntryKind};
+        let items: Vec<(VPath, Entry)> = self
+            .cfg
+            .ais
+            .iter()
+            .enumerate()
+            .map(|(i, a)| {
+                let label = format!("{}   {} · {} · {}", a.name, a.api, a.model, ai_host(&a.url));
+                let entry = Entry {
+                    name: label.into(),
+                    kind: EntryKind::File,
+                    size: 0,
+                    mtime: None,
+                    btime: None,
+                    atime: None,
+                    flags: fcmd_core::EntryFlags::empty(),
+                    id: EntryId::Name(i as u64),
+                    link_target: None,
+                };
+                // Not a file: the number of the service, where a path would be.
+                (VPath::local(format!("/ai/{i}")), entry)
+            })
+            .collect();
+        if items.is_empty() {
+            let m = self.i18n.t("ai-none-panel");
+            self.set_status(m);
+        }
+        let title = self.plain("drive-ai");
+        let generation = self.panels[side].generation + 1;
+        self.panels[side].generation = generation;
+        self.panels[side].set_temp(title, items, generation);
+        self.panels[side].set_temp_origin(":ai");
+        self.panels[side].sort.key = fcmd_core::SortKey::Unsorted;
+        self.panels[side].rebuild();
+        self.active = side;
+    }
+
+    /// The service under the cursor of the AI panel, by its place in `[[ai]]`.
+    fn ai_service_at_cursor(&self) -> Option<usize> {
+        let p = self.panel();
+        if p.temp_origin() != Some(":ai") {
+            return None;
+        }
+        let at = p
+            .path_of(p.current()?)
+            .display_name()
+            .parse::<usize>()
+            .ok()?;
+        (at < self.cfg.ais.len()).then_some(at)
+    }
+
+    fn remove_ai_service_at_cursor(&mut self) {
+        let Some(at) = self.ai_service_at_cursor() else {
+            return;
+        };
+        let gone = self.cfg.ais.remove(at);
+        self.save_setup();
+        let m = self
+            .i18n
+            .t_args("ai-service-removed", &[("name", gone.name.into())]);
+        self.open_ai_panel(self.active);
+        self.set_status(m);
+    }
+
+    /// `Enter` on a service: the login — one look at its list of models, with the key it
+    /// will be asked with, and the status line saying what happens.
+    fn ai_login_at_cursor(&mut self) {
+        let Some(at) = self.ai_service_at_cursor() else {
+            return;
+        };
+        let service = self.cfg.ais[at].clone();
+        let m = self.i18n.t_args(
+            "ai-probing",
+            &[
+                ("name", service.name.clone().into()),
+                ("host", ai_host(&service.url).into()),
+            ],
+        );
+        let mut query = AiQuery::new(service, String::new());
+        query.purpose = AiUse::Probe;
+        self.ai_probing = Some(self.active);
+        self.ask_ai(query);
+        // `ask_ai` may have asked for a key or a password instead; then this is said later.
+        if matches!(self.mode, Mode::Normal) {
+            self.set_status(m);
+        }
+    }
+
+    /// The service answered the login: say how, and open the conversation on that side.
+    fn ai_logged_in(&mut self, report: &str) {
+        let side = self.ai_probing.take().unwrap_or(self.active);
+        let mut fields = report.lines();
+        let mut next = || fields.next().unwrap_or("").to_string();
+        let (name, url, status, millis, models, has_model) =
+            (next(), next(), next(), next(), next(), next());
+        let Some(service) = self.cfg.ais.iter().find(|a| a.name == name).cloned() else {
+            return;
+        };
+        let mut m = self.i18n.t_args(
+            "ai-probe-ok",
+            &[
+                ("host", ai_host(&url).into()),
+                ("status", status.into()),
+                ("ms", millis.into()),
+                ("models", models.into()),
+            ],
+        );
+        if has_model != "true" {
+            m.push(' ');
+            m.push_str(&self.i18n.t_args(
+                "ai-probe-no-model",
+                &[("model", service.model.clone().into())],
+            ));
+        }
+        // The same service again keeps its conversation and its files; another starts afresh.
+        let keep = self
+            .ai_session
+            .as_ref()
+            .filter(|s| s.service.name == service.name)
+            .cloned();
+        self.ai_session = Some(match keep {
+            Some(mut s) => {
+                s.side = side;
+                s.service = service;
+                s
+            }
+            None => AiSession {
+                service,
+                side,
+                files: Vec::new(),
+                thread: None,
+                sent: Vec::new(),
+            },
+        });
+        self.active = side;
+        self.show_ai_session();
+        self.set_status(m);
+    }
+
+    /// The conversation as a panel: the files of the context first, then the conversation
+    /// itself — real files, so `F3`, `F4` and `Ctrl+Q` read them as any other.
+    fn show_ai_session(&mut self) {
+        let Some(session) = self.ai_session.clone() else {
+            return;
+        };
+        let ctx = self.i18n.t("ai-row-context");
+        let conv = self.i18n.t("ai-row-conversation");
+        let width = ctx.chars().count().max(conv.chars().count());
+        let pad = |w: &str| format!("{w}{}", " ".repeat(width - w.chars().count()));
+        let mut items: Vec<(VPath, fcmd_core::Entry)> = Vec::new();
+        for (at, file) in session.files.iter().enumerate() {
+            let path = VPath::local(file);
+            let mut entry = Self::temp_entry(&path, at);
+            entry.name = format!("{}  {}", pad(&ctx), file.display()).into();
+            items.push((path, entry));
+        }
+        if let Some(thread) = session.thread.as_ref().filter(|t| t.is_file()) {
+            let path = VPath::local(thread);
+            let mut entry = Self::temp_entry(&path, items.len());
+            let name = thread
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            entry.name = format!("{}  {name}", pad(&conv)).into();
+            items.push((path, entry));
+        }
+        let title = self.i18n.t_args(
+            "ai-session-title",
+            &[
+                ("name", session.service.name.clone().into()),
+                ("model", session.service.model.clone().into()),
+                ("files", (session.files.len() as i64).into()),
+            ],
+        );
+        let side = session.side;
+        let generation = self.panels[side].generation + 1;
+        self.panels[side].generation = generation;
+        self.panels[side].set_temp(title, items, generation);
+        self.panels[side].set_temp_origin(":aichat");
+        self.panels[side].sort.key = fcmd_core::SortKey::Unsorted;
+        self.panels[side].rebuild();
+    }
+
+    /// `F5` onto the conversation: the files selected (or under the cursor) in this panel go
+    /// into the context. Only files on this disk, whole; folders and archives say no.
+    fn ai_add_context(&mut self) {
+        let picked: Vec<PathBuf> = self
+            .job_sources()
+            .into_iter()
+            .filter(|p| p.is_local() && !p.in_container() && p.as_path().is_file())
+            .map(|p| p.as_path().to_path_buf())
+            .collect();
+        let Some(session) = self.ai_session.as_mut() else {
+            return;
+        };
+        let before = session.files.len();
+        for f in picked {
+            if !session.files.contains(&f) {
+                session.files.push(f);
+            }
+        }
+        let added = session.files.len() - before;
+        self.panel_mut().selection.clear();
+        self.show_ai_session();
+        let m = if added == 0 {
+            self.i18n.t("ai-context-nothing")
+        } else {
+            self.i18n
+                .t_args("ai-context-added", &[("count", (added as i64).into())])
+        };
+        self.set_status(m);
+    }
+
+    /// `F8` in the conversation: the file under the cursor leaves the context.
+    fn ai_forget_at_cursor(&mut self) {
+        let Some(path) = self.panel().current_path() else {
+            return;
+        };
+        let file = path.as_path().to_path_buf();
+        let Some(session) = self.ai_session.as_mut() else {
+            return;
+        };
+        if session.thread.as_ref() == Some(&file) {
+            // The conversation itself: forgetting it starts a new one.
+            session.thread = None;
+        } else {
+            session.files.retain(|f| f != &file);
+        }
+        self.show_ai_session();
+        let m = self.i18n.t("ai-context-removed");
+        self.set_status(m);
+    }
+
+    /// A line typed under the conversation: the next turn, with the files of the context —
+    /// named in a dialog first whenever they are not the ones sent last time.
+    fn ai_session_ask(&mut self, text: String) {
+        let Some(session) = self.ai_session.clone() else {
+            return;
+        };
+        let mut query = AiQuery::new(session.service.clone(), text);
+        query.thread = session.thread.clone().filter(|t| t.is_file());
+        query.files = session
+            .files
+            .iter()
+            .filter(|f| f.is_file())
+            .cloned()
+            .collect();
+        if query.files.is_empty() || query.files == session.sent {
+            self.ask_ai(query);
+            return;
+        }
+        let bytes: u64 = query
+            .files
+            .iter()
+            .filter_map(|f| std::fs::metadata(f).ok())
+            .map(|m| m.len())
+            .sum();
+        let names: Vec<String> = query
+            .files
+            .iter()
+            .map(|f| f.display().to_string())
+            .collect();
+        self.confirm_ai_send(query, names, Some(bytes));
     }
 
     /// `tool.ai`: the services, the one `ai:` asks first.
@@ -13347,7 +13687,11 @@ impl App {
             None => self.cfg.ais.push(cfg),
         }
         self.save_setup();
-        self.open_ai_services();
+        if self.panel().temp_origin() == Some(":ai") {
+            self.open_ai_panel(self.active);
+        } else {
+            self.open_ai_services();
+        }
     }
 
     fn run_prefix(&mut self, prefix: Prefix) {
@@ -20114,6 +20458,7 @@ impl App {
                     ":programs" => self.open_programs_panel(pick.side),
                     ":services" => self.open_services_panel(pick.side),
                     ":tools" => self.open_tools_panel(pick.side),
+                    ":ai" => self.open_ai_panel(pick.side),
                     // The log of the repository the panel is in, on that panel.
                     ":gitlog" => {
                         self.active = pick.side;
@@ -20536,6 +20881,13 @@ impl App {
             self.set_error(m);
             return;
         }
+        // On the AI services, the service under the cursor.
+        if self.panel().temp_origin() == Some(":ai") {
+            if let Some(at) = self.ai_service_at_cursor() {
+                self.open_ai_form(Some(at));
+            }
+            return;
+        }
         // And on the stored connections it is the session under the cursor, which is what
         // `F4` means in the list this panel is a panel of.
         if self.panel().temp_origin() == Some(":netbox") {
@@ -20706,6 +21058,10 @@ impl App {
         // there are no files in that panel, and a new session is what one is there for.
         if self.panel().temp_origin() == Some(":netbox") {
             self.open_site_form(None);
+            return;
+        }
+        if self.panel().temp_origin() == Some(":ai") {
+            self.open_ai_form(None);
             return;
         }
         let mut editor = Editor::empty(None);
@@ -24371,6 +24727,52 @@ impl App {
                 })
                 .collect();
         }
+        let ai_keys: Option<[(u8, &str); 12]> = match self.panel().temp_origin() {
+            Some(":ai") => Some([
+                (1u8, "key-help"),
+                (2, "key-menu"),
+                (3, ""),
+                (4, "key-ai-edit"),
+                (5, ""),
+                (6, ""),
+                (7, "key-ai-new"),
+                (8, "key-ai-remove"),
+                (9, "key-pulldown"),
+                (10, "key-quit"),
+                (11, "key-plugins"),
+                (12, "key-screens"),
+            ]),
+            Some(":aichat") => Some([
+                (1u8, "key-help"),
+                (2, "key-menu"),
+                (3, "key-view"),
+                (4, "key-edit"),
+                (5, ""),
+                (6, ""),
+                (7, ""),
+                (8, "key-ai-forget"),
+                (9, "key-pulldown"),
+                (10, "key-quit"),
+                (11, "key-plugins"),
+                (12, "key-screens"),
+            ]),
+            _ => None,
+        };
+        if let Some(keys) = ai_keys {
+            return keys
+                .iter()
+                .map(|(n, id)| {
+                    (
+                        *n,
+                        if id.is_empty() {
+                            String::new()
+                        } else {
+                            self.i18n.t(id)
+                        },
+                    )
+                })
+                .collect();
+        }
         if self.panel().temp_origin() == Some(":netbox") {
             return [
                 (1u8, "key-help"),
@@ -24802,6 +25204,15 @@ fn is_editor_command(cmd: Command) -> bool {
 /// The one line a model was asked for, out of what it answered: a code fence and the quotes
 /// or backticks some models put around a command anyway are taken off, and only the first
 /// line that says anything is kept — whatever else came back stays in the answer file.
+/// The host part of a service's address, for the panel and the dialogs.
+fn ai_host(url: &str) -> String {
+    url.split("//")
+        .nth(1)
+        .and_then(|r| r.split('/').next())
+        .unwrap_or(url)
+        .to_string()
+}
+
 fn ai_command_line(answer: &str) -> String {
     answer
         .lines()
@@ -35561,6 +35972,117 @@ abcdefghij
         let mut app = app_on_disk(dir);
         app.editor_size = (40, 6);
         app
+    }
+
+    /// The AI row of the change-drive dialog: the services as a panel, `Enter` a login that
+    /// only asks for the models, then a conversation whose context `F5` from the other panel
+    /// fills, whose command line is the question, and whose files are named in a dialog only
+    /// when they change.
+    #[test]
+    fn the_ai_panel_logs_in_takes_files_into_its_context_and_talks() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), "alpha").unwrap();
+        let mut app = editing_app(dir.path());
+        app.cfg.ais = vec![fcmd_config::AiCfg {
+            name: "local".into(),
+            url: "http://localhost:11434/api/chat".into(),
+            model: "llama3".into(),
+            api: "ollama".into(),
+            ..Default::default()
+        }];
+        let pick = app.drive_pick(1, Vec::new());
+        assert!(pick.rows.iter().any(|r| r.value == ":ai"), "an AI row");
+        app.open_ai_panel(1);
+        assert_eq!(app.panels[1].temp_origin(), Some(":ai"));
+        assert_eq!(app.panels[1].listing.len(), 1);
+        app.take_requests();
+
+        // The login asks for nothing but the models.
+        app.panels[1].cursor = 0;
+        press(&mut app, "Enter");
+        let probe = app.take_requests().into_iter().find_map(|r| match r {
+            Request::AiAsk { query, .. } => Some(query),
+            _ => None,
+        });
+        let probe = probe.expect("a login");
+        assert_eq!(probe.purpose, AiUse::Probe);
+        app.handle_event(Event::AiDone {
+            result: Ok(AiAnswer {
+                file: PathBuf::new(),
+                text: "local\nhttp://localhost:11434/api/tags\n200\n12\n3\ntrue".into(),
+                purpose: AiUse::Probe,
+                tokens: (None, None),
+            }),
+        });
+        assert_eq!(app.panels[1].temp_origin(), Some(":aichat"));
+        assert!(app.status.contains("200"), "{}", app.status);
+
+        // `F5` from the other panel puts the file in the context.
+        app.active = 0;
+        let row = (0..app.panels[0].listing.len())
+            .find(|&r| app.panels[0].listing.row(r).unwrap().name_str() == "a.txt")
+            .unwrap();
+        app.panels[0].cursor = row;
+        press(&mut app, "F5");
+        assert_eq!(
+            app.ai_session.as_ref().unwrap().files,
+            vec![dir.path().join("a.txt")]
+        );
+        assert!(app
+            .take_requests()
+            .iter()
+            .all(|r| !matches!(r, Request::Job { .. })));
+
+        // Under the conversation the command line is the question; the files are named first.
+        app.active = 1;
+        app.cmd.set("what is in it?");
+        press(&mut app, "Enter");
+        assert!(matches!(&app.mode, Mode::Confirm(_)), "{:?}", app.mode);
+        press(&mut app, "Left");
+        press(&mut app, "Enter");
+        let asked = app.take_requests().into_iter().find_map(|r| match r {
+            Request::AiAsk { query, .. } => Some(query),
+            _ => None,
+        });
+        let asked = asked.expect("the question");
+        assert_eq!(asked.question, "what is in it?");
+        assert_eq!(asked.files, vec![dir.path().join("a.txt")]);
+        let answer = dir.path().join("answer.md");
+        std::fs::write(&answer, "# what is in it?\n\nalpha").unwrap();
+        app.handle_event(Event::AiDone {
+            result: Ok(AiAnswer {
+                file: answer.clone(),
+                text: "alpha".into(),
+                purpose: AiUse::Answer,
+                tokens: (None, None),
+            }),
+        });
+        app.mode = Mode::Normal;
+        assert_eq!(
+            app.ai_session.as_ref().unwrap().thread,
+            Some(answer.clone())
+        );
+        assert_eq!(
+            app.panels[1].listing.len(),
+            2,
+            "the file and the conversation"
+        );
+
+        // The same files again: no dialog, the question follows the conversation.
+        app.active = 1;
+        app.cmd.set("and in French?");
+        press(&mut app, "Enter");
+        let asked = app.take_requests().into_iter().find_map(|r| match r {
+            Request::AiAsk { query, .. } => Some(query),
+            _ => None,
+        });
+        let asked = asked.expect("no dialog this time");
+        assert_eq!(asked.thread, Some(answer));
+
+        // `F8` takes the file out of the context.
+        app.panels[1].cursor = 0;
+        press(&mut app, "F8");
+        assert!(app.ai_session.as_ref().unwrap().files.is_empty());
     }
 
     /// A site's `max_kbps` caps a copy to or from it, the slowest end winning.

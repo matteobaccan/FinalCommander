@@ -1044,6 +1044,10 @@ key-screens = Screens
 key-site-edit = EditSes
 key-site-new = NewSes
 key-site-forget = DelSes
+key-ai-edit = Edit
+key-ai-new = New
+key-ai-remove = Remove
+key-ai-forget = Forget
 hex-needs-a-file = this buffer has no file to read bytes from
 hex-save-first = save first: the two editors cannot hold each other's unsaved changes
 
@@ -1354,6 +1358,20 @@ ai-no-thread = no answer to follow up: ask with `ai:` first, or put the cursor o
 ai-nothing-to-explain = nothing to explain here: open a file in the viewer or the editor
 ai-explain-question = What is this, from { $name }? Explain it briefly.
 ai-tokens = { $in } tokens in, { $out } out
+ai-none-panel = No AI service yet — F7 adds one
+ai-service-removed = { $name } removed
+ai-probing = Logging in to { $name } at { $host }…
+ai-probe-ok = { $host } answered HTTP { $status } in { $ms } ms, { $models } models — type a question and press Enter
+ai-probe-no-model = (the model { $model } is not among them)
+ai-row-context = context
+ai-row-conversation = conversation
+ai-session-title = AI: { $name } · { $model } — { $files } files in context
+ai-context-added = { $count ->
+        [one] One file
+       *[other] { $count } files
+    } in the context
+ai-context-nothing = Nothing to add: only files on this disk go into the context
+ai-context-removed = Out of the context
 ai-command-ready = the command is on the line — read it before pressing Enter
 ai-commit-question = Write a commit message for the staged changes.
 ai-staged-diff = the staged diff
@@ -1476,6 +1494,7 @@ vault-refused = The secrets file did not open: {$why}
 
 # The programs from elsewhere
 drive-tools = External programs
+drive-ai = AI
 drive-git = Git
 tools-found = found
 tools-missing = not installed

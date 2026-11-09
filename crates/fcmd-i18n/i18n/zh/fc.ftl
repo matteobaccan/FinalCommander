@@ -1012,6 +1012,10 @@ key-screens = 屏幕
 key-site-edit = 改会话
 key-site-new = 新会话
 key-site-forget = 删会话
+key-ai-edit = 编辑
+key-ai-new = 新建
+key-ai-remove = 移除
+key-ai-forget = 移除
 hex-needs-a-file = 这个缓冲区没有可读取字节的文件
 hex-save-first = 先保存：两个编辑器无法互相交接未保存的修改
 
@@ -1316,6 +1320,17 @@ ai-no-thread = 没有可继续的回答：先用 `ai:` 提问，或在回答文�
 ai-nothing-to-explain = 这里没有可解释的内容：请在查看器或编辑器中打开文件
 ai-explain-question = 这是什么（来自 { $name }）？请简要解释。
 ai-tokens = 输入 { $in } 个令牌，输出 { $out } 个
+ai-none-panel = 还没有 AI 服务 — F7 添加
+ai-service-removed = 已移除 { $name }
+ai-probing = 正在登录 { $host } 上的 { $name }…
+ai-probe-ok = { $host } 回复 HTTP { $status }，用时 { $ms } 毫秒，{ $models } 个模型 — 输入问题并按回车
+ai-probe-no-model = （模型 { $model } 不在其中）
+ai-row-context = 上下文
+ai-row-conversation = 对话
+ai-session-title = AI：{ $name } · { $model } — 上下文中 { $files } 个文件
+ai-context-added = 上下文中加入 { $count } 个文件
+ai-context-nothing = 没有可加入的：只有本磁盘上的文件能进入上下文
+ai-context-removed = 已移出上下文
 ai-command-ready = 命令已在命令行上——按回车前请先阅读
 ai-commit-question = 为已暂存的更改写一条提交信息。
 ai-staged-diff = 已暂存的差异
@@ -1435,6 +1450,7 @@ vault-refused = 密钥文件未能打开：{$why}
 
 # 外部程序
 drive-tools = 外部程序
+drive-ai = AI
 drive-git = Git
 tools-found = 已找到
 tools-missing = 未安装

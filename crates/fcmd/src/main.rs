@@ -4771,6 +4771,20 @@ async fn ask_ai(
         system,
         max_tokens: cfg.max_tokens,
     };
+    // A login asks the service for its models, which proves the address, the key and the
+    // protocol, and sends nothing else. What it found goes back a field a line.
+    if query.purpose == app::AiUse::Probe {
+        let probe = fcmd_net::ai::probe(&service).await?;
+        return Ok(app::AiAnswer {
+            file: std::path::PathBuf::new(),
+            text: format!(
+                "{}\n{}\n{}\n{}\n{}\n{}",
+                cfg.name, probe.url, probe.status, probe.millis, probe.models, probe.has_model
+            ),
+            purpose: app::AiUse::Probe,
+            tokens: (None, None),
+        });
+    }
     let mut attachments = Vec::new();
     for f in &query.files {
         let bytes = std::fs::read(f).map_err(|e| format!("{}: {e}", f.display()))?;

@@ -36,6 +36,22 @@ out as well. Where the panels were is a different file and comes back either way
 
 # Asking an AI
 
+The easiest way is the **AI** row of `Alt+F1` / `Alt+F2`: it turns the panel into the list of
+your services. `F7` adds one, `F4` changes it, `F8` removes it. `Enter` logs in — fcmd asks the
+service for its list of models, which proves the address and the key without asking the model
+anything, and the status line says what came back (`HTTP 200 in 120 ms, 12 models`), or why it
+failed (a server that is not running, a wrong key). Then the panel is the **conversation**:
+
+* whatever you type on the command line under it goes to the AI, as the next turn of the same
+  conversation — no prefix needed;
+* `F5` in the other panel puts the files selected there into the **context**, and they go with
+  every question from then on — before the first one that carries them, a dialog says which
+  files, how big and to which host;
+* the panel shows the files of the context and the conversation itself: `F3` or `Ctrl+Q` reads
+  it, `F8` takes a file out of the context (on the conversation row, it starts a new one).
+
+The rest of this chapter is the same thing from the command line.
+
 `ai: question` on the command line asks a language model and opens the answer in the viewer.
 The services are `[[ai]]` blocks in `fcmd.toml`:
 

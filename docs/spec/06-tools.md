@@ -614,6 +614,31 @@ completions (and every server that speaks it), Anthropic's messages, Ollama's ch
 * A line that starts with `ai:`, `ai+` or `ai!` is not expanded: FAR's metasymbols would turn
   the `!` of `ai!` into a file name.
 
+### 14.1 The AI panel (0.39.0)
+
+`Alt+F1` / `Alt+F2` has an **AI** row (`:ai`, hidden like the others with `[drives] panels`):
+the `[[ai]]` services as a panel, one row each — name, protocol, model, host. `F7` or
+`Shift+F4` adds one through the service dialog, `F4` edits the one under the cursor, `F8`
+removes it.
+
+`Enter` is the **login**: one `GET` of the service's list of models — `…/models` beside an
+OpenAI or Anthropic endpoint, `…/api/tags` beside Ollama's chat — with the key it will be
+asked with (from `token_env`, or asked for and kept in the secrets file, §14). Nothing else is
+sent and nothing is generated. The status line says what happened: the host, the HTTP status,
+the time, how many models it lists and whether the configured one is among them; a refusal,
+a wrong key or a server that is not running is git-style error text from the request.
+
+Logged in, the panel becomes the **conversation** (`:aichat`): first the files of its context,
+then the conversation file itself once there is one — real files, so `F3`, `F4` and `Ctrl+Q`
+read them. `F5` in the other panel puts the files selected there (or the one under the cursor)
+into the context instead of copying anything; only files on this disk. `F8` takes a file out of
+the context, or on the conversation row starts a new conversation. While the active panel is
+the conversation, the **command line is the question**: what is typed goes to the service as
+the next turn of the conversation (as `ai+` does), with the files of the context; the dialog
+that names the files, their size and the host comes back whenever they are not the ones sent
+last time. `ai:`, `ai+` and `ai!` keep their meaning there. Logging in again to the same
+service keeps its conversation and its files; another service starts afresh.
+
 ## 15. Git
 
 `Ctrl+Alt+G` (`tool.git`, *Commands → Git*) on a folder of this disk, and `F2` inside any of
