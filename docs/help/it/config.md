@@ -71,7 +71,9 @@ ne aggiunge uno con il suo dialogo (nome, protocollo, indirizzo, modello, variab
 chiave) — cambiare protocollo riscrive l'indirizzo per quel protocollo, sullo stesso host, e
 un indirizzo scritto senza `http://` o `https://` prende `http` su questa macchina e `https`
 altrove; un host da solo prende il percorso solito del protocollo, e una lista di modelli
-incollata al posto dell'indirizzo torna all'endpoint accanto — `F4` lo modifica, `Canc` lo toglie, e `Enter` lo rende quello a cui chiede `ai:`. Se
+incollata al posto dell'indirizzo torna all'endpoint accanto; mentre una domanda è in corso,
+l'angolo della riga di stato dice quale servizio sta pensando e da quanti secondi — `F4` lo
+modifica, `Canc` lo toglie, e `Enter` lo rende quello a cui chiede `ai:`. Se
 la variabile della chiave è vuota o non c'è, la chiave viene chiesta la prima volta che serve e
 tenuta in `fcmd-secrets.vault`, il file cifrato di fcmd accanto alle impostazioni — così viaggia
 con loro su un'altra macchina. La prima volta scegli la password di quel file (vuota: la chiave

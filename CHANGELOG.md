@@ -90,6 +90,12 @@ Notable changes, newest first. The format follows
   list of models (`…/api/tags`) had the list's path added again, and an Ollama protocol on an
   OpenAI-style address asked `/v1/chat/completions/api/tags`. The address is now read back to
   its endpoint before anything is called, and stored that way.
+- **An answer in another protocol's shape was called no answer.** A local server picked as
+  Ollama that answers the OpenAI way (llama.cpp, LM Studio, vLLM under `/v1`) has its answer
+  and its token counts read anyway: each protocol's shape is tried first, then the others.
+- **A question out to the AI looked like nothing happening.** The status line's corner now
+  shows the service and the seconds it has been thinking, with a turning wheel, until the
+  answer or the error is back.
 - **Menus in a short window.** A dropdown taller than the window scrolls with the cursor,
   with `▲`/`▼` on its frame, and it hangs right under the bar, with no empty row between.
 - **`Esc` after a quick search** closes the box and leaves the cursor on the row it found, as

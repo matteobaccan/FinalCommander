@@ -2088,6 +2088,9 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
             let step = std::time::Duration::from_secs(1);
             wait = Some(wait.map_or(step, |w: std::time::Duration| w.min(step)));
         }
+        if let Some(step) = app.ai_wait() {
+            wait = Some(wait.map_or(step, |w: std::time::Duration| w.min(step)));
+        }
         // The secrets file's password is forgotten on time, not only at the next key.
         if let Some(left) = app.vault_wait() {
             let left = left.max(std::time::Duration::from_secs(1));

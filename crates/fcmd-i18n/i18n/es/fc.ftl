@@ -1385,6 +1385,7 @@ ai-staged-diff = el diff preparado
 ai-send-diff = El diff preparado va a { $host }
 ai-send-files = { $count } archivos, { $size }, se enviarán a { $host } con la pregunta.
 ai-asking = Preguntando a { $name }…
+ai-busy = { $name } está pensando… { $secs } s
 ai-failed = La IA no respondió: { $why }
 btn-send = Enviar
 

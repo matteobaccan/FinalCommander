@@ -1354,6 +1354,7 @@ ai-staged-diff = 已暂存的差异
 ai-send-diff = 已暂存的差异将发送到 { $host }
 ai-send-files = { $count } 个文件，{ $size }，将随问题发送到 { $host }。
 ai-asking = 正在询问 { $name }…
+ai-busy = { $name } 正在思考… { $secs } 秒
 ai-failed = AI 没有回答：{ $why }
 btn-send = 发送
 

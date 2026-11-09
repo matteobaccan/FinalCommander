@@ -1385,6 +1385,7 @@ ai-staged-diff = der vorgemerkte Diff
 ai-send-diff = Der vorgemerkte Diff geht an { $host }
 ai-send-files = { $count } Dateien, { $size }, werden mit der Frage an { $host } gesendet.
 ai-asking = Frage { $name }…
+ai-busy = { $name } denkt nach… { $secs } s
 ai-failed = Die KI hat nicht geantwortet: { $why }
 btn-send = Senden
 

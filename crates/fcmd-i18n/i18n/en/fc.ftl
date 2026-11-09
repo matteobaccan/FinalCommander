@@ -1395,6 +1395,7 @@ ai-staged-diff = the staged diff
 ai-send-diff = The staged diff goes to { $host }
 ai-send-files = { $count } files, { $size }, will be sent to { $host } with the question.
 ai-asking = Asking { $name }…
+ai-busy = { $name } is thinking… { $secs }s
 ai-failed = The AI did not answer: { $why }
 btn-send = Send
 

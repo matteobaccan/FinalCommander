@@ -547,6 +547,20 @@ pub fn draw(app: &mut App, buf: &mut Buffer) -> Option<(u16, u16)> {
         if !app.background.is_empty() {
             mark.push_str(&format!("[{}]", app.background.len()));
         }
+        // A question out to an AI: which service, and the seconds it has been thinking, with
+        // a wheel that turns, until the answer or the error comes back.
+        if let Some((name, since)) = &app.ai_busy {
+            let secs = since.elapsed().as_secs();
+            let wheel = ['◐', '◓', '◑', '◒'][(secs % 4) as usize];
+            let text = app.i18n.t_args(
+                "ai-busy",
+                &[
+                    ("name", name.clone().into()),
+                    ("secs", (secs as i64).into()),
+                ],
+            );
+            mark = format!("{wheel} {text} {mark}");
+        }
         {
             let mark = mark.trim_end().to_string();
             let width = unicode_width::UnicodeWidthStr::width(mark.as_str()) as u16;

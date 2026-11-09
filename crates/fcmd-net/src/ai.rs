@@ -81,11 +81,21 @@ pub struct Reply {
 /// The tokens a reply says it used, read where each service puts them.
 pub fn usage(api: Api, reply: &Value) -> (Option<u64>, Option<u64>) {
     let n = |p: &str| reply.pointer(p).and_then(Value::as_u64);
-    match api {
-        Api::Anthropic => (n("/usage/input_tokens"), n("/usage/output_tokens")),
-        Api::OpenAi => (n("/usage/prompt_tokens"), n("/usage/completion_tokens")),
-        Api::Ollama => (n("/prompt_eval_count"), n("/eval_count")),
-    }
+    let shapes = [
+        (n("/usage/input_tokens"), n("/usage/output_tokens")),
+        (n("/usage/prompt_tokens"), n("/usage/completion_tokens")),
+        (n("/prompt_eval_count"), n("/eval_count")),
+    ];
+    let own = match api {
+        Api::Anthropic => 0,
+        Api::OpenAi => 1,
+        Api::Ollama => 2,
+    };
+    // Its own shape first, then whichever the reply has, as for the answer itself.
+    std::iter::once(shapes[own])
+        .chain(shapes)
+        .find(|(i, o)| i.is_some() || o.is_some())
+        .unwrap_or((None, None))
 }
 
 /// The body of the request, in the service's own shape.
@@ -152,8 +162,8 @@ pub fn answer(api: Api, reply: &Value) -> Result<String, String> {
             .unwrap_or_else(|| error.to_string());
         return Err(message);
     }
-    let text = match api {
-        Api::Anthropic => reply
+    let anthropic = || {
+        reply
             .get("content")
             .and_then(Value::as_array)
             .map(|blocks| {
@@ -163,15 +173,22 @@ pub fn answer(api: Api, reply: &Value) -> Result<String, String> {
                     .filter_map(|b| b.get("text").and_then(Value::as_str))
                     .collect::<Vec<_>>()
                     .join("")
-            }),
-        Api::OpenAi => reply
-            .pointer("/choices/0/message/content")
+            })
+    };
+    let at = |path: &str| {
+        reply
+            .pointer(path)
             .and_then(Value::as_str)
-            .map(str::to_string),
-        Api::Ollama => reply
-            .pointer("/message/content")
-            .and_then(Value::as_str)
-            .map(str::to_string),
+            .map(str::to_string)
+    };
+    let openai = || at("/choices/0/message/content");
+    let ollama = || at("/message/content");
+    // The protocol's own shape first, then the others: a local server picked as Ollama that
+    // answers the OpenAI way (llama.cpp, LM Studio, vLLM under `/v1`) has still answered.
+    let text = match api {
+        Api::Anthropic => anthropic().or_else(openai).or_else(ollama),
+        Api::OpenAi => openai().or_else(ollama).or_else(anthropic),
+        Api::Ollama => ollama().or_else(openai).or_else(anthropic),
     };
     text.ok_or_else(|| format!("no answer in the reply: {}", short(&reply.to_string())))
 }
@@ -428,6 +445,11 @@ mod tests {
         );
         let openai = json!({"data": [{"id": "gpt-x"}, {"id": "gpt-y"}]});
         assert_eq!(model_names(&openai), ["gpt-x", "gpt-y"]);
+        // An Ollama service whose server answers the OpenAI way has still answered.
+        let openai_reply = json!({"choices": [{"message": {"role": "assistant", "content": "ciao"}}],
+            "usage": {"prompt_tokens": 2, "completion_tokens": 3}});
+        assert_eq!(answer(Api::Ollama, &openai_reply).unwrap(), "ciao");
+        assert_eq!(usage(Api::Ollama, &openai_reply), (Some(2), Some(3)));
         let ollama = json!({"models": [{"name": "llama3:8b"}]});
         assert_eq!(model_names(&ollama), ["llama3:8b"]);
     }

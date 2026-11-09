@@ -69,7 +69,8 @@ sessions. `Ins` adds one through its dialog (name, protocol, address, model, the
 key is in) — changing the protocol rewrites the address for it, on the same host, and an
 address typed without `http://` or `https://` gets `http` on this machine and `https`
 anywhere else; a bare host gets the protocol's usual path, and a list of models pasted for
-the address is taken back to the endpoint beside it — `F4` changes it, `Del` removes it, and `Enter` makes it the one `ai:` asks. With no
+the address is taken back to the endpoint beside it; while a question is out, the corner of
+the status line says which service is thinking and for how many seconds — `F4` changes it, `Del` removes it, and `Enter` makes it the one `ai:` asks. With no
 variable, or one that is not set, the key is asked for the first time it is needed and kept in
 `fcmd-secrets.vault`, fcmd's own encrypted file beside the settings — so it travels with them
 to another machine. The first time, you choose that file's password (leave it empty to keep the

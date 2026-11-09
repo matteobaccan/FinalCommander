@@ -2509,6 +2509,9 @@ pub struct App {
     ai_session: Option<AiSession>,
     /// The side a login was asked from, while its answer is on its way.
     ai_probing: Option<usize>,
+    /// A question on its way: to which service, and since when. Drawn in the status line's
+    /// corner with the seconds going by, so a slow model looks busy rather than dead.
+    pub ai_busy: Option<(String, std::time::Instant)>,
     /// Size of the editor's text area, from the last frame.
     pub editor_size: (u16, u16),
     /// The decompilation we are waiting for, if any.
@@ -2889,6 +2892,7 @@ impl App {
             ai_editing: None,
             ai_session: None,
             ai_probing: None,
+            ai_busy: None,
             editor_size: (80, 20),
             decompile_id: None,
             sites,
@@ -3204,13 +3208,16 @@ impl App {
                 self.read_panel(0);
                 self.read_panel(1);
             }
-            Event::AiDone { result } => match result {
-                Ok(answer) => self.ai_done(answer),
-                Err(why) => {
-                    let m = self.i18n.t_args("ai-failed", &[("why", why.into())]);
-                    self.set_error(m);
+            Event::AiDone { result } => {
+                self.ai_busy = None;
+                match result {
+                    Ok(answer) => self.ai_done(answer),
+                    Err(why) => {
+                        let m = self.i18n.t_args("ai-failed", &[("why", why.into())]);
+                        self.set_error(m);
+                    }
                 }
-            },
+            }
             Event::SqlDone { result } => match result {
                 Ok(csv) => {
                     self.set_status(String::new());
@@ -13306,6 +13313,7 @@ impl App {
             });
             return;
         }
+        self.ai_busy = Some((service.name.clone(), std::time::Instant::now()));
         self.requests.push(Request::AiAsk {
             query,
             token: if from_env { None } else { typed },
@@ -13396,6 +13404,13 @@ impl App {
     }
 
     /// How long the loop may wait before the password has to be forgotten.
+    /// While a question is out, the screen is drawn again every second for its clock.
+    pub fn ai_wait(&self) -> Option<std::time::Duration> {
+        self.ai_busy
+            .as_ref()
+            .map(|_| std::time::Duration::from_secs(1))
+    }
+
     pub fn vault_wait(&self) -> Option<std::time::Duration> {
         self.vault
             .as_ref()
@@ -36566,6 +36581,33 @@ abcdefghij
             matches!(&app.mode, Mode::Prompt(p) if p.kind == PromptKind::VaultPassword),
             "asked for again"
         );
+    }
+
+    /// A question out shows in the status line's corner until its answer is back.
+    #[test]
+    fn a_question_out_is_shown_until_it_is_answered() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = app_on_disk(dir.path());
+        app.cfg.ais.push(fcmd_config::AiCfg {
+            name: "local".into(),
+            url: "http://localhost:11434/api/chat".into(),
+            api: "ollama".into(),
+            ..Default::default()
+        });
+        app.ai_line("hello".into());
+        assert!(app.ai_busy.is_some(), "{:?}", app.mode);
+        assert!(app.ai_wait().is_some());
+        let mut buf = fcmd_ui::Buffer::new(100, 30);
+        crate::render::draw(&mut app, &mut buf);
+        let screen: String = (0..30)
+            .flat_map(|y| (0..100).map(move |x| (x, y)))
+            .filter_map(|(x, y)| buf.get(x, y).map(|c| c.ch))
+            .collect();
+        assert!(screen.contains("local is thinking"), "{screen}");
+        app.handle_event(Event::AiDone {
+            result: Err("nope".into()),
+        });
+        assert!(app.ai_busy.is_none());
     }
 
     /// In the AI service dialog the address follows the protocol, `Alt+↓` lists the

@@ -1383,6 +1383,7 @@ ai-staged-diff = подготовленный diff
 ai-send-diff = Подготовленный diff уходит на { $host }
 ai-send-files = Файлов: { $count }, { $size } — будут отправлены на { $host } вместе с вопросом.
 ai-asking = Спрашиваю { $name }…
+ai-busy = { $name } думает… { $secs } с
 ai-failed = ИИ не ответил: { $why }
 btn-send = Отправить
 
