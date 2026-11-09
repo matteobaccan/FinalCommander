@@ -32,6 +32,9 @@ Notable changes, newest first. The format follows
   and the branches panels `F4` is what changed, `F5` pull, `F6` push, `F7` commit and `F8` the
   other list. `Ctrl+Q` beside the log shows the commit under the cursor, and beside the
   branches that branch's log.
+- **Diffs in colour.** In the viewer and the quick view a `.diff` or `.patch` — and what git
+  shows from its panels, a file's changes or a commit — has its added lines green, its removed
+  lines red, and the hunk and file headers marked. Each theme has the two new colours.
 
 ### Changed
 
@@ -39,6 +42,18 @@ Notable changes, newest first. The format follows
   times now asked for by name): on Windows the wastebasket is listed under each file's real
   name, extension included, which the undo's restore depends on; on Linux encoded paths in
   `.trashinfo` records are read correctly.
+- **Fewer crates in the binary: 348 down to 334 on Linux.** The configuration folder, the
+  selection masks and the pseudo-terminal are the program's own code now, in place of `dirs`,
+  `globset` and `portable-pty` (with it went a second `nix`, `bitflags` 1 and `thiserror` 1),
+  and `fcmd-arc` asks for the `lzma-rust2` the archivers already bring, so the xz code is in
+  the binary once. Nothing changes for the user; the terminal pane on Windows is ConPTY as
+  before, and a Windows without it still starts.
+
+### Fixed
+
+- **What changed after a copy into the repository.** `F5` from the other panel into the folder
+  that *What changed* shows copied the file and left the panel as it was; every job now ends
+  with git asked again, so the new file is there.
 
 ## [0.38.0] - 2026-11-06
 

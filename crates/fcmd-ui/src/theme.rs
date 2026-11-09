@@ -167,6 +167,10 @@ const DEFAULTS: &[(&str, Color)] = &[
     ("syntax.attr", Color::Ansi(11)),
     ("syntax.entity", Color::Ansi(13)),
     ("syntax.function", Color::Ansi(12)),
+    // A diff's two kinds of line: what it adds in green and what it takes away in red, as
+    // `git diff --color` and every review tool draw them.
+    ("syntax.added", Color::Ansi(10)),
+    ("syntax.removed", Color::Ansi(9)),
     ("syntax.text", Color::Default),
     ("cmdline.fg", Color::Default),
     ("cmdline.bg", Color::Default),

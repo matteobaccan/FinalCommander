@@ -8904,6 +8904,25 @@ impl App {
         }
         self.read_panel(0);
         self.read_panel(1);
+        self.git_status_again();
+    }
+
+    /// Ask git again on each side that shows what changed. A copy into the repository, a
+    /// delete or a rename there changes the answer, and re-reading the rows the panel already
+    /// had would never show a file that was not in it before.
+    fn git_status_again(&mut self) {
+        for side in 0..self.panels.len() {
+            if self.panels[side].temp_origin() != Some(":git") {
+                continue;
+            }
+            if let Some(cwd) = self.git_cwd_of(side) {
+                self.requests.push(Request::Git {
+                    panel: side,
+                    cwd,
+                    what: GitAsk::Status,
+                });
+            }
+        }
     }
 
     /// What a finished job did, on the status line — and when it went wrong, in a box if it
@@ -35636,6 +35655,55 @@ abcdefghij
             .map(|e| e.name_str().into_owned())
             .collect();
         assert!(names.contains(&" M a.txt".to_string()), "{names:?}");
+    }
+
+    /// A copy into the repository from the other panel ends with git asked again, so the
+    /// file it made shows up in what changed instead of the panel keeping the rows it had.
+    #[test]
+    fn a_job_that_ends_asks_git_again_for_what_changed() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), "x").unwrap();
+        let mut app = editing_app(dir.path());
+        app.handle_event(Event::GitDone {
+            panel: 0,
+            result: Ok(GitOut::Status {
+                root: dir.path().to_path_buf(),
+                files: vec![(" M".into(), "a.txt".into())],
+            }),
+        });
+        assert_eq!(app.panels[0].temp_origin(), Some(":git"));
+        app.start_job(JobSpec::new(
+            JobKind::Copy,
+            vec![VPath::local(dir.path().join("a.txt"))],
+            Some(VPath::local(dir.path().join("b.txt"))),
+        ));
+        let id = app
+            .take_requests()
+            .into_iter()
+            .find_map(|r| match r {
+                Request::Job { id, .. } => Some(id),
+                _ => None,
+            })
+            .expect("the copy");
+        app.handle_event(Event::JobDone {
+            id,
+            kind: JobKind::Copy,
+            outcome: fcmd_jobs::Outcome {
+                files: 1,
+                ..Default::default()
+            },
+        });
+        let asked = app.take_requests().into_iter().any(|r| {
+            matches!(
+                r,
+                Request::Git {
+                    panel: 0,
+                    what: GitAsk::Status,
+                    ..
+                }
+            )
+        });
+        assert!(asked, "what changed is asked again");
     }
 
     /// Everything git does here is a panel: in what changed `F5` stages, `F6` unstages, `F3`

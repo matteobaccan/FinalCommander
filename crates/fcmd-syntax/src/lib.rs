@@ -41,6 +41,10 @@ pub enum Class {
     Entity,
     /// A name being called or defined.
     Function,
+    /// A line a diff adds.
+    Added,
+    /// A line a diff takes away.
+    Removed,
     /// Everything that is none of the above.
     Text,
 }
@@ -59,6 +63,8 @@ impl Class {
             Class::Attr => "syntax.attr",
             Class::Entity => "syntax.entity",
             Class::Function => "syntax.function",
+            Class::Added => "syntax.added",
+            Class::Removed => "syntax.removed",
             Class::Text => "syntax.text",
         }
     }
@@ -101,6 +107,8 @@ pub enum Flavour {
     Markup,
     /// Headings, fences, emphasis, links.
     Markdown,
+    /// A unified diff: what it adds, what it takes away, where each hunk is.
+    Diff,
 }
 
 impl Syntax {
@@ -114,6 +122,7 @@ impl Syntax {
             Flavour::Code => self.scan_code(text, state),
             Flavour::Markup => self.scan_markup(text, state),
             Flavour::Markdown => scan_markdown(text, state),
+            Flavour::Diff => (scan_diff(text), state),
         }
     }
 
@@ -437,6 +446,47 @@ fn scan_tag(text: &str, start: usize, end: usize) -> Vec<Span> {
 }
 
 /// Markdown: the shape of the page rather than the language of a program.
+/// One line of a unified diff — `git diff`, `git show`, `diff -u` — coloured by its first
+/// characters alone, which is all the format says: the file headers, the `@@` that opens a
+/// hunk, a line added, a line taken away. A diff carries nothing from one line to the next.
+fn scan_diff(text: &str) -> Vec<Span> {
+    let whole = |class| {
+        vec![Span {
+            start: 0,
+            end: text.len(),
+            class,
+        }]
+    };
+    if text.starts_with("+++") || text.starts_with("---") {
+        return whole(Class::Preproc);
+    }
+    if text.starts_with("@@") {
+        return whole(Class::Function);
+    }
+    if text.starts_with('+') {
+        return whole(Class::Added);
+    }
+    if text.starts_with('-') {
+        return whole(Class::Removed);
+    }
+    const HEADS: [&str; 10] = [
+        "diff ",
+        "index ",
+        "commit ",
+        "new file",
+        "deleted file",
+        "similarity",
+        "rename ",
+        "old mode",
+        "new mode",
+        "Binary files",
+    ];
+    if HEADS.iter().any(|h| text.starts_with(h)) {
+        return whole(Class::Keyword);
+    }
+    Vec::new()
+}
+
 fn scan_markdown(text: &str, mut state: State) -> (Vec<Span>, State) {
     let trimmed = text.trim_start();
     let indent = text.len() - trimmed.len();
@@ -674,6 +724,21 @@ mod tests {
             .into_iter()
             .map(|s| (line[s.start..s.end].to_string(), s.class))
             .collect()
+    }
+
+    #[test]
+    fn a_diff_colours_what_it_adds_what_it_removes_and_its_hunks() {
+        let diff = of_name("app.rs.diff").expect("a .diff is a diff");
+        assert_eq!(diff.name, "Diff");
+        assert_eq!(of_name("fix.patch").map(|s| s.name), Some("Diff"));
+        let one = |line: &str| classes(diff, line).first().map(|(_, c)| *c);
+        assert_eq!(one("+let x = 1;"), Some(Class::Added));
+        assert_eq!(one("-let x = 0;"), Some(Class::Removed));
+        assert_eq!(one("@@ -1,3 +1,3 @@ fn main()"), Some(Class::Function));
+        assert_eq!(one("+++ b/src/app.rs"), Some(Class::Preproc));
+        assert_eq!(one("--- a/src/app.rs"), Some(Class::Preproc));
+        assert_eq!(one("diff --git a/x b/x"), Some(Class::Keyword));
+        assert_eq!(one(" context stays plain"), None);
     }
 
     #[test]
