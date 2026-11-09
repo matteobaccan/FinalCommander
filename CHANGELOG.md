@@ -6,6 +6,16 @@ Notable changes, newest first. The format follows
 
 ## [Unreleased]
 
+## [0.39.2] - 2026-11-09
+
+### Added
+
+- **Pascal and Delphi are coloured** in the viewer and the editor: `.pas`, `.pp`, `.dpr`,
+  `.dpk`, `.lpr`, `.lpk` and `.inc`. Keywords in any case (`BEGIN` is `begin`), both block
+  comments — `{ … }` and `(* … *)`, each closed only by its own end — `//` lines, `'…'`
+  strings with `''` inside, and `{$IFDEF …}` coloured as a directive rather than a comment. A
+  fenced block in Markdown may say `pascal` or `delphi`.
+
 ## [0.39.1] - 2026-11-09
 
 ### Fixed
