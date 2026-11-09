@@ -666,7 +666,7 @@ diff-needs-two = Поставьте курсор на файл в каждой �
 diff-not-here = { $name } — не файл на этом диске
 diff-too-big = { $name } больше, чем { $most }
 diff-same = Файлы одинаковы
-diff-where = блок { $at } из { $count }
+diff-where = блок { $at } из { $count } · -{ $removed } +{ $added } строк
 diff-no-next = Последнее различие
 diff-no-previous = Первое различие
 diff-hint = Alt+↑↓ блоки · Tab сторона · F5 взять · F2 записать · W пробелы · C регистр · E концы строк · Esc закрыть
@@ -1379,6 +1379,21 @@ git-kind-type = тип изменён
 git-kind-conflict = разрешить
 git-as-tree = Показать изменения деревом
 git-as-list = Показать изменения списком
+git-version-head = последний коммит
+git-version-index = в индексе
+git-version-disk = на диске
+git-discard-title = Отменить изменения
+git-discard-body = Отменить изменения { $count ->
+        [one] { $count } файла
+        [few] { $count } файлов
+        [many] { $count } файлов
+       *[other] { $count } файлов
+    }?
+git-discard-worktree = как в индексе:
+git-discard-both = как в последнем коммите:
+git-discard-added = убрать из индекса, оставить на диске:
+git-discard-trash = в корзину:
+git-discard-warning = Возврат к индексу или к последнему коммиту нельзя отменить.
 git-hint = Enter: выбрать · Esc: закрыть
 
 ## The editor's character list and word completion.
@@ -1526,8 +1541,8 @@ key-git = Git
 key-git-diff = Разн
 key-git-stage = Индекс
 key-git-unstage = Убрать
+key-git-discard = Отменить
 key-git-commit = Коммит
-key-git-history = История
 key-git-show = Показ
 key-git-log = Журнал
 key-git-changes = Измен.

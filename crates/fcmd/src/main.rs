@@ -4586,7 +4586,11 @@ fn run_git(cwd: &std::path::Path, what: &app::GitAsk) -> Result<app::GitOut, Str
             if *staged {
                 let before = write("HEAD", version(format!("HEAD:{rel}")))?;
                 let after = write("index", version(format!(":{rel}")))?;
-                Ok(GitOut::Sides(before, after))
+                Ok(GitOut::Sides {
+                    before,
+                    after,
+                    staged: true,
+                })
             } else {
                 let before = write("index", version(format!(":{rel}")))?;
                 // The work tree is the file itself, unless it is gone from it.
@@ -4595,8 +4599,38 @@ fn run_git(cwd: &std::path::Path, what: &app::GitAsk) -> Result<app::GitOut, Str
                 } else {
                     write("worktree", String::new())?
                 };
-                Ok(GitOut::Sides(before, after))
+                Ok(GitOut::Sides {
+                    before,
+                    after,
+                    staged: false,
+                })
             }
+        }
+        GitAsk::Discard {
+            worktree,
+            both,
+            added,
+        } => {
+            let run = |head: &[&str], files: &[std::path::PathBuf]| -> Result<(), String> {
+                if files.is_empty() {
+                    return Ok(());
+                }
+                let mut args: Vec<String> = head.iter().map(|a| a.to_string()).collect();
+                args.push("--".into());
+                args.extend(files.iter().map(|f| f.display().to_string()));
+                let args: Vec<&str> = args.iter().map(String::as_str).collect();
+                git(&root, &args).map(|_| ())
+            };
+            run(&["restore", "--worktree"], worktree)?;
+            run(
+                &["restore", "--source=HEAD", "--staged", "--worktree"],
+                both,
+            )?;
+            run(&["rm", "--cached", "--quiet"], added)?;
+            Ok(GitOut::Done(format!(
+                "{} discarded",
+                worktree.len() + both.len() + added.len()
+            )))
         }
         GitAsk::Stage(files) | GitAsk::Unstage(files) => {
             let mut args: Vec<String> = match what {
@@ -6731,17 +6765,24 @@ dir_attr = "D"
             file: a.clone(),
             staged,
         };
-        let Ok(app::GitOut::Sides(before, after)) = run_git(root, &sides(true)) else {
+        let Ok(app::GitOut::Sides { before, after, .. }) = run_git(root, &sides(true)) else {
             panic!("the staged sides")
         };
         assert_eq!(std::fs::read_to_string(&before).unwrap(), "one\n");
         assert_eq!(std::fs::read_to_string(&after).unwrap(), "two\n");
-        let Ok(app::GitOut::Sides(before, after)) = run_git(root, &sides(false)) else {
+        let Ok(app::GitOut::Sides { before, after, .. }) = run_git(root, &sides(false)) else {
             panic!("the unstaged sides")
         };
         assert_eq!(std::fs::read_to_string(&before).unwrap(), "two\n");
         assert_eq!(after, a, "the work tree is the file itself");
-        std::fs::write(&a, "two\n").unwrap();
+        // Discarding what is not staged puts the file back as the index has it.
+        let discard = app::GitAsk::Discard {
+            worktree: vec![a.clone()],
+            both: vec![],
+            added: vec![],
+        };
+        run_git(root, &discard).unwrap();
+        assert_eq!(std::fs::read_to_string(&a).unwrap(), "two\n");
         run_git(root, &app::GitAsk::Unstage(vec![a.clone()])).unwrap();
         let Ok(app::GitOut::Status { files, .. }) = run_git(root, &app::GitAsk::Status) else {
             panic!("a status")

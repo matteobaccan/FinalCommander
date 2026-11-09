@@ -666,7 +666,7 @@ diff-needs-two = Den Cursor in jedem Panel auf eine Datei setzen
 diff-not-here = { $name } ist keine Datei auf dieser Platte
 diff-too-big = { $name } ist größer als { $most }
 diff-same = Die beiden Dateien sind gleich
-diff-where = Block { $at } von { $count }
+diff-where = Block { $at } von { $count } · -{ $removed } +{ $added } Zeilen
 diff-no-next = Der letzte Unterschied
 diff-no-previous = Der erste Unterschied
 diff-hint = Alt+↑↓ Blöcke · Tab Seite · F5 übernehmen · F2 schreiben · W Leerzeichen · C Groß/Klein · E Zeilenenden · Esc schließen
@@ -1378,6 +1378,19 @@ git-kind-type = Typ geändert
 git-kind-conflict = zu lösen
 git-as-tree = Änderungen als Baum zeigen
 git-as-list = Änderungen als Liste zeigen
+git-version-head = letzter Commit
+git-version-index = vorgemerkt
+git-version-disk = auf der Platte
+git-discard-title = Änderungen verwerfen
+git-discard-body = Die Änderungen { $count ->
+        [one] einer Datei
+       *[other] von { $count } Dateien
+    } verwerfen?
+git-discard-worktree = zurück auf den Index:
+git-discard-both = zurück auf den letzten Commit:
+git-discard-added = aus dem Index, bleibt auf der Platte:
+git-discard-trash = in den Papierkorb:
+git-discard-warning = Was auf den Index oder den letzten Commit zurückgeht, lässt sich nicht rückgängig machen.
 git-hint = Enter: wählen · Esc: schließen
 
 ## The editor's character list and word completion.
@@ -1525,8 +1538,8 @@ key-git = Git
 key-git-diff = Diff
 key-git-stage = Stage
 key-git-unstage = Unstage
+key-git-discard = Verwerfen
 key-git-commit = Commit
-key-git-history = Verlauf
 key-git-show = Zeigen
 key-git-log = Log
 key-git-changes = Änder.

@@ -488,6 +488,13 @@ pub enum GitAsk {
     },
     Stage(Vec<std::path::PathBuf>),
     Unstage(Vec<std::path::PathBuf>),
+    /// Throw changes away: the work tree back to the index for `worktree`, both back to the
+    /// last commit for `both`, and out of the index (the file kept, untracked) for `added`.
+    Discard {
+        worktree: Vec<std::path::PathBuf>,
+        both: Vec<std::path::PathBuf>,
+        added: Vec<std::path::PathBuf>,
+    },
     Commit(String),
     Push,
     Pull,
@@ -630,8 +637,14 @@ pub enum GitOut {
     Log(Vec<GitCommit>),
     /// Something was done — staged, committed, pushed, switched; what git said about it.
     Done(String),
-    /// Two files to compare side by side: the version before, and the version after.
-    Sides(std::path::PathBuf, std::path::PathBuf),
+    /// Two files to compare side by side — the version before and the version after — and
+    /// whether they are the last commit and the index (a staged row) or the index and the
+    /// work tree.
+    Sides {
+        before: std::path::PathBuf,
+        after: std::path::PathBuf,
+        staged: bool,
+    },
 }
 
 /// What comes back.
@@ -1511,6 +1524,12 @@ pub enum ConfirmAction {
     /// Boxed, and clippy is right to ask: a `JobSpec` carries the sources, the target and
     /// every option, which is most of a kilobyte, and every other answer here is a word.
     Job(Box<JobSpec>),
+    /// Throw away the changes of rows of what changed (SPEC 06 §15): what git does, and the
+    /// files git does not know, which go to the wastebasket.
+    GitDiscard {
+        ask: Box<GitAsk>,
+        trash: Vec<std::path::PathBuf>,
+    },
     /// Leave the editor, losing unsaved changes.
     DiscardEdits,
     /// The same, for the hex editor: its buffer is bytes, not lines.
@@ -1600,6 +1619,7 @@ impl ConfirmAction {
             ConfirmAction::GitSwitch { .. } => "btn-switch",
             ConfirmAction::AskAi { .. } => "btn-send",
             ConfirmAction::Undo => "btn-undo",
+            ConfirmAction::GitDiscard { .. } => "btn-discard",
         }
     }
 }
@@ -4842,6 +4862,25 @@ impl App {
                     }
                     ConfirmAction::AskAi { query } => self.ask_ai(*query),
                     ConfirmAction::Undo => self.run_undo(),
+                    ConfirmAction::GitDiscard { ask, trash } => {
+                        if let GitAsk::Discard {
+                            worktree,
+                            both,
+                            added,
+                        } = ask.as_ref()
+                        {
+                            if !(worktree.is_empty() && both.is_empty() && added.is_empty()) {
+                                self.git_ask(*ask);
+                            }
+                        }
+                        if !trash.is_empty() {
+                            self.start_job(JobSpec::new(
+                                JobKind::Trash,
+                                trash.iter().map(VPath::local).collect(),
+                                None,
+                            ));
+                        }
+                    }
                     ConfirmAction::OpenRelease { url } => {
                         self.requests.push(Request::OpenUrl { url });
                     }
@@ -10447,12 +10486,7 @@ impl App {
                 // In the git panel `F8` is the file's own history, which is what one wants
                 // next to what changed in it — never a delete.
                 if self.panel().temp_origin() == Some(":git") {
-                    if let Some(row) = self.git_status_at_cursor() {
-                        self.git_ask(GitAsk::Log {
-                            file: Some(row.file),
-                            rev: None,
-                        });
-                    }
+                    self.ask_git_discard();
                     return;
                 }
                 // And on the service list `F8` stops the service under the cursor, having
@@ -12412,6 +12446,114 @@ impl App {
         })
     }
 
+    /// The rows of what changed a key acts on: the selected ones, or the one under the
+    /// cursor. A folder of the tree stands for the rows under it in the same part.
+    fn git_rows_chosen(&self) -> Vec<GitRow> {
+        let p = self.panel();
+        let picked: Vec<GitRow> = if p.selection.is_empty() {
+            self.git_status_at_cursor().into_iter().collect()
+        } else {
+            (0..p.listing.len())
+                .filter_map(|r| p.listing.row(r))
+                .filter(|e| p.selection.contains(e.id))
+                .filter_map(|e| self.git_rows.get(&e.id).cloned())
+                .collect()
+        };
+        let mut out: Vec<GitRow> = Vec::new();
+        for row in picked {
+            let rows: Vec<GitRow> = if row.folder {
+                let mut under: Vec<GitRow> = self
+                    .git_rows
+                    .values()
+                    .filter(|r| !r.folder && r.side == row.side && r.file.starts_with(&row.file))
+                    .cloned()
+                    .collect();
+                under.sort_by(|a, b| a.file.cmp(&b.file));
+                under
+            } else {
+                vec![row]
+            };
+            for r in rows {
+                if !out.contains(&r) {
+                    out.push(r);
+                }
+            }
+        }
+        out
+    }
+
+    /// `F8` in what changed: throw the changes away, having said what goes. What is not
+    /// staged goes back to the index (`git restore`); what is staged goes back to the last
+    /// commit, index and file alike (`git restore --source=HEAD --staged --worktree`), except
+    /// a file new in the index, which leaves it and stays on disk untracked; a file git does
+    /// not know goes to the wastebasket, where the undo can find it. A conflict is left to be
+    /// resolved by hand.
+    fn ask_git_discard(&mut self) {
+        let rows = self.git_rows_chosen();
+        let (mut worktree, mut both, mut added, mut trash) =
+            (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+        for row in &rows {
+            match (row.side, row.letter) {
+                (GitSide::Changed, _) => worktree.push(row.file.clone()),
+                (GitSide::Staged, 'A') => added.push(row.file.clone()),
+                (GitSide::Staged, _) => both.push(row.file.clone()),
+                (GitSide::Untracked, _) => trash.push(row.file.clone()),
+                (GitSide::Conflict, _) => {}
+            }
+        }
+        let count = worktree.len() + both.len() + added.len() + trash.len();
+        if count == 0 {
+            let m = self.i18n.t("msg-nothing-to-do");
+            self.set_error(m);
+            return;
+        }
+        let mut lines = vec![self
+            .i18n
+            .t_args("git-discard-body", &[("count", (count as i64).into())])];
+        let rel = |p: &std::path::PathBuf| {
+            self.git_last
+                .as_ref()
+                .and_then(|(root, _)| p.strip_prefix(root).ok())
+                .unwrap_or(p)
+                .display()
+                .to_string()
+        };
+        let mut said = 0;
+        for (key, files) in [
+            ("git-discard-worktree", &worktree),
+            ("git-discard-both", &both),
+            ("git-discard-added", &added),
+            ("git-discard-trash", &trash),
+        ] {
+            for f in files {
+                if said < 8 {
+                    lines.push(format!("  {}  {}", self.i18n.t(key), rel(f)));
+                }
+                said += 1;
+            }
+        }
+        if said > 8 {
+            lines.push("  …".into());
+        }
+        if !(worktree.is_empty() && both.is_empty()) {
+            lines.push(self.i18n.t("git-discard-warning"));
+        }
+        let title = self.i18n.t("git-discard-title");
+        self.mode = Mode::Confirm(Confirm {
+            title,
+            lines,
+            action: ConfirmAction::GitDiscard {
+                ask: Box::new(GitAsk::Discard {
+                    worktree,
+                    both,
+                    added,
+                }),
+                trash,
+            },
+            button: 1,
+        });
+    }
+
     /// `F3` on a changed file: the version before and the version after, side by side —
     /// before and after staging on a row that is not staged, the last commit and the index
     /// on one that is. A file git does not know is read.
@@ -12635,9 +12777,29 @@ impl App {
                 };
                 self.set_status(m);
             }
-            Ok(GitOut::Sides(before, after)) => {
+            Ok(GitOut::Sides {
+                before,
+                after,
+                staged,
+            }) => {
                 self.set_status(String::new());
+                let name = after
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
                 self.open_diff_on(VPath::local(before), VPath::local(after));
+                // The two sides are named for what they are, not for the copies git wrote
+                // into a temporary folder: the last commit, the index, the file on disk.
+                let label = |key: &str| format!("{name} · {}", self.i18n.t(key));
+                let (left, right) = if staged {
+                    (label("git-version-head"), label("git-version-index"))
+                } else {
+                    (label("git-version-index"), label("git-version-disk"))
+                };
+                if let Mode::Diff(view) = &mut self.mode {
+                    view.left_name = left;
+                    view.right_name = right;
+                }
             }
         }
     }
@@ -24159,7 +24321,7 @@ impl App {
                 (5, "key-git-stage"),
                 (6, "key-git-unstage"),
                 (7, "key-git-commit"),
-                (8, "key-git-history"),
+                (8, "key-git-discard"),
                 (9, "key-pulldown"),
                 (10, "key-quit"),
                 (11, "key-plugins"),
@@ -36132,12 +36294,24 @@ abcdefghij
                 staged: false
             }]
         );
+        // `F8` throws the change away, but only after asking — and Cancel is the button lit.
         press(&mut app, "F8");
+        let Mode::Confirm(c) = &app.mode else {
+            panic!("a question first: {:?}", app.mode)
+        };
+        assert_eq!(c.button, 1);
+        assert!(c.lines.iter().any(|l| l.contains("a.txt")), "{:?}", c.lines);
+        press(&mut app, "Esc");
+        assert!(asked(&mut app).is_empty(), "nothing goes on Esc");
+        press(&mut app, "F8");
+        press(&mut app, "Left");
+        press(&mut app, "Enter");
         assert_eq!(
             asked(&mut app),
-            vec![GitAsk::Log {
-                file: Some(file.clone()),
-                rev: None
+            vec![GitAsk::Discard {
+                worktree: vec![file.clone()],
+                both: vec![],
+                added: vec![],
             }]
         );
         // `F7` asks the message first, and an empty one commits nothing.

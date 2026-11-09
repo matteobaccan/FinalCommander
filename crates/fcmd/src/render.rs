@@ -2804,11 +2804,14 @@ fn draw_diff(app: &App, view: &fcmd_view::Diff, buf: &mut Buffer, screen: Rect) 
         app.theme.color("panel.footer.fg"),
         app.theme.color("panel.bg"),
     );
-    // One ink per kind, taken from what the panel already uses for the same idea: a line that
-    // is only on one side is the colour of a file that is not there any more, and the part of
-    // a line that changed is the selection's.
-    let removed = Style::new(app.theme.color("file.exec"), app.theme.color("panel.bg"));
-    let added = Style::new(app.theme.color("file.archive"), app.theme.color("panel.bg"));
+    // A diff's own two colours, the ones a `.diff` has in the viewer: what the left side has
+    // and the right does not is red, what the right side brings is green. A changed line is
+    // both — red on the left, green on the right — with the part that differs marked.
+    let removed = Style::new(
+        app.theme.color("syntax.removed"),
+        app.theme.color("panel.bg"),
+    );
+    let added = Style::new(app.theme.color("syntax.added"), app.theme.color("panel.bg"));
     let inner_mark = Style::new(
         app.theme.color("selected.fg"),
         app.theme.color("selected.bg"),
@@ -2825,7 +2828,9 @@ fn draw_diff(app: &App, view: &fcmd_view::Diff, buf: &mut Buffer, screen: Rect) 
     let rows_h = inner.h.saturating_sub(2) as usize;
     // Each side: a line number, a space, and the text. The middle column is one character.
     let side_w = (inner.w.saturating_sub(1) / 2).max(8);
-    let number_w = 6u16;
+    // The number, then `-`, `+` or a blank, then a space: the sign is what a unified diff
+    // would have put in front of the line.
+    let number_w = 7u16;
     let text_w = side_w.saturating_sub(number_w + 1).max(4) as usize;
 
     // A side that has been merged into carries a `*`, the way every editor has said "this is
@@ -2840,7 +2845,7 @@ fn draw_diff(app: &App, view: &fcmd_view::Diff, buf: &mut Buffer, screen: Rect) 
         }
     };
     let names = format!(
-        "{}  ↔  {}",
+        "- {}  ↔  + {}",
         name(&view.left_name, view.left_edited),
         name(&view.right_name, view.right_edited)
     );
@@ -2849,61 +2854,91 @@ fn draw_diff(app: &App, view: &fcmd_view::Diff, buf: &mut Buffer, screen: Rect) 
     let top = inner.y + 1;
     for (i, row) in view.window(rows_h as u16).iter().enumerate() {
         let y = top + i as u16;
-        let style = match row.kind {
-            Side::Same => base,
-            Side::Removed => removed,
-            Side::Added => added,
-            Side::Changed => base,
+        // What each side of this row is: the left side of a row that is not the same on both
+        // is what went away, the right side what came.
+        let (left_style, right_style, left_sign, right_sign) = match row.kind {
+            Side::Same => (base, base, ' ', ' '),
+            Side::Removed => (removed, base, '-', ' '),
+            Side::Added => (base, added, ' ', '+'),
+            Side::Changed => (removed, added, '-', '+'),
         };
         // The rule down the middle, drawn whatever is on either side of it.
         buf.put_str(inner.x + side_w, y, "│", frame, 1);
-        let mut side =
-            |x: u16, number: Option<usize>, text: &str, mark: &std::ops::Range<usize>| {
-                let label = match number {
-                    Some(n) => format!("{n:>5} "),
-                    None => " ".repeat(number_w as usize),
-                };
-                buf.put_str(x, y, &label, dim, number_w);
-                let from = view.col.min(text.len());
-                let shown: String = text[from..].chars().take(text_w).collect();
-                buf.put_str(x + number_w, y, &shown, style, text_w as u16);
-                // The part that differs, over the top of what was just drawn: the eye goes
-                // there, which is the whole point of a word diff.
-                if row.kind == Side::Changed && !mark.is_empty() {
-                    let start = mark.start.max(from);
-                    let end = mark.end.max(start);
-                    if end > from {
-                        let before = text[from..start].chars().count();
-                        let part: String = text[start..end].chars().take(text_w).collect();
-                        if before < text_w {
-                            buf.put_str(
-                                x + number_w + before as u16,
-                                y,
-                                &part,
-                                inner_mark,
-                                (text_w - before) as u16,
-                            );
-                        }
+        let mut side = |x: u16,
+                        number: Option<usize>,
+                        text: &str,
+                        mark: &std::ops::Range<usize>,
+                        style: Style,
+                        sign: char| {
+            let label = match number {
+                Some(n) => format!("{n:>5}"),
+                None => " ".repeat(5),
+            };
+            buf.put_str(x, y, &label, dim, 5);
+            let sign_style = if sign == ' ' { dim } else { style.bold() };
+            buf.put_str(x + 5, y, &format!("{sign} "), sign_style, 2);
+            let from = view.col.min(text.len());
+            let shown: String = text[from..].chars().take(text_w).collect();
+            buf.put_str(x + number_w, y, &shown, style, text_w as u16);
+            // The part that differs, over the top of what was just drawn: the eye goes
+            // there, which is the whole point of a word diff.
+            if row.kind == Side::Changed && !mark.is_empty() {
+                let start = mark.start.max(from);
+                let end = mark.end.max(start);
+                if end > from {
+                    let before = text[from..start].chars().count();
+                    let part: String = text[start..end].chars().take(text_w).collect();
+                    if before < text_w {
+                        buf.put_str(
+                            x + number_w + before as u16,
+                            y,
+                            &part,
+                            inner_mark,
+                            (text_w - before) as u16,
+                        );
                     }
                 }
-            };
-        side(inner.x, row.left_no, &row.left, &row.left_inner);
+            }
+        };
+        side(
+            inner.x,
+            row.left_no,
+            &row.left,
+            &row.left_inner,
+            left_style,
+            left_sign,
+        );
         side(
             inner.x + side_w + 1,
             row.right_no,
             &row.right,
             &row.right_inner,
+            right_style,
+            right_sign,
         );
     }
 
     let foot = if view.identical() {
         app.i18n.t("diff-same")
     } else {
+        // How much went and how much came, as `git diff --stat` counts it: a changed line is
+        // one of each.
+        let (gone, came) = view
+            .rows()
+            .iter()
+            .fold((0i64, 0i64), |(g, c), r| match r.kind {
+                Side::Same => (g, c),
+                Side::Removed => (g + 1, c),
+                Side::Added => (g, c + 1),
+                Side::Changed => (g + 1, c + 1),
+            });
         app.i18n.t_args(
             "diff-where",
             &[
                 ("at", (view.hunk_at() as i64).into()),
                 ("count", (view.hunks() as i64).into()),
+                ("removed", gone.into()),
+                ("added", came.into()),
             ],
         )
     };

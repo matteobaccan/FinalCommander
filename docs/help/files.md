@@ -456,7 +456,7 @@ it. They are the real files, and the keys are the ones the bar shows:
 | `F6` | unstage them (`git restore --staged`) |
 | `F7` | commit what is staged, after asking for the message |
 | `Shift+F7` | the same, with a message the AI drafted from the staged diff (see *Asking an AI*) |
-| `F8` | the file's own log, every commit that touched it |
+| `F8` | throw the changes away, after asking (Cancel is the button lit): a row not staged goes back to what is staged (`git restore`), a staged row back to the last commit, a staged new file out of the index but kept on disk, and a file git does not know to the wastebasket, where `Ctrl+Alt+Z` finds it again. What git puts back cannot be undone |
 | `F2` | the git menu: the other panels, blame, pull and push |
 | `Ctrl+R` | ask git again |
 
@@ -467,7 +467,7 @@ into the repository from the other panel shows up as untracked at once.
 another switches to it, after asking — the files the two branches disagree on change on disk —
 and `F3` is that branch's log. **The log** is a panel of commits, newest first — hash, date,
 author, subject — and `Enter` or `F3` on one shows it whole, with its patch, in the viewer; the
-log of one file comes from `F8` in *what changed* or from the menu. **Blame** of the file under
+log of one file comes from the menu (`F2`) in *what changed*. **Blame** of the file under
 the cursor opens in the viewer.
 
 From the log and the branches panels the rest of git is a function key away:

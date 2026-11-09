@@ -640,7 +640,11 @@ with an origin of its own and a key bar that says what its keys do there:
   ends asks git again for each side showing what changed. `F4` edits, `F5`
   stages (`git add --`), `F6` unstages (`git restore --staged --`), both on the selection or
   the row, `F7` commits after a prompt for the message (`git commit -m`, an empty message
-  refused before git is asked), `F8` is the file's log.
+  refused before git is asked), `F8` throws the changes of the selected rows or the one under
+  the cursor away after a confirmation with Cancel lit — `git restore --worktree` for rows not
+  staged, `git restore --source=HEAD --staged --worktree` for staged ones, `git rm --cached` for
+  a file new in the index (it stays on disk, untracked), the wastebasket (a job, so the undo
+  has it) for an untracked file, nothing for a conflict; the file's log is in the `F2` menu.
 * **Branches** (`:gitbranches`): the local branches, the current one marked. `Enter` on another
   asks and then runs `git switch`; `F3` is that branch's log.
 * **The log** (`:gitlog`): up to a thousand commits, newest first and kept in git's order (the

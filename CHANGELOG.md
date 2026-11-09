@@ -39,9 +39,16 @@ Notable changes, newest first. The format follows
   file, or the last commit against the index), and `Ctrl+Q` beside the panel shows the diff of
   the row rather than the whole file. *Show what changed as a tree* in the `F2` menu groups
   the rows by folder, and a folder row stages, unstages or diffs all of it.
+- **Throwing a change away.** `F8` in what changed discards the changes of the selected rows,
+  after asking: back to the index for what is not staged, back to the last commit for what is,
+  out of the index for a file new there, and to the wastebasket for a file git does not know.
+  The file's log, which `F8` was, is in the `F2` menu.
 - **Diffs in colour.** In the viewer and the quick view a `.diff` or `.patch` — and what git
   shows from its panels, a file's changes or a commit — has its added lines green, its removed
-  lines red, and the hunk and file headers marked. Each theme has the two new colours.
+  lines red, and the hunk and file headers marked. Each theme has the two new colours. The
+  side-by-side diff uses them too, with a `-` or `+` beside each line number, the git sides
+  named for what they are (last commit, staged, on disk), and the lines removed and added
+  counted in its foot.
 
 ### Changed
 

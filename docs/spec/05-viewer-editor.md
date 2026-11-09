@@ -908,9 +908,14 @@ start from `[compare] ignore_eol`, so the screen and the folder comparison agree
 "the same" means; blanks and case start off, because they are a question one asks of the diff
 in front of one rather than a setting one keeps.
 
-**The screen.** Two equal columns with a rule between them, six columns of line number on each
-side — a line that exists on one side only has a number on that side and nothing on the other —
-and a foot line with which hunk of how many is under the cursor and the keys. `Alt+↓` and
+**The screen.** Two equal columns with a rule between them, the left the *before* and the right
+the *after*. Each side has five columns of line number, then the sign a unified diff would give
+the line — `-` on the left of a removed or changed row, `+` on the right of an added or changed
+one — then the text; a line that exists on one side only has a number on that side and nothing
+on the other. The colours are the diff's own (`syntax.removed` and `syntax.added`, 0.39.0): red
+on the left side of a row that differs, green on the right, the changed part in the selection's
+colours on top. The foot line says which hunk of how many is under the cursor, the lines
+removed and added (a changed row counts one of each), and the keys. `Alt+↓` and
 `Alt+↑` are the hunks, which is the key one presses forty times; the plain arrows, `PgUp`,
 `PgDn`, `Home` and `End` are the rows, `←` and `→` scroll both columns sideways together, and
 `Tab` changes which column is the one being read. `F1` opens the written chapter, `Esc`, `F3`

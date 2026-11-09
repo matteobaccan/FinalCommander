@@ -480,7 +480,7 @@ quello che c'è dentro. Sono i file veri, e i tasti sono quelli che mostra la ba
 | `F6` | li toglie dallo staging (`git restore --staged`) |
 | `F7` | committa quello che è in staging, dopo aver chiesto il messaggio |
 | `Shift+F7` | lo stesso, con un messaggio che l'AI ha scritto dal diff in staging (vedi *Chiedere a un'AI*) |
-| `F8` | il log del file, ogni commit che l'ha toccato |
+| `F8` | butta via le modifiche, dopo aver chiesto (il pulsante acceso è Annulla): una riga non in staging torna com'è nell'indice (`git restore`), una in staging come nell'ultimo commit, un file nuovo in staging esce dall'indice ma resta su disco, e un file che git non conosce va nel cestino, dove `Ctrl+Alt+Z` lo ritrova. Quello che git rimette a posto non si può annullare |
 | `F2` | il menu di git: gli altri pannelli, blame, pull e push |
 | `Ctrl+R` | richiede a git |
 
@@ -492,7 +492,7 @@ non tracciato.
 ci passa, dopo aver chiesto — i file su cui i due branch non sono d'accordo cambiano su disco —
 e `F3` è il log di quel branch. **Il log** è un pannello di commit, dal più recente — hash,
 data, autore, oggetto — e `Invio` o `F3` su uno lo mostra intero, con la sua patch, nel
-visualizzatore; il log di un solo file viene da `F8` in *cosa è cambiato* o dal menu. **Blame**
+visualizzatore; il log di un solo file viene dal menu (`F2`) in *cosa è cambiato*. **Blame**
 del file sotto il cursore si apre nel visualizzatore.
 
 Dai pannelli del log e dei branch il resto di git è a un tasto funzione:

@@ -674,7 +674,7 @@ diff-needs-two = Put the cursor on a file in each panel
 diff-not-here = { $name } is not a file on this disk
 diff-too-big = { $name } is larger than { $most }
 diff-same = The two files are the same
-diff-where = hunk { $at } of { $count }
+diff-where = hunk { $at } of { $count } · -{ $removed } +{ $added } lines
 diff-no-next = The last difference
 diff-no-previous = The first difference
 diff-hint = Alt+↑↓ hunks · Tab side · F5 take · F2 write · W space · C case · E line ends · Esc close
@@ -1388,6 +1388,19 @@ git-kind-type = type changed
 git-kind-conflict = to resolve
 git-as-tree = Show what changed as a tree
 git-as-list = Show what changed as a list
+git-version-head = last commit
+git-version-index = staged
+git-version-disk = on disk
+git-discard-title = Discard changes
+git-discard-body = Throw away the changes of { $count ->
+        [one] one file
+       *[other] { $count } files
+    }?
+git-discard-worktree = back to the index:
+git-discard-both = back to the last commit:
+git-discard-added = out of the index, kept on disk:
+git-discard-trash = to the wastebasket:
+git-discard-warning = What goes back to the index or the last commit cannot be undone.
 git-hint = Enter: choose · Esc: close
 
 ## The editor's character list and word completion.
@@ -1535,8 +1548,8 @@ key-git = Git
 key-git-diff = Diff
 key-git-stage = Stage
 key-git-unstage = Unstage
+key-git-discard = Discard
 key-git-commit = Commit
-key-git-history = History
 key-git-show = Show
 key-git-log = Log
 key-git-changes = Changes

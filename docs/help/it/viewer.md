@@ -274,10 +274,13 @@ del pannello di sinistra accanto a quello sotto il cursore di destra e segna que
 cambia. *Confronta per contenuto* risponde a quali di cento coppie sono diverse; questo
 risponde a cosa, in una coppia, è diverso.
 
-Ogni colonna porta i propri numeri di riga, e una riga che esiste da un solo lato ha il numero
-da quel lato e niente di fronte. Dove una riga è cambiata invece di comparire o sparire, la
-parte che è davvero cambiata è segnata dentro la riga, così l'occhio va al carattere che conta
-invece di rileggere tutte e due.
+Il file di sinistra è il *prima* e quello di destra il *dopo*, e la schermata si legge come un
+diff: quello che c'è solo a sinistra è rosso con un `-` accanto al numero, quello che porta la
+destra è verde con un `+`, e una riga cambiata è tutte e due le cose — rossa a sinistra, verde
+a destra — con dentro segnata la parte che è davvero cambiata, così l'occhio va al carattere
+che conta. Ogni colonna porta i propri numeri di riga, e una riga che esiste da un solo lato ha
+il numero da quel lato e niente di fronte. Il piede dice quale differenza di quante è sullo
+schermo, e quante righe sono andate e venute (`-3 +5`).
 
 `Alt+↓` e `Alt+↑` vanno da una differenza all'altra, che è il modo in cui si legge un diff;
 l'ultima dice che è l'ultima invece di ricominciare dall'inizio. Le frecce, `PgSu`, `PgGiù`,

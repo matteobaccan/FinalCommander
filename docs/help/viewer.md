@@ -261,10 +261,13 @@ panel's cursor beside the file under the right panel's and marks what differs. *
 content* answers which of a hundred pairs differ; this answers what, in one pair, is
 different.
 
-Each column carries its own line numbers, and a line that exists on one side only has a number
-on that side and nothing opposite it. Where a line changed rather than appeared or vanished,
-the part that actually changed is marked inside it, so the eye goes to the one character that
-matters instead of reading both lines.
+The left file is the *before* and the right one the *after*, and the screen reads like a
+diff: what only the left side has is red with a `-` beside its number, what the right side
+brings is green with a `+`, and a line that changed is both — red on the left, green on the
+right — with the part that actually changed marked inside it, so the eye goes to the one
+character that matters. Each column carries its own line numbers, and a line that exists on one
+side only has a number on that side and nothing opposite it. The foot says which difference of
+how many is on screen, and how many lines went and came (`-3 +5`).
 
 `Alt+↓` and `Alt+↑` go from one difference to the next, which is how one reads a diff; the last
 one says it is the last rather than wrapping round. The arrows, `PgUp`, `PgDn`, `Home` and
