@@ -480,12 +480,75 @@ pub enum GitAsk {
         file: std::path::PathBuf,
         staged: bool,
     },
+    /// The two versions of one file a diff is between, for the side-by-side view: before and
+    /// after staging, or the last commit and what is staged.
+    Sides {
+        file: std::path::PathBuf,
+        staged: bool,
+    },
     Stage(Vec<std::path::PathBuf>),
     Unstage(Vec<std::path::PathBuf>),
     Commit(String),
     Push,
     Pull,
     Switch(String),
+}
+
+/// Which part of what changed a row of the `:git` panel is in (SPEC 06 §15). The order is the
+/// order of the panel: what needs a hand first, then what a commit would take, then the rest.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum GitSide {
+    /// Both sides changed it and the merge could not choose.
+    Conflict,
+    /// In the index: what the next commit takes.
+    Staged,
+    /// Changed in the work tree and not staged.
+    Changed,
+    /// Not known to git at all.
+    Untracked,
+}
+
+/// One row of what changed: the part it is in, git's letter for what happened to it, and the
+/// file — or, in the tree, the folder that heads the files under it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GitRow {
+    pub side: GitSide,
+    pub letter: char,
+    pub file: std::path::PathBuf,
+    pub folder: bool,
+}
+
+impl GitRow {
+    /// The rows of `git status`: a file once for each part it is in, so one that is staged
+    /// and then changed again is a row in each — each with its own diff and its own key.
+    pub fn of_status(root: &std::path::Path, files: &[(String, String)]) -> Vec<GitRow> {
+        let mut rows = Vec::new();
+        for (code, rel) in files {
+            let mut c = code.chars();
+            let (x, y) = (c.next().unwrap_or(' '), c.next().unwrap_or(' '));
+            let file = root.join(rel);
+            let row = |side, letter| GitRow {
+                side,
+                letter,
+                file: file.clone(),
+                folder: false,
+            };
+            if code == "??" {
+                rows.push(row(GitSide::Untracked, '?'));
+            } else if x == 'U' || y == 'U' || (x == 'A' && y == 'A') || (x == 'D' && y == 'D') {
+                rows.push(row(GitSide::Conflict, 'U'));
+            } else {
+                if x != ' ' {
+                    rows.push(row(GitSide::Staged, x));
+                }
+                if y != ' ' {
+                    rows.push(row(GitSide::Changed, y));
+                }
+            }
+        }
+        rows.sort_by(|a, b| (a.side, &a.file).cmp(&(b.side, &b.file)));
+        rows
+    }
 }
 
 /// What a question to a language model is for, which decides where its answer goes
@@ -567,6 +630,8 @@ pub enum GitOut {
     Log(Vec<GitCommit>),
     /// Something was done — staged, committed, pushed, switched; what git said about it.
     Done(String),
+    /// Two files to compare side by side: the version before, and the version after.
+    Sides(std::path::PathBuf, std::path::PathBuf),
 }
 
 /// What comes back.
@@ -2456,6 +2521,13 @@ pub struct App {
     /// What the git panel shows — what changed, the branches, a log — so that `Ctrl+R` and
     /// anything done to the repository can ask for it again.
     git_view: Option<GitAsk>,
+    /// The rows of the what-changed panel, by the id each of its entries carries.
+    git_rows: std::collections::HashMap<fcmd_core::EntryId, GitRow>,
+    /// What changed as a tree of folders rather than a list of paths.
+    git_tree: bool,
+    /// The last answer to `git status`, so the list and the tree can be switched without
+    /// asking again: the work tree's top and each changed file.
+    git_last: Option<(std::path::PathBuf, Vec<(String, String)>)>,
     /// The view asked for and not yet come back.
     git_pending: Option<GitAsk>,
     /// The commits of the log panel and the branches of the branches panel, by row.
@@ -2792,6 +2864,9 @@ impl App {
             plugins: Vec::new(),
             mkdir_cursor: None,
             git_view: None,
+            git_rows: std::collections::HashMap::new(),
+            git_tree: false,
+            git_last: None,
             git_pending: None,
             git_commits: Vec::new(),
             git_branches: Vec::new(),
@@ -10236,7 +10311,7 @@ impl App {
                     let files =
                         if matches!(cmd, Command::FileCopyCurrent | Command::FileMoveCurrent) {
                             self.git_status_at_cursor()
-                                .map(|(_, f)| vec![f])
+                                .map(|row| vec![row.file])
                                 .unwrap_or_default()
                         } else {
                             self.git_selected_files()
@@ -10372,9 +10447,9 @@ impl App {
                 // In the git panel `F8` is the file's own history, which is what one wants
                 // next to what changed in it — never a delete.
                 if self.panel().temp_origin() == Some(":git") {
-                    if let Some((_, file)) = self.git_status_at_cursor() {
+                    if let Some(row) = self.git_status_at_cursor() {
                         self.git_ask(GitAsk::Log {
-                            file: Some(file),
+                            file: Some(row.file),
                             rev: None,
                         });
                     }
@@ -12126,6 +12201,11 @@ impl App {
                 file: None,
                 rev: Some(b),
             }),
+            // Beside what changed, the change: the diff of the row's part, coloured, rather
+            // than the whole file — which `F3` and `F4` are for.
+            Some(":git") => self
+                .git_row_on(panel)
+                .and_then(|row| Self::git_diff_question(&row, false)),
             _ => None,
         }
     }
@@ -12185,6 +12265,14 @@ impl App {
                 false,
             ));
         }
+        if self.panel().temp_origin() == Some(":git") {
+            let key = if self.git_tree {
+                "git-as-list"
+            } else {
+                "git-as-tree"
+            };
+            rows.push(PickRow::plain(self.i18n.t(key), "tree", false));
+        }
         rows.push(PickRow::plain(self.i18n.t("git-commit"), "commit", false));
         rows.push(PickRow::plain(self.i18n.t("git-pull"), "pull", false));
         rows.push(PickRow::plain(self.i18n.t("git-push"), "push", false));
@@ -12214,6 +12302,13 @@ impl App {
             },
             "commit" => {
                 self.ask_commit_message();
+                return;
+            }
+            // What changed as a tree of folders, or back to a list: the same answer drawn
+            // again, without asking git.
+            "tree" => {
+                self.git_tree = !self.git_tree;
+                self.git_show_status(self.active);
                 return;
             }
             "pull" => GitAsk::Pull,
@@ -12287,37 +12382,52 @@ impl App {
             .collect()
     }
 
-    /// The row of the `:git` panel under the cursor: its two status letters and its file.
-    fn git_status_at_cursor(&self) -> Option<(String, std::path::PathBuf)> {
-        if self.panel().temp_origin() != Some(":git") {
-            return None;
-        }
-        let entry = self.panel().current()?;
-        let name = entry.name_str().into_owned();
-        let code = name.get(..2)?.to_string();
-        let path = self.panel().path_of(entry);
-        Some((code, path.as_path().to_path_buf()))
+    /// The row of the `:git` panel under the cursor: the part it is in, what happened to it,
+    /// and its file or folder.
+    fn git_status_at_cursor(&self) -> Option<GitRow> {
+        self.git_row_on(self.active)
     }
 
-    /// `F3` on a changed file: what changed in it — in the work tree when it changed there,
-    /// what is staged when only that. A new file has nothing to compare, so it is read.
-    fn git_diff_at_cursor(&mut self) {
-        let Some((code, file)) = self.git_status_at_cursor() else {
-            return;
-        };
-        let (staged, worktree) = {
-            let mut c = code.chars();
-            (c.next().unwrap_or(' '), c.next().unwrap_or(' '))
-        };
-        if code == "??" || (staged == 'A' && worktree == ' ') {
-            let vpath = VPath::local(&file);
-            self.open_viewer_on(&file, vpath);
-            return;
+    /// The same, for the panel on either side.
+    fn git_row_on(&self, panel: usize) -> Option<GitRow> {
+        let p = self.panels.get(panel)?;
+        if p.temp_origin() != Some(":git") {
+            return None;
         }
-        self.git_ask(GitAsk::Diff {
-            file,
-            staged: worktree == ' ',
-        });
+        self.git_rows.get(&p.current()?.id).cloned()
+    }
+
+    /// What git is asked to show of a row of what changed: the diff of its part, staged or
+    /// not; `None` for what git has nothing to compare — a file it does not know.
+    fn git_diff_question(row: &GitRow, sides: bool) -> Option<GitAsk> {
+        if row.side == GitSide::Untracked && !row.folder {
+            return None;
+        }
+        let staged = row.side == GitSide::Staged;
+        let file = row.file.clone();
+        Some(if sides && !row.folder {
+            GitAsk::Sides { file, staged }
+        } else {
+            GitAsk::Diff { file, staged }
+        })
+    }
+
+    /// `F3` on a changed file: the version before and the version after, side by side —
+    /// before and after staging on a row that is not staged, the last commit and the index
+    /// on one that is. A file git does not know is read.
+    fn git_diff_at_cursor(&mut self) {
+        let Some(row) = self.git_status_at_cursor() else {
+            return;
+        };
+        // A file git does not know has nothing to compare: it is read. A folder of the tree
+        // has no two versions to put side by side: its diff is the one of everything in it.
+        match Self::git_diff_question(&row, true) {
+            Some(ask) => self.git_ask(ask),
+            None => {
+                let vpath = VPath::local(&row.file);
+                self.open_viewer_on(&row.file, vpath);
+            }
+        }
     }
 
     /// The row of the log panel under the cursor: its commit.
@@ -12515,49 +12625,146 @@ impl App {
             Ok(GitOut::Status { root, files }) => {
                 self.git_pending = None;
                 self.git_view = Some(GitAsk::Status);
-                let Some(p) = self.panels.get_mut(panel) else {
-                    return;
-                };
-                let items: Vec<(VPath, fcmd_core::Entry)> = files
-                    .iter()
-                    .enumerate()
-                    .map(|(at, (code, rel))| {
-                        let path = VPath::local(root.join(rel));
-                        let mut entry = Self::temp_entry(&path, at);
-                        // The status first, as `git status --short` writes it — the left
-                        // letter is what is staged, the right one what is not — so the panel
-                        // reads like the command and a sort by name groups the kinds.
-                        entry.name = format!("{code} {rel}").into();
-                        (path, entry)
-                    })
-                    .collect();
-                let staged = files
-                    .iter()
-                    .filter(|(c, _)| !c.starts_with(' ') && !c.starts_with('?'))
-                    .count();
-                let unstaged = files
-                    .iter()
-                    .filter(|(c, _)| c.chars().nth(1).is_some_and(|y| y != ' '))
-                    .count();
-                let title = self.i18n.t_args(
-                    "git-status-title",
-                    &[
-                        ("staged", (staged as i64).into()),
-                        ("unstaged", (unstaged as i64).into()),
-                    ],
-                );
-                let generation = p.generation + 1;
-                p.generation = generation;
-                p.set_temp(title, items, generation);
-                p.set_temp_origin(":git");
-                let m = if files.is_empty() {
+                let clean = files.is_empty();
+                self.git_last = Some((root, files));
+                self.git_show_status(panel);
+                let m = if clean {
                     self.i18n.t("git-clean")
                 } else {
                     String::new()
                 };
                 self.set_status(m);
             }
+            Ok(GitOut::Sides(before, after)) => {
+                self.set_status(String::new());
+                self.open_diff_on(VPath::local(before), VPath::local(after));
+            }
         }
+    }
+
+    /// What changed, drawn on `panel` from the last answer git gave: a row for each part a
+    /// file is in, the part and what happened to it written out, in order — conflicts, then
+    /// what is staged, then what is not, then what git does not know. In the tree each
+    /// folder heads the files under it, once per part.
+    fn git_show_status(&mut self, panel: usize) {
+        let Some((root, files)) = self.git_last.clone() else {
+            return;
+        };
+        let rows = GitRow::of_status(&root, &files);
+        let side_word = |side: GitSide| {
+            self.i18n.t(match side {
+                GitSide::Conflict => "git-side-conflict",
+                GitSide::Staged => "git-side-staged",
+                GitSide::Changed => "git-side-changed",
+                GitSide::Untracked => "git-side-untracked",
+            })
+        };
+        let kind_word = |letter: char| -> String {
+            match letter {
+                'M' => self.i18n.t("git-kind-modified"),
+                'A' => self.i18n.t("git-kind-added"),
+                'D' => self.i18n.t("git-kind-deleted"),
+                'R' => self.i18n.t("git-kind-renamed"),
+                'C' => self.i18n.t("git-kind-copied"),
+                'T' => self.i18n.t("git-kind-type"),
+                'U' => self.i18n.t("git-kind-conflict"),
+                _ => String::new(),
+            }
+        };
+        let pad = |text: String, width: usize| {
+            let n = text.chars().count();
+            format!("{text}{}", " ".repeat(width.saturating_sub(n)))
+        };
+        let sides = [
+            GitSide::Conflict,
+            GitSide::Staged,
+            GitSide::Changed,
+            GitSide::Untracked,
+        ];
+        let side_w = sides
+            .iter()
+            .map(|s| side_word(*s).chars().count())
+            .max()
+            .unwrap_or(0);
+        let kind_w = "MADRCTU"
+            .chars()
+            .map(|l| kind_word(l).chars().count())
+            .max()
+            .unwrap_or(0);
+        let rel = |path: &std::path::Path| {
+            path.strip_prefix(&root)
+                .unwrap_or(path)
+                .to_string_lossy()
+                .replace('\\', "/")
+        };
+
+        let mut shown: Vec<GitRow> = Vec::new();
+        let mut names: Vec<String> = Vec::new();
+        let mut last: Option<(GitSide, std::path::PathBuf)> = None;
+        for row in &rows {
+            let side = pad(side_word(row.side), side_w);
+            let kind = pad(kind_word(row.letter), kind_w);
+            if self.git_tree {
+                let dir = row
+                    .file
+                    .parent()
+                    .map(|d| d.to_path_buf())
+                    .unwrap_or_else(|| root.clone());
+                if dir != root && last.as_ref() != Some(&(row.side, dir.clone())) {
+                    shown.push(GitRow {
+                        side: row.side,
+                        letter: ' ',
+                        file: dir.clone(),
+                        folder: true,
+                    });
+                    names.push(format!("{side}  {}/", rel(&dir)));
+                }
+                let depth = usize::from(dir != root);
+                let name = row
+                    .file
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                names.push(format!("{side}  {kind}  {}{name}", "  ".repeat(depth)));
+                last = Some((row.side, dir));
+            } else {
+                names.push(format!("{side}  {kind}  {}", rel(&row.file)));
+            }
+            shown.push(row.clone());
+        }
+        let items: Vec<(VPath, fcmd_core::Entry)> = shown
+            .iter()
+            .zip(names)
+            .enumerate()
+            .map(|(at, (row, name))| {
+                let path = VPath::local(&row.file);
+                let mut entry = Self::temp_entry(&path, at);
+                entry.name = name.into();
+                // A folder of the tree is a row like the files under it, not a directory to
+                // sort ahead of them: the order is the parts, then the folders in each.
+                entry.kind = fcmd_core::EntryKind::File;
+                (path, entry)
+            })
+            .collect();
+        let count = |side| rows.iter().filter(|r| r.side == side).count() as i64;
+        let title = self.i18n.t_args(
+            "git-status-title",
+            &[
+                ("staged", count(GitSide::Staged).into()),
+                ("unstaged", count(GitSide::Changed).into()),
+            ],
+        );
+        let ids = crate::panel::temp_ids(items.iter().map(|(path, _)| path));
+        self.git_rows = ids.into_iter().zip(shown).collect();
+        let Some(p) = self.panels.get_mut(panel) else {
+            return;
+        };
+        let generation = p.generation + 1;
+        p.generation = generation;
+        p.set_temp(title, items, generation);
+        p.set_temp_origin(":git");
+        p.sort.key = fcmd_core::SortKey::Unsorted;
+        p.rebuild();
     }
 
     /// `ai:` on the command line (SPEC 06 §14).
@@ -35654,7 +35861,10 @@ abcdefghij
             .filter_map(|r| p.listing.row(r))
             .map(|e| e.name_str().into_owned())
             .collect();
-        assert!(names.contains(&" M a.txt".to_string()), "{names:?}");
+        let has = |name: &str| names.iter().any(|n| n.ends_with(name));
+        assert!(has("a.txt") && has("b.txt"), "{names:?}");
+        assert!(names[0].starts_with("not staged") && names[0].contains("modified"));
+        assert!(names[1].starts_with("untracked"), "{names:?}");
     }
 
     /// A copy into the repository from the other panel ends with git asked again, so the
@@ -35790,6 +36000,98 @@ abcdefghij
         assert!(app.quick.is_some(), "{:?}", app.quick_why);
     }
 
+    /// What changed says in words which part each row is in: a file staged and changed again
+    /// is a row in each, with its own diff — side by side on `F3`, coloured in the quick view —
+    /// and the tree heads the files with their folder, which `F5` stages whole.
+    #[test]
+    fn what_changed_has_a_row_per_part_a_diff_each_and_a_tree() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("src")).unwrap();
+        std::fs::write(dir.path().join("src/a.rs"), "x").unwrap();
+        let mut app = editing_app(dir.path());
+        let asked = |app: &mut App| -> Vec<GitAsk> {
+            app.take_requests()
+                .into_iter()
+                .filter_map(|r| match r {
+                    Request::Git { what, .. } => Some(what),
+                    _ => None,
+                })
+                .collect()
+        };
+        app.handle_event(Event::GitDone {
+            panel: 0,
+            result: Ok(GitOut::Status {
+                root: dir.path().to_path_buf(),
+                files: vec![("MM".into(), "src/a.rs".into())],
+            }),
+        });
+        let names = |app: &App| -> Vec<String> {
+            let p = &app.panels[0];
+            (0..p.listing.len())
+                .filter_map(|r| p.listing.row(r))
+                .map(|e| e.name_str().into_owned())
+                .collect()
+        };
+        let list = names(&app);
+        assert_eq!(list.len(), 2, "{list:?}");
+        assert!(list[0].starts_with("staged") && list[0].ends_with("src/a.rs"));
+        assert!(list[1].starts_with("not staged") && list[1].ends_with("src/a.rs"));
+        let file = dir.path().join("src/a.rs");
+
+        app.take_requests();
+        app.panels[0].cursor = 0;
+        press(&mut app, "F3");
+        assert_eq!(
+            asked(&mut app),
+            vec![GitAsk::Sides {
+                file: file.clone(),
+                staged: true
+            }]
+        );
+        app.panels[0].cursor = 1;
+        press(&mut app, "F3");
+        assert_eq!(
+            asked(&mut app),
+            vec![GitAsk::Sides {
+                file: file.clone(),
+                staged: false
+            }]
+        );
+        // The quick view beside it asks for the diff of the row, not the whole file.
+        app.quick_of = None;
+        app.quick_view_for(0);
+        let quick = app.take_requests().into_iter().find_map(|r| match r {
+            Request::GitQuick { what, .. } => Some(what),
+            _ => None,
+        });
+        assert_eq!(
+            quick,
+            Some(GitAsk::Diff {
+                file: file.clone(),
+                staged: false
+            })
+        );
+
+        // As a tree: the folder heads each part, and `F5` on it stages the folder.
+        app.git_menu("tree");
+        let tree = names(&app);
+        assert_eq!(tree.len(), 4, "{tree:?}");
+        assert!(tree[0].ends_with("src/"), "{tree:?}");
+        assert!(
+            tree[1].ends_with("  a.rs") && !tree[1].contains("src/"),
+            "{tree:?}"
+        );
+        app.panels[0].cursor = 0;
+        app.take_requests();
+        press(&mut app, "F5");
+        assert_eq!(
+            asked(&mut app),
+            vec![GitAsk::Stage(vec![dir.path().join("src")])]
+        );
+        app.git_menu("tree");
+        assert_eq!(names(&app).len(), 2, "back to the list");
+    }
+
     #[test]
     fn the_git_panels_stage_commit_show_and_switch() {
         let dir = tempfile::tempdir().unwrap();
@@ -35825,7 +36127,7 @@ abcdefghij
         press(&mut app, "F3");
         assert_eq!(
             asked(&mut app),
-            vec![GitAsk::Diff {
+            vec![GitAsk::Sides {
                 file: file.clone(),
                 staged: false
             }]

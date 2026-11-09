@@ -1365,6 +1365,19 @@ git-running = Preguntando a git…
 git-failed = git: { $why }
 git-clean = No ha cambiado nada.
 git-status-title = Cambiados: { $staged } preparados, { $unstaged } no
+git-side-conflict = conflicto
+git-side-staged = preparado
+git-side-changed = sin preparar
+git-side-untracked = sin seguimiento
+git-kind-modified = modificado
+git-kind-added = nuevo
+git-kind-deleted = borrado
+git-kind-renamed = renombrado
+git-kind-copied = copiado
+git-kind-type = tipo cambiado
+git-kind-conflict = por resolver
+git-as-tree = Mostrar los cambios como árbol
+git-as-list = Mostrar los cambios como lista
 git-hint = Intro: elegir · Esc: cerrar
 
 ## The editor's character list and word completion.

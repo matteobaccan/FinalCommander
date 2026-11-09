@@ -32,6 +32,13 @@ Notable changes, newest first. The format follows
   and the branches panels `F4` is what changed, `F5` pull, `F6` push, `F7` commit and `F8` the
   other list. `Ctrl+Q` beside the log shows the commit under the cursor, and beside the
   branches that branch's log.
+- **What changed says what is staged.** Each row of the git panel says in words which part
+  it is in — staged, not staged, untracked, conflict — and what happened to the file, instead
+  of `git status --short`'s two letters; a file staged and then changed again is a row in each
+  part. `F3` shows the two versions side by side in the internal diff (the index against the
+  file, or the last commit against the index), and `Ctrl+Q` beside the panel shows the diff of
+  the row rather than the whole file. *Show what changed as a tree* in the `F2` menu groups
+  the rows by folder, and a folder row stages, unstages or diffs all of it.
 - **Diffs in colour.** In the viewer and the quick view a `.diff` or `.patch` — and what git
   shows from its panels, a file's changes or a commit — has its added lines green, its removed
   lines red, and the hunk and file headers marked. Each theme has the two new colours.

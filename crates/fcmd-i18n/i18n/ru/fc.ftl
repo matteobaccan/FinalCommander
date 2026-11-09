@@ -1366,6 +1366,19 @@ git-running = Спрашиваю git…
 git-failed = git: { $why }
 git-clean = Ничего не изменилось.
 git-status-title = Изменено: { $staged } в индексе, { $unstaged } нет
+git-side-conflict = конфликт
+git-side-staged = в индексе
+git-side-changed = не в индексе
+git-side-untracked = не отслеживается
+git-kind-modified = изменён
+git-kind-added = новый
+git-kind-deleted = удалён
+git-kind-renamed = переименован
+git-kind-copied = скопирован
+git-kind-type = тип изменён
+git-kind-conflict = разрешить
+git-as-tree = Показать изменения деревом
+git-as-list = Показать изменения списком
 git-hint = Enter: выбрать · Esc: закрыть
 
 ## The editor's character list and word completion.

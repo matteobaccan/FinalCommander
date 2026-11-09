@@ -4553,6 +4553,51 @@ fn run_git(cwd: &std::path::Path, what: &app::GitAsk) -> Result<app::GitOut, Str
             }
             text(&format!("{name}.diff"), body)
         }
+        GitAsk::Sides { file, staged } => {
+            let rel = file
+                .strip_prefix(&root)
+                .map(|r| r.to_path_buf())
+                .or_else(|_| {
+                    let real = file
+                        .parent()
+                        .and_then(|d| d.canonicalize().ok())
+                        .map(|d| d.join(file.file_name().unwrap_or_default()))
+                        .unwrap_or_else(|| file.clone());
+                    let top = root.canonicalize().unwrap_or_else(|_| root.clone());
+                    real.strip_prefix(&top).map(|r| r.to_path_buf())
+                })
+                .map_err(|_| format!("{}: not in this repository", file.display()))?;
+            let rel = rel.to_string_lossy().replace('\\', "/");
+            let name = file
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            // A version git does not have — a file new in this commit, or one taken away — is
+            // an empty side: the diff then shows all of it added, or all of it gone.
+            let version = |spec: String| git(&root, &["show", &spec]).unwrap_or_default();
+            let dir = std::env::temp_dir().join(format!("fcmd-sql-{}", std::process::id()));
+            let write = |label: &str, body: String| -> Result<std::path::PathBuf, String> {
+                let sub = dir.join(label);
+                std::fs::create_dir_all(&sub).map_err(|e| e.to_string())?;
+                let path = sub.join(&name);
+                std::fs::write(&path, body).map_err(|e| e.to_string())?;
+                Ok(path)
+            };
+            if *staged {
+                let before = write("HEAD", version(format!("HEAD:{rel}")))?;
+                let after = write("index", version(format!(":{rel}")))?;
+                Ok(GitOut::Sides(before, after))
+            } else {
+                let before = write("index", version(format!(":{rel}")))?;
+                // The work tree is the file itself, unless it is gone from it.
+                let after = if file.exists() {
+                    file.clone()
+                } else {
+                    write("worktree", String::new())?
+                };
+                Ok(GitOut::Sides(before, after))
+            }
+        }
         GitAsk::Stage(files) | GitAsk::Unstage(files) => {
             let mut args: Vec<String> = match what {
                 GitAsk::Stage(_) => vec!["add".into(), "--".into()],
@@ -6679,6 +6724,24 @@ dir_attr = "D"
             "{files:?}"
         );
         assert!(run_git(root, &diff(true)).is_ok(), "staged now");
+        // The two versions, for the side-by-side view: the last commit and the index once it
+        // is staged, and with a change made after that the index and the file on disk.
+        std::fs::write(&a, "three\n").unwrap();
+        let sides = |staged| app::GitAsk::Sides {
+            file: a.clone(),
+            staged,
+        };
+        let Ok(app::GitOut::Sides(before, after)) = run_git(root, &sides(true)) else {
+            panic!("the staged sides")
+        };
+        assert_eq!(std::fs::read_to_string(&before).unwrap(), "one\n");
+        assert_eq!(std::fs::read_to_string(&after).unwrap(), "two\n");
+        let Ok(app::GitOut::Sides(before, after)) = run_git(root, &sides(false)) else {
+            panic!("the unstaged sides")
+        };
+        assert_eq!(std::fs::read_to_string(&before).unwrap(), "two\n");
+        assert_eq!(after, a, "the work tree is the file itself");
+        std::fs::write(&a, "two\n").unwrap();
         run_git(root, &app::GitAsk::Unstage(vec![a.clone()])).unwrap();
         let Ok(app::GitOut::Status { files, .. }) = run_git(root, &app::GitAsk::Status) else {
             panic!("a status")

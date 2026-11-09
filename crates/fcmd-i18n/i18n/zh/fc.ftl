@@ -1337,6 +1337,19 @@ git-running = 正在询问 git…
 git-failed = git：{ $why }
 git-clean = 没有任何改动。
 git-status-title = 已改动：已暂存 { $staged }，未暂存 { $unstaged }
+git-side-conflict = 冲突
+git-side-staged = 已暂存
+git-side-changed = 未暂存
+git-side-untracked = 未跟踪
+git-kind-modified = 已修改
+git-kind-added = 新增
+git-kind-deleted = 已删除
+git-kind-renamed = 已重命名
+git-kind-copied = 已复制
+git-kind-type = 类型已改
+git-kind-conflict = 待解决
+git-as-tree = 以树形显示更改
+git-as-list = 以列表显示更改
 git-hint = 回车：选择 · Esc：关闭
 
 ## The editor's character list and word completion.

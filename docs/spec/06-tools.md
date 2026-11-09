@@ -624,10 +624,20 @@ uncommitted work). Everything it shows is a **panel**, three of them, each a tem
 with an origin of its own and a key bar that says what its keys do there:
 
 * **What changed** (`:git`): `git status --porcelain -z`, untracked files included, as the real
-  files, each row its two-letter status and its path from the top of the work tree —
-  `"M  src/app.rs"`, `" M notes.md"`, `"?? new.txt"` — the left letter the index (staged), the
-  right the work tree; the title counts both. `F3` is the diff (`git diff`, or `--cached` when
-  only the index differs; an untracked or newly added file is read instead), `F4` edits, `F5`
+  files. Since 0.39.0 a row is one *part* of a file — conflict, staged (the index letter),
+  not staged (the work-tree letter), untracked — so a file changed on both sides is two rows,
+  each with its own id (a path that repeats takes the next free number after its hash). The
+  part and the kind (modified, new, deleted, renamed, copied, type changed, to resolve) are
+  words, padded into columns, then the path from the top of the work tree; the order is the
+  parts in that order, then the path, and the panel is unsorted. *Show what changed as a tree*
+  in the `F2` menu draws the same answer, without asking git again, with each folder heading
+  its files once per part; a folder row is the folder for `F5`, `F6` and `F3`. The title
+  counts staged and not staged. `F3` is the two versions side by side in the internal diff
+  (SPEC 05 §3): `git show :path` against the file for a row not staged, `git show HEAD:path`
+  against `git show :path` for a staged one, an absent version being an empty side; on a
+  folder it is `git diff` of the folder, and an untracked file is read. The quick view beside
+  the panel shows `git diff` (or `--cached`) of the row, coloured as a diff. Every job that
+  ends asks git again for each side showing what changed. `F4` edits, `F5`
   stages (`git add --`), `F6` unstages (`git restore --staged --`), both on the selection or
   the row, `F7` commits after a prompt for the message (`git commit -m`, an empty message
   refused before git is asked), `F8` is the file's log.

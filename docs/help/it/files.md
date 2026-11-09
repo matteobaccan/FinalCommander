@@ -461,15 +461,20 @@ pannello.
 git, e tutto quello che c'è dentro è un pannello in cui lavori con i tasti funzione. Risponde il
 `git` installato sulla macchina.
 
-**Cosa è cambiato** trasforma il pannello nei file cambiati, ogni riga col suo stato come lo
-scrive `git status --short`: la **lettera di sinistra è quello che è in staging**, quella di
-destra quello che è cambiato e non è in staging (`M ` in staging, ` M` non ancora, `MM`
-entrambi, `??` nuovo, `D ` cancellato). Il titolo li conta tutti e due. Sono i file veri, e i
-tasti sono quelli che mostra la barra:
+**Cosa è cambiato** trasforma il pannello nei file cambiati, e ogni riga dice a parole in che
+parte è e che cosa gli è successo — `in staging  modificato  src/app.rs`, `non in staging
+cancellato  old.txt`, `non tracciato  note.md` — in quest'ordine: prima i conflitti, poi quello
+che il prossimo commit prende, poi quello che non prende, poi i file che git non conosce. Un
+file messo in staging e poi cambiato di nuovo è una riga in ciascuna parte, ognuna con la sua
+diff. Il titolo li conta tutti e due. *Mostra le modifiche ad albero* nel menu di `F2`
+raggruppa le righe per cartella, con la cartella in testa ai file che contiene in ogni parte (e
+si torna alla lista allo stesso modo); `F5`, `F6` e `F3` su una cartella valgono per tutto
+quello che c'è dentro. Sono i file veri, e i tasti sono quelli che mostra la barra:
 
 | Tasto | In *cosa è cambiato* |
 | --- | --- |
-| `F3` | cosa è cambiato nel file — nella copia di lavoro, o quello che è in staging quando c'è solo quello; un file nuovo si vede com'è |
+| `F3` | le due versioni affiancate, nel confronto interno: l'indice e il file su una riga non in staging, l'ultimo commit e l'indice su una in staging; un file che git non conosce si vede com'è |
+| `Ctrl+Q` | la vista rapida accanto mostra la diff della riga, a colori, e segue il cursore |
 | `F4` | modifica il file |
 | `F5` | mette in staging i file selezionati, o quello sotto il cursore (`git add`) |
 | `F6` | li toglie dallo staging (`git restore --staged`) |
@@ -478,6 +483,10 @@ tasti sono quelli che mostra la barra:
 | `F8` | il log del file, ogni commit che l'ha toccato |
 | `F2` | il menu di git: gli altri pannelli, blame, pull e push |
 | `Ctrl+R` | richiede a git |
+
+Il pannello richiede a git da solo ogni volta che una copia, uno spostamento o una
+cancellazione finisce: un file copiato nel repository dall'altro pannello compare subito come
+non tracciato.
 
 **Branch** è un pannello dei branch locali con quello attuale segnato `*`. `Invio` su un altro
 ci passa, dopo aver chiesto — i file su cui i due branch non sono d'accordo cambiano su disco —

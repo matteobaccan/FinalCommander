@@ -25,10 +25,11 @@ impl TempList {
     /// One row per path. The id is the hash of the whole path rather than of the name, because
     /// two results of a search are very often the same name in different directories.
     pub fn new(title: String, items: Vec<(VPath, Entry)>) -> (TempList, Vec<Entry>) {
+        let ids = temp_ids(items.iter().map(|(path, _)| path));
         let mut paths = HashMap::with_capacity(items.len());
         let mut entries = Vec::with_capacity(items.len());
-        for (path, mut entry) in items {
-            entry.id = EntryId::Name(path_hash(&path));
+        for ((path, mut entry), id) in items.into_iter().zip(ids) {
+            entry.id = id;
             paths.insert(entry.id, path);
             entries.push(entry);
         }
@@ -41,6 +42,22 @@ impl TempList {
             entries,
         )
     }
+}
+
+/// The ids the rows of a list get, in order: the hash of each path, and the next free number
+/// after it for a path that is in the list more than once — what changed has a file twice when
+/// part of it is staged and part is not, and two rows with one id would be one row to select.
+pub fn temp_ids<'a>(paths: impl Iterator<Item = &'a VPath>) -> Vec<EntryId> {
+    let mut seen = std::collections::HashSet::new();
+    paths
+        .map(|path| {
+            let mut id = path_hash(path);
+            while !seen.insert(id) {
+                id = id.wrapping_add(1);
+            }
+            EntryId::Name(id)
+        })
+        .collect()
 }
 
 fn path_hash(path: &VPath) -> u64 {

@@ -438,14 +438,19 @@ git repository — and only then. Choosing it opens the repository's log on that
 and everything in it is a panel you work in with the function keys. It is the `git` installed
 on the machine that answers.
 
-**What changed** turns the panel into the changed files, each row starting with its status as
-`git status --short` writes it: the **left letter is what is staged**, the right one what is
-changed and not staged (`M ` staged, ` M` not yet, `MM` both, `??` new, `D ` deleted). The
-title counts both. They are the real files, and the keys are the ones the bar shows:
+**What changed** turns the panel into the changed files, each row saying in words which part
+it is in and what happened to it — `staged  modified  src/app.rs`, `not staged  deleted
+old.txt`, `untracked  notes.md` — in that order: conflicts first, then what the next commit
+takes, then what it does not, then the files git does not know. A file staged and then changed
+again is a row in each part, each with its own diff. The title counts both. *Show what changed
+as a tree* in the `F2` menu groups the rows by folder, a folder heading the files under it in
+each part (and back to the list the same way); `F5`, `F6` and `F3` on a folder act on all of
+it. They are the real files, and the keys are the ones the bar shows:
 
 | Key | In *what changed* |
 | --- | --- |
-| `F3` | what changed in the file — in the work tree, or what is staged when only that; a new file is shown as it is |
+| `F3` | the two versions side by side, in the internal diff: the index and the file on a row that is not staged, the last commit and the index on one that is; a file git does not know is shown as it is |
+| `Ctrl+Q` | the quick view beside it shows the diff of the row, in colour, and follows the cursor |
 | `F4` | edit the file |
 | `F5` | stage the selected files, or the one under the cursor (`git add`) |
 | `F6` | unstage them (`git restore --staged`) |
@@ -454,6 +459,9 @@ title counts both. They are the real files, and the keys are the ones the bar sh
 | `F8` | the file's own log, every commit that touched it |
 | `F2` | the git menu: the other panels, blame, pull and push |
 | `Ctrl+R` | ask git again |
+
+The panel asks git again by itself whenever a copy, a move or a delete ends — a file copied
+into the repository from the other panel shows up as untracked at once.
 
 **Branches** is a panel of the local branches with the current one marked `*`. `Enter` on
 another switches to it, after asking — the files the two branches disagree on change on disk —
