@@ -30,7 +30,7 @@ unicode-width = "0.2"
 # file rather than alphabetically, which is the difference between a readable log and a
 # shuffled one. It uses `indexmap`, which is already in the tree under several other crates.
 serde_json = { version = "1.0.154", features = ["preserve_order"] }
-object = { version = "0.40.0", default-features = false, features = ["read_core", "elf", "pe", "macho", "archive", "std"] }
+object = { version = "0.41.0", default-features = false, features = ["read_core", "elf", "pe", "macho", "archive", "std"] }
 iced-x86 = { version = "1.21.0", default-features = false, features = ["decoder", "intel", "std"] }
 # AArch64 decoding (SPEC 05 §1.6). A viewer that only reads x86 is half a tool on an Apple
 # Silicon laptop or an ARM server, and an instruction table is not something to write twice.
