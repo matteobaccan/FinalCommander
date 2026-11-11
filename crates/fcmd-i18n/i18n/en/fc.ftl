@@ -1434,7 +1434,7 @@ ai-context-dropped = { $count ->
         [one] one file out of the context
        *[other] { $count } files out of the context
     }
-ai-context-hint = Enter or Del: take it out of the context — the file stays on the disk · Esc
+ai-context-hint = Enter or Del: take it out of the context — the file stays on the disk · F3: what is sent · Esc
 ai-threads-title = Conversations
 ai-threads-hint = Enter: go on with this conversation · Esc
 ai-thread-resumed = going on with { $name }
@@ -1802,3 +1802,20 @@ menu-frecent = Frequent folders
 frecent-none = no folder has been visited yet
 frecent-gone = { $path } taken out of the frequent folders
 frecent-hint = type letters of the path · Enter go there · Del forget · Esc close
+
+# ai third round
+ai-redact-off = Redaction is off: everything goes as it is
+ai-redact-none = No secret found to mask
+ai-redact-count = Secrets masked before sending: { $count } ({ $kinds })
+ai-redacted = secrets masked: { $count }
+ai-preview-title = What goes to { $name } ({ $host })
+ai-preview-instruction = Instruction
+ai-preview-earlier = The conversation so far
+ai-preview-question = The question and its files
+ai-preview-key = F3 shows what is sent
+ai-preview-reading = Reading what would be sent…
+key-ai-redact = Redact
+ai-redact-now-on = Redaction is on: keys, tokens, private keys and passwords are masked before anything is sent
+ai-redact-now-off = Redaction is off: what is sent goes as it is
+ai-panel-redact-on = secrets masked
+ai-panel-redact-off = secrets not masked

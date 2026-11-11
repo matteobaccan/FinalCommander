@@ -2049,11 +2049,31 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                         }
                     });
                 }
+                Request::AiPreview { query, guard } => {
+                    // The same reading and the same masking the question itself gets, and
+                    // nothing sent: what comes back is what would go.
+                    let tx = tx.clone();
+                    runtime.spawn_blocking(move || {
+                        let result = ai_payload(&query, &guard).map(|p| app::AiPreview {
+                            system: ai_system(&query),
+                            earlier: p
+                                .earlier
+                                .iter()
+                                .map(|t| (t.question.clone(), t.answer.clone()))
+                                .collect(),
+                            user: fcmd_net::ai::user_text(&p.question, &p.attachments),
+                            redacted: p.redacted,
+                            kinds: fcmd_core::redact::Redacted::summary(&p.kinds),
+                        });
+                        let _ = tx.send(Event::AiPreview { query, result });
+                    });
+                }
                 Request::AiAsk {
                     query,
                     token,
                     dir,
                     cancel,
+                    guard,
                 } => {
                     let tx = tx.clone();
                     runtime.spawn(async move {
@@ -2071,7 +2091,7 @@ fn interactive(mut app: App, printwd: Option<&Path>) -> Result<()> {
                             }
                         };
                         tokio::select! {
-                            result = ask_ai(&query, token, &dir, progress) => {
+                            result = ask_ai(&query, token, &dir, &guard, progress) => {
                                 let _ = tx.send(Event::AiDone { result });
                             }
                             () = stopped => {}
@@ -5108,57 +5128,31 @@ fn staged_diff(root: &std::path::Path) -> Result<String, String> {
     Ok(diff)
 }
 
-/// Ask, and write the question and its answer into a Markdown file of their own — or, for a
-/// follow-up, onto the end of the thread's file.
-async fn ask_ai(
-    query: &app::AiQuery,
-    typed: Option<String>,
-    dir: &std::path::Path,
-    progress: impl FnMut(&str) + Send,
-) -> Result<app::AiAnswer, String> {
-    use fcmd_net::ai::{Api, Attachment, Service};
+/// What the model is told before the question: a use that wants its answer in a shape says
+/// so before the service's own instruction.
+fn ai_system(query: &app::AiQuery) -> String {
     let cfg = &query.service;
-    let api = Api::parse(&cfg.api).ok_or_else(|| format!("api = \"{}\"?", cfg.api))?;
-    // The variable first, when it holds a key; then the one typed in this session.
-    let token = match std::env::var(&cfg.token_env) {
-        Ok(key) if !cfg.token_env.is_empty() => Some(key),
-        _ => typed,
-    };
-    // A use that wants its answer in a shape says so before the service's own instruction.
-    let system = match (query.instruction.is_empty(), cfg.system.is_empty()) {
+    match (query.instruction.is_empty(), cfg.system.is_empty()) {
         (true, _) => cfg.system.clone(),
         (false, true) => query.instruction.clone(),
         (false, false) => format!("{}\n\n{}", query.instruction, cfg.system),
-    };
-    let service = Service {
-        api,
-        url: cfg.url.clone(),
-        model: cfg.model.clone(),
-        token,
-        system,
-        max_tokens: cfg.max_tokens,
-    };
-    // A login asks the service for its models, which proves the address, the key and the
-    // protocol, and sends nothing else. What it found goes back a field a line.
-    if query.purpose == app::AiUse::Probe {
-        let probe = fcmd_net::ai::probe(&service).await?;
-        return Ok(app::AiAnswer {
-            file: std::path::PathBuf::new(),
-            text: format!(
-                "{}\n{}\n{}\n{}\n{}\n{}\n{}",
-                cfg.name,
-                probe.url,
-                probe.status,
-                probe.millis,
-                probe.models,
-                probe.has_model,
-                probe.context.map(|n| n.to_string()).unwrap_or_default()
-            ),
-            purpose: app::AiUse::Probe,
-            tokens: (None, None),
-            model: String::new(),
-        });
     }
+}
+
+/// Everything one question sends, read and — unless that is turned off — with its secrets
+/// masked: the earlier turns of its thread, the question, the files. Built in one place so
+/// that the preview shows exactly what the request carries (SPEC 06 §14.2).
+struct AiPayload {
+    earlier: Vec<fcmd_net::ai::Turn>,
+    question: String,
+    attachments: Vec<fcmd_net::ai::Attachment>,
+    /// How many secrets were masked, and how many of each kind.
+    redacted: usize,
+    kinds: std::collections::BTreeMap<String, usize>,
+}
+
+fn ai_payload(query: &app::AiQuery, guard: &fcmd_config::AiGuardCfg) -> Result<AiPayload, String> {
+    use fcmd_net::ai::Attachment;
     let mut attachments = Vec::new();
     for f in &query.files {
         let bytes = std::fs::read(f).map_err(|e| format!("{}: {e}", f.display()))?;
@@ -5186,10 +5180,102 @@ async fn ask_ai(
         Some(file) => ai_turns(&std::fs::read_to_string(file).map_err(|e| e.to_string())?),
         None => Vec::new(),
     };
+    let mut payload = AiPayload {
+        earlier,
+        question: query.question.clone(),
+        attachments,
+        redacted: 0,
+        kinds: Default::default(),
+    };
+    if guard.redact {
+        // A pattern of the user's that is not a regular expression is left out here; the
+        // settings are where it is said (`Config::load`'s warnings), not every question.
+        let (redactor, _) = fcmd_core::redact::Redactor::new(&guard.patterns);
+        let mut found = Vec::new();
+        let mut pass = |text: &mut String| {
+            let got = redactor.redact(text);
+            if got.count > 0 {
+                *text = got.text;
+                found.push(got.kinds);
+            }
+        };
+        pass(&mut payload.question);
+        for a in &mut payload.attachments {
+            pass(&mut a.text);
+        }
+        // The earlier turns are read back from the conversation's file, which holds what
+        // was typed and not what was sent.
+        for t in &mut payload.earlier {
+            pass(&mut t.question);
+            pass(&mut t.answer);
+        }
+        for kinds in found {
+            for (kind, n) in kinds {
+                payload.redacted += n;
+                *payload.kinds.entry(kind).or_default() += n;
+            }
+        }
+    }
+    Ok(payload)
+}
+
+/// Ask, and write the question and its answer into a Markdown file of their own — or, for a
+/// follow-up, onto the end of the thread's file.
+async fn ask_ai(
+    query: &app::AiQuery,
+    typed: Option<String>,
+    dir: &std::path::Path,
+    guard: &fcmd_config::AiGuardCfg,
+    progress: impl FnMut(&str) + Send,
+) -> Result<app::AiAnswer, String> {
+    use fcmd_net::ai::{Api, Service};
+    let cfg = &query.service;
+    let api = Api::parse(&cfg.api).ok_or_else(|| format!("api = \"{}\"?", cfg.api))?;
+    // The variable first, when it holds a key; then the one typed in this session.
+    let token = match std::env::var(&cfg.token_env) {
+        Ok(key) if !cfg.token_env.is_empty() => Some(key),
+        _ => typed,
+    };
+    let service = Service {
+        api,
+        url: cfg.url.clone(),
+        model: cfg.model.clone(),
+        token,
+        system: ai_system(query),
+        max_tokens: cfg.max_tokens,
+    };
+    // A login asks the service for its models, which proves the address, the key and the
+    // protocol, and sends nothing else. What it found goes back a field a line.
+    if query.purpose == app::AiUse::Probe {
+        let probe = fcmd_net::ai::probe(&service).await?;
+        return Ok(app::AiAnswer {
+            file: std::path::PathBuf::new(),
+            text: format!(
+                "{}\n{}\n{}\n{}\n{}\n{}\n{}",
+                cfg.name,
+                probe.url,
+                probe.status,
+                probe.millis,
+                probe.models,
+                probe.has_model,
+                probe.context.map(|n| n.to_string()).unwrap_or_default()
+            ),
+            purpose: app::AiUse::Probe,
+            tokens: (None, None),
+            model: String::new(),
+            redacted: 0,
+        });
+    }
+    let AiPayload {
+        earlier,
+        question,
+        attachments,
+        redacted,
+        ..
+    } = ai_payload(query, guard)?;
     // Read as it is written, each piece handed on to be shown while the rest comes.
     let reply =
-        fcmd_net::ai::ask_streaming(&service, &earlier, &query.question, &attachments, progress)
-            .await?;
+        fcmd_net::ai::ask_streaming(&service, &earlier, &question, &attachments, progress).await?;
     std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     let names: Vec<&str> = attachments.iter().map(|a| a.name.as_str()).collect();
     // The model that answered, as the service names it; the one configured when it does not.
@@ -5204,6 +5290,11 @@ async fn ask_ai(
     }
     if let (Some(i), Some(o)) = (reply.tokens_in, reply.tokens_out) {
         meta.push_str(&format!(" · {i} + {o} tokens"));
+    }
+    // Said in the file too, so that reading it later one knows the model saw less than the
+    // question above it holds.
+    if redacted > 0 {
+        meta.push_str(&format!(" · {redacted} redacted"));
     }
     meta.push('*');
     let path = match &query.thread {
@@ -5234,6 +5325,7 @@ async fn ask_ai(
         purpose: query.purpose.clone(),
         tokens: (reply.tokens_in, reply.tokens_out),
         model: reply.model.clone().unwrap_or_default(),
+        redacted,
     })
 }
 
@@ -7133,6 +7225,7 @@ dir_attr = "D"
                 | Request::GitQuick { .. }
                 | Request::SysLog
                 | Request::AiAsk { .. }
+                | Request::AiPreview { .. }
                 | Request::Undo { .. }
                 | Request::StripMeta { .. }
                 | Request::OpenUrl { .. }
@@ -8797,5 +8890,78 @@ place = "diagonally"
             let path = base.join(expected);
             assert!(text.contains(&path.display().to_string()), "{text}");
         }
+    }
+
+    /// SPEC 06 §14.2: what a question carries — the question, its files, a block sent by
+    /// name, the earlier turns — has its secrets masked and counted before it goes, and goes
+    /// as it is with the masking turned off.
+    #[test]
+    fn what_a_question_sends_has_its_secrets_masked_and_counted() {
+        let dir = tempfile::tempdir().unwrap();
+        let env = dir.path().join("prod.env");
+        // Put together here, so that no line of this file reads as a key somebody leaked.
+        let key = format!("AKIA{}", "IOSFODNN7EXAMPLE");
+        std::fs::write(
+            &env,
+            format!("APP=shop\nDB_PASSWORD=correct-horse-battery\nAWS_ACCESS_KEY_ID={key}\n"),
+        )
+        .unwrap();
+        let thread = dir.path().join("thread.md");
+        std::fs::write(
+            &thread,
+            "# connect with postgres://app:hunter2hunter2@db/shop?\n\n*local · m*\n\nyes\n",
+        )
+        .unwrap();
+        let mut query = app::AiQuery::new(
+            fcmd_config::AiCfg {
+                name: "local".into(),
+                ..Default::default()
+            },
+            format!("why does {key} fail, and what is ticket ACME-123456?"),
+        );
+        query.files = vec![env.clone()];
+        query.inline = vec![("block".into(), "token: abcdef0123456789\n".into())];
+        query.thread = Some(thread);
+
+        let guard = fcmd_config::AiGuardCfg::default();
+        assert!(guard.redact, "on unless turned off");
+        let sent = ai_payload(&query, &guard).unwrap();
+        assert_eq!(sent.redacted, 5, "{:?}", sent.kinds);
+        assert!(!sent.question.contains(&key), "{}", sent.question);
+        assert!(sent.question.contains("[REDACTED:aws-key]"));
+        assert!(sent.question.contains("ACME-123456"), "not a shape we know");
+        let file = &sent.attachments[0];
+        assert_eq!(file.name, "prod.env");
+        assert!(file.text.contains("APP=shop"));
+        assert!(file.text.contains("DB_PASSWORD=[REDACTED:assignment]"));
+        assert!(file.text.contains("AWS_ACCESS_KEY_ID=[REDACTED:aws-key]"));
+        assert_eq!(sent.attachments[1].text, "token: [REDACTED:assignment]\n");
+        assert!(sent.earlier[0]
+            .question
+            .contains("postgres://app:[REDACTED:url-password]@db/shop"));
+        assert_eq!(sent.kinds["aws-key"], 2);
+
+        // The user's own pattern, after the built-in ones.
+        let own = fcmd_config::AiGuardCfg {
+            patterns: vec![r"ACME-\d{6}".into()],
+            ..Default::default()
+        };
+        let sent = ai_payload(&query, &own).unwrap();
+        assert_eq!(sent.redacted, 6);
+        assert!(sent.question.contains("ticket [REDACTED:custom]?"));
+
+        // Turned off, everything goes as it is and nothing is counted.
+        let off = fcmd_config::AiGuardCfg {
+            redact: false,
+            ..Default::default()
+        };
+        let sent = ai_payload(&query, &off).unwrap();
+        assert_eq!(sent.redacted, 0);
+        assert!(sent.question.contains(&key));
+        assert!(sent.attachments[0].text.contains("correct-horse-battery"));
+
+        // A file that is not there is the same error the question itself would give.
+        query.files = vec![dir.path().join("gone.txt")];
+        assert!(ai_payload(&query, &guard).is_err());
     }
 }

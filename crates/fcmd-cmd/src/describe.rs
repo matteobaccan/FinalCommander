@@ -250,6 +250,9 @@ impl Command {
             Command::ToolGit => "the repository: what changed, the log, blame, branches",
             Command::GitCommitDraft => "commit what is staged, with a message the model drafted",
             Command::AiExplain => "ask the model what the marked block, or the screen, is",
+            Command::AiRedact => {
+                "mask keys, tokens and passwords in what is sent to the model: on or off"
+            }
             Command::ToolSysLog => "the system log, the latest entries, in the viewer",
             Command::ToolAi => "the AI services: add, change, remove, choose the one asked",
             Command::ToolGrab => "copy a piece of the screen as it stands",

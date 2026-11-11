@@ -78,6 +78,14 @@ pub enum Request {
         dir: std::path::PathBuf,
         /// `Esc` while it is out: the question is dropped and nothing comes back.
         cancel: CancelToken,
+        /// What is masked before it goes (`[ai_guard]`).
+        guard: fcmd_config::AiGuardCfg,
+    },
+    /// Read what a question would send, mask it as the question itself would be, and send
+    /// nothing: for the dialog's count and for the preview (SPEC 06 §14.2).
+    AiPreview {
+        query: Box<AiQuery>,
+        guard: fcmd_config::AiGuardCfg,
     },
     /// Undo what is not a job: names back from the wastebasket, an empty folder removed.
     Undo {
@@ -701,6 +709,21 @@ pub struct AiAnswer {
     pub tokens: (Option<u64>, Option<u64>),
     /// The model that answered, as the service names it, when the reply says.
     pub model: String,
+    /// How many secrets were masked in what was sent.
+    pub redacted: usize,
+}
+
+/// What one question would send, as the worker read it: the instruction, the earlier turns,
+/// the question with its files after it — all of it after the masking — and how much was
+/// masked, by kind.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AiPreview {
+    pub system: String,
+    pub earlier: Vec<(String, String)>,
+    pub user: String,
+    pub redacted: usize,
+    /// `2 aws-key, 1 assignment`.
+    pub kinds: String,
 }
 
 /// One row of the log panel.
@@ -993,6 +1016,11 @@ pub enum Event {
     /// A piece of an answer still being written, to show while the rest comes.
     AiPartial {
         text: String,
+    },
+    /// What a question would send, read and masked, or why it could not be read.
+    AiPreview {
+        query: Box<AiQuery>,
+        result: Result<AiPreview, String>,
     },
     /// A `sql:` query's rows, as a CSV file to view, or why there are none.
     SqlDone {
@@ -2780,6 +2808,14 @@ pub struct App {
     pub ai_busy: Option<(String, std::time::Instant)>,
     /// What has come of the answer so far, while it is still being written.
     pub ai_streamed: String,
+    /// What the question in the send dialog would carry, once the worker has read it: the
+    /// question it is for, the text to show, and how many secrets were masked in it.
+    ai_preview: Option<(AiQuery, String, usize)>,
+    /// The preview was asked for before it was ready, or with no dialog to wait in: it opens
+    /// when it arrives.
+    ai_preview_show: bool,
+    /// The send dialog, waiting under the preview: closing the preview asks again.
+    ai_preview_back: Option<Box<Confirm>>,
     /// What stops the question that is out, and whether one was stopped and its answer, if
     /// it still arrives, is to be dropped.
     pub ai_cancel: Option<CancelToken>,
@@ -3210,6 +3246,9 @@ impl App {
             ai_probing: None,
             ai_busy: None,
             ai_streamed: String::new(),
+            ai_preview: None,
+            ai_preview_show: false,
+            ai_preview_back: None,
             ai_cancel: None,
             ai_stopped: false,
             editor_size: (80, 20),
@@ -3606,6 +3645,7 @@ impl App {
                     self.ai_streamed.push_str(&text);
                 }
             }
+            Event::AiPreview { query, result } => self.ai_preview_read(*query, result),
             Event::AiDone { result } => {
                 self.ai_cancel = None;
                 // The answer to a question `Esc` stopped, come back before the stop did.
@@ -5338,6 +5378,14 @@ impl App {
         match key.code {
             // The page about dialogs, with the question waiting behind it.
             KeyCode::F(1) if key.mods == Mods::NONE => self.open_dialog_help(),
+            // `F3` reads, here as everywhere: what the question would send.
+            KeyCode::F(3)
+                if key.mods == Mods::NONE
+                    && matches!(confirm.action, ConfirmAction::AskAi { .. }) =>
+            {
+                self.show_ai_preview();
+                return;
+            }
             KeyCode::Left | KeyCode::BackTab => {
                 if let Mode::Confirm(open) = &mut self.mode {
                     open.button = (open.button.min(count - 1) + count - 1) % count;
@@ -10509,6 +10557,10 @@ impl App {
         }
         // The two that ask the language model about what is in front of the user, wherever
         // that is: the viewer, the editor, or the panel of a repository.
+        if cmd == Command::AiRedact {
+            self.ai_toggle_redact();
+            return;
+        }
         if cmd == Command::AiExplain {
             self.ai_explain_here();
             return;
@@ -11609,6 +11661,14 @@ impl App {
                     && self.other().temp_origin() == Some(":aichat")
                 {
                     self.ai_add_context();
+                    return;
+                }
+                // Nothing to copy in the list of AI services: `F5` there is the switch for
+                // what is masked before a question goes, as the key bar says.
+                if self.panel().temp_origin() == Some(":ai") {
+                    if cmd == Command::FileCopy {
+                        self.ai_toggle_redact();
+                    }
                     return;
                 }
                 // In the git panel `F5` stages and `F6` unstages: the files a commit takes.
@@ -14672,6 +14732,14 @@ impl App {
         if names.len() > 5 {
             lines.push("  …".into());
         }
+        // Read on the worker while the dialog is already up: how many secrets will be
+        // masked is a line that arrives a moment later, and the preview with it.
+        self.ai_preview = None;
+        self.ai_preview_show = false;
+        self.requests.push(Request::AiPreview {
+            query: Box::new(query.clone()),
+            guard: self.cfg.ai_guard.clone(),
+        });
         self.mode = Mode::Confirm(Confirm {
             title,
             lines,
@@ -14680,6 +14748,109 @@ impl App {
             },
             button: 1,
         });
+    }
+
+    /// The worker has read what a question would send. The text of the preview is put
+    /// together here, where the words are; the send dialog, when it is still the one this
+    /// was read for, gains the line that says how much was masked.
+    fn ai_preview_read(&mut self, query: AiQuery, result: Result<AiPreview, String>) {
+        let show = std::mem::take(&mut self.ai_preview_show);
+        let preview = match result {
+            Ok(preview) => preview,
+            Err(why) => {
+                // A file that cannot be read: the question would fail the same way.
+                self.set_error(why);
+                return;
+            }
+        };
+        let what = if !self.cfg.ai_guard.redact {
+            self.i18n.t("ai-redact-off")
+        } else if preview.redacted == 0 {
+            self.i18n.t("ai-redact-none")
+        } else {
+            self.i18n.t_args(
+                "ai-redact-count",
+                &[
+                    ("count", (preview.redacted as i64).into()),
+                    ("kinds", preview.kinds.clone().into()),
+                ],
+            )
+        };
+        let mut text = format!(
+            "# {}\n\n*{what}*\n",
+            self.i18n.t_args(
+                "ai-preview-title",
+                &[
+                    ("name", query.service.name.clone().into()),
+                    ("host", ai_host(&query.service.url).into()),
+                ],
+            )
+        );
+        if !preview.system.is_empty() {
+            text.push_str(&format!(
+                "\n## {}\n\n{}\n",
+                self.i18n.t("ai-preview-instruction"),
+                preview.system
+            ));
+        }
+        if !preview.earlier.is_empty() {
+            text.push_str(&format!("\n## {}\n", self.i18n.t("ai-preview-earlier")));
+            for (question, answer) in &preview.earlier {
+                text.push_str(&format!("\n> {question}\n\n{answer}\n"));
+            }
+        }
+        text.push_str(&format!(
+            "\n## {}\n\n{}\n",
+            self.i18n.t("ai-preview-question"),
+            preview.user
+        ));
+        if let Mode::Confirm(c) = &mut self.mode {
+            if matches!(&c.action, ConfirmAction::AskAi { query: asked } if **asked == query) {
+                c.lines
+                    .push(format!("{what} — {}", self.i18n.t("ai-preview-key")));
+            }
+        }
+        self.ai_preview = Some((query, text, preview.redacted));
+        if show {
+            self.show_ai_preview();
+        }
+    }
+
+    /// `F3` in the send dialog and in the list of the context: what would go,
+    /// in the viewer, with the dialog waiting underneath. Asked for before the worker has
+    /// answered, it opens when the answer comes.
+    fn show_ai_preview(&mut self) {
+        let asked = match &self.mode {
+            Mode::Confirm(c) => match &c.action {
+                ConfirmAction::AskAi { query } => Some((**query).clone()),
+                _ => None,
+            },
+            _ => None,
+        };
+        let Some((query, text, redacted)) = self.ai_preview.clone() else {
+            self.ai_preview_show = true;
+            let m = self.i18n.t("ai-preview-reading");
+            self.set_status(m);
+            return;
+        };
+        // Read for another question than the one being asked: not this one's preview.
+        if asked.as_ref().is_some_and(|a| *a != query) {
+            return;
+        }
+        if let Mode::Confirm(c) = std::mem::replace(&mut self.mode, Mode::Normal) {
+            self.ai_preview_back = Some(Box::new(c));
+        }
+        self.open_viewer_on_text(text, VPath::local("what-is-sent.md"));
+        if let Mode::Viewer(viewer) = &mut self.mode {
+            viewer.as_markdown();
+        }
+        let m = if !self.cfg.ai_guard.redact {
+            self.i18n.t("ai-redact-off")
+        } else {
+            self.i18n
+                .t_args("ai-redacted", &[("count", (redacted as i64).into())])
+        };
+        self.set_status(m);
     }
 
     /// `Ctrl+Alt+X` in the viewer and the editor: ask what the marked block — or, with none,
@@ -14809,6 +14980,7 @@ impl App {
             token: if from_env { None } else { typed },
             dir,
             cancel,
+            guard: self.cfg.ai_guard.clone(),
         });
     }
 
@@ -14835,13 +15007,24 @@ impl App {
     /// An answer is back: read it, put it on the command line, or offer it as a commit
     /// message — and say on the status line what it cost.
     fn ai_done(&mut self, answer: AiAnswer) {
-        let cost = match answer.tokens {
+        let mut cost = match answer.tokens {
             (Some(i), Some(o)) => self.i18n.t_args(
                 "ai-tokens",
                 &[("in", (i as i64).into()), ("out", (o as i64).into())],
             ),
             _ => String::new(),
         };
+        // And how many secrets never left, beside what it cost.
+        if answer.redacted > 0 {
+            let masked = self
+                .i18n
+                .t_args("ai-redacted", &[("count", (answer.redacted as i64).into())]);
+            cost = if cost.is_empty() {
+                masked
+            } else {
+                format!("{cost} · {masked}")
+            };
+        }
         match answer.purpose {
             AiUse::Probe => self.ai_logged_in(&answer.text),
             AiUse::Answer => {
@@ -14998,7 +15181,17 @@ impl App {
             let m = self.i18n.t("ai-none-panel");
             self.set_status(m);
         }
-        let title = self.plain("drive-ai");
+        // The title says what stands between a question and a service, since this is the
+        // panel where that is switched.
+        let title = format!(
+            "{} · {}",
+            self.plain("drive-ai"),
+            self.i18n.t(if self.cfg.ai_guard.redact {
+                "ai-panel-redact-on"
+            } else {
+                "ai-panel-redact-off"
+            })
+        );
         let generation = self.panels[side].generation + 1;
         self.panels[side].generation = generation;
         self.panels[side].set_temp(title, items, generation);
@@ -15006,6 +15199,26 @@ impl App {
         self.panels[side].sort.key = fcmd_core::SortKey::Unsorted;
         self.panels[side].rebuild();
         self.active = side;
+    }
+
+    /// `ai.redact` (`F5` in the AI panel): masking on or off, kept in the settings.
+    fn ai_toggle_redact(&mut self) {
+        self.cfg.ai_guard.redact = !self.cfg.ai_guard.redact;
+        self.save_setup();
+        for side in 0..2 {
+            if self.panels[side].temp_origin() == Some(":ai") {
+                let (active, cursor) = (self.active, self.panels[side].cursor);
+                self.open_ai_panel(side);
+                self.panels[side].cursor = cursor;
+                self.active = active;
+            }
+        }
+        let m = self.i18n.t(if self.cfg.ai_guard.redact {
+            "ai-redact-now-on"
+        } else {
+            "ai-redact-now-off"
+        });
+        self.set_status(m);
     }
 
     /// The service under the cursor of the AI panel, by its place in `[[ai]]`.
@@ -15365,6 +15578,31 @@ impl App {
             rows,
             self.active,
         )));
+    }
+
+    /// `F3` in the `F8` list: what goes with every question of this conversation — its
+    /// earlier turns and the files of its context — as it would be sent, masked.
+    fn ai_context_preview(&mut self) {
+        let Some(session) = self.ai_session.clone() else {
+            return;
+        };
+        let mut query = AiQuery::new(session.service.clone(), String::new());
+        query.thread = session.thread.clone().filter(|t| t.is_file());
+        query.files = session
+            .files
+            .iter()
+            .filter(|f| f.is_file())
+            .cloned()
+            .collect();
+        self.mode = Mode::Normal;
+        self.ai_preview = None;
+        self.ai_preview_show = true;
+        let m = self.i18n.t("ai-preview-reading");
+        self.set_status(m);
+        self.requests.push(Request::AiPreview {
+            query: Box::new(query),
+            guard: self.cfg.ai_guard.clone(),
+        });
     }
 
     /// One row of the `F8` list taken: that file, or all of them, leaves the context; the
@@ -21378,6 +21616,12 @@ impl App {
     }
 
     fn leave_screen(&mut self) {
+        // The preview of what a question sends was opened over the dialog that asks whether
+        // to send it: closing it is going back to that question, not answering it.
+        if let Some(dialog) = self.ai_preview_back.take() {
+            self.mode = Mode::Confirm(*dialog);
+            return;
+        }
         self.mode = Mode::Normal;
         if self.alone {
             self.quit = true;
@@ -22374,6 +22618,11 @@ impl App {
                 if let Some(at) = pick.chosen().and_then(|r| r.value.parse::<usize>().ok()) {
                     self.open_plugin_card(at);
                 }
+            }
+            // What these files come to once they are read and masked: the preview of what
+            // goes with the next question.
+            KeyCode::F(3) if kind == PickKind::AiContext && key.mods == Mods::NONE => {
+                self.ai_context_preview();
             }
             KeyCode::Delete if kind == PickKind::AiContext => {
                 if let Some(value) = pick.chosen().map(|r| r.value.clone()) {
@@ -27915,7 +28164,7 @@ impl App {
                 (2, "key-menu"),
                 (3, ""),
                 (4, "key-ai-edit"),
-                (5, ""),
+                (5, "key-ai-redact"),
                 (6, ""),
                 (7, "key-ai-new"),
                 (8, "key-ai-remove"),
@@ -40717,6 +40966,7 @@ abcdefghij
                 purpose: AiUse::Probe,
                 tokens: (None, None),
                 model: String::new(),
+                redacted: 0,
             }),
         });
         assert_eq!(app.panels[1].temp_origin(), Some(":aichat"));
@@ -40761,6 +41011,7 @@ abcdefghij
                 purpose: AiUse::Answer,
                 tokens: (None, None),
                 model: String::new(),
+                redacted: 0,
             }),
         });
         app.mode = Mode::Normal;
@@ -40937,6 +41188,7 @@ abcdefghij
                 purpose: AiUse::Probe,
                 tokens: (None, None),
                 model: String::new(),
+                redacted: 0,
             }),
         });
         assert_eq!(
@@ -41001,6 +41253,7 @@ abcdefghij
                 purpose: AiUse::Answer,
                 tokens: (Some(1200), Some(300)),
                 model: "qwen3".into(),
+                redacted: 0,
             }),
         });
         assert!(
@@ -42487,6 +42740,7 @@ abcdefghij
                 purpose: AiUse::Command,
                 tokens: (Some(10), Some(5)),
                 model: String::new(),
+                redacted: 0,
             }),
         });
         assert_eq!(app.cmd.text, "ls -S | head -10");
@@ -42510,6 +42764,7 @@ abcdefghij
                 purpose: AiUse::Answer,
                 tokens: (None, None),
                 model: String::new(),
+                redacted: 0,
             }),
         });
         app.mode = Mode::Normal;
@@ -42535,6 +42790,7 @@ abcdefghij
                 },
                 tokens: (None, None),
                 model: String::new(),
+                redacted: 0,
             }),
         });
         let Mode::Prompt(p) = &app.mode else {
@@ -46844,5 +47100,246 @@ abcdefghij
         press(&mut app, "F10");
         assert_eq!(app.cfg.editor.tabs, "all");
         assert!(app.cfg.editor.expand_on_open());
+    }
+
+    fn ai_service_cfg(name: &str, url: &str) -> fcmd_config::AiCfg {
+        fcmd_config::AiCfg {
+            name: name.into(),
+            url: url.into(),
+            model: "m".into(),
+            api: "ollama".into(),
+            ..Default::default()
+        }
+    }
+
+    /// SPEC 06 §14.2: the dialog that names what goes also says how much of it is masked,
+    /// once the worker has read it; `F3` there shows what is sent, and closing that comes
+    /// back to the question, which is still the user's to answer. The answer's status says
+    /// how many secrets never left.
+    #[test]
+    fn the_send_dialog_counts_what_is_masked_and_f3_shows_what_goes() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.env"), "DB_PASSWORD=correct-horse\n").unwrap();
+        let mut app = editing_app(dir.path());
+        app.cfg.ais = vec![ai_service_cfg("local", "http://127.0.0.1:11434/api/chat")];
+        let at = app.panels[0].listing.row_of_name("a.env").unwrap();
+        app.panels[0].cursor = at;
+        press(&mut app, "Insert");
+        app.take_requests();
+        app.cmd.set("ai: what is this?");
+        press(&mut app, "Enter");
+        let Mode::Confirm(c) = &app.mode else {
+            panic!("a dialog: {:?}", app.mode)
+        };
+        assert_eq!(c.button, 1, "Cancel is the one lit");
+        // Nothing is asked; what would go is read, with the masking that is in force.
+        let requests = app.take_requests();
+        assert!(!requests.iter().any(|r| matches!(r, Request::AiAsk { .. })));
+        let (query, guard) = requests
+            .into_iter()
+            .find_map(|r| match r {
+                Request::AiPreview { query, guard } => Some((query, guard)),
+                _ => None,
+            })
+            .expect("the worker is asked to read what would go");
+        assert!(guard.redact);
+        assert_eq!(query.files.len(), 1);
+
+        // `F3` before the worker has answered: it opens when the answer comes.
+        press(&mut app, "F3");
+        assert!(matches!(&app.mode, Mode::Confirm(_)), "{:?}", app.mode);
+        app.handle_event(Event::AiPreview {
+            query: query.clone(),
+            result: Ok(AiPreview {
+                system: String::new(),
+                earlier: Vec::new(),
+                user: "what is this?\n\n--- a.env ---\n```\nDB_PASSWORD=[REDACTED:assignment]\n```"
+                    .into(),
+                redacted: 1,
+                kinds: "1 assignment".into(),
+            }),
+        });
+        let Mode::Viewer(viewer) = &mut app.mode else {
+            panic!("the preview: {:?}", app.mode)
+        };
+        let shown: Vec<String> = viewer.rows(80, 30).into_iter().map(|r| r.text).collect();
+        let shown = shown.join("\n");
+        assert!(shown.contains("[REDACTED:assignment]"), "{shown}");
+        assert!(!shown.contains("correct-horse"), "{shown}");
+        assert!(shown.contains("127.0.0.1"), "the host it goes to: {shown}");
+        assert!(app.status.contains('1'), "{}", app.status);
+
+        // Closing the preview is not an answer: the question is back, with its count.
+        press(&mut app, "Esc");
+        let Mode::Confirm(c) = &app.mode else {
+            panic!("the dialog again: {:?}", app.mode)
+        };
+        assert!(
+            c.lines
+                .iter()
+                .any(|l| l.contains("1 assignment") && l.contains("F3")),
+            "{:?}",
+            c.lines
+        );
+        assert!(!app
+            .take_requests()
+            .iter()
+            .any(|r| matches!(r, Request::AiAsk { .. })));
+
+        // Asked for again, the preview is there at once.
+        press(&mut app, "F3");
+        assert!(matches!(&app.mode, Mode::Viewer(_)), "{:?}", app.mode);
+        press(&mut app, "Esc");
+
+        // *Send*: the question goes with the masking to apply to it.
+        if let Mode::Confirm(c) = &mut app.mode {
+            c.button = 0;
+        }
+        press(&mut app, "Enter");
+        let guard = app
+            .take_requests()
+            .into_iter()
+            .find_map(|r| match r {
+                Request::AiAsk { guard, .. } => Some(guard),
+                _ => None,
+            })
+            .expect("sent on yes");
+        assert!(guard.redact);
+        let answer = dir.path().join("answer.md");
+        std::fs::write(&answer, "# what is this?\n\nan env file").unwrap();
+        app.handle_event(Event::AiDone {
+            result: Ok(AiAnswer {
+                file: answer,
+                text: "an env file".into(),
+                purpose: AiUse::Answer,
+                tokens: (Some(10), Some(4)),
+                model: String::new(),
+                redacted: 1,
+            }),
+        });
+        assert!(
+            app.status.contains("10") && app.status.contains("secrets masked: 1"),
+            "{}",
+            app.status
+        );
+    }
+
+    /// A preview read for a question that is no longer the one on the screen changes nothing,
+    /// and one that could not be read says why.
+    #[test]
+    fn a_preview_for_another_question_is_not_shown_in_this_dialog() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = editing_app(dir.path());
+        app.cfg.ais = vec![ai_service_cfg("local", "http://127.0.0.1:11434/api/chat")];
+        app.ai_explain("notes.txt".into(), "some text".into());
+        let before = match &app.mode {
+            Mode::Confirm(c) => c.lines.clone(),
+            other => panic!("a dialog: {other:?}"),
+        };
+        let other = AiQuery::new(app.cfg.ais[0].clone(), "another question".into());
+        app.handle_event(Event::AiPreview {
+            query: Box::new(other.clone()),
+            result: Ok(AiPreview {
+                user: "another question".into(),
+                redacted: 3,
+                kinds: "3 jwt".into(),
+                ..Default::default()
+            }),
+        });
+        assert!(matches!(&app.mode, Mode::Confirm(c) if c.lines == before));
+        press(&mut app, "F3");
+        assert!(matches!(&app.mode, Mode::Confirm(_)), "{:?}", app.mode);
+        app.handle_event(Event::AiPreview {
+            query: Box::new(other),
+            result: Err("gone.txt: no such file".into()),
+        });
+        assert!(app.status_error && app.status.contains("gone.txt"));
+    }
+
+    /// `F5` in the AI panel is the switch: the title and the status say which way it is, the
+    /// settings keep it, and a question asked after it carries it.
+    #[test]
+    fn f5_in_the_ai_panel_turns_the_masking_off_and_on_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut app = editing_app(dir.path());
+        app.paths.config_file = dir.path().join("fcmd.toml");
+        app.cfg.ais = vec![ai_service_cfg("local", "http://127.0.0.1:11434/api/chat")];
+        assert!(app.cfg.ai_guard.redact, "on unless turned off");
+        app.open_ai_panel(0);
+        assert!(app.panels[0]
+            .temp
+            .as_ref()
+            .unwrap()
+            .title
+            .contains("secrets masked"));
+        press(&mut app, "F5");
+        assert!(!app.cfg.ai_guard.redact);
+        assert!(app.panels[0]
+            .temp
+            .as_ref()
+            .unwrap()
+            .title
+            .contains("secrets not masked"));
+        assert_eq!(app.panels[0].temp_origin(), Some(":ai"), "still the list");
+        let saved = std::fs::read_to_string(dir.path().join("fcmd.toml")).unwrap();
+        assert!(
+            saved.contains("[ai_guard]") && saved.contains("redact = false"),
+            "{saved}"
+        );
+        let (back, problems) = Config::parse("fcmd.toml", &saved).unwrap();
+        assert!(problems.is_empty(), "{problems:?}");
+        assert!(!back.ai_guard.redact);
+
+        app.take_requests();
+        app.cmd.set("ai: why?");
+        press(&mut app, "Enter");
+        let guard = app.take_requests().into_iter().find_map(|r| match r {
+            Request::AiAsk { guard, .. } => Some(guard),
+            _ => None,
+        });
+        assert_eq!(guard.map(|g| g.redact), Some(false));
+
+        // The command by its name does the same, from anywhere.
+        app.run(Command::AiRedact);
+        assert!(app.cfg.ai_guard.redact);
+        assert!(app.panels[0]
+            .temp
+            .as_ref()
+            .unwrap()
+            .title
+            .contains("secrets masked"));
+    }
+
+    /// `F3` in the list of the context: what goes with every question of the conversation,
+    /// read by the worker and shown when it is.
+    #[test]
+    fn f3_in_the_context_list_previews_what_goes_with_every_question() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("a.txt");
+        std::fs::write(&file, "alpha").unwrap();
+        let mut app = editing_app(dir.path());
+        ai_session_on(&mut app, vec![file.clone()], None);
+        app.open_ai_context();
+        app.take_requests();
+        press(&mut app, "F3");
+        let query = app
+            .take_requests()
+            .into_iter()
+            .find_map(|r| match r {
+                Request::AiPreview { query, .. } => Some(query),
+                _ => None,
+            })
+            .expect("read on the worker");
+        assert_eq!(query.files, vec![file]);
+        app.handle_event(Event::AiPreview {
+            query,
+            result: Ok(AiPreview {
+                user: "--- a.txt ---\n```\nalpha\n```".into(),
+                ..Default::default()
+            }),
+        });
+        assert!(matches!(&app.mode, Mode::Viewer(_)), "{:?}", app.mode);
+        press(&mut app, "Esc");
+        assert!(matches!(&app.mode, Mode::Normal), "{:?}", app.mode);
     }
 }

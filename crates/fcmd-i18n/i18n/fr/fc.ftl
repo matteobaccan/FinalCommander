@@ -1424,7 +1424,7 @@ ai-context-dropped = { $count ->
         [one] un fichier retiré du contexte
        *[other] { $count } fichiers retirés du contexte
     }
-ai-context-hint = Entrée ou Suppr : le retirer du contexte — le fichier reste sur le disque · Échap
+ai-context-hint = Entrée ou Suppr : le retirer du contexte — le fichier reste sur le disque · F3 : ce qui part · Échap
 ai-threads-title = Conversations
 ai-threads-hint = Entrée : reprendre cette conversation · Échap
 ai-thread-resumed = reprise de { $name }
@@ -1792,3 +1792,20 @@ menu-frecent = Dossiers fréquents
 frecent-none = aucun dossier visité pour l’instant
 frecent-gone = { $path } retiré des dossiers fréquents
 frecent-hint = tapez des lettres du chemin · Entrée y aller · Suppr oublier · Échap fermer
+
+# ai third round
+ai-redact-off = Le masquage est désactivé : tout part tel quel
+ai-redact-none = Aucun secret à masquer
+ai-redact-count = Secrets masqués avant l'envoi : { $count } ({ $kinds })
+ai-redacted = secrets masqués : { $count }
+ai-preview-title = Ce qui part vers { $name } ({ $host })
+ai-preview-instruction = Instruction
+ai-preview-earlier = La conversation jusqu'ici
+ai-preview-question = La question et ses fichiers
+ai-preview-key = F3 montre ce qui part
+ai-preview-reading = Lecture de ce qui partirait…
+key-ai-redact = Masque
+ai-redact-now-on = Masquage activé : clés, jetons, clés privées et mots de passe sont masqués avant tout envoi
+ai-redact-now-off = Masquage désactivé : ce qui part, part tel quel
+ai-panel-redact-on = secrets masqués
+ai-panel-redact-off = secrets non masqués

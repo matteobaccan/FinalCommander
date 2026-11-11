@@ -1424,7 +1424,7 @@ ai-context-dropped = { $count ->
         [one] un archivo fuera del contexto
        *[other] { $count } archivos fuera del contexto
     }
-ai-context-hint = Intro o Supr: sacarlo del contexto — el archivo sigue en el disco · Esc
+ai-context-hint = Intro o Supr: sacarlo del contexto — el archivo sigue en el disco · F3: lo que se envía · Esc
 ai-threads-title = Conversaciones
 ai-threads-hint = Intro: seguir con esta conversación · Esc
 ai-thread-resumed = se sigue con { $name }
@@ -1792,3 +1792,20 @@ menu-frecent = Carpetas frecuentes
 frecent-none = aún no se ha visitado ninguna carpeta
 frecent-gone = { $path } quitada de las carpetas frecuentes
 frecent-hint = escribe letras de la ruta · Intro ir · Supr olvidar · Esc cerrar
+
+# ai third round
+ai-redact-off = El enmascarado está apagado: todo sale tal cual
+ai-redact-none = Ningún secreto que enmascarar
+ai-redact-count = Secretos enmascarados antes de enviar: { $count } ({ $kinds })
+ai-redacted = secretos enmascarados: { $count }
+ai-preview-title = Lo que se envía a { $name } ({ $host })
+ai-preview-instruction = Instrucción
+ai-preview-earlier = La conversación hasta ahora
+ai-preview-question = La pregunta y sus archivos
+ai-preview-key = F3 muestra lo que se envía
+ai-preview-reading = Leyendo lo que se enviaría…
+key-ai-redact = Enmasc
+ai-redact-now-on = Enmascarado encendido: claves, tokens, claves privadas y contraseñas se enmascaran antes de enviar
+ai-redact-now-off = Enmascarado apagado: lo que se envía sale tal cual
+ai-panel-redact-on = secretos enmascarados
+ai-panel-redact-off = secretos sin enmascarar

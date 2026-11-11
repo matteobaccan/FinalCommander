@@ -127,6 +127,47 @@ Altri tre modi di chiedere:
 
 Una domanda al modello non è un comando: `!` e gli altri metasimboli non vengono espansi.
 
+## Cosa viene mascherato prima di partire
+
+I file contengono chiavi: un `.env` accanto ai sorgenti, un token incollato in uno script, una
+chiave privata in una cartella selezionata tutta intera. Prima che una domanda lasci la
+macchina — la domanda stessa, i file che partono con lei, il blocco dall'editor, i turni
+precedenti della conversazione — fcmd maschera ciò che ha l'aspetto di un segreto e scrive
+`[REDACTED:tipo]` al suo posto:
+
+| Cosa viene trovato | Cosa viene scritto al suo posto |
+| --- | --- |
+| un blocco di chiave privata (da `-----BEGIN … PRIVATE KEY-----` alla sua fine) | `[REDACTED:private-key]` |
+| le chiavi che dicono cosa sono: AWS (`AKIA…`), GitHub (`ghp_…`, `github_pat_…`), GitLab (`glpat-…`), Slack (`xoxb-…`), Stripe (`sk_live_…`), OpenAI e Anthropic (`sk-…`), Google (`AIza…`), npm (`npm_…`), un JWT | `[REDACTED:aws-key]`, `[REDACTED:github-token]`, `[REDACTED:api-key]` e così via |
+| la password in un indirizzo: `postgres://app:segreto@db/shop` | `postgres://app:[REDACTED:url-password]@db/shop` |
+| quello che segue `Authorization: Bearer` o `Basic` | `[REDACTED:auth-header]` |
+| il valore di una riga `CHIAVE=valore`, `chiave: valore` o `"chiave": "valore"` la cui chiave finisce in `password`, `secret`, `token`, `api_key`, `access_key`, `private_key`, `credential` e simili | `[REDACTED:assignment]` |
+
+Il nome della chiave, l'host e l'utente di un indirizzo restano: sono ciò per cui vale la pena
+mandare la riga. Un valore che è un riferimento (`${VAR}`), un numero o una chiamata in un
+programma non viene toccato. Nel dubbio maschera, e resta comunque una rete, non una garanzia:
+una password che è una parola qualunque in una frase qualunque non ha una forma da trovare.
+
+Quello che ha fatto si vede. Il dialogo che elenca i file guadagna una riga un attimo dopo
+essersi aperto — `Segreti mascherati prima dell'invio: 2 (1 assignment, 1 aws-key)` — e lì
+**`F3`** apre **che cosa parte**, esattamente come partirà: l'istruzione, la conversazione fin
+qui, la domanda con i suoi file, mascherati. `Esc` torna al dialogo, a cui rispondi ancora tu.
+In una conversazione, `F3` nella lista `F8` del contesto mostra lo stesso per ciò che parte con
+ogni domanda. Dopo la risposta la riga di stato dice quanti segreti sono stati mascherati,
+accanto al costo, e lo dice anche la seconda riga del file della risposta.
+
+La mascheratura è **accesa** finché non la spegni: `F5` nella lista dei servizi (la riga AI di
+`Alt+F1`) la commuta, e la cornice del pannello dice com'è. In `fcmd.toml`:
+
+```toml
+[ai_guard]
+redact = true
+patterns = ['ACME-\d{6}', 'codice cliente: (\d+)']   # i tuoi, come espressioni regolari
+```
+
+Un tuo pattern maschera il suo primo gruppo quando ne ha uno — così le parole prima restano — e
+altrimenti tutto ciò che ha trovato; compaiono come `[REDACTED:custom]`.
+
 # Aggiornamenti
 
 `Opzioni → Verifica aggiornamenti` chiede a GitHub qual è l'ultima versione e, se è più nuova

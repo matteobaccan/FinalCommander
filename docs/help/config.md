@@ -123,6 +123,46 @@ Three more ways to ask:
 
 A question to the model is not a command: `!` and the other metasymbols are not expanded in it.
 
+## What is masked before it goes
+
+Files hold keys: an `.env` beside the sources, a token pasted into a script, a private key in
+a folder that was selected whole. Before a question leaves the machine — the question itself,
+the files that go with it, the block from the editor, the earlier turns of the conversation —
+fcmd masks what looks like a secret and writes `[REDACTED:kind]` where it was:
+
+| What is found | Written in its place |
+| --- | --- |
+| a private key block (`-----BEGIN … PRIVATE KEY-----` to its end) | `[REDACTED:private-key]` |
+| the keys that say what they are: AWS (`AKIA…`), GitHub (`ghp_…`, `github_pat_…`), GitLab (`glpat-…`), Slack (`xoxb-…`), Stripe (`sk_live_…`), OpenAI and Anthropic (`sk-…`), Google (`AIza…`), npm (`npm_…`), a JWT | `[REDACTED:aws-key]`, `[REDACTED:github-token]`, `[REDACTED:api-key]` and so on |
+| the password in an address: `postgres://app:secret@db/shop` | `postgres://app:[REDACTED:url-password]@db/shop` |
+| what follows `Authorization: Bearer` or `Basic` | `[REDACTED:auth-header]` |
+| the value of a line `KEY=value`, `key: value` or `"key": "value"` whose key ends in `password`, `secret`, `token`, `api_key`, `access_key`, `private_key`, `credential` and the like | `[REDACTED:assignment]` |
+
+The name of the key, the host and the user of an address stay: they are what makes the line
+worth sending. A value that is a reference (`${VAR}`), a number or a call in a program is left
+alone. It errs towards masking, and it is still a net, not a guarantee — a password that is an
+ordinary word in an ordinary sentence has no shape to find.
+
+You can see what it did. The dialog that names the files gains a line a moment after it opens —
+`Secrets masked before sending: 2 (1 assignment, 1 aws-key)` — and **`F3`** there opens
+**what is sent**, exactly as it will go: the instruction, the conversation so far, the
+question with its files, masked. `Esc` comes back to the dialog, which is still yours to
+answer. In a conversation, `F3` in the `F8` list of the context shows the same for what goes
+with every question. After the answer the status line says how many secrets were masked,
+beside what it cost, and the answer file says it on its second line.
+
+Masking is **on** unless you turn it off: `F5` in the list of services (the AI row of
+`Alt+F1`) switches it, and the panel's frame says which way it is. In `fcmd.toml`:
+
+```toml
+[ai_guard]
+redact = true
+patterns = ['ACME-\d{6}', 'customer id: (\d+)']   # your own, as regular expressions
+```
+
+A pattern of your own masks its first group when it has one — so the words before it stay —
+and otherwise everything it matched; they show as `[REDACTED:custom]`.
+
 # Updates
 
 `Options → Check for updates` asks GitHub which release is the latest and, when it is newer

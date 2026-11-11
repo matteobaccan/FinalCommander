@@ -782,6 +782,54 @@ that names the files, their size and the host comes back whenever they are not t
 last time. `ai:`, `ai+` and `ai!` keep their meaning there. Logging in again to the same
 service keeps its conversation and its files; another service starts afresh.
 
+### 14.2 What stands between a question and the service (0.44)
+
+`[ai_guard]` in `fcmd.toml` — its own table, because `[[ai]]` is the list of services and TOML
+does not let one name be both. `docs/06-ai-study.md` called these A4 and A5.
+
+**Redaction (A4).** `redact = true` by default. Everything a question carries is read in one
+place on the worker (`ai_payload`): the question, each selected file (capped as before), each
+block sent by name, the staged diff, and the earlier turns read back from the thread's file.
+With `redact` on, each of these texts goes through `fcmd_core::redact::Redactor` before the
+request body is built, so there is no path from a file to the wire that does not pass it. The
+service's own `system` text and the file *names* are not masked. The rules, in order, each
+replacing the secret with `[REDACTED:kind]`:
+
+1. `private-key`: `-----BEGIN … PRIVATE KEY-----` to its `END` line, or to the end of the
+   text when the file was cut.
+2. Tokens with a documented prefix: `aws-key`, `github-token`, `gitlab-token`, `slack-token`,
+   `stripe-key`, `api-key` (`sk-…`), `google-key`, `npm-token`, `jwt`.
+3. `url-password`: the password of `scheme://user:password@host`, and only it.
+4. `auth-header`: the credential after `Authorization: Bearer|Basic|Token`, and a long one
+   after a bare `Bearer`.
+5. `[ai_guard] patterns`, regular expressions of the user's: the first group when the pattern
+   has one, the whole match otherwise; `custom`. One that does not compile is left out.
+6. `assignment`: at the start of a line, `KEY=value`, `key: value`, `"key": "value"`
+   (optionally after `export`/`set`), where the key ends in `password`, `passwd`,
+   `passphrase`, `pwd`, `secret`, `token`, `api_key`, `access_key`, `private_key`, `auth_key`
+   or `credential`, singular or plural. Not masked: an empty value, `PWD`/`OLDPWD`, a
+   reference (`$…`, `%…`, `<…>`, `{{…`), `true`/`false`/`null` and the like, a short number,
+   and an unquoted value that reads as code (brackets, `::`, `->`, several words).
+
+A secret two rules would find is counted once. The count goes back with the answer
+(`AiAnswer::redacted`): the status line says it beside the tokens, and the answer file's
+second line ends `· N redacted`. The decision asked in the study — mask silently with a
+count, or stop on each match — is: **mask, count, and show**; nothing stops.
+
+**The preview.** The dialog that names what goes (§14) also asks the worker, as it opens, to
+read what would go (`Request::AiPreview`, the same `ai_payload`, nothing sent). When that
+comes back the dialog gains a line — how many secrets are masked and of which kinds, or that
+none was found, or that redaction is off — and `F3` in the dialog opens the whole of it in the
+viewer as Markdown: the instruction, the earlier turns, the question with its files, as
+masked. `F3` before the worker has answered opens it when it does. Closing the viewer comes
+back to the dialog with *Cancel* still lit. `F3` in the `F8` list of a conversation's context
+shows the same for the thread and the files that go with every question. A preview that
+arrives for a question other than the one in the dialog is ignored.
+
+**The switch.** `ai.redact` — `F5` in the `:ai` panel, where the key bar says so — turns
+`redact` off and on, writes the settings, and says which on the status line; the `:ai`
+panel's title carries the state.
+
 ## 15. Git
 
 `Ctrl+Alt+G` (`tool.git`, *Commands → Git*) on a folder of this disk, and `F2` inside any of

@@ -1423,7 +1423,7 @@ ai-context-dropped = { $count ->
         [few] { $count } файла убраны из контекста
        *[other] { $count } файлов убрано из контекста
     }
-ai-context-hint = Enter или Del: убрать из контекста — файл остаётся на диске · Esc
+ai-context-hint = Enter или Del: убрать из контекста — файл остаётся на диске · F3: что уходит · Esc
 ai-threads-title = Разговоры
 ai-threads-hint = Enter: продолжить этот разговор · Esc
 ai-thread-resumed = продолжаем { $name }
@@ -1778,3 +1778,20 @@ menu-frecent = Частые папки
 frecent-none = пока ни одна папка не посещена
 frecent-gone = { $path } убрана из частых папок
 frecent-hint = наберите буквы пути · Enter перейти · Del забыть · Esc закрыть
+
+# ai third round
+ai-redact-off = Маскирование выключено: всё уходит как есть
+ai-redact-none = Секретов для маскирования не найдено
+ai-redact-count = Секретов замаскировано перед отправкой: { $count } ({ $kinds })
+ai-redacted = замаскировано секретов: { $count }
+ai-preview-title = Что уходит в { $name } ({ $host })
+ai-preview-instruction = Инструкция
+ai-preview-earlier = Разговор до сих пор
+ai-preview-question = Вопрос и его файлы
+ai-preview-key = F3 показывает, что уходит
+ai-preview-reading = Читаю, что было бы отправлено…
+key-ai-redact = Маск.
+ai-redact-now-on = Маскирование включено: ключи, токены, закрытые ключи и пароли маскируются перед отправкой
+ai-redact-now-off = Маскирование выключено: отправляемое уходит как есть
+ai-panel-redact-on = секреты маскируются
+ai-panel-redact-off = секреты не маскируются

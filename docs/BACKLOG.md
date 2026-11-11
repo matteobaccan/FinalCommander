@@ -141,7 +141,7 @@ cannot be, kept so the question is not asked again.
 | Boolean search | Wikipedia | Nested and/or/not over conditions | The conditions of `Alt+F7` are all *and*-ed today |
 | Metadata panel | superfile, Opus | A side panel showing a file's metadata (EXIF and the like, `exiftool` where present) as the cursor moves | `F11` shows it in the viewer today |
 | Editing metadata | Opus | Writing EXIF/ID3/document fields | Read-only today |
-| What the AI could do next | — | Follow-ups, streaming, cost, words to a command, a commit message, explain this, rename and rewrite proposals, and the larger ideas | The study is `docs/06-ai-study.md`; the author chooses from it |
+| What the AI could do next | — | What is left of the study: explain a failed command (B2), ask the table (B3), explain a difference (B4), describe a picture (B5), words to a search (C2) or a filter (C6), and the larger ideas (D) | The study is `docs/06-ai-study.md`; follow-ups, streaming, cost, words to a command, the commit message, explain this and redaction (A4) are in |
 | Verifying a signature | — | Saying whether an Authenticode or a Mach-O signature is valid, not only who it names | Needs the machine's trust store and the hash of the image; 0.38.0 reads and names, and says "not verified" |
 | HEIC/HEIF and TIFF/RAW EXIF | Opus | The EXIF of a phone's HEIC and a camera's raw file | The TIFF reader is there; HEIF keeps EXIF in an `iloc` item |
 | Image conversion | Opus | Converting and resizing images from the panel | Through a program on the machine, as `7z` is |

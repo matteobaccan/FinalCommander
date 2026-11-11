@@ -1680,6 +1680,31 @@ fn is_zero_u32(n: &u32) -> bool {
     *n == 0
 }
 
+/// `[ai_guard]`: what stands between a question and the service it goes to (SPEC 06 §14.2).
+///
+/// Its own table, not `[ai]`: `[[ai]]` is the list of services, and TOML does not let one
+/// name be both a list and a table.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct AiGuardCfg {
+    /// Mask what looks like a key, a token, a private key or a password in everything that
+    /// is sent — the question, the files, the earlier turns. On unless turned off.
+    pub redact: bool,
+    /// Regular expressions of the user's own, masked like the built-in shapes: the first
+    /// group when the pattern has one, all it matched otherwise.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub patterns: Vec<String>,
+}
+
+impl Default for AiGuardCfg {
+    fn default() -> Self {
+        AiGuardCfg {
+            redact: true,
+            patterns: Vec::new(),
+        }
+    }
+}
+
 /// One `[[sync]]` block: a pair of directories and how to synchronise them, under a name
 /// (SPEC 03 §10a, SPEC 07 §2b-septies).
 ///
@@ -1931,6 +1956,8 @@ pub struct Config {
     /// one `ai:` asks; `ai:name:` asks another by its name.
     #[serde(rename = "ai")]
     pub ais: Vec<AiCfg>,
+    /// `[ai_guard]`: redaction before anything is sent (SPEC 06 §14.2).
+    pub ai_guard: AiGuardCfg,
     /// `[[sort_group]]` blocks: the bands the sort groups cut a listing into (SPEC 02 §4).
     #[serde(rename = "sort_group")]
     pub sort_groups: Vec<SortGroupCfg>,
@@ -2306,6 +2333,7 @@ impl Config {
             // somebody can change (SPEC 07 §2e): the browser is generated from this file, and
             // a key it shows that `set` refuses would be a setting nobody can reach.
             "cmdline.prompt" => self.cmdline.prompt = value.to_string(),
+            "ai_guard.redact" => self.ai_guard.redact = parse_bool(value)?,
             "arc.max_entries" => self.arc.max_entries = parse_usize(value)?,
             "arc.max_depth" => self.arc.max_depth = parse_usize(value)?,
             "arc.max_total_mb" => self.arc.max_total_mb = parse_u64(value)?,

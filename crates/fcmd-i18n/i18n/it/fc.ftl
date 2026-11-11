@@ -1425,7 +1425,7 @@ ai-context-dropped = { $count ->
         [one] un file tolto dal contesto
        *[other] { $count } file tolti dal contesto
     }
-ai-context-hint = Enter o Canc: lo toglie dal contesto — il file resta sul disco · Esc
+ai-context-hint = Enter o Canc: lo toglie dal contesto — il file resta sul disco · F3: che cosa parte · Esc
 ai-threads-title = Conversazioni
 ai-threads-hint = Enter: continua questa conversazione · Esc
 ai-thread-resumed = si continua { $name }
@@ -1793,3 +1793,20 @@ menu-frecent = Cartelle frequenti
 frecent-none = nessuna cartella visitata finora
 frecent-gone = { $path } tolta dalle cartelle frequenti
 frecent-hint = scrivi lettere del percorso · Invio vai · Canc dimentica · Esc chiudi
+
+# ai third round
+ai-redact-off = La mascheratura è spenta: tutto parte così com'è
+ai-redact-none = Nessun segreto da mascherare
+ai-redact-count = Segreti mascherati prima dell'invio: { $count } ({ $kinds })
+ai-redacted = segreti mascherati: { $count }
+ai-preview-title = Che cosa parte per { $name } ({ $host })
+ai-preview-instruction = Istruzione
+ai-preview-earlier = La conversazione fin qui
+ai-preview-question = La domanda e i suoi file
+ai-preview-key = F3 mostra che cosa parte
+ai-preview-reading = Leggo che cosa partirebbe…
+key-ai-redact = Masch.
+ai-redact-now-on = Mascheratura accesa: chiavi, token, chiavi private e password vengono mascherati prima di ogni invio
+ai-redact-now-off = Mascheratura spenta: ciò che parte, parte così com'è
+ai-panel-redact-on = segreti mascherati
+ai-panel-redact-off = segreti non mascherati

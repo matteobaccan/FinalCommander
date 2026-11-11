@@ -246,6 +246,7 @@ something readable rather than only into instructions.
 | 7.16 | Find files by approximate name: the letters in order anywhere in the name, results ranked best first | broot/NEW | ✓ a box in `Alt+F7` (SPEC 06 §1d) |
 | 7.17 | Find files by metadata: EXIF, ID3, document properties and the rest of what `F11` reads, as `field=value` conditions | TC/Wikipedia | ✓ a row in `Alt+F7` (SPEC 06 §1d) |
 | 7.18 | Indexed search: the system's own index (plocate/locate, Spotlight, Everything) asked for candidates instead of a walk, each checked again on the disk | Opus/NEW | ✓ a box in `Alt+F7`, `find.index` (SPEC 06 §1e) |
+| 7.19 | Redaction before a question goes to a language model: keys, tokens, private keys, passwords in addresses and `.env`-style secrets masked, with a count and a preview of what is sent; the user's own patterns | NEW | ✓ on by default, `[ai_guard]` (SPEC 06 §14.2) |
 
 ## 8. Shell & terminal integration
 

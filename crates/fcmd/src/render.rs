@@ -4484,6 +4484,7 @@ mod tests {
                 purpose: crate::app::AiUse::Answer,
                 tokens: (Some(812), Some(406)),
                 model: "qwen3:32b".into(),
+                redacted: 0,
             }),
         });
         ai_app.mode = Mode::Normal;

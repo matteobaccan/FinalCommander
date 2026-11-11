@@ -17,6 +17,7 @@ pub mod fuzzy;
 pub mod git;
 pub mod listing;
 pub mod longpath;
+pub mod redact;
 pub mod rename;
 pub mod selection;
 pub mod size;

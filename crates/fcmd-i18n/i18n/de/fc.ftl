@@ -1424,7 +1424,7 @@ ai-context-dropped = { $count ->
         [one] eine Datei aus dem Kontext genommen
        *[other] { $count } Dateien aus dem Kontext genommen
     }
-ai-context-hint = Enter oder Entf: aus dem Kontext nehmen — die Datei bleibt auf der Platte · Esc
+ai-context-hint = Enter oder Entf: aus dem Kontext nehmen — die Datei bleibt auf der Platte · F3: was gesendet wird · Esc
 ai-threads-title = Gespräche
 ai-threads-hint = Enter: dieses Gespräch fortsetzen · Esc
 ai-thread-resumed = { $name } wird fortgesetzt
@@ -1792,3 +1792,20 @@ menu-frecent = Häufige Ordner
 frecent-none = noch kein Ordner besucht
 frecent-gone = { $path } aus den häufigen Ordnern genommen
 frecent-hint = Buchstaben des Pfads tippen · Enter hin · Entf vergessen · Esc schließen
+
+# ai third round
+ai-redact-off = Die Schwärzung ist aus: alles geht, wie es ist
+ai-redact-none = Kein Geheimnis zum Schwärzen gefunden
+ai-redact-count = Vor dem Senden geschwärzte Geheimnisse: { $count } ({ $kinds })
+ai-redacted = geschwärzte Geheimnisse: { $count }
+ai-preview-title = Was an { $name } geht ({ $host })
+ai-preview-instruction = Anweisung
+ai-preview-earlier = Das Gespräch bisher
+ai-preview-question = Die Frage und ihre Dateien
+ai-preview-key = F3 zeigt, was gesendet wird
+ai-preview-reading = Lese, was gesendet würde…
+key-ai-redact = Schwärz
+ai-redact-now-on = Schwärzung an: Schlüssel, Tokens, private Schlüssel und Passwörter werden vor dem Senden geschwärzt
+ai-redact-now-off = Schwärzung aus: was gesendet wird, geht, wie es ist
+ai-panel-redact-on = Geheimnisse geschwärzt
+ai-panel-redact-off = Geheimnisse nicht geschwärzt
