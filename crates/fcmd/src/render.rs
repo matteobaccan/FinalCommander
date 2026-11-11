@@ -3279,12 +3279,14 @@ fn draw_bindiff(app: &App, view: &fcmd_view::BinDiff, buf: &mut Buffer, screen: 
     };
     // The two names, each with how long the file is to the byte: two lengths that differ
     // are the first thing one wants to know about two binaries.
-    let half = (inner.w as usize).saturating_sub(7) / 2;
+    // Each side has half of what the arrow between them (`  ↔  `) leaves, and in it its own
+    // sign (`- `), the name, ` · ` and the size; the name is what gives way, never the size.
+    let half = (inner.w as usize).saturating_sub(5) / 2;
     let name = |text: &str, bytes: u64| {
         let size = app
             .i18n
             .t_args("bin-bytes", &[("count", (bytes as i64).into())]);
-        let room = half.saturating_sub(fcmd_ui::buffer::str_cells(&size) + 3);
+        let room = half.saturating_sub(fcmd_ui::buffer::str_cells(&size) + 2 + 3);
         format!("{} · {size}", fcmd_ui::elide_middle(text, room))
     };
     let names = format!(
